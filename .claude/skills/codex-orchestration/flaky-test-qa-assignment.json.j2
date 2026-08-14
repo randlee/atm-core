@@ -24,15 +24,15 @@ defaults:
   notes: ""
 ---
 {
-  "worktree_path": "{{ worktree_path }}",
+  "worktree_path": {{ worktree_path }},
   "scope": {
-    "phase": {% if phase %}"{{ phase }}"{% else %}null{% endif %},
-    "sprint": {% if sprint %}"{{ sprint }}"{% else %}null{% endif %}
+    "phase": {% if phase %}{{ phase }}{% else %}null{% endif %},
+    "sprint": {% if sprint %}{{ sprint }}{% else %}null{% endif %}
   },
-  "review_targets": [{% for target in review_targets %}"{{ target }}"{% if not loop.last %}, {% endif %}{% endfor %}],
+  "review_targets": [{% for target in review_targets %}{{ target }}{% if not loop.last %}, {% endif %}{% endfor %}],
   "round_limit": {% if round_limit %}true{% else %}false{% endif %},
-  "changed_files": [{% for file in changed_files %}"{{ file }}"{% if not loop.last %}, {% endif %}{% endfor %}],
-  "triage_records": [{% for record in triage_records %}"{{ record }}"{% if not loop.last %}, {% endif %}{% endfor %}],
+  "changed_files": [{% for file in changed_files %}{{ file }}{% if not loop.last %}, {% endif %}{% endfor %}],
+  "triage_records": [{% for record in triage_records %}{{ record }}{% if not loop.last %}, {% endif %}{% endfor %}],
   "carry_forward_findings": {{ carry_forward_findings_json }},
-  "notes": "{{ notes }}"
+  "notes": {{ notes }}
 }

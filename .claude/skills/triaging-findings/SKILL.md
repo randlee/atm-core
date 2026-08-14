@@ -5,7 +5,7 @@ description: Orchestrate pre-dispatch QA finding triage as team-lead. Launch one
 requires:
   cli:
     - name: sc-compose
-      minimum_version: 1.3.0
+      minimum_version: 1.4.0
     - name: oxigraph
     - name: rg
   python:
@@ -34,7 +34,7 @@ record:
 python3 .claude/skills/triaging-findings/scripts/check_dependencies.py
 ```
 
-The preflight requires the `sc-compose` CLI at the unreleased source pin and
+The preflight requires the released v1.4.0 `sc-compose` CLI at the pinned source revision and
 the Python `sc_compose` binding at `>= 1.2.0`, plus `oxigraph`, `rg`, and Python `rdflib`. It checks PATH plus
 common Homebrew/Cargo/user-install locations and returns a structured result.
 A non-zero result is a hard stop; read

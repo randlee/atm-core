@@ -25,12 +25,12 @@ defaults:
   notes: ""
 ---
 {
-  "review_mode": "{{ review_mode }}",
-  "worktree_path": "{{ worktree_path }}",
-  "review_targets": [{% for target in review_targets %}"{{ target }}"{% if not loop.last %}, {% endif %}{% endfor %}],
-  "practice_mode": {% if practice_mode %}"{{ practice_mode }}"{% elif review_mode == "phase_end" %}"all"{% else %}"selected"{% endif %},
+  "review_mode": {{ review_mode }},
+  "worktree_path": {{ worktree_path }},
+  "review_targets": [{% for target in review_targets %}{{ target }}{% if not loop.last %}, {% endif %}{% endfor %}],
+  "practice_mode": {% if practice_mode %}{{ practice_mode }}{% elif review_mode == "phase_end" %}"all"{% else %}"selected"{% endif %},
   "practice_ids": {% if practice_ids and practice_mode != "all" %}
-    [{% for practice_id in practice_ids %}"{{ practice_id }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+    [{% for practice_id in practice_ids %}{{ practice_id }}{% if not loop.last %}, {% endif %}{% endfor %}]
   {% elif not practice_mode and review_mode == "doc_review" %}
     ["RBP-001", "RBP-002", "RBP-003", "RBP-004", "RBP-005", "RBP-008", "RBP-010"]
   {% elif not practice_mode and review_mode == "sprint_review" %}
@@ -39,9 +39,9 @@ defaults:
     []
   {% endif %},
   "round_limit": {% if round_limit %}true{% else %}false{% endif %},
-  "changed_files": [{% for file in changed_files %}"{{ file }}"{% if not loop.last %}, {% endif %}{% endfor %}],
-  "triage_records": [{% for record in triage_records %}"{{ record }}"{% if not loop.last %}, {% endif %}{% endfor %}],
+  "changed_files": [{% for file in changed_files %}{{ file }}{% if not loop.last %}, {% endif %}{% endfor %}],
+  "triage_records": [{% for record in triage_records %}{{ record }}{% if not loop.last %}, {% endif %}{% endfor %}],
   "carry_forward_findings": {{ carry_forward_findings_json }},
   "findings_scope_locked": {% if carry_forward_findings_json != "[]" %}true{% else %}false{% endif %},
-  "notes": "{{ notes }}{% if carry_forward_findings_json != "[]" %} SCOPE LOCK: this is a fix-round verification dispatch. Report a disposition (fixed | open | regressed) for each id in carry_forward_findings ONLY. Do not add any new finding to the `findings` array beyond those ids, even if you notice something real and unrelated -- put anything else observed under `notes`, not `findings`.{% endif %}"
+  "notes": {{ notes ~ (" SCOPE LOCK: this is a fix-round verification dispatch. Report a disposition (fixed | open | regressed) for each id in carry_forward_findings ONLY. Do not add any new finding to the `findings` array beyond those ids, even if you notice something real and unrelated -- put anything else observed under `notes`, not `findings`." if carry_forward_findings_json != "[]" else "") }}
 }
