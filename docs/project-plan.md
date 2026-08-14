@@ -1227,7 +1227,7 @@ Acceptance:
   proven dead, no guard is merged early, and the minimality proof confirms
   no compatibility shim survives.
 
-## 45. Phase AN — Decomposed Template Messages And Query Surface [AN.1–AN.13 COMPLETE; AN.14 IN PROGRESS]
+## 45. Phase AN — Decomposed Template Messages And Query Surface [AN.1–AN.14 COMPLETE; AN.15 IN PROGRESS]
 
 - **Phase AN: Decomposed Template Messages And Query Surface [AN.1–AN.10 COMPLETE]** —
   Added a bounded `sc-composer` adapter boundary, durable template catalog and
@@ -1261,10 +1261,10 @@ Sprint line:
 - `AN.14` `feature/an14-sc-compose-141-checked-emission` — adapter-only
   checked emission that rejects malformed JSON before send or render-on-read
 
-- **AN.13–AN.15 checked-render upgrade and assurance [AN.14 IN PROGRESS]** — AN.13 establishes
+- **AN.13–AN.15 checked-render upgrade and assurance [AN.15 IN PROGRESS]** — AN.13 establishes
   durable adapter-derived output-format identity and adopts the released
   exact `sc-sha`/`sc-composer` 1.4.1 dependency chain in its adapter; AN.14
-  will make the
+  makes the
   `atm-template-sc-compose` adapter refuse malformed rendered JSON before
   sending, caching, or render-on-read output. AN.15 then runs a bounded,
   deterministic adversarial campaign over the checked template/catalog
