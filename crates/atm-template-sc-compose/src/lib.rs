@@ -456,7 +456,7 @@ mod tests {
     }
 
     #[test]
-    fn checked_emission_rejection_leaves_send_fallback_and_read_inputs_immutable() {
+    fn an15_boundary_probe_rejection_leaves_send_fallback_and_read_inputs_immutable() {
         let malformed = br#"{\"secret\": "#;
 
         // Template send and its rendered-fallback variant both invoke this
@@ -516,7 +516,7 @@ mod tests {
     }
 
     #[test]
-    fn production_adapter_preserves_auto_and_legacy_json_escape_contracts() {
+    fn an15_template_probe_preserves_auto_and_legacy_json_escape_contracts() {
         let injected = r#"x\", \"injected\": true, \"y\": \"x"#;
         for (label, frontmatter, body) in [
             ("auto", "", r#"{"value": {{ value }}}"#),
@@ -553,7 +553,35 @@ mod tests {
     }
 
     #[test]
-    fn checked_emission_reports_the_failing_second_render_pass() {
+    fn an15_template_probe_checked_json_is_deterministic_for_unicode_and_escape_vectors() {
+        let root = temporary_root("an15-unicode-escape");
+        let template_path = root.join("payload.json.j2");
+        fs::write(&template_path, r#"{"value": {{ value }}}"#).expect("write JSON template");
+        let source = TemplateSource::file_backed(
+            fs::read(&template_path).expect("read template"),
+            fs::canonicalize(&template_path).expect("canonical template"),
+        );
+        let root = TemplateRoot {
+            canonical_path: fs::canonicalize(&root).expect("canonical root"),
+        };
+        let composer = ScComposeTemplateComposer::new();
+
+        for case_index in 0..100 {
+            let value = format!("case-{case_index}-🙂-漢字-\\\"-newline\\n");
+            let vars = Map::from_iter([("value".to_owned(), Value::String(value.clone()))]);
+            let rendered = composer
+                .compose_file(&source, &vars, &root)
+                .expect("checked JSON must remain valid");
+            assert_eq!(
+                serde_json::from_str::<Value>(&rendered.text).expect("checked JSON")["value"],
+                Value::String(value),
+            );
+        }
+        fs::remove_dir_all(&root.canonical_path).expect("remove isolated template root");
+    }
+
+    #[test]
+    fn an15_template_probe_reports_the_failing_second_render_pass() {
         let root = temporary_root("checked-multipass-json");
         let template_path = root.join("payload.json.j2");
         fs::write(
@@ -734,6 +762,45 @@ mod tests {
                 .is_some_and(|cause| cause.contains("escapes confinement root")),
             "upstream confinement diagnostic must be preserved: {error}"
         );
+    }
+
+    #[test]
+    fn an15_boundary_probe_rejects_one_hundred_confined_include_escape_vectors() {
+        let parent = temporary_root("an15-include-escape-parent");
+        let root = parent.join("root");
+        fs::create_dir_all(&root).expect("create root");
+        let canonical_root = ConfiningRoot::new(&root)
+            .expect("canonical root")
+            .into_inner();
+
+        for case_index in 0..100 {
+            let template_path = root.join(format!("main-{case_index}.j2"));
+            fs::write(&template_path, format!("@<../outside-{case_index}.j2>\\n"))
+                .expect("write escaping template");
+            fs::write(
+                parent.join(format!("outside-{case_index}.j2")),
+                "must not load",
+            )
+            .expect("write outside template");
+            let source = TemplateSource::file_backed(
+                fs::read(&template_path).expect("read template"),
+                template_path,
+            );
+            let error = ScComposeTemplateComposer::new()
+                .render_within_root(
+                    &source,
+                    &Map::new(),
+                    &TemplateRoot {
+                        canonical_path: canonical_root.clone(),
+                    },
+                )
+                .expect_err("outside include must be rejected");
+            assert_eq!(
+                error.code(),
+                atm_storage::AtmErrorCode::TemplateIncludeUnresolved
+            );
+        }
+        fs::remove_dir_all(&parent).expect("remove isolated template parent");
     }
 
     #[test]

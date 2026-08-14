@@ -122,13 +122,16 @@ mod tests {
         fn render_without_includes(
             &self,
             _source: &TemplateSource,
-            _vars: &Map<String, Value>,
+            vars: &Map<String, Value>,
         ) -> Result<RenderedBody, crate::error::AtmError> {
             if self.includes {
                 return Err(crate::error::AtmError::decomposed_template_include_forbidden());
             }
             Ok(RenderedBody {
-                text: "stable rendered body".to_string(),
+                text: vars.get("ATM_TEAM").and_then(Value::as_str).map_or_else(
+                    || "stable rendered body".to_string(),
+                    |team| format!("team={team}"),
+                ),
             })
         }
     }
@@ -197,5 +200,23 @@ mod tests {
         .expect_err("legacy rows must be re-registered before checked rendering");
 
         assert!(error.detail().contains("legacy/unverified"));
+    }
+
+    #[test]
+    fn an15_differential_probe_render_on_read_uses_only_captured_variables() {
+        let _ambient = crate::test_support::EnvGuard::set_raw("ATM_TEAM", "ambient-wrong-team");
+        let composer = FixtureComposer { includes: false };
+        let stored = template();
+
+        for case_index in 0..100 {
+            let captured = format!("catalog-team-{case_index}");
+            let vars = atm_storage::MergedVarsJson::from_merged_object(Map::from_iter([(
+                "ATM_TEAM".to_owned(),
+                Value::String(captured.clone()),
+            )]));
+            let rendered =
+                render_decomposed(&composer, &stored, &vars).expect("pure stored render");
+            assert_eq!(rendered.text, format!("team={captured}"));
+        }
     }
 }

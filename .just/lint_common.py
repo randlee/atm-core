@@ -14,9 +14,6 @@ LOG_DIR = Path(".just/logs")
 CONFIG_PATH = Path(".just/lint-config.toml")
 TIMESTAMP_FORMAT = "%Y%m%d%H%M%S"
 LINT_NAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
-STRING_LITERAL_RE = re.compile(
-    r'r(?P<hashes>#+)?\"(?P<raw>.*?)\"(?P=hashes)|\"(?P<quoted>(?:[^\"\\\\]|\\\\.)*)\"'
-)
 CFG_ATTRIBUTE_RE = re.compile(r"^#(?P<inner>!)?\[cfg\((?P<body>.*)\)\]$")
 TEST_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9_])test(?![A-Za-z0-9_])")
 
@@ -438,14 +435,89 @@ def rust_file_test_scope(path: Path, lines: list[str]) -> list[bool]:
     return [False] * len(lines)
 
 
-def iter_string_literal_contents(line: str) -> list[str]:
-    literals: list[str] = []
-    for match in STRING_LITERAL_RE.finditer(line):
-        raw_value = match.group("raw")
-        if raw_value is not None:
-            literals.append(raw_value)
+def _decode_rust_quoted_literal(value: str) -> str:
+    """Decode the Rust escape forms relevant to literal-oriented lint checks.
+
+    The scanner deliberately walks Python Unicode code points. Encoding the
+    matched value as UTF-8 and handing those bytes to ``unicode_escape`` loses
+    the correspondence between Rust character positions and scanner positions
+    once a literal contains emoji or CJK text.
+    """
+    decoded: list[str] = []
+    index = 0
+    single_escapes = {"n": "\n", "r": "\r", "t": "\t", "0": "\0", "\\": "\\", '\"': '"'}
+    while index < len(value):
+        character = value[index]
+        if character != "\\":
+            decoded.append(character)
+            index += 1
             continue
-        quoted_value = match.group("quoted")
-        if quoted_value is not None:
-            literals.append(bytes(quoted_value, "utf-8").decode("unicode_escape"))
+        if index + 1 >= len(value):
+            # An unterminated literal is not valid Rust. Preserve the source
+            # fragment so this lint remains observational rather than raising.
+            decoded.append("\\")
+            break
+        escape = value[index + 1]
+        if escape in single_escapes:
+            decoded.append(single_escapes[escape])
+            index += 2
+            continue
+        if escape == "x" and index + 3 < len(value):
+            digits = value[index + 2 : index + 4]
+            try:
+                decoded.append(chr(int(digits, 16)))
+                index += 4
+                continue
+            except ValueError:
+                pass
+        if escape == "u" and index + 2 < len(value) and value[index + 2] == "{":
+            closing = value.find("}", index + 3)
+            if closing != -1:
+                try:
+                    decoded.append(chr(int(value[index + 3 : closing].replace("_", ""), 16)))
+                    index = closing + 1
+                    continue
+                except ValueError:
+                    pass
+        # Keep unknown/malformed escapes literal. Rust will reject malformed
+        # production code separately; this lint must never hide its own result
+        # behind an exception.
+        decoded.extend(("\\", escape))
+        index += 2
+    return "".join(decoded)
+
+
+def iter_string_literal_contents(line: str) -> list[str]:
+    """Return quoted and raw Rust string contents using Unicode-safe offsets."""
+    literals: list[str] = []
+    index = 0
+    while index < len(line):
+        if line[index] == "r":
+            raw_index = index + 1
+            while raw_index < len(line) and line[raw_index] == "#":
+                raw_index += 1
+            if raw_index < len(line) and line[raw_index] == '"':
+                hashes = line[index + 1 : raw_index]
+                closing = '"' + hashes
+                closing_index = line.find(closing, raw_index + 1)
+                if closing_index != -1:
+                    literals.append(line[raw_index + 1 : closing_index])
+                    index = closing_index + len(closing)
+                    continue
+        if line[index] == '"':
+            start = index + 1
+            cursor = start
+            while cursor < len(line):
+                if line[cursor] == "\\":
+                    cursor += 2
+                    continue
+                if line[cursor] == '"':
+                    literals.append(_decode_rust_quoted_literal(line[start:cursor]))
+                    index = cursor + 1
+                    break
+                cursor += 1
+            else:
+                index = len(line)
+            continue
+        index += 1
     return literals

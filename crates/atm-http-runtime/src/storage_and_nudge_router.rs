@@ -1456,6 +1456,76 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn an15_shape_probe_missing_required_input_mutates_no_catalog_or_mailbox_rows() {
+        let body = "required input must be captured before durable admission";
+        let inspection = atm_core::TemplateInspection {
+            sha: TemplateSha::new(
+                "814271b7e98145c998a2c1f20270856c592881ba7dac4dfee9307d8093163a03",
+            )
+            .expect("template SHA"),
+            frontmatter: TemplateFrontmatter {
+                required_variables: vec![
+                    atm_storage::TemplateVariableName::new("ATM_TEAM")
+                        .expect("fixture required variable"),
+                ],
+                ..TemplateFrontmatter::default()
+            },
+            include_references: Vec::new(),
+            output_format: atm_storage::TemplateOutputFormat::Text,
+        };
+        let composer: Arc<dyn atm_core::TemplateComposer> = Arc::new(
+            FixtureTemplateComposer::with_inspection(body.as_bytes().to_vec(), inspection),
+        );
+        let fixture =
+            fixture_with_selector_and_template(true, None, None, Some(composer), |received_hook| {
+                Arc::new(FixedReceivedHookSelector {
+                    emitter: received_hook,
+                })
+            });
+
+        let write = template_write_request(&fixture, body);
+        let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+        let status = response.status();
+        let error = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("rejection body");
+        assert_ne!(
+            status,
+            StatusCode::CREATED,
+            "missing required input must reject the write: {}",
+            String::from_utf8_lossy(&error)
+        );
+        let error: serde_json::Value = serde_json::from_slice(&error).expect("rejection JSON");
+        assert_eq!(
+            error["code"].as_str(),
+            Some("TEMPLATE_REQUIRED_VARIABLE_MISSING"),
+            "the stable admission error explains the rejected write"
+        );
+
+        let snapshot = inspect_template_admission_for_test(&fixture.database_path, &[])
+            .expect("inspect rejected durable admission");
+        assert_eq!(
+            snapshot.template_count, 0,
+            "rejected input registers no template"
+        );
+        assert_eq!(
+            snapshot.decomposed_count, 0,
+            "rejected input creates no decomposition"
+        );
+        let mailbox = fixture
+            .message_store
+            .list_messages(&MessageQuery {
+                team: "test-team".parse().expect("team"),
+                agent: "recipient".parse().expect("agent"),
+                sender: None,
+                task_id: None,
+                limit: None,
+            })
+            .expect("inspect rejected mailbox");
+        assert!(mailbox.is_empty(), "rejected input writes no mailbox row");
+    }
+
+    #[tokio::test]
     async fn template_routing_matrix_persists_only_same_team_same_host_as_decomposed() {
         let body = "routing matrix body";
         let fixture = fixture_with_selector_and_template(
