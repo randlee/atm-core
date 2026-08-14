@@ -126,7 +126,7 @@ impl ScComposeTemplateComposer {
     ) -> Result<RenderedBody, AtmError> {
         let format = Self::to_sc_output_format(format);
         let meta = RenderCheckMeta::for_template_with_format(template_path, format);
-        check_rendered_output_with_meta(meta, &text)
+        check_rendered_output_with_meta(meta, text)
             .map(|checked| RenderedBody {
                 text: checked.body().to_owned(),
             })
