@@ -113,6 +113,7 @@ pub fn assemble_host_runtime_with_template_composer(
         config_current_dir,
         non_claude_outbound,
         template_composer,
+        workflow_telemetry: None,
     })
 }
 
@@ -234,6 +235,7 @@ async fn run_replacement_daemon_with_selector(
         // The process has not advertised readiness, so it must not retain an
         // otherwise-live listener when its supervisor handshake fails.
         let _ = running.begin_shutdown().finish().await;
+        assembly.workflow_telemetry.shutdown().await;
         return Err(error);
     }
     tokio::select! {
@@ -243,15 +245,19 @@ async fn run_replacement_daemon_with_selector(
         }
         _ = running.wait_for_server_stop() => {
             eprintln!("replacement ATM HTTP runtime server stopped unexpectedly; beginning cleanup");
-            return match running.begin_shutdown().finish().await {
+            let result = match running.begin_shutdown().finish().await {
                 Ok(_) => Err(AtmError::daemon_unavailable(
                     "replacement HTTP runtime server stopped unexpectedly",
                 )),
                 Err(error) => Err(error),
             };
+            assembly.workflow_telemetry.shutdown().await;
+            return result;
         }
     }
-    let _stopped = running.begin_shutdown().finish().await?;
+    let stopped = running.begin_shutdown().finish().await;
+    assembly.workflow_telemetry.shutdown().await;
+    let _stopped = stopped?;
     Ok(())
 }
 

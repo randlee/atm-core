@@ -72,6 +72,7 @@ pub fn open_sqlite_boundary(path: impl AsRef<Path>) -> Result<RuntimeAssembly, A
         config_current_dir,
         non_claude_outbound: std::sync::Arc::new(LocalFileNonClaudeOutbound::new()),
         template_composer: None,
+        workflow_telemetry: None,
     })
 }
 

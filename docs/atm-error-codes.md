@@ -131,6 +131,16 @@ Error codes should describe the failure class, not a specific prose message.
 
 ### 5.5 Workflow And Timeouts
 
+- `ATM_WORKFLOW_QUERY_INVALID` — a local workflow lifecycle projection used an
+  empty selector or an impossible time range. Supply at least one exact
+  start/end selector field and an ordered RFC 3339 range.
+- `ATM_WORKFLOW_TELEMETRY_CONFIG_INVALID` — configured telemetry worker
+  capacity or timeout is outside its bounded range. ATM remains available with
+  telemetry disabled; repair the configuration and restart the daemon.
+- `ATM_WORKFLOW_TELEMETRY_DROPPED` — the best-effort telemetry sink could not
+  accept a record during a full queue, timeout, failure, or bounded shutdown.
+  Inspect runtime diagnostics; this never changes admission, routing, or a
+  query result.
 - `ATM_WAIT_TIMEOUT`
 - `ATM_ACK_INVALID_STATE`
 - `ATM_CLEAR_INVALID_STATE`

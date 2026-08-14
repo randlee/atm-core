@@ -274,6 +274,12 @@ impl AtmError {
         Self::new(AtmErrorCode::MessageValidationFailed, message)
     }
 
+    /// Rejects an invalid bounded local workflow query before it reaches a
+    /// storage adapter or telemetry producer.
+    pub fn workflow_query_invalid(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::WorkflowQueryInvalid, message)
+    }
+
     /// Denies the intentionally local-only message-search capability before a
     /// peer request can select any storage adapter.
     pub fn search_local_only() -> Self {

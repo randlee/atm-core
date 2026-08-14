@@ -65,6 +65,18 @@ mod tests {
                 "TEMPLATE_WORKFLOW_VALUE_INVALID",
             ),
             (AtmErrorCode::TemplateTagReserved, "TEMPLATE_TAG_RESERVED"),
+            (
+                AtmErrorCode::WorkflowQueryInvalid,
+                "ATM_WORKFLOW_QUERY_INVALID",
+            ),
+            (
+                AtmErrorCode::WorkflowTelemetryConfigInvalid,
+                "ATM_WORKFLOW_TELEMETRY_CONFIG_INVALID",
+            ),
+            (
+                AtmErrorCode::WorkflowTelemetryDropped,
+                "ATM_WORKFLOW_TELEMETRY_DROPPED",
+            ),
         ] {
             assert_eq!(code.as_str(), wire);
             assert_eq!(wire.parse::<AtmErrorCode>(), Ok(code));

@@ -6,7 +6,9 @@ use atm_storage::{
     AsyncMessageSearchStore, AtmError, MessageSearchPage, MessageSearchQuery, MessageSearchStore,
     SearchAggregate, SearchCursor, SearchDeadline, SearchExpression, SearchGroup, SearchGroupBy,
     SearchGroupField, SearchMatchField, SearchMetadataMatch, SearchResultKey, SimpleAggregate,
-    StoredSearchAddress, StoredSearchMatch,
+    StoredSearchAddress, StoredSearchMatch, StoredWorkflowMetadata, TemplateFrontmatter,
+    TemplateTag, WorkflowIteration, WorkflowScopeId, WorkflowScopeKind, WorkflowSnapshot,
+    WorkflowStage, WorkflowState, WorkflowTransition,
 };
 use rusqlite::{Connection, params_from_iter, types::Value as SqlValue};
 use serde_json::Value;
@@ -104,7 +106,10 @@ fn primary_search_sql(uses_fts: bool, filters: &SqlFilters) -> String {
                     CASE WHEN instr(highlight(mail_messages_fts, 4, char(1), char(2)), char(1)) > 0 THEN 1 ELSE 0 END,
                     0,
                     snippet(mail_messages_fts, -1, char(1), char(2), '…', 16),
-                    m.tags_json, m.vars_json, t.schema_json
+                    m.tags_json, m.vars_json, t.schema_json, m.content_format,
+                    m.workflow_scope_kind, m.workflow_scope_id, m.workflow_state,
+                    m.workflow_stage, m.workflow_transition, m.workflow_iteration,
+                    m.applied_template_tags_json, m.effective_tags_json
              FROM mail_message_search_documents d
              JOIN mail_messages_fts ON mail_messages_fts.rowid = d.search_rowid
              JOIN mail_messages m ON (m.team, m.agent, m.message_key) = (d.team, d.agent, d.message_key)
@@ -118,7 +123,10 @@ fn primary_search_sql(uses_fts: bool, filters: &SqlFilters) -> String {
             "SELECT d.team, d.agent, d.message_key, d.message_id, d.message_at,
                     d.from_agent, m.source_chat_id, m.destination_chat_id, m.template_sha,
                     t.template_type, m.category,
-                    0, 0, 0, 0, 0, 0, NULL, m.tags_json, m.vars_json, t.schema_json
+                    0, 0, 0, 0, 0, 0, NULL, m.tags_json, m.vars_json, t.schema_json,
+                    m.content_format, m.workflow_scope_kind, m.workflow_scope_id,
+                    m.workflow_state, m.workflow_stage, m.workflow_transition,
+                    m.workflow_iteration, m.applied_template_tags_json, m.effective_tags_json
              FROM mail_message_search_documents d
              JOIN mail_messages m ON (m.team, m.agent, m.message_key) = (d.team, d.agent, d.message_key)
              LEFT JOIN message_templates t ON t.template_sha = m.template_sha
@@ -142,7 +150,10 @@ fn execute_template_search(
                 0, 0, 0, 0, 0,
                 CASE WHEN instr(highlight(message_templates_fts, 0, char(1), char(2)), char(1)) > 0 THEN 1 ELSE 0 END,
                 snippet(message_templates_fts, -1, char(1), char(2), '…', 16),
-                m.tags_json, m.vars_json, t.schema_json
+                m.tags_json, m.vars_json, t.schema_json, m.content_format,
+                m.workflow_scope_kind, m.workflow_scope_id, m.workflow_state,
+                m.workflow_stage, m.workflow_transition, m.workflow_iteration,
+                m.applied_template_tags_json, m.effective_tags_json
          FROM message_template_search_documents td
          JOIN message_templates_fts ON message_templates_fts.rowid = td.search_rowid
          JOIN mail_messages m ON m.template_sha = td.template_sha
@@ -273,6 +284,15 @@ type SearchRow = (
     Option<String>,
     Option<String>,
     Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
 );
 
 #[derive(Debug, Clone)]
@@ -296,6 +316,7 @@ struct DecodedSearchRow {
     match_fields: Vec<SearchMatchField>,
     snippet: Option<String>,
     vars_json: Option<String>,
+    workflow: Option<StoredWorkflowMetadata>,
 }
 
 fn decode_search_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SearchRecord> {
@@ -330,6 +351,15 @@ fn decode_search_row_values(row: &rusqlite::Row<'_>) -> rusqlite::Result<Decoded
         row.get(18)?,
         row.get(19)?,
         row.get(20)?,
+        row.get(21)?,
+        row.get(22)?,
+        row.get(23)?,
+        row.get(24)?,
+        row.get(25)?,
+        row.get(26)?,
+        row.get(27)?,
+        row.get(28)?,
+        row.get(29)?,
     );
     let (
         team,
@@ -350,9 +380,18 @@ fn decode_search_row_values(row: &rusqlite::Row<'_>) -> rusqlite::Result<Decoded
         from_agent_match,
         template_content,
         snippet,
-        _tags_json,
+        tags_json,
         vars_json,
-        _template_metadata_json,
+        template_metadata_json,
+        content_format,
+        scope_kind,
+        scope_id,
+        state,
+        stage,
+        transition,
+        iteration,
+        applied_tags_json,
+        effective_tags_json,
     ) = values;
     Ok(DecodedSearchRow {
         team,
@@ -364,7 +403,7 @@ fn decode_search_row_values(row: &rusqlite::Row<'_>) -> rusqlite::Result<Decoded
         source_chat_id,
         destination_chat_id,
         template_sha,
-        template_type,
+        template_type: template_type.clone(),
         category,
         match_fields: decode_match_fields(
             body,
@@ -376,6 +415,21 @@ fn decode_search_row_values(row: &rusqlite::Row<'_>) -> rusqlite::Result<Decoded
         ),
         snippet,
         vars_json,
+        workflow: decode_workflow_metadata(
+            tags_json,
+            template_type.as_deref(),
+            content_format.as_deref(),
+            template_metadata_json,
+            scope_kind,
+            scope_id,
+            state,
+            stage,
+            transition,
+            iteration,
+            applied_tags_json,
+            effective_tags_json,
+        )
+        .map_err(to_sqlite_conversion_error)?,
     })
 }
 
@@ -414,7 +468,92 @@ impl DecodedSearchRow {
             category: self.category,
             match_fields: self.match_fields,
             snippet: self.snippet,
+            workflow: self.workflow,
         })
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn decode_workflow_metadata(
+    tags_json: Option<String>,
+    template_type: Option<&str>,
+    content_format: Option<&str>,
+    schema_json: Option<String>,
+    scope_kind: Option<String>,
+    scope_id: Option<String>,
+    state: Option<String>,
+    stage: Option<String>,
+    transition: Option<String>,
+    iteration: Option<String>,
+    applied_tags_json: Option<String>,
+    effective_tags_json: Option<String>,
+) -> Result<Option<StoredWorkflowMetadata>, AtmError> {
+    let snapshot = match (scope_kind, scope_id, state, stage, transition, iteration) {
+        (
+            Some(scope_kind),
+            Some(scope_id),
+            Some(state),
+            Some(stage),
+            Some(transition),
+            iteration,
+        ) => Some(WorkflowSnapshot {
+            scope_kind: WorkflowScopeKind::new(scope_kind)?,
+            scope_id: WorkflowScopeId::new(scope_id)?,
+            state: WorkflowState::new(state)?,
+            stage: WorkflowStage::new(stage)?,
+            transition: WorkflowTransition::new(transition)?,
+            iteration: iteration.map(WorkflowIteration::new).transpose()?,
+        }),
+        (None, None, None, None, None, None) => None,
+        _ => {
+            return Err(AtmError::mailbox_read(
+                "stored workflow snapshot is incomplete",
+            ));
+        }
+    };
+    match (snapshot, applied_tags_json, effective_tags_json) {
+        (None, None, None) => Ok(None),
+        (Some(snapshot), Some(applied), Some(effective)) => {
+            let instance_tags: Vec<atm_storage::InstanceTag> = serde_json::from_str(
+                &tags_json.unwrap_or_else(|| "[]".to_owned()),
+            )
+            .map_err(|error| {
+                AtmError::mailbox_read(format!("stored instance tags are invalid: {error}"))
+            })?;
+            let applied_template_tags: Vec<TemplateTag> =
+                serde_json::from_str(&applied).map_err(|error| {
+                    AtmError::mailbox_read(format!("stored applied tags are invalid: {error}"))
+                })?;
+            let effective_tags: Vec<atm_storage::EffectiveTag> = serde_json::from_str(&effective)
+                .map_err(|error| {
+                AtmError::mailbox_read(format!("stored effective tags are invalid: {error}"))
+            })?;
+            let frontmatter: TemplateFrontmatter =
+                serde_json::from_str(schema_json.as_deref().unwrap_or("{}")).map_err(|error| {
+                    AtmError::mailbox_read(format!("stored template metadata is invalid: {error}"))
+                })?;
+            let expected = atm_storage::DecomposedMessageAdmission::expected_tag_provenance_for(
+                &instance_tags,
+                &frontmatter.template_tags,
+                template_type,
+                content_format,
+                &snapshot,
+            )?;
+            if expected.applied_template_tags != applied_template_tags
+                || expected.effective_tags != effective_tags
+            {
+                return Err(AtmError::mailbox_read(
+                    "stored workflow tag provenance does not match immutable admission inputs",
+                ));
+            }
+            Ok(Some(StoredWorkflowMetadata {
+                snapshot,
+                tag_provenance: expected,
+            }))
+        }
+        _ => Err(AtmError::mailbox_read(
+            "stored workflow tag provenance is incomplete",
+        )),
     }
 }
 
@@ -513,6 +652,24 @@ fn compile_sql_filters(filters: &atm_storage::SearchFilters) -> SqlFilters {
     if let Some(category) = &filters.category {
         equals("m.category", category.clone());
     }
+    if let Some(scope_kind) = &filters.workflow_scope_kind {
+        equals("m.workflow_scope_kind", scope_kind.to_string());
+    }
+    if let Some(scope_id) = &filters.workflow_scope_id {
+        equals("m.workflow_scope_id", scope_id.as_str().to_owned());
+    }
+    if let Some(state) = &filters.workflow_state {
+        equals("m.workflow_state", state.to_string());
+    }
+    if let Some(stage) = &filters.workflow_stage {
+        equals("m.workflow_stage", stage.to_string());
+    }
+    if let Some(transition) = &filters.workflow_transition {
+        equals("m.workflow_transition", transition.to_string());
+    }
+    if let Some(iteration) = &filters.workflow_iteration {
+        equals("m.workflow_iteration", iteration.as_str().to_owned());
+    }
     if let Some(time_range) = &filters.time_range {
         if let Some(since) = time_range.since {
             clauses.push("d.message_at >= ?".to_owned());
@@ -529,6 +686,13 @@ fn compile_sql_filters(filters: &atm_storage::SearchFilters) -> SqlFilters {
                 .to_owned(),
         );
         parameters.push(SqlValue::Text(tag.clone()));
+    }
+    for tag in &filters.effective_tags {
+        clauses.push(
+            "EXISTS (SELECT 1 FROM json_each(COALESCE(m.effective_tags_json, '[]')) AS effective_tag WHERE CAST(effective_tag.value AS TEXT) = ?)"
+                .to_owned(),
+        );
+        parameters.push(SqlValue::Text(tag.as_str().to_owned()));
     }
     for (key, value) in &filters.vars {
         clauses.push(json_scalar_filter("m.vars_json"));
@@ -644,6 +808,26 @@ fn aggregate(
                     SearchGroupBy::Field(SearchGroupField::Category) => {
                         stored.category.clone().unwrap_or_default()
                     }
+                    SearchGroupBy::Field(SearchGroupField::WorkflowScopeKind) => stored
+                        .workflow
+                        .as_ref()
+                        .map(|workflow| workflow.snapshot.scope_kind.to_string())
+                        .unwrap_or_default(),
+                    SearchGroupBy::Field(SearchGroupField::WorkflowState) => stored
+                        .workflow
+                        .as_ref()
+                        .map(|workflow| workflow.snapshot.state.to_string())
+                        .unwrap_or_default(),
+                    SearchGroupBy::Field(SearchGroupField::WorkflowStage) => stored
+                        .workflow
+                        .as_ref()
+                        .map(|workflow| workflow.snapshot.stage.to_string())
+                        .unwrap_or_default(),
+                    SearchGroupBy::Field(SearchGroupField::WorkflowTransition) => stored
+                        .workflow
+                        .as_ref()
+                        .map(|workflow| workflow.snapshot.transition.to_string())
+                        .unwrap_or_default(),
                     SearchGroupBy::Var(key) => record
                         .vars
                         .as_object()
@@ -1007,5 +1191,131 @@ mod tests {
             tag_page.matches[0].key.message_key.as_str(),
             "atm:assignment"
         );
+    }
+
+    #[test]
+    fn production_search_filters_workflow_and_returns_explicit_provenance() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let record = atm_storage::Message {
+            team: "query-team".parse().expect("team"),
+            agent: "agent".parse().expect("agent"),
+            message_key: MessageKey::new("atm:workflow-search").expect("key"),
+            envelope: MessageEnvelope {
+                from: "sender".parse().expect("sender"),
+                source_chat_id: None,
+                text: "workflow search".to_owned(),
+                timestamp: "2026-08-12T00:00:00Z".parse().expect("time"),
+                read: false,
+                source_team: Some("query-team".parse().expect("team")),
+                destination_chat_id: None,
+                summary: None,
+                message_id: Some("01KZTTRD6K9WJYJ2N7E39CVB9P".parse().expect("message id")),
+                requires_ack: false,
+                pending_ack_at: None,
+                acknowledged_at: None,
+                acknowledges_message_id: None,
+                parent_message_id: None,
+                thread_mode: None,
+                expires_at: None,
+                task_id: None,
+                extra: Map::new(),
+            },
+        };
+        backend.message_store().save_message(&record).expect("save");
+        let mut template = atm_storage::TemplateRegistration {
+            sha: "a".repeat(64).parse().expect("sha"),
+            template_type: Some("workflow-event".to_owned()),
+            template_name: Some("workflow search fixture".to_owned()),
+            content_bytes: b"workflow".to_vec(),
+            content_text: "workflow".to_owned(),
+            frontmatter: atm_storage::TemplateFrontmatter::default(),
+            first_seen: atm_storage::TemplateFirstSeen::new(IsoTimestamp::now(), "tester")
+                .expect("seen"),
+        };
+        template.frontmatter.metadata = [
+            ("tags".to_owned(), serde_json::json!(["domain:testing"])),
+            ("workflow".to_owned(), serde_json::json!({"scope":{"kind":"sprint","variable":"sprint"},"state":"opened","stage":"dev","transition":"start"})),
+        ].into_iter().collect();
+        let template = template
+            .into_normalized_workflow_metadata()
+            .expect("template");
+        let snapshot = atm_storage::WorkflowSnapshot {
+            scope_kind: atm_storage::WorkflowScopeKind::new("sprint").expect("kind"),
+            scope_id: atm_storage::WorkflowScopeId::new("an-11").expect("id"),
+            state: atm_storage::WorkflowState::new("opened").expect("state"),
+            stage: atm_storage::WorkflowStage::new("dev").expect("stage"),
+            transition: atm_storage::WorkflowTransition::new("start").expect("transition"),
+            iteration: None,
+        };
+        let mut admission = atm_storage::DecomposedMessageAdmission {
+            template: template.clone(),
+            message: atm_storage::DecomposedMessageRecord {
+                key: record.message_key.clone(),
+                template_sha: template.sha.clone(),
+                vars: atm_storage::MergedVarsJson::from_merged_object(
+                    [(String::from("sprint"), serde_json::json!("an-11"))]
+                        .into_iter()
+                        .collect(),
+                ),
+                category: None,
+                tags: vec![atm_storage::InstanceTag::new("audience:test").expect("tag")],
+                content_format: Some("markdown".to_owned()),
+                workflow: None,
+            },
+        };
+        let provenance = admission
+            .expected_tag_provenance(&snapshot)
+            .expect("provenance");
+        admission.message.workflow = Some(atm_storage::WorkflowAdmission {
+            snapshot,
+            tag_provenance: provenance,
+        });
+        backend
+            .template_catalog_store()
+            .admit_decomposed_message(admission)
+            .expect("admit");
+
+        let mut query = MessageSearchQuery::default();
+        query.filters.workflow_scope_kind =
+            Some(atm_storage::WorkflowScopeKind::new("sprint").expect("kind"));
+        query.filters.workflow_scope_id =
+            Some(atm_storage::WorkflowScopeId::new("an-11").expect("id"));
+        query.filters.workflow_state =
+            Some(atm_storage::WorkflowState::new("opened").expect("state"));
+        query.filters.effective_tags =
+            vec![atm_storage::EffectiveTag::new("workflow-state:opened").expect("tag")];
+        query.aggregate = Some(SimpleAggregate::GroupBy(SearchGroupBy::Field(
+            SearchGroupField::WorkflowState,
+        )));
+        let page = backend
+            .message_search_store()
+            .search(&query)
+            .expect("search");
+        let workflow = page
+            .matches
+            .into_iter()
+            .next()
+            .expect("one match")
+            .workflow
+            .expect("provenance");
+        assert_eq!(
+            workflow.tag_provenance.instance_tags[0].as_str(),
+            "audience:test"
+        );
+        assert_eq!(
+            workflow.tag_provenance.applied_template_tags[0].as_str(),
+            "domain:testing"
+        );
+        assert!(
+            workflow
+                .tag_provenance
+                .derived_tags
+                .iter()
+                .any(|tag| tag.as_str() == "workflow-state:opened")
+        );
+        assert!(matches!(
+            page.aggregate,
+            Some(SearchAggregate::Groups { .. })
+        ));
     }
 }

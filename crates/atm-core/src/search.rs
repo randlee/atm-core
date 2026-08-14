@@ -47,6 +47,10 @@ pub struct SearchHit {
     pub template_type: Option<String>,
     pub category: Option<String>,
     pub snippet: String,
+    /// Immutable workflow snapshot and each explicit provenance set. Legacy
+    /// rows deliberately leave this absent rather than pretending their
+    /// instance tags are an effective workflow projection.
+    pub workflow: Option<atm_storage::StoredWorkflowMetadata>,
 }
 
 /// Public primitive values decoded by either the CLI or HTTP adapter.
@@ -60,7 +64,14 @@ pub struct SearchInput {
     pub template_meta: Vec<String>,
     pub vars: Vec<String>,
     pub tags: Vec<String>,
+    pub effective_tags: Vec<String>,
     pub category: Option<String>,
+    pub workflow_scope_kind: Option<String>,
+    pub workflow_scope_id: Option<String>,
+    pub workflow_state: Option<String>,
+    pub workflow_stage: Option<String>,
+    pub workflow_transition: Option<String>,
+    pub workflow_iteration: Option<String>,
     pub from: Option<String>,
     pub team: Option<String>,
     pub agent: Option<String>,
@@ -111,7 +122,43 @@ impl SearchInput {
                 .map(|value| parse_key_value(value, "variable"))
                 .collect::<Result<Vec<_>, _>>()?,
             tags: self.tags.clone(),
+            effective_tags: self
+                .effective_tags
+                .iter()
+                .cloned()
+                .map(atm_storage::EffectiveTag::new)
+                .collect::<Result<Vec<_>, _>>()?,
             category: self.category.clone(),
+            workflow_scope_kind: self
+                .workflow_scope_kind
+                .as_deref()
+                .map(atm_storage::WorkflowScopeKind::new)
+                .transpose()?,
+            workflow_scope_id: self
+                .workflow_scope_id
+                .as_deref()
+                .map(atm_storage::WorkflowScopeId::new)
+                .transpose()?,
+            workflow_state: self
+                .workflow_state
+                .as_deref()
+                .map(atm_storage::WorkflowState::new)
+                .transpose()?,
+            workflow_stage: self
+                .workflow_stage
+                .as_deref()
+                .map(atm_storage::WorkflowStage::new)
+                .transpose()?,
+            workflow_transition: self
+                .workflow_transition
+                .as_deref()
+                .map(atm_storage::WorkflowTransition::new)
+                .transpose()?,
+            workflow_iteration: self
+                .workflow_iteration
+                .as_deref()
+                .map(atm_storage::WorkflowIteration::new)
+                .transpose()?,
             time_range: match (&self.since, &self.until) {
                 (None, None) => None,
                 (since, until) => Some(TimeRange {
@@ -238,6 +285,7 @@ fn hit_from_match(record: StoredSearchMatch) -> SearchHit {
         template_type: record.template_type,
         category: record.category,
         snippet,
+        workflow: record.workflow,
     }
 }
 
@@ -498,9 +546,13 @@ fn parse_group_by(value: &str) -> Result<SearchGroupBy, AtmError> {
         "from" | "from_agent" => atm_storage::SearchGroupField::FromAgent,
         "template_type" => atm_storage::SearchGroupField::TemplateType,
         "category" => atm_storage::SearchGroupField::Category,
+        "scope_kind" => atm_storage::SearchGroupField::WorkflowScopeKind,
+        "state" => atm_storage::SearchGroupField::WorkflowState,
+        "stage" => atm_storage::SearchGroupField::WorkflowStage,
+        "transition" => atm_storage::SearchGroupField::WorkflowTransition,
         _ => {
             return Err(AtmError::validation(
-                "group-by must be var:KEY, team, agent, from_agent, template_type, or category",
+                "group-by must be var:KEY, team, agent, from_agent, template_type, category, scope_kind, state, stage, or transition",
             ));
         }
     };
@@ -579,6 +631,41 @@ mod tests {
                 atm_storage::SearchKey::new("sprint").expect("key")
             )))
         );
+    }
+
+    #[test]
+    fn workflow_filter_and_only_four_workflow_group_keys_compile() {
+        let query = SearchInput {
+            effective_tags: vec!["workflow-state:opened".to_owned()],
+            workflow_scope_kind: Some("sprint".to_owned()),
+            workflow_scope_id: Some("an-11".to_owned()),
+            workflow_state: Some("opened".to_owned()),
+            workflow_stage: Some("dev".to_owned()),
+            workflow_transition: Some("start".to_owned()),
+            workflow_iteration: Some("2".to_owned()),
+            aggregate: Some(super::SearchAggregateInput::GroupBy(
+                "transition".to_owned(),
+            )),
+            ..SearchInput::default()
+        }
+        .compile_query()
+        .expect("workflow query");
+        assert_eq!(
+            query.filters.workflow_scope_id.expect("scope").as_str(),
+            "an-11"
+        );
+        assert_eq!(
+            query.filters.effective_tags[0].as_str(),
+            "workflow-state:opened"
+        );
+        assert!(matches!(
+            query.aggregate,
+            Some(SimpleAggregate::GroupBy(SearchGroupBy::Field(
+                atm_storage::SearchGroupField::WorkflowTransition
+            )))
+        ));
+        assert!(super::parse_group_by("scope_id").is_err());
+        assert!(super::parse_group_by("iteration").is_err());
     }
 
     #[test]

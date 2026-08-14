@@ -87,6 +87,12 @@ pub enum AtmErrorCode {
     TemplateWorkflowInvalid,
     TemplateWorkflowValueInvalid,
     TemplateTagReserved,
+    /// A bounded local workflow query or lifecycle projection is invalid.
+    WorkflowQueryInvalid,
+    /// Runtime telemetry configuration failed validation and was disabled.
+    WorkflowTelemetryConfigInvalid,
+    /// A best-effort workflow telemetry record was dropped.
+    WorkflowTelemetryDropped,
     SerializationFailed,
     FilePolicyRejected,
     FileReferenceRewriteFailed,
@@ -227,6 +233,9 @@ impl AtmErrorCode {
             Self::TemplateWorkflowInvalid => "TEMPLATE_WORKFLOW_INVALID",
             Self::TemplateWorkflowValueInvalid => "TEMPLATE_WORKFLOW_VALUE_INVALID",
             Self::TemplateTagReserved => "TEMPLATE_TAG_RESERVED",
+            Self::WorkflowQueryInvalid => "ATM_WORKFLOW_QUERY_INVALID",
+            Self::WorkflowTelemetryConfigInvalid => "ATM_WORKFLOW_TELEMETRY_CONFIG_INVALID",
+            Self::WorkflowTelemetryDropped => "ATM_WORKFLOW_TELEMETRY_DROPPED",
             Self::SerializationFailed => "ATM_SERIALIZATION_FAILED",
             Self::FilePolicyRejected => "ATM_FILE_POLICY_REJECTED",
             Self::FileReferenceRewriteFailed => "ATM_FILE_REFERENCE_REWRITE_FAILED",
@@ -383,6 +392,9 @@ fn parse_mailbox_or_validation_code(value: &str) -> Option<AtmErrorCode> {
         "TEMPLATE_WORKFLOW_INVALID" => AtmErrorCode::TemplateWorkflowInvalid,
         "TEMPLATE_WORKFLOW_VALUE_INVALID" => AtmErrorCode::TemplateWorkflowValueInvalid,
         "TEMPLATE_TAG_RESERVED" => AtmErrorCode::TemplateTagReserved,
+        "ATM_WORKFLOW_QUERY_INVALID" => AtmErrorCode::WorkflowQueryInvalid,
+        "ATM_WORKFLOW_TELEMETRY_CONFIG_INVALID" => AtmErrorCode::WorkflowTelemetryConfigInvalid,
+        "ATM_WORKFLOW_TELEMETRY_DROPPED" => AtmErrorCode::WorkflowTelemetryDropped,
         "ATM_SERIALIZATION_FAILED" => AtmErrorCode::SerializationFailed,
         "ATM_FILE_POLICY_REJECTED" => AtmErrorCode::FilePolicyRejected,
         "ATM_FILE_REFERENCE_REWRITE_FAILED" => AtmErrorCode::FileReferenceRewriteFailed,

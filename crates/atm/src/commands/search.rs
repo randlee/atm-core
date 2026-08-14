@@ -41,6 +41,10 @@ pub struct SearchCommand {
     #[arg(long = "tag", value_name = "VALUE")]
     tags: Vec<String>,
 
+    /// Filter ATM's immutable effective-tag projection; may be repeated.
+    #[arg(long = "effective-tag", value_name = "VALUE")]
+    effective_tags: Vec<String>,
+
     #[arg(long)]
     category: Option<String>,
 
@@ -52,6 +56,24 @@ pub struct SearchCommand {
 
     #[arg(long)]
     agent: Option<String>,
+
+    #[arg(long = "workflow-scope-kind", value_name = "VALUE")]
+    workflow_scope_kind: Option<String>,
+
+    #[arg(long = "workflow-scope-id", value_name = "VALUE")]
+    workflow_scope_id: Option<String>,
+
+    #[arg(long = "workflow-state", value_name = "VALUE")]
+    workflow_state: Option<String>,
+
+    #[arg(long = "workflow-stage", value_name = "VALUE")]
+    workflow_stage: Option<String>,
+
+    #[arg(long = "workflow-transition", value_name = "VALUE")]
+    workflow_transition: Option<String>,
+
+    #[arg(long = "workflow-iteration", value_name = "VALUE")]
+    workflow_iteration: Option<String>,
 
     #[arg(long)]
     since: Option<String>,
@@ -112,10 +134,17 @@ impl SearchCommand {
             template_sha: self.template_sha.clone(),
             vars: self.vars.clone(),
             tags: self.tags.clone(),
+            effective_tags: self.effective_tags.clone(),
             category: self.category.clone(),
             from: self.from.clone(),
             team: self.team.clone(),
             agent: self.agent.clone(),
+            workflow_scope_kind: self.workflow_scope_kind.clone(),
+            workflow_scope_id: self.workflow_scope_id.clone(),
+            workflow_state: self.workflow_state.clone(),
+            workflow_stage: self.workflow_stage.clone(),
+            workflow_transition: self.workflow_transition.clone(),
+            workflow_iteration: self.workflow_iteration.clone(),
             since: self.since.clone(),
             until: self.until.clone(),
             limit: self.limit,
@@ -196,6 +225,8 @@ mod tests {
             "phase=an",
             "--tag",
             "priority",
+            "--effective-tag",
+            "workflow-state=dev-start",
             "--category",
             "work",
             "--from",
@@ -204,6 +235,18 @@ mod tests {
             TEST_TEAM,
             "--agent",
             TEST_ARCH_CTM,
+            "--workflow-scope-kind",
+            "sprint",
+            "--workflow-scope-id",
+            "an-11",
+            "--workflow-state",
+            "dev-start",
+            "--workflow-stage",
+            "implementation",
+            "--workflow-transition",
+            "opened",
+            "--workflow-iteration",
+            "1",
             "--since",
             "2026-01-01T00:00:00Z",
             "--until",
@@ -227,10 +270,17 @@ mod tests {
             template_sha: None,
             vars: vec![],
             tags: vec![],
+            effective_tags: vec![],
             category: None,
             from: None,
             team: None,
             agent: None,
+            workflow_scope_kind: None,
+            workflow_scope_id: None,
+            workflow_state: None,
+            workflow_stage: None,
+            workflow_transition: None,
+            workflow_iteration: None,
             since: None,
             until: None,
             limit: None,
