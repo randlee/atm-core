@@ -1112,9 +1112,9 @@ mod tests {
                         "SELECT applied_template_tags_json, derived_tags_json,
                                 effective_tags_json,
                                 (SELECT derived_tags_json FROM decomposed_messages
-                                 WHERE message_key = ?1)
+                                 WHERE template_sha = ?2)
                          FROM mail_messages WHERE message_key = ?1",
-                        params![record.message_key.as_str()],
+                        params![record.message_key.as_str(), template.sha.as_str()],
                         |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
                     )
                     .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
