@@ -8,29 +8,31 @@
   a triage:Finding ;
   triage:findingId "AN15-SKILL-TARGET-UNDOCUMENTED" ;
   triage:title "adversarial-fuzzing SKILL.md not updated with new atm-template-checked-emission target" ;
-  triage:description ".claude/skills/adversarial-fuzzing/SKILL.md was not updated with the new atm-template-checked-emission target or its worker-to-seam mapping -- the authoritative campaign-contract doc is out of sync with .just/run_fuzz.py." ;
+  triage:description ".claude/skills/adversarial-fuzzing/SKILL.md was not updated with the new atm-template-checked-emission target or its worker-to-seam mapping. RESOLVED: .claude/skills/adversarial-fuzzing/SKILL.md:112-127 now documents the target and worker-to-seam mapping, confirmed by AN-PHASEEND-REVIEW fuzz reviewer (task #1767) at integrate/phase-an @ 628d6531b." ;
   triage:phaseId "phase-an" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "docs" ;
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope ".claude/skills/adversarial-fuzzing/SKILL.md" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-14T08:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.15 ;
   triage:foundAt "2026-08-14T08:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN15-SKILL-TARGET-UNDOCUMENTED/AN15-0> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN15-SKILL-TARGET-UNDOCUMENTED/AN15-1> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-08-14T20:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AN15-SKILL-TARGET-UNDOCUMENTED/AN15-0>
   a triage:Occurrence ;
   triage:file ".claude/skills/adversarial-fuzzing/SKILL.md" ;
-  triage:line 34 ;
-  triage:snippet "missing targets: local-http-framing, atm-template-checked-emission" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:line 112 ;
+  triage:snippet "atm-template-checked-emission target documented" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/an15-adversarial-fuzzing" ;
   triage:headSha "9ddf105b5dd7c3d7ec592cac1602dd7ab1c743bb" ;
   triage:occursIn <urn:atm:triage:worktree/AN15-FT/9ddf105b> .
@@ -38,13 +40,13 @@
 <urn:atm:triage:occurrence/AN15-SKILL-TARGET-UNDOCUMENTED/AN15-1>
   a triage:Occurrence ;
   triage:file ".claude/skills/adversarial-fuzzing/SKILL.md" ;
-  triage:line 96 ;
-  triage:snippet "missing worker-to-seam mapping table for atm-template-checked-emission" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:line 127 ;
+  triage:snippet "worker-to-seam mapping table added for atm-template-checked-emission" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-an" ;
-  triage:headSha "2fd6e90300fb8d67302debfa7b1bb4324cc928bb" ;
-  triage:occursIn <urn:atm:triage:worktree/AN15-INT/2fd6e903> .
+  triage:headSha "628d6531bd77db0507447e587088fb9abdfeb4bc" ;
+  triage:occursIn <urn:atm:triage:worktree/AN15-INT/628d6531> .
 
 <urn:atm:triage:worktree/AN15-FT/9ddf105b>
   a triage:WorktreeSnapshot ;
@@ -53,9 +55,9 @@
   triage:headSha "9ddf105b5dd7c3d7ec592cac1602dd7ab1c743bb" ;
   triage:orderIndex 0 .
 
-<urn:atm:triage:worktree/AN15-INT/2fd6e903>
+<urn:atm:triage:worktree/AN15-INT/628d6531>
   a triage:WorktreeSnapshot ;
   triage:path ".worktrees/integrate/phase-an" ;
   triage:branch "integrate/phase-an" ;
-  triage:headSha "2fd6e90300fb8d67302debfa7b1bb4324cc928bb" ;
+  triage:headSha "628d6531bd77db0507447e587088fb9abdfeb4bc" ;
   triage:orderIndex 1 .

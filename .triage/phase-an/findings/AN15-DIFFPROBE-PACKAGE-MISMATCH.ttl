@@ -8,31 +8,45 @@
   a triage:Finding ;
   triage:findingId "AN15-DIFFPROBE-PACKAGE-MISMATCH" ;
   triage:title "Differential-probe worker cannot exercise its claimed atm-core seam" ;
-  triage:description ".just/run_fuzz.py's differential-probe command is `cargo test -p atm-storage-rusqlite an15_differential_probe_`, which cannot match `an15_differential_probe_render_on_read_uses_only_captured_variables` at crates/atm-core/src/read/render.rs:206 (package agent-team-mail-core, not atm-storage-rusqlite). The retained report site/reports/fuzz/an15-checked-emission-20260814.json nonetheless records the seam 'atm-core render-on-read and rusqlite persisted template catalog' as success/100 cases, overstating actual coverage. Independently confirmed by rust-qa-agent, req-qa (both runs), arch-qa (both runs), and quality-mgr directly." ;
+  triage:description ".just/run_fuzz.py's differential-probe command previously targeted package atm-storage-rusqlite, which could not match an15_differential_probe_render_on_read_uses_only_captured_variables (package agent-team-mail-core). RESOLVED: .just/run_fuzz.py:94 now targets the correct package, confirmed via AN-PHASEEND-REVIEW fuzz reviewer (task #1767) at integrate/phase-an @ 628d6531b." ;
   triage:phaseId "phase-an" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "test-coverage" ;
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-14T09:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.15 ;
   triage:foundAt "2026-08-14T08:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN15-DIFFPROBE-PACKAGE-MISMATCH/an15-feature-0> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN15-DIFFPROBE-PACKAGE-MISMATCH/integrate-0> ;
+  triage:closedAt "2026-08-14T20:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AN15-DIFFPROBE-PACKAGE-MISMATCH/an15-feature-0>
   a triage:Occurrence ;
   triage:file ".just/run_fuzz.py" ;
   triage:line 88 ;
   triage:snippet "cargo test -p atm-storage-rusqlite an15_differential_probe_" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/an15-adversarial-fuzzing" ;
   triage:headSha "9ddf105b5dd7c3d7ec592cac1602dd7ab1c743bb" ;
   triage:occursIn <urn:atm:triage:worktree/feature-an15/9ddf105> .
+
+<urn:atm:triage:occurrence/AN15-DIFFPROBE-PACKAGE-MISMATCH/integrate-0>
+  a triage:Occurrence ;
+  triage:file ".just/run_fuzz.py" ;
+  triage:line 94 ;
+  triage:snippet "cargo test -p agent-team-mail-core an15_differential_probe_" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "628d6531bd77db0507447e587088fb9abdfeb4bc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-an/628d6531> .
 
 <urn:atm:triage:worktree/feature-an15/9ddf105>
   a triage:WorktreeSnapshot ;
@@ -41,9 +55,9 @@
   triage:headSha "9ddf105b5dd7c3d7ec592cac1602dd7ab1c743bb" ;
   triage:orderIndex 0 .
 
-<urn:atm:triage:worktree/integrate-an/2fd6e90>
+<urn:atm:triage:worktree/integrate-an/628d6531>
   a triage:WorktreeSnapshot ;
   triage:path ".worktrees/integrate-an" ;
   triage:branch "integrate/phase-an" ;
-  triage:headSha "2fd6e90300fb8d67302debfa7b1bb4324cc928bb" ;
+  triage:headSha "628d6531bd77db0507447e587088fb9abdfeb4bc" ;
   triage:orderIndex 1 .
