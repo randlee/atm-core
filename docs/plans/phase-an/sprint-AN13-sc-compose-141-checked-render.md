@@ -114,6 +114,11 @@ sc-compose #448.
   sc-compose #448 closure link, exact upstream API call sites, and the final
   CI commit.
 
+## Retained evidence records
+
+- Final CI validation commit: `1dbb560471ad63179d0c0c4b95b0485b340018ef`
+  (the current AN.13 validation head for PR #876).
+
 ## Paths to delete
 
 None. Do not delete historical AN.1 fixture/oracle evidence or legacy catalog
