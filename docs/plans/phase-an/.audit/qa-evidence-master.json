@@ -708,6 +708,30 @@
       "minor": 1,
       "count_basis": "headline/reviewer",
       "evidence": "AN13-QA-1 verdict: FAIL. Deliverables 7/10 (70%). PR #876 (feature/an13-sc-composer-141-upgrade -> integrate/phase-an) comment: https://github.com/randlee/atm-core/pull/876#issuecomment-5288951870. 3 blocking: QA-001 rust-qa-agent workspace compile error E0433 at crates/atm-daemon-bootstrap/src/lib.rs:462,476 (atm_core::TemplateOutputFormat should be atm_core::boundary::TemplateOutputFormat, root cause of live CI failures on PR #876, confirmed via gh pr checks 876); ATM-QA-001 sprint doc frontmatter status still in_progress; ATM-QA-002 sprint doc frontmatter branch field mismatches actual branch. 5 important: evidence doc missing final-CI-commit record (ATM-QA-003); serde_json not allowlisted for atm-runtime Cargo.toml (QA-002); 6 inherited RULE-002 function-length violations from AN9-12 ancestry, not introduced by AN.13 (QA-003); inconsistent error-code mapping across TemplateComposer consumers (RBP-F001). 1 minor: local cargo-deny version mismatch, not an AN.13 defect (QA-004). Clean: arch-qa PASS/0, ruthless-boundary-qa PASS/0, RBP-004/006/007 clean, 84/84 scoped tests pass. No .ttl closures this round (task XML scope was empty). AN.11 concat!() lint-evasion pattern noted as inherited debt, not a new AN.13 finding; Cipher-311d's AN.11 fixes (cc114eab7, e8d7707a6) already on integrate/phase-an for AN.13 to merge-forward."
+    },
+    {
+      "aich_sprint": "AN.14",
+      "phase_sprint": "AN.14",
+      "pass": "QA-4",
+      "run_type": "qa",
+      "assignment_time_utc": null,
+      "assignment_time_pst": null,
+      "assignment_message_id": null,
+      "assignment_from": null,
+      "assignment_shared_path": null,
+      "assignment_summary": null,
+      "result_time_utc": "2026-08-14T06:52:32.603791Z",
+      "result_time_pst": null,
+      "result_message_id": "01KZZGPDEVE8QN3Y5E2VVNXFYG",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "PASS",
+      "blockers": 0,
+      "important": 0,
+      "minor": 0,
+      "count_basis": "headline/reviewer",
+      "evidence": "AN14-QA-4 final sign-off VERDICT: PASS. Reviewed commit 5371065d7b42c4d55f00df77c69e7b8dd0898f60 on feature/an14-sc-compose-141-checked-emission (PR #877, OPEN at review time). Rechecked findings: ATM-QA-006-AN14 (sprint-doc status gate) FIXED, sprint-AN14-sc-compose-141-checked-emission.md line 3 literally reads status: complete, confirmed via git show at reviewed commit. ATM-QA-008-AN14 (clippy needless_borrow) FIXED, lib.rs:129 borrow removed (check_rendered_output_with_meta(meta, text)), full-file sweep found no other occurrences. CI: PR #877 fully green, 9/9 checks pass at reviewed commit (Classify CI scope, Clippy, Format check, Just lint x3 OS, Test x3 OS). Deliverable completion 13/13 (100%). Triage closed on integrate/phase-an (commit 5154f36fb), closedBy quality-mgr: ATM-QA-006-AN14.ttl -> fixed, ATM-QA-008-AN14.ttl -> fixed. No unresolved blocking findings remain. QA-4 report posted: https://github.com/randlee/atm-core/pull/877#issuecomment-5290411563. PR #877 merged into integrate/phase-an at 35108bc4be054fd52ce803c279a053011ed54513 (2026-08-14T06:52:46Z) by team-lead per standing merge policy (green CI + 100% findings fixed, non-develop/main target)."
     }
   ],
   "coverage_gaps": [
