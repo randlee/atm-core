@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-005-AN11>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-005-AN11" ;
+  triage:title "Lifecycle-pairing algorithm built but never called from any CLI/HTTP/telemetry site" ;
+  triage:description "crates/atm-core/src/workflow_analytics.rs's project_lifecycles function is implemented and unit-testable but has no caller anywhere in atm/src/commands, atm-http-runtime, or atm-daemon-bootstrap -- the feature is unreachable by any real caller." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "process-doc" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-14T00:31:16Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.11 ;
+  triage:foundAt "2026-08-14T00:08:17Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005-AN11/pan11-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-005-AN11/pan11-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/workflow_analytics.rs" ;
+  triage:line 104 ;
+  triage:snippet "pub fn project_lifecycles" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
+  triage:headSha "e971a226c3a944ec8eb8caa22b3aded76314ee5e" ;
+  triage:occursIn <urn:atm:triage:worktree/pan11/e971a226c> .
+
+<urn:atm:triage:worktree/pan11/e971a226c>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pan11" ;
+  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
+  triage:headSha "e971a226c3a944ec8eb8caa22b3aded76314ee5e" ;
+  triage:orderIndex 11 .
+
+<urn:atm:triage:worktree/integrate-an/e8507167>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-an" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "e8507167921788a98d864fa6da7d0e8534d058f6" ;
+  triage:orderIndex 12 .

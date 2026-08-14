@@ -13,3 +13,4 @@ triage:AN.7 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 7 ; t
 triage:AN.8 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 8 ; triage:branch "feature/pan-s8-validation-evidence" ; triage:criteria "docs/plans/phase-an/sprint-AN8-validation-evidence.md" .
 triage:AN.9 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 9 ; triage:branch "feature/pan-s9-template-workflow-contract" ; triage:criteria "docs/plans/phase-an/sprint-AN9-template-workflow-contract.md" .
 triage:AN.10 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 10 ; triage:branch "feature/pan-s10-template-workflow-admission" ; triage:criteria "docs/plans/phase-an/sprint-AN10-template-workflow-admission.md" .
+triage:AN.11 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 11 ; triage:branch "feature/pan-s11-workflow-analytics-projection" ; triage:criteria "docs/plans/phase-an/sprint-AN11-workflow-analytics-projection.md" .
