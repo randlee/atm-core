@@ -732,6 +732,30 @@
       "minor": 0,
       "count_basis": "headline/reviewer",
       "evidence": "AN14-QA-4 final sign-off VERDICT: PASS. Reviewed commit 5371065d7b42c4d55f00df77c69e7b8dd0898f60 on feature/an14-sc-compose-141-checked-emission (PR #877, OPEN at review time). Rechecked findings: ATM-QA-006-AN14 (sprint-doc status gate) FIXED, sprint-AN14-sc-compose-141-checked-emission.md line 3 literally reads status: complete, confirmed via git show at reviewed commit. ATM-QA-008-AN14 (clippy needless_borrow) FIXED, lib.rs:129 borrow removed (check_rendered_output_with_meta(meta, text)), full-file sweep found no other occurrences. CI: PR #877 fully green, 9/9 checks pass at reviewed commit (Classify CI scope, Clippy, Format check, Just lint x3 OS, Test x3 OS). Deliverable completion 13/13 (100%). Triage closed on integrate/phase-an (commit 5154f36fb), closedBy quality-mgr: ATM-QA-006-AN14.ttl -> fixed, ATM-QA-008-AN14.ttl -> fixed. No unresolved blocking findings remain. QA-4 report posted: https://github.com/randlee/atm-core/pull/877#issuecomment-5290411563. PR #877 merged into integrate/phase-an at 35108bc4be054fd52ce803c279a053011ed54513 (2026-08-14T06:52:46Z) by team-lead per standing merge policy (green CI + 100% findings fixed, non-develop/main target)."
+    },
+    {
+      "aich_sprint": "AN.15",
+      "phase_sprint": "AN.15",
+      "pass": "QA-1",
+      "run_type": "qa",
+      "assignment_time_utc": null,
+      "assignment_time_pst": null,
+      "assignment_message_id": null,
+      "assignment_from": null,
+      "assignment_shared_path": null,
+      "assignment_summary": null,
+      "result_time_utc": "2026-08-14T09:44:20Z",
+      "result_time_pst": null,
+      "result_message_id": "01KZZTGZQ62628K109SDECGA92",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "PASS",
+      "blockers": 0,
+      "important": 0,
+      "minor": 0,
+      "count_basis": "headline/reviewer",
+      "evidence": "AN15-QA-1 FINAL VERDICT: PASS. PR #879 (feature/an15-adversarial-fuzzing), final reviewed commit b7c22b160e8fd6a6e5a62de11187705f481ca08b. Original QA-1 raised 3 blocking findings on the feature branch plus 3 important findings scoped to integrate/phase-an (AN15-PROJECTPLAN-STATUS-CONFLICT, AN15-FUZZTEST-UNKNOWNTARGET-COVERAGE, AN15-SKILL-TARGET-UNDOCUMENTED). AN15QA1-FIX-1/FIX-2 (arch-ctm) closed the feature-branch findings, including a root-cause fix to .just/lint_common.py (iter_string_literal_contents / _decode_rust_quoted_literal made Unicode-code-point-safe, with regression test) for a UTF-8 decode crash surfaced mid-fix. quality-mgr independently re-verified the fix locally and via the full green CI matrix (confirmed by gh api job status, not self-report) before issuing this PASS. All AN.15 sprint deliverables (campaign contract extension, checked-render scenario corpus, bounded four-worker campaign run/retention) confirmed satisfied. PR #879 merged into integrate/phase-an at afddeb86b680df1a4c0bb7d0f2ac08e1eea44706 (2026-08-14T09:44:31Z) by team-lead per standing merge policy (green CI + 100% findings fixed, non-develop/main target)."
     }
   ],
   "coverage_gaps": [
