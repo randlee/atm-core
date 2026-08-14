@@ -1,6 +1,6 @@
 ---
 title: AN.13 sc-compose 1.4.1 Checked-Render Catalog Format Contract
-status: in_progress
+status: complete
 branch: feature/an13-sc-compose-141-checked-render
 target: integrate/phase-an
 worktree: ../atm-core-worktrees/feature/an13-sc-composer-141-upgrade
