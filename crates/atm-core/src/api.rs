@@ -354,9 +354,8 @@ fn decode_success_response(
         }
         RequestEnvelope::Doctor(_) => decode_response_body(body, "doctor")
             .map(|value| ResponseEnvelope::Doctor(Box::new(value))),
-        RequestEnvelope::Search(_) => {
-            decode_response_body(body, "search").map(ResponseEnvelope::Search)
-        }
+        RequestEnvelope::Search(_) => decode_response_body(body, "search")
+            .map(|value| ResponseEnvelope::Search(Box::new(value))),
         RequestEnvelope::ReloadRuntimeView => decode_response_body::<()>(body, "runtime reload")
             .map(|()| ResponseEnvelope::RuntimeViewReloaded),
     }

@@ -11,7 +11,9 @@ forbidden_literals = [
 ]
 
 [identities.production_canonical_literals]
-"team-lead" = ["crates/atm-core/src/roles.rs"]
+"team-lead" = ["crates/atm-storage/src/lib.rs"]
+"quality-mgr" = ["crates/atm-storage/src/lib.rs"]
+"atm-dev" = ["crates/atm-storage/src/lib.rs"]
 
 [fixed_sleep]
 # Empty by default: no test file is exempt until a narrow daemon-runtime suite

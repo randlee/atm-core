@@ -62,7 +62,7 @@ pub enum ResponseEnvelope {
     Receive(Box<ReadOutcome>),
     Clear(ClearOutcome),
     Doctor(Box<DoctorReport>),
-    Search(SearchResponse),
+    Search(Box<SearchResponse>),
     RuntimeViewReloaded,
     Error(AtmError),
 }

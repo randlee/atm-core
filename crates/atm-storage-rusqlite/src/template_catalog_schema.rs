@@ -35,22 +35,7 @@ SELECT m.team, m.agent, m.from_agent, m.message_at, m.message_id,
        m.workflow_scope_kind, m.workflow_scope_id, m.workflow_state,
        m.workflow_stage, m.workflow_transition, m.workflow_iteration,
        m.applied_template_tags_json,
-       CASE WHEN m.workflow_scope_kind IS NULL THEN NULL ELSE COALESCE((
-           SELECT json_group_array(value) FROM (
-               SELECT 'template-type:' || t.template_type AS value
-               WHERE t.template_type IS NOT NULL
-               UNION ALL SELECT 'content-format:' || m.content_format
-               WHERE m.content_format IS NOT NULL
-               UNION ALL SELECT 'workflow-state:' || m.workflow_state
-               WHERE m.workflow_state IS NOT NULL
-               UNION ALL SELECT 'workflow-stage:' || m.workflow_stage
-               WHERE m.workflow_stage IS NOT NULL
-               UNION ALL SELECT 'workflow-transition:' || m.workflow_transition
-               WHERE m.workflow_transition IS NOT NULL
-               UNION ALL SELECT 'workflow-scope-kind:' || m.workflow_scope_kind
-               WHERE m.workflow_scope_kind IS NOT NULL
-           )
-       ), '[]') END AS derived_tags_json,
+       m.derived_tags_json,
        m.effective_tags_json,
        s.read, s.acknowledged_at, s.pending_ack_at
 FROM mail_messages m
@@ -151,12 +136,41 @@ fn ensure_mail_message_template_columns(
             "ALTER TABLE mail_messages ADD COLUMN applied_template_tags_json TEXT NULL;",
         ),
         (
+            "derived_tags_json",
+            "ALTER TABLE mail_messages ADD COLUMN derived_tags_json TEXT NULL;",
+        ),
+        (
             "effective_tags_json",
             "ALTER TABLE mail_messages ADD COLUMN effective_tags_json TEXT NULL;",
         ),
     ] {
         ensure_column(connection, target, "mail_messages", name, statement)?;
     }
+    // Existing workflow rows predate the persisted canonical projection. Keep
+    // their view surface intact during the additive migration; new admissions
+    // are written by Rust's single canonical tag-provenance implementation.
+    connection
+        .execute(
+            "UPDATE mail_messages
+             SET derived_tags_json = COALESCE((
+                 SELECT json_group_array(effective.value)
+                 FROM json_each(COALESCE(effective_tags_json, '[]')) AS effective
+                 WHERE NOT EXISTS (
+                     SELECT 1 FROM json_each(COALESCE(tags_json, '[]')) AS instance
+                     WHERE instance.value = effective.value
+                 )
+                 AND NOT EXISTS (
+                     SELECT 1 FROM json_each(COALESCE(applied_template_tags_json, '[]')) AS applied
+                     WHERE applied.value = effective.value
+                 )
+             ), '[]')
+             WHERE workflow_scope_kind IS NOT NULL
+               AND derived_tags_json IS NULL",
+            [],
+        )
+        .map_err(|error| {
+            sqlite_error(target, "failed to backfill derived tag projection", error)
+        })?;
     Ok(())
 }
 

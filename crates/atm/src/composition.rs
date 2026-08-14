@@ -376,7 +376,7 @@ impl<'a> CliComposition<'a> {
             .execute_request(RequestEnvelope::Search(Box::new(request)))
             .await?
         {
-            ResponseEnvelope::Search(response) => Ok(response),
+            ResponseEnvelope::Search(response) => Ok(*response),
             other => Err(unexpected_response("search", other)),
         }
     }

@@ -23,6 +23,8 @@
   triage:closedAt "2026-08-14T01:00:00Z"^^xsd:dateTime ;
   triage:closedBy "quality-mgr" ;
   triage:hasOccurrence <urn:atm:triage:occurrence/QA-002-AN11/AN11-S11-1> ;
+  triage:closedAt "2026-08-14T02:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/QA-002-AN11/AN11-S11-1>

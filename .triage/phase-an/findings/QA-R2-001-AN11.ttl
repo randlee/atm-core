@@ -15,7 +15,7 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-14T01:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.11 ;
@@ -28,8 +28,8 @@
   triage:file "crates/atm-core/src/protocol.rs" ;
   triage:line 49 ;
   triage:snippet "Search(SearchRequest)," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pan-s11-workflow-analytics-projection" ;
   triage:headSha "ca053b737" ;
   triage:occursIn <urn:atm:triage:worktree/S11-R2/ca053b737> .

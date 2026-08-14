@@ -434,7 +434,7 @@ impl StorageAndNudgeRouter {
         let store = self.service_runtime.async_message_search_store()?;
         atm_core::search::execute_search(ingress, request, store.as_ref(), deadline)
             .await
-            .map(atm_core::protocol::ResponseEnvelope::Search)
+            .map(|response| atm_core::protocol::ResponseEnvelope::Search(Box::new(response)))
             .map(ApiResponse::new)
     }
 
