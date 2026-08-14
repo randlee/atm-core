@@ -24,9 +24,9 @@
   triage:triagedAt "2026-08-11T02:53:58-07:00"^^xsd:dateTime ;
   triage:reasonForDeferral "public_upstream_api_prerequisite" ;
   triage:futureValidationMethod "exact_pinned_upstream_adapter_swap" ;
-  triage:resolutionNotes "When the public upstream API is available, create a dedicated integration/phase-an PR that replaces the fixture map with the exact-pinned sc-compose/sc-sha adapter. Preserve the TemplateComposer port and the sole atm-daemon-bootstrap composition site; do not add a local hash/parser/loader implementation. Validate the shared LF/CRLF identity vector, explicit BOM/final-newline vectors, classified include/import/from-import inspection, containment, Windows/macOS/Linux CI, and boundary lint in that same PR." ;
+  triage:resolutionNotes "Status update (2026-08-14, quality-mgr, record-accuracy correction): prerequisite satisfied (sc-composer 1.4.1 exposes inspect_template_directives / sc-sha calculate_hash+TemplateSha256), fixture-backed adapter integration not yet done. When the public upstream API is available, create a dedicated integration/phase-an PR that replaces the fixture map with the exact-pinned sc-compose/sc-sha adapter. Preserve the TemplateComposer port and the sole atm-daemon-bootstrap composition site; do not add a local hash/parser/loader implementation. Validate the shared LF/CRLF identity vector, explicit BOM/final-newline vectors, classified include/import/from-import inspection, containment, Windows/macOS/Linux CI, and boundary lint in that same PR." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN1-FIXTURE-STUB-REPLACEMENT-001/1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AN1-FIXTURE-STUB-REPLACEMENT-001/1>
   a triage:Occurrence ;

@@ -8,27 +8,27 @@
   a triage:Finding ;
   triage:findingId "FTQ-001-AN15" ;
   triage:title "timeout_and_failure_remain_best_effort races a fixed 10ms sleep against the async timeout-drop path on loaded Windows runners" ;
-  triage:description "quality-mgr root-caused a Test(windows-latest) FAILED on PR #880 (feature/an15-adversarial-fuzzing, run 31819546649, job 94829518897) to workflow_telemetry::tests::timeout_and_failure_remain_best_effort, panicked at crates/atm-runtime/src/workflow_telemetry.rs:405:9, assertion left==right failed (left: 0, right: 1). The test configures emit_timeout: Duration::from_millis(1), calls try_emit once, then sleeps a fixed Duration::from_millis(10) before asserting diagnostics().dropped_timeout == 1. On a loaded/slow Windows CI runner the background async task that increments dropped_timeout after the 1ms configured timeout can lose the race against the fixed 10ms sleep, observing 0 instead of 1. Confirmed unrelated to the AN.15 fix under review: this test is in atm-runtime (workflow_telemetry.rs), a different crate from the boundaries-lint fix's atm-template-sc-compose (commit f661a8876, 2-string-literal rename only). Test(macos-latest) and Test(ubuntu-latest) passed on the same run; re-running Test(windows-latest) alone succeeded. Remediation: replace the fixed 10ms sleep with a bounded poll/retry loop (or otherwise await the drop-counter reaching 1 with a generous timeout) instead of a single fixed sleep racing the timeout path." ;
+  triage:description "quality-mgr root-caused a Test(windows-latest) FAILED on PR #880 (feature/an15-adversarial-fuzzing, run 31819546649, job 94829518897) to workflow_telemetry::tests::timeout_and_failure_remain_best_effort, panicked at crates/atm-runtime/src/workflow_telemetry.rs:405:9, assertion left==right failed (left: 0, right: 1). The test configures emit_timeout: Duration::from_millis(1), calls try_emit once, then sleeps a fixed Duration::from_millis(10) before asserting diagnostics().dropped_timeout == 1. On a loaded/slow Windows CI runner the background async task that increments dropped_timeout after the 1ms configured timeout can lose the race against the fixed 10ms sleep, observing 0 instead of 1. Confirmed unrelated to the AN.15 fix under review: this test is in atm-runtime (workflow_telemetry.rs), a different crate from the boundaries-lint fix's atm-template-sc-compose (commit f661a8876, 2-string-literal rename only). Test(macos-latest) and Test(ubuntu-latest) passed on the same run; re-running Test(windows-latest) alone succeeded. Remediation: replace the fixed 10ms sleep with a bounded poll/retry loop (or otherwise await the drop-counter reaching 1 with a generous timeout) instead of a single fixed sleep racing the timeout path. Status corrected open -> deferred by quality-mgr (2026-08-14): intentional-defer rationale (flaky-test root cause fully understood and unrelated to the reviewed fix; matches this record's own reasoning) means it should not have been left open." ;
   triage:phaseId "phase-an" ;
   triage:triageMode "initial_pass" ;
   triage:category "flaky-test-qa" ;
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "deferred" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-14T16:50:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AN15 ;
   triage:foundAt "2026-08-14T16:36:54Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001-AN15/AN15-OCC-001> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/FTQ-001-AN15/AN15-OCC-001>
   a triage:Occurrence ;
   triage:file "crates/atm-runtime/src/workflow_telemetry.rs" ;
   triage:line 395 ;
   triage:snippet "async fn timeout_and_failure_remain_best_effort() {" ;
-  triage:status "open" ;
+  triage:status "deferred" ;
   triage:closed false ;
   triage:branch "feature/an15-adversarial-fuzzing" ;
   triage:headSha "f661a8876" ;
