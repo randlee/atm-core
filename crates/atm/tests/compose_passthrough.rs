@@ -90,17 +90,17 @@ fn compose_matches_validation_failure_status_and_diagnostic() {
     );
     let direct_stderr = String::from_utf8_lossy(&direct.stderr);
     let atm_stderr = String::from_utf8_lossy(&passthrough.stderr);
-    let direct_diag = direct_stderr
-        .lines()
-        .find(|line| line.contains("ERR_VAL_MISSING_REQUIRED"))
-        .expect("direct sc-compose must report the validation diagnostic");
-    let atm_diag = atm_stderr
-        .lines()
-        .find(|line| line.contains("ERR_VAL_MISSING_REQUIRED"))
-        .expect("ATM must retain the upstream validation diagnostic");
     assert!(
-        direct_diag.ends_with(atm_diag),
-        "ATM diagnostic must preserve the direct sc-compose detail:\n direct: {direct_diag}\n    atm: {atm_diag}"
+        direct_stderr.contains("ERR_VAL_MISSING_REQUIRED"),
+        "direct sc-compose must report the validation diagnostic"
+    );
+    assert!(
+        atm_stderr.contains("template verification render failed"),
+        "ATM must map the upstream validation diagnostic to its stable typed error"
+    );
+    assert!(
+        !atm_stderr.contains(template),
+        "ATM's public diagnostic must not leak the absolute template path retained in the upstream cause"
     );
 }
 

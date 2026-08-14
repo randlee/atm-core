@@ -500,4 +500,43 @@ mod tests {
                 .is_some_and(|cause| cause.contains("changed after it was loaded"))
         );
     }
+
+    #[test]
+    fn production_adapter_retains_upstream_validation_diagnostic_as_a_typed_cause() {
+        let root = temporary_root("missing-required-variable");
+        let template_path = root.join("main.j2");
+        fs::write(
+            &template_path,
+            "---\nrequired_variables:\n  - required\n---\n{{ required }}",
+        )
+        .expect("write template");
+        let canonical_root = fs::canonicalize(&root).expect("canonical root");
+        let canonical_template = fs::canonicalize(&template_path).expect("canonical template");
+        let source = TemplateSource::file_backed(
+            fs::read(&canonical_template).expect("read template"),
+            canonical_template,
+        );
+
+        let error = ScComposeTemplateComposer::new()
+            .compose_file(
+                &source,
+                &Map::new(),
+                &TemplateRoot {
+                    canonical_path: canonical_root,
+                },
+            )
+            .expect_err("missing required variable must fail composition");
+        fs::remove_dir_all(&root).expect("remove isolated template root");
+
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateRenderVerificationFailed
+        );
+        assert!(
+            error
+                .cause()
+                .is_some_and(|cause| cause.contains("ERR_VAL_MISSING_REQUIRED")),
+            "the typed ATM error must retain the upstream diagnostic in its cause"
+        );
+    }
 }
