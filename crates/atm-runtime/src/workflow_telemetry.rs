@@ -267,7 +267,33 @@ impl WorkflowTelemetrySink for WorkflowTelemetryRuntime {
 mod tests {
     use super::*;
     use std::sync::Mutex;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+
+    const DIAGNOSTIC_WAIT_TIMEOUT: Duration = Duration::from_secs(1);
+    const DIAGNOSTIC_POLL_INTERVAL: Duration = Duration::from_millis(2);
+
+    async fn wait_for_diagnostic_count(counter: &AtomicU64, expected: u64, counter_name: &str) {
+        let observed = tokio::time::timeout(DIAGNOSTIC_WAIT_TIMEOUT, async {
+            loop {
+                let observed = counter.load(Ordering::Relaxed);
+                if observed >= expected {
+                    return observed;
+                }
+                tokio::time::sleep(DIAGNOSTIC_POLL_INTERVAL).await;
+            }
+        })
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "{counter_name} did not reach {expected} within {DIAGNOSTIC_WAIT_TIMEOUT:?}; observed {}",
+                counter.load(Ordering::Relaxed)
+            )
+        });
+        assert_eq!(
+            observed, expected,
+            "{counter_name} must not exceed its expected count in this single-record test"
+        );
+    }
 
     fn record() -> WorkflowTelemetryRecord {
         WorkflowTelemetryRecord {
@@ -401,14 +427,8 @@ mod tests {
             Arc::new(BlockingSink(AtomicUsize::new(0))),
         );
         runtime.try_emit(record());
-        tokio::time::sleep(Duration::from_millis(10)).await;
-        assert_eq!(
-            runtime
-                .diagnostics()
-                .dropped_timeout
-                .load(Ordering::Relaxed),
-            1
-        );
+        wait_for_diagnostic_count(&runtime.diagnostics().dropped_timeout, 1, "dropped_timeout")
+            .await;
         runtime.shutdown().await;
     }
 
@@ -438,14 +458,8 @@ mod tests {
             Arc::new(FailingSink),
         );
         runtime.try_emit(record());
-        tokio::time::sleep(Duration::from_millis(10)).await;
-        assert_eq!(
-            runtime
-                .diagnostics()
-                .dropped_failure
-                .load(Ordering::Relaxed),
-            1
-        );
+        wait_for_diagnostic_count(&runtime.diagnostics().dropped_failure, 1, "dropped_failure")
+            .await;
         runtime.shutdown().await;
     }
 
