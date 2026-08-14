@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-001-AN12>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-001-AN12" ;
+  triage:title "AN.12 sprint doc missing required worktree: frontmatter field" ;
+  triage:description "docs/plans/phase-an/sprint-AN12-workflow-validation-evidence.md frontmatter has title/status/branch/target but is missing the required 'worktree:' field (should be '../atm-core-worktrees/feature/an12-workflow-validation-evidence' per repo convention). Confirmed directly: current frontmatter block is only title/status/branch/target, no worktree: key." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-14T02:14:23Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN-12 ;
+  triage:foundAt "2026-08-14T02:04:48Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-AN12/AN12-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-001-AN12/AN12-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-an/sprint-AN12-workflow-validation-evidence.md" ;
+  triage:line 1 ;
+  triage:snippet "frontmatter missing 'worktree:' field" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "2095a8f" ;
+  triage:occursIn <urn:atm:triage:worktree/AN12-0> .
+
+<urn:atm:triage:worktree/AN12-0>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/an12-workflow-validation-evidence" ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "2095a8f" ;
+  triage:orderIndex 0 .
