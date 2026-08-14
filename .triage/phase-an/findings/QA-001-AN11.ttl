@@ -15,11 +15,13 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-14T00:20:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.11 ;
   triage:foundAt "2026-08-14T00:08:17Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-14T01:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:hasOccurrence <urn:atm:triage:occurrence/QA-001-AN11/AN11-S1> ;
   triage:triageRecordVersion "1" .
 
@@ -28,8 +30,8 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 106 ;
   triage:snippet "assert!(runtime_composition.contains(...doctor_ports...))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pan-s11-workflow-analytics-projection" ;
   triage:headSha "e971a226c3a944ec8eb8caa22b3aded76314ee5e" ;
   triage:occursIn <urn:atm:triage:worktree/AN11-S1/e971a226c> .

@@ -15,11 +15,13 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-14T00:31:16Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.11 ;
   triage:foundAt "2026-08-14T00:08:17Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-14T01:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005-AN11/pan11-1> ;
   triage:triageRecordVersion "1" .
 
@@ -28,8 +30,8 @@
   triage:file "crates/atm-core/src/workflow_analytics.rs" ;
   triage:line 104 ;
   triage:snippet "pub fn project_lifecycles" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pan-s11-workflow-analytics-projection" ;
   triage:headSha "e971a226c3a944ec8eb8caa22b3aded76314ee5e" ;
   triage:occursIn <urn:atm:triage:worktree/pan11/e971a226c> .

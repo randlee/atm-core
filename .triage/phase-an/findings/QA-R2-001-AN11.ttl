@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QA-R2-001-AN11>
+  a triage:Finding ;
+  triage:findingId "QA-R2-001-AN11" ;
+  triage:title "clippy::large_enum_variant on RequestEnvelope::Search after SearchRequest lifecycle field addition" ;
+  triage:description "crates/atm-core/src/protocol.rs line 49: RequestEnvelope::Search(SearchRequest) now triggers clippy::large_enum_variant under -D warnings (enum >=720 bytes vs 496-byte second-largest variant Receive(ReadQuery) at line 46). Regression introduced by this fix round: SearchRequest grew a new 'lifecycle: Option<WorkflowProjectionRequest>' field (crates/atm-core/src/search.rs:24-31), pushing the enum over clippy's size threshold. CI-corroborated: PR #874 Clippy check and all 3 Just-lint matrix jobs (macos/ubuntu/windows) fail identically. Recommended fix: box the variant (Search(Box<SearchRequest>)) at protocol.rs:49, check mirrored ResponseEnvelope::Search at protocol.rs:65 for the same issue, and update construction/match sites in crates/atm-core/src/api.rs, crates/atm-http-runtime/src/message_handler.rs, crates/atm-http-runtime/src/storage_and_nudge_router.rs." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "fix_round_2" ;
+  triage:category "quality" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-14T01:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.11 ;
+  triage:foundAt "2026-08-14T01:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-R2-001-AN11/S11-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QA-R2-001-AN11/S11-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 49 ;
+  triage:snippet "Search(SearchRequest)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
+  triage:headSha "ca053b737" ;
+  triage:occursIn <urn:atm:triage:worktree/S11-R2/ca053b737> .
+
+<urn:atm:triage:worktree/S11-R2/ca053b737>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-pan-s11" ;
+  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
+  triage:headSha "ca053b737" ;
+  triage:orderIndex 11 .
