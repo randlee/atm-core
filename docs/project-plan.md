@@ -1325,7 +1325,7 @@ merged into this documentation line.
   replace that historical comparison with a reduced absolute threshold.
 
 The authoritative decision and sprint scopes are
-[`ADR-047`](./adr/ADR-047-durable-idle-search-projection.md),
+[`ADR-049`](./adr/ADR-049-durable-idle-search-projection.md),
 [`Phase AQ plan`](./plans/phase-aq/plan-phase-aq.md),
 [`sprint-AQ1`](./plans/phase-aq/sprint-AQ1-durable-idle-search-projection.md),
 and [`sprint-AQ2`](./plans/phase-aq/sprint-AQ2-search-projection-performance-evidence.md).

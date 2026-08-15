@@ -79,7 +79,7 @@ Initial crate requirement IDs:
   The crate exposes only the backend-neutral read-only freshness status
   authorized by the amended sealed search capability. It adds no second
   SQLite owner, daemon, or public maintenance trait. Satisfies
-  `REQ-P-SEARCH-INDEX-001` and `REQ-CORE-SEARCH-INDEX-001` per ADR-047.
+  `REQ-P-SEARCH-INDEX-001` and `REQ-CORE-SEARCH-INDEX-001` per ADR-049.
 
 ## 4. Required References
 
