@@ -19,7 +19,7 @@
   triage:dispatchReady false ;
   triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-08-14T16:50:00Z"^^xsd:dateTime ;
-  triage:foundIn triage:AN15 ;
+  triage:foundIn triage:AN.15 ;
   triage:foundAt "2026-08-14T16:36:54Z"^^xsd:dateTime ;
   triage:resolutionNotes "Closed 2026-08-14 by quality-mgr: independently verified fix b875b0170c5646e7530a562376a7e8c8826ed3a9 on integrate/phase-an. Both racing fixed-sleep assertions (dropped_timeout and dropped_failure) replaced with a bounded 1s-timeout/2ms-poll wait_for_diagnostic_count() helper with a clear panic diagnostic on timeout, removing the fixed-10ms-sleep-vs-async-drop race entirely. Re-ran `cargo test -p atm-runtime workflow_telemetry::tests --release`: 9/9 pass, including timeout_and_failure_remain_best_effort. Not taken from arch-ctm's self-report." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001-AN15/AN15-OCC-001> ;
