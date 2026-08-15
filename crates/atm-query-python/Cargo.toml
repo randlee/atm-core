@@ -18,9 +18,9 @@ extension-module = ["pyo3/extension-module"]
 
 [dependencies]
 pyo3 = "0.29"
-atm-storage = { path = "../atm-storage", version = "1.4.2-beta-am" }
-atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.2-beta-am" }
+atm-storage = { path = "../atm-storage", version = "1.4.2" }
+atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.2" }
 
 [dev-dependencies]
-atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.2-beta-am", features = ["test-support"] }
+atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.2", features = ["test-support"] }
 tempfile = "3"
