@@ -1,6 +1,6 @@
 ---
 title: AQ.2 Search Projection Performance and Recovery Evidence
-status: draft
+status: planned
 branch: feature/aq2-search-projection-performance-evidence
 target: integrate/phase-aq
 worktree: ../atm-core-worktrees/feature/aq2-search-projection-performance-evidence

@@ -1,6 +1,6 @@
 ---
 title: AQ.1 Durable Idle Search Projection
-status: draft
+status: planned
 branch: feature/aq1-durable-idle-search-projection
 target: integrate/phase-aq
 worktree: ../atm-core-worktrees/feature/aq1-durable-idle-search-projection

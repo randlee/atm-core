@@ -1,6 +1,6 @@
 ---
 title: Phase AQ Plan — Search Indexing and Query Optimization
-status: AQ.1–AQ.2 planned
+status: planned
 branch: plan/search-indexing-admission-performance
 baseline: develop @ 5d541bd06
 ---
