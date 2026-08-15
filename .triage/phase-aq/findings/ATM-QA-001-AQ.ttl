@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-001-AQ>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-001-AQ" ;
+  triage:title "ADR-047 number collision" ;
+  triage:description "docs/adr/ADR-047-durable-idle-search-projection.md registers as ADR-047, but this number is already claimed by forward references in Phase AK planning docs (ADR-047 was supposed to define direct trusted-LAN HTTP peer transport). The AQ conversion commit (a760a473d) landed a new ADR-047 without confirming Phase AK's ADR renumbering actually happened first. ADR-047 now collides with forward-referenced number in docs/adr/INDEX.md and other Phase AK documentation." ;
+  triage:phaseId "phase-aq" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-15T19:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AQ.0 ;
+  triage:foundAt "2026-08-15T19:28:11Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-AQ/AQ-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-001-AQ/AQ-1>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-047-durable-idle-search-projection.md" ;
+  triage:line 1 ;
+  triage:snippet "# ADR-047 — Durable Idle Search Projection" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "plan/search-indexing-admission-performance" ;
+  triage:headSha "6a89883fa" ;
+  triage:occursIn <urn:atm:triage:worktree/AQ-plan/6a89883fa> .
+
+<urn:atm:triage:worktree/AQ-plan/6a89883fa>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/plan-search-indexing-admission-performance" ;
+  triage:branch "plan/search-indexing-admission-performance" ;
+  triage:headSha "6a89883fa" ;
+  triage:orderIndex 0 .

@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RSH-004-AQ>
+  a triage:Finding ;
+  triage:findingId "RSH-004-AQ" ;
+  triage:title "No transaction deadline specified for idle drain-batch SQLite transactions" ;
+  triage:description "sprint-AQ1-durable-idle-search-projection.md specifies that the existing SQLite writer drains bounded work only while idle and yields to every foreground submission, but does not define a maximum transaction-hold deadline for an in-progress drain batch, risking an unbounded transaction hold if a batch is large or a drain step stalls, which could block foreground admission it is meant to yield to." ;
+  triage:phaseId "phase-aq" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "robustness" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-15T19:29:30Z"^^xsd:dateTime ;
+  triage:foundIn triage:AQ.0 ;
+  triage:foundAt "2026-08-15T19:28:11Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004-AQ/AQ-spec-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RSH-004-AQ/AQ-spec-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-aq/sprint-AQ1-durable-idle-search-projection.md" ;
+  triage:line 48 ;
+  triage:snippet "drains bounded work only while idle and yields to every foreground submission" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "plan/search-indexing-admission-performance" ;
+  triage:headSha "6a89883fa19f7772aec5bf864da757a08eda9915" ;
+  triage:occursIn <urn:atm:triage:worktree/AQ0/6a89883fa19f7772aec5bf864da757a08eda9915> .
+
+<urn:atm:triage:worktree/AQ0/6a89883fa19f7772aec5bf864da757a08eda9915>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AQ0" ;
+  triage:branch "plan/search-indexing-admission-performance" ;
+  triage:headSha "6a89883fa19f7772aec5bf864da757a08eda9915" ;
+  triage:orderIndex 0 .

@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RSH-003-AQ>
+  a triage:Finding ;
+  triage:findingId "RSH-003-AQ" ;
+  triage:title "No staleness threshold defined for search-projection freshness reporting" ;
+  triage:description "Phase acceptance criterion 3 in plan-phase-aq.md requires local CLI/Python/HTTP/doctor surfaces to 'expose honest projection freshness', but neither plan-phase-aq.md nor sprint-AQ1-durable-idle-search-projection.md defines a concrete staleness threshold (e.g., how many backlog items or how much elapsed time constitutes 'stale' vs 'fresh') that those surfaces should use to classify freshness." ;
+  triage:phaseId "phase-aq" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "robustness" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-15T19:33:11Z"^^xsd:dateTime ;
+  triage:foundIn triage:AQ.0 ;
+  triage:foundAt "2026-08-15T19:28:11Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-003-AQ/AQ0-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RSH-003-AQ/AQ0-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-aq/plan-phase-aq.md" ;
+  triage:line 99 ;
+  triage:snippet "Local CLI, Python, HTTP, and doctor expose honest projection freshness" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "plan/search-indexing-admission-performance" ;
+  triage:headSha "6a89883fa19f7772aec5bf864da757a08eda9915" ;
+  triage:occursIn <urn:atm:triage:worktree/AQ0/6a89883fa19f7772aec5bf864da757a08eda9915> .
+
+<urn:atm:triage:worktree/AQ0/6a89883fa19f7772aec5bf864da757a08eda9915>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AQ0" ;
+  triage:branch "plan/search-indexing-admission-performance" ;
+  triage:headSha "6a89883fa19f7772aec5bf864da757a08eda9915" ;
+  triage:orderIndex 0 .

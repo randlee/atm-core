@@ -1,0 +1,6 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:PhaseAQ a triage:Phase .
+
+triage:AQ.0 a triage:Sprint ; triage:inPhase triage:PhaseAQ ; triage:order 0 ; triage:branch "plan/search-indexing-admission-performance" ; triage:criteria "docs/plans/phase-aq/plan-phase-aq.md" .

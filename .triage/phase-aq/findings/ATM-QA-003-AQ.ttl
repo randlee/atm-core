@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-003-AQ>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-003-AQ" ;
+  triage:title "AQ.1 schema-approval gate not tracked to an artifact" ;
+  triage:description "plan-phase-aq.md's AQ.1 entry gate states 'The product owner must approve the additive SQLite desired-state work-ledger schema before its migration is implemented. Record that approval in AQ.1's implementation PR.' but sprint-AQ1-durable-idle-search-projection.md does not define a concrete tracking mechanism (checklist item, required PR field, or gate artifact) for capturing that approval, leaving the gate as prose only with no enforceable tracking point." ;
+  triage:phaseId "phase-aq" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "completeness" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-15T19:32:34Z"^^xsd:dateTime ;
+  triage:foundIn triage:AQ.0 ;
+  triage:foundAt "2026-08-15T19:28:11Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003-AQ/AQ0-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-003-AQ/AQ0-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-aq/plan-phase-aq.md" ;
+  triage:line 69 ;
+  triage:snippet "The product owner must approve the additive SQLite desired-state work-ledger schema before its migration is implemented. Record that approval in AQ.1's implementation PR." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "plan/search-indexing-admission-performance" ;
+  triage:headSha "6a89883fa19f7772aec5bf864da757a08eda9915" ;
+  triage:occursIn <urn:atm:triage:worktree/AQ0/6a89883fa19f7772aec5bf864da757a08eda9915> .
+
+<urn:atm:triage:worktree/AQ0/6a89883fa19f7772aec5bf864da757a08eda9915>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AQ0" ;
+  triage:branch "plan/search-indexing-admission-performance" ;
+  triage:headSha "6a89883fa19f7772aec5bf864da757a08eda9915" ;
+  triage:orderIndex 0 .

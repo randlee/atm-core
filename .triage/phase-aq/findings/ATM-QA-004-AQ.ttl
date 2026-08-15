@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-004-AQ>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-004-AQ" ;
+  triage:title "Stale ADR-ATM-RUSQLITE-002 frontmatter" ;
+  triage:description "An existing ADR referenced by the Phase AQ plan (ADR-ATM-RUSQLITE-002, governing atm-storage-rusqlite ownership boundaries) has stale frontmatter (status or superseded-by fields) that was not updated when ADR-047 was introduced as the new governing decision for search-projection scheduling. Check docs/adr/ for ADR-ATM-RUSQLITE-002 and confirm its frontmatter accurately reflects its relationship to ADR-047." ;
+  triage:phaseId "phase-aq" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-15T19:32:25Z"^^xsd:dateTime ;
+  triage:foundIn triage:AQ.0 ;
+  triage:foundAt "2026-08-15T19:28:11Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AQ/AQ.0-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-004-AQ/AQ.0-1>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-ATM-RUSQLITE-002.md" ;
+  triage:line 3 ;
+  triage:snippet "adr_id: ADR-ATM-RUSQLITE-002 ... status: accepted (missing superseded-by field)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "plan/search-indexing-admission-performance" ;
+  triage:headSha "6a89883fa19f7772aec5bf864da757a08eda9915" ;
+  triage:occursIn <urn:atm:triage:worktree/AQ.0/6a89883fa> .
+
+<urn:atm:triage:worktree/AQ.0/6a89883fa>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AQ.0" ;
+  triage:branch "plan/search-indexing-admission-performance" ;
+  triage:headSha "6a89883fa19f7772aec5bf864da757a08eda9915" ;
+  triage:orderIndex 0 .
