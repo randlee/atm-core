@@ -5,7 +5,7 @@ branch: plan/search-indexing-admission-performance
 baseline: develop @ 5d541bd06
 ---
 
-# Phase AQ — Search Indexing and Query Optimization
+# Phase AQ Plan — Search Indexing and Query Optimization
 
 ## Why this phase exists
 
@@ -26,6 +26,14 @@ This is a focused indexing/search-optimization phase. It does not reopen
 Phase AN's template, workflow-metadata, query-language, or checked-render
 work. AO (portable TLS) and AP (outbound corporate-network connectivity) are
 independent planned phases and are not dependencies or deliverables of AQ.
+
+**Phase AQ has no dependency on Phase AO or Phase AP, in either direction.**
+AQ touches only `atm-storage-rusqlite`'s search-projection scheduling and the
+sealed `atm-storage`/`atm-core` status DTO; it does not touch TLS transport
+(AO) or outbound corporate-network connectivity (AP), and neither of those
+phases touches search projection. AQ may be scheduled and executed before,
+in parallel with, or after AO and/or AP, in any order, with no sequencing,
+merge-order, or shared-artifact coordination required between them.
 
 ## Governing decision and boundaries
 
