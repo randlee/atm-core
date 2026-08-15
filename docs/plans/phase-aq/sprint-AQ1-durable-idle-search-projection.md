@@ -55,6 +55,14 @@ gate; an unchecked field blocks the migration and enables no drain.
    daemon, raw process, detached task, HTTP DB access, or legacy-daemon edit
    is permitted.
 
+   AQ.1 defines one crate-private `SearchProjectionScheduleConfig` validated
+   synchronously while `SharedDb` starts, before the writer accepts work:
+   `idle_quiet_interval` defaults to 250 ms and must be within 1 ms through
+   60 s; `max_batch_items` defaults to 256 and must be within 1 through
+   1,024. Zero, negative/invalid duration encodings, and values outside those
+   bounds return one typed configuration error and prevent writer startup.
+   There is no silent clamping, fallback, or partially running indexer.
+
 3. Extend only the existing sealed `MessageSearchStore` capability with a
    leaf `SearchProjectionStatus` DTO and a read-only status method. It has
    this minimum public shape; SQLite timing/schema details remain private:
@@ -120,6 +128,9 @@ gate; an unchecked field blocks the migration and enables no drain.
   no more than the documented batch bound, and processes newly queued
   foreground work before another maintenance batch. Shutdown stops intake,
   does not leave a detached worker, and preserves unfinished durable items.
+- Invalid `idle_quiet_interval` or `max_batch_items` values fail startup
+  before the writer accepts a submission; defaults and both inclusive valid
+  bounds start deterministically.
 - Fake and SQLite implementations expose the same status semantics. CLI,
   local HTTP, Python, and doctor make nonempty backlog observable without
   exposing an internal cause or changing canonical command success.
@@ -140,6 +151,9 @@ gate; an unchecked field blocks the migration and enables no drain.
   Tokio/Axum HTTP, Maturin/Python, and doctor response tests for the explicit
   status. Include a nonempty backlog assertion and prove no remote query route
   becomes available.
+- Configuration tests cover the default, both valid bounds, zero, invalid
+  duration encodings, and out-of-range values, proving rejection occurs
+  before the writer accepts any work.
 - `cargo test -p atm-storage -p atm-storage-rusqlite -p atm-core -p atm -p atm-http-runtime`,
   `cargo test -p atm-architecture --test boundary_enforcement`, `just lint`,
   and `just test` on Linux, macOS, and Windows CI.
