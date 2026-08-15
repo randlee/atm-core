@@ -15,22 +15,25 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "docs/plans/phase-an/sprint-AN15-adversarial-fuzzing.md" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-08-14T08:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.15 ;
   triage:foundAt "2026-08-14T08:00:00Z"^^xsd:dateTime ;
+  triage:resolutionNotes "Update 2026-08-15 by quality-mgr, AN-PHASEAN-INTEGRATE-LANDINGCHECK-1 follow-up: fix commit ce0fde03a independently re-verified on integrate/phase-an. docs/plans/phase-an/sprint-AN15-adversarial-fuzzing.md frontmatter now status: complete (was draft) with worktree: field present (unchanged from prior, was never actually missing on this occurrence -- the draft status was the real defect). Verified the doc's own stated completion gate ('sprint cannot be marked complete until [HTTP-seam] addendum has its own independent QA pass') is genuinely met, not just asserted: AN15HTTPFUZZ-QA-3 PASSed 4/4 (I ran that QA round myself) and PR #887 is merged into integrate/phase-an @ 56b3ccef5 (I fast-forwarded and confirmed this myself in AN-PHASEAN-INTEGRATE-LANDINGCHECK-1). Not a waiver -- the doc was genuinely updated to meet its own gate. Closing both occurrences." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN15-SPRINTDOC-STATUS-DRAFT/AN15-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN15-SPRINTDOC-STATUS-DRAFT/AN15-2> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AN15-SPRINTDOC-STATUS-DRAFT/AN15-1>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-an/sprint-AN15-adversarial-fuzzing.md" ;
   triage:line 3 ;
-  triage:snippet "status: draft" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "status: complete" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-08-15T05:40:00Z"^^xsd:dateTime ;
   triage:branch "feature/an15-adversarial-fuzzing" ;
   triage:headSha "9ddf105b5dd7c3d7ec592cac1602dd7ab1c743bb" ;
   triage:occursIn <urn:atm:triage:worktree/AN15-feature/an15/9ddf105b> .
@@ -39,11 +42,13 @@
   a triage:Occurrence ;
   triage:file "docs/plans/phase-an/sprint-AN15-adversarial-fuzzing.md" ;
   triage:line 3 ;
-  triage:snippet "status: draft" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "status: complete" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-08-15T05:40:00Z"^^xsd:dateTime ;
   triage:branch "integrate/phase-an" ;
-  triage:headSha "2fd6e90300fb8d67302debfa7b1bb4324cc928bb" ;
+  triage:headSha "ce0fde03a" ;
   triage:occursIn <urn:atm:triage:worktree/AN15-integrate/phase-an/2fd6e903> .
 
 <urn:atm:triage:worktree/AN15-feature/an15/9ddf105b>
