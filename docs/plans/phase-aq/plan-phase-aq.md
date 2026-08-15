@@ -96,9 +96,11 @@ Phase AQ closes only when all of the following are true:
 2. The existing writer drains bounded work only while idle and yields to every
    foreground submission; restart, delete/recreate, and reindex converge to
    the current canonical state.
-3. Local CLI, Python, HTTP, and doctor expose honest projection freshness
-   without making canonical mail operations unavailable or adding remote
-   search.
+3. Local CLI, Python, HTTP, and doctor expose one honest projection freshness
+   classification: `Fresh` only with no pending or blocked work,
+   `CatchingUp` only with unblocked work at most 30 seconds old, and `Stale`
+   with blocked work or an older backlog. It is observational only: canonical
+   mail operations remain available and remote search remains absent.
 4. Required fake-contract, storage, core, CLI, local HTTP, Python, boundary,
    and cross-platform CI tests pass.
 5. AQ.2 retains valid M5 direct/F8 and recovery evidence meeting the fixed

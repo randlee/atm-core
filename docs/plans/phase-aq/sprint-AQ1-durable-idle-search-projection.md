@@ -80,11 +80,20 @@ gate; an unchecked field blocks the migration and enables no drain.
    this minimum public shape; SQLite timing/schema details remain private:
 
    ```rust
+   pub enum SearchProjectionFreshness {
+       Fresh,
+       CatchingUp,
+       Stale,
+   }
+
    pub struct SearchProjectionStatus {
+       pub sampled_at: IsoTimestamp,
        pub pending_count: u64,
+       pub blocked_count: u64,
        pub oldest_pending_at: Option<IsoTimestamp>,
        pub last_successful_drain_at: Option<IsoTimestamp>,
        pub completed_watermark_at: Option<IsoTimestamp>,
+       pub freshness: SearchProjectionFreshness,
    }
 
    pub trait MessageSearchStore: sealed::Sealed + Send + Sync {
@@ -108,12 +117,22 @@ gate; an unchecked field blocks the migration and enables no drain.
    method after awaiting a search. Do not add a public maintenance trait or
    expose a direct SQLite handle.
 
+   Every adapter derives the same classification from the status snapshot:
+   `Fresh` means `pending_count == 0` and `blocked_count == 0`;
+   `CatchingUp` means there is pending work, no blocked work, and the oldest
+   pending item is at most 30 seconds old; `Stale` means any blocked work or
+   an oldest pending item older than 30 seconds. The fixed 30-second threshold
+   is deliberately an observation contract, not an admission timeout or a
+   promise that newly accepted content is immediately searchable.
+
 4. Make the status additive and visible on every existing **local** search
    presentation: the CLI, local HTTP response, Python read/query result, and
    doctor diagnostic. A nonzero backlog states that FTS is eventually
    consistent; it does not block send/read/ack or downgrade daemon readiness.
    Remote search remains forbidden. The status must not expose message
    content, a raw database path, or private SQLite error causes.
+   CLI, Python, local HTTP, and doctor use the one `Fresh`/`CatchingUp`/
+   `Stale` classification above; they must not invent per-surface thresholds.
 
 5. Preserve the local search-projection rebuild operation as recovery. It
    must converge to the same projection state as an idle drain without
@@ -150,6 +169,9 @@ gate; an unchecked field blocks the migration and enables no drain.
 - Fake and SQLite implementations expose the same status semantics. CLI,
   local HTTP, Python, and doctor make nonempty backlog observable without
   exposing an internal cause or changing canonical command success.
+- CLI, Python, local HTTP, doctor, fake, and SQLite tests prove the one
+  classification contract: empty is `Fresh`; a <=30-second unblocked backlog
+  is `CatchingUp`; an older backlog or any blocked work is `Stale`.
 - Boundary lint proves `atm-storage-rusqlite` is the only direct SQLite/FTS
   owner; no legacy daemon or `atm-http-runtime` source constructs/controls the
   indexer. The sealed-trait manifests name the amended method and all
