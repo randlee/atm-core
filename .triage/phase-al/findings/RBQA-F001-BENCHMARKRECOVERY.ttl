@@ -1,0 +1,30 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F001-BENCHMARKRECOVERY>
+  a triage:Finding ;
+  triage:findingId "RBQA-F001-BENCHMARKRECOVERY" ;
+  triage:title "Duplicated daemon-health-decision logic between run_admission_capacity.py and daemon-switch.py" ;
+  triage:description "ruthless-boundary-qa (BENCHMARK-MANAGED-RECOVERY-QA-1) reports duplicated daemon-health-decision logic between scripts/smoke/run_admission_capacity.py's require_ready_managed_doctor() and daemon-switch.py's live_pair_matches(), on branch fix/benchmark-managed-recovery-001 (commit 0bf083c23, PR #890). Reported as likely pre-existing duplication, not newly introduced by this diff. Confirmed pre-existing via parent commit inspection." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-15T18:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL13 ;
+  triage:foundAt "2026-08-15T18:18:59Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:worktree/AL13/0bf083c23>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/fix/benchmark-managed-recovery-001" ;
+  triage:branch "fix/benchmark-managed-recovery-001" ;
+  triage:headSha "0bf083c23" ;
+  triage:orderIndex 0 .

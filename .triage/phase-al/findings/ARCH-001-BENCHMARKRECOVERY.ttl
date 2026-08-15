@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ARCH-001-BENCHMARKRECOVERY>
+  a triage:Finding ;
+  triage:findingId "ARCH-001-BENCHMARKRECOVERY" ;
+  triage:title "run_admission_capacity.py exceeds RULE-003 line ceiling (recurrence)" ;
+  triage:description "arch-qa (BENCHMARK-MANAGED-RECOVERY-QA-1) reports scripts/smoke/run_admission_capacity.py is at 1590 lines against the RULE-003 ceiling of 1000 lines. This file was previously fixed once (1016 -> 894 lines), closed 2026-08-01 under prior triage, and has regrown since. arch-qa explicitly states this diff (commit 0bf083c23 on PR #890, branch fix/benchmark-managed-recovery-001) did not worsen it materially but is reporting it per zero-tolerance policy since it is currently over ceiling." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-15T18:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL13 ;
+  triage:foundAt "2026-08-15T18:18:59Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-BENCHMARKRECOVERY/BM1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ARCH-001-BENCHMARKRECOVERY/BM1-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 1590 ;
+  triage:snippet "line count violation: 1590 lines >= 1000 ceiling" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/benchmark-managed-recovery-001" ;
+  triage:headSha "0bf083c23f5c28a487bbfc00e3d7ac5e08edfd88" ;
+  triage:occursIn <urn:atm:triage:worktree/BM1/0bf083c23> .
+
+<urn:atm:triage:worktree/BM1/0bf083c23>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/fix/benchmark-managed-recovery-001" ;
+  triage:branch "fix/benchmark-managed-recovery-001" ;
+  triage:headSha "0bf083c23f5c28a487bbfc00e3d7ac5e08edfd88" ;
+  triage:orderIndex 0 .

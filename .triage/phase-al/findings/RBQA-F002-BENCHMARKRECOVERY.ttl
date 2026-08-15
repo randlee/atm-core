@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F002-BENCHMARKRECOVERY>
+  a triage:Finding ;
+  triage:findingId "RBQA-F002-BENCHMARKRECOVERY" ;
+  triage:title "Overly-broad except Exception in _restart_and_verify() discards context" ;
+  triage:description "ruthless-boundary-qa (BENCHMARK-MANAGED-RECOVERY-QA-1) reports an overly-broad except Exception clause in _restart_and_verify() within scripts/smoke/run_admission_capacity.py, on branch fix/benchmark-managed-recovery-001 (commit 0bf083c23, PR #890), which discards error context. Reported as likely pre-existing, not newly introduced by this diff." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "error-handling" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-15T18:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL13 ;
+  triage:foundAt "2026-08-15T18:18:59Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002-BENCHMARKRECOVERY/001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F002-BENCHMARKRECOVERY/001>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 344 ;
+  triage:snippet "except Exception as error:  # pragma: no cover" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/benchmark-managed-recovery-001" ;
+  triage:headSha "0bf083c23" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-bm-001/0bf083c23> .
+
+<urn:atm:triage:worktree/fix-bm-001/0bf083c23>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-bm-001" ;
+  triage:branch "fix/benchmark-managed-recovery-001" ;
+  triage:headSha "0bf083c23" ;
+  triage:orderIndex 0 .
