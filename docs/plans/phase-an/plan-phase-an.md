@@ -1,6 +1,6 @@
 ---
 title: Phase AN Plan — Decomposed Template Messages and a Template-Agnostic Query Surface
-status: AN.1–AN.15 complete
+status: AN.1–AN.15 complete; AN.16–AN.17 planned
 branch: plan/phase-an
 baseline: integrate/phase-al @ 0ef581e1 (assumes Phase AM deletion completes first; see Entry gate)
 ---
@@ -333,6 +333,8 @@ parallel once the schema lands.
 | AN.13 checked-render catalog-format contract | [sprint-AN13](./sprint-AN13-sc-compose-141-checked-render.md) | AN.10 merged | none |
 | AN.14 checked-render runtime upgrade to sc-compose 1.4.1 | [sprint-AN14](./sprint-AN14-sc-compose-141-checked-emission.md) | AN.13 merged | none |
 | AN.15 adversarial checked-render assurance | [sprint-AN15](./sprint-AN15-adversarial-fuzzing.md) | AN.14 merged | none |
+| AN.16 durable idle search projection | [sprint-AN16](./sprint-AN16-durable-idle-search-projection.md) | AN.15 pushed | none |
+| AN.17 search projection performance and recovery evidence | [sprint-AN17](./sprint-AN17-search-projection-performance-evidence.md) | AN.16 pushed | no production sprint |
 
 Merge-forward rule (repo convention): `must_follow` children merge the
 parent's pushed integration line before every dev/fix round.
@@ -389,6 +391,24 @@ preserves immutable input facts (raw revision SHA, parsed metadata, captured
 variables, and output format) without guessing a template's approval lineage.
 Repository-specific approval, protected-frontmatter, expected-tag, and
 lineage lint rules remain owned by the repository that supplies templates.
+
+## AN extension — durable idle search projection
+
+AN.5's synchronous FTS maintenance is correct but needlessly sits on the mail
+admission critical path. AN.16–AN.17 preserve canonical rows as immediate
+durable truth while treating FTS as a coalesced, recoverable, eventually
+consistent search projection. The extension is governed by
+[ADR-047](../../adr/ADR-047-durable-idle-search-projection.md): the existing
+private SQLite writer owns one durable work ledger and drains it only when
+foreground admission is quiet. It does not add ATM workflow vocabulary,
+remote search, a second daemon/process, or an in-memory best-effort queue.
+
+AN.16 is the only implementation sprint. It must land the complete durable
+queue, idle fairness, restart/reindex recovery, and explicit local freshness
+status as one production-ready behavior. AN.17 is the release-evidence sprint:
+it measures the exact M5 direct/F8 historical control, verifies recovery, and
+enforces the retained throughput floors. Its status cannot silently relax those
+floors or substitute a small absolute rate for the historical comparison.
 
 ## Open questions and resolved gates (do not implement past an unresolved gate)
 

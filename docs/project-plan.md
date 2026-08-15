@@ -1227,7 +1227,7 @@ Acceptance:
   proven dead, no guard is merged early, and the minimality proof confirms
   no compatibility shim survives.
 
-## 45. Phase AN — Decomposed Template Messages And Query Surface [AN.1–AN.15 COMPLETE]
+## 45. Phase AN — Decomposed Template Messages And Query Surface [AN.1–AN.15 COMPLETE; AN.16–AN.17 PLANNED]
 
 - **Phase AN: Decomposed Template Messages And Query Surface [AN.1–AN.10 COMPLETE]** —
   Added a bounded `sc-composer` adapter boundary, durable template catalog and
@@ -1285,6 +1285,19 @@ Sprint line:
   [`sprint-AN13-sc-compose-141-checked-render.md`](./plans/phase-an/sprint-AN13-sc-compose-141-checked-render.md),
   [`sprint-AN14-sc-compose-141-checked-emission.md`](./plans/phase-an/sprint-AN14-sc-compose-141-checked-emission.md),
   and [`sprint-AN15-adversarial-fuzzing.md`](./plans/phase-an/sprint-AN15-adversarial-fuzzing.md).
+
+- **AN.16–AN.17 durable idle search projection [PLANNED]** — AN.16 removes
+  synchronous FTS maintenance from foreground mail admission by atomically
+  recording coalesced desired-state work and draining it only through the
+  existing idle SQLite writer. It keeps canonical rows immediate, makes FTS
+  freshness explicit through local query/doctor observations, and preserves
+  crash/reindex recovery. AN.17 then provides the managed M5 direct/F8
+  performance and recovery proof against the retained FTS-free control; it
+  cannot replace that comparison with a reduced absolute threshold. The
+  authoritative decision and sprint scopes are
+  [`ADR-047`](./adr/ADR-047-durable-idle-search-projection.md),
+  [`sprint-AN16`](./plans/phase-an/sprint-AN16-durable-idle-search-projection.md),
+  and [`sprint-AN17`](./plans/phase-an/sprint-AN17-search-projection-performance-evidence.md).
 
 ## Publishing Improvements
 
