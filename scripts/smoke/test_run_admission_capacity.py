@@ -251,7 +251,40 @@ class AdmissionCapacityTests(unittest.TestCase):
         clean.assert_called_once_with(smoke_label="admission-capacity smoke")
         self.assertEqual(
             calls,
-            [("status", True), ("quiesce", False), ("restart", False), ("status", True)],
+            [("status", False), ("quiesce", False), ("restart", False), ("status", True)],
+        )
+
+    def test_managed_lifecycle_recovers_an_unavailable_pre_quiesce_daemon(self):
+        """Initial selector capture must not require the very doctor recovery restores."""
+        options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
+        pre_quiesce = healthy_managed_status()
+        pre_quiesce.pop("doctor")
+        after_restore = healthy_managed_status()
+        calls: list[tuple[str, bool]] = []
+
+        def daemon_switch(action, _options, *, doctor=False):
+            calls.append((action, doctor))
+            if action == "status" and doctor:
+                return after_restore
+            return pre_quiesce
+
+        with tempfile.TemporaryDirectory() as temp:
+            os_home = Path(temp)
+            state = os_home / ".atm"
+            state.mkdir()
+            (state / "mail.db").write_text("managed-state", encoding="utf-8")
+            with (
+                mock.patch.object(RUNNER, "os_account_home", return_value=os_home),
+                mock.patch.object(RUNNER, "daemon_switch_result", side_effect=daemon_switch),
+                mock.patch.object(RUNNER, "require_clean_host_daemon_state"),
+            ):
+                lifecycle = RUNNER.ManagedDaemonLifecycle(options)
+                lifecycle.begin()
+                lifecycle.restore()
+
+        self.assertEqual(
+            calls,
+            [("status", False), ("quiesce", False), ("restart", False), ("status", True)],
         )
 
     def test_backup_snapshot_failure_restarts_the_managed_pair(self):

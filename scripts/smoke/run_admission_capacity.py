@@ -285,8 +285,11 @@ class ManagedDaemonLifecycle:
 
     The state root is moved only after daemon-switch has stopped the managed
     daemon, so an open SQLite connection cannot race the snapshot. The selected
-    pair is captured before quiescence and compared after restart; this flow
-    never changes CLI/daemon selectors or their configuration.
+    pair is captured before quiescence and compared after restart. Capturing
+    selectors does not require an initial doctor result: controlled quiescence
+    is the recovery path for an unavailable managed daemon. Recovery always
+    requires a ready doctor result and this flow never changes CLI/daemon
+    selectors or their configuration.
     """
 
     options: ManagedDaemonOptions
@@ -295,7 +298,12 @@ class ManagedDaemonLifecycle:
     quiesced: bool = False
 
     def begin(self) -> None:
-        before = daemon_switch_result("status", self.options, doctor=True)
+        # Record only the selected binaries before stopping the service.  A
+        # managed daemon may be unavailable precisely because this benchmark
+        # is being used to validate/recover a release candidate.  Requiring
+        # doctor here makes that safe recovery impossible; doctor is enforced
+        # after restoration below.
+        before = daemon_switch_result("status", self.options)
         self.pre_pair = selected_pair(before)
         daemon_switch_result("quiesce", self.options)
         self.quiesced = True
