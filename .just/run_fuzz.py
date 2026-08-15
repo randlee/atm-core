@@ -13,6 +13,7 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 from typing import Any, Callable
@@ -31,6 +32,7 @@ TARGETS = (
     "atm-template-checked-emission",
     "full",
 )
+GIT_REVISION = re.compile(r"^[0-9a-f]{40,64}$")
 WORKERS = ("shape-probe", "template-probe", "boundary-probe", "differential-probe")
 WORKER_TARGETS = {
     "shape-probe": "var-file",
@@ -73,6 +75,54 @@ CHECKED_EMISSION_WORKERS = {
         "negative_cases": [],
     },
 }
+
+# The HTTP campaign is equally closed over owning-crate test selectors. It
+# covers the Axum framing boundary and one real loopback TCP listener without
+# accepting arbitrary commands from campaign JSON.
+HTTP_FRAMING_WORKERS = {
+    "shape-probe": {
+        "seam_id": "atm_http_runtime::axum_router::malformed_json",
+        "command": (
+            "cargo", "test", "-p", "atm-http-runtime",
+            "message_handler::tests::an15_http_shape_probe_rejects_malformed_json_before_dispatch", "--", "--exact", "--nocapture",
+        ),
+        "negative_cases": [
+            ("malformed-json", "invalid JSON is rejected before dispatch", "HTTP framing rejected malformed JSON"),
+        ],
+    },
+    "template-probe": {
+        "seam_id": "atm_http_runtime::axum_router::content_type",
+        "command": (
+            "cargo", "test", "-p", "atm-http-runtime",
+            "message_handler::tests::an15_http_template_probe_rejects_non_json_content_before_dispatch", "--", "--exact", "--nocapture",
+        ),
+        "negative_cases": [
+            ("non-json-content", "unsupported content is rejected before dispatch", "HTTP framing rejected non-JSON content"),
+        ],
+    },
+    "boundary-probe": {
+        "seam_id": "atm_http_runtime::axum_router::retired_provenance",
+        "command": (
+            "cargo", "test", "-p", "atm-http-runtime",
+            "message_handler::tests::an15_http_boundary_probe_rejects_retired_provenance_before_dispatch", "--", "--exact", "--nocapture",
+        ),
+        "negative_cases": [
+            ("retired-provenance", "client provenance claims are rejected before dispatch", "HTTP framing rejected retired provenance"),
+        ],
+    },
+    "differential-probe": {
+        "seam_id": "atm_http_runtime::loopback_tcp::live_request",
+        "command": (
+            "cargo", "test", "-p", "atm-http-runtime",
+            "tests::an15_http_differential_probe_exercises_live_loopback_request_shapes", "--", "--exact", "--nocapture",
+        ),
+        "negative_cases": [],
+    },
+}
+PRODUCT_WORKERS = {
+    "atm-template-checked-emission": CHECKED_EMISSION_WORKERS,
+    "local-http-framing": HTTP_FRAMING_WORKERS,
+}
 PROOF_MECHANISMS = ("counter", "tracing-span", "coverage")
 ISSUE_CATEGORIES = ("environment", "dependency", "harness", "tooling", "product")
 ISSUE_DISPOSITIONS = ("fix_now", "deferred")
@@ -97,8 +147,9 @@ CAMPAIGN_FIELDS = {
     "promote_regressions",
     "target_seams",
     "notes",
+    "source_revision",
 }
-CAMPAIGN_OPTIONAL_FIELDS = {"baseline_ref", "notes", "campaign_id"}
+CAMPAIGN_OPTIONAL_FIELDS = {"baseline_ref", "notes", "campaign_id", "source_revision"}
 SEAM_FIELDS = {"seam_id", "minimum_invocations", "accepted_proof"}
 WORKER_RESULT_FIELDS = {
     "correlation_id",
@@ -275,6 +326,11 @@ def validate_campaign(payload: Any, root: Path | None = None, *, require_campaig
     campaign_id = campaign.get("campaign_id")
     if require_campaign_id or campaign_id is not None:
         campaign_id = _required_string(campaign_id, "campaign_id")
+    source_revision = campaign.get("source_revision")
+    if source_revision is not None:
+        source_revision = _required_string(source_revision, "source_revision")
+        if not GIT_REVISION.fullmatch(source_revision):
+            raise FuzzInputError("source_revision must be a lowercase Git object ID")
     if not isinstance(campaign["promote_regressions"], bool):
         raise FuzzInputError("promote_regressions must be boolean")
     validated = {
@@ -289,20 +345,21 @@ def validate_campaign(payload: Any, root: Path | None = None, *, require_campaig
         "promote_regressions": campaign["promote_regressions"],
         "target_seams": _validate_target_seams(campaign["target_seams"]),
         "notes": notes,
+        "source_revision": source_revision,
     }
-    if target == "atm-template-checked-emission":
+    if target in PRODUCT_WORKERS:
         if validated["max_workers"] != len(WORKERS):
-            raise FuzzInputError("atm-template-checked-emission requires exactly four workers")
+            raise FuzzInputError(f"{target} requires exactly four workers")
         if validated["cases_per_worker"] < 100:
-            raise FuzzInputError("atm-template-checked-emission requires at least 100 cases per worker")
+            raise FuzzInputError(f"{target} requires at least 100 cases per worker")
         if validated["per_worker_timeout_s"] != 120:
-            raise FuzzInputError("atm-template-checked-emission requires a 120-second worker timeout")
-        expected = {contract["seam_id"] for contract in CHECKED_EMISSION_WORKERS.values()}
+            raise FuzzInputError(f"{target} requires a 120-second worker timeout")
+        expected = {contract["seam_id"] for contract in PRODUCT_WORKERS[target].values()}
         declared = {seam["seam_id"] for seam in validated["target_seams"]}
         if declared != expected:
-            raise FuzzInputError("atm-template-checked-emission must declare each fixed product seam exactly once")
+            raise FuzzInputError(f"{target} must declare each fixed product seam exactly once")
         if any(seam["accepted_proof"] != "coverage" or seam["minimum_invocations"] < 100 for seam in validated["target_seams"]):
-            raise FuzzInputError("atm-template-checked-emission requires coverage proof with at least 100 invocations per seam")
+            raise FuzzInputError(f"{target} requires coverage proof with at least 100 invocations per seam")
     return validated
 
 
@@ -637,6 +694,32 @@ def _checked_emission_diagnostic(expected_code: str, observed_message: str) -> d
     }
 
 
+def _resolved_git_revision(worktree: Path) -> str:
+    """Return the exact checked-out source revision for durable evidence."""
+    try:
+        process = subprocess.Popen(
+            ("git", "-C", str(worktree), "rev-parse", "HEAD"),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        stdout, _ = process.communicate()
+        if process.returncode != 0:
+            raise OSError("git rev-parse failed")
+        revision = stdout.strip()
+    except OSError as error:
+        raise FuzzInputError(f"unable to record the campaign source revision for {worktree}") from error
+    if not GIT_REVISION.fullmatch(revision):
+        raise FuzzInputError("resolved campaign source revision is not a lowercase Git object ID")
+    return revision
+
+
+def _with_source_revision(campaign: dict[str, Any]) -> dict[str, Any]:
+    recorded = dict(campaign)
+    recorded["source_revision"] = _resolved_git_revision(Path(campaign["worktree_path"]))
+    return recorded
+
+
 def _require_diverse_case_shapes(output: str, correlation_id: str, cases_per_worker: int) -> None:
     """Fail closed when an AN.15 product probe repeats one input shape.
 
@@ -666,9 +749,13 @@ def _require_diverse_case_shapes(output: str, correlation_id: str, cases_per_wor
         )
 
 
-def _checked_emission_worker(campaign: dict[str, Any], correlation_id: str) -> dict[str, Any]:
-    """Run one fixed AN.15 product seam and retain its bounded command evidence."""
-    contract = CHECKED_EMISSION_WORKERS[correlation_id]
+def _executed_product_worker(
+    campaign: dict[str, Any],
+    correlation_id: str,
+    contracts: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Run one fixed product seam and retain its bounded command evidence."""
+    contract = contracts[correlation_id]
     campaign_dir = Path(campaign["worktree_path"]) / "site" / "reports" / "fuzz" / f"{campaign['campaign_id']}-v2"
     campaign_dir.mkdir(parents=True, exist_ok=True)
     log_path = campaign_dir / f"{correlation_id}.log"
@@ -722,14 +809,16 @@ def _checked_emission_worker(campaign: dict[str, Any], correlation_id: str) -> d
     }, campaign)
 
 
-def build_checked_emission_result(campaign: dict[str, Any]) -> dict[str, Any]:
-    """Execute the closed-over AN.15 product campaign; never accept caller commands."""
-    if campaign["target"] != "atm-template-checked-emission":
-        raise FuzzInputError("real execution is currently supported only for atm-template-checked-emission")
+def build_executed_product_result(campaign: dict[str, Any]) -> dict[str, Any]:
+    """Execute a closed-over product campaign; never accept caller commands."""
+    contracts = PRODUCT_WORKERS.get(campaign["target"])
+    if contracts is None:
+        raise FuzzInputError("real execution is unsupported for the selected campaign target")
     if campaign["campaign_id"] is None:
         raise FuzzInputError("real execution requires campaign_id")
+    campaign = _with_source_revision(campaign)
     with ThreadPoolExecutor(max_workers=len(WORKERS)) as executor:
-        workers = list(executor.map(lambda worker_id: _checked_emission_worker(campaign, worker_id), WORKERS))
+        workers = list(executor.map(lambda worker_id: _executed_product_worker(campaign, worker_id, contracts), WORKERS))
     report = {
         "schema_version": SCHEMA_VERSION,
         "execution_mode": "executed-product-campaign",
@@ -742,6 +831,13 @@ def build_checked_emission_result(campaign: dict[str, Any]) -> dict[str, Any]:
         "summary": _expected_summary(workers, [], []),
     }
     return validate_report(report)
+
+
+def build_checked_emission_result(campaign: dict[str, Any]) -> dict[str, Any]:
+    """Compatibility entry point for the AN.15 checked-emission campaign."""
+    if campaign["target"] != "atm-template-checked-emission":
+        raise FuzzInputError("expected atm-template-checked-emission campaign")
+    return build_executed_product_result(campaign)
 
 
 def _probe_worker(correlation_id: str, campaign: dict[str, Any]) -> dict[str, Any]:
@@ -830,7 +926,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--campaign", type=Path, help="v2 campaign JSON; defaults to the tooling contract-probe campaign")
     parser.add_argument("--verify-report", type=Path, help="validate and normalize an external durable v2 report")
     parser.add_argument("--contract-probe", action="store_true", help="run the instrumented tooling-only v2 contract probe")
-    parser.add_argument("--execute", action="store_true", help="run the fixed AN.15 checked-emission product campaign")
+    parser.add_argument("--execute", action="store_true", help="run a fixed supported product campaign")
     parser.add_argument("--output", type=Path, help="optional JSON output path inside the repository")
     args = parser.parse_args(argv[1:])
     root = repository_root()
@@ -845,7 +941,7 @@ def main(argv: list[str]) -> int:
             if args.campaign is None:
                 raise FuzzInputError("--execute requires an explicit AN.15 campaign JSON")
             campaign = validate_campaign(load_json(args.campaign), root, require_campaign_id=True)
-            result = build_checked_emission_result(campaign)
+            result = build_executed_product_result(campaign)
         else:
             result = validate_report(load_json(args.verify_report), root)
         encoded = json.dumps(result, indent=2, sort_keys=True) + "\n"

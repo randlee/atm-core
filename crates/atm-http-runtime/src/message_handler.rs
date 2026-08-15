@@ -938,6 +938,117 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn an15_http_shape_probe_rejects_malformed_json_before_dispatch() {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let app = canonical_message_router(
+            Arc::new(RecordingRouter {
+                response: sent_response(),
+                calls: Arc::clone(&calls),
+            }),
+            AuthenticatedConnector::local(),
+            limits(4096, 2),
+            timeouts(),
+        );
+
+        for case_index in 0..100 {
+            let (body, shape) = match case_index % 5 {
+                0 => (b"{".to_vec(), "truncated-object"),
+                1 => (b"[".to_vec(), "truncated-array"),
+                2 => (b"{\"to\":".to_vec(), "truncated-field"),
+                3 => (b"not-json".to_vec(), "plain-text"),
+                _ => (b"{\"to\":true".to_vec(), "wrong-scalar"),
+            };
+            eprintln!("AN15_CASE_SHAPE={shape}");
+            let response = post(app.clone(), body).await;
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+            assert!(
+                String::from_utf8_lossy(&response_body(response).await)
+                    .contains("invalid HTTP messages request"),
+                "case {case_index} must retain the stable malformed-request diagnostic"
+            );
+        }
+        assert!(calls.lock().expect("record calls").is_empty());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn an15_http_template_probe_rejects_non_json_content_before_dispatch() {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let app = canonical_message_router(
+            Arc::new(RecordingRouter {
+                response: sent_response(),
+                calls: Arc::clone(&calls),
+            }),
+            AuthenticatedConnector::local(),
+            limits(4096, 2),
+            timeouts(),
+        );
+        let body = serde_json::to_vec(&write_request()).expect("typed request JSON");
+
+        for case_index in 0..100 {
+            let (content_type, shape) = match case_index % 5 {
+                0 => ("text/plain", "plain-text"),
+                1 => ("application/xml", "xml"),
+                2 => ("text/html", "html"),
+                3 => ("application/octet-stream", "binary"),
+                _ => ("application/x-www-form-urlencoded", "form"),
+            };
+            eprintln!("AN15_CASE_SHAPE={shape}");
+            let response =
+                post_with_headers(app.clone(), body.clone(), &[(CONTENT_TYPE, content_type)]).await;
+            assert_eq!(
+                response.status(),
+                StatusCode::BAD_REQUEST,
+                "case {case_index}"
+            );
+        }
+        assert!(calls.lock().expect("record calls").is_empty());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn an15_http_boundary_probe_rejects_retired_provenance_before_dispatch() {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let app = canonical_message_router(
+            Arc::new(RecordingRouter {
+                response: sent_response(),
+                calls: Arc::clone(&calls),
+            }),
+            AuthenticatedConnector::local(),
+            limits(4096, 2),
+            timeouts(),
+        );
+        let body = serde_json::to_vec(&write_request()).expect("typed request JSON");
+        let retired = HeaderName::from_static("x-atm-peer-source-host");
+
+        for case_index in 0..100 {
+            let (claim, shape) = match case_index % 5 {
+                0 => ("peer.example.test", "dns"),
+                1 => ("127.0.0.1", "ipv4"),
+                2 => ("[::1]", "ipv6"),
+                3 => ("xn--peer-7qa.example.test", "idna"),
+                _ => ("peer.example.test:443", "host-port"),
+            };
+            eprintln!("AN15_CASE_SHAPE={shape}");
+            let response = post_with_headers(
+                app.clone(),
+                body.clone(),
+                &[(CONTENT_TYPE, "application/json"), (retired.clone(), claim)],
+            )
+            .await;
+            assert_eq!(
+                response.status(),
+                StatusCode::BAD_REQUEST,
+                "case {case_index}"
+            );
+            assert!(
+                String::from_utf8_lossy(&response_body(response).await)
+                    .contains("X-ATM-Peer-Source-Host is not accepted"),
+                "case {case_index} must retain the retired-provenance diagnostic"
+            );
+        }
+        assert!(calls.lock().expect("record calls").is_empty());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn local_and_peer_use_identical_write_json_and_one_dispatch() {
         let mut request = write_request();
         request.authenticated_source_host = Some("forged.example.test".parse().expect("host"));

@@ -1978,6 +1978,54 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn an15_http_differential_probe_exercises_live_loopback_request_shapes() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let configured = HttpRuntimeBuilder::new(
+            config_with_record(0, temporary_directory.path().join("local-http.json")),
+            Arc::new(TestRouter),
+        )
+        .build()
+        .expect("valid configuration");
+        let running = configured.start().await.expect("replacement server starts");
+        let record: LocalHttpEndpointRecord = serde_json::from_slice(
+            &std::fs::read(temporary_directory.path().join("local-http.json"))
+                .expect("read active loopback endpoint record"),
+        )
+        .expect("decode active loopback endpoint record");
+        let endpoint = format!("http://{}/v1/atm/messages", running.local_address());
+        let client = bounded_test_http_client();
+
+        for case_index in 0..100 {
+            let (accept, shape) = match case_index % 5 {
+                0 => ("application/json", "json"),
+                1 => ("text/plain", "plain-text"),
+                2 => ("application/xml", "xml"),
+                3 => ("text/html", "html"),
+                _ => ("*/*", "wildcard"),
+            };
+            eprintln!("AN15_CASE_SHAPE={shape}");
+            let response = client
+                .get(&endpoint)
+                .header(LOCAL_CAPABILITY_HEADER, &record.capability_base64url)
+                .header("accept", accept)
+                .header("x-atm-request-id", (case_index + 1).to_string())
+                .send()
+                .await
+                .expect("replacement server responds");
+            assert_eq!(
+                response.status(),
+                reqwest::StatusCode::BAD_REQUEST,
+                "case {case_index}"
+            );
+        }
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("replacement server joins after HTTP fuzz probe");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn os_selected_loopback_port_is_published_from_the_bound_listener() {
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let record_path = temporary_directory.path().join("local-http.json");
