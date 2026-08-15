@@ -1,12 +1,36 @@
 ---
 title: Phase AO Plan — Optional mTLS Peer Adapter
-status: proposed
+status: approved
 branch: plan/phase-ao-tls-and-ap-outbound-connectivity
 worktree: ../atm-core-worktrees/plan/phase-ao-tls-and-ap-outbound-connectivity
 target: develop
 ---
 
 # Phase AO — Optional mTLS Peer Adapter
+
+## Plan approval
+
+Approved by quality-mgr after a two-round plan-hardening QA cycle on PR #829.
+
+- **PLAN-AO/AP-QA-2** (re-verify fix round at `8705b1fbd`) confirmed fixed:
+  PLAN-CRIT-002 (Blocking — AM quarantine explicit-decision gap),
+  PLAN-CRIT-007/CONTRA (undefined gating phrase mismatch between
+  `project-plan.md` and `plan-phase-am.md`), PLAN-CRIT-008 (SSE
+  session/`PeerIoAdapter` tie-in), RBQA-F001 (missing dedicated boundary
+  TOML for the sealed `PeerIoAdapter` plus specificity gaps in
+  `http-runtime.toml`/`atm-daemon-bootstrap`), PLAN-SCOPE-006 (missing
+  branch/worktree frontmatter on 5 sprint docs), PLAN-SCOPE-007 (fictitious
+  symbol names in `sprint-ap4-canonical-bridge.md`). PASS verdict sent to
+  team-lead.
+- **PLAN-AO/AP-QA-3** (re-verify at `e81e9f426`) confirmed a residual
+  namespace-consistency fix: all `PeerIoAdapter` references unified to
+  `atm_core::PeerIoAdapter`, eliminating a stray
+  `atm_http_runtime::PeerIoAdapter` reference. PASS verdict sent to
+  team-lead.
+- **RBQA-F006** (unstrengthened `.just/lint_boundaries.py` `tls_adapter`
+  regex, line 171) was waived as known lint debt rather than treated as
+  blocking; closing this gap is committed to AO.1/AO.2 code delivery (see
+  line below).
 
 ## Goal
 
