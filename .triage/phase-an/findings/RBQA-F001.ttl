@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F001>
+  a triage:Finding ;
+  triage:findingId "RBQA-F001" ;
+  triage:title "Dead code in normalize_worker path with stale AI.48 label" ;
+  triage:description "normalize_worker() and its helpers (_default_input(), _default_finding()) are dead code left over from the pre-v2 ('AI.48') report path. Since normalize_campaign() now delegates exclusively to run_fuzz.validate_report() and projects results through _v2_worker_for_panel(), normalize_worker() is never called anywhere in the tree. The dead path still carries a stale, wrong provenance label ('AI.48 bounded {worker}campaign') that predates and does not match this sprint's identifiers." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "dead-code" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-14T19:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.15 ;
+  triage:foundAt "2026-08-14T19:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/rbqa-f001-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F001/rbqa-f001-1>
+  a triage:Occurrence ;
+  triage:file "scripts/fuzz/render_report.py" ;
+  triage:line 81 ;
+  triage:snippet "def _default_input() and _default_finding() unused helper functions" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an15-fuzz-v2-realism-campaign" ;
+  triage:headSha "59e447707" ;
+  triage:occursIn <urn:atm:triage:worktree/an15-fuzz-v2/59e447707> .
+
+<urn:atm:triage:worktree/an15-fuzz-v2/59e447707>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/an15-fuzz-v2-realism-campaign" ;
+  triage:branch "feature/an15-fuzz-v2-realism-campaign" ;
+  triage:headSha "59e447707" ;
+  triage:orderIndex 1 .

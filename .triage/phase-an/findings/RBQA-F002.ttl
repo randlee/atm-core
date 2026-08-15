@@ -1,0 +1,90 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F002>
+  a triage:Finding ;
+  triage:findingId "RBQA-F002" ;
+  triage:title "Mechanical acceptance gate loop count not input diversity" ;
+  triage:description "The mechanical acceptance gate for atm-template-checked-emission (minimum_invocations >= 100) is satisfied purely by loop count, not input diversity. All four AN.15 probe tests implement their '100 cases' as `for case_index in 0..100 { ... }` where case_index is only interpolated into an otherwise fixed template/value/path string. This satisfies the sprint's '>= 100 seeded cases' gate without actual structural/class diversity across the 100 iterations. The gate cannot currently distinguish a genuinely varied 100-case corpus from a single case looped 100 times with a counter suffix." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-quality" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-14T19:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.15 ;
+  triage:foundAt "2026-08-14T19:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/rbqa-f002-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/rbqa-f002-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/rbqa-f002-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/rbqa-f002-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/rbqa-f002-5> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F002/rbqa-f002-1>
+  a triage:Occurrence ;
+  triage:file ".just/run_fuzz.py" ;
+  triage:line 302 ;
+  triage:snippet "minimum_invocations >= 100 for all seams" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an15-fuzz-v2-realism-campaign" ;
+  triage:headSha "59e447707" ;
+  triage:occursIn <urn:atm:triage:worktree/an15-fuzz-v2/59e447707> .
+
+<urn:atm:triage:occurrence/RBQA-F002/rbqa-f002-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/template.rs" ;
+  triage:line 246 ;
+  triage:snippet "for case_index in 0..100 with counter-only variation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an15-fuzz-v2-realism-campaign" ;
+  triage:headSha "59e447707" ;
+  triage:occursIn <urn:atm:triage:worktree/an15-fuzz-v2/59e447707> .
+
+<urn:atm:triage:occurrence/RBQA-F002/rbqa-f002-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-template-sc-compose/src/lib.rs" ;
+  triage:line 646 ;
+  triage:snippet "for case_index in 0..100 with counter-only variation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an15-fuzz-v2-realism-campaign" ;
+  triage:headSha "59e447707" ;
+  triage:occursIn <urn:atm:triage:worktree/an15-fuzz-v2/59e447707> .
+
+<urn:atm:triage:occurrence/RBQA-F002/rbqa-f002-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-template-sc-compose/src/lib.rs" ;
+  triage:line 1294 ;
+  triage:snippet "for case_index in 0..100 with counter-only variation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an15-fuzz-v2-realism-campaign" ;
+  triage:headSha "59e447707" ;
+  triage:occursIn <urn:atm:triage:worktree/an15-fuzz-v2/59e447707> .
+
+<urn:atm:triage:occurrence/RBQA-F002/rbqa-f002-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/render.rs" ;
+  triage:line 211 ;
+  triage:snippet "for case_index in 0..100 with counter-only variation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an15-fuzz-v2-realism-campaign" ;
+  triage:headSha "59e447707" ;
+  triage:occursIn <urn:atm:triage:worktree/an15-fuzz-v2/59e447707> .
+
+<urn:atm:triage:worktree/an15-fuzz-v2/59e447707>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/an15-fuzz-v2-realism-campaign" ;
+  triage:branch "feature/an15-fuzz-v2-realism-campaign" ;
+  triage:headSha "59e447707" ;
+  triage:orderIndex 1 .
