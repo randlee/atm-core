@@ -644,7 +644,14 @@ mod tests {
         let composer = ScComposeTemplateComposer::new();
 
         for case_index in 0..100 {
-            let value = format!("case-{case_index}-🙂-漢字-\\\"-newline\\n");
+            let (value, shape) = match case_index % 5 {
+                0 => (format!("case-{case_index}"), "plain"),
+                1 => (format!("case-{case_index}-🙂-漢字"), "unicode"),
+                2 => (format!("case {case_index} with spaces"), "whitespace"),
+                3 => (format!("case-{case_index}-\\\"-quote"), "quoted"),
+                _ => (format!("case-{case_index}-newline\\nnext"), "multiline"),
+            };
+            eprintln!("AN15_CASE_SHAPE={shape}");
             let vars = Map::from_iter([("value".to_owned(), Value::String(value.clone()))]);
             let rendered = composer
                 .compose_file(&source, &vars, &root)
@@ -1292,9 +1299,22 @@ mod tests {
             .into_inner();
 
         for case_index in 0..100 {
+            let (include, shape) = match case_index % 5 {
+                0 => (format!("../outside-{case_index}.j2"), "parent"),
+                1 => (format!("./../outside-{case_index}.j2"), "current-parent"),
+                2 => (
+                    format!("nested/../../outside-{case_index}.j2"),
+                    "nested-parent",
+                ),
+                3 => (format!(".././outside-{case_index}.j2"), "parent-current"),
+                _ => (
+                    format!("nested/.././../outside-{case_index}.j2"),
+                    "nested-current-parent",
+                ),
+            };
+            eprintln!("AN15_CASE_SHAPE={shape}");
             let template_path = root.join(format!("main-{case_index}.j2"));
-            fs::write(&template_path, format!("@<../outside-{case_index}.j2>\\n"))
-                .expect("write escaping template");
+            fs::write(&template_path, format!("@<{include}>\\n")).expect("write escaping template");
             fs::write(
                 parent.join(format!("outside-{case_index}.j2")),
                 "must not load",

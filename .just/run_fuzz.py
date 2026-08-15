@@ -113,6 +113,8 @@ WORKER_RESULT_FIELDS = {
 }
 INVOCATION_FIELDS = {"required_seam_ids", "proofs"}
 PROOF_FIELDS = {"seam_id", "mechanism", "invocation_count", "evidence_ref"}
+CASE_SHAPE_PREFIX = "AN15_CASE_SHAPE="
+MINIMUM_DISTINCT_CASE_SHAPES = 4
 ISSUE_FIELDS = {
     "issue_id",
     "case_id",
@@ -635,6 +637,35 @@ def _checked_emission_diagnostic(expected_code: str, observed_message: str) -> d
     }
 
 
+def _require_diverse_case_shapes(output: str, correlation_id: str, cases_per_worker: int) -> None:
+    """Fail closed when an AN.15 product probe repeats one input shape.
+
+    The worker tests emit one stable, non-counter shape label per exercised
+    case. The execution gate verifies both complete evidence and several
+    distinct input families, so a loop which only changes a case number cannot
+    satisfy the campaign's 100-case acceptance criterion.
+    """
+    shapes = [
+        line.removeprefix(CASE_SHAPE_PREFIX)
+        for line in output.splitlines()
+        if line.startswith(CASE_SHAPE_PREFIX)
+    ]
+    if len(shapes) != cases_per_worker:
+        raise FuzzInputError(
+            f"campaign worker {correlation_id} did not retain one case-shape marker for every seeded case"
+        )
+    counts = {shape: shapes.count(shape) for shape in set(shapes)}
+    if len(counts) < MINIMUM_DISTINCT_CASE_SHAPES:
+        raise FuzzInputError(
+            f"campaign worker {correlation_id} case diversity is degenerate: "
+            f"expected at least {MINIMUM_DISTINCT_CASE_SHAPES} distinct shapes"
+        )
+    if max(counts.values()) * 2 > cases_per_worker:
+        raise FuzzInputError(
+            f"campaign worker {correlation_id} case diversity is degenerate: one shape dominates the corpus"
+        )
+
+
 def _checked_emission_worker(campaign: dict[str, Any], correlation_id: str) -> dict[str, Any]:
     """Run one fixed AN.15 product seam and retain its bounded command evidence."""
     contract = CHECKED_EMISSION_WORKERS[correlation_id]
@@ -659,6 +690,9 @@ def _checked_emission_worker(campaign: dict[str, Any], correlation_id: str) -> d
     )
     if completed.returncode != 0:
         raise FuzzInputError(f"campaign worker {correlation_id} failed; retained {log_path.relative_to(campaign['worktree_path'])}")
+    _require_diverse_case_shapes(
+        f"{completed.stdout}\n{completed.stderr}", correlation_id, campaign["cases_per_worker"]
+    )
     proof = {
         "seam_id": contract["seam_id"],
         "mechanism": "coverage",

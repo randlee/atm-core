@@ -244,7 +244,14 @@ mod tests {
         };
 
         for case_index in 0..100 {
-            let captured = format!("captured-team-{case_index}");
+            let (captured, shape) = match case_index % 5 {
+                0 => (format!("captured-team-{case_index}"), "plain"),
+                1 => (format!("captured-team-{case_index}-🙂"), "unicode"),
+                2 => (format!("captured team {case_index}"), "whitespace"),
+                3 => (format!("captured-team-{case_index}-\\\"quote"), "quoted"),
+                _ => (format!("captured-team-{case_index}\\nnext"), "multiline"),
+            };
+            eprintln!("AN15_CASE_SHAPE={shape}");
             let mut request = source();
             request.environment_values =
                 Map::from_iter([("ATM_TEAM".to_owned(), Value::String(captured.clone()))]);

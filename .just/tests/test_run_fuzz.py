@@ -29,6 +29,13 @@ from run_fuzz import validate_worker_result
 
 
 class FuzzRunnerTests(unittest.TestCase):
+    @staticmethod
+    def case_shape_evidence(*, distinct_shapes: int = 4) -> str:
+        return "\n".join(
+            f"AN15_CASE_SHAPE=family-{case_index % distinct_shapes}"
+            for case_index in range(100)
+        )
+
     def campaign(self) -> dict:
         return validate_campaign(default_campaign(Path.cwd()), Path.cwd(), require_campaign_id=True)
 
@@ -220,7 +227,10 @@ class FuzzRunnerTests(unittest.TestCase):
         campaign = validate_campaign(payload, Path.cwd(), require_campaign_id=True)
         report_dir = Path.cwd() / "site/reports/fuzz/unit-checked-emission-v2-v2"
         try:
-            with mock.patch("run_fuzz.subprocess.run", return_value=mock.Mock(returncode=0, stdout="ok", stderr="")) as run:
+            with mock.patch(
+                "run_fuzz.subprocess.run",
+                return_value=mock.Mock(returncode=0, stdout=self.case_shape_evidence(), stderr=""),
+            ) as run:
                 report = build_checked_emission_result(campaign)
             self.assertEqual(report["execution_mode"], "executed-product-campaign")
             self.assertEqual([worker["cases_run"] for worker in report["workers"]], [100, 100, 100, 100])
@@ -229,6 +239,21 @@ class FuzzRunnerTests(unittest.TestCase):
             self.assertTrue(all(call.args[0][0] == "cargo" for call in run.call_args_list))
         finally:
             rmtree(report_dir, ignore_errors=True)
+
+    def test_checked_emission_executor_rejects_a_counter_only_corpus(self) -> None:
+        payload = json.loads((FIXTURES / "an15-checked-emission.json").read_text())
+        payload["worktree_path"] = str(Path.cwd())
+        payload["campaign_id"] = "unit-checked-emission-degenerate-v2"
+        campaign = validate_campaign(payload, Path.cwd(), require_campaign_id=True)
+        try:
+            with mock.patch(
+                "run_fuzz.subprocess.run",
+                return_value=mock.Mock(returncode=0, stdout=self.case_shape_evidence(distinct_shapes=1), stderr=""),
+            ):
+                with self.assertRaisesRegex(FuzzInputError, "case diversity is degenerate"):
+                    build_checked_emission_result(campaign)
+        finally:
+            rmtree(Path.cwd() / "site/reports/fuzz/unit-checked-emission-degenerate-v2-v2", ignore_errors=True)
 
 
 if __name__ == "__main__":

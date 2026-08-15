@@ -209,7 +209,14 @@ mod tests {
         let stored = template();
 
         for case_index in 0..100 {
-            let captured = format!("catalog-team-{case_index}");
+            let (captured, shape) = match case_index % 5 {
+                0 => (format!("catalog-team-{case_index}"), "plain"),
+                1 => (format!("catalog-team-{case_index}-🙂"), "unicode"),
+                2 => (format!("catalog team {case_index}"), "whitespace"),
+                3 => (format!("catalog-team-{case_index}-\\\"quote"), "quoted"),
+                _ => (format!("catalog-team-{case_index}\\nnext"), "multiline"),
+            };
+            eprintln!("AN15_CASE_SHAPE={shape}");
             let vars = atm_storage::MergedVarsJson::from_merged_object(Map::from_iter([(
                 "ATM_TEAM".to_owned(),
                 Value::String(captured.clone()),

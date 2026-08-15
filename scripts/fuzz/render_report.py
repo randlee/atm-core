@@ -27,7 +27,6 @@ JUST_ROOT = ROOT / ".just"
 if str(JUST_ROOT) not in sys.path:
     sys.path.insert(0, str(JUST_ROOT))
 
-from scripts.public_redaction import public_string
 from scripts.public_redaction import public_value
 from run_fuzz import FuzzInputError as V2FuzzInputError
 from run_fuzz import validate_report
@@ -37,9 +36,6 @@ REPORTS_ROOT = ROOT / "site" / "reports"
 REPORT_TEMPLATE = ROOT / ".claude/skills/html-report/templates/fuzz-run-report.html.j2"
 PANEL_TEMPLATE = ROOT / ".claude/skills/html-report/templates/fuzz-run-agent.xhtml.j2"
 SCHEMA_VERSION = "adversarial-fuzzing/v2"
-WORKERS = ("shape-probe", "template-probe", "boundary-probe", "differential-probe")
-STATUSES = {"success", "failed", "timed_out"}
-CLASSIFICATIONS = {"pass", "confirmed_bug", "intentional_boundary", "inconclusive"}
 OUTCOME_KINDS = ("confirmed_bug", "non_repro", "benign", "inconclusive")
 SAFE_STEM = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 SAFE_HOST = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
@@ -70,107 +66,6 @@ def load_json(path: Path) -> Any:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise FuzzReportError(f"unable to read JSON artifact: {path}") from error
-
-
-def _bounded_count(value: Any, field: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0 or value > 1000:
-        raise FuzzReportError(f"{field} must be an integer between 0 and 1000")
-    return value
-
-
-def _default_input(worker_id: str, status: str, cases_run: int) -> dict[str, Any]:
-    return {
-        "case_id": f"{worker_id}-campaign",
-        "description": f"AI.48 bounded {worker_id} campaign",
-        "minimal_template": "---\n---\n{{ value }}",
-        "minimal_input": f"status={status}; cases_run={cases_run}",
-        "passed": status == "success",
-        "outcome": "all bounded cases completed" if status == "success" else f"worker ended with {status}",
-    }
-
-
-def _default_finding(worker_id: str, status: str) -> dict[str, str]:
-    return {
-        "finding_id": f"{worker_id}-{status}",
-        "minimal_template": "---\n---\n{{ value }}",
-        "minimal_input": f"worker status={status}",
-        "expected_oracle": "worker completes its bounded campaign",
-        "observed_result": f"worker returned {status}",
-        "requirement_trace": "No requirement or ADR currently covers this behavior.",
-        "requirement_follow_up": "Record the owner and evidence before changing a product contract.",
-        "root_cause": "Worker did not provide an evidence-backed root cause.",
-        "recommended_fix": "Review the worker evidence and rerun the bounded campaign.",
-    }
-
-
-def normalize_worker(raw: Any, session_id: str, target: str) -> dict[str, Any]:
-    if not isinstance(raw, dict):
-        raise FuzzReportError("worker result must be an object")
-    worker_id = raw.get("correlation_id")
-    if worker_id not in WORKERS:
-        raise FuzzReportError(f"unknown worker correlation_id: {worker_id!r}")
-    status = raw.get("status")
-    if status not in STATUSES:
-        raise FuzzReportError(f"worker {worker_id}: invalid status {status!r}")
-    cases_run = _bounded_count(raw.get("cases_run"), f"{worker_id}.cases_run")
-    passed = _bounded_count(raw.get("passed", cases_run if status == "success" else 0), f"{worker_id}.passed")
-    if passed > cases_run:
-        raise FuzzReportError(f"worker {worker_id}: passed exceeds cases_run")
-    failed = _bounded_count(raw.get("failed", cases_run - passed), f"{worker_id}.failed")
-    if failed != cases_run - passed:
-        raise FuzzReportError(f"worker {worker_id}: failed does not equal cases_run - passed")
-    classification = raw.get("classification")
-    if classification is None:
-        classification = {"success": "pass", "failed": "confirmed_bug", "timed_out": "inconclusive"}[status]
-    if classification not in CLASSIFICATIONS:
-        raise FuzzReportError(f"worker {worker_id}: invalid classification {classification!r}")
-    test_inputs = raw.get("test_inputs", [_default_input(worker_id, status, cases_run)])
-    if not isinstance(test_inputs, list) or any(not isinstance(item, dict) for item in test_inputs):
-        raise FuzzReportError(f"worker {worker_id}: test_inputs must be an array of objects")
-    normalized_inputs: list[dict[str, Any]] = []
-    for item in test_inputs:
-        required = {"case_id", "description", "minimal_template", "minimal_input", "passed", "outcome"}
-        if required - item.keys():
-            raise FuzzReportError(f"worker {worker_id}: test input is missing required fields")
-        if not all(isinstance(item[field], str) for field in required - {"passed"}):
-            raise FuzzReportError(f"worker {worker_id}: test input text fields must be strings")
-        if not isinstance(item["passed"], bool):
-            raise FuzzReportError(f"worker {worker_id}: test input passed must be boolean")
-        normalized_inputs.append({field: public_value(item[field]) for field in required})
-    findings = raw.get("findings", [])
-    if not isinstance(findings, list) or any(not isinstance(item, dict) for item in findings):
-        raise FuzzReportError(f"worker {worker_id}: findings must be an array of objects")
-    if classification != "pass" and not findings:
-        findings = [_default_finding(worker_id, status)]
-    findings = public_value(findings)
-    payload = public_value(dict(raw))
-    payload.update({
-        "correlation_id": worker_id,
-        "target": target,
-        "status": status,
-        "cases_run": cases_run,
-        "findings": findings,
-        "test_inputs": normalized_inputs,
-    })
-    description = public_string(raw.get("fuzz_run_description", f"AI.48 {target} {worker_id} bounded campaign"))
-    result = "PASS" if failed == 0 else "FAIL"
-    return {
-        "session_id": session_id,
-        "agent_id": worker_id,
-        "fuzz_run_description": description,
-        "worker_correlation_id": worker_id,
-        "classification": classification,
-        "iterations": cases_run,
-        "passed": passed,
-        "failed": failed,
-        "result": result,
-        "summary": public_string(raw.get("summary", f"{worker_id} returned {status} after {cases_run} bounded cases.")),
-        "test_inputs": normalized_inputs,
-        "findings": findings,
-        "json_payload": payload,
-        "copy_json": json.dumps(payload, sort_keys=True),
-        "context_text": public_string(raw.get("context_text", f"{worker_id}: {status}; {passed}/{cases_run} cases passed.")),
-    }
 
 
 def _v2_worker_for_panel(worker: dict[str, Any], findings: list[dict[str, Any]], session_id: str) -> dict[str, Any]:
