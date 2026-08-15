@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F003-F004-AN15HTTPFUZZ>
+  a triage:Finding ;
+  triage:findingId "RBQA-F003-F004-AN15HTTPFUZZ" ;
+  triage:title "boundary-probe and differential-probe vary a label never read by production code (RBQA-F002 defect class recurrence)" ;
+  triage:description "quality-mgr's AN15HTTPFUZZ-QA-1 verdict found that 2 of 4 HTTP fuzz probes (boundary-probe, differential-probe) vary labels attached to request elements that production code never reads -- so all 100 cases in each of those 2 probes hit identical code branches, producing false appearance of coverage diversity. Same defect class as RBQA-F002, now recurring in the HTTP test suite. Boundary-probe varies retired provenance header; differential-probe varies Accept header. Shape-probe and template-probe confirmed genuinely diverse." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-quality" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-15T04:16:42Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.15 ;
+  triage:foundAt "2026-08-15T04:16:42Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003-F004-AN15HTTPFUZZ/boundary-probe-1047> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003-F004-AN15HTTPFUZZ/differential-probe-2006> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F003-F004-AN15HTTPFUZZ/boundary-probe-1047>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 1047 ;
+  triage:snippet "eprintln!(AN15_CASE_SHAPE={shape});" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an15-http-fuzz-campaign" ;
+  triage:headSha "01f9f3660" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an15-http-fuzz-campaign/01f9f3660> .
+
+<urn:atm:triage:occurrence/RBQA-F003-F004-AN15HTTPFUZZ/differential-probe-2006>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 2006 ;
+  triage:snippet "eprintln!(AN15_CASE_SHAPE={shape});" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an15-http-fuzz-campaign" ;
+  triage:headSha "01f9f3660" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an15-http-fuzz-campaign/01f9f3660> .
+
+<urn:atm:triage:worktree/feature-an15-http-fuzz-campaign/01f9f3660>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/an15-http-fuzz-campaign" ;
+  triage:branch "feature/an15-http-fuzz-campaign" ;
+  triage:headSha "01f9f3660" ;
+  triage:orderIndex 0 .

@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:ATM-QA-005-AN15HTTPFUZZ> a triage:Finding ;
+    triage:findingId "ATM-QA-005-AN15HTTPFUZZ" ;
+    triage:title "AtmError.cause serialized into HTTP bodies with no redaction boundary" ;
+    triage:description "req-qa found that AtmError.cause is serialized directly into HTTP response bodies in crates/atm-http-runtime/src/message_handler.rs with no redaction boundary. No current leak was found (no secrets flow through .cause today), but there is no structural guard preventing a future caller from putting sensitive data into .cause and having it surface in an HTTP body. Add a redaction boundary or explicit doc/test guard." ;
+    triage:triageMode "initial_pass" ;
+    triage:category "security-hardening" ;
+    triage:phaseId "phase-an" ;
+    triage:severity "minor" ;
+    triage:repeatable false ;
+    triage:sweepScope "file_only" ;
+    triage:status "open" ;
+    triage:dispatchReady true ;
+    triage:triagedAt "2026-08-15T04:16:42Z"^^xsd:dateTime ;
+    triage:foundIn triage:AN.15 ;
+    triage:foundAt "2026-08-15T04:16:42Z"^^xsd:dateTime ;
+    triage:openOn <urn:atm:triage:worktree:feature-an15-http-fuzz-campaign> ;
+    triage:hasOccurrence <urn:atm:triage:ATM-QA-005-AN15HTTPFUZZ:occurrence:1> ;
+    triage:hasOccurrence <urn:atm:triage:ATM-QA-005-AN15HTTPFUZZ:occurrence:2> ;
+    triage:hasOccurrence <urn:atm:triage:ATM-QA-005-AN15HTTPFUZZ:occurrence:3> .
+
+<urn:atm:triage:ATM-QA-005-AN15HTTPFUZZ:occurrence:1> a triage:Occurrence ;
+    triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+    triage:line "640" ;
+    triage:snippet "pub(crate) fn error_response(error: AtmError) -> Response" ;
+    triage:status "open" ;
+    triage:headSha "01f9f3660" ;
+    triage:branch "feature/an15-http-fuzz-campaign" ;
+    triage:closed false ;
+    triage:occursIn <urn:atm:triage:worktree:feature-an15-http-fuzz-campaign> .
+
+<urn:atm:triage:ATM-QA-005-AN15HTTPFUZZ:occurrence:2> a triage:Occurrence ;
+    triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+    triage:line "653" ;
+    triage:snippet "json_response(status, &error, None)" ;
+    triage:status "open" ;
+    triage:headSha "01f9f3660" ;
+    triage:branch "feature/an15-http-fuzz-campaign" ;
+    triage:closed false ;
+    triage:occursIn <urn:atm:triage:worktree:feature-an15-http-fuzz-campaign> .
+
+<urn:atm:triage:ATM-QA-005-AN15HTTPFUZZ:occurrence:3> a triage:Occurrence ;
+    triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+    triage:line "661" ;
+    triage:snippet "serde_json::to_vec(value)" ;
+    triage:status "open" ;
+    triage:headSha "01f9f3660" ;
+    triage:branch "feature/an15-http-fuzz-campaign" ;
+    triage:closed false ;
+    triage:occursIn <urn:atm:triage:worktree:feature-an15-http-fuzz-campaign> .
+
+<urn:atm:triage:worktree:feature-an15-http-fuzz-campaign> a triage:WorktreeSnapshot ;
+    triage:path ".worktrees/feature/an15-http-fuzz-campaign" ;
+    triage:branch "feature/an15-http-fuzz-campaign" ;
+    triage:headSha "01f9f3660" ;
+    triage:orderIndex 0 .
