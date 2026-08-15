@@ -95,11 +95,13 @@ gate; an unchecked field blocks the migration and enables no drain.
    Remote search remains forbidden. The status must not expose message
    content, a raw database path, or private SQLite error causes.
 
-5. Preserve `atm admin reindex-search` as recovery. It must converge to the
-   same projection state as an idle drain without creating a second writer or
-   leaving false-complete ledger rows. Record the one operator explanation:
-   canonical rows are immediate; FTS search can lag until the durable backlog
-   drains; reindex is recovery, not an admission prerequisite.
+5. Preserve the local search-projection rebuild operation as recovery. It
+   must converge to the same projection state as an idle drain without
+   creating a second writer or leaving false-complete ledger rows. Any future
+   user-facing command is separately owned by the CLI/core layer, never by
+   `atm-storage-rusqlite`. Record the one operator explanation: canonical
+   rows are immediate; FTS search can lag until the durable backlog drains;
+   rebuild is recovery, not an admission prerequisite.
 
 ## Acceptance criteria
 

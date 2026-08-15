@@ -780,8 +780,8 @@ impl SqliteStorageBackend {
     }
 
     /// Rebuilds both external-content FTS projections from canonical durable
-    /// rows. This is the backend half of `atm admin reindex-search`; the CLI
-    /// command is deliberately added with AN.6's public command surface.
+    /// rows. This is a storage-internal recovery operation; any future
+    /// user-facing command belongs to the `atm` CLI/core layer, not this store.
     pub fn reindex_search(&self) -> Result<(), AtmError> {
         self.message_store.db.with_transaction(|transaction| {
             search_schema::rebuild(transaction, self.message_store.db.target())

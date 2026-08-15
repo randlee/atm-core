@@ -80,9 +80,11 @@ Local CLI/HTTP/Python search results and doctor diagnostics surface this
 status as an additive observation. A nonempty backlog is not a daemon
 readiness failure and does not make a canonical message unavailable, but it
 must make it clear that FTS results are an eventually-consistent projection.
-No remote search endpoint is added. `atm admin reindex-search` remains the
-explicit recovery operation and uses the same desired-state/drain semantics,
-not a competing projection writer.
+No remote search endpoint is added. The local search-projection rebuild
+operation remains the explicit recovery path and uses the same
+desired-state/drain semantics, not a competing projection writer. Any future
+user-facing control for that operation is owned by the CLI/core layer and
+must not be represented as a storage-owned command.
 
 ### 4. One honest performance gate
 
