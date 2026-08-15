@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN15R-AMBIGUOUS-INSPECTION-ERROR-CODE-001>
+  a triage:Finding ;
+  triage:findingId "AN15R-AMBIGUOUS-INSPECTION-ERROR-CODE-001" ;
+  triage:title "Inspection failures of any cause (including plain Jinja/template body syntax errors) are all reported under the generic AtmErrorCode::TemplateHashApiFailed / TEMPLATE_HASH_API_FAILED code" ;
+  triage:description "crates/atm-core/src/send/template.rs fn verify_template_send() at line 62-68 maps ANY failure from composer.inspect() into AtmErrorCode::TemplateHashApiFailed. This code name strongly implies a content-hash/SHA-identity failure, but is used as a catch-all for the whole inspection call. A caller or operator reading logs/error codes cannot distinguish (a) SHA identity mismatch from (b) template body has invalid Jinja syntax from (c) any other inspection-API failure. Admission correctly rejects the malformed template either way (fail-closed, not a security/correctness bug), but the diagnostic code is misleading/ambiguous. The composition_error() function at lines 95-104 in atm-template-sc-compose/src/lib.rs correctly discriminates error kinds (Include vs Resolve vs Validation vs Render vs Config), demonstrating the correct pattern." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "diagnostics" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-14T18:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.15 ;
+  triage:foundAt "2026-08-14T17:45:00Z"^^xsd:dateTime ;
+  triage:resolutionNotes "Update 2026-08-15 by quality-mgr, AN15R-TEMPLATEHASH-QA-1: PR #884 (fix/an15-templatehash-error-code-ambiguity @ 28668949b19b0f9a368680f4661292298cf5362d) independently verified to genuinely fix this record's cited occurrence: crates/atm-core/src/send/template.rs:62 now propagates composer.inspect() errors via direct `?` (confirmed sole production caller: crates/atm-core/src/send/async_persistence.rs:87); crates/atm-template-sc-compose/src/lib.rs inspection_error() (lines 97-105) now routes ComposeError::Config to the new AtmErrorCode::TemplateInspectionParseFailed via inspection_parse_error(), discriminated from Include/Resolve/Validation/Render; new AtmErrorCode variant registered end-to-end (error_codes.rs, error_catalog.rs, docs/atm-error-codes.md) with real (non-mocked) adapter test coverage (inspection_fails_closed_for_plain_jinja_body_syntax and 2 other real-input tests) plus a core-level propagation test. Verified via direct code read, not self-report; req-qa/arch-qa/ruthless-boundary-qa/rust-best-practices-agent all dispatched independently. NOT CLOSED: three independent reviewers (req-qa ATM-QA-001, ruthless-boundary-qa RBQA-F002-AN15R, rust-best-practices-agent RBP-F001) plus quality-mgr's own read confirm composition_error() (lib.rs:78-87), the sibling helper on the compose_file() entrypoint, was left unfixed and still collapses ComposeError::Config into TemplateRenderVerificationFailed -- the same ambiguity class on a second call path. Tracked as new finding AN15R-COMPOSITION-ERROR-CONFIG-002 (Important, open). Will close this record once that sibling finding is fixed and re-verified." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN15R-AMBIGUOUS-INSPECTION-ERROR-CODE-001/AN15-OCC-001> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AN15R-AMBIGUOUS-INSPECTION-ERROR-CODE-001/AN15-OCC-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/template.rs" ;
+  triage:line 64 ;
+  triage:snippet "AtmErrorCode::TemplateHashApiFailed" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "63c158a76e31aa7ac0034a1f796a4366ba915a7e" ;
+  triage:occursIn <urn:atm:triage:worktree/AN15/63c158a76e31aa7ac0034a1f796a4366ba915a7e> .
+
+<urn:atm:triage:worktree/AN15/63c158a76e31aa7ac0034a1f796a4366ba915a7e>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-an" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "63c158a76e31aa7ac0034a1f796a4366ba915a7e" ;
+  triage:orderIndex 0 .
