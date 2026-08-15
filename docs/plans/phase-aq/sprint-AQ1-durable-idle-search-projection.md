@@ -1,20 +1,20 @@
 ---
-title: AN.16 Durable Idle Search Projection
+title: AQ.1 Durable Idle Search Projection
 status: draft
-branch: feature/an16-durable-idle-search-projection
-target: integrate/phase-an
-worktree: ../atm-core-worktrees/feature/an16-durable-idle-search-projection
+branch: feature/aq1-durable-idle-search-projection
+target: integrate/phase-aq
+worktree: ../atm-core-worktrees/feature/aq1-durable-idle-search-projection
 external_blockers: []
 ---
 
-# AN.16 — Durable Idle Search Projection
+# AQ.1 — Durable Idle Search Projection
 
 **recommended_agent:** arch-ctm/deep-reasoning (SQLite transaction and
 foreground/maintenance ownership).
-**must_follow:** AN.15's pushed `integrate/phase-an` tip. Merge that tip
-before every development/fix round so the implementation tests the released
+**must_follow:** Phase AN's merged `develop` tip. Before every development or
+fix round, merge the selected AQ integration baseline so the implementation tests the released
 checked-render/search surface, including its current HTTP fuzz coverage.
-**unblocks:** AN.17 performance and recovery evidence.
+**unblocks:** AQ.2 performance and recovery evidence.
 **parallel_safe:** none. This sprint changes the only search-projection
 writer, the `MessageSearchStore` contract, and every local presentation of
 its freshness state.
@@ -148,8 +148,8 @@ them in a new worker.
 
 ## Non-closure
 
-AN.16 does not add remote search, a generic jobs framework, user-configurable
+AQ.1 does not add remote search, a generic jobs framework, user-configurable
 SQL/FTS syntax, a second database process, template lineage policy, or a
 promise that a just-admitted message is immediately searchable. It does not
-claim the M5 throughput target; AN.17 owns measured performance/recovery
+claim the M5 throughput target; AQ.2 owns measured performance/recovery
 closure.

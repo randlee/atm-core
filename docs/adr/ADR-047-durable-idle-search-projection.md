@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Proposed for AN.16–AN.17 planning |
+| Status | Proposed for AQ.1–AQ.2 planning |
 | Scope | `atm-storage`, `atm-storage-rusqlite`, local search freshness and maintenance observability |
 | Relates to | ADR-001, ADR-008, ADR-018, ADR-036, ADR-ATM-RUSQLITE-002; `REQ-P-SEARCH-INDEX-001`, `REQ-RUSQLITE-SEARCH-INDEX-001` |
 

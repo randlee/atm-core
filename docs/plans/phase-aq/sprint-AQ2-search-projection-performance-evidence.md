@@ -1,22 +1,22 @@
 ---
-title: AN.17 Search Projection Performance and Recovery Evidence
+title: AQ.2 Search Projection Performance and Recovery Evidence
 status: draft
-branch: feature/an17-search-projection-performance-evidence
-target: integrate/phase-an
-worktree: ../atm-core-worktrees/feature/an17-search-projection-performance-evidence
+branch: feature/aq2-search-projection-performance-evidence
+target: integrate/phase-aq
+worktree: ../atm-core-worktrees/feature/aq2-search-projection-performance-evidence
 external_blockers: []
 ---
 
-# AN.17 — Search Projection Performance and Recovery Evidence
+# AQ.2 — Search Projection Performance and Recovery Evidence
 
 **recommended_agent:** arch-ctm/deep-reasoning (same-host performance and
 durability evidence).
-**must_follow:** AN.16 pushed to `integrate/phase-an`; merge it before every
-development/fix round. AN.16 owns the runtime behavior being measured, so a
+**must_follow:** AQ.1 pushed to `integrate/phase-aq`; merge it before every
+development/fix round. AQ.1 owns the runtime behavior being measured, so a
 pre-merge snapshot is invalid evidence.
-**unblocks:** release decision for the AN.5 admission-performance regression.
+**unblocks:** Phase AQ release decision for the AN.5 admission-performance regression.
 **parallel_safe:** no production implementation sprint. Documentation-only
-benchmark report work is parallel-safe after AN.16 has a pinned candidate.
+benchmark report work is parallel-safe after AQ.1 has a pinned candidate.
 
 **traceability:** ADR-047; `REQ-P-SEARCH-INDEX-001`,
 `REQ-RUSQLITE-SEARCH-INDEX-001`, `REQ-P-SMOKE-001`, `REQ-P-TEST-001`, and
@@ -25,7 +25,7 @@ benchmark report work is parallel-safe after AN.16 has a pinned candidate.
 ## Deliverables
 
 1. Retain a reproducible managed-daemon M5 benchmark report comparing the
-   exact AN.16 candidate against the historical FTS-free control
+   exact AQ.1 candidate against the historical FTS-free control
    `3b67fea40`, using the managed recovery/isolation procedure. The run uses
    a disposable benchmark state root, restores the operator database, and
    leaves the approved candidate daemon available for dogfooding unless a
@@ -76,7 +76,7 @@ benchmark report work is parallel-safe after AN.16 has a pinned candidate.
   local/cross-host Tokio+Axum smoke through the candidate daemon.
 - Retain reports under `site/reports/send-message-benchmark/` and link the
   exact report filenames, source commit, baseline commit, and final CI commit
-  from Phase AN validation evidence.
+  from Phase AQ validation evidence.
 
 ## Paths to delete
 
@@ -84,6 +84,6 @@ None.
 
 ## Non-closure
 
-AN.17 does not retune unrelated SQLite/WAL settings, establish a new generic
+AQ.2 does not retune unrelated SQLite/WAL settings, establish a new generic
 job framework, change query grammar, or introduce remote analytics. Any
 future user-selectable freshness policy requires a separate ADR and sprint.
