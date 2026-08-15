@@ -25,11 +25,11 @@ defaults:
   notes: ""
 ---
 {
-  "review_mode": "{{ review_mode }}",
-  "worktree_path": "{{ worktree_path }}",
-  "review_targets": [{% for target in review_targets %}"{{ target }}"{% if not loop.last %}, {% endif %}{% endfor %}],
+  "review_mode": {{ review_mode }},
+  "worktree_path": {{ worktree_path }},
+  "review_targets": [{% for target in review_targets %}{{ target }}{% if not loop.last %}, {% endif %}{% endfor %}],
   "topics": {% if topics %}
-    [{% for topic in topics %}"{{ topic }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+    [{% for topic in topics %}{{ topic }}{% if not loop.last %}, {% endif %}{% endfor %}]
   {% elif review_mode == "doc_review" %}
     ["config_validation", "timeouts", "graceful_shutdown", "retry_scope", "backpressure", "health_readiness"]
   {% elif review_mode == "sprint_review" %}
@@ -38,10 +38,10 @@ defaults:
     ["config_validation", "timeouts", "graceful_shutdown", "structured_logging", "request_ids", "retries", "backpressure", "spawn_blocking", "input_limits", "dependency_hygiene", "health_readiness", "ci_release_gates"]
   {% endif %},
   "service_indicator_dependencies": ["tokio", "axum", "hyper", "tonic", "warp", "actix-web", "reqwest"],
-  "service_indicators_extra": [{% for indicator in service_indicators_extra %}"{{ indicator }}"{% if not loop.last %}, {% endif %}{% endfor %}],
+  "service_indicators_extra": [{% for indicator in service_indicators_extra %}{{ indicator }}{% if not loop.last %}, {% endif %}{% endfor %}],
   "round_limit": {% if round_limit %}true{% else %}false{% endif %},
-  "changed_files": [{% for file in changed_files %}"{{ file }}"{% if not loop.last %}, {% endif %}{% endfor %}],
-  "triage_records": [{% for record in triage_records %}"{{ record }}"{% if not loop.last %}, {% endif %}{% endfor %}],
+  "changed_files": [{% for file in changed_files %}{{ file }}{% if not loop.last %}, {% endif %}{% endfor %}],
+  "triage_records": [{% for record in triage_records %}{{ record }}{% if not loop.last %}, {% endif %}{% endfor %}],
   "carry_forward_findings": {{ carry_forward_findings_json }},
-  "notes": "{{ notes }}"
+  "notes": {{ notes }}
 }

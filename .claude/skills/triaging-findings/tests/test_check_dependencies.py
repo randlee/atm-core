@@ -20,7 +20,7 @@ def test_version_parser():
 
 def test_preflight_passes_in_current_environment(monkeypatch):
     monkeypatch.setattr(check_dependencies, "_find", lambda name: Path("/bin/true"))
-    monkeypatch.setattr(check_dependencies, "_run_version", lambda path: ("tool 1.3.0", "tool 1.3.0"))
+    monkeypatch.setattr(check_dependencies, "_run_version", lambda path: ("tool 1.4.0", "tool 1.4.0"))
     monkeypatch.setattr(check_dependencies, "_python_binding_entry", lambda: {"name": "sc_compose", "ok": True})
     result = check_dependencies.run()
     assert result["success"] is True

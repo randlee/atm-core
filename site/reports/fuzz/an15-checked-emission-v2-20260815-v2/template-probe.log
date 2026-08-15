@@ -1,0 +1,23 @@
+command: cargo test -p atm-template-sc-compose an15_template_probe_ -- --nocapture
+returncode: 0
+
+stdout:
+
+running 4 tests
+test tests::an15_template_probe_reports_the_failing_second_render_pass ... ok
+test tests::an15_template_probe_regresses_historical_sc_compose_json_escape_migration ... ok
+test tests::an15_template_probe_checked_json_is_deterministic_for_unicode_and_escape_vectors ... ok
+test tests::an15_template_probe_composes_realistic_jinja_syntax_and_text_target_corpus ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 29 filtered out; finished in 0.07s
+
+stderr:
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on shared package cache
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.34s
+     Running unittests src/lib.rs (target/debug/deps/atm_template_sc_compose-a66224698d290577)
+AN15_DIAGNOSTIC legacy-json-escape code=TEMPLATE_RENDER_VERIFICATION_FAILED message=JSON template rendered invalid output after checked composition. If it manually quotes a placeholder such as `"{{ value }}"`, migrate it to `{{ value }}` for sc-compose automatic JSON escaping, or declare `json_escape_mode: legacy` in the template frontmatter.
+  Recovery: Correct the template source or its supplied variables before retrying.
