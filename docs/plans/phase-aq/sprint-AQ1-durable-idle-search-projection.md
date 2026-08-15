@@ -63,6 +63,18 @@ gate; an unchecked field blocks the migration and enables no drain.
    bounds return one typed configuration error and prevent writer startup.
    There is no silent clamping, fallback, or partially running indexer.
 
+   A failed idle-drain item is never retried in a transaction loop. The ledger
+   records an attempt count and next-eligible time. For classified transient
+   SQLite `BUSY`/`LOCKED` and I/O failures, it schedules at most eight
+   automatic attempts per current desired state with exponential delays of
+   50 ms, 100 ms, 200 ms, 400 ms, 800 ms, 1.6 s, 3.2 s, and 5 s (capped).
+   Every failed batch rolls back its projection changes and leaves its work
+   durable. After the eighth failure the item is durable-but-blocked: it is
+   excluded from automatic drain until a new canonical mutation or explicit
+   rebuild resets its attempt state. The status surface reports blocked work
+   separately from healthy pending work, so a failure cannot spin forever or
+   silently masquerade as eventual catch-up.
+
 3. Extend only the existing sealed `MessageSearchStore` capability with a
    leaf `SearchProjectionStatus` DTO and a read-only status method. It has
    this minimum public shape; SQLite timing/schema details remain private:
@@ -124,6 +136,10 @@ gate; an unchecked field blocks the migration and enables no drain.
   and decomposed-admission updates converge to the newest canonical state.
   Crash/reopen before, during, and after a drain converges with no source loss,
   duplicate externally visible search result, or false-empty ledger.
+- A transient drain failure rolls back the batch and follows the exact bounded
+  retry schedule. An eighth consecutive failure leaves durable blocked work
+  visible to operators; a source mutation or explicit rebuild resets the
+  retry state and converges without data loss or an unbounded retry loop.
 - The writer runs maintenance only after the configured quiet interval, drains
   no more than the documented batch bound, and processes newly queued
   foreground work before another maintenance batch. Shutdown stops intake,
@@ -154,6 +170,9 @@ gate; an unchecked field blocks the migration and enables no drain.
 - Configuration tests cover the default, both valid bounds, zero, invalid
   duration encodings, and out-of-range values, proving rejection occurs
   before the writer accepts any work.
+- Controlled-clock drain tests cover each retry delay, rollback-on-failure,
+  the eighth-failure block, blocked-work status, and reset through both a new
+  canonical mutation and explicit rebuild; no retry test may use a sleep.
 - `cargo test -p atm-storage -p atm-storage-rusqlite -p atm-core -p atm -p atm-http-runtime`,
   `cargo test -p atm-architecture --test boundary_enforcement`, `just lint`,
   and `just test` on Linux, macOS, and Windows CI.
