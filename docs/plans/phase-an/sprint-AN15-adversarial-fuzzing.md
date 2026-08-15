@@ -1,6 +1,6 @@
 ---
 title: AN.15 Checked-Render Adversarial Assurance
-status: in_progress
+status: complete
 branch: feature/an15-http-fuzz-campaign
 target: integrate/phase-an
 worktree: ../atm-core-worktrees/feature/an15-http-fuzz-campaign
@@ -10,10 +10,10 @@ external_blockers: []
 # AN.15 — Checked-Render Adversarial Assurance
 
 The original checked-render campaign completed on
-`feature/an15-adversarial-fuzzing` (PR #877). The HTTP-seam addendum below is
-the remaining active AN.15 work on `feature/an15-http-fuzz-campaign` (PR
-#887); the sprint cannot be marked complete until that addendum has its own
-independent QA pass.
+`feature/an15-adversarial-fuzzing` (PR #877). The HTTP-seam addendum
+(`feature/an15-http-fuzz-campaign`, PR #887) is also complete: it passed its
+own independent QA (AN15HTTPFUZZ-QA-3, PASS 4/4) and merged into
+`integrate/phase-an` at `56b3ccef5ef81ad2f5a0db25c89d217e09802e14`.
 
 **recommended_agent:** arch-ctm/deep-reasoning (template lifecycle and
 negative-contract assurance).
