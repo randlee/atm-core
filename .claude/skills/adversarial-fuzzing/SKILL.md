@@ -157,6 +157,11 @@ Require the worker to emit the observed values and the field-level comparison;
 missing diagnostic evidence is a failed worker result, not an inconclusive
 pass. Do not require exact punctuation or internal debugging text, but do
 require the externally actionable meaning and safe disclosure behavior.
+Each worker must emit `negative_cases`, using an explicit empty array when it
+ran no negative/rejection cases. Every negative case includes its oracle,
+observed result, diagnostic contract, and target-invocation proof. A mismatch
+must reference a durable `confirmed_bug` finding; it cannot be relabeled as an
+intentional boundary merely because the input was rejected.
 
 ### No silent defer
 
@@ -402,6 +407,7 @@ The durable report must be a JSON object matching this contract:
           }
         ]
       },
+      "negative_cases": [],
       "encountered_issues": []
     }
   ],

@@ -71,6 +71,7 @@ WORKER_RESULT_FIELDS = {
     "finding_ids",
     "error",
     "target_invocation",
+    "negative_cases",
     "encountered_issues",
 }
 INVOCATION_FIELDS = {"required_seam_ids", "proofs"}
@@ -97,6 +98,14 @@ DIAGNOSTIC_FIELDS = {
     "observed_recovery_family",
     "sensitive_input_leaked",
     "field_matches",
+}
+NEGATIVE_CASE_FIELDS = {
+    "case_id",
+    "expected_oracle",
+    "observed_result",
+    "diagnostic_contract",
+    "target_invocation",
+    "finding_id",
 }
 FINDING_FIELDS = {
     "finding_id",
@@ -339,6 +348,16 @@ def validate_worker_result(
     issue_ids = [issue["issue_id"] for issue in issues]
     if len(issue_ids) != len(set(issue_ids)):
         raise FuzzInputError("encountered_issues must not contain duplicate issue_id values")
+    invocation = validate_target_invocation(worker["target_invocation"], campaign, "target_invocation")
+    if not isinstance(worker["negative_cases"], list):
+        raise FuzzInputError("negative_cases must be an array")
+    negative_cases = [
+        _validate_negative_case(case, campaign, invocation, f"negative_cases[{index}]")
+        for index, case in enumerate(worker["negative_cases"])
+    ]
+    case_ids = [case["case_id"] for case in negative_cases]
+    if len(case_ids) != len(set(case_ids)):
+        raise FuzzInputError("negative_cases must not contain duplicate case_id values")
     return {
         "correlation_id": correlation_id,
         "target": target,
@@ -346,7 +365,8 @@ def validate_worker_result(
         "cases_run": _bounded_int(worker["cases_run"], "cases_run", 0, 1000),
         "finding_ids": finding_ids,
         "error": error,
-        "target_invocation": validate_target_invocation(worker["target_invocation"], campaign, "target_invocation"),
+        "target_invocation": invocation,
+        "negative_cases": negative_cases,
         "encountered_issues": issues,
     }
 
@@ -365,6 +385,39 @@ def _validate_diagnostic_contract(value: Any, label: str) -> dict[str, Any]:
     normalized["sensitive_input_leaked"] = leaked
     normalized["field_matches"] = {field: matches[field] for field in DIAGNOSTIC_MATCH_FIELDS}
     return normalized
+
+
+def _validate_negative_case(
+    value: Any,
+    campaign: dict[str, Any],
+    worker_invocation: dict[str, Any],
+    label: str,
+) -> dict[str, Any]:
+    case = _required_object(value, label, NEGATIVE_CASE_FIELDS)
+    diagnostic = _validate_diagnostic_contract(case["diagnostic_contract"], f"{label}.diagnostic_contract")
+    invocation = validate_target_invocation(
+        {
+            "required_seam_ids": [case["target_invocation"]["seam_id"]] if isinstance(case.get("target_invocation"), dict) and "seam_id" in case["target_invocation"] else [],
+            "proofs": [case["target_invocation"]] if isinstance(case.get("target_invocation"), dict) else [],
+        },
+        campaign,
+        f"{label}.target_invocation",
+    )
+    if invocation["proofs"][0] not in worker_invocation["proofs"]:
+        raise FuzzInputError(f"{label}.target_invocation must be proven by its worker")
+    finding_id = case["finding_id"]
+    if finding_id is not None:
+        finding_id = _required_string(finding_id, f"{label}.finding_id")
+    if not all(diagnostic["field_matches"].values()) and finding_id is None:
+        raise FuzzInputError(f"{label} diagnostic mismatch requires a confirmed finding")
+    return {
+        "case_id": _required_string(case["case_id"], f"{label}.case_id"),
+        "expected_oracle": _required_string(case["expected_oracle"], f"{label}.expected_oracle"),
+        "observed_result": _required_string(case["observed_result"], f"{label}.observed_result"),
+        "diagnostic_contract": diagnostic,
+        "target_invocation": invocation["proofs"][0],
+        "finding_id": finding_id,
+    }
 
 
 def _validate_finding(value: Any, campaign: dict[str, Any], workers: dict[str, dict[str, Any]]) -> dict[str, Any]:
@@ -467,6 +520,13 @@ def validate_report(payload: Any, root: Path | None = None) -> dict[str, Any]:
         raise FuzzInputError("findings must not contain duplicate finding_id values")
     if set(finding_ids) != {finding_id for worker in workers for finding_id in worker["finding_ids"]}:
         raise FuzzInputError("worker finding_ids must match the durable findings exactly")
+    finding_by_id = {finding["finding_id"]: finding for finding in findings}
+    for worker in workers:
+        for negative_case in worker["negative_cases"]:
+            if not all(negative_case["diagnostic_contract"]["field_matches"].values()):
+                finding = finding_by_id.get(negative_case["finding_id"])
+                if finding is None or finding["classification"] != "confirmed_bug":
+                    raise FuzzInputError("negative-case diagnostic mismatch must map to a confirmed_bug finding")
     raw_issues = report["campaign_issues"]
     if not isinstance(raw_issues, list):
         raise FuzzInputError("campaign_issues must be an array")
@@ -525,6 +585,7 @@ def _probe_worker(correlation_id: str, campaign: dict[str, Any]) -> dict[str, An
                 "evidence_ref": f"contract-probe/{correlation_id}#/run_fuzz.validate_worker_result",
             }],
         },
+        "negative_cases": [],
         "encountered_issues": [],
     }
     worker = validate_worker_result(raw_worker, campaign, invocation_observer=observe)

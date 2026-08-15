@@ -165,6 +165,45 @@ class FuzzRunnerTests(unittest.TestCase):
         with self.assertRaisesRegex(FuzzInputError, "valid only for differential-probe"):
             validate_report(report, Path.cwd())
 
+    def test_negative_case_requires_the_full_diagnostic_contract_and_bug_mapping(self) -> None:
+        report = self.valid_report()
+        negative_case = {
+            "case_id": "negative-001",
+            "expected_oracle": "malformed input is rejected with the stable diagnostic",
+            "observed_result": "malformed input is rejected",
+            "diagnostic_contract": {
+                "expected_status": "rejected",
+                "observed_status": "rejected",
+                "expected_code_or_category": "malformed_input",
+                "observed_code_or_category": "malformed_input",
+                "expected_message_family": "input is malformed",
+                "observed_message_family": "input is malformed",
+                "expected_recovery_family": "fix input",
+                "observed_recovery_family": "fix input",
+                "sensitive_input_leaked": False,
+                "field_matches": {
+                    "status": True,
+                    "code_or_category": True,
+                    "message_family": True,
+                    "recovery_family": True,
+                    "no_sensitive_leak": True,
+                },
+            },
+            "target_invocation": {
+                "seam_id": CONTRACT_PROBE_SEAM,
+                "mechanism": "counter",
+                "invocation_count": 1,
+                "evidence_ref": "contract-probe/shape-probe#/run_fuzz.validate_worker_result",
+            },
+            "finding_id": None,
+        }
+        report["workers"][0]["negative_cases"] = [negative_case]
+        self.assertEqual(validate_report(report, Path.cwd())["workers"][0]["negative_cases"][0]["case_id"], "negative-001")
+        broken = deepcopy(report)
+        broken["workers"][0]["negative_cases"][0]["diagnostic_contract"]["field_matches"]["code_or_category"] = False
+        with self.assertRaisesRegex(FuzzInputError, "requires a confirmed finding"):
+            validate_report(broken, Path.cwd())
+
     def test_cli_requires_an_actual_probe_or_external_report(self) -> None:
         stderr = io.StringIO()
         with redirect_stderr(stderr):
