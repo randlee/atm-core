@@ -77,12 +77,11 @@ impl ScComposeTemplateComposer {
 
     fn composition_error(error: ComposeError) -> AtmError {
         match error {
-            ComposeError::Include(_) | ComposeError::Resolve(_) => {
-                AtmError::template_include_unresolved(error)
-            }
-            ComposeError::Validation(_) | ComposeError::Render(_) | ComposeError::Config(_) => {
-                AtmError::template_render_verification_failed(error)
-            }
+            ComposeError::Include(error) => AtmError::template_include_unresolved(error),
+            ComposeError::Resolve(error) => AtmError::template_include_unresolved(error),
+            ComposeError::Validation(error) => AtmError::template_render_verification_failed(error),
+            ComposeError::Render(error) => AtmError::template_render_verification_failed(error),
+            ComposeError::Config(error) => Self::inspection_parse_error(error),
         }
     }
 
@@ -1274,6 +1273,40 @@ mod tests {
                 .cause()
                 .is_some_and(|cause| cause.contains("ERR_VAL_MISSING_REQUIRED")),
             "the typed ATM error must retain the upstream diagnostic in its cause"
+        );
+    }
+
+    #[test]
+    fn production_adapter_compose_maps_config_parse_to_inspection_error() {
+        let root = temporary_root("compose-invalid-frontmatter");
+        let template_path = root.join("main.j2");
+        let raw = b"---\nrequired_variables: [\n---\nbody";
+        fs::write(&template_path, raw).expect("write invalid frontmatter template");
+        let canonical_root = fs::canonicalize(&root).expect("canonical root");
+        let canonical_template = fs::canonicalize(&template_path).expect("canonical template");
+        let source = TemplateSource::file_backed(raw.to_vec(), canonical_template);
+
+        let error = ScComposeTemplateComposer::new()
+            .compose_file(
+                &source,
+                &Map::new(),
+                &TemplateRoot {
+                    canonical_path: canonical_root,
+                },
+            )
+            .expect_err("config parse failures must fail composition");
+        fs::remove_dir_all(&root).expect("remove isolated template root");
+
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateInspectionParseFailed
+        );
+        assert!(error.message().contains("inspection parser"));
+        assert!(
+            error
+                .cause()
+                .is_some_and(|cause| cause.contains("failed to parse YAML frontmatter")),
+            "the typed ATM error must retain the upstream config diagnostic"
         );
     }
 }
