@@ -287,6 +287,40 @@ class AdmissionCapacityTests(unittest.TestCase):
             [("status", False), ("quiesce", False), ("restart", False), ("status", True)],
         )
 
+    def test_managed_lifecycle_executes_and_restarts_the_selected_service_on_disposable_state(self):
+        options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
+        calls: list[tuple[str, bool]] = []
+
+        def daemon_switch(action, _options, *, doctor=False):
+            calls.append((action, doctor))
+            return healthy_managed_status()
+
+        with tempfile.TemporaryDirectory() as temp:
+            os_home = Path(temp)
+            state = os_home / ".atm"
+            state.mkdir()
+            (state / "mail.db").write_text("managed-state", encoding="utf-8")
+            with (
+                mock.patch.object(RUNNER, "os_account_home", return_value=os_home),
+                mock.patch.object(RUNNER, "daemon_switch_result", side_effect=daemon_switch),
+                mock.patch.object(RUNNER, "require_clean_host_daemon_state"),
+            ):
+                lifecycle = RUNNER.ManagedDaemonLifecycle(options)
+                lifecycle.begin()
+                lifecycle.start_isolated_service()
+                lifecycle.restart_isolated_service()
+                lifecycle.restore()
+
+        self.assertEqual(
+            calls,
+            [
+                ("status", False), ("quiesce", False),
+                ("restart", False), ("status", True),
+                ("quiesce", False), ("restart", False), ("status", True),
+                ("quiesce", False), ("restart", False), ("status", True),
+            ],
+        )
+
     def test_backup_snapshot_failure_restarts_the_managed_pair(self):
         options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
         status = healthy_managed_status()
@@ -434,9 +468,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
                 mock.patch.object(RUNNER, "run_direct_storage_probe"),
                 mock.patch.object(RUNNER, "run_direct_core_write_probe"),
-                mock.patch.object(
-                    RUNNER, "start_capacity_daemon", side_effect=RUNNER.SmokeError("benchmark failed"),
-                ),
+                mock.patch.object(RUNNER, "local_endpoint", side_effect=RUNNER.SmokeError("benchmark failed")),
                 mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"),
                 mock.patch.object(
                     RUNNER,
@@ -454,7 +486,10 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual(captured["failure"], "benchmark failed")
         self.assertEqual(captured["managed_daemon_recovery"], "doctor-verified")
-        self.assertEqual(calls, ["status", "quiesce", "restart", "status"])
+        self.assertEqual(
+            calls,
+            ["status", "quiesce", "restart", "status", "status", "quiesce", "restart", "status"],
+        )
 
     def test_transport_is_platform_explicit(self):
         self.assertEqual(RUNNER.validate_transport("tcp"), "tcp")
