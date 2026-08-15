@@ -2,7 +2,7 @@
 
 ```yaml
 adr_id: ADR-ATM-RUSQLITE-002
-crate: atm-rusqlite
+crate: atm-storage-rusqlite
 title: Single in-process SQLite write worker
 status: accepted
 related_adrs:
@@ -20,8 +20,8 @@ related_boundaries:
   - BOUNDARY-MailStore-Sqlite
   - BOUNDARY-RosterStore-Sqlite
 code_references:
-  - crates/atm-rusqlite/src/shared_db.rs
-  - crates/atm-rusqlite/src/lib.rs
+  - crates/atm-storage-rusqlite/src/shared_db.rs
+  - crates/atm-storage-rusqlite/src/lib.rs
 ```
 
 ## Context
