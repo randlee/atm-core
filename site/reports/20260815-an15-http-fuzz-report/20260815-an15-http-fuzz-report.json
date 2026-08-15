@@ -8,7 +8,7 @@
     "per_worker_timeout_s": 120,
     "promote_regressions": true,
     "seed": 20260815,
-    "source_revision": "daae4065642f3602d16687ce8b50908db3ca0781",
+    "source_revision": "9681de8a5fca252c2514b99db0b85610ff69130f",
     "target": "local-http-framing",
     "target_seams": [
       {
@@ -34,7 +34,7 @@
     ]
   },
   "footer_html": "<p>Generated from validated adversarial-fuzz v2 evidence through sc-compose.</p>",
-  "generated_at": "2026-08-15T04:00:00.951411Z",
+  "generated_at": "2026-08-15T04:42:31.551076Z",
   "json_output_path": "site/reports/20260815-an15-http-fuzz-report/20260815-an15-http-fuzz-report.json",
   "metadata_rows": [
     {
