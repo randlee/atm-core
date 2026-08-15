@@ -27,7 +27,10 @@ ADR-ATM-RUSQLITE-002; `REQ-P-SEARCH-INDEX-001`,
 **schema approval gate:** this sprint is planning-only until the product owner
 explicitly approves the additive SQLite work-ledger schema required by
 `REQ-RUSQLITE-SEARCH-INDEX-001`. That approval must be recorded in the
-implementation PR before any schema migration lands.
+tracked [AQ.1 schema-approval artifact](./aq1-schema-approval.md) and copied
+into the implementation PR description under `AQ.1 schema approval` before
+any schema migration lands. Every checklist field in that artifact is a hard
+gate; an unchecked field blocks the migration and enables no drain.
 
 ## Deliverables
 
