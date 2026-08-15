@@ -13,10 +13,16 @@ Purpose:
 
 Contract:
 - request DTOs are `TemplateRegistration`, `TemplateListFilter`, and
-  `DecomposedMessageAdmission`; AN.9/AN.10 add validated leaf
-  `WorkflowSnapshot` and `MessageTagProvenance` to that admission payload
+  `DecomposedMessageAdmission`; the AN.9 admission shape includes validated
+  leaf `WorkflowSnapshot` and `MessageTagProvenance`, which AN.10 populates
+  atomically for workflow-aware decomposed admission
 - response DTOs are `StoredTemplate`, `TemplateSummary`, and
   `DecomposedMessageAdmissionOutcome`
+- AN.13 adds `TemplateOutputFormat` as adapter-derived durable leaf data:
+  newly admitted rows carry `Text` or `Json`; a missing stored value is a
+  legacy/unverified row and is never inferred by core or storage. The sole
+  operator recovery path is documented in
+  [template catalog output formats](../template-catalog-output-format.md)
 - `atm-core` resolves/validates workflow variables before this boundary;
   implementations persist only the validated leaf DTOs atomically with the
   decomposed message
@@ -25,7 +31,8 @@ Contract:
   storage capability trait for this work
 
 Status:
-- active; AN.9/AN.10 contract extension governed by ADR-046
+- active; AN.9/AN.10 contract extension governed by ADR-046; AN.13 adds the
+  generic output-format column without changing renderer ownership
 
 ## AsyncMessageStore
 
@@ -39,6 +46,30 @@ adapter owns one synchronous transaction thread; `atm-http-runtime` must use
 this contract for writes and must not introduce `spawn_blocking` for admission.
 `MessageStore` remains the temporary synchronous compatibility surface for
 non-Tokio callers until the migration is performance-proven.
+
+## MessageSearchStore and AsyncMessageSearchStore
+
+Canonical machine-readable boundary sources:
+- [../../boundaries/atm-storage/message-search-store.toml](../../boundaries/atm-storage/message-search-store.toml)
+- [../../boundaries/atm-storage/async-message-search-store.toml](../../boundaries/atm-storage/async-message-search-store.toml)
+
+`MessageSearchStore` owns the sealed, backend-neutral query, filter,
+aggregate, page, and durable-result DTOs. `AsyncMessageSearchStore` is its
+Tokio-safe companion, with the same semantics and a bounded deadline. Neither
+trait exposes SQL, FTS syntax, renderer handles, or HTTP DTOs. The concrete
+SQLite adapter owns FTS5/JSON1 compilation and a bounded reader lane; HTTP
+consumers only await this port.
+
+## AnalystQueryStore
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-storage/analyst-query-store.toml](../../boundaries/atm-storage/analyst-query-store.toml)
+
+`AnalystQueryStore` is a separate, local-only read interface for the
+`atm-query-python` Maturin binding. It is not a widening of the daemon's
+`MessageSearchStore`: the binding is the only non-storage consumer, the
+concrete SQLite adapter owns connection authorization and query budgets, and
+the contract exposes neither SQLite handles nor any write or network operation.
 
 ## TlsHelpers
 

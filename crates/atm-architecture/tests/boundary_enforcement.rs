@@ -22,6 +22,7 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm-runtime", "atm-storage-rusqlite"),
     ("atm-storage", "atm-core"),
     ("atm-storage", "atm-storage-rusqlite"),
+    ("atm-storage-rusqlite", "atm-core"),
     ("atm-storage-rusqlite", "atm-runtime"),
     ("atm-graft", "atm-daemon"),
     ("atm-graft", "atm-daemon-bootstrap"),
@@ -33,6 +34,13 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm-http-runtime", "atm-graft"),
     ("atm-http-runtime", "atm-storage-rusqlite"),
     ("atm-runtime", "atm-daemon"),
+    ("atm-core", "atm-template-sc-compose"),
+    ("atm-storage", "atm-template-sc-compose"),
+    ("atm-storage-rusqlite", "atm-template-sc-compose"),
+    ("atm", "atm-template-sc-compose"),
+    ("atm-daemon", "atm-template-sc-compose"),
+    ("atm-runtime", "atm-template-sc-compose"),
+    ("atm-http-runtime", "atm-template-sc-compose"),
 ];
 
 const RETIRED_DAEMON_CONSTRUCT_FRAGMENTS: &[(&str, &str)] = &[
@@ -96,9 +104,9 @@ fn daemon_must_not_read_caller_workspace_config() {
     );
     let runtime_composition = read_source(&root.join("crates/atm-runtime/src/composition.rs"));
     assert!(
-        runtime_composition.contains(
-            "self.doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor::default()));"
-        ),
+        runtime_composition.contains("config_current_dir: None,")
+            && runtime_composition
+                .contains("workflow_telemetry: Arc::clone(self.workflow_telemetry.diagnostics()),"),
         "the daemon runtime view must replace the caller-workspace config doctor"
     );
 
@@ -1118,8 +1126,38 @@ fn atm_storage_rusqlite_must_not_depend_on_atm_runtime() {
 }
 
 #[test]
+fn atm_storage_rusqlite_must_not_depend_on_atm_core() {
+    assert_forbidden_edge_absent("atm-storage-rusqlite", "atm-core");
+}
+
+#[test]
 fn atm_graft_must_not_depend_on_atm_storage_rusqlite() {
     assert_forbidden_edge_absent("atm-graft", "atm-storage-rusqlite");
+}
+
+#[test]
+fn template_sc_compose_is_bootstrap_owned_and_forbidden_elsewhere() {
+    for source in [
+        "atm-core",
+        "atm-storage",
+        "atm-storage-rusqlite",
+        "atm",
+        "atm-daemon",
+        "atm-runtime",
+        "atm-http-runtime",
+    ] {
+        assert_forbidden_edge_absent(source, "atm-template-sc-compose");
+    }
+
+    let boundary_path =
+        workspace_root().join("boundaries/atm-template-sc-compose/sc-composer.toml");
+    let boundary: BoundaryToml = toml::from_str(&read_source(&boundary_path))
+        .expect("template sc-compose boundary must be valid TOML");
+    assert_eq!(
+        boundary.dependencies.allowed_dependents,
+        vec!["atm-daemon-bootstrap".to_string()],
+        "only the replacement bootstrap may construct the production template adapter"
+    );
 }
 
 #[test]
@@ -2506,6 +2544,7 @@ fn guarded_boundary_files() -> Vec<PathBuf> {
         root.join("boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml"),
         root.join("boundaries/atm-runtime/runtime-composition.toml"),
         root.join("boundaries/atm-storage/tls.toml"),
+        root.join("boundaries/atm-template-sc-compose/sc-composer.toml"),
     ];
     let mut sqlite_files = fs::read_dir(root.join("boundaries/atm-storage-rusqlite"))
         .expect("boundaries/atm-storage-rusqlite directory must be readable")

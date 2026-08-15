@@ -27,11 +27,11 @@ use crate::observability::{
 use crate::process::process_is_alive;
 use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage, ThreadMode};
-use crate::send::{SendCommandOutcome, SendMessageSource, SendRequest};
+use crate::send::{SendCommandOutcome, SendMessageSource, SendOutcome, SendRequest};
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
-use crate::types::{AgentName, IsoTimestamp, TeamName};
+use crate::types::{AgentName, CommandAction, IsoTimestamp, TeamName};
 
 pub(super) fn message(
     from: &str,
@@ -400,6 +400,49 @@ fn send_runtime_with_missing_atm_roster_member() -> TestRuntime {
 pub(super) struct RecordingObservability {
     // Mutex records concurrent delivery-policy events for deterministic assertions.
     events: Mutex<Vec<CommandEvent>>,
+}
+
+#[test]
+fn path_body_detection_emits_structured_warning_event() {
+    let observability = RecordingObservability::default();
+    let tempdir = tempdir().expect("tempdir");
+    let context = SendExecutionContext {
+        recipient: ResolvedRecipient {
+            agent: AgentName::from_validated("recipient"),
+            team: TeamName::from_validated(TEST_TEAM),
+        },
+        canonical_sender: AgentName::from_validated(TEST_SENDER),
+        inbox_path: tempdir.path().join("recipient.jsonl"),
+        delivery_snapshot: delivery_snapshot(DeliveryHarnessPath::NonClaude),
+        delivery_family: DeliveryEventFamily::NewMessage,
+        warnings: Vec::new(),
+    };
+    let outcome = SendOutcome {
+        action: CommandAction::Send,
+        team: TeamName::from_validated(TEST_TEAM),
+        agent: AgentName::from_validated("recipient"),
+        sender: AgentName::from_validated(TEST_SENDER),
+        outcome: SendCommandOutcome::Sent,
+        message_id: AtmMessageId::new(),
+        requires_ack: false,
+        task_id: None,
+        summary: Some("path reference".to_owned()),
+        message: None,
+        warnings: Vec::new(),
+        dry_run: false,
+    };
+
+    super::emit_path_body_detection_event(&observability, &outcome, None, &context);
+
+    let events = observability.events.lock().expect("events lock");
+    assert!(events.iter().any(|event| {
+        event.action.as_str() == "path_body_detected"
+            && event.outcome.as_str() == "warn"
+            && event
+                .error_message
+                .as_deref()
+                .is_some_and(|message| message.contains("content_format=path-ref"))
+    }));
 }
 
 impl crate::boundary::sealed::Sealed for RecordingObservability {}

@@ -1,11 +1,10 @@
 ---
 title: AN.13 sc-compose 1.4.1 Checked-Render Catalog Format Contract
-status: blocked
-branch: feature/an13-sc-compose-141-checked-render
+status: complete
+branch: feature/an13-sc-composer-141-upgrade
 target: integrate/phase-an
-external_blockers:
-  - crates.io publishes sc-sha 1.4.1, sc-composer 1.4.1, and sc-compose 1.4.1; published sc-composer exports check_rendered_output, CheckedOutput, and OutputFormat
-  - https://github.com/randlee/sc-compose/issues/448 closed
+worktree: ../atm-core-worktrees/feature/an13-sc-composer-141-upgrade
+external_blockers: []
 ---
 
 # AN.13 — sc-compose 1.4.1 Checked-Render Catalog Format Contract
@@ -15,7 +14,8 @@ durable output-format contract).
 **must_follow:** AN.10 merged, because AN.10 owns the atomic decomposed
 admission path and `TemplateCatalogStore` contract this sprint extends. Before
 every dev/fix round, merge the pushed AN.10 integration tip. In addition, this
-sprint is **blocked** until all three external conditions hold:
+sprint was **blocked** until all three external conditions held. They are now
+satisfied and retained in [the AN.13 release evidence](./sc-compose-141-evidence.md):
 
 1. crates.io publishes `sc-sha` **1.4.1**, `sc-composer` **1.4.1**, and
    `sc-compose` **1.4.1**, and the published `sc-composer` release exports
@@ -25,8 +25,8 @@ sprint is **blocked** until all three external conditions hold:
    `compose` → `check_rendered_output` checked-emission sequence.
 
 Do not use an unpublished git revision, a local path override, or a version
-range to bypass these gates. Until they hold, AN.13 is planned-but-blocked and
-no implementation PR may claim its acceptance criteria.
+range to bypass these gates. The adapter uses the exact released `=1.4.1` pin
+to call `OutputFormat::from_template_path`; checked emission remains AN.14.
 
 **unblocks:** AN.14, the runtime checked-emission upgrade. It does not unblock
 the workflow-metadata extension.
@@ -114,6 +114,11 @@ sc-compose #448.
   sc-compose #448 closure link, exact upstream API call sites, and the final
   CI commit.
 
+## Retained evidence records
+
+- Final CI validation commit: `1dbb560471ad63179d0c0c4b95b0485b340018ef`
+  (the current AN.13 validation head for PR #876).
+
 ## Paths to delete
 
 None. Do not delete historical AN.1 fixture/oracle evidence or legacy catalog
@@ -121,10 +126,10 @@ rows.
 
 ## Non-closure
 
-AN.13 does not alter the `sc-composer` pin, invoke checked rendering, make
-`compose()` itself return a checked type, infer an output format for legacy
-rows, synchronize templates across hosts, or add ATM workflow-specific
-behavior. AN.14 owns the released dependency upgrade and every runtime
-emission route. Upstream API changes and the direct-library test belong to
-sc-compose; ATM consumes the published contract only after its external gates
-close.
+AN.13 alters only the adapter-owned exact `sc-composer` pin to `=1.4.1`,
+because that released version supplies the `OutputFormat::from_template_path`
+API used for durable admission classification. It does not invoke checked
+rendering, make `compose()` itself return a checked type, infer an output
+format for legacy rows, synchronize templates across hosts, or add
+ATM workflow-specific behavior. AN.14 owns every runtime checked-emission
+route. Upstream API changes and the direct-library test belong to sc-compose.

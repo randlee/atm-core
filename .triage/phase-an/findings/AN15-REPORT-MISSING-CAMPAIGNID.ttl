@@ -1,0 +1,51 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN15-REPORT-MISSING-CAMPAIGNID>
+  a triage:Finding ;
+  triage:findingId "AN15-REPORT-MISSING-CAMPAIGNID" ;
+  triage:title "Retained AN.15 campaign report has no structured campaign_id/final_ci_commit fields" ;
+  triage:description "site/reports/fuzz/an15-checked-emission-20260814.json's campaign object lacked a campaign_id key. RESOLVED: campaign object now carries a structured campaign_id field, confirmed by AN-PHASEEND-REVIEW fuzz reviewer (task #1767) at integrate/phase-an @ 628d6531b. (Note: the candidate_ref vs reviewed-HEAD mismatch flagged by arch-qa was independently confirmed NOT a distinct defect -- pure docs-only commit, no intervening code change.)" ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "docs" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-14T08:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.15 ;
+  triage:foundAt "2026-08-14T08:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN15-REPORT-MISSING-CAMPAIGNID/AN15-1> ;
+  triage:closedAt "2026-08-14T20:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AN15-REPORT-MISSING-CAMPAIGNID/AN15-1>
+  a triage:Occurrence ;
+  triage:file "site/reports/fuzz/an15-checked-emission-20260814.json" ;
+  triage:line 2 ;
+  triage:snippet "campaign object now includes campaign_id and final_ci_commit keys" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "628d6531bd77db0507447e587088fb9abdfeb4bc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-an/628d6531> .
+
+<urn:atm:triage:worktree/AN15-0>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/an15-adversarial-fuzzing" ;
+  triage:branch "feature/an15-adversarial-fuzzing" ;
+  triage:headSha "9ddf105b5dd7c3d7ec592cac1602dd7ab1c743bb" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/integrate-an/628d6531>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate/phase-an" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "628d6531bd77db0507447e587088fb9abdfeb4bc" ;
+  triage:orderIndex 1 .

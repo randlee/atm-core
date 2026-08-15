@@ -1,0 +1,51 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F002-AN12>
+  a triage:Finding ;
+  triage:findingId "RBQA-F002-AN12" ;
+  triage:title "check_test_identity_literals.py has no defense against concat!() fragment reassembly" ;
+  triage:description "ruthless-boundary-qa reported (AN12-QA-1, quality-mgr, PR #875): .just/check_test_identity_literals.py lacks defense against concat!()-style fragment reassembly. Lint script only examines string literals within individual lines and cannot detect identity literals split across multiple lines via concat!()." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "tooling" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-13T20:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.12 ;
+  triage:foundAt "2026-08-14T02:04:48Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002-AN12/AN12-1> ;
+  triage:closedAt "2026-08-13T18:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RBQA-F002-AN12/AN12-1>
+  a triage:Occurrence ;
+  triage:file ".just/check_test_identity_literals.py" ;
+  triage:line 81 ;
+  triage:snippet "literal_contents = set(iter_string_literal_contents(line))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "76485c590" ;
+  triage:occursIn <urn:atm:triage:worktree/AN12/76485c590> .
+
+<urn:atm:triage:worktree/AN12/76485c590>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/an12-workflow-validation-evidence" ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "76485c590" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AN13/70c7b231b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/an13-sc-composer-141-upgrade" ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "70c7b231b" ;
+  triage:orderIndex 2 .

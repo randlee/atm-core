@@ -13,13 +13,14 @@ use std::sync::{Arc, Once};
 use std::time::Duration;
 
 use atm_core::LocalFileNonClaudeOutbound;
-use atm_core::boundary::{NonClaudeOutbound, RosterStore};
+use atm_core::boundary::{NonClaudeOutbound, RosterStore, TemplateComposer};
 use atm_core::error::AtmError;
 #[cfg(unix)]
 use atm_core::home::HOST_RUNTIME_SOCKET_FILE;
 use atm_core::home::current_host_runtime_scope;
 use atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME;
 use atm_core::observability::{NullObservability, ObservabilityPort};
+use atm_core::send::input::DEFAULT_MESSAGE_MAX_BYTES;
 use atm_core::types::{AgentName, TeamName};
 use atm_http_runtime::{
     DirectPeerTcpConfig, HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig, NonZeroDuration,
@@ -39,6 +40,13 @@ pub use received_hook_selector::{BenchmarkHookMode, benchmark_received_hook_sele
 static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
 /// Architecture §21.6.4's single replacement-daemon drain deadline.
 pub const REPLACEMENT_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
+/// Space reserved above one valid message body for the canonical HTTP JSON
+/// envelope (routing, identity, acknowledgement, and protocol metadata).
+///
+/// It keeps the 1 MiB message contract independent from HTTP framing while
+/// remaining a bounded admission limit. The wire request's `max_message_bytes`
+/// can only lower the body policy; it cannot raise this server ceiling.
+const CANONICAL_WRITE_ENVELOPE_OVERHEAD_BYTES: usize = 64 * 1024;
 
 /// Identity values captured once at the daemon bootstrap boundary.
 ///
@@ -78,11 +86,34 @@ pub fn assemble_host_runtime(
     config_current_dir: PathBuf,
     non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
 ) -> Result<RuntimeAssembly, AtmError> {
+    assemble_host_runtime_with_template_composer(
+        config_current_dir,
+        non_claude_outbound,
+        Some(template_composer()),
+    )
+}
+
+/// Construct the approved renderer adapter for callers that only need local
+/// composition (for example `atm compose`) and must not touch mailbox state.
+pub fn template_composer() -> Arc<dyn TemplateComposer> {
+    Arc::new(atm_template_sc_compose::ScComposeTemplateComposer::new())
+}
+
+/// Assemble the host-scoped runtime with the sole bootstrap-owned template
+/// port. The concrete adapter remains invisible to `atm-runtime` and every
+/// caller downstream of this composition root.
+pub fn assemble_host_runtime_with_template_composer(
+    config_current_dir: PathBuf,
+    non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
+    template_composer: Option<Arc<dyn TemplateComposer>>,
+) -> Result<RuntimeAssembly, AtmError> {
     assemble_runtime(RuntimeAssemblyInputs {
         host_runtime_scope: current_host_runtime_scope()?,
         storage_factory: Arc::new(SqliteStorageFactory::host_scoped()),
         config_current_dir,
         non_claude_outbound,
+        template_composer,
+        workflow_telemetry: None,
     })
 }
 
@@ -145,6 +176,34 @@ pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode) -> Result<(), At
     .await
 }
 
+fn build_replacement_handler(
+    assembly: RuntimeAssembly,
+    observability: Arc<dyn ObservabilityPort + Send + Sync>,
+    selector_factory: impl FnOnce(
+        atm_core::LocalServiceRuntime,
+    ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
+    daemon_launch_identity: &DaemonLaunchIdentity,
+    runtime_health: RuntimeHealth,
+) -> Result<Arc<StorageAndNudgeRouter>, AtmError> {
+    let selector = selector_factory(assembly.service_runtime.clone());
+    Ok(Arc::new(
+        StorageAndNudgeRouter::new(
+            assembly.service_runtime,
+            observability,
+            selector,
+            atm_core::home::atm_home()?,
+        )
+        .with_runtime_health(runtime_health, assembly.doctor_ports)
+        .with_daemon_context(atm_core::doctor::DoctorExecutionContext {
+            team: daemon_launch_identity.team.clone(),
+            identity: daemon_launch_identity.identity.clone(),
+            version: Some(atm_core::protocol::ReleaseVersion::current()),
+            cli_schema_version: Some(atm_core::protocol::CLI_SCHEMA_VERSION),
+            http_api_version: Some(atm_core::protocol::HttpApiVersion::current()),
+        }),
+    ))
+}
+
 async fn run_replacement_daemon_with_selector(
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
     selector_factory: impl FnOnce(
@@ -157,25 +216,16 @@ async fn run_replacement_daemon_with_selector(
     let _owner = DaemonOwnerGuard::acquire_at(scope.owner_lock.clone())?;
     let runtime_health = RuntimeHealth::with_owner(std::process::id());
     let assembly = assemble_daemon_runtime()?;
+    let workflow_telemetry = assembly.workflow_telemetry.clone();
     // The shipped daemon always keeps the injected receiver hook active.
     // Benchmark-only selection is available only from the separate binary.
-    let selector = selector_factory(assembly.service_runtime.clone());
-    let handler = Arc::new(
-        StorageAndNudgeRouter::new(
-            assembly.service_runtime,
-            observability,
-            selector,
-            atm_core::home::atm_home()?,
-        )
-        .with_runtime_health(runtime_health.clone(), assembly.doctor_ports)
-        .with_daemon_context(atm_core::doctor::DoctorExecutionContext {
-            team: daemon_launch_identity.team,
-            identity: daemon_launch_identity.identity,
-            version: Some(atm_core::protocol::ReleaseVersion::current()),
-            cli_schema_version: Some(atm_core::protocol::CLI_SCHEMA_VERSION),
-            http_api_version: Some(atm_core::protocol::HttpApiVersion::current()),
-        }),
-    );
+    let handler = build_replacement_handler(
+        assembly,
+        observability,
+        selector_factory,
+        &daemon_launch_identity,
+        runtime_health.clone(),
+    )?;
     let loopback = LoopbackTcpConfig::new(
         SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
         scope.runtime_root.as_ref().join(LOCAL_HTTP_RECORD_FILENAME),
@@ -185,7 +235,8 @@ async fn run_replacement_daemon_with_selector(
         loopback,
         unix_socket_config(&scope)?,
         RuntimeLimits::new(
-            NonZeroUsize::new(1_048_576).expect("non-zero body limit"),
+            NonZeroUsize::new(DEFAULT_MESSAGE_MAX_BYTES + CANONICAL_WRITE_ENVELOPE_OVERHEAD_BYTES)
+                .expect("non-zero body limit"),
             NonZeroUsize::new(128).expect("non-zero connection limit"),
         ),
         RuntimeTimeouts::new(
@@ -203,6 +254,7 @@ async fn run_replacement_daemon_with_selector(
         // The process has not advertised readiness, so it must not retain an
         // otherwise-live listener when its supervisor handshake fails.
         let _ = running.begin_shutdown().finish().await;
+        workflow_telemetry.shutdown().await;
         return Err(error);
     }
     tokio::select! {
@@ -212,15 +264,19 @@ async fn run_replacement_daemon_with_selector(
         }
         _ = running.wait_for_server_stop() => {
             eprintln!("replacement ATM HTTP runtime server stopped unexpectedly; beginning cleanup");
-            return match running.begin_shutdown().finish().await {
+            let result = match running.begin_shutdown().finish().await {
                 Ok(_) => Err(AtmError::daemon_unavailable(
                     "replacement HTTP runtime server stopped unexpectedly",
                 )),
                 Err(error) => Err(error),
             };
+            workflow_telemetry.shutdown().await;
+            return result;
         }
     }
-    let _stopped = running.begin_shutdown().finish().await?;
+    let stopped = running.begin_shutdown().finish().await;
+    workflow_telemetry.shutdown().await;
+    let _stopped = stopped?;
     Ok(())
 }
 
@@ -374,7 +430,14 @@ pub fn with_default_peer_config_store<T>(
 mod replacement_runtime_tests {
     use std::time::Duration;
 
-    use super::{REPLACEMENT_DRAIN_DEADLINE, ShutdownSignal, write_ready_signal_if_requested};
+    use atm_core::boundary::TemplateSource;
+    use atm_template_sc_compose::ScComposeTemplateComposer;
+    use serde_json::Map;
+
+    use super::{
+        REPLACEMENT_DRAIN_DEADLINE, ShutdownSignal, assemble_host_runtime_with_template_composer,
+        write_ready_signal_if_requested,
+    };
 
     #[test]
     fn ready_signal_is_absent_unless_requested() {
@@ -400,6 +463,46 @@ mod replacement_runtime_tests {
         assert_eq!(ShutdownSignal::Interrupt.as_str(), "SIGINT");
         #[cfg(unix)]
         assert_eq!(ShutdownSignal::Terminate.as_str(), "SIGTERM");
+    }
+
+    #[test]
+    fn replacement_bootstrap_injects_the_real_template_composer_port() {
+        let raw = b"bootstrap adapter".to_vec();
+        let adapter = ScComposeTemplateComposer::new();
+        let temp = tempfile::tempdir().expect("temporary bootstrap directory");
+        let assembly = assemble_host_runtime_with_template_composer(
+            temp.path().to_path_buf(),
+            std::sync::Arc::new(atm_core::LocalFileNonClaudeOutbound::new()),
+            Some(std::sync::Arc::new(adapter)),
+        )
+        .expect("bootstrap accepts the core-owned template port");
+
+        let composer = assembly
+            .template_composer()
+            .expect("port arrives through runtime assembly");
+        let path = temp.path().join("bootstrap.txt.j2");
+        std::fs::write(&path, &raw).expect("write bootstrap template");
+        let source = TemplateSource::file_backed(
+            raw.clone(),
+            std::fs::canonicalize(&path).expect("canonical bootstrap template"),
+        );
+        let inspection = composer
+            .inspect(&source)
+            .expect("real inspection through port");
+        assert_eq!(
+            inspection.output_format,
+            atm_core::boundary::TemplateOutputFormat::Text
+        );
+        assert_eq!(inspection.sha.as_str().len(), 64);
+        let stored_source =
+            TemplateSource::stored(raw, Some(atm_core::boundary::TemplateOutputFormat::Text));
+        assert_eq!(
+            composer
+                .render_without_includes(&stored_source, &Map::new())
+                .expect("real render through port")
+                .text,
+            "bootstrap adapter"
+        );
     }
 
     #[cfg(unix)]

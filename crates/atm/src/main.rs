@@ -97,7 +97,14 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         | AtmErrorCode::ConfigRetiredHookMembersKey
         | AtmErrorCode::ConfigRetiredLegacyHookKeys
         | AtmErrorCode::ConfigTeamParseFailed
-        | AtmErrorCode::ConfigTeamMissing => 2,
+        | AtmErrorCode::ConfigTeamMissing
+        // `atm compose` is a process-level adapter for `sc-compose`. Keep
+        // its source/load/include/render failures in the upstream CLI's
+        // configuration/validation exit category so callers can distinguish
+        // them from ATM request validation (3) and internal failures (1).
+        | AtmErrorCode::TemplateLoadFailed
+        | AtmErrorCode::TemplateRenderVerificationFailed
+        | AtmErrorCode::TemplateIncludeUnresolved => 2,
         AtmErrorCode::IdentityUnavailable
         | AtmErrorCode::IdentityInvalid
         | AtmErrorCode::IdentityConflict
@@ -1003,7 +1010,7 @@ fn resolve_adapter_log_dir(_home_dir: &Path) -> Result<PathBuf, AtmError> {
 #[cfg(test)]
 mod adapter_tests {
     use anyhow::anyhow;
-    use atm_core::error::AtmError;
+    use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::test_support::EnvGuard;
     use sc_observability_types::LevelFilter as SharedLevelFilter;
     use serial_test::serial;
@@ -1122,6 +1129,27 @@ mod adapter_tests {
         assert_eq!(
             exit_code_for_atm_error(&AtmError::validation("bad input")),
             3
+        );
+        assert_eq!(
+            exit_code_for_atm_error(&AtmError::new(
+                AtmErrorCode::TemplateLoadFailed,
+                "template unavailable"
+            )),
+            2
+        );
+        assert_eq!(
+            exit_code_for_atm_error(&AtmError::new(
+                AtmErrorCode::TemplateIncludeUnresolved,
+                "template include unavailable"
+            )),
+            2
+        );
+        assert_eq!(
+            exit_code_for_atm_error(&AtmError::new(
+                AtmErrorCode::TemplateRenderVerificationFailed,
+                "template verification failed"
+            )),
+            2
         );
         assert_eq!(
             exit_code_for_atm_error(&AtmError::daemon_unavailable("daemon down")),

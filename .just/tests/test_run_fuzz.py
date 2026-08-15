@@ -5,8 +5,10 @@ from copy import deepcopy
 import io
 import json
 from pathlib import Path
+from shutil import rmtree
 import sys
 import unittest
+from unittest import mock
 
 
 JUST_DIR = Path(__file__).resolve().parents[1]
@@ -18,6 +20,8 @@ from run_fuzz import CONTRACT_PROBE_SEAM
 from run_fuzz import FuzzInputError
 from run_fuzz import SCHEMA_VERSION
 from run_fuzz import build_result
+from run_fuzz import build_checked_emission_result
+from run_fuzz import build_executed_product_result
 from run_fuzz import default_campaign
 from run_fuzz import main
 from run_fuzz import validate_campaign
@@ -26,6 +30,13 @@ from run_fuzz import validate_worker_result
 
 
 class FuzzRunnerTests(unittest.TestCase):
+    @staticmethod
+    def case_shape_evidence(*, distinct_shapes: int = 4) -> str:
+        return "\n".join(
+            f"AN15_CASE_SHAPE=family-{case_index % distinct_shapes}"
+            for case_index in range(100)
+        )
+
     def campaign(self) -> dict:
         return validate_campaign(default_campaign(Path.cwd()), Path.cwd(), require_campaign_id=True)
 
@@ -209,6 +220,59 @@ class FuzzRunnerTests(unittest.TestCase):
         with redirect_stderr(stderr):
             self.assertEqual(main(["run_fuzz.py"]), 2)
         self.assertIn("select exactly one", stderr.getvalue())
+
+    def test_checked_emission_executor_runs_only_closed_over_product_commands(self) -> None:
+        payload = json.loads((FIXTURES / "an15-checked-emission.json").read_text())
+        payload["worktree_path"] = str(Path.cwd())
+        payload["campaign_id"] = "unit-checked-emission-v2"
+        campaign = validate_campaign(payload, Path.cwd(), require_campaign_id=True)
+        report_dir = Path.cwd() / "site/reports/fuzz/unit-checked-emission-v2-v2"
+        try:
+            with mock.patch(
+                "run_fuzz.subprocess.run",
+                return_value=mock.Mock(returncode=0, stdout=self.case_shape_evidence(), stderr=""),
+            ) as run:
+                report = build_checked_emission_result(campaign)
+            self.assertEqual(report["execution_mode"], "executed-product-campaign")
+            self.assertRegex(report["campaign"]["source_revision"], r"^[0-9a-f]{40,64}$")
+            self.assertEqual([worker["cases_run"] for worker in report["workers"]], [100, 100, 100, 100])
+            self.assertTrue(all(worker["target_invocation"]["proofs"][0]["mechanism"] == "coverage" for worker in report["workers"]))
+            self.assertEqual(run.call_count, 4)
+            self.assertTrue(all(call.args[0][0] == "cargo" for call in run.call_args_list))
+        finally:
+            rmtree(report_dir, ignore_errors=True)
+
+    def test_checked_emission_executor_rejects_a_counter_only_corpus(self) -> None:
+        payload = json.loads((FIXTURES / "an15-checked-emission.json").read_text())
+        payload["worktree_path"] = str(Path.cwd())
+        payload["campaign_id"] = "unit-checked-emission-degenerate-v2"
+        campaign = validate_campaign(payload, Path.cwd(), require_campaign_id=True)
+        try:
+            with mock.patch(
+                "run_fuzz.subprocess.run",
+                return_value=mock.Mock(returncode=0, stdout=self.case_shape_evidence(distinct_shapes=1), stderr=""),
+            ):
+                with self.assertRaisesRegex(FuzzInputError, "case diversity is degenerate"):
+                    build_checked_emission_result(campaign)
+        finally:
+            rmtree(Path.cwd() / "site/reports/fuzz/unit-checked-emission-degenerate-v2-v2", ignore_errors=True)
+
+    def test_http_framing_executor_uses_closed_over_http_runtime_commands(self) -> None:
+        payload = json.loads((FIXTURES / "an15-http-framing.json").read_text())
+        payload["worktree_path"] = str(Path.cwd())
+        payload["campaign_id"] = "unit-http-framing-v2"
+        campaign = validate_campaign(payload, Path.cwd(), require_campaign_id=True)
+        report_dir = Path.cwd() / "site/reports/fuzz/unit-http-framing-v2-v2"
+        try:
+            with mock.patch(
+                "run_fuzz.subprocess.run",
+                return_value=mock.Mock(returncode=0, stdout=self.case_shape_evidence(), stderr=""),
+            ) as run:
+                report = build_executed_product_result(campaign)
+            self.assertEqual(report["campaign"]["target"], "local-http-framing")
+            self.assertTrue(all("atm-http-runtime" in call.args[0] for call in run.call_args_list))
+        finally:
+            rmtree(report_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":

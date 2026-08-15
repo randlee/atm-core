@@ -8,6 +8,13 @@ use crate::types::{AgentName, TeamName};
 
 pub const DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES: u64 = 128 * 1024;
 pub const MAX_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES: u64 = 1_048_576;
+/// The default and hard upper bound for one ATM message payload.
+///
+/// The HTTP runtime reserves canonical-envelope space above this value, so a
+/// valid maximum-size message is never rejected only because JSON framing was
+/// added around it.
+pub const DEFAULT_MAX_MESSAGE_BYTES: u64 = 1_048_576;
+pub const MAX_MESSAGE_BYTES: u64 = DEFAULT_MAX_MESSAGE_BYTES;
 pub const MAX_POST_SEND_HOOKS: usize = 64;
 pub const MAX_POST_SEND_HOOK_COMMAND_PATH_BYTES: usize = 4096;
 
@@ -65,6 +72,9 @@ pub struct AtmConfig {
     /// the config layer, so no newtype wrapper is needed here.
     pub aliases: BTreeMap<String, String>,
     pub post_send_hooks: Vec<PostSendHookRule>,
+    /// Bounded message payload policy shared by inline, stdin, and daemon
+    /// admission. It deliberately is not a SQLite row-size limit.
+    pub max_message_bytes: ByteCount,
     pub claude_jsonl_body_export_max_bytes: ByteCount,
     pub graft: GraftConfig,
     pub config_root: PathBuf,
@@ -78,6 +88,7 @@ impl Default for AtmConfig {
             team_members: Vec::new(),
             aliases: BTreeMap::new(),
             post_send_hooks: Vec::new(),
+            max_message_bytes: ByteCount::new(DEFAULT_MAX_MESSAGE_BYTES),
             claude_jsonl_body_export_max_bytes: ByteCount::new(
                 DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES,
             ),

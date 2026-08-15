@@ -106,7 +106,16 @@ async fn load_store_backed_mailbox_projection_async(
             .cmp(&right.envelope.timestamp)
             .then_with(|| left.message_key.as_ref().cmp(right.message_key.as_ref()))
     });
-    Ok(records.into_iter().map(|record| record.envelope).collect())
+    records
+        .into_iter()
+        .map(|record| {
+            runtime.render_message_body(
+                &record.message_key,
+                record.envelope.message_id,
+                &record.envelope,
+            )
+        })
+        .collect()
 }
 
 /// Tokio-owned durable admission for ordinary immutable messages.
@@ -182,7 +191,12 @@ fn load_store_backed_mailbox_projection(
         else {
             continue;
         };
-        messages.push(record.envelope);
+        let envelope = runtime.render_message_body(
+            &record.message_key,
+            record.envelope.message_id,
+            &record.envelope,
+        )?;
+        messages.push(envelope);
     }
     Ok(messages)
 }

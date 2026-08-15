@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN6-TESTGAP-001>
+  a triage:Finding ;
+  triage:findingId "AN6-TESTGAP-001" ;
+  triage:title "Production SQLite search backend has zero tests; sprint checklist test-suite claims do not match diff" ;
+  triage:description "search_store.rs (761 lines) and search_reader.rs in atm-storage-rusqlite have zero tests; all aggregation/cursor/dedup correctness including the NULL message_id + --per-mailbox case is only proven against the AN.5 in-memory fake, never the shipped SQLite backend. The sprint worktree checklist claims corpus/parity, parser/key/injection, aggregate/cursor, local/peer, and Python security acceptance tests were added, but the actual diff adds zero new test files -- claim does not match diff." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "branch" ;
+  triage:status "closed" ;
+  triage:resolution "fixed" ;
+  triage:closedAt "2026-08-13T08:20:34Z"^^xsd:dateTime ;
+  triage:closedNote "AN6-QUERYFIX-1 (36a75f3de): production SQLite coverage now includes the shipped reader lane, null-message-id dedup/cursor behavior, real category/tag filters, free-text FTS filtering, and category aggregation. These tests execute against SqliteStorageBackend rather than only the AN.5 in-memory fake." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-12T10:09:50Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.6 ;
+  triage:foundAt "2026-08-12T10:09:50Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN6-TESTGAP-001/1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AN6-TESTGAP-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/search_store.rs" ;
+  triage:line 1 ;
+  triage:snippet "SqliteMessageSearchStore / search_reader.rs -- zero tests against production backend" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-13T08:20:34Z"^^xsd:dateTime ;
+  triage:closedNote "AN6-QUERYFIX-1 (36a75f3de): search_store.rs now has production-backend filter/aggregate coverage in addition to pagination/dedup, and search_reader.rs has a production reader-lane test." ;
+  triage:branch "feature/pan-s6-query-surface" ;
+  triage:headSha "8bdc985ac392b1eb9f6ad47794deec30e3c86c06" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pan-s6-query-surface> .
+
+<urn:atm:triage:worktree/feature-pan-s6-query-surface>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pan-s6-query-surface" ;
+  triage:branch "feature/pan-s6-query-surface" ;
+  triage:headSha "8bdc985ac392b1eb9f6ad47794deec30e3c86c06" ;
+  triage:orderIndex 1 .

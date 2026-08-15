@@ -33,7 +33,10 @@ use crate::schema::{AgentMember, TeamConfig};
 use crate::types::AgentName;
 use crate::types::TeamName;
 use discovery::normalize_post_send_hooks;
-use types::{ByteCount, GraftConfig, MAX_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES, MAX_POST_SEND_HOOKS};
+use types::{
+    ByteCount, GraftConfig, MAX_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES, MAX_MESSAGE_BYTES,
+    MAX_POST_SEND_HOOKS,
+};
 
 /// Load `.atm.toml` by walking upward from `start_dir`.
 ///
@@ -60,6 +63,7 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
         team_members: normalize_team_members(parsed.atm.team_members, &path)?,
         aliases: normalize_aliases(parsed.atm.aliases),
         post_send_hooks: normalize_post_send_hooks(parsed.atm.post_send_hooks, &config_root)?,
+        max_message_bytes: normalize_max_message_bytes(parsed.atm.max_message_bytes, &path)?,
         claude_jsonl_body_export_max_bytes: normalize_claude_jsonl_body_export_max_bytes(
             parsed.atm.claude_jsonl_body_export_max_bytes,
             &path,
@@ -195,6 +199,8 @@ struct RawAtmSection {
     #[serde(default)]
     post_send_hooks: Vec<RawPostSendHookRule>,
     #[serde(default)]
+    max_message_bytes: Option<u64>,
+    #[serde(default)]
     claude_jsonl_body_export_max_bytes: Option<u64>,
     #[serde(default)]
     graft: Option<RawGraftSection>,
@@ -256,6 +262,20 @@ fn normalize_claude_jsonl_body_export_max_bytes(
                 "invalid [atm].claude_jsonl_body_export_max_bytes in {}: {value} exceeds the maximum of {} bytes",
                 path.display(),
                 MAX_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES
+            ),
+        ));
+    }
+    Ok(ByteCount::new(value))
+}
+
+fn normalize_max_message_bytes(raw: Option<u64>, path: &Path) -> Result<ByteCount, AtmError> {
+    let value = raw.unwrap_or(types::DEFAULT_MAX_MESSAGE_BYTES);
+    if value == 0 || value > MAX_MESSAGE_BYTES {
+        return Err(AtmError::new(
+            AtmErrorCode::ConfigParseFailed,
+            format!(
+                "invalid [atm].max_message_bytes in {}: {value} must be between 1 and {MAX_MESSAGE_BYTES} bytes",
+                path.display(),
             ),
         ));
     }
@@ -398,7 +418,8 @@ fn parse_team_member(config_path: &Path, index: usize, entry: &Value) -> Option<
 #[cfg(test)]
 mod tests {
     use crate::config::types::{
-        ByteCount, HookRecipient, MAX_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES, MAX_POST_SEND_HOOKS,
+        ByteCount, HookRecipient, MAX_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES, MAX_MESSAGE_BYTES,
+        MAX_POST_SEND_HOOKS,
     };
     use crate::error_codes::AtmErrorCode;
     use crate::roles::ROLE_TEAM_LEAD;
@@ -506,6 +527,7 @@ blank = ""
             config.claude_jsonl_body_export_max_bytes,
             ByteCount::new(128 * 1024)
         );
+        assert_eq!(config.max_message_bytes, ByteCount::new(MAX_MESSAGE_BYTES));
         assert_eq!(
             config.aliases.get("tl").map(String::as_str),
             Some(ROLE_TEAM_LEAD)
@@ -526,6 +548,44 @@ blank = ""
         let config = load_config(root.path()).expect("config").expect("present");
 
         assert_eq!(config.claude_jsonl_body_export_max_bytes, ByteCount::new(0));
+    }
+
+    #[test]
+    fn load_config_reads_message_cap_with_default_and_explicit_value() {
+        let explicit_root = unique_temp_dir("atm-config-message-cap");
+        fs::write(
+            explicit_root.path().join(".atm.toml"),
+            "[atm]\nmax_message_bytes = 65536\n",
+        )
+        .expect("config");
+
+        let explicit = load_config(explicit_root.path())
+            .expect("config")
+            .expect("present");
+        assert_eq!(explicit.max_message_bytes, ByteCount::new(65_536));
+
+        let default_root = unique_temp_dir("atm-config-message-cap-default");
+        fs::write(default_root.path().join(".atm.toml"), "[atm]\n").expect("config");
+        let default = load_config(default_root.path())
+            .expect("config")
+            .expect("present");
+        assert_eq!(default.max_message_bytes, ByteCount::new(MAX_MESSAGE_BYTES));
+    }
+
+    #[test]
+    fn load_config_rejects_zero_or_widened_message_cap() {
+        for value in [0, MAX_MESSAGE_BYTES + 1] {
+            let root = unique_temp_dir("atm-config-invalid-message-cap");
+            fs::write(
+                root.path().join(".atm.toml"),
+                format!("[atm]\nmax_message_bytes = {value}\n"),
+            )
+            .expect("config");
+
+            let error = load_config(root.path()).expect_err("invalid message cap should fail");
+            assert_eq!(error.code(), AtmErrorCode::ConfigParseFailed);
+            assert!(error.message().contains("max_message_bytes"));
+        }
     }
 
     #[test]

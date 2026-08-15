@@ -1,0 +1,47 @@
+boundary_id = "BOUNDARY-WorkflowTelemetrySink"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "WorkflowTelemetrySink"
+
+[public]
+trait = "WorkflowTelemetrySink"
+notes = "Sealed, object-safe first-party telemetry projection. Records contain only workflow snapshot attributes and durable timestamps; message payloads and merged variables are forbidden."
+
+[implementation]
+type = "NoopWorkflowTelemetrySink"
+module = "atm_core::workflow_telemetry"
+visibility = "public"
+constructor = "public"
+
+[composition]
+roots = ["atm_runtime::workflow_telemetry::WorkflowTelemetryRuntime::start"]
+
+[ownership]
+io_owns = ["best_effort_telemetry_export"]
+io_forbidden = ["database_io", "socket_io"]
+
+[dependencies]
+allowed_dependents = ["atm-runtime"]
+allowed_dependencies = []
+forbidden_edges = ["atm -> telemetry-implementation", "atm-http-runtime -> telemetry-implementation", "atm-storage -> telemetry-implementation", "atm-storage-rusqlite -> telemetry-implementation"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["WorkflowTelemetryRecord"]
+response_types = ["Result<(), WorkflowTelemetryError>"]
+error_types = ["WorkflowTelemetryError"]
+
+[testing]
+allowed_test_double_paths = ["atm_runtime::workflow_telemetry::tests"]
+forbidden_test_bypasses = ["payload_bearing_record"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-WORKFLOW-TELEMETRY-SINK-REFERENCES"]
+review_gates = ["first_party_only", "no_payload_or_vars", "best_effort_only"]
+
+[status]
+state = "concrete_landed"
+notes = ["atm-core owns the no-op implementation; atm-runtime is the sole allowed out-of-owner implementation and composition site."]

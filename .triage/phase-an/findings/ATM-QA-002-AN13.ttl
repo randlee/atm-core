@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-002-AN13>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-002-AN13" ;
+  triage:title "AN.13 sprint doc frontmatter branch field mismatches actual branch" ;
+  triage:description "req-qa reported, confirmed by quality-mgr (AN13-QA-1, PR #876, ATM message 01KZZ3Y9KD34EY4RPQMTMS3B6K): docs/plans/phase-an/sprint-AN13-sc-compose-141-checked-render.md frontmatter branch field says feature/an13-sc-compose-141-checked-render but the actual branch is feature/an13-sc-composer-141-upgrade (note: composer vs compose, upgrade vs checked-render the doc branch field does not match the real branch name)." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-13T20:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.13 ;
+  triage:foundAt "2026-08-14T03:09:39Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-AN13/AN13-1> ;
+  triage:closedAt "2026-08-14T08:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/ATM-QA-002-AN13/AN13-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-an/sprint-AN13-sc-compose-141-checked-render.md" ;
+  triage:line 4 ;
+  triage:snippet "branch: feature/an13-sc-compose-141-checked-render" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "70c7b23" ;
+  triage:occursIn <urn:atm:triage:worktree/AN13/70c7b23> .
+
+<urn:atm:triage:worktree/AN-INTEGRATE/f8e1f52>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-an" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "f8e1f52" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AN12/76485c5>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/an12" ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "76485c5" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AN13/70c7b23>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/an13" ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "70c7b23" ;
+  triage:orderIndex 2 .

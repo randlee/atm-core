@@ -1,0 +1,82 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F001-AN12>
+  a triage:Finding ;
+  triage:findingId "RBP-F001-AN12" ;
+  triage:title "storage_error() collapses structured AtmError to opaque string, dropping code/cause" ;
+  triage:description "crates/atm-query-python/src/lib.rs:117 storage_error() collapses a structured AtmError into an opaque string via .to_string(), dropping the code/cause fields; the sibling atm-graft-python crate already has the correct structured-exception pattern to copy as reference." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "error-handling" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-13T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.12 ;
+  triage:foundAt "2026-08-14T02:04:48Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AN12/AN12-OCC-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AN12/AN13-OCC-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AN12/AN0-OCC-1> ;
+  triage:closedAt "2026-08-13T18:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RBP-F001-AN12/AN12-OCC-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-query-python/src/lib.rs" ;
+  triage:line 117 ;
+  triage:snippet "fn storage_error(error: atm_storage::AtmError) -> PyErr {" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "76485c590" ;
+  triage:occursIn <urn:atm:triage:worktree/AN12/76485c590> .
+
+<urn:atm:triage:occurrence/RBP-F001-AN12/AN13-OCC-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-query-python/src/lib.rs" ;
+  triage:line 117 ;
+  triage:snippet "fn storage_error(error: atm_storage::AtmError) -> PyErr {" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "70c7b231b" ;
+  triage:occursIn <urn:atm:triage:worktree/AN13/70c7b231b> .
+
+<urn:atm:triage:occurrence/RBP-F001-AN12/AN0-OCC-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-query-python/src/lib.rs" ;
+  triage:line 117 ;
+  triage:snippet "fn storage_error(error: atm_storage::AtmError) -> PyErr {" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "f8e1f52d4" ;
+  triage:occursIn <urn:atm:triage:worktree/AN0/f8e1f52d4> .
+
+<urn:atm:triage:worktree/AN0/f8e1f52d4>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-an" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "f8e1f52d4" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AN12/76485c590>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/an12-workflow-validation-evidence" ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "76485c590" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AN13/70c7b231b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/an13-sc-composer-141-upgrade" ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "70c7b231b" ;
+  triage:orderIndex 2 .

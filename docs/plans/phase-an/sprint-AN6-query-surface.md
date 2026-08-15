@@ -61,7 +61,7 @@ hardening.
 ```rust
 pub struct SearchRequest {
     /// Transport-neutral core input, decoded from CLI flags or HTTP query.
-    pub query: MessageSearchQuery,
+    pub query: SearchInput,
 }
 
 pub struct SearchResponse {
@@ -74,14 +74,20 @@ pub struct SearchHit {
     pub key: SearchResultKey,
     pub message_id: Option<String>, // display/dedup metadata, never identity
     pub message_at: IsoTimestamp,
-    pub from_agent: AgentAddress,
-    pub to_agent: AgentAddress,
+    pub from_agent: StoredSearchAddress,
+    pub to_agent: StoredSearchAddress,
     pub template_type: Option<String>,
     pub category: Option<String>,
     pub snippet: String,
 }
 
 ```
+
+`SearchInput` is the stable public primitive DTO. Core compiles it to the
+backend-neutral `MessageSearchQuery`; that backend type is not an HTTP or CLI
+wire contract. `StoredSearchAddress` contains agent, team, and optional chat
+ID. Durable search rows do not record a host, so the response never invents
+one. Peer requests reject with `ATM_SEARCH_LOCAL_ONLY` before storage selection.
 
    The route is local-only: core rejects `AuthenticatedIngress::Peer` with a
    documented typed authorization error before selecting a storage capability.
@@ -103,7 +109,8 @@ pub struct SearchHit {
    network client and not part of `atm-graft-python`. Its explicit API is
    `open_readonly(database_path=None).query(sql, parameters=())`; it accepts
    one parameterized statement and returns column-labelled Python rows.
-   The extension opens the selected ATM database read-only and enforces
+   The extension selects the existing `atm-storage` analyst-query capability;
+   `atm-storage-rusqlite` alone opens the selected ATM database read-only and enforces
    `PRAGMA query_only=ON`, defensive connection settings, an SQLite authorizer
    that denies DML/DDL/transaction/attach/detach/extension-load actions, no
    executable tail after the first prepared statement, and SQLite's

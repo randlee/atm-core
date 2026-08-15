@@ -11,7 +11,9 @@ forbidden_literals = [
 ]
 
 [identities.production_canonical_literals]
-"team-lead" = ["crates/atm-core/src/roles.rs"]
+"team-lead" = ["crates/atm-storage/src/lib.rs"]
+"quality-mgr" = ["crates/atm-storage/src/lib.rs"]
+"atm-dev" = ["crates/atm-storage/src/lib.rs"]
 
 [fixed_sleep]
 # Empty by default: no test file is exempt until a narrow daemon-runtime suite
@@ -124,7 +126,7 @@ allowed_dependencies = ["async-trait", "atm-error", "atm-runtime-test-support", 
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-daemon-bootstrap/Cargo.toml"
-allowed_dependencies = ["atm-core", "atm-http-runtime", "atm-runtime", "atm-storage", "atm-storage-rusqlite", "fs4", "serde_json", "tempfile", "tokio", "ulid"]
+allowed_dependencies = ["atm-core", "atm-http-runtime", "atm-runtime", "atm-storage", "atm-storage-rusqlite", "atm-template-sc-compose", "fs4", "serde_json", "tempfile", "tokio", "ulid"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-daemon-client/Cargo.toml"
@@ -139,12 +141,16 @@ owner_manifest_path = "crates/atm-graft-python/Cargo.toml"
 allowed_dependencies = ["atm-core", "atm-graft", "pyo3", "tempfile", "tokio"]
 
 [[boundaries.manifest_dependency_allowlists]]
+owner_manifest_path = "crates/atm-query-python/Cargo.toml"
+allowed_dependencies = ["atm-storage", "atm-storage-rusqlite", "pyo3", "tempfile"]
+
+[[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-http-runtime/Cargo.toml"
 allowed_dependencies = ["async-trait", "atm-core", "atm-runtime-test-support", "atm-storage", "axum", "base64", "fs4", "hyper", "hyper-util", "reqwest", "serde", "serde_json", "serde_yaml", "tempfile", "tokio", "tower", "tracing", "ulid", "windows-sys"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-runtime/Cargo.toml"
-allowed_dependencies = ["atm-core", "atm-storage"]
+allowed_dependencies = ["atm-core", "atm-storage", "serde_json", "tokio", "tracing"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-storage/Cargo.toml"
@@ -153,6 +159,11 @@ allowed_dependencies = ["async-trait", "atm-error", "chrono", "rustls", "serde",
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-storage-rusqlite/Cargo.toml"
 allowed_dependencies = ["async-trait", "atm-storage", "chrono", "rusqlite", "serde", "serde_json", "tempfile", "tokio", "tracing"]
+
+[[boundaries.manifest_dependency_allowlists]]
+owner_manifest_path = "crates/atm-template-sc-compose/Cargo.toml"
+boundary_record_path = "boundaries/atm-template-sc-compose/sc-composer.toml"
+allowed_dependencies = ["atm-core", "atm-storage", "base64", "sc-composer", "sc-sha", "serde_json"]
 
 [[boundaries.global_dependency_ownership]]
 dependency = "rusqlite"

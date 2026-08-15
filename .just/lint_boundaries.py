@@ -94,6 +94,16 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\bcompatibility[^\n]*\.jsonl\b",
     ),
     "cursor": (r"\bcursor\b", r"\bCursor\b"),
+    "catalog_persistence": (
+        r"\b(?:TemplateCatalogStore|TemplateCatalogRecord|CatalogPersistence)\b",
+        r"\b(?:persist|store|load)_[A-Za-z0-9_]*catalog[A-Za-z0-9_]*\s*\(",
+        r"\bcatalog_persistence\b",
+    ),
+    "cli_surface": (
+        r"\bclap::",
+        r"\b(?:Args|Subcommand|Parser)::",
+        r"\bcli_surface\b",
+    ),
     "daemon_lifecycle": (r"\b(?:start|stop|shutdown|restart)_daemon\s*\(", r"\bdaemon_lifecycle\b"),
     "daemon_private_graft_api": (r"\bdaemon_private_graft_api\b", r"\bDaemonGraft[A-Za-z0-9_]*\b", r"\bdaemon::graft\b"),
     "daemon_request_dispatch": (r"\bdaemon_request_dispatch\b", r"\bdispatch_request\s*\(", r"\bDaemonRequestDispatcher\b"),
@@ -124,6 +134,11 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\b(?:deliver|send|route)_production(?:_message|_request)?\s*\(",
     ),
     "message_persistence": (r"\bmessage_persistence\b", r"\b(?:persist|store)_message\s*\(", r"\bMessageStore\b"),
+    "local_path_heuristics": (
+        r"\b(?:std::path::|Path(?:Buf)?::|canonicalize\s*\()",
+        r"\b(?:is_absolute|starts_with)\s*\(",
+        r"\blocal_path_heuristics\b",
+    ),
     "named_pipe": (r"\bNamedPipe\b", r"\bnamed_pipe\b", r"\b(?:pipe|fifo)_(?:read|write|open)\s*\("),
     "nudge": (r"\bnudge\b", r"\bNudge\b"),
     "nudge_emission": (r"\bnudge_emission\b", r"\b(?:emit|send|deliver)_nudge\s*\(", r"\bNudgeEmitter\b"),
@@ -135,6 +150,11 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\baxum::serve\s*\(",
         r"\bserve_(?:loopback|unix)_http1\s*\(",
         r"\bhyper::server\b",
+    ),
+    "http_runtime": (
+        r"\b(?:axum|hyper|tower)::",
+        r"\b(?:HttpRuntime|ApiRouter)\b",
+        r"\bhttp_runtime\b",
     ),
     "process_spawn": (r"\bstd::process::Command\b", r"\bCommand::new\s*\(", r"\)\.spawn\s*\("),
     "process_spawn_for_notifications": (r"\bstd::process::Command\b", r"\bCommand::new\s*\(", r"\)\.spawn\s*\("),
@@ -162,6 +182,11 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\bthread::spawn\s*\(",
     ),
     "router": (r"\brouter\b", r"\bRouter\b"),
+    "storage_schema": (
+        r"\b(?:CREATE|ALTER|DROP)\s+(?:VIRTUAL\s+)?TABLE\b",
+        r"\b(?:schema_json|migration(?:s)?)\b",
+        r"\bstorage_schema\b",
+    ),
     "socket_io": (
         r"\b(?:std|tokio)::net::",
         r"\b(?:Tcp|Udp|Unix)(?:Stream|Listener|Socket)\b",
@@ -189,6 +214,11 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
     "tls_handshake": (r"\b(?:rustls|native_tls)::", r"\b(?:Client|Server)Connection\b", r"\b(?:tls|TLS)[^\n]*handshake\b"),
     "tmux_nudge_delivery": (r"\btmux_nudge_delivery\b", r"\btmux[^\n]*nudge\b", r"\b(?:send|emit)_tmux_nudge\s*\("),
     "transport_dispatch": (r"\btransport_dispatch\b", r"\bdispatch_transport\s*\(", r"\bTransportDispatcher\b"),
+    "transport": (
+        r"\b(?:Tcp|Udp|Unix)(?:Stream|Listener|Socket)\b",
+        r"\b(?:reqwest|hyper)::",
+        r"\btransport\b",
+    ),
 }
 
 # The runtime composition crate performs a deliberately short-lived listener
@@ -375,6 +405,7 @@ class ManifestSectionRule:
 class ManifestDependencyAllowlist:
     owner_manifest_path: Path
     allowed_dependencies: tuple[str, ...]
+    boundary_record_path: Path | None
 
 
 @dataclass(frozen=True)
@@ -616,6 +647,7 @@ def manifest_dependency_allowlists(repo_root: Path) -> list[ManifestDependencyAl
             )
         owner_manifest_path = raw_rule.get("owner_manifest_path")
         allowed_dependencies = raw_rule.get("allowed_dependencies")
+        boundary_record_path = raw_rule.get("boundary_record_path")
         if not isinstance(owner_manifest_path, str) or not owner_manifest_path:
             raise SystemExit(
                 f"[boundaries.manifest_dependency_allowlists][{index}].owner_manifest_path must be a non-empty string"
@@ -626,10 +658,21 @@ def manifest_dependency_allowlists(repo_root: Path) -> list[ManifestDependencyAl
             raise SystemExit(
                 f"[boundaries.manifest_dependency_allowlists][{index}].allowed_dependencies must be an array of non-empty strings"
             )
+        if boundary_record_path is not None and (
+            not isinstance(boundary_record_path, str) or not boundary_record_path
+        ):
+            raise SystemExit(
+                f"[boundaries.manifest_dependency_allowlists][{index}].boundary_record_path must be a non-empty string when present"
+            )
         rules.append(
             ManifestDependencyAllowlist(
                 owner_manifest_path=Path(owner_manifest_path),
                 allowed_dependencies=tuple(allowed_dependencies),
+                boundary_record_path=(
+                    Path(boundary_record_path)
+                    if boundary_record_path is not None
+                    else None
+                ),
             )
         )
     return rules
@@ -1658,10 +1701,12 @@ def collect_manifest_dependency_allowlist_violations(
 ) -> list[BoundaryViolation]:
     """Require every active boundary owner to declare all direct Cargo dependencies.
 
-    ``BoundaryRecord.allowed_dependencies`` remains per-seam documentation.  This
-    separate crate-manifest policy intentionally includes dependencies from
-    normal, dev, build, and target-specific sections so a new test dependency
-    cannot silently bypass review.
+    ``BoundaryRecord.allowed_dependencies`` remains per-seam documentation unless
+    a manifest policy explicitly names ``boundary_record_path``. That opt-in
+    makes the record and manifest allowlist mechanically identical. This policy
+    intentionally includes dependencies from normal, dev, build, and
+    target-specific sections so a new test dependency cannot silently bypass
+    review.
     """
     allowlists = manifest_dependency_allowlists(repo_root)
     if not allowlists:
@@ -1674,6 +1719,7 @@ def collect_manifest_dependency_allowlist_violations(
         info.path.relative_to(repo_root): info
         for info in infos
     }
+    records_by_path = {record.source_path: record for record in records}
     active_owner_paths = {
         alias_map[record.owner_package].path.relative_to(repo_root)
         for record in records
@@ -1719,6 +1765,36 @@ def collect_manifest_dependency_allowlist_violations(
                 )
             )
             continue
+
+        if allowlist.boundary_record_path is not None:
+            record = records_by_path.get(allowlist.boundary_record_path)
+            if record is None:
+                violations.append(
+                    BoundaryViolation(
+                        manifest_path.as_posix(),
+                        "manifest dependency allowlist names no parsed boundary record",
+                    )
+                )
+            elif record.owner_package not in info.aliases:
+                violations.append(
+                    BoundaryViolation(
+                        record.location,
+                        "manifest dependency allowlist and boundary record have different owners",
+                    )
+                )
+            else:
+                documented = set(record.allowed_dependencies)
+                allowlisted = set(allowlist.allowed_dependencies)
+                missing = sorted(allowlisted - documented)
+                extra = sorted(documented - allowlisted)
+                if missing or extra:
+                    violations.append(
+                        BoundaryViolation(
+                            record.location,
+                            "boundary record allowed_dependencies diverges from its manifest dependency allowlist "
+                            f"(missing {missing!r}; extra {extra!r})",
+                        )
+                    )
 
         manifest = tomllib_load(info.path)
         actual_dependencies: set[str] = set()

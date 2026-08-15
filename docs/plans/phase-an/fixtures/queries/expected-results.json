@@ -1,0 +1,30 @@
+{
+  "provenance": "Hand-computed from the AN.8 seeded corpus built from the AN.1 task and QA template shapes.",
+  "q1_sprint_span": [
+    {"sprint": "AN.1", "first_assignment_at": "2026-08-01T08:00:00Z", "completion_at": "2026-08-01T10:00:00Z"},
+    {"sprint": "AN.2", "first_assignment_at": "2026-08-02T08:00:00Z", "completion_at": "2026-08-02T11:00:00Z"}
+  ],
+  "q2_qa_iterations": [
+    {"sprint": "AN.1", "qa_iterations": 2},
+    {"sprint": "AN.2", "qa_iterations": 1}
+  ],
+  "q3_findings_by_severity": [
+    {"sprint": "AN.1", "qa_round": 1, "severity": "Blocking", "findings": 1},
+    {"sprint": "AN.1", "qa_round": 1, "severity": "Minor", "findings": 1},
+    {"sprint": "AN.1", "qa_round": 2, "severity": "Important", "findings": 1},
+    {"sprint": "AN.2", "qa_round": 1, "severity": "Blocking", "findings": 1}
+  ],
+  "q4_developer_by_sprint": [
+    {"sprint": "AN.1", "developer": "dev-alpha"},
+    {"sprint": "AN.2", "developer": "dev-beta"}
+  ],
+  "synthetic_vocabulary": [
+    {
+      "cycle": "PX-7",
+      "opened_at": "2026-08-03T08:00:00Z",
+      "delivered_at": "2026-08-03T10:00:00Z",
+      "owner": "owner-rose",
+      "high_risk_assessments": 1
+    }
+  ]
+}

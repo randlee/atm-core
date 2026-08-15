@@ -13,6 +13,8 @@ use atm_core::{
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime};
 use atm_storage_rusqlite::SqliteStorageFactory;
 
+pub use atm_storage_rusqlite::{TemplateAdmissionMessage, TemplateAdmissionSnapshot};
+
 // Mutex required because sqlite retained runtimes are cached across concurrent
 // tests; bulk clear() is safe because entries are deterministic per path and
 // are rebuilt lazily on the next access.
@@ -69,7 +71,25 @@ pub fn open_sqlite_boundary(path: impl AsRef<Path>) -> Result<RuntimeAssembly, A
         )),
         config_current_dir,
         non_claude_outbound: std::sync::Arc::new(LocalFileNonClaudeOutbound::new()),
+        template_composer: None,
+        workflow_telemetry: None,
     })
+}
+
+/// Build an isolated SQLite runtime from a test-owned directory.
+///
+/// Every caller receives a distinct database filename, so independent unit
+/// fixtures can safely create their durable state even when another test owns
+/// a transaction in the same process.
+pub fn open_isolated_sqlite_boundary(root: impl AsRef<Path>) -> Result<RuntimeAssembly, AtmError> {
+    open_sqlite_boundary(root.as_ref().join("runtime").join("mail.sqlite3"))
+}
+
+/// Install the current test's isolated runtime path before composing a
+/// loopback client. The caller must hold the test environment guard while the
+/// returned value remains alive.
+pub fn install_isolated_sqlite_runtime(root: impl AsRef<Path>) -> SqliteRuntimeGuard {
+    SqliteRuntimeGuard::install(root.as_ref().join("runtime").join("mail.sqlite3"))
 }
 
 pub struct SqliteWriterLockGuard {
@@ -88,6 +108,15 @@ pub fn hold_sqlite_writer_lock(path: impl AsRef<Path>) -> Result<SqliteWriterLoc
 /// SQLite busy-timeout scheduling across operating systems.
 pub fn install_sqlite_message_write_failure(path: impl AsRef<Path>) -> Result<(), AtmError> {
     atm_storage_rusqlite::install_message_write_failure_for_test(path)
+}
+
+/// Inspects a SQLite fixture through test support, never from the replacement
+/// HTTP runtime itself. Production callers must use storage contracts.
+pub fn inspect_template_admission_for_test(
+    path: impl AsRef<Path>,
+    message_keys: &[String],
+) -> Result<TemplateAdmissionSnapshot, AtmError> {
+    atm_storage_rusqlite::inspect_template_admission_for_test(path, message_keys)
 }
 
 fn sqlite_retained_runtime() -> Result<LocalServiceRuntime, AtmError> {

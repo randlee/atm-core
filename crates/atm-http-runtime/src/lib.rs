@@ -1978,6 +1978,92 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn an15_http_differential_probe_exercises_live_loopback_request_shapes() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let configured = HttpRuntimeBuilder::new(
+            config_with_record(0, temporary_directory.path().join("local-http.json")),
+            Arc::new(TestRouter),
+        )
+        .build()
+        .expect("valid configuration");
+        let running = configured.start().await.expect("replacement server starts");
+        let record: LocalHttpEndpointRecord = serde_json::from_slice(
+            &std::fs::read(temporary_directory.path().join("local-http.json"))
+                .expect("read active loopback endpoint record"),
+        )
+        .expect("decode active loopback endpoint record");
+        let endpoint = format!("http://{}", running.local_address());
+        let client = bounded_test_http_client();
+
+        for case_index in 0..100 {
+            // Each case changes the search-query shape consumed by
+            // `decode_search_query`, not an ignored HTTP header. All forms
+            // intentionally reject before the test router can dispatch.
+            let (path, shape, expected_message) = match case_index % 5 {
+                0 => (
+                    "/v1/atm/messages/search",
+                    "missing-query",
+                    "missing its request query parameter",
+                ),
+                1 => (
+                    "/v1/atm/messages/search?other=value",
+                    "missing-request-key",
+                    "missing its request query parameter",
+                ),
+                2 => (
+                    "/v1/atm/messages/search?request=AA&request=AA",
+                    "repeated-request-key",
+                    "repeats its request query parameter",
+                ),
+                3 => (
+                    "/v1/atm/messages/search?request=.",
+                    "invalid-base64url",
+                    "not valid base64url",
+                ),
+                _ => (
+                    "/v1/atm/messages/search?request=e30",
+                    "invalid-search-json",
+                    "JSON is invalid",
+                ),
+            };
+            eprintln!("AN15_CASE_SHAPE={shape}");
+            let response = client
+                .get(format!("{endpoint}{path}"))
+                .header(LOCAL_CAPABILITY_HEADER, &record.capability_base64url)
+                .header("x-atm-request-id", (case_index + 1).to_string())
+                .send()
+                .await
+                .expect("replacement server responds");
+            assert_eq!(
+                response.status(),
+                reqwest::StatusCode::BAD_REQUEST,
+                "case {case_index}"
+            );
+            let error: atm_core::error::AtmError = serde_json::from_slice(
+                &response
+                    .bytes()
+                    .await
+                    .expect("read typed search-query validation response"),
+            )
+            .expect("decode typed search-query validation response");
+            assert_eq!(
+                error.code(),
+                atm_core::error::AtmErrorCode::MessageValidationFailed,
+                "case {case_index}"
+            );
+            assert!(
+                error.message().contains(expected_message),
+                "case {case_index} must reach its intended query-decoder branch: {error:?}"
+            );
+        }
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("replacement server joins after HTTP fuzz probe");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn os_selected_loopback_port_is_published_from_the_bound_listener() {
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let record_path = temporary_directory.path().join("local-http.json");

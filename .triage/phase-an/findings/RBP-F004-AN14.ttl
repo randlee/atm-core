@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F004-AN14>
+  a triage:Finding ;
+  triage:findingId "RBP-F004-AN14" ;
+  triage:title "checked_body takes owned String but only ever borrows it; return value is separately re-allocated" ;
+  triage:description "In crates/atm-template-sc-compose/src/lib.rs, checked_body(text: String, ...) takes ownership of text but only ever borrows &text (line 109) before it is dropped; the return value is independently re-allocated via checked.body().to_owned() (line 116). All 3 call sites already hold values that could be passed by reference. Recommended fix: change the signature to take text: &str instead of String." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-best-practices" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "function" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-13T18:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.14 ;
+  triage:foundAt "2026-08-13T18:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004-AN14/AN14-1> ;
+  triage:closedAt "2026-08-14T07:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RBP-F004-AN14/AN14-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-template-sc-compose/src/lib.rs" ;
+  triage:line 109 ;
+  triage:snippet "fn checked_body(text: String, ...) -> Result<RenderedBody, AtmError>" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an14-sc-compose-141-checked-emission" ;
+  triage:headSha "5fa273bb8" ;
+  triage:occursIn <urn:atm:triage:worktree/AN14/5fa273bb8> .
+
+<urn:atm:triage:worktree/AN14/5fa273bb8>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AN14" ;
+  triage:branch "feature/an14-sc-compose-141-checked-emission" ;
+  triage:headSha "5fa273bb8" ;
+  triage:orderIndex 1 .

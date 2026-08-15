@@ -13,6 +13,9 @@ required_variables:
   - agent.passed
   - agent.result
   - agent.context_text
+  - agent.target_invocation
+  - agent.negative_cases
+  - agent.encountered_issues
   - test_inputs
   - findings
 ---
@@ -56,6 +59,18 @@ required_variables:
     </tbody>
   </table>
 
+  <section class="target-invocation">
+    <h3>Verified target invocation</h3>
+    <table>
+      <thead><tr><th scope="col">Seam</th><th scope="col">Mechanism</th><th scope="col">Invocations</th><th scope="col">Evidence</th></tr></thead>
+      <tbody>
+{% for proof in agent.target_invocation.proofs %}
+        <tr><th scope="row"><code>{{ proof.seam_id | e }}</code></th><td>{{ proof.mechanism | e }}</td><td>{{ proof.invocation_count | e }}</td><td><code>{{ proof.evidence_ref | e }}</code></td></tr>
+{% endfor %}
+      </tbody>
+    </table>
+  </section>
+
   <section class="test-inputs">
     <h3>Inputs exercised</h3>
     <table>
@@ -67,6 +82,32 @@ required_variables:
       </tbody>
     </table>
   </section>
+
+  <section class="negative-contracts">
+    <h3>Negative diagnostic contracts</h3>
+    <table>
+      <thead><tr><th scope="col">Case</th><th scope="col">Expected</th><th scope="col">Observed</th><th scope="col">Diagnostic match</th></tr></thead>
+      <tbody>
+{% for case in agent.negative_cases %}
+        <tr><th scope="row">{{ case.case_id | e }}</th><td>{{ case.expected_oracle | e }}</td><td>{{ case.observed_result | e }}</td><td>{{ case.diagnostic_match | e }}</td></tr>
+{% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+{% if agent.encountered_issues %}
+  <section class="campaign-issues">
+    <h3>Encountered issues</h3>
+    <table>
+      <thead><tr><th scope="col">ID</th><th scope="col">Category</th><th scope="col">Disposition</th><th scope="col">Tracking</th></tr></thead>
+      <tbody>
+{% for issue in agent.encountered_issues %}
+        <tr><th scope="row">{{ issue.issue_id | e }}</th><td>{{ issue.category | e }}</td><td>{{ issue.disposition | e }}</td><td>{{ issue.tracking_ref | e }}</td></tr>
+{% endfor %}
+      </tbody>
+    </table>
+  </section>
+{% endif %}
 
 {% if not agent_is_pass %}
   <section class="findings">

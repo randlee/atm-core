@@ -136,6 +136,8 @@ const fn mailbox_guidance(code: AtmErrorCode) -> Option<&'static str> {
 const fn request_guidance(code: AtmErrorCode) -> Option<&'static str> {
     match code {
         AtmErrorCode::MessageValidationFailed
+        | AtmErrorCode::WorkflowQueryInvalid
+        | AtmErrorCode::SearchLocalOnly
         | AtmErrorCode::LocalHttpCapabilityInvalid
         | AtmErrorCode::LocalHttpEndpointSchemaUnsupported
         | AtmErrorCode::LocalHttpEndpointMissing
@@ -145,10 +147,32 @@ const fn request_guidance(code: AtmErrorCode) -> Option<&'static str> {
         | AtmErrorCode::SelfAddressedSendInvalid
         | AtmErrorCode::EmptyNudgeTemplateBody
         | AtmErrorCode::CallerContextRequestInvalid
+        | AtmErrorCode::TemplateContentNotUtf8
         | AtmErrorCode::AckInvalidState
         | AtmErrorCode::ClearInvalidState => {
             Some("Correct the invalid ATM request or state before retrying.")
         }
+        AtmErrorCode::DecomposedTemplateIncludeForbidden => Some(
+            "Remove template dependencies or use the confined render operation before retrying.",
+        ),
+        AtmErrorCode::TemplateLoadFailed
+        | AtmErrorCode::TemplateHashApiFailed
+        | AtmErrorCode::TemplateInspectionParseFailed
+        | AtmErrorCode::TemplateRequiredVariableMissing
+        | AtmErrorCode::TemplateRenderVerificationFailed
+        | AtmErrorCode::TemplateIncludeUnresolved
+        | AtmErrorCode::TemplateClassificationInvalid
+        | AtmErrorCode::TemplateWorkflowInvalid
+        | AtmErrorCode::TemplateWorkflowValueInvalid
+        | AtmErrorCode::TemplateTagReserved => {
+            Some("Correct the template source or its supplied variables before retrying.")
+        }
+        AtmErrorCode::WorkflowTelemetryConfigInvalid => {
+            Some("Repair telemetry configuration; ATM will continue with telemetry disabled.")
+        }
+        AtmErrorCode::WorkflowTelemetryDropped => Some(
+            "Inspect telemetry diagnostics and repair the exporter if durable observability is required.",
+        ),
         _ => None,
     }
 }

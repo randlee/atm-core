@@ -1,7 +1,7 @@
 //! Send command service implementation and post-send hook handling.
 
 use serde::{Deserialize, Serialize};
-use serde_json::Map;
+use serde_json::{Map, Value};
 use std::path::PathBuf;
 use tracing::warn;
 
@@ -28,6 +28,7 @@ use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::types::{AgentName, ChatId, CommandAction, HostName, IsoTimestamp, TaskId, TeamName};
 
+mod async_persistence;
 mod delivery_persistence;
 pub(crate) mod file_policy;
 pub(crate) mod hook;
@@ -41,8 +42,10 @@ mod received_hook;
 mod recipient;
 mod request;
 pub(crate) mod summary;
+mod template;
 mod write_context;
 
+use async_persistence::prepare_persisted_write_async;
 pub(crate) use delivery_persistence::{
     DeliveryPersistenceDisposition, DeliveryPersistenceResult, DuplicateWriteDisposition,
 };
@@ -58,6 +61,7 @@ pub(crate) use persistence::persist_message;
 use received_hook::{PreparedReceivedHook, prepare_received_hook};
 pub(crate) use recipient::{ResolvedRecipient, resolve_recipient, validate_non_self_recipient};
 use request::{prepare_threaded_message, resolve_message_body};
+use template::{requires_plain_template_fallback, verify_template_send};
 use write_context::{
     SendExecutionContext, build_send_delivery_plan, build_send_outcome, prepare_send_context,
 };
@@ -69,6 +73,39 @@ pub enum SendMessageSource {
         path: PathBuf,
         message: Option<String>,
     },
+    /// A self-contained template request. The CLI captures all caller-owned
+    /// inputs before the local HTTP hop. The selected daemon owns inspection,
+    /// variable merge, verification render, and routing policy.
+    Template(TemplateSendSource),
+}
+
+/// Transport-safe caller input for a templated send.
+///
+/// This deliberately carries source bytes and captured environment values,
+/// rather than asking the daemon to inspect its environment after the local
+/// HTTP request has arrived.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemplateSendSource {
+    pub canonical_template_path: PathBuf,
+    pub canonical_template_root: PathBuf,
+    pub raw_file_bytes: Vec<u8>,
+    /// Caller-provided defaults that sit above frontmatter defaults but below
+    /// the explicit compose-time sources. Kept on the request so the daemon
+    /// merges a complete, reproducible input snapshot.
+    #[serde(default)]
+    pub input_defaults: Map<String, Value>,
+    pub var_file_values: Map<String, Value>,
+    pub explicit_values: Map<String, Value>,
+    pub environment_values: Map<String, Value>,
+}
+
+/// User-facing message classification. This stays on the canonical write
+/// request so ordinary and template-derived sends persist the same metadata.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MessageClassification {
+    pub category: Option<String>,
+    pub tags: Vec<String>,
+    pub content_format: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -99,6 +136,12 @@ pub struct WriteRequest {
     /// the canonical writer.
     pub to: Option<AgentAddress>,
     pub message_source: SendMessageSource,
+    #[serde(default)]
+    pub classification: MessageClassification,
+    /// Caller-selected payload limit carried across local HTTP so the daemon
+    /// applies the exact same inline/stdin policy after transport framing.
+    #[serde(default = "input::default_message_max_bytes")]
+    pub max_message_bytes: usize,
     pub summary_override: Option<String>,
     pub requires_ack: bool,
     pub task_id: Option<TaskId>,
@@ -138,6 +181,8 @@ impl WriteRequest {
             origin_timestamp: None,
             to: Some(to.parse()?),
             message_source,
+            classification: MessageClassification::default(),
+            max_message_bytes: input::default_message_max_bytes(),
             summary_override,
             requires_ack,
             task_id,
@@ -152,6 +197,18 @@ impl WriteRequest {
     #[must_use]
     pub fn with_caller_chat_id(mut self, caller_chat_id: Option<ChatId>) -> Self {
         self.caller_chat_id = caller_chat_id;
+        self
+    }
+
+    #[must_use]
+    pub fn with_max_message_bytes(mut self, max_message_bytes: usize) -> Self {
+        self.max_message_bytes = max_message_bytes;
+        self
+    }
+
+    #[must_use]
+    pub fn with_classification(mut self, classification: MessageClassification) -> Self {
+        self.classification = classification;
         self
     }
 
@@ -607,13 +664,13 @@ fn request_requires_ack(request: &SendRequest, task_id: &Option<TaskId>) -> bool
 fn prepare_persisted_write<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(
-    request: SendRequest,
+    mut request: SendRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
     acknowledgement: Option<crate::ack::ResolvedAcknowledgement>,
     delivery_mode: DeliveryExecutionMode,
 ) -> Result<PreparedWrite, AtmError> {
-    let context = prepare_send_context(runtime, &request)?;
+    let mut context = prepare_send_context(runtime, &request)?;
     let task_id = request.task_id.clone();
     let requires_ack = request_requires_ack(&request, &task_id);
     let body = resolve_message_body(
@@ -621,7 +678,9 @@ fn prepare_persisted_write<
         &request.current_dir,
         &request.home_dir,
         &context.recipient.team,
+        request.max_message_bytes,
     )?;
+    annotate_path_only_body(&mut request, &mut context, &body);
     let summary = summary::build_summary(&body, request.summary_override.clone());
     let message_id = request.origin_message_id.unwrap_or_default();
     let timestamp = request.origin_timestamp.unwrap_or_else(IsoTimestamp::now);
@@ -659,68 +718,6 @@ fn prepare_persisted_write<
         task_id,
         &persistence,
         delivery_mode,
-    )?;
-    Ok(PreparedWrite {
-        outcome,
-        outbound_request: request,
-        persisted_timestamp: timestamp,
-        post_write_needed: persistence.requires_post_write(),
-        same_store_peer_receipt: persistence.duplicate_disposition
-            == DuplicateWriteDisposition::SameStorePeerReceipt,
-        received_hook,
-        acknowledgement,
-    })
-}
-
-async fn prepare_persisted_write_async(
-    request: SendRequest,
-    observability: &(dyn ObservabilityPort + Send + Sync),
-    runtime: &LocalServiceRuntime,
-    acknowledgement: Option<crate::ack::ResolvedAcknowledgement>,
-) -> Result<PreparedWrite, AtmError> {
-    let context = prepare_send_context(runtime, &request)?;
-    let task_id = request.task_id.clone();
-    let requires_ack = request_requires_ack(&request, &task_id);
-    let body = resolve_message_body(
-        &request.message_source,
-        &request.current_dir,
-        &request.home_dir,
-        &context.recipient.team,
-    )?;
-    let summary = summary::build_summary(&body, request.summary_override.clone());
-    let message_id = request.origin_message_id.unwrap_or_default();
-    let timestamp = request.origin_timestamp.unwrap_or_else(IsoTimestamp::now);
-    let persistence = persist_send_message_async(
-        runtime,
-        &request,
-        &context,
-        &body,
-        &summary,
-        message_id,
-        timestamp,
-        requires_ack,
-        task_id.clone(),
-    )
-    .await?;
-    let received_hook = prepare_received_hook(
-        runtime,
-        &context,
-        &persistence,
-        requires_ack,
-        acknowledgement.is_some(),
-    );
-    let outcome = finalize_send_outcome(
-        runtime,
-        observability,
-        &request,
-        &context,
-        &body,
-        &summary,
-        message_id,
-        requires_ack,
-        task_id,
-        &persistence,
-        DeliveryExecutionMode::Deferred,
     )?;
     Ok(PreparedWrite {
         outcome,
@@ -822,10 +819,99 @@ fn finalize_send_outcome<
         observability,
         command_outcome.as_str(),
         &outcome,
-        task_id,
+        task_id.clone(),
         &context.canonical_sender,
     );
+    if looks_like_path_only_body(body, &request.current_dir, &request.home_dir) {
+        emit_path_body_detection_event(observability, &outcome, task_id, context);
+    }
     Ok(outcome)
+}
+
+/// Detect the migration pattern where a rendered file path is sent instead
+/// of the file's content. This is deliberately advisory: the message is
+/// admitted and retained while telemetry guides callers toward `--template`.
+pub(crate) fn looks_like_path_only_body(
+    body: &str,
+    current_dir: &std::path::Path,
+    home_dir: &std::path::Path,
+) -> bool {
+    if body.len() >= 512 || body.is_empty() || body.trim() != body {
+        return false;
+    }
+    if body.contains(['\n', '\r']) {
+        return false;
+    }
+    let candidate = std::path::Path::new(body);
+    let resolved = if body == "~" || body.starts_with("~/") {
+        Some(if body == "~" {
+            home_dir.to_path_buf()
+        } else {
+            home_dir.join(body.trim_start_matches("~/"))
+        })
+    } else if candidate.is_absolute() {
+        Some(candidate.to_path_buf())
+    } else {
+        let from_current = current_dir.join(candidate);
+        let from_home = home_dir.join(candidate);
+        if from_current.is_file() {
+            Some(from_current)
+        } else if from_home.is_file() {
+            Some(from_home)
+        } else {
+            None
+        }
+    };
+    let Some(resolved) = resolved else {
+        return false;
+    };
+    // Whitespace is valid in an existing filename, but an unresolvable path
+    // containing prose must never become a false positive.
+    if body.chars().any(char::is_whitespace) && !resolved.is_file() {
+        return false;
+    }
+    true
+}
+
+fn annotate_path_only_body(
+    request: &mut SendRequest,
+    context: &mut SendExecutionContext,
+    body: &str,
+) {
+    if !looks_like_path_only_body(body, &request.current_dir, &request.home_dir) {
+        return;
+    }
+    // Detection is an admission fact, so it wins over an optional caller
+    // label; otherwise explicit labels could hide the migration telemetry.
+    request.classification.content_format = Some("path-ref".to_owned());
+    context.warnings.push(WarningEntry::new(
+        "message body looks like a file path; send file content with `atm send --template <path> --vars <file>` (path retained for compatibility)",
+        Some("use `atm compose --template <path>` to preview rendered content"),
+    ));
+}
+
+fn emit_path_body_detection_event(
+    observability: &dyn ObservabilityPort,
+    outcome: &SendOutcome,
+    task_id: Option<TaskId>,
+    context: &SendExecutionContext,
+) {
+    if let Err(error) = observability.emit(CommandEvent {
+        command: "send",
+        action: action_name("path_body_detected"),
+        outcome: outcome_label("warn"),
+        team: outcome.team.clone(),
+        agent: outcome.agent.clone(),
+        sender: context.canonical_sender.clone(),
+        message_id: Some(outcome.message_id),
+        requires_ack: outcome.requires_ack,
+        dry_run: outcome.dry_run,
+        task_id,
+        error_code: None,
+        error_message: Some("content_format=path-ref".to_owned()),
+    }) {
+        warn!(%error, command = "send", action = "path_body_detected", "failed to emit path-body detection event");
+    }
 }
 
 #[expect(
@@ -889,54 +975,6 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
 
 #[expect(
     clippy::too_many_arguments,
-    reason = "Send persistence keeps the canonical request/body/message envelope fields explicit at the async seam."
-)]
-async fn persist_send_message_async(
-    runtime: &LocalServiceRuntime,
-    request: &SendRequest,
-    context: &SendExecutionContext,
-    body: &str,
-    summary: &str,
-    message_id: AtmMessageId,
-    timestamp: IsoTimestamp,
-    requires_ack: bool,
-    task_id: Option<TaskId>,
-) -> Result<DeliveryPersistenceResult, AtmError> {
-    let mut envelope = build_send_envelope(
-        request,
-        context,
-        body,
-        summary,
-        message_id,
-        timestamp,
-        requires_ack,
-        task_id,
-    );
-    if request.dry_run {
-        return Ok(DeliveryPersistenceResult::persisted(envelope));
-    }
-    if let Some(destination) = request.to.as_ref()
-        && let Some(host) = direct_peer_destination(request, destination)
-    {
-        set_peer_delivery_target(&mut envelope, &host);
-    }
-    persistence::persist_message_with_async_admission(
-        runtime,
-        &request.home_dir,
-        &context.delivery_snapshot,
-        &context.inbox_path,
-        &envelope,
-        false,
-        request
-            .authenticated_source_host
-            .as_ref()
-            .zip(request.to.as_ref().and_then(|recipient| recipient.host())),
-    )
-    .await
-}
-
-#[expect(
-    clippy::too_many_arguments,
     reason = "the immutable envelope is assembled from the canonical write fields"
 )]
 fn build_send_envelope(
@@ -973,8 +1011,53 @@ fn build_send_envelope(
         task_id: task_id.clone(),
         extra: Map::new(),
     };
+    insert_classification_metadata(&mut envelope, &request.classification);
     set_authenticated_source_host(&mut envelope, request.authenticated_source_host.clone());
     envelope
+}
+
+fn request_has_classification(request: &SendRequest) -> bool {
+    request_has_classification_from(&request.classification)
+}
+
+fn insert_classification_metadata(
+    envelope: &mut InboxMessage,
+    classification: &MessageClassification,
+) {
+    if !request_has_classification_from(classification) {
+        return;
+    }
+    envelope.extra.insert(
+        "category".to_owned(),
+        classification
+            .category
+            .clone()
+            .map_or(serde_json::Value::Null, serde_json::Value::String),
+    );
+    envelope.extra.insert(
+        "tags".to_owned(),
+        serde_json::Value::Array(
+            classification
+                .tags
+                .iter()
+                .cloned()
+                .map(serde_json::Value::String)
+                .collect(),
+        ),
+    );
+    envelope.extra.insert(
+        "content_format".to_owned(),
+        classification
+            .content_format
+            .clone()
+            .map_or(serde_json::Value::Null, serde_json::Value::String),
+    );
+}
+
+fn request_has_classification_from(classification: &MessageClassification) -> bool {
+    classification.category.is_some()
+        || !classification.tags.is_empty()
+        || classification.content_format.is_some()
 }
 
 fn emit_send_command_event(
@@ -1006,3 +1089,59 @@ fn emit_send_command_event(
 mod post_write_tests;
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod path_body_tests {
+    use super::looks_like_path_only_body;
+
+    #[test]
+    fn detects_existing_relative_and_absolute_files() {
+        let root = tempfile::tempdir().expect("temporary workspace");
+        let home = tempfile::tempdir().expect("temporary home");
+        let relative = root.path().join("rendered.xml");
+        std::fs::write(&relative, "<message />").expect("fixture");
+
+        assert!(looks_like_path_only_body(
+            "rendered.xml",
+            root.path(),
+            home.path()
+        ));
+        assert!(looks_like_path_only_body(
+            &relative.display().to_string(),
+            root.path(),
+            home.path()
+        ));
+    }
+
+    #[test]
+    fn detects_home_shorthand_but_not_prose_containing_a_path() {
+        let root = tempfile::tempdir().expect("temporary workspace");
+        let home = tempfile::tempdir().expect("temporary home");
+        assert!(looks_like_path_only_body(
+            "~/report.xml",
+            root.path(),
+            home.path()
+        ));
+        assert!(!looks_like_path_only_body(
+            "Please see /tmp/report.xml for details.",
+            root.path(),
+            home.path()
+        ));
+    }
+
+    #[test]
+    fn rejects_multiline_and_oversized_bodies() {
+        let root = tempfile::tempdir().expect("temporary workspace");
+        let home = tempfile::tempdir().expect("temporary home");
+        assert!(!looks_like_path_only_body(
+            "/tmp/report.xml\n",
+            root.path(),
+            home.path()
+        ));
+        assert!(!looks_like_path_only_body(
+            &"/".repeat(512),
+            root.path(),
+            home.path()
+        ));
+    }
+}

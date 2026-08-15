@@ -7,6 +7,7 @@ pub mod ack;
 pub mod api;
 pub(crate) mod caller_context;
 pub mod clear;
+pub mod compose;
 pub mod doctor;
 pub mod help;
 pub(crate) mod internal_nudge;
@@ -17,13 +18,16 @@ pub mod peek;
 pub mod peer;
 pub mod read;
 pub(crate) mod retained_roster;
+pub mod search;
 pub mod send;
 pub mod teams;
+pub mod templates;
 pub(crate) mod util;
 
 pub use ack::AckCommand;
 pub use api::ApiCommand;
 pub use clear::ClearCommand;
+pub use compose::ComposeCommand;
 pub use doctor::DoctorCommand;
 pub use help::HelpCommand;
 pub(crate) use internal_nudge::InternalNudgeCommand;
@@ -33,8 +37,10 @@ pub use members::MembersCommand;
 pub use peek::PeekCommand;
 pub use peer::PeerCommand;
 pub use read::ReadCommand;
+pub use search::SearchCommand;
 pub use send::SendCommand;
 pub use teams::TeamsCommand;
+pub use templates::TemplatesCommand;
 
 use crate::observability::CliObservability;
 
@@ -97,10 +103,12 @@ impl Cli {
 enum Command {
     Api(ApiCommand),
     Send(SendCommand),
+    Compose(ComposeCommand),
     List(ListCommand),
     Peek(PeekCommand),
     Peer(PeerCommand),
     Read(ReadCommand),
+    Search(Box<SearchCommand>),
     Ack(AckCommand),
     Clear(ClearCommand),
     Log(LogCommand),
@@ -113,6 +121,7 @@ enum Command {
     DumpCliSurface(DumpCliSurfaceCommand),
     Teams(TeamsCommand),
     Members(MembersCommand),
+    Templates(TemplatesCommand),
 }
 
 impl Command {
@@ -120,10 +129,12 @@ impl Command {
         match self {
             Self::Api(command) => command.run(observability),
             Self::Send(command) => command.run(observability).await,
+            Self::Compose(command) => command.run(),
             Self::List(command) => command.run(observability).await,
             Self::Peek(command) => command.run(observability).await,
             Self::Peer(command) => command.run(observability).await,
             Self::Read(command) => command.run(observability).await,
+            Self::Search(command) => command.run(observability).await,
             Self::Ack(command) => command.run(observability).await,
             Self::Clear(command) => command.run(observability).await,
             Self::Log(command) => command.run(observability),
@@ -134,6 +145,7 @@ impl Command {
             Self::DumpCliSurface(command) => command.run(observability),
             Self::Teams(command) => command.run(observability).await,
             Self::Members(command) => command.run(observability).await,
+            Self::Templates(command) => command.run(observability).await,
         }
     }
 }

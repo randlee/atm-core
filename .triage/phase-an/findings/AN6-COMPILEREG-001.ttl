@@ -1,0 +1,59 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN6-COMPILEREG-001>
+  a triage:Finding ;
+  triage:findingId "AN6-COMPILEREG-001" ;
+  triage:title "New compile-breaking regression introduced by AN6QA1-FIX-1 test code" ;
+  triage:description "AN6QA1-FIX-1 (80b5fb8a) added test code in crates/atm-http-runtime/src/message_handler.rs that fails to compile. Line 1043 uses SearchGroupBy::Category, but Category belongs to SearchGroupField, not SearchGroupBy (which only has Field(SearchGroupField)/Var(SearchKey) variants), producing E0599. Line 1039 has a related timestamp type-inference failure (E0282) once the enum-path error is fixed. Confirmed via cargo clippy --workspace --all-targets after a clean rebuild by quality-mgr; ruled out as a stale-cache artifact." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "compile-error" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "branch" ;
+  triage:status "closed" ;
+  triage:resolution "fixed" ;
+  triage:closedAt "2026-08-12T11:06:54Z"^^xsd:dateTime ;
+  triage:closedNote "INDEPENDENT VERIFICATION (quality-mgr, AN6QA2-FIX-1 @ 59ee84654): clean rebuild (cargo clean -p ...; 43694 files/7.3GiB removed) then fresh cargo clippy --workspace --all-targets -- -D warnings, 11.47s, exit 0, zero errors/warnings across all 16 workspace crates. Genuinely fixed, not a stale-cache artifact." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-12T11:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.6 ;
+  triage:foundAt "2026-08-12T11:05:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN6-COMPILEREG-001/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN6-COMPILEREG-001/2> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AN6-COMPILEREG-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 1043 ;
+  triage:snippet "SearchGroupBy::Category -- invalid path; Category belongs to SearchGroupField, causing E0599" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedNote "AN6QA2-FIX-1 (59ee84654): compile error resolved, confirmed by clean-rebuild clippy pass." ;
+  triage:branch "feature/pan-s6-query-surface" ;
+  triage:headSha "59ee84654" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pan-s6-query-surface> .
+
+<urn:atm:triage:occurrence/AN6-COMPILEREG-001/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 1039 ;
+  triage:snippet "timestamp type-inference failure (E0282), downstream of the E0599 above" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedNote "AN6QA2-FIX-1 (59ee84654): downstream type-inference error resolved alongside occurrence 1, confirmed by clean-rebuild clippy pass." ;
+  triage:branch "feature/pan-s6-query-surface" ;
+  triage:headSha "59ee84654" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pan-s6-query-surface> .
+
+<urn:atm:triage:worktree/feature-pan-s6-query-surface>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pan-s6-query-surface" ;
+  triage:branch "feature/pan-s6-query-surface" ;
+  triage:headSha "59ee84654" ;
+  triage:orderIndex 1 .

@@ -1227,9 +1227,9 @@ Acceptance:
   proven dead, no guard is merged early, and the minimality proof confirms
   no compatibility shim survives.
 
-## 45. Phase AN — Decomposed Template Messages And Query Surface [AN.1–AN.8 COMPLETE; AN.9–AN.12 PLANNED; AN.13–AN.15 BLOCKED]
+## 45. Phase AN — Decomposed Template Messages And Query Surface [AN.1–AN.14 COMPLETE; AN.15 IN PROGRESS]
 
-- **Phase AN: Decomposed Template Messages And Query Surface [AN.1–AN.8 COMPLETE]** —
+- **Phase AN: Decomposed Template Messages And Query Surface [AN.1–AN.10 COMPLETE]** —
   Added a bounded `sc-composer` adapter boundary, durable template catalog and
   decomposed-message records, render-on-read, FTS search, public
   introspection/query surfaces, and compose guidance. AN.8 closes the original
@@ -1241,27 +1241,47 @@ Acceptance:
   [`plan-phase-an.md`](./plans/phase-an/plan-phase-an.md); evidence:
   [`validation-evidence.md`](./plans/phase-an/validation-evidence.md))
 
-- **AN workflow-metadata extension [PLANNED]** — adds optional
+- **AN workflow-metadata extension [COMPLETE]** — adds optional
   template-declared workflow facts, immutable admission snapshots of template
   and instance tag provenance, generic local lifecycle analytics, and an
   opt-in OpenTelemetry-compatible projection. It retains no ATM-specific
   workflow vocabulary and is governed by
   [`ADR-046`](./adr/ADR-046-template-declared-workflow-metadata.md).
 
-- **AN.13–AN.15 checked-render upgrade and assurance [BLOCKED]** — AN.13 will establish
-  durable adapter-derived output-format identity; AN.14 will adopt the
-  released `sc-sha` and `sc-composer` 1.4.1 crates and make the
+Sprint line:
+- `AN.9` `feature/pan-s9-template-workflow-contract`
+- `AN.10` `feature/pan-s10-template-workflow-admission`
+- `AN.11` `feature/pan-s11-workflow-analytics-projection` — local workflow
+  lifecycle analytics, query projection, and opt-in telemetry seam
+- `AN.12` `feature/an12-workflow-validation-evidence` — retained two-vocabulary
+  local validation for admission/provenance, CLI/HTTP/Python query, routing,
+  migration compatibility, and best-effort telemetry isolation
+- `AN.13` `feature/an13-sc-composer-141-upgrade` — durable output-format
+  catalog identity and exact released `sc-composer`/`sc-sha` 1.4.1 adapter pin
+- `AN.14` `feature/an14-sc-compose-141-checked-emission` — adapter-only
+  checked emission that rejects malformed JSON before send or render-on-read
+
+- **AN.13–AN.15 checked-render upgrade and assurance [AN.15 IN PROGRESS]** — AN.13 establishes
+  durable adapter-derived output-format identity and adopts the released
+  exact `sc-sha`/`sc-composer` 1.4.1 dependency chain in its adapter; AN.14
+  makes the
   `atm-template-sc-compose` adapter refuse malformed rendered JSON before
   sending, caching, or render-on-read output. AN.15 then runs a bounded,
   deterministic adversarial campaign over the checked template/catalog
-  lifecycle, including captured-environment and immutable-revision oracles;
-  it does not make ATM a template-approval or lineage-policy engine. None of
-  the three sprints can start or close until crates.io publishes `sc-sha`,
+  lifecycle, including captured-environment and immutable-revision oracles.
+  The remaining AN.15 HTTP-seam addendum (PR #887,
+  `feature/an15-http-fuzz-campaign`) exercises the current Tokio/Axum
+  `atm-http-runtime` boundary with a separately retained, commit-pinned
+  four-worker campaign; it is not duplicate pre-Tokio AI.51 work against the
+  removed `api::http_frame_reader` module. AN.15 does not make ATM a
+  template-approval or lineage-policy engine. The three
+  sprints required crates.io to publish `sc-sha`,
   `sc-composer`, and `sc-compose` 1.4.1; published `sc-composer` exports
   `check_rendered_output`, `CheckedOutput`, and `OutputFormat`; and
   [sc-compose #448](https://github.com/randlee/sc-compose/issues/448) supplies
-  the direct-library checked-emission regression coverage. The
-  authoritative scope and closure gates are in
+  the direct-library checked-emission regression coverage.
+  [AN.13 retained release evidence](./plans/phase-an/sc-compose-141-evidence.md)
+  records the satisfied gate; the authoritative scope and closure gates are in
   [`sprint-AN13-sc-compose-141-checked-render.md`](./plans/phase-an/sprint-AN13-sc-compose-141-checked-render.md),
   [`sprint-AN14-sc-compose-141-checked-emission.md`](./plans/phase-an/sprint-AN14-sc-compose-141-checked-emission.md),
   and [`sprint-AN15-adversarial-fuzzing.md`](./plans/phase-an/sprint-AN15-adversarial-fuzzing.md).

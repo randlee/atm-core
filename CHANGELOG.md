@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- complete Phase AN's template-composition and queryable-message line:
+  durable decomposed template rows, render-on-read, typed search and raw
+  read-only analyst queries, plus a generic `atm compose` workflow
+- add AN.8 validation artifacts for sprint span, QA-round, severity, and
+  developer queries; prove the generic query surface with a synthetic
+  vocabulary and the Tokio HTTP same-host/cross-host/foreign-team routing
+  matrix
 - add `atm teams remove-member` for authorized local roster removal
 - `DAEMON-PREAG-RESET-1`: reset the daemon to a local-IPC-only singleton by
   deleting the entire cross-host/peer-transport subsystem (`peer_transport`,

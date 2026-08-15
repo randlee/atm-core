@@ -124,6 +124,22 @@
         }
       }
     },
+    "/messages/search": {
+      "get": {
+        "operation_id": "searchMessages",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/SearchResponse"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
     "/runtime/reload": {
       "post": {
         "operation_id": "reloadRuntimeView",
@@ -219,6 +235,73 @@
     },
     "ReadQuery": {
       "properties": [],
+      "required": []
+    },
+    "SearchHit": {
+      "properties": [
+        "category",
+        "from_agent",
+        "key",
+        "message_at",
+        "message_id",
+        "snippet",
+        "template_type",
+        "to_agent"
+      ],
+      "required": [
+        "from_agent",
+        "key",
+        "message_at",
+        "snippet",
+        "to_agent"
+      ]
+    },
+    "SearchRequest": {
+      "properties": [
+        "lifecycle",
+        "query"
+      ],
+      "required": [
+        "query"
+      ]
+    },
+    "SearchResponse": {
+      "properties": [
+        "aggregate",
+        "hits",
+        "next_cursor"
+      ],
+      "required": [
+        "hits"
+      ]
+    },
+    "WorkflowProjectionRequest": {
+      "properties": [
+        "end",
+        "scope_id",
+        "scope_kind",
+        "start",
+        "time_range"
+      ],
+      "required": [
+        "end",
+        "scope_kind",
+        "start"
+      ]
+    },
+    "WorkflowSelector": {
+      "properties": [
+        "stage",
+        "state",
+        "transition"
+      ],
+      "required": []
+    },
+    "WorkflowTimeRange": {
+      "properties": [
+        "since",
+        "until"
+      ],
       "required": []
     },
     "WriteRequest": {

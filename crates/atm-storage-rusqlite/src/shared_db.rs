@@ -3,7 +3,9 @@ use crate::observability::NullSqliteObservability;
 use crate::observability::{
     SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
 };
+use crate::search_reader::SearchReader;
 use crate::writer::{SqliteWriter, WriteOp, WriteOpResult, validate_upsert_message_request};
+use atm_storage::TemplateMessageAdmission;
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, Message,
     MessageQuery,
@@ -31,7 +33,12 @@ CREATE TABLE IF NOT EXISTS mail_messages (
     from_agent TEXT NOT NULL,
     source_chat_id TEXT NULL,
     destination_chat_id TEXT NULL,
-    message_text TEXT NOT NULL,
+    message_text TEXT NULL,
+    template_sha TEXT NULL,
+    vars_json TEXT NULL,
+    category TEXT NULL,
+    content_format TEXT NULL,
+    tags_json TEXT NOT NULL DEFAULT '[]',
     summary TEXT NULL,
     message_at TEXT NOT NULL,
     message_id TEXT NULL,
@@ -173,10 +180,15 @@ impl SharedDbTarget {
 pub(crate) struct SharedDb {
     target: Arc<SharedDbTarget>,
     writer: Arc<SqliteWriter>,
+    search_reader: Arc<SearchReader>,
     observability: Arc<dyn SqliteObservability>,
 }
 
 impl SharedDb {
+    pub(crate) fn target(&self) -> &SharedDbTarget {
+        self.target.as_ref()
+    }
+
     #[cfg(test)]
     pub(crate) fn open_in_memory_for_test() -> Result<Self, AtmError> {
         Self::open_in_memory_with_observability(Arc::new(NullSqliteObservability))
@@ -196,9 +208,11 @@ impl SharedDb {
             Arc::clone(&target),
             Arc::clone(&observability),
         )?);
+        let search_reader = Arc::new(SearchReader::start(Arc::clone(&target))?);
         Ok(Self {
             target,
             writer,
+            search_reader,
             observability,
         })
     }
@@ -224,6 +238,7 @@ impl SharedDb {
             Arc::clone(&target),
             Arc::clone(&observability),
         )?);
+        let search_reader = Arc::new(SearchReader::start(Arc::clone(&target))?);
         tracing::debug!(
             writer_handles = 1,
             path = %target.display(),
@@ -232,12 +247,12 @@ impl SharedDb {
         Ok(Self {
             target,
             writer,
+            search_reader,
             observability,
         })
     }
 
-    /// Call only from blocking code paths; async callers must enter
-    /// `spawn_blocking` before borrowing a sqlite connection.
+    /// Call only from backend-owned blocking code paths.
     ///
     /// Accepted risk: this is enforced as a crate-internal contract rather
     /// than a runtime assert because `SharedDb` is only called from owned
@@ -251,8 +266,7 @@ impl SharedDb {
         operation(&mut connection)
     }
 
-    /// Call only from blocking code paths; async callers must enter
-    /// `spawn_blocking` before opening a sqlite transaction.
+    /// Call only from backend-owned blocking code paths.
     ///
     /// Accepted risk: this is enforced as a crate-internal contract rather
     /// than a runtime assert because `SharedDb` is only called from owned
@@ -296,10 +310,42 @@ impl SharedDb {
             WriteOpResult::UpsertMessage { inserted, .. } => Ok(inserted),
             WriteOpResult::Messages(_)
             | WriteOpResult::UpsertMessages
-            | WriteOpResult::Acknowledged(_) => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::Acknowledged(_)
+            | WriteOpResult::TemplateRegistration(_)
+            | WriteOpResult::DecomposedMessageAdmission(_)
+            | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for message upsert",
             )),
         }
+    }
+
+    /// Submits a feature-owned writer operation without exposing the writer
+    /// handle or its transaction lifecycle outside this state root.
+    pub(crate) fn submit_writer_op(&self, operation: WriteOp) -> Result<WriteOpResult, AtmError> {
+        self.writer.submit(operation)
+    }
+
+    pub(crate) fn submit_search(
+        &self,
+        query: atm_storage::MessageSearchQuery,
+    ) -> Result<atm_storage::MessageSearchPage, AtmError> {
+        self.search_reader.submit(query)
+    }
+
+    pub(crate) async fn submit_search_async(
+        &self,
+        query: atm_storage::MessageSearchQuery,
+        deadline: std::time::Duration,
+    ) -> Result<atm_storage::MessageSearchPage, AtmError> {
+        self.search_reader.submit_async(query, deadline).await
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn submit_expired_search_for_test(
+        &self,
+        query: atm_storage::MessageSearchQuery,
+    ) -> Result<atm_storage::MessageSearchPage, AtmError> {
+        self.search_reader.submit_expired_for_test(query).await
     }
 
     pub(crate) async fn submit_upsert_message_async(
@@ -325,9 +371,39 @@ impl SharedDb {
             )),
             WriteOpResult::Messages(_)
             | WriteOpResult::UpsertMessages
-            | WriteOpResult::Acknowledged(_) => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::Acknowledged(_)
+            | WriteOpResult::TemplateRegistration(_)
+            | WriteOpResult::DecomposedMessageAdmission(_)
+            | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for async message upsert",
             )),
+        }
+    }
+
+    pub(crate) async fn submit_template_message_admission_async(
+        &self,
+        admission: TemplateMessageAdmission,
+    ) -> Result<Option<Message>, AtmError> {
+        admission.validate()?;
+        match self
+            .writer
+            .submit_async(WriteOp::AdmitTemplateMessage(Box::new(admission)))
+            .await?
+        {
+            WriteOpResult::TemplateMessageAdmission { inserted: true, .. } => Ok(None),
+            WriteOpResult::TemplateMessageAdmission {
+                inserted: false,
+                existing: Some(existing),
+            } => Ok(Some(*existing)),
+            WriteOpResult::TemplateMessageAdmission {
+                inserted: false,
+                existing: None,
+            } => Err(AtmError::daemon_unavailable(
+                "sqlite writer reported a duplicate template admission without its retained record",
+            )),
+            other => Err(AtmError::daemon_unavailable(format!(
+                "sqlite writer returned the wrong result for async template message admission: {other:?}"
+            ))),
         }
     }
 
@@ -346,7 +422,10 @@ impl SharedDb {
             WriteOpResult::UpsertMessages => Ok(()),
             WriteOpResult::Messages(_)
             | WriteOpResult::UpsertMessage { .. }
-            | WriteOpResult::Acknowledged(_) => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::Acknowledged(_)
+            | WriteOpResult::TemplateRegistration(_)
+            | WriteOpResult::DecomposedMessageAdmission(_)
+            | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for atomic message commit",
             )),
         }
@@ -364,7 +443,10 @@ impl SharedDb {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
             WriteOpResult::Messages(_)
             | WriteOpResult::UpsertMessage { .. }
-            | WriteOpResult::UpsertMessages => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::UpsertMessages
+            | WriteOpResult::TemplateRegistration(_)
+            | WriteOpResult::DecomposedMessageAdmission(_)
+            | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for acknowledgement admission",
             )),
         }
@@ -383,7 +465,10 @@ impl SharedDb {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
             WriteOpResult::Messages(_)
             | WriteOpResult::UpsertMessage { .. }
-            | WriteOpResult::UpsertMessages => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::UpsertMessages
+            | WriteOpResult::TemplateRegistration(_)
+            | WriteOpResult::DecomposedMessageAdmission(_)
+            | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for async acknowledgement admission",
             )),
         }
@@ -401,7 +486,10 @@ impl SharedDb {
             WriteOpResult::Messages(messages) => Ok(messages),
             WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::UpsertMessages
-            | WriteOpResult::Acknowledged(_) => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::Acknowledged(_)
+            | WriteOpResult::TemplateRegistration(_)
+            | WriteOpResult::DecomposedMessageAdmission(_)
+            | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for async mailbox projection",
             )),
         }
@@ -504,11 +592,22 @@ fn enable_write_ahead_log(
     #[cfg(not(test))]
     let enable_wal = true;
     if enable_wal {
-        connection
-            .pragma_update(None, "journal_mode", "WAL")
+        // `PRAGMA journal_mode = WAL` returns the selected mode. Use a query
+        // rather than Rusqlite's execute-only pragma helper, which correctly
+        // rejects result-producing pragmas.
+        let journal_mode = connection
+            .query_row("PRAGMA journal_mode = WAL", [], |row| {
+                row.get::<_, String>(0)
+            })
             .map_err(|error| {
                 sqlite_error(target, "failed to enable sqlite wal journal mode", error)
             })?;
+        if !journal_mode.eq_ignore_ascii_case("wal") {
+            return Err(AtmError::mailbox_write(format!(
+                "SQLite declined WAL journal mode for {} (reported {journal_mode:?})",
+                target.display()
+            )));
+        }
     }
     Ok(())
 }
@@ -549,6 +648,8 @@ pub(crate) fn ensure_schema(
         .execute_batch(DB_MIGRATIONS)
         .map_err(|error| sqlite_error(target, "failed to initialize sqlite schema", error))?;
     ensure_mail_message_columns(connection, target)?;
+    crate::template_catalog_schema::ensure_schema(connection, target)?;
+    crate::search_schema::ensure_schema(connection, target)?;
     ensure_team_roster_columns(connection, target)?;
     ensure_team_roster_harness_values(connection, target)?;
     ensure_team_nudge_template_override_columns(connection, target)?;
@@ -776,7 +877,7 @@ fn ensure_mail_messages_message_id_compat(
     )
 }
 
-fn ensure_column(
+pub(crate) fn ensure_column(
     connection: &Connection,
     target: &SharedDbTarget,
     table: &str,

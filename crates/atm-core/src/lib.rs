@@ -64,6 +64,8 @@ pub mod roles;
 pub mod runtime_install_hooks;
 /// Public mailbox and team schema types shared with CLI tests and adapters.
 pub mod schema;
+/// Transport-neutral, local-only message search query contract.
+pub mod search;
 /// Mailbox send workflows and request/response models.
 pub mod send;
 /// Internal service-owned seams that isolate retained command orchestration
@@ -73,6 +75,8 @@ pub(crate) mod service_runtime;
 pub(crate) mod service_runtime_store;
 /// Retained local team discovery, roster repair, and backup/restore workflows.
 pub mod team_admin;
+/// Pure resolution of template-declared workflow snapshots.
+pub mod template_workflow;
 /// Shared synthetic test identities and role constants used across crate tests.
 #[doc(hidden)]
 #[cfg(any(test, feature = "test-utils"))]
@@ -87,12 +91,17 @@ pub(crate) mod threading;
 pub mod transport;
 /// Shared enums and semantic newtypes used across ATM core workflows.
 pub mod types;
+/// Generic local lifecycle projection over immutable workflow admission facts.
+pub mod workflow_analytics;
+/// First-party-only telemetry contract for workflow lifecycle projections.
+pub mod workflow_telemetry;
 
 pub use api::{
     ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, DaemonApiClient,
     MAX_HTTP_REQUEST_BODY_BYTES, RequestDeadline,
 };
 pub use atm_storage::derive_ack_requirement;
+pub use atm_storage::{TemplateFrontmatter, TemplateSha};
 #[allow(deprecated)]
 pub use boundary::{
     AckTransition, AsyncMessageReceivedHookEmitter, BuiltInNudgeSinkTarget,
@@ -102,10 +111,12 @@ pub use boundary::{
     MailStoreDoctorReport, MailStoreHealthSnapshot, MailStoreMailboxMetadataCounts,
     MailStoreMailboxMetadataRow, Message, MessageFingerprint, MessageKey,
     MessageReceivedHookEmitter, NotificationEvent, NudgeTemplateOverrideStore, PostSendHookEvent,
-    ResolvedBuiltInNudgeTemplate, RosterEntry, RosterHarness, RosterMemberKind, RosterStore,
-    RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot, RuntimeStatusSnapshot,
-    StatusSource, TaskState, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
-    UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
+    RenderedBody, ResolvedBuiltInNudgeTemplate, RosterEntry, RosterHarness, RosterMemberKind,
+    RosterStore, RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot,
+    RuntimeStatusSnapshot, SourceSpan, StatusSource, TaskState, TeamNudgeTemplateOverrideMode,
+    TeamNudgeTemplateOverrideRow, TemplateComposer, TemplateInspection, TemplateReference,
+    TemplateReferenceKind, TemplateRoot, TemplateSource, UpsertMailMessageStateRequest,
+    UpsertMailMessageStateResponse,
 };
 pub use config::AtmConfig;
 pub use config::load_config as load_atm_config;
@@ -115,6 +126,15 @@ pub use config::types::GraftConfig;
 /// accepted `atm-core` surface.
 pub use graft::AtmGraftClient;
 pub use protocol::{RequestEnvelope, ResponseEnvelope};
+pub use search::{SearchAggregateInput, SearchHit, SearchInput, SearchRequest, SearchResponse};
 pub use service_runtime::{
     LocalFileNonClaudeOutbound, LocalServiceRuntime, with_default_local_service_runtime,
+};
+pub use workflow_analytics::{
+    LifecycleObservation, WorkflowFact, WorkflowProjectionRequest, WorkflowSelector,
+    project_lifecycles,
+};
+pub use workflow_telemetry::{
+    NoopWorkflowTelemetrySink, WorkflowTelemetryError, WorkflowTelemetryObservation,
+    WorkflowTelemetryRecord, WorkflowTelemetrySink,
 };

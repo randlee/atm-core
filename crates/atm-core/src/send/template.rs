@@ -1,0 +1,409 @@
+//! Core-owned templated-send composition.
+//!
+//! The CLI only captures caller input. This module owns the deterministic
+//! merge, required-variable validation, and renderer-port invocation.
+
+use serde_json::{Map, Value};
+
+use crate::boundary::{RenderedBody, TemplateComposer, TemplateRoot, TemplateSource};
+use crate::error::AtmError;
+
+use super::TemplateSendSource;
+
+/// Fully resolved template variables. Environment values have already been
+/// captured by the CLI, so this stays reproducible after the HTTP hop.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct MergedVars(Map<String, Value>);
+
+impl MergedVars {
+    #[must_use]
+    pub fn as_map(&self) -> &Map<String, Value> {
+        &self.0
+    }
+
+    pub fn into_storage_json(self) -> atm_storage::MergedVarsJson {
+        atm_storage::MergedVarsJson::from_merged_object(self.0)
+    }
+}
+
+/// Output required by the routing/persistence step after verification.
+#[derive(Debug, Clone)]
+pub(super) struct VerifiedTemplateSend {
+    pub source: TemplateSource,
+    pub inspection: crate::boundary::TemplateInspection,
+    pub vars: MergedVars,
+    pub rendered: RenderedBody,
+}
+
+/// The four-cell Decision 5 matrix in one auditable predicate. A direct peer
+/// destination denotes the cross-host cells; team inequality denotes the
+/// foreign-team cells. Either condition forces a rendered ordinary row.
+#[must_use]
+pub(super) fn requires_plain_template_fallback(
+    inspection: &crate::boundary::TemplateInspection,
+    caller_team: &crate::types::TeamName,
+    recipient_team: &crate::types::TeamName,
+    is_direct_peer_destination: bool,
+) -> bool {
+    !inspection.include_references.is_empty()
+        || caller_team != recipient_team
+        || is_direct_peer_destination
+}
+
+pub(super) fn verify_template_send(
+    composer: &dyn TemplateComposer,
+    request: &TemplateSendSource,
+    max_message_bytes: usize,
+) -> Result<VerifiedTemplateSend, AtmError> {
+    let source = TemplateSource::file_backed(
+        request.raw_file_bytes.clone(),
+        request.canonical_template_path.clone(),
+    );
+    let inspection = composer.inspect(&source)?;
+    let vars = resolve_merged_vars(&inspection.frontmatter, request)?;
+    let root = TemplateRoot {
+        canonical_path: request.canonical_template_root.clone(),
+    };
+    // A loader-constrained render is mandatory even for the include fallback:
+    // it proves each dependency is in-root before returning the plain body.
+    let rendered = composer
+        .render_within_root(&source, vars.as_map(), &root)
+        .map_err(|error| {
+            if !inspection.include_references.is_empty() {
+                AtmError::template_include_unresolved(error)
+            } else {
+                AtmError::template_render_verification_failed(error)
+            }
+        })?;
+    let rendered = RenderedBody {
+        text: super::input::validate_message_text_with_limit(rendered.text, max_message_bytes)?,
+    };
+    Ok(VerifiedTemplateSend {
+        source,
+        inspection,
+        vars,
+        rendered,
+    })
+}
+
+/// Applies the documented immutable precedence at the core composition seam.
+pub fn resolve_merged_vars(
+    frontmatter: &atm_storage::TemplateFrontmatter,
+    request: &TemplateSendSource,
+) -> Result<MergedVars, AtmError> {
+    let mut merged = frontmatter.defaults.clone();
+    merged.extend(request.input_defaults.clone());
+    merged.extend(request.environment_values.clone());
+    merged.extend(request.var_file_values.clone());
+    merged.extend(request.explicit_values.clone());
+    for required in &frontmatter.required_variables {
+        if !merged.contains_key(required.as_str()) {
+            return Err(AtmError::template_required_variable_missing(
+                required.as_str(),
+            ));
+        }
+    }
+    Ok(MergedVars(merged))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use serde_json::{Map, Value, json};
+
+    use super::{requires_plain_template_fallback, resolve_merged_vars, verify_template_send};
+    use crate::boundary::sealed;
+    use crate::boundary::{
+        RenderedBody, TemplateComposer, TemplateInspection, TemplateRoot, TemplateSource,
+    };
+    use crate::error::AtmError;
+    use crate::send::{TemplateSendSource, input};
+
+    struct FixtureComposer {
+        inspection: TemplateInspection,
+        inspection_error: Option<AtmError>,
+        render_result: Result<RenderedBody, AtmError>,
+        renders: AtomicUsize,
+    }
+
+    impl sealed::Sealed for FixtureComposer {}
+
+    impl TemplateComposer for FixtureComposer {
+        fn inspect(&self, _source: &TemplateSource) -> Result<TemplateInspection, AtmError> {
+            if let Some(error) = &self.inspection_error {
+                return Err(error.clone());
+            }
+            Ok(self.inspection.clone())
+        }
+
+        fn render_within_root(
+            &self,
+            _template: &TemplateSource,
+            _vars: &Map<String, Value>,
+            _root: &TemplateRoot,
+        ) -> Result<RenderedBody, AtmError> {
+            self.renders.fetch_add(1, Ordering::Relaxed);
+            self.render_result.clone()
+        }
+
+        fn render_without_includes(
+            &self,
+            _source: &TemplateSource,
+            _vars: &Map<String, Value>,
+        ) -> Result<RenderedBody, AtmError> {
+            unreachable!("AN.3 verification uses the confined render seam")
+        }
+    }
+
+    fn variable(name: &str) -> atm_storage::TemplateVariableName {
+        atm_storage::TemplateVariableName::new(name).expect("fixture variable")
+    }
+
+    fn source() -> TemplateSendSource {
+        TemplateSendSource {
+            canonical_template_path: "template.j2".into(),
+            canonical_template_root: ".".into(),
+            raw_file_bytes: b"hello".to_vec(),
+            input_defaults: Map::from_iter([(String::from("name"), json!("input"))]),
+            var_file_values: Map::from_iter([(String::from("name"), json!("file"))]),
+            explicit_values: Map::from_iter([(String::from("name"), json!("flag"))]),
+            environment_values: Map::from_iter([
+                (String::from("name"), json!("environment")),
+                (String::from("region"), json!("captured")),
+            ]),
+        }
+    }
+
+    #[test]
+    fn merge_precedence_is_explicit_over_file_environment_input_and_frontmatter_defaults() {
+        let frontmatter = atm_storage::TemplateFrontmatter {
+            required_variables: vec![variable("name"), variable("region")],
+            defaults: Map::from_iter([
+                (String::from("name"), json!("default")),
+                (String::from("region"), json!("default-region")),
+            ]),
+            metadata: Map::new(),
+            ..atm_storage::TemplateFrontmatter::default()
+        };
+        let merged = resolve_merged_vars(&frontmatter, &source()).expect("merged vars");
+        assert_eq!(merged.as_map().get("name"), Some(&json!("flag")));
+        assert_eq!(merged.as_map().get("region"), Some(&json!("captured")));
+    }
+
+    #[test]
+    fn var_file_values_override_environment_values_without_an_explicit_value() {
+        let mut request = source();
+        request.explicit_values.remove("name");
+
+        let merged = resolve_merged_vars(&atm_storage::TemplateFrontmatter::default(), &request)
+            .expect("merged vars");
+
+        assert_eq!(merged.as_map().get("name"), Some(&json!("file")));
+    }
+
+    #[test]
+    fn input_defaults_override_frontmatter_defaults_when_no_higher_source_provides_a_value() {
+        let frontmatter = atm_storage::TemplateFrontmatter {
+            required_variables: vec![variable("priority")],
+            defaults: Map::from_iter([(String::from("priority"), json!("frontmatter"))]),
+            metadata: Map::new(),
+            ..atm_storage::TemplateFrontmatter::default()
+        };
+        let mut request = source();
+        request
+            .input_defaults
+            .insert("priority".to_string(), json!("input"));
+
+        let merged = resolve_merged_vars(&frontmatter, &request).expect("merged vars");
+
+        assert_eq!(merged.as_map().get("priority"), Some(&json!("input")));
+    }
+
+    #[test]
+    fn missing_required_variable_fails_before_render() {
+        let frontmatter = atm_storage::TemplateFrontmatter {
+            required_variables: vec![variable("missing")],
+            defaults: Map::<String, Value>::new(),
+            metadata: Map::new(),
+            ..atm_storage::TemplateFrontmatter::default()
+        };
+        let error = resolve_merged_vars(&frontmatter, &source()).expect_err("missing var");
+        assert!(error.message().contains("required variable 'missing'"));
+    }
+
+    #[test]
+    fn an15_shape_probe_captures_environment_values_without_consulting_process_environment() {
+        // The CLI is responsible for capturing any approved environment input
+        // into `environment_values`. Admission and every later read are pure
+        // with respect to the ambient process environment.
+        let _ambient = crate::test_support::EnvGuard::set_raw("ATM_TEAM", "ambient-wrong-team");
+        let frontmatter = atm_storage::TemplateFrontmatter {
+            required_variables: vec![variable("ATM_TEAM")],
+            ..atm_storage::TemplateFrontmatter::default()
+        };
+
+        for case_index in 0..100 {
+            let (captured, shape) = match case_index % 5 {
+                0 => (format!("captured-team-{case_index}"), "plain"),
+                1 => (format!("captured-team-{case_index}-🙂"), "unicode"),
+                2 => (format!("captured team {case_index}"), "whitespace"),
+                3 => (format!("captured-team-{case_index}-\\\"quote"), "quoted"),
+                _ => (format!("captured-team-{case_index}\\nnext"), "multiline"),
+            };
+            eprintln!("AN15_CASE_SHAPE={shape}");
+            let mut request = source();
+            request.environment_values =
+                Map::from_iter([("ATM_TEAM".to_owned(), Value::String(captured.clone()))]);
+            let merged = resolve_merged_vars(&frontmatter, &request).expect("captured admission");
+            assert_eq!(
+                merged.as_map().get("ATM_TEAM"),
+                Some(&Value::String(captured))
+            );
+        }
+
+        let mut missing = source();
+        missing.environment_values.remove("ATM_TEAM");
+        let error =
+            resolve_merged_vars(&frontmatter, &missing).expect_err("missing admission value");
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateRequiredVariableMissing
+        );
+    }
+
+    #[test]
+    fn verification_uses_confined_render_and_captures_the_merged_body() {
+        let inspection = TemplateInspection {
+            sha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .parse()
+                .expect("sha"),
+            frontmatter: atm_storage::TemplateFrontmatter {
+                required_variables: vec![variable("name")],
+                defaults: Map::new(),
+                metadata: Map::new(),
+                ..atm_storage::TemplateFrontmatter::default()
+            },
+            include_references: Vec::new(),
+            output_format: atm_storage::TemplateOutputFormat::Text,
+        };
+        let composer = FixtureComposer {
+            inspection,
+            inspection_error: None,
+            render_result: Ok(RenderedBody {
+                text: "verified body".to_owned(),
+            }),
+            renders: AtomicUsize::new(0),
+        };
+
+        let verified =
+            verify_template_send(&composer, &source(), input::default_message_max_bytes())
+                .expect("verification");
+
+        assert_eq!(verified.rendered.text, "verified body");
+        assert_eq!(composer.renders.load(Ordering::Relaxed), 1);
+        assert_eq!(verified.vars.as_map().get("name"), Some(&json!("flag")));
+    }
+
+    #[test]
+    fn verification_preserves_the_adapter_inspection_error_code() {
+        let inspection = TemplateInspection {
+            sha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .parse()
+                .expect("sha"),
+            frontmatter: atm_storage::TemplateFrontmatter::default(),
+            include_references: Vec::new(),
+            output_format: atm_storage::TemplateOutputFormat::Text,
+        };
+        let inspection_error = AtmError::new(
+            atm_storage::AtmErrorCode::TemplateInspectionParseFailed,
+            "template inspection parser rejected body syntax",
+        );
+        let composer = FixtureComposer {
+            inspection,
+            inspection_error: Some(inspection_error.clone()),
+            render_result: Ok(RenderedBody {
+                text: "unreachable".to_owned(),
+            }),
+            renders: AtomicUsize::new(0),
+        };
+
+        let error = verify_template_send(&composer, &source(), input::default_message_max_bytes())
+            .expect_err("inspection errors must fail before render");
+
+        assert_eq!(error, inspection_error);
+        assert_eq!(composer.renders.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn include_render_failure_is_mapped_to_the_closed_containment_error() {
+        let inspection = TemplateInspection {
+            sha: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                .parse()
+                .expect("sha"),
+            frontmatter: atm_storage::TemplateFrontmatter::default(),
+            include_references: vec![crate::boundary::TemplateReference {
+                directive: crate::boundary::TemplateReferenceKind::Include,
+                source_span: crate::boundary::SourceSpan {
+                    byte_start: 0,
+                    byte_end: 1,
+                },
+            }],
+            output_format: atm_storage::TemplateOutputFormat::Text,
+        };
+        let composer = FixtureComposer {
+            inspection,
+            inspection_error: None,
+            render_result: Err(AtmError::config("include escaped declared root")),
+            renders: AtomicUsize::new(0),
+        };
+
+        let error = verify_template_send(&composer, &source(), input::default_message_max_bytes())
+            .expect_err("unresolved include fails closed");
+
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateIncludeUnresolved
+        );
+        assert_eq!(composer.renders.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn routing_matrix_decomposes_only_same_team_same_host_without_includes() {
+        let inspection = TemplateInspection {
+            sha: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+                .parse()
+                .expect("sha"),
+            frontmatter: atm_storage::TemplateFrontmatter::default(),
+            include_references: Vec::new(),
+            output_format: atm_storage::TemplateOutputFormat::Text,
+        };
+        let local_team = "local-team".parse().expect("team");
+        let foreign_team = "foreign-team".parse().expect("team");
+
+        assert!(!requires_plain_template_fallback(
+            &inspection,
+            &local_team,
+            &local_team,
+            false,
+        ));
+        assert!(requires_plain_template_fallback(
+            &inspection,
+            &local_team,
+            &local_team,
+            true,
+        ));
+        assert!(requires_plain_template_fallback(
+            &inspection,
+            &local_team,
+            &foreign_team,
+            false,
+        ));
+        assert!(requires_plain_template_fallback(
+            &inspection,
+            &local_team,
+            &foreign_team,
+            true,
+        ));
+    }
+}

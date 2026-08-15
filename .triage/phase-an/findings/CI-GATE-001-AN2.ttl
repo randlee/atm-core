@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CI-GATE-001-AN2>
+  a triage:Finding ;
+  triage:findingId "CI-GATE-001-AN2" ;
+  triage:title "Clippy redundant_closure in template_catalog_store.rs blocks CI" ;
+  triage:description "Line 60 uses redundant closure wrapping decode_stored_template. Clippy's redundant_closure lint flags this as unnecessary; the function should be used directly via .map(decode_stored_template) instead of .map(|row| decode_stored_template(row))" ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ci-lint" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-11T19:44:52Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.2 ;
+  triage:foundAt "2026-08-11T19:43:40Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-GATE-001-AN2/AN2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/CI-GATE-001-AN2/AN2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/template_catalog_store.rs" ;
+  triage:line 60 ;
+  triage:snippet ".map(|row| decode_stored_template(row))" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "3572e2e73" ;
+  triage:occursIn <urn:atm:triage:worktree/AN2/3572e2e73> .
+
+<urn:atm:triage:worktree/AN2/3572e2e73>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/an2-sprint" ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "3572e2e73" ;
+  triage:orderIndex 1 .

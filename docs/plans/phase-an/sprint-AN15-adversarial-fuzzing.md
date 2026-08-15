@@ -1,26 +1,33 @@
 ---
 title: AN.15 Checked-Render Adversarial Assurance
-status: blocked
-branch: feature/an15-adversarial-fuzzing
+status: complete
+branch: feature/an15-http-fuzz-campaign
 target: integrate/phase-an
-external_blockers:
-  - crates.io publishes sc-sha 1.4.1, sc-composer 1.4.1, and sc-compose 1.4.1; published sc-composer exports check_rendered_output, CheckedOutput, and OutputFormat
-  - https://github.com/randlee/sc-compose/issues/448 closed
+worktree: ../atm-core-worktrees/feature/an15-http-fuzz-campaign
+external_blockers: []
 ---
 
 # AN.15 — Checked-Render Adversarial Assurance
 
+The original checked-render campaign completed on
+`feature/an15-adversarial-fuzzing` (PR #877). The HTTP-seam addendum
+(`feature/an15-http-fuzz-campaign`, PR #887) is also complete: it passed its
+own independent QA (AN15HTTPFUZZ-QA-3, PASS 4/4) and merged into
+`integrate/phase-an` at `56b3ccef5ef81ad2f5a0db25c89d217e09802e14`.
+
 **recommended_agent:** arch-ctm/deep-reasoning (template lifecycle and
 negative-contract assurance).
-**must_follow:** AN.14 merged. Before every dev/fix round, merge AN.14's
-pushed integration tip because this sprint tests the exact checked-emission
-routes and durable format catalog AN.13–AN.14 introduce. AN.15 is also
-**blocked** until crates.io publishes `sc-sha` **1.4.1**, `sc-composer`
-**1.4.1**, and `sc-compose` **1.4.1**; the published `sc-composer` release
-exports `check_rendered_output`, `CheckedOutput`, and `OutputFormat`; and
-[sc-compose #448](https://github.com/randlee/sc-compose/issues/448) is closed
-with direct-library checked-emission coverage. Never substitute an unpublished
-git revision, path dependency, prerelease, or version range.
+**must_follow:** AN.14 merged. Merged into `integrate/phase-an` at
+`35108bc4be054fd52ce803c279a053011ed54513` (PR #877). Before every dev/fix
+round, merge AN.14's pushed integration tip because this sprint tests the
+exact checked-emission routes and durable format catalog AN.13–AN.14
+introduce. AN.15's prior external blockers are satisfied: crates.io publishes
+`sc-sha` **1.4.1**, `sc-composer` **1.4.1**, and `sc-compose` **1.4.1**; the
+published `sc-composer` release exports `check_rendered_output`,
+`CheckedOutput`, and `OutputFormat`; and
+[sc-compose #448](https://github.com/randlee/sc-compose/issues/448) is
+closed with direct-library checked-emission coverage. Never substitute an
+unpublished git revision, path dependency, prerelease, or version range.
 
 **unblocks:** checked-render assurance evidence for Phase AN close-out.
 **parallel_safe:** none. The campaign exercises the complete AN.13–AN.14
@@ -140,6 +147,27 @@ be fixed and re-run against that exact integrated line.
 - ATM records immutable facts only: SHA, exact parsed frontmatter metadata,
   output format, and merged variables. The repository-policy exclusions are
   defined once under Non-closure.
+
+## HTTP-seam campaign addendum (PR #887)
+
+This addendum retains an additional bounded four-worker campaign for the
+Tokio/Axum `atm-http-runtime` boundary. It is intentionally complementary to
+the checked-render campaign: 100 seeded cases per worker exercise malformed
+JSON, non-JSON content, retired client-provenance headers, and live loopback
+search-query decoding. The campaign records its exact source commit, fixed
+worker commands, per-worker logs, typed error code/recovery expectations, and
+sanitized HTML/JSON report under `site/reports/fuzz/`.
+
+This is not duplicate AI.51 work. AI.51 targeted
+`api::http_frame_reader`, a module removed before the Tokio/Axum runtime was
+introduced; this addendum tests the current `atm-http-runtime` routes and a
+real loopback TCP listener. It must prove that each labelled case changes an
+input read by the production path, and that HTTP error serialization exposes
+only the public error code/message, never `AtmError.cause` diagnostic data.
+
+The addendum preserves the original AN.15 four-worker bounds and report
+requirements. It does not broaden ATM into a generic HTTP fuzzer or alter the
+AN.15 non-closure policy.
 
 ## Required validation
 

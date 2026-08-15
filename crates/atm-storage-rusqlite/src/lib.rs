@@ -7,15 +7,27 @@
 //! SQLite-backed storage backend implementing the shared `atm-storage`
 //! message and roster contracts.
 
+mod analyst_query;
 #[cfg(test)]
 mod mailbox_metadata;
 mod nudge_template_override_store;
 mod observability;
 mod peer_config_store;
 mod roster_store;
+mod search_reader;
+mod search_schema;
+mod search_store;
 mod shared_db;
+mod template_catalog_schema;
+mod template_catalog_store;
 mod writer;
 
+pub use crate::analyst_query::open_analyst_query_store;
+#[cfg(feature = "test-support")]
+pub use crate::analyst_query::{
+    create_an8_analyst_query_fixture_for_test, create_an12_workflow_query_fixture_for_test,
+    create_analyst_query_fixture_for_test,
+};
 #[cfg(test)]
 use crate::mailbox_metadata::query_mailbox_metadata_rows;
 pub use crate::observability::{
@@ -31,11 +43,15 @@ use atm_storage::schema::MessageEnvelope;
 #[cfg(test)]
 use atm_storage::schema::{AtmMessageId, ThreadMode};
 use atm_storage::types::{AgentName, TeamName};
-use atm_storage::{AtmError, IsoTimestamp, StorageFactory, StorageHandles};
+use atm_storage::{AsyncMessageSearchStore, MessageSearchStore, TemplateCatalogStore};
+use atm_storage::{AtmError, IsoTimestamp, StorageFactory, StorageHandleParts, StorageHandles};
 use rusqlite::{Connection, OptionalExtension, params};
+use search_schema::delete_message_projection;
+use search_store::{async_search_store, search_store};
 use shared_db::{SharedDb, deserialize_json};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use template_catalog_store::template_catalog_store;
 
 #[cfg(any(test, feature = "test-support"))]
 #[derive(Debug)]
@@ -54,6 +70,33 @@ impl Drop for SqliteWriterLockGuard {
 #[cfg(any(test, feature = "test-support"))]
 pub struct TestOnlySqliteWriterLockGuard {
     _guard: SqliteWriterLockGuard,
+}
+
+/// Test-only projection of template-admission state.
+///
+/// Keeping this probe in SQLite test support lets the replacement HTTP runtime
+/// prove durable rows without importing SQLite or opening a database itself.
+#[doc(hidden)]
+#[cfg(any(test, feature = "test-support"))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TemplateAdmissionSnapshot {
+    pub template_count: usize,
+    pub decomposed_count: usize,
+    pub messages: Vec<TemplateAdmissionMessage>,
+}
+
+/// One durable message projection returned by [`TemplateAdmissionSnapshot`].
+#[doc(hidden)]
+#[cfg(any(test, feature = "test-support"))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TemplateAdmissionMessage {
+    pub message_key: String,
+    pub template_sha: Option<String>,
+    pub vars_json: Option<String>,
+    pub category: Option<String>,
+    pub content_format: Option<String>,
+    pub tags_json: String,
+    pub message_text: Option<String>,
 }
 
 #[cfg(any(test, feature = "test-support"))]
@@ -77,6 +120,73 @@ pub fn hold_sqlite_writer_lock_for_test(
     path: impl AsRef<Path>,
 ) -> Result<TestOnlySqliteWriterLockGuard, AtmError> {
     hold_sqlite_writer_lock(path).map(|guard| TestOnlySqliteWriterLockGuard { _guard: guard })
+}
+
+/// Reads only durable template-admission projections for black-box tests.
+///
+/// Production code must use the sealed storage contracts. This helper is
+/// test-support-only so the Tokio HTTP runtime never owns a database handle.
+#[doc(hidden)]
+#[cfg(any(test, feature = "test-support"))]
+pub fn inspect_template_admission_for_test(
+    path: impl AsRef<Path>,
+    message_keys: &[String],
+) -> Result<TemplateAdmissionSnapshot, AtmError> {
+    let connection = Connection::open(path.as_ref()).map_err(|error| {
+        AtmError::mailbox_read(format!(
+            "failed to inspect template-admission fixture: {error}"
+        ))
+    })?;
+    let (template_count, decomposed_count): (i64, i64) = connection
+        .query_row(
+            "SELECT
+                (SELECT COUNT(*) FROM message_templates),
+                (SELECT COUNT(*) FROM decomposed_messages)",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|error| {
+            AtmError::mailbox_read(format!(
+                "failed to count template-admission fixture rows: {error}"
+            ))
+        })?;
+    let messages = message_keys
+        .iter()
+        .map(|message_key| {
+            connection
+                .query_row(
+                    "SELECT message_key, template_sha, vars_json, category, content_format,
+                            tags_json, message_text
+                     FROM mail_messages WHERE message_key = ?1",
+                    params![message_key],
+                    |row| {
+                        Ok(TemplateAdmissionMessage {
+                            message_key: row.get(0)?,
+                            template_sha: row.get(1)?,
+                            vars_json: row.get(2)?,
+                            category: row.get(3)?,
+                            content_format: row.get(4)?,
+                            tags_json: row.get(5)?,
+                            message_text: row.get(6)?,
+                        })
+                    },
+                )
+                .map_err(|error| {
+                    AtmError::mailbox_read(format!(
+                        "failed to inspect template-admission message '{message_key}': {error}"
+                    ))
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(TemplateAdmissionSnapshot {
+        template_count: usize::try_from(template_count).map_err(|_| {
+            AtmError::mailbox_read("template-admission fixture count exceeds usize range")
+        })?,
+        decomposed_count: usize::try_from(decomposed_count).map_err(|_| {
+            AtmError::mailbox_read("template-admission fixture count exceeds usize range")
+        })?,
+        messages,
+    })
 }
 
 /// Installs a test-only SQLite trigger that deterministically rejects mailbox
@@ -468,6 +578,7 @@ impl MessageStore for SqliteMessageStore {
 
     fn delete_message(&self, key: &MessageKey) -> Result<(), AtmError> {
         self.db.with_transaction(|transaction| {
+            delete_message_projection(transaction, self.db.target(), key.as_str())?;
             transaction
                 .execute(
                     "DELETE FROM mail_message_states WHERE message_key = ?1;",
@@ -501,6 +612,15 @@ impl AsyncMessageStore for SqliteMessageStore {
         self.db.submit_upsert_message_async(message).await
     }
 
+    async fn admit_template_message_async(
+        &self,
+        admission: atm_storage::TemplateMessageAdmission,
+    ) -> Result<Option<Message>, AtmError> {
+        self.db
+            .submit_template_message_admission_async(admission)
+            .await
+    }
+
     async fn acknowledge_message_atomically_async(
         &self,
         source: AcknowledgementSource,
@@ -510,12 +630,23 @@ impl AsyncMessageStore for SqliteMessageStore {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct SqliteStorageBackend {
     message_store: Arc<SqliteMessageStore>,
     roster_store: Arc<SqliteRosterStore>,
     nudge_template_override_store: Arc<SqliteNudgeTemplateOverrideStore>,
     peer_config_store: Arc<SqlitePeerConfigStore>,
+    template_catalog_store: Arc<dyn TemplateCatalogStore>,
+    message_search_store: Arc<dyn MessageSearchStore>,
+    async_message_search_store: Arc<dyn AsyncMessageSearchStore>,
+}
+
+impl std::fmt::Debug for SqliteStorageBackend {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SqliteStorageBackend")
+            .finish_non_exhaustive()
+    }
 }
 
 /// Concrete SQLite selection owned by the SQLite backend and consumed only at
@@ -547,13 +678,16 @@ impl SqliteStorageFactory {
 impl StorageFactory for SqliteStorageFactory {
     fn open(&self, durable_state_root: &Path) -> Result<StorageHandles, AtmError> {
         let backend = SqliteStorageBackend::new(self.database_path(durable_state_root))?;
-        Ok(StorageHandles::new(
-            backend.message_store(),
-            backend.async_message_store(),
-            backend.roster_store(),
-            backend.nudge_template_override_store(),
-            backend.peer_config_store(),
-        ))
+        Ok(StorageHandles::from_parts(StorageHandleParts {
+            message_store: backend.message_store(),
+            async_message_store: backend.async_message_store(),
+            roster_store: backend.roster_store(),
+            nudge_template_override_store: backend.nudge_template_override_store(),
+            peer_config_store: backend.peer_config_store(),
+            template_catalog_store: backend.template_catalog_store(),
+            message_search_store: backend.message_search_store(),
+            async_message_search_store: backend.async_message_search_store(),
+        }))
     }
 }
 
@@ -574,11 +708,14 @@ impl SqliteStorageBackend {
                 Arc::clone(&db),
             )),
             peer_config_store: Arc::new(SqlitePeerConfigStore::new(Arc::clone(&db))),
+            template_catalog_store: template_catalog_store(Arc::clone(&db)),
+            message_search_store: search_store(Arc::clone(&db)),
+            async_message_search_store: async_search_store(Arc::clone(&db)),
         })
     }
 
     #[cfg(test)]
-    fn in_memory_for_test() -> Result<Self, AtmError> {
+    pub(crate) fn in_memory_for_test() -> Result<Self, AtmError> {
         let db = Arc::new(SharedDb::open_in_memory_for_test()?);
         Ok(Self {
             message_store: Arc::new(SqliteMessageStore::new(Arc::clone(&db))),
@@ -587,6 +724,9 @@ impl SqliteStorageBackend {
                 Arc::clone(&db),
             )),
             peer_config_store: Arc::new(SqlitePeerConfigStore::new(Arc::clone(&db))),
+            template_catalog_store: template_catalog_store(Arc::clone(&db)),
+            message_search_store: search_store(Arc::clone(&db)),
+            async_message_search_store: async_search_store(Arc::clone(&db)),
         })
     }
 
@@ -625,6 +765,27 @@ impl SqliteStorageBackend {
 
     pub fn peer_config_store(&self) -> Arc<dyn PeerConfigStore + Send + Sync> {
         self.peer_config_store.clone()
+    }
+
+    pub fn template_catalog_store(&self) -> Arc<dyn TemplateCatalogStore + Send + Sync> {
+        self.template_catalog_store.clone()
+    }
+
+    pub fn message_search_store(&self) -> Arc<dyn MessageSearchStore + Send + Sync> {
+        self.message_search_store.clone()
+    }
+
+    pub fn async_message_search_store(&self) -> Arc<dyn AsyncMessageSearchStore + Send + Sync> {
+        self.async_message_search_store.clone()
+    }
+
+    /// Rebuilds both external-content FTS projections from canonical durable
+    /// rows. This is the backend half of `atm admin reindex-search`; the CLI
+    /// command is deliberately added with AN.6's public command surface.
+    pub fn reindex_search(&self) -> Result<(), AtmError> {
+        self.message_store.db.with_transaction(|transaction| {
+            search_schema::rebuild(transaction, self.message_store.db.target())
+        })
     }
 
     #[cfg(test)]
@@ -693,10 +854,34 @@ mod tests {
     };
     use atm_storage::schema::{AtmMessageId, MessageEnvelope};
     use atm_storage::types::{AgentName, IsoTimestamp, ModelName, TeamName};
+    use atm_storage::{
+        AtmError, DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome,
+        DecomposedMessageRecord, InstanceTag, MergedVarsJson, MessageSearchQuery, SearchAtom,
+        SearchDeadline, SearchExpression, SearchGroupBy, SearchGroupField, SearchKey, SearchLimit,
+        SearchMetadataMatch, SearchValue, SimpleAggregate, TemplateFirstSeen, TemplateFrontmatter,
+        TemplateMessageAdmission, TemplateOutputFormat, TemplateRegistration,
+        TemplateRegistrationOutcome, TemplateSha, WorkflowAdmission, WorkflowScopeId,
+    };
     use chrono::Utc;
-    use rusqlite::params;
+    use rusqlite::{Connection, OptionalExtension, params};
     use serde_json::Map;
     use std::sync::Arc;
+
+    type OrdinaryMessageColumns = (
+        Option<String>,
+        String,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    );
 
     fn team() -> TeamName {
         "test-team".parse().expect("team")
@@ -734,6 +919,1782 @@ mod tests {
                 extra: Map::new(),
             },
         }
+    }
+
+    fn template_registration(sha_seed: char) -> TemplateRegistration {
+        let content_bytes = b"---\nmetadata:\n  type: task\n---\nhello {{ name }}\n".to_vec();
+        TemplateRegistration {
+            sha: TemplateSha::new(sha_seed.to_string().repeat(64)).expect("template sha"),
+            template_type: Some("task".to_string()),
+            template_name: Some("example".to_string()),
+            content_text: String::from_utf8(content_bytes.clone()).expect("utf8 fixture"),
+            content_bytes,
+            output_format: TemplateOutputFormat::Text,
+            frontmatter: TemplateFrontmatter {
+                metadata: [("kind".to_owned(), serde_json::json!("assignment"))]
+                    .into_iter()
+                    .collect(),
+                ..TemplateFrontmatter::default()
+            },
+            first_seen: TemplateFirstSeen::new(IsoTimestamp::now(), "test-agent")
+                .expect("first seen"),
+        }
+    }
+
+    fn instance_tags(values: &[&str]) -> Vec<InstanceTag> {
+        values
+            .iter()
+            .map(|value| InstanceTag::new(*value).expect("valid instance tag"))
+            .collect()
+    }
+
+    fn workflow_template_registration(sha_seed: char, tags: &[&str]) -> TemplateRegistration {
+        let mut template = template_registration(sha_seed);
+        template.frontmatter.metadata = [
+            ("tags".to_owned(), serde_json::json!(tags)),
+            (
+                "workflow".to_owned(),
+                serde_json::json!({
+                    "scope": { "kind": "sprint", "variable": "sprint" },
+                    "state": "dev-start",
+                    "stage": "development",
+                    "transition": "started",
+                    "iteration_variable": "iteration"
+                }),
+            ),
+        ]
+        .into_iter()
+        .collect();
+        template
+            .into_normalized_workflow_metadata()
+            .expect("valid workflow template")
+    }
+
+    fn workflow_admission(
+        record: &Message,
+        template: TemplateRegistration,
+        instance: &[&str],
+    ) -> DecomposedMessageAdmission {
+        let vars = MergedVarsJson::from_merged_object(
+            [
+                ("sprint".to_owned(), serde_json::json!("an-10")),
+                ("iteration".to_owned(), serde_json::json!(2)),
+            ]
+            .into_iter()
+            .collect(),
+        );
+        let snapshot = atm_storage::WorkflowSnapshot {
+            scope_kind: template
+                .frontmatter
+                .workflow
+                .as_ref()
+                .expect("workflow")
+                .scope_kind
+                .clone(),
+            scope_id: WorkflowScopeId::new("an-10").expect("scope id"),
+            state: template
+                .frontmatter
+                .workflow
+                .as_ref()
+                .expect("workflow")
+                .state
+                .clone(),
+            stage: template
+                .frontmatter
+                .workflow
+                .as_ref()
+                .expect("workflow")
+                .stage
+                .clone(),
+            transition: template
+                .frontmatter
+                .workflow
+                .as_ref()
+                .expect("workflow")
+                .transition
+                .clone(),
+            iteration: Some(atm_storage::WorkflowIteration::new("2").expect("iteration")),
+        };
+        let mut admission = DecomposedMessageAdmission {
+            template: template.clone(),
+            message: DecomposedMessageRecord {
+                key: record.message_key.clone(),
+                template_sha: template.sha.clone(),
+                vars,
+                category: Some("assignment".to_owned()),
+                tags: instance_tags(instance),
+                content_format: Some("markdown".to_owned()),
+                workflow: None,
+            },
+        };
+        let tag_provenance = admission
+            .expected_tag_provenance(&snapshot)
+            .expect("canonical provenance");
+        admission.message.workflow = Some(WorkflowAdmission {
+            snapshot,
+            tag_provenance,
+        });
+        admission
+    }
+
+    #[test]
+    fn bundled_sqlite_exposes_fts5_for_the_template_catalog_gate() {
+        let connection = Connection::open_in_memory().expect("open temporary SQLite database");
+        connection
+            .execute_batch(
+                "CREATE VIRTUAL TABLE template_catalog_fts_gate USING fts5(template_text);",
+            )
+            .expect("atm template catalog requires bundled SQLite FTS5 support");
+    }
+
+    #[test]
+    fn workflow_admission_persists_canonical_snapshot_and_tag_provenance() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let record = message("atm:workflow-snapshot", "rendered body");
+        backend
+            .message_store()
+            .save_message(&record)
+            .expect("seed canonical message");
+        let template = workflow_template_registration('a', &["phase:an", "component:catalog"]);
+        let admission = workflow_admission(&record, template.clone(), &["audience:engineering"]);
+        backend
+            .template_catalog_store()
+            .admit_decomposed_message(admission)
+            .expect("atomic workflow admission");
+
+        let stored = backend
+            .template_catalog_store()
+            .load_decomposed_message(&record.message_key)
+            .expect("load")
+            .expect("decomposed row");
+        let workflow = stored.workflow.expect("workflow");
+        let snapshot = &workflow.snapshot;
+        assert_eq!(snapshot.scope_kind.as_str(), "sprint");
+        assert_eq!(snapshot.scope_id.as_str(), "an-10");
+        assert_eq!(
+            snapshot.iteration.as_ref().expect("iteration").as_str(),
+            "2"
+        );
+        let provenance = &workflow.tag_provenance;
+        assert_eq!(
+            provenance
+                .applied_template_tags
+                .iter()
+                .map(|tag| tag.as_str())
+                .collect::<Vec<_>>(),
+            ["component:catalog", "phase:an"]
+        );
+        assert_eq!(
+            provenance
+                .effective_tags
+                .iter()
+                .map(|tag| tag.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "audience:engineering",
+                "component:catalog",
+                "content-format:markdown",
+                "phase:an",
+                "template-type:task",
+                "workflow-scope-kind:sprint",
+                "workflow-stage:development",
+                "workflow-state:dev-start",
+                "workflow-transition:started",
+            ]
+        );
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                let row: (Option<String>, Option<String>, Option<String>) = connection
+                    .query_row(
+                        "SELECT applied_template_tags_json, effective_tags_json,
+                                (SELECT derived_tags_json FROM decomposed_messages
+                                 WHERE template_sha = ?2)
+                         FROM mail_messages WHERE message_key = ?1",
+                        params![record.message_key.as_str(), template.sha.as_str()],
+                        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+                    )
+                    .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
+                assert_eq!(
+                    row.0.as_deref(),
+                    Some(r#"["component:catalog","phase:an"]"#)
+                );
+                assert!(row.1.is_some());
+                let derived_json =
+                    serde_json::to_string(&provenance.derived_tags).expect("derived tags JSON");
+                assert_eq!(row.2.as_deref(), Some(derived_json.as_str()));
+                Ok(())
+            })
+            .expect("durable workflow projection");
+    }
+
+    #[test]
+    fn workflow_admission_rejects_mismatched_projection_without_mutation() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let record = message("atm:workflow-mismatch", "rendered body");
+        backend
+            .message_store()
+            .save_message(&record)
+            .expect("seed canonical message");
+        let template = workflow_template_registration('b', &["phase:an"]);
+        let mut admission =
+            workflow_admission(&record, template.clone(), &["audience:engineering"]);
+        admission
+            .message
+            .workflow
+            .as_mut()
+            .expect("workflow")
+            .tag_provenance
+            .effective_tags
+            .clear();
+        let error = backend
+            .template_catalog_store()
+            .admit_decomposed_message(admission)
+            .expect_err("mismatch must reject before writer mutation");
+        assert_eq!(error.code().as_str(), "ATM_MESSAGE_VALIDATION_FAILED");
+        assert!(
+            backend
+                .template_catalog_store()
+                .load(&template.sha)
+                .expect("load")
+                .is_none()
+        );
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                let value: Option<String> = connection
+                    .query_row(
+                        "SELECT template_sha FROM mail_messages WHERE message_key = ?1",
+                        params![record.message_key.as_str()],
+                        |row| row.get(0),
+                    )
+                    .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
+                assert!(value.is_none());
+                Ok(())
+            })
+            .expect("canonical row unchanged");
+    }
+
+    #[test]
+    fn workflow_template_revisions_preserve_prior_snapshot_and_provenance() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let first_record = message("atm:workflow-revision-one", "first rendered body");
+        let second_record = message("atm:workflow-revision-two", "second rendered body");
+        backend
+            .message_store()
+            .save_message(&first_record)
+            .expect("seed first message");
+        backend
+            .message_store()
+            .save_message(&second_record)
+            .expect("seed second message");
+        let first_template = workflow_template_registration('c', &["phase:an"]);
+        let second_template = workflow_template_registration('d', &["phase:ao"]);
+        backend
+            .template_catalog_store()
+            .admit_decomposed_message(workflow_admission(
+                &first_record,
+                first_template.clone(),
+                &["audience:engineering"],
+            ))
+            .expect("first workflow admission");
+        backend
+            .template_catalog_store()
+            .admit_decomposed_message(workflow_admission(
+                &second_record,
+                second_template.clone(),
+                &["audience:operations"],
+            ))
+            .expect("second workflow admission");
+
+        let first = backend
+            .template_catalog_store()
+            .load_decomposed_message(&first_record.message_key)
+            .expect("load first")
+            .expect("first decomposition");
+        let second = backend
+            .template_catalog_store()
+            .load_decomposed_message(&second_record.message_key)
+            .expect("load second")
+            .expect("second decomposition");
+        assert_eq!(first.template_sha, first_template.sha);
+        assert_eq!(second.template_sha, second_template.sha);
+        assert_eq!(
+            first
+                .workflow
+                .as_ref()
+                .expect("workflow")
+                .tag_provenance
+                .applied_template_tags
+                .iter()
+                .map(|tag| tag.as_str())
+                .collect::<Vec<_>>(),
+            ["phase:an"]
+        );
+        assert_eq!(
+            second
+                .workflow
+                .as_ref()
+                .expect("workflow")
+                .tag_provenance
+                .applied_template_tags
+                .iter()
+                .map(|tag| tag.as_str())
+                .collect::<Vec<_>>(),
+            ["phase:ao"]
+        );
+    }
+
+    #[test]
+    fn retained_an12_fixture_admits_two_unrelated_workflow_vocabularies() {
+        let corpus: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../docs/plans/phase-an/fixtures/workflow-metadata-evidence.json"
+        ))
+        .expect("retained fixture corpus");
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let families = corpus["families"].as_array().expect("fixture families");
+        let expected_aggregate_counts: std::collections::BTreeMap<
+            String,
+            std::collections::BTreeMap<String, u64>,
+        > = serde_json::from_value(corpus["expected_aggregate_counts"].clone())
+            .expect("expected aggregate counts");
+        let mut seeded = 0_usize;
+
+        for family in families {
+            let name = family["name"].as_str().expect("family name");
+            let scope_kind = family["scope_kind"].as_str().expect("scope kind");
+            let scope_id = family["scope_id"].as_str().expect("scope id");
+            let template_tags = family["template_tags"].clone();
+            let fixture_instance_tags = family["instance_tags"]
+                .as_array()
+                .expect("instance tags")
+                .iter()
+                .map(|tag| tag.as_str().expect("tag"))
+                .collect::<Vec<_>>();
+            for event in family["events"].as_array().expect("events") {
+                let id = event["id"].as_str().expect("event id");
+                let mut record = message(&format!("atm:an12:{id}"), "retained rendered body");
+                record.envelope.timestamp = event["at"]
+                    .as_str()
+                    .expect("timestamp")
+                    .parse()
+                    .expect("timestamp");
+                backend
+                    .message_store()
+                    .save_message(&record)
+                    .expect("seed canonical message");
+
+                let mut template = template_registration(
+                    ["a", "b", "c", "d", "e"][seeded]
+                        .chars()
+                        .next()
+                        .expect("hex seed"),
+                );
+                template.template_type = Some(
+                    family["template_type"]
+                        .as_str()
+                        .expect("template type")
+                        .to_owned(),
+                );
+                template.frontmatter.metadata = [
+                    ("tags".to_owned(), template_tags.clone()),
+                    (
+                        "workflow".to_owned(),
+                        serde_json::json!({
+                            "scope": { "kind": scope_kind, "variable": "scope" },
+                            "state": event["state"],
+                            "stage": event["stage"],
+                            "transition": event["transition"],
+                            "iteration_variable": "iteration"
+                        }),
+                    ),
+                ]
+                .into_iter()
+                .collect();
+                let template = template
+                    .into_normalized_workflow_metadata()
+                    .expect("normalize fixture template");
+                let snapshot = atm_storage::WorkflowSnapshot {
+                    scope_kind: atm_storage::WorkflowScopeKind::new(scope_kind)
+                        .expect("scope kind"),
+                    scope_id: WorkflowScopeId::new(scope_id).expect("scope id"),
+                    state: atm_storage::WorkflowState::new(event["state"].as_str().expect("state"))
+                        .expect("state"),
+                    stage: atm_storage::WorkflowStage::new(event["stage"].as_str().expect("stage"))
+                        .expect("stage"),
+                    transition: atm_storage::WorkflowTransition::new(
+                        event["transition"].as_str().expect("transition"),
+                    )
+                    .expect("transition"),
+                    iteration: event["iteration"]
+                        .as_str()
+                        .map(atm_storage::WorkflowIteration::new)
+                        .transpose()
+                        .expect("iteration"),
+                };
+                let mut admission = DecomposedMessageAdmission {
+                    template: template.clone(),
+                    message: DecomposedMessageRecord {
+                        key: record.message_key.clone(),
+                        template_sha: template.sha.clone(),
+                        vars: MergedVarsJson::from_merged_object(
+                            [
+                                ("scope".to_owned(), serde_json::json!(scope_id)),
+                                ("iteration".to_owned(), event["iteration"].clone()),
+                            ]
+                            .into_iter()
+                            .collect(),
+                        ),
+                        category: Some(name.to_owned()),
+                        tags: instance_tags(&fixture_instance_tags),
+                        content_format: Some(
+                            family["content_format"]
+                                .as_str()
+                                .expect("content format")
+                                .to_owned(),
+                        ),
+                        workflow: None,
+                    },
+                };
+                admission.message.workflow = Some(WorkflowAdmission {
+                    tag_provenance: admission
+                        .expected_tag_provenance(&snapshot)
+                        .expect("canonical provenance"),
+                    snapshot,
+                });
+                backend
+                    .template_catalog_store()
+                    .admit_decomposed_message(admission)
+                    .expect("atomic fixture admission");
+                seeded += 1;
+            }
+        }
+        assert_eq!(seeded, 5, "all retained events admitted");
+        let query = MessageSearchQuery::default();
+        assert_eq!(
+            backend
+                .message_search_store()
+                .search(&query)
+                .expect("generic search")
+                .matches
+                .len(),
+            seeded
+        );
+
+        for (name, field) in [
+            ("scope_kind", SearchGroupField::WorkflowScopeKind),
+            ("state", SearchGroupField::WorkflowState),
+            ("stage", SearchGroupField::WorkflowStage),
+            ("transition", SearchGroupField::WorkflowTransition),
+        ] {
+            let page = backend
+                .message_search_store()
+                .search(&MessageSearchQuery {
+                    aggregate: Some(SimpleAggregate::GroupBy(SearchGroupBy::Field(field))),
+                    ..MessageSearchQuery::default()
+                })
+                .expect("bounded workflow aggregate");
+            let atm_storage::SearchAggregate::Groups { groups, .. } =
+                page.aggregate.expect("aggregate result")
+            else {
+                panic!("expected grouped aggregate");
+            };
+            let actual = groups
+                .into_iter()
+                .map(|group| (group.key, group.count))
+                .collect::<std::collections::BTreeMap<_, _>>();
+            assert_eq!(
+                actual, expected_aggregate_counts[name],
+                "{name} aggregation"
+            );
+        }
+
+        let scope_id_query = MessageSearchQuery {
+            filters: atm_storage::SearchFilters {
+                workflow_scope_id: Some(WorkflowScopeId::new("train-42").expect("scope id")),
+                ..atm_storage::SearchFilters::default()
+            },
+            ..MessageSearchQuery::default()
+        };
+        assert_eq!(
+            backend
+                .message_search_store()
+                .search(&scope_id_query)
+                .expect("scope-id filter")
+                .matches
+                .len(),
+            3,
+            "scope_id remains an exact filter, never an aggregate group key"
+        );
+        let iteration_query = MessageSearchQuery {
+            filters: atm_storage::SearchFilters {
+                workflow_iteration: Some(
+                    atm_storage::WorkflowIteration::new("1").expect("iteration"),
+                ),
+                ..atm_storage::SearchFilters::default()
+            },
+            ..MessageSearchQuery::default()
+        };
+        assert_eq!(
+            backend
+                .message_search_store()
+                .search(&iteration_query)
+                .expect("iteration filter")
+                .matches
+                .len(),
+            2,
+            "iteration remains an exact filter, never an aggregate group key"
+        );
+    }
+
+    #[test]
+    fn external_content_message_search_returns_a_compound_key_and_highlight() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let record = message("atm:search-alpha", "alpha beta gamma");
+        backend
+            .message_store()
+            .save_message(&record)
+            .expect("seed message");
+        let query = MessageSearchQuery {
+            expression: Some(SearchExpression::Atom(
+                SearchAtom::term("beta").expect("atom"),
+            )),
+            ..MessageSearchQuery::default()
+        };
+        let page = backend
+            .message_search_store()
+            .search(&query)
+            .expect("search");
+        assert_eq!(page.matches.len(), 1);
+        assert_eq!(page.matches[0].key.message_key, record.message_key);
+        assert!(
+            page.matches[0]
+                .snippet
+                .as_deref()
+                .is_some_and(|snippet| snippet.contains("\u{1}beta\u{2}")),
+            "typed search results must carry backend FTS context"
+        );
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                let highlight: String = connection
+                    .query_row(
+                        "SELECT highlight(mail_messages_fts, 0, '[', ']')
+                 FROM mail_messages_fts WHERE mail_messages_fts MATCH 'beta'",
+                        [],
+                        |row| row.get(0),
+                    )
+                    .map_err(|error| {
+                        AtmError::mailbox_read(format!("search highlight query failed: {error}"))
+                    })?;
+                assert_eq!(highlight, "alpha [beta] gamma");
+                Ok(())
+            })
+            .expect("external-content highlight");
+    }
+
+    #[test]
+    fn search_reindex_matches_transactional_projection_and_delete_removes_hit() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let record = message("atm:search-rebuild", "needle before rebuild");
+        let store = backend.message_store();
+        store.save_message(&record).expect("seed message");
+        let query = MessageSearchQuery {
+            expression: Some(SearchExpression::Atom(
+                SearchAtom::term("needle").expect("atom"),
+            )),
+            ..MessageSearchQuery::default()
+        };
+        assert_eq!(
+            backend
+                .message_search_store()
+                .search(&query)
+                .expect("before rebuild")
+                .matches
+                .len(),
+            1
+        );
+        backend.reindex_search().expect("rebuild");
+        assert_eq!(
+            backend
+                .message_search_store()
+                .search(&query)
+                .expect("after rebuild")
+                .matches
+                .len(),
+            1
+        );
+        store
+            .delete_message(&record.message_key)
+            .expect("delete message");
+        assert!(
+            backend
+                .message_search_store()
+                .search(&query)
+                .expect("after delete")
+                .matches
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn search_filters_and_template_projection_follow_decomposed_admission() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let record = message("atm:search-decomposed", "plain body must disappear");
+        backend
+            .message_store()
+            .save_message(&record)
+            .expect("seed canonical message");
+        let template = template_registration('c');
+        backend
+            .template_catalog_store()
+            .admit_decomposed_message(DecomposedMessageAdmission {
+                template: template.clone(),
+                message: DecomposedMessageRecord {
+                    key: record.message_key.clone(),
+                    template_sha: template.sha,
+                    vars: MergedVarsJson::from_merged_object(
+                        [("assignee".to_owned(), serde_json::json!("Rand"))]
+                            .into_iter()
+                            .collect(),
+                    ),
+                    category: Some("sprint-fix".to_owned()),
+                    tags: instance_tags(&["phase-an"]),
+                    content_format: Some("markdown".to_owned()),
+                    workflow: None,
+                },
+            })
+            .expect("decompose");
+
+        let store = backend.message_search_store();
+        let by_var = MessageSearchQuery {
+            expression: Some(SearchExpression::Atom(
+                SearchAtom::term("Rand").expect("atom"),
+            )),
+            filters: atm_storage::SearchFilters {
+                vars: vec![(
+                    SearchKey::new("assignee").expect("key"),
+                    SearchValue::new("Rand").expect("value"),
+                )],
+                ..atm_storage::SearchFilters::default()
+            },
+            ..MessageSearchQuery::default()
+        };
+        let page = store.search(&by_var).expect("var search");
+        assert_eq!(page.matches.len(), 1);
+        assert_eq!(page.matches[0].key.message_key, record.message_key);
+        assert_eq!(
+            page.matches[0].match_fields,
+            vec![atm_storage::SearchMatchField::VarValue]
+        );
+
+        let mut by_type_prefix = MessageSearchQuery::default();
+        by_type_prefix.filters.template_metadata = vec![(
+            SearchKey::new("kind").expect("key"),
+            SearchMetadataMatch::prefix("assign").expect("prefix"),
+        )];
+        assert_eq!(
+            store
+                .search(&by_type_prefix)
+                .expect("prefix metadata search")
+                .matches
+                .len(),
+            1
+        );
+
+        let mut by_tag = MessageSearchQuery::default();
+        by_tag.filters.tags = vec!["phase-an".to_owned()];
+        by_tag.filters.template_metadata = vec![(
+            SearchKey::new("kind").expect("key"),
+            atm_storage::SearchMetadataMatch::exact("assignment").expect("value"),
+        )];
+        assert_eq!(
+            store
+                .search(&by_tag)
+                .expect("structured filters")
+                .matches
+                .len(),
+            1
+        );
+
+        let template_content = MessageSearchQuery {
+            expression: Some(SearchExpression::Atom(
+                SearchAtom::term("hello").expect("atom"),
+            )),
+            ..MessageSearchQuery::default()
+        };
+        let page = store
+            .search(&template_content)
+            .expect("template FTS search");
+        assert_eq!(page.matches.len(), 1);
+        assert_eq!(
+            page.matches[0].match_fields,
+            vec![atm_storage::SearchMatchField::TemplateContent]
+        );
+
+        let plain_body = MessageSearchQuery {
+            expression: Some(SearchExpression::Atom(
+                SearchAtom::term("plain").expect("atom"),
+            )),
+            ..MessageSearchQuery::default()
+        };
+        assert!(
+            store
+                .search(&plain_body)
+                .expect("body search")
+                .matches
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn search_type_and_variables_include_derivative_template_revisions() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let first = message("atm:revision-one", "first body");
+        let second = message("atm:revision-two", "second body");
+        backend
+            .message_store()
+            .save_message(&first)
+            .expect("first message");
+        backend
+            .message_store()
+            .save_message(&second)
+            .expect("second message");
+
+        let first_template = template_registration('e');
+        let second_template = template_registration('f');
+        for (record, template) in [(&first, first_template), (&second, second_template)] {
+            backend
+                .template_catalog_store()
+                .admit_decomposed_message(DecomposedMessageAdmission {
+                    template: template.clone(),
+                    message: DecomposedMessageRecord {
+                        key: record.message_key.clone(),
+                        template_sha: template.sha,
+                        vars: MergedVarsJson::from_merged_object(
+                            [("phase".to_owned(), serde_json::json!("an"))]
+                                .into_iter()
+                                .collect(),
+                        ),
+                        category: Some("assignment".to_owned()),
+                        tags: instance_tags(&["phase-an"]),
+                        content_format: Some("markdown".to_owned()),
+                        workflow: None,
+                    },
+                })
+                .expect("decomposed admission");
+        }
+
+        let mut query = MessageSearchQuery::default();
+        query.filters.template_metadata = vec![(
+            SearchKey::new("kind").expect("key"),
+            SearchMetadataMatch::exact("assignment").expect("metadata"),
+        )];
+        query.filters.vars = vec![(
+            SearchKey::new("phase").expect("key"),
+            SearchValue::new("an").expect("value"),
+        )];
+        let page = backend
+            .message_search_store()
+            .search(&query)
+            .expect("cross-revision search");
+        assert_eq!(page.matches.len(), 2);
+        assert_eq!(
+            page.matches
+                .iter()
+                .map(|hit| hit.template_type.as_deref())
+                .collect::<Vec<_>>(),
+            vec![Some("task"), Some("task")]
+        );
+    }
+
+    #[test]
+    fn search_cursor_is_bound_to_its_typed_query() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let timestamp: IsoTimestamp = "2026-08-12T00:00:00Z".parse().expect("timestamp");
+        for (key, message_id) in [
+            ("atm:cursor-one", Some(AtmMessageId::new())),
+            ("atm:cursor-two", Some(AtmMessageId::new())),
+            ("atm:cursor-three", Some(AtmMessageId::new())),
+        ] {
+            let mut record = message(key, "cursor needle");
+            record.envelope.timestamp = timestamp;
+            record.envelope.message_id = message_id;
+            backend
+                .message_store()
+                .save_message(&record)
+                .expect("seed message");
+        }
+        let mut query = MessageSearchQuery {
+            expression: Some(SearchExpression::Atom(
+                SearchAtom::term("needle").expect("atom"),
+            )),
+            page: atm_storage::SearchPageRequest {
+                limit: SearchLimit::new(1).expect("limit"),
+                cursor: None,
+            },
+            ..MessageSearchQuery::default()
+        };
+        let first = backend
+            .message_search_store()
+            .search(&query)
+            .expect("first page");
+        let cursor = first.next_cursor.expect("next cursor");
+        query.page.cursor = Some(cursor.clone());
+        let continuation = backend
+            .message_search_store()
+            .search(&query)
+            .expect("continuation page");
+        assert_eq!(continuation.matches.len(), 1);
+        assert_ne!(
+            continuation.matches[0].key.message_key,
+            first.matches[0].key.message_key
+        );
+        query.filters.category = Some("different-query".to_owned());
+        query.page.cursor = Some(cursor);
+        assert!(backend.message_search_store().search(&query).is_err());
+    }
+
+    #[test]
+    fn sqlite_search_default_dedup_happens_before_cursor_continuation() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let timestamp: IsoTimestamp = "2026-08-12T00:00:00Z".parse().expect("timestamp");
+        let message_id = AtmMessageId::new();
+        for (key, team_name) in [
+            ("atm:dedup-first", "a-team"),
+            ("atm:dedup-duplicate", "b-team"),
+            ("atm:dedup-third", "c-team"),
+        ] {
+            let mut record = message(key, "dedup needle");
+            record.team = team_name.parse().expect("team");
+            record.agent = "test-agent".parse().expect("agent");
+            record.envelope.from = record.agent.clone();
+            record.envelope.source_team = Some(record.team.clone());
+            record.envelope.timestamp = timestamp;
+            record.envelope.message_id = if key == "atm:dedup-third" {
+                Some(AtmMessageId::new())
+            } else {
+                Some(message_id)
+            };
+            backend
+                .message_store()
+                .save_message(&record)
+                .expect("seed message");
+        }
+        let mut query = MessageSearchQuery {
+            expression: Some(SearchExpression::Atom(
+                SearchAtom::term("needle").expect("atom"),
+            )),
+            page: atm_storage::SearchPageRequest {
+                limit: SearchLimit::new(1).expect("limit"),
+                cursor: None,
+            },
+            ..MessageSearchQuery::default()
+        };
+        let first = backend
+            .message_search_store()
+            .search(&query)
+            .expect("first page");
+        query.page.cursor = first.next_cursor;
+        let second = backend
+            .message_search_store()
+            .search(&query)
+            .expect("second page");
+        assert_eq!(second.matches.len(), 1);
+        assert_eq!(
+            second.matches[0].key.message_key.as_str(),
+            "atm:dedup-third"
+        );
+        assert!(second.next_cursor.is_none());
+    }
+
+    #[test]
+    fn search_projection_mutations_match_a_from_scratch_rebuild() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let first = message("atm:projection-one", "first inline payload");
+        let second = message("atm:projection-two", "second inline payload");
+        store.save_message(&first).expect("insert first");
+        store.save_message(&second).expect("insert second");
+
+        let template = template_registration('d');
+        backend
+            .template_catalog_store()
+            .admit_decomposed_message(DecomposedMessageAdmission {
+                template: template.clone(),
+                message: DecomposedMessageRecord {
+                    key: first.message_key.clone(),
+                    template_sha: template.sha,
+                    vars: MergedVarsJson::from_merged_object(
+                        [("cycle".to_owned(), serde_json::json!(["one", "two"]))]
+                            .into_iter()
+                            .collect(),
+                    ),
+                    category: Some("repair".to_owned()),
+                    tags: instance_tags(&["phase-an", "search"]),
+                    content_format: Some("markdown".to_owned()),
+                    workflow: None,
+                },
+            })
+            .expect("decompose first");
+        store
+            .delete_message(&second.message_key)
+            .expect("delete second");
+
+        let before = backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                crate::search_schema::projection_snapshot(
+                    connection,
+                    backend.shared_db_for_test().target(),
+                )
+            })
+            .expect("transactional snapshot");
+        let template_before = backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                crate::search_schema::template_projection_snapshot(
+                    connection,
+                    backend.shared_db_for_test().target(),
+                )
+            })
+            .expect("transactional template snapshot");
+        backend.reindex_search().expect("rebuild");
+        let after = backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                crate::search_schema::projection_snapshot(
+                    connection,
+                    backend.shared_db_for_test().target(),
+                )
+            })
+            .expect("rebuilt snapshot");
+        let template_after = backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                crate::search_schema::template_projection_snapshot(
+                    connection,
+                    backend.shared_db_for_test().target(),
+                )
+            })
+            .expect("rebuilt template snapshot");
+        assert_eq!(before, after);
+        assert_eq!(template_before, template_after);
+        assert_eq!(template_after.len(), 1);
+        assert_eq!(after.len(), 1);
+        assert_eq!(after[0].4, "");
+        assert_eq!(after[0].7, "one two");
+    }
+
+    #[tokio::test]
+    async fn async_search_uses_the_backend_owned_lane() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let record = message("atm:async-search", "async needle");
+        backend
+            .message_store()
+            .save_message(&record)
+            .expect("seed message");
+        let query = MessageSearchQuery {
+            expression: Some(SearchExpression::Atom(
+                SearchAtom::term("needle").expect("atom"),
+            )),
+            ..MessageSearchQuery::default()
+        };
+        let page = backend
+            .async_message_search_store()
+            .search_async(
+                query,
+                SearchDeadline::new(std::time::Duration::from_secs(1)).expect("deadline"),
+            )
+            .await
+            .expect("async search");
+        assert_eq!(page.matches[0].key.message_key, record.message_key);
+        assert!(SearchDeadline::new(std::time::Duration::ZERO).is_err());
+    }
+
+    #[tokio::test]
+    async fn async_search_reader_rejects_work_that_expired_before_execution() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let error = backend
+            .shared_db_for_test()
+            .submit_expired_search_for_test(MessageSearchQuery::default())
+            .await
+            .expect_err("expired queued request must not execute");
+        assert!(
+            error.to_string().contains("expired before execution"),
+            "the reader lane must reject a request after its absolute deadline"
+        );
+    }
+
+    #[test]
+    fn sqlite_template_catalog_round_trips_bytes_and_admits_a_decomposed_row_atomically() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let message = message("atm:decomposed-template", "inline before decomposition");
+        backend
+            .message_store()
+            .save_message(&message)
+            .expect("seed canonical message");
+        let catalog = backend.template_catalog_store();
+        let mut template = template_registration('a');
+        template.frontmatter.metadata.extend([
+            (
+                "tags".to_owned(),
+                serde_json::json!(["domain:workflow", "audience:engineering"]),
+            ),
+            (
+                "workflow".to_owned(),
+                serde_json::json!({
+                    "scope": { "kind": "release-train", "variable": "train_id" },
+                    "state": "dev-start",
+                    "stage": "implementation",
+                    "transition": "entered",
+                    "iteration_variable": "attempt"
+                }),
+            ),
+        ]);
+
+        assert_eq!(
+            catalog.register(template.clone()).expect("register"),
+            TemplateRegistrationOutcome::Inserted
+        );
+        assert_eq!(
+            catalog
+                .register(template.clone())
+                .expect("idempotent register"),
+            TemplateRegistrationOutcome::AlreadyRegistered
+        );
+        let loaded = catalog
+            .load(&template.sha)
+            .expect("load")
+            .expect("template exists");
+        assert_eq!(loaded.content_bytes, template.content_bytes);
+        assert_eq!(loaded.content_text, template.content_text);
+        assert_eq!(
+            loaded
+                .frontmatter
+                .template_tags
+                .iter()
+                .map(|tag| tag.as_str())
+                .collect::<Vec<_>>(),
+            vec!["audience:engineering", "domain:workflow"]
+        );
+        assert_eq!(
+            loaded
+                .frontmatter
+                .workflow
+                .as_ref()
+                .expect("canonical workflow")
+                .scope_variable
+                .as_str(),
+            "train_id"
+        );
+
+        let vars = MergedVarsJson::from_merged_object(
+            [("name".to_string(), serde_json::json!("Rand"))]
+                .into_iter()
+                .collect(),
+        );
+        let outcome = catalog
+            .admit_decomposed_message(DecomposedMessageAdmission {
+                template: template.clone(),
+                message: DecomposedMessageRecord {
+                    key: message.message_key.clone(),
+                    template_sha: template.sha.clone(),
+                    vars,
+                    category: Some("assignment".to_string()),
+                    tags: instance_tags(&["phase-an"]),
+                    content_format: Some("markdown".to_string()),
+                    workflow: None,
+                },
+            })
+            .expect("atomic admission");
+        assert_eq!(
+            outcome,
+            DecomposedMessageAdmissionOutcome::Inserted {
+                template: TemplateRegistrationOutcome::AlreadyRegistered
+            }
+        );
+        let decomposed = catalog
+            .load_decomposed_message(&message.message_key)
+            .expect("load decomposition")
+            .expect("decomposed row exists");
+        assert_eq!(decomposed.key, message.message_key);
+        assert_eq!(decomposed.template_sha, template.sha);
+        assert_eq!(decomposed.category.as_deref(), Some("assignment"));
+        assert_eq!(decomposed.tags, instance_tags(&["phase-an"]));
+        assert_eq!(decomposed.content_format.as_deref(), Some("markdown"));
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                let row = connection
+                    .query_row(
+                        "SELECT template_sha, vars_json FROM decomposed_messages
+                         WHERE team = ?1 AND agent = ?2",
+                        params![message.team.as_str(), message.agent.as_str()],
+                        |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+                    )
+                    .map_err(|error| {
+                        AtmError::mailbox_read(format!("view query failed: {error}"))
+                    })?;
+                assert_eq!(row.0, template.sha.as_str());
+                assert_eq!(row.1, r#"{"name":"Rand"}"#);
+                let message_text = connection
+                    .query_row(
+                        "SELECT message_text FROM mail_messages WHERE message_key = ?1",
+                        params![message.message_key.as_str()],
+                        |row| row.get::<_, Option<String>>(0),
+                    )
+                    .map_err(|error| {
+                        AtmError::mailbox_read(format!("mail row query failed: {error}"))
+                    })?;
+                assert_eq!(message_text, None);
+                Ok(())
+            })
+            .expect("view exposes decomposed state");
+    }
+
+    #[test]
+    fn an15_differential_probe_preserves_immutable_revision_metadata_and_idempotency() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let catalog = backend.template_catalog_store();
+
+        for case_index in 0..100_u64 {
+            let mut original = template_registration('a');
+            original.sha = TemplateSha::new(format!("{case_index:064x}")).expect("original SHA");
+            original.content_text = format!(
+                "---\nmetadata:\n  revision: original-{case_index}\n---\nhello {{ name }}\n"
+            );
+            original.content_bytes = original.content_text.as_bytes().to_vec();
+            original.frontmatter.metadata.insert(
+                "revision".to_owned(),
+                serde_json::json!(format!("original-{case_index}")),
+            );
+            assert_eq!(
+                catalog
+                    .register(original.clone())
+                    .expect("register original revision"),
+                TemplateRegistrationOutcome::Inserted
+            );
+
+            let mut revision = template_registration('a');
+            revision.sha =
+                TemplateSha::new(format!("{:064x}", case_index + 10_000)).expect("edited SHA");
+            revision.content_text =
+                format!("---\nmetadata:\n  revision: {case_index}\n---\nhello {{ name }}\n");
+            revision.content_bytes = revision.content_text.as_bytes().to_vec();
+            revision
+                .frontmatter
+                .metadata
+                .insert("revision".to_owned(), serde_json::json!(case_index));
+
+            assert_eq!(
+                catalog
+                    .register(revision.clone())
+                    .expect("register immutable revision"),
+                TemplateRegistrationOutcome::Inserted
+            );
+            assert_eq!(
+                catalog
+                    .register(revision.clone())
+                    .expect("idempotent re-admission"),
+                TemplateRegistrationOutcome::AlreadyRegistered
+            );
+            let loaded = catalog
+                .load(&revision.sha)
+                .expect("load revision")
+                .expect("registered revision");
+            assert_eq!(loaded.content_bytes, revision.content_bytes);
+            assert_eq!(
+                loaded.frontmatter.metadata.get("revision"),
+                Some(&serde_json::json!(case_index))
+            );
+            assert_eq!(
+                loaded.frontmatter.metadata.get("kind"),
+                Some(&serde_json::json!("assignment"))
+            );
+            let loaded_original = catalog
+                .load(&original.sha)
+                .expect("load original")
+                .expect("original remains registered");
+            assert_ne!(
+                loaded_original.sha, loaded.sha,
+                "one-byte revision needs a new SHA"
+            );
+            assert_eq!(loaded_original.content_bytes, original.content_bytes);
+            assert_eq!(
+                loaded_original.frontmatter.metadata.get("revision"),
+                Some(&serde_json::json!(format!("original-{case_index}")))
+            );
+        }
+    }
+
+    #[test]
+    fn an15_differential_probe_legacy_rows_survive_reopen_without_reclassification() {
+        let root = tempfile::tempdir().expect("temporary catalog root");
+        let path = root.path().join("catalog.db");
+        let legacy_sha = "e".repeat(64);
+        let first_seen = IsoTimestamp::now().to_string();
+        let connection = Connection::open(&path).expect("open pre-AN.13 catalog fixture");
+        connection
+            .execute_batch(
+                "CREATE TABLE message_templates (
+                    template_sha TEXT NOT NULL PRIMARY KEY,
+                    template_type TEXT NULL,
+                    template_name TEXT NULL,
+                    content_bytes BLOB NOT NULL,
+                    content_text TEXT NOT NULL,
+                    schema_json TEXT NOT NULL DEFAULT '{}',
+                    first_seen_at TEXT NOT NULL,
+                    first_seen_by TEXT NOT NULL
+                 );",
+            )
+            .expect("create pre-AN.13 catalog schema");
+        connection
+            .execute(
+                "INSERT INTO message_templates(
+                    template_sha, content_bytes, content_text, schema_json,
+                    first_seen_at, first_seen_by
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![
+                    legacy_sha,
+                    b"legacy source".as_slice(),
+                    "legacy source",
+                    serde_json::to_string(&TemplateFrontmatter::default())
+                        .expect("serialize legacy frontmatter"),
+                    first_seen,
+                    "historical-agent",
+                ],
+            )
+            .expect("seed legacy catalog row");
+        drop(connection);
+
+        let backend = SqliteStorageBackend::new(&path).expect("migrate catalog schema");
+        let catalog = backend.template_catalog_store();
+        let legacy = catalog
+            .load(&legacy_sha.parse().expect("legacy SHA"))
+            .expect("load legacy row")
+            .expect("legacy row exists");
+        assert_eq!(
+            legacy.output_format, None,
+            "migration must not guess a format"
+        );
+
+        let mut classified = template_registration('f');
+        classified.output_format = TemplateOutputFormat::Json;
+        assert_eq!(
+            catalog
+                .register(classified.clone())
+                .expect("admit classified row"),
+            TemplateRegistrationOutcome::Inserted
+        );
+        assert_eq!(
+            catalog
+                .load(&classified.sha)
+                .expect("load newly admitted row")
+                .expect("classified row exists")
+                .output_format,
+            Some(TemplateOutputFormat::Json)
+        );
+        drop(catalog);
+        drop(backend);
+
+        let reopened = SqliteStorageBackend::new(&path).expect("reopen catalog");
+        let catalog = reopened.template_catalog_store();
+        assert_eq!(
+            catalog
+                .load(&legacy_sha.parse().expect("legacy SHA"))
+                .expect("load legacy after reopen")
+                .expect("legacy row exists")
+                .output_format,
+            None
+        );
+        assert_eq!(
+            catalog
+                .load(&classified.sha)
+                .expect("load classified after reopen")
+                .expect("classified row exists")
+                .output_format,
+            Some(TemplateOutputFormat::Json)
+        );
+    }
+
+    #[test]
+    fn invalid_workflow_metadata_rejects_before_sqlite_catalog_or_message_mutation() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let message = message("atm:invalid-workflow", "canonical body");
+        backend
+            .message_store()
+            .save_message(&message)
+            .expect("seed canonical message");
+        let mut template = template_registration('a');
+        template.frontmatter.metadata.insert(
+            "workflow".to_owned(),
+            serde_json::json!({ "scope": { "kind": "sprint" } }),
+        );
+
+        let catalog = backend.template_catalog_store();
+        let error = catalog
+            .admit_decomposed_message(DecomposedMessageAdmission {
+                template: template.clone(),
+                message: DecomposedMessageRecord {
+                    key: message.message_key.clone(),
+                    template_sha: template.sha.clone(),
+                    vars: MergedVarsJson::default(),
+                    category: None,
+                    tags: vec![],
+                    content_format: None,
+                    workflow: None,
+                },
+            })
+            .expect_err("partial workflow must fail before mutation");
+        assert_eq!(error.code().as_str(), "TEMPLATE_WORKFLOW_INVALID");
+        assert!(catalog.load(&template.sha).expect("load").is_none());
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                let template_sha: Option<String> = connection
+                    .query_row(
+                        "SELECT template_sha FROM mail_messages WHERE message_key = ?1",
+                        params![message.message_key.as_str()],
+                        |row| row.get(0),
+                    )
+                    .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
+                assert!(template_sha.is_none());
+                Ok(())
+            })
+            .expect("canonical row remains unmodified");
+    }
+
+    #[tokio::test]
+    async fn async_template_message_admission_is_atomic_and_idempotent() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let message = message("atm:template-async", "rendered fallback is not persisted");
+        let template = template_registration('b');
+        let admission = TemplateMessageAdmission {
+            record: message.clone(),
+            decomposition: DecomposedMessageAdmission {
+                template: template.clone(),
+                message: DecomposedMessageRecord {
+                    key: message.message_key.clone(),
+                    template_sha: template.sha.clone(),
+                    vars: MergedVarsJson::from_merged_object(
+                        [("name".to_owned(), serde_json::json!("captured"))]
+                            .into_iter()
+                            .collect(),
+                    ),
+                    category: Some("assignment".to_owned()),
+                    tags: instance_tags(&["phase-an"]),
+                    content_format: Some("markdown".to_owned()),
+                    workflow: None,
+                },
+            },
+        };
+        assert!(
+            backend
+                .async_message_store()
+                .admit_template_message_async(admission.clone())
+                .await
+                .expect("first admission")
+                .is_none()
+        );
+        assert!(
+            backend
+                .async_message_store()
+                .admit_template_message_async(admission)
+                .await
+                .expect("idempotent admission")
+                .is_some()
+        );
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                let counts: (i64, i64, Option<String>, Option<String>) = connection
+                    .query_row(
+                        "SELECT (SELECT COUNT(*) FROM message_templates),
+                            (SELECT COUNT(*) FROM decomposed_messages),
+                            template_sha, vars_json
+                     FROM mail_messages WHERE message_key = ?1",
+                        params![message.message_key.as_str()],
+                        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+                    )
+                    .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
+                assert_eq!(counts.0, 1);
+                assert_eq!(counts.1, 1);
+                assert_eq!(counts.2.as_deref(), Some(template.sha.as_str()));
+                assert_eq!(counts.3.as_deref(), Some(r#"{"name":"captured"}"#));
+                Ok(())
+            })
+            .expect("stored decomposed row");
+    }
+
+    #[test]
+    fn ordinary_message_classification_projects_to_normal_message_columns() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let mut message = message("atm:template-plain-fallback", "verified rendered body");
+        message.envelope.summary = Some("ordinary summary beacon".to_owned());
+        message.envelope.extra = Map::from_iter([
+            ("category".to_owned(), serde_json::json!("assignment")),
+            (
+                "tags".to_owned(),
+                serde_json::json!(["phase-an", "fallback"]),
+            ),
+            ("content_format".to_owned(), serde_json::json!("markdown")),
+        ]);
+
+        backend
+            .message_store()
+            .save_message(&message)
+            .expect("ordinary classified message is stored");
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                let row: OrdinaryMessageColumns = connection
+                    .query_row(
+                        "SELECT template_sha, tags_json, category, content_format, message_text,
+                                workflow_scope_kind, workflow_scope_id, workflow_state,
+                                workflow_stage, workflow_transition, workflow_iteration,
+                                applied_template_tags_json, effective_tags_json
+                         FROM mail_messages WHERE message_key = ?1",
+                        params![message.message_key.as_str()],
+                        |row| {
+                            Ok((
+                                row.get(0)?,
+                                row.get(1)?,
+                                row.get(2)?,
+                                row.get(3)?,
+                                row.get(4)?,
+                                row.get(5)?,
+                                row.get(6)?,
+                                row.get(7)?,
+                                row.get(8)?,
+                                row.get(9)?,
+                                row.get(10)?,
+                                row.get(11)?,
+                                row.get(12)?,
+                            ))
+                        },
+                    )
+                    .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
+                assert_eq!(row.0, None, "ordinary message has no template reference");
+                assert_eq!(row.1, r#"["phase-an","fallback"]"#);
+                assert_eq!(row.2.as_deref(), Some("assignment"));
+                assert_eq!(row.3.as_deref(), Some("markdown"));
+                assert_eq!(row.4.as_deref(), Some("verified rendered body"));
+                assert!(
+                    [
+                        row.5.as_ref(),
+                        row.6.as_ref(),
+                        row.7.as_ref(),
+                        row.8.as_ref(),
+                        row.9.as_ref(),
+                        row.10.as_ref(),
+                        row.11.as_ref(),
+                        row.12.as_ref(),
+                    ]
+                    .into_iter()
+                    .all(|value| value.is_none()),
+                    "plain fallback must not invent workflow snapshots or tag projections"
+                );
+                Ok(())
+            })
+            .expect("inspect ordinary classified row");
+
+        for (term, expected_field) in [
+            ("verified", atm_storage::SearchMatchField::BodyText),
+            ("beacon", atm_storage::SearchMatchField::Summary),
+            ("fallback", atm_storage::SearchMatchField::Tag),
+            ("test-agent", atm_storage::SearchMatchField::FromAgent),
+        ] {
+            let query = MessageSearchQuery {
+                expression: Some(SearchExpression::Atom(
+                    SearchAtom::term(term).expect("FTS term"),
+                )),
+                ..MessageSearchQuery::default()
+            };
+            let page = backend
+                .message_search_store()
+                .search(&query)
+                .expect("ordinary row FTS query");
+            assert_eq!(page.matches.len(), 1, "term {term:?} must be indexed");
+            assert_eq!(page.matches[0].match_fields, vec![expected_field]);
+        }
+    }
+
+    #[test]
+    fn failed_decomposed_update_rolls_back_its_new_template_registration() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let message = message("atm:decomposed-rollback", "inline");
+        backend
+            .message_store()
+            .save_message(&message)
+            .expect("seed canonical message");
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                connection
+                    .execute_batch(
+                        "CREATE TRIGGER fail_decomposed_update
+                         BEFORE UPDATE OF template_sha ON mail_messages
+                         BEGIN SELECT RAISE(ABORT, 'intentional decomposed failure'); END;",
+                    )
+                    .map_err(|error| {
+                        AtmError::mailbox_write(format!("install trigger failed: {error}"))
+                    })
+            })
+            .expect("install failure trigger");
+        let catalog = backend.template_catalog_store();
+        let template = template_registration('b');
+        let _error = catalog
+            .admit_decomposed_message(DecomposedMessageAdmission {
+                template: template.clone(),
+                message: DecomposedMessageRecord {
+                    key: message.message_key,
+                    template_sha: template.sha.clone(),
+                    vars: MergedVarsJson::from_merged_object(Default::default()),
+                    category: None,
+                    tags: vec![],
+                    content_format: None,
+                    workflow: None,
+                },
+            })
+            .expect_err("update trigger rejects admission");
+        assert!(catalog.load(&template.sha).expect("load").is_none());
+    }
+
+    #[test]
+    fn shared_inbox_envelope_does_not_gain_template_storage_fields() {
+        let envelope = message("atm:shared-inbox-guard", "inline").envelope;
+        let serialized = serde_json::to_value(envelope).expect("serialize shared envelope");
+        for field in [
+            "template_sha",
+            "vars_json",
+            "category",
+            "content_format",
+            "tags_json",
+        ] {
+            assert!(
+                serialized.get(field).is_none(),
+                "{field} must remain storage-only"
+            );
+        }
+    }
+
+    #[test]
+    fn fresh_and_historical_databases_expose_the_same_decomposed_query_surface() {
+        let fresh_root = tempfile::tempdir().expect("fresh root");
+        let fresh_path = fresh_root.path().join("fresh.db");
+        let _fresh = SqliteStorageBackend::new(&fresh_path).expect("fresh backend");
+
+        let historical_root = tempfile::tempdir().expect("historical root");
+        let historical_path = historical_root.path().join("historical.db");
+        Connection::open(&historical_path)
+            .expect("open historical fixture")
+            .execute_batch(
+                "CREATE TABLE mail_messages (
+                    team TEXT NOT NULL, agent TEXT NOT NULL, message_key TEXT NOT NULL,
+                    envelope_json TEXT NOT NULL, from_agent TEXT NOT NULL,
+                    source_chat_id TEXT NULL, destination_chat_id TEXT NULL,
+                    message_text TEXT NULL, summary TEXT NULL, message_at TEXT NOT NULL,
+                    message_id TEXT NULL, parent_message_id TEXT NULL, thread_mode TEXT NULL,
+                    recorded_at TEXT NULL,
+                    PRIMARY KEY (team, agent, message_key)
+                 );",
+            )
+            .expect("historical nullable-message-text fixture");
+        let historical_record = message("atm:historical-search", "historical backfill needle");
+        let historical_connection =
+            Connection::open(&historical_path).expect("reopen historical fixture");
+        historical_connection
+            .execute(
+                "INSERT INTO mail_messages(
+                    team, agent, message_key, envelope_json, from_agent, message_text,
+                    summary, message_at, message_id
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                params![
+                    historical_record.team.as_str(),
+                    historical_record.agent.as_str(),
+                    historical_record.message_key.as_str(),
+                    serde_json::to_string(&historical_record.envelope).expect("envelope JSON"),
+                    historical_record.envelope.from.as_str(),
+                    historical_record.envelope.text.as_str(),
+                    historical_record.envelope.summary.as_deref(),
+                    historical_record.envelope.timestamp.to_string(),
+                    historical_record
+                        .envelope
+                        .message_id
+                        .as_ref()
+                        .map(ToString::to_string),
+                ],
+            )
+            .expect("seed historical message");
+        drop(historical_connection);
+        let historical = SqliteStorageBackend::new(&historical_path).expect("migrate fixture");
+
+        let historical_query = MessageSearchQuery {
+            expression: Some(SearchExpression::Atom(
+                SearchAtom::term("needle").expect("atom"),
+            )),
+            ..MessageSearchQuery::default()
+        };
+        assert_eq!(
+            historical
+                .message_search_store()
+                .search(&historical_query)
+                .expect("historical backfill search")
+                .matches
+                .len(),
+            1
+        );
+        let historical_projection_before_reindex = historical
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                crate::search_schema::projection_snapshot(
+                    connection,
+                    historical.shared_db_for_test().target(),
+                )
+            })
+            .expect("historical backfill projection");
+        let historical_templates_before_reindex = historical
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                crate::search_schema::template_projection_snapshot(
+                    connection,
+                    historical.shared_db_for_test().target(),
+                )
+            })
+            .expect("historical template backfill projection");
+        historical.reindex_search().expect("historical rebuild");
+        assert_eq!(
+            historical_projection_before_reindex,
+            historical
+                .shared_db_for_test()
+                .with_connection(|connection| {
+                    crate::search_schema::projection_snapshot(
+                        connection,
+                        historical.shared_db_for_test().target(),
+                    )
+                })
+                .expect("historical rebuilt projection")
+        );
+        assert_eq!(
+            historical_templates_before_reindex,
+            historical
+                .shared_db_for_test()
+                .with_connection(|connection| {
+                    crate::search_schema::template_projection_snapshot(
+                        connection,
+                        historical.shared_db_for_test().target(),
+                    )
+                })
+                .expect("historical rebuilt template projection")
+        );
+
+        // Model an AN.8 decomposed row after the additive migration: it has
+        // the historic decomposition values, but none of AN.9's columns.
+        // This comes after the search-reindex equivalence proof because it is
+        // intentionally a post-AN.8 decomposition rather than a legacy plain
+        // message.
+        let historical_template = template_registration('a');
+        historical
+            .template_catalog_store()
+            .register(historical_template.clone())
+            .expect("register historical template");
+        historical
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                connection
+                    .execute(
+                        "UPDATE mail_messages
+                         SET template_sha = ?1, vars_json = ?2, category = ?3,
+                             tags_json = ?4, content_format = ?5, message_text = NULL
+                         WHERE message_key = ?6",
+                        params![
+                            historical_template.sha.as_str(),
+                            "{}",
+                            "assignment",
+                            "[\"phase-an\"]",
+                            "markdown",
+                            historical_record.message_key.as_str(),
+                        ],
+                    )
+                    .map_err(|error| AtmError::mailbox_write(error.to_string()))?;
+                Ok(())
+            })
+            .expect("seed historical decomposed row");
+
+        let surface = |path: &std::path::Path| {
+            let connection = Connection::open(path).expect("inspect schema");
+            let columns = connection
+                .prepare("PRAGMA table_info(decomposed_messages)")
+                .expect("prepare view info")
+                .query_map([], |row| row.get::<_, String>(1))
+                .expect("query view info")
+                .collect::<Result<Vec<_>, _>>()
+                .expect("decode view columns");
+            let message_text_not_null = connection
+                .query_row(
+                    "SELECT \"notnull\" FROM pragma_table_info('mail_messages') WHERE name = 'message_text'",
+                    [],
+                    |row| row.get::<_, i64>(0),
+                )
+                .expect("message_text metadata");
+            let workflow_columns_are_null = connection
+                .query_row(
+                    "SELECT workflow_scope_kind IS NULL
+                          AND workflow_scope_id IS NULL
+                          AND workflow_state IS NULL
+                          AND workflow_stage IS NULL
+                          AND workflow_transition IS NULL
+                          AND workflow_iteration IS NULL
+                          AND applied_template_tags_json IS NULL
+                          AND effective_tags_json IS NULL
+                       FROM mail_messages WHERE template_sha IS NOT NULL LIMIT 1",
+                    [],
+                    |row| row.get::<_, i64>(0),
+                )
+                .optional()
+                .expect("inspect workflow projection values");
+            (columns, message_text_not_null, workflow_columns_are_null)
+        };
+        let expected_columns = vec![
+            "team",
+            "agent",
+            "from_agent",
+            "message_at",
+            "message_id",
+            "template_sha",
+            "template_type",
+            "vars_json",
+            "category",
+            "tags_json",
+            "instance_tags_json",
+            "summary",
+            "workflow_scope_kind",
+            "workflow_scope_id",
+            "workflow_state",
+            "workflow_stage",
+            "workflow_transition",
+            "workflow_iteration",
+            "applied_template_tags_json",
+            "derived_tags_json",
+            "effective_tags_json",
+            "read",
+            "acknowledged_at",
+            "pending_ack_at",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+        let fresh_surface = surface(&fresh_path);
+        let historical_surface = surface(&historical_path);
+        assert_eq!(fresh_surface.0, historical_surface.0);
+        assert_eq!(fresh_surface.0, expected_columns);
+        assert_eq!(fresh_surface.1, 0, "fresh DDL keeps message_text nullable");
+        assert_eq!(
+            historical_surface.2,
+            Some(1),
+            "historical decomposed rows retain NULL workflow/projection fields"
+        );
     }
 
     #[test]

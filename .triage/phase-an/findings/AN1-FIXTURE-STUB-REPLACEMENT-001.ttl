@@ -1,0 +1,56 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# This historical follow-up record prevented the temporary test seam from
+# being forgotten. The public upstream APIs are now released and the exact-pin
+# replacement is implemented on the recorded production adapter boundary.
+
+<urn:atm:triage:finding/AN1-FIXTURE-STUB-REPLACEMENT-001>
+  a triage:Finding ;
+  triage:findingId "AN1-FIXTURE-STUB-REPLACEMENT-001" ;
+  triage:title "Replace AN.1 fixture-only template adapter with published sc-compose/sc-sha integration" ;
+  triage:description "crates/atm-template-sc-compose currently reserves ATM's production adapter boundary with fixture-registered parser/hash/render results. It intentionally does not implement hashing, UTF-8/line-ending normalization, frontmatter parsing, directive inspection, path resolution, or rendering. Replace it only after the public exact-pinnable sc-compose APIs provide strict UTF-8 plus CRLF/lone-CR-to-LF normalized per-file identity, classified directive inspection, and contained rendering, and sc-sha provides the required generic per-file/recursive hash support. ATM retains raw source bytes and owns the template graph manifest, storage, and resolver policy." ;
+  triage:phaseId "phase-AN" ;
+  triage:triageMode "planned_followup" ;
+  triage:category "upstream-dependency" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:closedBy "quality-mgr" ;
+  triage:foundIn triage:AN.1 ;
+  triage:foundAt "2026-08-11T02:53:58-07:00"^^xsd:dateTime ;
+  triage:triagedAt "2026-08-11T02:53:58-07:00"^^xsd:dateTime ;
+  triage:reasonForDeferral "public_upstream_api_prerequisite" ;
+  triage:futureValidationMethod "completed_exact_pinned_upstream_adapter_swap" ;
+  triage:resolutionNotes "Governance correction 2026-08-14 by quality-mgr: arch-ctm self-closed this record as part of the fix commit (triage:closedBy arch-ctm), which violates the triaging-findings skill's closure rule that only quality-mgr may close a finding. Reopened pending independent verification. Independent review of fix/an-template-inspection-real-upstream @ 7bf536ad7de3b9b89473a1c2d7d61ecf20f974a7 confirms the CODE FIX ITSELF IS SUBSTANTIVELY REAL: the fixture map and from_fixture_inspections() are fully removed from ScComposeTemplateComposer; both inspect() and render_without_includes() delegate to real sc_composer::parse_template_document / inspect_template_directives and real sc_sha::calculate_hash; all upstream failure paths (parse, directive-inspect, hash, non-UTF8) fail closed via inspection_error()/AtmError mapping, no silent pass observed; non-file TemplateSource still fails closed with the pre-existing config error (unchanged); the sole production composition root (atm-daemon-bootstrap) now exercises the real adapter end-to-end (real temp file, real inspect()/render_without_includes(), asserts a genuine 64-char SHA); no fixture/stub inspection path remains reachable from any production code path (the only other fixture composer, atm-http-runtime's test-local FixtureTemplateComposer, is unrelated and non-production). HOWEVER the branch is NOT CI-green: PR #883's 'just lint' boundaries check fails on all 3 platforms. Root cause: the fix edited boundaries/atm-template-sc-compose/sc-composer.toml's [dependencies].allowed_dependencies (documentation-only per lint_boundaries.py's own docstring) instead of the actually-enforced allowlist at .just/lint-config.toml line 164-165 ([[boundaries.manifest_dependency_allowlists]] owner_manifest_path = crates/atm-template-sc-compose/Cargo.toml), which still reads allowed_dependencies = [atm-core, atm-storage, sc-composer, serde_json] and was never touched. Both new dependencies (sc-sha, a regular dependency; base64, a new dev-dependency added for the golden-vector test) are missing from that real allowlist. Confirmed locally via `python3 .just/lint_boundaries.py` in the worktree: 'Cargo dependency base64 is not allowlisted' and 'Cargo dependency sc-sha is not allowlisted'. Remediation: add sc-sha and base64 to allowed_dependencies at .just/lint-config.toml:165, then re-run CI. Reopened rather than closed because a real, reproducible, blocking CI failure remains; will re-close (closedBy quality-mgr) once the lint-config fix lands and PR #883 is fully CI-green with no other unresolved findings." ;
+  triage:resolutionNotes "Update 2026-08-14 by quality-mgr, critical design-gap review (AN1-INSPECTION-CRITICAL-REVIEW-1): the .just/lint-config.toml:165 lint remediation described above has landed at head 75ebeb273b126656e962092aa1353c97fa189c72 (allowed_dependencies now [\"atm-core\", \"atm-storage\", \"base64\", \"sc-composer\", \"sc-sha\", \"serde_json\"], matching Cargo.toml exactly). PR #883 independently reconfirmed fully CI-green (9/9 checks) via `gh pr checks 883`, checked twice by quality-mgr directly, not taken from arch-ctm's self-report. Dispatched req-qa/arch-qa/ruthless-boundary-qa/rust-qa-agent/rust-best-practices-agent against the true PR diff (9 files, base integrate/phase-an): arch-qa and rust-qa-agent passed clean (0 findings); ruthless-boundary-qa and rust-best-practices-agent surfaced 3 new Important findings, now tracked as their own canonical records (RBQA-F001-AN1, RBP-F001-AN1, RBP-F002-AN1) on integrate/phase-an. This record (AN1-FIXTURE-STUB-REPLACEMENT-001) remains open, not because the lint-config CI blocker persists (it is resolved), but pending closure of those 3 findings, per the standing merge policy of 100% quality-mgr findings fixed before merge. Will re-close (closedBy quality-mgr) once RBQA-F001-AN1/RBP-F001-AN1/RBP-F002-AN1 are fixed and re-verified." ;
+  triage:resolutionNotes "Closed 2026-08-14 by quality-mgr, AN1-INSPECTION-CRITICAL-REVIEW-1 verdict: PASS. All 3 downstream findings (RBQA-F001-AN1, RBP-F001-AN1, RBP-F002-AN1) independently verified fixed at c1e672ade16697f23c2e2da35349f7911c0f9182 on fix/an-template-inspection-real-upstream, code read directly (not self-report). PR #883 independently reconfirmed 9/9 CI green and MERGEABLE via `gh pr view 883`. No fixture/stub inspection path remains reachable from production; all 3 error-taxonomy/lint-parity findings genuinely and mechanically remediated." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN1-FIXTURE-STUB-REPLACEMENT-001/1> ;
+  triage:triageRecordVersion "5" .
+
+<urn:atm:triage:occurrence/AN1-FIXTURE-STUB-REPLACEMENT-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-template-sc-compose/src/lib.rs" ;
+  triage:line 1 ;
+  triage:snippet "ScComposeTemplateComposer delegates production identity and inspection to exact-pinned sc-sha/sc-composer" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "fix/an-template-inspection-real-upstream" ;
+  triage:headSha "c1e672ade16697f23c2e2da35349f7911c0f9182" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-an-template-inspection-real-upstream/75ebeb273b126656e962092aa1353c97fa189c72> .
+
+<urn:atm:triage:worktree/feature-pan-s1-contract-gates/e6b1f94bf43abd11329affe2ec8e3091cf3f3757>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pan-s1-contract-gates" ;
+  triage:branch "feature/pan-s1-contract-gates" ;
+  triage:headSha "e6b1f94bf43abd11329affe2ec8e3091cf3f3757" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/fix-an-template-inspection-real-upstream/7bf536ad7de3b9b89473a1c2d7d61ecf20f974a7>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-an-template-inspection-real-upstream" ;
+  triage:branch "fix/an-template-inspection-real-upstream" ;
+  triage:headSha "7bf536ad7de3b9b89473a1c2d7d61ecf20f974a7" ;
+  triage:orderIndex 2 .

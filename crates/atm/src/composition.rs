@@ -5,7 +5,9 @@
 
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Once};
+use std::sync::Arc;
+#[cfg(not(test))]
+use std::sync::Once;
 
 use async_trait::async_trait;
 use atm_core::ack::{AckOutcome, AckRequest};
@@ -19,6 +21,7 @@ use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
 use atm_core::read::{PeekQuery, ReadOutcome, ReadQuery};
+use atm_core::search::{SearchRequest, SearchResponse};
 use atm_core::send::{SendOutcome, SendRequest};
 #[cfg(not(test))]
 use atm_daemon_bootstrap::install_sqlite_retained_runtime_factory;
@@ -28,12 +31,14 @@ use atm_daemon_client::{resolve_daemon_local_ipc_endpoint, unexpected_response};
 use atm_http_runtime::SAME_HOST_REQUEST_DEADLINE;
 #[cfg(test)]
 use atm_runtime_test_support::{
-    SQLITE_RUNTIME_PATH_ENV,
-    install_sqlite_retained_runtime_factory as install_test_runtime_factory, open_sqlite_boundary,
+    install_isolated_sqlite_runtime,
+    install_sqlite_retained_runtime_factory as install_test_runtime_factory,
+    open_isolated_sqlite_boundary,
 };
 
 use crate::observability::CliObservability;
 
+#[cfg(not(test))]
 static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
 
 #[cfg(not(test))]
@@ -45,9 +50,18 @@ fn install_retained_runtime_factory() {
 
 #[cfg(test)]
 fn install_retained_runtime_factory() {
-    INSTALL_RETAINED_RUNTIME_FACTORY.call_once(|| {
-        install_test_runtime_factory();
-    });
+    // Tests that exercise direct-local doctor composition install the
+    // production bootstrap factory in this process. Reinstall the isolated
+    // fixture factory for every CLI composition so parallel test ordering can
+    // never redirect a fixture to the live host mailbox.
+    install_test_runtime_factory();
+}
+
+/// Installs the local read-only runtime composition used by immutable catalog
+/// introspection.  It does not start or route through the frozen daemon.
+pub(crate) fn install_local_runtime_for_read_only_command() -> Result<(), AtmError> {
+    install_retained_runtime_factory();
+    Ok(())
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -357,6 +371,16 @@ impl<'a> CliComposition<'a> {
         }
     }
 
+    pub(crate) async fn search(&self, request: SearchRequest) -> Result<SearchResponse, AtmError> {
+        match self
+            .execute_request(RequestEnvelope::Search(Box::new(request)))
+            .await?
+        {
+            ResponseEnvelope::Search(response) => Ok(*response),
+            other => Err(unexpected_response("search", other)),
+        }
+    }
+
     pub(crate) async fn clear(&self, query: ClearQuery) -> Result<ClearOutcome, AtmError> {
         match self.execute_request(RequestEnvelope::Clear(query)).await? {
             ResponseEnvelope::Clear(outcome) => {
@@ -488,8 +512,9 @@ mod tests {
     use tracing_subscriber::fmt::MakeWriter;
 
     use super::{
-        CliComposition, HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, SQLITE_RUNTIME_PATH_ENV,
-        open_sqlite_boundary, resolve_command_runtime_context,
+        CliComposition, HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard,
+        install_isolated_sqlite_runtime, open_isolated_sqlite_boundary,
+        resolve_command_runtime_context,
     };
     use crate::observability::CliObservability;
 
@@ -558,6 +583,7 @@ mod tests {
 
     struct LoopbackFixture {
         _env_guard: EnvGuard,
+        _runtime_guard: atm_runtime_test_support::SqliteRuntimeGuard,
         _tempdir: TempDir,
         home_dir: std::path::PathBuf,
         current_dir: std::path::PathBuf,
@@ -568,22 +594,17 @@ mod tests {
             super::install_retained_runtime_factory();
             let tempdir = tempfile::tempdir().expect("tempdir");
             let home_dir = tempdir.path().to_path_buf();
-            let sqlite_db_path = home_dir.join("runtime").join("mail.sqlite3");
             let current_dir = tempdir.path().join("cwd");
             fs::create_dir_all(&current_dir).expect("cwd");
             fs::write(current_dir.join(".atm.toml"), "[atm]\n").expect("fixture atm config");
-            let env_guard = EnvGuard::set_many([
-                (
-                    "ATM_HOME",
-                    Some(home_dir.to_str().expect("utf-8 tempdir path")),
-                ),
-                (
-                    SQLITE_RUNTIME_PATH_ENV,
-                    Some(sqlite_db_path.to_str().expect("utf-8 sqlite db path")),
-                ),
-            ]);
+            let env_guard = EnvGuard::set_many([(
+                "ATM_HOME",
+                Some(home_dir.to_str().expect("utf-8 tempdir path")),
+            )]);
+            let runtime_guard = install_isolated_sqlite_runtime(&home_dir);
             let fixture = Self {
                 _env_guard: env_guard,
+                _runtime_guard: runtime_guard,
                 _tempdir: tempdir,
                 home_dir,
                 current_dir,
@@ -600,10 +621,6 @@ mod tests {
             self.team_dir()
                 .join("inboxes")
                 .join(format!("{agent}.json"))
-        }
-
-        fn sqlite_db_path(&self) -> std::path::PathBuf {
-            self.home_dir.join("runtime").join("mail.sqlite3")
         }
 
         fn write_team_config(&self, recipient: &str) {
@@ -628,7 +645,7 @@ mod tests {
         }
 
         fn seed_sqlite_roster(&self, recipient: &str) {
-            let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
+            let assembly = open_isolated_sqlite_boundary(&self.home_dir).expect("sqlite db");
             let roster_store = assembly.roster_store_arc();
             let team = TEST_TEAM.parse::<TeamName>().expect("team");
             let members = [TEST_SENDER, recipient, TEST_LEAD]
@@ -669,8 +686,8 @@ mod tests {
         }
 
         fn inbox_contents(&self, agent: &str) -> Vec<InboxMessage> {
-            if self.sqlite_db_path().exists() {
-                let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
+            if self.home_dir.join("runtime").join("mail.sqlite3").exists() {
+                let assembly = open_isolated_sqlite_boundary(&self.home_dir).expect("sqlite db");
                 let mail_store = assembly.mail_store_arc();
                 let team = TEST_TEAM.parse::<TeamName>().expect("team");
                 let agent_name = agent.parse::<AgentName>().expect("agent");
@@ -718,7 +735,7 @@ mod tests {
         }
 
         fn seed_sqlite_mailbox(&self, agent: &str, messages: &[InboxMessage]) {
-            let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
+            let assembly = open_isolated_sqlite_boundary(&self.home_dir).expect("sqlite db");
             let mail_store = assembly.mail_store_arc();
             let team = TEST_TEAM.parse::<TeamName>().expect("team");
             let agent_name = agent.parse::<AgentName>().expect("agent");

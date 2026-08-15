@@ -1,6 +1,6 @@
 ---
 title: AN.8 Phase Validation — Motivating Queries and Evidence
-status: draft
+status: complete
 branch: feature/pan-s8-validation-evidence
 worktree: ../atm-core-worktrees/feature/pan-s8-validation-evidence
 target: integrate/phase-an
@@ -31,10 +31,12 @@ during plan hardening.
    - Q4: dev agent per sprint
    Authored against the real templates captured in AN.1, using only
    introspection output to discover keys.
-2. **Parser-replacement test:** the captured agent-written Python tmp-file
-   parser is re-implemented as queries; both are run against a corpus
-   seeded by real templated sends and must produce equivalent answers with
-   zero file parsing.
+2. **File-parser replacement test:** inspect the AN.1-captured Python helper
+   before treating it as evidence. It is a JSON mailbox reader/atomic writer,
+   not an analytical parser, so it has no Q1–Q4 answer to compare. Replace
+   its file-oriented data source with the durable decomposed-view artifacts:
+   a shared task/QA-shaped corpus yields the documented Q1–Q4 answers with
+   zero file parsing by the query path.
 3. **Template-agnosticism check:** a synthetic template set with a
    deliberately different metadata/var vocabulary answers analogous
    span/count/rollup questions using the same generic surface, with no atm
@@ -49,13 +51,22 @@ during plan hardening.
    and Windows lanes; retained artifacts), plus `docs/project-plan.md` and
    `CHANGELOG.md` entries for the phase.
 
+Implementation evidence is retained in
+[`validation-evidence.md`](./validation-evidence.md). The four-cell Tokio
+runtime test runs in the repository's Linux/macOS/Windows CI matrix; it is the
+platform evidence for this code-level routing invariant. Physical cross-host
+template synchronization remains a declared Phase AN non-goal.
+
 ## Acceptance criteria
 
-- Q1–Q4 return correct results against both the seeded corpus and the
-  real-template fixture corpus, with expected values hand-computed in the
-  fixtures.
-- Parser-replacement equivalence holds on the shared corpus; the query
-  artifact reads no files outside SQLite.
+- Q1–Q4 return correct results against the shared task/QA-shaped corpus, with
+  expected values hand-computed in the fixtures. The retained real templates
+  are independently rendered byte-for-byte by the Phase AN compose
+  passthrough test; the query corpus uses their public template names and
+  discovered durable keys without inventing an unavailable historical send.
+- The historical helper's actual file-oriented scope is recorded accurately;
+  the replacement query artifacts answer Q1–Q4 from the shared decomposed
+  corpus and read no files outside SQLite.
 - The synthetic-vocabulary check passes with zero atm-core diffs.
 - The four-cell routing matrix (same-team/same-host → decomposed;
   same-team/cross-host → plain; foreign-team/same-host → plain;

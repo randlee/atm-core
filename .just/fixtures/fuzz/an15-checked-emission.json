@@ -1,0 +1,18 @@
+{
+  "worktree_path": "/Users/randlee/Documents/github/atm-core-worktrees/feature/an15-fuzz-v2-realism-campaign",
+  "target": "atm-template-checked-emission",
+  "baseline_ref": "9c3d9e2a40535833bdf8c1a46a6f7eb1de88b44f",
+  "seed": 20260814,
+  "max_workers": 4,
+  "cases_per_worker": 100,
+  "per_worker_timeout_s": 120,
+  "promote_regressions": true,
+  "notes": "AN.15 fixed four-worker checked-emission product campaign; the execution runner accepts no caller-supplied commands.",
+  "campaign_id": "an15-checked-emission-v2-20260815",
+  "target_seams": [
+    {"seam_id": "atm_http_runtime::template_admission::captured_input", "minimum_invocations": 100, "accepted_proof": "coverage"},
+    {"seam_id": "atm_template_sc_compose::checked_render", "minimum_invocations": 100, "accepted_proof": "coverage"},
+    {"seam_id": "atm_template_sc_compose::confined_include", "minimum_invocations": 100, "accepted_proof": "coverage"},
+    {"seam_id": "atm_core::render_on_read::persisted_snapshot", "minimum_invocations": 100, "accepted_proof": "coverage"}
+  ]
+}
