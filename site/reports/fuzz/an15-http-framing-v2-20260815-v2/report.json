@@ -8,7 +8,7 @@
     "per_worker_timeout_s": 120,
     "promote_regressions": true,
     "seed": 20260815,
-    "source_revision": "9681de8a5fca252c2514b99db0b85610ff69130f",
+    "source_revision": "cc0ee308e0a02a09aa41c3c6e635101b5011d418",
     "target": "local-http-framing",
     "target_seams": [
       {
