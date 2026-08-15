@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Adversarial fuzz session: an15-http-framing-v2-20260815</title>
+  <style type="text/css">
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; padding: 24px; color: #1f2937; background: #ffffff; line-height: 1.5; }
+    @media (prefers-color-scheme: dark) {
+      body { background: #0b1220; color: #e5e7eb; }
+      .section { background: #111827; border-color: #1f2937; }
+      table { background: #0f172a; }
+      th, td { border-color: #1f2937 !important; }
+      .icon-button { background: #1f2937; color: #cbd5e1; border-color: #374151; }
+      code { background: #1f2937; color: #e5e7eb; }
+      a { color: #93c5fd; }
+    }
+    :root[data-theme="dark"] body { background: #0b1220; color: #e5e7eb; }
+    :root[data-theme="dark"] .section { background: #111827; border-color: #1f2937; }
+    :root[data-theme="light"] body { background: #ffffff; color: #1f2937; }
+    header { border-bottom: 1px solid #e5e7eb; padding-bottom: 16px; margin-bottom: 20px; }
+    h1 { margin: 0 0 6px 0; font-size: 1.6rem; }
+    .subtitle { margin: 0 0 4px 0; color: #6b7280; }
+    .generated-at, .source-label { margin: 2px 0; font-size: 0.85rem; color: #6b7280; }
+    .status { font-weight: 700; padding: 4px 10px; border-radius: 999px; display: inline-block; font-size: 0.85em; border: 1px solid transparent; }
+    .status-pass { color: #065f46; background: #d1fae5; border-color: #6ee7b7; }
+    .status-drift { color: #92400e; background: #fef3c7; border-color: #f59e0b; }
+    .status-error { color: #991b1b; background: #fee2e2; border-color: #ef4444; }
+    .status-info { color: #1e40af; background: #dbeafe; border-color: #3b82f6; }
+    .top-status { margin-top: 8px; }
+    nav.toc { margin: 16px 0; padding: 12px 16px; border: 1px solid #e5e7eb; border-radius: 10px; }
+    nav.toc ul { margin: 8px 0 0 0; padding-left: 20px; }
+    .summary-block { border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; margin: 16px 0; }
+    .section { border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; margin-top: 16px; }
+    .section-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+    .section-head h2 { margin: 0; font-size: 1.15rem; display: flex; align-items: center; gap: 10px; }
+    .section-actions { display: flex; gap: 8px; flex-shrink: 0; }
+    .icon-button { width: 30px; height: 30px; border-radius: 999px; border: 1px solid #cbd5e1; background: #ffffff; color: #334155; font-size: 14px; cursor: pointer; }
+    .icon-button:hover { filter: brightness(0.95); }
+    .section-summary { color: #374151; font-style: italic; }
+    .fragment-link { font-size: 0.9rem; }
+    .fragment-source { color: #6b7280; }
+    table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+    th, td { border: 1px solid #e5e7eb; padding: 6px 10px; text-align: left; vertical-align: top; font-size: 0.9rem; }
+    thead th { background: #f3f4f6; }
+    :root[data-theme="dark"] thead th { background: #1f2937; }
+    @media (prefers-color-scheme: dark) { thead th { background: #1f2937; } }
+    code { background: #f3f4f6; padding: 1px 4px; border-radius: 4px; font-size: 0.9em; white-space: pre-wrap; word-break: break-word; }
+    .finding { border-top: 1px dashed #e5e7eb; padding-top: 10px; margin-top: 10px; }
+    dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 8px 0; }
+    dt { font-weight: 600; }
+    dd { margin: 0; }
+    .scratchpad { background: #f9fafb; border-left: 4px solid #3b82f6; padding: 12px; margin-top: 12px; border-radius: 4px; }
+    :root[data-theme="dark"] .scratchpad { background: #0f172a; }
+    .recommendations ul { padding-left: 20px; }
+    .metadata-table th { width: 260px; }
+    footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #e5e7eb; font-size: 0.85rem; color: #6b7280; }
+    table { display: block; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Adversarial fuzz session: an15-http-framing-v2-20260815</h1>
+    <p class="subtitle">Validated adversarial-fuzz v2 evidence</p>
+    <p class="generated-at">Generated: 2026-08-15T04:00:00.951411Z</p>
+    <p class="source-label">Source: adversarial-fuzz v2 contract</p>
+    <div class="top-status"><span class="status status-pass">PASS</span></div>
+  </header>
+
+  <section class="summary-block">
+    <div class="section-head">
+      <h2>Summary</h2>
+      <div class="section-actions" role="group" aria-label="Copy summary data">
+        <button class="icon-button" type="button" title="Copy JSON" data-copy-text="{&quot;session_id&quot;: &quot;an15-http-framing-v2-20260815&quot;, &quot;status&quot;: &quot;PASS&quot;, &quot;workers&quot;: 4}">{}</button>
+        <button class="icon-button" type="button" title="Copy Context" data-copy-text="an15-http-framing-v2-20260815: PASS; 4 worker panels.">⎘</button>
+      </div>
+    </div>
+    <p>Validated v2 adversarial-fuzz evidence rendered through the sc-compose report contract. Session <code>an15-http-framing-v2-20260815</code> contains one bounded panel per worker. This is executed product-seam evidence; each retained command log proves the named seam's bounded corpus.</p><p>Candidate outcome ledger: zero confirmed bugs is explicit evidence, not an implicit pass.</p><table><thead><tr><th scope="col">Candidate outcome</th><th scope="col">Count</th></tr></thead><tbody><tr><th scope="row">confirmed bug</th><td>0</td></tr><tr><th scope="row">non repro</th><td>0</td></tr><tr><th scope="row">benign</th><td>0</td></tr><tr><th scope="row">inconclusive</th><td>0</td></tr></tbody></table>
+    <table class="session-summary">
+      <thead><tr><th scope="col">Fuzz run description</th><th scope="col">Iterations</th><th scope="col">Pass</th><th scope="col">Result</th></tr></thead>
+      <tbody>
+        <tr>
+          <th scope="row">local-http-framing shape-probe product seam</th>
+          <td>100</td>
+          <td>100/100</td>
+          <td><span class="status status-pass">PASS</span></td>
+        </tr>
+        <tr>
+          <th scope="row">local-http-framing template-probe product seam</th>
+          <td>100</td>
+          <td>100/100</td>
+          <td><span class="status status-pass">PASS</span></td>
+        </tr>
+        <tr>
+          <th scope="row">local-http-framing boundary-probe product seam</th>
+          <td>100</td>
+          <td>100/100</td>
+          <td><span class="status status-pass">PASS</span></td>
+        </tr>
+        <tr>
+          <th scope="row">local-http-framing differential-probe product seam</th>
+          <td>100</td>
+          <td>100/100</td>
+          <td><span class="status status-pass">PASS</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <nav class="toc">
+    <strong>Worker Sections</strong>
+    <ul>
+      <li><a href="#shape-probe">shape-probe</a> <span class="status status-pass">PASS</span></li>
+      <li><a href="#template-probe">template-probe</a> <span class="status status-pass">PASS</span></li>
+      <li><a href="#boundary-probe">boundary-probe</a> <span class="status status-pass">PASS</span></li>
+      <li><a href="#differential-probe">differential-probe</a> <span class="status status-pass">PASS</span></li>
+    </ul>
+  </nav>
+
+<section xmlns="http://www.w3.org/1999/xhtml" class="fuzz-agent fuzz-agent-pass">
+  <header class="agent-header fuzz-agent-header">
+    <div>
+      <p class="eyebrow">Adversarial fuzz worker</p>
+      <h2>shape-probe</h2>
+      <p class="agent-meta">Session an15-http-framing-v2-20260815 · Worker shape-probe</p>
+    </div>
+    <div class="agent-actions" role="group" aria-label="Copy worker data">
+      <button type="button" class="icon-button" title="Copy JSON" data-copy-text="{&quot;cases_run&quot;: 100, &quot;correlation_id&quot;: &quot;shape-probe&quot;, &quot;encountered_issues&quot;: [], &quot;error&quot;: null, &quot;finding_ids&quot;: [], &quot;negative_cases&quot;: [{&quot;case_id&quot;: &quot;malformed-json&quot;, &quot;diagnostic_contract&quot;: {&quot;expected_code_or_category&quot;: &quot;ATM_MESSAGE_VALIDATION_FAILED&quot;, &quot;expected_message_family&quot;: &quot;HTTP framing rejected malformed JSON&quot;, &quot;expected_recovery_family&quot;: &quot;Correct the invalid ATM request or state before retrying.&quot;, &quot;expected_status&quot;: &quot;rejected&quot;, &quot;field_matches&quot;: {&quot;code_or_category&quot;: true, &quot;message_family&quot;: true, &quot;no_sensitive_leak&quot;: true, &quot;recovery_family&quot;: true, &quot;status&quot;: true}, &quot;observed_code_or_category&quot;: &quot;ATM_MESSAGE_VALIDATION_FAILED&quot;, &quot;observed_message_family&quot;: &quot;HTTP framing rejected malformed JSON&quot;, &quot;observed_recovery_family&quot;: &quot;Correct the invalid ATM request or state before retrying.&quot;, &quot;observed_status&quot;: &quot;rejected&quot;, &quot;sensitive_input_leaked&quot;: false}, &quot;expected_oracle&quot;: &quot;invalid JSON is rejected before dispatch&quot;, &quot;finding_id&quot;: null, &quot;observed_result&quot;: &quot;HTTP framing rejected malformed JSON&quot;, &quot;target_invocation&quot;: {&quot;evidence_ref&quot;: &quot;site/reports/fuzz/an15-http-framing-v2-20260815-v2/shape-probe.log&quot;, &quot;invocation_count&quot;: 100, &quot;mechanism&quot;: &quot;coverage&quot;, &quot;seam_id&quot;: &quot;atm_http_runtime::axum_router::malformed_json&quot;}}], &quot;status&quot;: &quot;success&quot;, &quot;target&quot;: &quot;local-http-framing&quot;, &quot;target_invocation&quot;: {&quot;proofs&quot;: [{&quot;evidence_ref&quot;: &quot;site/reports/fuzz/an15-http-framing-v2-20260815-v2/shape-probe.log&quot;, &quot;invocation_count&quot;: 100, &quot;mechanism&quot;: &quot;coverage&quot;, &quot;seam_id&quot;: &quot;atm_http_runtime::axum_router::malformed_json&quot;}], &quot;required_seam_ids&quot;: [&quot;atm_http_runtime::axum_router::malformed_json&quot;]}}">{}</button>
+      <button type="button" class="icon-button" title="Copy Context" data-copy-text="shape-probe: success; 100/100 cases passed.">⎘</button>
+    </div>
+  </header>
+
+  <p class="status">
+    <span class="status status-pass">PASS</span>
+  </p>
+
+  <table class="agent-results">
+    <thead><tr><th scope="col">Fuzz run description</th><th scope="col">Iterations</th><th scope="col">Pass</th><th scope="col">Result</th></tr></thead>
+    <tbody>
+      <tr>
+        <th scope="row">local-http-framing shape-probe product seam</th>
+        <td>100</td>
+        <td>100/100</td>
+        <td>
+          <span class="status status-pass">PASS</span>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <section class="target-invocation">
+    <h3>Verified target invocation</h3>
+    <table>
+      <thead><tr><th scope="col">Seam</th><th scope="col">Mechanism</th><th scope="col">Invocations</th><th scope="col">Evidence</th></tr></thead>
+      <tbody>
+        <tr><th scope="row"><code>atm_http_runtime::axum_router::malformed_json</code></th><td>coverage</td><td>100</td><td><code>site/reports/fuzz/an15-http-framing-v2-20260815-v2/shape-probe.log</code></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="test-inputs">
+    <h3>Inputs exercised</h3>
+    <table>
+      <thead><tr><th scope="col">Case</th><th scope="col">Template / input</th><th scope="col">Outcome</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">malformed-json</th><td><code>invalid JSON is rejected before dispatch</code></td><td>HTTP framing rejected malformed JSON</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="negative-contracts">
+    <h3>Negative diagnostic contracts</h3>
+    <table>
+      <thead><tr><th scope="col">Case</th><th scope="col">Expected</th><th scope="col">Observed</th><th scope="col">Diagnostic match</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">malformed-json</th><td>invalid JSON is rejected before dispatch</td><td>HTTP framing rejected malformed JSON</td><td>PASS</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+
+</section>
+<section xmlns="http://www.w3.org/1999/xhtml" class="fuzz-agent fuzz-agent-pass">
+  <header class="agent-header fuzz-agent-header">
+    <div>
+      <p class="eyebrow">Adversarial fuzz worker</p>
+      <h2>template-probe</h2>
+      <p class="agent-meta">Session an15-http-framing-v2-20260815 · Worker template-probe</p>
+    </div>
+    <div class="agent-actions" role="group" aria-label="Copy worker data">
+      <button type="button" class="icon-button" title="Copy JSON" data-copy-text="{&quot;cases_run&quot;: 100, &quot;correlation_id&quot;: &quot;template-probe&quot;, &quot;encountered_issues&quot;: [], &quot;error&quot;: null, &quot;finding_ids&quot;: [], &quot;negative_cases&quot;: [{&quot;case_id&quot;: &quot;non-json-content&quot;, &quot;diagnostic_contract&quot;: {&quot;expected_code_or_category&quot;: &quot;ATM_MESSAGE_VALIDATION_FAILED&quot;, &quot;expected_message_family&quot;: &quot;HTTP framing rejected non-JSON content&quot;, &quot;expected_recovery_family&quot;: &quot;Correct the invalid ATM request or state before retrying.&quot;, &quot;expected_status&quot;: &quot;rejected&quot;, &quot;field_matches&quot;: {&quot;code_or_category&quot;: true, &quot;message_family&quot;: true, &quot;no_sensitive_leak&quot;: true, &quot;recovery_family&quot;: true, &quot;status&quot;: true}, &quot;observed_code_or_category&quot;: &quot;ATM_MESSAGE_VALIDATION_FAILED&quot;, &quot;observed_message_family&quot;: &quot;HTTP framing rejected non-JSON content&quot;, &quot;observed_recovery_family&quot;: &quot;Correct the invalid ATM request or state before retrying.&quot;, &quot;observed_status&quot;: &quot;rejected&quot;, &quot;sensitive_input_leaked&quot;: false}, &quot;expected_oracle&quot;: &quot;unsupported content is rejected before dispatch&quot;, &quot;finding_id&quot;: null, &quot;observed_result&quot;: &quot;HTTP framing rejected non-JSON content&quot;, &quot;target_invocation&quot;: {&quot;evidence_ref&quot;: &quot;site/reports/fuzz/an15-http-framing-v2-20260815-v2/template-probe.log&quot;, &quot;invocation_count&quot;: 100, &quot;mechanism&quot;: &quot;coverage&quot;, &quot;seam_id&quot;: &quot;atm_http_runtime::axum_router::content_type&quot;}}], &quot;status&quot;: &quot;success&quot;, &quot;target&quot;: &quot;local-http-framing&quot;, &quot;target_invocation&quot;: {&quot;proofs&quot;: [{&quot;evidence_ref&quot;: &quot;site/reports/fuzz/an15-http-framing-v2-20260815-v2/template-probe.log&quot;, &quot;invocation_count&quot;: 100, &quot;mechanism&quot;: &quot;coverage&quot;, &quot;seam_id&quot;: &quot;atm_http_runtime::axum_router::content_type&quot;}], &quot;required_seam_ids&quot;: [&quot;atm_http_runtime::axum_router::content_type&quot;]}}">{}</button>
+      <button type="button" class="icon-button" title="Copy Context" data-copy-text="template-probe: success; 100/100 cases passed.">⎘</button>
+    </div>
+  </header>
+
+  <p class="status">
+    <span class="status status-pass">PASS</span>
+  </p>
+
+  <table class="agent-results">
+    <thead><tr><th scope="col">Fuzz run description</th><th scope="col">Iterations</th><th scope="col">Pass</th><th scope="col">Result</th></tr></thead>
+    <tbody>
+      <tr>
+        <th scope="row">local-http-framing template-probe product seam</th>
+        <td>100</td>
+        <td>100/100</td>
+        <td>
+          <span class="status status-pass">PASS</span>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <section class="target-invocation">
+    <h3>Verified target invocation</h3>
+    <table>
+      <thead><tr><th scope="col">Seam</th><th scope="col">Mechanism</th><th scope="col">Invocations</th><th scope="col">Evidence</th></tr></thead>
+      <tbody>
+        <tr><th scope="row"><code>atm_http_runtime::axum_router::content_type</code></th><td>coverage</td><td>100</td><td><code>site/reports/fuzz/an15-http-framing-v2-20260815-v2/template-probe.log</code></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="test-inputs">
+    <h3>Inputs exercised</h3>
+    <table>
+      <thead><tr><th scope="col">Case</th><th scope="col">Template / input</th><th scope="col">Outcome</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">non-json-content</th><td><code>unsupported content is rejected before dispatch</code></td><td>HTTP framing rejected non-JSON content</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="negative-contracts">
+    <h3>Negative diagnostic contracts</h3>
+    <table>
+      <thead><tr><th scope="col">Case</th><th scope="col">Expected</th><th scope="col">Observed</th><th scope="col">Diagnostic match</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">non-json-content</th><td>unsupported content is rejected before dispatch</td><td>HTTP framing rejected non-JSON content</td><td>PASS</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+
+</section>
+<section xmlns="http://www.w3.org/1999/xhtml" class="fuzz-agent fuzz-agent-pass">
+  <header class="agent-header fuzz-agent-header">
+    <div>
+      <p class="eyebrow">Adversarial fuzz worker</p>
+      <h2>boundary-probe</h2>
+      <p class="agent-meta">Session an15-http-framing-v2-20260815 · Worker boundary-probe</p>
+    </div>
+    <div class="agent-actions" role="group" aria-label="Copy worker data">
+      <button type="button" class="icon-button" title="Copy JSON" data-copy-text="{&quot;cases_run&quot;: 100, &quot;correlation_id&quot;: &quot;boundary-probe&quot;, &quot;encountered_issues&quot;: [], &quot;error&quot;: null, &quot;finding_ids&quot;: [], &quot;negative_cases&quot;: [{&quot;case_id&quot;: &quot;retired-provenance&quot;, &quot;diagnostic_contract&quot;: {&quot;expected_code_or_category&quot;: &quot;ATM_MESSAGE_VALIDATION_FAILED&quot;, &quot;expected_message_family&quot;: &quot;HTTP framing rejected retired provenance&quot;, &quot;expected_recovery_family&quot;: &quot;Correct the invalid ATM request or state before retrying.&quot;, &quot;expected_status&quot;: &quot;rejected&quot;, &quot;field_matches&quot;: {&quot;code_or_category&quot;: true, &quot;message_family&quot;: true, &quot;no_sensitive_leak&quot;: true, &quot;recovery_family&quot;: true, &quot;status&quot;: true}, &quot;observed_code_or_category&quot;: &quot;ATM_MESSAGE_VALIDATION_FAILED&quot;, &quot;observed_message_family&quot;: &quot;HTTP framing rejected retired provenance&quot;, &quot;observed_recovery_family&quot;: &quot;Correct the invalid ATM request or state before retrying.&quot;, &quot;observed_status&quot;: &quot;rejected&quot;, &quot;sensitive_input_leaked&quot;: false}, &quot;expected_oracle&quot;: &quot;client provenance claims are rejected before dispatch&quot;, &quot;finding_id&quot;: null, &quot;observed_result&quot;: &quot;HTTP framing rejected retired provenance&quot;, &quot;target_invocation&quot;: {&quot;evidence_ref&quot;: &quot;site/reports/fuzz/an15-http-framing-v2-20260815-v2/boundary-probe.log&quot;, &quot;invocation_count&quot;: 100, &quot;mechanism&quot;: &quot;coverage&quot;, &quot;seam_id&quot;: &quot;atm_http_runtime::axum_router::retired_provenance&quot;}}], &quot;status&quot;: &quot;success&quot;, &quot;target&quot;: &quot;local-http-framing&quot;, &quot;target_invocation&quot;: {&quot;proofs&quot;: [{&quot;evidence_ref&quot;: &quot;site/reports/fuzz/an15-http-framing-v2-20260815-v2/boundary-probe.log&quot;, &quot;invocation_count&quot;: 100, &quot;mechanism&quot;: &quot;coverage&quot;, &quot;seam_id&quot;: &quot;atm_http_runtime::axum_router::retired_provenance&quot;}], &quot;required_seam_ids&quot;: [&quot;atm_http_runtime::axum_router::retired_provenance&quot;]}}">{}</button>
+      <button type="button" class="icon-button" title="Copy Context" data-copy-text="boundary-probe: success; 100/100 cases passed.">⎘</button>
+    </div>
+  </header>
+
+  <p class="status">
+    <span class="status status-pass">PASS</span>
+  </p>
+
+  <table class="agent-results">
+    <thead><tr><th scope="col">Fuzz run description</th><th scope="col">Iterations</th><th scope="col">Pass</th><th scope="col">Result</th></tr></thead>
+    <tbody>
+      <tr>
+        <th scope="row">local-http-framing boundary-probe product seam</th>
+        <td>100</td>
+        <td>100/100</td>
+        <td>
+          <span class="status status-pass">PASS</span>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <section class="target-invocation">
+    <h3>Verified target invocation</h3>
+    <table>
+      <thead><tr><th scope="col">Seam</th><th scope="col">Mechanism</th><th scope="col">Invocations</th><th scope="col">Evidence</th></tr></thead>
+      <tbody>
+        <tr><th scope="row"><code>atm_http_runtime::axum_router::retired_provenance</code></th><td>coverage</td><td>100</td><td><code>site/reports/fuzz/an15-http-framing-v2-20260815-v2/boundary-probe.log</code></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="test-inputs">
+    <h3>Inputs exercised</h3>
+    <table>
+      <thead><tr><th scope="col">Case</th><th scope="col">Template / input</th><th scope="col">Outcome</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">retired-provenance</th><td><code>client provenance claims are rejected before dispatch</code></td><td>HTTP framing rejected retired provenance</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="negative-contracts">
+    <h3>Negative diagnostic contracts</h3>
+    <table>
+      <thead><tr><th scope="col">Case</th><th scope="col">Expected</th><th scope="col">Observed</th><th scope="col">Diagnostic match</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">retired-provenance</th><td>client provenance claims are rejected before dispatch</td><td>HTTP framing rejected retired provenance</td><td>PASS</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+
+</section>
+<section xmlns="http://www.w3.org/1999/xhtml" class="fuzz-agent fuzz-agent-pass">
+  <header class="agent-header fuzz-agent-header">
+    <div>
+      <p class="eyebrow">Adversarial fuzz worker</p>
+      <h2>differential-probe</h2>
+      <p class="agent-meta">Session an15-http-framing-v2-20260815 · Worker differential-probe</p>
+    </div>
+    <div class="agent-actions" role="group" aria-label="Copy worker data">
+      <button type="button" class="icon-button" title="Copy JSON" data-copy-text="{&quot;cases_run&quot;: 100, &quot;correlation_id&quot;: &quot;differential-probe&quot;, &quot;encountered_issues&quot;: [], &quot;error&quot;: null, &quot;finding_ids&quot;: [], &quot;negative_cases&quot;: [], &quot;status&quot;: &quot;success&quot;, &quot;target&quot;: &quot;local-http-framing&quot;, &quot;target_invocation&quot;: {&quot;proofs&quot;: [{&quot;evidence_ref&quot;: &quot;site/reports/fuzz/an15-http-framing-v2-20260815-v2/differential-probe.log&quot;, &quot;invocation_count&quot;: 100, &quot;mechanism&quot;: &quot;coverage&quot;, &quot;seam_id&quot;: &quot;atm_http_runtime::loopback_tcp::live_request&quot;}], &quot;required_seam_ids&quot;: [&quot;atm_http_runtime::loopback_tcp::live_request&quot;]}}">{}</button>
+      <button type="button" class="icon-button" title="Copy Context" data-copy-text="differential-probe: success; 100/100 cases passed.">⎘</button>
+    </div>
+  </header>
+
+  <p class="status">
+    <span class="status status-pass">PASS</span>
+  </p>
+
+  <table class="agent-results">
+    <thead><tr><th scope="col">Fuzz run description</th><th scope="col">Iterations</th><th scope="col">Pass</th><th scope="col">Result</th></tr></thead>
+    <tbody>
+      <tr>
+        <th scope="row">local-http-framing differential-probe product seam</th>
+        <td>100</td>
+        <td>100/100</td>
+        <td>
+          <span class="status status-pass">PASS</span>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <section class="target-invocation">
+    <h3>Verified target invocation</h3>
+    <table>
+      <thead><tr><th scope="col">Seam</th><th scope="col">Mechanism</th><th scope="col">Invocations</th><th scope="col">Evidence</th></tr></thead>
+      <tbody>
+        <tr><th scope="row"><code>atm_http_runtime::loopback_tcp::live_request</code></th><td>coverage</td><td>100</td><td><code>site/reports/fuzz/an15-http-framing-v2-20260815-v2/differential-probe.log</code></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="test-inputs">
+    <h3>Inputs exercised</h3>
+    <table>
+      <thead><tr><th scope="col">Case</th><th scope="col">Template / input</th><th scope="col">Outcome</th></tr></thead>
+      <tbody>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="negative-contracts">
+    <h3>Negative diagnostic contracts</h3>
+    <table>
+      <thead><tr><th scope="col">Case</th><th scope="col">Expected</th><th scope="col">Observed</th><th scope="col">Diagnostic match</th></tr></thead>
+      <tbody>
+      </tbody>
+    </table>
+  </section>
+
+
+</section>
+
+
+  <section class="section metadata">
+    <h2>Metadata</h2>
+    <table class="metadata-table"><tbody>
+      <tr><th scope="row">Session</th><td>an15-http-framing-v2-20260815</td></tr>
+      <tr><th scope="row">Execution mode</th><td>executed-product-campaign</td></tr>
+      <tr><th scope="row">Worker count</th><td>4</td></tr>
+    </tbody></table>
+  </section>
+
+  <footer>
+    <p>Generated from validated adversarial-fuzz v2 evidence through sc-compose.</p>
+  </footer>
+
+  <script>
+    document.addEventListener("click", async function (event) {
+      var button = event.target.closest("[data-copy-text]");
+      if (!button) return;
+      var text = button.getAttribute("data-copy-text") || "";
+      try {
+        await navigator.clipboard.writeText(text);
+        button.setAttribute("title", "Copied");
+      } catch (err) {
+        button.setAttribute("title", "Copy failed");
+      }
+    });
+  </script>
+</body>
+</html>

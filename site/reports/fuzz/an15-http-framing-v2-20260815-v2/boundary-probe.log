@@ -1,0 +1,117 @@
+command: cargo test -p atm-http-runtime message_handler::tests::an15_http_boundary_probe_rejects_retired_provenance_before_dispatch -- --exact --nocapture
+returncode: 0
+
+stdout:
+
+running 1 test
+test message_handler::tests::an15_http_boundary_probe_rejects_retired_provenance_before_dispatch ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 103 filtered out; finished in 0.04s
+
+stderr:
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.48s
+     Running unittests src/lib.rs (target/debug/deps/atm_http_runtime-53841b6e8a305f2e)
+AN15_CASE_SHAPE=dns
+AN15_CASE_SHAPE=ipv4
+AN15_CASE_SHAPE=ipv6
+AN15_CASE_SHAPE=idna
+AN15_CASE_SHAPE=host-port
+AN15_CASE_SHAPE=dns
+AN15_CASE_SHAPE=ipv4
+AN15_CASE_SHAPE=ipv6
+AN15_CASE_SHAPE=idna
+AN15_CASE_SHAPE=host-port
+AN15_CASE_SHAPE=dns
+AN15_CASE_SHAPE=ipv4
+AN15_CASE_SHAPE=ipv6
+AN15_CASE_SHAPE=idna
+AN15_CASE_SHAPE=host-port
+AN15_CASE_SHAPE=dns
+AN15_CASE_SHAPE=ipv4
+AN15_CASE_SHAPE=ipv6
+AN15_CASE_SHAPE=idna
+AN15_CASE_SHAPE=host-port
+AN15_CASE_SHAPE=dns
+AN15_CASE_SHAPE=ipv4
+AN15_CASE_SHAPE=ipv6
+AN15_CASE_SHAPE=idna
+AN15_CASE_SHAPE=host-port
+AN15_CASE_SHAPE=dns
+AN15_CASE_SHAPE=ipv4
+AN15_CASE_SHAPE=ipv6
+AN15_CASE_SHAPE=idna
+AN15_CASE_SHAPE=host-port
+AN15_CASE_SHAPE=dns
+AN15_CASE_SHAPE=ipv4
+AN15_CASE_SHAPE=ipv6
+AN15_CASE_SHAPE=idna
+AN15_CASE_SHAPE=host-port
+AN15_CASE_SHAPE=dns
+AN15_CASE_SHAPE=ipv4
+AN15_CASE_SHAPE=ipv6
+AN15_CASE_SHAPE=idna
+AN15_CASE_SHAPE=host-port
+AN15_CASE_SHAPE=dns
+AN15_CASE_SHAPE=ipv4
+AN15_CASE_SHAPE=ipv6
+AN15_CASE_SHAPE=idna
+AN15_CASE_SHAPE=host-port
+AN15_CASE_SHAPE=dns
+AN15_CASE_SHAPE=ipv4
+AN15_CASE_SHAPE=ipv6
+AN15_CASE_SHAPE=idna
+AN15_CASE_SHAPE=host-port
+AN15_CASE_SHAPE=dns
+AN15_CASE_SHAPE=ipv4
+AN15_CASE_SHAPE=ipv6
+AN15_CASE_SHAPE=idna
+AN15_CASE_SHAPE=host-port
+AN15_CASE_SHAPE=dns
+AN15_CASE_SHAPE=ipv4
+AN15_CASE_SHAPE=ipv6
+AN15_CASE_SHAPE=idna
+AN15_CASE_SHAPE=host-port
+AN15_CASE_SHAPE=dns
+AN15_CASE_SHAPE=ipv4
+AN15_CASE_SHAPE=ipv6
+AN15_CASE_SHAPE=idna
+AN15_CASE_SHAPE=host-port
+AN15_CASE_SHAPE=dns
+AN15_CASE_SHAPE=ipv4
+AN15_CASE_SHAPE=ipv6
+AN15_CASE_SHAPE=idna
+AN15_CASE_SHAPE=host-port
+AN15_CASE_SHAPE=dns
+AN15_CASE_SHAPE=ipv4
+AN15_CASE_SHAPE=ipv6
+AN15_CASE_SHAPE=idna
+AN15_CASE_SHAPE=host-port
+AN15_CASE_SHAPE=dns
+AN15_CASE_SHAPE=ipv4
+AN15_CASE_SHAPE=ipv6
+AN15_CASE_SHAPE=idna
+AN15_CASE_SHAPE=host-port
+AN15_CASE_SHAPE=dns
+AN15_CASE_SHAPE=ipv4
+AN15_CASE_SHAPE=ipv6
+AN15_CASE_SHAPE=idna
+AN15_CASE_SHAPE=host-port
+AN15_CASE_SHAPE=dns
+AN15_CASE_SHAPE=ipv4
+AN15_CASE_SHAPE=ipv6
+AN15_CASE_SHAPE=idna
+AN15_CASE_SHAPE=host-port
+AN15_CASE_SHAPE=dns
+AN15_CASE_SHAPE=ipv4
+AN15_CASE_SHAPE=ipv6
+AN15_CASE_SHAPE=idna
+AN15_CASE_SHAPE=host-port
+AN15_CASE_SHAPE=dns
+AN15_CASE_SHAPE=ipv4
+AN15_CASE_SHAPE=ipv6
+AN15_CASE_SHAPE=idna
+AN15_CASE_SHAPE=host-port

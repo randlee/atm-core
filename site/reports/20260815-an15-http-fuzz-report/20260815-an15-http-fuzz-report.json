@@ -1,0 +1,339 @@
+{
+  "campaign": {
+    "baseline_ref": null,
+    "campaign_id": "an15-http-framing-v2-20260815",
+    "cases_per_worker": 100,
+    "max_workers": 4,
+    "notes": "AN.15 fixed four-worker HTTP framing campaign; the execution runner records the exact checked-out source revision and accepts no caller-supplied commands.",
+    "per_worker_timeout_s": 120,
+    "promote_regressions": true,
+    "seed": 20260815,
+    "source_revision": "daae4065642f3602d16687ce8b50908db3ca0781",
+    "target": "local-http-framing",
+    "target_seams": [
+      {
+        "accepted_proof": "coverage",
+        "minimum_invocations": 100,
+        "seam_id": "atm_http_runtime::axum_router::malformed_json"
+      },
+      {
+        "accepted_proof": "coverage",
+        "minimum_invocations": 100,
+        "seam_id": "atm_http_runtime::axum_router::content_type"
+      },
+      {
+        "accepted_proof": "coverage",
+        "minimum_invocations": 100,
+        "seam_id": "atm_http_runtime::axum_router::retired_provenance"
+      },
+      {
+        "accepted_proof": "coverage",
+        "minimum_invocations": 100,
+        "seam_id": "atm_http_runtime::loopback_tcp::live_request"
+      }
+    ]
+  },
+  "footer_html": "<p>Generated from validated adversarial-fuzz v2 evidence through sc-compose.</p>",
+  "generated_at": "2026-08-15T04:00:00.951411Z",
+  "json_output_path": "site/reports/20260815-an15-http-fuzz-report/20260815-an15-http-fuzz-report.json",
+  "metadata_rows": [
+    {
+      "label": "Session",
+      "value": "an15-http-framing-v2-20260815"
+    },
+    {
+      "label": "Execution mode",
+      "value": "executed-product-campaign"
+    },
+    {
+      "label": "Worker count",
+      "value": 4
+    }
+  ],
+  "outcome_ledger": {
+    "benign": [],
+    "confirmed_bug": [],
+    "inconclusive": [],
+    "non_repro": []
+  },
+  "output_path": "site/reports/20260815-an15-http-fuzz-report.html",
+  "rows": [
+    {
+      "iterations": 100,
+      "label": "local-http-framing shape-probe product seam",
+      "pass": "100/100",
+      "result": "PASS"
+    },
+    {
+      "iterations": 100,
+      "label": "local-http-framing template-probe product seam",
+      "pass": "100/100",
+      "result": "PASS"
+    },
+    {
+      "iterations": 100,
+      "label": "local-http-framing boundary-probe product seam",
+      "pass": "100/100",
+      "result": "PASS"
+    },
+    {
+      "iterations": 100,
+      "label": "local-http-framing differential-probe product seam",
+      "pass": "100/100",
+      "result": "PASS"
+    }
+  ],
+  "schema_version": "adversarial-fuzzing/v2",
+  "sections": [
+    {
+      "body_html": "<section xmlns=\"http://www.w3.org/1999/xhtml\" class=\"fuzz-agent fuzz-agent-pass\">\n  <header class=\"agent-header fuzz-agent-header\">\n    <div>\n      <p class=\"eyebrow\">Adversarial fuzz worker</p>\n      <h2>shape-probe</h2>\n      <p class=\"agent-meta\">Session an15-http-framing-v2-20260815 \u00b7 Worker shape-probe</p>\n    </div>\n    <div class=\"agent-actions\" role=\"group\" aria-label=\"Copy worker data\">\n      <button type=\"button\" class=\"icon-button\" title=\"Copy JSON\" data-copy-text=\"{&quot;cases_run&quot;: 100, &quot;correlation_id&quot;: &quot;shape-probe&quot;, &quot;encountered_issues&quot;: [], &quot;error&quot;: null, &quot;finding_ids&quot;: [], &quot;negative_cases&quot;: [{&quot;case_id&quot;: &quot;malformed-json&quot;, &quot;diagnostic_contract&quot;: {&quot;expected_code_or_category&quot;: &quot;ATM_MESSAGE_VALIDATION_FAILED&quot;, &quot;expected_message_family&quot;: &quot;HTTP framing rejected malformed JSON&quot;, &quot;expected_recovery_family&quot;: &quot;Correct the invalid ATM request or state before retrying.&quot;, &quot;expected_status&quot;: &quot;rejected&quot;, &quot;field_matches&quot;: {&quot;code_or_category&quot;: true, &quot;message_family&quot;: true, &quot;no_sensitive_leak&quot;: true, &quot;recovery_family&quot;: true, &quot;status&quot;: true}, &quot;observed_code_or_category&quot;: &quot;ATM_MESSAGE_VALIDATION_FAILED&quot;, &quot;observed_message_family&quot;: &quot;HTTP framing rejected malformed JSON&quot;, &quot;observed_recovery_family&quot;: &quot;Correct the invalid ATM request or state before retrying.&quot;, &quot;observed_status&quot;: &quot;rejected&quot;, &quot;sensitive_input_leaked&quot;: false}, &quot;expected_oracle&quot;: &quot;invalid JSON is rejected before dispatch&quot;, &quot;finding_id&quot;: null, &quot;observed_result&quot;: &quot;HTTP framing rejected malformed JSON&quot;, &quot;target_invocation&quot;: {&quot;evidence_ref&quot;: &quot;site/reports/fuzz/an15-http-framing-v2-20260815-v2/shape-probe.log&quot;, &quot;invocation_count&quot;: 100, &quot;mechanism&quot;: &quot;coverage&quot;, &quot;seam_id&quot;: &quot;atm_http_runtime::axum_router::malformed_json&quot;}}], &quot;status&quot;: &quot;success&quot;, &quot;target&quot;: &quot;local-http-framing&quot;, &quot;target_invocation&quot;: {&quot;proofs&quot;: [{&quot;evidence_ref&quot;: &quot;site/reports/fuzz/an15-http-framing-v2-20260815-v2/shape-probe.log&quot;, &quot;invocation_count&quot;: 100, &quot;mechanism&quot;: &quot;coverage&quot;, &quot;seam_id&quot;: &quot;atm_http_runtime::axum_router::malformed_json&quot;}], &quot;required_seam_ids&quot;: [&quot;atm_http_runtime::axum_router::malformed_json&quot;]}}\">{}</button>\n      <button type=\"button\" class=\"icon-button\" title=\"Copy Context\" data-copy-text=\"shape-probe: success; 100/100 cases passed.\">\u2398</button>\n    </div>\n  </header>\n\n  <p class=\"status\">\n    <span class=\"status status-pass\">PASS</span>\n  </p>\n\n  <table class=\"agent-results\">\n    <thead><tr><th scope=\"col\">Fuzz run description</th><th scope=\"col\">Iterations</th><th scope=\"col\">Pass</th><th scope=\"col\">Result</th></tr></thead>\n    <tbody>\n      <tr>\n        <th scope=\"row\">local-http-framing shape-probe product seam</th>\n        <td>100</td>\n        <td>100/100</td>\n        <td>\n          <span class=\"status status-pass\">PASS</span>\n        </td>\n      </tr>\n    </tbody>\n  </table>\n\n  <section class=\"target-invocation\">\n    <h3>Verified target invocation</h3>\n    <table>\n      <thead><tr><th scope=\"col\">Seam</th><th scope=\"col\">Mechanism</th><th scope=\"col\">Invocations</th><th scope=\"col\">Evidence</th></tr></thead>\n      <tbody>\n        <tr><th scope=\"row\"><code>atm_http_runtime::axum_router::malformed_json</code></th><td>coverage</td><td>100</td><td><code>site/reports/fuzz/an15-http-framing-v2-20260815-v2/shape-probe.log</code></td></tr>\n      </tbody>\n    </table>\n  </section>\n\n  <section class=\"test-inputs\">\n    <h3>Inputs exercised</h3>\n    <table>\n      <thead><tr><th scope=\"col\">Case</th><th scope=\"col\">Template / input</th><th scope=\"col\">Outcome</th></tr></thead>\n      <tbody>\n        <tr><th scope=\"row\">malformed-json</th><td><code>invalid JSON is rejected before dispatch</code></td><td>HTTP framing rejected malformed JSON</td></tr>\n      </tbody>\n    </table>\n  </section>\n\n  <section class=\"negative-contracts\">\n    <h3>Negative diagnostic contracts</h3>\n    <table>\n      <thead><tr><th scope=\"col\">Case</th><th scope=\"col\">Expected</th><th scope=\"col\">Observed</th><th scope=\"col\">Diagnostic match</th></tr></thead>\n      <tbody>\n        <tr><th scope=\"row\">malformed-json</th><td>invalid JSON is rejected before dispatch</td><td>HTTP framing rejected malformed JSON</td><td>PASS</td></tr>\n      </tbody>\n    </table>\n  </section>\n\n\n</section>",
+      "context_text": "shape-probe: success; 100/100 cases passed.",
+      "fragment_source": "auto-generated",
+      "id": "shape-probe",
+      "json_payload": {
+        "cases_run": 100,
+        "correlation_id": "shape-probe",
+        "encountered_issues": [],
+        "error": null,
+        "finding_ids": [],
+        "negative_cases": [
+          {
+            "case_id": "malformed-json",
+            "diagnostic_contract": {
+              "expected_code_or_category": "ATM_MESSAGE_VALIDATION_FAILED",
+              "expected_message_family": "HTTP framing rejected malformed JSON",
+              "expected_recovery_family": "Correct the invalid ATM request or state before retrying.",
+              "expected_status": "rejected",
+              "field_matches": {
+                "code_or_category": true,
+                "message_family": true,
+                "no_sensitive_leak": true,
+                "recovery_family": true,
+                "status": true
+              },
+              "observed_code_or_category": "ATM_MESSAGE_VALIDATION_FAILED",
+              "observed_message_family": "HTTP framing rejected malformed JSON",
+              "observed_recovery_family": "Correct the invalid ATM request or state before retrying.",
+              "observed_status": "rejected",
+              "sensitive_input_leaked": false
+            },
+            "expected_oracle": "invalid JSON is rejected before dispatch",
+            "finding_id": null,
+            "observed_result": "HTTP framing rejected malformed JSON",
+            "target_invocation": {
+              "evidence_ref": "site/reports/fuzz/an15-http-framing-v2-20260815-v2/shape-probe.log",
+              "invocation_count": 100,
+              "mechanism": "coverage",
+              "seam_id": "atm_http_runtime::axum_router::malformed_json"
+            }
+          }
+        ],
+        "status": "success",
+        "target": "local-http-framing",
+        "target_invocation": {
+          "proofs": [
+            {
+              "evidence_ref": "site/reports/fuzz/an15-http-framing-v2-20260815-v2/shape-probe.log",
+              "invocation_count": 100,
+              "mechanism": "coverage",
+              "seam_id": "atm_http_runtime::axum_router::malformed_json"
+            }
+          ],
+          "required_seam_ids": [
+            "atm_http_runtime::axum_router::malformed_json"
+          ]
+        }
+      },
+      "status": "PASS",
+      "title": "shape-probe",
+      "xhtml_path": "20260815-an15-http-fuzz-report/20260815-an15-http-fuzz-report-shape-probe.xhtml"
+    },
+    {
+      "body_html": "<section xmlns=\"http://www.w3.org/1999/xhtml\" class=\"fuzz-agent fuzz-agent-pass\">\n  <header class=\"agent-header fuzz-agent-header\">\n    <div>\n      <p class=\"eyebrow\">Adversarial fuzz worker</p>\n      <h2>template-probe</h2>\n      <p class=\"agent-meta\">Session an15-http-framing-v2-20260815 \u00b7 Worker template-probe</p>\n    </div>\n    <div class=\"agent-actions\" role=\"group\" aria-label=\"Copy worker data\">\n      <button type=\"button\" class=\"icon-button\" title=\"Copy JSON\" data-copy-text=\"{&quot;cases_run&quot;: 100, &quot;correlation_id&quot;: &quot;template-probe&quot;, &quot;encountered_issues&quot;: [], &quot;error&quot;: null, &quot;finding_ids&quot;: [], &quot;negative_cases&quot;: [{&quot;case_id&quot;: &quot;non-json-content&quot;, &quot;diagnostic_contract&quot;: {&quot;expected_code_or_category&quot;: &quot;ATM_MESSAGE_VALIDATION_FAILED&quot;, &quot;expected_message_family&quot;: &quot;HTTP framing rejected non-JSON content&quot;, &quot;expected_recovery_family&quot;: &quot;Correct the invalid ATM request or state before retrying.&quot;, &quot;expected_status&quot;: &quot;rejected&quot;, &quot;field_matches&quot;: {&quot;code_or_category&quot;: true, &quot;message_family&quot;: true, &quot;no_sensitive_leak&quot;: true, &quot;recovery_family&quot;: true, &quot;status&quot;: true}, &quot;observed_code_or_category&quot;: &quot;ATM_MESSAGE_VALIDATION_FAILED&quot;, &quot;observed_message_family&quot;: &quot;HTTP framing rejected non-JSON content&quot;, &quot;observed_recovery_family&quot;: &quot;Correct the invalid ATM request or state before retrying.&quot;, &quot;observed_status&quot;: &quot;rejected&quot;, &quot;sensitive_input_leaked&quot;: false}, &quot;expected_oracle&quot;: &quot;unsupported content is rejected before dispatch&quot;, &quot;finding_id&quot;: null, &quot;observed_result&quot;: &quot;HTTP framing rejected non-JSON content&quot;, &quot;target_invocation&quot;: {&quot;evidence_ref&quot;: &quot;site/reports/fuzz/an15-http-framing-v2-20260815-v2/template-probe.log&quot;, &quot;invocation_count&quot;: 100, &quot;mechanism&quot;: &quot;coverage&quot;, &quot;seam_id&quot;: &quot;atm_http_runtime::axum_router::content_type&quot;}}], &quot;status&quot;: &quot;success&quot;, &quot;target&quot;: &quot;local-http-framing&quot;, &quot;target_invocation&quot;: {&quot;proofs&quot;: [{&quot;evidence_ref&quot;: &quot;site/reports/fuzz/an15-http-framing-v2-20260815-v2/template-probe.log&quot;, &quot;invocation_count&quot;: 100, &quot;mechanism&quot;: &quot;coverage&quot;, &quot;seam_id&quot;: &quot;atm_http_runtime::axum_router::content_type&quot;}], &quot;required_seam_ids&quot;: [&quot;atm_http_runtime::axum_router::content_type&quot;]}}\">{}</button>\n      <button type=\"button\" class=\"icon-button\" title=\"Copy Context\" data-copy-text=\"template-probe: success; 100/100 cases passed.\">\u2398</button>\n    </div>\n  </header>\n\n  <p class=\"status\">\n    <span class=\"status status-pass\">PASS</span>\n  </p>\n\n  <table class=\"agent-results\">\n    <thead><tr><th scope=\"col\">Fuzz run description</th><th scope=\"col\">Iterations</th><th scope=\"col\">Pass</th><th scope=\"col\">Result</th></tr></thead>\n    <tbody>\n      <tr>\n        <th scope=\"row\">local-http-framing template-probe product seam</th>\n        <td>100</td>\n        <td>100/100</td>\n        <td>\n          <span class=\"status status-pass\">PASS</span>\n        </td>\n      </tr>\n    </tbody>\n  </table>\n\n  <section class=\"target-invocation\">\n    <h3>Verified target invocation</h3>\n    <table>\n      <thead><tr><th scope=\"col\">Seam</th><th scope=\"col\">Mechanism</th><th scope=\"col\">Invocations</th><th scope=\"col\">Evidence</th></tr></thead>\n      <tbody>\n        <tr><th scope=\"row\"><code>atm_http_runtime::axum_router::content_type</code></th><td>coverage</td><td>100</td><td><code>site/reports/fuzz/an15-http-framing-v2-20260815-v2/template-probe.log</code></td></tr>\n      </tbody>\n    </table>\n  </section>\n\n  <section class=\"test-inputs\">\n    <h3>Inputs exercised</h3>\n    <table>\n      <thead><tr><th scope=\"col\">Case</th><th scope=\"col\">Template / input</th><th scope=\"col\">Outcome</th></tr></thead>\n      <tbody>\n        <tr><th scope=\"row\">non-json-content</th><td><code>unsupported content is rejected before dispatch</code></td><td>HTTP framing rejected non-JSON content</td></tr>\n      </tbody>\n    </table>\n  </section>\n\n  <section class=\"negative-contracts\">\n    <h3>Negative diagnostic contracts</h3>\n    <table>\n      <thead><tr><th scope=\"col\">Case</th><th scope=\"col\">Expected</th><th scope=\"col\">Observed</th><th scope=\"col\">Diagnostic match</th></tr></thead>\n      <tbody>\n        <tr><th scope=\"row\">non-json-content</th><td>unsupported content is rejected before dispatch</td><td>HTTP framing rejected non-JSON content</td><td>PASS</td></tr>\n      </tbody>\n    </table>\n  </section>\n\n\n</section>",
+      "context_text": "template-probe: success; 100/100 cases passed.",
+      "fragment_source": "auto-generated",
+      "id": "template-probe",
+      "json_payload": {
+        "cases_run": 100,
+        "correlation_id": "template-probe",
+        "encountered_issues": [],
+        "error": null,
+        "finding_ids": [],
+        "negative_cases": [
+          {
+            "case_id": "non-json-content",
+            "diagnostic_contract": {
+              "expected_code_or_category": "ATM_MESSAGE_VALIDATION_FAILED",
+              "expected_message_family": "HTTP framing rejected non-JSON content",
+              "expected_recovery_family": "Correct the invalid ATM request or state before retrying.",
+              "expected_status": "rejected",
+              "field_matches": {
+                "code_or_category": true,
+                "message_family": true,
+                "no_sensitive_leak": true,
+                "recovery_family": true,
+                "status": true
+              },
+              "observed_code_or_category": "ATM_MESSAGE_VALIDATION_FAILED",
+              "observed_message_family": "HTTP framing rejected non-JSON content",
+              "observed_recovery_family": "Correct the invalid ATM request or state before retrying.",
+              "observed_status": "rejected",
+              "sensitive_input_leaked": false
+            },
+            "expected_oracle": "unsupported content is rejected before dispatch",
+            "finding_id": null,
+            "observed_result": "HTTP framing rejected non-JSON content",
+            "target_invocation": {
+              "evidence_ref": "site/reports/fuzz/an15-http-framing-v2-20260815-v2/template-probe.log",
+              "invocation_count": 100,
+              "mechanism": "coverage",
+              "seam_id": "atm_http_runtime::axum_router::content_type"
+            }
+          }
+        ],
+        "status": "success",
+        "target": "local-http-framing",
+        "target_invocation": {
+          "proofs": [
+            {
+              "evidence_ref": "site/reports/fuzz/an15-http-framing-v2-20260815-v2/template-probe.log",
+              "invocation_count": 100,
+              "mechanism": "coverage",
+              "seam_id": "atm_http_runtime::axum_router::content_type"
+            }
+          ],
+          "required_seam_ids": [
+            "atm_http_runtime::axum_router::content_type"
+          ]
+        }
+      },
+      "status": "PASS",
+      "title": "template-probe",
+      "xhtml_path": "20260815-an15-http-fuzz-report/20260815-an15-http-fuzz-report-template-probe.xhtml"
+    },
+    {
+      "body_html": "<section xmlns=\"http://www.w3.org/1999/xhtml\" class=\"fuzz-agent fuzz-agent-pass\">\n  <header class=\"agent-header fuzz-agent-header\">\n    <div>\n      <p class=\"eyebrow\">Adversarial fuzz worker</p>\n      <h2>boundary-probe</h2>\n      <p class=\"agent-meta\">Session an15-http-framing-v2-20260815 \u00b7 Worker boundary-probe</p>\n    </div>\n    <div class=\"agent-actions\" role=\"group\" aria-label=\"Copy worker data\">\n      <button type=\"button\" class=\"icon-button\" title=\"Copy JSON\" data-copy-text=\"{&quot;cases_run&quot;: 100, &quot;correlation_id&quot;: &quot;boundary-probe&quot;, &quot;encountered_issues&quot;: [], &quot;error&quot;: null, &quot;finding_ids&quot;: [], &quot;negative_cases&quot;: [{&quot;case_id&quot;: &quot;retired-provenance&quot;, &quot;diagnostic_contract&quot;: {&quot;expected_code_or_category&quot;: &quot;ATM_MESSAGE_VALIDATION_FAILED&quot;, &quot;expected_message_family&quot;: &quot;HTTP framing rejected retired provenance&quot;, &quot;expected_recovery_family&quot;: &quot;Correct the invalid ATM request or state before retrying.&quot;, &quot;expected_status&quot;: &quot;rejected&quot;, &quot;field_matches&quot;: {&quot;code_or_category&quot;: true, &quot;message_family&quot;: true, &quot;no_sensitive_leak&quot;: true, &quot;recovery_family&quot;: true, &quot;status&quot;: true}, &quot;observed_code_or_category&quot;: &quot;ATM_MESSAGE_VALIDATION_FAILED&quot;, &quot;observed_message_family&quot;: &quot;HTTP framing rejected retired provenance&quot;, &quot;observed_recovery_family&quot;: &quot;Correct the invalid ATM request or state before retrying.&quot;, &quot;observed_status&quot;: &quot;rejected&quot;, &quot;sensitive_input_leaked&quot;: false}, &quot;expected_oracle&quot;: &quot;client provenance claims are rejected before dispatch&quot;, &quot;finding_id&quot;: null, &quot;observed_result&quot;: &quot;HTTP framing rejected retired provenance&quot;, &quot;target_invocation&quot;: {&quot;evidence_ref&quot;: &quot;site/reports/fuzz/an15-http-framing-v2-20260815-v2/boundary-probe.log&quot;, &quot;invocation_count&quot;: 100, &quot;mechanism&quot;: &quot;coverage&quot;, &quot;seam_id&quot;: &quot;atm_http_runtime::axum_router::retired_provenance&quot;}}], &quot;status&quot;: &quot;success&quot;, &quot;target&quot;: &quot;local-http-framing&quot;, &quot;target_invocation&quot;: {&quot;proofs&quot;: [{&quot;evidence_ref&quot;: &quot;site/reports/fuzz/an15-http-framing-v2-20260815-v2/boundary-probe.log&quot;, &quot;invocation_count&quot;: 100, &quot;mechanism&quot;: &quot;coverage&quot;, &quot;seam_id&quot;: &quot;atm_http_runtime::axum_router::retired_provenance&quot;}], &quot;required_seam_ids&quot;: [&quot;atm_http_runtime::axum_router::retired_provenance&quot;]}}\">{}</button>\n      <button type=\"button\" class=\"icon-button\" title=\"Copy Context\" data-copy-text=\"boundary-probe: success; 100/100 cases passed.\">\u2398</button>\n    </div>\n  </header>\n\n  <p class=\"status\">\n    <span class=\"status status-pass\">PASS</span>\n  </p>\n\n  <table class=\"agent-results\">\n    <thead><tr><th scope=\"col\">Fuzz run description</th><th scope=\"col\">Iterations</th><th scope=\"col\">Pass</th><th scope=\"col\">Result</th></tr></thead>\n    <tbody>\n      <tr>\n        <th scope=\"row\">local-http-framing boundary-probe product seam</th>\n        <td>100</td>\n        <td>100/100</td>\n        <td>\n          <span class=\"status status-pass\">PASS</span>\n        </td>\n      </tr>\n    </tbody>\n  </table>\n\n  <section class=\"target-invocation\">\n    <h3>Verified target invocation</h3>\n    <table>\n      <thead><tr><th scope=\"col\">Seam</th><th scope=\"col\">Mechanism</th><th scope=\"col\">Invocations</th><th scope=\"col\">Evidence</th></tr></thead>\n      <tbody>\n        <tr><th scope=\"row\"><code>atm_http_runtime::axum_router::retired_provenance</code></th><td>coverage</td><td>100</td><td><code>site/reports/fuzz/an15-http-framing-v2-20260815-v2/boundary-probe.log</code></td></tr>\n      </tbody>\n    </table>\n  </section>\n\n  <section class=\"test-inputs\">\n    <h3>Inputs exercised</h3>\n    <table>\n      <thead><tr><th scope=\"col\">Case</th><th scope=\"col\">Template / input</th><th scope=\"col\">Outcome</th></tr></thead>\n      <tbody>\n        <tr><th scope=\"row\">retired-provenance</th><td><code>client provenance claims are rejected before dispatch</code></td><td>HTTP framing rejected retired provenance</td></tr>\n      </tbody>\n    </table>\n  </section>\n\n  <section class=\"negative-contracts\">\n    <h3>Negative diagnostic contracts</h3>\n    <table>\n      <thead><tr><th scope=\"col\">Case</th><th scope=\"col\">Expected</th><th scope=\"col\">Observed</th><th scope=\"col\">Diagnostic match</th></tr></thead>\n      <tbody>\n        <tr><th scope=\"row\">retired-provenance</th><td>client provenance claims are rejected before dispatch</td><td>HTTP framing rejected retired provenance</td><td>PASS</td></tr>\n      </tbody>\n    </table>\n  </section>\n\n\n</section>",
+      "context_text": "boundary-probe: success; 100/100 cases passed.",
+      "fragment_source": "auto-generated",
+      "id": "boundary-probe",
+      "json_payload": {
+        "cases_run": 100,
+        "correlation_id": "boundary-probe",
+        "encountered_issues": [],
+        "error": null,
+        "finding_ids": [],
+        "negative_cases": [
+          {
+            "case_id": "retired-provenance",
+            "diagnostic_contract": {
+              "expected_code_or_category": "ATM_MESSAGE_VALIDATION_FAILED",
+              "expected_message_family": "HTTP framing rejected retired provenance",
+              "expected_recovery_family": "Correct the invalid ATM request or state before retrying.",
+              "expected_status": "rejected",
+              "field_matches": {
+                "code_or_category": true,
+                "message_family": true,
+                "no_sensitive_leak": true,
+                "recovery_family": true,
+                "status": true
+              },
+              "observed_code_or_category": "ATM_MESSAGE_VALIDATION_FAILED",
+              "observed_message_family": "HTTP framing rejected retired provenance",
+              "observed_recovery_family": "Correct the invalid ATM request or state before retrying.",
+              "observed_status": "rejected",
+              "sensitive_input_leaked": false
+            },
+            "expected_oracle": "client provenance claims are rejected before dispatch",
+            "finding_id": null,
+            "observed_result": "HTTP framing rejected retired provenance",
+            "target_invocation": {
+              "evidence_ref": "site/reports/fuzz/an15-http-framing-v2-20260815-v2/boundary-probe.log",
+              "invocation_count": 100,
+              "mechanism": "coverage",
+              "seam_id": "atm_http_runtime::axum_router::retired_provenance"
+            }
+          }
+        ],
+        "status": "success",
+        "target": "local-http-framing",
+        "target_invocation": {
+          "proofs": [
+            {
+              "evidence_ref": "site/reports/fuzz/an15-http-framing-v2-20260815-v2/boundary-probe.log",
+              "invocation_count": 100,
+              "mechanism": "coverage",
+              "seam_id": "atm_http_runtime::axum_router::retired_provenance"
+            }
+          ],
+          "required_seam_ids": [
+            "atm_http_runtime::axum_router::retired_provenance"
+          ]
+        }
+      },
+      "status": "PASS",
+      "title": "boundary-probe",
+      "xhtml_path": "20260815-an15-http-fuzz-report/20260815-an15-http-fuzz-report-boundary-probe.xhtml"
+    },
+    {
+      "body_html": "<section xmlns=\"http://www.w3.org/1999/xhtml\" class=\"fuzz-agent fuzz-agent-pass\">\n  <header class=\"agent-header fuzz-agent-header\">\n    <div>\n      <p class=\"eyebrow\">Adversarial fuzz worker</p>\n      <h2>differential-probe</h2>\n      <p class=\"agent-meta\">Session an15-http-framing-v2-20260815 \u00b7 Worker differential-probe</p>\n    </div>\n    <div class=\"agent-actions\" role=\"group\" aria-label=\"Copy worker data\">\n      <button type=\"button\" class=\"icon-button\" title=\"Copy JSON\" data-copy-text=\"{&quot;cases_run&quot;: 100, &quot;correlation_id&quot;: &quot;differential-probe&quot;, &quot;encountered_issues&quot;: [], &quot;error&quot;: null, &quot;finding_ids&quot;: [], &quot;negative_cases&quot;: [], &quot;status&quot;: &quot;success&quot;, &quot;target&quot;: &quot;local-http-framing&quot;, &quot;target_invocation&quot;: {&quot;proofs&quot;: [{&quot;evidence_ref&quot;: &quot;site/reports/fuzz/an15-http-framing-v2-20260815-v2/differential-probe.log&quot;, &quot;invocation_count&quot;: 100, &quot;mechanism&quot;: &quot;coverage&quot;, &quot;seam_id&quot;: &quot;atm_http_runtime::loopback_tcp::live_request&quot;}], &quot;required_seam_ids&quot;: [&quot;atm_http_runtime::loopback_tcp::live_request&quot;]}}\">{}</button>\n      <button type=\"button\" class=\"icon-button\" title=\"Copy Context\" data-copy-text=\"differential-probe: success; 100/100 cases passed.\">\u2398</button>\n    </div>\n  </header>\n\n  <p class=\"status\">\n    <span class=\"status status-pass\">PASS</span>\n  </p>\n\n  <table class=\"agent-results\">\n    <thead><tr><th scope=\"col\">Fuzz run description</th><th scope=\"col\">Iterations</th><th scope=\"col\">Pass</th><th scope=\"col\">Result</th></tr></thead>\n    <tbody>\n      <tr>\n        <th scope=\"row\">local-http-framing differential-probe product seam</th>\n        <td>100</td>\n        <td>100/100</td>\n        <td>\n          <span class=\"status status-pass\">PASS</span>\n        </td>\n      </tr>\n    </tbody>\n  </table>\n\n  <section class=\"target-invocation\">\n    <h3>Verified target invocation</h3>\n    <table>\n      <thead><tr><th scope=\"col\">Seam</th><th scope=\"col\">Mechanism</th><th scope=\"col\">Invocations</th><th scope=\"col\">Evidence</th></tr></thead>\n      <tbody>\n        <tr><th scope=\"row\"><code>atm_http_runtime::loopback_tcp::live_request</code></th><td>coverage</td><td>100</td><td><code>site/reports/fuzz/an15-http-framing-v2-20260815-v2/differential-probe.log</code></td></tr>\n      </tbody>\n    </table>\n  </section>\n\n  <section class=\"test-inputs\">\n    <h3>Inputs exercised</h3>\n    <table>\n      <thead><tr><th scope=\"col\">Case</th><th scope=\"col\">Template / input</th><th scope=\"col\">Outcome</th></tr></thead>\n      <tbody>\n      </tbody>\n    </table>\n  </section>\n\n  <section class=\"negative-contracts\">\n    <h3>Negative diagnostic contracts</h3>\n    <table>\n      <thead><tr><th scope=\"col\">Case</th><th scope=\"col\">Expected</th><th scope=\"col\">Observed</th><th scope=\"col\">Diagnostic match</th></tr></thead>\n      <tbody>\n      </tbody>\n    </table>\n  </section>\n\n\n</section>",
+      "context_text": "differential-probe: success; 100/100 cases passed.",
+      "fragment_source": "auto-generated",
+      "id": "differential-probe",
+      "json_payload": {
+        "cases_run": 100,
+        "correlation_id": "differential-probe",
+        "encountered_issues": [],
+        "error": null,
+        "finding_ids": [],
+        "negative_cases": [],
+        "status": "success",
+        "target": "local-http-framing",
+        "target_invocation": {
+          "proofs": [
+            {
+              "evidence_ref": "site/reports/fuzz/an15-http-framing-v2-20260815-v2/differential-probe.log",
+              "invocation_count": 100,
+              "mechanism": "coverage",
+              "seam_id": "atm_http_runtime::loopback_tcp::live_request"
+            }
+          ],
+          "required_seam_ids": [
+            "atm_http_runtime::loopback_tcp::live_request"
+          ]
+        }
+      },
+      "status": "PASS",
+      "title": "differential-probe",
+      "xhtml_path": "20260815-an15-http-fuzz-report/20260815-an15-http-fuzz-report-differential-probe.xhtml"
+    }
+  ],
+  "source_label": "adversarial-fuzz v2 contract",
+  "status": "PASS",
+  "subtitle": "Validated adversarial-fuzz v2 evidence",
+  "summary_copy_context": "an15-http-framing-v2-20260815: PASS; 4 worker panels.",
+  "summary_copy_json": "{\"session_id\": \"an15-http-framing-v2-20260815\", \"status\": \"PASS\", \"workers\": 4}",
+  "summary_intro_html": "<p>Validated v2 adversarial-fuzz evidence rendered through the sc-compose report contract. Session <code>an15-http-framing-v2-20260815</code> contains one bounded panel per worker. This is executed product-seam evidence; each retained command log proves the named seam's bounded corpus.</p><p>Candidate outcome ledger: zero confirmed bugs is explicit evidence, not an implicit pass.</p><table><thead><tr><th scope=\"col\">Candidate outcome</th><th scope=\"col\">Count</th></tr></thead><tbody><tr><th scope=\"row\">confirmed bug</th><td>0</td></tr><tr><th scope=\"row\">non repro</th><td>0</td></tr><tr><th scope=\"row\">benign</th><td>0</td></tr><tr><th scope=\"row\">inconclusive</th><td>0</td></tr></tbody></table>",
+  "title": "Adversarial fuzz session: an15-http-framing-v2-20260815",
+  "toc_rows": [
+    {
+      "id": "shape-probe",
+      "status": "PASS",
+      "title": "shape-probe"
+    },
+    {
+      "id": "template-probe",
+      "status": "PASS",
+      "title": "template-probe"
+    },
+    {
+      "id": "boundary-probe",
+      "status": "PASS",
+      "title": "boundary-probe"
+    },
+    {
+      "id": "differential-probe",
+      "status": "PASS",
+      "title": "differential-probe"
+    }
+  ]
+}
