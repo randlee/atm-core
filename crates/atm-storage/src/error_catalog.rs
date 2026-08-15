@@ -157,6 +157,7 @@ const fn request_guidance(code: AtmErrorCode) -> Option<&'static str> {
         ),
         AtmErrorCode::TemplateLoadFailed
         | AtmErrorCode::TemplateHashApiFailed
+        | AtmErrorCode::TemplateInspectionParseFailed
         | AtmErrorCode::TemplateRequiredVariableMissing
         | AtmErrorCode::TemplateRenderVerificationFailed
         | AtmErrorCode::TemplateIncludeUnresolved

@@ -41,6 +41,10 @@ mod tests {
                 "TEMPLATE_HASH_API_FAILED",
             ),
             (
+                AtmErrorCode::TemplateInspectionParseFailed,
+                "TEMPLATE_INSPECTION_PARSE_FAILED",
+            ),
+            (
                 AtmErrorCode::TemplateRequiredVariableMissing,
                 "TEMPLATE_REQUIRED_VARIABLE_MISSING",
             ),

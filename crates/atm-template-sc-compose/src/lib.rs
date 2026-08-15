@@ -86,12 +86,30 @@ impl ScComposeTemplateComposer {
         }
     }
 
-    fn inspection_error(error: impl std::fmt::Display) -> AtmError {
+    fn inspection_parse_error(cause: impl std::fmt::Display) -> AtmError {
+        AtmError::new(
+            atm_storage::AtmErrorCode::TemplateInspectionParseFailed,
+            "template inspection parser rejected frontmatter or body/directive syntax",
+        )
+        .with_cause(cause)
+    }
+
+    fn inspection_error(error: ComposeError) -> AtmError {
+        match error {
+            ComposeError::Include(error) => AtmError::template_include_unresolved(error),
+            ComposeError::Resolve(error) => AtmError::template_include_unresolved(error),
+            ComposeError::Validation(error) => AtmError::template_render_verification_failed(error),
+            ComposeError::Render(error) => AtmError::template_render_verification_failed(error),
+            ComposeError::Config(error) => Self::inspection_parse_error(error),
+        }
+    }
+
+    fn hash_api_error(cause: impl std::fmt::Display) -> AtmError {
         AtmError::new(
             atm_storage::AtmErrorCode::TemplateHashApiFailed,
-            "template inspection through the configured composition API failed",
+            "template SHA/hash identity API failed to produce a valid identity",
         )
-        .with_cause(error)
+        .with_cause(cause)
     }
 
     fn upstream_frontmatter(
@@ -120,7 +138,7 @@ impl ScComposeTemplateComposer {
                 value
                     .to_json_value()
                     .map(|value| (name.clone(), value))
-                    .map_err(Self::inspection_error)
+                    .map_err(Self::inspection_parse_error)
             })
             .collect::<Result<_, _>>()?;
         Ok(atm_storage::TemplateFrontmatter {
@@ -163,7 +181,7 @@ impl ScComposeTemplateComposer {
         .template()
         .to_hex();
         Ok(TemplateInspection {
-            sha: atm_storage::TemplateSha::new(sha).map_err(Self::inspection_error)?,
+            sha: atm_storage::TemplateSha::new(sha).map_err(Self::hash_api_error)?,
             frontmatter: Self::upstream_frontmatter(raw_file_bytes)?,
             include_references: Self::upstream_references(raw_file_bytes)?,
             output_format,
@@ -831,7 +849,7 @@ mod tests {
 
         assert_eq!(
             error.code(),
-            atm_storage::AtmErrorCode::TemplateHashApiFailed
+            atm_storage::AtmErrorCode::TemplateInspectionParseFailed
         );
         assert!(
             error
@@ -852,8 +870,48 @@ mod tests {
 
         assert_eq!(
             error.code(),
+            atm_storage::AtmErrorCode::TemplateInspectionParseFailed
+        );
+    }
+
+    #[test]
+    fn inspection_fails_closed_for_plain_jinja_body_syntax() {
+        let error = ScComposeTemplateComposer::new()
+            .inspect(&TemplateSource::file_backed(
+                b"hello {{ value".to_vec(),
+                "invalid-body.txt.j2".into(),
+            ))
+            .expect_err("parser-backed body syntax inspection must reject malformed Jinja");
+
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateInspectionParseFailed
+        );
+        assert!(error.message().contains("inspection parser"));
+    }
+
+    #[test]
+    fn inspection_parse_and_hash_identity_failures_keep_distinct_codes_and_messages() {
+        let parse_error = ScComposeTemplateComposer::new()
+            .inspect(&TemplateSource::file_backed(
+                b"hello {{ value".to_vec(),
+                "invalid-body.txt.j2".into(),
+            ))
+            .expect_err("malformed Jinja must fail inspection");
+        let hash_error = atm_storage::TemplateSha::new("not-a-sha")
+            .map_err(ScComposeTemplateComposer::hash_api_error)
+            .expect_err("invalid storage identity must fail the hash adapter seam");
+
+        assert_eq!(
+            parse_error.code(),
+            atm_storage::AtmErrorCode::TemplateInspectionParseFailed
+        );
+        assert_eq!(
+            hash_error.code(),
             atm_storage::AtmErrorCode::TemplateHashApiFailed
         );
+        assert_ne!(parse_error.code(), hash_error.code());
+        assert_ne!(parse_error.message(), hash_error.message());
     }
 
     #[test]
