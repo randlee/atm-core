@@ -59,9 +59,20 @@ gate; an unchecked field blocks the migration and enables no drain.
    synchronously while `SharedDb` starts, before the writer accepts work:
    `idle_quiet_interval` defaults to 250 ms and must be within 1 ms through
    60 s; `max_batch_items` defaults to 256 and must be within 1 through
-   1,024. Zero, negative/invalid duration encodings, and values outside those
-   bounds return one typed configuration error and prevent writer startup.
+   1,024; and `max_drain_transaction_hold` defaults to 25 ms and must be
+   within 1 ms through 250 ms. Zero, negative/invalid duration encodings, and
+   values outside those bounds return one typed configuration error and prevent writer startup.
    There is no silent clamping, fallback, or partially running indexer.
+
+   `max_drain_transaction_hold` is a hard deadline for an idle batch's SQLite
+   transaction. The writer checks it before every item, caps SQLite's busy
+   wait at the smaller of the remaining budget and 10 ms, and installs the
+   supported `rusqlite::Connection::progress_handler` at 1,000 SQLite
+   operations to interrupt a running statement at expiry. An interrupted or
+   expired batch rolls back its entire transaction, retains all corresponding
+   ledger rows, clears the progress handler/restores the normal busy policy,
+   and follows the transient retry policy below. No foreground submission may
+   inherit the maintenance deadline or handler.
 
    A failed idle-drain item is never retried in a transaction loop. The ledger
    records an attempt count and next-eligible time. For classified transient
@@ -163,9 +174,13 @@ gate; an unchecked field blocks the migration and enables no drain.
   no more than the documented batch bound, and processes newly queued
   foreground work before another maintenance batch. Shutdown stops intake,
   does not leave a detached worker, and preserves unfinished durable items.
-- Invalid `idle_quiet_interval` or `max_batch_items` values fail startup
-  before the writer accepts a submission; defaults and both inclusive valid
-  bounds start deterministically.
+- An idle-drain transaction holds SQLite for at most the configured deadline;
+  a deadline interruption rolls back all of that batch's changes and leaves
+  its ledger work durable for retry. The next foreground request runs with the
+  normal SQLite busy/progress configuration, never maintenance configuration.
+- Invalid `idle_quiet_interval`, `max_batch_items`, or
+  `max_drain_transaction_hold` values fail startup before the writer accepts a
+  submission; defaults and both inclusive valid bounds start deterministically.
 - Fake and SQLite implementations expose the same status semantics. CLI,
   local HTTP, Python, and doctor make nonempty backlog observable without
   exposing an internal cause or changing canonical command success.
@@ -190,8 +205,11 @@ gate; an unchecked field blocks the migration and enables no drain.
   status. Include a nonempty backlog assertion and prove no remote query route
   becomes available.
 - Configuration tests cover the default, both valid bounds, zero, invalid
-  duration encodings, and out-of-range values, proving rejection occurs
-  before the writer accepts any work.
+  duration encodings, and out-of-range values for every tunable, proving
+  rejection occurs before the writer accepts any work. Controlled-clock and
+  SQLite-progress-hook tests force deadline expiry, prove whole-batch rollback
+  and durable retry, and prove the next foreground request does not inherit a
+  maintenance busy timeout or progress handler.
 - Controlled-clock drain tests cover each retry delay, rollback-on-failure,
   the eighth-failure block, blocked-work status, and reset through both a new
   canonical mutation and explicit rebuild; no retry test may use a sleep.
