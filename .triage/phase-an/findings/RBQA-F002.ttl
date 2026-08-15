@@ -15,72 +15,90 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-14T19:50:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.15 ;
   triage:foundAt "2026-08-14T19:00:00Z"^^xsd:dateTime ;
+  triage:resolutionNotes "Update 2026-08-15 by quality-mgr, AN15FUZZV2-QA1FIX1-VERIFY: arch-ctm's fix at integrate/phase-an @ 565620a32e6aeb3480f7de4da0b26fb8ac1d1769 independently verified via ruthless-boundary-qa. `.just/run_fuzz.py:116-117` defines a diversity gate (MINIMUM_DISTINCT_CASE_SHAPES=4) enforced by `_require_diverse_case_shapes` (lines 640-666): fails closed unless exactly one shape marker is retained per seeded case, at least 4 distinct shapes are present, and no shape exceeds half the corpus. Called unconditionally from `_checked_emission_worker` (line 693) before a worker result validates. All five original occurrences (.just/run_fuzz.py:302; template.rs:246-254; render.rs:211-219; lib.rs:646-654; lib.rs:1301-1315) now emit five genuine structurally-distinct input families (plain/unicode/whitespace/quoted/multiline, or 5 distinct path-escape shapes for the boundary-probe), each occurring 20/100 times. A real, non-mocked unit test at .just/tests/test_run_fuzz.py:243-256 (test_checked_emission_executor_rejects_a_counter_only_corpus) proves a degenerate distinct_shapes=1 corpus is rejected with FuzzInputError; a companion positive test (lines 223-241) proves a genuine 4-shape corpus passes. Sealed-adapter boundary reconfirmed intact; no ATM-to-sc-compose shell-out introduced. Closing." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/rbqa-f002-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/rbqa-f002-2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/rbqa-f002-3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/rbqa-f002-4> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/rbqa-f002-5> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/RBQA-F002/rbqa-f002-1>
   a triage:Occurrence ;
   triage:file ".just/run_fuzz.py" ;
   triage:line 302 ;
   triage:snippet "minimum_invocations >= 100 for all seams" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/an15-fuzz-v2-realism-campaign" ;
-  triage:headSha "59e447707" ;
-  triage:occursIn <urn:atm:triage:worktree/an15-fuzz-v2/59e447707> .
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-08-15T03:50:00Z"^^xsd:dateTime ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "565620a32e6aeb3480f7de4da0b26fb8ac1d1769" ;
+  triage:occursIn <urn:atm:triage:worktree/RBQA-F002/565620a32> .
 
 <urn:atm:triage:occurrence/RBQA-F002/rbqa-f002-2>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/send/template.rs" ;
   triage:line 246 ;
   triage:snippet "for case_index in 0..100 with counter-only variation" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/an15-fuzz-v2-realism-campaign" ;
-  triage:headSha "59e447707" ;
-  triage:occursIn <urn:atm:triage:worktree/an15-fuzz-v2/59e447707> .
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-08-15T03:50:00Z"^^xsd:dateTime ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "565620a32e6aeb3480f7de4da0b26fb8ac1d1769" ;
+  triage:occursIn <urn:atm:triage:worktree/RBQA-F002/565620a32> .
 
 <urn:atm:triage:occurrence/RBQA-F002/rbqa-f002-3>
   a triage:Occurrence ;
   triage:file "crates/atm-template-sc-compose/src/lib.rs" ;
   triage:line 646 ;
   triage:snippet "for case_index in 0..100 with counter-only variation" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/an15-fuzz-v2-realism-campaign" ;
-  triage:headSha "59e447707" ;
-  triage:occursIn <urn:atm:triage:worktree/an15-fuzz-v2/59e447707> .
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-08-15T03:50:00Z"^^xsd:dateTime ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "565620a32e6aeb3480f7de4da0b26fb8ac1d1769" ;
+  triage:occursIn <urn:atm:triage:worktree/RBQA-F002/565620a32> .
 
 <urn:atm:triage:occurrence/RBQA-F002/rbqa-f002-4>
   a triage:Occurrence ;
   triage:file "crates/atm-template-sc-compose/src/lib.rs" ;
   triage:line 1294 ;
   triage:snippet "for case_index in 0..100 with counter-only variation" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/an15-fuzz-v2-realism-campaign" ;
-  triage:headSha "59e447707" ;
-  triage:occursIn <urn:atm:triage:worktree/an15-fuzz-v2/59e447707> .
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-08-15T03:50:00Z"^^xsd:dateTime ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "565620a32e6aeb3480f7de4da0b26fb8ac1d1769" ;
+  triage:occursIn <urn:atm:triage:worktree/RBQA-F002/565620a32> .
 
 <urn:atm:triage:occurrence/RBQA-F002/rbqa-f002-5>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/read/render.rs" ;
   triage:line 211 ;
   triage:snippet "for case_index in 0..100 with counter-only variation" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/an15-fuzz-v2-realism-campaign" ;
-  triage:headSha "59e447707" ;
-  triage:occursIn <urn:atm:triage:worktree/an15-fuzz-v2/59e447707> .
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-08-15T03:50:00Z"^^xsd:dateTime ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "565620a32e6aeb3480f7de4da0b26fb8ac1d1769" ;
+  triage:occursIn <urn:atm:triage:worktree/RBQA-F002/565620a32> .
+
+<urn:atm:triage:worktree/RBQA-F002/565620a32>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-an" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "565620a32e6aeb3480f7de4da0b26fb8ac1d1769" ;
+  triage:orderIndex 0 .
 
 <urn:atm:triage:worktree/an15-fuzz-v2/59e447707>
   a triage:WorktreeSnapshot ;

@@ -15,28 +15,31 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-14T19:50:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.15 ;
   triage:foundAt "2026-08-14T19:00:00Z"^^xsd:dateTime ;
+  triage:resolutionNotes "Update 2026-08-15 by quality-mgr, AN15FUZZV2-QA1FIX1-VERIFY: arch-ctm's fix at integrate/phase-an @ 565620a32e6aeb3480f7de4da0b26fb8ac1d1769 independently verified via ruthless-boundary-qa. scripts/fuzz/render_report.py no longer contains normalize_worker(), _default_input(), or _default_finding() -- full grep across the tree confirms zero remaining references (dead code and its stale 'AI.48 bounded {worker}campaign' provenance label fully removed, not just commented out). normalize_campaign() confirmed as the sole live path, delegating exclusively to run_fuzz.validate_report() and projecting through _v2_worker_for_panel(). No behavior change to the live report path. Closing." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/rbqa-f001-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/RBQA-F001/rbqa-f001-1>
   a triage:Occurrence ;
   triage:file "scripts/fuzz/render_report.py" ;
   triage:line 81 ;
   triage:snippet "def _default_input() and _default_finding() unused helper functions" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/an15-fuzz-v2-realism-campaign" ;
-  triage:headSha "59e447707" ;
-  triage:occursIn <urn:atm:triage:worktree/an15-fuzz-v2/59e447707> .
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-08-15T03:50:00Z"^^xsd:dateTime ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "565620a32e6aeb3480f7de4da0b26fb8ac1d1769" ;
+  triage:occursIn <urn:atm:triage:worktree/RBQA-F001/565620a32> .
 
-<urn:atm:triage:worktree/an15-fuzz-v2/59e447707>
+<urn:atm:triage:worktree/RBQA-F001/565620a32>
   a triage:WorktreeSnapshot ;
-  triage:path "feature/an15-fuzz-v2-realism-campaign" ;
-  triage:branch "feature/an15-fuzz-v2-realism-campaign" ;
-  triage:headSha "59e447707" ;
-  triage:orderIndex 1 .
+  triage:path "integrate/phase-an" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "565620a32e6aeb3480f7de4da0b26fb8ac1d1769" ;
+  triage:orderIndex 0 .
