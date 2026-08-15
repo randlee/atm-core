@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM5-ADR-INDEX-ADR041-FALSE-SUPERSEDE>
+  a triage:Finding ;
+  triage:findingId "AM5-ADR-INDEX-ADR041-FALSE-SUPERSEDE" ;
+  triage:title "docs/adr/INDEX.md marks ADR-041 as superseded by a nonexistent ADR-047" ;
+  triage:description "quality-mgr QA-AM5-1 (ATM-QA-001, req-qa): docs/adr/INDEX.md marks ADR-041 -- Accepted, and this sprint's governing end-to-end write-outcome contract -- as superseded by ADR-047, which does not exist (evidently a stale reference to abandoned Phase AK planning). This is pre-existing on integrate/phase-am, not introduced by this PR, but remains unresolved and actively misleading given ADR-041's central role in AM.5's acceptance criteria. Correct the INDEX.md entry to reflect ADR-041's actual Accepted status." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doc-accuracy" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-10T23:12:32Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S5 ;
+  triage:foundAt "2026-08-10T23:11:37Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-10T23:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM5-ADR-INDEX-ADR041-FALSE-SUPERSEDE/AM5-ADR-INDEX-ADR041-FALSE-SUPERSEDE/AM5-QA1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM5-ADR-INDEX-ADR041-FALSE-SUPERSEDE/AM5-ADR-INDEX-ADR041-FALSE-SUPERSEDE/AM5-QA1-1>
+  a triage:Occurrence ;
+  triage:file "docs/adr/INDEX.md" ;
+  triage:line 1 ;
+  triage:snippet "ADR-041 marked superseded by nonexistent ADR-047" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s5-delete-replay" ;
+  triage:headSha "9eebc6075a7c37585b547ecffe407d490f2ef3b0" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s5/9eebc607> .
+
+<urn:atm:triage:worktree/pam-s5/9eebc607>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s5-delete-replay" ;
+  triage:branch "feature/pam-s5-delete-replay" ;
+  triage:headSha "9eebc6075a7c37585b547ecffe407d490f2ef3b0" ;
+  triage:orderIndex 1 .

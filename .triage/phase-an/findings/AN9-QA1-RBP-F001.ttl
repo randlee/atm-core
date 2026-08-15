@@ -1,0 +1,63 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN9-QA1-RBP-F001>
+  a triage:Finding ;
+  triage:findingId "AN9-QA1-RBP-F001" ;
+  triage:title "infallible-Result anti-pattern (duplicate of ATM-QA-003 pattern)" ;
+  triage:description "rust-best-practices-agent flagged a function returning Result that can never actually fail (infallible-Result pattern) in the AN.9 template workflow contract surface -- reported as a duplicate of the QA-003 pattern already tracked elsewhere. Minor severity, non-blocking." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-best-practices" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-storage/src/template_workflow.rs, crates/atm-core/src/template_workflow.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-13T21:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-14T00:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:foundIn triage:AN.9 ;
+  triage:foundAt "2026-08-13T21:19:14Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN9-QA1-RBP-F001/S9-0> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN9-QA1-RBP-F001/S10-0> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AN9-QA1-RBP-F001/S9-0>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/template_workflow.rs" ;
+  triage:line 360 ;
+  triage:snippet "pub fn validate_instance_tags(tags: &[String]) -> Result<(), AtmError>" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pan-s9-template-workflow-contract" ;
+  triage:headSha "bd5615917164196ead262757ac7d587f8fe778fa" ;
+  triage:occursIn <urn:atm:triage:worktree/S9/bd56159> .
+
+<urn:atm:triage:occurrence/AN9-QA1-RBP-F001/S10-0>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/template_workflow.rs" ;
+  triage:line 360 ;
+  triage:snippet "pub fn validate_instance_tags(tags: &[String]) -> Result<(), AtmError>" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pan-s10-template-workflow-admission" ;
+  triage:headSha "bd5615917164196ead262757ac7d587f8fe778fa" ;
+  triage:occursIn <urn:atm:triage:worktree/S10/bd56159> .
+
+<urn:atm:triage:worktree/S9/bd56159>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pan-s9-template-workflow-contract" ;
+  triage:branch "feature/pan-s9-template-workflow-contract" ;
+  triage:headSha "bd5615917164196ead262757ac7d587f8fe778fa" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/S10/bd56159>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pan-s10-template-workflow-admission" ;
+  triage:branch "feature/pan-s10-template-workflow-admission" ;
+  triage:headSha "bd5615917164196ead262757ac7d587f8fe778fa" ;
+  triage:orderIndex 1 .

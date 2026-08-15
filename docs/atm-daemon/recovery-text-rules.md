@@ -66,26 +66,24 @@ Recovery text may be omitted only when:
 
 ## File Ownership Map
 
-Primary files in scope:
+Primary active files in scope:
 - `crates/atm-daemon-client/src/lib.rs`
+- `crates/atm-daemon/src/lifecycle_control.rs`
+
+Retired historical paths (deleted by AM.3; retained here only for recovery-text
+provenance):
 - `crates/atm-daemon/src/composition.rs`
 - `crates/atm-daemon/src/local_ipc_transport.rs`
 - `crates/atm-daemon/src/local_ipc_connection.rs`
-- `crates/atm-daemon/src/lifecycle_control.rs`
 
 Category ownership:
 - daemon unavailable:
   - `crates/atm-daemon-client/src/lib.rs`
-  - `crates/atm-daemon/src/composition.rs`
 - socket connect failures:
   - `crates/atm-daemon-client/src/lib.rs`
-  - `crates/atm-daemon/src/local_ipc_transport.rs`
 - daemon start failures:
   - `crates/atm-daemon-client/src/lib.rs`
-  - `crates/atm-daemon/src/composition.rs`
 - local IPC runtime failures:
-  - `crates/atm-daemon/src/local_ipc_transport.rs`
-  - `crates/atm-daemon/src/local_ipc_connection.rs`
   - `crates/atm-daemon/src/lifecycle_control.rs`
 
 ## Recovery Text Checklist

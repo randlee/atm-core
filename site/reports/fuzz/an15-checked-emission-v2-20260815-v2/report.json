@@ -1,0 +1,238 @@
+{
+  "campaign": {
+    "baseline_ref": "9c3d9e2a40535833bdf8c1a46a6f7eb1de88b44f",
+    "campaign_id": "an15-checked-emission-v2-20260815",
+    "cases_per_worker": 100,
+    "max_workers": 4,
+    "notes": "AN.15 fixed four-worker checked-emission product campaign; the execution runner accepts no caller-supplied commands.",
+    "per_worker_timeout_s": 120,
+    "promote_regressions": true,
+    "seed": 20260814,
+    "target": "atm-template-checked-emission",
+    "target_seams": [
+      {
+        "accepted_proof": "coverage",
+        "minimum_invocations": 100,
+        "seam_id": "atm_http_runtime::template_admission::captured_input"
+      },
+      {
+        "accepted_proof": "coverage",
+        "minimum_invocations": 100,
+        "seam_id": "atm_template_sc_compose::checked_render"
+      },
+      {
+        "accepted_proof": "coverage",
+        "minimum_invocations": 100,
+        "seam_id": "atm_template_sc_compose::confined_include"
+      },
+      {
+        "accepted_proof": "coverage",
+        "minimum_invocations": 100,
+        "seam_id": "atm_core::render_on_read::persisted_snapshot"
+      }
+    ],
+    "worktree_path": "/Users/randlee/Documents/github/atm-core-worktrees/feature/an15-fuzz-v2-realism-campaign"
+  },
+  "campaign_issues": [],
+  "execution_mode": "executed-product-campaign",
+  "findings": [],
+  "promoted_tests": [],
+  "schema_version": "adversarial-fuzzing/v2",
+  "summary": {
+    "all_successful": true,
+    "confirmed_bugs": 0,
+    "failed_workers": 0,
+    "inconclusive": 0,
+    "intentional_boundaries": 0,
+    "open_campaign_issues": 0,
+    "target_not_exercised_workers": 0
+  },
+  "unresolved_candidates": [],
+  "workers": [
+    {
+      "cases_run": 100,
+      "correlation_id": "shape-probe",
+      "encountered_issues": [],
+      "error": null,
+      "finding_ids": [],
+      "negative_cases": [
+        {
+          "case_id": "missing-required-variable",
+          "diagnostic_contract": {
+            "expected_code_or_category": "checked_render_rejected",
+            "expected_message_family": "required template input is missing",
+            "expected_recovery_family": "fix the template input and retry",
+            "expected_status": "rejected",
+            "field_matches": {
+              "code_or_category": true,
+              "message_family": true,
+              "no_sensitive_leak": true,
+              "recovery_family": true,
+              "status": true
+            },
+            "observed_code_or_category": "checked_render_rejected",
+            "observed_message_family": "required template input is missing",
+            "observed_recovery_family": "fix the template input and retry",
+            "observed_status": "rejected",
+            "sensitive_input_leaked": false
+          },
+          "expected_oracle": "required input is rejected before persistence",
+          "finding_id": null,
+          "observed_result": "required template input is missing",
+          "target_invocation": {
+            "evidence_ref": "site/reports/fuzz/an15-checked-emission-v2-20260815-v2/shape-probe.log",
+            "invocation_count": 100,
+            "mechanism": "coverage",
+            "seam_id": "atm_http_runtime::template_admission::captured_input"
+          }
+        }
+      ],
+      "status": "success",
+      "target": "atm-template-checked-emission",
+      "target_invocation": {
+        "proofs": [
+          {
+            "evidence_ref": "site/reports/fuzz/an15-checked-emission-v2-20260815-v2/shape-probe.log",
+            "invocation_count": 100,
+            "mechanism": "coverage",
+            "seam_id": "atm_http_runtime::template_admission::captured_input"
+          }
+        ],
+        "required_seam_ids": [
+          "atm_http_runtime::template_admission::captured_input"
+        ]
+      }
+    },
+    {
+      "cases_run": 100,
+      "correlation_id": "template-probe",
+      "encountered_issues": [],
+      "error": null,
+      "finding_ids": [],
+      "negative_cases": [
+        {
+          "case_id": "invalid-final-json",
+          "diagnostic_contract": {
+            "expected_code_or_category": "checked_render_rejected",
+            "expected_message_family": "checked render rejected invalid JSON",
+            "expected_recovery_family": "fix the template input and retry",
+            "expected_status": "rejected",
+            "field_matches": {
+              "code_or_category": true,
+              "message_family": true,
+              "no_sensitive_leak": true,
+              "recovery_family": true,
+              "status": true
+            },
+            "observed_code_or_category": "checked_render_rejected",
+            "observed_message_family": "checked render rejected invalid JSON",
+            "observed_recovery_family": "fix the template input and retry",
+            "observed_status": "rejected",
+            "sensitive_input_leaked": false
+          },
+          "expected_oracle": "invalid final JSON is rejected with checked-render guidance",
+          "finding_id": null,
+          "observed_result": "checked render rejected invalid JSON",
+          "target_invocation": {
+            "evidence_ref": "site/reports/fuzz/an15-checked-emission-v2-20260815-v2/template-probe.log",
+            "invocation_count": 100,
+            "mechanism": "coverage",
+            "seam_id": "atm_template_sc_compose::checked_render"
+          }
+        }
+      ],
+      "status": "success",
+      "target": "atm-template-checked-emission",
+      "target_invocation": {
+        "proofs": [
+          {
+            "evidence_ref": "site/reports/fuzz/an15-checked-emission-v2-20260815-v2/template-probe.log",
+            "invocation_count": 100,
+            "mechanism": "coverage",
+            "seam_id": "atm_template_sc_compose::checked_render"
+          }
+        ],
+        "required_seam_ids": [
+          "atm_template_sc_compose::checked_render"
+        ]
+      }
+    },
+    {
+      "cases_run": 100,
+      "correlation_id": "boundary-probe",
+      "encountered_issues": [],
+      "error": null,
+      "finding_ids": [],
+      "negative_cases": [
+        {
+          "case_id": "include-escape",
+          "diagnostic_contract": {
+            "expected_code_or_category": "checked_render_rejected",
+            "expected_message_family": "include path rejected outside configured root",
+            "expected_recovery_family": "fix the template input and retry",
+            "expected_status": "rejected",
+            "field_matches": {
+              "code_or_category": true,
+              "message_family": true,
+              "no_sensitive_leak": true,
+              "recovery_family": true,
+              "status": true
+            },
+            "observed_code_or_category": "checked_render_rejected",
+            "observed_message_family": "include path rejected outside configured root",
+            "observed_recovery_family": "fix the template input and retry",
+            "observed_status": "rejected",
+            "sensitive_input_leaked": false
+          },
+          "expected_oracle": "confined include escape is rejected without state mutation",
+          "finding_id": null,
+          "observed_result": "include path rejected outside configured root",
+          "target_invocation": {
+            "evidence_ref": "site/reports/fuzz/an15-checked-emission-v2-20260815-v2/boundary-probe.log",
+            "invocation_count": 100,
+            "mechanism": "coverage",
+            "seam_id": "atm_template_sc_compose::confined_include"
+          }
+        }
+      ],
+      "status": "success",
+      "target": "atm-template-checked-emission",
+      "target_invocation": {
+        "proofs": [
+          {
+            "evidence_ref": "site/reports/fuzz/an15-checked-emission-v2-20260815-v2/boundary-probe.log",
+            "invocation_count": 100,
+            "mechanism": "coverage",
+            "seam_id": "atm_template_sc_compose::confined_include"
+          }
+        ],
+        "required_seam_ids": [
+          "atm_template_sc_compose::confined_include"
+        ]
+      }
+    },
+    {
+      "cases_run": 100,
+      "correlation_id": "differential-probe",
+      "encountered_issues": [],
+      "error": null,
+      "finding_ids": [],
+      "negative_cases": [],
+      "status": "success",
+      "target": "atm-template-checked-emission",
+      "target_invocation": {
+        "proofs": [
+          {
+            "evidence_ref": "site/reports/fuzz/an15-checked-emission-v2-20260815-v2/differential-probe.log",
+            "invocation_count": 100,
+            "mechanism": "coverage",
+            "seam_id": "atm_core::render_on_read::persisted_snapshot"
+          }
+        ],
+        "required_seam_ids": [
+          "atm_core::render_on_read::persisted_snapshot"
+        ]
+      }
+    }
+  ]
+}

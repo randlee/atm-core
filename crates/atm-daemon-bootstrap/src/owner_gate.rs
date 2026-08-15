@@ -12,7 +12,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use atm_core::error::AtmError;
-use fs2::FileExt;
+use fs4::fs_std::FileExt;
 use ulid::Ulid;
 
 #[derive(Debug)]
@@ -40,12 +40,17 @@ impl DaemonOwnerGuard {
             .map_err(|source| {
                 AtmError::daemon_unavailable("failed to open daemon owner lock").with_cause(source)
             })?;
-        lock_file.try_lock_exclusive().map_err(|source| {
+        if !lock_file.try_lock_exclusive().map_err(|source| {
             AtmError::daemon_serving_state_rejected(format!(
-                "an ATM daemon already owns {}: {source}",
+                "failed to acquire ATM daemon owner lock at {}: {source}",
                 lock_path.display()
             ))
-        })?;
+        })? {
+            return Err(AtmError::daemon_serving_state_rejected(format!(
+                "an ATM daemon already owns {}",
+                lock_path.display()
+            )));
+        }
         let instance_id = Ulid::new();
         let token = Ulid::new();
         let record = format!("{}:{token}:{instance_id}\n", std::process::id());

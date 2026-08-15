@@ -14,16 +14,18 @@ members = [
     "crates/atm-peer-tls-interop",
     "crates/atm-graft",
     "crates/atm-graft-python",
+    "crates/atm-query-python",
     "crates/sc-lint-attributes",
     "crates/sc-lint-boundary",
     "crates/sc-lint-directives",
     "crates/atm-daemon",
     "crates/atm-storage-rusqlite",
+    "crates/atm-template-sc-compose",
 ]
 resolver = "2"
 
 [workspace.package]
-version = "1.4.1-beta-ai-1"
+version = "1.4.2"
 edition = "2024"
 rust-version = "1.94.1"
 authors = ["atm-core contributors"]

@@ -1,7 +1,8 @@
 ---
 name: adversarial-fuzzing
-version: 1.1.0
 description: Generate and triage adversarial templates, var-files, and rendering inputs against sc-compose by coordinating bounded background agents, differential and metamorphic checks, minimization, and regression-test promotion. Use when trying to break a rendering subsystem, validating a risky change, hunting parser/validator/rendering edge cases, or turning a confirmed fuzz failure into a unit or CLI test.
+metadata:
+  version: "1.2.0"
 ---
 
 # Adversarial Fuzzing
@@ -38,6 +39,13 @@ before delegating work.
   "cases_per_worker": 100,
   "per_worker_timeout_s": 120,
   "promote_regressions": true,
+  "target_seams": [
+    {
+      "seam_id": "crate::module::Type::method",
+      "minimum_invocations": 1,
+      "accepted_proof": "counter"
+    }
+  ],
   "notes": "optional target-specific context"
 }
 ```
@@ -51,6 +59,16 @@ per-worker timeout, and record the seed and campaign correlation ID in every
 result. Use a fresh temporary directory for generated inputs and clean it up
 after the campaign unless a failure artifact is being preserved.
 
+Declare every method or seam that the campaign claims to exercise in
+`target_seams`. A generic subsystem label, an exit status, a no-crash result,
+or worker self-attestation is not invocation proof. Before a campaign can
+claim a passing result, the campaign validator must reject a missing,
+malformed, or zero-count proof for each declared seam. The proof must identify
+the exact seam and be produced by a direct counter, a named tracing span, or
+coverage evidence that resolves to that seam. A count of zero is a worker
+failure with `target-not-exercised`; it is never a passing empty result or an
+intentional boundary.
+
 ## Workflow
 
 1. Verify the CLI dependencies above.
@@ -62,8 +80,8 @@ after the campaign unless a failure artifact is being preserved.
 4. Have the primary coordinator spawn a swarm of focused workers in the
    background with `run_in_background: true`. Each worker gets a distinct fuzz
    task, runs one bounded fuzz test, and returns exactly one structured JSON
-   result with its test inputs, iteration count, pass/fail counts, and any
-   candidate finding.
+   result with its test inputs, iteration count, pass/fail counts, target
+   invocation proof, encountered issues, and any candidate finding.
 5. Aggregate worker results in correlation-ID order. Surface partial failures;
    never discard a timeout, malformed response, or worker error.
 6. Reproduce each candidate failure in the primary coordinator's worktree,
@@ -92,6 +110,79 @@ after the campaign unless a failure artifact is being preserved.
     port (AI.50 owns those assets); pass the durable worker envelopes to that
     owner rather than referencing a template path that is not checked out in
     this repository.
+
+## Zero-tolerance evidence gates
+
+Enforce the following gates mechanically in the campaign-result validator.
+Do not substitute a narrative summary, a reviewer inference, or a “known
+issue” note for one of these fields.
+
+### Target-invocation proof
+
+For every worker, declare the subset of campaign `target_seams` it is
+responsible for and emit one proof record per declared seam:
+
+```json
+{
+  "required_seam_ids": ["atm_template_sc_compose::Adapter::inspect"],
+  "proofs": [
+    {
+      "seam_id": "atm_template_sc_compose::Adapter::inspect",
+      "mechanism": "counter",
+      "invocation_count": 100,
+      "evidence_ref": "campaign/worker-template-probe.json#/coverage/inspect"
+    }
+  ]
+}
+```
+
+Require every `required_seam_id` to have exactly one matching proof record,
+an allowed mechanism, a nonempty evidence reference, and an invocation count
+at least equal to its campaign minimum. Reject the worker result otherwise.
+The aggregator must mark the campaign unsuccessful when any worker has no
+valid proof. Never infer execution from a returned status, absence of a panic,
+or an indirect helper call.
+
+### Diagnostic fidelity
+
+For every negative/admission-rejection test and every candidate, compare the
+actual public diagnostic contract with the declared oracle: outcome/status,
+stable code/category, user-visible message semantic family, recovery semantic
+family, and absence of sensitive raw-input leakage. A different failure cause
+that yields a superficially similar error is a diagnostic-contract bug, not a
+cosmetic difference. A differential result may accept a diagnostic delta only
+when the case names the approved delta and cites its contract/ADR.
+
+Require the worker to emit the observed values and the field-level comparison;
+missing diagnostic evidence is a failed worker result, not an inconclusive
+pass. Do not require exact punctuation or internal debugging text, but do
+require the externally actionable meaning and safe disclosure behavior.
+Each worker must emit `negative_cases`, using an explicit empty array when it
+ran no negative/rejection cases. Every negative case includes its oracle,
+observed result, diagnostic contract, and target-invocation proof. A mismatch
+must reference a durable `confirmed_bug` finding; it cannot be relabeled as an
+intentional boundary merely because the input was rejected.
+
+### No silent defer
+
+Record every unexpected product, environment, dependency, harness, or tooling
+failure encountered by a worker as a structured issue. This includes a known
+or pre-existing failure discovered while running the campaign. Expected
+negative-contract cases are not issues when their declared oracle matches.
+
+Each worker must emit `encountered_issues`, using an explicit empty array when
+none occurred. The aggregator must copy every worker issue into the durable
+`campaign_issues` array and reject the report if an issue is omitted or loses
+its worker reference. Each issue must include an ID, category, observed
+evidence, affected worker/case, and exactly one disposition:
+
+- `fix_now`, with an owner and tracking reference; or
+- `deferred`, with an owner, tracking reference, and a concrete reason.
+
+Never hide a failure in prose such as “known issues” or “pre-existing.” A
+deferred issue may remain open, but it must remain visible in the final report
+and summary. A campaign with an unrecorded failure is invalid regardless of
+its pass count.
 
 ## Worker portfolio
 
@@ -150,13 +241,42 @@ For every candidate, require:
   "minimal_input": "...",
   "observed": "...",
   "expected_oracle": "...",
-  "diagnostic": "optional code",
+  "diagnostic_contract": {
+    "expected_status": "rejected",
+    "observed_status": "rejected",
+    "expected_code_or_category": "template_render_verification_failed",
+    "observed_code_or_category": "template_render_verification_failed",
+    "expected_message_family": "checked render failed",
+    "observed_message_family": "checked render failed",
+    "expected_recovery_family": "fix the template and retry",
+    "observed_recovery_family": "fix the template and retry",
+    "sensitive_input_leaked": false,
+    "field_matches": {
+      "status": true,
+      "code_or_category": true,
+      "message_family": true,
+      "recovery_family": true,
+      "no_sensitive_leak": true
+    }
+  },
   "requirement_trace": "existing requirement/ADR, or explicit no-coverage statement",
   "requirement_follow_up": "create/update, no-new-doc rationale, or named decision owner",
   "reproduction_count": 3,
-  "recommended_test": "..."
+  "recommended_test": "...",
+  "target_invocation": {
+    "seam_id": "crate::module::Type::method",
+    "mechanism": "counter",
+    "invocation_count": 3,
+    "evidence_ref": "campaign/worker-template-probe.json#/coverage/inspect"
+  }
 }
 ```
+
+Treat any false diagnostic field match, a missing field, a missing target
+proof, or a target invocation count below its required minimum as a failed
+validation result. A candidate whose public diagnostic contract disagrees
+with its accepted oracle is a `confirmed_bug` unless the case includes an
+explicit approved differential delta.
 
 Minimize by deleting unrelated template blocks, variables, fields, array
 members, and nesting while re-running the exact command. Keep the smallest
@@ -201,6 +321,7 @@ The coordinator must return fenced JSON only, with results ordered by
   "concurrency": 4,
   "per_task_timeout_s": 120,
   "results": [],
+  "campaign_issues": [],
   "summary": {
     "all_successful": true,
     "confirmed_bugs": 0,
@@ -229,20 +350,26 @@ independent quality-mgr passes:
    flag, campaign ID, and generated campaign directory before launching.
 3. Run the full target with the four registered workers when `target` is
    `full`; record every correlation ID, worker target, case count, status,
-   timeout, and error.
+   timeout, error, required seam, proof mechanism, invocation count, and
+   evidence reference.
 4. Record every candidate with the exact command, minimized input/template,
-   expected oracle, observed result, diagnostic, and reproduction count.
+   expected oracle, observed result, field-level diagnostic comparison,
+   target-invocation proof, and reproduction count.
 5. Record classification and promotion decisions. A confirmed bug needs three
    reproductions and a durable owning-crate test; an unresolved confirmed bug
    needs a next owner. Do not claim the pipeline is proven in E.2.
 6. Run the relevant validation gates and preserve the report outside temporary
    files when E.3 or quality-mgr requires durable evidence.
+7. Record every unexpected product, environment, dependency, harness, and
+   tooling failure in `campaign_issues`, including a `fix_now` or
+   `deferred` disposition. Verify every worker issue is represented in the
+   final report before declaring the campaign complete.
 
 The durable report must be a JSON object matching this contract:
 
 ```json
 {
-  "schema_version": "adversarial-fuzzing/v1",
+  "schema_version": "adversarial-fuzzing/v2",
   "campaign": {
     "campaign_id": "e3-20260729-0001",
     "worktree_path": "/absolute/approved/worktree",
@@ -252,7 +379,14 @@ The durable report must be a JSON object matching this contract:
     "max_workers": 4,
     "cases_per_worker": 100,
     "per_worker_timeout_s": 120,
-    "promote_regressions": true
+    "promote_regressions": true,
+    "target_seams": [
+      {
+        "seam_id": "atm_template_sc_compose::Adapter::inspect",
+        "minimum_invocations": 1,
+        "accepted_proof": "counter"
+      }
+    ]
   },
   "workers": [
     {
@@ -261,7 +395,20 @@ The durable report must be a JSON object matching this contract:
       "status": "success | failed | timed_out",
       "cases_run": 100,
       "finding_ids": ["FUZZ-001"],
-      "error": null
+      "error": null,
+      "target_invocation": {
+        "required_seam_ids": ["atm_template_sc_compose::Adapter::inspect"],
+        "proofs": [
+          {
+            "seam_id": "atm_template_sc_compose::Adapter::inspect",
+            "mechanism": "counter",
+            "invocation_count": 100,
+            "evidence_ref": "campaign/template-probe.json#/coverage/inspect"
+          }
+        ]
+      },
+      "negative_cases": [],
+      "encountered_issues": []
     }
   ],
   "findings": [
@@ -274,7 +421,30 @@ The durable report must be a JSON object matching this contract:
       "minimal_input": "...",
       "expected_oracle": "...",
       "observed_result": "...",
-      "diagnostic_code": null,
+      "diagnostic_contract": {
+        "expected_status": "rejected",
+        "observed_status": "rejected",
+        "expected_code_or_category": "...",
+        "observed_code_or_category": "...",
+        "expected_message_family": "...",
+        "observed_message_family": "...",
+        "expected_recovery_family": "...",
+        "observed_recovery_family": "...",
+        "sensitive_input_leaked": false,
+        "field_matches": {
+          "status": true,
+          "code_or_category": true,
+          "message_family": true,
+          "recovery_family": true,
+          "no_sensitive_leak": true
+        }
+      },
+      "target_invocation": {
+        "seam_id": "atm_template_sc_compose::Adapter::inspect",
+        "mechanism": "counter",
+        "invocation_count": 3,
+        "evidence_ref": "campaign/template-probe.json#/coverage/inspect"
+      },
       "reproduction_count": 3
     }
   ],
@@ -290,19 +460,36 @@ The durable report must be a JSON object matching this contract:
       "next_owner": "team-lead"
     }
   ],
+  "campaign_issues": [
+    {
+      "issue_id": "FUZZ-ENV-001",
+      "worker_correlation_id": "template-probe",
+      "case_id": "template-042",
+      "category": "environment",
+      "observed_evidence": "...",
+      "disposition": "deferred",
+      "owner": "team-lead",
+      "tracking_ref": "https://github.com/org/repo/issues/123",
+      "defer_reason": "required only when disposition is deferred"
+    }
+  ],
   "summary": {
     "all_successful": true,
     "confirmed_bugs": 0,
     "intentional_boundaries": 0,
     "inconclusive": 0,
-    "failed_workers": 0
+    "failed_workers": 0,
+    "target_not_exercised_workers": 0,
+    "open_campaign_issues": 0
   }
 }
 ```
 
 Order workers and findings deterministically by correlation ID and finding ID.
 `all_successful` is false for any worker failure or timeout. A report with no
-findings but incomplete execution is not a passing no-finding campaign.
+findings but incomplete execution is not a passing no-finding campaign. A
+v2 report is invalid unless every target seam has nonzero proof and every
+worker issue appears in `campaign_issues` with a valid disposition.
 
 ## Safety and cleanup
 

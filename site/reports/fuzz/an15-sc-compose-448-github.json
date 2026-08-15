@@ -1,0 +1,10 @@
+{
+  "number": 448,
+  "state": "closed",
+  "state_reason": "completed",
+  "title": "test(sc-composer): cover checked-emission sequence for direct library consumers",
+  "html_url": "https://github.com/randlee/sc-compose/issues/448",
+  "created_at": "2026-08-13T19:29:58Z",
+  "closed_at": "2026-08-13T20:44:19Z",
+  "updated_at": "2026-08-13T20:44:19Z"
+}

@@ -1,0 +1,239 @@
+{
+  "campaign": {
+    "baseline_ref": null,
+    "campaign_id": "an15-http-framing-v2-20260815",
+    "cases_per_worker": 100,
+    "max_workers": 4,
+    "notes": "AN.15 fixed four-worker HTTP framing campaign; the execution runner records the exact checked-out source revision and accepts no caller-supplied commands.",
+    "per_worker_timeout_s": 120,
+    "promote_regressions": true,
+    "seed": 20260815,
+    "source_revision": "cc0ee308e0a02a09aa41c3c6e635101b5011d418",
+    "target": "local-http-framing",
+    "target_seams": [
+      {
+        "accepted_proof": "coverage",
+        "minimum_invocations": 100,
+        "seam_id": "atm_http_runtime::axum_router::malformed_json"
+      },
+      {
+        "accepted_proof": "coverage",
+        "minimum_invocations": 100,
+        "seam_id": "atm_http_runtime::axum_router::content_type"
+      },
+      {
+        "accepted_proof": "coverage",
+        "minimum_invocations": 100,
+        "seam_id": "atm_http_runtime::axum_router::retired_provenance"
+      },
+      {
+        "accepted_proof": "coverage",
+        "minimum_invocations": 100,
+        "seam_id": "atm_http_runtime::loopback_tcp::live_request"
+      }
+    ],
+    "worktree_path": "/Users/randlee/Documents/github/atm-core-worktrees/feature/an15-http-fuzz-campaign"
+  },
+  "campaign_issues": [],
+  "execution_mode": "executed-product-campaign",
+  "findings": [],
+  "promoted_tests": [],
+  "schema_version": "adversarial-fuzzing/v2",
+  "summary": {
+    "all_successful": true,
+    "confirmed_bugs": 0,
+    "failed_workers": 0,
+    "inconclusive": 0,
+    "intentional_boundaries": 0,
+    "open_campaign_issues": 0,
+    "target_not_exercised_workers": 0
+  },
+  "unresolved_candidates": [],
+  "workers": [
+    {
+      "cases_run": 100,
+      "correlation_id": "shape-probe",
+      "encountered_issues": [],
+      "error": null,
+      "finding_ids": [],
+      "negative_cases": [
+        {
+          "case_id": "malformed-json",
+          "diagnostic_contract": {
+            "expected_code_or_category": "ATM_MESSAGE_VALIDATION_FAILED",
+            "expected_message_family": "HTTP framing rejected malformed JSON",
+            "expected_recovery_family": "Correct the invalid ATM request or state before retrying.",
+            "expected_status": "rejected",
+            "field_matches": {
+              "code_or_category": true,
+              "message_family": true,
+              "no_sensitive_leak": true,
+              "recovery_family": true,
+              "status": true
+            },
+            "observed_code_or_category": "ATM_MESSAGE_VALIDATION_FAILED",
+            "observed_message_family": "HTTP framing rejected malformed JSON",
+            "observed_recovery_family": "Correct the invalid ATM request or state before retrying.",
+            "observed_status": "rejected",
+            "sensitive_input_leaked": false
+          },
+          "expected_oracle": "invalid JSON is rejected before dispatch",
+          "finding_id": null,
+          "observed_result": "HTTP framing rejected malformed JSON",
+          "target_invocation": {
+            "evidence_ref": "site/reports/fuzz/an15-http-framing-v2-20260815-v2/shape-probe.log",
+            "invocation_count": 100,
+            "mechanism": "coverage",
+            "seam_id": "atm_http_runtime::axum_router::malformed_json"
+          }
+        }
+      ],
+      "status": "success",
+      "target": "local-http-framing",
+      "target_invocation": {
+        "proofs": [
+          {
+            "evidence_ref": "site/reports/fuzz/an15-http-framing-v2-20260815-v2/shape-probe.log",
+            "invocation_count": 100,
+            "mechanism": "coverage",
+            "seam_id": "atm_http_runtime::axum_router::malformed_json"
+          }
+        ],
+        "required_seam_ids": [
+          "atm_http_runtime::axum_router::malformed_json"
+        ]
+      }
+    },
+    {
+      "cases_run": 100,
+      "correlation_id": "template-probe",
+      "encountered_issues": [],
+      "error": null,
+      "finding_ids": [],
+      "negative_cases": [
+        {
+          "case_id": "non-json-content",
+          "diagnostic_contract": {
+            "expected_code_or_category": "ATM_MESSAGE_VALIDATION_FAILED",
+            "expected_message_family": "HTTP framing rejected non-JSON content",
+            "expected_recovery_family": "Correct the invalid ATM request or state before retrying.",
+            "expected_status": "rejected",
+            "field_matches": {
+              "code_or_category": true,
+              "message_family": true,
+              "no_sensitive_leak": true,
+              "recovery_family": true,
+              "status": true
+            },
+            "observed_code_or_category": "ATM_MESSAGE_VALIDATION_FAILED",
+            "observed_message_family": "HTTP framing rejected non-JSON content",
+            "observed_recovery_family": "Correct the invalid ATM request or state before retrying.",
+            "observed_status": "rejected",
+            "sensitive_input_leaked": false
+          },
+          "expected_oracle": "unsupported content is rejected before dispatch",
+          "finding_id": null,
+          "observed_result": "HTTP framing rejected non-JSON content",
+          "target_invocation": {
+            "evidence_ref": "site/reports/fuzz/an15-http-framing-v2-20260815-v2/template-probe.log",
+            "invocation_count": 100,
+            "mechanism": "coverage",
+            "seam_id": "atm_http_runtime::axum_router::content_type"
+          }
+        }
+      ],
+      "status": "success",
+      "target": "local-http-framing",
+      "target_invocation": {
+        "proofs": [
+          {
+            "evidence_ref": "site/reports/fuzz/an15-http-framing-v2-20260815-v2/template-probe.log",
+            "invocation_count": 100,
+            "mechanism": "coverage",
+            "seam_id": "atm_http_runtime::axum_router::content_type"
+          }
+        ],
+        "required_seam_ids": [
+          "atm_http_runtime::axum_router::content_type"
+        ]
+      }
+    },
+    {
+      "cases_run": 100,
+      "correlation_id": "boundary-probe",
+      "encountered_issues": [],
+      "error": null,
+      "finding_ids": [],
+      "negative_cases": [
+        {
+          "case_id": "retired-provenance",
+          "diagnostic_contract": {
+            "expected_code_or_category": "ATM_MESSAGE_VALIDATION_FAILED",
+            "expected_message_family": "HTTP framing rejected retired provenance",
+            "expected_recovery_family": "Correct the invalid ATM request or state before retrying.",
+            "expected_status": "rejected",
+            "field_matches": {
+              "code_or_category": true,
+              "message_family": true,
+              "no_sensitive_leak": true,
+              "recovery_family": true,
+              "status": true
+            },
+            "observed_code_or_category": "ATM_MESSAGE_VALIDATION_FAILED",
+            "observed_message_family": "HTTP framing rejected retired provenance",
+            "observed_recovery_family": "Correct the invalid ATM request or state before retrying.",
+            "observed_status": "rejected",
+            "sensitive_input_leaked": false
+          },
+          "expected_oracle": "client provenance claims are rejected before dispatch",
+          "finding_id": null,
+          "observed_result": "HTTP framing rejected retired provenance",
+          "target_invocation": {
+            "evidence_ref": "site/reports/fuzz/an15-http-framing-v2-20260815-v2/boundary-probe.log",
+            "invocation_count": 100,
+            "mechanism": "coverage",
+            "seam_id": "atm_http_runtime::axum_router::retired_provenance"
+          }
+        }
+      ],
+      "status": "success",
+      "target": "local-http-framing",
+      "target_invocation": {
+        "proofs": [
+          {
+            "evidence_ref": "site/reports/fuzz/an15-http-framing-v2-20260815-v2/boundary-probe.log",
+            "invocation_count": 100,
+            "mechanism": "coverage",
+            "seam_id": "atm_http_runtime::axum_router::retired_provenance"
+          }
+        ],
+        "required_seam_ids": [
+          "atm_http_runtime::axum_router::retired_provenance"
+        ]
+      }
+    },
+    {
+      "cases_run": 100,
+      "correlation_id": "differential-probe",
+      "encountered_issues": [],
+      "error": null,
+      "finding_ids": [],
+      "negative_cases": [],
+      "status": "success",
+      "target": "local-http-framing",
+      "target_invocation": {
+        "proofs": [
+          {
+            "evidence_ref": "site/reports/fuzz/an15-http-framing-v2-20260815-v2/differential-probe.log",
+            "invocation_count": 100,
+            "mechanism": "coverage",
+            "seam_id": "atm_http_runtime::loopback_tcp::live_request"
+          }
+        ],
+        "required_seam_ids": [
+          "atm_http_runtime::loopback_tcp::live_request"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN3-BOUNDARY-001>
+  a triage:Finding ;
+  triage:findingId "AN3-BOUNDARY-001" ;
+  triage:title "Forbidden atm-http-runtime -> atm-template-sc-compose dev-dependency" ;
+  triage:description "crates/atm-http-runtime/Cargo.toml adds a dev-dependency on atm-template-sc-compose; forbidden by BOUNDARY-TemplateScCompose and not present on the manifest-dependency-allowlist." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "closed" ;
+  triage:resolution "fixed" ;
+  triage:closedAt "2026-08-12T03:15:00Z"^^xsd:dateTime ;
+  triage:closedNote "INDEPENDENT VERIFICATION (quality-mgr, integrate/phase-an @ 208276044, PR #855 merge): grep -n \"atm-template-sc-compose\" crates/atm-http-runtime/Cargo.toml returns no matches -- the forbidden dev-dependency has been removed entirely from the manifest." ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-12T02:37:23Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.3 ;
+  triage:foundAt "2026-08-12T02:35:12Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN3-BOUNDARY-001/1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AN3-BOUNDARY-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/Cargo.toml" ;
+  triage:line 1 ;
+  triage:snippet "dev-dependency atm-template-sc-compose" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:resolution "fixed" ;
+  triage:closedAt "2026-08-12T03:15:00Z"^^xsd:dateTime ;
+  triage:closedNote "atm-template-sc-compose dev-dependency entry removed; grep confirms no match at integrate/phase-an @ 208276044." ;
+  triage:branch "feature/pan-s3-send-surface" ;
+  triage:headSha "ebbf68b815bedbe331e0b4e20d0ea71de86a923d" ;
+  triage:occursIn <urn:atm:triage:worktree/S3/ebbf68b8> .
+
+<urn:atm:triage:worktree/S3/ebbf68b8>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pan-s3-send-surface" ;
+  triage:branch "feature/pan-s3-send-surface" ;
+  triage:headSha "ebbf68b815bedbe331e0b4e20d0ea71de86a923d" ;
+  triage:orderIndex 0 .

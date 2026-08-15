@@ -3,7 +3,6 @@
 //! UDS and future HTTPS adapters translate HTTP into this surface.  The
 //! application router receives no socket, storage, or nudge capability.
 
-use std::io::{Read, Write};
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
@@ -17,24 +16,18 @@ use crate::protocol::{
     CompatibilityPreflight, RequestEnvelope, ResponseEnvelope, TeamMemberHeartbeatRequest,
 };
 use crate::read::{PeekQuery, ReadQuery};
+use crate::search::SearchRequest;
 use crate::send::WriteRequest;
 use crate::types::HostName;
 use base64::Engine as _;
 
-mod http_frame_reader;
-pub use http_frame_reader::HttpFrameReader;
-pub(crate) use http_frame_reader::HttpResponseFrame;
-
 pub const MAX_HTTP_REQUEST_BODY_BYTES: usize = 1_048_576;
 /// Version of the daemon's HTTP request contract.
 pub const HTTP_API_VERSION: &str = crate::protocol::HTTP_API_VERSION;
-const MAX_HTTP_HEADER_BYTES: usize = 16 * 1024;
 /// HTTP response header carrying the canonical clear outcome for the `204`
 /// clear route. Framework adapters use this shared contract instead of
 /// inventing a JSON body for a no-content response.
 pub const CLEAR_OUTCOME_HEADER: &str = "X-ATM-Clear-Outcome";
-/// Adapter-owned provenance header for the explicit plaintext peer smoke mode.
-pub const PEER_SOURCE_HOST_HEADER: &str = "X-ATM-Peer-Source-Host";
 const MESSAGES_PATH: &str = "/v1/atm/messages";
 const INSPECT_PATH: &str = "/v1/atm/messages/inspect";
 const READ_PATH: &str = "/v1/atm/messages/read";
@@ -42,6 +35,7 @@ const DOCTOR_PATH: &str = "/v1/atm/doctor";
 const COMPATIBILITY_PATH: &str = "/v1/atm/compatibility";
 const HEARTBEAT_PATH: &str = "/v1/atm/heartbeat";
 const RUNTIME_RELOAD_PATH: &str = "/v1/atm/runtime/reload";
+const SEARCH_PATH: &str = "/v1/atm/messages/search";
 
 /// One registered HTTP route, published from the same constants as request encoding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -51,7 +45,7 @@ pub struct HttpRoute {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum HttpRouteKind {
+pub enum HttpRouteKind {
     Write,
     List,
     Clear,
@@ -61,6 +55,7 @@ enum HttpRouteKind {
     RuntimeReload,
     Compatibility,
     Heartbeat,
+    Search,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -72,6 +67,13 @@ struct HttpRouteSpec {
 // This one table is consumed by both outbound request construction and inbound
 // decoding. Adding a route cannot make it to one direction without the other.
 const HTTP_ROUTE_SPECS: &[HttpRouteSpec] = &[
+    HttpRouteSpec {
+        kind: HttpRouteKind::Search,
+        route: HttpRoute {
+            method: "GET",
+            path_template: SEARCH_PATH,
+        },
+    },
     HttpRouteSpec {
         kind: HttpRouteKind::List,
         route: HttpRoute {
@@ -146,15 +148,16 @@ fn route_spec(kind: HttpRouteKind) -> &'static HttpRouteSpec {
     // Keep outbound route selection exhaustive: adding a route kind cannot
     // compile until its shared codec entry is selected here.
     match kind {
-        HttpRouteKind::List => &HTTP_ROUTE_SPECS[0],
-        HttpRouteKind::Write => &HTTP_ROUTE_SPECS[1],
-        HttpRouteKind::Clear => &HTTP_ROUTE_SPECS[2],
-        HttpRouteKind::Inspect => &HTTP_ROUTE_SPECS[3],
-        HttpRouteKind::Receive => &HTTP_ROUTE_SPECS[4],
-        HttpRouteKind::Doctor => &HTTP_ROUTE_SPECS[5],
-        HttpRouteKind::RuntimeReload => &HTTP_ROUTE_SPECS[6],
-        HttpRouteKind::Compatibility => &HTTP_ROUTE_SPECS[7],
-        HttpRouteKind::Heartbeat => &HTTP_ROUTE_SPECS[8],
+        HttpRouteKind::Search => &HTTP_ROUTE_SPECS[0],
+        HttpRouteKind::List => &HTTP_ROUTE_SPECS[1],
+        HttpRouteKind::Write => &HTTP_ROUTE_SPECS[2],
+        HttpRouteKind::Clear => &HTTP_ROUTE_SPECS[3],
+        HttpRouteKind::Inspect => &HTTP_ROUTE_SPECS[4],
+        HttpRouteKind::Receive => &HTTP_ROUTE_SPECS[5],
+        HttpRouteKind::Doctor => &HTTP_ROUTE_SPECS[6],
+        HttpRouteKind::RuntimeReload => &HTTP_ROUTE_SPECS[7],
+        HttpRouteKind::Compatibility => &HTTP_ROUTE_SPECS[8],
+        HttpRouteKind::Heartbeat => &HTTP_ROUTE_SPECS[9],
     }
 }
 
@@ -166,19 +169,24 @@ fn route_kind_for_request(request: &RequestEnvelope) -> HttpRouteKind {
         RequestEnvelope::Receive(_) => HttpRouteKind::Receive,
         RequestEnvelope::Clear(_) => HttpRouteKind::Clear,
         RequestEnvelope::Doctor(_) => HttpRouteKind::Doctor,
+        RequestEnvelope::Search(_) => HttpRouteKind::Search,
         RequestEnvelope::ReloadRuntimeView => HttpRouteKind::RuntimeReload,
         RequestEnvelope::CompatibilityPreflight(_) => HttpRouteKind::Compatibility,
         RequestEnvelope::Heartbeat(_) => HttpRouteKind::Heartbeat,
     }
 }
 
-fn route_kind_for_http(method: &str, path: &str) -> Option<HttpRouteKind> {
+/// Resolves a framework HTTP method and path through the canonical route table.
+#[must_use]
+pub fn http_route_kind(method: &str, path: &str) -> Option<HttpRouteKind> {
+    // Request parameters are part of the HTTP representation, not the route
+    // identity.  In particular, search is a bodyless GET so caches and
+    // ordinary HTTP tooling can address a complete typed query by URL.
+    let path = path.split_once('?').map_or(path, |(path, _)| path);
     HTTP_ROUTE_SPECS.iter().find_map(|spec| {
         (spec.route.method == method && spec.route.path_template == path).then_some(spec.kind)
     })
 }
-
-type EncodedHttpResponse = (u16, &'static str, Vec<u8>, Option<String>);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpRequest {
@@ -200,48 +208,6 @@ pub fn endpoint_for(request: &RequestEnvelope) -> (&'static str, String) {
     (spec.route.method, path)
 }
 
-pub fn write_http_request(
-    writer: &mut impl Write,
-    request: &RequestEnvelope,
-) -> Result<(), AtmError> {
-    write_http_request_with_headers(writer, request, &[])
-}
-
-/// Serializes one route-specific HTTP request with adapter-owned headers.
-pub fn write_http_request_with_headers(
-    writer: &mut impl Write,
-    request: &RequestEnvelope,
-    headers: &[(&str, &str)],
-) -> Result<(), AtmError> {
-    let encoded = encode_http_request(request, headers)?;
-    let headers = encoded.headers.join("\r\n");
-    let headers = if headers.is_empty() {
-        String::new()
-    } else {
-        format!("{headers}\r\n")
-    };
-    write!(
-        writer,
-        "{} {} HTTP/1.1\r\n{headers}Content-Length: {}\r\nConnection: close\r\n\r\n",
-        encoded.method,
-        encoded.path,
-        encoded.body.len()
-    )
-    .map_err(|source| {
-        AtmError::daemon_unavailable(format!(
-            "failed to write daemon HTTP request headers: {source}"
-        ))
-    })?;
-    writer.write_all(&encoded.body).map_err(|source| {
-        AtmError::daemon_unavailable(format!(
-            "failed to write daemon HTTP request body: {source}"
-        ))
-    })?;
-    writer.flush().map_err(|source| {
-        AtmError::daemon_unavailable(format!("failed to flush daemon HTTP request: {source}"))
-    })
-}
-
 /// Encodes one application request as its route-specific HTTP representation.
 ///
 /// The application [`RequestEnvelope`] remains an in-process dispatch type;
@@ -252,7 +218,13 @@ pub fn encode_http_request(
     adapter_headers: &[(&str, &str)],
 ) -> Result<HttpRequest, AtmError> {
     let body = encode_request_body(request)?;
-    let (method, path) = endpoint_for(request);
+    let (method, mut path) = endpoint_for(request);
+    if let RequestEnvelope::Search(value) = request {
+        let encoded = serde_json::to_vec(value).map_err(AtmError::from)?;
+        let encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(encoded);
+        path.push_str("?request=");
+        path.push_str(&encoded);
+    }
     let mut headers = Vec::with_capacity(adapter_headers.len() + 1);
     headers.push("Content-Type: application/json".to_string());
     headers.extend(
@@ -266,132 +238,6 @@ pub fn encode_http_request(
         headers,
         body,
     })
-}
-
-pub fn read_http_request(reader: &mut impl Read) -> Result<Option<HttpRequest>, AtmError> {
-    HttpFrameReader::new().read_request(reader)
-}
-
-/// Writes an HTTP response with the supplied local connection policy.
-///
-/// Local adapters use this for their opt-in bounded keep-alive loop; the
-/// public default remains [`write_http_response`], which closes the connection.
-pub fn write_local_http_response(
-    writer: &mut impl Write,
-    response: &ResponseEnvelope,
-    keep_alive: bool,
-) -> Result<(), AtmError> {
-    match response {
-        ResponseEnvelope::Clear(outcome) => {
-            write_no_content_response_with_connection(writer, outcome, keep_alive)
-        }
-        _ => write_http_response_body_with_connection(writer, response, keep_alive),
-    }
-}
-
-pub fn decode_request(request: HttpRequest) -> Result<ApiRequest, AtmError> {
-    if request.body.len() > MAX_HTTP_REQUEST_BODY_BYTES {
-        return Err(AtmError::validation(
-            "daemon HTTP request body exceeds 1048576 bytes",
-        ));
-    }
-    decode_route_request(
-        &request.method.to_ascii_uppercase(),
-        &request.path,
-        &request.body,
-    )
-}
-
-pub fn write_http_response(
-    writer: &mut impl Write,
-    response: &ResponseEnvelope,
-) -> Result<(), AtmError> {
-    match response {
-        ResponseEnvelope::Clear(outcome) => write_no_content_response(writer, outcome),
-        _ => write_http_response_body(writer, response),
-    }
-}
-
-fn write_http_response_body(
-    writer: &mut impl Write,
-    response: &ResponseEnvelope,
-) -> Result<(), AtmError> {
-    write_http_response_body_with_connection(writer, response, false)
-}
-
-fn write_http_response_body_with_connection(
-    writer: &mut impl Write,
-    response: &ResponseEnvelope,
-    keep_alive: bool,
-) -> Result<(), AtmError> {
-    let (status, reason, body, location) = encode_response(response)?;
-    let location = location
-        .as_deref()
-        .map(|value| format!("Location: {value}\r\n"))
-        .unwrap_or_default();
-    // One application write keeps a small local TCP response from becoming a
-    // header packet followed by a body packet when TCP_NODELAY is enabled.
-    // The framing remains identical for every local transport.
-    let headers = format!(
-        "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\n{location}Content-Length: {}\r\nConnection: {}\r\n\r\n",
-        body.len(),
-        if keep_alive { "keep-alive" } else { "close" },
-    );
-    let mut encoded = Vec::with_capacity(headers.len() + body.len());
-    encoded.extend_from_slice(headers.as_bytes());
-    encoded.extend_from_slice(&body);
-    writer.write_all(&encoded).map_err(|source| {
-        AtmError::daemon_unavailable(format!("failed to write daemon HTTP response: {source}"))
-    })?;
-    writer.flush().map_err(|source| {
-        AtmError::daemon_unavailable(format!("failed to flush daemon HTTP response: {source}"))
-    })
-}
-
-pub fn read_http_response(
-    reader: &mut impl Read,
-    request: &RequestEnvelope,
-) -> Result<ResponseEnvelope, AtmError> {
-    read_http_response_with_frame_reader(&mut HttpFrameReader::new(), reader, request)
-}
-
-/// Reads one HTTP response through a persistent bounded frame reader.
-///
-/// Keep `frames` for the lifetime of a connection when a caller may read more
-/// than one response. This preserves coalesced bytes for the next response;
-/// [`read_http_response`] remains the one-response compatibility wrapper.
-pub fn read_http_response_with_frame_reader(
-    frames: &mut HttpFrameReader,
-    reader: &mut impl Read,
-    request: &RequestEnvelope,
-) -> Result<ResponseEnvelope, AtmError> {
-    let Some(HttpResponseFrame {
-        status_line,
-        headers,
-        body,
-    }) = frames.read_response(reader)?
-    else {
-        return Err(AtmError::daemon_unavailable(
-            "daemon closed HTTP connection before a response",
-        ));
-    };
-    let status = status_line
-        .split_whitespace()
-        .nth(1)
-        .ok_or_else(|| {
-            AtmError::validation_with_recovery(
-                "daemon HTTP response status is malformed",
-                "ensure the daemon returns an HTTP/1.1 status line with a numeric status code",
-            )
-        })?
-        .parse::<u16>()
-        .map_err(|_source| {
-            AtmError::validation_with_recovery(
-                "daemon HTTP response status is malformed",
-                "ensure the daemon returns an HTTP/1.1 status line with a numeric status code",
-            )
-        })?;
-    decode_http_response(request, status, &headers, &body)
 }
 
 /// Decodes one route-specific HTTP response into the application envelope.
@@ -411,37 +257,6 @@ pub fn decode_http_response(
         return decode_response_body(body, "error").map(ResponseEnvelope::Error);
     }
     decode_success_response(request, body)
-}
-
-fn write_no_content_response(
-    writer: &mut impl Write,
-    outcome: &crate::clear::ClearOutcome,
-) -> Result<(), AtmError> {
-    write_no_content_response_with_connection(writer, outcome, false)
-}
-
-fn write_no_content_response_with_connection(
-    writer: &mut impl Write,
-    outcome: &crate::clear::ClearOutcome,
-    keep_alive: bool,
-) -> Result<(), AtmError> {
-    let outcome = serde_json::to_vec(outcome).map_err(AtmError::from)?;
-    let encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(outcome);
-    write!(
-        writer,
-        "HTTP/1.1 204 No Content\r\n{CLEAR_OUTCOME_HEADER}: {encoded}\r\nContent-Length: 0\r\nConnection: {}\r\n\r\n",
-        if keep_alive { "keep-alive" } else { "close" },
-    )
-    .map_err(|source| {
-        AtmError::daemon_unavailable(format!(
-            "failed to write daemon HTTP no-content response: {source}"
-        ))
-    })?;
-    writer.flush().map_err(|source| {
-        AtmError::daemon_unavailable(format!(
-            "failed to flush daemon HTTP no-content response: {source}"
-        ))
-    })
 }
 
 fn decode_no_content_response(
@@ -469,11 +284,12 @@ fn decode_no_content_response(
     })?;
     let outcome = base64::engine::general_purpose::URL_SAFE_NO_PAD
         .decode(encoded)
-        .map_err(|_source| {
+        .map_err(|source| {
             AtmError::validation_with_recovery(
                 "daemon HTTP clear outcome metadata is invalid",
                 "ensure the daemon encodes valid clear outcome metadata in its HTTP 204 response",
             )
+            .with_cause(source)
         })?;
     decode_response_body(&outcome, "clear outcome").map(ResponseEnvelope::Clear)
 }
@@ -488,51 +304,12 @@ fn encode_request_body(request: &RequestEnvelope) -> Result<Vec<u8>, AtmError> {
         RequestEnvelope::Receive(value) => serde_json::to_vec(value),
         RequestEnvelope::Clear(value) => serde_json::to_vec(value),
         RequestEnvelope::Doctor(value) => serde_json::to_vec(value),
+        // Search is a bodyless GET. Its typed request is encoded as the
+        // URL-safe `request` query value in `encode_http_request`.
+        RequestEnvelope::Search(_) => Ok(Vec::new()),
         RequestEnvelope::ReloadRuntimeView => serde_json::to_vec(&()),
     }
     .map_err(AtmError::from)
-}
-
-fn decode_route_request(method: &str, path: &str, body: &[u8]) -> Result<ApiRequest, AtmError> {
-    let route = route_kind_for_http(method, path).ok_or_else(|| {
-        AtmError::validation(format!("unsupported daemon HTTP route {method} {path}"))
-    })?;
-    match route {
-        HttpRouteKind::Write => serde_json::from_slice(body)
-            .map(|value| ApiRequest::Write(Box::new(value)))
-            .map_err(|source| invalid_route_body("write", source)),
-        HttpRouteKind::List => serde_json::from_slice(body)
-            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::List(value))))
-            .map_err(|source| invalid_route_body("messages list", source)),
-        HttpRouteKind::Inspect => serde_json::from_slice(body)
-            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::Peek(value))))
-            .map_err(|source| invalid_route_body("message inspect", source)),
-        HttpRouteKind::Receive => serde_json::from_slice(body)
-            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::Receive(value))))
-            .map_err(|source| invalid_route_body("message read", source)),
-        HttpRouteKind::Clear => serde_json::from_slice(body)
-            .map(ApiRequest::Clear)
-            .map_err(|source| invalid_route_body("messages clear", source)),
-        HttpRouteKind::Doctor => serde_json::from_slice(body)
-            .map(ApiRequest::Doctor)
-            .map_err(|source| invalid_route_body("doctor", source)),
-        HttpRouteKind::Compatibility => serde_json::from_slice(body)
-            .map(ApiRequest::CompatibilityPreflight)
-            .map_err(|source| invalid_route_body("compatibility", source)),
-        HttpRouteKind::Heartbeat => serde_json::from_slice(body)
-            .map(ApiRequest::Heartbeat)
-            .map_err(|source| invalid_route_body("heartbeat", source)),
-        HttpRouteKind::RuntimeReload => serde_json::from_slice::<()>(body)
-            .map(|()| ApiRequest::ReloadRuntimeView)
-            .map_err(|source| invalid_route_body("runtime reload", source)),
-    }
-}
-
-fn invalid_route_body(what: &str, source: serde_json::Error) -> AtmError {
-    AtmError::validation_with_recovery(
-        format!("invalid {what} HTTP request body: {source}"),
-        "ensure the client sends the documented JSON request body and retry",
-    )
 }
 
 fn decode_response_body<T: DeserializeOwned>(
@@ -577,51 +354,11 @@ fn decode_success_response(
         }
         RequestEnvelope::Doctor(_) => decode_response_body(body, "doctor")
             .map(|value| ResponseEnvelope::Doctor(Box::new(value))),
+        RequestEnvelope::Search(_) => decode_response_body(body, "search")
+            .map(|value| ResponseEnvelope::Search(Box::new(value))),
         RequestEnvelope::ReloadRuntimeView => decode_response_body::<()>(body, "runtime reload")
             .map(|()| ResponseEnvelope::RuntimeViewReloaded),
     }
-}
-
-fn encode_response(response: &ResponseEnvelope) -> Result<EncodedHttpResponse, AtmError> {
-    let (status, reason, location, body) = match response {
-        ResponseEnvelope::Send(crate::protocol::SendResponseEnvelope::Sent(value)) => (
-            201,
-            "Created",
-            Some(format!("/v1/atm/message/{}", value.message_id)),
-            serde_json::to_vec(value),
-        ),
-        ResponseEnvelope::Send(crate::protocol::SendResponseEnvelope::Acknowledged(value)) => (
-            201,
-            "Created",
-            Some(format!("/v1/atm/message/{}", value.message_id)),
-            serde_json::to_vec(value),
-        ),
-        ResponseEnvelope::CompatibilityVerdict(value) => {
-            (200, "OK", None, serde_json::to_vec(value))
-        }
-        ResponseEnvelope::Heartbeat(value) => (200, "OK", None, serde_json::to_vec(value)),
-        ResponseEnvelope::List(value) => (200, "OK", None, serde_json::to_vec(value)),
-        ResponseEnvelope::Peek(value) => (200, "OK", None, serde_json::to_vec(value)),
-        ResponseEnvelope::Receive(value) => (200, "OK", None, serde_json::to_vec(value)),
-        ResponseEnvelope::Clear(_) => unreachable!("clear responses use HTTP 204 metadata"),
-        ResponseEnvelope::Doctor(value) => (200, "OK", None, serde_json::to_vec(value)),
-        ResponseEnvelope::RuntimeViewReloaded => (200, "OK", None, serde_json::to_vec(&())),
-        ResponseEnvelope::Error(value) => {
-            let status = if value.is_validation() { 400 } else { 503 };
-            (
-                status,
-                if status == 400 {
-                    "Bad Request"
-                } else {
-                    "Service Unavailable"
-                },
-                None,
-                serde_json::to_vec(value),
-            )
-        }
-    };
-    body.map(|body| (status, reason, body, location))
-        .map_err(AtmError::from)
 }
 
 fn http_header<'a>(headers: &'a [String], name: &str) -> Option<&'a str> {
@@ -639,6 +376,7 @@ pub enum ApiRequest {
     Write(Box<WriteRequest>),
     Clear(ClearQuery),
     Doctor(DoctorQuery),
+    Search(Box<SearchRequest>),
     CompatibilityPreflight(CompatibilityPreflight),
     Heartbeat(TeamMemberHeartbeatRequest),
     ReloadRuntimeView,
@@ -666,6 +404,7 @@ impl ApiRequest {
             Self::Write(request) => RequestEnvelope::Write(request),
             Self::Clear(query) => RequestEnvelope::Clear(query),
             Self::Doctor(query) => RequestEnvelope::Doctor(query),
+            Self::Search(query) => RequestEnvelope::Search(query),
             Self::CompatibilityPreflight(preflight) => {
                 RequestEnvelope::CompatibilityPreflight(preflight)
             }
@@ -690,6 +429,7 @@ impl From<RequestEnvelope> for ApiRequest {
             }
             RequestEnvelope::Clear(query) => Self::Clear(query),
             RequestEnvelope::Doctor(query) => Self::Doctor(query),
+            RequestEnvelope::Search(query) => Self::Search(query),
             RequestEnvelope::CompatibilityPreflight(preflight) => {
                 Self::CompatibilityPreflight(preflight)
             }
@@ -711,6 +451,45 @@ impl ApiResponse {
 
     pub fn into_inner(self) -> ResponseEnvelope {
         self.response
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use base64::Engine as _;
+
+    use super::{HttpRouteKind, encode_http_request, http_route_kind};
+    use crate::protocol::RequestEnvelope;
+    use crate::search::SearchRequest;
+
+    #[test]
+    fn search_is_encoded_as_one_bodyless_get_query_parameter() {
+        let request = RequestEnvelope::Search(Box::new(SearchRequest {
+            query: crate::search::SearchInput::default(),
+            lifecycle: None,
+        }));
+        let encoded = encode_http_request(&request, &[]).expect("HTTP request");
+        assert_eq!(encoded.method, "GET");
+        assert!(encoded.body.is_empty());
+        assert_eq!(
+            http_route_kind(&encoded.method, &encoded.path),
+            Some(HttpRouteKind::Search)
+        );
+        let value = encoded
+            .path
+            .split_once("?request=")
+            .expect("request query value")
+            .1;
+        let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(value)
+            .expect("base64url request");
+        assert_eq!(
+            serde_json::from_slice::<SearchRequest>(&decoded).expect("typed JSON"),
+            SearchRequest {
+                query: crate::search::SearchInput::default(),
+                lifecycle: None,
+            }
+        );
     }
 }
 
@@ -793,589 +572,4 @@ pub fn request_requires_compatibility_verification(request: &RequestEnvelope) ->
         request,
         RequestEnvelope::Write(_) | RequestEnvelope::Clear(_) | RequestEnvelope::ReloadRuntimeView
     )
-}
-
-#[cfg(test)]
-mod tests {
-    use std::io::{self, Read, Write};
-    use std::time::Duration;
-
-    use base64::Engine;
-
-    use super::{
-        ApiRequest, HttpFrameReader, MAX_HTTP_HEADER_BYTES, MAX_HTTP_REQUEST_BODY_BYTES,
-        RequestDeadline, decode_request, read_http_request, read_http_response, write_http_request,
-        write_http_response,
-    };
-    use crate::ack::AckRequest;
-    use crate::clear::{ClearOutcome, ClearQuery, RemovedByClass};
-    use crate::doctor::DoctorQuery;
-    use crate::error::AtmError;
-    use crate::protocol::{RequestEnvelope, ResponseEnvelope};
-    use crate::schema::AtmMessageId;
-    use crate::send::{SendMessageSource, SendRequest};
-    use crate::test_support::{TEST_SENDER, TEST_TEAM};
-    use crate::types::CommandAction;
-
-    #[test]
-    fn zero_request_deadline_has_no_remaining_budget() {
-        let deadline = RequestDeadline::after(Duration::ZERO);
-
-        assert!(deadline.expired());
-        assert_eq!(deadline.remaining(), None);
-    }
-
-    /// A reader that presents a valid HTTP stream in deliberately small reads.
-    ///
-    /// TCP may split one HTTP frame at any byte boundary; adapters must rely on
-    /// HTTP framing rather than a single socket read.
-    struct FragmentedReader {
-        bytes: Vec<u8>,
-        position: usize,
-        maximum_chunk: usize,
-    }
-
-    impl FragmentedReader {
-        fn new(bytes: Vec<u8>, maximum_chunk: usize) -> Self {
-            Self {
-                bytes,
-                position: 0,
-                maximum_chunk,
-            }
-        }
-    }
-
-    impl Read for FragmentedReader {
-        fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
-            if self.position == self.bytes.len() {
-                return Ok(0);
-            }
-            let count = (self.bytes.len() - self.position)
-                .min(self.maximum_chunk)
-                .min(buffer.len());
-            buffer[..count].copy_from_slice(&self.bytes[self.position..self.position + count]);
-            self.position += count;
-            Ok(count)
-        }
-    }
-
-    #[derive(Default)]
-    struct WriteCountingWriter {
-        bytes: Vec<u8>,
-        writes: usize,
-    }
-
-    impl Write for WriteCountingWriter {
-        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-            self.writes += 1;
-            self.bytes.extend_from_slice(bytes);
-            Ok(bytes.len())
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
-
-    #[test]
-    fn http_uds_request_round_trip_preserves_the_canonical_envelope() {
-        let request = RequestEnvelope::Doctor(DoctorQuery::default());
-        let mut bytes = Vec::new();
-
-        write_http_request(&mut bytes, &request).expect("write HTTP request");
-        let decoded = decode_request(
-            read_http_request(&mut bytes.as_slice())
-                .expect("read HTTP request")
-                .expect("request"),
-        )
-        .expect("decode HTTP request");
-
-        assert!(matches!(decoded, ApiRequest::Doctor(_)));
-    }
-
-    #[test]
-    fn http_request_parser_accepts_a_request_fragmented_at_every_transport_read() {
-        let request = RequestEnvelope::Doctor(DoctorQuery::default());
-        let mut wire = Vec::new();
-        write_http_request(&mut wire, &request).expect("write HTTP request");
-
-        for mut frames in [HttpFrameReader::new(), HttpFrameReader::scalar_for_test()] {
-            let mut fragmented = FragmentedReader::new(wire.clone(), 1);
-            let decoded = decode_request(
-                frames
-                    .read_request(&mut fragmented)
-                    .expect("read fragmented HTTP request")
-                    .expect("request"),
-            )
-            .expect("decode fragmented HTTP request");
-
-            assert!(matches!(decoded, ApiRequest::Doctor(_)));
-        }
-    }
-
-    #[test]
-    fn http_request_parser_handles_coalesced_runs_of_consecutive_frames() {
-        let request = RequestEnvelope::Doctor(DoctorQuery::default());
-
-        for frame_count in [1_usize, 2, 4, 8, 16, 32, 64] {
-            let mut wire = Vec::new();
-            for _ in 0..frame_count {
-                write_http_request(&mut wire, &request).expect("write coalesced HTTP request");
-            }
-            for mut frames in [HttpFrameReader::new(), HttpFrameReader::scalar_for_test()] {
-                let mut coalesced = wire.as_slice();
-                for frame_index in 0..frame_count {
-                    let decoded = decode_request(
-                        frames
-                            .read_request(&mut coalesced)
-                            .expect("read coalesced HTTP request")
-                            .unwrap_or_else(|| {
-                                panic!(
-                                    "coalesced run of {frame_count} frames ended before frame {}",
-                                    frame_index + 1
-                                )
-                            }),
-                    )
-                    .expect("decode coalesced request");
-                    assert!(matches!(decoded, ApiRequest::Doctor(_)));
-                }
-                assert!(
-                    coalesced.is_empty(),
-                    "coalesced run of {frame_count} complete frames left trailing bytes"
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn http_frame_reader_retains_bytes_after_a_body_boundary() {
-        let wire = b"POST /v1/atm/messages HTTP/1.1\r\nContent-Length: 2\r\n\r\n{}GET /v1/atm/doctor HTTP/1.1\r\nContent-Length: 0\r\n\r\n";
-        for mut frames in [HttpFrameReader::new(), HttpFrameReader::scalar_for_test()] {
-            let mut source = FragmentedReader::new(wire.to_vec(), wire.len());
-            let first = frames
-                .read_request(&mut source)
-                .expect("read first frame")
-                .expect("first frame");
-            let second = frames
-                .read_request(&mut source)
-                .expect("read second frame")
-                .expect("second frame");
-
-            assert_eq!(first.body, b"{}");
-            assert_eq!(second.method, "GET");
-            assert_eq!(second.path, "/v1/atm/doctor");
-        }
-    }
-
-    #[test]
-    fn http_frame_reader_consumes_a_complete_buffered_follow_up_without_reading() {
-        let wire = b"GET /v1/atm/doctor HTTP/1.1\r\nContent-Length: 0\r\n\r\nGET /v1/atm/doctor HTTP/1.1\r\nContent-Length: 0\r\n\r\n";
-        let mut frames = HttpFrameReader::new();
-        let mut source = wire.as_slice();
-
-        let first = frames
-            .read_request(&mut source)
-            .expect("read first frame")
-            .expect("first frame");
-        let second = frames
-            .read_buffered_request()
-            .expect("read buffered frame")
-            .expect("buffered frame");
-
-        assert_eq!(first.path, "/v1/atm/doctor");
-        assert_eq!(second.path, "/v1/atm/doctor");
-        assert!(source.is_empty());
-    }
-
-    #[test]
-    fn http_response_frame_reader_accepts_delimiter_and_body_fragmentation() {
-        let wire = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}";
-
-        for mut frames in [HttpFrameReader::new(), HttpFrameReader::scalar_for_test()] {
-            let mut source = FragmentedReader::new(wire.to_vec(), 1);
-            let response = frames
-                .read_response(&mut source)
-                .expect("read fragmented HTTP response")
-                .expect("response");
-
-            assert_eq!(response.status_line, "HTTP/1.1 200 OK");
-            assert_eq!(response.body, b"{}");
-        }
-    }
-
-    #[test]
-    fn public_http_response_reader_uses_bounded_fragmented_framing() {
-        let request = RequestEnvelope::Doctor(DoctorQuery::default());
-        let mut wire = Vec::new();
-        write_http_response(
-            &mut wire,
-            &ResponseEnvelope::Error(AtmError::validation("fragmented")),
-        )
-        .expect("write response");
-        let mut source = FragmentedReader::new(wire, 1);
-
-        let response = read_http_response(&mut source, &request)
-            .expect("bounded public response reader must decode fragmented response");
-
-        assert!(matches!(response, ResponseEnvelope::Error(error) if error.is_validation()));
-    }
-
-    #[test]
-    fn http_response_frame_reader_retains_coalesced_follow_up() {
-        let wire = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}HTTP/1.1 503 Service Unavailable\r\nContent-Length: 2\r\n\r\n[]";
-
-        for mut frames in [HttpFrameReader::new(), HttpFrameReader::scalar_for_test()] {
-            let mut source = FragmentedReader::new(wire.to_vec(), wire.len());
-            let first = frames
-                .read_response(&mut source)
-                .expect("read first HTTP response")
-                .expect("first response");
-            let second = frames
-                .read_buffered_response()
-                .expect("read buffered HTTP response")
-                .expect("second response");
-
-            assert_eq!(first.body, b"{}");
-            assert_eq!(second.status_line, "HTTP/1.1 503 Service Unavailable");
-            assert_eq!(second.body, b"[]");
-            assert_eq!(source.position, source.bytes.len());
-        }
-    }
-
-    #[test]
-    fn http_response_frame_reader_rejects_ambiguous_or_oversized_frames() {
-        let duplicate = b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nContent-Length: 0\r\n\r\n";
-        let duplicate_error = HttpFrameReader::new()
-            .read_response(&mut duplicate.as_slice())
-            .expect_err("duplicate response Content-Length must fail");
-        assert!(duplicate_error.is_validation());
-        assert!(
-            duplicate_error
-                .message()
-                .contains("duplicate Content-Length")
-        );
-
-        let oversized = format!(
-            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n",
-            MAX_HTTP_REQUEST_BODY_BYTES + 1
-        );
-        let mut oversized_source = oversized.as_bytes();
-        let oversized_error = HttpFrameReader::new()
-            .read_response(&mut oversized_source)
-            .expect_err("oversized response body must fail");
-        assert!(oversized_error.is_validation());
-        assert!(oversized_error.message().contains("body exceeds"));
-    }
-
-    #[test]
-    fn http_response_frame_reader_errors_include_recovery_guidance() {
-        let invalid_headers = b"HTTP/1.1 200 OK\r\nX-Test: \xff\r\n\r\n";
-        let duplicate_length = b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nContent-Length: 0\r\n\r\n";
-        let invalid_length = b"HTTP/1.1 200 OK\r\nContent-Length: nope\r\n\r\n";
-        let oversized_headers = format!(
-            "HTTP/1.1 200 OK\r\nX-Test: {}\r\n\r\n",
-            "x".repeat(MAX_HTTP_HEADER_BYTES)
-        );
-        let oversized_body = format!(
-            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n",
-            MAX_HTTP_REQUEST_BODY_BYTES + 1
-        );
-
-        for wire in [
-            invalid_headers.as_slice(),
-            duplicate_length.as_slice(),
-            invalid_length.as_slice(),
-            oversized_headers.as_bytes(),
-            oversized_body.as_bytes(),
-        ] {
-            let mut source = wire;
-            let error = HttpFrameReader::new()
-                .read_response(&mut source)
-                .expect_err("malformed response must fail with recovery guidance");
-            assert!(error.is_validation());
-            assert!(
-                error.message().contains("Recovery:"),
-                "response framing error must explain recovery: {error:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn response_decoding_errors_include_recovery_guidance() {
-        let clear = RequestEnvelope::Clear(ClearQuery {
-            home_dir: std::env::temp_dir(),
-            current_dir: std::env::temp_dir(),
-            caller_identity: TEST_SENDER.parse().expect("caller"),
-            caller_team: TEST_TEAM.parse().expect("team"),
-            older_than: None,
-            idle_only: false,
-            dry_run: false,
-        });
-        let doctor = RequestEnvelope::Doctor(DoctorQuery::default());
-        let valid_outcome = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
-            serde_json::to_vec(&ClearOutcome {
-                action: CommandAction::Clear,
-                team: TEST_TEAM.parse().expect("team"),
-                agent: TEST_SENDER.parse().expect("agent"),
-                removed_total: 0,
-                remaining_total: 0,
-                removed_by_class: RemovedByClass::default(),
-            })
-            .expect("serialize outcome"),
-        );
-        let cases = [
-            (
-                b"HTTP/1.1 OK\r\nContent-Length: 0\r\n\r\n".as_slice(),
-                &doctor,
-            ),
-            (
-                b"HTTP/1.1 nope OK\r\nContent-Length: 0\r\n\r\n".as_slice(),
-                &doctor,
-            ),
-            (
-                b"HTTP/1.1 204 No Content\r\nContent-Length: 1\r\n\r\nx".as_slice(),
-                &clear,
-            ),
-            (
-                b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".as_slice(),
-                &doctor,
-            ),
-        ];
-
-        for (mut wire, request) in cases {
-            let error = read_http_response(&mut wire, request)
-                .expect_err("malformed response must include recovery guidance");
-            assert!(error.is_validation());
-            assert!(error.message().contains("Recovery:"), "{error:?}");
-        }
-
-        for (mut wire, request) in [
-            (
-                b"HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nx".as_slice(),
-                &doctor,
-            ),
-            (
-                b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 1\r\n\r\nx".as_slice(),
-                &doctor,
-            ),
-        ] {
-            let error = read_http_response(&mut wire, request)
-                .expect_err("invalid JSON response must include recovery guidance");
-            assert!(error.is_validation());
-            assert!(error.message().contains("Recovery:"), "{error:?}");
-        }
-
-        for mut wire in [
-            b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".as_slice(),
-            b"HTTP/1.1 204 No Content\r\nX-ATM-Clear-Outcome: invalid!\r\nContent-Length: 0\r\n\r\n".as_slice(),
-        ] {
-            let error = read_http_response(&mut wire, &clear)
-                .expect_err("malformed clear response must include recovery guidance");
-            assert!(error.is_validation());
-            assert!(error.message().contains("Recovery:"), "{error:?}");
-        }
-
-        let wire = format!(
-            "HTTP/1.1 204 No Content\r\nX-ATM-Clear-Outcome: {valid_outcome}\r\nContent-Length: 0\r\n\r\n"
-        );
-        assert!(read_http_response(&mut wire.as_bytes(), &clear).is_ok());
-    }
-
-    #[test]
-    fn http_frame_reader_rejects_duplicate_content_length() {
-        let wire =
-            b"POST /v1/atm/messages HTTP/1.1\r\nContent-Length: 2\r\nContent-Length: 2\r\n\r\n{}";
-        let error = HttpFrameReader::new()
-            .read_request(&mut wire.as_slice())
-            .expect_err("duplicate Content-Length must be rejected");
-
-        assert!(error.is_validation());
-        assert!(error.message().contains("duplicate Content-Length"));
-    }
-
-    #[test]
-    fn http_wire_body_is_route_schema_not_request_envelope() {
-        let request = RequestEnvelope::Doctor(DoctorQuery::default());
-        let mut bytes = Vec::new();
-
-        write_http_request(&mut bytes, &request).expect("write HTTP request");
-
-        let text = String::from_utf8(bytes).expect("HTTP UTF-8");
-        assert!(text.starts_with("GET /v1/atm/doctor HTTP/1.1"));
-        assert!(!text.contains("Doctor"));
-        assert!(!text.contains("RequestEnvelope"));
-    }
-
-    #[test]
-    fn http_error_is_direct_error_body_with_non_success_status() {
-        let request = RequestEnvelope::Doctor(DoctorQuery::default());
-        let mut bytes = Vec::new();
-
-        write_http_response(
-            &mut bytes,
-            &ResponseEnvelope::Error(AtmError::validation("bad")),
-        )
-        .expect("write HTTP error");
-
-        let text = String::from_utf8(bytes.clone()).expect("HTTP UTF-8");
-        assert!(text.starts_with("HTTP/1.1 400 Bad Request"));
-        assert!(!text.contains("Error\":{") && !text.contains("Error\""));
-        let response = read_http_response(&mut bytes.as_slice(), &request).expect("read error");
-        assert!(matches!(response, ResponseEnvelope::Error(error) if error.is_validation()));
-    }
-
-    #[test]
-    fn http_response_writes_headers_and_body_as_one_transport_frame() {
-        let mut writer = WriteCountingWriter::default();
-
-        write_http_response(
-            &mut writer,
-            &ResponseEnvelope::Error(AtmError::validation("bad")),
-        )
-        .expect("write HTTP error");
-
-        assert_eq!(
-            writer.writes, 1,
-            "response must not split header and body writes"
-        );
-        assert!(writer.bytes.starts_with(b"HTTP/1.1 400 Bad Request"));
-    }
-
-    #[test]
-    fn http_response_remains_explicitly_connection_close_until_keep_alive_is_introduced() {
-        let mut bytes = Vec::new();
-
-        write_http_response(
-            &mut bytes,
-            &ResponseEnvelope::Error(AtmError::validation("bad")),
-        )
-        .expect("write HTTP error");
-
-        let headers = std::str::from_utf8(&bytes)
-            .expect("HTTP response is UTF-8")
-            .split("\r\n\r\n")
-            .next()
-            .expect("response headers");
-        assert!(
-            headers
-                .lines()
-                .any(|line| line.eq_ignore_ascii_case("Connection: close"))
-        );
-    }
-
-    #[test]
-    fn http_clear_uses_no_content_with_outcome_metadata() {
-        let request = RequestEnvelope::Clear(ClearQuery {
-            home_dir: std::env::temp_dir(),
-            current_dir: std::env::temp_dir(),
-            caller_identity: TEST_SENDER.parse().expect("caller"),
-            caller_team: TEST_TEAM.parse().expect("team"),
-            older_than: None,
-            idle_only: false,
-            dry_run: false,
-        });
-        let response = ResponseEnvelope::Clear(ClearOutcome {
-            action: CommandAction::Clear,
-            team: TEST_TEAM.parse().expect("team"),
-            agent: TEST_SENDER.parse().expect("agent"),
-            removed_total: 1,
-            remaining_total: 2,
-            removed_by_class: RemovedByClass {
-                acknowledged: 1,
-                read: 0,
-            },
-        });
-        let mut bytes = Vec::new();
-
-        write_http_response(&mut bytes, &response).expect("write clear response");
-
-        let text = String::from_utf8(bytes.clone()).expect("HTTP UTF-8");
-        assert!(text.starts_with("HTTP/1.1 204 No Content"));
-        assert!(text.contains("X-ATM-Clear-Outcome:"));
-        assert!(text.ends_with("\r\n\r\n"));
-        let decoded = read_http_response(&mut bytes.as_slice(), &request).expect("read clear");
-        assert!(matches!(decoded, ResponseEnvelope::Clear(outcome) if outcome.removed_total == 1));
-    }
-
-    #[test]
-    fn normal_send_and_ack_share_one_http_write_resource() {
-        let send = RequestEnvelope::Write(Box::new(
-            SendRequest::new(
-                std::env::temp_dir(),
-                std::env::temp_dir(),
-                TEST_SENDER.parse().expect("sender"),
-                "receiver",
-                TEST_TEAM.parse().expect("team"),
-                SendMessageSource::Inline("hello".to_string()),
-                None,
-                false,
-                None,
-                false,
-            )
-            .expect("send request"),
-        ));
-        let ack = RequestEnvelope::Write(Box::new(
-            AckRequest {
-                home_dir: std::env::temp_dir(),
-                current_dir: std::env::temp_dir(),
-                caller_identity: TEST_SENDER.parse().expect("sender"),
-                caller_chat_id: None,
-                caller_team: TEST_TEAM.parse().expect("team"),
-                activity_observation: None,
-                message_id: AtmMessageId::new(),
-                reply_body: "acknowledged".to_string(),
-            }
-            .into_write_request(),
-        ));
-
-        for (request, is_ack) in [(send, false), (ack, true)] {
-            let mut bytes = Vec::new();
-            write_http_request(&mut bytes, &request).expect("write HTTP request");
-            let raw = String::from_utf8(bytes.clone()).expect("HTTP UTF-8");
-            assert!(raw.starts_with("POST /v1/atm/messages HTTP/1.1"));
-            let decoded = decode_request(
-                read_http_request(&mut bytes.as_slice())
-                    .expect("read HTTP request")
-                    .expect("request"),
-            )
-            .expect("decode HTTP request");
-            assert!(matches!(
-                decoded,
-                ApiRequest::Write(request) if request.acknowledges_message_id.is_some() == is_ack
-            ));
-        }
-    }
-
-    #[test]
-    fn http_decode_rejects_body_kind_that_does_not_match_route() {
-        let request = RequestEnvelope::Doctor(DoctorQuery::default());
-        let body = serde_json::to_vec(&request).expect("body");
-        let raw = format!(
-            "POST /v1/atm/messages HTTP/1.1\r\nContent-Length: {}\r\n\r\n{}",
-            body.len(),
-            String::from_utf8(body).expect("utf8")
-        );
-
-        let decoded = decode_request(
-            read_http_request(&mut raw.as_bytes())
-                .expect("read HTTP request")
-                .expect("request"),
-        );
-
-        let error = decoded.expect_err("route mismatch");
-        assert!(error.is_validation());
-        assert!(error.message().contains("Recovery:"), "{error:?}");
-    }
-
-    #[test]
-    fn declared_oversized_http_body_is_rejected_before_decode() {
-        let request = format!(
-            "POST /v1/atm/messages HTTP/1.1\r\nContent-Length: {}\r\n\r\n",
-            MAX_HTTP_REQUEST_BODY_BYTES + 1
-        );
-
-        let error = read_http_request(&mut request.as_bytes()).expect_err("oversized body");
-
-        assert!(error.is_validation());
-    }
 }

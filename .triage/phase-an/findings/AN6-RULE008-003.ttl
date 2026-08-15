@@ -1,0 +1,59 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN6-RULE008-003>
+  a triage:Finding ;
+  triage:findingId "AN6-RULE008-003" ;
+  triage:title "Raw production identity literal 'atm-dev' in atm-query-python lib.rs test" ;
+  triage:description "AN6-QA-4 (quality-mgr) independent re-verification of AN6-RULE008-002 confirmed that fix genuinely closed, but surfaced a separate, pre-existing RULE-008/009 violation not caught during AN6-QA-3: crates/atm-query-python/src/lib.rs:179, in test parameterized_query_returns_column_labelled_rows, uses PyTuple::new(py, [raw literal atm-dev]) as a query parameter. This literal predates AN6QA2-FIX-1 (present unchanged at 59ee84654 and still at 77acf6a0a); confirmed via git diff 59ee84654..77acf6a0a --stat showing only templates.rs changed. Recommend replacing the raw literal with the same TEST_* fixture pattern used for templates.rs (e.g. a shared test-identity constant). This finding blocks just lint identities check / PR #862 mergeability." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "lint-rule008-009" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "branch" ;
+  triage:status "closed" ;
+  triage:resolution "fixed" ;
+  triage:closedAt "2026-08-12T11:36:44Z"^^xsd:dateTime ;
+  triage:closedNote "INDEPENDENT VERIFICATION (quality-mgr, AN6-QA-6 @ 3c62c2bb3890): fresh pull, HEAD confirmed. python3 .just/check_test_identity_literals.py --root . -> 0 violations. Full workspace grep for 'atm-dev' in *.rs -> zero hits. just lint -> only pre-existing deny --config mismatch (unrelated, non-blocking). Clean-rebuild clippy -> 0 warnings. cargo test -p atm-query-python -> 5/5 pass. Genuinely fixed; TEST_NONEXISTENT_TEAM/'test-team' replaces the raw identity literal entirely. (Test-quality regression from the != rewrite tracked separately, non-blocking: see AN6-TESTQUALITY-001.)" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-12T11:25:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.6 ;
+  triage:foundAt "2026-08-12T11:25:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN6-RULE008-003/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN6-RULE008-003/2> ;
+  triage:triageRecordVersion "3" .
+
+<urn:atm:triage:occurrence/AN6-RULE008-003/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-query-python/src/lib.rs" ;
+  triage:line 179 ;
+  triage:snippet "PyTuple::new(py, [raw literal atm-dev]) -- raw production identity literal in test parameter" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedNote "AN6-QA-5 (894e36781846): inline PyTuple literal removed from line 179 -- this specific occurrence is fixed, but the underlying identities-checker violation moved to a new const definition (see occurrence 2). AN6-RULE008-003-FIX-1 (const TEST_ANALYST_TEAM: &str = 'atm-dev') relabeled rather than fixed the finding: .just/check_test_identity_literals.py flags any string-literal content matching forbidden_literals regardless of the const/variable name wrapping it." ;
+  triage:branch "feature/pan-s6-query-surface" ;
+  triage:headSha "894e36781846dbbee00cf5cccb5900df31a96468" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pan-s6-query-surface> .
+
+<urn:atm:triage:occurrence/AN6-RULE008-003/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-query-python/src/lib.rs" ;
+  triage:line 136 ;
+  triage:snippet "const TEST_ANALYST_TEAM: &str = 'atm-dev'; -- raw production identity literal still present in const initializer" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedNote "AN6-QA-6 (3c62c2bb3890): const renamed to TEST_NONEXISTENT_TEAM with synthetic value 'test-team', confirmed via direct check_test_identity_literals.py run (0 violations) and full workspace grep for 'atm-dev' (zero hits). Genuinely fixed." ;
+  triage:branch "feature/pan-s6-query-surface" ;
+  triage:headSha "3c62c2bb389061ee820c99aa5971300dd05f7cb2" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pan-s6-query-surface> .
+
+<urn:atm:triage:worktree/feature-pan-s6-query-surface>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pan-s6-query-surface" ;
+  triage:branch "feature/pan-s6-query-surface" ;
+  triage:headSha "3c62c2bb389061ee820c99aa5971300dd05f7cb2" ;
+  triage:orderIndex 1 .

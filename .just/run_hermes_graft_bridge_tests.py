@@ -88,6 +88,16 @@ def main() -> None:
         hermes_wheels = sorted(wheel_dir.glob("hermes_atm*.whl"))
         if len(hermes_wheels) != 1:
             raise RuntimeError(f"expected one hermes-atm wheel, found {len(hermes_wheels)}")
+        # The generic graft wheel owns the strict Pydantic ingress models.
+        # Install that declared runtime dependency explicitly because this
+        # contract runner intentionally installs both project wheels with
+        # ``--no-deps`` to avoid resolving an unrelated published ATM wheel.
+        subprocess.run(
+            [str(python), "-m", "pip", "install", "pydantic>=2,<3"],
+            check=True,
+            cwd=ROOT,
+            env=env,
+        )
         subprocess.run(
             [str(python), "-m", "pip", "install", "--no-deps", str(graft_wheels[0]), str(hermes_wheels[0])],
             check=True,

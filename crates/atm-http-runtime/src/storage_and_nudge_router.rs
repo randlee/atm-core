@@ -20,7 +20,8 @@ use atm_core::error::AtmError;
 use atm_core::list::ListQuery;
 use atm_core::observability::ObservabilityPort;
 use atm_core::protocol::{
-    CompatibilityVerdict, ReleaseVersion, RequestEnvelope, ResponseEnvelope, SendResponseEnvelope,
+    CompatibilityVerdict, ReleaseVersion, RequestEnvelope, RequestId, ResponseEnvelope,
+    SendResponseEnvelope,
 };
 use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::{WarningEntry, WriteOutcome, prepare_write_with_async_runtime};
@@ -197,6 +198,7 @@ impl StorageAndNudgeRouter {
         message_id: atm_core::schema::AtmMessageId,
         timestamp: atm_core::types::IsoTimestamp,
         deadline: RequestDeadline,
+        request_id: RequestId,
     ) -> Result<(), AtmError> {
         let Some(host) = request.to.as_ref().and_then(|recipient| recipient.host()) else {
             return Ok(());
@@ -206,10 +208,17 @@ impl StorageAndNudgeRouter {
                 "request deadline expired before cross-host acknowledgement delivery",
             )
         })?;
-        let client = crate::direct_peer_tcp_client(host.clone(), self.direct_peer_port, remaining)?;
+        let client = crate::client::direct_peer_write_client(
+            host.clone(),
+            self.direct_peer_port,
+            remaining,
+        )?;
         let request = request.clone().with_origin_metadata(message_id, timestamp);
         match client
-            .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request))))
+            .execute_with_request_id(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(request))),
+                request_id,
+            )
             .await?
             .into_inner()
         {
@@ -286,6 +295,7 @@ impl StorageAndNudgeRouter {
             },
             ApiRequest::Clear(query) => self.clear_messages(query, deadline).await,
             ApiRequest::Doctor(query) => self.doctor(query, deadline).await,
+            ApiRequest::Search(request) => self.search(*request, ingress, deadline).await,
             ApiRequest::CompatibilityPreflight(preflight) => Ok(ApiResponse::new(
                 ResponseEnvelope::CompatibilityVerdict(compatibility_verdict(preflight)),
             )),
@@ -415,6 +425,19 @@ impl StorageAndNudgeRouter {
             .await
     }
 
+    async fn search(
+        &self,
+        request: atm_core::search::SearchRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        let store = self.service_runtime.async_message_search_store()?;
+        atm_core::search::execute_search(ingress, request, store.as_ref(), deadline)
+            .await
+            .map(|response| atm_core::protocol::ResponseEnvelope::Search(Box::new(response)))
+            .map(ApiResponse::new)
+    }
+
     async fn heartbeat(
         &self,
         request: atm_core::protocol::TeamMemberHeartbeatRequest,
@@ -466,9 +489,24 @@ impl atm_core::boundary::sealed::Sealed for StorageAndNudgeRouter {}
 impl CanonicalWriteHandler for StorageAndNudgeRouter {
     fn write(
         &self,
+        request: atm_core::send::WriteRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
+        self.write_with_request_id(
+            request,
+            ingress,
+            deadline,
+            atm_core::protocol::next_request_id(),
+        )
+    }
+
+    fn write_with_request_id(
+        &self,
         mut request: atm_core::send::WriteRequest,
         ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
+        request_id: RequestId,
     ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
         Box::pin(async move {
             if deadline.expired() {
@@ -490,6 +528,7 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
                     committed.message_id,
                     committed.persisted_timestamp,
                     deadline,
+                    request_id,
                 )
                 .await?;
             }
@@ -510,9 +549,27 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
         ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
+        self.dispatch_with_request_id(
+            request,
+            ingress,
+            deadline,
+            atm_core::protocol::next_request_id(),
+        )
+    }
+
+    fn dispatch_with_request_id(
+        &self,
+        request: ApiRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+        request_id: RequestId,
+    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
         Box::pin(async move {
             match request {
-                ApiRequest::Write(request) => self.write(*request, ingress, deadline).await,
+                ApiRequest::Write(request) => {
+                    self.write_with_request_id(*request, ingress, deadline, request_id)
+                        .await
+                }
                 request => self.dispatch_non_write(request, ingress, deadline).await,
             }
         })
@@ -609,11 +666,18 @@ mod tests {
         SendResponseEnvelope, TeamMemberHeartbeatRequest,
     };
     use atm_core::schema::AtmMessageId;
-    use atm_core::send::{SendMessageSource, WriteRequest};
+    use atm_core::send::{
+        MessageClassification, SendMessageSource, TemplateSendSource, WriteRequest,
+    };
     use atm_core::types::{AgentName, ModelName, PaneId, TeamName};
-    use atm_core::{RequestDeadline, api::ApiRequest, error::AtmError};
-    use atm_runtime_test_support::{hold_sqlite_writer_lock, open_sqlite_boundary};
-    use atm_storage::{MessageKey, MessageQuery, MessageStore, RosterSnapshot};
+    use atm_core::{AuthenticatedIngress, RequestDeadline, api::ApiRequest, error::AtmError};
+    use atm_runtime_test_support::{
+        inspect_template_admission_for_test, install_sqlite_message_write_failure,
+        open_sqlite_boundary,
+    };
+    use atm_storage::{
+        MessageKey, MessageQuery, MessageStore, RosterSnapshot, TemplateFrontmatter, TemplateSha,
+    };
     use axum::body::{Body, to_bytes};
     use axum::http::header::{CONTENT_TYPE, LOCATION};
     use axum::http::{Request, StatusCode};
@@ -625,10 +689,7 @@ mod tests {
         AuthenticatedConnector, CanonicalWriteHandler, NonZeroDuration, RuntimeHealth,
         RuntimeLimits, RuntimeTimeouts, canonical_message_router,
     };
-    use crate::{
-        DirectPeerTcpConfig, HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig,
-        direct_peer_tcp_client,
-    };
+    use crate::{HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig, direct_peer_tcp_client};
     #[cfg(unix)]
     use crate::{UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid};
 
@@ -713,6 +774,70 @@ mod tests {
         }
     }
 
+    struct FixtureTemplateComposer {
+        source_bytes: Vec<u8>,
+        inspection: atm_core::TemplateInspection,
+    }
+
+    impl FixtureTemplateComposer {
+        fn new(body: &str) -> Self {
+            Self::with_inspection(
+                body.as_bytes().to_vec(),
+                atm_core::TemplateInspection {
+                    sha: TemplateSha::new(
+                        "814271b7e98145c998a2c1f20270856c592881ba7dac4dfee9307d8093163a03",
+                    )
+                    .expect("template SHA"),
+                    frontmatter: TemplateFrontmatter::default(),
+                    include_references: Vec::new(),
+                    output_format: atm_storage::TemplateOutputFormat::Text,
+                },
+            )
+        }
+
+        fn with_inspection(
+            source_bytes: Vec<u8>,
+            inspection: atm_core::TemplateInspection,
+        ) -> Self {
+            Self {
+                source_bytes,
+                inspection,
+            }
+        }
+    }
+
+    impl atm_core::boundary::sealed::Sealed for FixtureTemplateComposer {}
+
+    impl atm_core::TemplateComposer for FixtureTemplateComposer {
+        fn inspect(
+            &self,
+            source: &atm_core::TemplateSource,
+        ) -> Result<atm_core::TemplateInspection, AtmError> {
+            assert_eq!(source.raw_file_bytes, self.source_bytes);
+            Ok(self.inspection.clone())
+        }
+
+        fn render_within_root(
+            &self,
+            source: &atm_core::TemplateSource,
+            _vars: &serde_json::Map<String, serde_json::Value>,
+            _root: &atm_core::TemplateRoot,
+        ) -> Result<atm_core::RenderedBody, AtmError> {
+            let text = std::str::from_utf8(&source.raw_file_bytes)
+                .map_err(|_| AtmError::template_content_not_utf8())?
+                .to_owned();
+            Ok(atm_core::RenderedBody { text })
+        }
+
+        fn render_without_includes(
+            &self,
+            _source: &atm_core::TemplateSource,
+            _vars: &serde_json::Map<String, serde_json::Value>,
+        ) -> Result<atm_core::RenderedBody, AtmError> {
+            unreachable!("HTTP runtime tests require confinement-aware rendering")
+        }
+    }
+
     struct HarnessReceivedHookSelector {
         tmux: Arc<RecordingReceivedHook>,
         graft: Arc<RecordingReceivedHook>,
@@ -747,10 +872,11 @@ mod tests {
         hook_failure: Option<AtmError>,
         cancelled_on_drop: Option<Arc<AtomicBool>>,
     ) -> Fixture {
-        fixture_with_selector(
+        fixture_with_selector_and_template(
             with_recipient,
             hook_failure,
             cancelled_on_drop,
+            None,
             |received_hook| {
                 Arc::new(FixedReceivedHookSelector {
                     emitter: received_hook,
@@ -763,6 +889,25 @@ mod tests {
         with_recipient: bool,
         hook_failure: Option<AtmError>,
         cancelled_on_drop: Option<Arc<AtomicBool>>,
+        select: F,
+    ) -> Fixture
+    where
+        F: FnOnce(Arc<RecordingReceivedHook>) -> Arc<dyn MessageReceivedHookSelector>,
+    {
+        fixture_with_selector_and_template(
+            with_recipient,
+            hook_failure,
+            cancelled_on_drop,
+            None,
+            select,
+        )
+    }
+
+    fn fixture_with_selector_and_template<F>(
+        with_recipient: bool,
+        hook_failure: Option<AtmError>,
+        cancelled_on_drop: Option<Arc<AtomicBool>>,
+        template_composer: Option<Arc<dyn atm_core::TemplateComposer>>,
         select: F,
     ) -> Fixture
     where
@@ -808,8 +953,12 @@ mod tests {
         fs::create_dir_all(&home_dir).expect("create fixture home");
         fs::create_dir_all(&current_dir).expect("create fixture workspace");
         let health = RuntimeHealth::with_owner(99);
+        let service_runtime = match template_composer {
+            Some(composer) => assembly.service_runtime.with_template_composer(composer),
+            None => assembly.service_runtime,
+        };
         let router = StorageAndNudgeRouter::new(
-            assembly.service_runtime,
+            service_runtime,
             Arc::new(NullObservability),
             select(received_hook.clone()),
             home_dir.clone(),
@@ -842,8 +991,39 @@ mod tests {
         .expect("write request")
     }
 
+    fn template_write_request(fixture: &Fixture, body: &str) -> WriteRequest {
+        let template_path = fixture._temporary_root.path().join("notice.j2");
+        std::fs::write(&template_path, body).expect("write template fixture");
+        let raw_file_bytes = std::fs::read(&template_path).expect("read template fixture");
+        let mut request = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
+        request.message_source = SendMessageSource::Template(TemplateSendSource {
+            canonical_template_path: std::fs::canonicalize(&template_path)
+                .expect("canonical template path"),
+            canonical_template_root: std::fs::canonicalize(fixture._temporary_root.path())
+                .expect("canonical template root"),
+            raw_file_bytes,
+            input_defaults: serde_json::Map::new(),
+            var_file_values: serde_json::Map::new(),
+            explicit_values: serde_json::Map::new(),
+            environment_values: serde_json::Map::new(),
+        });
+        request.classification = MessageClassification {
+            category: Some("assignment".to_owned()),
+            tags: vec!["phase-an".to_owned()],
+            content_format: Some("markdown".to_owned()),
+        };
+        request
+    }
+
+    fn template_composer_for(body: &str) -> Arc<dyn atm_core::TemplateComposer> {
+        Arc::new(FixtureTemplateComposer::new(body))
+    }
+
     fn router(fixture: &Fixture, connector: AuthenticatedConnector) -> axum::Router {
-        router_with_timeout(fixture, connector, Duration::from_secs(1))
+        // Ordinary route tests are not deadline tests. Give their SQLite
+        // admission and advisory hook enough headroom on slower CI hosts;
+        // tests of deadline behavior select their one-second budget below.
+        router_with_timeout(fixture, connector, Duration::from_secs(10))
     }
 
     fn router_with_timeout(
@@ -865,7 +1045,10 @@ mod tests {
         )
     }
 
-    fn direct_peer_runtime_config(fixture: &Fixture, peer_port: u16) -> HttpRuntimeConfig {
+    fn direct_peer_runtime_config(
+        fixture: &Fixture,
+        direct_peer: crate::DirectPeerTcpConfig,
+    ) -> HttpRuntimeConfig {
         use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
         HttpRuntimeConfig::new(
@@ -884,13 +1067,7 @@ mod tests {
                 NonZeroDuration::new(Duration::from_secs(1)).expect("shutdown timeout"),
             ),
         )
-        .with_direct_peer_tcp(DirectPeerTcpConfig::new(peer_port))
-    }
-
-    fn unused_direct_peer_port() -> u16 {
-        let reserve = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
-            .expect("reserve direct peer port");
-        reserve.local_addr().expect("reserved peer address").port()
+        .with_direct_peer_tcp(direct_peer)
     }
 
     #[tokio::test]
@@ -1232,6 +1409,288 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn templated_send_over_loopback_tcp_uses_decomposed_admission_once() {
+        let body = "template body";
+        let fixture = fixture_with_selector_and_template(
+            true,
+            None,
+            None,
+            Some(template_composer_for(body)),
+            |received_hook| {
+                Arc::new(FixedReceivedHookSelector {
+                    emitter: received_hook,
+                })
+            },
+        );
+        let write = template_write_request(&fixture, body);
+        let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body");
+        let response: serde_json::Value = serde_json::from_slice(&body).expect("response JSON");
+        let message_id = response["message_id"].as_str().expect("message id");
+        let snapshot = inspect_template_admission_for_test(
+            &fixture.database_path,
+            &[format!("atm:{message_id}")],
+        )
+        .expect("stored decomposition");
+        assert_eq!(
+            snapshot.template_count, 1,
+            "one immutable template registration"
+        );
+        assert_eq!(snapshot.decomposed_count, 1, "one decomposed message row");
+        let stored = snapshot.messages.first().expect("stored mail row");
+        assert!(
+            stored.template_sha.is_some(),
+            "mail row records the template SHA"
+        );
+        assert_eq!(stored.vars_json.as_deref(), Some("{}"));
+        assert_eq!(stored.tags_json, r#"["phase-an"]"#);
+        assert_eq!(
+            stored.message_text, None,
+            "decomposed row never retains rendered plain body"
+        );
+    }
+
+    #[tokio::test]
+    async fn an15_shape_probe_missing_required_input_mutates_no_catalog_or_mailbox_rows() {
+        let body = "required input must be captured before durable admission";
+        let inspection = atm_core::TemplateInspection {
+            sha: TemplateSha::new(
+                "814271b7e98145c998a2c1f20270856c592881ba7dac4dfee9307d8093163a03",
+            )
+            .expect("template SHA"),
+            frontmatter: TemplateFrontmatter {
+                required_variables: vec![
+                    atm_storage::TemplateVariableName::new("ATM_TEAM")
+                        .expect("fixture required variable"),
+                ],
+                ..TemplateFrontmatter::default()
+            },
+            include_references: Vec::new(),
+            output_format: atm_storage::TemplateOutputFormat::Text,
+        };
+        let composer: Arc<dyn atm_core::TemplateComposer> = Arc::new(
+            FixtureTemplateComposer::with_inspection(body.as_bytes().to_vec(), inspection),
+        );
+        let fixture =
+            fixture_with_selector_and_template(true, None, None, Some(composer), |received_hook| {
+                Arc::new(FixedReceivedHookSelector {
+                    emitter: received_hook,
+                })
+            });
+
+        let write = template_write_request(&fixture, body);
+        let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+        let status = response.status();
+        let error = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("rejection body");
+        assert_ne!(
+            status,
+            StatusCode::CREATED,
+            "missing required input must reject the write: {}",
+            String::from_utf8_lossy(&error)
+        );
+        let error: serde_json::Value = serde_json::from_slice(&error).expect("rejection JSON");
+        assert_eq!(
+            error["code"].as_str(),
+            Some("TEMPLATE_REQUIRED_VARIABLE_MISSING"),
+            "the stable admission error explains the rejected write"
+        );
+        eprintln!(
+            "AN15_DIAGNOSTIC missing-required-input code={} message={}",
+            error["code"].as_str().expect("stable rejection code"),
+            error["message"].as_str().expect("stable rejection message"),
+        );
+
+        let snapshot = inspect_template_admission_for_test(&fixture.database_path, &[])
+            .expect("inspect rejected durable admission");
+        assert_eq!(
+            snapshot.template_count, 0,
+            "rejected input registers no template"
+        );
+        assert_eq!(
+            snapshot.decomposed_count, 0,
+            "rejected input creates no decomposition"
+        );
+        let mailbox = fixture
+            .message_store
+            .list_messages(&MessageQuery {
+                team: "test-team".parse().expect("team"),
+                agent: "recipient".parse().expect("agent"),
+                sender: None,
+                task_id: None,
+                limit: None,
+            })
+            .expect("inspect rejected mailbox");
+        assert!(mailbox.is_empty(), "rejected input writes no mailbox row");
+    }
+
+    #[tokio::test]
+    async fn template_routing_matrix_persists_only_same_team_same_host_as_decomposed() {
+        let body = "routing matrix body";
+        let fixture = fixture_with_selector_and_template(
+            true,
+            None,
+            None,
+            Some(template_composer_for(body)),
+            |received_hook| {
+                Arc::new(FixedReceivedHookSelector {
+                    emitter: received_hook,
+                })
+            },
+        );
+        let same_local = template_write_request(&fixture, body);
+        let mut same_team_cross_host = template_write_request(&fixture, body);
+        same_team_cross_host.to = Some(
+            "recipient@test-team.peer.example.test"
+                .parse()
+                .expect("cross-host recipient"),
+        );
+        let mut foreign_team_local = template_write_request(&fixture, body);
+        foreign_team_local.caller_team = "foreign-team".parse().expect("foreign caller team");
+        let mut foreign_team_cross_host = foreign_team_local.clone();
+        foreign_team_cross_host.to = Some(
+            "recipient@test-team.peer.example.test"
+                .parse()
+                .expect("foreign cross-host recipient"),
+        );
+
+        let mut message_keys = Vec::new();
+        for request in [
+            same_local,
+            same_team_cross_host,
+            foreign_team_local,
+            foreign_team_cross_host,
+        ] {
+            let response = fixture
+                .router
+                .dispatch(
+                    ApiRequest::new(RequestEnvelope::Write(Box::new(request))),
+                    AuthenticatedIngress::Local,
+                    RequestDeadline::after(Duration::from_secs(1)),
+                )
+                .await
+                .expect("template routing request");
+            let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response.into_inner()
+            else {
+                panic!("template routing request must send")
+            };
+            message_keys.push(format!("atm:{}", outcome.message_id));
+        }
+
+        let snapshot = inspect_template_admission_for_test(&fixture.database_path, &message_keys)
+            .expect("inspect routing rows");
+        assert_eq!(
+            snapshot.template_count, 1,
+            "only the same-team local cell registers a template"
+        );
+        assert_eq!(
+            snapshot.decomposed_count, 1,
+            "only the same-team local cell decomposes a row"
+        );
+        assert_eq!(
+            snapshot.messages.len(),
+            4,
+            "each routing cell admits exactly one mailbox row"
+        );
+        let fallback_rows = snapshot
+            .messages
+            .iter()
+            .filter(|row| row.template_sha.is_none())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            fallback_rows.len(),
+            3,
+            "the three fallback cells stay ordinary rows"
+        );
+        assert_eq!(
+            fallback_rows
+                .iter()
+                .filter(|row| row.vars_json.is_none() && row.message_text.as_deref() == Some(body))
+                .count(),
+            3,
+            "every fallback persists the verification render without template metadata"
+        );
+        assert_eq!(
+            snapshot
+                .messages
+                .iter()
+                .filter(|row| row.template_sha.is_some())
+                .count(),
+            1,
+            "none of the plain-text cells may create a catalog admission"
+        );
+    }
+
+    #[tokio::test]
+    async fn include_template_is_verified_but_persisted_as_an_ordinary_rendered_row() {
+        let body = "include fallback body";
+        let inspection = atm_core::TemplateInspection {
+            sha: TemplateSha::new(
+                "8eff5904e91d06678d2bd0bd3afd9aef81d4bb3b732a9348b9ba463e00781723",
+            )
+            .expect("template SHA"),
+            frontmatter: TemplateFrontmatter::default(),
+            include_references: vec![atm_core::TemplateReference {
+                directive: atm_core::TemplateReferenceKind::Include,
+                source_span: atm_core::SourceSpan {
+                    byte_start: 0,
+                    byte_end: body.len(),
+                },
+            }],
+            output_format: atm_storage::TemplateOutputFormat::Text,
+        };
+        let composer: Arc<dyn atm_core::TemplateComposer> = Arc::new(
+            FixtureTemplateComposer::with_inspection(body.as_bytes().to_vec(), inspection),
+        );
+        let fixture =
+            fixture_with_selector_and_template(true, None, None, Some(composer), |received_hook| {
+                Arc::new(FixedReceivedHookSelector {
+                    emitter: received_hook,
+                })
+            });
+        let response = fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(template_write_request(
+                    &fixture, body,
+                )))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("include fallback send");
+        let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response.into_inner()
+        else {
+            panic!("include fallback send must send")
+        };
+        let snapshot = inspect_template_admission_for_test(
+            &fixture.database_path,
+            &[format!("atm:{}", outcome.message_id)],
+        )
+        .expect("inspect include fallback row");
+        assert_eq!(
+            snapshot.template_count, 0,
+            "include fallback never registers a catalog template"
+        );
+        assert_eq!(
+            snapshot.decomposed_count, 0,
+            "include fallback never creates decomposition"
+        );
+        let row = snapshot
+            .messages
+            .first()
+            .expect("stored include fallback row");
+        assert_eq!(row.template_sha, None);
+        assert_eq!(row.vars_json, None);
+        assert_eq!(row.message_text.as_deref(), Some(body));
+    }
+
     #[test]
     fn canonical_write_path_does_not_reopen_committed_records_for_hook_planning() {
         // This is an architecture regression guard rather than a behavior
@@ -1353,12 +1812,192 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn uds_and_loopback_search_use_the_same_local_storage_port() {
+        use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+        use std::num::NonZeroU32;
+        use std::os::unix::fs::MetadataExt;
+
+        let fixture = fixture(true, None, None);
+        fixture
+            .router
+            .write(
+                write_request(fixture.home_dir.clone(), fixture.current_dir.clone()),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("seed local mailbox through the canonical storage path");
+        let socket_path = fixture._temporary_root.path().join("search-runtime.sock");
+        let endpoint_path = fixture
+            ._temporary_root
+            .path()
+            .join("search-local-http.json");
+        let instance_id = ulid::Ulid::new();
+        std::fs::write(
+            fixture._temporary_root.path().join("owner.lock"),
+            format!("1:test-owner:{instance_id}\n"),
+        )
+        .expect("owner record");
+        let uid = NonZeroU32::new(
+            std::fs::metadata(fixture._temporary_root.path())
+                .expect("runtime root metadata")
+                .uid(),
+        )
+        .expect("test process must not use uid zero");
+        let runtime = HttpRuntimeBuilder::new(
+            HttpRuntimeConfig::new(
+                LoopbackTcpConfig::new(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                    endpoint_path.clone(),
+                    instance_id,
+                ),
+                Some(UnixSocketConfig::new(
+                    socket_path.clone(),
+                    UnixSocketOwnerUid::new(uid),
+                    UnixSocketMode::new(NonZeroU32::new(0o600).expect("owner-only mode")),
+                )),
+                RuntimeLimits::new(
+                    std::num::NonZeroUsize::new(4096).expect("non-zero body limit"),
+                    std::num::NonZeroUsize::new(1).expect("non-zero request limit"),
+                ),
+                RuntimeTimeouts::new(
+                    NonZeroDuration::new(Duration::from_secs(1)).expect("request timeout"),
+                    NonZeroDuration::new(Duration::from_secs(1)).expect("shutdown timeout"),
+                ),
+            ),
+            Arc::new(fixture.router.clone()),
+        )
+        .build()
+        .expect("valid search runtime configuration");
+        let running = runtime.start().await.expect("search runtime starts");
+        let request = ApiRequest::new(RequestEnvelope::Search(Box::new(
+            atm_core::search::SearchRequest {
+                query: atm_core::search::SearchInput::default(),
+                lifecycle: None,
+            },
+        )));
+        let uds = crate::unix_socket_client(&socket_path, Duration::from_secs(1))
+            .expect("UDS client")
+            .execute(request.clone())
+            .await
+            .expect("UDS search");
+        let loopback = crate::loopback_tcp_client(&endpoint_path, Duration::from_secs(1))
+            .expect("loopback client")
+            .execute(request)
+            .await
+            .expect("loopback search");
+        let ResponseEnvelope::Search(uds) = uds.into_inner() else {
+            panic!("UDS response must be search data");
+        };
+        let ResponseEnvelope::Search(loopback) = loopback.into_inner() else {
+            panic!("loopback response must be search data");
+        };
+        assert_eq!(
+            uds.hits.len(),
+            1,
+            "UDS query returns the seeded mailbox row"
+        );
+        assert_eq!(
+            loopback, uds,
+            "UDS and loopback share one local search path"
+        );
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("search runtime drains");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn templated_send_over_uds_uses_the_same_decomposed_admission() {
+        use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+        use std::num::NonZeroU32;
+        use std::os::unix::fs::MetadataExt;
+
+        let body = "template body over UDS";
+        let fixture = fixture_with_selector_and_template(
+            true,
+            None,
+            None,
+            Some(template_composer_for(body)),
+            |received_hook| {
+                Arc::new(FixedReceivedHookSelector {
+                    emitter: received_hook,
+                })
+            },
+        );
+        let socket_path = fixture._temporary_root.path().join("template-runtime.sock");
+        let uid = NonZeroU32::new(
+            std::fs::metadata(fixture._temporary_root.path())
+                .expect("runtime root metadata")
+                .uid(),
+        )
+        .expect("test process must not use uid zero");
+        let runtime = HttpRuntimeBuilder::new(
+            HttpRuntimeConfig::new(
+                LoopbackTcpConfig::new(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                    fixture
+                        ._temporary_root
+                        .path()
+                        .join("template-local-http.json"),
+                    ulid::Ulid::new(),
+                ),
+                Some(UnixSocketConfig::new(
+                    socket_path.clone(),
+                    UnixSocketOwnerUid::new(uid),
+                    UnixSocketMode::new(NonZeroU32::new(0o600).expect("owner-only mode")),
+                )),
+                RuntimeLimits::new(
+                    std::num::NonZeroUsize::new(4096).expect("non-zero body limit"),
+                    std::num::NonZeroUsize::new(1).expect("non-zero request limit"),
+                ),
+                RuntimeTimeouts::new(
+                    NonZeroDuration::new(Duration::from_secs(1)).expect("request timeout"),
+                    NonZeroDuration::new(Duration::from_secs(1)).expect("shutdown timeout"),
+                ),
+            ),
+            Arc::new(fixture.router.clone()),
+        )
+        .build()
+        .expect("valid UDS runtime configuration");
+        let running = runtime.start().await.expect("UDS runtime starts");
+        let response = crate::unix_socket_client(&socket_path, Duration::from_secs(1))
+            .expect("UDS client")
+            .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(
+                template_write_request(&fixture, body),
+            ))))
+            .await
+            .expect("canonical UDS response");
+        let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response.into_inner()
+        else {
+            panic!("canonical UDS template write must send")
+        };
+        let snapshot = inspect_template_admission_for_test(
+            &fixture.database_path,
+            &[format!("atm:{}", outcome.message_id)],
+        )
+        .expect("stored template rows");
+        assert_eq!(
+            (snapshot.template_count, snapshot.decomposed_count),
+            (1, 1),
+            "UDS reaches the same atomic template admission"
+        );
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("UDS runtime drains");
+    }
+
     #[tokio::test]
     async fn direct_peer_runtime_reaches_storage_once_and_skips_duplicate_hook() {
         let fixture = fixture(true, None, None);
-        let peer_port = unused_direct_peer_port();
         let running = HttpRuntimeBuilder::new(
-            direct_peer_runtime_config(&fixture, peer_port),
+            direct_peer_runtime_config(&fixture, crate::DirectPeerTcpConfig::ephemeral_for_test()),
             Arc::new(fixture.router.clone()),
         )
         .build()
@@ -1366,6 +2005,10 @@ mod tests {
         .start()
         .await
         .expect("direct peer runtime starts");
+        let peer_port = running
+            .direct_peer_address()
+            .expect("ephemeral direct peer listener is bound")
+            .port();
         let message_id = AtmMessageId::new();
         let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone())
             .with_origin_metadata(message_id, atm_core::types::IsoTimestamp::now());
@@ -1445,9 +2088,8 @@ mod tests {
     #[tokio::test]
     async fn local_ack_routes_to_the_received_peer_and_peer_receipt_does_not_reacknowledge() {
         let remote = fixture(true, None, None);
-        let remote_port = unused_direct_peer_port();
         let remote_runtime = HttpRuntimeBuilder::new(
-            direct_peer_runtime_config(&remote, remote_port),
+            direct_peer_runtime_config(&remote, crate::DirectPeerTcpConfig::ephemeral_for_test()),
             Arc::new(remote.router.clone()),
         )
         .build()
@@ -1455,15 +2097,18 @@ mod tests {
         .start()
         .await
         .expect("remote direct peer runtime starts");
+        let remote_port = remote_runtime
+            .direct_peer_address()
+            .expect("ephemeral remote direct peer listener is bound")
+            .port();
 
         let mut local = fixture(true, None, None);
         local.router = local
             .router
             .clone()
             .with_direct_peer_port(std::num::NonZeroU16::new(remote_port).expect("non-zero port"));
-        let local_port = unused_direct_peer_port();
         let local_runtime = HttpRuntimeBuilder::new(
-            direct_peer_runtime_config(&local, local_port),
+            direct_peer_runtime_config(&local, crate::DirectPeerTcpConfig::ephemeral_for_test()),
             Arc::new(local.router.clone()),
         )
         .build()
@@ -1471,6 +2116,10 @@ mod tests {
         .start()
         .await
         .expect("local direct peer runtime starts");
+        let local_port = local_runtime
+            .direct_peer_address()
+            .expect("ephemeral local direct peer listener is bound")
+            .port();
 
         let received_id = AtmMessageId::new();
         let mut incoming = write_request(remote.home_dir.clone(), remote.current_dir.clone())
@@ -1611,9 +2260,8 @@ mod tests {
             )),
             None,
         );
-        let peer_port = unused_direct_peer_port();
         let running = HttpRuntimeBuilder::new(
-            direct_peer_runtime_config(&fixture, peer_port),
+            direct_peer_runtime_config(&fixture, crate::DirectPeerTcpConfig::ephemeral_for_test()),
             Arc::new(fixture.router.clone()),
         )
         .build()
@@ -1621,6 +2269,10 @@ mod tests {
         .start()
         .await
         .expect("direct peer runtime starts");
+        let peer_port = running
+            .direct_peer_address()
+            .expect("ephemeral direct peer listener is bound")
+            .port();
         let client = direct_peer_tcp_client(
             "localhost".parse().expect("direct peer host"),
             std::num::NonZeroU16::new(peer_port).expect("non-zero peer port"),
@@ -1688,13 +2340,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn axum_route_storage_failure_emits_no_hook_and_persists_no_message() {
+    async fn axum_route_storage_rejection_emits_no_hook_and_persists_no_message() {
         let fixture = fixture(true, None, None);
-        let writer_lock =
-            hold_sqlite_writer_lock(&fixture.database_path).expect("hold SQLite writer lock");
+        install_sqlite_message_write_failure(&fixture.database_path)
+            .expect("install deterministic SQLite storage failure");
         let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
         let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
-        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        // The deterministic SQLite trigger is a constraint rejection, which
+        // the shared ADR-032 mapper exposes as a client error.  The contract
+        // under test here is that any failed durable admission emits no hook
+        // and leaves no mailbox record; availability mapping is covered by
+        // the dedicated lock-timeout tests in the SQLite backend.
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         assert!(
             fixture
                 .received_hook
@@ -1704,7 +2361,6 @@ mod tests {
                 .is_empty(),
             "storage failure must not emit a receiver hook"
         );
-        drop(writer_lock);
         assert!(
             fixture
                 .message_store

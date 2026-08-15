@@ -1,5 +1,5 @@
 PackageIdentifier: randlee.agent-team-mail
-PackageVersion: 1.4.1-beta-ai-1
+PackageVersion: 1.4.2
 PackageLocale: en-US
 Publisher: Randy Lee
 PublisherUrl: https://github.com/randlee
@@ -21,7 +21,7 @@ Tags:
 Installers:
   - Architecture: x64
     InstallerType: zip
-    InstallerUrl: https://github.com/randlee/atm-core/releases/download/v1.4.1-beta-ai-1/atm_1.4.1-beta-ai-1_x86_64-pc-windows-msvc.zip
+    InstallerUrl: https://github.com/randlee/atm-core/releases/download/v1.4.2/atm_1.4.2_x86_64-pc-windows-msvc.zip
     InstallerSha256: <SHA256_HASH_TO_BE_FILLED_AFTER_RELEASE>
 ManifestType: installer
-ManifestVersion: 1.4.1-beta-ai-1
+ManifestVersion: 1.4.2

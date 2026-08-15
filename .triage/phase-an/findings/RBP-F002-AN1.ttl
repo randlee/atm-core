@@ -1,0 +1,68 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F002-AN1>
+  a triage:Finding ;
+  triage:findingId "RBP-F002-AN1" ;
+  triage:title "inspect(), render_within_root(), compose_file() misclassify template-source precondition violations as config-parse failures" ;
+  triage:description "inspect(), render_within_root(), and compose_file() each reuse `AtmError::config(...)` (code `ConfigParseFailed`) to report that a stored (non-file-backed) `TemplateSource` was passed to an operation requiring a canonical file path — this is a caller/precondition contract violation about template-source classification, not a config-file parsing failure. `AtmErrorCode::TemplateClassificationInvalid` already exists and is unused here. Recommendation: use the template-specific precondition code instead of `ConfigParseFailed` at all 3 call sites (lines 214, 234, 260)." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "error-taxonomy" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-08-14T16:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.1 ;
+  triage:foundAt "2026-08-14T15:30:00Z"^^xsd:dateTime ;
+  triage:resolutionNotes "Closed 2026-08-14 by quality-mgr: independently verified fix c1e672ade16697f23c2e2da35349f7911c0f9182 on fix/an-template-inspection-real-upstream. Read crates/atm-template-sc-compose/src/lib.rs directly: all 3 call sites (inspect(), render_within_root(), compose_file(), now lines 220/241/268) now use AtmErrorCode::TemplateClassificationInvalid instead of AtmError::config(...). PR #883 independently reconfirmed 9/9 CI green and MERGEABLE via `gh pr view 883`, not taken from arch-ctm's self-report." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AN1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AN1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AN1/3> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RBP-F002-AN1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-template-sc-compose/src/lib.rs" ;
+  triage:line 214 ;
+  triage:snippet "AtmError::config(...) at inspect(): template classification violation misreported as config-parse failure" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "fix/an-template-inspection-real-upstream" ;
+  triage:headSha "c1e672ade16697f23c2e2da35349f7911c0f9182" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-an-template/75ebeb27> .
+
+<urn:atm:triage:occurrence/RBP-F002-AN1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-template-sc-compose/src/lib.rs" ;
+  triage:line 234 ;
+  triage:snippet "AtmError::config(...) at render_within_root(): template classification violation misreported as config-parse failure" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "fix/an-template-inspection-real-upstream" ;
+  triage:headSha "c1e672ade16697f23c2e2da35349f7911c0f9182" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-an-template/75ebeb27> .
+
+<urn:atm:triage:occurrence/RBP-F002-AN1/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-template-sc-compose/src/lib.rs" ;
+  triage:line 260 ;
+  triage:snippet "AtmError::config(...) at compose_file(): template classification violation misreported as config-parse failure" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "fix/an-template-inspection-real-upstream" ;
+  triage:headSha "c1e672ade16697f23c2e2da35349f7911c0f9182" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-an-template/75ebeb27> .
+
+<urn:atm:triage:worktree/fix-an-template/75ebeb27>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-an-template" ;
+  triage:branch "fix/an-template-inspection-real-upstream" ;
+  triage:headSha "75ebeb273b126656e962092aa1353c97fa189c72" ;
+  triage:orderIndex 1 .

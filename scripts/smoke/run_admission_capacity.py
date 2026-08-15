@@ -285,17 +285,26 @@ class ManagedDaemonLifecycle:
 
     The state root is moved only after daemon-switch has stopped the managed
     daemon, so an open SQLite connection cannot race the snapshot. The selected
-    pair is captured before quiescence and compared after restart; this flow
-    never changes CLI/daemon selectors or their configuration.
+    pair is captured before quiescence and compared after restart. Capturing
+    selectors does not require an initial doctor result: controlled quiescence
+    is the recovery path for an unavailable managed daemon. Recovery always
+    requires a ready doctor result and this flow never changes CLI/daemon
+    selectors or their configuration.
     """
 
     options: ManagedDaemonOptions
     backup: HostStateBackup | None = None
     pre_pair: dict[str, str | None] | None = None
     quiesced: bool = False
+    isolated_service_running: bool = False
 
     def begin(self) -> None:
-        before = daemon_switch_result("status", self.options, doctor=True)
+        # Record only the selected binaries before stopping the service.  A
+        # managed daemon may be unavailable precisely because this benchmark
+        # is being used to validate/recover a release candidate.  Requiring
+        # doctor here makes that safe recovery impossible; doctor is enforced
+        # after restoration below.
+        before = daemon_switch_result("status", self.options)
         self.pre_pair = selected_pair(before)
         daemon_switch_result("quiesce", self.options)
         self.quiesced = True
@@ -310,10 +319,42 @@ class ManagedDaemonLifecycle:
                 ) from error
             raise
 
+    def start_isolated_service(self) -> None:
+        """Start the already-selected candidate against the disposable state.
+
+        Managed-host benchmarking must measure the same launch-managed daemon
+        that will remain installed for dogfooding.  The feature-gated child is
+        reserved for the clean OS-user mode, where no managed service exists.
+        """
+        if self.backup is None or not self.quiesced:
+            raise SmokeError("managed benchmark cannot start before state isolation")
+        daemon_switch_result("restart", self.options)
+        after = daemon_switch_result("status", self.options, doctor=True)
+        if self.pre_pair is not None and selected_pair(after) != self.pre_pair:
+            raise SmokeError("managed daemon selectors changed before benchmark execution")
+        self.quiesced = False
+        self.isolated_service_running = True
+
+    def restart_isolated_service(self) -> None:
+        """Prove the selected candidate survives a restart on disposable state."""
+        if not self.isolated_service_running:
+            raise SmokeError("managed benchmark daemon is not running on disposable state")
+        daemon_switch_result("quiesce", self.options)
+        self.quiesced = True
+        self.isolated_service_running = False
+        self.start_isolated_service()
+
     def restore(self) -> None:
-        if not self.quiesced:
+        if self.backup is None:
             return
         failures: list[str] = []
+        if self.isolated_service_running:
+            try:
+                daemon_switch_result("quiesce", self.options)
+                self.quiesced = True
+                self.isolated_service_running = False
+            except Exception as error:
+                failures.append(f"could not quiesce benchmark daemon: {error}")
         if self.backup is not None:
             try:
                 self.backup.restore()
@@ -1241,6 +1282,11 @@ def run_capacity(
         "worker_limit": workers,
         "source_revision": source_revision(),
         "release": {"atm": str(atm), "atm_daemon_benchmark": str(daemon)},
+        "execution_daemon": (
+            "selected_managed_service"
+            if isolation_mode == "backup_restore"
+            else "feature_gated_benchmark_child"
+        ),
         "atm_home": str(home),
         "host_state_isolation": isolation_mode,
         "runs": [],
@@ -1259,12 +1305,14 @@ def run_capacity(
         },
         "decomposition": {},
     }
+    started_at = time.monotonic()
     try:
         if isolation_mode == "backup_restore":
             assert managed_daemon is not None
             managed_lifecycle = ManagedDaemonLifecycle(managed_daemon)
             managed_lifecycle.begin()
-        before = count_atm_daemon_processes()
+        else:
+            before = count_atm_daemon_processes()
         home.mkdir(parents=True, exist_ok=False)
         prepare_capacity_roster(atm, env, home, roster)
         evidence["decomposition"]["async_storage_admission"] = run_direct_storage_probe(
@@ -1277,14 +1325,20 @@ def run_capacity(
             env,
             workers,
         )
-        process, daemon_output = start_capacity_daemon(daemon, home, env, hook_mode)
-        doctor = command_result(
-            [str(atm), "doctor", "--json"],
-            timeout=10.0,
-            env=host_runtime_client_environment(env),
-        )
-        doctor_payload = benchmark_doctor_payload(doctor)
-        evidence["daemon_pid"] = process.pid
+        if managed_lifecycle is not None:
+            managed_lifecycle.start_isolated_service()
+            managed_status = daemon_switch_result("status", managed_daemon, doctor=True)
+            doctor_payload = managed_status["doctor"]
+            evidence["managed_daemon"] = selected_pair(managed_status)
+        else:
+            process, daemon_output = start_capacity_daemon(daemon, home, env, hook_mode)
+            doctor = command_result(
+                [str(atm), "doctor", "--json"],
+                timeout=10.0,
+                env=host_runtime_client_environment(env),
+            )
+            doctor_payload = benchmark_doctor_payload(doctor)
+            evidence["daemon_pid"] = process.pid
         evidence["doctor"] = doctor_payload
         evidence["doctor_status"] = "passed"
         endpoint = local_endpoint(transport)
@@ -1313,6 +1367,12 @@ def run_capacity(
         evidence["runs"] = [profile]
         evidence["sample_count"] = profile["sample_count"]
         evidence["target_duration_s"] = profile["target_duration_s"]
+        evidence["run_duration_s"] = profile["run_duration_s"]
+
+        # Preserve the completed public profile before validating its
+        # comparison reference. A stale or failed baseline must make the run
+        # fail closed, but it must not erase the measurements that explain
+        # that failure from the compact evidence.
         baseline_median = load_baseline_median(
             baseline_path, transport, frames_per_connection,
         )
@@ -1321,25 +1381,28 @@ def run_capacity(
             profile, baseline_median, comparison_median, comparison_ratio,
             comparison_strict, comparison_required,
         )
-        evidence["run_duration_s"] = profile["run_duration_s"]
         evidence["passed"] = evidence["thresholds"]["passed"]
         expected_accepted_count = sum(item["accepted_count"] for item in profile["intervals"])
 
-        # This intentionally restarts the same isolated daemon.  A transport
-        # success alone is not durable evidence, so prove every committed row
-        # survived using an exact read-only count of its disposable store.
-        reap_owned_daemon(process)
-        daemon_output.join()
-        evidence["pre_restart_daemon_output"] = daemon_output.evidence()
-        process = None
-        daemon_output = None
-        process, daemon_output = start_capacity_daemon(daemon, home, env, hook_mode)
-        restart_doctor = command_result(
-            [str(atm), "doctor", "--json"],
-            timeout=10.0,
-            env=host_runtime_client_environment(env),
-        )
-        benchmark_doctor_payload(restart_doctor)
+        # Restart the actual execution daemon. A transport success alone is
+        # not durable evidence, so prove every committed row survived using an
+        # exact read-only count of its disposable store.
+        if managed_lifecycle is not None:
+            managed_lifecycle.restart_isolated_service()
+            daemon_switch_result("status", managed_daemon, doctor=True)
+        else:
+            reap_owned_daemon(process)
+            daemon_output.join()
+            evidence["pre_restart_daemon_output"] = daemon_output.evidence()
+            process = None
+            daemon_output = None
+            process, daemon_output = start_capacity_daemon(daemon, home, env, hook_mode)
+            restart_doctor = command_result(
+                [str(atm), "doctor", "--json"],
+                timeout=10.0,
+                env=host_runtime_client_environment(env),
+            )
+            benchmark_doctor_payload(restart_doctor)
         # The full doctor payload is host-private diagnostics; publication only
         # needs the asserted healthy result after the restart.
         evidence["doctor_after_restart"] = {"status": "passed"}
@@ -1352,6 +1415,12 @@ def run_capacity(
         evidence["passed"] = False
         evidence["failure"] = str(error)
     finally:
+        # A setup or baseline-validation failure can occur before a profile
+        # exists.  Public failed-run evidence still has to satisfy the
+        # summary schema, so retain the elapsed wall time rather than leaving
+        # its required duration field null.
+        if evidence["run_duration_s"] is None:
+            evidence["run_duration_s"] = time.monotonic() - started_at
         if process is not None:
             try:
                 reap_owned_daemon(process)

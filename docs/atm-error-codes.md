@@ -77,6 +77,43 @@ Error codes should describe the failure class, not a specific prose message.
 - `ATM_MESSAGE_VALIDATION_FAILED`
 - `ATM_SELF_ADDRESSED_SEND_INVALID`
 - `ATM_SERIALIZATION_FAILED`
+- `TEMPLATE_CONTENT_NOT_UTF8` — template catalog registration rejected raw
+  content that has no strict UTF-8 projection; replace the source with UTF-8
+  text and retry. This is checked before either a catalog row or a decomposed
+  message row can become durable.
+- `TEMPLATE_LOAD_FAILED` — the selected template could not be loaded.
+- `TEMPLATE_HASH_API_FAILED` — the approved template inspection/hash adapter
+  could not produce a durable SHA/hash identity.
+- `TEMPLATE_INSPECTION_PARSE_FAILED` — the approved template inspection parser
+  rejected frontmatter or body/directive syntax before any identity or message
+  row could be admitted.
+- `TEMPLATE_REQUIRED_VARIABLE_MISSING` — a required frontmatter variable was
+  absent after deterministic merge.
+- `TEMPLATE_RENDER_VERIFICATION_FAILED` — rendering or the adapter-owned
+  checked-emission verification failed before a body can be admitted, sent, or
+  returned.  For malformed JSON the retained cause is redacted and identifies
+  the diagnostic location without echoing rendered values.
+- `TEMPLATE_INCLUDE_UNRESOLVED` — a detected include/import could not be
+  resolved inside the declared root; no message or catalog row was written.
+- `TEMPLATE_CLASSIFICATION_INVALID` — category, tag, or content-format input
+  failed template-message classification validation.
+- `TEMPLATE_WORKFLOW_INVALID` — template `metadata.tags` or
+  `metadata.workflow` is malformed, partial, dynamic, duplicated, or otherwise
+  outside the durable workflow declaration contract. Correct the immutable
+  template source and register its resulting SHA again; no catalog or message
+  row is written for the rejected declaration.
+- `TEMPLATE_WORKFLOW_VALUE_INVALID` — a declared workflow scope or iteration
+  variable is missing, null, non-scalar, blank, or exceeds the bounded stored
+  value limit after deterministic merge. Supply a valid merged value before
+  decomposed admission; the storage capability is not called.
+- `TEMPLATE_TAG_RESERVED` — a sender/instance or template-authored tag uses an
+  ATM-reserved derived prefix (`template-type:`, `content-format:`, or one of
+  the `workflow-*:` prefixes). Remove the spoofed tag; only ATM derives those
+  classifications during workflow-aware admission.
+- `DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN` — a stored decomposed template was
+  inspected during render-on-read and still declares an include, import, or
+  from-import. Re-register the same SHA from a dependency-free source; ATM
+  rejects the render before any resolver or loader can run.
 
 #### 5.3.1 `ATM_MAILBOX_LOCK_TIMEOUT`
 
@@ -99,6 +136,16 @@ Error codes should describe the failure class, not a specific prose message.
 
 ### 5.5 Workflow And Timeouts
 
+- `ATM_WORKFLOW_QUERY_INVALID` — a local workflow lifecycle projection used an
+  empty selector or an impossible time range. Supply at least one exact
+  start/end selector field and an ordered RFC 3339 range.
+- `ATM_WORKFLOW_TELEMETRY_CONFIG_INVALID` — configured telemetry worker
+  capacity or timeout is outside its bounded range. ATM remains available with
+  telemetry disabled; repair the configuration and restart the daemon.
+- `ATM_WORKFLOW_TELEMETRY_DROPPED` — the best-effort telemetry sink could not
+  accept a record during a full queue, timeout, failure, or bounded shutdown.
+  Inspect runtime diagnostics; this never changes admission, routing, or a
+  query result.
 - `ATM_WAIT_TIMEOUT`
 - `ATM_ACK_INVALID_STATE`
 - `ATM_CLEAR_INVALID_STATE`
@@ -441,6 +488,7 @@ Classification rules:
 | `ATM_MESSAGE_VALIDATION_FAILED` | `operator_actionable` |
 | `ATM_SELF_ADDRESSED_SEND_INVALID` | `operator_actionable` |
 | `ATM_SERIALIZATION_FAILED` | `fail_closed` |
+| `TEMPLATE_CONTENT_NOT_UTF8` | `operator_actionable` |
 | `ATM_FILE_POLICY_REJECTED` | `operator_actionable` |
 | `ATM_FILE_REFERENCE_REWRITE_FAILED` | `operator_actionable` |
 | `ATM_WAIT_TIMEOUT` | `retryable` |
@@ -498,6 +546,49 @@ Classification rules:
 | `ATM_DAEMON_STALE_OWNER_RECOVERY_FAILED` | `operator_actionable` |
 | `ATM_DAEMON_AUTO_START_FAILED` | `operator_actionable` |
 | `ATM_TEST_FAKE_TRANSPORT_INJECTION_FAILED` | `operator_actionable` |
+| `ATM_IDENTITY_INVALID` | `operator_actionable` |
+| `ATM_IDENTITY_CONFLICT` | `operator_actionable` |
+| `ATM_MEMBER_ALREADY_EXISTS` | `operator_actionable` |
+| `ATM_MEMBER_NOT_FOUND` | `operator_actionable` |
+| `ATM_SOCKET_OVERRIDE_FORBIDDEN` | `fail_closed` |
+| `ATM_DAEMON_MAY_HAVE_EXECUTED` | `fail_closed` |
+| `ATM_DAEMON_LIFECYCLE_WEDGE` | `operator_actionable` |
+| `ATM_DAEMON_CONNECTION_SATURATED` | `retryable` |
+| `REMOTE_DELIVERY_UNCONFIRMED` | `retryable` |
+| `ATM_PEER_CONFIG_VALIDATION_FAILED` | `operator_actionable` |
+| `ATM_CERTIFICATE_OPERATION_FAILED` | `operator_actionable` |
+| `ATM_BIND_PREFLIGHT_FAILED` | `operator_actionable` |
+| `ATM_CLIENT_DAEMON_VERSION_INCOMPATIBLE` | `operator_actionable` |
+| `ATM_TEAM_INVALID` | `operator_actionable` |
+| `ATM_INTERNAL_ERROR` | `fail_closed` |
+| `ATM_SEARCH_LOCAL_ONLY` | `operator_actionable` |
+| `ATM_LOCAL_HTTP_CAPABILITY_INVALID` | `operator_actionable` |
+| `ATM_LOCAL_HTTP_ENDPOINT_MISSING` | `operator_actionable` |
+| `ATM_LOCAL_HTTP_ENDPOINT_NON_LOOPBACK` | `fail_closed` |
+| `ATM_LOCAL_HTTP_RUNTIME_DIRECTORY_MISSING` | `operator_actionable` |
+| `ATM_LOCAL_HTTP_CAPABILITY_REVOKED` | `fail_closed` |
+| `ATM_MESSAGE_ID_CONFLICT` | `fail_closed` |
+| `ATM_NUDGE_TEMPLATE_BODY_EMPTY` | `operator_actionable` |
+| `ATM_CALLER_CONTEXT_REQUEST_INVALID` | `operator_actionable` |
+| `DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN` | `operator_actionable` |
+| `TEMPLATE_LOAD_FAILED` | `operator_actionable` |
+| `TEMPLATE_HASH_API_FAILED` | `operator_actionable` |
+| `TEMPLATE_INSPECTION_PARSE_FAILED` | `operator_actionable` |
+| `TEMPLATE_REQUIRED_VARIABLE_MISSING` | `operator_actionable` |
+| `TEMPLATE_RENDER_VERIFICATION_FAILED` | `fail_closed` |
+| `TEMPLATE_INCLUDE_UNRESOLVED` | `operator_actionable` |
+| `TEMPLATE_CLASSIFICATION_INVALID` | `operator_actionable` |
+| `TEMPLATE_WORKFLOW_INVALID` | `operator_actionable` |
+| `TEMPLATE_WORKFLOW_VALUE_INVALID` | `operator_actionable` |
+| `TEMPLATE_TAG_RESERVED` | `operator_actionable` |
+| `ATM_WARNING_SQLITE_HEALTH_DEGRADED` | `warning_only` |
+| `ATM_WARNING_ROSTER_DRIFT` | `warning_only` |
+| `ATM_POST_SEND_PANE_MISSING` | `retryable` |
+| `ATM_POST_SEND_TMUX_SEND_FAILED` | `retryable` |
+| `ATM_POST_SEND_GRAFT_UNAVAILABLE` | `retryable` |
+| `ATM_GRAFT_RECEIVER_ALREADY_ACTIVE` | `operator_actionable` |
+| `ATM_POST_SEND_ADVISORY_DELIVERY_FAILED` | `retryable` |
+| `ATM_HELP_TOPIC_NOT_FOUND` | `operator_actionable` |
 
 ## 8. Evolution Rules
 

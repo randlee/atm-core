@@ -1,0 +1,86 @@
+{
+  "campaign": {
+    "baseline_ref": "9c3d9e2a40535833bdf8c1a46a6f7eb1de88b44f",
+    "campaign_id": "an15-checked-emission-20260814",
+    "candidate_ref": "e97ef4e12a4e4cbf2863506859c431bb9e0140a1",
+    "cases_per_worker": 100,
+    "final_ci_commit": "e97ef4e12a4e4cbf2863506859c431bb9e0140a1",
+    "max_workers": 4,
+    "notes": "AN.15 fixed four-worker checked-emission campaign, including the historical sc-compose 1.4.x auto-escape migration regression; the execution runner accepts no caller-supplied commands.",
+    "per_worker_timeout_s": 120,
+    "promote_regressions": true,
+    "sc_compose_issue_evidence": "site/reports/fuzz/an15-sc-compose-448-github.json",
+    "sc_compose_release_evidence": "site/reports/fuzz/an15-sc-compose-1.4.1-crates-io.json",
+    "seed": 20260814,
+    "target": "atm-template-checked-emission",
+    "worktree_path": "/Users/randlee/Documents/github/atm-core-worktrees/feature/an15-adversarial-fuzzing"
+  },
+  "execution_mode": "executed",
+  "findings": [],
+  "outcome_ledger": {
+    "benign": [],
+    "confirmed_bug": [],
+    "inconclusive": [],
+    "non_repro": []
+  },
+  "promoted_tests": [],
+  "provenance": {
+    "sc_compose_issue_evidence": "site/reports/fuzz/an15-sc-compose-448-github.json",
+    "sc_compose_release_evidence": "site/reports/fuzz/an15-sc-compose-1.4.1-crates-io.json"
+  },
+  "schema_version": "adversarial-fuzzing/v1",
+  "summary": {
+    "all_successful": true,
+    "confirmed_bugs": 0,
+    "failed_workers": 0,
+    "inconclusive": 0,
+    "intentional_boundaries": 0
+  },
+  "unresolved_candidates": [],
+  "workers": [
+    {
+      "cases_run": 100,
+      "correlation_id": "shape-probe",
+      "diagnostic_codes": [],
+      "error": null,
+      "finding_ids": [],
+      "oracle": "missing required input rejects before any template catalog or mailbox row is written",
+      "seam": "Tokio/Axum template admission through the SQLite catalog and mailbox boundary",
+      "status": "success",
+      "target": "atm-template-checked-emission"
+    },
+    {
+      "cases_run": 100,
+      "correlation_id": "template-probe",
+      "diagnostic_codes": [],
+      "error": null,
+      "finding_ids": [],
+      "oracle": "format classification, auto/legacy JSON escape compatibility, Unicode, and actionable checked-render rejection are deterministic",
+      "seam": "sealed atm-template-sc-compose checked final rendering",
+      "status": "success",
+      "target": "atm-template-checked-emission"
+    },
+    {
+      "cases_run": 100,
+      "correlation_id": "boundary-probe",
+      "diagnostic_codes": [],
+      "error": null,
+      "finding_ids": [],
+      "oracle": "rejection neither escapes the root nor leaks or mutates persisted state",
+      "seam": "template catalog admission and confined include/fallback paths",
+      "status": "success",
+      "target": "atm-template-checked-emission"
+    },
+    {
+      "cases_run": 100,
+      "correlation_id": "differential-probe",
+      "diagnostic_codes": [],
+      "error": null,
+      "finding_ids": [],
+      "oracle": "captured stored values, never ambient state, determine rendering",
+      "seam": "atm-core render-on-read from captured persisted variables",
+      "status": "success",
+      "target": "atm-template-checked-emission"
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+<section xmlns="http://www.w3.org/1999/xhtml" class="fuzz-agent fuzz-agent-pass">
+  <header class="agent-header fuzz-agent-header">
+    <div>
+      <p class="eyebrow">Adversarial fuzz worker</p>
+      <h2>template-probe</h2>
+      <p class="agent-meta">Session an15-checked-emission-v2-20260815 · Worker template-probe</p>
+    </div>
+    <div class="agent-actions" role="group" aria-label="Copy worker data">
+      <button type="button" class="icon-button" title="Copy JSON" data-copy-text="{&quot;cases_run&quot;: 100, &quot;correlation_id&quot;: &quot;template-probe&quot;, &quot;encountered_issues&quot;: [], &quot;error&quot;: null, &quot;finding_ids&quot;: [], &quot;negative_cases&quot;: [{&quot;case_id&quot;: &quot;invalid-final-json&quot;, &quot;diagnostic_contract&quot;: {&quot;expected_code_or_category&quot;: &quot;checked_render_rejected&quot;, &quot;expected_message_family&quot;: &quot;checked render rejected invalid JSON&quot;, &quot;expected_recovery_family&quot;: &quot;fix the template input and retry&quot;, &quot;expected_status&quot;: &quot;rejected&quot;, &quot;field_matches&quot;: {&quot;code_or_category&quot;: true, &quot;message_family&quot;: true, &quot;no_sensitive_leak&quot;: true, &quot;recovery_family&quot;: true, &quot;status&quot;: true}, &quot;observed_code_or_category&quot;: &quot;checked_render_rejected&quot;, &quot;observed_message_family&quot;: &quot;checked render rejected invalid JSON&quot;, &quot;observed_recovery_family&quot;: &quot;fix the template input and retry&quot;, &quot;observed_status&quot;: &quot;rejected&quot;, &quot;sensitive_input_leaked&quot;: false}, &quot;expected_oracle&quot;: &quot;invalid final JSON is rejected with checked-render guidance&quot;, &quot;finding_id&quot;: null, &quot;observed_result&quot;: &quot;checked render rejected invalid JSON&quot;, &quot;target_invocation&quot;: {&quot;evidence_ref&quot;: &quot;site/reports/fuzz/an15-checked-emission-v2-20260815-v2/template-probe.log&quot;, &quot;invocation_count&quot;: 100, &quot;mechanism&quot;: &quot;coverage&quot;, &quot;seam_id&quot;: &quot;atm_template_sc_compose::checked_render&quot;}}], &quot;status&quot;: &quot;success&quot;, &quot;target&quot;: &quot;atm-template-checked-emission&quot;, &quot;target_invocation&quot;: {&quot;proofs&quot;: [{&quot;evidence_ref&quot;: &quot;site/reports/fuzz/an15-checked-emission-v2-20260815-v2/template-probe.log&quot;, &quot;invocation_count&quot;: 100, &quot;mechanism&quot;: &quot;coverage&quot;, &quot;seam_id&quot;: &quot;atm_template_sc_compose::checked_render&quot;}], &quot;required_seam_ids&quot;: [&quot;atm_template_sc_compose::checked_render&quot;]}}">{}</button>
+      <button type="button" class="icon-button" title="Copy Context" data-copy-text="template-probe: success; 100/100 cases passed.">⎘</button>
+    </div>
+  </header>
+
+  <p class="status">
+    <span class="status status-pass">PASS</span>
+  </p>
+
+  <table class="agent-results">
+    <thead><tr><th scope="col">Fuzz run description</th><th scope="col">Iterations</th><th scope="col">Pass</th><th scope="col">Result</th></tr></thead>
+    <tbody>
+      <tr>
+        <th scope="row">atm-template-checked-emission template-probe product seam</th>
+        <td>100</td>
+        <td>100/100</td>
+        <td>
+          <span class="status status-pass">PASS</span>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <section class="target-invocation">
+    <h3>Verified target invocation</h3>
+    <table>
+      <thead><tr><th scope="col">Seam</th><th scope="col">Mechanism</th><th scope="col">Invocations</th><th scope="col">Evidence</th></tr></thead>
+      <tbody>
+        <tr><th scope="row"><code>atm_template_sc_compose::checked_render</code></th><td>coverage</td><td>100</td><td><code>site/reports/fuzz/an15-checked-emission-v2-20260815-v2/template-probe.log</code></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="test-inputs">
+    <h3>Inputs exercised</h3>
+    <table>
+      <thead><tr><th scope="col">Case</th><th scope="col">Template / input</th><th scope="col">Outcome</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">invalid-final-json</th><td><code>invalid final JSON is rejected with checked-render guidance</code></td><td>checked render rejected invalid JSON</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="negative-contracts">
+    <h3>Negative diagnostic contracts</h3>
+    <table>
+      <thead><tr><th scope="col">Case</th><th scope="col">Expected</th><th scope="col">Observed</th><th scope="col">Diagnostic match</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">invalid-final-json</th><td>invalid final JSON is rejected with checked-render guidance</td><td>checked render rejected invalid JSON</td><td>PASS</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+
+</section>

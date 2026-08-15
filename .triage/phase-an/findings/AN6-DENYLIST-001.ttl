@@ -1,0 +1,59 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN6-DENYLIST-001>
+  a triage:Finding ;
+  triage:findingId "AN6-DENYLIST-001" ;
+  triage:title "Unallowlisted futures dependency added to atm-core" ;
+  triage:description "AN6QA1-FIX-1 (80b5fb8a) removed the unallowlisted `futures = '0.3'` dependency, but relabeled rather than fixed this finding: crates/atm-core/Cargo.toml now adds an unallowlisted `tokio` dependency instead. just lint still fails the manifest-dependency-allowlist check. Independently reproduced by quality-mgr against 80b5fb8a after a clean rebuild." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "dependency-policy" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "branch" ;
+  triage:status "closed" ;
+  triage:resolution "fixed" ;
+  triage:closedAt "2026-08-12T11:06:54Z"^^xsd:dateTime ;
+  triage:closedNote "INDEPENDENT VERIFICATION (quality-mgr, AN6QA2-FIX-1 @ 59ee84654): grep -n 'tokio\\|futures' crates/atm-core/Cargo.toml returns zero matches. Both offending deps fully removed, not merely allowlisted. just lint manifest-allowlist check passes." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-12T10:09:50Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.6 ;
+  triage:foundAt "2026-08-12T10:09:50Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN6-DENYLIST-001/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN6-DENYLIST-001/2> ;
+  triage:triageRecordVersion "3" .
+
+<urn:atm:triage:occurrence/AN6-DENYLIST-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/Cargo.toml" ;
+  triage:line 45 ;
+  triage:snippet "futures = '0.3'" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedNote "AN6QA1-FIX-1 (80b5fb8a): futures dependency removed -- this specific occurrence is fixed, but the underlying manifest-allowlist violation moved to a new tokio dependency (see occurrence 2)." ;
+  triage:branch "feature/pan-s6-query-surface" ;
+  triage:headSha "8bdc985ac392b1eb9f6ad47794deec30e3c86c06" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pan-s6-query-surface> .
+
+<urn:atm:triage:occurrence/AN6-DENYLIST-001/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/Cargo.toml" ;
+  triage:line 1 ;
+  triage:snippet "tokio dependency added, not present on the manifest-dependency-allowlist" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedNote "AN6QA2-FIX-1 (59ee84654): tokio dependency fully removed, confirmed via grep. Genuinely fixed." ;
+  triage:branch "feature/pan-s6-query-surface" ;
+  triage:headSha "59ee84654" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pan-s6-query-surface> .
+
+<urn:atm:triage:worktree/feature-pan-s6-query-surface>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pan-s6-query-surface" ;
+  triage:branch "feature/pan-s6-query-surface" ;
+  triage:headSha "8bdc985ac392b1eb9f6ad47794deec30e3c86c06" ;
+  triage:orderIndex 1 .

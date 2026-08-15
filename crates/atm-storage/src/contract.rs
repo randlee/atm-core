@@ -587,6 +587,17 @@ pub trait AsyncMessageStore: MessageStore {
         self.save_message_if_absent(&message)
     }
 
+    /// Atomically admits a mailbox record and its template decomposition on
+    /// the backend-owned async writer lane.
+    async fn admit_template_message_async(
+        &self,
+        _admission: crate::TemplateMessageAdmission,
+    ) -> Result<Option<Message>, AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "message store does not implement async template-message admission",
+        ))
+    }
+
     /// Resolves a pending acknowledgement source, persists its reply, and
     /// transitions that source as one async durable admission.
     async fn acknowledge_message_atomically_async(
@@ -724,30 +735,6 @@ pub trait PeerConfigStore: sealed::Sealed + Send + Sync {
     fn trusted_peer(&self, host: &HostName) -> Result<Option<TrustedPeer>, AtmError>;
     fn save_trusted_peer(&self, peer: &TrustedPeer) -> Result<(), AtmError>;
     fn remove_trusted_peer(&self, host: &HostName) -> Result<bool, AtmError>;
-}
-
-/// Immutable canonical peer write selected for a bounded reconciliation pass.
-/// The JSON is the origin writer's serialized request, retained with the
-/// canonical message rather than in an outbox or delivery-state table.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct StoredPeerWrite {
-    /// Ordering key retained with the immutable canonical write. This is a
-    /// transient scan cursor only; it is never delivery state.
-    pub created_at: IsoTimestamp,
-    pub message_id: AtmMessageId,
-    pub request_json: String,
-}
-
-/// Read-only selection of local, immutable peer-directed messages.
-pub trait OutboundMessageQuery: sealed::Sealed + Send + Sync {
-    fn page_for_peer(
-        &self,
-        peer: &HostName,
-        not_before: IsoTimestamp,
-        after: Option<(IsoTimestamp, AtmMessageId)>,
-        limit: NonZeroU16,
-        budget: std::time::Duration,
-    ) -> Result<Vec<StoredPeerWrite>, AtmError>;
 }
 
 pub trait StorageNotifier: sealed::Sealed + Send + Sync {

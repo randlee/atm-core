@@ -1,0 +1,63 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN9-QA1-CLIPPY-001>
+  a triage:Finding ;
+  triage:findingId "AN9-QA1-CLIPPY-001" ;
+  triage:title "clippy::unused_enumerate_index hard failure" ;
+  triage:description "quality-mgr independently reproduced (ran cargo clippy directly, not reviewer self-report) a Blocking clippy::unused_enumerate_index failure at crates/atm-storage/src/template_workflow.rs:86, confirmed as the root cause of the live CI failure on PR #871 (Clippy job + Just lint x3 OS all failing at commit bd5615917164196ead262757ac7d587f8fe778fa). Not touched by arch-ctm's prior fix push (bd561591) which closed the 3 previously-flagged AN9-QA-1 gaps plus 2 bonus fixes." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "lint/ci" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-13T21:35:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-14T00:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:foundIn triage:AN.9 ;
+  triage:foundAt "2026-08-13T21:19:14Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN9-QA1-CLIPPY-001/S9-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN9-QA1-CLIPPY-001/S10-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AN9-QA1-CLIPPY-001/S9-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/template_workflow.rs" ;
+  triage:line 86 ;
+  triage:snippet ".enumerate()" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pan-s9-template-workflow-contract" ;
+  triage:headSha "bd5615917164196ead262757ac7d587f8fe778fa" ;
+  triage:occursIn <urn:atm:triage:worktree/S9-bd56159> .
+
+<urn:atm:triage:occurrence/AN9-QA1-CLIPPY-001/S10-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/template_workflow.rs" ;
+  triage:line 86 ;
+  triage:snippet ".enumerate()" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pan-s10-template-workflow-admission" ;
+  triage:headSha "bd5615917164196ead262757ac7d587f8fe778fa" ;
+  triage:occursIn <urn:atm:triage:worktree/S10-bd56159> .
+
+<urn:atm:triage:worktree/S9-bd56159>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pan-s9-template-workflow-contract" ;
+  triage:branch "feature/pan-s9-template-workflow-contract" ;
+  triage:headSha "bd5615917164196ead262757ac7d587f8fe778fa" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/S10-bd56159>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pan-s10-template-workflow-admission" ;
+  triage:branch "feature/pan-s10-template-workflow-admission" ;
+  triage:headSha "bd5615917164196ead262757ac7d587f8fe778fa" ;
+  triage:orderIndex 1 .

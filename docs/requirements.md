@@ -2354,10 +2354,49 @@ Required behavior:
 Product requirement ID:
 - `REQ-P-WORKFLOW-001` The message/workflow model must satisfy the documented
   persisted-field, two-axis, and legal-transition rules.
+- `REQ-P-TEMPLATE-WORKFLOW-001` A decomposed templated message may carry a
+  template-declared, generic workflow snapshot whose scope, state, stage,
+  transition, and optional iteration are resolved at admission and retained
+  immutably. ATM validates structure but must not reserve orchestration
+  vocabulary or infer state from rendered content. The canonical decision is
+  [ADR-046](./adr/ADR-046-template-declared-workflow-metadata.md).
+- `REQ-P-TEMPLATE-TAGS-001` Template-declared literal tags, sender/instance
+  tags, and ATM-derived search tags must retain distinct provenance. The
+  admission-time applied-template snapshot is historical truth; an effective
+  tag projection is a deterministic search aid only; derived tags are
+  reproducible from the immutable snapshot rather than caller-writable data.
+  Reserved generated tag prefixes must not be caller-spoofable.
+- `REQ-P-WORKFLOW-ANALYTICS-001` ATM must make the immutable template workflow
+  snapshot available through its local query surfaces for generic duration and
+  iteration analysis. Optional OpenTelemetry-compatible export is a projection
+  of durable facts and must not alter routing, admission, policy, or security
+  decisions.
 
 Satisfied by:
 - `REQ-CORE-WORKFLOW-001` for the canonical two-axis model and legal
   transitions
+- `REQ-CORE-TEMPLATE-WORKFLOW-001` `atm-core` must own the transport-neutral
+  declaration validation and pure merged-variable resolution for optional
+  template workflow facts. It must carry opaque bounded scope, state, stage,
+  transition, and iteration values into an immutable admission snapshot;
+  neither it nor any downstream surface may reserve orchestration vocabulary
+  or infer facts from rendered content. The requirement derives from ADR-046
+  and satisfies `REQ-P-TEMPLATE-WORKFLOW-001`.
+- `REQ-RUSQLITE-TEMPLATE-WORKFLOW-001` `atm-storage-rusqlite` must own the
+  additive migration, atomic persistence, and indexed query projection for
+  the already-validated workflow snapshot. Its durable tag columns are limited
+  to existing caller/instance tags, the immutable applied-template tag
+  snapshot, and the atomically computed `effective_tags_json` search
+  projection; derived tags have no independently persisted column. It adds no
+  storage capability trait and never rebuilds history from mutable catalog
+  data. The requirement derives from ADR-046 and satisfies
+  `REQ-P-TEMPLATE-WORKFLOW-001` and `REQ-P-TEMPLATE-TAGS-001`.
+- `REQ-CORE-WORKFLOW-ANALYTICS-001` `atm-core` must expose immutable workflow
+  facts and their tag provenance through local query/projection contracts for
+  generic duration and iteration analysis. Any optional telemetry sink is a
+  non-authoritative read-side projection only: it cannot affect message
+  admission, routing, retry, policy, or security. The requirement derives
+  from ADR-046 and satisfies `REQ-P-WORKFLOW-ANALYTICS-001`.
 
 ### 15.1 Persisted Message Fields
 
@@ -3947,10 +3986,9 @@ mail correctness.
     the narrow same-host retained-origin receipt defined by
     `REQ-CORE-TRANSPORT-002` logs its skipped write and continues the ordinary
     inbound recipient nudge without a second database write
-  - the only exception is REQ-CORE-TRANSPORT-003B's bounded, user-selected
-    reconciliation scheduler; it creates no delivery state. Its transient work
-    keys are execution coordination, not a retry queue: they contain no
-    payload, result, receipt, attempt history, or durable checkpoint
+  - `REQ-CORE-TRANSPORT-003B` is historical and separately authorized future
+    work only; it supplies no scheduler, policy, queue, cursor, configuration,
+    or compatibility path to the current implementation
 
 - `REQ-CORE-TRANSPORT-003A` **Historical; superseded by
   `REQ-CORE-TRANSPORT-003B`.** It records the AI.28 ordered-coordinator

@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM2-ORPHANED-FUZZ-CAMPAIGN-SCRIPT>
+  a triage:Finding ;
+  triage:findingId "AM2-ORPHANED-FUZZ-CAMPAIGN-SCRIPT" ;
+  triage:title "scripts/fuzz/run_local_http_framing_campaign.py and its live Justfile target still reference raw-framing tests deleted by this sprint" ;
+  triage:description "scripts/fuzz/run_local_http_framing_campaign.py's TEST_PREFIX and four worker test names target a cargo test path under agent-team-mail-core's raw HTTP frame reader tests, all of which AM.2 deleted from crates/atm-core/src/api.rs. The script is wired live into the Justfile as the 'fuzz-local-http' recipe, so `just fuzz-local-http` will now find no matching tests and produce a broken/empty campaign report instead of a clear error. Found by ruthless-boundary-qa (RBQA-AM2-F001). AM.2's own sprint doc requires removing docs/deps/exports/tests belonging exclusively to the deleted raw-framing helpers; this orphaned fuzz harness is exactly that class of leftover. RECHECK (QA-AM2-2, 2026-08-10, commit fab8bdbe): FIXED. scripts/fuzz/run_local_http_framing_campaign.py deleted (commit 5952dcb5), its dedicated test .just/tests/test_run_local_http_framing_campaign.py deleted (commit efb418d3), and the Justfile's fuzz-local-http recipe removed (commit fab8bdbe). All three pieces of the orphaned harness are gone; no dangling references remain. Independently confirmed by all 4 QA-2 reviewers plus quality-mgr's own grep for fuzz-local-http/run_local_http_framing_campaign across the workspace." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doc-gap" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-10T20:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-08-10T20:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S2 ;
+  triage:foundAt "2026-08-10T20:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM2-ORPHANED-FUZZ-CAMPAIGN-SCRIPT/AM2-QA1-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AM2-ORPHANED-FUZZ-CAMPAIGN-SCRIPT/AM2-QA1-1>
+  a triage:Occurrence ;
+  triage:file "scripts/fuzz/run_local_http_framing_campaign.py" ;
+  triage:line 31 ;
+  triage:snippet "TEST_PREFIX = \"api::http_frame_reader::ai51_campaign::\" -- targets deleted tests; wired live into Justfile fuzz-local-http" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s2-delete-legacy-http" ;
+  triage:headSha "46ff7c508b93e25aa0ff028e797071677145959e" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s2/46ff7c50> .
+
+<urn:atm:triage:worktree/pam-s2/46ff7c50>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s2-delete-legacy-http" ;
+  triage:branch "feature/pam-s2-delete-legacy-http" ;
+  triage:headSha "46ff7c508b93e25aa0ff028e797071677145959e" ;
+  triage:orderIndex 1 .

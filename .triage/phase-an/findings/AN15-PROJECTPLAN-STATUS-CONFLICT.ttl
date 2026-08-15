@@ -1,0 +1,87 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN15-PROJECTPLAN-STATUS-CONFLICT>
+  a triage:Finding ;
+  triage:findingId "AN15-PROJECTPLAN-STATUS-CONFLICT" ;
+  triage:title "Cross-doc status conflict: project-plan.md and phase-an plan still mark AN.13-15 blocked/in-progress" ;
+  triage:description "docs/project-plan.md (~line 1230) and docs/plans/phase-an/plan-phase-an.md (~line 3) still mark AN.13-AN.15 as blocked/in-progress despite AN.13/AN.14 having merged (PR #877). RESOLVED: both files now consistently read 'AN.1-AN.14 COMPLETE; AN.15 IN PROGRESS' as of integrate/phase-an @ 628d6531b. Confirmed by AN-PHASEEND-REVIEW docs reviewer (task #1767)." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "docs" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "docs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-14T08:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.15 ;
+  triage:foundAt "2026-08-14T08:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN15-PROJECTPLAN-STATUS-CONFLICT/proj-plan-1230-an15> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN15-PROJECTPLAN-STATUS-CONFLICT/proj-plan-1230-integrate> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN15-PROJECTPLAN-STATUS-CONFLICT/phase-an-plan-3-an15> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN15-PROJECTPLAN-STATUS-CONFLICT/phase-an-plan-3-integrate> ;
+  triage:closedAt "2026-08-14T20:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AN15-PROJECTPLAN-STATUS-CONFLICT/proj-plan-1230-an15>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1230 ;
+  triage:snippet "AN.1-AN.14 COMPLETE; AN.15 IN PROGRESS" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an15-adversarial-fuzzing" ;
+  triage:headSha "9ddf105b5dd7c3d7ec592cac1602dd7ab1c743bb" ;
+  triage:occursIn <urn:atm:triage:worktree/AN15_9ddf105b> .
+
+<urn:atm:triage:occurrence/AN15-PROJECTPLAN-STATUS-CONFLICT/proj-plan-1230-integrate>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1230 ;
+  triage:snippet "AN.1-AN.14 COMPLETE; AN.15 IN PROGRESS" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "628d6531bd77db0507447e587088fb9abdfeb4bc" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE_AN_628d6531> .
+
+<urn:atm:triage:occurrence/AN15-PROJECTPLAN-STATUS-CONFLICT/phase-an-plan-3-an15>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-an/plan-phase-an.md" ;
+  triage:line 3 ;
+  triage:snippet "AN.1-AN.14 COMPLETE; AN.15 IN PROGRESS" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an15-adversarial-fuzzing" ;
+  triage:headSha "9ddf105b5dd7c3d7ec592cac1602dd7ab1c743bb" ;
+  triage:occursIn <urn:atm:triage:worktree/AN15_9ddf105b> .
+
+<urn:atm:triage:occurrence/AN15-PROJECTPLAN-STATUS-CONFLICT/phase-an-plan-3-integrate>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-an/plan-phase-an.md" ;
+  triage:line 3 ;
+  triage:snippet "AN.1-AN.14 COMPLETE; AN.15 IN PROGRESS" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "628d6531bd77db0507447e587088fb9abdfeb4bc" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE_AN_628d6531> .
+
+<urn:atm:triage:worktree/AN15_9ddf105b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/an15-adversarial-fuzzing" ;
+  triage:branch "feature/an15-adversarial-fuzzing" ;
+  triage:headSha "9ddf105b5dd7c3d7ec592cac1602dd7ab1c743bb" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/INTEGRATE_AN_628d6531>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate/phase-an" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "628d6531bd77db0507447e587088fb9abdfeb4bc" ;
+  triage:orderIndex 1 .

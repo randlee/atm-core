@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN6-TESTQUALITY-001>
+  a triage:Finding ;
+  triage:findingId "AN6-TESTQUALITY-001" ;
+  triage:title "parameterized_query_returns_column_labelled_rows lost equality-selectivity coverage" ;
+  triage:description "AN6-RULE008-003-FIX-2 (3c62c2bb389061ee820c99aa5971300dd05f7cb2) fixed a RULE-008/009 identity-literal violation by rewriting the test predicate from team-equals-question-mark to team-not-equals-question-mark and binding a synthetic non-matching value (TEST_NONEXISTENT_TEAM equals test-team). Confirmed by quality-mgr (AN6-QA-6): since all 4 fixture rows share team equals atm-dev and no fixture row matches test-team, the not-equals predicate returns all 4 rows for any bound string value, so the test no longer distinguishes correct equality-parameter-binding from broken or ignored binding (a null binding would still be caught). This is a real coverage loss on the equality-selectivity path, not a fabricated pass; identities/lint/clippy/tests are all genuinely green. Recommended remediation (either): add a second distinct team value to the atm-storage-rusqlite analyst-query fixture and restore equals semantics, or reference an already-allowlisted production-canonical literal as the equality target instead of inverting to not-equals." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-quality" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "branch" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-12T11:38:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-13T23:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "Cipher-311d" ;
+  triage:foundIn triage:AN.6 ;
+  triage:foundAt "2026-08-12T11:38:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN6-TESTQUALITY-001/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AN6-TESTQUALITY-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-query-python/src/lib.rs" ;
+  triage:line 180 ;
+  triage:snippet "team != question-mark predicate matches all fixture rows regardless of bound value -- equality-selectivity coverage lost" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-13T23:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "Cipher-311d" ;
+  triage:branch "feature/pan-s6-query-surface" ;
+  triage:headSha "64133471d9cee5b076f86aa855ac60bc02a2e506" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pan-s6-query-surface> .
+
+<urn:atm:triage:worktree/feature-pan-s6-query-surface>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pan-s6-query-surface" ;
+  triage:branch "feature/pan-s6-query-surface" ;
+  triage:headSha "3c62c2bb389061ee820c99aa5971300dd05f7cb2" ;
+  triage:orderIndex 1 .

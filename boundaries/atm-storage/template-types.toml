@@ -1,0 +1,47 @@
+boundary_id = "BOUNDARY-TemplateStorageTypes"
+owner_package = "atm-storage"
+owner_crate_path = "atm_storage"
+name = "TemplateStorageTypes"
+
+[public]
+facade = "TemplateSha"
+notes = "leaf template identity and frontmatter DTOs shared with the template-composer port; no catalog, schema, or hashing capability"
+
+[implementation]
+type = "TemplateSha"
+module = "atm_storage::types"
+visibility = "public"
+constructor = "public"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["template_identity_contract_dtos"]
+io_forbidden = ["direct_sqlite_io", "storage_write", "template_rendering", "socket_io", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-core", "atm-template-sc-compose"]
+allowed_dependencies = ["atm-error", "serde", "serde_json"]
+forbidden_edges = ["atm-storage -> atm-core", "atm-storage -> atm-storage-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["String", "serde_json::Map<String, serde_json::Value>"]
+response_types = ["TemplateSha", "TemplateFrontmatter"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["atm_hash_implementation", "atm_yaml_parser", "catalog_persistence"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-TEMPLATE-STORAGE-TYPES"]
+review_gates = ["leaf_dto_only", "no_catalog_or_hashing_capability"]
+
+[status]
+state = "concrete_landed"
+notes = ["AN.1 keeps TemplateSha and TemplateFrontmatter in the leaf storage contract. The exact-pinned adapter obtains them from public sc-compose/sc-sha APIs; this crate does not hash, parse, or persist templates."]

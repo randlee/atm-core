@@ -5,10 +5,10 @@ from __future__ import annotations
 import re
 
 
-SC_COMPOSE_SOURCE_REV = "113729e60e3409ad8c651a74956ffa5c167dd1b6"
-MIN_SC_COMPOSE = (1, 3, 0)
+SC_COMPOSE_SOURCE_REV = "6a8af1ff46ccd64ae9cc40d7d5c815aa9b0a4661"
+MIN_SC_COMPOSE = (1, 4, 0)
 MIN_SC_COMPOSE_TEXT = (
-    ">= 1.3.0 (unreleased source revision "
+    ">= 1.4.0 (released v1.4.0 source revision "
     f"{SC_COMPOSE_SOURCE_REV})"
 )
 MIN_SC_COMPOSE_BINDING = (1, 2, 0)

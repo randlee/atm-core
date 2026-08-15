@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM3-GUARD-SCOPE-GAP>
+  a triage:Finding ;
+  triage:findingId "AM3-GUARD-SCOPE-GAP" ;
+  triage:title "The local-listener deletion guard enumerates 4 specific paths instead of asserting directory/workspace-wide absence, which is exactly how AM3-ACCEPT-LOOP-LEFTOVER went undetected" ;
+  triage:description "crates/atm-architecture/tests/boundary_enforcement.rs::ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies checks a hand-maintained 4-item array (local_tcp_transport.rs, local_ipc_transport.rs, local_ipc_connection.rs, local_ipc_transport/request_worker.rs) for file-existence, plus a substring check against exactly one file (lib.rs) for the module-name strings. It does not assert the local_ipc_transport/ directory as a whole is absent, and does not sweep the workspace the way its sibling AI.11 Windows-transport-identifier check does (via ai11_guarded_workspace_sources). The AM.1 Python guard (scripts/phase-am/check_legacy_transport_removal.py) has no local-listener category at all -- only raw-framing, peer-ingress, resend-replay, direct-sqlite, and daemon-harness. This gap is already named as the ledger's own open item AM-PLAN-007 ('make the guard contract match its stated scope') and was not closed by AM.3. Independently confirmed by arch-qa, ruthless-boundary-qa, and req-qa in the same QA-1 round." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "lint-gap" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-10T19:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-08-10T19:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S3 ;
+  triage:foundAt "2026-08-10T18:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM3-GUARD-SCOPE-GAP/AM3-QA1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM3-GUARD-SCOPE-GAP/AM3-QA1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 1305 ;
+  triage:snippet "ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies checks a fixed 4-file list, not the whole local_ipc_transport/ directory" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s3-delete-legacy-local" ;
+  triage:headSha "d17337193dfd3580730612d64a7c231011e9ee8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s3/d1733719-b> .
+
+<urn:atm:triage:worktree/pam-s3/d1733719-b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s3-delete-legacy-local" ;
+  triage:branch "feature/pam-s3-delete-legacy-local" ;
+  triage:headSha "d17337193dfd3580730612d64a7c231011e9ee8c" ;
+  triage:orderIndex 1 .

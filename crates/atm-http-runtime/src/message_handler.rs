@@ -10,10 +10,17 @@ use std::sync::Arc;
 
 use atm_core::api::{
     ApiRequest, ApiResponse, AuthenticatedIngress, CLEAR_OUTCOME_HEADER, HttpRequest,
-    PEER_SOURCE_HOST_HEADER, RequestDeadline, decode_request, http_route_surface,
+    HttpRouteKind, MessageCollectionRequest, RequestDeadline, http_route_kind, http_route_surface,
 };
-use atm_core::error::AtmError;
-use atm_core::protocol::{ResponseEnvelope, SendResponseEnvelope};
+use atm_core::clear::ClearQuery;
+use atm_core::doctor::DoctorQuery;
+use atm_core::error::{AtmError, AtmErrorCode};
+use atm_core::protocol::{
+    CompatibilityPreflight, RequestId, ResponseEnvelope, SendResponseEnvelope,
+    TeamMemberHeartbeatRequest, next_request_id,
+};
+use atm_core::read::{PeekQuery, ReadQuery};
+use atm_core::search::SearchRequest;
 use atm_core::send::WriteRequest;
 use atm_core::types::HostName;
 use axum::body::{Body, Bytes};
@@ -25,14 +32,23 @@ use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, Uri};
 use axum::response::Response;
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
+use base64::Engine as _;
 use serde::Serialize;
 use std::net::SocketAddr;
 use tower::BoxError;
 use tower::ServiceBuilder;
 use tower::limit::ConcurrencyLimitLayer;
 use tower::load_shed::LoadShedLayer;
+use tracing::{Instrument, info, info_span, warn};
 
 use crate::{RuntimeLimits, RuntimeTimeouts};
+
+/// Retired peer-provenance claims must never select application routing.
+///
+/// This remains private to the HTTP boundary solely to reject stale callers;
+/// connectors establish provenance independently after authentication.
+const RETIRED_PEER_PROVENANCE_HEADER: &str = "X-ATM-Peer-Source-Host";
+const REQUEST_ID_HEADER: &str = "X-ATM-Request-Id";
 
 /// Async replacement-owned application operation for the canonical write
 /// route. Implementations may isolate synchronous storage or hook adapters in
@@ -51,6 +67,21 @@ pub trait CanonicalWriteHandler: atm_core::boundary::sealed::Sealed + Send + Syn
         ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>>;
+
+    /// Writes with the correlation ID established at HTTP ingress.
+    ///
+    /// Focused write-only handlers retain the compatibility implementation;
+    /// the production router overrides this to preserve the ID across a
+    /// directly forwarded peer acknowledgement.
+    fn write_with_request_id(
+        &self,
+        request: WriteRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+        _request_id: RequestId,
+    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
+        self.write(request, ingress, deadline)
+    }
 
     /// Dispatches a route decoded by the core-owned HTTP codec.
     ///
@@ -72,6 +103,22 @@ pub trait CanonicalWriteHandler: atm_core::boundary::sealed::Sealed + Send + Syn
                     request.into_inner()
                 )))
             }),
+        }
+    }
+
+    /// Dispatches with the correlation ID established at HTTP ingress.
+    fn dispatch_with_request_id(
+        &self,
+        request: ApiRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+        request_id: RequestId,
+    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
+        match request {
+            ApiRequest::Write(request) => {
+                self.write_with_request_id(*request, ingress, deadline, request_id)
+            }
+            request => self.dispatch(request, ingress, deadline),
         }
     }
 }
@@ -170,6 +217,7 @@ struct MessageRouteState {
     handler: Arc<dyn CanonicalWriteHandler>,
     connector: AuthenticatedConnector,
     request_timeout: std::time::Duration,
+    max_body_bytes: usize,
 }
 
 /// Builds the one framework-owned typed message-write route.
@@ -187,6 +235,7 @@ pub fn canonical_message_router(
         handler,
         connector,
         request_timeout: timeouts.request,
+        max_body_bytes: limits.max_body_bytes,
     };
     let admission = ServiceBuilder::new()
         .layer(HandleErrorLayer::new(|error: BoxError| async move {
@@ -203,7 +252,7 @@ pub fn canonical_message_router(
 
 /// Builds the production framework router for the complete retained core HTTP
 /// route surface. Each route is registered from [`http_route_surface`] and is
-/// decoded by `atm_core::api::decode_request`, so the loopback and UDS
+/// decoded at this framework boundary, so the loopback and UDS
 /// connectors share the exact route/body contract with their clients.
 ///
 /// This is deliberately distinct from [`canonical_message_router`]: focused
@@ -220,6 +269,7 @@ pub fn canonical_api_router(
         handler,
         connector,
         request_timeout: timeouts.request,
+        max_body_bytes: limits.max_body_bytes,
     };
     let admission = ServiceBuilder::new()
         .layer(HandleErrorLayer::new(|error: BoxError| async move {
@@ -266,6 +316,20 @@ async fn post_messages(
     headers: HeaderMap,
     request: Result<Json<WriteRequest>, JsonRejection>,
 ) -> Response {
+    let request_id = request_id_from_headers(&headers).unwrap_or_else(next_request_id);
+    post_messages_with_request_id(state, peer, headers, request, request_id)
+        .instrument(info_span!("atm_http_request", %request_id, method = "POST", path = canonical_write_path()))
+        .await
+}
+
+async fn post_messages_with_request_id(
+    state: MessageRouteState,
+    peer: Option<Extension<ConnectInfo<SocketAddr>>>,
+    headers: HeaderMap,
+    request: Result<Json<WriteRequest>, JsonRejection>,
+    request_id: RequestId,
+) -> Response {
+    info!(%request_id, "accepted canonical HTTP ingress request");
     if let Err(error) = validate_request_headers(&headers) {
         return error_response(error);
     }
@@ -282,7 +346,10 @@ async fn post_messages(
     };
     let deadline = RequestDeadline::after(state.request_timeout);
 
-    let response = state.handler.write(request, ingress, deadline).await;
+    let response = state
+        .handler
+        .write_with_request_id(request, ingress, deadline, request_id)
+        .await;
     response
         .and_then(map_write_response)
         .unwrap_or_else(error_response)
@@ -296,6 +363,27 @@ async fn dispatch_request(
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
+    let request_id = request_id_from_headers(&headers).unwrap_or_else(next_request_id);
+    let request_method = method.clone();
+    let request_path = uri.path_and_query().map_or_else(
+        || uri.path().to_owned(),
+        |path_and_query| path_and_query.as_str().to_owned(),
+    );
+    dispatch_request_with_request_id(state, peer, method, uri, headers, body, request_id)
+        .instrument(info_span!("atm_http_request", %request_id, method = %request_method, path = %request_path))
+        .await
+}
+
+async fn dispatch_request_with_request_id(
+    state: MessageRouteState,
+    peer: Option<Extension<ConnectInfo<SocketAddr>>>,
+    method: Method,
+    uri: Uri,
+    headers: HeaderMap,
+    body: Bytes,
+    request_id: RequestId,
+) -> Response {
+    info!(%request_id, "accepted canonical HTTP ingress request");
     if let Err(error) = validate_request_headers(&headers) {
         return error_response(error);
     }
@@ -303,12 +391,18 @@ async fn dispatch_request(
         Ok(headers) => headers,
         Err(error) => return error_response(error),
     };
-    let mut request = match decode_request(HttpRequest {
-        method: method.as_str().to_owned(),
-        path: uri.path().to_owned(),
-        headers,
-        body: body.to_vec(),
-    }) {
+    let mut request = match decode_framework_request(
+        HttpRequest {
+            method: method.as_str().to_owned(),
+            path: uri.path_and_query().map_or_else(
+                || uri.path().to_owned(),
+                |path_and_query| path_and_query.as_str().to_owned(),
+            ),
+            headers,
+            body: body.to_vec(),
+        },
+        state.max_body_bytes,
+    ) {
         Ok(request) => request,
         Err(error) => return error_response(error),
     };
@@ -322,10 +416,114 @@ async fn dispatch_request(
     let deadline = RequestDeadline::after(state.request_timeout);
     state
         .handler
-        .dispatch(request, ingress, deadline)
+        .dispatch_with_request_id(request, ingress, deadline, request_id)
         .await
         .and_then(map_api_response)
         .unwrap_or_else(error_response)
+}
+
+fn decode_framework_request(
+    request: HttpRequest,
+    max_body_bytes: usize,
+) -> Result<ApiRequest, AtmError> {
+    if request.body.len() > max_body_bytes {
+        return Err(AtmError::validation_with_recovery(
+            format!("daemon HTTP request body exceeds configured limit of {max_body_bytes} bytes"),
+            "reduce the request body or raise the runtime max_body_bytes limit and retry",
+        ));
+    }
+    let body = request.body.as_slice();
+    let invalid = |kind: &str, source: serde_json::Error| {
+        AtmError::validation_with_recovery(
+            format!("invalid {kind} HTTP request body: {source}"),
+            "ensure the client sends the documented JSON request body and retry",
+        )
+    };
+    let method = request.method.to_ascii_uppercase();
+    match http_route_kind(&method, &request.path) {
+        Some(HttpRouteKind::Write) => serde_json::from_slice::<WriteRequest>(body)
+            .map(|value| ApiRequest::Write(Box::new(value)))
+            .map_err(|source| invalid("write", source)),
+        Some(HttpRouteKind::List) => serde_json::from_slice(body)
+            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::List(value))))
+            .map_err(|source| invalid("messages list", source)),
+        Some(HttpRouteKind::Inspect) => serde_json::from_slice::<PeekQuery>(body)
+            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::Peek(value))))
+            .map_err(|source| invalid("message inspect", source)),
+        Some(HttpRouteKind::Receive) => serde_json::from_slice::<ReadQuery>(body)
+            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::Receive(value))))
+            .map_err(|source| invalid("message read", source)),
+        Some(HttpRouteKind::Clear) => serde_json::from_slice::<ClearQuery>(body)
+            .map(ApiRequest::Clear)
+            .map_err(|source| invalid("messages clear", source)),
+        Some(HttpRouteKind::Doctor) => serde_json::from_slice::<DoctorQuery>(body)
+            .map(ApiRequest::Doctor)
+            .map_err(|source| invalid("doctor", source)),
+        Some(HttpRouteKind::Search) => decode_search_query(&request.path)
+            .map(Box::new)
+            .map(ApiRequest::Search),
+        Some(HttpRouteKind::Compatibility) => {
+            serde_json::from_slice::<CompatibilityPreflight>(body)
+                .map(ApiRequest::CompatibilityPreflight)
+                .map_err(|source| invalid("compatibility", source))
+        }
+        Some(HttpRouteKind::Heartbeat) => {
+            serde_json::from_slice::<TeamMemberHeartbeatRequest>(body)
+                .map(ApiRequest::Heartbeat)
+                .map_err(|source| invalid("heartbeat", source))
+        }
+        Some(HttpRouteKind::RuntimeReload) => serde_json::from_slice::<()>(body)
+            .map(|()| ApiRequest::ReloadRuntimeView)
+            .map_err(|source| invalid("runtime reload", source)),
+        None => Err(AtmError::validation_with_recovery(
+            format!("unsupported daemon HTTP route {method} {}", request.path),
+            "use a method and path from the daemon HTTP route contract and retry",
+        )),
+    }
+}
+
+/// Decodes the canonical bodyless GET representation for search.  The value
+/// is URL-safe base64 JSON so a complete typed `SearchRequest` remains one
+/// stable HTTP query parameter without inventing a second filter grammar.
+fn decode_search_query(path: &str) -> Result<SearchRequest, AtmError> {
+    let (_, query) = path.split_once('?').ok_or_else(|| {
+        AtmError::validation_with_recovery(
+            "message search HTTP request is missing its request query parameter",
+            "send GET /v1/atm/messages/search?request=<base64url-json> and retry",
+        )
+    })?;
+    let mut request_values = query
+        .split('&')
+        .filter_map(|field| field.split_once('='))
+        .filter(|(name, _)| *name == "request")
+        .map(|(_, value)| value);
+    let encoded = request_values.next().ok_or_else(|| {
+        AtmError::validation_with_recovery(
+            "message search HTTP request is missing its request query parameter",
+            "send GET /v1/atm/messages/search?request=<base64url-json> and retry",
+        )
+    })?;
+    if request_values.next().is_some() {
+        return Err(AtmError::validation_with_recovery(
+            "message search HTTP request repeats its request query parameter",
+            "send exactly one request query parameter and retry",
+        ));
+    }
+    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(encoded)
+        .map_err(|source| {
+            AtmError::validation_with_recovery(
+                "message search HTTP request query parameter is not valid base64url",
+                "encode the JSON SearchRequest as unpadded URL-safe base64 and retry",
+            )
+            .with_cause(source)
+        })?;
+    serde_json::from_slice(&bytes).map_err(|source| {
+        AtmError::validation_with_recovery(
+            format!("message search HTTP request JSON is invalid: {source}"),
+            "encode the documented SearchRequest JSON in the request query parameter and retry",
+        )
+    })
 }
 
 fn canonical_headers(headers: &HeaderMap) -> Result<Vec<String>, AtmError> {
@@ -342,22 +540,47 @@ fn canonical_headers(headers: &HeaderMap) -> Result<Vec<String>, AtmError> {
 }
 
 fn validate_request_headers(headers: &HeaderMap) -> Result<(), AtmError> {
-    if headers.contains_key(PEER_SOURCE_HOST_HEADER) {
+    if headers.contains_key(RETIRED_PEER_PROVENANCE_HEADER) {
         return Err(AtmError::validation(format!(
-            "{PEER_SOURCE_HOST_HEADER} is not accepted by canonical HTTP ingress"
+            "{RETIRED_PEER_PROVENANCE_HEADER} is not accepted by canonical HTTP ingress"
         )));
     }
     Ok(())
 }
 
+fn request_id_from_headers(headers: &HeaderMap) -> Option<RequestId> {
+    let values = headers.get_all(REQUEST_ID_HEADER);
+    let mut values = values.iter();
+    let value = values.next()?.to_str().ok()?;
+    if values.next().is_some() {
+        return None;
+    }
+    value
+        .parse::<u64>()
+        .ok()
+        .and_then(|value| RequestId::new(value).ok())
+}
+
 async fn overload_response(_: BoxError) -> Response {
+    warn!("HTTP message ingress rejected because its in-flight capacity is saturated");
     error_response(AtmError::daemon_connection_saturated(
         "HTTP message ingress is at its configured in-flight capacity",
     ))
 }
 
 fn framework_rejection(rejection: JsonRejection) -> AtmError {
-    AtmError::validation("invalid HTTP messages request").with_cause(rejection)
+    let detail = match &rejection {
+        JsonRejection::JsonDataError(_) => {
+            "invalid HTTP messages request: JSON fields have invalid types"
+        }
+        JsonRejection::JsonSyntaxError(_) => "invalid HTTP messages request: malformed JSON",
+        JsonRejection::MissingJsonContentType(_) => {
+            "invalid HTTP messages request: Content-Type must be application/json"
+        }
+        JsonRejection::BytesRejection(_) => "invalid HTTP messages request: body could not be read",
+        _ => "invalid HTTP messages request: request body was rejected",
+    };
+    AtmError::validation(detail).with_cause(rejection)
 }
 
 fn map_write_response(response: ApiResponse) -> Result<Response, AtmError> {
@@ -401,6 +624,7 @@ fn map_api_response(response: ApiResponse) -> Result<Response, AtmError> {
         ResponseEnvelope::Receive(value) => json_response(StatusCode::OK, &value, None),
         ResponseEnvelope::Clear(value) => clear_response(&value),
         ResponseEnvelope::Doctor(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::Search(value) => json_response(StatusCode::OK, &value, None),
         ResponseEnvelope::RuntimeViewReloaded => json_response(StatusCode::OK, &(), None),
         ResponseEnvelope::Error(error) => Ok(error_response(error)),
     }
@@ -424,6 +648,23 @@ fn clear_response(outcome: &atm_core::clear::ClearOutcome) -> Result<Response, A
     Ok(response)
 }
 
+#[derive(Serialize)]
+struct HttpErrorBody<'error> {
+    code: AtmErrorCode,
+    message: &'error str,
+}
+
+impl<'error> From<&'error AtmError> for HttpErrorBody<'error> {
+    fn from(error: &'error AtmError) -> Self {
+        // HTTP is an untrusted transport boundary. `cause` remains available
+        // to local diagnostics, but must never be serialized to a peer.
+        Self {
+            code: error.code(),
+            message: error.message(),
+        }
+    }
+}
+
 pub(crate) fn error_response(error: AtmError) -> Response {
     let status = if error.is_validation()
         || matches!(
@@ -435,9 +676,10 @@ pub(crate) fn error_response(error: AtmError) -> Response {
     } else {
         StatusCode::SERVICE_UNAVAILABLE
     };
-    // `AtmError` is the repository-wide serde error contract. If serialization
-    // itself fails, return a minimal 503 without inventing another JSON shape.
-    json_response(status, &error, None).unwrap_or_else(|_| Response::new(Body::empty()))
+    // Preserve the public code/message contract while redacting diagnostic
+    // causes before serializing through the untrusted HTTP boundary.
+    let body = HttpErrorBody::from(&error);
+    json_response(status, &body, None).unwrap_or_else(|_| Response::new(Body::empty()))
 }
 
 fn json_response<T: Serialize>(
@@ -477,21 +719,30 @@ mod tests {
     use std::sync::{Arc, Condvar, Mutex};
     use std::time::Duration;
 
-    use atm_core::api::PEER_SOURCE_HOST_HEADER;
+    use atm_core::api::HttpRequest;
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::protocol::ResponseEnvelope;
+    use atm_core::search::{SearchRequest, SearchResponse};
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome};
     use atm_core::types::CommandAction;
+    use atm_core::workflow_analytics::{WorkflowProjectionRequest, WorkflowSelector};
     use atm_core::{ApiResponse, AuthenticatedIngress, RequestDeadline};
+    use atm_storage::{
+        ChatId, IsoTimestamp, MessageKey, SearchAggregate, SearchGroup, SearchGroupBy,
+        SearchResultKey, SearchTimestampField, StoredSearchAddress,
+    };
     use axum::body::{Body, to_bytes};
     use axum::http::header::{CONTENT_TYPE, HeaderName};
-    use axum::http::{Request, StatusCode};
+    use axum::http::{HeaderMap, HeaderValue, Request, StatusCode};
+    use base64::Engine as _;
     use serde_json::{Value, json};
     use tower::ServiceExt;
 
     use super::{
-        AuthenticatedConnector, CanonicalWriteHandler, canonical_api_router,
-        canonical_message_router, canonical_write_path, json_response, map_write_response,
+        AuthenticatedConnector, CanonicalWriteHandler, REQUEST_ID_HEADER,
+        RETIRED_PEER_PROVENANCE_HEADER, canonical_api_router, canonical_message_router,
+        canonical_write_path, decode_framework_request, json_response, map_write_response,
+        request_id_from_headers,
     };
     use crate::{NonZeroDuration, RuntimeLimits, RuntimeTimeouts};
 
@@ -636,6 +887,22 @@ mod tests {
         )
     }
 
+    #[test]
+    fn request_id_header_preserves_a_valid_peer_correlation_id() {
+        let mut headers = HeaderMap::new();
+        headers.insert(REQUEST_ID_HEADER, HeaderValue::from_static("42"));
+
+        assert_eq!(
+            request_id_from_headers(&headers)
+                .expect("valid header")
+                .into_inner(),
+            42
+        );
+
+        headers.append(REQUEST_ID_HEADER, HeaderValue::from_static("43"));
+        assert!(request_id_from_headers(&headers).is_none());
+    }
+
     fn write_request() -> atm_core::send::WriteRequest {
         let temporary_root = tempfile::tempdir().expect("temporary request paths");
         atm_core::send::WriteRequest::new(
@@ -697,6 +964,217 @@ mod tests {
             .await
             .expect("response bytes")
             .to_vec()
+    }
+
+    #[derive(Clone, Copy)]
+    enum An15HttpProbe {
+        Shape,
+        ContentType,
+        HeaderBoundary,
+    }
+
+    const AN15_HTTP_CASE_SHAPES: [&[&str]; 3] = [
+        &[
+            "truncated-object",
+            "truncated-array",
+            "truncated-field",
+            "plain-text",
+            "wrong-scalar",
+        ],
+        &["plain-text", "xml", "html", "binary", "form"],
+        &[
+            "retired-header",
+            "non-json-content-type",
+            "json-syntax",
+            "json-data",
+        ],
+    ];
+
+    fn an15_http_case_shape(probe: An15HttpProbe, case_index: usize) -> (usize, &'static str) {
+        let probe_index = match probe {
+            An15HttpProbe::Shape => 0,
+            An15HttpProbe::ContentType => 1,
+            An15HttpProbe::HeaderBoundary => 2,
+        };
+        let slot = case_index % AN15_HTTP_CASE_SHAPES[probe_index].len();
+        (slot, AN15_HTTP_CASE_SHAPES[probe_index][slot])
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn error_response_redacts_diagnostic_causes_at_the_http_boundary() {
+        let diagnostic_secret = "Bearer test-only-http-error-secret";
+        let response = super::error_response(
+            AtmError::validation("HTTP error redaction fixture").with_cause(diagnostic_secret),
+        );
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+        let body: Value = serde_json::from_slice(&response_body(response).await)
+            .expect("redacted HTTP error response");
+        assert_eq!(body["code"], "ATM_MESSAGE_VALIDATION_FAILED");
+        assert!(
+            body["message"]
+                .as_str()
+                .expect("stable error message")
+                .contains("HTTP error redaction fixture")
+        );
+        assert!(body.get("cause").is_none(), "HTTP must not expose causes");
+        assert!(
+            !body.to_string().contains(diagnostic_secret),
+            "HTTP must not expose diagnostic secrets"
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn an15_http_shape_probe_rejects_malformed_json_before_dispatch() {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let app = canonical_message_router(
+            Arc::new(RecordingRouter {
+                response: sent_response(),
+                calls: Arc::clone(&calls),
+            }),
+            AuthenticatedConnector::local(),
+            limits(4096, 2),
+            timeouts(),
+        );
+
+        for case_index in 0..100 {
+            let (shape_slot, shape) = an15_http_case_shape(An15HttpProbe::Shape, case_index);
+            let body = match shape_slot {
+                0 => b"{".to_vec(),
+                1 => b"[".to_vec(),
+                2 => b"{\"to\":".to_vec(),
+                3 => b"not-json".to_vec(),
+                _ => b"{\"to\":true".to_vec(),
+            };
+            eprintln!("AN15_CASE_SHAPE={shape}");
+            let response = post(app.clone(), body).await;
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+            let error: AtmError = serde_json::from_slice(&response_body(response).await)
+                .expect("typed validation error response");
+            assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+            assert!(
+                error.message().contains("invalid HTTP messages request"),
+                "case {case_index} must retain the stable malformed-request diagnostic"
+            );
+            assert!(
+                error.message().contains(
+                    "Recovery: Correct the invalid ATM request or state before retrying."
+                ),
+                "case {case_index} must retain the actionable validation recovery"
+            );
+        }
+        assert!(calls.lock().expect("record calls").is_empty());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn an15_http_template_probe_rejects_non_json_content_before_dispatch() {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let app = canonical_message_router(
+            Arc::new(RecordingRouter {
+                response: sent_response(),
+                calls: Arc::clone(&calls),
+            }),
+            AuthenticatedConnector::local(),
+            limits(4096, 2),
+            timeouts(),
+        );
+        let body = serde_json::to_vec(&write_request()).expect("typed request JSON");
+
+        for case_index in 0..100 {
+            let (shape_slot, shape) = an15_http_case_shape(An15HttpProbe::ContentType, case_index);
+            let content_type = match shape_slot {
+                0 => "text/plain",
+                1 => "application/xml",
+                2 => "text/html",
+                3 => "application/octet-stream",
+                _ => "application/x-www-form-urlencoded",
+            };
+            eprintln!("AN15_CASE_SHAPE={shape}");
+            let response =
+                post_with_headers(app.clone(), body.clone(), &[(CONTENT_TYPE, content_type)]).await;
+            assert_eq!(
+                response.status(),
+                StatusCode::BAD_REQUEST,
+                "case {case_index}"
+            );
+            let error: AtmError = serde_json::from_slice(&response_body(response).await)
+                .expect("typed validation error response");
+            assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+            assert!(
+                error.message().contains(
+                    "Recovery: Correct the invalid ATM request or state before retrying."
+                ),
+                "case {case_index} must retain the actionable validation recovery"
+            );
+        }
+        assert!(calls.lock().expect("record calls").is_empty());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn an15_http_boundary_probe_rejects_retired_provenance_before_dispatch() {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let app = canonical_message_router(
+            Arc::new(RecordingRouter {
+                response: sent_response(),
+                calls: Arc::clone(&calls),
+            }),
+            AuthenticatedConnector::local(),
+            limits(4096, 2),
+            timeouts(),
+        );
+        let retired = HeaderName::from_static("x-atm-peer-source-host");
+
+        for case_index in 0..100 {
+            let (shape_slot, shape) =
+                an15_http_case_shape(An15HttpProbe::HeaderBoundary, case_index);
+            let (body, headers, expected_message) = match shape_slot {
+                0 => (
+                    serde_json::to_vec(&write_request()).expect("typed request JSON"),
+                    vec![
+                        (CONTENT_TYPE, "application/json"),
+                        (retired.clone(), "ignored"),
+                    ],
+                    "X-ATM-Peer-Source-Host is not accepted",
+                ),
+                1 => (
+                    serde_json::to_vec(&write_request()).expect("typed request JSON"),
+                    vec![(CONTENT_TYPE, "text/plain")],
+                    "invalid HTTP messages request: Content-Type must be application/json",
+                ),
+                2 => (
+                    b"{".to_vec(),
+                    vec![(CONTENT_TYPE, "application/json")],
+                    "invalid HTTP messages request: malformed JSON",
+                ),
+                3 => (
+                    b"{\"to\":true}".to_vec(),
+                    vec![(CONTENT_TYPE, "application/json")],
+                    "invalid HTTP messages request: JSON fields have invalid types",
+                ),
+                _ => unreachable!("header-boundary corpus has four shapes"),
+            };
+            eprintln!("AN15_CASE_SHAPE={shape}");
+            let response = post_with_headers(app.clone(), body, &headers).await;
+            assert_eq!(
+                response.status(),
+                StatusCode::BAD_REQUEST,
+                "case {case_index}"
+            );
+            let error: AtmError = serde_json::from_slice(&response_body(response).await)
+                .expect("typed validation error response");
+            assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+            assert!(
+                error.message().contains(expected_message),
+                "case {case_index} must retain the production header/framing diagnostic"
+            );
+            assert!(
+                error.message().contains(
+                    "Recovery: Correct the invalid ATM request or state before retrying."
+                ),
+                "case {case_index} must retain the actionable validation recovery"
+            );
+        }
+        assert!(calls.lock().expect("record calls").is_empty());
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -806,6 +1284,220 @@ mod tests {
         }
     }
 
+    #[test]
+    fn framework_decoder_recognizes_every_route_from_the_core_contract() {
+        for route in atm_core::api::http_route_surface() {
+            let result = decode_framework_request(
+                HttpRequest {
+                    method: route.method.to_owned(),
+                    path: route.path_template.to_owned(),
+                    headers: Vec::new(),
+                    body: Vec::new(),
+                },
+                1,
+            );
+            let handled = match result {
+                Ok(_) => true,
+                Err(error) => {
+                    error.message().contains("invalid") || error.message().contains("missing")
+                }
+            };
+            assert!(
+                handled,
+                "{} {} must be handled by the framework decoder",
+                route.method, route.path_template
+            );
+        }
+    }
+
+    #[test]
+    fn search_route_decodes_the_shared_core_request_contract() {
+        let expected = SearchRequest {
+            query: atm_core::search::SearchInput::default(),
+            lifecycle: Some(WorkflowProjectionRequest {
+                scope_kind: atm_storage::WorkflowScopeKind::new("release-train")
+                    .expect("valid opaque scope kind"),
+                scope_id: Some(
+                    atm_storage::WorkflowScopeId::new("train-42").expect("valid opaque scope id"),
+                ),
+                start: WorkflowSelector {
+                    state: Some(
+                        atm_storage::WorkflowState::new("queued").expect("valid opaque state"),
+                    ),
+                    stage: None,
+                    transition: None,
+                },
+                end: WorkflowSelector {
+                    state: Some(
+                        atm_storage::WorkflowState::new("shipped").expect("valid opaque state"),
+                    ),
+                    stage: None,
+                    transition: None,
+                },
+                time_range: None,
+            }),
+        };
+        let encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .encode(serde_json::to_vec(&expected).expect("JSON"));
+        let decoded = decode_framework_request(
+            HttpRequest {
+                method: "GET".to_owned(),
+                path: format!("/v1/atm/messages/search?request={encoded}"),
+                headers: Vec::new(),
+                body: Vec::new(),
+            },
+            1024,
+        )
+        .expect("search request");
+        assert!(matches!(decoded, atm_core::api::ApiRequest::Search(value) if *value == expected));
+    }
+
+    #[test]
+    fn malformed_query_keys_fail_after_the_real_http_request_decoder() {
+        for query in [
+            atm_core::search::SearchInput {
+                template_meta: vec!["../phase=an".to_owned()],
+                ..Default::default()
+            },
+            atm_core::search::SearchInput {
+                vars: vec!["phase/path=an".to_owned()],
+                ..Default::default()
+            },
+            atm_core::search::SearchInput {
+                aggregate: Some(atm_core::search::SearchAggregateInput::GroupBy(
+                    "var:../../phase".to_owned(),
+                )),
+                ..Default::default()
+            },
+        ] {
+            let encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
+                serde_json::to_vec(&SearchRequest {
+                    query,
+                    lifecycle: None,
+                })
+                .expect("request JSON"),
+            );
+            let request = decode_framework_request(
+                HttpRequest {
+                    method: "GET".to_owned(),
+                    path: format!("/v1/atm/messages/search?request={encoded}"),
+                    headers: Vec::new(),
+                    body: Vec::new(),
+                },
+                1024,
+            )
+            .expect("HTTP transport accepts the public DTO");
+            let atm_core::api::ApiRequest::Search(request) = request else {
+                unreachable!("search request")
+            };
+            let error = request
+                .compile_query()
+                .expect_err("core compilation rejects invalid key");
+            assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        }
+    }
+
+    #[test]
+    fn search_response_uses_the_shared_core_response_contract() {
+        let response = super::map_api_response(atm_core::ApiResponse::new(
+            ResponseEnvelope::Search(Box::new(SearchResponse {
+                hits: Vec::new(),
+                aggregate: None,
+                next_cursor: None,
+                lifecycle: None,
+            })),
+        ))
+        .expect("response");
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[test]
+    fn search_response_contract_round_trips_every_aggregate_variant() {
+        let timestamp: IsoTimestamp = "2026-08-12T00:00:00Z".parse().expect("timestamp");
+        let aggregates = [
+            SearchAggregate::Count { value: 3 },
+            SearchAggregate::Groups {
+                by: SearchGroupBy::Field(atm_storage::SearchGroupField::Category),
+                groups: vec![SearchGroup {
+                    key: "task".to_owned(),
+                    count: 2,
+                }],
+            },
+            SearchAggregate::Timestamp {
+                field: SearchTimestampField::MessageAt,
+                value: Some(timestamp),
+            },
+            SearchAggregate::Timestamp {
+                field: SearchTimestampField::MessageAt,
+                value: None,
+            },
+        ];
+        for aggregate in aggregates {
+            let response = SearchResponse {
+                hits: Vec::new(),
+                aggregate: Some(aggregate),
+                next_cursor: None,
+                lifecycle: None,
+            };
+            let json = serde_json::to_value(&response).expect("serialize response");
+            assert_eq!(
+                serde_json::from_value::<SearchResponse>(json).expect("deserialize response"),
+                response
+            );
+        }
+    }
+
+    #[test]
+    fn search_response_contract_preserves_address_dimensions() {
+        let team: atm_storage::TeamName = "query-team".parse().expect("team");
+        let sender: atm_storage::AgentName = "sender".parse().expect("sender");
+        let recipient: atm_storage::AgentName = "recipient".parse().expect("recipient");
+        let sender_chat: ChatId = "1001".parse().expect("sender chat id");
+        let recipient_chat: ChatId = "1002".parse().expect("recipient chat id");
+        let message_at: IsoTimestamp = "2026-08-12T00:00:00Z".parse().expect("timestamp");
+        let response = SearchResponse {
+            hits: vec![atm_core::search::SearchHit {
+                key: SearchResultKey {
+                    team: team.clone(),
+                    agent: recipient.clone(),
+                    message_key: MessageKey::new("atm:address-contract").expect("message key"),
+                },
+                message_id: Some("01KZTTRD6K9WJYJ2N7E39CVB9P".to_owned()),
+                message_at,
+                from_agent: StoredSearchAddress {
+                    agent: sender,
+                    team: team.clone(),
+                    chat_id: Some(sender_chat.clone()),
+                },
+                to_agent: StoredSearchAddress {
+                    agent: recipient,
+                    team,
+                    chat_id: Some(recipient_chat.clone()),
+                },
+                template_type: Some("dev-task".to_owned()),
+                category: Some("workflow".to_owned()),
+                snippet: "address contract".to_owned(),
+                workflow: None,
+            }],
+            aggregate: None,
+            next_cursor: None,
+            lifecycle: None,
+        };
+        let json = serde_json::to_value(&response).expect("serialize response");
+        assert_eq!(
+            json["hits"][0]["from_agent"]["chat_id"],
+            serde_json::json!(sender_chat)
+        );
+        assert_eq!(
+            json["hits"][0]["to_agent"]["chat_id"],
+            serde_json::json!(recipient_chat)
+        );
+        assert_eq!(
+            serde_json::from_value::<SearchResponse>(json).expect("deserialize response"),
+            response
+        );
+    }
+
     #[tokio::test(flavor = "current_thread")]
     async fn framework_json_and_body_rejections_keep_the_adr_032_schema() {
         let calls = Arc::new(Mutex::new(Vec::new()));
@@ -848,7 +1540,7 @@ mod tests {
             vec![
                 (CONTENT_TYPE, "application/json"),
                 (
-                    HeaderName::from_bytes(PEER_SOURCE_HOST_HEADER.as_bytes())
+                    HeaderName::from_bytes(RETIRED_PEER_PROVENANCE_HEADER.as_bytes())
                         .expect("canonical peer source header"),
                     "not a valid host",
                 ),
@@ -860,6 +1552,40 @@ mod tests {
                 .expect("ADR-032 header error JSON");
             assert!(error.is_validation(), "{error:?}");
         }
+        assert!(calls.lock().expect("calls").is_empty());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn retired_peer_provenance_header_is_rejected_before_dispatch() {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let app = canonical_message_router(
+            Arc::new(RecordingRouter {
+                response: sent_response(),
+                calls: Arc::clone(&calls),
+            }),
+            AuthenticatedConnector::local(),
+            limits(4096, 1),
+            timeouts(),
+        );
+        let request = serde_json::to_vec(&write_request()).expect("typed JSON");
+        let headers = [
+            (CONTENT_TYPE, "application/json"),
+            (
+                HeaderName::from_bytes(RETIRED_PEER_PROVENANCE_HEADER.as_bytes())
+                    .expect("retired peer provenance header"),
+                "not a valid host",
+            ),
+        ];
+
+        let response = post_with_headers(app, request, &headers).await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let error: AtmError = serde_json::from_slice(&response_body(response).await)
+            .expect("ADR-032 header error JSON");
+        assert!(error.is_validation(), "{error:?}");
+        assert!(
+            error.message().contains(RETIRED_PEER_PROVENANCE_HEADER),
+            "{error:?}"
+        );
         assert!(calls.lock().expect("calls").is_empty());
     }
 
@@ -1034,7 +1760,7 @@ mod tests {
     }
 
     #[test]
-    fn openapi_and_serde_keep_the_existing_typed_write_contract() {
+    fn openapi_and_serde_keep_the_existing_typed_write_and_search_contracts() {
         let openapi: Value =
             serde_yaml::from_str(include_str!("../../../docs/atm-http-runtime/openapi.yaml"))
                 .expect("parse checked-in OpenAPI document");
@@ -1069,6 +1795,28 @@ mod tests {
             "the parsed OpenAPI write operation must remain the AL.1 compatibility oracle"
         );
 
+        let search_operation = openapi
+            .pointer("/paths/~1messages~1search/get")
+            .expect("OpenAPI must declare GET /messages/search");
+        assert_eq!(
+            search_operation
+                .pointer("/operationId")
+                .and_then(Value::as_str),
+            Some("searchMessages")
+        );
+        assert_eq!(
+            search_operation
+                .pointer("/parameters/0/name")
+                .and_then(Value::as_str),
+            Some("request")
+        );
+        assert_eq!(
+            search_operation
+                .pointer("/parameters/0/schema/format")
+                .and_then(Value::as_str),
+            Some("base64url")
+        );
+
         let serialized = serde_json::to_value(write_request())
             .expect("serialize the existing route-specific WriteRequest");
         let round_tripped: atm_core::send::WriteRequest =
@@ -1079,6 +1827,27 @@ mod tests {
             serialized,
             "the handler must retain the existing WriteRequest Serde representation"
         );
+
+        for aggregate in [
+            atm_core::search::SearchAggregateInput::Count,
+            atm_core::search::SearchAggregateInput::GroupBy("var:phase".to_owned()),
+            atm_core::search::SearchAggregateInput::MinMessageAt,
+            atm_core::search::SearchAggregateInput::MaxMessageAt,
+        ] {
+            let search = SearchRequest {
+                query: atm_core::search::SearchInput {
+                    aggregate: Some(aggregate),
+                    ..atm_core::search::SearchInput::default()
+                },
+                lifecycle: None,
+            };
+            let serialized = serde_json::to_value(&search).expect("serialize SearchRequest");
+            assert_eq!(
+                serde_json::from_value::<SearchRequest>(serialized.clone())
+                    .expect("deserialize SearchRequest"),
+                search
+            );
+        }
 
         let forbidden = ["Http", "Frame", "Reader"].concat();
         assert!(!include_str!("message_handler.rs").contains(&forbidden));

@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN6-KEYBOUNDARY-001>
+  a triage:Finding ;
+  triage:findingId "AN6-KEYBOUNDARY-001" ;
+  triage:title "No end-to-end malformed/traversal query-key rejection suite across both CLI and HTTP transports" ;
+  triage:description "Sprint doc requires a boundary suite proving malformed/traversal query keys are rejected identically over both CLI and HTTP. Existing tests only check rejection at the SearchKey level in isolation; no test exercises this end-to-end over both transports." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "branch" ;
+  triage:status "closed" ;
+  triage:resolution "fixed" ;
+  triage:closedAt "2026-08-13T08:20:34Z"^^xsd:dateTime ;
+  triage:closedNote "AN6-QUERYFIX-1 (36a75f3de): malformed metadata, variable, and group-by keys are exercised through the real CLI and HTTP decoding paths; both compile through the same core validator and assert the stable MessageValidationFailed code. The HTTP path also remains covered by the existing transport decoder test." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-12T10:09:50Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.6 ;
+  triage:foundAt "2026-08-12T10:09:50Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN6-KEYBOUNDARY-001/1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AN6-KEYBOUNDARY-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/search/mod.rs" ;
+  triage:line 1 ;
+  triage:snippet "SearchKey rejection tested in isolation only, not end-to-end over CLI+HTTP" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-13T08:20:34Z"^^xsd:dateTime ;
+  triage:closedNote "AN6-QUERYFIX-1 (36a75f3de): CLI boundary test now asserts the shared typed validation code instead of only matching display text." ;
+  triage:branch "feature/pan-s6-query-surface" ;
+  triage:headSha "8bdc985ac392b1eb9f6ad47794deec30e3c86c06" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pan-s6-query-surface> .
+
+<urn:atm:triage:worktree/feature-pan-s6-query-surface>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pan-s6-query-surface" ;
+  triage:branch "feature/pan-s6-query-surface" ;
+  triage:headSha "8bdc985ac392b1eb9f6ad47794deec30e3c86c06" ;
+  triage:orderIndex 1 .

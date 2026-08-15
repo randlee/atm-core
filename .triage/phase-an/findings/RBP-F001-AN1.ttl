@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F001-AN1>
+  a triage:Finding ;
+  triage:findingId "RBP-F001-AN1" ;
+  triage:title "inspection_error() collapses distinct inspect()-time failures into misleading generic render-verification error" ;
+  triage:description "inspection_error() collapses every distinct inspect()-time failure (frontmatter parse errors, directive-classification errors, metadata-to-JSON conversion errors, `TemplateSha::new` format-validation failures) into `AtmError::template_render_verification_failed` (code `TemplateRenderVerificationFailed`, message 'template verification render failed') even though `inspect()` never renders anything — misleading for diagnosis/scripted recovery. `AtmErrorCode::TemplateHashApiFailed` already exists and is used elsewhere for this exact failure class but is unused in this adapter's own inspect() path. Recommendation: route inspect()-time failures to semantically accurate, distinct error codes." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "error-taxonomy" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-08-14T16:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.1 ;
+  triage:foundAt "2026-08-14T15:30:00Z"^^xsd:dateTime ;
+  triage:resolutionNotes "Closed 2026-08-14 by quality-mgr: independently verified fix c1e672ade16697f23c2e2da35349f7911c0f9182 on fix/an-template-inspection-real-upstream (merged from integrate/phase-an first via f0d2e9beb). Read crates/atm-template-sc-compose/src/lib.rs directly: inspection_error() now maps to AtmErrorCode::TemplateHashApiFailed instead of the generic template_render_verification_failed; strict non-UTF8 content failures route separately to AtmErrorCode::TemplateContentNotUtf8. PR #883 independently reconfirmed 9/9 CI green and MERGEABLE via `gh pr view 883`, not taken from arch-ctm's self-report." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AN1/1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RBP-F001-AN1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-template-sc-compose/src/lib.rs" ;
+  triage:line 89 ;
+  triage:snippet "fn inspection_error(error: impl std::fmt::Display) -> AtmError { AtmError::template_render_verification_failed(error) }" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "fix/an-template-inspection-real-upstream" ;
+  triage:headSha "c1e672ade16697f23c2e2da35349f7911c0f9182" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-an-template/75ebeb27> .
+
+<urn:atm:triage:worktree/fix-an-template/75ebeb27>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-an-template" ;
+  triage:branch "fix/an-template-inspection-real-upstream" ;
+  triage:headSha "75ebeb273b126656e962092aa1353c97fa189c72" ;
+  triage:orderIndex 1 .

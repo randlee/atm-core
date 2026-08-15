@@ -1,0 +1,45 @@
+boundary_id = "BOUNDARY-TemplateCatalogStore"
+owner_package = "atm-storage"
+owner_crate_path = "atm_storage"
+name = "TemplateCatalogStore"
+
+[public]
+trait = "TemplateCatalogStore"
+notes = "sealed backend-neutral immutable catalog and atomic decomposed-message admission capability"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["template_catalog_contract"]
+io_forbidden = ["direct_sqlite_io", "template_rendering", "http_runtime", "socket_io", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-runtime", "atm-storage-rusqlite"]
+allowed_dependencies = ["atm-error", "serde", "serde_json"]
+forbidden_edges = ["atm-storage -> atm-core", "atm-storage -> atm-storage-rusqlite"]
+
+[references]
+scope = "inside_owner_crate"
+forbidden = ["rusqlite::Connection", "TemplateComposer", "MergedVars"]
+
+[contracts]
+request_types = ["TemplateRegistration", "TemplateOutputFormat", "TemplateListFilter", "DecomposedMessageAdmission", "WorkflowSnapshot", "MessageTagProvenance"]
+response_types = ["StoredTemplate", "TemplateOutputFormat", "TemplateSummary", "DecomposedMessageAdmissionOutcome"]
+error_types = ["AtmError"]
+notes = ["AN.9/AN.10 extend the existing decomposed admission payload with the validated WorkflowSnapshot and MessageTagProvenance leaf DTOs; AN.13 adds the adapter-derived TemplateOutputFormat as durable leaf data. They do not create another storage capability trait, infer an output format, or own renderer behavior."]
+
+[testing]
+allowed_test_double_paths = ["crate::template_catalog::InMemoryTemplateCatalogStore"]
+forbidden_test_bypasses = ["sqlite_connection", "renderer_handle"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-TEMPLATE-CATALOG-STORE"]
+review_gates = ["sealed_capability", "leaf_dtos_only", "no_renderer_or_sql"]
+
+[status]
+state = "concrete_landed"

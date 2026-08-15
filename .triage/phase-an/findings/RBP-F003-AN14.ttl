@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F003-AN14>
+  a triage:Finding ;
+  triage:findingId "RBP-F003-AN14" ;
+  triage:title "Redundant repeated .expect() on same Option in render_without_includes instead of binding once" ;
+  triage:description "In crates/atm-template-sc-compose/src/lib.rs, render_without_includes checks source.output_format.is_none() at lines 234-238, then calls .expect(\"checked above\") twice on the same Option at lines 252 and 256 instead of binding it once. Recommended fix: bind `let output_format = source.output_format.expect(...)` once after the is_none check, and reuse the bound value at both use sites." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "function" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-13T22:55:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.14 ;
+  triage:foundAt "2026-08-13T22:52:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003-AN14/AN14-1> ;
+  triage:closedAt "2026-08-14T07:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RBP-F003-AN14/AN14-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-template-sc-compose/src/lib.rs" ;
+  triage:line 252 ;
+  triage:snippet "source.output_format.expect(\"checked above\")" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an14-sc-compose-141-checked-emission" ;
+  triage:headSha "5fa273bb" ;
+  triage:occursIn <urn:atm:triage:worktree/AN14-1/5fa273bb> .
+
+<urn:atm:triage:worktree/AN14-1/5fa273bb>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/an14-sc-compose-141-checked-emission" ;
+  triage:branch "feature/an14-sc-compose-141-checked-emission" ;
+  triage:headSha "5fa273bb" ;
+  triage:orderIndex 1 .

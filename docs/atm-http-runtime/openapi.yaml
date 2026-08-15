@@ -6,6 +6,19 @@ info:
 servers:
   - url: /v1/atm
 paths:
+  /messages/search:
+    get:
+      operationId: searchMessages
+      description: Local-only typed search. Peer-authenticated callers are rejected before storage selection.
+      parameters:
+        - name: request
+          in: query
+          required: true
+          description: Unpadded URL-safe base64 encoding of the JSON SearchRequest contract.
+          schema: { type: string, format: base64url }
+      responses:
+        '200': { description: Local typed search result, content: { application/json: { schema: { $ref: '#/components/schemas/SearchResponse' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
   /messages:
     get:
       operationId: listMessages
@@ -114,6 +127,57 @@ components:
     ListQuery:
       type: object
       description: Canonical list query; fields are validated by the daemon.
+    SearchRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: object
+          description: Public CLI/HTTP primitives compiled by atm-core into the bounded backend-neutral search query.
+        lifecycle:
+          $ref: '#/components/schemas/WorkflowProjectionRequest'
+          description: Optional generic lifecycle projection over the bounded local search result.
+    WorkflowSelector:
+      type: object
+      description: Partial exact selector; at least one selector field is required by the runtime.
+      properties:
+        state: { type: string }
+        stage: { type: string }
+        transition: { type: string }
+    WorkflowTimeRange:
+      type: object
+      properties:
+        since: { type: string, format: date-time }
+        until: { type: string, format: date-time }
+    WorkflowProjectionRequest:
+      type: object
+      required: [scope_kind, start, end]
+      description: Generic one-to-one lifecycle pairing request carried by SearchRequest.lifecycle.
+      properties:
+        scope_kind: { type: string }
+        scope_id: { type: string }
+        start: { $ref: '#/components/schemas/WorkflowSelector' }
+        end: { $ref: '#/components/schemas/WorkflowSelector' }
+        time_range: { $ref: '#/components/schemas/WorkflowTimeRange' }
+    SearchResponse:
+      type: object
+      required: [hits]
+      properties:
+        hits: { type: array, items: { $ref: '#/components/schemas/SearchHit' } }
+        aggregate: { type: object }
+        next_cursor: { type: string }
+    SearchHit:
+      type: object
+      required: [key, message_at, from_agent, to_agent, snippet]
+      properties:
+        key: { type: object }
+        message_id: { type: string }
+        message_at: { type: string, format: date-time }
+        from_agent: { $ref: '#/components/schemas/AgentAddress' }
+        to_agent: { $ref: '#/components/schemas/AgentAddress' }
+        template_type: { type: string }
+        category: { type: string }
+        snippet: { type: string }
     CompatibilityPreflight:
       type: object
       description: Client and daemon release compatibility request.

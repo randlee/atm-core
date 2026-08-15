@@ -1,0 +1,226 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F003-AN12>
+  a triage:Finding ;
+  triage:findingId "RBP-F003-AN12" ;
+  triage:title "validation-rejection sites use AtmError::validation() instead of validation_with_recovery()" ;
+  triage:description "rust-best-practices-agent reported (AN12-QA-1, quality-mgr, PR #875 comment): 5 analyst_query.rs validation-rejection error sites use AtmError::validation() instead of validation_with_recovery(), missing actionable recovery guidance." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "error-handling" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-13T23:59:59Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.12 ;
+  triage:foundAt "2026-08-14T02:04:48Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003-AN12/p0-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003-AN12/p0-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003-AN12/p0-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003-AN12/p0-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003-AN12/p0-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003-AN12/p1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003-AN12/p1-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003-AN12/p1-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003-AN12/p1-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003-AN12/p1-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003-AN12/p2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003-AN12/p2-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003-AN12/p2-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003-AN12/p2-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003-AN12/p2-5> ;
+  triage:closedAt "2026-08-13T18:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RBP-F003-AN12/p0-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
+  triage:line 190 ;
+  triage:snippet "AtmError::validation(read-only statement)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "f8e1f52d4" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-an/f8e1f52d4> .
+
+<urn:atm:triage:occurrence/RBP-F003-AN12/p0-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
+  triage:line 216 ;
+  triage:snippet "AtmError::validation(row budget)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "f8e1f52d4" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-an/f8e1f52d4> .
+
+<urn:atm:triage:occurrence/RBP-F003-AN12/p0-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
+  triage:line 238 ;
+  triage:snippet "AtmError::validation(byte budget)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "f8e1f52d4" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-an/f8e1f52d4> .
+
+<urn:atm:triage:occurrence/RBP-F003-AN12/p0-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
+  triage:line 323 ;
+  triage:snippet "AtmError::validation(unterminated block comment)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "f8e1f52d4" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-an/f8e1f52d4> .
+
+<urn:atm:triage:occurrence/RBP-F003-AN12/p0-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
+  triage:line 395 ;
+  triage:snippet "AtmError::validation(one statement)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "f8e1f52d4" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-an/f8e1f52d4> .
+
+<urn:atm:triage:occurrence/RBP-F003-AN12/p1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
+  triage:line 239 ;
+  triage:snippet "AtmError::validation(read-only statement)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "76485c590" ;
+  triage:occursIn <urn:atm:triage:worktree/an12/76485c590> .
+
+<urn:atm:triage:occurrence/RBP-F003-AN12/p1-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
+  triage:line 265 ;
+  triage:snippet "AtmError::validation(row budget)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "76485c590" ;
+  triage:occursIn <urn:atm:triage:worktree/an12/76485c590> .
+
+<urn:atm:triage:occurrence/RBP-F003-AN12/p1-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
+  triage:line 287 ;
+  triage:snippet "AtmError::validation(byte budget)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "76485c590" ;
+  triage:occursIn <urn:atm:triage:worktree/an12/76485c590> .
+
+<urn:atm:triage:occurrence/RBP-F003-AN12/p1-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
+  triage:line 372 ;
+  triage:snippet "AtmError::validation(unterminated block comment)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "76485c590" ;
+  triage:occursIn <urn:atm:triage:worktree/an12/76485c590> .
+
+<urn:atm:triage:occurrence/RBP-F003-AN12/p1-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
+  triage:line 444 ;
+  triage:snippet "AtmError::validation(one statement)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "76485c590" ;
+  triage:occursIn <urn:atm:triage:worktree/an12/76485c590> .
+
+<urn:atm:triage:occurrence/RBP-F003-AN12/p2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
+  triage:line 239 ;
+  triage:snippet "AtmError::validation(read-only statement)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "70c7b231b" ;
+  triage:occursIn <urn:atm:triage:worktree/an13/70c7b231b> .
+
+<urn:atm:triage:occurrence/RBP-F003-AN12/p2-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
+  triage:line 265 ;
+  triage:snippet "AtmError::validation(row budget)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "70c7b231b" ;
+  triage:occursIn <urn:atm:triage:worktree/an13/70c7b231b> .
+
+<urn:atm:triage:occurrence/RBP-F003-AN12/p2-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
+  triage:line 287 ;
+  triage:snippet "AtmError::validation(byte budget)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "70c7b231b" ;
+  triage:occursIn <urn:atm:triage:worktree/an13/70c7b231b> .
+
+<urn:atm:triage:occurrence/RBP-F003-AN12/p2-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
+  triage:line 372 ;
+  triage:snippet "AtmError::validation(unterminated block comment)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "70c7b231b" ;
+  triage:occursIn <urn:atm:triage:worktree/an13/70c7b231b> .
+
+<urn:atm:triage:occurrence/RBP-F003-AN12/p2-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
+  triage:line 444 ;
+  triage:snippet "AtmError::validation(one statement)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "70c7b231b" ;
+  triage:occursIn <urn:atm:triage:worktree/an13/70c7b231b> .
+
+<urn:atm:triage:worktree/phase-an/f8e1f52d4>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-an" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "f8e1f52d4" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/an12/76485c590>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/an12-workflow-validation-evidence" ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "76485c590" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/an13/70c7b231b>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/an13-sc-composer-141-upgrade" ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "70c7b231b" ;
+  triage:orderIndex 2 .

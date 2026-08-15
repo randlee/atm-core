@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QA-003-AN11>
+  a triage:Finding ;
+  triage:findingId "QA-003-AN11" ;
+  triage:title "Clippy -D warnings: boxed asymmetric enum field" ;
+  triage:description "crates/atm-core/src/workflow_analytics.rs's LifecycleObservation::Completed variant has a large 'end: WorkflowFact' field relative to its sibling variant, triggering clippy::large_enum_variant under -D warnings." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "quality" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-14T00:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.11 ;
+  triage:foundAt "2026-08-14T00:08:17Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-14T01:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:worktree/S11/e971a226c>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pan-s11" ;
+  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
+  triage:headSha "e971a226c3a944ec8eb8caa22b3aded76314ee5e" ;
+  triage:orderIndex 11 .
+
+<urn:atm:triage:worktree/AN12/e8507167>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-an" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "e8507167921788a98d864fa6da7d0e8534d058f6" ;
+  triage:orderIndex 12 .

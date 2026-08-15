@@ -8,6 +8,7 @@ from contextlib import closing
 from pathlib import Path, PureWindowsPath
 import sys
 import tempfile
+import threading
 import unittest
 from unittest import mock
 
@@ -250,7 +251,74 @@ class AdmissionCapacityTests(unittest.TestCase):
         clean.assert_called_once_with(smoke_label="admission-capacity smoke")
         self.assertEqual(
             calls,
-            [("status", True), ("quiesce", False), ("restart", False), ("status", True)],
+            [("status", False), ("quiesce", False), ("restart", False), ("status", True)],
+        )
+
+    def test_managed_lifecycle_recovers_an_unavailable_pre_quiesce_daemon(self):
+        """Initial selector capture must not require the very doctor recovery restores."""
+        options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
+        pre_quiesce = healthy_managed_status()
+        pre_quiesce.pop("doctor")
+        after_restore = healthy_managed_status()
+        calls: list[tuple[str, bool]] = []
+
+        def daemon_switch(action, _options, *, doctor=False):
+            calls.append((action, doctor))
+            if action == "status" and doctor:
+                return after_restore
+            return pre_quiesce
+
+        with tempfile.TemporaryDirectory() as temp:
+            os_home = Path(temp)
+            state = os_home / ".atm"
+            state.mkdir()
+            (state / "mail.db").write_text("managed-state", encoding="utf-8")
+            with (
+                mock.patch.object(RUNNER, "os_account_home", return_value=os_home),
+                mock.patch.object(RUNNER, "daemon_switch_result", side_effect=daemon_switch),
+                mock.patch.object(RUNNER, "require_clean_host_daemon_state"),
+            ):
+                lifecycle = RUNNER.ManagedDaemonLifecycle(options)
+                lifecycle.begin()
+                lifecycle.restore()
+
+        self.assertEqual(
+            calls,
+            [("status", False), ("quiesce", False), ("restart", False), ("status", True)],
+        )
+
+    def test_managed_lifecycle_executes_and_restarts_the_selected_service_on_disposable_state(self):
+        options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
+        calls: list[tuple[str, bool]] = []
+
+        def daemon_switch(action, _options, *, doctor=False):
+            calls.append((action, doctor))
+            return healthy_managed_status()
+
+        with tempfile.TemporaryDirectory() as temp:
+            os_home = Path(temp)
+            state = os_home / ".atm"
+            state.mkdir()
+            (state / "mail.db").write_text("managed-state", encoding="utf-8")
+            with (
+                mock.patch.object(RUNNER, "os_account_home", return_value=os_home),
+                mock.patch.object(RUNNER, "daemon_switch_result", side_effect=daemon_switch),
+                mock.patch.object(RUNNER, "require_clean_host_daemon_state"),
+            ):
+                lifecycle = RUNNER.ManagedDaemonLifecycle(options)
+                lifecycle.begin()
+                lifecycle.start_isolated_service()
+                lifecycle.restart_isolated_service()
+                lifecycle.restore()
+
+        self.assertEqual(
+            calls,
+            [
+                ("status", False), ("quiesce", False),
+                ("restart", False), ("status", True),
+                ("quiesce", False), ("restart", False), ("status", True),
+                ("quiesce", False), ("restart", False), ("status", True),
+            ],
         )
 
     def test_backup_snapshot_failure_restarts_the_managed_pair(self):
@@ -400,9 +468,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
                 mock.patch.object(RUNNER, "run_direct_storage_probe"),
                 mock.patch.object(RUNNER, "run_direct_core_write_probe"),
-                mock.patch.object(
-                    RUNNER, "start_capacity_daemon", side_effect=RUNNER.SmokeError("benchmark failed"),
-                ),
+                mock.patch.object(RUNNER, "local_endpoint", side_effect=RUNNER.SmokeError("benchmark failed")),
                 mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"),
                 mock.patch.object(
                     RUNNER,
@@ -420,7 +486,10 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual(captured["failure"], "benchmark failed")
         self.assertEqual(captured["managed_daemon_recovery"], "doctor-verified")
-        self.assertEqual(calls, ["status", "quiesce", "restart", "status"])
+        self.assertEqual(
+            calls,
+            ["status", "quiesce", "restart", "status", "status", "quiesce", "restart", "status"],
+        )
 
     def test_transport_is_platform_explicit(self):
         self.assertEqual(RUNNER.validate_transport("tcp"), "tcp")
@@ -473,6 +542,56 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(evidence_path.name, "evidence.json")
         self.assertEqual(captured["hook_mode"], "disabled")
         self.assertIn("disabled", captured["stages"]["post_commit_received_hook"])
+
+    def test_failed_setup_records_a_schema_valid_duration(self):
+        captured: dict[str, object] = {}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            home = root / "atm-capacity-proof"
+            daemon = root / "atm-daemon"
+            atm = root / "atm"
+            daemon.touch()
+            atm.touch()
+            with (
+                mock.patch.object(RUNNER, "select_host_state_isolation", return_value="isolated_os_user"),
+                mock.patch.object(RUNNER, "require_clean_host_daemon_state"),
+                mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
+                mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
+                mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "prepare_capacity_roster"),
+                mock.patch.object(
+                    RUNNER,
+                    "run_direct_storage_probe",
+                    return_value={
+                        "kind": "async_storage_admission",
+                        "requested_count": 1,
+                        "accepted_count": 1,
+                        "worker_count": 1,
+                        "elapsed_seconds": 1.0,
+                        "admissions_per_second": 1.0,
+                    },
+                ),
+                mock.patch.object(RUNNER, "run_direct_core_write_probe", return_value={}),
+                mock.patch.object(
+                    RUNNER, "start_capacity_daemon", side_effect=RUNNER.SmokeError("setup failed"),
+                ),
+                mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"),
+                mock.patch.object(
+                    RUNNER,
+                    "write_evidence",
+                    side_effect=lambda _path, value: (
+                        compact_evidence(value), captured.update(value), root / "evidence.json"
+                    )[-1],
+                ),
+            ):
+                code, _evidence = RUNNER.run_capacity(
+                    home, root, "tcp", 1, sample_count=1, raw_evidence_directory=root,
+                )
+
+        self.assertEqual(code, 1)
+        self.assertEqual(captured["failure"], "setup failed")
+        self.assertIsInstance(captured["run_duration_s"], float)
+        self.assertGreaterEqual(captured["run_duration_s"], 0.0)
 
     def test_sparse_profiles_and_schema_fields_are_declared(self):
         self.assertEqual(RUNNER.SPARSE_FRAMES_PER_CONNECTION, (1, 2, 4, 8, 16, 64))
@@ -1034,11 +1153,14 @@ class AdmissionCapacityTests(unittest.TestCase):
 
     def test_interval_preserves_the_first_failure_and_requires_all_1000_responses(self):
         calls = 0
+        calls_lock = threading.Lock()
 
         def submit(_sequence, _message_count):
             nonlocal calls
-            calls += 1
-            return [RUNNER.AdmissionResult(201 if calls != 7 else 503, 0.1, None if calls != 7 else "HTTP 503")]
+            with calls_lock:
+                calls += 1
+                status = 201 if calls != 7 else 503
+            return [RUNNER.AdmissionResult(status, 0.1, None if status == 201 else "HTTP 503")]
 
         with mock.patch.object(RUNNER, "ADMISSIONS_PER_INTERVAL", 10):
             result = RUNNER.run_interval(submit, 0, 1, 2, 10)

@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN10-QA1-DOC-001>
+  a triage:Finding ;
+  triage:findingId "AN10-QA1-DOC-001" ;
+  triage:title "project-plan.md missing AN.10 sprint-line entry" ;
+  triage:description "docs/project-plan.md Phase AN sprint-line list still has no entry for AN.10 despite the phase heading already claiming AN.1-AN.10 complete." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-13T22:16:30Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.10 ;
+  triage:foundAt "2026-08-13T22:15:57Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN10-QA1-DOC-001/S10-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AN10-QA1-DOC-001/S10-1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1230 ;
+  triage:snippet "## 45. Phase AN — Decomposed Template Messages And Query Surface [AN.1–AN.8 COMPLETE; AN.9–AN.12 PLANNED]" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-13T23:59:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:branch "feature/pan-s10-template-workflow-admission" ;
+  triage:headSha "6922cd2eb" ;
+  triage:occursIn <urn:atm:triage:worktree/S10/6922cd2eb> .
+
+<urn:atm:triage:worktree/S10/6922cd2eb>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pan-s10-template-workflow-admission" ;
+  triage:branch "feature/pan-s10-template-workflow-admission" ;
+  triage:headSha "6922cd2eb" ;
+  triage:orderIndex 0 .

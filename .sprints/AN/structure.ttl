@@ -1,0 +1,20 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:PhaseAN a triage:Phase .
+
+triage:AN.1 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 1 ; triage:branch "feature/pan-s1-contract-gates" ; triage:criteria "docs/plans/phase-an/sprint-AN1-contract-gates.md" .
+triage:AN.2 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 2 ; triage:branch "feature/an2-sprint" ; triage:criteria "docs/plans/phase-an/sprint-AN2-storage-schema.md" .
+triage:AN.3 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 3 ; triage:branch "feature/pan-s3-send-surface" ; triage:criteria "docs/plans/phase-an/sprint-AN3-send-surface.md" .
+triage:AN.4 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 4 ; triage:branch "feature/pan-s4-render-on-read" ; triage:criteria "docs/plans/phase-an/sprint-AN4-render-on-read.md" .
+triage:AN.5 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 5 ; triage:branch "feature/pan-s5-search-infrastructure" ; triage:criteria "docs/plans/phase-an/sprint-AN5-search-infrastructure.md" .
+triage:AN.6 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 6 ; triage:branch "feature/pan-s6-query-surface" ; triage:criteria "docs/plans/phase-an/sprint-AN6-query-surface.md" .
+triage:AN.7 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 7 ; triage:branch "feature/pan-s7-compose-guidance" ; triage:criteria "docs/plans/phase-an/sprint-AN7-compose-guidance.md" .
+triage:AN.8 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 8 ; triage:branch "feature/pan-s8-validation-evidence" ; triage:criteria "docs/plans/phase-an/sprint-AN8-validation-evidence.md" .
+triage:AN.9 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 9 ; triage:branch "feature/pan-s9-template-workflow-contract" ; triage:criteria "docs/plans/phase-an/sprint-AN9-template-workflow-contract.md" .
+triage:AN.10 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 10 ; triage:branch "feature/pan-s10-template-workflow-admission" ; triage:criteria "docs/plans/phase-an/sprint-AN10-template-workflow-admission.md" .
+triage:AN.11 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 11 ; triage:branch "feature/pan-s11-workflow-analytics-projection" ; triage:criteria "docs/plans/phase-an/sprint-AN11-workflow-analytics-projection.md" .
+triage:AN.12 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 12 ; triage:branch "feature/an12-workflow-validation-evidence" ; triage:criteria "docs/plans/phase-an/sprint-AN12-workflow-validation-evidence.md" .
+triage:AN.13 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 13 ; triage:branch "feature/an13-sc-composer-141-upgrade" ; triage:criteria "docs/plans/phase-an/sprint-AN13-sc-compose-141-checked-render.md" .
+triage:AN.14 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 14 ; triage:branch "feature/an14-sc-compose-141-checked-emission" ; triage:criteria "docs/plans/phase-an/sprint-AN14-sc-compose-141-checked-emission.md" .
+triage:AN.15 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 15 ; triage:branch "feature/an15-adversarial-fuzzing" ; triage:criteria "docs/plans/phase-an/sprint-AN15-adversarial-fuzzing.md" .

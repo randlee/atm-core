@@ -20,7 +20,7 @@ use atm_core::api::{
 use atm_core::boundary;
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::local_http::{LOCAL_CAPABILITY_HEADER, LocalCapability, LocalHttpEndpointRecord};
-use atm_core::protocol::RequestEnvelope;
+use atm_core::protocol::{RequestEnvelope, RequestId, next_request_id};
 use atm_core::schema::AtmMessageId;
 use atm_core::send::SendRequest;
 use atm_core::types::{HostName, IsoTimestamp};
@@ -34,6 +34,7 @@ use reqwest::header::{HeaderName, HeaderValue};
 /// every replacement daemon owns this protocol port on its active IPv4
 /// interfaces.
 pub const DIRECT_PEER_TCP_PORT: u16 = 43_101;
+const REQUEST_ID_HEADER: &str = "X-ATM-Request-Id";
 
 /// One bounded budget for the selected write connector.
 ///
@@ -56,11 +57,12 @@ pub fn direct_peer_port() -> NonZeroU16 {
 pub(crate) enum HttpRuntimeClientFailure {
     EndpointRecord(AtmError),
     Connect(String),
+    PeerConnect { target: String, cause: String },
     RequestWrite(String),
     ResponseDecode(AtmError),
     Cancelled,
     Timeout,
-    ConnectTimeout(String),
+    PeerConnectTimeout { target: String, cause: String },
 }
 
 impl HttpRuntimeClientFailure {
@@ -70,6 +72,10 @@ impl HttpRuntimeClientFailure {
             Self::Connect(cause) => AtmError::daemon_unavailable(
                 "HTTP client could not connect to the configured daemon endpoint",
             )
+            .with_cause(cause),
+            Self::PeerConnect { target, cause } => AtmError::remote_delivery_unconfirmed(format!(
+                "HTTP client could not connect to direct peer `{target}`"
+            ))
             .with_cause(cause),
             Self::RequestWrite(cause) => AtmError::daemon_unavailable(
                 "HTTP client could not write the request to the daemon endpoint",
@@ -84,9 +90,9 @@ impl HttpRuntimeClientFailure {
                 AtmErrorCode::WaitTimeout,
                 "HTTP client request exceeded its absolute request budget",
             ),
-            Self::ConnectTimeout(cause) => AtmError::daemon_unavailable(
-                "HTTP client could not connect to the configured daemon endpoint before its request budget elapsed",
-            )
+            Self::PeerConnectTimeout { target, cause } => AtmError::remote_delivery_unconfirmed(format!(
+                "HTTP client could not connect to direct peer `{target}` before its request budget elapsed"
+            ))
             .with_cause(cause),
         }
     }
@@ -127,6 +133,18 @@ pub fn direct_peer_tcp_client(
     port: NonZeroU16,
     request_timeout: Duration,
 ) -> Result<Arc<dyn DaemonApiClient + Send + Sync>, AtmError> {
+    Ok(Arc::new(direct_peer_write_client(
+        host,
+        port,
+        request_timeout,
+    )?))
+}
+
+pub(crate) fn direct_peer_write_client(
+    host: HostName,
+    port: NonZeroU16,
+    request_timeout: Duration,
+) -> Result<DirectPeerWriteClient, AtmError> {
     if request_timeout.is_zero() {
         return Err(AtmError::config(
             "direct peer HTTP client request timeout must be greater than zero",
@@ -134,7 +152,7 @@ pub fn direct_peer_tcp_client(
     }
     let connector = DirectPeerTcpConnector::new(host, port)?;
     let client = Arc::new(HttpRuntimeClient::new(Arc::new(connector), request_timeout));
-    Ok(Arc::new(DirectPeerWriteClient { client }))
+    Ok(DirectPeerWriteClient { client })
 }
 
 /// Selects the one physical connector for a canonical write before encoding.
@@ -222,7 +240,7 @@ struct DirectPeerTcpConnector {
 /// write.  Supplying a caller-originated provenance pair is supported for
 /// handoff from an origin writer; otherwise the first peer boundary creates
 /// the immutable pair once.
-struct DirectPeerWriteClient {
+pub(crate) struct DirectPeerWriteClient {
     client: Arc<HttpRuntimeClient<DirectPeerTcpConnector>>,
 }
 
@@ -231,6 +249,25 @@ impl boundary::sealed::Sealed for DirectPeerWriteClient {}
 #[async_trait]
 impl DaemonApiClient for DirectPeerWriteClient {
     async fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
+        self.execute_with_optional_request_id(request, None).await
+    }
+}
+
+impl DirectPeerWriteClient {
+    pub(crate) async fn execute_with_request_id(
+        &self,
+        request: ApiRequest,
+        request_id: RequestId,
+    ) -> Result<ApiResponse, AtmError> {
+        self.execute_with_optional_request_id(request, Some(request_id))
+            .await
+    }
+
+    async fn execute_with_optional_request_id(
+        &self,
+        request: ApiRequest,
+        request_id: Option<RequestId>,
+    ) -> Result<ApiResponse, AtmError> {
         let RequestEnvelope::Write(write) = request.into_inner() else {
             return Err(AtmError::validation(
                 "direct peer HTTP transport accepts canonical write requests only",
@@ -260,6 +297,7 @@ impl DaemonApiClient for DirectPeerWriteClient {
                 RequestEnvelope::Write(Box::new(write)),
                 RequestEnvelope::Write(Box::new(peer_response_shape)),
                 RequestDeadline::after(self.client.request_timeout),
+                request_id,
             )
             .await
     }
@@ -291,10 +329,13 @@ impl HttpRuntimeConnector for DirectPeerTcpConnector {
     }
 
     fn deadline_elapsed(&self) -> HttpRuntimeClientFailure {
-        HttpRuntimeClientFailure::ConnectTimeout(format!(
-            "{} did not resolve or establish a connection before the configured request deadline",
-            self.connection_target()
-        ))
+        HttpRuntimeClientFailure::PeerConnectTimeout {
+            target: self.authority.clone(),
+            cause: format!(
+                "{} did not resolve or establish a connection before the configured request deadline",
+                self.connection_target()
+            ),
+        }
     }
 
     async fn exchange(
@@ -309,7 +350,25 @@ impl HttpRuntimeConnector for DirectPeerTcpConnector {
                     request.path
                 ))
             })?;
-        execute_reqwest_request(&self.client, url, request, deadline, None).await
+        execute_reqwest_request(&self.client, url, request, deadline, None)
+            .await
+            .map_err(|failure| direct_peer_connection_failure(&self.authority, failure))
+    }
+}
+
+/// Preserve the direct-peer authority when the shared HTTP exchange fails
+/// before a response.  A host-qualified recipient never uses the local daemon
+/// endpoint, so reporting this as local daemon unavailability is misleading.
+fn direct_peer_connection_failure(
+    authority: &str,
+    failure: HttpRuntimeClientFailure,
+) -> HttpRuntimeClientFailure {
+    match failure {
+        HttpRuntimeClientFailure::Connect(cause) => HttpRuntimeClientFailure::PeerConnect {
+            target: authority.to_owned(),
+            cause,
+        },
+        other => other,
     }
 }
 
@@ -616,7 +675,7 @@ impl<Connector> HttpRuntimeClient<Connector> {
         Connector: HttpRuntimeConnector,
     {
         let request = request.into_inner();
-        self.execute_envelope_with_deadline(request.clone(), request, deadline)
+        self.execute_envelope_with_deadline(request.clone(), request, deadline, None)
             .await
     }
 
@@ -633,11 +692,14 @@ impl<Connector> HttpRuntimeClient<Connector> {
         request: RequestEnvelope,
         response_shape: RequestEnvelope,
         deadline: RequestDeadline,
+        request_id: Option<RequestId>,
     ) -> Result<ApiResponse, AtmError>
     where
         Connector: HttpRuntimeConnector,
     {
-        let encoded = encode_http_request(&request, &[])?;
+        let request_id = request_id.unwrap_or_else(next_request_id);
+        let request_id_value = request_id.to_string();
+        let encoded = encode_http_request(&request, &[(REQUEST_ID_HEADER, &request_id_value)])?;
         let remaining = deadline.remaining().ok_or_else(|| {
             AtmError::new(
                 AtmErrorCode::WaitTimeout,
@@ -702,7 +764,7 @@ mod tests {
 
     use super::{
         DirectPeerTcpConnector, HttpRuntimeClient, HttpRuntimeClientFailure, HttpRuntimeConnector,
-        direct_peer_tcp_client,
+        direct_peer_connection_failure, direct_peer_tcp_client,
     };
 
     #[derive(Default)]
@@ -809,11 +871,54 @@ mod tests {
                 requests[0].path, "/v1/atm/messages",
                 "{connector_kind} connector"
             );
+            let request_id_header = requests[0]
+                .headers
+                .iter()
+                .find(|header| header.starts_with("X-ATM-Request-Id: "))
+                .expect("outbound requests carry their correlation request ID");
+            assert!(
+                request_id_header
+                    .strip_prefix("X-ATM-Request-Id: ")
+                    .expect("request ID header prefix")
+                    .parse::<u64>()
+                    .is_ok(),
+                "{connector_kind} connector"
+            );
             assert!(
                 serde_json::from_slice::<atm_core::send::WriteRequest>(&requests[0].body).is_ok(),
                 "{connector_kind} connector"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn caller_supplied_request_id_is_forwarded_without_reminting() {
+        let connector = Arc::new(RecordingConnector::default());
+        connector
+            .responses
+            .lock()
+            .expect("responses")
+            .push_back(Ok(sent_response()));
+        let client = HttpRuntimeClient::new(connector.clone(), Duration::from_secs(1));
+        let request = write_request();
+
+        client
+            .execute_envelope_with_deadline(
+                request.clone(),
+                request,
+                RequestDeadline::after(Duration::from_secs(1)),
+                Some(atm_core::protocol::RequestId::new(73).expect("non-zero request ID")),
+            )
+            .await
+            .expect("caller-provided request ID is accepted");
+
+        let requests = connector.requests.lock().expect("requests");
+        assert!(
+            requests[0]
+                .headers
+                .iter()
+                .any(|header| header == "X-ATM-Request-Id: 73")
+        );
     }
 
     #[tokio::test]
@@ -873,16 +978,28 @@ mod tests {
                 "write",
             ),
             (
+                "direct peer connect",
+                HttpRuntimeClientFailure::PeerConnect {
+                    target: "peer.example.test:43101".to_owned(),
+                    cause: "DNS lookup failed".to_owned(),
+                },
+                AtmErrorCode::RemoteDeliveryUnconfirmed,
+                "direct peer",
+            ),
+            (
                 "cancellation",
                 HttpRuntimeClientFailure::Cancelled,
                 AtmErrorCode::WaitTimeout,
                 "cancelled",
             ),
             (
-                "connect timeout",
-                HttpRuntimeClientFailure::ConnectTimeout("unresolved test peer".to_owned()),
-                AtmErrorCode::DaemonUnavailable,
-                "connect",
+                "direct peer connect timeout",
+                HttpRuntimeClientFailure::PeerConnectTimeout {
+                    target: "peer.example.test:43101".to_owned(),
+                    cause: "request budget elapsed".to_owned(),
+                },
+                AtmErrorCode::RemoteDeliveryUnconfirmed,
+                "direct peer",
             ),
         ] {
             let connector = Arc::new(RecordingConnector::default());
@@ -907,7 +1024,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn direct_connector_failure_performs_exactly_one_exchange() {
+    async fn direct_connector_failure_performs_exactly_one_exchange_without_follow_up() {
         let connector = Arc::new(RecordingConnector::default());
         connector
             .responses
@@ -927,8 +1044,34 @@ mod tests {
         assert_eq!(
             connector.requests.lock().expect("requests").len(),
             1,
-            "the shared client performs exactly one direct exchange"
+            "a failed direct delivery performs exactly one exchange and starts no follow-up work"
         );
+    }
+
+    #[test]
+    fn direct_peer_connection_failure_names_the_remote_authority() {
+        let error = direct_peer_connection_failure(
+            "rand-m5:43101",
+            HttpRuntimeClientFailure::Connect("DNS lookup failed".to_owned()),
+        )
+        .into_atm_error();
+
+        assert_eq!(error.code(), AtmErrorCode::RemoteDeliveryUnconfirmed);
+        assert!(
+            error
+                .message()
+                .starts_with("HTTP client could not connect to direct peer `rand-m5:43101`"),
+            "the direct peer authority is shown before recovery guidance"
+        );
+        assert!(
+            !error.message().contains("configured daemon endpoint"),
+            "a host-qualified send must not claim the local daemon failed"
+        );
+        assert!(
+            !error.message().contains("restore the single local daemon"),
+            "the recovery action must not direct the caller to repair a healthy local daemon"
+        );
+        assert_eq!(error.cause(), Some("DNS lookup failed"));
     }
 
     #[tokio::test(start_paused = true)]
@@ -972,8 +1115,12 @@ mod tests {
         .expect("direct peer connector");
         let error = connector.deadline_elapsed().into_atm_error();
 
-        assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
-        assert!(error.message().contains("could not connect"));
+        assert_eq!(error.code(), AtmErrorCode::RemoteDeliveryUnconfirmed);
+        assert!(
+            error
+                .message()
+                .starts_with("HTTP client could not connect to direct peer `unresolvable.example:43101` before its request budget elapsed")
+        );
         assert!(
             error
                 .cause()

@@ -274,6 +274,27 @@ impl AtmError {
         Self::new(AtmErrorCode::MessageValidationFailed, message)
     }
 
+    /// Rejects an invalid bounded local workflow query before it reaches a
+    /// storage adapter or telemetry producer.
+    pub fn workflow_query_invalid(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::WorkflowQueryInvalid, message)
+    }
+
+    /// Denies the intentionally local-only message-search capability before a
+    /// peer request can select any storage adapter.
+    pub fn search_local_only() -> Self {
+        Self::new(
+            AtmErrorCode::SearchLocalOnly,
+            "message search is available only through authenticated local HTTP adapters",
+        )
+    }
+
+    /// Rejects a template before catalog or decomposed-message admission when
+    /// its immutable raw bytes cannot be represented by the UTF-8 projection.
+    pub fn template_content_not_utf8() -> Self {
+        Self::for_code(AtmErrorCode::TemplateContentNotUtf8)
+    }
+
     /// Builds a validation error whose recovery is specific to the rejected CLI input.
     pub fn validation_with_recovery(
         message: impl Into<String>,
@@ -330,6 +351,52 @@ impl AtmError {
 
     pub fn caller_context_request_invalid(message: impl Into<String>) -> Self {
         Self::new(AtmErrorCode::CallerContextRequestInvalid, message)
+    }
+
+    /// Rejects an include/import in a template that must render without filesystem access.
+    pub fn decomposed_template_include_forbidden() -> Self {
+        Self::new(
+            AtmErrorCode::DecomposedTemplateIncludeForbidden,
+            "template dependencies are forbidden for the decomposed render operation",
+        )
+    }
+
+    pub fn template_required_variable_missing(variable: &str) -> Self {
+        Self::new(
+            AtmErrorCode::TemplateRequiredVariableMissing,
+            format!("template required variable '{variable}' is missing"),
+        )
+    }
+
+    pub fn template_render_verification_failed(cause: impl fmt::Display) -> Self {
+        Self::new(
+            AtmErrorCode::TemplateRenderVerificationFailed,
+            "template verification render failed",
+        )
+        .with_cause(cause)
+    }
+
+    /// Reports invalid checked JSON without exposing rendered template content.
+    ///
+    /// `sc-composer` 1.4.x automatically emits complete JSON values. Older
+    /// templates that manually quoted a placeholder therefore become invalid
+    /// JSON after rendering. The public diagnostic gives an agent a concrete,
+    /// safe migration path while the lower-level parser diagnostic remains a
+    /// machine-preserved cause only.
+    pub fn template_json_escape_migration_required(cause: impl fmt::Display) -> Self {
+        Self::new(
+            AtmErrorCode::TemplateRenderVerificationFailed,
+            "JSON template rendered invalid output after checked composition. If it manually quotes a placeholder such as `\"{{ value }}\"`, migrate it to `{{ value }}` for sc-compose automatic JSON escaping, or declare `json_escape_mode: legacy` in the template frontmatter.",
+        )
+        .with_cause(cause)
+    }
+
+    pub fn template_include_unresolved(cause: impl fmt::Display) -> Self {
+        Self::new(
+            AtmErrorCode::TemplateIncludeUnresolved,
+            "template include could not be resolved within its declared root",
+        )
+        .with_cause(cause)
     }
 
     pub fn missing_document(message: impl Into<String>) -> Self {
@@ -474,5 +541,19 @@ mod tests {
                 .expect("serialize error")
                 .contains(r#""cause":"connection refused""#)
         );
+    }
+
+    #[test]
+    fn decomposed_template_include_forbidden_has_its_stable_wire_code() {
+        let error = AtmError::decomposed_template_include_forbidden();
+
+        assert_eq!(
+            error.code().as_str(),
+            "DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN"
+        );
+        assert!(matches!(
+            "DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN".parse::<AtmErrorCode>(),
+            Ok(AtmErrorCode::DecomposedTemplateIncludeForbidden)
+        ));
     }
 }

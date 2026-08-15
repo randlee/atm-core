@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "expected_aggregate_counts": {
+    "scope_kind": {"operation": 2, "release-train": 3},
+    "state": {"mobilized": 1, "queued": 2, "secured": 1, "shipped": 1},
+    "stage": {"dispatch": 1, "prepare": 2, "recovery": 1, "release": 1},
+    "transition": {"begin": 1, "enter": 2, "exit": 1, "finish": 1}
+  },
+  "families": [
+    {
+      "name": "release-train",
+      "template_tags": ["domain:delivery", "audience:operators"],
+      "instance_tags": ["channel:release"],
+      "template_type": "notice",
+      "content_format": "xml",
+      "scope_kind": "release-train",
+      "scope_id": "train-42",
+      "events": [
+        {"id": "rt-1", "at": "2026-08-10T09:00:00Z", "state": "queued", "stage": "prepare", "transition": "enter", "iteration": "1"},
+        {"id": "rt-2", "at": "2026-08-10T09:07:00Z", "state": "shipped", "stage": "release", "transition": "exit", "iteration": "1"},
+        {"id": "rt-3", "at": "2026-08-10T09:10:00Z", "state": "queued", "stage": "prepare", "transition": "enter", "iteration": "2"}
+      ],
+      "expected": {
+        "completed_durations_millis": [420000],
+        "incomplete_ids": ["rt-3"],
+        "iteration_counts": {"1": 2, "2": 1},
+        "applied_template_tags": ["audience:operators", "domain:delivery"],
+        "effective_tags": ["audience:operators", "channel:release", "content-format:xml", "domain:delivery", "template-type:notice", "workflow-scope-kind:release-train", "workflow-stage:prepare", "workflow-state:queued", "workflow-transition:enter"]
+      }
+    },
+    {
+      "name": "field-operations",
+      "template_tags": ["domain:field", "retention:brief"],
+      "instance_tags": ["channel:dispatch"],
+      "template_type": "dispatch-note",
+      "content_format": "markdown",
+      "scope_kind": "operation",
+      "scope_id": "north-pier",
+      "events": [
+        {"id": "fo-1", "at": "2026-08-11T14:00:00Z", "state": "mobilized", "stage": "dispatch", "transition": "begin"},
+        {"id": "fo-2", "at": "2026-08-11T14:03:30Z", "state": "secured", "stage": "recovery", "transition": "finish"}
+      ],
+      "expected": {
+        "completed_durations_millis": [210000],
+        "incomplete_ids": [],
+        "iteration_counts": {},
+        "applied_template_tags": ["domain:field", "retention:brief"],
+        "effective_tags": ["channel:dispatch", "content-format:markdown", "domain:field", "retention:brief", "template-type:dispatch-note", "workflow-scope-kind:operation", "workflow-stage:dispatch", "workflow-state:mobilized", "workflow-transition:begin"]
+      }
+    }
+  ]
+}

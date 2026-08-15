@@ -1,0 +1,45 @@
+boundary_id = "BOUNDARY-TemplateCatalogSqlite"
+owner_package = "atm-storage-rusqlite"
+owner_crate_path = "atm_storage_rusqlite"
+name = "SqliteTemplateCatalogStore"
+
+[public]
+trait = "TemplateCatalogStore"
+
+[implementation]
+type = "SqliteTemplateCatalogStore"
+module = "atm_storage_rusqlite::template_catalog_store"
+visibility = "private"
+constructor = "private"
+
+[composition]
+roots = ["atm_storage_rusqlite::SqliteStorageBackend::new"]
+
+[ownership]
+io_owns = ["sqlite_template_catalog", "atomic_decomposed_admission"]
+io_forbidden = ["template_rendering", "http_runtime", "socket_io", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime-test-support"]
+allowed_dependencies = ["atm-storage", "rusqlite"]
+forbidden_edges = ["atm-storage-rusqlite -> atm-core", "atm-storage-rusqlite -> atm-runtime"]
+
+[references]
+scope = "inside_owner_crate"
+forbidden = ["TemplateComposer", "MergedVars"]
+
+[contracts]
+request_types = ["TemplateCatalogStore method inputs"]
+response_types = ["atm-storage template DTOs"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["connection_escape"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-TEMPLATE-CATALOG-SQLITE"]
+review_gates = ["single_writer_atomicity", "private_adapter"]
+
+[status]
+state = "concrete_landed"

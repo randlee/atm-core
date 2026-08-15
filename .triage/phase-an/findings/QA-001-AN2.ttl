@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QA-001-AN2>
+  a triage:Finding ;
+  triage:findingId "QA-001-AN2" ;
+  triage:title "boundary manifest forbidden_edges not mirrored in EXPECTED_FORBIDDEN_EDGES, fails cargo test --workspace" ;
+  triage:description "boundaries/atm-storage-rusqlite/template-catalog-sqlite.toml:25 declares a forbidden_edges entry for atm-storage-rusqlite->atm-core. This edge is not mirrored in crates/atm-architecture/tests/boundary_enforcement.rs's EXPECTED_FORBIDDEN_EDGES constant/table, causing cargo test --workspace to fail (the boundary-enforcement test asserts the TOML and the Rust guard catalog stay in sync). Fix is either to add the missing entry to EXPECTED_FORBIDDEN_EDGES so it matches the TOML, or narrow/remove the TOML edge if it was declared in error — whichever is architecturally correct needs a quick check of atm-storage-rusqlite's actual dependency graph." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary-enforcement" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-11T21:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.2 ;
+  triage:foundAt "2026-08-11T19:43:40Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-001-AN2/QA-001-AN2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QA-001-AN2/QA-001-AN2-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage-rusqlite/template-catalog-sqlite.toml" ;
+  triage:line 25 ;
+  triage:snippet "forbidden_edges entry: atm-storage-rusqlite -> atm-core is declared in TOML but missing from EXPECTED_FORBIDDEN_EDGES constant" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "3572e2e73" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/3572e2e73> .
+
+<urn:atm:triage:worktree/feature-an2-sprint/3572e2e73>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-an2-sprint" ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "3572e2e73" ;
+  triage:orderIndex 1 .

@@ -88,6 +88,21 @@ fn response_shape(value: &Value) -> Value {
     json!({ "error": error, "schema": schema })
 }
 
+fn operation_has_required_input(operation: &Value) -> bool {
+    operation
+        .pointer("/requestBody/required")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+        || operation
+            .get("parameters")
+            .and_then(Value::as_array)
+            .is_some_and(|parameters| {
+                parameters.iter().any(|parameter| {
+                    parameter.get("required").and_then(Value::as_bool) == Some(true)
+                })
+            })
+}
+
 fn live_surface() -> Value {
     let source = std::fs::read_to_string(document_path()).expect("read OpenAPI contract");
     let document: Value = serde_yaml::from_str(&source).expect("parse OpenAPI YAML");
@@ -108,7 +123,7 @@ fn live_surface() -> Value {
                 method,
                 json!({
                     "operation_id": operation["operationId"],
-                    "request_required": operation.pointer("/requestBody/required").and_then(Value::as_bool).unwrap_or(false),
+                    "request_required": operation_has_required_input(operation),
                     "responses": responses,
                 }),
             );

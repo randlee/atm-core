@@ -6,7 +6,7 @@ use crate::caller_context::ActivityObservation;
 use crate::error::AtmError;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use crate::provenance::{WriteIngress, WriteProvenance, validate_write_provenance};
-use crate::schema::{AtmMessageId, InboxMessage, authenticated_source_host, peer_outbound_host};
+use crate::schema::{AtmMessageId, InboxMessage, authenticated_source_host, peer_delivery_target};
 use crate::send::{SendMessageSource, SendOutcome, SendRequest, WriteOutcome};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
@@ -45,6 +45,8 @@ impl AckRequest {
             origin_timestamp: None,
             to: None,
             message_source: SendMessageSource::Inline(self.reply_body),
+            classification: crate::send::MessageClassification::default(),
+            max_message_bytes: crate::send::input::default_message_max_bytes(),
             summary_override: None,
             requires_ack: false,
             task_id: None,
@@ -60,10 +62,13 @@ impl AckRequest {
         let message_id = request.acknowledges_message_id.ok_or_else(|| {
             AtmError::validation("acknowledgement write is missing acknowledges_message_id")
         })?;
-        let SendMessageSource::Inline(reply_body) = request.message_source else {
-            return Err(AtmError::validation(
-                "acknowledgement reply body must be inline",
-            ));
+        let reply_body = match request.message_source {
+            SendMessageSource::Inline(reply_body) => reply_body,
+            SendMessageSource::File { .. } | SendMessageSource::Template(_) => {
+                return Err(AtmError::validation(
+                    "acknowledgement reply body must be inline",
+                ));
+            }
         };
         Ok(Self {
             home_dir: request.home_dir,
@@ -301,7 +306,7 @@ impl AcknowledgementReplyBuilder for AtomicAcknowledgementBuilder {
                 })?;
                 let reply_text = match &request.message_source {
                     SendMessageSource::Inline(value) => value.clone(),
-                    SendMessageSource::File { .. } => {
+                    SendMessageSource::File { .. } | SendMessageSource::Template(_) => {
                         return Err(AtmError::validation(
                             "acknowledgement reply body must be inline",
                         ));
@@ -506,13 +511,7 @@ fn build_atomic_acknowledgement(
         task_id: None,
         extra: serde_json::Map::new(),
     };
-    persist_peer_outbound_reply(
-        &canonical_request,
-        destination,
-        &mut envelope,
-        message_id,
-        timestamp,
-    )?;
+    persist_direct_peer_target(&canonical_request, destination, &mut envelope);
     let reply = StoredMessage {
         team: destination.team().cloned().ok_or_else(|| {
             AtmError::validation("acknowledgement reply destination is missing a team")
@@ -536,22 +535,14 @@ fn build_atomic_acknowledgement(
     })
 }
 
-fn persist_peer_outbound_reply(
+fn persist_direct_peer_target(
     canonical_request: &SendRequest,
     destination: &crate::address::AgentAddress,
     envelope: &mut InboxMessage,
-    message_id: AtmMessageId,
-    timestamp: IsoTimestamp,
-) -> Result<(), AtmError> {
-    if let Some((host, request_json)) = crate::send::build_peer_outbound_replay(
-        canonical_request,
-        destination,
-        message_id,
-        timestamp,
-    )? {
-        crate::schema::set_peer_outbound_write(envelope, &host, request_json);
+) {
+    if let Some(host) = crate::send::direct_peer_destination(canonical_request, destination) {
+        crate::schema::set_peer_delivery_target(envelope, &host);
     }
-    Ok(())
 }
 
 fn reply_target_from_source(
@@ -627,6 +618,8 @@ fn canonical_ack_write_request(
             target.host.clone(),
         )?),
         message_source: SendMessageSource::Inline(request.reply_body.clone()),
+        classification: crate::send::MessageClassification::default(),
+        max_message_bytes: crate::send::input::default_message_max_bytes(),
         summary_override: None,
         requires_ack: false,
         task_id: None,
@@ -655,7 +648,7 @@ fn ensure_roster_member_exists<R: RetainedServiceRuntime>(
 
 fn reply_target_host(source: &InboxMessage) -> Result<Option<crate::types::HostName>, AtmError> {
     let authenticated = authenticated_source_host(source)?;
-    let outbound = peer_outbound_host(source)?;
+    let outbound = peer_delivery_target(source)?;
     let validated = validate_write_provenance(
         WriteIngress::Canonical,
         WriteProvenance {
@@ -712,7 +705,7 @@ mod tests {
     use crate::read::{MailboxQueryFilters, ReadQuery};
     use crate::schema::{
         AckIntentFields, AtmMessageId, InboxMessage, authenticated_source_host,
-        set_authenticated_source_host, set_peer_outbound_write,
+        set_authenticated_source_host, set_peer_delivery_target,
     };
     use crate::send::{SendMessageSource, WriteRequest};
     use crate::types::{
@@ -899,18 +892,16 @@ mod tests {
             Some(message_id),
             "the acknowledgement response keeps the exact send ULID it causally acknowledges"
         );
-        let stored_request = acknowledged.reply.envelope.extra["peerOutbound"]["request"]
-            .as_str()
-            .expect("stored peer request");
-        let decoded: WriteRequest = serde_json::from_str(stored_request).expect("decoded request");
         assert_eq!(
-            decoded.origin_message_id,
-            Some(acknowledgement_id),
-            "peer recovery must replay the canonical acknowledgement origin ULID"
+            acknowledged.reply.envelope.extra["peerOutbound"]["host"],
+            host.to_string(),
+            "the retained direct target is enough for the synchronous router"
         );
-        assert_eq!(
-            decoded.origin_timestamp,
-            Some(acknowledged.reply.envelope.timestamp)
+        assert!(
+            acknowledged.reply.envelope.extra["peerOutbound"]
+                .get("request")
+                .is_none(),
+            "acknowledgements retain no serialized replay payload"
         );
     }
 
@@ -937,7 +928,7 @@ mod tests {
             task_id: None,
             extra: Map::new(),
         };
-        set_peer_outbound_write(&mut envelope, &host, "{}".to_string());
+        set_peer_delivery_target(&mut envelope, &host);
 
         assert_eq!(
             reply_target_host(&envelope).expect("reply host"),

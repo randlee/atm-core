@@ -1,0 +1,11 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:PhaseAM a triage:Phase .
+
+triage:AM-S1 a triage:Sprint ; triage:inPhase triage:PhaseAM ; triage:order 1 ; triage:criteria "docs/plans/phase-am/sprint-AM1-removal-ledger.md" ; triage:branch "feature/pam-s1-removal-ledger" .
+triage:AM-S2 a triage:Sprint ; triage:inPhase triage:PhaseAM ; triage:order 2 ; triage:criteria "docs/plans/phase-am/plan-phase-am.md" ; triage:branch "feature/pam-s2-delete-legacy-http" .
+triage:AM-S3 a triage:Sprint ; triage:inPhase triage:PhaseAM ; triage:order 3 ; triage:criteria "docs/plans/phase-am/plan-phase-am.md" ; triage:branch "feature/pam-s3-delete-legacy-local" .
+triage:AM-S4 a triage:Sprint ; triage:inPhase triage:PhaseAM ; triage:order 4 ; triage:criteria "docs/plans/phase-am/plan-phase-am.md" ; triage:branch "feature/pam-s4-delete-legacy-peer" .
+triage:AM-S5 a triage:Sprint ; triage:inPhase triage:PhaseAM ; triage:order 5 ; triage:criteria "docs/plans/phase-am/plan-phase-am.md" ; triage:branch "feature/pam-s5-delete-replay" .
+triage:AM-S6 a triage:Sprint ; triage:inPhase triage:PhaseAM ; triage:order 6 ; triage:criteria "docs/plans/phase-am/plan-phase-am.md" ; triage:branch "feature/pam-s6-minimality-proof" .

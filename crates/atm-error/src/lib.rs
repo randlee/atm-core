@@ -31,4 +31,59 @@ mod tests {
 
         assert_eq!(decoded, code);
     }
+
+    #[test]
+    fn template_send_error_codes_keep_their_stable_wire_spelling() {
+        for (code, wire) in [
+            (AtmErrorCode::TemplateLoadFailed, "TEMPLATE_LOAD_FAILED"),
+            (
+                AtmErrorCode::TemplateHashApiFailed,
+                "TEMPLATE_HASH_API_FAILED",
+            ),
+            (
+                AtmErrorCode::TemplateInspectionParseFailed,
+                "TEMPLATE_INSPECTION_PARSE_FAILED",
+            ),
+            (
+                AtmErrorCode::TemplateRequiredVariableMissing,
+                "TEMPLATE_REQUIRED_VARIABLE_MISSING",
+            ),
+            (
+                AtmErrorCode::TemplateRenderVerificationFailed,
+                "TEMPLATE_RENDER_VERIFICATION_FAILED",
+            ),
+            (
+                AtmErrorCode::TemplateIncludeUnresolved,
+                "TEMPLATE_INCLUDE_UNRESOLVED",
+            ),
+            (
+                AtmErrorCode::TemplateClassificationInvalid,
+                "TEMPLATE_CLASSIFICATION_INVALID",
+            ),
+            (
+                AtmErrorCode::TemplateWorkflowInvalid,
+                "TEMPLATE_WORKFLOW_INVALID",
+            ),
+            (
+                AtmErrorCode::TemplateWorkflowValueInvalid,
+                "TEMPLATE_WORKFLOW_VALUE_INVALID",
+            ),
+            (AtmErrorCode::TemplateTagReserved, "TEMPLATE_TAG_RESERVED"),
+            (
+                AtmErrorCode::WorkflowQueryInvalid,
+                "ATM_WORKFLOW_QUERY_INVALID",
+            ),
+            (
+                AtmErrorCode::WorkflowTelemetryConfigInvalid,
+                "ATM_WORKFLOW_TELEMETRY_CONFIG_INVALID",
+            ),
+            (
+                AtmErrorCode::WorkflowTelemetryDropped,
+                "ATM_WORKFLOW_TELEMETRY_DROPPED",
+            ),
+        ] {
+            assert_eq!(code.as_str(), wire);
+            assert_eq!(wire.parse::<AtmErrorCode>(), Ok(code));
+        }
+    }
 }

@@ -21,6 +21,7 @@ use crate::error_codes::AtmErrorCode;
 use crate::home;
 use crate::list::{ListOutcome, ListQuery};
 use crate::read::{PeekQuery, ReadOutcome, ReadQuery};
+use crate::search::{SearchRequest, SearchResponse};
 use crate::send::{SendOutcome, WriteRequest};
 use crate::types::{AgentName, IsoTimestamp, SessionId, TeamName, deserialize_optional_session_id};
 
@@ -45,6 +46,7 @@ pub enum RequestEnvelope {
     Receive(ReadQuery),
     Clear(ClearQuery),
     Doctor(DoctorQuery),
+    Search(Box<SearchRequest>),
     /// Authenticated local control request that reloads the daemon's durable runtime view.
     ReloadRuntimeView,
 }
@@ -60,6 +62,7 @@ pub enum ResponseEnvelope {
     Receive(Box<ReadOutcome>),
     Clear(ClearOutcome),
     Doctor(Box<DoctorReport>),
+    Search(Box<SearchResponse>),
     RuntimeViewReloaded,
     Error(AtmError),
 }
@@ -267,11 +270,12 @@ pub fn daemon_local_ipc_name_from_path(endpoint_path: &Path) -> Result<Name<'sta
         .to_path_buf()
         .into_os_string()
         .to_fs_name::<GenericFilePath>()
-        .map_err(|_source| {
+        .map_err(|source| {
             AtmError::daemon_unavailable(format!(
                 "failed to map daemon local IPC endpoint {} to a supported platform-local IPC name",
                 endpoint_path.display()
             ))
+            .with_cause(source)
         })
 }
 
@@ -444,6 +448,7 @@ mod tests {
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
     use crate::list::ListQuery;
+    use crate::search::{SearchInput, SearchRequest};
     use crate::send::{SendMessageSource, SendRequest};
     use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, ReadSelection, SessionId, TeamName};
@@ -766,5 +771,26 @@ mod tests {
             }
             other => panic!("expected list request, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn request_envelope_search_box_preserves_wire_shape() {
+        let request = RequestEnvelope::Search(Box::new(SearchRequest {
+            query: SearchInput {
+                text: Some("workflow fact".to_owned()),
+                ..SearchInput::default()
+            },
+            lifecycle: None,
+        }));
+
+        let encoded = serde_json::to_value(&request).expect("encode search request");
+        assert_eq!(encoded["Search"]["query"]["text"], "workflow fact");
+        let decoded: RequestEnvelope =
+            serde_json::from_value(encoded).expect("decode search request");
+
+        let RequestEnvelope::Search(decoded) = decoded else {
+            panic!("expected search request");
+        };
+        assert_eq!(decoded.query.text.as_deref(), Some("workflow fact"));
     }
 }

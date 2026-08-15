@@ -1,0 +1,51 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F001-AN11>
+  a triage:Finding ;
+  triage:findingId "RBQA-F001-AN11" ;
+  triage:title "tokio dependency missing from atm-runtime's Just-lint manifest allowlist" ;
+  triage:description ".just/lint-config.toml's manifest_dependency_allowlists entry for crates/atm-runtime/Cargo.toml was missing 'tokio' (and 'tracing'), causing Just-lint CI to fail on all 3 OS for the new AN.11 tokio usage in atm-runtime." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-14T00:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.11 ;
+  triage:foundAt "2026-08-14T00:08:17Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001-AN11/AN12-1> ;
+  triage:closedAt "2026-08-14T02:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F001-AN11/AN12-1>
+  a triage:Occurrence ;
+  triage:file ".just/lint-config.toml" ;
+  triage:line 151 ;
+  triage:snippet """allowed_dependencies = ["atm-core", "atm-storage"]""" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "e8507167921788a98d864fa6da7d0e8534d058f6" ;
+  triage:occursIn <urn:atm:triage:worktree/AN12/e8507167921788a98d864fa6da7d0e8534d058f6> .
+
+<urn:atm:triage:worktree/AN11/e971a226c3a944ec8eb8caa22b3aded76314ee5e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-pan-s11" ;
+  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
+  triage:headSha "e971a226c3a944ec8eb8caa22b3aded76314ee5e" ;
+  triage:orderIndex 11 .
+
+<urn:atm:triage:worktree/AN12/e8507167921788a98d864fa6da7d0e8534d058f6>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-an" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "e8507167921788a98d864fa6da7d0e8534d058f6" ;
+  triage:orderIndex 12 .

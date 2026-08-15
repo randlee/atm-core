@@ -1,0 +1,47 @@
+boundary_id = "BOUNDARY-LocalAnalystPythonBinding"
+owner_package = "atm-query-python"
+owner_crate_path = "atm_query"
+name = "LocalAnalystPythonBinding"
+
+[public]
+facade = "ReadonlyDatabase"
+notes = "Maturin facade for bounded, local read-only analyst queries. This binding has no transport, daemon, or message-write capability."
+
+[implementation]
+type = "ReadonlyDatabase"
+module = "atm_query"
+visibility = "public"
+constructor = "public"
+
+[composition]
+roots = ["atm_query::open_readonly"]
+
+[ownership]
+io_owns = ["python_value_projection"]
+io_forbidden = ["direct_sqlite_io", "storage_write", "http_runtime", "socket_io", "process_spawn"]
+
+[dependencies]
+allowed_dependents = []
+allowed_dependencies = ["atm-storage", "atm-storage-rusqlite", "pyo3"]
+forbidden_edges = ["atm-query-python -> atm-core", "atm-query-python -> atm-http-runtime", "atm-query-python -> atm-graft", "atm-query-python -> rusqlite"]
+
+[references]
+scope = "inside_owner_crate"
+forbidden = ["rusqlite::Connection", "axum::Router", "reqwest::Client"]
+
+[contracts]
+request_types = ["AnalystQueryValue"]
+response_types = ["PyObject"]
+error_types = ["AtmError", "PyRuntimeError"]
+
+[testing]
+allowed_test_double_paths = ["atm_storage_rusqlite::create_analyst_query_fixture_for_test"]
+forbidden_test_bypasses = ["rusqlite::Connection", "write_capability"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-LOCAL-ANALYST-PYTHON"]
+review_gates = ["no_binding_owned_sqlite", "no_binding_owned_transport", "readonly_only"]
+
+[status]
+state = "active"
+notes = ["AN.6 makes the local Maturin analyst interface an explicit leaf consumer of the dedicated analyst storage seam."]

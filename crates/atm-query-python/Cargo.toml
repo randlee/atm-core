@@ -1,0 +1,26 @@
+[package]
+name = "atm-query-python"
+version = "1.4.2"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Local read-only SQLite analyst interface for ATM's stable query view."
+repository.workspace = true
+homepage.workspace = true
+
+[lib]
+name = "atm_query"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+extension-module = ["pyo3/extension-module"]
+
+[dependencies]
+pyo3 = "0.29"
+atm-storage = { path = "../atm-storage", version = "1.4.2" }
+atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.2" }
+
+[dev-dependencies]
+atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.2", features = ["test-support"] }
+tempfile = "3"

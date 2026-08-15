@@ -1,0 +1,57 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM2-BOUNDARY-DEPENDENCY-UNDOCUMENTED>
+  a triage:Finding ;
+  triage:findingId "AM2-BOUNDARY-DEPENDENCY-UNDOCUMENTED" ;
+  triage:title "atm-daemon-client gained atm-http-runtime/tokio Cargo dependencies not reflected in boundaries/atm-daemon-client/*.toml or .just/lint-config.toml's manifest allowlist; the check that should catch this is dead code" ;
+  triage:description "AM.2 added atm-http-runtime and tokio as direct dependencies of crates/atm-daemon-client/Cargo.toml so the retained compatibility client can delegate to the shared typed client. docs/plans/phase-al-am-boundary-transition.md binds exactly this kind of edge to a same-PR boundary-manifest update, but boundaries/atm-daemon-client/daemon-bootstrap.toml:35 and rpc-envelope.toml:35 still list only ['atm-core','atm-storage'], and .just/lint-config.toml's manifest_dependency_allowlists entry for crates/atm-daemon-client/Cargo.toml (line 136) still lists only ['atm-core','atm-storage','fs2','interprocess','serde_json','tempfile','tracing']. Flagged by arch-qa (ARCH-002). IMPORTANT CORRECTION to arch-qa's claim: this does NOT currently fail `just lint` -- quality-mgr traced the actual enforcement path and found `collect_manifest_dependency_allowlist_violations()` (the function that would catch this) is only called from the standalone, unused `collect_boundary_violations()` aggregator in .just/lint_boundaries.py, which itself is only invoked by .just/view_boundaries.py (a display tool), never by `run()`/`main()` -- the actual entrypoint `just lint` calls. Calling `collect_manifest_dependency_allowlist_violations` directly (python3 -c ...) reproduces the real violation ('atm-http-runtime' / 'tokio' not allowlisted for crates/atm-daemon-client/Cargo.toml). So there are two distinct problems here: (1) the boundary docs/allowlist are stale for this new edge, and (2) the mechanical gate meant to catch exactly this class of gap is itself orphaned/dead code -- a deeper, pre-existing lint-tooling defect that this sprint's diff happened to trip over, not something AM.2 introduced. RECHECK (QA-AM2-2, 2026-08-10, commit fab8bdbe): PARTIALLY FIXED. Occurrence 1 (stale allowlists) is fixed: .just/lint-config.toml:136, boundaries/atm-daemon-client/daemon-bootstrap.toml:35, and rpc-envelope.toml:35 now all list 'atm-http-runtime' and 'tokio' -- confirmed by quality-mgr's own diff read and by all 4 QA-2 reviewers. Occurrence 2 (the dead collect_manifest_dependency_allowlist_violations gate) is NOT fixed: run() in .just/lint_boundaries.py still does not call it or collect_boundary_violations(); confirmed by quality-mgr re-running the same direct-call reproduction from QA-1 and by all 4 reviewers independently reading run()'s call list. Finding remains open on occurrence 2 only; not closing the record." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary-doc-gap" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-10T20:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S2 ;
+  triage:foundAt "2026-08-10T20:05:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-11T01:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Occurrence 2 (the dead collect_manifest_dependency_allowlist_violations gate, re-raised as QA-AM6-1's AM6-DEAD-DEPENDENCY-ALLOWLIST-ENFORCEMENT-UNWIRED) is now fixed: commit 42e263957e01134e82e7de4611bf70a0a2acd3b7 adds `violations.extend(collect_manifest_dependency_allowlist_violations(repo_root, records))` directly into run()'s violation-collection sequence in .just/lint_boundaries.py, independently confirmed by quality-mgr by reading run()'s current source. Both occurrences now closed; closing the record." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM2-BOUNDARY-DEPENDENCY-UNDOCUMENTED/AM2-QA1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM2-BOUNDARY-DEPENDENCY-UNDOCUMENTED/AM2-QA1-2> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AM2-BOUNDARY-DEPENDENCY-UNDOCUMENTED/AM2-QA1-1>
+  a triage:Occurrence ;
+  triage:file ".just/lint-config.toml" ;
+  triage:line 136 ;
+  triage:snippet "allowed_dependencies for crates/atm-daemon-client/Cargo.toml missing 'atm-http-runtime', 'tokio'" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s2-delete-legacy-http" ;
+  triage:headSha "46ff7c508b93e25aa0ff028e797071677145959e" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s2/46ff7c50> .
+
+<urn:atm:triage:occurrence/AM2-BOUNDARY-DEPENDENCY-UNDOCUMENTED/AM2-QA1-2>
+  a triage:Occurrence ;
+  triage:file ".just/lint_boundaries.py" ;
+  triage:line 2379 ;
+  triage:snippet "collect_manifest_dependency_allowlist_violations is only reachable via the unused collect_boundary_violations(), never from run()/main()" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s2-delete-legacy-http" ;
+  triage:headSha "46ff7c508b93e25aa0ff028e797071677145959e" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s2/46ff7c50> .
+
+<urn:atm:triage:worktree/pam-s2/46ff7c50>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s2-delete-legacy-http" ;
+  triage:branch "feature/pam-s2-delete-legacy-http" ;
+  triage:headSha "46ff7c508b93e25aa0ff028e797071677145959e" ;
+  triage:orderIndex 1 .

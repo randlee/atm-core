@@ -3,18 +3,24 @@ use std::net::TcpListener;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use atm_core::boundary::{self, ConfigDoctor, ConfigDoctorReport, NonClaudeOutbound};
+use atm_core::boundary::{
+    self, ConfigDoctor, ConfigDoctorReport, NonClaudeOutbound, TemplateComposer,
+};
 use atm_core::doctor::RuntimeDoctorPorts;
+use atm_core::doctor::{DoctorFinding, DoctorSeverity};
 use atm_core::error::AtmError;
 use atm_core::home::HostRuntimeScope;
 use atm_core::{LocalServiceRuntime, load_atm_config};
 use atm_storage::{
-    MessageStore as SharedMessageStore, OutboundMessageQuery, PeerConfigStore,
-    RosterStore as SharedRosterStore, StorageFactory,
+    MessageStore as SharedMessageStore, PeerConfigStore, RosterStore as SharedRosterStore,
+    StorageFactory,
 };
 
 use crate::legacy_storage_adapters::{
     StorageBackends, boundary_mail_store_view, boundary_roster_store_view, runtime_doctor_ports,
+};
+use crate::workflow_telemetry::{
+    WorkflowTelemetryDiagnostics, WorkflowTelemetryRuntime, WorkflowTelemetrySetup,
 };
 
 #[derive(Clone)]
@@ -23,6 +29,12 @@ pub struct RuntimeAssemblyInputs {
     pub storage_factory: Arc<dyn StorageFactory>,
     pub config_current_dir: PathBuf,
     pub non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
+    /// Optional application port supplied by the bootstrap composition root.
+    /// Runtime owns no template-adapter dependency or implementation detail.
+    pub template_composer: Option<Arc<dyn TemplateComposer>>,
+    /// Optional bootstrap-owned telemetry exporter. `None` selects the core
+    /// no-op sink; invalid supplied limits degrade doctor only.
+    pub workflow_telemetry: Option<WorkflowTelemetrySetup>,
 }
 
 impl fmt::Debug for RuntimeAssemblyInputs {
@@ -32,6 +44,20 @@ impl fmt::Debug for RuntimeAssemblyInputs {
             .field("storage_factory", &"dyn StorageFactory")
             .field("config_current_dir", &self.config_current_dir)
             .field("non_claude_outbound", &"dyn NonClaudeOutbound")
+            .field(
+                "template_composer",
+                &self
+                    .template_composer
+                    .as_ref()
+                    .map(|_| "dyn TemplateComposer"),
+            )
+            .field(
+                "workflow_telemetry",
+                &self
+                    .workflow_telemetry
+                    .as_ref()
+                    .map(|_| "configured exporter"),
+            )
             .finish()
     }
 }
@@ -45,8 +71,9 @@ pub struct RuntimeAssembly {
     >,
     pub nudge_template_override_store: Arc<dyn boundary::NudgeTemplateOverrideStore + Send + Sync>,
     pub peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
-    pub outbound_message_query: Arc<dyn OutboundMessageQuery + Send + Sync>,
     pub doctor_ports: RuntimeDoctorPorts,
+    pub workflow_telemetry: WorkflowTelemetryRuntime,
+    template_composer: Option<Arc<dyn TemplateComposer>>,
 }
 
 impl fmt::Debug for RuntimeAssembly {
@@ -59,18 +86,26 @@ impl fmt::Debug for RuntimeAssembly {
                 &"dyn NudgeTemplateOverrideStore",
             )
             .field("peer_config_store", &"dyn PeerConfigStore")
-            .field("outbound_message_query", &"dyn OutboundMessageQuery")
             .field("doctor_ports", &self.doctor_ports)
+            .field("workflow_telemetry", &"WorkflowTelemetryRuntime")
+            .field(
+                "template_composer",
+                &self
+                    .template_composer
+                    .as_ref()
+                    .map(|_| "dyn TemplateComposer"),
+            )
             .finish()
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct RuntimeConfigDoctor {
     // `None` is the daemon-owned doctor.  A system daemon has no caller
     // workspace and therefore must not read `.atm.toml` while answering
     // doctor requests.
     config_current_dir: Option<PathBuf>,
+    workflow_telemetry: Arc<WorkflowTelemetryDiagnostics>,
 }
 
 impl boundary::sealed::Sealed for RuntimeConfigDoctor {}
@@ -80,13 +115,34 @@ impl ConfigDoctor for RuntimeConfigDoctor {
         if let Some(config_current_dir) = &self.config_current_dir {
             let _ = load_atm_config(config_current_dir)?;
         }
-        Ok(ConfigDoctorReport {
-            findings: Vec::new(),
-        })
+        let mut findings = Vec::new();
+        if self
+            .workflow_telemetry
+            .config_invalid
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            findings.push(DoctorFinding {
+                severity: DoctorSeverity::Warning,
+                code: atm_storage::AtmErrorCode::WorkflowTelemetryConfigInvalid,
+                message: "workflow telemetry configuration is invalid; telemetry is disabled"
+                    .to_owned(),
+                remediation: Some(
+                    "Repair the configured telemetry queue or timeout limits, then restart the daemon."
+                        .to_owned(),
+                ),
+            });
+        }
+        Ok(ConfigDoctorReport { findings })
     }
 }
 
 pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly, AtmError> {
+    let template_composer = inputs.template_composer;
+    let workflow_telemetry = inputs
+        .workflow_telemetry
+        .map_or_else(WorkflowTelemetryRuntime::disabled, |setup| {
+            WorkflowTelemetryRuntime::start(setup.config, setup.sink)
+        });
     let storage = inputs
         .storage_factory
         .open(inputs.host_runtime_scope.durable_state_root.as_ref())?;
@@ -95,26 +151,31 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
         rosters: storage.roster_store(),
     };
     let async_message_store = storage.async_message_store();
+    let async_message_search_store = storage.async_message_search_store();
+    let template_catalog_store = storage.template_catalog_store();
     let nudge_template_override_store = storage.nudge_template_override_store();
     let peer_config_store = storage.peer_config_store();
-    let outbound_message_query = storage.outbound_message_query();
     let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
         storage_backends.messages.clone(),
         storage_backends.rosters.clone(),
         Arc::clone(&nudge_template_override_store),
         inputs.non_claude_outbound,
     )
-    .with_async_message_store(async_message_store);
+    .with_async_message_store(async_message_store)
+    .with_async_message_search_store(async_message_search_store)
+    .with_template_rendering(template_catalog_store, template_composer.clone());
     let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor {
         config_current_dir: Some(inputs.config_current_dir),
+        workflow_telemetry: Arc::clone(workflow_telemetry.diagnostics()),
     }));
     Ok(RuntimeAssembly {
         service_runtime,
         storage_backends,
         nudge_template_override_store,
         peer_config_store,
-        outbound_message_query,
         doctor_ports,
+        workflow_telemetry,
+        template_composer,
     })
 }
 
@@ -184,7 +245,10 @@ impl RuntimeAssembly {
     /// daemon to read a caller workspace's `.atm.toml` file.
     pub fn for_daemon(mut self) -> Self {
         self.service_runtime = self.service_runtime.without_workspace_config();
-        self.doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor::default()));
+        self.doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor {
+            config_current_dir: None,
+            workflow_telemetry: Arc::clone(self.workflow_telemetry.diagnostics()),
+        }));
         self
     }
 
@@ -207,9 +271,9 @@ impl RuntimeAssembly {
     pub fn peer_config_store(&self) -> Arc<dyn PeerConfigStore + Send + Sync> {
         Arc::clone(&self.peer_config_store)
     }
-
-    pub fn outbound_message_query(&self) -> Arc<dyn OutboundMessageQuery + Send + Sync> {
-        Arc::clone(&self.outbound_message_query)
+    /// Returns the bootstrap-provided template-composition port, if enabled.
+    pub fn template_composer(&self) -> Option<Arc<dyn TemplateComposer>> {
+        self.service_runtime.template_composer()
     }
 }
 
@@ -227,6 +291,7 @@ pub fn with_installed_roster_store<T>(
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
+    use std::sync::Arc;
 
     use atm_core::boundary::ConfigDoctor;
     use atm_storage::{
@@ -235,6 +300,7 @@ mod tests {
     };
 
     use super::{RuntimeConfigDoctor, validate_enabled_peer_configuration};
+    use crate::workflow_telemetry::WorkflowTelemetryDiagnostics;
 
     #[test]
     fn daemon_config_doctor_does_not_read_a_caller_workspace() {
@@ -252,13 +318,40 @@ mod tests {
 
         let caller_doctor = RuntimeConfigDoctor {
             config_current_dir: Some(PathBuf::from(&workspace)),
+            workflow_telemetry: Arc::new(WorkflowTelemetryDiagnostics::default()),
         };
         assert!(caller_doctor.inspect_config().is_err());
 
-        RuntimeConfigDoctor::default()
-            .inspect_config()
-            .expect("daemon doctor must ignore caller workspace config");
+        RuntimeConfigDoctor {
+            config_current_dir: None,
+            workflow_telemetry: Arc::new(WorkflowTelemetryDiagnostics::default()),
+        }
+        .inspect_config()
+        .expect("daemon doctor must ignore caller workspace config");
         std::fs::remove_dir_all(workspace).expect("remove workspace fixture");
+    }
+
+    #[test]
+    fn invalid_telemetry_configuration_is_a_doctor_warning_not_a_runtime_failure() {
+        let diagnostics = Arc::new(WorkflowTelemetryDiagnostics::default());
+        diagnostics
+            .config_invalid
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        let report = RuntimeConfigDoctor {
+            config_current_dir: None,
+            workflow_telemetry: diagnostics,
+        }
+        .inspect_config()
+        .expect("doctor report");
+        assert_eq!(report.findings.len(), 1);
+        assert_eq!(
+            report.findings[0].code,
+            atm_storage::AtmErrorCode::WorkflowTelemetryConfigInvalid
+        );
+        assert_eq!(
+            report.findings[0].severity,
+            atm_core::doctor::DoctorSeverity::Warning
+        );
     }
 
     #[derive(Default)]

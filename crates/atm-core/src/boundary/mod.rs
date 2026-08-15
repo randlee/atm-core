@@ -34,15 +34,21 @@ pub mod sealed {
 mod mail;
 mod message_received_hook_emitter;
 mod store;
+mod template_composer;
 
 // Intentional re-export façade: the boundary module is the stable public import
 // surface for Phase R/AA contracts, so callers should not need to know whether
 // an item lives in `mail` or `store`.
+pub use atm_storage::TemplateOutputFormat;
 pub use mail::*;
 pub use message_received_hook_emitter::{
     AsyncMessageReceivedHookEmitter, MessageReceivedHookEmitter, MessageReceivedHookSelector,
 };
 pub use store::*;
+pub use template_composer::{
+    RenderedBody, SourceSpan, TemplateComposer, TemplateInspection, TemplateReference,
+    TemplateReferenceKind, TemplateRoot, TemplateSource,
+};
 
 /// BOUNDARY-StatusSource — see docs/atm-core/boundaries.md.
 pub trait StatusSource: sealed::Sealed {

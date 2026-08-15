@@ -1,0 +1,200 @@
+command: cargo test --workspace an15_shape_probe_ -- --nocapture
+returncode: 0
+
+stdout:
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 160 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+
+running 1 test
+test send::template::tests::an15_shape_probe_captures_environment_values_without_consulting_process_environment ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 428 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 54 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 16 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 22 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+
+running 1 test
+test storage_and_nudge_router::tests::an15_shape_probe_missing_required_input_mutates_no_catalog_or_mailbox_rows ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 99 filtered out; finished in 0.02s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 14 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 34 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 58 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 33 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 62 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+stderr:
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on artifact directory
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.48s
+     Running unittests src/main.rs (target/debug/deps/atm-35aab6e533f61ed4)
+     Running unittests src/bin/atm_post_send_hook_fixture.rs (target/debug/deps/atm_post_send_hook_fixture-532f4328a2d9fbed)
+     Running tests/compose_passthrough.rs (target/debug/deps/compose_passthrough-6d8a726d6354d82a)
+     Running tests/openapi_surface.rs (target/debug/deps/openapi_surface-64a905f16a02a9e5)
+     Running tests/peer_cli.rs (target/debug/deps/peer_cli-f50821568a977b9a)
+     Running tests/version_alignment.rs (target/debug/deps/version_alignment-8d21abbd31c4f7ca)
+     Running unittests src/lib.rs (target/debug/deps/atm_core-61bc3b6e6076ddee)
+     Running tests/graft_receiver_ownership.rs (target/debug/deps/graft_receiver_ownership-0a5970937f37697e)
+     Running tests/mailbox_locking.rs (target/debug/deps/mailbox_locking-68a64f82d0f92b9c)
+     Running tests/boundary_enforcement.rs (target/debug/deps/boundary_enforcement-2ef6fbd0e5dcda1f)
+     Running tests/graft_receiver_ownership_boundary.rs (target/debug/deps/graft_receiver_ownership_boundary-97f8df780ddfa0e2)
+     Running unittests src/main.rs (target/debug/deps/atm_daemon-52696d8a706f2ea7)
+     Running unittests src/lib.rs (target/debug/deps/atm_daemon_bootstrap-0a48f2bdbddbb14e)
+     Running unittests src/lib.rs (target/debug/deps/atm_daemon_client-28a47620476a6766)
+     Running unittests src/lib.rs (target/debug/deps/atm_error-c6f795fb1de195c2)
+     Running unittests src/lib.rs (target/debug/deps/atm_graft-6a754911cdabccfb)
+     Running unittests src/lib.rs (target/debug/deps/atm_graft_python-ddc3239d5e0f9406)
+     Running tests/python_api.rs (target/debug/deps/python_api-08897b238a7a4014)
+     Running unittests src/lib.rs (target/debug/deps/atm_http_runtime-86c47404c292eb34)
+AN15_DIAGNOSTIC missing-required-input code=TEMPLATE_REQUIRED_VARIABLE_MISSING message=template required variable 'ATM_TEAM' is missing
+  Recovery: Correct the template source or its supplied variables before retrying.
+     Running unittests src/lib.rs (target/debug/deps/atm_peer_tls_interop-e43d656bd47adce8)
+     Running unittests src/lib.rs (target/debug/deps/atm_query-5c64dad9c5657994)
+     Running unittests src/lib.rs (target/debug/deps/atm_runtime-adbc47e2cba8426e)
+     Running unittests src/lib.rs (target/debug/deps/atm_runtime_test_support-21317dbd44e3733c)
+     Running unittests src/lib.rs (target/debug/deps/atm_storage-81d990369cc0156a)
+     Running unittests src/lib.rs (target/debug/deps/atm_storage_rusqlite-bf6eb21afa5350cc)
+     Running unittests src/lib.rs (target/debug/deps/atm_storage_sqlserver_proof-fd0a0583f2e76e0b)
+     Running unittests src/lib.rs (target/debug/deps/atm_template_sc_compose-9bb5b2a2fed71e83)
+     Running unittests src/lib.rs (target/debug/deps/sc_lint_attributes-c4b01985af8534a1)
+     Running unittests src/lib.rs (target/debug/deps/sc_lint_boundary-dd33138dbaa4755d)
+     Running unittests src/main.rs (target/debug/deps/sc_lint_boundary-df3bebd82990d2e1)
+     Running unittests src/lib.rs (target/debug/deps/sc_lint_directives-f7cb3e52d606d6ae)
