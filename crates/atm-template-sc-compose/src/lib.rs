@@ -622,6 +622,11 @@ mod tests {
             error.cause().is_some_and(|cause| !cause.contains(injected)),
             "raw rendered values must not leak through the preserved cause"
         );
+        eprintln!(
+            "AN15_DIAGNOSTIC legacy-json-escape code={} message={}",
+            error.code(),
+            error.message(),
+        );
     }
 
     #[test]
@@ -650,6 +655,92 @@ mod tests {
             );
         }
         fs::remove_dir_all(&root.canonical_path).expect("remove isolated template root");
+    }
+
+    #[test]
+    fn an15_template_probe_composes_realistic_jinja_syntax_and_text_target_corpus() {
+        let root = temporary_root("an15-realistic-syntax");
+        let primary_path = root.join("workflow.txt.j2");
+        fs::write(
+            &primary_path,
+            concat!(
+                "{% macro label(value) %}{{ value | trim | default(\"none\") }}{% endmacro %}\n",
+                "{% macro state(value) %}{{ \"open\" if value else \"closed\" }}{% endmacro %}\n",
+                "{% set deviations = report.rows | selectattr(\"verdict\", \"ne\", \"PASS\") | list -%}\n",
+                "{{ report.owner.name }}|{{ state(enabled) }}|{{ label(report.title) }}|",
+                "{% for row in deviations %}{{ row.get(\"id\", \"n/a\") }}{% if not loop.last %},{% endif %}{% endfor %}",
+                "\n",
+            ),
+        )
+        .expect("write realistic primary template");
+        let source = TemplateSource::file_backed(
+            fs::read(&primary_path).expect("read primary template"),
+            fs::canonicalize(&primary_path).expect("canonical primary template"),
+        );
+        let template_root = TemplateRoot {
+            canonical_path: fs::canonicalize(&root).expect("canonical template root"),
+        };
+        let composer = ScComposeTemplateComposer::new();
+
+        for case_index in 0..100 {
+            let vars = Map::from_iter([
+                ("enabled".to_owned(), Value::Bool(case_index % 2 == 0)),
+                (
+                    "report".to_owned(),
+                    json!({
+                        "owner": {"name": format!("dev-{case_index}")},
+                        "title": format!("  phase-an-{case_index}  "),
+                        "rows": [
+                            {"id": format!("PASS-{case_index}"), "verdict": "PASS"},
+                            {"id": format!("FIX-{case_index}"), "verdict": "FAIL"},
+                            {"id": format!("WARN-{case_index}"), "verdict": "WARN"}
+                        ]
+                    }),
+                ),
+            ]);
+            let rendered = composer
+                .compose_file(&source, &vars, &template_root)
+                .expect("realistic supported Jinja constructs must compose");
+            let expected_state = if case_index % 2 == 0 { "open" } else { "closed" };
+            assert!(
+                rendered.text.contains(&format!(
+                    "dev-{case_index}|{expected_state}|phase-an-{case_index}|FIX-{case_index},WARN-{case_index}"
+                )),
+                "case {case_index} rendered unexpected text: {}",
+                rendered.text
+            );
+        }
+
+        // Text targets stay deliberately format-neutral: ATM checks JSON only
+        // for JSON paths, while common YAML/XML/HTML/code payloads are safely
+        // rendered as text and retain their exact protocol characters.
+        for (file_name, body, expected) in [
+            ("workflow.yaml.j2", "title: {{ title }}\r\nitems:\r\n  - {{ item }}\r", "title: an15"),
+            ("notice.xml.j2", "<notice owner=\"{{ owner }}\">{{ title }}</notice>", "<notice owner=\"dev\">an15</notice>"),
+            ("report.html.j2", "<h1>{{ title }}</h1><p>{{ item }}</p>", "<h1>an15</h1>"),
+            ("handler.rs.j2", "const TITLE: &str = \"{{ title }}\";\n", "const TITLE: &str = \"an15\";"),
+            ("bom.txt.j2", "\u{feff}title={{ title }}\n", "title=an15"),
+        ] {
+            let path = root.join(file_name);
+            fs::write(&path, body).expect("write text target template");
+            let text_source = TemplateSource::file_backed(
+                fs::read(&path).expect("read text target template"),
+                fs::canonicalize(&path).expect("canonical text target template"),
+            );
+            let rendered = composer
+                .compose_file(
+                    &text_source,
+                    &Map::from_iter([
+                        ("title".to_owned(), Value::String("an15".to_owned())),
+                        ("item".to_owned(), Value::String("checked-emission".to_owned())),
+                        ("owner".to_owned(), Value::String("dev".to_owned())),
+                    ]),
+                    &template_root,
+                )
+                .expect("realistic text target must compose without a format-specific panic");
+            assert!(rendered.text.contains(expected), "{file_name}: {}", rendered.text);
+        }
+        fs::remove_dir_all(&root).expect("remove isolated realistic syntax root");
     }
 
     #[test]

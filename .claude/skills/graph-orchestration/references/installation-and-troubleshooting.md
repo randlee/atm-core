@@ -27,7 +27,7 @@ The required runtime dependencies are:
 
 | Dependency | Minimum | Used for |
 |---|---:|---|
-| `sc-compose` CLI | **unreleased source revision `113729e` (1.3.0-compatible)** | Rendering fenced Jinja templates and agent prompts |
+| `sc-compose` CLI | **released v1.4.0 source revision `6a8af1f`** | Rendering fenced Jinja templates and agent prompts |
 | `sc_compose` Python binding | **1.2.0** | Python/maturin rendering integrations and wrappers |
 | Python + `rdflib` | **3.11+** | RDF/Turtle parsing and SPARQL queries |
 | `jq` | any current release | Reading the JSON cursor contract |
@@ -75,7 +75,7 @@ For the CLI, use the pinned source revision required by the report templates:
 
 ```bash
 cargo install --git https://github.com/randlee/sc-compose.git \
-  --rev 113729e60e3409ad8c651a74956ffa5c167dd1b6 --locked --bin sc-compose
+  --rev 6a8af1ff46ccd64ae9cc40d7d5c815aa9b0a4661 --locked --bin sc-compose
 ```
 
 For the Python/maturin binding (a one-time per-machine setup; no activation
@@ -113,7 +113,7 @@ one-time install command and in the preflight.
 
 ```powershell
 py -m pip install --user --break-system-packages "sc-compose>=1.2.0"
-cargo install --git https://github.com/randlee/sc-compose.git --rev 113729e60e3409ad8c651a74956ffa5c167dd1b6 --locked --bin sc-compose
+cargo install --git https://github.com/randlee/sc-compose.git --rev 6a8af1ff46ccd64ae9cc40d7d5c815aa9b0a4661 --locked --bin sc-compose
 winget install jqlang.jq
 ```
 
@@ -129,12 +129,12 @@ python3 -m pytest .claude/skills/graph-orchestration/scripts/test_validate_findi
 ```
 
 The first command must return `"success": true` and report
-the pinned unreleased 1.3.0-compatible `sc-compose` build. A test pass does not override a failed
+the pinned released v1.4.0 `sc-compose` build. A test pass does not override a failed
 preflight: dependency errors are distinct from expected validation failures.
 
 ## Known issues
 
-- **The v1.2.0 CLI is rejected for current templates.** Install the pinned
+- **The v1.3.0 CLI is rejected for current templates.** Install the pinned
   source revision above; the Python binding remains a separate `>=1.2.0`
   artifact.
 - **`rdflib` import fails although it was installed.** `pip` and `python3`

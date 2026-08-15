@@ -5,7 +5,7 @@ requires:
 
 | Dependency | Minimum | Purpose |
 |---|---:|---|
-| `sc-compose` CLI | **unreleased source revision `113729e` (1.3.0-compatible)** | Render canonical Turtle records |
+| `sc-compose` CLI | **released v1.4.0 source revision `6a8af1f`** | Render canonical Turtle records |
 | Python `sc_compose` binding | **1.2.0** | Native Python rendering/API tests |
 | `oxigraph` | supported installed release | Parse/validate rendered Turtle |
 | `rg` | installed | Sweep source worktrees |
@@ -30,7 +30,7 @@ macOS (one-time per-machine setup):
 python3 -m pip install --user --break-system-packages 'sc-compose>=1.2.0'
 # The CLI pin below is required for the current report/template contract.
 cargo install --git https://github.com/randlee/sc-compose.git \
-  --rev 113729e60e3409ad8c651a74956ffa5c167dd1b6 --locked --bin sc-compose
+  --rev 6a8af1ff46ccd64ae9cc40d7d5c815aa9b0a4661 --locked --bin sc-compose
 cargo install oxigraph-cli
 ```
 
@@ -48,7 +48,7 @@ Linux:
 python3 -m pip install --user --break-system-packages 'sc-compose>=1.2.0'
 # Install the standalone CLI from the pinned source revision:
 cargo install --git https://github.com/randlee/sc-compose.git \
-  --rev 113729e60e3409ad8c651a74956ffa5c167dd1b6 --locked --bin sc-compose
+  --rev 6a8af1ff46ccd64ae9cc40d7d5c815aa9b0a4661 --locked --bin sc-compose
 cargo install oxigraph-cli
 ```
 
@@ -96,7 +96,7 @@ host-specific absolute checkout path in a canonical Turtle record.
 ## Validate after setup
 
 ```bash
-sc-compose --version       # CLI must be the pinned unreleased 1.3.0-compatible build
+sc-compose --version       # CLI must be the pinned released v1.4.0 build
 oxigraph --version
 rg --version
 python3 -c 'import rdflib; print(rdflib.__version__)'
@@ -106,7 +106,7 @@ python3 .claude/skills/triaging-findings/scripts/check_dependencies.py
 
 ## Known issues
 
-- The v1.2.0 CLI is insufficient for the current templates. Install the pinned
+- The v1.3.0 CLI is insufficient for the current templates. Install the pinned
   source revision above; do not lower the requirement or substitute a release
   binary.
 - Installing with one Python and invoking the skill with another leaves

@@ -1501,6 +1501,11 @@ mod tests {
             Some("TEMPLATE_REQUIRED_VARIABLE_MISSING"),
             "the stable admission error explains the rejected write"
         );
+        eprintln!(
+            "AN15_DIAGNOSTIC missing-required-input code={} message={}",
+            error["code"].as_str().expect("stable rejection code"),
+            error["message"].as_str().expect("stable rejection message"),
+        );
 
         let snapshot = inspect_template_admission_for_test(&fixture.database_path, &[])
             .expect("inspect rejected durable admission");

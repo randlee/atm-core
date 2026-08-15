@@ -1,0 +1,18 @@
+command: cargo test -p atm-template-sc-compose an15_boundary_probe_ -- --nocapture
+returncode: 0
+
+stdout:
+
+running 2 tests
+test tests::an15_boundary_probe_rejection_leaves_send_fallback_and_read_inputs_immutable ... ok
+test tests::an15_boundary_probe_rejects_one_hundred_confined_include_escape_vectors ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 31 filtered out; finished in 0.05s
+
+stderr:
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on artifact directory
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.36s
+     Running unittests src/lib.rs (target/debug/deps/atm_template_sc_compose-a66224698d290577)
