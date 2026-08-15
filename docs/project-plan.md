@@ -1268,8 +1268,13 @@ Sprint line:
   `atm-template-sc-compose` adapter refuse malformed rendered JSON before
   sending, caching, or render-on-read output. AN.15 then runs a bounded,
   deterministic adversarial campaign over the checked template/catalog
-  lifecycle, including captured-environment and immutable-revision oracles;
-  it does not make ATM a template-approval or lineage-policy engine. The three
+  lifecycle, including captured-environment and immutable-revision oracles.
+  The remaining AN.15 HTTP-seam addendum (PR #887,
+  `feature/an15-http-fuzz-campaign`) exercises the current Tokio/Axum
+  `atm-http-runtime` boundary with a separately retained, commit-pinned
+  four-worker campaign; it is not duplicate pre-Tokio AI.51 work against the
+  removed `api::http_frame_reader` module. AN.15 does not make ATM a
+  template-approval or lineage-policy engine. The three
   sprints required crates.io to publish `sc-sha`,
   `sc-composer`, and `sc-compose` 1.4.1; published `sc-composer` exports
   `check_rendered_output`, `CheckedOutput`, and `OutputFormat`; and

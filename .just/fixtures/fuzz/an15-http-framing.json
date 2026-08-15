@@ -1,0 +1,18 @@
+{
+  "worktree_path": "/Users/randlee/Documents/github/atm-core-worktrees/feature/an15-http-fuzz-campaign",
+  "target": "local-http-framing",
+  "baseline_ref": null,
+  "seed": 20260815,
+  "max_workers": 4,
+  "cases_per_worker": 100,
+  "per_worker_timeout_s": 120,
+  "promote_regressions": true,
+  "notes": "AN.15 fixed four-worker HTTP framing campaign; the execution runner records the exact checked-out source revision and accepts no caller-supplied commands.",
+  "campaign_id": "an15-http-framing-v2-20260815",
+  "target_seams": [
+    {"seam_id": "atm_http_runtime::axum_router::malformed_json", "minimum_invocations": 100, "accepted_proof": "coverage"},
+    {"seam_id": "atm_http_runtime::axum_router::content_type", "minimum_invocations": 100, "accepted_proof": "coverage"},
+    {"seam_id": "atm_http_runtime::axum_router::retired_provenance", "minimum_invocations": 100, "accepted_proof": "coverage"},
+    {"seam_id": "atm_http_runtime::loopback_tcp::live_request", "minimum_invocations": 100, "accepted_proof": "coverage"}
+  ]
+}
