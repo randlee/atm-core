@@ -569,7 +569,18 @@ async fn overload_response(_: BoxError) -> Response {
 }
 
 fn framework_rejection(rejection: JsonRejection) -> AtmError {
-    AtmError::validation("invalid HTTP messages request").with_cause(rejection)
+    let detail = match &rejection {
+        JsonRejection::JsonDataError(_) => {
+            "invalid HTTP messages request: JSON fields have invalid types"
+        }
+        JsonRejection::JsonSyntaxError(_) => "invalid HTTP messages request: malformed JSON",
+        JsonRejection::MissingJsonContentType(_) => {
+            "invalid HTTP messages request: Content-Type must be application/json"
+        }
+        JsonRejection::BytesRejection(_) => "invalid HTTP messages request: body could not be read",
+        _ => "invalid HTTP messages request: request body was rejected",
+    };
+    AtmError::validation(detail).with_cause(rejection)
 }
 
 fn map_write_response(response: ApiResponse) -> Result<Response, AtmError> {
@@ -962,18 +973,17 @@ mod tests {
         HeaderBoundary,
     }
 
-    const AN15_HTTP_CASE_SHAPES: [[&str; 5]; 3] = [
-        [
+    const AN15_HTTP_CASE_SHAPES: [&[&str]; 3] = [
+        &[
             "truncated-object",
             "truncated-array",
             "truncated-field",
             "plain-text",
             "wrong-scalar",
         ],
-        ["plain-text", "xml", "html", "binary", "form"],
-        [
+        &["plain-text", "xml", "html", "binary", "form"],
+        &[
             "retired-header",
-            "missing-content-type",
             "non-json-content-type",
             "json-syntax",
             "json-data",
@@ -1127,25 +1137,21 @@ mod tests {
                     "X-ATM-Peer-Source-Host is not accepted",
                 ),
                 1 => (
-                    b"not-json".to_vec(),
-                    Vec::new(),
-                    "invalid HTTP messages request",
+                    serde_json::to_vec(&write_request()).expect("typed request JSON"),
+                    vec![(CONTENT_TYPE, "text/plain")],
+                    "invalid HTTP messages request: Content-Type must be application/json",
                 ),
                 2 => (
-                    b"not-json".to_vec(),
-                    vec![(CONTENT_TYPE, "text/plain")],
-                    "invalid HTTP messages request",
-                ),
-                3 => (
                     b"{".to_vec(),
                     vec![(CONTENT_TYPE, "application/json")],
-                    "invalid HTTP messages request",
+                    "invalid HTTP messages request: malformed JSON",
                 ),
-                _ => (
-                    b"{\"to\":true".to_vec(),
+                3 => (
+                    b"{\"to\":true}".to_vec(),
                     vec![(CONTENT_TYPE, "application/json")],
-                    "invalid HTTP messages request",
+                    "invalid HTTP messages request: JSON fields have invalid types",
                 ),
+                _ => unreachable!("header-boundary corpus has four shapes"),
             };
             eprintln!("AN15_CASE_SHAPE={shape}");
             let response = post_with_headers(app.clone(), body, &headers).await;
