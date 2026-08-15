@@ -1,13 +1,19 @@
 ---
 title: AN.15 Checked-Render Adversarial Assurance
-status: complete
-branch: feature/an15-adversarial-fuzzing
+status: in_progress
+branch: feature/an15-http-fuzz-campaign
 target: integrate/phase-an
-worktree: ../atm-core-worktrees/feature/an15-adversarial-fuzzing
+worktree: ../atm-core-worktrees/feature/an15-http-fuzz-campaign
 external_blockers: []
 ---
 
 # AN.15 — Checked-Render Adversarial Assurance
+
+The original checked-render campaign completed on
+`feature/an15-adversarial-fuzzing` (PR #877). The HTTP-seam addendum below is
+the remaining active AN.15 work on `feature/an15-http-fuzz-campaign` (PR
+#887); the sprint cannot be marked complete until that addendum has its own
+independent QA pass.
 
 **recommended_agent:** arch-ctm/deep-reasoning (template lifecycle and
 negative-contract assurance).
@@ -141,6 +147,27 @@ be fixed and re-run against that exact integrated line.
 - ATM records immutable facts only: SHA, exact parsed frontmatter metadata,
   output format, and merged variables. The repository-policy exclusions are
   defined once under Non-closure.
+
+## HTTP-seam campaign addendum (PR #887)
+
+This addendum retains an additional bounded four-worker campaign for the
+Tokio/Axum `atm-http-runtime` boundary. It is intentionally complementary to
+the checked-render campaign: 100 seeded cases per worker exercise malformed
+JSON, non-JSON content, retired client-provenance headers, and live loopback
+search-query decoding. The campaign records its exact source commit, fixed
+worker commands, per-worker logs, typed error code/recovery expectations, and
+sanitized HTML/JSON report under `site/reports/fuzz/`.
+
+This is not duplicate AI.51 work. AI.51 targeted
+`api::http_frame_reader`, a module removed before the Tokio/Axum runtime was
+introduced; this addendum tests the current `atm-http-runtime` routes and a
+real loopback TCP listener. It must prove that each labelled case changes an
+input read by the production path, and that HTTP error serialization exposes
+only the public error code/message, never `AtmError.cause` diagnostic data.
+
+The addendum preserves the original AN.15 four-worker bounds and report
+requirements. It does not broaden ATM into a generic HTTP fuzzer or alter the
+AN.15 non-closure policy.
 
 ## Required validation
 

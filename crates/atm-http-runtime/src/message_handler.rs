@@ -14,7 +14,7 @@ use atm_core::api::{
 };
 use atm_core::clear::ClearQuery;
 use atm_core::doctor::DoctorQuery;
-use atm_core::error::AtmError;
+use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::protocol::{
     CompatibilityPreflight, RequestId, ResponseEnvelope, SendResponseEnvelope,
     TeamMemberHeartbeatRequest, next_request_id,
@@ -637,6 +637,23 @@ fn clear_response(outcome: &atm_core::clear::ClearOutcome) -> Result<Response, A
     Ok(response)
 }
 
+#[derive(Serialize)]
+struct HttpErrorBody<'error> {
+    code: AtmErrorCode,
+    message: &'error str,
+}
+
+impl<'error> From<&'error AtmError> for HttpErrorBody<'error> {
+    fn from(error: &'error AtmError) -> Self {
+        // HTTP is an untrusted transport boundary. `cause` remains available
+        // to local diagnostics, but must never be serialized to a peer.
+        Self {
+            code: error.code(),
+            message: error.message(),
+        }
+    }
+}
+
 pub(crate) fn error_response(error: AtmError) -> Response {
     let status = if error.is_validation()
         || matches!(
@@ -648,9 +665,10 @@ pub(crate) fn error_response(error: AtmError) -> Response {
     } else {
         StatusCode::SERVICE_UNAVAILABLE
     };
-    // `AtmError` is the repository-wide serde error contract. If serialization
-    // itself fails, return a minimal 503 without inventing another JSON shape.
-    json_response(status, &error, None).unwrap_or_else(|_| Response::new(Body::empty()))
+    // Preserve the public code/message contract while redacting diagnostic
+    // causes before serializing through the untrusted HTTP boundary.
+    let body = HttpErrorBody::from(&error);
+    json_response(status, &body, None).unwrap_or_else(|_| Response::new(Body::empty()))
 }
 
 fn json_response<T: Serialize>(
@@ -937,6 +955,65 @@ mod tests {
             .to_vec()
     }
 
+    #[derive(Clone, Copy)]
+    enum An15HttpProbe {
+        Shape,
+        ContentType,
+        HeaderBoundary,
+    }
+
+    const AN15_HTTP_CASE_SHAPES: [[&str; 5]; 3] = [
+        [
+            "truncated-object",
+            "truncated-array",
+            "truncated-field",
+            "plain-text",
+            "wrong-scalar",
+        ],
+        ["plain-text", "xml", "html", "binary", "form"],
+        [
+            "retired-header",
+            "missing-content-type",
+            "non-json-content-type",
+            "json-syntax",
+            "json-data",
+        ],
+    ];
+
+    fn an15_http_case_shape(probe: An15HttpProbe, case_index: usize) -> (usize, &'static str) {
+        let probe_index = match probe {
+            An15HttpProbe::Shape => 0,
+            An15HttpProbe::ContentType => 1,
+            An15HttpProbe::HeaderBoundary => 2,
+        };
+        let slot = case_index % AN15_HTTP_CASE_SHAPES[probe_index].len();
+        (slot, AN15_HTTP_CASE_SHAPES[probe_index][slot])
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn error_response_redacts_diagnostic_causes_at_the_http_boundary() {
+        let diagnostic_secret = "Bearer test-only-http-error-secret";
+        let response = super::error_response(
+            AtmError::validation("HTTP error redaction fixture").with_cause(diagnostic_secret),
+        );
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+        let body: Value = serde_json::from_slice(&response_body(response).await)
+            .expect("redacted HTTP error response");
+        assert_eq!(body["code"], "ATM_MESSAGE_VALIDATION_FAILED");
+        assert!(
+            body["message"]
+                .as_str()
+                .expect("stable error message")
+                .contains("HTTP error redaction fixture")
+        );
+        assert!(body.get("cause").is_none(), "HTTP must not expose causes");
+        assert!(
+            !body.to_string().contains(diagnostic_secret),
+            "HTTP must not expose diagnostic secrets"
+        );
+    }
+
     #[tokio::test(flavor = "current_thread")]
     async fn an15_http_shape_probe_rejects_malformed_json_before_dispatch() {
         let calls = Arc::new(Mutex::new(Vec::new()));
@@ -951,12 +1028,13 @@ mod tests {
         );
 
         for case_index in 0..100 {
-            let (body, shape) = match case_index % 5 {
-                0 => (b"{".to_vec(), "truncated-object"),
-                1 => (b"[".to_vec(), "truncated-array"),
-                2 => (b"{\"to\":".to_vec(), "truncated-field"),
-                3 => (b"not-json".to_vec(), "plain-text"),
-                _ => (b"{\"to\":true".to_vec(), "wrong-scalar"),
+            let (shape_slot, shape) = an15_http_case_shape(An15HttpProbe::Shape, case_index);
+            let body = match shape_slot {
+                0 => b"{".to_vec(),
+                1 => b"[".to_vec(),
+                2 => b"{\"to\":".to_vec(),
+                3 => b"not-json".to_vec(),
+                _ => b"{\"to\":true".to_vec(),
             };
             eprintln!("AN15_CASE_SHAPE={shape}");
             let response = post(app.clone(), body).await;
@@ -993,12 +1071,13 @@ mod tests {
         let body = serde_json::to_vec(&write_request()).expect("typed request JSON");
 
         for case_index in 0..100 {
-            let (content_type, shape) = match case_index % 5 {
-                0 => ("text/plain", "plain-text"),
-                1 => ("application/xml", "xml"),
-                2 => ("text/html", "html"),
-                3 => ("application/octet-stream", "binary"),
-                _ => ("application/x-www-form-urlencoded", "form"),
+            let (shape_slot, shape) = an15_http_case_shape(An15HttpProbe::ContentType, case_index);
+            let content_type = match shape_slot {
+                0 => "text/plain",
+                1 => "application/xml",
+                2 => "text/html",
+                3 => "application/octet-stream",
+                _ => "application/x-www-form-urlencoded",
             };
             eprintln!("AN15_CASE_SHAPE={shape}");
             let response =
@@ -1033,24 +1112,43 @@ mod tests {
             limits(4096, 2),
             timeouts(),
         );
-        let body = serde_json::to_vec(&write_request()).expect("typed request JSON");
         let retired = HeaderName::from_static("x-atm-peer-source-host");
 
         for case_index in 0..100 {
-            let (claim, shape) = match case_index % 5 {
-                0 => ("peer.example.test", "dns"),
-                1 => ("127.0.0.1", "ipv4"),
-                2 => ("[::1]", "ipv6"),
-                3 => ("xn--peer-7qa.example.test", "idna"),
-                _ => ("peer.example.test:443", "host-port"),
+            let (shape_slot, shape) =
+                an15_http_case_shape(An15HttpProbe::HeaderBoundary, case_index);
+            let (body, headers, expected_message) = match shape_slot {
+                0 => (
+                    serde_json::to_vec(&write_request()).expect("typed request JSON"),
+                    vec![
+                        (CONTENT_TYPE, "application/json"),
+                        (retired.clone(), "ignored"),
+                    ],
+                    "X-ATM-Peer-Source-Host is not accepted",
+                ),
+                1 => (
+                    b"not-json".to_vec(),
+                    Vec::new(),
+                    "invalid HTTP messages request",
+                ),
+                2 => (
+                    b"not-json".to_vec(),
+                    vec![(CONTENT_TYPE, "text/plain")],
+                    "invalid HTTP messages request",
+                ),
+                3 => (
+                    b"{".to_vec(),
+                    vec![(CONTENT_TYPE, "application/json")],
+                    "invalid HTTP messages request",
+                ),
+                _ => (
+                    b"{\"to\":true".to_vec(),
+                    vec![(CONTENT_TYPE, "application/json")],
+                    "invalid HTTP messages request",
+                ),
             };
             eprintln!("AN15_CASE_SHAPE={shape}");
-            let response = post_with_headers(
-                app.clone(),
-                body.clone(),
-                &[(CONTENT_TYPE, "application/json"), (retired.clone(), claim)],
-            )
-            .await;
+            let response = post_with_headers(app.clone(), body, &headers).await;
             assert_eq!(
                 response.status(),
                 StatusCode::BAD_REQUEST,
@@ -1060,10 +1158,8 @@ mod tests {
                 .expect("typed validation error response");
             assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
             assert!(
-                error
-                    .message()
-                    .contains("X-ATM-Peer-Source-Host is not accepted"),
-                "case {case_index} must retain the retired-provenance diagnostic"
+                error.message().contains(expected_message),
+                "case {case_index} must retain the production header/framing diagnostic"
             );
             assert!(
                 error.message().contains(
