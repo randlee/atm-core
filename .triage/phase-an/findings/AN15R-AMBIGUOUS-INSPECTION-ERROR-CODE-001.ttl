@@ -15,22 +15,24 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-14T18:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.15 ;
   triage:foundAt "2026-08-14T17:45:00Z"^^xsd:dateTime ;
-  triage:resolutionNotes "Update 2026-08-15 by quality-mgr, AN15R-TEMPLATEHASH-QA-1: PR #884 (fix/an15-templatehash-error-code-ambiguity @ 28668949b19b0f9a368680f4661292298cf5362d) independently verified to genuinely fix this record's cited occurrence: crates/atm-core/src/send/template.rs:62 now propagates composer.inspect() errors via direct `?` (confirmed sole production caller: crates/atm-core/src/send/async_persistence.rs:87); crates/atm-template-sc-compose/src/lib.rs inspection_error() (lines 97-105) now routes ComposeError::Config to the new AtmErrorCode::TemplateInspectionParseFailed via inspection_parse_error(), discriminated from Include/Resolve/Validation/Render; new AtmErrorCode variant registered end-to-end (error_codes.rs, error_catalog.rs, docs/atm-error-codes.md) with real (non-mocked) adapter test coverage (inspection_fails_closed_for_plain_jinja_body_syntax and 2 other real-input tests) plus a core-level propagation test. Verified via direct code read, not self-report; req-qa/arch-qa/ruthless-boundary-qa/rust-best-practices-agent all dispatched independently. NOT CLOSED: three independent reviewers (req-qa ATM-QA-001, ruthless-boundary-qa RBQA-F002-AN15R, rust-best-practices-agent RBP-F001) plus quality-mgr's own read confirm composition_error() (lib.rs:78-87), the sibling helper on the compose_file() entrypoint, was left unfixed and still collapses ComposeError::Config into TemplateRenderVerificationFailed -- the same ambiguity class on a second call path. Tracked as new finding AN15R-COMPOSITION-ERROR-CONFIG-002 (Important, open). Will close this record once that sibling finding is fixed and re-verified." ;
+  triage:resolutionNotes "Update 2026-08-15 by quality-mgr, AN15R-TEMPLATEHASH-QA-1: PR #884 (fix/an15-templatehash-error-code-ambiguity @ 28668949b19b0f9a368680f4661292298cf5362d) independently verified to genuinely fix this record's cited occurrence: crates/atm-core/src/send/template.rs:62 now propagates composer.inspect() errors via direct `?` (confirmed sole production caller: crates/atm-core/src/send/async_persistence.rs:87); crates/atm-template-sc-compose/src/lib.rs inspection_error() (lines 97-105) now routes ComposeError::Config to the new AtmErrorCode::TemplateInspectionParseFailed via inspection_parse_error(), discriminated from Include/Resolve/Validation/Render; new AtmErrorCode variant registered end-to-end (error_codes.rs, error_catalog.rs, docs/atm-error-codes.md) with real (non-mocked) adapter test coverage (inspection_fails_closed_for_plain_jinja_body_syntax and 2 other real-input tests) plus a core-level propagation test. Verified via direct code read, not self-report; req-qa/arch-qa/ruthless-boundary-qa/rust-best-practices-agent all dispatched independently. NOT CLOSED: three independent reviewers (req-qa ATM-QA-001, ruthless-boundary-qa RBQA-F002-AN15R, rust-best-practices-agent RBP-F001) plus quality-mgr's own read confirm composition_error() (lib.rs:78-87), the sibling helper on the compose_file() entrypoint, was left unfixed and still collapses ComposeError::Config into TemplateRenderVerificationFailed -- the same ambiguity class on a second call path. Tracked as new finding AN15R-COMPOSITION-ERROR-CONFIG-002 (Important, open). Will close this record once that sibling finding is fixed and re-verified. Update 2026-08-15 by quality-mgr, AN15R-COMPOSITIONFIX-QA-1: sibling AN15R-COMPOSITION-ERROR-CONFIG-002 is now independently confirmed fixed at commit 7397b6c16 on this same PR (5/5 reviewers PASS, 0 blocking findings: quality-mgr direct read, 2x arch-qa, 2x ruthless-boundary-qa, req-qa). Both inspect() and compose_file() entrypoints now discriminate ComposeError::Config identically. Closing this parent record; the blocking condition is resolved." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN15R-AMBIGUOUS-INSPECTION-ERROR-CODE-001/AN15-OCC-001> ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/AN15R-AMBIGUOUS-INSPECTION-ERROR-CODE-001/AN15-OCC-001>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/send/template.rs" ;
   triage:line 64 ;
   triage:snippet "AtmErrorCode::TemplateHashApiFailed" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-08-15T01:40:00Z"^^xsd:dateTime ;
   triage:branch "integrate/phase-an" ;
   triage:headSha "63c158a76e31aa7ac0034a1f796a4366ba915a7e" ;
   triage:occursIn <urn:atm:triage:worktree/AN15/63c158a76e31aa7ac0034a1f796a4366ba915a7e> .
