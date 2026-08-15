@@ -1286,7 +1286,34 @@ Sprint line:
   [`sprint-AN14-sc-compose-141-checked-emission.md`](./plans/phase-an/sprint-AN14-sc-compose-141-checked-emission.md),
   and [`sprint-AN15-adversarial-fuzzing.md`](./plans/phase-an/sprint-AN15-adversarial-fuzzing.md).
 
-## 46. Phase AQ — Search Indexing and Query Optimization [PLANNED]
+## 46. Phase AO — Optional mTLS for the Canonical HTTP Peer Path [APPROVED PLAN]
+
+- **Phase AO** restores optional mTLS on the canonical Tokio/Axum direct-peer
+  path through one reusable `peer-tls` adapter. The adapter consumes the
+  existing sealed TLS configuration/key-exchange storage types; it does not
+  duplicate certificate policy or create a second HTTP path. Once a trusted
+  peer configuration exists, TLS is the default; plaintext is an explicit,
+  observable test/benchmark/debug override only.
+
+Phase AO is planned independently from AQ. Its authoritative planning branch
+is `plan/phase-ao-tls-and-ap-outbound-connectivity`; its plan is approved but
+has not yet been merged into this documentation line.
+
+## 47. Phase AP — Outbound-Only Corporate Network Peer Connectivity [PROPOSED PLAN]
+
+- **Phase AP** targets a restricted daemon that can initiate outbound HTTP but
+  cannot accept unsolicited inbound peer TCP. Its proposed path is an
+  authenticated outbound mTLS SSE session plus ordinary authenticated HTTP
+  POST. AP.1 must first prove that design on the actual CWin/M4/M5 network, or
+  retain the infrastructure block; localhost, port forwarding, SSH tunnels,
+  and relays are not evidence.
+
+Phase AP follows the mTLS proof required by AO.3, but remains independent of
+AQ's local search-projection work. Its authoritative planning branch is
+`plan/phase-ao-tls-and-ap-outbound-connectivity`; its plan has not yet been
+merged into this documentation line.
+
+## 48. Phase AQ — Search Indexing and Query Optimization [PLANNED]
 
 - **Phase AQ** moves synchronous FTS projection maintenance out of foreground
   mail admission while preserving canonical rows as immediate durable truth.
