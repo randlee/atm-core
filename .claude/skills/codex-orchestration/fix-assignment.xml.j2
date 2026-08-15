@@ -19,11 +19,13 @@ required_variables:
 optional_variables:
   - validation_requirements
   - dependency_relations
+  - assignee
 defaults:
   validation_requirements: ""
   dependency_relations: "- See authoritative sprint doc."
+  assignee: "arch-ctm"
 ---
-<atm-task id="{{ task_id }}" phase="{{ phase }}" assignee="arch-ctm" mode="fix">
+<atm-task id="{{ task_id }}" phase="{{ phase }}" assignee="{{ assignee }}" mode="fix">
   <description>{{ description }}</description>
 
   <branch>{{ branch }}</branch>
