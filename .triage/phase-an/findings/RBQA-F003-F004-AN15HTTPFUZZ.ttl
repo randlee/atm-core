@@ -20,31 +20,41 @@
   triage:triagedAt "2026-08-15T04:16:42Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.15 ;
   triage:foundAt "2026-08-15T04:16:42Z"^^xsd:dateTime ;
+  triage:resolutionNotes "Update 2026-08-15 by quality-mgr, AN15HTTPFUZZ-QA-2: fix commit 9681de8a5 independently re-verified via ruthless-boundary-qa, PARTIAL FIX only. The differential-probe occurrence (lib.rs:2006) is genuinely fixed: its 5 rewritten cases against /v1/atm/messages/search each trace to a distinct real branch inside decode_search_query (message_handler.rs:488-527) with unique expected_message assertions per branch -- closing that occurrence. The boundary-probe occurrence (message_handler.rs:1047) is NOT fixed -- still open, reproduces the same defect class this record was filed for. Shape 0 (retired-header presence) is a genuine distinct branch, but the remaining 4 of 5 labeled shapes collapse into only 2 real axum branches: shape-slots 1 ('missing-content-type') and 2 ('non-json-content-type') both hit axum's identical json_content_type()-false rejection (axum 0.8.9 json.rs:130,138-155) regardless of header-absent vs header-wrong; shape-slots 3 ('json-syntax') and 4 ('json-data', body `{\"to\":true` -- missing closing brace) both hit Category::Eof -> JsonSyntaxError (axum json.rs:176-179), not Category::Data as claimed, because the body is truncated rather than well-formed-but-wrong-typed. Corroborating: the test's own expected_message for shape-slots 1-4 is the identical hardcoded literal across all four. Recommendation from reviewer: use a complete, well-formed-but-wrong-typed body (e.g. `{\"to\":true}`) to genuinely reach Category::Data, and either collapse the claimed shape count to 3 real branches or replace the redundant slot with a body that fails at a different layer. NOT closing this record -- keeping status open pending a further fix round on the boundary-probe occurrence only." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003-F004-AN15HTTPFUZZ/boundary-probe-1047> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003-F004-AN15HTTPFUZZ/differential-probe-2006> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/RBQA-F003-F004-AN15HTTPFUZZ/boundary-probe-1047>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
-  triage:line 1047 ;
-  triage:snippet "eprintln!(AN15_CASE_SHAPE={shape});" ;
+  triage:line 1104 ;
+  triage:snippet "an15_http_boundary_probe_rejects_retired_provenance_before_dispatch: shape-slots 1-4 collapse into 2 real axum branches, not 4" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/an15-http-fuzz-campaign" ;
-  triage:headSha "01f9f3660" ;
-  triage:occursIn <urn:atm:triage:worktree/feature-an15-http-fuzz-campaign/01f9f3660> .
+  triage:headSha "9681de8a5" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an15-http-fuzz-campaign/9681de8a5> .
 
 <urn:atm:triage:occurrence/RBQA-F003-F004-AN15HTTPFUZZ/differential-probe-2006>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/lib.rs" ;
-  triage:line 2006 ;
-  triage:snippet "eprintln!(AN15_CASE_SHAPE={shape});" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:line 1998 ;
+  triage:snippet "an15_http_differential_probe_exercises_live_loopback_request_shapes: 5 cases now trace to 5 distinct decode_search_query branches" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-08-15T05:10:00Z"^^xsd:dateTime ;
   triage:branch "feature/an15-http-fuzz-campaign" ;
-  triage:headSha "01f9f3660" ;
-  triage:occursIn <urn:atm:triage:worktree/feature-an15-http-fuzz-campaign/01f9f3660> .
+  triage:headSha "9681de8a5" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an15-http-fuzz-campaign/9681de8a5> .
+
+<urn:atm:triage:worktree/feature-an15-http-fuzz-campaign/9681de8a5>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/an15-http-fuzz-campaign" ;
+  triage:branch "feature/an15-http-fuzz-campaign" ;
+  triage:headSha "9681de8a5" ;
+  triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/feature-an15-http-fuzz-campaign/01f9f3660>
   a triage:WorktreeSnapshot ;

@@ -11,12 +11,13 @@
     triage:severity "minor" ;
     triage:repeatable false ;
     triage:sweepScope "file_only" ;
-    triage:status "open" ;
+    triage:status "fixed" ;
     triage:dispatchReady true ;
     triage:triagedAt "2026-08-15T04:16:42Z"^^xsd:dateTime ;
     triage:foundIn triage:AN.15 ;
     triage:foundAt "2026-08-15T04:16:42Z"^^xsd:dateTime ;
     triage:openOn <urn:atm:triage:worktree:feature-an15-http-fuzz-campaign> ;
+    triage:resolutionNotes "Update 2026-08-15 by quality-mgr, AN15HTTPFUZZ-QA-2: fix commit 9681de8a5 independently verified via ruthless-boundary-qa. New shared const AN15_HTTP_CASE_SHAPES + helper an15_http_case_shape() (message_handler.rs, ~line 965-981) replaces the three separately-duplicated inline match tables previously at lines 954/996/1040, now a single source of truth consumed by all three message_handler.rs probes. NOTE (non-blocking, out of this record's cited scope): reviewer observed lib.rs's differential-probe (RBQA-F004-AN15HTTPFUZZ) still declares its own separate inline shape-label table rather than sharing this const; left open for a future dedicated triage pass since its shapes are semantically different and this record's 3 cited occurrences are all in message_handler.rs and are now consolidated. Closing this record as scoped." ;
     triage:hasOccurrence <urn:atm:triage:RBP-F001-AN15HTTPFUZZ:occurrence:1> ;
     triage:hasOccurrence <urn:atm:triage:RBP-F001-AN15HTTPFUZZ:occurrence:2> ;
     triage:hasOccurrence <urn:atm:triage:RBP-F001-AN15HTTPFUZZ:occurrence:3> .
@@ -25,30 +26,36 @@
     triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
     triage:line "954" ;
     triage:snippet "let (body, shape) = match case_index % 5" ;
-    triage:status "open" ;
-    triage:headSha "01f9f3660" ;
+    triage:status "fixed" ;
+    triage:headSha "9681de8a5" ;
     triage:branch "feature/an15-http-fuzz-campaign" ;
-    triage:closed false ;
+    triage:closed true ;
+    triage:closedBy "quality-mgr" ;
+    triage:closedAt "2026-08-15T05:10:00Z"^^xsd:dateTime ;
     triage:occursIn <urn:atm:triage:worktree:feature-an15-http-fuzz-campaign> .
 
 <urn:atm:triage:RBP-F001-AN15HTTPFUZZ:occurrence:2> a triage:Occurrence ;
     triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
     triage:line "996" ;
     triage:snippet "let (content_type, shape) = match case_index % 5" ;
-    triage:status "open" ;
-    triage:headSha "01f9f3660" ;
+    triage:status "fixed" ;
+    triage:headSha "9681de8a5" ;
     triage:branch "feature/an15-http-fuzz-campaign" ;
-    triage:closed false ;
+    triage:closed true ;
+    triage:closedBy "quality-mgr" ;
+    triage:closedAt "2026-08-15T05:10:00Z"^^xsd:dateTime ;
     triage:occursIn <urn:atm:triage:worktree:feature-an15-http-fuzz-campaign> .
 
 <urn:atm:triage:RBP-F001-AN15HTTPFUZZ:occurrence:3> a triage:Occurrence ;
     triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
     triage:line "1040" ;
     triage:snippet "let (claim, shape) = match case_index % 5" ;
-    triage:status "open" ;
-    triage:headSha "01f9f3660" ;
+    triage:status "fixed" ;
+    triage:headSha "9681de8a5" ;
     triage:branch "feature/an15-http-fuzz-campaign" ;
-    triage:closed false ;
+    triage:closed true ;
+    triage:closedBy "quality-mgr" ;
+    triage:closedAt "2026-08-15T05:10:00Z"^^xsd:dateTime ;
     triage:occursIn <urn:atm:triage:worktree:feature-an15-http-fuzz-campaign> .
 
 <urn:atm:triage:worktree:feature-an15-http-fuzz-campaign> a triage:WorktreeSnapshot ;
