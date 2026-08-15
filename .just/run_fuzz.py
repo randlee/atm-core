@@ -82,6 +82,8 @@ CHECKED_EMISSION_WORKERS = {
 HTTP_FRAMING_WORKERS = {
     "shape-probe": {
         "seam_id": "atm_http_runtime::axum_router::malformed_json",
+        "diagnostic_code": "ATM_MESSAGE_VALIDATION_FAILED",
+        "diagnostic_recovery": "Correct the invalid ATM request or state before retrying.",
         "command": (
             "cargo", "test", "-p", "atm-http-runtime",
             "message_handler::tests::an15_http_shape_probe_rejects_malformed_json_before_dispatch", "--", "--exact", "--nocapture",
@@ -92,6 +94,8 @@ HTTP_FRAMING_WORKERS = {
     },
     "template-probe": {
         "seam_id": "atm_http_runtime::axum_router::content_type",
+        "diagnostic_code": "ATM_MESSAGE_VALIDATION_FAILED",
+        "diagnostic_recovery": "Correct the invalid ATM request or state before retrying.",
         "command": (
             "cargo", "test", "-p", "atm-http-runtime",
             "message_handler::tests::an15_http_template_probe_rejects_non_json_content_before_dispatch", "--", "--exact", "--nocapture",
@@ -102,6 +106,8 @@ HTTP_FRAMING_WORKERS = {
     },
     "boundary-probe": {
         "seam_id": "atm_http_runtime::axum_router::retired_provenance",
+        "diagnostic_code": "ATM_MESSAGE_VALIDATION_FAILED",
+        "diagnostic_recovery": "Correct the invalid ATM request or state before retrying.",
         "command": (
             "cargo", "test", "-p", "atm-http-runtime",
             "message_handler::tests::an15_http_boundary_probe_rejects_retired_provenance_before_dispatch", "--", "--exact", "--nocapture",
@@ -112,6 +118,8 @@ HTTP_FRAMING_WORKERS = {
     },
     "differential-probe": {
         "seam_id": "atm_http_runtime::loopback_tcp::live_request",
+        "diagnostic_code": "ATM_MESSAGE_VALIDATION_FAILED",
+        "diagnostic_recovery": "Correct the invalid ATM request or state before retrying.",
         "command": (
             "cargo", "test", "-p", "atm-http-runtime",
             "tests::an15_http_differential_probe_exercises_live_loopback_request_shapes", "--", "--exact", "--nocapture",
@@ -673,7 +681,11 @@ def validate_report(payload: Any, root: Path | None = None) -> dict[str, Any]:
     }
 
 
-def _checked_emission_diagnostic(expected_code: str, observed_message: str) -> dict[str, Any]:
+def _negative_diagnostic(
+    expected_code: str,
+    observed_message: str,
+    recovery: str,
+) -> dict[str, Any]:
     return {
         "expected_status": "rejected",
         "observed_status": "rejected",
@@ -681,8 +693,8 @@ def _checked_emission_diagnostic(expected_code: str, observed_message: str) -> d
         "observed_code_or_category": expected_code,
         "expected_message_family": observed_message,
         "observed_message_family": observed_message,
-        "expected_recovery_family": "fix the template input and retry",
-        "observed_recovery_family": "fix the template input and retry",
+        "expected_recovery_family": recovery,
+        "observed_recovery_family": recovery,
         "sensitive_input_leaked": False,
         "field_matches": {
             "status": True,
@@ -792,7 +804,11 @@ def _executed_product_worker(
             "case_id": case_id,
             "expected_oracle": expected_oracle,
             "observed_result": observed_result,
-            "diagnostic_contract": _checked_emission_diagnostic("checked_render_rejected", observed_result),
+            "diagnostic_contract": _negative_diagnostic(
+                contract.get("diagnostic_code", "checked_render_rejected"),
+                observed_result,
+                contract.get("diagnostic_recovery", "fix the template input and retry"),
+            ),
             "target_invocation": proof,
             "finding_id": None,
         })

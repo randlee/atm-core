@@ -961,10 +961,18 @@ mod tests {
             eprintln!("AN15_CASE_SHAPE={shape}");
             let response = post(app.clone(), body).await;
             assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+            let error: AtmError = serde_json::from_slice(&response_body(response).await)
+                .expect("typed validation error response");
+            assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
             assert!(
-                String::from_utf8_lossy(&response_body(response).await)
-                    .contains("invalid HTTP messages request"),
+                error.message().contains("invalid HTTP messages request"),
                 "case {case_index} must retain the stable malformed-request diagnostic"
+            );
+            assert!(
+                error.message().contains(
+                    "Recovery: Correct the invalid ATM request or state before retrying."
+                ),
+                "case {case_index} must retain the actionable validation recovery"
             );
         }
         assert!(calls.lock().expect("record calls").is_empty());
@@ -999,6 +1007,15 @@ mod tests {
                 response.status(),
                 StatusCode::BAD_REQUEST,
                 "case {case_index}"
+            );
+            let error: AtmError = serde_json::from_slice(&response_body(response).await)
+                .expect("typed validation error response");
+            assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+            assert!(
+                error.message().contains(
+                    "Recovery: Correct the invalid ATM request or state before retrying."
+                ),
+                "case {case_index} must retain the actionable validation recovery"
             );
         }
         assert!(calls.lock().expect("record calls").is_empty());
@@ -1039,10 +1056,20 @@ mod tests {
                 StatusCode::BAD_REQUEST,
                 "case {case_index}"
             );
+            let error: AtmError = serde_json::from_slice(&response_body(response).await)
+                .expect("typed validation error response");
+            assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
             assert!(
-                String::from_utf8_lossy(&response_body(response).await)
+                error
+                    .message()
                     .contains("X-ATM-Peer-Source-Host is not accepted"),
                 "case {case_index} must retain the retired-provenance diagnostic"
+            );
+            assert!(
+                error.message().contains(
+                    "Recovery: Correct the invalid ATM request or state before retrying."
+                ),
+                "case {case_index} must retain the actionable validation recovery"
             );
         }
         assert!(calls.lock().expect("record calls").is_empty());
