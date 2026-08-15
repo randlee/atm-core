@@ -701,7 +701,11 @@ mod tests {
             let rendered = composer
                 .compose_file(&source, &vars, &template_root)
                 .expect("realistic supported Jinja constructs must compose");
-            let expected_state = if case_index % 2 == 0 { "open" } else { "closed" };
+            let expected_state = if case_index % 2 == 0 {
+                "open"
+            } else {
+                "closed"
+            };
             assert!(
                 rendered.text.contains(&format!(
                     "dev-{case_index}|{expected_state}|phase-an-{case_index}|FIX-{case_index},WARN-{case_index}"
@@ -715,10 +719,26 @@ mod tests {
         // for JSON paths, while common YAML/XML/HTML/code payloads are safely
         // rendered as text and retain their exact protocol characters.
         for (file_name, body, expected) in [
-            ("workflow.yaml.j2", "title: {{ title }}\r\nitems:\r\n  - {{ item }}\r", "title: an15"),
-            ("notice.xml.j2", "<notice owner=\"{{ owner }}\">{{ title }}</notice>", "<notice owner=\"dev\">an15</notice>"),
-            ("report.html.j2", "<h1>{{ title }}</h1><p>{{ item }}</p>", "<h1>an15</h1>"),
-            ("handler.rs.j2", "const TITLE: &str = \"{{ title }}\";\n", "const TITLE: &str = \"an15\";"),
+            (
+                "workflow.yaml.j2",
+                "title: {{ title }}\r\nitems:\r\n  - {{ item }}\r",
+                "title: an15",
+            ),
+            (
+                "notice.xml.j2",
+                "<notice owner=\"{{ owner }}\">{{ title }}</notice>",
+                "<notice owner=\"dev\">an15</notice>",
+            ),
+            (
+                "report.html.j2",
+                "<h1>{{ title }}</h1><p>{{ item }}</p>",
+                "<h1>an15</h1>",
+            ),
+            (
+                "handler.rs.j2",
+                "const TITLE: &str = \"{{ title }}\";\n",
+                "const TITLE: &str = \"an15\";",
+            ),
             ("bom.txt.j2", "\u{feff}title={{ title }}\n", "title=an15"),
         ] {
             let path = root.join(file_name);
@@ -732,13 +752,20 @@ mod tests {
                     &text_source,
                     &Map::from_iter([
                         ("title".to_owned(), Value::String("an15".to_owned())),
-                        ("item".to_owned(), Value::String("checked-emission".to_owned())),
+                        (
+                            "item".to_owned(),
+                            Value::String("checked-emission".to_owned()),
+                        ),
                         ("owner".to_owned(), Value::String("dev".to_owned())),
                     ]),
                     &template_root,
                 )
                 .expect("realistic text target must compose without a format-specific panic");
-            assert!(rendered.text.contains(expected), "{file_name}: {}", rendered.text);
+            assert!(
+                rendered.text.contains(expected),
+                "{file_name}: {}",
+                rendered.text
+            );
         }
         fs::remove_dir_all(&root).expect("remove isolated realistic syntax root");
     }
