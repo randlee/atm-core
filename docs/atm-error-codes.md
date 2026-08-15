@@ -83,7 +83,10 @@ Error codes should describe the failure class, not a specific prose message.
   message row can become durable.
 - `TEMPLATE_LOAD_FAILED` — the selected template could not be loaded.
 - `TEMPLATE_HASH_API_FAILED` — the approved template inspection/hash adapter
-  did not produce a durable inspection result.
+  could not produce a durable SHA/hash identity.
+- `TEMPLATE_INSPECTION_PARSE_FAILED` — the approved template inspection parser
+  rejected frontmatter or body/directive syntax before any identity or message
+  row could be admitted.
 - `TEMPLATE_REQUIRED_VARIABLE_MISSING` — a required frontmatter variable was
   absent after deterministic merge.
 - `TEMPLATE_RENDER_VERIFICATION_FAILED` — rendering or the adapter-owned
@@ -570,6 +573,7 @@ Classification rules:
 | `DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN` | `operator_actionable` |
 | `TEMPLATE_LOAD_FAILED` | `operator_actionable` |
 | `TEMPLATE_HASH_API_FAILED` | `operator_actionable` |
+| `TEMPLATE_INSPECTION_PARSE_FAILED` | `operator_actionable` |
 | `TEMPLATE_REQUIRED_VARIABLE_MISSING` | `operator_actionable` |
 | `TEMPLATE_RENDER_VERIFICATION_FAILED` | `fail_closed` |
 | `TEMPLATE_INCLUDE_UNRESOLVED` | `operator_actionable` |

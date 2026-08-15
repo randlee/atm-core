@@ -59,13 +59,7 @@ pub(super) fn verify_template_send(
         request.raw_file_bytes.clone(),
         request.canonical_template_path.clone(),
     );
-    let inspection = composer.inspect(&source).map_err(|error| {
-        AtmError::new(
-            atm_storage::AtmErrorCode::TemplateHashApiFailed,
-            error.detail(),
-        )
-        .with_cause(error)
-    })?;
+    let inspection = composer.inspect(&source)?;
     let vars = resolve_merged_vars(&inspection.frontmatter, request)?;
     let root = TemplateRoot {
         canonical_path: request.canonical_template_root.clone(),
@@ -128,6 +122,7 @@ mod tests {
 
     struct FixtureComposer {
         inspection: TemplateInspection,
+        inspection_error: Option<AtmError>,
         render_result: Result<RenderedBody, AtmError>,
         renders: AtomicUsize,
     }
@@ -136,6 +131,9 @@ mod tests {
 
     impl TemplateComposer for FixtureComposer {
         fn inspect(&self, _source: &TemplateSource) -> Result<TemplateInspection, AtmError> {
+            if let Some(error) = &self.inspection_error {
+                return Err(error.clone());
+            }
             Ok(self.inspection.clone())
         }
 
@@ -284,6 +282,7 @@ mod tests {
         };
         let composer = FixtureComposer {
             inspection,
+            inspection_error: None,
             render_result: Ok(RenderedBody {
                 text: "verified body".to_owned(),
             }),
@@ -297,6 +296,36 @@ mod tests {
         assert_eq!(verified.rendered.text, "verified body");
         assert_eq!(composer.renders.load(Ordering::Relaxed), 1);
         assert_eq!(verified.vars.as_map().get("name"), Some(&json!("flag")));
+    }
+
+    #[test]
+    fn verification_preserves_the_adapter_inspection_error_code() {
+        let inspection = TemplateInspection {
+            sha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .parse()
+                .expect("sha"),
+            frontmatter: atm_storage::TemplateFrontmatter::default(),
+            include_references: Vec::new(),
+            output_format: atm_storage::TemplateOutputFormat::Text,
+        };
+        let inspection_error = AtmError::new(
+            atm_storage::AtmErrorCode::TemplateInspectionParseFailed,
+            "template inspection parser rejected body syntax",
+        );
+        let composer = FixtureComposer {
+            inspection,
+            inspection_error: Some(inspection_error.clone()),
+            render_result: Ok(RenderedBody {
+                text: "unreachable".to_owned(),
+            }),
+            renders: AtomicUsize::new(0),
+        };
+
+        let error = verify_template_send(&composer, &source(), input::default_message_max_bytes())
+            .expect_err("inspection errors must fail before render");
+
+        assert_eq!(error, inspection_error);
+        assert_eq!(composer.renders.load(Ordering::Relaxed), 0);
     }
 
     #[test]
@@ -317,6 +346,7 @@ mod tests {
         };
         let composer = FixtureComposer {
             inspection,
+            inspection_error: None,
             render_result: Err(AtmError::config("include escaped declared root")),
             renders: AtomicUsize::new(0),
         };
