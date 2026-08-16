@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
+import tomllib
 import unittest
 from unittest import mock
 
@@ -12,6 +13,8 @@ if str(JUST_DIR) not in sys.path:
     sys.path.insert(0, str(JUST_DIR))
 
 from run_hermes_graft_bridge_tests import bridge_test_environment
+from run_hermes_graft_bridge_tests import project_dependency_requirement
+from run_hermes_graft_bridge_tests import require_universal_python_wheel
 
 
 class HermesGraftBridgeRunnerTests(unittest.TestCase):
@@ -23,11 +26,33 @@ class HermesGraftBridgeRunnerTests(unittest.TestCase):
         self.assertNotIn("PYTHONPATH", environment)
         self.assertNotIn("HERMES_SRC", environment)
 
-    def test_ci_test_matrix_runs_the_bridge_boundary_suite(self) -> None:
+    def test_ci_runs_the_bridge_boundary_suite_for_each_supported_python(self) -> None:
         workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
         self.assertIn("Run Hermes graft steer boundary tests", workflow)
         self.assertIn("python .just/run_hermes_graft_bridge_tests.py", workflow)
+        self.assertIn("Hermes ATM wheel (Python", workflow)
+        for version in ("3.11", "3.12", "3.13", "3.14"):
+            self.assertIn(f'"{version}"', workflow)
+
+    def test_bridge_runner_rejects_non_universal_hermes_wheel(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "universal Python wheel"):
+            require_universal_python_wheel(Path("hermes_atm-1.4.2-cp311-cp311-any.whl"))
+
+    def test_bridge_runner_uses_graft_manifest_pydantic_constraint(self) -> None:
+        requirement = project_dependency_requirement(
+            ROOT / "crates" / "atm-graft-python" / "pyproject.toml", "pydantic"
+        )
+
+        self.assertEqual(requirement, "pydantic>=2,<3")
+
+    def test_python_artifacts_declare_the_same_supported_python_release_range(self) -> None:
+        for manifest in (
+            ROOT / "crates" / "atm-graft-python" / "pyproject.toml",
+            ROOT / "crates" / "hermes-atm" / "pyproject.toml",
+        ):
+            metadata = tomllib.loads(manifest.read_text(encoding="utf-8"))
+            self.assertEqual(metadata["project"]["requires-python"], ">=3.11,<3.15")
 
 
 if __name__ == "__main__":

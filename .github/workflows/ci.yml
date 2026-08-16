@@ -180,7 +180,7 @@ jobs:
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
+          python-version: "3.14"
 
       - name: Install Python test dependencies
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
@@ -265,3 +265,32 @@ jobs:
         continue-on-error: true
         if: ${{ always() && needs.ci-scope.outputs.runtime == 'true' }}
         run: python scripts/smoke/run_thorough_shared_host.py
+
+  hermes-atm-wheel:
+    name: Hermes ATM wheel (Python ${{ matrix.python-version }})
+    needs: [ci-scope]
+    if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.94.1"
+          components: clippy, rustfmt
+
+      - name: Install Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Maturin
+        run: python -m pip install maturin
+
+      - name: Build, install, and test isolated ATM wheels
+        run: python .just/run_hermes_graft_bridge_tests.py

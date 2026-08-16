@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 import venv
 import zipfile
 
@@ -17,6 +18,25 @@ ROOT = Path(__file__).resolve().parents[1]
 CRATE = ROOT / "crates" / "atm-graft-python"
 TESTS = ROOT / "crates" / "hermes-atm" / "tests"
 HERMES_PACKAGE = ROOT / "crates" / "hermes-atm"
+
+
+def project_dependency_requirement(manifest_path: Path, package_name: str) -> str:
+    """Return one declared project dependency, preserving its version constraint."""
+
+    metadata = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
+    dependencies = metadata.get("project", {}).get("dependencies", [])
+    for dependency in dependencies:
+        if isinstance(dependency, str) and dependency.split("=", 1)[0].split("<", 1)[0].split(">", 1)[0] == package_name:
+            return dependency
+    raise RuntimeError(f"{manifest_path} does not declare required dependency {package_name}")
+
+
+def require_universal_python_wheel(wheel_path: Path) -> None:
+    if not wheel_path.name.endswith("-py3-none-any.whl"):
+        raise RuntimeError(
+            "expected hermes-atm to ship one universal Python wheel, found "
+            f"{wheel_path.name}"
+        )
 
 
 def bridge_test_environment(venv_dir: Path, python: Path) -> dict[str, str]:
@@ -88,12 +108,19 @@ def main() -> None:
         hermes_wheels = sorted(wheel_dir.glob("hermes_atm*.whl"))
         if len(hermes_wheels) != 1:
             raise RuntimeError(f"expected one hermes-atm wheel, found {len(hermes_wheels)}")
+        require_universal_python_wheel(hermes_wheels[0])
         # The generic graft wheel owns the strict Pydantic ingress models.
         # Install that declared runtime dependency explicitly because this
         # contract runner intentionally installs both project wheels with
         # ``--no-deps`` to avoid resolving an unrelated published ATM wheel.
         subprocess.run(
-            [str(python), "-m", "pip", "install", "pydantic>=2,<3"],
+            [
+                str(python),
+                "-m",
+                "pip",
+                "install",
+                project_dependency_requirement(CRATE / "pyproject.toml", "pydantic"),
+            ],
             check=True,
             cwd=ROOT,
             env=env,
