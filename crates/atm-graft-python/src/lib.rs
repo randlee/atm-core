@@ -747,7 +747,7 @@ impl PyGraftSession {
             py,
             DaemonRecoveryPolicy::RetryOnce,
             self.with_daemon_recovery(py, DaemonRecoveryPolicy::RetryOnce, || {
-                self.read_outcome(query.clone())
+                self.peek_outcome(query.clone())
             }),
         ) {
             Ok(outcome) => Ok(Py::new(py, outcome)?.into_any()),
@@ -1474,10 +1474,10 @@ mod tests {
     }
 
     #[test]
-    fn read_and_list_tools_retry_once_on_the_refreshed_fake_transport() {
+    fn native_read_and_list_retry_once_on_the_refreshed_fake_transport() {
         Python::initialize();
         for (operation, replacement_response) in [
-            ("read", ResponseEnvelope::Receive(Box::new(read_outcome()))),
+            ("read", ResponseEnvelope::Peek(Box::new(read_outcome()))),
             ("list", ResponseEnvelope::List(list_outcome())),
         ] {
             let initial_calls = Arc::new(AtomicUsize::new(0));
@@ -1486,7 +1486,7 @@ mod tests {
             let replacement_calls_for_transport = Arc::clone(&replacement_calls);
             let initial = Arc::new(FakeClientTransport::new(Box::new(move |request| {
                 match operation {
-                    "read" => assert!(matches!(request, RequestEnvelope::Receive(_))),
+                    "read" => assert!(matches!(request, RequestEnvelope::Peek(_))),
                     "list" => assert!(matches!(request, RequestEnvelope::List(_))),
                     _ => unreachable!(),
                 }
@@ -1495,7 +1495,7 @@ mod tests {
             })));
             let replacement = Arc::new(FakeClientTransport::new(Box::new(move |request| {
                 match operation {
-                    "read" => assert!(matches!(request, RequestEnvelope::Receive(_))),
+                    "read" => assert!(matches!(request, RequestEnvelope::Peek(_))),
                     "list" => assert!(matches!(request, RequestEnvelope::List(_))),
                     _ => unreachable!(),
                 }

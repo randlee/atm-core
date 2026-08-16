@@ -1,6 +1,7 @@
 //! Query construction and read-only execution for the Python graft session.
 
 use super::*;
+use atm_core::read::PeekQuery;
 
 impl PyGraftSession {
     pub(super) fn build_read_query(&self, seen_state_update: bool) -> PyResult<ReadQuery> {
@@ -40,7 +41,7 @@ impl PyGraftSession {
         contains: Option<&str>,
         since: Option<&str>,
         from_agent: Option<&str>,
-    ) -> PyResult<ReadQuery> {
+    ) -> PyResult<PeekQuery> {
         let (home_dir, current_dir) = Self::command_paths()?;
         let team = self.caller_team()?;
         let timestamp = since
@@ -51,14 +52,13 @@ impl PyGraftSession {
                     "invalid since timestamp: {error}"
                 )))
             })?;
-        ReadQuery::new(
+        PeekQuery::new(
             home_dir,
             current_dir,
             self.caller.agent().clone(),
             None,
             team,
             Self::read_selection(selection)?,
-            false,
             false,
             message_id,
             from_agent,
@@ -121,8 +121,26 @@ impl PyGraftSession {
             .map_err(atm_error)
     }
 
+    pub(super) fn peek_raw(&self, query: PeekQuery) -> PyResult<ReadOutcome> {
+        let client = self.client()?;
+        python_extension_runtime()?
+            .lock()
+            .map_err(|_| {
+                atm_error(AtmError::new(
+                    AtmErrorCode::InternalError,
+                    "ATM Python extension runtime lock poisoned",
+                ))
+            })?
+            .block_on(client.peek_message(query))
+            .map_err(atm_error)
+    }
+
     pub(super) fn read_outcome(&self, query: ReadQuery) -> PyResult<AtmReadResult> {
         self.read_raw(query).and_then(AtmReadResult::from_outcome)
+    }
+
+    pub(super) fn peek_outcome(&self, query: PeekQuery) -> PyResult<AtmReadResult> {
+        self.peek_raw(query).and_then(AtmReadResult::from_outcome)
     }
 
     pub(super) fn list_outcome(&self, query: ListQuery) -> PyResult<AtmListResult> {
