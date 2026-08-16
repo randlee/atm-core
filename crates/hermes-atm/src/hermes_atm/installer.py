@@ -54,6 +54,7 @@ async def handle(event_type, context):
 """
 
 TOOLS_PLUGIN_NAME = "hermes-atm-native-tools"
+TOOLS_TOOLSET_NAME = "atm"
 TOOLS_PLUGIN_MANIFEST = """name: hermes-atm-native-tools
 version: 1
 description: Native ATM mailbox tools backed by the typed atm-graft client.
@@ -183,13 +184,14 @@ def _write_text_if_changed(path: Path, content: str) -> bool:
 
 
 def _enable_native_tools_plugin(profile_home: Path) -> bool:
-    """Add the package-owned native-tools plugin to Hermes' opt-in allow-list.
+    """Enable the package-owned plugin and its toolset for Hermes sessions.
 
     Hermes discovers user plugins from ``<HERMES_HOME>/plugins`` but does not
-    load them until their path-derived key is in ``plugins.enabled``.  The
-    installer owns both the generated plugin and this declarative enablement,
-    so a normal install followed by a gateway reset is sufficient; operators
-    never need to edit the profile configuration by hand.
+    load them until their path-derived key is in ``plugins.enabled``.  A
+    plugin-provided tool is visible to a model session only when its toolset is
+    also enabled for that platform.  Match Hermes' public plugin-enable flow:
+    enable the plugin and add its toolset to every configured platform (or the
+    CLI platform when the profile has not saved platform choices yet).
     """
 
     load_config, save_config = _config_apis()
@@ -209,11 +211,37 @@ def _enable_native_tools_plugin(profile_home: Path) -> bool:
         enabled = plugins.setdefault("enabled", [])
         if not isinstance(enabled, list) or not all(isinstance(item, str) for item in enabled):
             raise HermesAtmInstallError("Hermes profile plugins.enabled must be a list of names")
-        if TOOLS_PLUGIN_NAME in enabled:
-            return False
-        enabled.append(TOOLS_PLUGIN_NAME)
-        save_config(config, merge_existing=True)
-        return True
+        changed = False
+        if TOOLS_PLUGIN_NAME not in enabled:
+            enabled.append(TOOLS_PLUGIN_NAME)
+            changed = True
+
+        platform_toolsets = config.get("platform_toolsets")
+        if platform_toolsets is None:
+            platform_toolsets = {}
+            config["platform_toolsets"] = platform_toolsets
+        if not isinstance(platform_toolsets, dict):
+            raise HermesAtmInstallError(
+                "Hermes profile platform_toolsets must be a mapping"
+            )
+
+        configured_platforms = [
+            toolsets
+            for toolsets in platform_toolsets.values()
+            if isinstance(toolsets, list)
+        ]
+        if not configured_platforms:
+            platform_toolsets["cli"] = [TOOLS_TOOLSET_NAME]
+            changed = True
+        else:
+            for toolsets in configured_platforms:
+                if TOOLS_TOOLSET_NAME not in toolsets:
+                    toolsets.append(TOOLS_TOOLSET_NAME)
+                    changed = True
+
+        if changed:
+            save_config(config, merge_existing=True)
+        return changed
     finally:
         if previous_home is None:
             os.environ.pop("HERMES_HOME", None)
