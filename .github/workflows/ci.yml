@@ -285,7 +285,7 @@ jobs:
             manylinux: "2014"
             interpreter: python3.11
             container: ""
-            smoke: true
+            smoke: native
           - name: musllinux x86_64
             os: ubuntu-latest
             artifact: linux-musl-x86_64
@@ -293,7 +293,7 @@ jobs:
             manylinux: musllinux_1_2
             interpreter: python3.11
             container: ""
-            smoke: false
+            smoke: musl
           - name: manylinux aarch64
             # Build natively on ARM. The x86_64 cross image does not compile
             # ring's pregenerated assembly correctly, whereas this official
@@ -304,7 +304,7 @@ jobs:
             manylinux: "2014"
             interpreter: python3.11
             container: quay.io/pypa/manylinux2014_aarch64:latest
-            smoke: false
+            smoke: native
           - name: macOS aarch64
             os: macos-14
             artifact: macos-aarch64
@@ -312,7 +312,7 @@ jobs:
             manylinux: "off"
             interpreter: python3.11
             container: ""
-            smoke: true
+            smoke: native
           - name: Windows x86_64
             os: windows-latest
             artifact: windows-x86_64
@@ -320,7 +320,7 @@ jobs:
             manylinux: "off"
             interpreter: python
             container: ""
-            smoke: true
+            smoke: native
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -368,12 +368,27 @@ jobs:
               assert "Tag: cp311-abi3" in archive.read(wheel_metadata).decode("utf-8")
 
       - name: Smoke-test native wheel on its host target
-        if: ${{ matrix.smoke }}
+        if: ${{ matrix.smoke == 'native' }}
         shell: bash
         run: |
           python -m pip install 'pydantic>=2,<3'
           python -m pip install --no-deps dist/atm_graft*.whl dist/hermes_atm*.whl
           python -c "import atm_graft, hermes_atm"
+
+      - name: Smoke-test musllinux wheel in a clean musl environment
+        if: ${{ matrix.smoke == 'musl' }}
+        shell: bash
+        run: |
+          docker run --rm \
+            --volume "$PWD:/workspace:ro" \
+            --workdir /workspace \
+            python:3.11-alpine \
+            sh -euxc '
+              python -m venv /tmp/atm-wheel-smoke
+              /tmp/atm-wheel-smoke/bin/pip install --disable-pip-version-check "pydantic>=2,<3"
+              /tmp/atm-wheel-smoke/bin/pip install --no-deps dist/atm_graft*.whl dist/hermes_atm*.whl
+              /tmp/atm-wheel-smoke/bin/python -c "import atm_graft, hermes_atm"
+            '
 
       - name: Upload release-wheel candidates
         uses: actions/upload-artifact@v4
