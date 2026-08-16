@@ -61,7 +61,11 @@ pub fn matches_participant_filter(
     };
     let source_matches = message.envelope.from == participant.agent
         && message.envelope.source_chat_id == participant.chat_id;
-    let destination_matches = message.envelope.destination_chat_id == participant.chat_id;
+    // Agent-addressed mail has no destination chat.  It belongs to the
+    // resolved mailbox regardless of which host session reads it; a present
+    // destination chat remains an exact session filter.
+    let destination_matches = message.envelope.destination_chat_id.is_none()
+        || message.envelope.destination_chat_id == participant.chat_id;
     match participant.direction {
         ParticipantDirection::From => source_matches,
         ParticipantDirection::To => destination_matches,

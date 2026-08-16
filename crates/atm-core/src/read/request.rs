@@ -366,11 +366,14 @@ impl ReadQuery {
     }
     #[must_use]
     pub fn with_caller_chat_id(mut self, caller_chat_id: Option<ChatId>) -> Self {
-        self.mailbox.participant_filter = Some(MessageParticipantFilter {
-            agent: self.caller_identity.clone(),
-            chat_id: caller_chat_id.clone(),
-            direction: ParticipantDirection::To,
-        });
+        self.mailbox.participant_filter =
+            caller_chat_id
+                .clone()
+                .map(|chat_id| MessageParticipantFilter {
+                    agent: self.caller_identity.clone(),
+                    chat_id: Some(chat_id),
+                    direction: ParticipantDirection::To,
+                });
         self.caller_chat_id = caller_chat_id;
         self
     }

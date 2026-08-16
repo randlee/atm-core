@@ -1304,6 +1304,39 @@ mod tests {
         assert!(selected_after_filters(&source_messages, &by_id, None).is_empty());
     }
 
+    #[test]
+    fn chat_qualified_read_selects_fresh_agent_addressed_unread_mail() {
+        let message_id = AtmMessageId::new();
+        let caller_chat_id = "recipient-session".parse::<ChatId>().expect("chat id");
+        let message = message("fresh unread", message_id, None, None, false);
+        let query = base_read_query()
+            .with_selection_mode(ReadSelection::Unread)
+            .with_caller_chat_id(Some(caller_chat_id));
+
+        let selected = selected_after_filters(
+            &[SourcedMessage {
+                envelope: message,
+                source_path: PathBuf::from("recipient.json"),
+                source_index: 0.into(),
+            }],
+            &query,
+            None,
+        );
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].envelope.message_id, Some(message_id));
+
+        let (mut metadata_row, _) = metadata_row("fresh unread", None, TEST_SENDER);
+        metadata_row.message_id = Some(message_id);
+        let (_counts, metadata_selected) =
+            metadata_selection::selection_state_for_mailbox_metadata_rows(
+                &[metadata_row],
+                &query,
+                None,
+            );
+        assert_eq!(metadata_selected.len(), 1);
+        assert_eq!(metadata_selected[0].envelope.message_id, Some(message_id));
+    }
+
     fn metadata_row(
         text: &str,
         summary: Option<&str>,
