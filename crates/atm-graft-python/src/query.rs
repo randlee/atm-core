@@ -3,6 +3,14 @@
 use super::*;
 use atm_core::read::PeekQuery;
 
+/// Read-family operations share one outer Python-to-async bridge.  Native
+/// tools select `Peek` so they cannot mutate mailbox state, while the legacy
+/// Python read API retains its explicit mutating operation.
+enum ReadOperation {
+    Read(ReadQuery),
+    Peek(PeekQuery),
+}
+
 impl PyGraftSession {
     pub(super) fn build_read_query(&self, seen_state_update: bool) -> PyResult<ReadQuery> {
         let (home_dir, current_dir) = Self::command_paths()?;
@@ -108,20 +116,14 @@ impl PyGraftSession {
     }
 
     pub(super) fn read_raw(&self, query: ReadQuery) -> PyResult<ReadOutcome> {
-        let client = self.client()?;
-        python_extension_runtime()?
-            .lock()
-            .map_err(|_| {
-                atm_error(AtmError::new(
-                    AtmErrorCode::InternalError,
-                    "ATM Python extension runtime lock poisoned",
-                ))
-            })?
-            .block_on(client.read_message(query))
-            .map_err(atm_error)
+        self.read_operation_raw(ReadOperation::Read(query))
     }
 
     pub(super) fn peek_raw(&self, query: PeekQuery) -> PyResult<ReadOutcome> {
+        self.read_operation_raw(ReadOperation::Peek(query))
+    }
+
+    fn read_operation_raw(&self, operation: ReadOperation) -> PyResult<ReadOutcome> {
         let client = self.client()?;
         python_extension_runtime()?
             .lock()
@@ -131,7 +133,12 @@ impl PyGraftSession {
                     "ATM Python extension runtime lock poisoned",
                 ))
             })?
-            .block_on(client.peek_message(query))
+            .block_on(async move {
+                match operation {
+                    ReadOperation::Read(query) => client.read_message(query).await,
+                    ReadOperation::Peek(query) => client.peek_message(query).await,
+                }
+            })
             .map_err(atm_error)
     }
 
