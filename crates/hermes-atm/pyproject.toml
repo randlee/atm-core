@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hermes-atm"
-version = "0.1.4"
+version = "1.4.2"
 description = "Hermes gateway integration for the generic ATM graft receiver"
 readme = "README.md"
 requires-python = ">=3.9"
