@@ -151,6 +151,20 @@ def expected_package_version(manifest: dict, workspace_version: str, manifest_la
     )
 
 
+def validate_workspace_member_versions(repo_root: Path, workspace_version: str) -> None:
+    """Require every Cargo workspace member to resolve to the workspace version."""
+
+    for manifest_path in workspace_manifest_paths(repo_root):
+        rel_manifest = manifest_path.relative_to(repo_root).as_posix()
+        manifest = tomllib.loads(read_text(manifest_path))
+        package_version = expected_package_version(manifest, workspace_version, rel_manifest)
+        if package_version != workspace_version:
+            fail(
+                f"{rel_manifest} [package].version ({package_version}) "
+                f"must equal workspace version ({workspace_version})"
+            )
+
+
 def validate_crate_versions(repo_root: Path, workspace_version: str) -> None:
     manifests = workspace_manifest_paths(repo_root)
     if not manifests:
@@ -328,6 +342,7 @@ def main() -> int:
     config = version_sync_config(repo_root)
     workspace_version = validate_workspace_version(repo_root)
     validate_python_release_versions(repo_root, workspace_version)
+    validate_workspace_member_versions(repo_root, workspace_version)
     validate_crate_versions(repo_root, workspace_version)
     validate_lockfile(repo_root, workspace_version)
 
