@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
+import tomllib
 import unittest
 from unittest import mock
 
@@ -23,11 +24,20 @@ class HermesGraftBridgeRunnerTests(unittest.TestCase):
         self.assertNotIn("PYTHONPATH", environment)
         self.assertNotIn("HERMES_SRC", environment)
 
-    def test_ci_test_matrix_runs_the_bridge_boundary_suite(self) -> None:
+    def test_ci_runs_the_bridge_boundary_suite_for_each_supported_python(self) -> None:
         workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
         self.assertIn("Run Hermes graft steer boundary tests", workflow)
         self.assertIn("python .just/run_hermes_graft_bridge_tests.py", workflow)
+        self.assertIn("Hermes ATM wheel (Python", workflow)
+        for version in ("3.11", "3.12", "3.13", "3.14"):
+            self.assertIn(f'"{version}"', workflow)
+
+    def test_hermes_atm_declares_the_supported_python_release_range(self) -> None:
+        manifest = ROOT / "crates" / "hermes-atm" / "pyproject.toml"
+        metadata = tomllib.loads(manifest.read_text(encoding="utf-8"))
+
+        self.assertEqual(metadata["project"]["requires-python"], ">=3.11,<3.15")
 
 
 if __name__ == "__main__":

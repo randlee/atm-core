@@ -88,6 +88,11 @@ def main() -> None:
         hermes_wheels = sorted(wheel_dir.glob("hermes_atm*.whl"))
         if len(hermes_wheels) != 1:
             raise RuntimeError(f"expected one hermes-atm wheel, found {len(hermes_wheels)}")
+        if not hermes_wheels[0].name.endswith("-py3-none-any.whl"):
+            raise RuntimeError(
+                "expected hermes-atm to ship one universal Python wheel, found "
+                f"{hermes_wheels[0].name}"
+            )
         # The generic graft wheel owns the strict Pydantic ingress models.
         # Install that declared runtime dependency explicitly because this
         # contract runner intentionally installs both project wheels with
