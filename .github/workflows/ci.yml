@@ -336,7 +336,16 @@ jobs:
           manylinux: ${{ matrix.manylinux }}
           container: ${{ matrix.container }}
           working-directory: crates/atm-graft-python
-          args: --release --locked --compatibility pypi -i ${{ matrix.interpreter }} --out ../../dist
+          # The manylinux container writes as root. Keep its output separate
+          # from the host-owned directory used by pip for the pure-Python
+          # hermes-atm wheel, then collect it below.
+          args: --release --locked --compatibility pypi -i ${{ matrix.interpreter }} --out ../../native-dist
+
+      - name: Collect native atm-graft wheel
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp native-dist/atm_graft*.whl dist/
 
       - name: Build universal hermes-atm wheel
         run: python -m pip wheel --no-deps --wheel-dir dist crates/hermes-atm
