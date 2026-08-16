@@ -44,8 +44,9 @@ homepage.workspace = true
 
 
 class CheckVersionSyncTests(unittest.TestCase):
-    def write_repo(self, repo_root: Path) -> None:
-        (repo_root / "Cargo.toml").write_text(ROOT_MANIFEST, encoding="utf-8")
+    def write_repo(self, repo_root: Path, workspace_version: str = "1.1.2") -> None:
+        root_manifest = ROOT_MANIFEST.replace('version = "1.1.2"', f'version = "{workspace_version}"')
+        (repo_root / "Cargo.toml").write_text(root_manifest, encoding="utf-8")
         crates_dir = repo_root / "crates"
         for crate_name, package_name in (
             ("atm", "agent-team-mail"),
@@ -209,6 +210,19 @@ version = "1.1.2"
 
             self.assertIn(
                 'crates/atm/Cargo.toml [dependencies.atm-core]: internal path dependency version must match target crate version "1.1.2"',
+                str(error.exception),
+            )
+
+    def test_validate_crate_versions_requires_exact_prerelease_path_dep_pin(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root, workspace_version="1.1.2-beta-am.1")
+
+            with self.assertRaises(SystemExit) as error:
+                validate_crate_versions(repo_root, "1.1.2-beta-am.1")
+
+            self.assertIn(
+                'crates/atm/Cargo.toml [dependencies.atm-core]: internal path dependency version must match target crate version "1.1.2-beta-am.1"',
                 str(error.exception),
             )
 
