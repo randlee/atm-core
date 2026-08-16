@@ -122,3 +122,10 @@ When assigning work to a teammate:
   so CI runs in parallel with QA.
 - Immediately after PR creation, start CI monitoring using the repo-local QA
   conventions from `.claude/skills/quality-management-gh/SKILL.md`.
+
+## Cross-Host Cooperative Teams (m4/m5)
+
+This ATM deployment spans multiple hosts (`m4`, `m5`), each running its own
+`team-lead`/dev/`quality-mgr` under team `atm-dev`. Coordinate scope with the
+peer team-lead before dispatching overlapping work, and address a
+same-named peer identity with `atm send team-lead --host <hostname> "..."`.
