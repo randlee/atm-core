@@ -1,5 +1,8 @@
 [package]
 name = "atm-graft-python"
+# Published to PyPI by Maturin as `atm-graft`; never cargo-publish this bridge
+# crate as a separate crates.io artifact.
+publish = false
 # Maturin consumes this crate's Cargo version as Python package metadata; keep
 # it equivalent to the workspace release while using PEP 440-compatible form.
 version = "1.4.2"

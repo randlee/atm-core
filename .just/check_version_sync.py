@@ -18,6 +18,9 @@ PYTHON_RELEASE_MANIFESTS = (
     (Path("crates/atm-query-python/pyproject.toml"), "project"),
     (Path("crates/hermes-atm/pyproject.toml"), "project"),
 )
+PYTHON_DYNAMIC_VERSION_SOURCES = {
+    Path("crates/atm-graft-python/pyproject.toml"): Path("crates/atm-graft-python/Cargo.toml"),
+}
 VERSION_BASE_PATTERN = re.compile(
     r"^(?P<base>\d+\.\d+\.\d+)"
     r"(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
@@ -100,6 +103,27 @@ def validate_python_release_versions(
         manifest = tomllib.loads(read_text(repo_root / manifest_path))
         table = manifest.get(table_name, {})
         actual = table.get("version") if isinstance(table, dict) else None
+        dynamic = table.get("dynamic", []) if isinstance(table, dict) else []
+        cargo_manifest = PYTHON_DYNAMIC_VERSION_SOURCES.get(manifest_path)
+        if actual is None and cargo_manifest is not None and "version" in dynamic:
+            cargo_data = tomllib.loads(read_text(repo_root / cargo_manifest))
+            cargo_package = cargo_data.get("package", {})
+            cargo_version = cargo_package.get("version") if isinstance(cargo_package, dict) else None
+            if isinstance(cargo_version, str) and cargo_version.strip():
+                actual = cargo_version
+            elif isinstance(cargo_version, dict) and cargo_version.get("workspace") is True:
+                actual = workspace_version
+            else:
+                fail(
+                    f"{rel_manifest} dynamically derives version from "
+                    f"{cargo_manifest.as_posix()}, which must define [package].version"
+                )
+            if actual != expected:
+                fail(
+                    f"{rel_manifest} dynamically derives version from "
+                    f"{cargo_manifest.as_posix()} [package].version ({actual}) "
+                    f"but it must equal workspace version base ({expected})"
+                )
         if not isinstance(actual, str) or not actual.strip():
             fail(
                 f"{rel_manifest} [{table_name}].version ({actual!r}) must equal "

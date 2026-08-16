@@ -2,7 +2,7 @@
 
 Scope: `atm_send`, read-only `atm_read`, and `atm_list` in `hermes-atm`.
 Execution rule: complete and verify each item before marking it done. Do not
-perform live SkillRX testing until every offline item and the second-pass review
+perform live gateway-profile testing until every offline item and the second-pass review
 are complete.
 
 - [x] 1. Reconcile package boundary: add `pydantic` to `atm-graft-python`,
@@ -22,6 +22,6 @@ are complete.
 - [x] 8. Second pass: re-read this checklist, requirements/ADR, boundary
   policy, and implementation; review crate/Python boundaries, error recovery,
   ownership, and test coverage for best-practice compliance.
-- [x] 9. Write a low-risk SkillRX proof plan: package-only install, managed
+- [x] 9. Write a low-risk installed-package proof plan: package-only install, managed
   gateway reset, one distinct tool invocation per operation, observation,
   and rollback criteria. Do not execute it without clean offline validation.

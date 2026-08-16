@@ -1,5 +1,7 @@
 [package]
 name = "atm-query-python"
+# This local analyst binding is not part of the current public release surface.
+publish = false
 version = "1.4.2"
 edition.workspace = true
 rust-version.workspace = true
