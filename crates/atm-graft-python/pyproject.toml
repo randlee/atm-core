@@ -17,4 +17,4 @@ python-source = "python"
 # Hermes lifecycle and Telegram policy are distributed separately as
 # ``hermes-atm``.
 python-packages = ["atm_graft"]
-features = ["extension-module"]
+features = ["abi3", "extension-module"]

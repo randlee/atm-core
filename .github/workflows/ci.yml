@@ -29,7 +29,7 @@ jobs:
           fi
 
           changed_files="$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "$GITHUB_SHA")"
-          if [[ -z "$changed_files" ]] || grep -qvE '^(docs/|site/|\.github/workflows/ci\.yml|.*\.md$)' <<< "$changed_files"; then
+          if [[ -z "$changed_files" ]] || grep -qvE '^(docs/|site/|.*\.md$)' <<< "$changed_files"; then
             echo "runtime=true" >> "$GITHUB_OUTPUT"
           else
             echo "runtime=false" >> "$GITHUB_OUTPUT"
@@ -266,14 +266,129 @@ jobs:
         if: ${{ always() && needs.ci-scope.outputs.runtime == 'true' }}
         run: python scripts/smoke/run_thorough_shared_host.py
 
-  hermes-atm-wheel:
-    name: Hermes ATM wheel (Python ${{ matrix.python-version }})
+  hermes-atm-release-wheels:
+    name: Hermes ATM release wheel (${{ matrix.name }})
     needs: [ci-scope]
     if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+        include:
+          - name: manylinux x86_64
+            os: ubuntu-latest
+            artifact: linux-x86_64
+            target: x86_64-unknown-linux-gnu
+            manylinux: "2014"
+            smoke: true
+          - name: musllinux x86_64
+            os: ubuntu-latest
+            artifact: linux-musl-x86_64
+            target: x86_64-unknown-linux-musl
+            manylinux: musllinux_1_2
+            smoke: false
+          - name: manylinux aarch64
+            os: ubuntu-latest
+            artifact: linux-aarch64
+            target: aarch64-unknown-linux-gnu
+            manylinux: "2014"
+            smoke: false
+          - name: macOS aarch64
+            os: macos-14
+            artifact: macos-aarch64
+            target: aarch64-apple-darwin
+            manylinux: "off"
+            smoke: true
+          - name: Windows x86_64
+            os: windows-latest
+            artifact: windows-x86_64
+            target: x86_64-pc-windows-msvc
+            manylinux: "off"
+            smoke: true
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Python for package smoke verification
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build PyPI-compatible atm-graft wheel
+        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
+        with:
+          command: build
+          maturin-version: v1.11.5
+          rust-toolchain: "1.94.1"
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux }}
+          working-directory: crates/atm-graft-python
+          args: --release --locked --compatibility pypi --out ../../dist
+
+      - name: Build universal hermes-atm wheel
+        run: python -m pip wheel --no-deps --wheel-dir dist crates/hermes-atm
+
+      - name: Verify abi3 artifact metadata
+        shell: python
+        run: |
+          from pathlib import Path
+          import zipfile
+
+          wheels = sorted(Path("dist").glob("atm_graft*.whl"))
+          assert len(wheels) == 1, wheels
+          assert "cp311-abi3" in wheels[0].name, wheels[0]
+          with zipfile.ZipFile(wheels[0]) as archive:
+              wheel_metadata = next(name for name in archive.namelist() if name.endswith(".dist-info/WHEEL"))
+              assert "Tag: cp311-abi3" in archive.read(wheel_metadata).decode("utf-8")
+
+      - name: Smoke-test native wheel on its host target
+        if: ${{ matrix.smoke }}
+        shell: bash
+        run: |
+          python -m pip install 'pydantic>=2,<3'
+          python -m pip install --no-deps dist/atm_graft*.whl dist/hermes_atm*.whl
+          python -c "import atm_graft, hermes_atm"
+
+      - name: Upload release-wheel candidates
+        uses: actions/upload-artifact@v4
+        with:
+          name: hermes-atm-wheels-${{ matrix.artifact }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+  hermes-atm-abi3-compat:
+    name: Hermes ATM abi3 compatibility (Python ${{ matrix.python-version }})
+    needs: [ci-scope, hermes-atm-release-wheels]
+    if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Download manylinux x86_64 candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: hermes-atm-wheels-linux-x86_64
+          path: dist
+
+      - name: Install and test abi3 wheel pair
+        run: |
+          python -m pip install 'pydantic>=2,<3'
+          python -m pip install --no-deps dist/atm_graft*.whl dist/hermes_atm*.whl
+          python -c "import atm_graft, hermes_atm"
+          python -m unittest discover -s crates/hermes-atm/tests -p "test_*.py"
+
+  hermes-atm-sdist:
+    name: Hermes ATM source-distribution fallback
+    needs: [ci-scope]
+    if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -282,24 +397,29 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.94.1"
-          components: clippy, rustfmt
 
-      - name: Install Python ${{ matrix.python-version }}
+      - name: Install Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.11"
 
       - name: Install Maturin
         run: python -m pip install maturin
 
-      - name: Build, install, and test isolated ATM wheels
-        env:
-          ATM_WHEEL_OUTPUT_DIR: ${{ runner.temp }}/hermes-atm-wheels
-        run: python .just/run_hermes_graft_bridge_tests.py
+      - name: Build atm-graft source distribution
+        run: maturin sdist --manifest-path crates/atm-graft-python/Cargo.toml --out dist
 
-      - name: Upload tested Hermes ATM wheels
+      - name: Install source distribution in a fresh environment
+        shell: bash
+        run: |
+          python -m venv "$RUNNER_TEMP/atm-graft-sdist-venv"
+          "$RUNNER_TEMP/atm-graft-sdist-venv/bin/python" -m pip install --upgrade pip
+          "$RUNNER_TEMP/atm-graft-sdist-venv/bin/python" -m pip install dist/atm_graft*.tar.gz
+          "$RUNNER_TEMP/atm-graft-sdist-venv/bin/python" -c "import atm_graft"
+
+      - name: Upload source-distribution candidate
         uses: actions/upload-artifact@v4
         with:
-          name: hermes-atm-wheels-ubuntu-py${{ matrix.python-version }}
-          path: ${{ runner.temp }}/hermes-atm-wheels/*.whl
+          name: atm-graft-sdist
+          path: dist/atm_graft*.tar.gz
           if-no-files-found: error

@@ -16,6 +16,11 @@ name = "atm_graft_python"
 crate-type = ["cdylib", "rlib"]
 
 [features]
+default = ["abi3"]
+# The public Python surface uses only PyO3 APIs compatible with CPython's
+# stable ABI.  One CPython 3.11 abi3 wheel therefore supports CPython 3.11+
+# on a given operating-system/architecture target.
+abi3 = ["pyo3/abi3-py311"]
 extension-module = ["pyo3/extension-module"]
 
 [dependencies]
