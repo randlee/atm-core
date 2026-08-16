@@ -175,6 +175,8 @@ impl MailboxQueryFields {
 pub struct PeekQuery {
     pub(crate) mailbox: MailboxQueryFields,
     pub(crate) caller_identity: AgentName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) caller_chat_id: Option<ChatId>,
     pub(crate) caller_team: TeamName,
 }
 impl PeekQuery {
@@ -249,8 +251,30 @@ impl PeekQuery {
         Ok(Self {
             mailbox,
             caller_identity,
+            caller_chat_id: None,
             caller_team,
         })
+    }
+
+    pub fn caller_chat_id(&self) -> Option<&ChatId> {
+        self.caller_chat_id.as_ref()
+    }
+
+    /// Scope a read-only mailbox query to the caller's identity. A present
+    /// chat ID selects that exact session; `None` selects only the bare-agent
+    /// identity.
+    #[must_use]
+    pub fn with_caller_chat_id(mut self, caller_chat_id: Option<ChatId>) -> Self {
+        self.mailbox.participant_filter =
+            caller_chat_id
+                .clone()
+                .map(|chat_id| MessageParticipantFilter {
+                    agent: self.caller_identity.clone(),
+                    chat_id: Some(chat_id),
+                    direction: ParticipantDirection::To,
+                });
+        self.caller_chat_id = caller_chat_id;
+        self
     }
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -366,11 +390,14 @@ impl ReadQuery {
     }
     #[must_use]
     pub fn with_caller_chat_id(mut self, caller_chat_id: Option<ChatId>) -> Self {
-        self.mailbox.participant_filter = Some(MessageParticipantFilter {
-            agent: self.caller_identity.clone(),
-            chat_id: caller_chat_id.clone(),
-            direction: ParticipantDirection::To,
-        });
+        self.mailbox.participant_filter =
+            caller_chat_id
+                .clone()
+                .map(|chat_id| MessageParticipantFilter {
+                    agent: self.caller_identity.clone(),
+                    chat_id: Some(chat_id),
+                    direction: ParticipantDirection::To,
+                });
         self.caller_chat_id = caller_chat_id;
         self
     }

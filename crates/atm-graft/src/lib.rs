@@ -14,7 +14,7 @@ use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::AtmGraftClient;
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
-use atm_core::read::{ReadOutcome, ReadQuery};
+use atm_core::read::{PeekQuery, ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest, WriteOutcome};
 use atm_core::types::{AgentName, ChatId, TeamName};
 use atm_daemon_client::{resolve_daemon_local_ipc_endpoint, unexpected_response};
@@ -245,6 +245,14 @@ impl GraftClient {
         {
             ResponseEnvelope::Error(error) => Err(error),
             response => Ok(response),
+        }
+    }
+
+    /// Read a mailbox projection without changing the selected message state.
+    pub async fn peek_message(&self, query: PeekQuery) -> Result<ReadOutcome, AtmError> {
+        match self.execute_request(RequestEnvelope::Peek(query)).await? {
+            ResponseEnvelope::Peek(outcome) => Ok(*outcome),
+            other => Err(unexpected_response("peek", other)),
         }
     }
 

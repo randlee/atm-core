@@ -61,6 +61,9 @@ pub fn matches_participant_filter(
     };
     let source_matches = message.envelope.from == participant.agent
         && message.envelope.source_chat_id == participant.chat_id;
+    // A bare agent, and each chat-qualified instance of that agent, are
+    // distinct inbox identities. `None == None` admits bare-agent mail only
+    // to a bare-agent caller; a present chat identity must match exactly.
     let destination_matches = message.envelope.destination_chat_id == participant.chat_id;
     match participant.direction {
         ParticipantDirection::From => source_matches,

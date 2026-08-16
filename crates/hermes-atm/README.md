@@ -54,9 +54,9 @@ the nudge will fail closed because it cannot find or contact the receiver.
 5. Run the package installer with the launch agent's Python. The command
    validates the public Hermes capability and interpreter match before it writes
    the standard generated hook and the package-owned native-tools plugin. It
-   also declaratively adds `hermes-atm-native-tools` to the profile's
-   `config.yaml` `plugins.enabled` list; do not make that configuration edit by
-   hand:
+   also declaratively enables `hermes-atm-native-tools` and its `atm` toolset
+   for every configured Hermes platform in `config.yaml`; do not make those
+   configuration edits by hand:
 
    ```sh
    python -m hermes_atm install \

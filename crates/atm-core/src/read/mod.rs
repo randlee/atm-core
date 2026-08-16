@@ -128,7 +128,7 @@ fn peek_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
     let synthesized = ReadQuery {
         mailbox: query.mailbox,
         caller_identity: query.caller_identity,
-        caller_chat_id: None,
+        caller_chat_id: query.caller_chat_id,
         caller_team: query.caller_team,
         seen_state_update: false,
         activity_observation: None,
@@ -1304,6 +1304,37 @@ mod tests {
         assert!(selected_after_filters(&source_messages, &by_id, None).is_empty());
     }
 
+    #[test]
+    fn chat_qualified_read_excludes_fresh_bare_agent_addressed_unread_mail() {
+        let message_id = AtmMessageId::new();
+        let caller_chat_id = "recipient-session".parse::<ChatId>().expect("chat id");
+        let message = message("fresh unread", message_id, None, None, false);
+        let query = base_read_query()
+            .with_selection_mode(ReadSelection::Unread)
+            .with_caller_chat_id(Some(caller_chat_id));
+
+        let selected = selected_after_filters(
+            &[SourcedMessage {
+                envelope: message,
+                source_path: PathBuf::from("recipient.json"),
+                source_index: 0.into(),
+            }],
+            &query,
+            None,
+        );
+        assert!(selected.is_empty());
+
+        let (mut metadata_row, _) = metadata_row("fresh unread", None, TEST_SENDER);
+        metadata_row.message_id = Some(message_id);
+        let (_counts, metadata_selected) =
+            metadata_selection::selection_state_for_mailbox_metadata_rows(
+                &[metadata_row],
+                &query,
+                None,
+            );
+        assert!(metadata_selected.is_empty());
+    }
+
     fn metadata_row(
         text: &str,
         summary: Option<&str>,
@@ -1764,6 +1795,67 @@ mod tests {
         );
         assert_eq!(persist_count.load(Ordering::SeqCst), 0);
         assert_eq!(seen_count.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn chat_qualified_peek_finds_only_the_callers_explicitly_addressed_mail() {
+        let tempdir = tempdir().expect("tempdir");
+        let caller_chat_id = "recipient-session".parse::<ChatId>().expect("chat id");
+        let other_chat_id = "other-session".parse::<ChatId>().expect("chat id");
+        let (mut caller_row, mut caller_record) =
+            metadata_row("for caller session", Some("caller"), TEST_SENDER);
+        caller_row.destination_chat_id = Some(caller_chat_id.clone());
+        caller_record.envelope.destination_chat_id = Some(caller_chat_id.clone());
+        let caller_key = caller_record.message_key.clone();
+        let (mut other_row, mut other_record) =
+            metadata_row("for other session", Some("other"), TEST_SENDER);
+        other_row.destination_chat_id = Some(other_chat_id.clone());
+        other_record.envelope.destination_chat_id = Some(other_chat_id);
+        let other_key = other_record.message_key.clone();
+        let runtime = ReadRuntime {
+            roster_present: true,
+            metadata_rows: vec![caller_row, other_row],
+            metadata_row_batches: None,
+            message_records: HashMap::from([
+                (caller_key, caller_record),
+                (other_key, other_record),
+            ]),
+            query_mailbox_metadata_rows_count: Arc::new(AtomicUsize::new(0)),
+            load_message_record_count: Arc::new(AtomicUsize::new(0)),
+            save_seen_watermark_count: Arc::new(AtomicUsize::new(0)),
+            persist_message_state_count: Arc::new(AtomicUsize::new(0)),
+            fail_load_message_record: false,
+        };
+        let query = PeekQuery::new(
+            tempdir.path().to_path_buf(),
+            tempdir.path().to_path_buf(),
+            "recipient".parse().expect("caller"),
+            None,
+            TEST_TEAM.parse().expect("team"),
+            ReadSelection::All,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("peek query")
+        .with_caller_chat_id(Some(caller_chat_id));
+
+        let outcome =
+            peek_mail_with_runtime_impl(query, &NullObservability, &runtime).expect("peek outcome");
+
+        assert_eq!(outcome.count, 1);
+        assert_eq!(
+            outcome
+                .message
+                .as_ref()
+                .map(|message| message.envelope.text.as_str()),
+            Some("for caller session")
+        );
+        assert!(!outcome.mutation_applied);
     }
 
     #[test]
