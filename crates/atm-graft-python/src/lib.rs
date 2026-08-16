@@ -1527,6 +1527,33 @@ mod tests {
     }
 
     #[test]
+    fn native_read_scopes_peek_to_the_callers_chat_qualified_session() {
+        let caller = PyAgentAddress::new(
+            TEST_RECIPIENT.to_string(),
+            TEST_TEAM.to_string(),
+            Some("recipient-session".to_owned()),
+        )
+        .expect("caller");
+        let session = PyGraftSession {
+            caller: caller.to_typed().expect("typed caller"),
+            client: Mutex::new(None),
+            receiver: Mutex::new(None),
+            reconnect_replacement: Mutex::new(None),
+            reconnect_attempts: AtomicUsize::new(0),
+            reconnect_fallback_attempts: AtomicUsize::new(0),
+        };
+
+        let query = session
+            .build_tool_read_query("all", None, None, None, None, None)
+            .expect("native read query");
+
+        assert_eq!(
+            query.caller_chat_id().map(ToString::to_string).as_deref(),
+            Some("recipient-session")
+        );
+    }
+
+    #[test]
     fn plain_python_methods_and_work_counts_share_the_recovery_policy() {
         Python::initialize();
         let operations: [(&str, ResponseEnvelope); 3] = [

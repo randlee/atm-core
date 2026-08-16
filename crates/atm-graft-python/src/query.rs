@@ -76,6 +76,7 @@ impl PyGraftSession {
             None,
         )
         .map_err(atm_error)
+        .map(|query| query.with_caller_chat_id(self.caller.chat_id().cloned()))
     }
 
     #[allow(clippy::too_many_arguments)]
