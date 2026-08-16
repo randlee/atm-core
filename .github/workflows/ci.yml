@@ -283,6 +283,7 @@ jobs:
             artifact: linux-x86_64
             target: x86_64-unknown-linux-gnu
             manylinux: "2014"
+            platform_tag: manylinux_2_17_x86_64.manylinux2014_x86_64
             interpreter: python3.11
             container: ""
             smoke: native
@@ -291,6 +292,7 @@ jobs:
             artifact: linux-musl-x86_64
             target: x86_64-unknown-linux-musl
             manylinux: musllinux_1_2
+            platform_tag: musllinux_1_2_x86_64
             interpreter: python3.11
             container: ""
             smoke: musl
@@ -302,6 +304,7 @@ jobs:
             artifact: linux-aarch64
             target: ""
             manylinux: "2014"
+            platform_tag: manylinux_2_17_aarch64.manylinux2014_aarch64
             interpreter: python3.11
             container: quay.io/pypa/manylinux2014_aarch64:latest
             smoke: native
@@ -310,6 +313,7 @@ jobs:
             artifact: macos-aarch64
             target: aarch64-apple-darwin
             manylinux: "off"
+            platform_tag: macosx_11_0_arm64
             interpreter: python3.11
             container: ""
             smoke: native
@@ -318,6 +322,7 @@ jobs:
             artifact: windows-x86_64
             target: x86_64-pc-windows-msvc
             manylinux: "off"
+            platform_tag: win_amd64
             interpreter: python
             container: ""
             smoke: native
@@ -355,17 +360,10 @@ jobs:
         run: python -m pip wheel --no-deps --wheel-dir dist crates/hermes-atm
 
       - name: Verify abi3 artifact metadata
-        shell: python
         run: |
-          from pathlib import Path
-          import zipfile
-
-          wheels = sorted(Path("dist").glob("atm_graft*.whl"))
-          assert len(wheels) == 1, wheels
-          assert "cp311-abi3" in wheels[0].name, wheels[0]
-          with zipfile.ZipFile(wheels[0]) as archive:
-              wheel_metadata = next(name for name in archive.namelist() if name.endswith(".dist-info/WHEEL"))
-              assert "Tag: cp311-abi3" in archive.read(wheel_metadata).decode("utf-8")
+          python .just/verify_atm_graft_wheel.py \
+            --wheel dist/atm_graft*.whl \
+            --platform-tag ${{ matrix.platform_tag }}
 
       - name: Smoke-test native wheel on its host target
         if: ${{ matrix.smoke == 'native' }}
