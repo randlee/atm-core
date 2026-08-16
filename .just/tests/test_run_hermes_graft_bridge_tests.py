@@ -31,7 +31,8 @@ class HermesGraftBridgeRunnerTests(unittest.TestCase):
 
         self.assertIn("Run Hermes graft steer boundary tests", workflow)
         self.assertIn("python .just/run_hermes_graft_bridge_tests.py", workflow)
-        self.assertIn("Hermes ATM wheel (Python", workflow)
+        self.assertIn("Hermes ATM release wheel (${{ matrix.name }})", workflow)
+        self.assertIn("Hermes ATM abi3 compatibility (Python", workflow)
         for version in ("3.11", "3.12", "3.13", "3.14"):
             self.assertIn(f'"{version}"', workflow)
 
