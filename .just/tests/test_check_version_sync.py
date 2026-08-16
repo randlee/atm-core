@@ -15,7 +15,7 @@ from check_version_sync import validate_crate_versions
 from check_version_sync import validate_lockfile
 from check_version_sync import validate_winget_manifests
 from check_version_sync import success_message
-from check_version_sync import validate_python_graft_version
+from check_version_sync import validate_python_release_versions
 
 
 ROOT_MANIFEST = """\
@@ -60,82 +60,92 @@ class CheckVersionSyncTests(unittest.TestCase):
                 extra = '\n[dependencies]\natm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.1.2" }\n'
             (crate_dir / "Cargo.toml").write_text(crate_manifest(package_name, extra=extra), encoding="utf-8")
 
-    def write_python_graft_manifest(self, repo_root: Path, version: str) -> None:
-        manifest_path = repo_root / "crates/atm-graft-python/Cargo.toml"
-        manifest_path.parent.mkdir(parents=True, exist_ok=True)
-        manifest_path.write_text(
-            f'[package]\nname = "atm-graft-python"\nversion = "{version}"\n',
-            encoding="utf-8",
+    def write_python_release_manifests(self, repo_root: Path, version: str) -> tuple[tuple[Path, str], ...]:
+        manifests = (
+            (Path("crates/atm-graft-python/Cargo.toml"), "package"),
+            (Path("crates/atm-graft-python/pyproject.toml"), "project"),
+            (Path("crates/atm-query-python/Cargo.toml"), "package"),
+            (Path("crates/atm-query-python/pyproject.toml"), "project"),
+            (Path("crates/hermes-atm/pyproject.toml"), "project"),
         )
+        for manifest_path, table_name in manifests:
+            path = repo_root / manifest_path
+            path.parent.mkdir(parents=True, exist_ok=True)
+            name = path.parent.name
+            path.write_text(
+                f'[{table_name}]\nname = "{name}"\nversion = "{version}"\n',
+                encoding="utf-8",
+            )
+        return manifests
 
-    def test_python_graft_version_accepts_final_workspace_version(self) -> None:
+    def test_python_release_versions_accept_final_workspace_version(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
-            self.write_python_graft_manifest(repo_root, "1.4.1")
+            manifests = self.write_python_release_manifests(repo_root, "1.4.1")
 
-            validate_python_graft_version(repo_root, "1.4.1")
+            validate_python_release_versions(repo_root, "1.4.1", manifests)
 
-    def test_python_graft_version_strips_prerelease_workspace_qualifier(self) -> None:
+    def test_python_release_versions_strip_prerelease_workspace_qualifier(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
-            self.write_python_graft_manifest(repo_root, "1.4.1")
+            manifests = self.write_python_release_manifests(repo_root, "1.4.1")
 
-            validate_python_graft_version(repo_root, "1.4.1-beta-ai-15")
-            validate_python_graft_version(repo_root, "1.4.1-beta-aj")
+            validate_python_release_versions(repo_root, "1.4.1-beta-ai-15", manifests)
+            validate_python_release_versions(repo_root, "1.4.1-beta-aj", manifests)
 
-    def test_python_graft_version_strips_combined_workspace_qualifiers(self) -> None:
+    def test_python_release_versions_strip_combined_workspace_qualifiers(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
-            self.write_python_graft_manifest(repo_root, "1.4.1")
+            manifests = self.write_python_release_manifests(repo_root, "1.4.1")
 
-            validate_python_graft_version(repo_root, "1.4.1-beta-ai-15+build.7")
+            validate_python_release_versions(repo_root, "1.4.1-beta-ai-15+build.7", manifests)
 
-    def test_python_graft_version_rejects_wrong_patch(self) -> None:
+    def test_python_release_versions_reject_wrong_patch(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
-            self.write_python_graft_manifest(repo_root, "1.4.2")
+            manifests = self.write_python_release_manifests(repo_root, "1.4.2")
 
             with self.assertRaises(SystemExit) as error:
-                validate_python_graft_version(repo_root, "1.4.1-beta-ai-15")
+                validate_python_release_versions(repo_root, "1.4.1-beta-ai-15", manifests)
 
             message = str(error.exception)
             self.assertIn("crates/atm-graft-python/Cargo.toml", message)
             self.assertIn("1.4.2", message)
             self.assertIn("1.4.1", message)
 
-    def test_python_graft_version_rejects_python_prerelease(self) -> None:
+    def test_python_release_versions_reject_python_prerelease(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
-            self.write_python_graft_manifest(repo_root, "1.4.1-beta-ai")
+            manifests = self.write_python_release_manifests(repo_root, "1.4.1-beta-ai")
 
             with self.assertRaises(SystemExit) as error:
-                validate_python_graft_version(repo_root, "1.4.1-beta-ai-15")
+                validate_python_release_versions(repo_root, "1.4.1-beta-ai-15", manifests)
 
             message = str(error.exception)
             self.assertIn("crates/atm-graft-python/Cargo.toml", message)
             self.assertIn("1.4.1-beta-ai", message)
             self.assertIn("1.4.1", message)
 
-    def test_python_graft_version_rejects_python_build_metadata(self) -> None:
+    def test_python_release_versions_reject_python_build_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
-            self.write_python_graft_manifest(repo_root, "1.4.1+local")
+            manifests = self.write_python_release_manifests(repo_root, "1.4.1+local")
 
             with self.assertRaises(SystemExit) as error:
-                validate_python_graft_version(repo_root, "1.4.1-beta-ai-15+build.7")
+                validate_python_release_versions(repo_root, "1.4.1-beta-ai-15+build.7", manifests)
 
             message = str(error.exception)
             self.assertIn("crates/atm-graft-python/Cargo.toml", message)
             self.assertIn("1.4.1+local", message)
             self.assertIn("1.4.1", message)
 
-    def test_real_repository_python_graft_version_is_numeric_workspace_base(self) -> None:
+    def test_real_repository_python_release_versions_are_numeric_workspace_base(self) -> None:
         repo_root = Path(__file__).resolve().parents[2]
         workspace_version = tomllib.loads(
             (repo_root / "Cargo.toml").read_text(encoding="utf-8")
         )["workspace"]["package"]["version"]
 
-        validate_python_graft_version(repo_root, workspace_version)
+        validate_python_release_versions(repo_root, workspace_version)
 
     def test_validate_crate_versions_checks_all_member_manifests(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

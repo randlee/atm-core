@@ -11,7 +11,13 @@ from lint_common import workspace_crate_section_lines
 from lint_common import workspace_manifest_paths
 
 
-PYTHON_GRAFT_MANIFEST = Path("crates/atm-graft-python/Cargo.toml")
+PYTHON_RELEASE_MANIFESTS = (
+    (Path("crates/atm-graft-python/Cargo.toml"), "package"),
+    (Path("crates/atm-graft-python/pyproject.toml"), "project"),
+    (Path("crates/atm-query-python/Cargo.toml"), "package"),
+    (Path("crates/atm-query-python/pyproject.toml"), "project"),
+    (Path("crates/hermes-atm/pyproject.toml"), "project"),
+)
 VERSION_BASE_PATTERN = re.compile(
     r"^(?P<base>\d+\.\d+\.\d+)"
     r"(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
@@ -81,25 +87,29 @@ def normalized_version_base(version: str, label: str) -> str:
     return match.group("base")
 
 
-def validate_python_graft_version(repo_root: Path, workspace_version: str) -> None:
-    """Require the Maturin crate's explicit version to be the workspace base."""
+def validate_python_release_versions(
+    repo_root: Path,
+    workspace_version: str,
+    manifests: tuple[tuple[Path, str], ...] = PYTHON_RELEASE_MANIFESTS,
+) -> None:
+    """Require every released Python artifact to use the workspace numeric base."""
 
-    manifest_path = repo_root / PYTHON_GRAFT_MANIFEST
-    rel_manifest = PYTHON_GRAFT_MANIFEST.as_posix()
-    manifest = tomllib.loads(read_text(manifest_path))
-    package = manifest.get("package", {})
-    actual = package.get("version") if isinstance(package, dict) else None
     expected = normalized_version_base(workspace_version, "workspace version")
-    if not isinstance(actual, str) or not actual.strip():
-        fail(
-            f"{rel_manifest} [package].version ({actual!r}) must equal "
-            f"workspace version base ({expected})"
-        )
-    if actual != expected:
-        fail(
-            f"{rel_manifest} [package].version ({actual}) must equal "
-            f"workspace version base ({expected})"
-        )
+    for manifest_path, table_name in manifests:
+        rel_manifest = manifest_path.as_posix()
+        manifest = tomllib.loads(read_text(repo_root / manifest_path))
+        table = manifest.get(table_name, {})
+        actual = table.get("version") if isinstance(table, dict) else None
+        if not isinstance(actual, str) or not actual.strip():
+            fail(
+                f"{rel_manifest} [{table_name}].version ({actual!r}) must equal "
+                f"workspace version base ({expected})"
+            )
+        if actual != expected:
+            fail(
+                f"{rel_manifest} [{table_name}].version ({actual}) must equal "
+                f"workspace version base ({expected})"
+            )
 
 
 def expected_package_version(manifest: dict, workspace_version: str, manifest_label: str) -> str:
@@ -293,11 +303,16 @@ def main() -> int:
     repo_root = Path(__file__).resolve().parent.parent
     config = version_sync_config(repo_root)
     workspace_version = validate_workspace_version(repo_root)
-    validate_python_graft_version(repo_root, workspace_version)
+    validate_python_release_versions(repo_root, workspace_version)
     validate_crate_versions(repo_root, workspace_version)
     validate_lockfile(repo_root, workspace_version)
 
-    executed_checks = ["workspace member versions", "internal path deps", "Cargo.lock"]
+    executed_checks = [
+        "released Python artifact versions",
+        "workspace member versions",
+        "internal path deps",
+        "Cargo.lock",
+    ]
     if validate_winget_manifests(repo_root, workspace_version, config):
         executed_checks.append("winget")
     if validate_release_wiring(repo_root, config):
