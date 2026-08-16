@@ -279,37 +279,43 @@ jobs:
             artifact: linux-x86_64
             target: x86_64-unknown-linux-gnu
             manylinux: "2014"
-            cflags: ""
+            interpreter: python3.11
+            container: ""
             smoke: true
           - name: musllinux x86_64
             os: ubuntu-latest
             artifact: linux-musl-x86_64
             target: x86_64-unknown-linux-musl
             manylinux: musllinux_1_2
-            cflags: ""
+            interpreter: python3.11
+            container: ""
             smoke: false
           - name: manylinux aarch64
-            os: ubuntu-latest
+            # Build natively on ARM. The x86_64 cross image does not compile
+            # ring's pregenerated assembly correctly, whereas this official
+            # manylinux image provides the required PyPI ABI on ARM.
+            os: ubuntu-24.04-arm
             artifact: linux-aarch64
-            target: aarch64-unknown-linux-gnu
+            target: ""
             manylinux: "2014"
-            # ring's pregenerated aarch64 assembly requires this macro when
-            # compiled by the manylinux cross toolchain.
-            cflags: -march=armv8-a
+            interpreter: python3.11
+            container: quay.io/pypa/manylinux2014_aarch64:latest
             smoke: false
           - name: macOS aarch64
             os: macos-14
             artifact: macos-aarch64
             target: aarch64-apple-darwin
             manylinux: "off"
-            cflags: ""
+            interpreter: python3.11
+            container: ""
             smoke: true
           - name: Windows x86_64
             os: windows-latest
             artifact: windows-x86_64
             target: x86_64-pc-windows-msvc
             manylinux: "off"
-            cflags: ""
+            interpreter: python
+            container: ""
             smoke: true
     runs-on: ${{ matrix.os }}
     steps:
@@ -322,16 +328,15 @@ jobs:
 
       - name: Build PyPI-compatible atm-graft wheel
         uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
-        env:
-          CFLAGS_aarch64_unknown_linux_gnu: ${{ matrix.cflags }}
         with:
           command: build
           maturin-version: v1.11.5
           rust-toolchain: "1.94.1"
           target: ${{ matrix.target }}
           manylinux: ${{ matrix.manylinux }}
+          container: ${{ matrix.container }}
           working-directory: crates/atm-graft-python
-          args: --release --locked --compatibility pypi --out ../../dist
+          args: --release --locked --compatibility pypi -i ${{ matrix.interpreter }} --out ../../dist
 
       - name: Build universal hermes-atm wheel
         run: python -m pip wheel --no-deps --wheel-dir dist crates/hermes-atm
