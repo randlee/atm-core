@@ -276,8 +276,8 @@ jobs:
           if len(wheels) != 1:
               raise RuntimeError(f"expected one downloaded atm-graft wheel, found {wheels}")
           with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as environment:
-              environment.write(f"ATM_GRAFT_WHEEL={wheels[0].resolve()}\\n")
-              environment.write(f"ATM_WHEEL_OUTPUT_DIR={Path('bridge-wheels').resolve()}\\n")
+              environment.write(f"ATM_GRAFT_WHEEL={wheels[0].resolve()}\n")
+              environment.write(f"ATM_WHEEL_OUTPUT_DIR={Path('bridge-wheels').resolve()}\n")
 
       - name: Run Hermes graft steer boundary tests
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
