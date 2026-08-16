@@ -387,6 +387,7 @@ jobs:
         run: python -m pip wheel --no-deps --wheel-dir dist crates/hermes-atm
 
       - name: Verify abi3 artifact metadata
+        shell: bash
         run: |
           python .just/verify_atm_graft_wheel.py \
             --wheel dist/atm_graft*.whl \
