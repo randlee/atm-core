@@ -101,6 +101,37 @@ class CheckVersionSyncTests(unittest.TestCase):
 
             validate_python_release_versions(repo_root, "1.4.1-beta-ai-15+build.7", manifests)
 
+    def test_python_release_versions_accept_dynamic_maturin_version_from_cargo(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            manifests = self.write_python_release_manifests(repo_root, "1.4.1")
+            (repo_root / "crates/atm-graft-python/pyproject.toml").write_text(
+                '[project]\nname = "atm-graft"\ndynamic = ["version"]\n',
+                encoding="utf-8",
+            )
+
+            validate_python_release_versions(repo_root, "1.4.1", manifests)
+
+    def test_python_release_versions_reject_wrong_dynamic_maturin_cargo_version(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            manifests = self.write_python_release_manifests(repo_root, "1.4.1")
+            (repo_root / "crates/atm-graft-python/pyproject.toml").write_text(
+                '[project]\nname = "atm-graft"\ndynamic = ["version"]\n',
+                encoding="utf-8",
+            )
+            cargo_path = repo_root / "crates/atm-graft-python/Cargo.toml"
+            cargo_path.write_text(
+                cargo_path.read_text(encoding="utf-8").replace('version = "1.4.1"', 'version = "1.4.2"'),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(SystemExit) as error:
+                validate_python_release_versions(repo_root, "1.4.1", manifests)
+
+            self.assertIn("crates/atm-graft-python/Cargo.toml", str(error.exception))
+            self.assertIn("1.4.2", str(error.exception))
+
     def test_python_release_versions_reject_wrong_patch(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)

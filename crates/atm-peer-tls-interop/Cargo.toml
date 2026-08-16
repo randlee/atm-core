@@ -1,5 +1,7 @@
 [package]
 name = "atm-peer-tls-interop"
+# Test/provisioning fixture only; it is not a standalone crates.io product.
+publish = false
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
