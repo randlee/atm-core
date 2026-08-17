@@ -48,6 +48,22 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Verify vendored publishing skill is synchronized
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/checkout@v4
+        with:
+          repository: randlee/sc-compose
+          ref: feature/publish-kit-preflight-hardening
+          path: .tmp/sc-compose-publish-kit
+
+      - name: Check publishing-skill source drift
+        if: matrix.os == 'ubuntu-latest'
+        run: >-
+          python3 scripts/sync_sc_compose_publish_kit.py
+          --source .tmp/sc-compose-publish-kit
+          --only skill
+          --check
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:

@@ -31,7 +31,8 @@ sanitized channel result set without creating a release side effect.
   candidate-tag reason is per-channel sanitized evidence.
 - It materializes one result for every channel declared by the evaluated
   manifest. Candidate-tag failure is `failed`, while checks it must not run are
-  `required`, not `blocked`.
+  listed in that channel's `required_checks` with
+  `reason: "not_run_after_invalid_release_authorization"`, not `blocked`.
 - It launches only the permitted read-only channel classifications, does not
   inspect credentials, create a tag, dispatch a workflow, publish, or modify
   a release.

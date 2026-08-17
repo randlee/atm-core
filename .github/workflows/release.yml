@@ -75,7 +75,7 @@ jobs:
             --workspace-toml Cargo.toml
 
       - name: Run release gate
-        run: scripts/release_gate.sh origin/main origin/develop '${{ steps.meta.outputs.release_version }}' "${RELEASE_ARTIFACT_MANIFEST}"
+        run: scripts/release_gate.sh origin/main origin/develop '${{ steps.meta.outputs.release_version }}' "${RELEASE_ARTIFACT_MANIFEST}" '${{ steps.meta.outputs.release_tag }}' '${{ steps.meta.outputs.release_target }}'
 
       - name: Ensure tag is correct or create it
         id: release-ref
@@ -87,15 +87,10 @@ jobs:
           target='${{ steps.meta.outputs.release_target }}'
           main_sha="$(git rev-parse origin/main)"
           if [[ "$target" == "production" ]]; then
-            remote_tag_sha="$(git ls-remote --tags origin "refs/tags/${tag}" | awk '{print $1}' || true)"
-            if [[ -n "$remote_tag_sha" ]]; then
-              if [[ "$remote_tag_sha" == "$main_sha" ]]; then
-                echo "Tag ${tag} already exists and points to origin/main (${main_sha}), skipping creation"
-                echo "release_ref=$tag" >> "$GITHUB_OUTPUT"
-                exit 0
-              fi
-              echo "Tag ${tag} exists but points to ${remote_tag_sha}, not origin/main (${main_sha})" >&2
-              exit 1
+            if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+              echo "Tag ${tag} was validated by release_gate.sh; reusing it"
+              echo "release_ref=$tag" >> "$GITHUB_OUTPUT"
+              exit 0
             fi
             git tag "$tag" origin/main
             git push origin "$tag"
@@ -195,6 +190,17 @@ jobs:
                           output.write(item, item.relative_to(stage.parent))
           else:
               raise SystemExit(f"unsupported archive type: {target['archive']}")
+          subprocess.run(
+              [
+                  "python3",
+                  "scripts/verify_release_archive.py",
+                  "--manifest",
+                  os.environ["RELEASE_ARTIFACT_MANIFEST"],
+                  "--archive",
+                  str(archive),
+              ],
+              check=True,
+          )
           with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env:
               env.write(f"ARCHIVE={archive}\n")
           PY

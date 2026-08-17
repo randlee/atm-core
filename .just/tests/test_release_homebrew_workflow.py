@@ -25,6 +25,12 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("python -m build --wheel", text)
         self.assertIn("python -m build --sdist", text)
 
+    def test_release_archives_are_verified_against_the_manifest_before_upload(self) -> None:
+        text = WORKFLOW.read_text(encoding="utf-8")
+
+        self.assertIn("scripts/verify_release_archive.py", text)
+        self.assertIn('"--archive",', text)
+
 
 if __name__ == "__main__":
     unittest.main()

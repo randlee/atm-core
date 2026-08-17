@@ -403,6 +403,12 @@ Product requirement ID:
   project supports opt-in prerelease builds such as `1.3.2-beta.1` and
   `1.3.2-alpha.1`; prereleases are never the default customer channel.
 
+- `REQ-P-RELEASE-008` Windows users must have a manifest-driven Scoop
+  distribution channel. Its bucket repository, manifest location and template,
+  installer target, and installed binary must be declared in the repository's
+  release artifact manifest; the release workflow may consume that declared
+  configuration but must not duplicate repository-specific channel values.
+
 Required behavior:
 - the `1.0` release must publish the retained CLI and core crates under the
   legacy crates.io package names:

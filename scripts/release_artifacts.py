@@ -4,18 +4,11 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import shutil
 import subprocess
-import tarfile
 import tomllib
-import zipfile
-from datetime import datetime, timezone
-from email import message_from_bytes
 from pathlib import Path
 
 from release_manifest import (
-    _assert_python_package_version,
-    _assert_workspace_inherited_version,
     _channel_config,
     _channel_contract,
     _channel_names,
@@ -23,7 +16,6 @@ from release_manifest import (
     _homebrew_formulas_for_tag,
     _validate_homebrew_formulas,
     _python_distribution_entries,
-    _python_distribution_expectations,
     _python_project_name,
     _python_project_version,
     _release_targets_by_name,
@@ -35,6 +27,31 @@ from release_manifest import (
     package_name,
     workspace_members,
     workspace_version,
+)
+from release_versions import (
+    cmd_sync_python_version,
+    cmd_sync_readme_version,
+    cmd_verify_python_release_assets,
+    cmd_verify_python_version,
+    cmd_verify_readme_version,
+    cmd_verify_version,
+    cmd_verify_version_lockstep,
+)
+from release_planning import (
+    cmd_emit_inventory,
+    cmd_list_preflight,
+    cmd_list_publish_plan,
+    cmd_validate_preflight_checks,
+    cmd_validate_publish_order,
+    cmd_validate_release_binaries,
+)
+from release_workspace import (
+    crate_is_publishable as _crate_is_publishable,
+    missing_publish_metadata_fields as _missing_publish_metadata_fields,
+    workspace_dependency_names as _workspace_dependency_names,
+    workspace_package_defaults as _workspace_package_defaults,
+    workspace_package_map as _workspace_package_map,
+    workspace_path_dependencies as _workspace_path_dependencies,
 )
 
 
@@ -132,127 +149,6 @@ def _channel_credential_rehearsal(
         )
     workflow, _ = _channel_dispatch_config(manifest, channel_name)
     return workflow, rehearsal_inputs
-
-
-def _workspace_package_defaults(workspace_toml: Path) -> dict:
-    """Return inheritable package metadata declared by the Rust workspace."""
-    data = tomllib.loads(workspace_toml.read_text(encoding="utf-8"))
-    package = data.get("workspace", {}).get("package", {})
-    return package if isinstance(package, dict) else {}
-
-
-def _crate_is_publishable(cargo_toml: Path) -> bool:
-    data = tomllib.loads(cargo_toml.read_text(encoding="utf-8"))
-    publish = data.get("package", {}).get("publish")
-    return publish is not False and not (isinstance(publish, list) and not publish)
-
-
-def _workspace_package_map(workspace_toml: Path) -> dict[str, Path]:
-    root = workspace_toml.parent
-    packages: dict[str, Path] = {}
-    for member in workspace_members(workspace_toml):
-        cargo_toml = root / member / "Cargo.toml"
-        if cargo_toml.is_file():
-            packages[package_name(cargo_toml)] = cargo_toml
-    return packages
-
-
-def _package_field_value(package: dict, field: str, workspace_defaults: dict) -> str | None:
-    value = package.get(field)
-    if isinstance(value, str) and value.strip():
-        return value.strip()
-    if isinstance(value, dict) and value.get("workspace") is True:
-        inherited = workspace_defaults.get(field)
-        if isinstance(inherited, str) and inherited.strip():
-            return inherited.strip()
-    return None
-
-
-def _missing_publish_metadata_fields(cargo_toml: Path, workspace_defaults: dict) -> list[str]:
-    data = tomllib.loads(cargo_toml.read_text(encoding="utf-8"))
-    package = data.get("package", {})
-    if not isinstance(package, dict):
-        return ["package"]
-    missing: list[str] = []
-    if _package_field_value(package, "description", workspace_defaults) is None:
-        missing.append("description")
-    if (
-        _package_field_value(package, "license", workspace_defaults) is None
-        and _package_field_value(package, "license-file", workspace_defaults) is None
-    ):
-        missing.append("license or license-file")
-    return missing
-
-
-def _workspace_dependency_names(cargo_toml: Path, workspace_toml: Path) -> set[str]:
-    """Return runtime/build dependencies that resolve to workspace packages."""
-    data = tomllib.loads(cargo_toml.read_text(encoding="utf-8"))
-    workspace_root = workspace_toml.parent.resolve()
-    workspace_data = tomllib.loads(workspace_toml.read_text(encoding="utf-8"))
-    workspace_dependencies = workspace_data.get("workspace", {}).get("dependencies", {})
-    workspace_packages = set(_workspace_package_map(workspace_toml))
-    crate_dir = cargo_toml.parent
-    dependencies: set[str] = set()
-
-    def resolve(name: str, spec: object) -> str | None:
-        if isinstance(spec, str):
-            return name if name in workspace_packages else None
-        if not isinstance(spec, dict):
-            return None
-        if spec.get("workspace") is True:
-            workspace_spec = workspace_dependencies.get(name, {})
-            if isinstance(workspace_spec, dict):
-                package = workspace_spec.get("package", name)
-                if "path" in workspace_spec or package in workspace_packages:
-                    return package
-            return name if name in workspace_packages else None
-        package = spec.get("package", name)
-        if "path" in spec:
-            dependency_path = (crate_dir / spec["path"]).resolve()
-            if dependency_path.is_relative_to(workspace_root):
-                return package
-        return package if package in workspace_packages else None
-
-    def collect(table: object) -> None:
-        if not isinstance(table, dict):
-            return
-        for name, spec in table.items():
-            package = resolve(name, spec)
-            if package:
-                dependencies.add(package)
-
-    collect(data.get("dependencies", {}))
-    collect(data.get("build-dependencies", {}))
-    for target_data in data.get("target", {}).values():
-        if isinstance(target_data, dict):
-            collect(target_data.get("dependencies", {}))
-            collect(target_data.get("build-dependencies", {}))
-    return dependencies
-
-
-def _workspace_path_dependencies(cargo_toml: Path, workspace_toml: Path) -> set[str]:
-    """Return dependencies declared through a workspace-local path."""
-    data = tomllib.loads(cargo_toml.read_text(encoding="utf-8"))
-    workspace_root = workspace_toml.parent.resolve()
-    crate_dir = cargo_toml.parent
-    dependencies: set[str] = set()
-
-    def collect(table: object) -> None:
-        if not isinstance(table, dict):
-            return
-        for name, spec in table.items():
-            if not isinstance(spec, dict) or "path" not in spec:
-                continue
-            if (crate_dir / spec["path"]).resolve().is_relative_to(workspace_root):
-                dependencies.add(str(spec.get("package", name)))
-
-    collect(data.get("dependencies", {}))
-    collect(data.get("build-dependencies", {}))
-    for target_data in data.get("target", {}).values():
-        if isinstance(target_data, dict):
-            collect(target_data.get("dependencies", {}))
-            collect(target_data.get("build-dependencies", {}))
-    return dependencies
 
 
 def _post_release_channel_preflight(manifest: dict, channel_name: str) -> dict[str, object]:
@@ -691,111 +587,6 @@ def cmd_validate_manifest(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_list_publish_plan(args: argparse.Namespace) -> int:
-    manifest = load_manifest(Path(args.manifest))
-    for crate in manifest["crates"]:
-        print(f"{crate['package']}|{crate['wait_after_publish_seconds']}")
-    return 0
-
-
-def cmd_list_preflight(args: argparse.Namespace) -> int:
-    manifest = load_manifest(Path(args.manifest))
-    for crate in manifest["crates"]:
-        if crate["publish"] and crate["preflight_check"] == args.mode:
-            print(crate["package"])
-    return 0
-
-
-def cmd_validate_preflight_checks(args: argparse.Namespace) -> int:
-    workspace_toml = Path(args.workspace_toml)
-    workspace_root = workspace_toml.parent
-    errors = []
-    for crate in load_manifest(Path(args.manifest))["crates"]:
-        if crate["preflight_check"] != "full":
-            continue
-        dependencies = _workspace_path_dependencies(
-            workspace_root / crate["cargo_toml"], workspace_toml
-        )
-        if dependencies:
-            errors.append(
-                f"{crate['artifact']} has workspace path deps ({', '.join(sorted(dependencies))}) "
-                "but preflight_check='full'"
-            )
-    if errors:
-        raise SystemExit("\n".join(errors))
-    print("ok: all preflight_check='full' crates are genuine leaf crates")
-    return 0
-
-
-def cmd_validate_publish_order(args: argparse.Namespace) -> int:
-    workspace_toml = Path(args.workspace_toml)
-    workspace_root = workspace_toml.parent
-    crates = [crate for crate in load_manifest(Path(args.manifest))["crates"] if crate["publish"]]
-    order = {crate["package"]: crate["publish_order"] for crate in crates}
-    errors = []
-    for crate in crates:
-        for dependency in sorted(
-            _workspace_dependency_names(workspace_root / crate["cargo_toml"], workspace_toml)
-        ):
-            if dependency in order and order[crate["package"]] <= order[dependency]:
-                errors.append(
-                    f"{crate['package']} (publish_order={order[crate['package']]}) depends on "
-                    f"{dependency} (publish_order={order[dependency]})"
-                )
-    if errors:
-        raise SystemExit("publish_order violation(s):\n  - " + "\n  - ".join(errors))
-    print("ok: publish_order matches the workspace dependency graph")
-    return 0
-
-
-def cmd_validate_release_binaries(args: argparse.Namespace) -> int:
-    configured = {entry["name"] for entry in load_manifest(Path(args.manifest))["release_binaries"]}
-    missing = sorted(set(args.required) - configured)
-    if missing:
-        raise SystemExit("required release binaries missing from manifest: " + ", ".join(missing))
-    print("release binaries validation passed")
-    return 0
-
-
-def cmd_emit_inventory(args: argparse.Namespace) -> int:
-    manifest = load_manifest(Path(args.manifest))
-    generated_at = args.generated_at or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    items = []
-    for crate in manifest["crates"]:
-        if not crate["publish"]:
-            continue
-        verification = [
-            f"cargo search {crate['package']} --limit 1 | grep -F "
-            f"'{crate['package']} = \"{args.version}\"'"
-        ]
-        if crate["verify_install"]:
-            verification.append(
-                f"cargo install {crate['package']} --version {args.version} --locked --force"
-            )
-        items.append(
-            {
-                "artifact": crate["artifact"],
-                "version": args.version,
-                "sourceRef": args.source_ref,
-                "publishTarget": "crates.io",
-                "required": crate["required"],
-                "publish": crate["publish"],
-                "verifyCommands": verification,
-            }
-        )
-    payload = {
-        "releaseVersion": args.version,
-        "releaseTag": args.tag,
-        "releaseCommit": args.commit,
-        "generatedAt": generated_at,
-        "items": sorted(items, key=lambda item: item["artifact"]),
-    }
-    output = Path(args.output)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-    return 0
-
-
 def cmd_python_wheel_matrix(args: argparse.Namespace) -> int:
     manifest = load_manifest(Path(args.manifest))
     include = [
@@ -958,221 +749,6 @@ def cmd_preflight_secret_plan(args: argparse.Namespace) -> int:
             separators=(",", ":"),
         )
     )
-    return 0
-
-
-def _python_distribution_name_from_wheel(path: Path, expected: set[str]) -> str:
-    with zipfile.ZipFile(path) as archive:
-        metadata = [name for name in archive.namelist() if name.endswith(".dist-info/METADATA")]
-        if len(metadata) != 1:
-            raise SystemExit(f"{path}: expected exactly one wheel METADATA file")
-        name = message_from_bytes(archive.read(metadata[0])).get("Name")
-    if name not in expected:
-        raise SystemExit(f"{path}: unexpected Python distribution {name!r}")
-    return name
-
-
-def _python_distribution_name_from_sdist(path: Path, expected: set[str]) -> str | None:
-    with tarfile.open(path, "r:gz") as archive:
-        metadata = [member for member in archive.getmembers() if member.name.endswith("/PKG-INFO")]
-        if not metadata:
-            return None
-        if len(metadata) != 1:
-            raise SystemExit(f"{path}: expected exactly one sdist PKG-INFO file")
-        extracted = archive.extractfile(metadata[0])
-        if extracted is None:
-            raise SystemExit(f"{path}: unable to read sdist PKG-INFO")
-        name = message_from_bytes(extracted.read()).get("Name")
-    if name not in expected:
-        raise SystemExit(f"{path}: unexpected Python distribution {name!r}")
-    return name
-
-
-def cmd_verify_python_release_assets(args: argparse.Namespace) -> int:
-    manifest = load_manifest(Path(args.manifest))
-    asset_dir = Path(args.asset_dir)
-    if not asset_dir.is_dir():
-        raise SystemExit(f"Python asset directory does not exist: {asset_dir}")
-    expected = _python_distribution_expectations(manifest)
-    found = {name: {"wheel": 0, "sdist": 0} for name in expected}
-    destination = Path(args.copy_to) if args.copy_to else None
-    if destination:
-        destination.mkdir(parents=True, exist_ok=True)
-
-    for asset in sorted(asset_dir.iterdir()):
-        if not asset.is_file():
-            continue
-        if asset.suffix == ".whl":
-            name = _python_distribution_name_from_wheel(asset, set(expected))
-            found[name]["wheel"] += 1
-        elif asset.name.endswith(".tar.gz"):
-            name = _python_distribution_name_from_sdist(asset, set(expected))
-            if name is None:
-                continue
-            found[name]["sdist"] += 1
-        else:
-            continue
-        if destination:
-            shutil.copy2(asset, destination / asset.name)
-
-    if found != expected:
-        raise SystemExit(
-            "published GitHub Release Python assets mismatch: "
-            f"expected {expected}, found {found}"
-        )
-    print(f"verified Python release assets: {expected}")
-    return 0
-
-
-def cmd_verify_version(args: argparse.Namespace) -> int:
-    version = workspace_version(Path(args.workspace_toml))
-    if version != args.version:
-        raise SystemExit(f"workspace version mismatch: expected {args.version}, got {version}")
-    manifest = load_manifest(Path(args.manifest))
-    for crate in manifest["crates"]:
-        data = tomllib.loads(Path(crate["cargo_toml"]).read_text(encoding='utf-8'))
-        pkg_version = data["package"]["version"]
-        if isinstance(pkg_version, str):
-            actual = pkg_version
-        elif isinstance(pkg_version, dict) and pkg_version.get("workspace") is True:
-            actual = version
-        else:
-            raise SystemExit(f"{crate['package']}: unsupported version shape: {pkg_version!r}")
-        if actual != version:
-            raise SystemExit(f"{crate['package']}: version mismatch: expected {version}, got {actual}")
-    print("version verification passed")
-    return 0
-
-
-def cmd_verify_version_lockstep(args: argparse.Namespace) -> int:
-    workspace_toml = Path(args.workspace_toml)
-    version = workspace_version(workspace_toml)
-    manifest = load_manifest(Path(args.manifest))
-    checked_cargo_manifests: set[str] = set()
-    for crate in manifest["crates"]:
-        cargo_toml = crate["cargo_toml"]
-        _assert_workspace_inherited_version(workspace_toml, cargo_toml)
-        checked_cargo_manifests.add(cargo_toml)
-    for distribution in _python_distribution_entries(manifest):
-        if distribution["build_system"] != "maturin":
-            continue
-        cargo_toml = distribution["cargo_manifest"]
-        if cargo_toml not in checked_cargo_manifests:
-            _assert_workspace_inherited_version(workspace_toml, cargo_toml)
-            checked_cargo_manifests.add(cargo_toml)
-    for package in manifest["python_packages"]:
-        _assert_python_package_version(workspace_toml, package["manifest"], version)
-    print("version lockstep verification passed")
-    return 0
-
-
-def cmd_verify_python_version(args: argparse.Namespace) -> int:
-    version = workspace_version(Path(args.workspace_toml))
-    if version != args.version:
-        raise SystemExit(f"workspace version mismatch: expected {args.version}, got {version}")
-    actual = _python_project_version(Path(args.pyproject))
-    if actual is None:
-        print("python package declares a dynamic version")
-        return 0
-    if actual != version:
-        raise SystemExit(f"python package version mismatch: expected {version}, got {actual}")
-    print("python version verification passed")
-    return 0
-
-
-def cmd_sync_python_version(args: argparse.Namespace) -> int:
-    version = workspace_version(Path(args.workspace_toml))
-    pyproject = Path(args.pyproject)
-    lines = pyproject.read_text(encoding="utf-8").splitlines()
-    output: list[str] = []
-    in_project = False
-    updated = False
-
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith("[") and stripped.endswith("]"):
-            in_project = stripped == "[project]"
-        if in_project and re.match(r'^\s*version\s*=\s*"[^"]+"\s*$', line):
-            output.append(re.sub(r'"[^"]+"', f'"{version}"', line, count=1))
-            updated = True
-            continue
-        output.append(line)
-
-    if not updated:
-        raise SystemExit(f"{pyproject}: could not find [project].version to rewrite")
-
-    pyproject.write_text("\n".join(output) + "\n", encoding="utf-8")
-    print(f"synced python package version to {version}")
-    return 0
-
-
-def _readme_dependency_crate(manifest: dict) -> str:
-    project = manifest["project"]
-    dependency_crate = project.get("readme_dependency_crate")
-    if not isinstance(dependency_crate, str) or not dependency_crate:
-        raise SystemExit("[project].readme_dependency_crate must be a non-empty string")
-    if dependency_crate not in {crate["package"] for crate in manifest["crates"]}:
-        raise SystemExit(
-            "[project].readme_dependency_crate must name a package declared in [[crates]]"
-        )
-    return dependency_crate
-
-
-def _readme_version_checks(
-    version: str, dependency_crate: str
-) -> tuple[tuple[str, str, str], ...]:
-    minor_version = version.rsplit(".", 1)[0]
-    return (
-        (
-            f"{dependency_crate} dependency example",
-            rf'({re.escape(dependency_crate)}\s*=\s*")[^"]+(")',
-            version,
-        ),
-        ("Status table Version row", rf'(\|\s*Version\s*\|\s*)[^\s|]+(\s*\|)', version),
-        ("Status table Stability row", rf'(\|\s*Stability\s*\|\s*stable\s+)\S+(\s+release line\s*\|)', minor_version),
-    )
-
-
-def cmd_verify_readme_version(args: argparse.Namespace) -> int:
-    version = workspace_version(Path(args.workspace_toml))
-    dependency_crate = _readme_dependency_crate(load_manifest(Path(args.manifest)))
-    readme = Path(args.readme)
-    text = readme.read_text(encoding="utf-8")
-
-    mismatches = []
-    for label, pattern, expected in _readme_version_checks(version, dependency_crate):
-        match = re.search(pattern, text)
-        if match is None:
-            raise SystemExit(f"{readme}: could not locate {label}")
-        found = text[match.end(1):match.start(2)]
-        if found != expected:
-            mismatches.append(f"{label}: expected {expected}, found {found}")
-
-    if mismatches:
-        raise SystemExit(
-            f"{readme}: stale version reference(s) (run 'sync-readme-version' to fix):\n"
-            + "\n".join(mismatches)
-        )
-    print("readme version verification passed")
-    return 0
-
-
-def cmd_sync_readme_version(args: argparse.Namespace) -> int:
-    version = workspace_version(Path(args.workspace_toml))
-    dependency_crate = _readme_dependency_crate(load_manifest(Path(args.manifest)))
-    readme = Path(args.readme)
-    text = readme.read_text(encoding="utf-8")
-
-    updated = 0
-    for label, pattern, expected in _readme_version_checks(version, dependency_crate):
-        new_text, count = re.subn(pattern, rf'\g<1>{expected}\g<2>', text, count=1)
-        if count == 0:
-            raise SystemExit(f"{readme}: could not locate {label}")
-        text = new_text
-        updated += count
-
-    readme.write_text(text, encoding="utf-8")
-    print(f"synced {updated} readme version reference(s) to {version}")
     return 0
 
 
