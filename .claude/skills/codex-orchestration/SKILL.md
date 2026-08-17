@@ -134,6 +134,10 @@ mandatory:
 - `rust-service-hardening-agent`
 - `flaky-test-qa`
 
+Before phase-ending QA can report PASS, `quality-mgr` must run `just validate`
+and require it to pass. This includes the committed CLI-surface contract check,
+so released CLI changes cannot bypass its baseline gate.
+
 ## CI
 
 Use standard GitHub CLI:

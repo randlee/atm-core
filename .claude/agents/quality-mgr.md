@@ -187,6 +187,8 @@ For phase-ending QA:
 - always run `rust-best-practices-agent`
 - always run `rust-service-hardening-agent`
 - always run `flaky-test-qa`
+- run `just validate` and require it to pass before phase-ending QA can report
+  PASS
 
 For docs-only plan review (`review_mode: plan`):
 - run `req-qa`
