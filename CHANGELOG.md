@@ -1,23 +1,28 @@
 # Changelog
 
-## Unreleased
+## 1.4.2
 
-- complete Phase AN's template-composition and queryable-message line:
-  durable decomposed template rows, render-on-read, typed search and raw
-  read-only analyst queries, plus a generic `atm compose` workflow
-- add AN.8 validation artifacts for sprint span, QA-round, severity, and
-  developer queries; prove the generic query surface with a synthetic
-  vocabulary and the Tokio HTTP same-host/cross-host/foreign-team routing
-  matrix
+- ship the minimal Tokio/Axum HTTP runtime (`atm-http-runtime`), replacing
+  hand-written synchronous HTTP framing for local and cross-host listeners
+  (Phase AL)
+- delete the legacy transport machinery made redundant by the Tokio runtime:
+  legacy HTTP framing, local/peer transport workers, resend/replay machinery,
+  and the obsolete cross-host subsystem; reset the daemon to a local-IPC-only
+  singleton (Phase AM, deletion-only)
+- land the decomposed template message and queryable-message line: durable
+  template catalog, render-on-read, typed search and raw read-only analyst
+  queries, generic `atm compose` workflow, optional workflow metadata with
+  OpenTelemetry projection, and the AN.8 validation/query-routing matrix
+  (Phase AN)
 - add `atm teams remove-member` for authorized local roster removal
-- `DAEMON-PREAG-RESET-1`: reset the daemon to a local-IPC-only singleton by
-  deleting the entire cross-host/peer-transport subsystem (`peer_transport`,
-  `claude_compat`, `boundary_adapters`, `direct_boundaries`, the
-  `SourceIngress`/`ProjectionExport` boundary contracts, and their
-  `replay_store`/config-layer supporting code), following the corrective
-  ruling that the prior cross-host ladder (`AG.16`-`AG.25`) was an
-  over-engineered dead end. Sprint `AI.1` carries this reset forward as the
-  Phase AI cross-host baseline.
+- converge daemon runtime session/pid observation into diagnostic-only
+  heartbeat caching (Phase AJ)
+- publish `hermes-atm` and `atm-graft` to PyPI for the first time: full
+  manylinux/musllinux/Windows/aarch64 wheel and sdist pipeline, CPython
+  3.11-3.14 compatibility, and repo-wide version-sync enforcement consolidated
+  onto one canonical gate
+- add `atm-error` and `atm-http-runtime` to the published crate set (11 crates
+  total, up from 9)
 
 ## 1.3.0
 
