@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:AI36-QA-ENDPOINT-VISIBILITY
+    a triage:Finding ;
+    triage:findingId "AI36-QA-ENDPOINT-VISIBILITY" ;
+    triage:title "GraftReceiverEndpointRecord is pub but sprint doc specifies it as a private record format" ;
+    triage:description "GraftReceiverEndpointRecord (and all its fields) is declared pub, giving it crate-external visibility as atm_core::graft::GraftReceiverEndpointRecord, even though the sprint doc explicitly specifies it as a \"private endpoint-record format\" (docs/plans/phase-ai/sprint-ai-36-graft-receiver-ownership.md line 78-79) with a non-pub struct in its required-shape code block. No crate outside atm-core actually constructs or inspects this type." ;
+    triage:triageMode "initial_pass" ;
+    triage:category "boundary_tightening" ;
+    triage:phaseId "phase-AI" ;
+    triage:severity "minor" ;
+    triage:repeatable false ;
+    triage:sweepScope "file_only" ;
+    triage:status "open" ;
+    triage:dispatchReady false ;
+    triage:triagedAt "2026-07-29T00:00:00Z"^^xsd:dateTime ;
+    triage:foundIn "AI.36" ;
+    triage:foundAt "2026-07-29T00:00:00Z"^^xsd:dateTime ;
+    triage:hasOccurrence triage:AI36-QA-ENDPOINT-VISIBILITY-1 ;
+    triage:openOn triage:FIX-AI36-QA-REPAIR-ee8f670f .
+
+triage:AI36-QA-ENDPOINT-VISIBILITY-1
+    a triage:Occurrence ;
+    triage:file "crates/atm-core/src/graft.rs" ;
+    triage:line "62" ;
+    triage:snippet "pub struct GraftReceiverEndpointRecord { pub schema_version: u8, pub owner_generation: String, pub owner_chat_id: Option<ChatId>, pub loopback: SocketAddr, pub capability_base64url: String, }" ;
+    triage:status "open" ;
+    triage:headSha "ee8f670f" ;
+    triage:branch "fix/ai36-qa-repair" ;
+    triage:closed false ;
+    triage:occursIn triage:FIX-AI36-QA-REPAIR-ee8f670f .
+
+triage:FIX-AI36-QA-REPAIR-ee8f670f
+    a triage:WorktreeSnapshot ;
+    triage:path "fix/ai36-qa-repair" ;
+    triage:branch "fix/ai36-qa-repair" ;
+    triage:headSha "ee8f670f" ;
+    triage:orderIndex "1" .

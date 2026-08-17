@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:AI36-QA-LOCK-CONTENTION-DUP
+    a triage:Finding ;
+    triage:findingId "AI36-QA-LOCK-CONTENTION-DUP" ;
+    triage:title "Third independent Windows lock-contention classifier duplicates atm-daemon/atm-daemon-client logic" ;
+    triage:description "AI.36 added a third independent implementation of Windows lock-contention classification (WouldBlock or raw_os_error(32|33)) in `is_lock_contention`, duplicating decision logic already implemented in crates/atm-daemon/src/host_ownership.rs::is_owner_lock_contention_error (line 169) and crates/atm-daemon-client/src/lib.rs::is_launch_gate_contention_error (line 962). The file-open pattern used to obtain the lock handle in ReceiverOwnershipGuard::acquire (graft.rs:180-196) also duplicates open_lock_file in host_ownership.rs (line 203)." ;
+    triage:triageMode "initial_pass" ;
+    triage:category "boundary_tightening" ;
+    triage:phaseId "phase-AI" ;
+    triage:severity "important" ;
+    triage:repeatable false ;
+    triage:sweepScope "file_only" ;
+    triage:status "open" ;
+    triage:dispatchReady false ;
+    triage:triagedAt "2026-07-29T00:00:00Z"^^xsd:dateTime ;
+    triage:foundIn "AI.36" ;
+    triage:foundAt "2026-07-29T00:00:00Z"^^xsd:dateTime ;
+    triage:hasOccurrence triage:AI36-QA-LOCK-CONTENTION-DUP-1 ;
+    triage:openOn triage:FIX-AI36-QA-REPAIR-ee8f670f .
+
+triage:AI36-QA-LOCK-CONTENTION-DUP-1
+    a triage:Occurrence ;
+    triage:file "crates/atm-core/src/graft.rs" ;
+    triage:line "466" ;
+    triage:snippet "fn is_lock_contention(error: &std::io::Error) -> bool { error.kind() == std::io::ErrorKind::WouldBlock || cfg!(windows) && matches!(error.raw_os_error(), Some(32 | 33)) }" ;
+    triage:status "open" ;
+    triage:headSha "ee8f670f" ;
+    triage:branch "fix/ai36-qa-repair" ;
+    triage:closed false ;
+    triage:occursIn triage:FIX-AI36-QA-REPAIR-ee8f670f .
+
+triage:FIX-AI36-QA-REPAIR-ee8f670f
+    a triage:WorktreeSnapshot ;
+    triage:path "fix/ai36-qa-repair" ;
+    triage:branch "fix/ai36-qa-repair" ;
+    triage:headSha "ee8f670f" ;
+    triage:orderIndex "1" .

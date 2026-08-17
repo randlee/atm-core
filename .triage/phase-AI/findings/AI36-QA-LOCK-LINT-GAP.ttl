@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:AI36-QA-LOCK-LINT-GAP
+    a triage:Finding ;
+    triage:findingId "AI36-QA-LOCK-LINT-GAP" ;
+    triage:title "No mechanical lint detects repeated re-implementation of lock-contention classifier across crates" ;
+    triage:description "No mechanical lint or boundary TOML detects repeated re-implementation of the same low-level fs2 advisory-lock contention classifier across crates (see AI36-QA-LOCK-CONTENTION-DUP). lint_same_host_portability.py only checks cfg-gating shape on a fixed file allowlist and does not scan for duplicate decision-logic function bodies across crates." ;
+    triage:triageMode "initial_pass" ;
+    triage:category "lint_gap" ;
+    triage:phaseId "phase-AI" ;
+    triage:severity "minor" ;
+    triage:repeatable false ;
+    triage:sweepScope "file_only" ;
+    triage:status "open" ;
+    triage:dispatchReady false ;
+    triage:triagedAt "2026-07-29T00:00:00Z"^^xsd:dateTime ;
+    triage:foundIn "AI.36" ;
+    triage:foundAt "2026-07-29T00:00:00Z"^^xsd:dateTime ;
+    triage:hasOccurrence triage:AI36-QA-LOCK-LINT-GAP-1 ;
+    triage:openOn triage:FIX-AI36-QA-REPAIR-ee8f670f .
+
+triage:AI36-QA-LOCK-LINT-GAP-1
+    a triage:Occurrence ;
+    triage:file ".just/lint_boundaries.py" ;
+    triage:line "22" ;
+    triage:snippet "LINT_NAME = \"boundaries\"" ;
+    triage:status "open" ;
+    triage:headSha "ee8f670f" ;
+    triage:branch "fix/ai36-qa-repair" ;
+    triage:closed false ;
+    triage:occursIn triage:FIX-AI36-QA-REPAIR-ee8f670f .
+
+triage:FIX-AI36-QA-REPAIR-ee8f670f
+    a triage:WorktreeSnapshot ;
+    triage:path "fix/ai36-qa-repair" ;
+    triage:branch "fix/ai36-qa-repair" ;
+    triage:headSha "ee8f670f" ;
+    triage:orderIndex "1" .
