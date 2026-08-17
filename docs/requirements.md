@@ -943,7 +943,7 @@ command identity.
 
 Product requirement ID:
 - `REQ-P-ADDRESS-001` Address resolution must support the documented
-  `agent`/`agent@team` forms and precedence rules.
+  local-team and CLI-only cross-host convenience forms and precedence rules.
 
 Satisfied by:
 - `REQ-CORE-CONFIG-002` for address parsing, alias rewrite, and
@@ -952,13 +952,37 @@ Satisfied by:
 Supported address forms:
 - `agent`
 - `agent@team`
+- `agent@team.host`
+- `agent@host` (CLI same-team cross-host shorthand only)
 
 Resolution order:
-1. explicit `agent@team`
-2. bare `agent` plus `--team`
-3. bare `agent` plus configured default team
+1. explicit `agent@team.host`, after canonical trusted-host resolution
+2. an exact known `agent@team` local/team destination
+3. `agent@host` shorthand when `host` resolves to exactly one enabled trusted
+   authority; the caller team is inserted as the destination team
+4. bare `agent` plus `--team`
+5. bare `agent` plus configured default team
 
 An explicit `@team` suffix takes precedence over `--team`.
+
+CLI host convenience rules:
+- `host` and `host.local` are equivalent input only when they resolve to the
+  same enabled trusted canonical authority; the request and all durable output
+  use that canonical registered hostname
+- hostname comparison is ASCII case-insensitive; `.local` completion is the
+  only permitted completion—fuzzy, prefix, and arbitrary suffix matching are
+  forbidden
+- an exact known team name wins over same-token host shorthand, preserving the
+  existing `agent@team` form
+- a token matching neither a known team nor exactly one enabled trusted host,
+  and every ambiguous host completion, fails before HTTP dispatch with
+  structured recovery guidance
+- this resolution is a CLI-only convenience. It completes before the existing
+  fully-qualified HTTP request is built; it must not add a daemon-side address
+  resolution path, HTTP/wire field, storage field, or graft/native-tool API
+- the CLI must preserve the canonical registered hostname in the resolved
+  destination, request output, and message provenance. Resolved IP addresses
+  are transient routing data only and must not be persisted as peer identity
 
 Aliases are resolved after splitting `agent@team`, so only the agent token is
 rewritten.
@@ -3899,20 +3923,24 @@ mail correctness.
   - if no enabled interface rows exist, no cross-host listener binds
   - environment variables must not configure cross-host networking or trust
 
-- `REQ-CORE-TRANSPORT-002D` A peer authority is one durable registered DNS
+- `REQ-CORE-TRANSPORT-002D` A peer authority is one durable registered
   hostname, HTTPS port, and pinned certificate fingerprint.
 
   Required behavior:
-  - a hostname target exact-matches one registered authority name; its durable
-    HTTPS port selects the endpoint
+  - a canonical hostname target exact-matches one registered authority name;
+    its durable HTTPS port selects the endpoint. CLI input may omit the
+    terminal `.local` only as specified by `REQ-P-ADDRESS-001`, and must be
+    canonicalized before request construction
   - a literal IP target is accepted only when a bounded fresh DNS lookup of
     exactly one registered hostname contains that address
   - resolved addresses are not stored in SQLite or another durable alias store
   - zero or multiple matching registered names fail closed before TLS or route
   - reverse DNS is forbidden; an IP-only registration never authorizes a name
   - every registered hostname must be forward-resolvable by the peers that
-    use it; a changing VPN or Wi-Fi address is updated by the host's normal
-    DNS/DDNS mechanism, never by ATM reverse lookup or a SQLite IP alias
+    use it through ordinary DNS/DDNS or local-network mDNS. A changing VPN,
+    Wi-Fi, Ethernet, DHCP, or VPS address is updated by the host's normal
+    name-resolution mechanism, never by ATM reverse lookup or a SQLite IP
+    alias
   - several account-owned daemons may use the same current host IP only when
     each authority has a distinct `(hostname, port)` endpoint and certificate
     pin; an OS bind collision fails closed and must not select another port
