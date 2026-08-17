@@ -10,8 +10,22 @@ import re
 import subprocess
 import sys
 import tomllib
+import tarfile
+import zipfile
 from datetime import datetime, timezone
+from email import message_from_bytes
 from pathlib import Path
+
+from release_manifest import (
+    _channel_config as publish_channel_config,
+    _channel_contract as publish_channel_contract,
+    _channel_names as publish_channel_names,
+    _release_targets_by_name as publish_release_targets_by_name,
+    _require_keys as publish_require_keys,
+    _require_project as publish_require_project,
+    load_channel_contracts as load_publish_channel_contracts,
+    load_manifest as load_publish_kit_manifest,
+)
 
 PREFLIGHT_FULL = "full"
 PREFLIGHT_LOCKED = "locked"
@@ -334,8 +348,521 @@ def missing_publish_metadata_fields(crate_toml: Path, workspace_defaults: dict) 
     return missing
 
 
+def load_publish_kit(path: Path, *, with_channel_contracts: bool = False) -> dict:
+    """Load the repository-owned release inventory plus the shared channel contract."""
+    return load_publish_kit_manifest(path, with_channel_contracts=with_channel_contracts)
+
+
+def publish_asset_pattern(project: dict, target: dict) -> str:
+    return (
+        rf"^{re.escape(project['archive_prefix'])}_.*_"
+        rf"{re.escape(target['target'])}\.{re.escape(target['archive'])}$"
+    )
+
+
+def publish_channel_asset_patterns(manifest: dict, channel_name: str) -> list[str]:
+    project = publish_require_project(manifest)
+    targets = publish_release_targets_by_name(manifest)
+    channel = publish_channel_config(manifest, channel_name)
+    if channel_name == "homebrew":
+        target_names = [asset["target"] for asset in channel.get("assets", [])]
+        if not target_names:
+            raise SystemExit("[channels.homebrew] must define [[channels.homebrew.assets]]")
+    elif channel_name in {"winget", "scoop"}:
+        publish_require_keys(channel, ("installer_target",), f"[channels.{channel_name}]")
+        target_names = [channel["installer_target"]]
+    else:
+        return []
+    if channel_name in {"homebrew", "scoop"}:
+        renderer_target = channel.get("renderer_target")
+        if not isinstance(renderer_target, str) or not renderer_target:
+            raise SystemExit(f"[channels.{channel_name}].renderer_target must be a non-empty string")
+        target_names.append(renderer_target)
+    missing = [target for target in target_names if target not in targets]
+    if missing:
+        raise SystemExit(
+            f"[channels.{channel_name}] references unknown release target(s): {', '.join(missing)}"
+        )
+    return [publish_asset_pattern(project, targets[name]) for name in dict.fromkeys(target_names)]
+
+
+def validate_publish_kit_manifest(manifest_path: Path, workspace_toml: Path) -> None:
+    """Validate the generic publish-kit data without embedding project release facts."""
+    manifest = load_publish_kit(manifest_path, with_channel_contracts=True)
+    publish_require_project(manifest)
+    publish_release_targets_by_name(manifest)
+    if not manifest["release_binaries"]:
+        raise SystemExit("manifest must define [[release_binaries]]")
+    for index, binary in enumerate(manifest["release_binaries"], start=1):
+        publish_require_keys(binary, ("name",), f"[[release_binaries]] #{index}")
+        for bundle in binary.get("bundled_paths", []):
+            publish_require_keys(bundle, ("source", "destination"), "bundled_paths entry")
+            if not Path(bundle["source"]).is_dir():
+                raise SystemExit(f"bundled path source does not exist: {bundle['source']}")
+
+    for channel_name in publish_channel_names(manifest):
+        channel = publish_channel_config(manifest, channel_name)
+        publish_require_keys(channel, ("workflow", "dispatch_inputs"), f"[channels.{channel_name}]")
+        if not isinstance(channel["workflow"], str) or not channel["workflow"]:
+            raise SystemExit(f"[channels.{channel_name}].workflow must be a non-empty string")
+        if not isinstance(channel["dispatch_inputs"], dict):
+            raise SystemExit(f"[channels.{channel_name}].dispatch_inputs must be a table")
+        publish_channel_asset_patterns(manifest, channel_name)
+
+    workspace_version_value = tomllib.loads(workspace_toml.read_text(encoding="utf-8"))["workspace"]["package"]["version"]
+    python_packages = {package["package"]: package for package in manifest["python_packages"]}
+    for index, package in enumerate(manifest["python_packages"], start=1):
+        publish_require_keys(
+            package,
+            ("artifact", "package", "manifest", "module", "publish"),
+            f"[[python_packages]] #{index}",
+        )
+        pyproject = Path(package["manifest"])
+        if not pyproject.is_file():
+            raise SystemExit(f"{pyproject}: missing Python package manifest")
+        project = tomllib.loads(pyproject.read_text(encoding="utf-8")).get("project", {})
+        if project.get("name") != package["package"]:
+            raise SystemExit(f"{pyproject}: package name does not match the release manifest")
+        version = project.get("version")
+        dynamic = project.get("dynamic", [])
+        if version is not None and version != workspace_version_value:
+            raise SystemExit(f"{pyproject}: version must match workspace.package.version")
+        if version is None and "version" not in dynamic:
+            raise SystemExit(f"{pyproject}: project version must be static or declared dynamic")
+
+    for index, distribution in enumerate(manifest["python_distributions"], start=1):
+        publish_require_keys(distribution, ("name", "source", "sdist", "wheels"), f"[[python_distributions]] #{index}")
+        if distribution["name"] not in python_packages:
+            raise SystemExit(f"[[python_distributions]] #{index}: unknown Python package")
+        if not Path(distribution["source"]).is_dir():
+            raise SystemExit(f"[[python_distributions]] #{index}: source directory does not exist")
+        if not isinstance(distribution["sdist"], bool) or not isinstance(distribution["wheels"], list):
+            raise SystemExit(f"[[python_distributions]] #{index}: invalid build matrix")
+        build_system = distribution.get("build_system", "maturin")
+        if build_system not in {"maturin", "setuptools"}:
+            raise SystemExit(f"[[python_distributions]] #{index}: unsupported build_system {build_system!r}")
+        if build_system == "maturin" and not Path(distribution.get("cargo_manifest", "")).is_file():
+            raise SystemExit(f"[[python_distributions]] #{index}: missing Maturin Cargo manifest")
+        module_path = Path(distribution.get("module_path", ""))
+        if not module_path.is_dir():
+            raise SystemExit(f"[[python_distributions]] #{index}: Python module path does not exist")
+
+
+def publish_channel_preflight(manifest: dict, channel_name: str) -> dict[str, object]:
+    contract = publish_channel_contract(manifest, channel_name)
+    return {
+        "agent": contract["agent"],
+        "repository_secrets": contract.get("repository_secrets", []),
+        "environment_secrets": contract.get("environment_secrets", []),
+        "liveness_checks": contract.get("liveness_checks", []),
+        "github_actions_permissions": contract.get("github_actions_permissions", []),
+        "public_registry_checks": contract.get("public_registry_checks", False),
+    }
+
+
+def channel_config(args: argparse.Namespace) -> int:
+    manifest = load_publish_kit(Path(args.manifest), with_channel_contracts=True)
+    channel = publish_channel_config(manifest, args.channel)
+    print(
+        json.dumps(
+            {
+                "project": publish_require_project(manifest),
+                "channel": channel,
+                "preflight": publish_channel_preflight(manifest, args.channel),
+                "asset_patterns": publish_channel_asset_patterns(manifest, args.channel),
+                "release_binaries": manifest["release_binaries"],
+                "release_targets": publish_release_targets_by_name(manifest),
+            },
+            separators=(",", ":"),
+        )
+    )
+    return 0
+
+
+def release_target_matrix(args: argparse.Namespace) -> int:
+    manifest = load_publish_kit(Path(args.manifest))
+    print(
+        json.dumps(
+            {"include": list(publish_release_targets_by_name(manifest).values())},
+            separators=(",", ":"),
+        )
+    )
+    return 0
+
+
+def release_package_config(args: argparse.Namespace) -> int:
+    manifest = load_publish_kit(Path(args.manifest))
+    targets = publish_release_targets_by_name(manifest)
+    if args.target not in targets:
+        raise SystemExit(f"unknown release target: {args.target}")
+    print(
+        json.dumps(
+            {
+                "project": publish_require_project(manifest),
+                "target": targets[args.target],
+                "binaries": manifest["release_binaries"],
+            },
+            separators=(",", ":"),
+        )
+    )
+    return 0
+
+
+def python_distribution_entries(manifest: dict) -> list[dict[str, object]]:
+    packages = {package["package"]: package for package in manifest["python_packages"]}
+    return [
+        {
+            "artifact": packages[distribution["name"]]["artifact"],
+            "name": distribution["name"],
+            "pyproject": packages[distribution["name"]]["manifest"],
+            "source": distribution["source"],
+            "build_system": distribution.get("build_system", "maturin"),
+            "cargo_manifest": distribution.get("cargo_manifest"),
+            "sdist": distribution["sdist"],
+            "wheels": distribution["wheels"],
+        }
+        for distribution in manifest["python_distributions"]
+    ]
+
+
+def python_wheel_matrix(args: argparse.Namespace) -> int:
+    manifest = load_publish_kit(Path(args.manifest))
+    include = [
+        {
+            key: value
+            for key, value in distribution.items()
+            if key not in {"sdist", "wheels"} and value is not None
+        }
+        | {"os": os_name}
+        for distribution in python_distribution_entries(manifest)
+        for os_name in distribution["wheels"]
+    ]
+    if not include:
+        raise SystemExit("manifest must define at least one Python wheel build")
+    print(json.dumps({"include": include}, separators=(",", ":")))
+    return 0
+
+
+def python_sdist_matrix(args: argparse.Namespace) -> int:
+    manifest = load_publish_kit(Path(args.manifest))
+    include = [
+        {
+            key: value
+            for key, value in distribution.items()
+            if key not in {"sdist", "wheels"} and value is not None
+        }
+        for distribution in python_distribution_entries(manifest)
+        if distribution["sdist"]
+    ]
+    print(json.dumps({"include": include}, separators=(",", ":")))
+    return 0
+
+
+def python_distribution_name_from_wheel(path: Path, expected: set[str]) -> str:
+    with zipfile.ZipFile(path) as archive:
+        metadata = [name for name in archive.namelist() if name.endswith(".dist-info/METADATA")]
+        if len(metadata) != 1:
+            raise SystemExit(f"{path}: expected exactly one wheel METADATA file")
+        name = message_from_bytes(archive.read(metadata[0])).get("Name")
+    if name not in expected:
+        raise SystemExit(f"{path}: unexpected Python distribution {name!r}")
+    return name
+
+
+def python_distribution_name_from_sdist(path: Path, expected: set[str]) -> str | None:
+    with tarfile.open(path, "r:gz") as archive:
+        metadata = [member for member in archive.getmembers() if member.name.endswith("/PKG-INFO")]
+        if not metadata:
+            return None
+        if len(metadata) != 1:
+            raise SystemExit(f"{path}: expected exactly one sdist PKG-INFO file")
+        contents = archive.extractfile(metadata[0])
+        if contents is None:
+            raise SystemExit(f"{path}: unable to read sdist PKG-INFO")
+        name = message_from_bytes(contents.read()).get("Name")
+    if name not in expected:
+        raise SystemExit(f"{path}: unexpected Python distribution {name!r}")
+    return name
+
+
+def verify_python_release_assets(args: argparse.Namespace) -> int:
+    manifest = load_publish_kit(Path(args.manifest))
+    asset_dir = Path(args.asset_dir)
+    if not asset_dir.is_dir():
+        raise SystemExit(f"Python asset directory does not exist: {asset_dir}")
+    expected = {
+        entry["name"]: {"wheel": len(entry["wheels"]), "sdist": int(entry["sdist"])}
+        for entry in python_distribution_entries(manifest)
+    }
+    found = {name: {"wheel": 0, "sdist": 0} for name in expected}
+    destination = Path(args.copy_to) if args.copy_to else None
+    if destination:
+        destination.mkdir(parents=True, exist_ok=True)
+    for asset in sorted(asset_dir.iterdir()):
+        if not asset.is_file():
+            continue
+        if asset.suffix == ".whl":
+            name = python_distribution_name_from_wheel(asset, set(expected))
+            found[name]["wheel"] += 1
+        elif asset.name.endswith(".tar.gz"):
+            name = python_distribution_name_from_sdist(asset, set(expected))
+            if name is None:
+                continue
+            found[name]["sdist"] += 1
+        else:
+            continue
+        if destination:
+            shutil.copy2(asset, destination / asset.name)
+    if found != expected:
+        raise SystemExit(
+            "published GitHub Release Python assets mismatch: "
+            f"expected {expected}, found {found}"
+        )
+    print(f"verified Python release assets: {expected}")
+    return 0
+
+
+def normalize_pypi_name(name: str) -> str:
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def public_registry_checks(
+    contracts: dict[str, dict], channel_name: str, name: str, version: str | None
+) -> list[dict[str, str | None]]:
+    try:
+        contract = contracts[channel_name]
+    except KeyError as error:
+        raise SystemExit(f"channel contract missing for {channel_name}") from error
+    if not contract.get("public_registry_checks", False):
+        raise SystemExit(f"{channel_name} does not support a public registry inquiry")
+    normalized_name = normalize_pypi_name(name) if channel_name == "pypi" else name
+    registries = (
+        [
+            {
+                "name": "crates.io",
+                "project_lookup_url": contract["project_lookup_url"],
+                "version_lookup_url": contract["version_lookup_url"],
+                "version_policy": "must_be_absent",
+            }
+        ]
+        if channel_name == "crates_io"
+        else contract.get("registries", [])
+    )
+    return [
+        {
+            "channel": channel_name,
+            "agent": contract["agent"],
+            "registry": registry["name"],
+            "name": name,
+            "normalized_name": normalized_name,
+            "expected_version": version,
+            "project_lookup_url": registry["project_lookup_url"].format(
+                name=normalized_name, version=version or ""
+            ),
+            "version_lookup_url": (
+                registry["version_lookup_url"].format(name=normalized_name, version=version)
+                if version
+                else None
+            ),
+            "version_policy": registry["version_policy"],
+        }
+        for registry in registries
+    ]
+
+
+def public_registry_check_plan(args: argparse.Namespace) -> int:
+    manifest = load_publish_kit(Path(args.manifest), with_channel_contracts=True)
+    checks = [
+        *(
+            check
+            for crate in manifest["crates"]
+            for check in public_registry_checks(
+                manifest["channel_contracts"], "crates_io", crate["package"], args.version
+            )
+        ),
+        *(
+            check
+            for distribution in python_distribution_entries(manifest)
+            for check in public_registry_checks(
+                manifest["channel_contracts"], "pypi", distribution["name"], args.version
+            )
+        ),
+    ]
+    print(json.dumps({"checks": checks}, separators=(",", ":")))
+    return 0
+
+
+def public_registry_inquiry_plan(args: argparse.Namespace) -> int:
+    contracts = load_publish_channel_contracts(Path(args.contracts))
+    print(
+        json.dumps(
+            {"checks": public_registry_checks(contracts, args.channel, args.name, args.version)},
+            separators=(",", ":"),
+        )
+    )
+    return 0
+
+
+def verify_version(args: argparse.Namespace) -> int:
+    workspace_toml = Path(args.workspace_toml)
+    workspace = tomllib.loads(workspace_toml.read_text(encoding="utf-8"))
+    version = workspace["workspace"]["package"]["version"]
+    if version != args.version:
+        raise SystemExit(f"workspace version mismatch: expected {args.version}, got {version}")
+    manifest = load_publish_kit(Path(args.manifest))
+    for crate in manifest["crates"]:
+        package = tomllib.loads(Path(crate["cargo_toml"]).read_text(encoding="utf-8"))["package"]
+        declared = package["version"]
+        actual = version if isinstance(declared, dict) and declared.get("workspace") else declared
+        if actual != version:
+            raise SystemExit(f"{crate['package']}: version mismatch: expected {version}, got {actual}")
+    print("version verification passed")
+    return 0
+
+
+def verify_version_lockstep(args: argparse.Namespace) -> int:
+    workspace_toml = Path(args.workspace_toml)
+    version = tomllib.loads(workspace_toml.read_text(encoding="utf-8"))["workspace"]["package"]["version"]
+    manifest = load_publish_kit(Path(args.manifest))
+    for crate in manifest["crates"]:
+        package = tomllib.loads(Path(crate["cargo_toml"]).read_text(encoding="utf-8"))["package"]
+        declared = package["version"]
+        actual = version if isinstance(declared, dict) and declared.get("workspace") else declared
+        if actual != version:
+            raise SystemExit(f"{crate['cargo_toml']}: version mismatch: expected {version}, got {actual}")
+    for distribution in python_distribution_entries(manifest):
+        pyproject = tomllib.loads(Path(distribution["pyproject"]).read_text(encoding="utf-8"))
+        project = pyproject["project"]
+        if "version" in project and project["version"] != version:
+            raise SystemExit(f"{distribution['pyproject']}: version mismatch: expected {version}")
+        if "version" not in project and "version" not in project.get("dynamic", []):
+            raise SystemExit(f"{distribution['pyproject']}: missing version metadata")
+    print("version lockstep verification passed")
+    return 0
+
+
+def preflight_secret_plan(args: argparse.Namespace) -> int:
+    manifest = load_publish_kit(Path(args.manifest), with_channel_contracts=True)
+    root_channels = [
+        {"name": name, **publish_channel_preflight(manifest, name)}
+        for name in ("crates_io", "github_release")
+    ]
+    post_release_channels = [
+        {"name": name, **publish_channel_preflight(manifest, name)}
+        for name in publish_channel_names(manifest)
+    ]
+    all_channels = [*root_channels, *post_release_channels]
+    print(
+        json.dumps(
+            {
+                "repository_secrets": [
+                    secret for channel in all_channels for secret in channel["repository_secrets"]
+                ],
+                "environment_secrets": [
+                    secret for channel in all_channels for secret in channel["environment_secrets"]
+                ],
+                "liveness_checks": [
+                    check for channel in all_channels for check in channel["liveness_checks"]
+                ],
+                "root_channels": root_channels,
+                "post_release_channels": post_release_channels,
+            },
+            separators=(",", ":"),
+        )
+    )
+    return 0
+
+
+def channel_preflight_results(args: argparse.Namespace) -> int:
+    try:
+        outcomes = json.loads(args.outcomes)
+    except json.JSONDecodeError as error:
+        raise SystemExit(f"invalid preflight outcomes JSON: {error.msg}") from error
+    if not isinstance(outcomes, dict) or not all(isinstance(value, str) for value in outcomes.values()):
+        raise SystemExit("preflight outcomes must be a string-to-string object")
+
+    def status(step: str) -> str:
+        outcome = outcomes.get(step)
+        if outcome == "success":
+            return "passed"
+        if outcome in {"failure", "cancelled"}:
+            return "failed"
+        return "blocked"
+
+    manifest = load_publish_kit(Path(args.manifest), with_channel_contracts=True)
+    channels = [
+        {"name": name, **publish_channel_preflight(manifest, name)}
+        for name in ("crates_io", "github_release", *publish_channel_names(manifest))
+    ]
+    results = []
+    for channel in channels:
+        checks = [
+            {"kind": "release_authorization", "status": status("ownership")},
+            {"kind": "release_metadata", "status": status("release_metadata")},
+        ]
+        for field, step in (
+            ("repository_secrets", "repository_secrets"),
+            ("environment_secrets", "environment_secrets"),
+            ("liveness_checks", "credential_liveness"),
+            ("github_actions_permissions", "github_release_permissions"),
+            ("public_registry_checks", "registry_state"),
+        ):
+            requirement = channel[field]
+            if requirement:
+                checks.append({"kind": field, "status": status(step)})
+        result_status = "failed" if any(check["status"] == "failed" for check in checks) else (
+            "blocked" if any(check["status"] == "blocked" for check in checks) else "passed"
+        )
+        results.append(
+            {
+                "name": channel["name"],
+                "tag": args.tag or None,
+                "status": result_status,
+                "checks": checks,
+                "sanitized_diagnostic": "" if result_status == "passed" else "PREFLIGHT.CHECK_INCOMPLETE",
+            }
+        )
+    print(json.dumps({"tag": args.tag or None, "channels": results}, separators=(",", ":")))
+    return 0
+
+
+def channel_dispatch_plan(args: argparse.Namespace) -> int:
+    manifest = load_publish_kit(Path(args.manifest), with_channel_contracts=True)
+    channels = []
+    for name in publish_channel_names(manifest):
+        channel = publish_channel_config(manifest, name)
+        dispatch_inputs = channel["dispatch_inputs"]
+        if "tag" in dispatch_inputs:
+            raise SystemExit(f"[channels.{name}].dispatch_inputs must not override tag")
+        rehearsal = channel.get("credential_rehearsal_inputs")
+        if rehearsal is not None and "tag" in rehearsal:
+            raise SystemExit(f"[channels.{name}].credential_rehearsal_inputs must not override tag")
+        channels.append(
+            {
+                "name": name,
+                "agent": publish_channel_preflight(manifest, name)["agent"],
+                "workflow": channel["workflow"],
+                "inputs": {"tag": args.tag, **dispatch_inputs},
+                "credential_rehearsal": (
+                    {"workflow": channel["workflow"], "inputs": {"tag": args.tag, **rehearsal}}
+                    if rehearsal is not None
+                    else None
+                ),
+                "preflight": publish_channel_preflight(manifest, name),
+            }
+        )
+    print(json.dumps({"channels": channels}, separators=(",", ":")))
+    return 0
+
+
 def validate_manifest(args: argparse.Namespace) -> int:
-    manifest = load_manifest(Path(args.manifest))
+    manifest_path = Path(args.manifest)
+    raw_manifest = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
+    # Keep the pre-kit schema readable for historical fixture validation while
+    # enforcing the channel contract whenever a repository adopts the kit.
+    if "project" in raw_manifest or "channels" in raw_manifest:
+        validate_publish_kit_manifest(manifest_path, Path(args.workspace_toml))
+    manifest = load_manifest(manifest_path)
     manifest_packages = {crate["package"] for crate in manifest["crates"]}
     published_manifest_packages = {
         crate["package"] for crate in manifest["crates"] if crate["publish"]
@@ -755,6 +1282,72 @@ def build_parser() -> argparse.ArgumentParser:
     list_plan = subparsers.add_parser("list-publish-plan")
     list_plan.add_argument("--manifest", required=True)
     list_plan.set_defaults(func=list_publish_plan)
+
+    channel = subparsers.add_parser("channel-config")
+    channel.add_argument("--manifest", required=True)
+    channel.add_argument("--channel", required=True)
+    channel.set_defaults(func=channel_config)
+
+    release_targets = subparsers.add_parser("release-target-matrix")
+    release_targets.add_argument("--manifest", required=True)
+    release_targets.set_defaults(func=release_target_matrix)
+
+    package_config = subparsers.add_parser("release-package-config")
+    package_config.add_argument("--manifest", required=True)
+    package_config.add_argument("--target", required=True)
+    package_config.set_defaults(func=release_package_config)
+
+    python_wheels = subparsers.add_parser("python-wheel-matrix")
+    python_wheels.add_argument("--manifest", required=True)
+    python_wheels.set_defaults(func=python_wheel_matrix)
+
+    python_sdists = subparsers.add_parser("python-sdist-matrix")
+    python_sdists.add_argument("--manifest", required=True)
+    python_sdists.set_defaults(func=python_sdist_matrix)
+
+    verify_python_assets = subparsers.add_parser("verify-python-release-assets")
+    verify_python_assets.add_argument("--manifest", required=True)
+    verify_python_assets.add_argument("--asset-dir", required=True)
+    verify_python_assets.add_argument("--copy-to")
+    verify_python_assets.set_defaults(func=verify_python_release_assets)
+
+    version_check = subparsers.add_parser("verify-version")
+    version_check.add_argument("--manifest", required=True)
+    version_check.add_argument("--workspace-toml", required=True)
+    version_check.add_argument("--version", required=True)
+    version_check.set_defaults(func=verify_version)
+
+    version_lockstep = subparsers.add_parser("verify-version-lockstep")
+    version_lockstep.add_argument("--manifest", required=True)
+    version_lockstep.add_argument("--workspace-toml", required=True)
+    version_lockstep.set_defaults(func=verify_version_lockstep)
+
+    registry_plan = subparsers.add_parser("public-registry-check-plan")
+    registry_plan.add_argument("--manifest", required=True)
+    registry_plan.add_argument("--version", required=True)
+    registry_plan.set_defaults(func=public_registry_check_plan)
+
+    registry_inquiry = subparsers.add_parser("public-registry-inquiry-plan")
+    registry_inquiry.add_argument("--contracts", required=True)
+    registry_inquiry.add_argument("--channel", choices=("crates_io", "pypi"), required=True)
+    registry_inquiry.add_argument("--name", required=True)
+    registry_inquiry.add_argument("--version")
+    registry_inquiry.set_defaults(func=public_registry_inquiry_plan)
+
+    dispatch = subparsers.add_parser("channel-dispatch-plan")
+    dispatch.add_argument("--manifest", required=True)
+    dispatch.add_argument("--tag", required=True)
+    dispatch.set_defaults(func=channel_dispatch_plan)
+
+    secret_plan = subparsers.add_parser("preflight-secret-plan")
+    secret_plan.add_argument("--manifest", required=True)
+    secret_plan.set_defaults(func=preflight_secret_plan)
+
+    preflight_results = subparsers.add_parser("channel-preflight-results")
+    preflight_results.add_argument("--manifest", required=True)
+    preflight_results.add_argument("--outcomes", required=True)
+    preflight_results.add_argument("--tag", required=True)
+    preflight_results.set_defaults(func=channel_preflight_results)
 
     list_bins = subparsers.add_parser("list-release-binaries")
     list_bins.add_argument("--manifest", required=True)

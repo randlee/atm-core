@@ -88,7 +88,7 @@ jobs:
           path: publish-dist
 
       - name: Install canonical Python tools
-        uses: ./.github/actions/setup-atm-python-tools
+        uses: ./.github/actions/setup-python-release-tools
         with:
           python-version: "3.14"
 
@@ -117,7 +117,7 @@ jobs:
           path: publish-dist
 
       - name: Install canonical Python tools
-        uses: ./.github/actions/setup-atm-python-tools
+        uses: ./.github/actions/setup-python-release-tools
         with:
           python-version: "3.14"
 

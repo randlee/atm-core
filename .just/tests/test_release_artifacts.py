@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import textwrap
+import tomllib
 import unittest
 
 
@@ -184,6 +186,16 @@ class ReleaseArtifactsTests(unittest.TestCase):
             encoding="utf-8",
         )
 
+    def run_repository_release_artifacts(self, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, str(SCRIPT), *args],
+            cwd=REPO_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+
     def test_validate_manifest_accepts_workspace_inherited_publish_metadata(self) -> None:
         workspace_toml, manifest_toml = self.write_workspace(
             crate_package_block="""
@@ -202,6 +214,27 @@ class ReleaseArtifactsTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertIn("ok: all publishable workspace crates are present in the manifest", completed.stdout)
         self.assertIn("ok: all publishable manifest crates define required publish metadata", completed.stdout)
+
+    def test_publish_channel_plans_are_derived_from_the_manifest(self) -> None:
+        manifest_path = REPO_ROOT / "release" / "publish-artifacts.toml"
+        manifest = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
+        preflight = self.run_repository_release_artifacts(
+            "preflight-secret-plan", "--manifest", str(manifest_path)
+        )
+        dispatch = self.run_repository_release_artifacts(
+            "channel-dispatch-plan", "--manifest", str(manifest_path), "--tag", "v1.4.3"
+        )
+
+        self.assertEqual(preflight.returncode, 0, preflight.stderr)
+        self.assertEqual(dispatch.returncode, 0, dispatch.stderr)
+        self.assertEqual(
+            {channel["name"] for channel in json.loads(dispatch.stdout)["channels"]},
+            set(manifest["channels"]),
+        )
+        self.assertEqual(
+            {channel["name"] for channel in json.loads(preflight.stdout)["root_channels"]},
+            {"crates_io", "github_release"},
+        )
 
     def test_validate_manifest_rejects_missing_publish_metadata(self) -> None:
         workspace_toml, manifest_toml = self.write_workspace(

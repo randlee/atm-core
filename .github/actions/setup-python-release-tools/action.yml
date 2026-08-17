@@ -1,5 +1,5 @@
-name: Setup ATM Python tools
-description: Install the pinned ATM Python validation, wheel-build, and publish toolchain.
+name: Setup Python release tools
+description: Install the pinned Python validation, wheel-build, and publish toolchain.
 
 inputs:
   python-version:
@@ -16,7 +16,7 @@ runs:
         cache: pip
         cache-dependency-path: .github/python-tooling-requirements.txt
 
-    - name: Install pinned ATM Python tools
+    - name: Install pinned Python release tools
       shell: bash
       run: |
         set -euo pipefail

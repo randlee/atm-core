@@ -6,7 +6,7 @@ import unittest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 REQUIREMENTS = REPO_ROOT / ".github" / "python-tooling-requirements.txt"
-ACTION = REPO_ROOT / ".github" / "actions" / "setup-atm-python-tools" / "action.yml"
+ACTION = REPO_ROOT / ".github" / "actions" / "setup-python-release-tools" / "action.yml"
 WORKFLOWS = (
     REPO_ROOT / ".github" / "workflows" / "ci.yml",
     REPO_ROOT / ".github" / "workflows" / "release-preflight.yml",
@@ -44,7 +44,7 @@ class PythonToolingTests(unittest.TestCase):
         for workflow_path in WORKFLOWS:
             workflow = workflow_path.read_text(encoding="utf-8")
             self.assertIn(
-                "uses: ./.github/actions/setup-atm-python-tools",
+                "uses: ./.github/actions/setup-python-release-tools",
                 workflow,
                 msg=f"{workflow_path.name} must use the canonical Python installer",
             )

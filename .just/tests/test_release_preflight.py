@@ -27,7 +27,7 @@ class ReleasePreflightWorkflowTests(unittest.TestCase):
         install_python = text.index("- name: Install canonical Python tools")
         validate = text.index("- name: Run canonical retained release validation suite")
         self.assertLess(install_python, validate)
-        self.assertIn("uses: ./.github/actions/setup-atm-python-tools", text)
+        self.assertIn("uses: ./.github/actions/setup-python-release-tools", text)
         self.assertNotIn("python -m pip install codespell", text)
 
 

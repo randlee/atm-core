@@ -52,7 +52,7 @@ class HermesAtmPyPiPublishWorkflowTests(unittest.TestCase):
     def test_publish_workflow_uses_canonical_python_tool_installer(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
 
-        self.assertEqual(workflow.count("uses: ./.github/actions/setup-atm-python-tools"), 2)
+        self.assertEqual(workflow.count("uses: ./.github/actions/setup-python-release-tools"), 2)
         self.assertGreaterEqual(workflow.count("uses: actions/checkout@v4"), 3)
         self.assertNotIn("python -m pip install twine", workflow)
 
