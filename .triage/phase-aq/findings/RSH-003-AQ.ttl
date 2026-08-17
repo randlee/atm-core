@@ -15,11 +15,14 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-15T19:33:11Z"^^xsd:dateTime ;
   triage:foundIn triage:AQ.0 ;
   triage:foundAt "2026-08-15T19:28:11Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-17T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedNote "Fixed on plan/search-indexing-admission-performance (commit b7004f67e, PR #891): plan-phase-aq.md:99-103 and sprint-AQ1-durable-idle-search-projection.md:131-137 define a fixed 30-second Fresh/CatchingUp/Stale classification contract, applied uniformly across CLI/HTTP/Python/doctor. Confirmed independently by req-qa and arch-qa." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-003-AQ/AQ0-1> ;
   triage:triageRecordVersion "1" .
 
@@ -28,8 +31,8 @@
   triage:file "docs/plans/phase-aq/plan-phase-aq.md" ;
   triage:line 99 ;
   triage:snippet "Local CLI, Python, HTTP, and doctor expose honest projection freshness" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "plan/search-indexing-admission-performance" ;
   triage:headSha "6a89883fa19f7772aec5bf864da757a08eda9915" ;
   triage:occursIn <urn:atm:triage:worktree/AQ0/6a89883fa19f7772aec5bf864da757a08eda9915> .

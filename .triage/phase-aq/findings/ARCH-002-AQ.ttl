@@ -15,11 +15,14 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-15T19:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AQ.0 ;
   triage:foundAt "2026-08-15T19:28:11Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-17T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedNote "Fixed on plan/search-indexing-admission-performance (commit b7004f67e, PR #891): docs/project-plan.md now has section 46 (Phase AO), 47 (Phase AP), 48 (Phase AQ), all cross-linking ADR-049 and the phase-aq plan docs. Confirmed independently by req-qa and arch-qa." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-AQ/ARCH-002-AQ-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-AQ/ARCH-002-AQ-2> ;
   triage:triageRecordVersion "1" .
@@ -29,8 +32,8 @@
   triage:file "docs/plans/phase-aq/plan-phase-aq.md" ;
   triage:line 27 ;
   triage:snippet "AO (portable TLS) and AP (outbound corporate-network connectivity) are independent planned phases" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "plan/search-indexing-admission-performance" ;
   triage:headSha "6a89883fa19f7772aec5bf864da757a08eda9915" ;
   triage:occursIn <urn:atm:triage:worktree/AQ.0/6a89883fa19f7772aec5bf864da757a08eda9915> .
@@ -40,8 +43,8 @@
   triage:file "docs/release-highlights-phase-am.md" ;
   triage:line 81 ;
   triage:snippet "Phase AO is the next planned implementation: a reusable `peer-tls`" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "plan/search-indexing-admission-performance" ;
   triage:headSha "6a89883fa19f7772aec5bf864da757a08eda9915" ;
   triage:occursIn <urn:atm:triage:worktree/AQ.0/6a89883fa19f7772aec5bf864da757a08eda9915> .

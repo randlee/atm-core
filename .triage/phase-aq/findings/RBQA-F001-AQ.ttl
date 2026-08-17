@@ -15,11 +15,14 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-15T19:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AQ.0 ;
   triage:foundAt "2026-08-15T19:28:11Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-17T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedNote "Fixed on plan/search-indexing-admission-performance (commit b7004f67e, PR #891): all three occurrences corrected to bare `reindex-search` with no CLI-ownership claim (crates/atm-storage-rusqlite/src/lib.rs:785, docs/adr/ADR-049-durable-idle-search-projection.md:53, sprint-AQ1-durable-idle-search-projection.md:46,194). ADR-049 lines 83-87 explicitly state future CLI ownership belongs to the CLI/core layer, not atm-storage-rusqlite. Confirmed independently by req-qa, arch-qa, and ruthless-boundary-qa." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001-AQ/AQ0-lib-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001-AQ/AQ0-adr-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001-AQ/AQ0-aq1-1> ;
@@ -30,8 +33,8 @@
   triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
   triage:line 783 ;
   triage:snippet "This is the backend half of `atm admin reindex-search`; the CLI command" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "plan/search-indexing-admission-performance" ;
   triage:headSha "6a89883fa19f7772aec5bf864da757a08eda9915" ;
   triage:occursIn <urn:atm:triage:worktree/AQ0/6a89883fa19f7772aec5bf864da757a08eda9915> .
@@ -41,8 +44,8 @@
   triage:file "docs/adr/ADR-047-durable-idle-search-projection.md" ;
   triage:line 83 ;
   triage:snippet "No remote search endpoint is added. `atm admin reindex-search` remains the" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "plan/search-indexing-admission-performance" ;
   triage:headSha "6a89883fa19f7772aec5bf864da757a08eda9915" ;
   triage:occursIn <urn:atm:triage:worktree/AQ0/6a89883fa19f7772aec5bf864da757a08eda9915> .
@@ -52,8 +55,8 @@
   triage:file "docs/plans/phase-aq/sprint-AQ1-durable-idle-search-projection.md" ;
   triage:line 95 ;
   triage:snippet "5. Preserve `atm admin reindex-search` as recovery. It must converge to the" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "plan/search-indexing-admission-performance" ;
   triage:headSha "6a89883fa19f7772aec5bf864da757a08eda9915" ;
   triage:occursIn <urn:atm:triage:worktree/AQ0/6a89883fa19f7772aec5bf864da757a08eda9915> .
