@@ -49,6 +49,9 @@ jobs:
         with:
           python-version: "3.x"
 
+      - name: Install Python validation dependencies
+        run: python -m pip install codespell 'pydantic>=2.12,<3'
+
       - name: Install just
         uses: taiki-e/install-action@just
 
@@ -68,9 +71,6 @@ jobs:
 
       - name: Install cargo-modules
         run: cargo binstall cargo-modules@0.26.0 --no-confirm
-
-      - name: Install codespell
-        run: python -m pip install codespell
 
       - name: Normalize version input
         id: meta
