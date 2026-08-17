@@ -92,16 +92,19 @@ prompt.
 ## Staffing (initial integration)
 
 The develop-branch integration is an **atm-dev team** project, not a hermes
-one: a codex agent (or two) runs ON the codex-atm repo as atm-dev team
-members, with **arch-ctm** as atm-side architect. This is the established
-pattern — arch-ctm already runs as a codex agent in the atm-core rmux layout.
-Coordination uses the existing terminal-agent atm path (tmux nudge + `atm
-read`) until the native integration they are building supersedes it —
-deliberate dogfooding. The codex-atm workspace gets its own `.atm.toml`
-(atm-dev team, dev-agent panes, startup directives pointing at this plan and
-the R5 boundary rules). Ongoing MAINTENANCE (release-triggered sync pipeline,
-leonardo escalation) stays on the hermes/hendrix side and is out of scope for
-the dev team.
+one. The team runs out of the atm-dev repo AS FAR AS ATM IS CONCERNED — the
+existing atm-core `.atm.toml`/rmux layout is the team anchor, extended with
+panes for 1–2 additional dev agents whose WORKING DIRECTORY is the codex-atm
+checkout (the proven multi-repo pattern: each agent's context stays focused on
+a single repo; team plumbing stays in one place). **arch-ctm** is atm-side
+architect but expects little atm-graft dev work — the crate is proven — so his
+role is support and infrastructure (R5 rule packaging, R6 fixtures, R2 API
+surface review). Dev-agent startup directives point at this plan and the R5
+boundary rules. Coordination uses the existing terminal-agent atm path (tmux
+nudge + `atm read`) until the native integration they are building supersedes
+it — deliberate dogfooding. Ongoing MAINTENANCE (release-triggered sync
+pipeline, leonardo escalation) stays on the hermes/hendrix side and is out of
+scope for the dev team.
 
 ## Proposed sequencing
 
