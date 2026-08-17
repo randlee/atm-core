@@ -2378,7 +2378,7 @@ Product requirement ID:
   idle worker must coalesce, recover, and expose bounded freshness status
   without blocking mail admission, routing, acknowledgement, or canonical
   reads. The canonical decision is
-  [ADR-049](./adr/ADR-049-durable-idle-search-projection.md).
+  [ADR-050](./adr/ADR-050-durable-idle-search-projection.md).
 
 Satisfied by:
 - `REQ-CORE-WORKFLOW-001` for the canonical two-axis model and legal
@@ -2409,7 +2409,7 @@ Satisfied by:
   read-only search-projection freshness DTO through local presentation
   contracts. It must not schedule/drain work, import SQLite/FTS details, or
   make a send/read/ack decision depend on projection backlog. This derives
-  from ADR-049 and satisfies `REQ-P-SEARCH-INDEX-001`.
+  from ADR-050 and satisfies `REQ-P-SEARCH-INDEX-001`.
 
 ### 15.1 Persisted Message Fields
 
