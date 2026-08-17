@@ -192,13 +192,13 @@ pub struct GraftPostSendWireRequest {
 /// Owner-readable publication describing where an embedded agent listens for
 /// post-send nudges.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct GraftReceiverEndpointRecord {
-    pub schema_version: u8,
-    pub owner_generation: String,
+struct GraftReceiverEndpointRecord {
+    schema_version: u8,
+    owner_generation: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub owner_chat_id: Option<ChatId>,
-    pub loopback: SocketAddr,
-    pub capability_base64url: String,
+    owner_chat_id: Option<ChatId>,
+    loopback: SocketAddr,
+    capability_base64url: String,
 }
 
 impl GraftReceiverEndpointRecord {
