@@ -676,6 +676,7 @@ def public_registry_check_plan(args: argparse.Namespace) -> int:
         *(
             check
             for crate in manifest["crates"]
+            if crate.get("publish", True)
             for check in public_registry_checks(
                 manifest["channel_contracts"], "crates_io", crate["package"], args.version
             )

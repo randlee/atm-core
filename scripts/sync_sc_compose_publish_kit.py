@@ -26,6 +26,11 @@ AGENT_FILES = (
     ".claude/agents/winget-publisher.md",
     "release/publish-channel-contracts.toml",
     "scripts/release_manifest.py",
+    "scripts/ci/validate_publish_order.sh",
+    "docs/publishing-agent.md",
+    "release/homebrew/formula.rb.j2",
+    ".github/workflows/homebrew-publish.yml",
+    ".github/workflows/winget-publish.yml",
 )
 
 

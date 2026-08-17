@@ -1,0 +1,203 @@
+name: Publish Homebrew
+
+# This post-release channel reads every repository-specific value from
+# release/publish-artifacts.toml and may be re-dispatched for the same tag.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Published GitHub Release tag to publish (e.g. v1.4.1)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-homebrew-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  verify-release:
+    runs-on: ubuntu-latest
+    outputs:
+      channel_config: ${{ steps.config.outputs.channel_config }}
+      asset_patterns: ${{ steps.config.outputs.asset_patterns }}
+      release_version: ${{ steps.meta.outputs.release_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - id: config
+        name: Read Homebrew configuration from release manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          config="$(python3 scripts/release_artifacts.py channel-config --manifest release/publish-artifacts.toml --channel homebrew)"
+          echo "channel_config=${config}" >> "$GITHUB_OUTPUT"
+          {
+            echo 'asset_patterns<<EOF'
+            jq -r '.asset_patterns[]' <<<"${config}"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+      - uses: ./.github/actions/verify-published-release
+        with:
+          release_tag: ${{ inputs.tag }}
+          asset_patterns: ${{ steps.config.outputs.asset_patterns }}
+      - id: meta
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: echo "release_version=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
+
+  update-tap:
+    needs: verify-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout workflow support
+        uses: actions/checkout@v4
+      - name: Checkout immutable release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          path: release-source
+      - name: Checkout Homebrew tap
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ fromJSON(needs.verify-release.outputs.channel_config).channel.tap_repository }}
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+      - name: Download configured release assets and compute SHA256
+        shell: bash
+        env:
+          CHANNEL_CONFIG: ${{ needs.verify-release.outputs.channel_config }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_VERSION: ${{ needs.verify-release.outputs.release_version }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+
+          config = json.loads(os.environ["CHANNEL_CONFIG"])
+          project = config["project"]
+          channel = config["channel"]
+          assets = []
+          archives_by_target = {}
+
+          def download(target):
+              filename = f"{project['archive_prefix']}_{os.environ['RELEASE_VERSION']}_{target['target']}.{target['archive']}"
+              url = f"https://github.com/{os.environ['RELEASE_REPOSITORY']}/releases/download/{os.environ['RELEASE_TAG']}/{filename}"
+              path = Path(os.environ["RUNNER_TEMP"]) / filename
+              subprocess.run(
+                  ["curl", "-fsSL", "--retry", "5", "--retry-delay", "30", "--retry-all-errors", "-o", str(path), url],
+                  check=True,
+              )
+              archives_by_target[target["target"]] = path
+              return url, path
+
+          for asset in config["channel"]["assets"]:
+              target = config["release_targets"][asset["target"]]
+              url, path = download(target)
+              assets.append(
+                  {"key": asset["key"], "url": url, "sha256": hashlib.file_digest(path.open("rb"), "sha256").hexdigest()}
+              )
+          renderer_target = config["release_targets"][channel["renderer_target"]]
+          renderer_archive = archives_by_target.get(renderer_target["target"])
+          if renderer_archive is None:
+              _url, renderer_archive = download(renderer_target)
+          Path("homebrew-release-assets.json").write_text(json.dumps(assets), encoding="utf-8")
+          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env_file:
+              env_file.write(f"PUBLISHED_RENDERER_ARCHIVE={renderer_archive}\n")
+              env_file.write(
+                  "PUBLISHED_RENDERER_EXTRACT_DIR="
+                  f"{project['archive_prefix']}_{os.environ['RELEASE_VERSION']}_{renderer_target['target']}\n"
+              )
+          PY
+      - name: Extract manifest-declared published renderer
+        uses: ./.github/actions/extract-published-renderer
+        with:
+          archive: ${{ env.PUBLISHED_RENDERER_ARCHIVE }}
+          extract-dir: ${{ env.PUBLISHED_RENDERER_EXTRACT_DIR }}
+          binary-path: ${{ fromJSON(needs.verify-release.outputs.channel_config).project.renderer_archive_path }}
+      - name: Render formula from the manifest-declared template
+        shell: bash
+        env:
+          CHANNEL_CONFIG: ${{ needs.verify-release.outputs.channel_config }}
+          FORMULA_PATH: ${{ fromJSON(needs.verify-release.outputs.channel_config).channel.formula_path }}
+          FORMULA_TEMPLATE: ${{ fromJSON(needs.verify-release.outputs.channel_config).channel.formula_template }}
+          RELEASE_VERSION: ${{ needs.verify-release.outputs.release_version }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          config = json.loads(os.environ["CHANNEL_CONFIG"])
+          project = config["project"]
+          channel = config["channel"]
+          assets = {asset["key"]: asset for asset in json.loads(Path("homebrew-release-assets.json").read_text())}
+          binary = channel["binary"]
+          bundled_paths = []
+          for entry in config.get("release_binaries", []):
+              if entry["name"] != binary:
+                  continue
+              for bundle in entry.get("bundled_paths", []):
+                  destination = bundle["destination"]
+                  bundled_paths.append(
+                      {
+                          "destination_components": bundle["homebrew_destination_components"],
+                          "source_glob": f"{destination}/*",
+                      }
+                  )
+          variables = {
+              "formula_class": channel["formula_class"],
+              "description": project["description"],
+              "homepage": project["homepage"],
+              "license": project["license"],
+              "version": os.environ["RELEASE_VERSION"],
+              "macos_arm_url": assets["macos_arm"]["url"],
+              "macos_arm_sha256": assets["macos_arm"]["sha256"],
+              "macos_intel_url": assets["macos_intel"]["url"],
+              "macos_intel_sha256": assets["macos_intel"]["sha256"],
+              "linux_url": assets["linux"]["url"],
+              "linux_sha256": assets["linux"]["sha256"],
+              "binary": binary,
+              "test_command": channel["test_command"],
+              "test_output": channel["test_output"],
+              "binary_path": f"bin/{binary}",
+              "bundled_paths": bundled_paths,
+          }
+          Path("homebrew-vars.json").write_text(json.dumps(variables), encoding="utf-8")
+          PY
+          workspace_root="$(pwd)"
+          mkdir -p "$(dirname "homebrew-tap/${FORMULA_PATH}")"
+          "${PUBLISHED_RENDERER}" render --mode file --root release-source \
+            --file "${FORMULA_TEMPLATE}" \
+            --var-file "${workspace_root}/homebrew-vars.json" \
+            --output "${workspace_root}/homebrew-tap/${FORMULA_PATH}"
+      - name: Verify formula syntax
+        env:
+          FORMULA_PATH: ${{ fromJSON(needs.verify-release.outputs.channel_config).channel.formula_path }}
+        run: ruby -c "homebrew-tap/${FORMULA_PATH}"
+      - name: Commit and push formula update
+        shell: bash
+        env:
+          FORMULA_PATH: ${{ fromJSON(needs.verify-release.outputs.channel_config).channel.formula_path }}
+          PROJECT_NAME: ${{ fromJSON(needs.verify-release.outputs.channel_config).project.name }}
+          RELEASE_VERSION: ${{ needs.verify-release.outputs.release_version }}
+        run: |
+          set -euo pipefail
+          cd homebrew-tap
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add "${FORMULA_PATH}"
+          git diff --cached --quiet && echo 'Formula already matches the release assets' && exit 0
+          git commit -m "chore: bump ${PROJECT_NAME} to v${RELEASE_VERSION}"
+          git push

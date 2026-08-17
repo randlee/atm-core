@@ -1,0 +1,60 @@
+name: Publish Winget
+
+# This post-release channel reads its package identity and installer pattern
+# from release/publish-artifacts.toml and may be re-dispatched for the same tag.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Published release tag to submit (e.g. v1.4.1)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-winget-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  verify-release:
+    runs-on: ubuntu-latest
+    outputs:
+      channel_config: ${{ steps.config.outputs.channel_config }}
+      asset_patterns: ${{ steps.config.outputs.asset_patterns }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - id: config
+        name: Read Winget configuration from release manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          config="$(python3 scripts/release_artifacts.py channel-config --manifest release/publish-artifacts.toml --channel winget)"
+          echo "channel_config=${config}" >> "$GITHUB_OUTPUT"
+          {
+            echo 'asset_patterns<<EOF'
+            jq -r '.asset_patterns[]' <<<"${config}"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+      - uses: ./.github/actions/verify-published-release
+        with:
+          release_tag: ${{ inputs.tag }}
+          asset_patterns: ${{ steps.config.outputs.asset_patterns }}
+
+  publish-winget:
+    needs: verify-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish to Winget
+        uses: vedantmgoyal2009/winget-releaser@v2
+        with:
+          identifier: ${{ fromJSON(needs.verify-release.outputs.channel_config).channel.identifier }}
+          release-tag: ${{ inputs.tag }}
+          installers-regex: ${{ fromJSON(needs.verify-release.outputs.channel_config).asset_patterns[0] }}
+          # Must authorize a fork of microsoft/winget-pkgs; the repository
+          # GITHUB_TOKEN is intentionally not used for this external channel.
+          token: ${{ secrets.WINGET_GITHUB_TOKEN }}

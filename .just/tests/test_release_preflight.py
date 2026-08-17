@@ -9,23 +9,23 @@ WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release-preflight.yml"
 
 
 class ReleasePreflightWorkflowTests(unittest.TestCase):
-    def test_release_preflight_stages_installed_docs_before_validation(self) -> None:
+    def test_release_preflight_reads_the_manifest_derived_credential_plan(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
 
-        self.assertIn("python3 scripts/release_artifacts.py stage-install-docs", text)
-        self.assertIn("--output-root \"${STAGED_INSTALL_ROOT}\"", text)
+        self.assertIn("preflight-secret-plan --manifest", text)
+        self.assertIn("channel-preflight-results", text)
 
-    def test_release_preflight_passes_staged_install_root_to_validator(self) -> None:
+    def test_release_preflight_uses_contract_derived_registry_checks(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
 
-        self.assertIn("python3 scripts/validate_release.py all \\", text)
-        self.assertIn("--staged-install-root \"${STAGED_INSTALL_ROOT}\"", text)
+        self.assertIn("public-registry-check-plan", text)
+        self.assertNotIn("randlee/atm-core", text)
 
-    def test_release_preflight_installs_canonical_python_tools_before_validation(self) -> None:
+    def test_release_preflight_installs_canonical_python_tools(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
 
-        install_python = text.index("- name: Install canonical Python tools")
-        validate = text.index("- name: Run canonical retained release validation suite")
+        install_python = text.index("- name: Install canonical Python release tools")
+        validate = text.index("- id: manifest")
         self.assertLess(install_python, validate)
         self.assertIn("uses: ./.github/actions/setup-python-release-tools", text)
         self.assertNotIn("python -m pip install codespell", text)
