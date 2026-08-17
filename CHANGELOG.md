@@ -1,7 +1,21 @@
 # Changelog
 
-## 1.4.2
+## 1.4.3
 
+- recovery release: `v1.4.2` was abandoned as a release tag/GitHub Release
+  after the tag was created pointing at a commit that predates a required
+  fix. `cargo publish`'s isolated package-verification build failed for
+  `agent-team-mail` because `crates/atm/src/commands/api.rs` embedded
+  `docs/atm-http-runtime/openapi.yaml` via `include_str!` from outside the
+  crate directory, so it was absent from the package tarball. PR #930 fixes
+  this by packaging a byte-for-byte-guarded derivative at
+  `crates/atm/openapi.yaml`, but it merged to `main` after the `v1.4.2` tag
+  already existed, and tag mutation is not a permitted recovery path. The 11
+  crates already published at `1.4.2` on crates.io remain there permanently;
+  all 12 crates are republished at `1.4.3` from `release/v1.4.3` (cut from
+  `main`, includes PR #930). All content below was originally authored for
+  `1.4.2` and is unchanged except for this recovery note and the version
+  number.
 - ship the minimal Tokio/Axum HTTP runtime (`atm-http-runtime`), replacing
   hand-written synchronous HTTP framing for local and cross-host listeners
   (Phase AL)
