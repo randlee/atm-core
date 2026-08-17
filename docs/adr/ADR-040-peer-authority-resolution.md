@@ -64,8 +64,10 @@ The CLI accepts either the registered hostname (including the documented
 
 - after CLI normalization, a hostname input must exactly match one registered
   canonical hostname;
-- a literal IP input is authorized only when a fresh bounded DNS/mDNS lookup of
-  exactly one registered hostname contains that address;
+- a literal IP input is authorized only when a fresh lookup of no more than 32
+  enabled registered DNS/mDNS hostnames finds exactly one hostname containing
+  that address; a larger enabled peer set fails with recovery to use the
+  registered hostname directly;
 - zero matches are untrusted and two or more matches are ambiguous; both fail
   closed before connection; and
 - reverse-DNS lookup is forbidden. An IP-only registration never authorizes a

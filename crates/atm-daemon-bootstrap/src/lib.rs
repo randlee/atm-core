@@ -426,6 +426,30 @@ pub fn with_default_peer_config_store<T>(
     f(assembly.peer_config_store().as_ref())
 }
 
+/// Open the canonical roster and durable peer-authority seams from one
+/// runtime assembly for CLI-only peer address normalization.
+///
+/// Keeping the two reads in the same assembly avoids accidentally composing
+/// a roster from one runtime snapshot with peer trust from another. The
+/// closure receives storage contracts only; no transport or daemon surface is
+/// exposed.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when the default SQLite-backed retained runtime cannot
+/// assemble its canonical boundary state.
+pub fn with_default_peer_address_stores<T>(
+    f: impl FnOnce(
+        &(dyn atm_storage::RosterStore + Send + Sync),
+        &(dyn atm_storage::PeerConfigStore + Send + Sync),
+    ) -> Result<T, AtmError>,
+) -> Result<T, AtmError> {
+    let assembly = assemble_default_runtime()?;
+    let roster_store = assembly.shared_roster_store_arc();
+    let peer_config_store = assembly.peer_config_store();
+    f(roster_store.as_ref(), peer_config_store.as_ref())
+}
+
 #[cfg(test)]
 mod replacement_runtime_tests {
     use std::time::Duration;

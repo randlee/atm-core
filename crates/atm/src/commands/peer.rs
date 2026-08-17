@@ -301,7 +301,7 @@ fn trusted_peer_host(value: &str) -> std::result::Result<HostName, AtmError> {
         .map_err(|_source| AtmError::peer_config_validation("invalid --host"))?;
     if !host.is_durable_hostname() {
         return Err(AtmError::peer_config_validation(
-            "--host must be a durable DNS hostname (IP addresses and .local names are not stable peer identities)",
+            "--host must be a durable DNS or mDNS hostname (IP addresses are not stable peer identities)",
         ));
     }
     Ok(host)
