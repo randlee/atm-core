@@ -5,6 +5,7 @@ import unittest
 
 
 WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "hermes-atm-pypi-publish.yml"
+CI_WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "ci.yml"
 
 
 class HermesAtmPyPiPublishWorkflowTests(unittest.TestCase):
@@ -36,6 +37,7 @@ class HermesAtmPyPiPublishWorkflowTests(unittest.TestCase):
             self.assertIn(artifact, workflow)
         self.assertIn("prepare_hermes_atm_publish_artifacts.py", workflow)
         self.assertIn("twine check publish-dist/*", workflow)
+        self.assertIn("workflow_call:", CI_WORKFLOW.read_text(encoding="utf-8"))
 
     def test_publish_workflow_uses_target_scoped_twine_tokens(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
