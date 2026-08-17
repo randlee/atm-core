@@ -35,9 +35,15 @@ prompt.
 
 ### R2 — Rust-native host embedding API (the codex seam)
 - Public, rustdoc'd, stability-stated Rust API on `atm-graft` for an external
-  host: activate receiver (identity, team, host binding), register nudge
-  callback, clean shutdown — the Rust equivalent of what `atm-graft-python`
-  gives hermes.
+  host: activate receiver (identity, team, host binding), clean shutdown —
+  the Rust equivalent of what `atm-graft-python` gives hermes.
+- **API shape: TWO Rust channels** (literally channels, e.g.
+  `tokio::sync::mpsc::Receiver<Nudge>` × 2) handed to the host on
+  activation — one for **steer**-mode nudges, one for **queue**-mode nudges.
+  atm-graft carries one delivery channel today; growing the second (and the
+  sender-side mode routing that feeds it) is atm-core work under this
+  requirement. Host-side consumption design:
+  hendrix `codex-ops/STEER-QUEUE-DESIGN.md`.
 - Tokio compatibility: codex is tokio-based. Preferred: tokio-native
   activation (aligns with atm-http-runtime). Minimum: a documented thread
   model so the host bridges callbacks safely.
