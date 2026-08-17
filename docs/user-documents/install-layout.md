@@ -1,7 +1,7 @@
 ---
 title: Install Layout
 audience: end-user
-reviewed_for_release: 1.4.2
+reviewed_for_release: 1.4.3
 ---
 
 # Install Layout
@@ -21,7 +21,7 @@ Long-form user docs live under `share/doc/atm/`.
 A typical local install layout looks like this:
 
 ```text
-~/.local/atm/1.4.2/
+~/.local/atm/1.4.3/
   bin/
     atm
     atm-daemon

@@ -2,16 +2,36 @@
 
 ## Summary
 
-- version: 1.4.2
+- version: 1.4.3
 - release date: 2026-08-17
 - release owner: publisher (ATM release execution)
 
-Version 1.4.2 consolidates the caller-identity and post-send simplification
+Version 1.4.3 consolidates the caller-identity and post-send simplification
 work, the Tokio/Axum HTTP runtime, deletion of the retired transport path,
 decomposed template messages and query surface, and the first public-package
 release lane for `hermes-atm` and `atm-graft`. It also records historical
 transport lines honestly: Phase AG and Phase AK are retired/superseded rather
 than features carried by this release.
+
+## Recovery Note (v1.4.2 → v1.4.3)
+
+- The `v1.4.2` release attempt published 11 of 12 crates (all but
+  `agent-team-mail`) to crates.io before failing `cargo publish`'s isolated
+  package-verification build: `crates/atm/src/commands/api.rs` embedded
+  `docs/atm-http-runtime/openapi.yaml` via `include_str!`, but that file lived
+  outside the crate's own directory and was therefore absent from the
+  packaged tarball cargo publish verifies against.
+- The fix (PR #930) packages a byte-for-byte-guarded derivative at
+  `crates/atm/openapi.yaml` so the CLI crate owns its OpenAPI contract. It
+  merged to `main` after the `v1.4.2` tag had already been created by the
+  release workflow's gate-and-tag step, so the tag could not be moved to
+  include it (tag mutation is not a permitted recovery path).
+- `v1.4.2` is abandoned as a release tag/GitHub Release: it was never
+  completed (no tag-consistent build, no GitHub Release, no Homebrew/winget
+  publish). The 11 crates already live at `1.4.2` on crates.io remain
+  published there permanently (crates.io versions are immutable); this
+  release republishes all 12 crates at `1.4.3` from a fresh `release/v1.4.3`
+  branch cut from `main`, which includes PR #930.
 
 ## Included Changes
 
@@ -25,7 +45,7 @@ than features carried by this release.
 ### Phase AG — retired cross-host design (historical context)
 
 - Retain the early custom-frame/TCP cross-host design only as historical
-  context. It was explicitly rejected and retired; it is not a v1.4.2
+  context. It was explicitly rejected and retired; it is not a v1.4.3
   transport feature.
 - Phase AI, followed by the Phase AL/AM runtime, is the accepted replacement
   line.
@@ -156,7 +176,7 @@ than features carried by this release.
 - Physical two-Mac and Mac-to-Windows peer proof remains pending. The current
   Windows-to-M4 limitation is the available VPN/DNS topology, not an alternate
   or unsupported local transport path.
-- Production peer TLS/mTLS is not part of v1.4.2. Quarantined TLS
+- Production peer TLS/mTLS is not part of v1.4.3. Quarantined TLS
   provisioning/storage material and curl mTLS interop fixtures are retained as
   reference material only; no TLS business logic is on the live daemon HTTP
   path.
