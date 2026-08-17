@@ -55,6 +55,7 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-045 — Runtime Observation Attribution](./ADR-045-runtime-observation-attribution.md)
 - [ADR-046 — Template-Declared Workflow Metadata And Admission Snapshots](./ADR-046-template-declared-workflow-metadata.md)
 - [ADR-049 — hermes-atm/atm-graft First Public PyPI Release Versioning](./ADR-049-hermes-atm-first-public-pypi-release-versioning.md)
+- [ADR-050 — Durable Idle Search Projection](./ADR-050-durable-idle-search-projection.md)
 
 ## Extracted Crate-Local ADRs
 

@@ -2371,6 +2371,14 @@ Product requirement ID:
   iteration analysis. Optional OpenTelemetry-compatible export is a projection
   of durable facts and must not alter routing, admission, policy, or security
   decisions.
+- `REQ-P-SEARCH-INDEX-001` ATM search indexes are recoverable, eventually
+  consistent projections of canonical durable rows. Foreground admission must
+  atomically persist source data plus an idempotent durable projection work
+  item without synchronously performing FTS maintenance; the one crate-owned
+  idle worker must coalesce, recover, and expose bounded freshness status
+  without blocking mail admission, routing, acknowledgement, or canonical
+  reads. The canonical decision is
+  [ADR-050](./adr/ADR-050-durable-idle-search-projection.md).
 
 Satisfied by:
 - `REQ-CORE-WORKFLOW-001` for the canonical two-axis model and legal
@@ -2397,6 +2405,11 @@ Satisfied by:
   non-authoritative read-side projection only: it cannot affect message
   admission, routing, retry, policy, or security. The requirement derives
   from ADR-046 and satisfies `REQ-P-WORKFLOW-ANALYTICS-001`.
+- `REQ-CORE-SEARCH-INDEX-001` `atm-core` must carry only the backend-neutral,
+  read-only search-projection freshness DTO through local presentation
+  contracts. It must not schedule/drain work, import SQLite/FTS details, or
+  make a send/read/ack decision depend on projection backlog. This derives
+  from ADR-050 and satisfies `REQ-P-SEARCH-INDEX-001`.
 
 ### 15.1 Persisted Message Fields
 

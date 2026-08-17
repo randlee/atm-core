@@ -142,6 +142,11 @@ Initial crate requirement IDs:
   - `MailStoreDoctor`, `RosterStoreDoctor`, and `ConfigDoctor` are the
     subsystem-owned doctor traits that freeze the aggregate-only daemon doctor
     model
+- `REQ-CORE-SEARCH-INDEX-001` `atm-core` owns transport-neutral presentation
+  of the read-only search-projection freshness DTO. It must not schedule or
+  drain search-index work, import SQLite/FTS details, or make canonical
+  send/read/ack behavior depend on a projection backlog. Satisfies
+  `REQ-P-SEARCH-INDEX-001` per ADR-050.
 - `REQ-CORE-OBS-001` `atm-core` owns the abstract observability boundary and
   ATM-owned event/query models above shared crates. Satisfies the ATM event,
   query-model, and health-contract aspects of:

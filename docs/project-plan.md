@@ -1227,7 +1227,7 @@ Acceptance:
   proven dead, no guard is merged early, and the minimality proof confirms
   no compatibility shim survives.
 
-## 45. Phase AN — Decomposed Template Messages And Query Surface [AN.1–AN.15 COMPLETE]
+## 45. Phase AN — Decomposed Template Messages And Query Surface [COMPLETE]
 
 - **Phase AN: Decomposed Template Messages And Query Surface [AN.1–AN.10 COMPLETE]** —
   Added a bounded `sc-composer` adapter boundary, durable template catalog and
@@ -1285,6 +1285,50 @@ Sprint line:
   [`sprint-AN13-sc-compose-141-checked-render.md`](./plans/phase-an/sprint-AN13-sc-compose-141-checked-render.md),
   [`sprint-AN14-sc-compose-141-checked-emission.md`](./plans/phase-an/sprint-AN14-sc-compose-141-checked-emission.md),
   and [`sprint-AN15-adversarial-fuzzing.md`](./plans/phase-an/sprint-AN15-adversarial-fuzzing.md).
+
+## 46. Phase AO — Optional mTLS for the Canonical HTTP Peer Path [APPROVED PLAN]
+
+- **Phase AO** restores optional mTLS on the canonical Tokio/Axum direct-peer
+  path through one reusable `peer-tls` adapter. The adapter consumes the
+  existing sealed TLS configuration/key-exchange storage types; it does not
+  duplicate certificate policy or create a second HTTP path. Once a trusted
+  peer configuration exists, TLS is the default; plaintext is an explicit,
+  observable test/benchmark/debug override only.
+
+Phase AO is planned independently from AQ. Its authoritative planning branch
+is `plan/phase-ao-tls-and-ap-outbound-connectivity`; its plan is approved but
+has not yet been merged into this documentation line.
+
+## 47. Phase AP — Outbound-Only Corporate Network Peer Connectivity [PROPOSED PLAN]
+
+- **Phase AP** targets a restricted daemon that can initiate outbound HTTP but
+  cannot accept unsolicited inbound peer TCP. Its proposed path is an
+  authenticated outbound mTLS SSE session plus ordinary authenticated HTTP
+  POST. AP.1 must first prove that design on the actual CWin/M4/M5 network, or
+  retain the infrastructure block; localhost, port forwarding, SSH tunnels,
+  and relays are not evidence.
+
+Phase AP follows the mTLS proof required by AO.3, but remains independent of
+AQ's local search-projection work. Its authoritative planning branch is
+`plan/phase-ao-tls-and-ap-outbound-connectivity`; its plan has not yet been
+merged into this documentation line.
+
+## 48. Phase AQ — Search Indexing and Query Optimization [PLANNED]
+
+- **Phase AQ** moves synchronous FTS projection maintenance out of foreground
+  mail admission while preserving canonical rows as immediate durable truth.
+  AQ.1 atomically records coalesced desired-state projection work and drains
+  it only through the existing idle SQLite writer; it makes FTS freshness
+  explicit through local query/doctor observations and preserves
+  crash/reindex recovery. AQ.2 then supplies managed M5 direct/F8 performance
+  and recovery evidence against the retained FTS-free control. It cannot
+  replace that historical comparison with a reduced absolute threshold.
+
+The authoritative decision and sprint scopes are
+[`ADR-050`](./adr/ADR-050-durable-idle-search-projection.md),
+[`Phase AQ plan`](./plans/phase-aq/plan-phase-aq.md),
+[`sprint-AQ1`](./plans/phase-aq/sprint-AQ1-durable-idle-search-projection.md),
+and [`sprint-AQ2`](./plans/phase-aq/sprint-AQ2-search-projection-performance-evidence.md).
 
 ## Publishing Improvements
 

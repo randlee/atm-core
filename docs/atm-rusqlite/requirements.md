@@ -71,6 +71,15 @@ Initial crate requirement IDs:
   `REQ-CORE-WORKFLOW-ANALYTICS-001`,
   `REQ-P-TEMPLATE-WORKFLOW-001`, `REQ-P-TEMPLATE-TAGS-001`, and
   `REQ-P-WORKFLOW-ANALYTICS-001` per ADR-046.
+- `REQ-RUSQLITE-SEARCH-INDEX-001` `atm-storage-rusqlite` owns the private,
+  additive desired-state ledger and single-writer idle drain for recoverable
+  FTS projections. Canonical source mutation and work enqueue must be one
+  transaction; drain completion and ledger removal must be one transaction;
+  restart must resume unfinished work; foreground writer work always wins.
+  The crate exposes only the backend-neutral read-only freshness status
+  authorized by the amended sealed search capability. It adds no second
+  SQLite owner, daemon, or public maintenance trait. Satisfies
+  `REQ-P-SEARCH-INDEX-001` and `REQ-CORE-SEARCH-INDEX-001` per ADR-050.
 
 ## 4. Required References
 

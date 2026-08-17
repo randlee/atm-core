@@ -1,0 +1,69 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-002-AQ>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-002-AQ" ;
+  triage:title "Sprint-doc status:draft vs phase status:planned inconsistency" ;
+  triage:description "docs/plans/phase-aq/plan-phase-aq.md frontmatter states 'status: AQ.1-AQ.2 planned', but the individual sprint docs sprint-AQ1-durable-idle-search-projection.md and/or sprint-AQ2-search-projection-performance-evidence.md still carry a frontmatter status field of 'draft', creating an inconsistency between the phase-level and sprint-level declared status." ;
+  triage:phaseId "phase-aq" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "consistency" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-15T19:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AQ.0 ;
+  triage:foundAt "2026-08-15T19:28:11Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-17T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedNote "Fixed on plan/search-indexing-admission-performance (commit b7004f67e, PR #891): plan-phase-aq.md:3, sprint-AQ1-durable-idle-search-projection.md:3, and sprint-AQ2-search-projection-performance-evidence.md:3 all now consistently declare status: planned. Confirmed independently by req-qa and arch-qa." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-AQ/AQ0-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-AQ/AQ0-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-AQ/AQ0-3> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-002-AQ/AQ0-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-aq/plan-phase-aq.md" ;
+  triage:line 3 ;
+  triage:snippet "status: AQ.1–AQ.2 planned" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "plan/search-indexing-admission-performance" ;
+  triage:headSha "6a89883fa19f7772aec5bf864da757a08eda9915" ;
+  triage:occursIn <urn:atm:triage:worktree/AQ-0/6a89883fa19f7772aec5bf864da757a08eda9915> .
+
+<urn:atm:triage:occurrence/ATM-QA-002-AQ/AQ0-2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-aq/sprint-AQ1-durable-idle-search-projection.md" ;
+  triage:line 3 ;
+  triage:snippet "status: draft" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "plan/search-indexing-admission-performance" ;
+  triage:headSha "6a89883fa19f7772aec5bf864da757a08eda9915" ;
+  triage:occursIn <urn:atm:triage:worktree/AQ-0/6a89883fa19f7772aec5bf864da757a08eda9915> .
+
+<urn:atm:triage:occurrence/ATM-QA-002-AQ/AQ0-3>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-aq/sprint-AQ2-search-projection-performance-evidence.md" ;
+  triage:line 3 ;
+  triage:snippet "status: draft" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "plan/search-indexing-admission-performance" ;
+  triage:headSha "6a89883fa19f7772aec5bf864da757a08eda9915" ;
+  triage:occursIn <urn:atm:triage:worktree/AQ-0/6a89883fa19f7772aec5bf864da757a08eda9915> .
+
+<urn:atm:triage:worktree/AQ-0/6a89883fa19f7772aec5bf864da757a08eda9915>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AQ-0" ;
+  triage:branch "plan/search-indexing-admission-performance" ;
+  triage:headSha "6a89883fa19f7772aec5bf864da757a08eda9915" ;
+  triage:orderIndex 0 .
