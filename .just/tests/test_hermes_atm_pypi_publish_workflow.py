@@ -42,8 +42,10 @@ class HermesAtmPyPiPublishWorkflowTests(unittest.TestCase):
     def test_publish_workflow_uses_target_scoped_twine_tokens(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
 
-        self.assertIn("secrets.TEST_PYPI_TOKEN", workflow)
-        self.assertIn("secrets.PYPI_TOKEN", workflow)
+        self.assertIn("secrets.TEST_PYPI_API_TOKEN", workflow)
+        self.assertIn("secrets.PYPI_API_TOKEN", workflow)
+        self.assertNotIn("secrets.TEST_PYPI_TOKEN", workflow)
+        self.assertNotIn("secrets.PYPI_TOKEN", workflow)
         self.assertIn("https://test.pypi.org/legacy/", workflow)
         self.assertIn("twine upload --non-interactive publish-dist/*", workflow)
 
