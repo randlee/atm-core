@@ -245,61 +245,16 @@ impl SendCommand {
             .map(|host| resolve_host_input(host, peers))
             .transpose()?;
 
-        match (recipient.host(), explicit_host) {
-            (Some(address_host), Some(flag_host))
-                if !address_host
-                    .as_str()
-                    .eq_ignore_ascii_case(flag_host.as_str()) =>
-            {
-                Err(peer_resolution_error(
-                    "recipient host and --host disagree",
-                    "Use the same host in both places, or specify it once with either `recipient@team.host` or `--host <host>`.",
-                ))
-            }
-            (Some(_), _) => Ok(recipient.to_string()),
-            (None, None) => Ok(recipient.to_string()),
-            (None, Some(host)) => AgentAddress::new(
-                recipient.agent().clone(),
-                recipient.chat_id().cloned(),
-                Some(
-                    recipient
-                        .team()
-                        .cloned()
-                        .unwrap_or_else(|| caller_team.clone()),
-                ),
-                Some(host),
-            )
-            .map(|target| target.to_string()),
-        }
+        merge_recipient_host(recipient, explicit_host, caller_team).map(|target| target.to_string())
     }
 
     fn legacy_target_with_explicit_host(&self, caller_team: &TeamName) -> Result<String> {
         let explicit_host = self.host.as_deref().map(parse_host_input).transpose()?;
         let recipient: AgentAddress = self.to.parse().map_err(anyhow::Error::from)?;
 
-        match (recipient.host(), explicit_host) {
-            (Some(address_host), Some(flag_host)) if address_host != &flag_host => {
-                Err(Self::message_validation_error(
-                    "recipient host and --host disagree",
-                    "Use the same host in both places, or specify it once with either `recipient@team.host` or `--host <host>`.",
-                ))
-            }
-            (Some(_), _) => Ok(recipient.to_string()),
-            (None, None) => Ok(recipient.to_string()),
-            (None, Some(host)) => AgentAddress::new(
-                recipient.agent().clone(),
-                recipient.chat_id().cloned(),
-                Some(
-                    recipient
-                        .team()
-                        .cloned()
-                        .unwrap_or_else(|| caller_team.clone()),
-                ),
-                Some(host),
-            )
+        merge_recipient_host(recipient, explicit_host, caller_team)
             .map(|target| target.to_string())
-            .map_err(Into::into),
-        }
+            .map_err(Into::into)
     }
 
     fn build_message_source(
@@ -538,6 +493,45 @@ impl CliRecipientInput {
             destination: Some(destination.to_string()),
         })
     }
+}
+
+/// Merges an optional CLI `--host` with an already parsed recipient.
+///
+/// This is deliberately CLI-only: callers have either canonicalized the host
+/// against trusted peer records or validated a diagnostic direct host. The
+/// returned address is therefore the ordinary canonical `AgentAddress` that
+/// crosses the daemon and HTTP boundaries.
+fn merge_recipient_host(
+    recipient: AgentAddress,
+    explicit_host: Option<HostName>,
+    caller_team: &TeamName,
+) -> std::result::Result<AgentAddress, AtmError> {
+    if let (Some(address_host), Some(flag_host)) = (recipient.host(), explicit_host.as_ref())
+        && !address_host
+            .as_str()
+            .eq_ignore_ascii_case(flag_host.as_str())
+    {
+        return Err(peer_resolution_error(
+            "recipient host and --host disagree",
+            "Use the same host in both places, or specify it once with either `recipient@team.host` or `--host <host>`.",
+        ));
+    }
+
+    if recipient.host().is_some() || explicit_host.is_none() {
+        return Ok(recipient);
+    }
+
+    AgentAddress::new(
+        recipient.agent().clone(),
+        recipient.chat_id().cloned(),
+        Some(
+            recipient
+                .team()
+                .cloned()
+                .unwrap_or_else(|| caller_team.clone()),
+        ),
+        explicit_host,
+    )
 }
 
 fn parse_host_input(raw_host: &str) -> Result<HostName> {
@@ -1042,6 +1036,19 @@ mod tests {
             via_destination.to.expect("destination target").to_string(),
             "both forms must create the same host-qualified destination before shared self-send validation"
         );
+    }
+
+    #[test]
+    fn legacy_explicit_host_compares_hostnames_case_insensitively() {
+        let caller_team = TEST_TEAM.parse().expect("caller team");
+        let target = send_command(
+            &format!("{TEST_SENDER}@{TEST_TEAM}.LOCALHOST"),
+            Some("localhost"),
+        )
+        .target_with_explicit_host(&caller_team)
+        .expect("case-only loopback host difference must be accepted");
+
+        assert_eq!(target, format!("{TEST_SENDER}@{TEST_TEAM}.LOCALHOST"));
     }
 
     #[test]
