@@ -34,7 +34,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          config="$(python3 scripts/release_artifacts.py channel-config --manifest release/publish-artifacts.toml --channel homebrew)"
+          config="$(python3 scripts/release_artifacts.py channel-config --manifest release/publish-artifacts.toml --channel homebrew --tag "${{ inputs.tag }}")"
           echo "channel_config=${config}" >> "$GITHUB_OUTPUT"
           {
             echo 'asset_patterns<<EOF'
@@ -125,12 +125,10 @@ jobs:
           archive: ${{ env.PUBLISHED_RENDERER_ARCHIVE }}
           extract-dir: ${{ env.PUBLISHED_RENDERER_EXTRACT_DIR }}
           binary-path: ${{ fromJSON(needs.verify-release.outputs.channel_config).project.renderer_archive_path }}
-      - name: Render formula from the manifest-declared template
+      - name: Render manifest-selected formulas with the published renderer
         shell: bash
         env:
           CHANNEL_CONFIG: ${{ needs.verify-release.outputs.channel_config }}
-          FORMULA_PATH: ${{ fromJSON(needs.verify-release.outputs.channel_config).channel.formula_path }}
-          FORMULA_TEMPLATE: ${{ fromJSON(needs.verify-release.outputs.channel_config).channel.formula_template }}
           RELEASE_VERSION: ${{ needs.verify-release.outputs.release_version }}
         run: |
           set -euo pipefail
@@ -138,66 +136,103 @@ jobs:
           import json
           import os
           from pathlib import Path
+          import subprocess
 
           config = json.loads(os.environ["CHANNEL_CONFIG"])
           project = config["project"]
           channel = config["channel"]
           assets = {asset["key"]: asset for asset in json.loads(Path("homebrew-release-assets.json").read_text())}
-          binary = channel["binary"]
-          bundled_paths = []
-          for entry in config.get("release_binaries", []):
-              if entry["name"] != binary:
-                  continue
-              for bundle in entry.get("bundled_paths", []):
-                  destination = bundle["destination"]
-                  bundled_paths.append(
-                      {
-                          "destination_components": bundle["homebrew_destination_components"],
-                          "source_glob": f"{destination}/*",
-                      }
-                  )
-          variables = {
-              "formula_class": channel["formula_class"],
-              "description": project["description"],
-              "homepage": project["homepage"],
-              "license": project["license"],
-              "version": os.environ["RELEASE_VERSION"],
-              "macos_arm_url": assets["macos_arm"]["url"],
-              "macos_arm_sha256": assets["macos_arm"]["sha256"],
-              "macos_intel_url": assets["macos_intel"]["url"],
-              "macos_intel_sha256": assets["macos_intel"]["sha256"],
-              "linux_url": assets["linux"]["url"],
-              "linux_sha256": assets["linux"]["sha256"],
-              "binary": binary,
-              "test_command": channel["test_command"],
-              "test_output": channel["test_output"],
-              "binary_path": f"bin/{binary}",
-              "bundled_paths": bundled_paths,
-          }
-          Path("homebrew-vars.json").write_text(json.dumps(variables), encoding="utf-8")
+          renderer = os.environ["PUBLISHED_RENDERER"]
+          for index, formula in enumerate(channel["formulas"]):
+              binaries = formula["binaries"]
+              bundled_paths = []
+              for entry in config.get("release_binaries", []):
+                  if entry["name"] not in binaries:
+                      continue
+                  for bundle in entry.get("bundled_paths", []):
+                      destination = bundle["destination"]
+                      bundled_paths.append(
+                          {
+                              "destination_components": bundle["homebrew_destination_components"],
+                              "source_glob": f"{destination}/*",
+                          }
+                      )
+              variables = {
+                  "formula_class": formula["class"],
+                  "description": project["description"],
+                  "homepage": project["homepage"],
+                  "license": project["license"],
+                  "version": os.environ["RELEASE_VERSION"],
+                  "macos_arm_url": assets["macos_arm"]["url"],
+                  "macos_arm_sha256": assets["macos_arm"]["sha256"],
+                  "macos_intel_url": assets["macos_intel"]["url"],
+                  "macos_intel_sha256": assets["macos_intel"]["sha256"],
+                  "linux_url": assets["linux"]["url"],
+                  "linux_sha256": assets["linux"]["sha256"],
+                  "test_binary": formula["test_binary"],
+                  "test_command": formula["test_command"],
+                  "test_output": formula["test_output"],
+                  "binary_paths": [f"bin/{binary}" for binary in binaries],
+                  "bundled_paths": bundled_paths,
+              }
+              variables_path = Path(f"homebrew-vars-{index}.json")
+              variables_path.write_text(json.dumps(variables), encoding="utf-8")
+              output = Path("homebrew-tap") / formula["path"]
+              output.parent.mkdir(parents=True, exist_ok=True)
+              subprocess.run(
+                  [
+                      renderer,
+                      "render",
+                      "--mode",
+                      "file",
+                      "--root",
+                      "release-source",
+                      "--file",
+                      formula["template"],
+                      "--var-file",
+                      str(variables_path.resolve()),
+                      "--output",
+                      str(output.resolve()),
+                  ],
+                  check=True,
+              )
           PY
-          workspace_root="$(pwd)"
-          mkdir -p "$(dirname "homebrew-tap/${FORMULA_PATH}")"
-          "${PUBLISHED_RENDERER}" render --mode file --root release-source \
-            --file "${FORMULA_TEMPLATE}" \
-            --var-file "${workspace_root}/homebrew-vars.json" \
-            --output "${workspace_root}/homebrew-tap/${FORMULA_PATH}"
       - name: Verify formula syntax
-        env:
-          FORMULA_PATH: ${{ fromJSON(needs.verify-release.outputs.channel_config).channel.formula_path }}
-        run: ruby -c "homebrew-tap/${FORMULA_PATH}"
-      - name: Commit and push formula update
         shell: bash
         env:
-          FORMULA_PATH: ${{ fromJSON(needs.verify-release.outputs.channel_config).channel.formula_path }}
+          CHANNEL_CONFIG: ${{ needs.verify-release.outputs.channel_config }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          for formula in json.loads(os.environ["CHANNEL_CONFIG"])["channel"]["formulas"]:
+              subprocess.run(["ruby", "-c", str(Path("homebrew-tap") / formula["path"])], check=True)
+          PY
+      - name: Commit and push formula updates
+        shell: bash
+        env:
+          CHANNEL_CONFIG: ${{ needs.verify-release.outputs.channel_config }}
           PROJECT_NAME: ${{ fromJSON(needs.verify-release.outputs.channel_config).project.name }}
           RELEASE_VERSION: ${{ needs.verify-release.outputs.release_version }}
         run: |
           set -euo pipefail
+          python3 - <<'PY' > homebrew-formula-paths.txt
+          import json
+          import os
+
+          for formula in json.loads(os.environ["CHANNEL_CONFIG"])["channel"]["formulas"]:
+              print(formula["path"])
+          PY
           cd homebrew-tap
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git add "${FORMULA_PATH}"
+          while IFS= read -r formula_path; do
+            git add -- "${formula_path}"
+          done < ../homebrew-formula-paths.txt
           git diff --cached --quiet && echo 'Formula already matches the release assets' && exit 0
           git commit -m "chore: bump ${PROJECT_NAME} to v${RELEASE_VERSION}"
           git push

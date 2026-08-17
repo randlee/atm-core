@@ -117,7 +117,7 @@ jobs:
           ref: ${{ needs.gate-and-tag.outputs.release_ref }}
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.94.1
           targets: ${{ matrix.target }}
@@ -216,7 +216,7 @@ jobs:
           ref: ${{ needs.gate-and-tag.outputs.release_ref }}
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.94.1
 
@@ -291,7 +291,7 @@ jobs:
           python-version: '3.11'
       - name: Install Rust toolchain for Maturin distributions
         if: ${{ matrix.build_system == 'maturin' }}
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.94.1
       - name: Build wheels
@@ -323,7 +323,7 @@ jobs:
           python-version: '3.11'
       - name: Install Rust toolchain for Maturin distributions
         if: ${{ matrix.build_system == 'maturin' }}
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.94.1
       - name: Build sdist

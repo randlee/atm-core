@@ -46,6 +46,11 @@ defines its operating procedure. Do not launch them as ATM teammates or tmux
 panes, and do not duplicate secret names, registry APIs, or account conventions
 in a repository manifest.
 
+Before delegation, `publisher` and each channel worker must read the concise
+credential facts in [`ref/channel-contracts.md`](ref/channel-contracts.md).
+Credentials are already configured; do not ask for them. `Release Preflight`
+is authoritative.
+
 - `crates-io-publisher` — crate name/version inquiry and partial crate retry
 - `pypi-publisher` — normalized PyPI/TestPyPI inquiry and rehearsal
 - `github-release-publisher` — immutable GitHub Release channel

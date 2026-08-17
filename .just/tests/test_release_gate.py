@@ -37,7 +37,10 @@ class ReleaseGateTests(unittest.TestCase):
         run(["git", "config", "user.email", "test@example.com"], cwd=self.seed)
 
         (self.seed / "README.md").write_text("seed\n", encoding="utf-8")
-        run(["git", "add", "README.md"], cwd=self.seed)
+        artifacts = self.seed / "scripts" / "release_artifacts.py"
+        artifacts.parent.mkdir(parents=True)
+        artifacts.write_text("raise SystemExit(0)\n", encoding="utf-8")
+        run(["git", "add", "README.md", "scripts/release_artifacts.py"], cwd=self.seed)
         run(["git", "commit", "-m", "seed"], cwd=self.seed)
         run(["git", "branch", "-M", "main"], cwd=self.seed)
         run(["git", "push", "-u", "origin", "main"], cwd=self.seed)
@@ -51,9 +54,9 @@ class ReleaseGateTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tempdir.cleanup()
 
-    def run_gate(self, trigger_ref: str) -> subprocess.CompletedProcess[str]:
+    def run_gate(self, version: str = "1.2.3") -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            ["bash", str(SCRIPT), "origin/main", "origin/develop", trigger_ref],
+            ["bash", str(SCRIPT), "origin/main", "origin/develop", version, "release/publish-artifacts.toml"],
             cwd=self.clone,
             check=False,
             capture_output=True,
@@ -61,19 +64,25 @@ class ReleaseGateTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-    def test_accepts_release_branch_trigger(self) -> None:
-        completed = self.run_gate("refs/heads/release/v1.2.3")
+    def test_accepts_converged_main_and_develop_for_requested_version(self) -> None:
+        completed = self.run_gate()
 
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertIn("PASS - release gate checks satisfied", completed.stdout)
-        self.assertIn("trigger_ref=refs/heads/release/v1.2.3", completed.stdout)
+        self.assertIn("version=1.2.3", completed.stdout)
 
-    def test_rejects_non_release_branch_trigger(self) -> None:
-        completed = self.run_gate("refs/heads/develop")
+    def test_rejects_develop_not_merged_to_main(self) -> None:
+        run(["git", "checkout", "develop"], cwd=self.seed)
+        (self.seed / "develop-only.txt").write_text("not released\n", encoding="utf-8")
+        run(["git", "add", "develop-only.txt"], cwd=self.seed)
+        run(["git", "commit", "-m", "develop only"], cwd=self.seed)
+        run(["git", "push"], cwd=self.seed)
+
+        completed = self.run_gate()
 
         self.assertNotEqual(completed.returncode, 0)
         self.assertIn(
-            "triggering ref must match refs/heads/release/vX.Y.Z",
+            "origin/develop has commits not in origin/main",
             completed.stderr,
         )
 

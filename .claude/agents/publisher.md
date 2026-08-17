@@ -142,6 +142,11 @@ identity, standard secret names, environments, public registry APIs, and safe
 credential checks; the reference defines its operating procedure. The artifact
 manifest remains repository-specific.
 
+The reference's credential-facts list is explicit: every token is already
+configured at the named GitHub Actions location, and each preflight/publish
+workflow is named there. Do not ask for credentials or question whether they
+exist; run `Release Preflight` and report its sanitized result.
+
 ## Release Execution
 
 1. Validate the manifest and candidate tag, then run `Release Preflight` with
@@ -190,11 +195,19 @@ manifest remains repository-specific.
   "inputs": {"tag": "v<VERSION>"},
   "dispatch_run_id": "<GitHub run id>",
   "status": "passed|failed|blocked",
-  "checks": [{"kind": "<check kind>", "status": "passed|failed|blocked|required"}],
+  "checks": [{"kind": "<check kind>", "status": "passed|failed|blocked"}],
+  "credential_rehearsal": "<manifest-derived rehearsal plan or null>",
   "verification": ["<channel-specific fact>"],
   "sanitized_diagnostic": "<empty on success; never a secret value>"
 }
 ```
+
+`required` describes a contract requirement, not an observed check result, and
+is never a result status. A worker may call its preflight complete only when
+every required check in the supplied result is `passed`. If evidence for a
+required check is absent, return `blocked`; if it is negative, return
+`failed`. Do not report a channel as technically ready while an entry remains
+uncollected.
 
 ## Retry Recovery
 

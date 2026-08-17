@@ -56,6 +56,18 @@ class ReleaseArtifactsTests(unittest.TestCase):
                 """
                 schema_version = 1
 
+                [project]
+                name = "demo"
+                archive_prefix = "demo"
+                description = "Demo release fixture"
+                homepage = "https://example.invalid/demo"
+                license = "MIT"
+
+                [[release_targets]]
+                target = "x86_64-unknown-linux-gnu"
+                os = "ubuntu-latest"
+                archive = "tar.gz"
+
                 [[crates]]
                 artifact = "demo-crate"
                 package = "demo-crate"
@@ -74,9 +86,19 @@ class ReleaseArtifactsTests(unittest.TestCase):
                 source_root = "docs/user-documents"
                 install_root = "share/doc/atm"
                 entrypoint = "share/doc/atm/README.md"
+
+                [channels.pypi]
+                workflow = "pypi-publish.yml"
+                dispatch_inputs = {}
                 """
             ).strip()
             + "\n",
+            encoding="utf-8",
+        )
+        (manifest_toml.parent / "publish-channel-contracts.toml").write_text(
+            (REPO_ROOT / "release" / "publish-channel-contracts.toml").read_text(
+                encoding="utf-8"
+            ),
             encoding="utf-8",
         )
 
@@ -86,77 +108,6 @@ class ReleaseArtifactsTests(unittest.TestCase):
         )
         docs_readme.write_text("# Demo ATM Docs\n", encoding="utf-8")
         return workspace_toml, manifest_toml
-
-    def write_homebrew_fixture(self) -> tuple[Path, Path]:
-        release_dir = self.root / "release"
-        formula_path = self.root / "homebrew-tap" / "Formula" / "atm.rb"
-        release_dir.mkdir(parents=True, exist_ok=True)
-        formula_path.parent.mkdir(parents=True, exist_ok=True)
-        (release_dir / "checksums.txt").write_text(
-            textwrap.dedent(
-                """
-                linuxsha  atm_1.3.0_x86_64-unknown-linux-gnu.tar.gz
-                intelmacsha  atm_1.3.0_x86_64-apple-darwin.tar.gz
-                armmacsha  atm_1.3.0_aarch64-apple-darwin.tar.gz
-                """
-            ).strip()
-            + "\n",
-            encoding="utf-8",
-        )
-        formula_path.write_text(
-            textwrap.dedent(
-                """
-                # typed: false
-                # frozen_string_literal: true
-
-                class Atm < Formula
-                  desc "CLI for mail-like messaging with Claude agent teams"
-                  homepage "https://github.com/randlee/atm-core"
-                  version "1.2.3"
-                  license "MIT"
-
-                  on_macos do
-                    on_intel do
-                      url "https://github.com/randlee/atm-core/releases/download/v1.2.3/atm_1.2.3_aarch64-apple-darwin.tar.gz"
-                      sha256 "wrong-old-macos-intel"
-
-                      def install
-                        bin.install "atm"
-                      end
-                    end
-                    on_arm do
-                      url "https://github.com/randlee/atm-core/releases/download/v1.2.3/atm_1.2.3_aarch64-apple-darwin.tar.gz"
-                      sha256 "wrong-old-macos-arm"
-
-                      def install
-                        bin.install "atm"
-                      end
-                    end
-                  end
-
-                  on_linux do
-                    on_intel do
-                      if Hardware::CPU.is_64_bit?
-                        url "https://github.com/randlee/atm-core/releases/download/v1.2.3/atm_1.2.3_aarch64-apple-darwin.tar.gz"
-                        sha256 "wrong-old-linux"
-
-                        def install
-                          bin.install "atm"
-                        end
-                      end
-                    end
-                  end
-
-                  test do
-                    system "#{bin}/atm", "--version"
-                  end
-                end
-                """
-            ).strip()
-            + "\n",
-            encoding="utf-8",
-        )
-        return release_dir, formula_path
 
     def run_validate_manifest(self, *, workspace_toml: Path, manifest_toml: Path) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
@@ -250,10 +201,10 @@ class ReleaseArtifactsTests(unittest.TestCase):
         completed = self.run_validate_manifest(workspace_toml=workspace_toml, manifest_toml=manifest_toml)
 
         self.assertNotEqual(completed.returncode, 0)
-        self.assertIn("publish metadata violation(s):", completed.stdout)
+        self.assertIn("publish metadata violation(s):", completed.stderr)
         self.assertIn(
             "demo-crate: missing required publish metadata field(s): description, license or license-file",
-            completed.stdout,
+            completed.stderr,
         )
 
     def test_validate_manifest_rejects_non_publishable_runtime_path_dependency(self) -> None:
@@ -303,96 +254,28 @@ class ReleaseArtifactsTests(unittest.TestCase):
         )
 
         self.assertNotEqual(completed.returncode, 0)
-        self.assertIn("publish dependency violation(s):", completed.stdout)
+        self.assertIn("publish dependency violation(s):", completed.stderr)
         self.assertIn(
             "demo-crate has runtime/build path dependency private-crate whose Cargo.toml sets publish = false",
-            completed.stdout,
+            completed.stderr,
         )
 
-    def test_update_homebrew_formulas_rewrites_each_platform_block_to_its_own_asset(self) -> None:
-        release_dir, formula_path = self.write_homebrew_fixture()
-
-        completed = self.run_release_artifacts(
-            "update-homebrew-formulas",
-            "--release-dir",
-            str(release_dir),
-            "--version",
-            "1.3.0",
-            "--tag",
-            "v1.3.0",
-            "--formula",
-            str(formula_path),
+    def test_homebrew_formula_selection_is_manifest_driven_and_tag_scoped(self) -> None:
+        manifest_path = REPO_ROOT / "release" / "publish-artifacts.toml"
+        stable = self.run_repository_release_artifacts(
+            "channel-config", "--manifest", str(manifest_path), "--channel", "homebrew", "--tag", "v1.4.3"
+        )
+        prerelease = self.run_repository_release_artifacts(
+            "channel-config", "--manifest", str(manifest_path), "--channel", "homebrew", "--tag", "v1.4.4-beta.1"
         )
 
-        self.assertEqual(completed.returncode, 0, completed.stderr)
-        text = formula_path.read_text(encoding="utf-8")
-        self.assertIn('version "1.3.0"', text)
-        self.assertIn(
-            'url "https://github.com/randlee/atm-core/releases/download/v1.3.0/atm_1.3.0_x86_64-apple-darwin.tar.gz"',
-            text,
-        )
-        self.assertIn(
-            'url "https://github.com/randlee/atm-core/releases/download/v1.3.0/atm_1.3.0_aarch64-apple-darwin.tar.gz"',
-            text,
-        )
-        self.assertIn(
-            'url "https://github.com/randlee/atm-core/releases/download/v1.3.0/atm_1.3.0_x86_64-unknown-linux-gnu.tar.gz"',
-            text,
-        )
-        self.assertIn('sha256 "intelmacsha"', text)
-        self.assertIn('sha256 "armmacsha"', text)
-        self.assertIn('sha256 "linuxsha"', text)
-
-    def test_validate_homebrew_formulas_rejects_cross_platform_asset_reuse(self) -> None:
-        release_dir, formula_path = self.write_homebrew_fixture()
-
-        completed = self.run_release_artifacts(
-            "validate-homebrew-formulas",
-            "--release-dir",
-            str(release_dir),
-            "--version",
-            "1.3.0",
-            "--tag",
-            "v1.3.0",
-            "--formula",
-            str(formula_path),
-        )
-
-        self.assertNotEqual(completed.returncode, 0)
-        self.assertIn("homebrew formula validation failed:", completed.stdout)
-        self.assertIn("on_macos/on_intel url mismatch", completed.stdout)
-        self.assertIn("on_linux/on_intel url mismatch", completed.stdout)
-
-    def test_validate_homebrew_formulas_passes_after_rewrite(self) -> None:
-        release_dir, formula_path = self.write_homebrew_fixture()
-
-        updated = self.run_release_artifacts(
-            "update-homebrew-formulas",
-            "--release-dir",
-            str(release_dir),
-            "--version",
-            "1.3.0",
-            "--tag",
-            "v1.3.0",
-            "--formula",
-            str(formula_path),
-        )
-        self.assertEqual(updated.returncode, 0, updated.stderr)
-
-        completed = self.run_release_artifacts(
-            "validate-homebrew-formulas",
-            "--release-dir",
-            str(release_dir),
-            "--version",
-            "1.3.0",
-            "--tag",
-            "v1.3.0",
-            "--formula",
-            str(formula_path),
-        )
-
-        self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertIn("ok: Homebrew formulas match expected platform assets and checksums", completed.stdout)
+        self.assertEqual(stable.returncode, 0, stable.stderr)
+        self.assertEqual(prerelease.returncode, 0, prerelease.stderr)
+        stable_formulas = json.loads(stable.stdout)["channel"]["formulas"]
+        prerelease_formulas = json.loads(prerelease.stdout)["channel"]["formulas"]
+        self.assertEqual({formula["release_track"] for formula in stable_formulas}, {"stable"})
+        self.assertEqual({formula["release_track"] for formula in prerelease_formulas}, {"prerelease"})
+        self.assertEqual({tuple(formula["binaries"]) for formula in stable_formulas}, {("atm", "atm-daemon")})
 
 
 if __name__ == "__main__":

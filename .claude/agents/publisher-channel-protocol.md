@@ -16,6 +16,9 @@ background task.
 
 - Require every relevant preflight check to be `passed`; otherwise return
   `blocked` for missing evidence or `failed` for negative evidence.
+- `required` is contract metadata, never a check-result status. Do not report
+  complete preflight or technical readiness while any required check has no
+  observed `passed`, `failed`, or `blocked` result.
 - Never ask for, inspect, print, or substitute a token.
 - Dispatch only the assigned channel workflow. A passed channel is immutable.
 - For an authorized retry, re-check current state and retry only the failed

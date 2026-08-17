@@ -25,6 +25,8 @@ sanitized channel result set without creating a release side effect.
 
 - The agent reads `../ref/release-state-strategy.md` before deciding how to
   proceed and identifies the candidate-tag error as negative evidence.
+- It reads `../ref/channel-contracts.md` and receives the explicit credential
+  name/location plus preflight/publish workflow facts before delegation.
 - It reports the stable top-level error `PREFLIGHT.NOT_READY`; the detailed
   candidate-tag reason is per-channel sanitized evidence.
 - It materializes one result for every channel declared by the evaluated

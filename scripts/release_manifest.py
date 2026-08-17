@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import tomllib
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 CHANNEL_CONTRACTS_FILE = "publish-channel-contracts.toml"
@@ -84,10 +84,15 @@ def _assert_workspace_inherited_version(workspace_toml: Path, relative_path: str
     path = _resolve_workspace_path(workspace_toml, relative_path)
     data = tomllib.loads(path.read_text(encoding="utf-8"))
     value = data.get("package", {}).get("version")
-    if not isinstance(value, dict) or value.get("workspace") is not True:
-        raise SystemExit(
-            f"{relative_path}: [package].version must inherit workspace.package.version"
-        )
+    if isinstance(value, dict) and value.get("workspace") is True:
+        return
+    expected = workspace_version(workspace_toml)
+    if value == expected:
+        return
+    raise SystemExit(
+        f"{relative_path}: [package].version must inherit workspace.package.version "
+        f"or equal {expected}"
+    )
 
 
 def _assert_python_package_version(
@@ -97,6 +102,8 @@ def _assert_python_package_version(
 ) -> None:
     path = _resolve_workspace_path(workspace_toml, relative_path)
     actual_version = _python_project_version(path)
+    if actual_version is None:
+        return
     if actual_version != expected_version:
         raise SystemExit(
             f"{relative_path}: [project].version mismatch: "
@@ -104,13 +111,18 @@ def _assert_python_package_version(
         )
 
 
-def _python_project_version(pyproject_toml: Path) -> str:
+def _python_project_version(pyproject_toml: Path) -> str | None:
     data = tomllib.loads(pyproject_toml.read_text(encoding="utf-8"))
     project = data.get("project", {})
     version = project.get("version")
-    if not isinstance(version, str):
-        raise SystemExit(f"{pyproject_toml}: [project].version must be a string")
-    return version
+    if isinstance(version, str):
+        return version
+    dynamic = project.get("dynamic", [])
+    if isinstance(dynamic, list) and "version" in dynamic:
+        return None
+    raise SystemExit(
+        f"{pyproject_toml}: [project].version must be a string or declared dynamic"
+    )
 
 
 def _python_project_name(pyproject_toml: Path) -> str:
@@ -129,20 +141,28 @@ def _python_distribution_entries(manifest: dict) -> list[dict]:
     for distribution in manifest["python_distributions"]:
         package = packages[distribution["name"]]
         source = distribution["source"]
-        entries.append(
-            {
-                "artifact": package["artifact"],
-                "name": distribution["name"],
-                "source": source,
-                "pyproject": package["manifest"],
-                "cargo_manifest": distribution.get("cargo_manifest", f"{source}/Cargo.toml"),
-                "module_path": distribution.get(
-                    "module_path", f"{source}/python/{package['module']}"
-                ),
-                "sdist": distribution["sdist"],
-                "wheels": distribution["wheels"],
-            }
-        )
+        build_system = distribution.get("build_system", "maturin")
+        if build_system not in {"maturin", "setuptools"}:
+            raise SystemExit(
+                f"unsupported Python build system for {distribution['name']}: {build_system}"
+            )
+        entry = {
+            "artifact": package["artifact"],
+            "name": distribution["name"],
+            "source": source,
+            "pyproject": package["manifest"],
+            "build_system": build_system,
+            "module_path": distribution.get(
+                "module_path", f"{source}/python/{package['module']}"
+            ),
+            "sdist": distribution["sdist"],
+            "wheels": distribution["wheels"],
+        }
+        if build_system == "maturin":
+            entry["cargo_manifest"] = distribution.get(
+                "cargo_manifest", f"{source}/Cargo.toml"
+            )
+        entries.append(entry)
     return entries
 
 
@@ -196,6 +216,83 @@ def _channel_config(manifest: dict, channel_name: str) -> dict:
     return channel
 
 
+def _is_prerelease_tag(tag: str) -> bool:
+    """Return whether a SemVer-style tag names a prerelease."""
+    return "-" in tag.removeprefix("v").split("+", maxsplit=1)[0]
+
+
+def _validate_homebrew_formulas(
+    channel: dict, available_binaries: set[str] | None = None
+) -> list[dict]:
+    """Validate manifest-declared Homebrew formula entries."""
+    formulas = channel.get("formulas")
+    if not isinstance(formulas, list) or not formulas:
+        raise SystemExit("[channels.homebrew] must define [[channels.homebrew.formulas]]")
+
+    paths: set[str] = set()
+    for index, formula in enumerate(formulas, start=1):
+        label = f"[[channels.homebrew.formulas]] #{index}"
+        if not isinstance(formula, dict):
+            raise SystemExit(f"{label} must be a table")
+        _require_keys(
+            formula,
+            ("path", "template", "class", "test_command", "test_output", "release_track"),
+            label,
+        )
+        for key in ("path", "template", "class", "test_command", "test_output"):
+            if not isinstance(formula[key], str) or not formula[key]:
+                raise SystemExit(f"{label}.{key} must be a non-empty string")
+        binaries = formula.get("binaries")
+        if binaries is None:
+            legacy_binary = formula.get("binary")
+            if not isinstance(legacy_binary, str) or not legacy_binary:
+                raise SystemExit(f"{label} must define non-empty binaries or legacy binary")
+            binaries = [legacy_binary]
+            formula["binaries"] = binaries
+        if not isinstance(binaries, list) or not binaries or not all(
+            isinstance(binary, str) and binary for binary in binaries
+        ):
+            raise SystemExit(f"{label}.binaries must be a non-empty list of strings")
+        if len(set(binaries)) != len(binaries):
+            raise SystemExit(f"{label}.binaries must not contain duplicates")
+        if available_binaries is not None:
+            missing_binaries = sorted(set(binaries) - available_binaries)
+            if missing_binaries:
+                raise SystemExit(
+                    f"{label}.binaries references undeclared release binary(s): "
+                    + ", ".join(missing_binaries)
+                )
+        test_binary = formula.setdefault("test_binary", binaries[0])
+        if not isinstance(test_binary, str) or test_binary not in binaries:
+            raise SystemExit(f"{label}.test_binary must name one of its binaries")
+        for key in ("path", "template"):
+            path = PurePosixPath(formula[key])
+            if path.is_absolute() or ".." in path.parts or str(path) in ("", "."):
+                raise SystemExit(f"{label}.{key} must be a safe relative path")
+        if formula["release_track"] not in {"stable", "prerelease"}:
+            raise SystemExit(f"{label}.release_track must be stable or prerelease")
+        if formula["path"] in paths:
+            raise SystemExit(f"duplicate Homebrew formula path: {formula['path']}")
+        paths.add(formula["path"])
+
+    return formulas
+
+
+def _homebrew_formulas_for_tag(
+    channel: dict, tag: str, available_binaries: set[str] | None = None
+) -> list[dict]:
+    """Select manifest-declared Homebrew formulas for one release tag."""
+    formulas = _validate_homebrew_formulas(channel, available_binaries)
+    selected_track = "prerelease" if _is_prerelease_tag(tag) else "stable"
+    selected = [
+        formula for formula in formulas if formula["release_track"] == selected_track
+    ]
+
+    if not selected:
+        raise SystemExit(f"no Homebrew {selected_track} formulas declared for tag {tag}")
+    return selected
+
+
 def _channel_contract(manifest: dict, channel_name: str) -> dict:
     try:
         contract = manifest["channel_contracts"][channel_name]
@@ -218,3 +315,79 @@ def _channel_names(manifest: dict) -> tuple[str, ...]:
     if not channels:
         raise SystemExit("manifest must define at least one [channels.<name>] table")
     return tuple(channels)
+
+
+def _preflight_outcome_status(outcome: str | None) -> str:
+    """Map a GitHub Actions step outcome to a non-disclosing check status."""
+    if outcome == "success":
+        return "passed"
+    if outcome in ("failure", "cancelled"):
+        return "failed"
+    return "blocked"
+
+
+def _channel_outcome(
+    outcomes: dict[str, object], key: str, channel_name: str, fallback_key: str | None = None
+) -> str | None:
+    """Read a channel-specific outcome, retaining legacy scalar compatibility."""
+    outcome = outcomes.get(key)
+    if isinstance(outcome, dict):
+        channel_outcome = outcome.get(channel_name)
+        return channel_outcome if isinstance(channel_outcome, str) else None
+    if isinstance(outcome, str):
+        return outcome
+    if fallback_key is not None:
+        fallback = outcomes.get(fallback_key)
+        return fallback if isinstance(fallback, str) else None
+    return None
+
+
+def _channel_preflight_result(
+    channel: dict[str, object], outcomes: dict[str, object], tag: str | None
+) -> dict[str, object]:
+    """Materialize one worker result from its contract and check outcomes."""
+    checks: list[dict[str, object]] = []
+    channel_name = str(channel["name"])
+    for requirement, outcome_key in (
+        ("publisher ownership", "ownership"),
+        ("normalized release tag", "release_metadata"),
+    ):
+        checks.append({
+            "kind": "release_authorization",
+            "requirements": [requirement],
+            "status": _preflight_outcome_status(outcomes.get(outcome_key)),
+        })
+    for key, outcome_key, fallback_key in (
+        ("repository_secrets", "repository_secret_channels", "repository_secrets"),
+        ("environment_secrets", "environment_secrets", None),
+        ("liveness_checks", "credential_liveness_channels", "credential_liveness"),
+        ("github_actions_permissions", "github_release_permissions", None),
+        ("public_registry_checks", "registry_state", None),
+    ):
+        requirements = channel.get(key, [])
+        if requirements:
+            outcome = _channel_outcome(
+                outcomes, outcome_key, channel_name, fallback_key
+            )
+            checks.append({
+                "kind": key,
+                "requirements": requirements,
+                "status": _preflight_outcome_status(outcome),
+            })
+    rehearsal = channel.get("credential_rehearsal")
+    statuses = [check["status"] for check in checks]
+    if "failed" in statuses:
+        status, diagnostic = "failed", "PREFLIGHT.CHECK_FAILED"
+    elif "blocked" in statuses:
+        status, diagnostic = "blocked", "PREFLIGHT.CHECK_BLOCKED"
+    else:
+        status, diagnostic = "passed", ""
+    return {
+        "name": channel["name"],
+        "agent": channel["agent"],
+        "tag": tag,
+        "status": status,
+        "checks": checks,
+        "credential_rehearsal": rehearsal,
+        "sanitized_diagnostic": diagnostic,
+    }

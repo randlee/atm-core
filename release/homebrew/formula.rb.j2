@@ -22,13 +22,15 @@ class {{ formula_class }} < Formula
   end
 
   def install
+{% for binary_path in binary_paths %}
     bin.install {{ binary_path | tojson }}
+{% endfor %}
 {% for bundle in bundled_paths %}
     ({% for component in bundle.destination_components %}{% if loop.first %}{{ component }}{% else %}/{{ component | tojson }}{% endif %}{% endfor %}).install Dir[{{ bundle.source_glob | tojson }}]
 {% endfor %}
   end
 
   test do
-    assert_match {{ test_output | tojson }}, shell_output("#{bin}/" + {{ binary | tojson }} + " " + {{ test_command | tojson }})
+    assert_match {{ test_output | tojson }}, shell_output("#{bin}/" + {{ test_binary | tojson }} + " " + {{ test_command | tojson }})
   end
 end

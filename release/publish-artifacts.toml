@@ -187,7 +187,7 @@ install_root = "share/doc/atm"
 entrypoint = "share/doc/atm/README.md"
 
 [[python_packages]]
-artifact = "atm-graft-python"
+artifact = "atm-graft-wheel"
 package = "atm-graft"
 manifest = "crates/atm-graft-python/pyproject.toml"
 module = "atm_graft"
@@ -227,13 +227,37 @@ production_repository = "pypi"
 workflow = "homebrew-publish.yml"
 dispatch_inputs = {}
 tap_repository = "randlee/homebrew-tap"
-formula_path = "Formula/agent-team-mail.rb"
-formula_template = "release/homebrew/formula.rb.j2"
-formula_class = "AgentTeamMail"
+renderer_target = "x86_64-unknown-linux-gnu"
+
+[[channels.homebrew.formulas]]
+path = "Formula/agent-team-mail.rb"
+template = "release/homebrew/formula.rb.j2"
+class = "AgentTeamMail"
+binaries = ["atm", "atm-daemon"]
 binary = "atm"
 test_command = "--help"
 test_output = "CLI for local agent team mail workflows"
-renderer_target = "x86_64-unknown-linux-gnu"
+release_track = "stable"
+
+[[channels.homebrew.formulas]]
+path = "Formula/atm.rb"
+template = "release/homebrew/formula.rb.j2"
+class = "Atm"
+binaries = ["atm", "atm-daemon"]
+binary = "atm"
+test_command = "--help"
+test_output = "CLI for local agent team mail workflows"
+release_track = "stable"
+
+[[channels.homebrew.formulas]]
+path = "Formula/atm-beta.rb"
+template = "release/homebrew/formula.rb.j2"
+class = "AtmBeta"
+binaries = ["atm", "atm-daemon"]
+binary = "atm"
+test_command = "--help"
+test_output = "CLI for local agent team mail workflows"
+release_track = "prerelease"
 
 [[channels.homebrew.assets]]
 key = "macos_arm"
@@ -252,3 +276,13 @@ workflow = "winget-publish.yml"
 dispatch_inputs = {}
 identifier = "randlee.agent-team-mail"
 installer_target = "x86_64-pc-windows-msvc"
+
+[channels.scoop]
+workflow = "scoop-publish.yml"
+dispatch_inputs = {}
+bucket_repository = "randlee/scoop-bucket"
+manifest_path = "bucket/atm.json"
+manifest_template = "release/scoop/manifest.json.j2"
+installer_target = "x86_64-pc-windows-msvc"
+binary = "bin/atm.exe"
+renderer_target = "x86_64-unknown-linux-gnu"

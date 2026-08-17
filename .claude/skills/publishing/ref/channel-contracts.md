@@ -9,6 +9,32 @@ using that contract. Copy both files unchanged when vendoring the publish kit.
 
 - Tokens are GitHub Actions secrets with the names declared in the TOML. Never
   request, inspect, print, or replace one locally.
+- Credential facts:
+  - `PYPI_API_TOKEN` — Actions `pypi` environment; preflight:
+    `.github/workflows/release-preflight.yml`; publish:
+    `.github/workflows/pypi-publish.yml`.
+  - `TEST_PYPI_API_TOKEN` — Actions `testpypi` environment; preflight:
+    `.github/workflows/release-preflight.yml`; publish:
+    `.github/workflows/pypi-publish.yml`.
+  - `CARGO_REGISTRY_TOKEN` — repository secret for preflight:
+    `.github/workflows/release-preflight.yml`; the publish job runs in the
+    Actions `crates-io` environment in `.github/workflows/release.yml`.
+  - `HOMEBREW_TAP_TOKEN` — repository secret; preflight:
+    `.github/workflows/release-preflight.yml`; publish:
+    `.github/workflows/homebrew-publish.yml`.
+  - `WINGET_GITHUB_TOKEN` — repository secret; preflight:
+    `.github/workflows/release-preflight.yml`; publish:
+    `.github/workflows/winget-publish.yml`.
+  - `SCOOP_BUCKET_TOKEN` — repository secret; preflight:
+    `.github/workflows/release-preflight.yml`; publish:
+    `.github/workflows/scoop-publish.yml`.
+  - `GITHUB_TOKEN` — GitHub-provided Actions token; preflight runs with
+    `contents:read` and verifies the release declaration in
+    `.github/workflows/release-preflight.yml`; publish uses `contents:write`
+    in `.github/workflows/release.yml`.
+- These credentials are already configured. Do not ask whether they exist or
+  ask anyone to provide them; run the named preflight workflow and report its
+  sanitized result.
 - A public lookup is evidence of registry state, not a reservation. Treat a
   timeout, rate limit, unexpected response, or 5xx as `indeterminate`.
 - `publisher` may delegate a read-only inquiry to a role-specific background
@@ -48,8 +74,13 @@ create or move tags manually.
 ## Homebrew — `homebrew-publisher`
 
 Use the contract-declared GitHub token liveness check before dispatching the
-manifest-declared tap workflow. Destination repository, formula, assets, and
-verification command come from the manifest.
+manifest-declared tap workflow. Destination repository, formulas, assets, and
+verification commands come from the manifest. Each `[[channels.homebrew.formulas]]`
+entry declares its path, template, class, `binaries`, test fields, and
+`release_track`; stable tags select every `stable` entry, while prerelease tags
+select only `prerelease` entries. `test_binary` defaults to the first binary.
+For vendor compatibility, a legacy single `binary` normalizes to a one-entry
+`binaries` list; new manifests must use `binaries`.
 
 ## winget — `winget-publisher`
 

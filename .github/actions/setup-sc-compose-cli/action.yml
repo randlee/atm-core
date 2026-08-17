@@ -1,0 +1,11 @@
+name: Setup sc-compose CLI
+description: Install the repository-pinned sc-compose CLI used by template and parity checks.
+
+runs:
+  using: composite
+  steps:
+    - name: Install pinned sc-compose CLI
+      shell: bash
+      run: |
+        set -euo pipefail
+        cargo install --git https://github.com/randlee/sc-compose.git --rev 6a8af1ff46ccd64ae9cc40d7d5c815aa9b0a4661 --locked --bin sc-compose
