@@ -361,7 +361,7 @@ impl fmt::Debug for GraftSession {
 impl GraftSession {
     /// # Errors
     ///
-    /// Returns [`AtmError`] when configuration gating allows graft mode but
+    /// Returns [`AtmError`] when optional configuration cannot be loaded or
     /// receiver-loop startup fails.
     pub fn activate(
         options: GraftSessionOptions,
@@ -372,32 +372,20 @@ impl GraftSession {
 
     /// # Errors
     ///
-    /// Returns [`AtmError`] when configuration gating allows graft mode but
+    /// Returns [`AtmError`] when optional configuration cannot be loaded or
     /// receiver-loop startup fails.
     pub fn activate_with_observability(
         options: GraftSessionOptions,
         injector: Arc<dyn HostNudgeInjector>,
         observability: Arc<dyn GraftObservability>,
     ) -> Result<Self, AtmError> {
-        let graft_config = load_graft_config(&options.workspace_root)?;
-        Self::activate_with_graft_config(graft_config, options, injector, observability)
-    }
-
-    fn activate_with_graft_config(
-        graft_config: Option<GraftConfig>,
-        options: GraftSessionOptions,
-        injector: Arc<dyn HostNudgeInjector>,
-        observability: Arc<dyn GraftObservability>,
-    ) -> Result<Self, AtmError> {
+        // Retain ATM-owned configuration parsing so malformed configuration is
+        // surfaced, but a missing config (or legacy graft.enabled setting)
+        // never changes the receiver activation contract. A clean return from
+        // this method means the receiver is listening.
+        let _optional_config = load_graft_config(&options.workspace_root)?;
         let initial_snapshot = options.activation_state();
         let snapshot = Arc::new(RwLock::new(initial_snapshot));
-
-        let Some(graft_config) = graft_config else {
-            return inactive_session(snapshot, observability);
-        };
-        if !graft_config.enabled {
-            return inactive_session(snapshot, observability);
-        }
 
         let endpoint_path = atm_core::graft::graft_receiver_record_path_from_root(
             options.workspace_root(),
@@ -482,19 +470,6 @@ impl GraftSession {
         )?;
         Ok(())
     }
-}
-
-fn inactive_session(
-    snapshot: Arc<RwLock<SessionSnapshot>>,
-    observability: Arc<dyn GraftObservability>,
-) -> Result<GraftSession, AtmError> {
-    observability.session_state_changed(&read_snapshot(&snapshot)?);
-    Ok(GraftSession {
-        snapshot,
-        observability,
-        stop_tx: None,
-        join_handle: None,
-    })
 }
 
 fn spawn_graft_receive_loop(
@@ -792,47 +767,46 @@ mod tests {
     }
 
     #[test]
-    fn session_stays_inactive_without_atm_config() {
+    fn session_activates_in_a_bare_workspace_without_atm_config() {
         let paths = test_paths();
-        let session = GraftSession::activate_with_graft_config(
-            None,
-            session_options(&paths),
-            Arc::new(NoopInjector),
-            Arc::new(NoopGraftObservability),
-        )
-        .expect("inactive session");
+        let endpoint_path = atm_core::graft::graft_receiver_record_path_from_root(
+            &paths.workspace_root,
+            &TeamName::from_validated(TEST_TEAM),
+            &AgentName::from_validated("qa-a"),
+        );
+        let session = GraftSession::activate(session_options(&paths), Arc::new(NoopInjector))
+            .expect("bare workspace must activate or return an error");
 
         assert_eq!(
             session.snapshot().expect("snapshot").state,
-            GraftSessionState::Inactive
+            GraftSessionState::Listening
         );
+        assert!(endpoint_path.exists(), "receiver record must be published");
+        session.close().expect("close active receiver");
     }
 
     #[test]
-    fn session_stays_inactive_when_graft_is_disabled() {
+    fn legacy_graft_enabled_setting_does_not_gate_receiver_activation() {
         let paths = test_paths();
-        let session = GraftSession::activate_with_graft_config(
-            Some(GraftConfig { enabled: false }),
-            session_options(&paths),
-            Arc::new(NoopInjector),
-            Arc::new(NoopGraftObservability),
-        )
-        .expect("inactive session");
-
-        assert_eq!(
-            session.snapshot().expect("snapshot").state,
-            GraftSessionState::Inactive
-        );
-    }
-
-    #[test]
-    fn load_config_drives_public_activation_path() {
-        let tempdir = tempfile::TempDir::new().expect("tempdir");
-        std::fs::write(
-            tempdir.path().join(".atm.toml"),
+        fs::write(
+            paths.workspace_root.join(".atm.toml"),
             "[atm.graft]\nenabled = false\n",
         )
-        .expect("write config");
+        .expect("write legacy config");
+        let session = GraftSession::activate(session_options(&paths), Arc::new(NoopInjector))
+            .expect("explicit legacy config must not suppress activation");
+
+        assert_eq!(
+            session.snapshot().expect("snapshot").state,
+            GraftSessionState::Listening
+        );
+        session.close().expect("close active receiver");
+    }
+
+    #[test]
+    fn malformed_optional_config_fails_loudly_before_receiver_startup() {
+        let tempdir = tempfile::TempDir::new().expect("tempdir");
+        std::fs::write(tempdir.path().join(".atm.toml"), "[atm\n").expect("write config");
         let _env = EnvGuard::set_many([
             (
                 "ATM_HOME",
@@ -842,8 +816,7 @@ mod tests {
             ("USERPROFILE", None),
         ]);
 
-        let session = GraftSession::activate_with_graft_config(
-            load_graft_config(tempdir.path()).expect("graft config"),
+        let error = GraftSession::activate_with_observability(
             GraftSessionOptions::new(
                 tempdir.path(),
                 TeamName::from_validated(TEST_TEAM),
@@ -852,11 +825,7 @@ mod tests {
             Arc::new(NoopInjector),
             Arc::new(NoopGraftObservability),
         )
-        .expect("inactive session");
-
-        assert_eq!(
-            session.snapshot().expect("snapshot").state,
-            GraftSessionState::Inactive
-        );
+        .expect_err("malformed optional configuration must fail loudly");
+        assert_ne!(error.code(), AtmErrorCode::InternalError);
     }
 }

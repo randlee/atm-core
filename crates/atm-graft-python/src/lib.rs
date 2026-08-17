@@ -912,7 +912,6 @@ mod tests {
     use atm_graft::{GraftClient, HostNudge, HostNudgeInjector, MailboxWorkCounts};
     use pyo3::prelude::{Py, Python};
     use pyo3::types::{PyAnyMethods, PyModule};
-    use std::fs;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use tempfile::TempDir;
@@ -1677,11 +1676,6 @@ mod tests {
     fn python_session_rejects_a_second_receiver_activation() {
         Python::initialize();
         let tempdir = TempDir::new().expect("tempdir");
-        fs::write(
-            tempdir.path().join(".atm.toml"),
-            "[graft]\nenabled = true\n",
-        )
-        .expect("graft config");
         let caller = PyAgentAddress::new(
             TEST_RECIPIENT.to_string(),
             TEST_TEAM.to_string(),
@@ -1719,7 +1713,11 @@ mod tests {
             .unbind();
             session
                 .activate_receiver(options.clone(), callback.clone_ref(py))
-                .expect("first receiver activation");
+                .expect("bare workspace receiver activation");
+            assert_eq!(
+                session.snapshot().expect("active snapshot").state,
+                "listening"
+            );
             let error = session
                 .activate_receiver(options, callback)
                 .expect_err("second activation must be rejected at the Python API boundary");
