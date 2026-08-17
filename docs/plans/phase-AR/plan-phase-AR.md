@@ -44,6 +44,13 @@ prompt.
   sender-side mode routing that feeds it) is atm-core work under this
   requirement. Host-side consumption design:
   hendrix `codex-ops/STEER-QUEUE-DESIGN.md`.
+- **Queue-channel semantics — staged work, not nudges**: the queue stages
+  tasks/beads (backlogs of hundreds; days of work) held DURABLY upstream
+  (daemon/mailbox), trickled to the host through a BOUNDED channel (prefetch
+  window) with backpressure when full. Delivery acknowledgment on
+  consumption: a task is acked only when the host actually injects it into a
+  turn; unacked tasks are redelivered on reconnect, so a host crash/restart
+  loses nothing. The steer channel stays lightweight/unbuffered by contrast.
 - Tokio compatibility: codex is tokio-based. Preferred: tokio-native
   activation (aligns with atm-http-runtime). Minimum: a documented thread
   model so the host bridges callbacks safely.
