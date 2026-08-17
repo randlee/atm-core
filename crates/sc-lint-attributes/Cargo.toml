@@ -1,6 +1,6 @@
 [package]
 name = "sc-lint-attributes"
-version = "0.1.0"
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
@@ -14,7 +14,7 @@ publish = false
 proc-macro = true
 
 [dependencies]
-sc-lint-directives = { version = "0.1.0", path = "../sc-lint-directives" }
+sc-lint-directives = { path = "../sc-lint-directives" }
 proc-macro2 = "1"
 quote = "1"
 syn = { version = "2", features = ["full", "parsing"] }

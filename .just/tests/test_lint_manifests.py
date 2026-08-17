@@ -114,14 +114,14 @@ atm-core = { path = "../atm-core", version = "9.9.9" }
                 rendered,
             )
 
-    def test_collect_manifest_violations_accepts_explicit_tool_crate_version(self) -> None:
+    def test_collect_manifest_violations_flags_unreferenced_explicit_version_drift(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
+            self.write_repo(repo_root)
             (repo_root / "Cargo.toml").write_text(
                 ROOT_MANIFEST.replace('"crates/atm"]', '"crates/atm", "crates/sc-lint-attributes"]'),
                 encoding="utf-8",
             )
-            self.write_repo(repo_root)
             tool_dir = repo_root / "crates/sc-lint-attributes"
             tool_dir.mkdir(parents=True)
             (tool_dir / "Cargo.toml").write_text(
@@ -139,7 +139,12 @@ homepage.workspace = true
                 encoding="utf-8",
             )
 
-            self.assertEqual(collect_manifest_violations(repo_root), [])
+            rendered = [violation.render() for violation in collect_manifest_violations(repo_root)]
+            self.assertIn(
+                "version sync: crates/sc-lint-attributes/Cargo.toml [package].version (0.1.0) "
+                "must equal expected workspace member version (1.1.2)",
+                rendered,
+            )
 
 
 if __name__ == "__main__":

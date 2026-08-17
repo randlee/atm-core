@@ -16,6 +16,7 @@ from check_version_sync import validate_lockfile
 from check_version_sync import validate_winget_manifests
 from check_version_sync import success_message
 from check_version_sync import validate_python_release_versions
+from check_version_sync import validate_workspace_member_versions
 
 
 ROOT_MANIFEST = """\
@@ -257,47 +258,54 @@ version = "1.1.2"
                 str(error.exception),
             )
 
-    def test_validate_crate_versions_accepts_explicit_tool_crate_versions(self) -> None:
+    def test_workspace_member_versions_reject_unreferenced_hardcoded_drift(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
-            (repo_root / "Cargo.toml").write_text(
-                """\
-[workspace]
-members = ["crates/atm-core", "crates/sc-lint-attributes"]
-resolver = "2"
-
-[workspace.package]
-version = "1.1.2"
-""",
-                encoding="utf-8",
-            )
-            atm_core_dir = repo_root / "crates/atm-core"
-            atm_core_dir.mkdir(parents=True)
-            (atm_core_dir / "Cargo.toml").write_text(
-                crate_manifest(
-                    "agent-team-mail-core",
-                    extra='\n[dependencies]\nsc-lint-attributes = { path = "../sc-lint-attributes", version = "0.1.0" }\n',
+            self.write_repo(repo_root)
+            root_manifest = repo_root / "Cargo.toml"
+            root_manifest.write_text(
+                root_manifest.read_text(encoding="utf-8").replace(
+                    '"crates/atm-rusqlite"]', '"crates/atm-rusqlite", "crates/unreferenced"]'
                 ),
                 encoding="utf-8",
             )
-            tool_dir = repo_root / "crates/sc-lint-attributes"
-            tool_dir.mkdir(parents=True)
-            (tool_dir / "Cargo.toml").write_text(
-                """\
-[package]
-name = "sc-lint-attributes"
-version = "0.1.0"
-edition.workspace = true
-rust-version.workspace = true
-authors.workspace = true
-license.workspace = true
-repository.workspace = true
-homepage.workspace = true
-""",
+            manifest = repo_root / "crates/unreferenced/Cargo.toml"
+            manifest.parent.mkdir(parents=True)
+            manifest.write_text(
+                crate_manifest("agent-team-mail-unreferenced").replace(
+                    "version.workspace = true", 'version = "9.9.9"'
+                ),
                 encoding="utf-8",
             )
 
-            validate_crate_versions(repo_root, "1.1.2")
+            with self.assertRaisesRegex(SystemExit, "must equal expected workspace member version"):
+                validate_workspace_member_versions(repo_root, "1.1.2")
+
+    def test_python_release_cargo_members_use_numeric_base_for_prerelease_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            workspace_version = "1.4.2-beta-am.1"
+            self.write_repo(repo_root, workspace_version=workspace_version)
+            root_manifest = repo_root / "Cargo.toml"
+            root_manifest.write_text(
+                root_manifest.read_text(encoding="utf-8").replace(
+                    '"crates/atm-rusqlite"]',
+                    '"crates/atm-rusqlite", "crates/atm-graft-python", "crates/atm-query-python"]',
+                ),
+                encoding="utf-8",
+            )
+            self.write_python_release_manifests(repo_root, "1.4.2")
+
+            validate_workspace_member_versions(repo_root, workspace_version)
+            validate_python_release_versions(repo_root, workspace_version)
+
+    def test_real_repository_workspace_member_versions_match_workspace(self) -> None:
+        repo_root = Path(__file__).resolve().parents[2]
+        workspace_version = tomllib.loads(
+            (repo_root / "Cargo.toml").read_text(encoding="utf-8")
+        )["workspace"]["package"]["version"]
+
+        validate_workspace_member_versions(repo_root, workspace_version)
 
     def test_success_message_includes_workspace_version(self) -> None:
         self.assertEqual(
