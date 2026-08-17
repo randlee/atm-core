@@ -12,11 +12,14 @@ triage:AI36-QA-LOCK-LINT-GAP
     triage:severity "minor" ;
     triage:repeatable false ;
     triage:sweepScope "file_only" ;
-    triage:status "open" ;
+    triage:status "closed" ;
     triage:dispatchReady false ;
     triage:triagedAt "2026-07-29T00:00:00Z"^^xsd:dateTime ;
     triage:foundIn "AI.36" ;
     triage:foundAt "2026-07-29T00:00:00Z"^^xsd:dateTime ;
+    triage:closedAt "2026-08-17T00:00:00Z"^^xsd:dateTime ;
+    triage:closedBy "quality-mgr" ;
+    triage:closedNote "Closed won't-fix per arch-ctm fix-worthiness assessment (ATM message 01M0776HCD3RXXKGAJCD5YTMGP), endorsed by team-lead. The underlying duplication this lint gap was motivated by (AI36-QA-LOCK-CONTENTION-DUP) is already resolved to a single remaining classifier site (atm-daemon-client::is_launch_gate_contention_error) following the graft.rs fs2->fs4 migration. Generic duplicate-function-body detection in lint_boundaries.py/lint_same_host_portability.py would be brittle and falls outside those lints' bounded policy purpose (boundary-record validation and cfg-gating shape respectively, not cross-crate decision-logic diffing). Refile only if a concrete live duplicate recurs." ;
     triage:hasOccurrence triage:AI36-QA-LOCK-LINT-GAP-1 ;
     triage:openOn triage:FIX-AI36-QA-REPAIR-ee8f670f .
 
@@ -25,10 +28,10 @@ triage:AI36-QA-LOCK-LINT-GAP-1
     triage:file ".just/lint_boundaries.py" ;
     triage:line "22" ;
     triage:snippet "LINT_NAME = \"boundaries\"" ;
-    triage:status "open" ;
+    triage:status "closed" ;
     triage:headSha "ee8f670f" ;
     triage:branch "fix/ai36-qa-repair" ;
-    triage:closed false ;
+    triage:closed true ;
     triage:occursIn triage:FIX-AI36-QA-REPAIR-ee8f670f .
 
 triage:FIX-AI36-QA-REPAIR-ee8f670f
