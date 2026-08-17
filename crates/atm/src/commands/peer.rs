@@ -639,9 +639,9 @@ mod tests {
     }
 
     #[test]
-    fn trust_add_and_replace_require_durable_peer_hostnames() {
+    fn trust_add_and_replace_reject_literal_ip_peer_hosts() {
         let store = InMemoryPeerConfigStore::default();
-        for (command, host) in [("add", "192.168.128.29"), ("replace", "peer.local")] {
+        for (command, host) in [("add", "192.168.128.29"), ("replace", "999.1.1.1")] {
             let error = run_peer(
                 &store,
                 &[
@@ -655,8 +655,8 @@ mod tests {
                     "--yes",
                 ],
             )
-            .expect_err("attachment-specific host must be rejected");
-            assert!(error.message().contains("durable DNS hostname"));
+            .expect_err("literal IP host must be rejected");
+            assert!(error.message().contains("not stable peer identities"));
         }
         assert!(store.list_trusted_peers().expect("list peers").is_empty());
     }

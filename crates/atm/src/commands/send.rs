@@ -237,72 +237,7 @@ impl SendCommand {
         peers: &[TrustedPeer],
     ) -> std::result::Result<String, AtmError> {
         let parsed = CliRecipientInput::parse(&self.to)?;
-        let recipient = match parsed.destination {
-            None => AgentAddress::new(parsed.identity.agent, parsed.identity.chat_id, None, None)?,
-            Some(destination) => {
-                if destination == caller_team.as_str() {
-                    AgentAddress::new(
-                        parsed.identity.agent,
-                        parsed.identity.chat_id,
-                        Some(caller_team.clone()),
-                        None,
-                    )?
-                } else if let Some(team) =
-                    known_teams.iter().find(|team| team.as_str() == destination)
-                {
-                    AgentAddress::new(
-                        parsed.identity.agent,
-                        parsed.identity.chat_id,
-                        Some(team.clone()),
-                        None,
-                    )?
-                } else if Ipv4Addr::from_str(&destination).is_ok() {
-                    let host = resolve_host_input(&destination, peers)?;
-                    AgentAddress::new(
-                        parsed.identity.agent,
-                        parsed.identity.chat_id,
-                        Some(caller_team.clone()),
-                        Some(host),
-                    )?
-                } else if let Some((team, host_input)) = destination.split_once('.') {
-                    let team = team.parse::<TeamName>()?;
-                    if let Some(host) = try_resolve_host_input(host_input, peers)? {
-                        AgentAddress::new(
-                            parsed.identity.agent,
-                            parsed.identity.chat_id,
-                            Some(team),
-                            Some(host),
-                        )?
-                    } else if let Some(host) = resolve_trusted_host(&destination, peers)? {
-                        AgentAddress::new(
-                            parsed.identity.agent,
-                            parsed.identity.chat_id,
-                            Some(caller_team.clone()),
-                            Some(host),
-                        )?
-                    } else {
-                        return Err(peer_resolution_error(
-                            format!("no enabled trusted peer matches '{destination}'"),
-                            "Run `atm peer trust list`; add or enable the intended peer, then retry using `agent@team.host`.",
-                        ));
-                    }
-                } else if let Some(host) = resolve_trusted_host(&destination, peers)? {
-                    AgentAddress::new(
-                        parsed.identity.agent,
-                        parsed.identity.chat_id,
-                        Some(caller_team.clone()),
-                        Some(host),
-                    )?
-                } else {
-                    return Err(peer_resolution_error(
-                        format!(
-                            "'{destination}' is neither a known local team nor an enabled trusted peer"
-                        ),
-                        "Use `atm team list` to select a local team, or add/list the peer with `atm peer trust list` and retry with `agent@team.host`.",
-                    ));
-                }
-            }
-        };
+        let recipient = resolve_cli_recipient(&parsed, caller_team, known_teams, peers)?;
 
         let explicit_host = self
             .host
@@ -509,6 +444,69 @@ impl SendCommand {
             .cloned()
             .ok_or_else(|| Self::template_load_error("--vars must contain a JSON object"))
     }
+}
+
+fn resolve_cli_recipient(
+    input: &CliRecipientInput,
+    caller_team: &TeamName,
+    known_teams: &[TeamName],
+    peers: &[TrustedPeer],
+) -> std::result::Result<AgentAddress, AtmError> {
+    let Some(destination) = input.destination.as_deref() else {
+        return cli_recipient_address(input, None, None);
+    };
+    if destination == caller_team.as_str() {
+        return cli_recipient_address(input, Some(caller_team.clone()), None);
+    }
+    if let Some(team) = known_teams.iter().find(|team| team.as_str() == destination) {
+        return cli_recipient_address(input, Some(team.clone()), None);
+    }
+    resolve_cli_destination(input, destination, caller_team, peers)
+}
+
+fn resolve_cli_destination(
+    input: &CliRecipientInput,
+    destination: &str,
+    caller_team: &TeamName,
+    peers: &[TrustedPeer],
+) -> std::result::Result<AgentAddress, AtmError> {
+    if Ipv4Addr::from_str(destination).is_ok() {
+        let host = resolve_host_input(destination, peers)?;
+        return cli_recipient_address(input, Some(caller_team.clone()), Some(host));
+    }
+    let has_team_host_shape = destination.contains('.');
+    if let Some((team, host_input)) = destination.split_once('.') {
+        let team = team.parse::<TeamName>()?;
+        if let Some(host) = try_resolve_host_input(host_input, peers)? {
+            return cli_recipient_address(input, Some(team), Some(host));
+        }
+    }
+    if let Some(host) = resolve_trusted_host(destination, peers)? {
+        return cli_recipient_address(input, Some(caller_team.clone()), Some(host));
+    }
+    if has_team_host_shape {
+        return Err(peer_resolution_error(
+            format!("no enabled trusted peer matches '{destination}'"),
+            "Run `atm peer trust list`; add or enable the intended peer, then retry using `agent@team.host`.",
+        ));
+    }
+    Err(peer_resolution_error(
+        format!("'{destination}' is neither a known local team nor an enabled trusted peer"),
+        "Use `atm team list` to select a local team, or add/list the peer with `atm peer trust list` and retry with `agent@team.host`.",
+    ))
+}
+
+fn cli_recipient_address(
+    input: &CliRecipientInput,
+    team: Option<TeamName>,
+    host: Option<HostName>,
+) -> std::result::Result<AgentAddress, AtmError> {
+    AgentAddress::new(
+        input.identity.agent.clone(),
+        input.identity.chat_id.clone(),
+        team,
+        host,
+    )
 }
 
 /// CLI-only recipient syntax before a destination is normalized against the
