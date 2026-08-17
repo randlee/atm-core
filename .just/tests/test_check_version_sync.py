@@ -278,8 +278,26 @@ version = "1.1.2"
                 encoding="utf-8",
             )
 
-            with self.assertRaisesRegex(SystemExit, "must equal workspace version"):
+            with self.assertRaisesRegex(SystemExit, "must equal expected workspace member version"):
                 validate_workspace_member_versions(repo_root, "1.1.2")
+
+    def test_python_release_cargo_members_use_numeric_base_for_prerelease_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            workspace_version = "1.4.2-beta-am.1"
+            self.write_repo(repo_root, workspace_version=workspace_version)
+            root_manifest = repo_root / "Cargo.toml"
+            root_manifest.write_text(
+                root_manifest.read_text(encoding="utf-8").replace(
+                    '"crates/atm-rusqlite"]',
+                    '"crates/atm-rusqlite", "crates/atm-graft-python", "crates/atm-query-python"]',
+                ),
+                encoding="utf-8",
+            )
+            self.write_python_release_manifests(repo_root, "1.4.2")
+
+            validate_workspace_member_versions(repo_root, workspace_version)
+            validate_python_release_versions(repo_root, workspace_version)
 
     def test_real_repository_workspace_member_versions_match_workspace(self) -> None:
         repo_root = Path(__file__).resolve().parents[2]

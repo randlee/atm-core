@@ -18,6 +18,11 @@ PYTHON_RELEASE_MANIFESTS = (
     (Path("crates/atm-query-python/pyproject.toml"), "project"),
     (Path("crates/hermes-atm/pyproject.toml"), "project"),
 )
+PYTHON_RELEASE_CARGO_MANIFESTS = frozenset(
+    manifest_path
+    for manifest_path, table_name in PYTHON_RELEASE_MANIFESTS
+    if table_name == "package"
+)
 PYTHON_DYNAMIC_VERSION_SOURCES = {
     Path("crates/atm-graft-python/pyproject.toml"): Path("crates/atm-graft-python/Cargo.toml"),
 }
@@ -152,16 +157,29 @@ def expected_package_version(manifest: dict, workspace_version: str, manifest_la
 
 
 def validate_workspace_member_versions(repo_root: Path, workspace_version: str) -> None:
-    """Require every Cargo workspace member to resolve to the workspace version."""
+    """Require Cargo members to use the workspace version, except PyPI bridges.
+
+    The two Maturin bridge crates are ``publish = false`` Cargo members whose
+    Cargo package version becomes public Python package metadata.  Python
+    wheels use the numeric workspace base because PEP 440 does not accept the
+    repository's release qualifiers, so those two manifests intentionally use
+    that base while every other workspace member uses the exact Cargo version.
+    """
 
     for manifest_path in workspace_manifest_paths(repo_root):
-        rel_manifest = manifest_path.relative_to(repo_root).as_posix()
+        rel_path = manifest_path.relative_to(repo_root)
+        rel_manifest = rel_path.as_posix()
         manifest = tomllib.loads(read_text(manifest_path))
         package_version = expected_package_version(manifest, workspace_version, rel_manifest)
-        if package_version != workspace_version:
+        expected_version = (
+            normalized_version_base(workspace_version, "workspace version")
+            if rel_path in PYTHON_RELEASE_CARGO_MANIFESTS
+            else workspace_version
+        )
+        if package_version != expected_version:
             fail(
                 f"{rel_manifest} [package].version ({package_version}) "
-                f"must equal workspace version ({workspace_version})"
+                f"must equal expected workspace member version ({expected_version})"
             )
 
 
