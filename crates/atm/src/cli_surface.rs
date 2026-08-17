@@ -94,7 +94,8 @@ pub(crate) fn command_surface_markdown(command: &Command) -> String {
     out.push_str(
         "This document is generated from the live `clap` command tree. Do \
          not hand-edit it — regenerate with `cargo run -p agent-team-mail \
-         --example gen_cli_docs` (see `crates/atm/src/cli_surface.rs`).\n\n",
+         --features cli-surface-dump --example gen_cli_docs` \
+         (see `crates/atm/src/cli_surface.rs`).\n\n",
     );
     render_command_markdown(command, 2, &mut out, "atm");
     out

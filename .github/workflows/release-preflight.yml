@@ -49,6 +49,14 @@ jobs:
         with:
           python-version: "3.x"
 
+      - name: Install Python validation dependencies
+        run: python -m pip install codespell 'pydantic>=2.12,<3'
+
+      - name: Install sc-compose CLI
+        # Template JSON escaping requires the released sc-compose 1.4.0 API.
+        # Keep this pin aligned with .github/workflows/ci.yml.
+        run: cargo install --git https://github.com/randlee/sc-compose.git --rev 6a8af1ff46ccd64ae9cc40d7d5c815aa9b0a4661 --locked --bin sc-compose
+
       - name: Install just
         uses: taiki-e/install-action@just
 
@@ -68,9 +76,6 @@ jobs:
 
       - name: Install cargo-modules
         run: cargo binstall cargo-modules@0.26.0 --no-confirm
-
-      - name: Install codespell
-        run: python -m pip install codespell
 
       - name: Normalize version input
         id: meta

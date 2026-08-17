@@ -49,8 +49,11 @@ fn version_slug() -> String {
     env!("CARGO_PKG_VERSION").replace('.', "-")
 }
 
-/// Locates the sibling `atm` binary alongside this example's own executable,
-/// building it first (matching this example's profile) if it isn't present.
+/// Builds and locates the sibling `atm` binary alongside this example's own
+/// executable, matching this example's profile.
+///
+/// The example does not link the binary target as a Cargo dependency, so an
+/// existing binary could otherwise be older than the source being snapshotted.
 fn ensure_atm_binary_built() -> PathBuf {
     let mut profile_dir = std::env::current_exe().expect("resolve current example executable path");
     profile_dir.pop(); // drop the example executable's own file name
@@ -63,10 +66,6 @@ fn ensure_atm_binary_built() -> PathBuf {
 
     let bin_name = if cfg!(windows) { "atm.exe" } else { "atm" };
     let bin_path = profile_dir.join(bin_name);
-    if bin_path.is_file() {
-        return bin_path;
-    }
-
     let release = profile_dir
         .file_name()
         .is_some_and(|name| name == "release");

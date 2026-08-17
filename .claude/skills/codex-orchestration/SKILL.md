@@ -134,6 +134,15 @@ mandatory:
 - `rust-service-hardening-agent`
 - `flaky-test-qa`
 
+Before phase-ending QA can report PASS, `quality-mgr` must require a successful
+`just validate` result from the assigned execution reviewer (normally
+`rust-qa-agent`). To preserve `quality-mgr`'s no-foreground-QA rule, it verifies
+the delegated `executed_checks.artifacts` output and source revision instead of
+executing that broad command itself. The phase-end rust-qa assignment supplies
+`just validate` through its artifact-command channel. `just validate` includes
+the committed CLI-surface contract check, so released CLI changes cannot bypass
+its baseline gate.
+
 ## CI
 
 Use standard GitHub CLI:

@@ -1,23 +1,44 @@
 # Changelog
 
-## Unreleased
+## 1.4.3
 
-- complete Phase AN's template-composition and queryable-message line:
-  durable decomposed template rows, render-on-read, typed search and raw
-  read-only analyst queries, plus a generic `atm compose` workflow
-- add AN.8 validation artifacts for sprint span, QA-round, severity, and
-  developer queries; prove the generic query surface with a synthetic
-  vocabulary and the Tokio HTTP same-host/cross-host/foreign-team routing
-  matrix
+- recovery release: `v1.4.2` was abandoned as a release tag/GitHub Release
+  after the tag was created pointing at a commit that predates a required
+  fix. `cargo publish`'s isolated package-verification build failed for
+  `agent-team-mail` because `crates/atm/src/commands/api.rs` embedded
+  `docs/atm-http-runtime/openapi.yaml` via `include_str!` from outside the
+  crate directory, so it was absent from the package tarball. PR #930 fixes
+  this by packaging a byte-for-byte-guarded derivative at
+  `crates/atm/openapi.yaml`, but it merged to `main` after the `v1.4.2` tag
+  already existed, and tag mutation is not a permitted recovery path. The 11
+  crates already published at `1.4.2` on crates.io remain there permanently;
+  all 12 crates are republished at `1.4.3` from `release/v1.4.3` (cut from
+  `main`, includes PR #930). All content below was originally authored for
+  `1.4.2` and is unchanged except for this recovery note and the version
+  number.
+- ship the minimal Tokio/Axum HTTP runtime (`atm-http-runtime`), replacing
+  hand-written synchronous HTTP framing for local and cross-host listeners
+  (Phase AL)
+- delete the legacy transport machinery made redundant by the Tokio runtime:
+  legacy HTTP framing, local/peer transport workers, resend/replay machinery,
+  and the obsolete cross-host subsystem; reset the daemon to a local-IPC-only
+  singleton (Phase AM, deletion-only)
+- land the decomposed template message and queryable-message line: durable
+  template catalog, render-on-read, typed search and raw read-only analyst
+  queries, generic `atm compose` workflow, optional workflow metadata with
+  OpenTelemetry projection, and the AN.8 validation/query-routing matrix
+  (Phase AN)
 - add `atm teams remove-member` for authorized local roster removal
-- `DAEMON-PREAG-RESET-1`: reset the daemon to a local-IPC-only singleton by
-  deleting the entire cross-host/peer-transport subsystem (`peer_transport`,
-  `claude_compat`, `boundary_adapters`, `direct_boundaries`, the
-  `SourceIngress`/`ProjectionExport` boundary contracts, and their
-  `replay_store`/config-layer supporting code), following the corrective
-  ruling that the prior cross-host ladder (`AG.16`-`AG.25`) was an
-  over-engineered dead end. Sprint `AI.1` carries this reset forward as the
-  Phase AI cross-host baseline.
+- converge daemon runtime session/pid observation into diagnostic-only
+  heartbeat caching (Phase AJ)
+- publish `hermes-atm` and `atm-graft` to PyPI for the first time: full
+  manylinux/musllinux/Windows/aarch64 wheel and sdist pipeline, CPython
+  3.11-3.14 compatibility, and repo-wide version-sync enforcement consolidated
+  onto one canonical gate
+- add `atm-error`, `atm-http-runtime`, and `atm-template-sc-compose` to the
+  published crate set (12 crates total, up from 9); the last was added after
+  release preflight found `atm-daemon-bootstrap` depends on it at runtime
+  while it was still unpublished (issue #923, fixed in PR #924)
 
 ## 1.3.0
 
