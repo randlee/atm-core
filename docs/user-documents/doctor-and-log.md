@@ -1,7 +1,7 @@
 ---
 title: Doctor And Log
 audience: end-user
-reviewed_for_release: 1.3.1
+reviewed_for_release: 1.4.2
 ---
 
 # Doctor And Log
@@ -51,10 +51,11 @@ atm log filter --level warn --match command=send
 atm log tail --level error
 ```
 
-Retained ATM logs live under the runtime state root, not under the installed
-document tree. The ordinary operator expectation is the canonical retained log
-path `{ATM_HOME}/.atm/logs/atm.log.jsonl`, with `ATM_LOG_DIR` as the supported
-override when the retained log must live somewhere else.
+Retained ATM logs are host-scoped, not selected by workspace `ATM_HOME` and not
+stored in the installed document tree. The ordinary operator expectation is
+`~/.atm/logs/atm.log.jsonl`; `ATM_LOG_DIR` is the supported absolute-directory
+override when the retained log must live somewhere else. `atm doctor --json`
+reports the active log path for the current host.
 
 ## Separation Of Concerns
 

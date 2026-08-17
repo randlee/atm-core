@@ -255,6 +255,10 @@ jobs:
           ATM_TEST_RECV_TIMEOUT_SECS: "60"
         run: cargo test --workspace --exclude atm-daemon --verbose
 
+      - name: Run ATM CLI surface compatibility contract
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        run: cargo test -p agent-team-mail --features cli-surface-dump --test cli_surface --verbose
+
       - name: Install Maturin for Hermes graft bridge tests
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         run: python -m pip install maturin

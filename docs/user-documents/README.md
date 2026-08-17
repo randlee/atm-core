@@ -1,7 +1,7 @@
 ---
 title: ATM User Guide
 audience: end-user
-reviewed_for_release: 1.3.1
+reviewed_for_release: 1.4.2
 ---
 
 # ATM User Guide
@@ -20,6 +20,7 @@ They are not developer architecture notes.
 - [Mailbox Workflows](./mailbox-workflows.md)
 - [Doctor And Log](./doctor-and-log.md)
 - [Hooks](./hooks.md)
+- [Hermes Gateway Integration](./hermes-atm.md)
 - [Nudge Templates](./nudge-templates.md)
 - [Troubleshooting](./troubleshooting.md)
 

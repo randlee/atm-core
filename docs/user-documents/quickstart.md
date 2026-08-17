@@ -1,7 +1,7 @@
 ---
 title: Quickstart
 audience: end-user
-reviewed_for_release: 1.3.1
+reviewed_for_release: 1.4.2
 ---
 
 # Quickstart
@@ -12,7 +12,8 @@ Use this guide when you need the smallest working ATM path.
 
 1. Confirm your repo is ATM-enabled and you know the current team.
 2. Run `atm doctor` first when you need a health/config check.
-3. Send a message with `atm send`.
+3. Send a message with `atm send`, or preview template-backed content with
+   `atm compose` before sending it.
 4. Inspect queues with `atm list` or `atm peek`.
 5. Read messages with `atm read`.
 6. Acknowledge a pending-ack message with `atm ack`.
@@ -31,6 +32,17 @@ atm read --team atm-dev
 atm ack 01KRFK5QTF2R6NRS3Q0F8Z9K0S "received"
 ```
 
+## Template-Backed Messages
+
+For generated content, preview the exact rendered body locally before
+delivery. `atm compose` does not read or write a mailbox; `atm send --template`
+uses the same template and variables for delivery.
+
+```bash
+atm compose --template notice.j2 --vars notice-vars.json
+atm send quality-mgr@atm-dev --template notice.j2 --vars notice-vars.json
+```
+
 Cross-agent inspection without mutation:
 
 ```bash
@@ -45,11 +57,11 @@ not rely on direct database access or private files under `~/.atm/`.
 
 If the installed ATM binary is at:
 
-- `~/.local/atm/1.3.1/bin/atm`
+- `~/.local/atm/1.4.2/bin/atm`
 
 then the installed long-form doc entrypoint is:
 
-- `~/.local/atm/1.3.1/share/doc/atm/README.md`
+- `~/.local/atm/1.4.2/share/doc/atm/README.md`
 
 ## Next Documents
 

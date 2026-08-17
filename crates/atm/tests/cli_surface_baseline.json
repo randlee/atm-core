@@ -225,6 +225,89 @@
       "args": [
         {
           "has_default": true,
+          "id": "dry_run",
+          "long": "dry-run",
+          "num_args": {
+            "max": 0,
+            "min": 0
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "env_prefix",
+          "long": "env-prefix",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": true,
+          "id": "json",
+          "long": "json",
+          "num_args": {
+            "max": 0,
+            "min": 0
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": true,
+          "id": "stderr_logs",
+          "long": "stderr-logs",
+          "num_args": {
+            "max": 0,
+            "min": 0
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "template",
+          "long": "template",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": true,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "var",
+          "long": "var",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "vars",
+          "long": "vars",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        }
+      ],
+      "name": "compose",
+      "subcommands": []
+    },
+    {
+      "args": [
+        {
+          "has_default": true,
           "id": "json",
           "long": "json",
           "num_args": {
@@ -1253,6 +1336,17 @@
                 },
                 {
                   "has_default": true,
+                  "id": "https_port",
+                  "long": "https-port",
+                  "num_args": {
+                    "max": 1,
+                    "min": 1
+                  },
+                  "required": false,
+                  "short": null
+                },
+                {
+                  "has_default": true,
                   "id": "stderr_logs",
                   "long": "stderr-logs",
                   "num_args": {
@@ -1327,6 +1421,17 @@
                     "min": 1
                   },
                   "required": true,
+                  "short": null
+                },
+                {
+                  "has_default": true,
+                  "id": "https_port",
+                  "long": "https-port",
+                  "num_args": {
+                    "max": 1,
+                    "min": 1
+                  },
+                  "required": false,
                   "short": null
                 },
                 {
@@ -1617,6 +1722,419 @@
       "args": [
         {
           "has_default": false,
+          "id": "agent",
+          "long": "agent",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "category",
+          "long": "category",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": true,
+          "id": "count",
+          "long": "count",
+          "num_args": {
+            "max": 0,
+            "min": 0
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "cursor",
+          "long": "cursor",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "effective_tags",
+          "long": "effective-tag",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "from",
+          "long": "from",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "group_by",
+          "long": "group-by",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": true,
+          "id": "json",
+          "long": "json",
+          "num_args": {
+            "max": 0,
+            "min": 0
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "lifecycle_end_stage",
+          "long": "lifecycle-end-stage",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "lifecycle_end_state",
+          "long": "lifecycle-end-state",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "lifecycle_end_transition",
+          "long": "lifecycle-end-transition",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "lifecycle_scope_id",
+          "long": "lifecycle-scope-id",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "lifecycle_scope_kind",
+          "long": "lifecycle-scope-kind",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "lifecycle_start_stage",
+          "long": "lifecycle-start-stage",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "lifecycle_start_state",
+          "long": "lifecycle-start-state",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "lifecycle_start_transition",
+          "long": "lifecycle-start-transition",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "limit",
+          "long": "limit",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "max",
+          "long": "max",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "min",
+          "long": "min",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": true,
+          "id": "per_mailbox",
+          "long": "per-mailbox",
+          "num_args": {
+            "max": 0,
+            "min": 0
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": true,
+          "id": "raw_match",
+          "long": "raw-match",
+          "num_args": {
+            "max": 0,
+            "min": 0
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "since",
+          "long": "since",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": true,
+          "id": "stderr_logs",
+          "long": "stderr-logs",
+          "num_args": {
+            "max": 0,
+            "min": 0
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "tags",
+          "long": "tag",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "team",
+          "long": "team",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "template_meta",
+          "long": "template-meta",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "template_sha",
+          "long": "template-sha",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "template_type",
+          "long": "type",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "text",
+          "long": null,
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "until",
+          "long": "until",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "vars",
+          "long": "var",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "workflow_iteration",
+          "long": "workflow-iteration",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "workflow_scope_id",
+          "long": "workflow-scope-id",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "workflow_scope_kind",
+          "long": "workflow-scope-kind",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "workflow_stage",
+          "long": "workflow-stage",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "workflow_state",
+          "long": "workflow-state",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "workflow_transition",
+          "long": "workflow-transition",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        }
+      ],
+      "name": "search",
+      "subcommands": []
+    },
+    {
+      "args": [
+        {
+          "has_default": false,
           "id": "actor",
           "long": "as",
           "num_args": {
@@ -1628,8 +2146,30 @@
         },
         {
           "has_default": false,
+          "id": "category",
+          "long": "category",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
           "id": "chat_id",
           "long": "chat-id",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "content_format",
+          "long": "content-format",
           "num_args": {
             "max": 1,
             "min": 1
@@ -1650,8 +2190,30 @@
         },
         {
           "has_default": false,
+          "id": "env_prefix",
+          "long": "env-prefix",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
           "id": "file",
           "long": "file",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "host",
+          "long": "host",
           "num_args": {
             "max": 1,
             "min": 1
@@ -1727,6 +2289,17 @@
         },
         {
           "has_default": false,
+          "id": "tag",
+          "long": "tag",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
           "id": "task_id",
           "long": "task-id",
           "num_args": {
@@ -1749,6 +2322,17 @@
         },
         {
           "has_default": false,
+          "id": "template",
+          "long": "template",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
           "id": "to",
           "long": null,
           "num_args": {
@@ -1756,6 +2340,28 @@
             "min": 1
           },
           "required": true,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "var",
+          "long": "var",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "vars",
+          "long": "vars",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
           "short": null
         }
       ],
@@ -2294,9 +2900,116 @@
               },
               "required": true,
               "short": null
+            },
+            {
+              "has_default": false,
+              "id": "workspace_root",
+              "long": "workspace-root",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
             }
           ],
           "name": "update-member",
+          "subcommands": []
+        }
+      ]
+    },
+    {
+      "args": [
+        {
+          "has_default": true,
+          "id": "stderr_logs",
+          "long": "stderr-logs",
+          "num_args": {
+            "max": 0,
+            "min": 0
+          },
+          "required": false,
+          "short": null
+        }
+      ],
+      "name": "templates",
+      "subcommands": [
+        {
+          "args": [
+            {
+              "has_default": true,
+              "id": "json",
+              "long": "json",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stderr_logs",
+              "long": "stderr-logs",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "template_type",
+              "long": "type",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            }
+          ],
+          "name": "list",
+          "subcommands": []
+        },
+        {
+          "args": [
+            {
+              "has_default": true,
+              "id": "json",
+              "long": "json",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "sha",
+              "long": null,
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stderr_logs",
+              "long": "stderr-logs",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            }
+          ],
+          "name": "schema",
           "subcommands": []
         }
       ]

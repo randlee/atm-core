@@ -1,7 +1,7 @@
 ---
 title: Install Layout
 audience: end-user
-reviewed_for_release: 1.3.1
+reviewed_for_release: 1.4.2
 ---
 
 # Install Layout
@@ -21,7 +21,7 @@ Long-form user docs live under `share/doc/atm/`.
 A typical local install layout looks like this:
 
 ```text
-~/.local/atm/1.3.1/
+~/.local/atm/1.4.2/
   bin/
     atm
     atm-daemon
@@ -36,7 +36,12 @@ A typical local install layout looks like this:
 
 ## Runtime State
 
-Runtime state lives under `~/.atm/`.
+Daemon coordination and durable mailbox state are host-scoped under the OS
+account's `~/.atm/` root. The managed daemon and its database are shared by
+that OS account rather than selected per workspace.
+
+`ATM_HOME` remains a workspace/config discovery input. It does not select a
+different daemon, daemon endpoint, database, or retained-log root.
 
 Runtime state is not the installed documentation tree. Do not treat `~/.atm/`
 as the source for long-form help content.

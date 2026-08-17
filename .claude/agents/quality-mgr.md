@@ -187,6 +187,12 @@ For phase-ending QA:
 - always run `rust-best-practices-agent`
 - always run `rust-service-hardening-agent`
 - always run `flaky-test-qa`
+- require a successful `just validate` result from the assigned execution
+  reviewer (normally `rust-qa-agent`) before phase-ending QA can report PASS;
+  verify its `executed_checks.artifacts` result in the rendered phase-end
+  assignment
+- do not run `just validate` yourself in the foreground: preserve Workflow
+  step 7 by verifying the delegated command output and its source revision
 
 For docs-only plan review (`review_mode: plan`):
 - run `req-qa`

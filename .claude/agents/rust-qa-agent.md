@@ -46,7 +46,7 @@ Rules:
 - `review_mode` is required.
 - `review_targets` is optional. Omit to review the default changed-file scope plus impacted files when needed.
 - `run_checks` is optional. If omitted, default to `fmt=true`, `clippy=true`, `tests=true`, `coverage=false`.
-- `artifact_commands` is optional. If `artifact_regeneration_required` is true and commands are supplied, treat failed regeneration as a finding.
+- `artifact_commands` is optional. If `artifact_regeneration_required` is true and commands are supplied, run them and treat failure as a finding. Phase-end assignments use this existing execution channel for `just validate`; report its result under `executed_checks.artifacts`.
 - This agent does not own `rust-best-practices` or `rust-service-hardening` policy. Do not infer those reviews from this input.
 
 ## Review Process
@@ -54,7 +54,7 @@ Rules:
 1. Parse and validate the input JSON.
 2. Read the required Rust guideline files first.
 3. Review changed files first, then widen scope only where a failed check or concrete first-principles issue requires more context.
-4. If `artifact_regeneration_required` is true and `artifact_commands` is non-empty, run those commands and treat failures or unexpected drift as findings.
+4. If `artifact_regeneration_required` is true and `artifact_commands` is non-empty, run those commands and treat failures or unexpected drift as findings. For `phase_end`, this is the required `just validate` execution proof.
 5. If `run_checks` requests execution, run only the requested checks.
 6. Return fenced JSON only.
 
