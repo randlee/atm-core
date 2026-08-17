@@ -1,6 +1,7 @@
 set windows-shell := ["pwsh", "-NoLogo", "-Command"]
 
-python_cmd := if os_family() == "windows" { "python" } else { "python3" }
+default_python_cmd := if os_family() == "windows" { "python" } else { "python3" }
+python_cmd := env_var_or_default("ATM_PYTHON_CMD", default_python_cmd)
 clippy_cmd := if os_family() == "windows" { "cargo clippy --workspace --all-targets --target x86_64-pc-windows-msvc -- -D warnings" } else { "cargo clippy --workspace --all-targets -- -D warnings" }
 
 # Show the curated repo task help.
@@ -90,6 +91,11 @@ _lint-version:
 # Show current workspace version state or latest recommended direct dependency upgrades.
 version mode='current':
     {{python_cmd}} .just/run_version.py {{mode}}
+
+# Install the exact Python lint, build, and publish tools used by GitHub Actions
+# in an isolated local virtual environment.
+python-tools *args:
+    {{python_cmd}} scripts/bootstrap_python_tools.py {{args}}
 
 # Enforce RULE-008 for test and cfg(test) code.
 [private]

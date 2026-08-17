@@ -21,15 +21,14 @@ class ReleasePreflightWorkflowTests(unittest.TestCase):
         self.assertIn("python3 scripts/validate_release.py all \\", text)
         self.assertIn("--staged-install-root \"${STAGED_INSTALL_ROOT}\"", text)
 
-    def test_release_preflight_installs_validation_python_dependencies_before_validation(self) -> None:
+    def test_release_preflight_installs_canonical_python_tools_before_validation(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
 
-        install_python = text.index("- name: Install Python\n")
-        install_dependencies = text.index("- name: Install Python validation dependencies")
+        install_python = text.index("- name: Install canonical Python tools")
         validate = text.index("- name: Run canonical retained release validation suite")
-        self.assertLess(install_python, install_dependencies)
-        self.assertLess(install_dependencies, validate)
-        self.assertIn("python -m pip install codespell 'pydantic>=2.12,<3'", text)
+        self.assertLess(install_python, validate)
+        self.assertIn("uses: ./.github/actions/setup-atm-python-tools", text)
+        self.assertNotIn("python -m pip install codespell", text)
 
 
 if __name__ == "__main__":

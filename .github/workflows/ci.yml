@@ -54,10 +54,10 @@ jobs:
           toolchain: "1.94.1"
           components: clippy, rustfmt
 
-      - name: Install Python
-        uses: actions/setup-python@v5
+      - name: Install canonical Python tools
+        uses: ./.github/actions/setup-atm-python-tools
         with:
-          python-version: "3.x"
+          python-version: "3.14"
 
       - name: Install sc-compose CLI
         # Template JSON escaping requires the released sc-compose 1.4.0 API.
@@ -86,9 +86,6 @@ jobs:
 
       - name: Install cargo-modules
         run: cargo binstall cargo-modules@0.26.0 --no-confirm
-
-      - name: Install Python lint dependencies
-        run: python -m pip install codespell 'pydantic>=2.12,<3'
 
       - name: Run just lint
         run: just lint
@@ -187,15 +184,11 @@ jobs:
           # and fail with rustfmt-preview's `bin/cargo-fmt` conflict.
           components: clippy, rustfmt
 
-      - name: Install Python
+      - name: Install canonical Python tools
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-atm-python-tools
         with:
           python-version: "3.14"
-
-      - name: Install Python test dependencies
-        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
-        run: python -m pip install 'pydantic>=2.12,<3'
 
       - name: Install sc-compose CLI for passthrough parity tests
         # The AN.7 process-level tests compare the ATM command with the
@@ -258,10 +251,6 @@ jobs:
       - name: Run ATM CLI surface compatibility contract
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         run: cargo test -p agent-team-mail --features cli-surface-dump --test cli_surface --verbose
-
-      - name: Install Maturin for Hermes graft bridge tests
-        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
-        run: python -m pip install maturin
 
       - name: Download host release-wheel candidate
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
@@ -362,8 +351,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Python for package smoke verification
-        uses: actions/setup-python@v5
+      - name: Install canonical Python tools for package smoke verification
+        uses: ./.github/actions/setup-atm-python-tools
         with:
           python-version: "3.11"
 
@@ -402,7 +391,6 @@ jobs:
         if: ${{ matrix.smoke == 'native' }}
         shell: bash
         run: |
-          python -m pip install 'pydantic>=2,<3'
           python -m pip install --no-deps dist/atm_graft*.whl dist/hermes_atm*.whl
           python -c "import atm_graft, hermes_atm"
 
@@ -416,8 +404,7 @@ jobs:
             python:3.11-alpine \
             sh -euxc '
               python -m venv /tmp/atm-wheel-smoke
-              /tmp/atm-wheel-smoke/bin/pip install --disable-pip-version-check "pydantic>=2,<3"
-              /tmp/atm-wheel-smoke/bin/pip install --no-deps dist/atm_graft*.whl dist/hermes_atm*.whl
+              /tmp/atm-wheel-smoke/bin/pip install --disable-pip-version-check dist/atm_graft*.whl dist/hermes_atm*.whl
               /tmp/atm-wheel-smoke/bin/python -c "import atm_graft, hermes_atm"
             '
 
@@ -440,8 +427,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Install canonical Python tools (${{ matrix.python-version }})
+        uses: ./.github/actions/setup-atm-python-tools
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -453,7 +440,6 @@ jobs:
 
       - name: Install and test abi3 wheel pair
         run: |
-          python -m pip install 'pydantic>=2,<3'
           python -m pip install --no-deps dist/atm_graft*.whl dist/hermes_atm*.whl
           python -c "import atm_graft, hermes_atm"
           python -m unittest discover -s crates/hermes-atm/tests -p "test_*.py"
@@ -475,13 +461,10 @@ jobs:
           # hosted-runner rustfmt-preview `bin/cargo-fmt` install conflict.
           components: clippy, rustfmt
 
-      - name: Install Python
-        uses: actions/setup-python@v5
+      - name: Install canonical Python tools
+        uses: ./.github/actions/setup-atm-python-tools
         with:
           python-version: "3.11"
-
-      - name: Install Maturin
-        run: python -m pip install maturin
 
       - name: Build atm-graft source distribution
         run: maturin sdist --manifest-path crates/atm-graft-python/Cargo.toml --out dist

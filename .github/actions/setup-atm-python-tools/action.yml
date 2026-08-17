@@ -1,0 +1,25 @@
+name: Setup ATM Python tools
+description: Install the pinned ATM Python validation, wheel-build, and publish toolchain.
+
+inputs:
+  python-version:
+    description: Python version to install before installing the canonical toolchain.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Install Python ${{ inputs.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: pip
+        cache-dependency-path: .github/python-tooling-requirements.txt
+
+    - name: Install pinned ATM Python tools
+      shell: bash
+      run: |
+        set -euo pipefail
+        python -m pip install --upgrade pip
+        python -m pip install --requirement .github/python-tooling-requirements.txt
+        python -m pip check

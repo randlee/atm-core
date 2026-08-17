@@ -20,6 +20,7 @@ Cargo.toml.ci
 # Python bytecode caches
 **/__pycache__/
 scripts/__pycache__/
+.venv/
 
 # Local Synaptic Canvas orchestration state: retain it locally for agent
 # history/status, but never treat it as repository content.

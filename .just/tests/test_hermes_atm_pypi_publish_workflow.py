@@ -49,6 +49,13 @@ class HermesAtmPyPiPublishWorkflowTests(unittest.TestCase):
         self.assertIn("https://test.pypi.org/legacy/", workflow)
         self.assertIn("twine upload --non-interactive publish-dist/*", workflow)
 
+    def test_publish_workflow_uses_canonical_python_tool_installer(self) -> None:
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+
+        self.assertEqual(workflow.count("uses: ./.github/actions/setup-atm-python-tools"), 2)
+        self.assertGreaterEqual(workflow.count("uses: actions/checkout@v4"), 3)
+        self.assertNotIn("python -m pip install twine", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()

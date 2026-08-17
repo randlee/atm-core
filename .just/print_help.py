@@ -14,6 +14,7 @@ SECTIONS = (
             ("clean", "Remove workspace build artifacts."),
             ("version", "Show current workspace version state."),
             ("version latest", "Show recommended direct dependency upgrades."),
+            ("python-tools", "Install the pinned Python validation/build/publish tools in a local venv."),
             ("ci", "Run the local CI-equivalent command set."),
             ("validate", "Run the full retained release validation suite."),
         ),

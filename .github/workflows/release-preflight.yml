@@ -44,13 +44,10 @@ jobs:
           toolchain: "1.94.1"
           components: clippy, rustfmt
 
-      - name: Install Python
-        uses: actions/setup-python@v5
+      - name: Install canonical Python tools
+        uses: ./.github/actions/setup-atm-python-tools
         with:
-          python-version: "3.x"
-
-      - name: Install Python validation dependencies
-        run: python -m pip install codespell 'pydantic>=2.12,<3'
+          python-version: "3.14"
 
       - name: Install sc-compose CLI
         # Template JSON escaping requires the released sc-compose 1.4.0 API.

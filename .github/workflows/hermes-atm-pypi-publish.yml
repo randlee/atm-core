@@ -79,14 +79,18 @@ jobs:
     runs-on: ubuntu-latest
     environment: testpypi
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download verified publish set
         uses: actions/download-artifact@v4
         with:
           name: hermes-atm-pypi-publish-set
           path: publish-dist
 
-      - name: Install Twine
-        run: python -m pip install twine
+      - name: Install canonical Python tools
+        uses: ./.github/actions/setup-atm-python-tools
+        with:
+          python-version: "3.14"
 
       - name: Validate distributions
         run: twine check publish-dist/*
@@ -104,14 +108,18 @@ jobs:
     runs-on: ubuntu-latest
     environment: pypi
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download verified publish set
         uses: actions/download-artifact@v4
         with:
           name: hermes-atm-pypi-publish-set
           path: publish-dist
 
-      - name: Install Twine
-        run: python -m pip install twine
+      - name: Install canonical Python tools
+        uses: ./.github/actions/setup-atm-python-tools
+        with:
+          python-version: "3.14"
 
       - name: Validate distributions
         run: twine check publish-dist/*
