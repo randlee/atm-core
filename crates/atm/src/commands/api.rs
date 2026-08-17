@@ -3,7 +3,10 @@ use clap::{Args, Subcommand};
 
 use crate::observability::CliObservability;
 
-const OPENAPI_YAML: &str = include_str!("../../../../docs/atm-http-runtime/openapi.yaml");
+// The CLI embeds its publishable OpenAPI copy from its own crate tree. The
+// repository documentation copy remains canonical; `openapi_surface` enforces
+// that this packaged derivative cannot drift from it.
+const OPENAPI_YAML: &str = include_str!("../../openapi.yaml");
 
 #[derive(Debug, Args)]
 pub struct ApiCommand {
