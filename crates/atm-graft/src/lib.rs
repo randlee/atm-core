@@ -431,8 +431,20 @@ impl GraftSession {
             ready_latch.notifier(),
             stop_rx,
         )?;
-        ready_latch.wait_until_listening(RECEIVE_LOOP_READY_DEADLINE)?;
-        Ok((stop_tx, join_handle))
+        match ready_latch.wait_until_listening(RECEIVE_LOOP_READY_DEADLINE) {
+            Ok(()) => Ok((stop_tx, join_handle)),
+            Err(readiness_error) => {
+                // A receiver can fail before it reports ready (for example,
+                // when its endpoint is already owned). Join the worker so its
+                // typed bind/ownership error is never replaced by the latch's
+                // generic timeout or disconnect diagnostic.
+                let _ = stop_tx.send(());
+                match join_receive_loop_with_deadline(join_handle) {
+                    Err(worker_error) => Err(worker_error),
+                    Ok(()) => Err(readiness_error),
+                }
+            }
+        }
     }
 
     pub fn snapshot(&self) -> Result<SessionSnapshot, AtmError> {
@@ -801,6 +813,19 @@ mod tests {
             GraftSessionState::Listening
         );
         session.close().expect("close active receiver");
+    }
+
+    #[test]
+    fn activation_surfaces_receiver_ownership_conflicts_from_the_worker() {
+        let paths = test_paths();
+        let active = GraftSession::activate(session_options(&paths), Arc::new(NoopInjector))
+            .expect("first receiver must activate");
+
+        let error = GraftSession::activate(session_options(&paths), Arc::new(NoopInjector))
+            .expect_err("second receiver must report the endpoint ownership conflict");
+
+        assert_eq!(error.code(), AtmErrorCode::GraftReceiverAlreadyActive);
+        active.close().expect("close active receiver");
     }
 
     #[test]
