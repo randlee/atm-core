@@ -1,0 +1,6 @@
+{
+  "source_repository": "randlee/sc-compose",
+  "source_revision": "3aa9a2306dfdc74fb57d5fe88641fd8f5349a45c",
+  "source_skill_path": ".claude/skills/publishing",
+  "sync_script": "scripts/sync_sc_compose_publishing_skill.py"
+}
