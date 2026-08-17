@@ -8,7 +8,6 @@ license.workspace = true
 description = "ATM adapter seam for the public sc-compose template API."
 repository.workspace = true
 homepage.workspace = true
-publish = false
 
 [lib]
 name = "atm_template_sc_compose"

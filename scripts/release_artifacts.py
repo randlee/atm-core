@@ -337,9 +337,13 @@ def missing_publish_metadata_fields(crate_toml: Path, workspace_defaults: dict) 
 def validate_manifest(args: argparse.Namespace) -> int:
     manifest = load_manifest(Path(args.manifest))
     manifest_packages = {crate["package"] for crate in manifest["crates"]}
+    published_manifest_packages = {
+        crate["package"] for crate in manifest["crates"] if crate["publish"]
+    }
     workspace_toml = Path(args.workspace_toml)
     workspace_root = workspace_toml.parent
     workspace_defaults = workspace_package_defaults(workspace_toml)
+    workspace_packages = workspace_package_map(workspace_toml)
     missing = []
     for member in workspace_members(workspace_toml):
         crate_toml = workspace_root / member / "Cargo.toml"
@@ -369,8 +373,34 @@ def validate_manifest(args: argparse.Namespace) -> int:
             print(f"  - {error}")
         return 1
 
+    dependency_errors = []
+    for crate in manifest["crates"]:
+        if not crate["publish"]:
+            continue
+        crate_toml = workspace_root / crate["cargo_toml"]
+        for dependency in sorted(workspace_dependency_names(crate_toml, workspace_root)):
+            dependency_toml = workspace_packages.get(dependency)
+            if dependency_toml is None:
+                continue
+            if not crate_is_publishable(dependency_toml):
+                dependency_errors.append(
+                    f"{crate['package']} has runtime/build path dependency {dependency} "
+                    "whose Cargo.toml sets publish = false"
+                )
+            elif dependency not in published_manifest_packages:
+                dependency_errors.append(
+                    f"{crate['package']} has runtime/build path dependency {dependency} "
+                    "missing from the publish manifest"
+                )
+    if dependency_errors:
+        print("publish dependency violation(s):")
+        for error in dependency_errors:
+            print(f"  - {error}")
+        return 1
+
     print("ok: all publishable workspace crates are present in the manifest")
     print("ok: all publishable manifest crates define required publish metadata")
+    print("ok: published crates have publishable runtime/build workspace dependencies")
     return 0
 
 
