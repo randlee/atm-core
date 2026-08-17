@@ -12,11 +12,14 @@ triage:AI36-QA-LOCK-CONTENTION-DUP
     triage:severity "important" ;
     triage:repeatable false ;
     triage:sweepScope "file_only" ;
-    triage:status "open" ;
+    triage:status "fixed" ;
     triage:dispatchReady false ;
     triage:triagedAt "2026-07-29T00:00:00Z"^^xsd:dateTime ;
     triage:foundIn "AI.36" ;
     triage:foundAt "2026-07-29T00:00:00Z"^^xsd:dateTime ;
+    triage:closedAt "2026-08-17T00:00:00Z"^^xsd:dateTime ;
+    triage:closedBy "quality-mgr" ;
+    triage:closedNote "No longer reproduces at develop HEAD: graft.rs migrated from fs2 hand-rolled WouldBlock/raw_os_error(32|33) classification to fs4 try_lock_exclusive() returning Result<bool>; cited is_lock_contention fn removed. Two of three cited duplicate sites (atm-daemon/src/host_ownership.rs::is_owner_lock_contention_error, ::open_lock_file) no longer exist -- file deleted. Only atm-daemon-client/src/lib.rs::is_launch_gate_contention_error remains, a single instance, not a graft.rs duplication. Confirmed independently by req-qa and arch-qa." ;
     triage:hasOccurrence triage:AI36-QA-LOCK-CONTENTION-DUP-1 ;
     triage:openOn triage:FIX-AI36-QA-REPAIR-ee8f670f .
 
@@ -25,10 +28,10 @@ triage:AI36-QA-LOCK-CONTENTION-DUP-1
     triage:file "crates/atm-core/src/graft.rs" ;
     triage:line "466" ;
     triage:snippet "fn is_lock_contention(error: &std::io::Error) -> bool { error.kind() == std::io::ErrorKind::WouldBlock || cfg!(windows) && matches!(error.raw_os_error(), Some(32 | 33)) }" ;
-    triage:status "open" ;
+    triage:status "fixed" ;
     triage:headSha "ee8f670f" ;
     triage:branch "fix/ai36-qa-repair" ;
-    triage:closed false ;
+    triage:closed true ;
     triage:occursIn triage:FIX-AI36-QA-REPAIR-ee8f670f .
 
 triage:FIX-AI36-QA-REPAIR-ee8f670f
