@@ -89,6 +89,20 @@ prompt.
   hendrix `hermes-ops/` + grecon cron.
 - Leonardo's system prompt stays general-purpose rust architecture.
 
+## Staffing (initial integration)
+
+The develop-branch integration is an **atm-dev team** project, not a hermes
+one: a codex agent (or two) runs ON the codex-atm repo as atm-dev team
+members, with **arch-ctm** as atm-side architect. This is the established
+pattern — arch-ctm already runs as a codex agent in the atm-core rmux layout.
+Coordination uses the existing terminal-agent atm path (tmux nudge + `atm
+read`) until the native integration they are building supersedes it —
+deliberate dogfooding. The codex-atm workspace gets its own `.atm.toml`
+(atm-dev team, dev-agent panes, startup directives pointing at this plan and
+the R5 boundary rules). Ongoing MAINTENANCE (release-triggered sync pipeline,
+leonardo escalation) stays on the hermes/hendrix side and is out of scope for
+the dev team.
+
 ## Proposed sequencing
 
 1. arch-ctm review of this plan; R4 ruling.
