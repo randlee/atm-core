@@ -1,7 +1,7 @@
 ---
 title: Mailbox Workflows
 audience: end-user
-reviewed_for_release: 1.3.1
+reviewed_for_release: 1.4.2
 ---
 
 # Mailbox Workflows
@@ -33,14 +33,14 @@ atm peek quality-mgr@atm-dev --team atm-dev --as quality-mgr --json
 Use message-handling commands when you intend to read, acknowledge, clear, or
 reply through the supported ATM workflow.
 
-Owner-only mutating surfaces:
+Caller-scoped mutating surfaces:
 
 - `atm send`
 - `atm read`
 - `atm ack`
 - `atm clear`
 
-Typical owner-only flow:
+Typical caller-scoped flow:
 
 ```bash
 export ATM_TEAM=atm-dev
@@ -52,13 +52,21 @@ atm ack 01KRFK5QTF2R6NRS3Q0F8Z9K0S "received"
 atm clear --team atm-dev --dry-run
 ```
 
+For template-backed delivery, first use `atm compose --template <path>` to
+preview the exact local rendering, then use `atm send <recipient> --template
+<path>` with the same variables. Composition is local and does not mutate a
+mailbox.
+
 ## Workflow Guidance
 
 - inspect before mutating when you need to confirm queue state
 - read the actual message before acting on it
 - use the supported acknowledge path when a task or sender requires it
 - use `atm clear` only for the resolved caller's mailbox state
-- do not use inspection examples as a substitute for owner-only mutation
+- do not use inspection examples as a substitute for caller-scoped mutation
+- a mutating command's optional `--as` value may only name the same base agent
+  as `ATM_IDENTITY`; it can select that caller's chat identity, never another
+  agent's mailbox state
 
 ## Clear Guidance
 

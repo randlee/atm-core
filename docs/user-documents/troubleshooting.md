@@ -1,7 +1,7 @@
 ---
 title: Troubleshooting
 audience: end-user
-reviewed_for_release: 1.3.1
+reviewed_for_release: 1.4.2
 ---
 
 # Troubleshooting
@@ -46,6 +46,9 @@ Symptoms:
 
 - ATM cannot reach the local daemon path
 - the command reports daemon startup/connect trouble
+
+The managed daemon uses host-scoped state. Changing `ATM_HOME` does not select
+another daemon, endpoint, database, or retained-log root.
 
 Supported recovery:
 
