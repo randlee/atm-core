@@ -20,6 +20,14 @@ resolvable when VPN, Wi-Fi, Ethernet, DHCP, or VPS placement changes. ATM
 never discovers a peer name by reverse DNS and does not write an observed
 address back into durable state.
 
+The CLI reads the enabled authority set directly through
+`PeerConfigStore::list_trusted_peers()` at the approved
+`boundaries/atm-storage/peer-config-store.toml` seam. It does not invent a
+parallel configuration read and it does not depend on a running daemon or the
+daemon's separately refreshed in-memory TLS-verifier snapshot. A later send
+still needs the ordinary local-daemon path, but address normalization itself is
+available while that daemon is stopped.
+
 ## CLI address convenience
 
 The CLI resolves destination shorthand before it builds the existing
@@ -43,6 +51,9 @@ peer-name completion.
 - Hostname comparisons are ASCII case-insensitive. Completion is deliberately
   limited to the terminal `.local` form; ATM does not apply fuzzy, prefix, or
   arbitrary suffix matching.
+- `--host <host>` uses this exact same trusted-authority canonicalization as an
+  inline host. Supplying both forms compares their canonical registered names,
+  not their unnormalized spelling.
 
 This is an input-normalization convenience only. The resolved `AgentAddress`
 is indistinguishable from one supplied in fully-qualified form before the
@@ -53,7 +64,7 @@ The CLI accepts either the registered hostname (including the documented
 
 - after CLI normalization, a hostname input must exactly match one registered
   canonical hostname;
-- a literal IP input is authorized only when a fresh bounded DNS lookup of
+- a literal IP input is authorized only when a fresh bounded DNS/mDNS lookup of
   exactly one registered hostname contains that address;
 - zero matches are untrusted and two or more matches are ambiguous; both fail
   closed before connection; and
@@ -78,6 +89,19 @@ Operators configure stable names such as `rand-m5.local` and
 or a new alias record. A direct IP remains usable for diagnostics and
 compatibility only while it resolves from one registered hostname. This decision
 does not add DNS/mDNS results, retries, receipts, or delivery state to storage.
+
+### Platform boundary
+
+macOS, Linux, and Windows all receive the same canonical hostname, matching,
+failure, and recovery behavior. Ordinary DNS/DDNS is the portable baseline.
+An operator may register a `.local` name only where the operating system's
+network stack has mDNS available; on Windows without mDNS resolution, ATM
+fails before dispatch with the same structured unresolved-authority recovery
+as an unavailable DNS name. The operator must use a forward-resolvable
+DNS/DDNS authority or enable the supported local mDNS facility; ATM does not
+silently fall back to an IP or another peer. Windows test coverage must cover
+this fail-closed behavior and successful canonicalization independently of a
+particular LAN's mDNS service.
 
 A host with several account-owned daemons assigns each daemon a distinct
 configured HTTPS port and a distinct endpoint name or otherwise unambiguous
