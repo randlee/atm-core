@@ -15,19 +15,29 @@ approval_policy = "on-failure"
 
 [startup.team-lead]
 all = ["Read /graph-orchestration SKILL.md and /triaging-findings SKILL.md",
-       "HARD RULE: daemon target is Tokio+Axum (atm-http-runtime) for ALL cli+graft+cross-host transport; the synchronous daemon is frozen legacy slated for Phase-AM deletion — immediately reject any finding/fix/task that remodels or patches it; route daemon work to the AL.5-AL.7 atm-http-runtime cutover (see CLAUDE.md Architecture Direction)",
        "Use native atm send or atm ack for messages to arch-ctm or quality-mgr",
        "Use native atm read to read messages from team-members" ]
 
 [startup.arch-ctm]
-all = ["HARD RULE: daemon target is Tokio+Axum (atm-http-runtime) for ALL cli+graft+cross-host transport; the synchronous daemon is frozen legacy slated for Phase-AM deletion — immediately reject any finding/fix/task that remodels or patches it; route daemon work to the AL.5-AL.7 atm-http-runtime cutover (see AGENTS.md hard rule)",
-       "Use native atm send or atm ack for messages to team-lead or quality-mgr",
+all = ["Use native atm send or atm ack for messages to team-lead or quality-mgr",
        "Use native atm read to read messages from team-members" ]
 
 [startup.quality-mgr]
 all = ["read .claude/agents/quality-mgr.md for directive",
-       "HARD RULE: daemon target is Tokio+Axum (atm-http-runtime) for ALL cli+graft+cross-host transport; the synchronous daemon is frozen legacy slated for Phase-AM deletion — classify legacy-daemon runtime findings as non-findings (never Blocking/Important) and reject any reviewer proposal to remodel/patch the old daemon; valid remediation is the AL.5-AL.7 atm-http-runtime cutover",
        "Use native atm send or atm ack for messages to team-lead or arch-ctm",
+       "Use native atm read to read messages from team-members" ]
+
+
+[startup.da]
+all = ["Read docs/plans/phase-AR/plan-phase-AR.md in the atm-core repo — the codex-atm integration plan; your working directory is the codex-atm checkout",
+       "HARD RULE: sc-lint boundary rules are the contract on the codex repo — ATM integration code stays behind its module boundary; never leak atm types into codex internals beyond the sanctioned seam; never reach into codex internals from ATM code beyond documented touch points; run `just lint atm` before every commit and treat violations as blockers, not advisories",
+       "Use native atm send or atm ack for messages to arch-ctm, team-lead, or vinci",
+       "Use native atm read to read messages from team-members" ]
+
+[startup.vinci]
+all = ["Read docs/plans/phase-AR/plan-phase-AR.md in the atm-core repo — the codex-atm integration plan; your working directory is the codex-atm checkout",
+       "HARD RULE: sc-lint boundary rules are the contract on the codex repo — ATM integration code stays behind its module boundary; never leak atm types into codex internals beyond the sanctioned seam; never reach into codex internals from ATM code beyond documented touch points; run `just lint atm` before every commit and treat violations as blockers, not advisories",
+       "Use native atm send or atm ack for messages to arch-ctm, team-lead, or da",
        "Use native atm read to read messages from team-members" ]
 
 # ── rmux: tmux session launcher ──────────────────────────────────────
@@ -57,3 +67,15 @@ tmux_pane_id = "%2"
 model = "sonnet"
 color = "blue"
 env = { ATM_IDENTITY = "quality-mgr", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
+
+[[rmux.windows.panes]]
+name = "da"
+command = "cd /Users/randlee/Documents/forks/codex-atm-worktrees/develop && codex -c features.hooks=true --yolo --model terra"
+color = "green"
+env = { ATM_IDENTITY = "da", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
+
+[[rmux.windows.panes]]
+name = "vinci"
+command = "cd /Users/randlee/Documents/forks/codex-atm-worktrees/develop && codex -c features.hooks=true --yolo --model luna"
+color = "green"
+env = { ATM_IDENTITY = "vinci", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
