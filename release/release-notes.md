@@ -123,7 +123,7 @@ than features carried by this release.
 
 ## Packaging / Distribution Notes
 
-- crates.io: publish the 11 `publish = true` crates in the manifest's required
+- crates.io: publish the 12 `publish = true` crates in the manifest's required
   dependency order:
   1. `atm-error`
   2. `atm-storage`
@@ -132,14 +132,19 @@ than features carried by this release.
   5. `atm-http-runtime`
   6. `atm-daemon-client`
   7. `atm-runtime`
-  8. `atm-daemon-bootstrap`
-  9. `atm-daemon`
-  10. `atm-graft`
-  11. `agent-team-mail`
+  8. `atm-template-sc-compose`
+  9. `atm-daemon-bootstrap`
+  10. `atm-daemon`
+  11. `atm-graft`
+  12. `agent-team-mail`
 - `atm-error` and `atm-http-runtime` are new entries relative to the 1.3.1
-  nine-crate manifest. The Maturin `atm-graft-python` artifact remains in the
-  release inventory but is published to PyPI as `atm-graft`, so it is not one
-  of the 11 crates.io artifacts.
+  nine-crate manifest. `atm-template-sc-compose` was added after release
+  preflight found `atm-daemon-bootstrap` depends on it at runtime (issue
+  #923, fixed in PR #924) -- it was previously `publish = false` and absent
+  from the manifest, which would have broken `cargo publish` mid-sequence.
+  The Maturin `atm-graft-python` artifact remains in the release inventory
+  but is published to PyPI as `atm-graft`, so it is not one of the 12
+  crates.io artifacts.
 - PyPI/TestPyPI: `hermes-atm` and `atm-graft` have a verified, installable
   TestPyPI milestone. The real PyPI publication is the release execution step,
   not a completed claim in these notes.

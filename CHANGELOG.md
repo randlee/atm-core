@@ -21,8 +21,10 @@
   manylinux/musllinux/Windows/aarch64 wheel and sdist pipeline, CPython
   3.11-3.14 compatibility, and repo-wide version-sync enforcement consolidated
   onto one canonical gate
-- add `atm-error` and `atm-http-runtime` to the published crate set (11 crates
-  total, up from 9)
+- add `atm-error`, `atm-http-runtime`, and `atm-template-sc-compose` to the
+  published crate set (12 crates total, up from 9); the last was added after
+  release preflight found `atm-daemon-bootstrap` depends on it at runtime
+  while it was still unpublished (issue #923, fixed in PR #924)
 
 ## 1.3.0
 
