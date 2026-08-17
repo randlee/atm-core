@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import importlib.util
 import shutil
+import subprocess
 import sys
 import tempfile
 import textwrap
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -174,6 +176,33 @@ class ValidateReleaseProofTests(unittest.TestCase):
                 and "reviewed_for_release is 0.0.0" in finding.detail
                 for finding in findings
             )
+        )
+
+    @mock.patch.object(VALIDATE_RELEASE, "run_capture")
+    def test_validate_cli_surface_uses_the_feature_gated_contract(self, run_capture: mock.Mock) -> None:
+        run_capture.return_value = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="",
+            stderr="",
+        )
+        findings: list[VALIDATE_RELEASE.Finding] = []
+
+        VALIDATE_RELEASE.validate_cli_surface(self.root, findings)
+
+        self.assertFalse(findings)
+        self.assertEqual(
+            run_capture.call_args.args[0],
+            [
+                "cargo",
+                "test",
+                "-p",
+                "agent-team-mail",
+                "--features",
+                "cli-surface-dump",
+                "--test",
+                "cli_surface",
+            ],
         )
 
 
