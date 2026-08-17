@@ -1,0 +1,90 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI39-RBP-F002>
+  a triage:Finding ;
+  triage:findingId "AI39-RBP-F002" ;
+  triage:title "HTTP framing error codes lack specificity and recovery guidance" ;
+  triage:description "Five structurally distinct HTTP framing failures (header section too large, non-UTF-8 headers, malformed method/path/version, invalid Content-Length, body too large) all resolve to the single generic AtmErrorCode::MessageValidationFailed via AtmError::validation(...), with no recovery guidance attached despite AtmError::validation_with_recovery being available in the same crate. Dedicated LocalHttp* error codes exist for other HTTP concerns but none apply to frame-reader failures." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP-001" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-31T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI39 ;
+  triage:foundAt "2026-07-31T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI39-RBP-F002/pAI-s39-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI39-RBP-F002/pAI-s39-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI39-RBP-F002/pAI-s39-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI39-RBP-F002/pAI-s39-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI39-RBP-F002/pAI-s39-5> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI39-RBP-F002/pAI-s39-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/api/http_frame_reader.rs" ;
+  triage:line 76 ;
+  triage:snippet "AtmError::validation('daemon HTTP headers exceed 16384 bytes')" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s39-buffered-local-http-framing" ;
+  triage:headSha "9e60c0ff" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s39-1> .
+
+<urn:atm:triage:occurrence/AI39-RBP-F002/pAI-s39-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/api/http_frame_reader.rs" ;
+  triage:line 139 ;
+  triage:snippet "AtmError::validation('daemon HTTP headers are not UTF-8')" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s39-buffered-local-http-framing" ;
+  triage:headSha "9e60c0ff" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s39-1> .
+
+<urn:atm:triage:occurrence/AI39-RBP-F002/pAI-s39-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/api/http_frame_reader.rs" ;
+  triage:line 145 ;
+  triage:snippet "AtmError::validation('malformed daemon HTTP request method')" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s39-buffered-local-http-framing" ;
+  triage:headSha "9e60c0ff" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s39-1> .
+
+<urn:atm:triage:occurrence/AI39-RBP-F002/pAI-s39-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/api/http_frame_reader.rs" ;
+  triage:line 150 ;
+  triage:snippet "AtmError::validation('malformed daemon HTTP request version')" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s39-buffered-local-http-framing" ;
+  triage:headSha "9e60c0ff" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s39-1> .
+
+<urn:atm:triage:occurrence/AI39-RBP-F002/pAI-s39-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/api/http_frame_reader.rs" ;
+  triage:line 174 ;
+  triage:snippet "AtmError::validation('daemon HTTP Content-Length is invalid')" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s39-buffered-local-http-framing" ;
+  triage:headSha "9e60c0ff" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s39-1> .
+
+<urn:atm:triage:worktree/pAI-s39-1>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s39-buffered-local-http-framing" ;
+  triage:branch "feature/pAI-s39-buffered-local-http-framing" ;
+  triage:headSha "9e60c0ff" ;
+  triage:orderIndex 1 .

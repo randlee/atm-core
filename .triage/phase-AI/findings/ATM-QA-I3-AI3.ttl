@@ -1,0 +1,70 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-I3-AI3>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-I3-AI3" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T22:28:00Z"^^xsd:dateTime ;
+  triage:title "MessageStore/RosterStore/StorageNotifier remain unsealed while NudgeTemplateOverrideStore is sealed (inconsistent trait-boundary discipline)" ;
+  triage:resolution "FIXED in integrate/phase-AI @ 98e6fc38. MessageStore, RosterStore, and StorageNotifier traits now sealed with sealed::Sealed + Send + Sync bounds, matching NudgeTemplateOverrideStore pattern. Prevents external implementations and enforces storage boundary discipline." ;
+  triage:description "AI3-QA-1 (ruthless-boundary-qa, important). crates/atm-storage/src/contract.rs defines a sealed module (contract.rs:12) and NudgeTemplateOverrideStore at line 474 bounds itself with `sealed::Sealed + Send + Sync`, preventing external implementations. MessageStore (line 456), RosterStore (line 463), and StorageNotifier (line 469) have no such bound -- any downstream crate can implement them directly, bypassing the storage boundary AI.3/AI.2 are trying to establish. Confirmed on feature/pAI-s3-error-contract-foundation." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-I3-AI3/pAI-3/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-4/3679a9b3> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-4/3679a9b3> ;
+  triage:highestOpenBranch "feature/pAI-s4-error-consumer-migration" ;
+  triage:triagedAt "2026-07-20T22:28:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/ATM-QA-I3-AI3/pAI-3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 456 ;
+  triage:snippet "pub trait MessageStore { ... } (line 456), pub trait RosterStore { ... } (line 463), pub trait StorageNotifier { ... } (line 469) -- all unsealed; contrast pub trait NudgeTemplateOverrideStore: sealed::Sealed + Send + Sync (line 474)" ;
+  triage:status "fixed" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s3-error-contract-foundation" ;
+  triage:headSha "0d448efe" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-3/0d448efe> .
+
+<urn:atm:triage:worktree/pAI-1/c479452e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-1-daemon-preag-reset" ;
+  triage:path "feature/pAI-1-daemon-preag-reset" ;
+  triage:headSha "c479452e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-2/770dd8ed>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s2-storage-topology" ;
+  triage:path "feature/pAI-s2-storage-topology" ;
+  triage:headSha "770dd8ed" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAI-3/0d448efe>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s3-error-contract-foundation" ;
+  triage:path "feature/pAI-s3-error-contract-foundation" ;
+  triage:headSha "0d448efe" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-4/3679a9b3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s4-error-consumer-migration" ;
+  triage:path "feature/pAI-s4-error-consumer-migration" ;
+  triage:headSha "3679a9b3" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/integrate-phase-AI/52252a32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
+  triage:headSha "52252a32" ;
+  triage:orderIndex 0 .

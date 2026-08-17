@@ -7,6 +7,11 @@ CLI ownership for `atm members`:
 - human-readable output
 - JSON output
 
+The member listing exposes the persisted `harness` for every member in both
+human-readable and JSON output. This is the authoritative read-only surface
+for checking whether a recipient uses a graft-compatible harness (`hermes` or
+`python-graft`) before exercising graft delivery.
+
 Core roster loading and deterministic member projection remain owned by
 `atm-core`.
 

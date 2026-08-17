@@ -1,12 +1,41 @@
 name: CI
 
 on:
+  workflow_call:
   pull_request:
     branches: [develop, main, "integrate/*"]
   push:
     branches: [develop, main]
 
 jobs:
+  ci-scope:
+    name: Classify CI scope
+    runs-on: ubuntu-latest
+    outputs:
+      runtime: ${{ steps.scope.outputs.runtime }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: scope
+        shell: bash
+        run: |
+          # Pushes always exercise the runtime.  A pull request containing only
+          # documentation or skill Markdown does not change executable code, so
+          # it does not run the long-lived daemon smoke matrix.
+          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+            echo "runtime=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed_files="$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "$GITHUB_SHA")"
+          if [[ -z "$changed_files" ]] || grep -qvE '^(docs/|site/|.*\.md$)' <<< "$changed_files"; then
+            echo "runtime=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "runtime=false" >> "$GITHUB_OUTPUT"
+          fi
+
   just-lint:
     name: Just lint (${{ matrix.os }})
     strategy:
@@ -30,6 +59,14 @@ jobs:
         with:
           python-version: "3.x"
 
+      - name: Install sc-compose CLI
+        # Template JSON escaping requires the released sc-compose 1.4.0 API.
+        # Keep this pin aligned with .claude/lib/sc_compose_dependency.py.
+        run: cargo install --git https://github.com/randlee/sc-compose.git --rev 6a8af1ff46ccd64ae9cc40d7d5c815aa9b0a4661 --locked --bin sc-compose
+
+      - name: Expose Cargo binaries on PATH
+        run: python -c "import os; cargo_bin = os.path.expanduser('~/.cargo/bin'); open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8').write(cargo_bin + os.linesep)"
+
       - name: Install just
         uses: taiki-e/install-action@just
 
@@ -48,13 +85,21 @@ jobs:
         uses: taiki-e/install-action@cargo-binstall
 
       - name: Install cargo-modules
-        run: cargo binstall cargo-modules --no-confirm
+        run: cargo binstall cargo-modules@0.26.0 --no-confirm
 
-      - name: Install codespell
-        run: python -m pip install codespell
+      - name: Install Python lint dependencies
+        run: python -m pip install codespell 'pydantic>=2.12,<3'
 
       - name: Run just lint
         run: just lint
+
+      - name: Show clippy diagnostics on lint failure
+        if: failure()
+        shell: bash
+        run: |
+          clippy_log="$(ls -t .just/logs/*-clippy.log 2>/dev/null | head -n 1)"
+          test -n "$clippy_log"
+          cat "$clippy_log"
 
       - name: Run cargo audit
         run: cargo audit
@@ -110,47 +155,90 @@ jobs:
 
   test:
     name: Test (${{ matrix.os }})
-    needs: [clippy]
-    if: ${{ always() && !cancelled() }}
+    needs: [clippy, ci-scope, hermes-atm-release-wheels]
+    if: ${{ always() && !cancelled() && needs.clippy.result == 'success' && (needs.ci-scope.outputs.runtime != 'true' || needs.hermes-atm-release-wheels.result == 'success') }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            release_artifact: linux-x86_64
+          - os: macos-latest
+            release_artifact: macos-aarch64
+          - os: windows-latest
+            release_artifact: windows-x86_64
     runs-on: ${{ matrix.os }}
     steps:
+      - name: Documentation-only runtime skip
+        if: ${{ needs.ci-scope.outputs.runtime != 'true' }}
+        run: echo "Runtime tests are intentionally skipped for documentation-only changes."
+
       - uses: actions/checkout@v4
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
 
       - name: Install Rust toolchain
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.94.1"
+          # Keep these components explicit even though this job only calls
+          # maturin/cargo test. Without them, maturin's nested toolchain
+          # resolution can race the hosted runner's preinstalled cargo-fmt
+          # and fail with rustfmt-preview's `bin/cargo-fmt` conflict.
           components: clippy, rustfmt
 
+      - name: Install Python
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install Python test dependencies
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        run: python -m pip install 'pydantic>=2.12,<3'
+
+      - name: Install sc-compose CLI for passthrough parity tests
+        # The AN.7 process-level tests compare the ATM command with the
+        # pinned upstream CLI on every platform, so the test lane needs the
+        # same source revision already used by just-lint.
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        run: cargo install --git https://github.com/randlee/sc-compose.git --rev 113729e60e3409ad8c651a74956ffa5c167dd1b6 --locked --bin sc-compose
+
       - name: Cache cargo registry
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Cache cargo index
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         uses: actions/cache@v4
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Cache cargo build
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build workspace
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         run: cargo build --verbose
 
-      - name: Build release smoke binaries
+      # Historical reference only while Phase AL constructs the replacement
+      # executable. This must not be cited as AL acceptance evidence.
+      - name: Build historical legacy-daemon smoke binaries (reference only)
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        continue-on-error: true
         run: cargo build --release -p agent-team-mail -p atm-daemon --verbose
 
-      - name: Prepare installed smoke binaries
+      - name: Prepare historical legacy-daemon smoke binaries (reference only)
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        continue-on-error: true
         shell: pwsh
         run: |
           $installRoot = Join-Path $env:RUNNER_TEMP "atm-smoke-install"
@@ -161,16 +249,250 @@ jobs:
           Copy-Item "target/release/atm-daemon$suffix" (Join-Path $binDir "atm-daemon$suffix") -Force
           "ATM_SMOKE_INSTALL_ROOT=$installRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Run workspace tests excluding atm-daemon on Windows
+      - name: Run replacement-workspace tests excluding legacy atm-daemon
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         env:
           ATM_TEST_RECV_TIMEOUT_SECS: "60"
         run: cargo test --workspace --exclude atm-daemon --verbose
 
-      - name: Run atm-daemon tests
-        env:
-          ATM_TEST_RECV_TIMEOUT_SECS: "60"
-        run: cargo test -p atm-daemon --verbose
+      - name: Install Maturin for Hermes graft bridge tests
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        run: python -m pip install maturin
 
-      - name: Run isolated shared-host singleton smoke
-        if: ${{ always() }}
+      - name: Download host release-wheel candidate
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: hermes-atm-wheels-${{ matrix.release_artifact }}
+          path: release-wheels
+
+      - name: Select host release atm-graft wheel
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+
+          wheels = sorted(Path("release-wheels").glob("atm_graft*.whl"))
+          if len(wheels) != 1:
+              raise RuntimeError(f"expected one downloaded atm-graft wheel, found {wheels}")
+          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as environment:
+              environment.write(f"ATM_GRAFT_WHEEL={wheels[0].resolve()}\n")
+              environment.write(f"ATM_WHEEL_OUTPUT_DIR={Path('bridge-wheels').resolve()}\n")
+
+      - name: Run Hermes graft steer boundary tests
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        run: python .just/run_hermes_graft_bridge_tests.py
+
+      - name: Test admission-capacity benchmark runner
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        run: python -m unittest scripts/smoke/test_run_admission_capacity.py
+
+      - name: Run graft receiver crash/reclaim proof
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        run: python scripts/graft_receiver_reclaim.py
+
+      # Historical reference only; replacement-runtime proof owns AL acceptance.
+      - name: Run historical shared-host singleton smoke (reference only)
+        continue-on-error: true
+        if: ${{ always() && needs.ci-scope.outputs.runtime == 'true' }}
         run: python scripts/smoke/run_thorough_shared_host.py
+
+  hermes-atm-release-wheels:
+    name: Hermes ATM release wheel (${{ matrix.name }})
+    needs: [ci-scope]
+    if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: manylinux x86_64
+            os: ubuntu-latest
+            artifact: linux-x86_64
+            target: x86_64-unknown-linux-gnu
+            manylinux: "2014"
+            platform_tag: manylinux_2_17_x86_64.manylinux2014_x86_64
+            interpreter: python3.11
+            container: ""
+            smoke: native
+          - name: musllinux x86_64
+            os: ubuntu-latest
+            artifact: linux-musl-x86_64
+            target: x86_64-unknown-linux-musl
+            manylinux: musllinux_1_2
+            platform_tag: musllinux_1_2_x86_64
+            interpreter: python3.11
+            container: ""
+            smoke: musl
+          - name: manylinux aarch64
+            # Build natively on ARM. The x86_64 cross image does not compile
+            # ring's pregenerated assembly correctly, whereas this official
+            # manylinux image provides the required PyPI ABI on ARM.
+            os: ubuntu-24.04-arm
+            artifact: linux-aarch64
+            target: ""
+            manylinux: "2014"
+            platform_tag: manylinux_2_17_aarch64.manylinux2014_aarch64
+            interpreter: python3.11
+            container: quay.io/pypa/manylinux2014_aarch64:latest
+            smoke: native
+          - name: macOS aarch64
+            os: macos-14
+            artifact: macos-aarch64
+            target: aarch64-apple-darwin
+            manylinux: "off"
+            platform_tag: macosx_11_0_arm64
+            interpreter: python3.11
+            container: ""
+            smoke: native
+          - name: Windows x86_64
+            os: windows-latest
+            artifact: windows-x86_64
+            target: x86_64-pc-windows-msvc
+            manylinux: "off"
+            platform_tag: win_amd64
+            interpreter: python
+            container: ""
+            smoke: native
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Python for package smoke verification
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build PyPI-compatible atm-graft wheel
+        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
+        with:
+          command: build
+          maturin-version: v1.11.5
+          rust-toolchain: "1.94.1"
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux }}
+          container: ${{ matrix.container }}
+          working-directory: crates/atm-graft-python
+          # The manylinux container writes as root. Keep its output separate
+          # from the host-owned directory used by pip for the pure-Python
+          # hermes-atm wheel, then collect it below.
+          args: --release --locked --compatibility pypi -i ${{ matrix.interpreter }} --out ../../native-dist
+
+      - name: Collect native atm-graft wheel
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp native-dist/atm_graft*.whl dist/
+
+      - name: Build universal hermes-atm wheel
+        run: python -m pip wheel --no-deps --wheel-dir dist crates/hermes-atm
+
+      - name: Verify abi3 artifact metadata
+        shell: bash
+        run: |
+          python .just/verify_atm_graft_wheel.py \
+            --wheel dist/atm_graft*.whl \
+            --platform-tag ${{ matrix.platform_tag }}
+
+      - name: Smoke-test native wheel on its host target
+        if: ${{ matrix.smoke == 'native' }}
+        shell: bash
+        run: |
+          python -m pip install 'pydantic>=2,<3'
+          python -m pip install --no-deps dist/atm_graft*.whl dist/hermes_atm*.whl
+          python -c "import atm_graft, hermes_atm"
+
+      - name: Smoke-test musllinux wheel in a clean musl environment
+        if: ${{ matrix.smoke == 'musl' }}
+        shell: bash
+        run: |
+          docker run --rm \
+            --volume "$PWD:/workspace:ro" \
+            --workdir /workspace \
+            python:3.11-alpine \
+            sh -euxc '
+              python -m venv /tmp/atm-wheel-smoke
+              /tmp/atm-wheel-smoke/bin/pip install --disable-pip-version-check "pydantic>=2,<3"
+              /tmp/atm-wheel-smoke/bin/pip install --no-deps dist/atm_graft*.whl dist/hermes_atm*.whl
+              /tmp/atm-wheel-smoke/bin/python -c "import atm_graft, hermes_atm"
+            '
+
+      - name: Upload release-wheel candidates
+        uses: actions/upload-artifact@v4
+        with:
+          name: hermes-atm-wheels-${{ matrix.artifact }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+  hermes-atm-abi3-compat:
+    name: Hermes ATM abi3 compatibility (Python ${{ matrix.python-version }})
+    needs: [ci-scope, hermes-atm-release-wheels]
+    if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Download manylinux x86_64 candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: hermes-atm-wheels-linux-x86_64
+          path: dist
+
+      - name: Install and test abi3 wheel pair
+        run: |
+          python -m pip install 'pydantic>=2,<3'
+          python -m pip install --no-deps dist/atm_graft*.whl dist/hermes_atm*.whl
+          python -c "import atm_graft, hermes_atm"
+          python -m unittest discover -s crates/hermes-atm/tests -p "test_*.py"
+
+  hermes-atm-sdist:
+    name: Hermes ATM source-distribution fallback
+    needs: [ci-scope]
+    if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.94.1"
+          # See the matching test-job setup above. Maturin resolves Rust
+          # tooling during the sdist build; explicit components avoid the
+          # hosted-runner rustfmt-preview `bin/cargo-fmt` install conflict.
+          components: clippy, rustfmt
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Maturin
+        run: python -m pip install maturin
+
+      - name: Build atm-graft source distribution
+        run: maturin sdist --manifest-path crates/atm-graft-python/Cargo.toml --out dist
+
+      - name: Install source distribution in a fresh environment
+        shell: bash
+        run: |
+          python -m venv "$RUNNER_TEMP/atm-graft-sdist-venv"
+          "$RUNNER_TEMP/atm-graft-sdist-venv/bin/python" -m pip install --upgrade pip
+          "$RUNNER_TEMP/atm-graft-sdist-venv/bin/python" -m pip install dist/atm_graft*.tar.gz
+          "$RUNNER_TEMP/atm-graft-sdist-venv/bin/python" -c "import atm_graft"
+
+      - name: Upload source-distribution candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: atm-graft-sdist
+          path: dist/atm_graft*.tar.gz
+          if-no-files-found: error

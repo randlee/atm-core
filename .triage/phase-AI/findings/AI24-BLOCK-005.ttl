@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI24-BLOCK-005>
+  a triage:Finding ;
+  triage:findingId "AI24-BLOCK-005" ;
+  triage:title "New boundary_enforcement.rs assertion hardcodes an LF-only multi-line literal, fails on Windows CI due to CRLF checkout" ;
+  triage:description "commit 506675841034a3bc3c11ca3cd6b1e6813f50411f (AICH-S4-FIX-QA1) added an assertion in crates/atm-architecture/tests/boundary_enforcement.rs::ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects (line ~153) that checks peer_https.contains(\"router\\n        .route(request, ingress\") -- an exact multi-line substring match with a literal LF and specific indentation. On windows-latest CI (run 30197200342, job 89780788550) the checked-out file uses CRLF line endings, so the literal \\n-based match fails even though the code is otherwise correct: 'AI.24 requires peer HTTPS ingress to enter ApiRouter::route before daemon dispatch'. Test passes on ubuntu-latest and macos-latest (LF checkouts), confirming this is a line-ending/cross-platform defect, not a real behavioral regression. Violates docs/cross-platform-guidelines.md mandatory Windows CI compliance patterns. Hard merge-blocking: Test (windows-latest) fails on PR #630." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ci-gate" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-26T10:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S4 ;
+  triage:foundAt "2026-07-26T10:15:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T10:47:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
+  triage:closureNote "Independently verified via git show ac465283747d3186667fab7ad2f752b1c4c1a968 -- crates/atm-architecture/tests/boundary_enforcement.rs: peer_https source is now normalized via .replace(\"\\r\\n\", \"\\n\") before the multiline contains() assertion, exactly matching the suggested remediation. CI run 30197599902 confirmed 8/8 green including Test (windows-latest). Same defect as quality-mgr's self-reported AI24-BLOCK-201 (also status fixed) -- both records now reconciled as closed against the same commit." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-BLOCK-005/AI24-BLOCK-005-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AI24-BLOCK-005/AI24-BLOCK-005-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 153 ;
+  triage:snippet "peer_https.contains(\"router\\n        .route(request, ingress\") -- LF-literal multi-line match, fails under Windows CRLF checkout" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-26T10:47:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "ac465283747d3186667fab7ad2f752b1c4c1a968" ;
+  triage:occursIn <urn:atm:triage:worktree/S24/506675841034a3bc3c11ca3cd6b1e6813f50411f> .
+
+<urn:atm:triage:worktree/S24/506675841034a3bc3c11ca3cd6b1e6813f50411f>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-pAI-s24" ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "506675841034a3bc3c11ca3cd6b1e6813f50411f" ;
+  triage:orderIndex 24 .

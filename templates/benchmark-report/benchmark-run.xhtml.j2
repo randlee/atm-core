@@ -1,0 +1,41 @@
+---
+metadata:
+  name: benchmark-run
+  description: One ATM local transport benchmark evidence panel
+required_variables:
+  - title
+  - artifact_id
+  - generated_at
+  - host_label
+  - transport
+  - frames_per_connection
+  - run_duration_s
+  - passed
+  - failure
+  - cleanup_failure
+  - sample_html
+  - direct_sqlite_html
+---
+<?xml version="1.0" encoding="UTF-8"?>
+<section xmlns="http://www.w3.org/1999/xhtml" class="benchmark-run">
+  <h1>{{ title | e }}</h1>
+  <p><strong>Status:</strong> {{ 'PASS' if passed else 'FAIL' }}</p>
+  <dl>
+    <dt>Generated</dt><dd>{{ generated_at | e }}</dd>
+    <dt>Host label</dt><dd>{{ host_label | e }}</dd>
+    <dt>Transport</dt><dd>{{ transport | e }}</dd>
+    <dt>Frames per connection</dt><dd>{{ frames_per_connection }}</dd>
+    <dt>Run duration (seconds)</dt><dd>{{ run_duration_s }}</dd>
+    <dt>Artifact</dt><dd>{{ artifact_id | e }}.json</dd>
+  </dl>
+{% if failure %}
+  <h2>Failure diagnostics</h2><pre>{{ failure | e }}</pre>
+{% endif %}
+{% if cleanup_failure %}
+  <h2>Cleanup diagnostics</h2><pre>{{ cleanup_failure | e }}</pre>
+{% endif %}
+  <h2>Samples</h2>
+{{ sample_html | safe }}
+  <h2>Direct SQLite message-write ceiling</h2>
+{{ direct_sqlite_html | safe }}
+</section>

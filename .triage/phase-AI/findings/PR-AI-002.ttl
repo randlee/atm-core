@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/PR-AI-002>
+  a triage:Finding ;
+  triage:findingId "PR-AI-002" ;
+  triage:title "Phase AI status docs drift from actual integration state" ;
+  triage:description "docs/project-plan.md:951 still marks Phase AI as PLANNED and AI.8-AI.11 as in progress, while integrate/phase-AI contains substantially later work (through AI.30 and post-AI.30 legacy cleanup). Readiness docs also retain a stale AI.14 preflight-failure note. Documentation cannot currently support an accurate release statement. Found during arch-ctm's production-readiness review of integrate/phase-AI at c052afe8." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "REQ" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-27T05:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-PHASE-END-QA-1 ;
+  triage:foundAt "2026-07-27T05:03:10Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PR-AI-002/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/PR-AI-002/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 951 ;
+  triage:snippet "Phase AI: PLANNED -- AI.8-AI.11 in progress" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "c052afe8" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate_phase_ai_c052afe8> .
+
+<urn:atm:triage:worktree/integrate_phase_ai_c052afe8>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "c052afe8" ;
+  triage:orderIndex 999 .
+
+<urn:atm:triage:finding/PR-AI-002>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:correctionNote "quality-mgr (2026-07-27): QA-1 for PR #669 (docs/phase-ai-readiness-triage @ b5ddce8a). docs/project-plan.md:951 header corrected from 'Phase AI: PLANNED -- AI.8-AI.11 in progress' to '[ACTIVE -- implementation through AI.30; readiness blocked]', with the sprint table (project-plan.md:971-1003) listing AI.1 through AI.30 all complete and explicit text stating this implementation status does not close the phase pending readiness.md's physical two-Mac/Mac<->Windows peer evidence. The stale AI.14 preflight-failure note in readiness.md is now clearly scoped as historical/superseded (readiness.md:50-63), citing the current canonical PostWriteRouter routing path as live evidence instead. docs/plans/phase-ai/readiness.md status:blocked (line 3) and the AI10-TWOMAC-001/AI10-WINDOWS-001 BLOCKED rows (lines 40-41) and Release blockers section (lines 43-48) were independently confirmed UNCHANGED/unweakened by all 3 reviewers. All 3 QA-1 reviewers (req-qa, arch-qa, ruthless-boundary-qa) independently confirmed PASS with 0 blocking findings. CI green 8/8 legs." .

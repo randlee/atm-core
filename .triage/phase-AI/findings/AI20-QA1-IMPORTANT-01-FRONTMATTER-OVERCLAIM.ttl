@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI20-QA1-IMPORTANT-01-FRONTMATTER-OVERCLAIM>
+  a triage:Finding ;
+  triage:findingId "AI20-QA1-IMPORTANT-01-FRONTMATTER-OVERCLAIM" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T16:15:00Z"^^xsd:dateTime ;
+  triage:title "AI.20 sprint-doc frontmatter claims status: complete while contradicted by its own Draft Validation Limit section and the readiness record's PENDING state" ;
+  triage:description "docs/plans/phase-ai/sprint-ai-20-hermes-bridge-deployment.md frontmatter says status: complete, but the same document's Draft Validation Limit section and docs/plans/phase-ai/readiness-ai17-21-hermes-graft.md both record AI.20 as PENDING (not yet closed). This is a doc-consistency defect, same category as the AI.17/AI.19 frontmatter issue fixed earlier this phase." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-22T16:15:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:closureNote "Fixed by 1acc7b73: AI.20 frontmatter now states status: planned, matching its Draft Validation Limit and readiness-ai17-21-hermes-graft.md PENDING record. The document no longer claims deployment closure before the operator registry and AI.19 PASS prerequisite exist." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI20-QA1-IMPORTANT-01-FRONTMATTER-OVERCLAIM/pAI-s20/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s20/a1d186a6> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s20/a1d186a6> .
+
+<urn:atm:triage:occurrence/AI20-QA1-IMPORTANT-01-FRONTMATTER-OVERCLAIM/pAI-s20/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-20-hermes-bridge-deployment.md" ;
+  triage:line 4 ;
+  triage:snippet "status: complete" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "Fixed by 1acc7b73; see top-level closureNote." ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "a1d186a6" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s20/a1d186a6> .
+
+<urn:atm:triage:worktree/pAI-s20/a1d186a6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "a1d186a6" ;
+  triage:orderIndex 4 .

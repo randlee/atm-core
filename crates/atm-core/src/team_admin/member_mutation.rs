@@ -1,14 +1,13 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use chrono::Utc;
 use serde::Serialize;
-use serde_json::{Value, json};
+use serde_json::json;
 
 use crate::boundary::{RosterEntry, RosterHarness, RosterMemberKind, RosterStore};
-use crate::config::load_claude_team_config_document;
 use crate::error::AtmError;
 use crate::home;
-use crate::schema::{AgentType, HOME_DIR_METADATA_KEY, HomeDirPath};
+use crate::schema::{AgentType, HOME_DIR_METADATA_KEY, HomeDirPath, WORKSPACE_ROOT_METADATA_KEY};
 use crate::types::{AgentName, ModelName, PaneId, TeamName};
 
 use super::{filesystem, projection};
@@ -68,6 +67,7 @@ pub struct UpdateMemberRequest {
     pub team: TeamName,
     pub member: MemberName,
     pub home_dir: Option<HomeDirPath>,
+    pub workspace_root: Option<HomeDirPath>,
     pub harness: Option<RosterHarness>,
     pub agent_type: Option<AgentType>,
     pub model: Option<ModelName>,
@@ -85,6 +85,7 @@ impl UpdateMemberRequest {
         team: &str,
         member: &str,
         home_dir: Option<PathBuf>,
+        workspace_root: Option<PathBuf>,
         harness: Option<String>,
         agent_type: Option<String>,
         model: Option<String>,
@@ -96,6 +97,7 @@ impl UpdateMemberRequest {
             team: team.parse()?,
             member: MemberName(member.parse()?),
             home_dir: home_dir.map(Into::into),
+            workspace_root: workspace_root.map(Into::into),
             harness: harness.map(parse_roster_harness).transpose()?,
             agent_type: agent_type.map(parse_agent_type).transpose()?,
             model: model.map(ModelName::new).transpose()?,
@@ -112,9 +114,43 @@ pub struct UpdateMemberOutcome {
     pub member: AgentName,
 }
 
+/// Parameters for removing one member from a team roster.
+///
+/// Removal is authorized using the caller identity and team, matching the
+/// authorization contract of `update-member`.
+#[derive(Debug, Clone)]
+pub struct RemoveMemberRequest {
+    pub caller_identity: AgentName,
+    pub caller_team: TeamName,
+    pub team: TeamName,
+    pub member: AgentName,
+}
+
+impl RemoveMemberRequest {
+    pub fn new(
+        caller_identity: AgentName,
+        caller_team: TeamName,
+        team: &str,
+        member: &str,
+    ) -> Result<Self, AtmError> {
+        Ok(Self {
+            caller_identity,
+            caller_team,
+            team: team.parse()?,
+            member: member.parse()?,
+        })
+    }
+}
+
+/// Result of removing one member from a team roster.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct RemoveMemberOutcome {
+    pub action: &'static str,
+    pub team: TeamName,
+    pub member: AgentName,
+}
+
 struct MemberAddContext {
-    team_dir: PathBuf,
-    current_extra: serde_json::Map<String, Value>,
     existing_roster: Vec<RosterEntry>,
 }
 
@@ -129,8 +165,6 @@ pub fn add_member_with_roster_store(
     request: AddMemberRequest,
 ) -> Result<AddMemberOutcome, AtmError> {
     let MemberAddContext {
-        team_dir,
-        current_extra,
         mut existing_roster,
     } = load_member_add_context(roster_store, &request)?;
 
@@ -142,19 +176,6 @@ pub fn add_member_with_roster_store(
     let created_inbox = filesystem::ensure_inbox_exists(&inbox_path)?;
     existing_roster.push(build_member_add_roster_record(&request));
     replace_roster_for_member_add(roster_store, &request.team, &existing_roster)?;
-    let projected_config =
-        projection::project_team_config_from_roster(current_extra, &existing_roster)?;
-
-    if let Err(error) = filesystem::write_team_config(&team_dir, &projected_config) {
-        if created_inbox {
-            let _ = std::fs::remove_file(&inbox_path);
-        }
-        return Err(
-            error.with_recovery(
-                "Check team config permissions and rerun `atm teams add-member`; ATM roster state may already include the new member.",
-            )
-        );
-    }
 
     Ok(AddMemberOutcome {
         action: "add-member",
@@ -172,16 +193,9 @@ pub fn add_member_with_roster_store(
 /// or roster/config persistence fails.
 pub fn update_member_with_roster_store(
     roster_store: &(dyn RosterStore + Send + Sync),
-    atm_home_dir: &Path,
     request: UpdateMemberRequest,
 ) -> Result<UpdateMemberOutcome, AtmError> {
     validate_update_member_caller(roster_store, &request)?;
-    let team_dir = home::team_dir_from_home(atm_home_dir, &request.team)?;
-    if !team_dir.exists() {
-        return Err(AtmError::team_not_found(&request.team));
-    }
-
-    let current_extra = load_team_projection_extra_for_member_add(&team_dir)?;
     let mut existing_roster = projection::load_team_roster(roster_store, &request.team)?;
     let member_name = request.member.0.clone();
     let member = existing_roster
@@ -190,25 +204,36 @@ pub fn update_member_with_roster_store(
         .ok_or_else(|| AtmError::member_not_found(member_name.as_str(), request.team.as_str()))?;
 
     apply_member_metadata_update(member, &request);
-    roster_store
-        .replace_roster(&request.team, &existing_roster, None)
-        .map_err(|error| {
-            error.with_recovery(
-                "Check ATM roster store availability and rerun `atm teams update-member`.",
-            )
-        })?;
-    let projected_config =
-        projection::project_team_config_from_roster(current_extra, &existing_roster)?;
-    filesystem::write_team_config(&team_dir, &projected_config).map_err(|error| {
-        error.with_recovery(
-            "Check team config permissions and rerun `atm teams update-member`; ATM roster state may already include the repaired metadata.",
-        )
-    })?;
+    roster_store.replace_roster(&request.team, &existing_roster)?;
 
     Ok(UpdateMemberOutcome {
         action: "update-member",
         team: request.team,
         member: member_name,
+    })
+}
+
+/// Remove one member record from a team roster.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when the caller does not belong to the target team,
+/// the target team or member is missing, or loading/persisting the roster
+/// fails. It never removes inbox data.
+pub fn remove_member_with_roster_store(
+    roster_store: &(dyn RosterStore + Send + Sync),
+    request: RemoveMemberRequest,
+) -> Result<RemoveMemberOutcome, AtmError> {
+    validate_remove_member_caller(roster_store, &request)?;
+    let mut existing_roster = projection::load_team_roster(roster_store, &request.team)?;
+    ensure_member_present(&existing_roster, &request.team, &request.member)?;
+    existing_roster.retain(|entry| entry.agent_name != request.member);
+    roster_store.replace_roster(&request.team, &existing_roster)?;
+
+    Ok(RemoveMemberOutcome {
+        action: "remove-member",
+        team: request.team,
+        member: request.member,
     })
 }
 
@@ -218,19 +243,9 @@ fn load_member_add_context(
     roster_store: &dyn RosterStore,
     request: &AddMemberRequest,
 ) -> Result<MemberAddContext, AtmError> {
-    let team_dir = home::team_dir_from_home(request.atm_home_dir.as_ref(), &request.team)?;
-    if !team_dir.exists() {
-        return Err(AtmError::team_not_found(&request.team));
-    }
-
-    let current_extra = load_team_projection_extra_for_member_add(&team_dir)?;
     let existing_roster = projection::load_team_roster(roster_store, &request.team)?;
     ensure_member_absent(&existing_roster, &request.team, &request.member)?;
-    Ok(MemberAddContext {
-        team_dir,
-        current_extra,
-        existing_roster,
-    })
+    Ok(MemberAddContext { existing_roster })
 }
 
 fn ensure_member_absent(
@@ -254,24 +269,65 @@ fn validate_update_member_caller(
     roster_store: &dyn RosterStore,
     request: &UpdateMemberRequest,
 ) -> Result<(), AtmError> {
-    if request.caller_team != request.team {
+    validate_member_mutation_caller(
+        roster_store,
+        &request.caller_identity,
+        &request.caller_team,
+        &request.team,
+        "update-member",
+    )
+}
+
+fn ensure_member_present(
+    existing_roster: &[RosterEntry],
+    team: &TeamName,
+    member: &AgentName,
+) -> Result<(), AtmError> {
+    if !existing_roster
+        .iter()
+        .any(|existing_member| existing_member.agent_name == *member)
+    {
+        return Err(AtmError::member_not_found(member.as_str(), team.as_str()));
+    }
+    Ok(())
+}
+
+fn validate_remove_member_caller(
+    roster_store: &dyn RosterStore,
+    request: &RemoveMemberRequest,
+) -> Result<(), AtmError> {
+    validate_member_mutation_caller(
+        roster_store,
+        &request.caller_identity,
+        &request.caller_team,
+        &request.team,
+        "remove-member",
+    )
+}
+
+/// Require a caller from the team that the mutation targets.
+///
+/// Keeping this in one helper makes `update-member` and `remove-member`
+/// enforce the same membership gate while retaining action-specific errors.
+fn validate_member_mutation_caller(
+    roster_store: &dyn RosterStore,
+    caller_identity: &AgentName,
+    caller_team: &TeamName,
+    target_team: &TeamName,
+    action: &str,
+) -> Result<(), AtmError> {
+    if caller_team != target_team {
         return Err(AtmError::validation(format!(
-            "caller team '{}' does not match update-member target team '{}'",
-            request.caller_team, request.team
-        ))
-        .with_recovery(
-            "Run `atm teams update-member` from the target team's ATM shell, or set ATM_TEAM to the same team named in the positional target argument.",
-        ));
+            "caller team '{}' does not match {action} target team '{target_team}'",
+            caller_team,
+        )));
     }
 
-    let caller_entry = roster_store.query_membership(&request.team, &request.caller_identity)?;
+    let caller_entry = roster_store.query_membership(target_team, caller_identity)?;
     if caller_entry.is_none() {
         return Err(AtmError::member_not_found(
-            request.caller_identity.as_str(),
-            request.team.as_str(),
-        )
-        .with_recovery(
-            "Repair the caller roster entry first or rerun `atm teams update-member` as an existing member of the target team.",
+            caller_identity.as_str(),
+            target_team.as_str(),
         ));
     }
 
@@ -315,13 +371,7 @@ fn replace_roster_for_member_add(
     team: &TeamName,
     existing_roster: &[RosterEntry],
 ) -> Result<(), AtmError> {
-    roster_store
-        .replace_roster(team, existing_roster, None)
-        .map_err(|error| {
-            error.with_recovery(
-                "Check ATM roster store availability and rerun `atm teams add-member`.",
-            )
-        })
+    roster_store.replace_roster(team, existing_roster)
 }
 
 fn apply_member_metadata_update(member: &mut RosterEntry, request: &UpdateMemberRequest) {
@@ -329,6 +379,12 @@ fn apply_member_metadata_update(member: &mut RosterEntry, request: &UpdateMember
         member.metadata_json.insert(
             HOME_DIR_METADATA_KEY.to_string(),
             json!(home_dir.as_ref().display().to_string()),
+        );
+    }
+    if let Some(workspace_root) = &request.workspace_root {
+        member.metadata_json.insert(
+            WORKSPACE_ROOT_METADATA_KEY.to_string(),
+            json!(workspace_root.as_ref().display().to_string()),
         );
     }
     if let Some(harness) = request.harness {
@@ -371,18 +427,13 @@ fn parse_roster_harness(value: String) -> Result<RosterHarness, AtmError> {
         "codex-cli" => Ok(RosterHarness::CodexCli),
         "gemini-cli" => Ok(RosterHarness::GeminiCli),
         "opencode" => Ok(RosterHarness::Opencode),
+        "hermes" => Ok(RosterHarness::Hermes),
+        "python-graft" => Ok(RosterHarness::PythonGraft),
         _ => Err(AtmError::validation(
-            "harness must be one of: claude-code, codex-cli, gemini-cli, opencode".to_string(),
+            "harness must be one of: claude-code, codex-cli, gemini-cli, opencode, hermes, python-graft"
+                .to_string(),
         )),
     }
-}
-
-fn load_team_projection_extra_for_member_add(
-    team_dir: &Path,
-) -> Result<serde_json::Map<String, Value>, AtmError> {
-    // Add-member still preserves non-roster Claude config extras while it
-    // projects canonical ATM roster truth back into config.json.
-    load_claude_team_config_document(team_dir).map(|config| config.extra)
 }
 
 fn normalize_tmux_pane_id(pane_id: Option<&str>) -> Result<Option<PaneId>, AtmError> {
@@ -400,8 +451,5 @@ fn normalize_tmux_pane_id(pane_id: Option<&str>) -> Result<Option<PaneId>, AtmEr
 
     Err(AtmError::validation(format!(
         "tmux pane id '{raw}' must use the tmux pane format '%<number>' or a bare numeric pane id",
-    ))
-    .with_recovery(
-        "Pass `--pane-id $(tmux display-message -p '#{pane_id}')` or a bare numeric pane id when registering a tmux-backed member.",
-    ))
+    )))
 }

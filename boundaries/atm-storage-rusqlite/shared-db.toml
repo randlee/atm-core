@@ -27,7 +27,7 @@ io_forbidden = [
 ]
 
 [dependencies]
-allowed_dependents = ["atm-runtime", "atm-runtime-test-support"]
+allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime-test-support"]
 allowed_dependencies = [
   "atm-storage",
   "rusqlite",
@@ -36,6 +36,8 @@ forbidden_edges = [
   "atm -> atm-storage-rusqlite",
   "atm-daemon -> atm-storage-rusqlite",
   "atm-graft -> atm-storage-rusqlite",
+  "atm-runtime -> atm-storage-rusqlite",
+  "atm-storage-rusqlite -> atm-runtime",
 ]
 
 [references]
@@ -70,5 +72,5 @@ state = "unix_implemented_windows_pending"
 notes = [
   "crate-private state-root surface must remain review-visible because it owns sqlite bootstrap and transaction policy",
   "shared database root is host-scoped under the ADR-005 durable-state model",
-  "daemon callers must reach sqlite bootstrap and transaction policy only through atm-runtime-owned composition",
+  "only the executable composition root selects this backend; runtime and transport receive storage traits only",
 ]

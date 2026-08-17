@@ -104,6 +104,19 @@ Initial crate requirement IDs:
   of:
   `REQ-P-LIST-001`, `REQ-P-READ-001`, `REQ-P-ACK-001`, `REQ-P-CLEAR-001`,
   `REQ-P-WORKFLOW-001`.
+- `REQ-CORE-TEMPLATE-WORKFLOW-001` `atm-core` owns transport-neutral validation
+  and admission mapping above the `atm-storage` leaf DTOs for an optional
+  template-declared workflow snapshot.
+  It must treat scope kind, state, stage, transition, iteration variable, and
+  template tags as bounded opaque data, resolve only declared merged-variable
+  references, and reject partial declarations or reserved-tag spoofing before
+  storage mutation. It satisfies `REQ-P-TEMPLATE-WORKFLOW-001` and
+  `REQ-P-TEMPLATE-TAGS-001` per ADR-046.
+- `REQ-CORE-WORKFLOW-ANALYTICS-001` `atm-core` owns generic local lifecycle
+  query/projection contracts over durable workflow snapshots. It must not
+  define process vocabulary, join current catalog metadata to rewrite history,
+  or make telemetry a routing/admission input. It satisfies
+  `REQ-P-WORKFLOW-ANALYTICS-001` per ADR-046.
 - `REQ-CORE-LIST-001` `atm-core` owns the metadata-first queue query contract
   shared by `atm list` and selector-driven `atm read`, including bounded
   query behavior, shared match filters, successor-chain terminal-node
@@ -187,38 +200,67 @@ Initial crate requirement IDs:
   when absent, and fail with a typed daemon-unavailable error rather than
   silently falling back to direct SQLite or inbox-file access. Satisfies:
   `REQ-P-RUNTIME-001`, `REQ-P-RELIABILITY-001`.
-- historical `REQ-CORE-GRAFT-001` is retired by the Phase U graft restack.
-  Any earlier graft-specific contract intent is superseded by
-  `REQ-CORE-TRANSPORT-001`, `REQ-CORE-TRANSPORT-002`, and the shared
-  `AtmProtocol` / `ClientTransport` family rather than by a graft-private core
-  requirement.
-  No graft-private lifecycle, session, queue, or stream identifier is reserved
-  in shared `atm-core`; receiver-private runtime state belongs in the receiver
-  implementation unless it is proven to be shared ATM semantics.
-- `REQ-CORE-TRANSPORT-001` `atm-core` owns the shared `AtmProtocol` contract
-  used by client transport, server transport, and in-process test transport. Satisfies:
+- `REQ-CORE-GRAFT-001` remains active. Phase U retired the earlier
+  graft-private transport implementation, not the requirement that graft stay
+  a thin daemon client and bounded host-wake transport. The shared
+  `REQ-CORE-TRANSPORT-001`, `REQ-CORE-TRANSPORT-002`, and HTTP application
+  contract satisfy its client operations; no graft-private lifecycle, session,
+  queue, or stream identifier is reserved in shared `atm-core`. Receiver-private
+  runtime state belongs in the receiver implementation unless it is proven to
+  be shared ATM semantics.
+- `REQ-CORE-TRANSPORT-001` `atm-core` owns the transport-neutral application
+  request/response types: `AgentAddress`, `WriteRequest`, read/query inputs,
+  and canonical message projections. Local UDS HTTP, normal remote HTTPS, the
+  explicit daemon-only plaintext-test peer profile, and the in-process test
+  adapter decode to or encode from these same types. The plaintext profile is
+  untrusted provenance only and cannot create a second application path.
+  Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
-- `REQ-CORE-TRANSPORT-002` `atm-core` owns the public `ClientTransport` and
-  `ServerTransport` contracts plus route-selection semantics between local and
-  cross-host daemon paths. Satisfies:
+- `REQ-CORE-TRANSPORT-002` `atm-core` owns the typed destination-host field
+  and post-write routing contract. Exactly one post-write router invokes the
+  receiver hook after a newly persisted inbound write (peer provenance or an
+  empty host) and invokes no hook for an idempotent duplicate. A
+  host-qualified origin write retains only the temporary peer wake-up until
+  Phase AM deletion, including `localhost` and the daemon's own advertised or
+  bound IP. Local CLI HTTP, same-host TCP HTTP, and remote peer HTTP decode the
+  same `WriteRequest` through one HTTP write resource; adapter
+  authentication/provenance cannot select another write, ACK, persistence, or
+  nudge path. A same-host duplicate preserves its origin metadata for a later
+  canonical ACK but produces neither a second hook nor peer wake-up. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
-- `REQ-CORE-TRANSPORT-003` `atm-core` owns the typed transport timeout and
-  retry semantics exposed at service boundaries. Satisfies:
-  `REQ-P-RELIABILITY-001`.
-- `REQ-CORE-TRANSPORT-004` `atm-core` owns the remote-acceptance and
-  no-durable-remote-outbox semantics above transport implementations. Satisfies:
-  `REQ-P-RELIABILITY-001`.
-- `REQ-CORE-TRANSPORT-005` `atm-core` owns the thread-safe client transport
-  contract used by production, fake, and loopback transports. The shared
-  `ClientTransport` boundary must remain object-safe and include `Send + Sync`
-  semantics so callers do not have to restate them ad hoc. Satisfies:
-  `REQ-P-TEST-001`, `REQ-P-CONTRACT-001`.
-- `REQ-CORE-TRANSPORT-006` `atm-core` owns the shared ATM wire-frame schema
-  and framed encode/decode helpers used by same-host local IPC, cross-host
-  daemon transport, and in-process protocol tests. The canonical wire contract
-  is documented in `docs/atm-daemon/protocol-icd.md`, including exact header
-  constants, `message_kind` assignments, and payload DTO mapping. Satisfies:
-  `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
+- AI.23 shared-write convergence constraint: all local, same-host, and remote
+  HTTP writes must enter `ApiRouter::route` with the same `WriteRequest`, then
+  pass through `DaemonRequestDispatcher::route_write` and the canonical
+  `MessageWriter::write` persistence boundary. Persistence precedes exactly
+  one `PostWriteRouter::dispatch`; adapters may authenticate and label
+  provenance but may not implement a parallel write, acknowledgement, or
+  nudge path. This is the crate-level refinement of
+  `REQ-CORE-TRANSPORT-001`/`002` and the shared-write-resource contract in
+  [`../architecture.md`](../architecture.md).
+- `REQ-CORE-TRANSPORT-003` cross-host delivery owns no durable or in-memory
+  per-message delivery state: no replay store, outbox, retry queue, receipt,
+  remote ack state, or duplicate-delivery subsystem. The sole permitted
+  non-durable state is REQ-CORE-TRANSPORT-003B's per-host lease, generation,
+  next-attempt time, and backoff for bounded canonical-record scans.
+  Storage idempotency is by immutable message ULID. An identical
+  already-delivered remote duplicate is a no-op; the narrow same-host peer
+  receipt of a retained origin record logs `peer_duplicate_write_skipped`
+  with its ULID, source/destination host, `database_write=skipped`, and
+  `delivery=continued`; it continues the ordinary inbound nudge without a second record or peer
+  re-delivery. Satisfies `REQ-P-RELIABILITY-001`.
+- `REQ-CORE-TRANSPORT-004` remote acceptance is a normal result of the same
+  canonical write. A failed remote attempt creates no remote recipient row or
+  delivery state; an already-persisted local sender record remains immutable.
+  Satisfies `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
+- `REQ-CORE-TRANSPORT-005` `atm-core` owns the sealed, object-safe, `Send + Sync`
+  `DaemonApiClient` contract used by CLI, graft, and test clients. It exposes
+  one application API; concrete UDS/HTTPS HTTP I/O is adapter-owned. A future
+  Python binding consumes this contract in its owning phase and must not create
+  a parallel ingress or client trait.
+  Satisfies `REQ-P-TEST-001`, `REQ-P-CONTRACT-001`.
+- `REQ-CORE-TRANSPORT-006` is historical only. The custom ATM wire-frame
+  schema, frame codec, and `ClientTransport` framing contract are retired by
+  AI.6 and must not be extended; ADR-033's HTTP/OpenAPI contract replaces them.
 - `REQ-CORE-LOCK-RETIRE-001` `atm-core` owns the service-layer rule that normal
   ATM mail correctness must not depend on mailbox locks in the current
   SQLite/daemon architecture. Satisfies:
@@ -273,7 +315,7 @@ The `atm-core` crate docs must remain aligned with:
 - [`../plan-phase-S.md`](../plan-phase-S.md)
 - [`../plan-phase-U.md`](../plan-phase-U.md)
 - [`../testing-guidelines.md`](../testing-guidelines.md)
-- [`../atm-daemon/protocol-icd.md`](../atm-daemon/protocol-icd.md)
+- [`../atm-daemon/http-api.md`](../atm-daemon/http-api.md)
 - [`./boundaries.md`](./boundaries.md)
 - [`./design/dedup-metadata-schema.md`](./design/dedup-metadata-schema.md)
 - [`./design/sc-observability-integration.md`](./design/sc-observability-integration.md)
@@ -317,28 +359,18 @@ Required `atm-core` crate rules:
 - `atm-core` must model `message_key` as a semantic newtype at the service and
   store boundaries; durable identities must not remain raw `String` values
 - `atm-core` must model resource-cap and timeout settings with typed wrappers
-- `ClientTransport` remains the shared request/response seam for:
-  - production same-host local IPC transport
-  - production remote daemon peer transport
-  - fake in-process transport doubles
-  - loopback in-process transport
-- `ClientTransport` must be strong enough for shared ownership and concurrent
-  request execution without downstream callers restating `Send + Sync`
-- `atm-core` owns one ATM frame contract for local IPC and remote daemon
-  request/response transport, as defined by
-  `docs/atm-daemon/protocol-icd.md`
-- the current shared daemon packet family covers:
-  - send compose
-  - send acknowledge
-  - receive
-  - clear
-  - doctor
-  - heartbeat
-- `atm-core` framed transport helpers must delimit packets explicitly rather
-  than relying on EOF/connection shutdown to mark request boundaries
-  rather than passing raw integer literals through the service boundary
-- `atm-core` owns the ingest replay/degradation contract and must not silently
-  drop parseable external rows
+- `DaemonApiClient` is the shared request/response seam for the HTTP/UDS
+  production client, HTTPS peer client, and in-process HTTP test adapter.
+  It is object-safe and `Send + Sync` so clients do not restate concurrency
+  bounds.
+- `atm-core` owns transport-neutral request/response domain types only. HTTP
+  routes, framing, socket ownership, and response translation are adapter
+  concerns under ADR-033; the retired ATM frame ICD is not an accepted contract.
+- canonical writes represent both send and acknowledgement. An ack differs
+  only by a populated `acknowledges_message_id`, never by a second request or
+  packet family.
+- `atm-core` relies on durable message identity and idempotent writes; it owns
+  no ingest-replay or deferred-delivery persistence contract
 - `atm-core` must not let command/service code access SQLite, mailbox JSON,
   `config.json`, or sockets except through the owning boundary
 - `atm-core` boundary traits are sealed by default; any boundary that must
@@ -347,8 +379,8 @@ Required `atm-core` crate rules:
   private unless public exposure is required by a documented boundary contract
 - `atm-core` must keep business logic testable in-process without daemon
   process spawning
-- `atm-core` must model fallible runtime behavior with typed error enums and
-  `Result` propagation rather than panic/unwrap on routine failure paths
+- `atm-core` must model fallible runtime behavior with ADR-032's `AtmError`
+  and `Result` propagation rather than panic/unwrap on routine failure paths
 - `atm-core` must define ATM-owned structured event/error models that both the
   CLI and daemon layers emit through `sc-observability`
 - `atm-core` store implementations must enforce WAL-mode, foreign-key, and
@@ -401,8 +433,9 @@ Required boundary rules:
   - tail-session projection
   - doctor health projection
 - the boundary must remain synchronous and object-safe for service injection
-- shared query/follow and health failures must map to stable `AtmErrorKind`
-  variants without leaking shared error enums into `atm-core`
+- shared query/follow and health failures must map to stable `AtmErrorCode`
+  values through ADR-032's `AtmError` without leaking backend error enums into
+  `atm-core`
 - `atm-core` command-service failures and degraded recovery warnings must expose
   stable ATM-owned error codes for the CLI observability adapter to log
 - the corresponding source-of-truth code registry must live in one source file
@@ -504,8 +537,10 @@ Required caller-context rules:
   in SQLite-owned state
 - canonical sender identity remains the source of truth for validation,
   self-send checks, routing, and audit behavior
-- canonical same-team self-addressed sends must fail in the shared `atm-core`
-  send path before persistence and before any `dry-run` success result
+- canonical same-team self-addressed sends with no destination host must fail
+  in the shared `atm-core` send path before persistence and before any
+  `dry-run` success result; every syntactically valid host-qualified target
+  proceeds to the ordinary host-routing contract
 - each `[[atm.post_send_hooks]]` rule binds one `recipient` selector and one
   `command` argv
 - `recipient` must be one concrete recipient name or `*`
@@ -534,9 +569,10 @@ Required caller-context rules:
 - the hook must run after successful non-`dry-run` `atm send`
 - the hook must also run after successful `atm ack`, using the reply message as
   the hook subject when ack emitted a reply
-- if `atm ack` suppresses a historical self-addressed reply, the
-  acknowledgement still succeeds but no ack hook fires because no outbound
-  reply message exists
+- if `atm ack` suppresses an unqualified same-agent/same-team historical
+  self-addressed reply, the acknowledgement still succeeds but no ack hook
+  fires because no outbound reply message exists. A host-qualified source is
+  never suppressed and uses the ordinary canonical ACK write.
 - `is_ack` must be `false` for `atm send` and `true` for `atm ack`
 - hook configuration lookup must resolve from the sender's authoritative ATM
   roster `home_dir` metadata
@@ -561,7 +597,7 @@ Required caller-context rules:
   not own sink-local transport behavior
 - any team-scoped built-in template override lookup must cross a dedicated
   storage-neutral `NudgeTemplateOverrideStore` boundary before
-  `PostSendHookEmitter` runs; `atm-core` must not perform direct SQLite lookup
+  `MessageReceivedHookEmitter` runs; `atm-core` must not perform direct SQLite lookup
   inside the emitter path
 - the accepted built-in template lifecycle is explicit:
   - no row => product default

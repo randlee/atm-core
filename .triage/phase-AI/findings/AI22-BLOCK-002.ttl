@@ -1,0 +1,200 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI22-BLOCK-002>
+  a triage:Finding ;
+  triage:findingId "AI22-BLOCK-002" ;
+  triage:foundAt "2026-07-25T06:42:14Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S2 ;
+  triage:title "AI.22 implements AI.24's chartered same-store duplicate-receipt logic ahead of ADR-035's gate, outside its own Exact Targets" ;
+  triage:description "AI.22's sprint doc explicitly disclaims implementing peer authority, TLS, DNS resolution, or the post-write router. Commit a5aa6813 nonetheless adds PreparedWrite::is_peer_receipt (send/mod.rs:305-314), is_same_host_peer_receipt forcing post_write_needed override (send/mod.rs:540,569-575), and new peer-outbound schema metadata (schema/inbox_message.rs clear_transport_delivery_metadata / set_peer_outbound_write) consumed by PostWriteRouter::dispatch (atm-daemon/src/runtime_health.rs:577-620). This is precisely the narrow same-store host-qualified duplicate-receipt mechanism that docs/plans/phase-ai/sprint-ai-24-host-qualified-ack-receipt.md Sub-task 3 explicitly charters as ITS OWN deliverable. AI.22 ships a materially weaker bare-boolean version instead, ahead of ADR-035's gate." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "scope" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-07-26T05:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
+  triage:closureNote "Occurrence reconciliation per user-confirmed ruling 2026-07-26: canonical finding status is authoritative; stale open occurrence records on non-fix branches reflect forward-merge-pending TTL, not an independently open blocker requiring dev dispatch. No code change performed; record-accuracy correction only." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
+  triage:propagated false ;
+  triage:mergeForwardNeeded false ;
+  triage:regressed false ;
+  triage:reassignReason "Fix confirmed present on later sprint branch s24 (af2fbb83); s22/s23 occurrences remain open only because forward-merge from s24 has not landed there -- no independent re-fix dispatched, s24's fix supersedes on forward merge." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-002/s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-002/s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-002/s22/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-002/s22/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-002/s22/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-002/s22/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-002/s22/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-002/s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-002/s23/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-002/s23/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-002/s23/4> ;
+  triage:openOn <urn:atm:triage:worktree/s22/a5aa6813> ;
+  triage:openOn <urn:atm:triage:worktree/s23/c528137c> ;
+  triage:fixedOn <urn:atm:triage:worktree/s24/af2fbb83> ;
+  triage:promoteTo <urn:atm:triage:worktree/s24/af2fbb83> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-002/s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 311 ;
+  triage:snippet "pub fn is_peer_receipt(&self) -> bool {" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:reason "Superseded by later fix under merge-forward-collapse; not independently re-fixed on this branch." ;
+  triage:occursIn <urn:atm:triage:worktree/s22/a5aa6813> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-002/s22/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 540 ;
+  triage:snippet "let post_write_needed = persistence.newly_persisted || is_same_host_peer_receipt(&request);" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:reason "Superseded by later fix under merge-forward-collapse; not independently re-fixed on this branch." ;
+  triage:occursIn <urn:atm:triage:worktree/s22/a5aa6813> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-002/s22/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 569 ;
+  triage:snippet "fn is_same_host_peer_receipt(request: &WriteRequest) -> bool {" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:reason "Superseded by later fix under merge-forward-collapse; not independently re-fixed on this branch." ;
+  triage:occursIn <urn:atm:triage:worktree/s22/a5aa6813> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-002/s22/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/schema/inbox_message.rs" ;
+  triage:line 18 ;
+  triage:snippet "pub(crate) fn clear_transport_delivery_metadata(message: &mut InboxMessage) {" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:reason "Superseded by later fix under merge-forward-collapse; not independently re-fixed on this branch." ;
+  triage:occursIn <urn:atm:triage:worktree/s22/a5aa6813> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-002/s22/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/schema/inbox_message.rs" ;
+  triage:line 58 ;
+  triage:snippet "pub(crate) fn set_peer_outbound_write(" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:reason "Superseded by later fix under merge-forward-collapse; not independently re-fixed on this branch." ;
+  triage:occursIn <urn:atm:triage:worktree/s22/a5aa6813> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-002/s22/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 579 ;
+  triage:snippet "if message.prepared.is_peer_receipt() {" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:reason "Superseded by later fix under merge-forward-collapse; not independently re-fixed on this branch." ;
+  triage:occursIn <urn:atm:triage:worktree/s22/a5aa6813> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-002/s23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 311 ;
+  triage:snippet "pub fn is_peer_receipt(&self) -> bool {" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:reason "Superseded by later fix under merge-forward-collapse; not independently re-fixed on this branch." ;
+  triage:occursIn <urn:atm:triage:worktree/s23/c528137c> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-002/s23/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 540 ;
+  triage:snippet "let post_write_needed = persistence.newly_persisted || is_same_host_peer_receipt(&request);" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:reason "Superseded by later fix under merge-forward-collapse; not independently re-fixed on this branch." ;
+  triage:occursIn <urn:atm:triage:worktree/s23/c528137c> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-002/s23/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 569 ;
+  triage:snippet "fn is_same_host_peer_receipt(request: &WriteRequest) -> bool {" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:reason "Superseded by later fix under merge-forward-collapse; not independently re-fixed on this branch." ;
+  triage:occursIn <urn:atm:triage:worktree/s23/c528137c> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-002/s23/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 579 ;
+  triage:snippet "if message.prepared.is_peer_receipt() {" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:reason "Superseded by later fix under merge-forward-collapse; not independently re-fixed on this branch." ;
+  triage:occursIn <urn:atm:triage:worktree/s23/c528137c> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-002/s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 569 ;
+  triage:snippet "fn is_same_host_peer_receipt(request: &WriteRequest) -> bool {" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "af2fbb83" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/af2fbb83> .
+
+<urn:atm:triage:worktree/s21/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 21 .
+
+<urn:atm:triage:worktree/s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 22 .
+
+<urn:atm:triage:worktree/s23/c528137c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:orderIndex 23 .
+
+<urn:atm:triage:worktree/s24/af2fbb83>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "af2fbb83" ;
+  triage:orderIndex 24 .

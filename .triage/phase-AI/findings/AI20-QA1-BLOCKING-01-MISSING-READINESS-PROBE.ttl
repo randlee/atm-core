@@ -1,0 +1,79 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI20-QA1-BLOCKING-01-MISSING-READINESS-PROBE>
+  a triage:Finding ;
+  triage:findingId "AI20-QA1-BLOCKING-01-MISSING-READINESS-PROBE" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:title "launchd plist lacks pre-activation Hermes-gateway readiness gate" ;
+  triage:description "Sprint AI.20 Exact Targets require: 'A readiness probe must confirm the Hermes gateway is ready before the bridge activates.' The checked-in plist template sets RunAtLoad=true with no pre-activation gate, allowing launchd to start the bridge immediately without verifying the Hermes gateway is ready. The probe script's --active mode checks socket availability post-hoc (after activation), not pre-activation." ;
+  triage:phaseId "phase-AI" ;
+  triage:category "QA" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:closureNote "Fixed by 1acc7b73: the checked-in plist now invokes a profile-owned bridge gate with the Hermes-gateway readiness executable and bridge runner as ordered ProgramArguments. The runbook and AI.20 plan define that the gate runs readiness and execs the runner only after zero exit; a failed probe leaves the bridge unstarted and returns failure to launchd." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI20-QA1-BLOCKING-01-MISSING-READINESS-PROBE/s20/plist> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI20-QA1-BLOCKING-01-MISSING-READINESS-PROBE/s20/probe> ;
+  triage:openOn <urn:atm:triage:worktree/s20/a1d186a6> ;
+  triage:promoteTo <urn:atm:triage:worktree/s20/a1d186a6> .
+
+<urn:atm:triage:occurrence/AI20-QA1-BLOCKING-01-MISSING-READINESS-PROBE/s20/plist>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/templates/ai.hermes.atm-graft-<profile>.plist" ;
+  triage:line 23 ;
+  triage:snippet "RunAtLoad and KeepAlive set to true without pre-activation readiness gate" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "Fixed by 1acc7b73; see top-level closureNote." ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "a1d186a6" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/a1d186a6> .
+
+<urn:atm:triage:occurrence/AI20-QA1-BLOCKING-01-MISSING-READINESS-PROBE/s20/probe>
+  a triage:Occurrence ;
+  triage:file "scripts/phase-ai/run-hermes-bridge-probes.sh" ;
+  triage:line 59 ;
+  triage:snippet "--active mode checks only AFTER activation: plutil -lint, launchctl print/kill/kickstart, socket availability" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "Fixed by 1acc7b73; the existing active probe remains post-activation validation and is explicitly documented not to replace the new pre-activation gate." ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "a1d186a6" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/a1d186a6> .
+
+<urn:atm:triage:worktree/s17/32407754>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "32407754" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s18/02aff5ca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:path "feature/pAI-s18-graft-python-bindings" ;
+  triage:headSha "02aff5ca" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s19/1bd8e54d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:path "feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "1bd8e54d" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s20/a1d186a6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "a1d186a6" ;
+  triage:orderIndex 4 .

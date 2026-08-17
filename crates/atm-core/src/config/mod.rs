@@ -15,21 +15,28 @@ pub mod types;
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use serde::Deserialize;
+#[cfg(test)]
 use serde_json::Value;
 use toml::Value as TomlValue;
+#[cfg(test)]
 use tracing::warn;
 
 pub use types::AtmConfig;
 
 use crate::caller_context::read_cli_team_from_env;
-use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
+use crate::error::{AtmError, AtmErrorCode};
+#[cfg(test)]
 use crate::schema::{AgentMember, TeamConfig};
-use crate::types::{AgentName, TeamName};
+#[cfg(test)]
+use crate::types::AgentName;
+use crate::types::TeamName;
 use discovery::normalize_post_send_hooks;
-use types::{ByteCount, GraftConfig, MAX_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES, MAX_POST_SEND_HOOKS};
+use types::{
+    ByteCount, GraftConfig, MAX_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES, MAX_MESSAGE_BYTES,
+    MAX_POST_SEND_HOOKS,
+};
 
 /// Load `.atm.toml` by walking upward from `start_dir`.
 ///
@@ -56,11 +63,11 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
         team_members: normalize_team_members(parsed.atm.team_members, &path)?,
         aliases: normalize_aliases(parsed.atm.aliases),
         post_send_hooks: normalize_post_send_hooks(parsed.atm.post_send_hooks, &config_root)?,
+        max_message_bytes: normalize_max_message_bytes(parsed.atm.max_message_bytes, &path)?,
         claude_jsonl_body_export_max_bytes: normalize_claude_jsonl_body_export_max_bytes(
             parsed.atm.claude_jsonl_body_export_max_bytes,
             &path,
         )?,
-        daemon: parse_daemon_config(&parsed.daemon, &path)?,
         graft: normalize_graft_config(parsed.atm.graft),
         config_root,
     }))
@@ -69,32 +76,22 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
 fn parse_raw_config_file(path: &Path) -> Result<RawConfigFile, AtmError> {
     let contents = fs::read_to_string(path).map_err(|error| {
         AtmError::new(
-            AtmErrorKind::Config,
+            AtmErrorCode::ConfigParseFailed,
             format!("failed to read config at {}: {error}", path.display()),
         )
-        .with_recovery("Check .atm.toml permissions and syntax, or run the command from a directory inside the intended ATM workspace.")
-        .with_source(error)
     })?;
     let raw_toml = toml::from_str::<TomlValue>(&contents).map_err(|error| {
         AtmError::new(
-            AtmErrorKind::Config,
+            AtmErrorCode::ConfigParseFailed,
             format!("failed to parse config at {}: {error}", path.display()),
         )
-        .with_recovery(
-            "Repair the .atm.toml syntax or remove malformed ATM config keys before retrying.",
-        )
-        .with_source(error)
     })?;
     reject_legacy_post_send_hook_keys(path, &raw_toml)?;
     raw_toml.try_into::<RawConfigFile>().map_err(|error| {
         AtmError::new(
-            AtmErrorKind::Config,
+            AtmErrorCode::ConfigParseFailed,
             format!("failed to parse config at {}: {error}", path.display()),
         )
-        .with_recovery(
-            "Repair the .atm.toml syntax or remove malformed ATM config keys before retrying.",
-        )
-        .with_source(error)
     })
 }
 
@@ -103,31 +100,16 @@ fn parse_default_team(raw_team: Option<String>, path: &Path) -> Result<Option<Te
         .map(|team| {
             team.parse::<TeamName>().map_err(|error| {
                 AtmError::new(
-                    AtmErrorKind::Config,
-                    format!("invalid default team in {}: {}", path.display(), error.message),
-                )
-                .with_recovery(
-                    "Use a valid ATM team name in [atm].default_team or default_team without path separators or surrounding whitespace.",
+                    AtmErrorCode::ConfigParseFailed,
+                    format!(
+                        "invalid default team in {}: {}",
+                        path.display(),
+                        error.detail()
+                    ),
                 )
             })
         })
         .transpose()
-}
-
-fn parse_daemon_config(
-    daemon: &RawDaemonSection,
-    path: &Path,
-) -> Result<types::DaemonConfig, AtmError> {
-    let config = daemon
-        .remote_retry_budget
-        .as_deref()
-        .map(|value| parse_duration_literal(value, path, "daemon.remote_retry_budget"))
-        .transpose()?
-        .map(|remote_retry_budget| types::DaemonConfig {
-            remote_retry_budget,
-        })
-        .unwrap_or_default();
-    Ok(config)
 }
 
 /// Load and validate the Claude Code `config.json` document for one team
@@ -144,6 +126,7 @@ fn parse_daemon_config(
 /// document does not exist, or
 /// [`crate::error_codes::AtmErrorCode::ConfigTeamParseFailed`] when the JSON
 /// document is malformed or violates the required team-config shape.
+#[cfg(test)]
 pub fn load_claude_team_config_document(team_dir: &Path) -> Result<TeamConfig, AtmError> {
     let config_path = team_dir.join("config.json");
     let raw = fs::read_to_string(&config_path).map_err(|error| {
@@ -152,20 +135,14 @@ pub fn load_claude_team_config_document(team_dir: &Path) -> Result<TeamConfig, A
                 "team config is missing at {}",
                 config_path.display()
             ))
-            .with_recovery(
-                "Restore config.json for the team or use only the documented send fallback.",
-            )
-            .with_source(error)
         } else {
             AtmError::new(
-                AtmErrorKind::Config,
+                AtmErrorCode::ConfigParseFailed,
                 format!(
                     "failed to read team config at {}: {error}",
                     config_path.display()
                 ),
             )
-            .with_recovery("Create config.json or restore it from a known-good copy.")
-            .with_source(error)
         }
     })?;
 
@@ -204,8 +181,6 @@ struct RawConfigFile {
     #[serde(default)]
     atm: RawAtmSection,
     #[serde(default)]
-    daemon: RawDaemonSection,
-    #[serde(default)]
     identity: Option<String>,
     #[serde(default)]
     default_team: Option<String>,
@@ -224,15 +199,11 @@ struct RawAtmSection {
     #[serde(default)]
     post_send_hooks: Vec<RawPostSendHookRule>,
     #[serde(default)]
+    max_message_bytes: Option<u64>,
+    #[serde(default)]
     claude_jsonl_body_export_max_bytes: Option<u64>,
     #[serde(default)]
     graft: Option<RawGraftSection>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct RawDaemonSection {
-    #[serde(default)]
-    remote_retry_budget: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -255,16 +226,12 @@ fn reject_legacy_post_send_hook_keys(path: &Path, raw_toml: &TomlValue) -> Resul
 
     let retired_present = atm.contains_key("post_send_hook_members");
     if retired_present {
-        return Err(AtmError::new_with_code(
+        return Err(AtmError::new(
             AtmErrorCode::ConfigRetiredHookMembersKey,
-            AtmErrorKind::Config,
             format!(
                 "error: '{}' field 'post_send_hook_members' is no longer supported.",
                 path.display()
             ),
-        )
-        .with_recovery(
-            "Replace 'post_send_hook_members' with one or more [[atm.post_send_hooks]] rules, each containing recipient = \"name-or-*\" and command = [\"argv\", ...].",
         ));
     }
 
@@ -272,16 +239,12 @@ fn reject_legacy_post_send_hook_keys(path: &Path, raw_toml: &TomlValue) -> Resul
         || atm.contains_key("post_send_hook_senders")
         || atm.contains_key("post_send_hook_recipients");
     if legacy_shape_present {
-        return Err(AtmError::new_with_code(
+        return Err(AtmError::new(
             AtmErrorCode::ConfigRetiredLegacyHookKeys,
-            AtmErrorKind::Config,
             format!(
                 "error: '{}' uses retired post-send hook keys. Use [[atm.post_send_hooks]] with recipient and command entries instead.",
                 path.display()
             ),
-        )
-        .with_recovery(
-            "Replace [atm].post_send_hook, [atm].post_send_hook_senders, and [atm].post_send_hook_recipients with one or more [[atm.post_send_hooks]] rules, each containing recipient = \"name-or-*\" and command = [\"argv\", ...].",
         ));
     }
     Ok(())
@@ -293,17 +256,27 @@ fn normalize_claude_jsonl_body_export_max_bytes(
 ) -> Result<ByteCount, AtmError> {
     let value = raw.unwrap_or(types::DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES);
     if value > MAX_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES {
-        return Err(AtmError::new_with_code(
+        return Err(AtmError::new(
             AtmErrorCode::ConfigParseFailed,
-            AtmErrorKind::Config,
             format!(
                 "invalid [atm].claude_jsonl_body_export_max_bytes in {}: {value} exceeds the maximum of {} bytes",
                 path.display(),
                 MAX_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES
             ),
-        )
-        .with_recovery(
-            "Set [atm].claude_jsonl_body_export_max_bytes to a value between 0 and 1048576 bytes before retrying.",
+        ));
+    }
+    Ok(ByteCount::new(value))
+}
+
+fn normalize_max_message_bytes(raw: Option<u64>, path: &Path) -> Result<ByteCount, AtmError> {
+    let value = raw.unwrap_or(types::DEFAULT_MAX_MESSAGE_BYTES);
+    if value == 0 || value > MAX_MESSAGE_BYTES {
+        return Err(AtmError::new(
+            AtmErrorCode::ConfigParseFailed,
+            format!(
+                "invalid [atm].max_message_bytes in {}: {value} must be between 1 and {MAX_MESSAGE_BYTES} bytes",
+                path.display(),
+            ),
         ));
     }
     Ok(ByteCount::new(value))
@@ -314,17 +287,15 @@ fn validate_post_send_hook_count(
     path: &Path,
 ) -> Result<(), AtmError> {
     if post_send_hooks.len() > MAX_POST_SEND_HOOKS {
-        return Err(AtmError::new_with_code(
+        return Err(AtmError::new(
             AtmErrorCode::ConfigParseFailed,
-            AtmErrorKind::Config,
             format!(
                 "invalid [[atm.post_send_hooks]] count in {}: {} exceeds the maximum of {}",
                 path.display(),
                 post_send_hooks.len(),
                 MAX_POST_SEND_HOOKS
             ),
-        )
-        .with_recovery("Reduce [[atm.post_send_hooks]] entries to 64 or fewer before retrying."));
+        ));
     }
     Ok(())
 }
@@ -335,107 +306,6 @@ fn normalize_graft_config(raw: Option<RawGraftSection>) -> GraftConfig {
     }
 }
 
-fn parse_duration_literal(
-    value: &str,
-    path: &Path,
-    field_name: &str,
-) -> Result<Duration, AtmError> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return Err(duration_parse_error(
-            path,
-            field_name,
-            "value must not be blank".to_string(),
-            "Use one positive duration literal such as 30s, 500ms, or 2m for daemon timeout settings.",
-        ));
-    }
-
-    let (number, unit) = parse_duration_parts(trimmed, path, field_name)?;
-    let amount = parse_duration_amount(number, path, field_name)?;
-    if amount == 0 {
-        return Err(duration_parse_error(
-            path,
-            field_name,
-            "zero is not allowed".to_string(),
-            "Use one positive duration literal such as 30s, 500ms, or 2m for daemon timeout settings.",
-        ));
-    }
-
-    Ok(duration_from_unit(amount, unit))
-}
-
-fn parse_duration_parts<'a>(
-    trimmed: &'a str,
-    path: &Path,
-    field_name: &str,
-) -> Result<(&'a str, &'static str), AtmError> {
-    if let Some(value) = trimmed.strip_suffix("ms") {
-        return Ok((value, "ms"));
-    }
-    if let Some(value) = trimmed.strip_suffix('s') {
-        return Ok((value, "s"));
-    }
-    if let Some(value) = trimmed.strip_suffix('m') {
-        return Ok((value, "m"));
-    }
-    Err(duration_parse_error(
-        path,
-        field_name,
-        format!("unsupported unit '{trimmed}'"),
-        "Use one positive duration literal ending in ms, s, or m for daemon timeout settings.",
-    ))
-}
-
-fn parse_duration_amount(number: &str, path: &Path, field_name: &str) -> Result<u64, AtmError> {
-    number.parse::<u64>().map_err(|error| {
-        duration_parse_error_with_source(
-            path,
-            field_name,
-            error.to_string(),
-            "Use one positive integer duration literal such as 30s, 500ms, or 2m for daemon timeout settings.",
-            error,
-        )
-    })
-}
-
-fn duration_from_unit(amount: u64, unit: &str) -> Duration {
-    match unit {
-        "ms" => Duration::from_millis(amount),
-        "s" => Duration::from_secs(amount),
-        "m" => Duration::from_secs(amount.saturating_mul(60)),
-        _ => unreachable!("duration unit filtered above"),
-    }
-}
-
-fn duration_parse_error(
-    path: &Path,
-    field_name: &str,
-    detail: String,
-    recovery: &'static str,
-) -> AtmError {
-    AtmError::new_with_code(
-        AtmErrorCode::ConfigParseFailed,
-        AtmErrorKind::Config,
-        format!(
-            "invalid duration for {} in {}: {}",
-            field_name,
-            path.display(),
-            detail
-        ),
-    )
-    .with_recovery(recovery)
-}
-
-fn duration_parse_error_with_source(
-    path: &Path,
-    field_name: &str,
-    detail: String,
-    recovery: &'static str,
-    source: impl std::error::Error + Send + Sync + 'static,
-) -> AtmError {
-    duration_parse_error(path, field_name, detail, recovery).with_source(source)
-}
-
 fn normalize_team_members(values: Vec<String>, path: &Path) -> Result<Vec<TeamName>, AtmError> {
     values
         .into_iter()
@@ -444,11 +314,11 @@ fn normalize_team_members(values: Vec<String>, path: &Path) -> Result<Vec<TeamNa
         .map(|value| {
             value.parse::<TeamName>().map_err(|error| {
                 AtmError::new(
-                    AtmErrorKind::Config,
-                    format!("invalid [atm].team_members entry in {}: {error}", path.display()),
-                )
-                .with_recovery(
-                    "Use valid ATM team-member names in [atm].team_members without path separators or surrounding whitespace.",
+                    AtmErrorCode::ConfigParseFailed,
+                    format!(
+                        "invalid [atm].team_members entry in {}: {error}",
+                        path.display()
+                    ),
                 )
             })
         })
@@ -465,30 +335,20 @@ fn normalize_aliases(
         .collect()
 }
 
+#[cfg(test)]
 fn parse_team_config(config_path: &Path, raw: &str) -> Result<TeamConfig, AtmError> {
     let root: Value = serde_json::from_str(raw).map_err(|error| {
-        AtmError::new_with_code(
+        AtmError::new(
             AtmErrorCode::ConfigTeamParseFailed,
-            AtmErrorKind::Config,
-            format!(
-                "failed to parse team config at {}: {error}",
-                config_path.display()
-            ),
+            format!("failed to parse {}: {error}", config_path.display()),
         )
-        .with_recovery("Repair the JSON syntax in config.json or restore a valid file.")
-        .with_source(error)
     })?;
 
     let object = root.as_object().ok_or_else(|| {
-        AtmError::new_with_code(
+        AtmError::new(
             AtmErrorCode::ConfigTeamParseFailed,
-            AtmErrorKind::Config,
-            format!(
-                "failed to parse team config at {}: root value must be a JSON object",
-                config_path.display()
-            ),
+            format!("{} root value must be a JSON object", config_path.display()),
         )
-        .with_recovery("Repair config.json so the root value is an object with a 'members' array.")
     })?;
 
     let members = match object.get("members") {
@@ -499,16 +359,12 @@ fn parse_team_config(config_path: &Path, raw: &str) -> Result<TeamConfig, AtmErr
             .filter_map(|(index, entry)| parse_team_member(config_path, index, entry))
             .collect(),
         Some(_) => {
-            return Err(AtmError::new_with_code(
+            return Err(AtmError::new(
                 AtmErrorCode::ConfigTeamParseFailed,
-                AtmErrorKind::Config,
                 format!(
-                    "failed to parse team config at {}: field 'members' must be a JSON array",
+                    "{} field 'members' must be a JSON array",
                     config_path.display()
                 ),
-            )
-            .with_recovery(
-                "Repair config.json so 'members' is an array of agent records or agent names.",
             ));
         }
     };
@@ -519,6 +375,7 @@ fn parse_team_config(config_path: &Path, raw: &str) -> Result<TeamConfig, AtmErr
     Ok(TeamConfig { members, extra })
 }
 
+#[cfg(test)]
 fn parse_team_member(config_path: &Path, index: usize, entry: &Value) -> Option<AgentMember> {
     match entry {
         Value::String(name) => match name.parse::<AgentName>() {
@@ -561,7 +418,8 @@ fn parse_team_member(config_path: &Path, index: usize, entry: &Value) -> Option<
 #[cfg(test)]
 mod tests {
     use crate::config::types::{
-        ByteCount, HookRecipient, MAX_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES, MAX_POST_SEND_HOOKS,
+        ByteCount, HookRecipient, MAX_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES, MAX_MESSAGE_BYTES,
+        MAX_POST_SEND_HOOKS,
     };
     use crate::error_codes::AtmErrorCode;
     use crate::roles::ROLE_TEAM_LEAD;
@@ -627,9 +485,6 @@ command = ["scripts/atm-nudge.sh", "{ROLE_TEAM_LEAD}"]
 recipient = "*"
 command = ["bash", "-lc", "echo hi"]
 
-[daemon]
-remote_retry_budget = "45s"
-
 [atm.aliases]
 tl = "{ROLE_TEAM_LEAD}"
 qa = "{TEST_QA}"
@@ -672,31 +527,13 @@ blank = ""
             config.claude_jsonl_body_export_max_bytes,
             ByteCount::new(128 * 1024)
         );
+        assert_eq!(config.max_message_bytes, ByteCount::new(MAX_MESSAGE_BYTES));
         assert_eq!(
             config.aliases.get("tl").map(String::as_str),
             Some(ROLE_TEAM_LEAD)
         );
         assert_eq!(config.aliases.get("qa").map(String::as_str), Some(TEST_QA));
         assert!(!config.aliases.contains_key("blank"));
-        assert_eq!(
-            config.daemon.remote_retry_budget,
-            std::time::Duration::from_secs(45)
-        );
-    }
-
-    #[test]
-    fn load_config_rejects_invalid_remote_retry_budget() {
-        let root = unique_temp_dir("atm-config-invalid-remote-retry-budget");
-        fs::write(
-            root.path().join(".atm.toml"),
-            "[daemon]\nremote_retry_budget = \"soon\"\n",
-        )
-        .expect("config");
-
-        let error = load_config(root.path()).expect_err("invalid duration");
-
-        assert_eq!(error.code, AtmErrorCode::ConfigParseFailed);
-        assert!(error.message.contains("daemon.remote_retry_budget"));
     }
 
     #[test]
@@ -711,6 +548,44 @@ blank = ""
         let config = load_config(root.path()).expect("config").expect("present");
 
         assert_eq!(config.claude_jsonl_body_export_max_bytes, ByteCount::new(0));
+    }
+
+    #[test]
+    fn load_config_reads_message_cap_with_default_and_explicit_value() {
+        let explicit_root = unique_temp_dir("atm-config-message-cap");
+        fs::write(
+            explicit_root.path().join(".atm.toml"),
+            "[atm]\nmax_message_bytes = 65536\n",
+        )
+        .expect("config");
+
+        let explicit = load_config(explicit_root.path())
+            .expect("config")
+            .expect("present");
+        assert_eq!(explicit.max_message_bytes, ByteCount::new(65_536));
+
+        let default_root = unique_temp_dir("atm-config-message-cap-default");
+        fs::write(default_root.path().join(".atm.toml"), "[atm]\n").expect("config");
+        let default = load_config(default_root.path())
+            .expect("config")
+            .expect("present");
+        assert_eq!(default.max_message_bytes, ByteCount::new(MAX_MESSAGE_BYTES));
+    }
+
+    #[test]
+    fn load_config_rejects_zero_or_widened_message_cap() {
+        for value in [0, MAX_MESSAGE_BYTES + 1] {
+            let root = unique_temp_dir("atm-config-invalid-message-cap");
+            fs::write(
+                root.path().join(".atm.toml"),
+                format!("[atm]\nmax_message_bytes = {value}\n"),
+            )
+            .expect("config");
+
+            let error = load_config(root.path()).expect_err("invalid message cap should fail");
+            assert_eq!(error.code(), AtmErrorCode::ConfigParseFailed);
+            assert!(error.message().contains("max_message_bytes"));
+        }
     }
 
     #[test]
@@ -750,9 +625,13 @@ blank = ""
 
         let error = load_config(root.path()).expect_err("oversized export cap should fail");
 
-        assert_eq!(error.code, AtmErrorCode::ConfigParseFailed);
-        assert!(error.message.contains("claude_jsonl_body_export_max_bytes"));
-        assert!(error.message.contains("exceeds the maximum"));
+        assert_eq!(error.code(), AtmErrorCode::ConfigParseFailed);
+        assert!(
+            error
+                .message()
+                .contains("claude_jsonl_body_export_max_bytes")
+        );
+        assert!(error.message().contains("exceeds the maximum"));
     }
 
     #[test]
@@ -768,9 +647,9 @@ blank = ""
 
         let error = load_config(root.path()).expect_err("too many hooks should fail");
 
-        assert_eq!(error.code, AtmErrorCode::ConfigParseFailed);
-        assert!(error.message.contains("[[atm.post_send_hooks]]"));
-        assert!(error.message.contains("exceeds the maximum"));
+        assert_eq!(error.code(), AtmErrorCode::ConfigParseFailed);
+        assert!(error.message().contains("[[atm.post_send_hooks]]"));
+        assert!(error.message().contains("exceeds the maximum"));
     }
 
     #[test]
@@ -784,7 +663,22 @@ blank = ""
 
         let error = load_config(root.path()).expect_err("invalid team member");
 
-        assert!(error.message.contains("[atm].team_members"));
+        assert!(error.message().contains("[atm].team_members"));
+    }
+
+    #[test]
+    fn invalid_default_team_composes_one_recovery_line() {
+        let root = unique_temp_dir("atm-config-invalid-default-team");
+        fs::write(
+            root.path().join(".atm.toml"),
+            "[atm]\ndefault_team = \"bad/team\"\n",
+        )
+        .expect("config");
+
+        let error = load_config(root.path()).expect_err("invalid default team must fail");
+
+        assert_eq!(error.code(), AtmErrorCode::ConfigParseFailed);
+        assert_eq!(error.message().matches("Recovery:").count(), 1);
     }
 
     #[test]
@@ -845,20 +739,23 @@ post_send_hook_members = ["{ROLE_TEAM_LEAD}"]
 
         let error = load_config(root.path()).expect_err("retired key should fail");
 
-        assert!(error.is_config());
-        assert_eq!(error.code, AtmErrorCode::ConfigRetiredHookMembersKey);
+        assert!(matches!(
+            error.code(),
+            crate::error_codes::AtmErrorCode::ConfigHomeUnavailable
+                | crate::error_codes::AtmErrorCode::ConfigParseFailed
+                | crate::error_codes::AtmErrorCode::ConfigRetiredHookMembersKey
+                | crate::error_codes::AtmErrorCode::ConfigRetiredLegacyHookKeys
+                | crate::error_codes::AtmErrorCode::ConfigTeamParseFailed
+                | crate::error_codes::AtmErrorCode::ConfigTeamMissing
+        ));
+        assert_eq!(error.code(), AtmErrorCode::ConfigRetiredHookMembersKey);
         assert!(
             error
-                .message
+                .message()
                 .contains(&root.path().join(".atm.toml").display().to_string())
         );
-        assert!(error.message.contains("post_send_hook_members"));
-        assert_eq!(
-            error.primary_recovery(),
-            Some(
-                "Replace 'post_send_hook_members' with one or more [[atm.post_send_hooks]] rules, each containing recipient = \"name-or-*\" and command = [\"argv\", ...]."
-            )
-        );
+        assert!(error.message().contains("post_send_hook_members"));
+        assert!(error.message().contains("Recovery:"));
     }
 
     #[test]
@@ -877,16 +774,19 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
 
         let error = load_config(root.path()).expect_err("legacy hook shape should fail");
 
-        assert!(error.is_config());
-        assert_eq!(error.code, AtmErrorCode::ConfigRetiredLegacyHookKeys);
-        assert!(error.message.contains("retired post-send hook keys"));
-        assert!(error.message.contains("[[atm.post_send_hooks]]"));
-        assert_eq!(
-            error.primary_recovery(),
-            Some(
-                "Replace [atm].post_send_hook, [atm].post_send_hook_senders, and [atm].post_send_hook_recipients with one or more [[atm.post_send_hooks]] rules, each containing recipient = \"name-or-*\" and command = [\"argv\", ...]."
-            )
-        );
+        assert!(matches!(
+            error.code(),
+            crate::error_codes::AtmErrorCode::ConfigHomeUnavailable
+                | crate::error_codes::AtmErrorCode::ConfigParseFailed
+                | crate::error_codes::AtmErrorCode::ConfigRetiredHookMembersKey
+                | crate::error_codes::AtmErrorCode::ConfigRetiredLegacyHookKeys
+                | crate::error_codes::AtmErrorCode::ConfigTeamParseFailed
+                | crate::error_codes::AtmErrorCode::ConfigTeamMissing
+        ));
+        assert_eq!(error.code(), AtmErrorCode::ConfigRetiredLegacyHookKeys);
+        assert!(error.message().contains("retired post-send hook keys"));
+        assert!(error.message().contains("[[atm.post_send_hooks]]"));
+        assert!(error.message().contains("Recovery:"));
     }
 
     #[test]
@@ -957,11 +857,19 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
         let raw = format!(r#"{{"members":[{{"name":"{TEST_SENDER}""#);
         let error = parse_team_config(&config_path, &raw).expect_err("syntax error");
 
-        assert!(error.is_config());
-        assert_eq!(error.code, AtmErrorCode::ConfigTeamParseFailed);
-        assert!(error.message.contains("config.json"));
-        assert!(error.message.contains("EOF while parsing"));
-        assert!(error.primary_recovery().is_some());
+        assert!(matches!(
+            error.code(),
+            crate::error_codes::AtmErrorCode::ConfigHomeUnavailable
+                | crate::error_codes::AtmErrorCode::ConfigParseFailed
+                | crate::error_codes::AtmErrorCode::ConfigRetiredHookMembersKey
+                | crate::error_codes::AtmErrorCode::ConfigRetiredLegacyHookKeys
+                | crate::error_codes::AtmErrorCode::ConfigTeamParseFailed
+                | crate::error_codes::AtmErrorCode::ConfigTeamMissing
+        ));
+        assert_eq!(error.code(), AtmErrorCode::ConfigTeamParseFailed);
+        assert!(error.message().contains("config.json"));
+        assert!(error.message().contains("EOF while parsing"));
+        assert!(error.message().contains("Recovery:"));
     }
 
     #[test]
@@ -970,10 +878,18 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
         let raw = format!(r#"["{TEST_SENDER}"]"#);
         let error = parse_team_config(&config_path, &raw).expect_err("root shape error");
 
-        assert!(error.is_config());
-        assert_eq!(error.code, AtmErrorCode::ConfigTeamParseFailed);
-        assert!(error.message.contains("root value must be a JSON object"));
-        assert!(error.primary_recovery().is_some());
+        assert!(matches!(
+            error.code(),
+            crate::error_codes::AtmErrorCode::ConfigHomeUnavailable
+                | crate::error_codes::AtmErrorCode::ConfigParseFailed
+                | crate::error_codes::AtmErrorCode::ConfigRetiredHookMembersKey
+                | crate::error_codes::AtmErrorCode::ConfigRetiredLegacyHookKeys
+                | crate::error_codes::AtmErrorCode::ConfigTeamParseFailed
+                | crate::error_codes::AtmErrorCode::ConfigTeamMissing
+        ));
+        assert_eq!(error.code(), AtmErrorCode::ConfigTeamParseFailed);
+        assert!(error.message().contains("root value must be a JSON object"));
+        assert!(error.message().contains("Recovery:"));
     }
 
     #[test]
@@ -982,14 +898,22 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
         let raw = format!(r#"{{"members":{{"name":"{TEST_SENDER}"}}}}"#);
         let error = parse_team_config(&config_path, &raw).expect_err("members shape error");
 
-        assert!(error.is_config());
-        assert_eq!(error.code, AtmErrorCode::ConfigTeamParseFailed);
+        assert!(matches!(
+            error.code(),
+            crate::error_codes::AtmErrorCode::ConfigHomeUnavailable
+                | crate::error_codes::AtmErrorCode::ConfigParseFailed
+                | crate::error_codes::AtmErrorCode::ConfigRetiredHookMembersKey
+                | crate::error_codes::AtmErrorCode::ConfigRetiredLegacyHookKeys
+                | crate::error_codes::AtmErrorCode::ConfigTeamParseFailed
+                | crate::error_codes::AtmErrorCode::ConfigTeamMissing
+        ));
+        assert_eq!(error.code(), AtmErrorCode::ConfigTeamParseFailed);
         assert!(
             error
-                .message
+                .message()
                 .contains("field 'members' must be a JSON array")
         );
-        assert!(error.primary_recovery().is_some());
+        assert!(error.message().contains("Recovery:"));
     }
 
     #[test]
@@ -1000,9 +924,9 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
 
         let error = super::load_claude_team_config_document(&team_dir).expect_err("missing config");
 
-        assert!(error.is_missing_document());
-        assert!(error.message.contains("team config is missing"));
-        assert!(error.primary_recovery().is_some());
+        assert!(error.code() == crate::error_codes::AtmErrorCode::ConfigTeamMissing);
+        assert!(error.message().contains("team config is missing"));
+        assert!(error.message().contains("Recovery:"));
     }
 
     #[test]

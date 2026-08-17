@@ -1,3 +1,4 @@
+use crate::address::{MessageParticipantFilter, ParticipantDirection};
 use crate::read::ClassifiedMessage;
 use crate::types::{AgentName, DisplayBucket, IsoTimestamp, ReadSelection, TaskId};
 
@@ -32,6 +33,42 @@ pub fn apply_sender_filter(
             .filter(|message| &message.envelope.from == sender)
             .collect(),
         None => messages,
+    }
+}
+
+/// The resolved mailbox already fixes the destination agent.  Therefore a
+/// destination participant filter compares its chat identity, while a source
+/// filter compares both source agent and source chat identity.
+pub fn apply_participant_filter(
+    messages: Vec<ClassifiedMessage>,
+    participant: Option<&MessageParticipantFilter>,
+) -> Vec<ClassifiedMessage> {
+    match participant {
+        Some(participant) => messages
+            .into_iter()
+            .filter(|message| matches_participant_filter(message, Some(participant)))
+            .collect(),
+        None => messages,
+    }
+}
+
+pub fn matches_participant_filter(
+    message: &ClassifiedMessage,
+    participant: Option<&MessageParticipantFilter>,
+) -> bool {
+    let Some(participant) = participant else {
+        return true;
+    };
+    let source_matches = message.envelope.from == participant.agent
+        && message.envelope.source_chat_id == participant.chat_id;
+    // A bare agent, and each chat-qualified instance of that agent, are
+    // distinct inbox identities. `None == None` admits bare-agent mail only
+    // to a bare-agent caller; a present chat identity must match exactly.
+    let destination_matches = message.envelope.destination_chat_id == participant.chat_id;
+    match participant.direction {
+        ParticipantDirection::From => source_matches,
+        ParticipantDirection::To => destination_matches,
+        ParticipantDirection::Either => source_matches || destination_matches,
     }
 }
 

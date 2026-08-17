@@ -1,9 +1,12 @@
 use anyhow::Result;
-use atm_core::read::{MAX_TIMEOUT_SECS, ReadQuery};
+use atm_core::read::{MAX_TIMEOUT_SECS, MailboxQueryFilters, ReadQuery};
 use atm_core::types::ReadSelection;
 use clap::Args;
 
-use crate::commands::caller_context::{CallerTeamOverride, resolve_cli_mutation_caller_context};
+use crate::commands::caller_context::{
+    CallerChatIdOverride, CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride,
+    resolve_cli_mutation_caller_context, resolve_cli_mutation_caller_context_with_overrides,
+};
 use crate::commands::util::parse_timestamp;
 use crate::composition::{
     AtmHomePath, CliComposition, InvocationDir, resolve_command_runtime_context,
@@ -16,6 +19,12 @@ use crate::output;
 pub struct ReadCommand {
     #[arg(long)]
     team: Option<String>,
+
+    #[arg(long = "chat-id", conflicts_with = "actor")]
+    chat_id: Option<String>,
+
+    #[arg(long = "as")]
+    actor: Option<String>,
 
     #[arg(long, conflicts_with_all = ["unread", "unread_only", "pending_ack", "pending_ack_only"])]
     all: bool,
@@ -64,7 +73,7 @@ pub struct ReadCommand {
 }
 
 impl ReadCommand {
-    pub fn run(self, observability: &CliObservability) -> Result<()> {
+    pub async fn run(self, observability: &CliObservability) -> Result<()> {
         let warnings = self.deprecation_warnings();
         let (home_dir, current_dir) = resolve_command_runtime_context("read")?;
         let json = self.json;
@@ -75,7 +84,7 @@ impl ReadCommand {
             InvocationDir::new(&current_dir),
             AtmHomePath::new(&home_dir),
         )?;
-        let outcome = composition.receive(query)?;
+        let outcome = composition.receive(query).await?;
         output::print_read_result(&outcome, json)?;
         for warning in warnings {
             eprintln!("{warning}");
@@ -88,8 +97,15 @@ impl ReadCommand {
         home_dir: std::path::PathBuf,
         current_dir: std::path::PathBuf,
     ) -> Result<ReadQuery> {
-        let caller_context =
-            resolve_cli_mutation_caller_context(self.team.as_deref().map(CallerTeamOverride))?;
+        let caller_context = if self.actor.is_some() || self.chat_id.is_some() {
+            resolve_cli_mutation_caller_context_with_overrides(CallerContextOverrides {
+                identity_override: self.actor.as_deref().map(CallerIdentityOverride),
+                chat_id_override: self.chat_id.as_deref().map(CallerChatIdOverride),
+                team_override: self.team.as_deref().map(CallerTeamOverride),
+            })?
+        } else {
+            resolve_cli_mutation_caller_context(self.team.as_deref().map(CallerTeamOverride))?
+        };
         if let Some(timeout_secs) = self.timeout
             && timeout_secs > MAX_TIMEOUT_SECS
         {
@@ -97,28 +113,33 @@ impl ReadCommand {
                 "timeout exceeds the {} second maximum",
                 MAX_TIMEOUT_SECS
             ))
-            .with_recovery("Use a timeout no greater than one hour before retrying `atm read`.")
             .into());
         }
         let _ = self.since_last_seen;
         let selection_mode = self.selection_mode();
         let timestamp_filter = self.since.as_deref().map(parse_timestamp).transpose()?;
-        ReadQuery::new(
+        let filters = MailboxQueryFilters::default()
+            .message_id_opt(self.message_id.as_deref())
+            .sender_opt(self.from.as_deref())
+            .timestamp_opt(timestamp_filter)
+            .task_opt(self.task.as_deref())
+            .contains_opt(self.contains.as_deref())
+            .timeout_secs_opt(self.timeout);
+        ReadQuery::from_filters(
             home_dir,
             current_dir,
             caller_context.caller_identity,
-            None,
             caller_context.caller_team,
             selection_mode,
             !self.no_since_last_seen && selection_mode != ReadSelection::All,
             true,
-            self.message_id.as_deref(),
-            self.from.as_deref(),
-            timestamp_filter,
-            self.task.as_deref(),
-            self.contains.as_deref(),
-            self.timeout,
+            filters,
         )
+        .map(|query| {
+            query
+                .with_caller_chat_id(caller_context.caller_chat_id)
+                .with_activity_observation(caller_context.activity_observation)
+        })
         .map_err(Into::into)
     }
 
@@ -165,7 +186,7 @@ impl ReadCommand {
 
 #[cfg(test)]
 mod tests {
-    use atm_core::test_support::EnvGuard;
+    use atm_core::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
     use atm_core::types::ReadSelection;
     use clap::Parser;
     use serial_test::serial;
@@ -260,6 +281,45 @@ mod tests {
     }
 
     #[test]
+    #[serial(env)]
+    fn chat_id_and_equivalent_as_construct_the_same_read_caller() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+        let mut shorthand = base_command();
+        shorthand.chat_id = Some("1234".to_string());
+        let mut explicit = base_command();
+        explicit.actor = Some(format!("{TEST_SENDER}:1234"));
+
+        let shorthand = shorthand
+            .build_query(".".into(), ".".into())
+            .expect("shorthand query");
+        let explicit = explicit
+            .build_query(".".into(), ".".into())
+            .expect("explicit query");
+
+        assert_eq!(shorthand.caller_chat_id(), explicit.caller_chat_id());
+        assert_eq!(shorthand.caller_chat_id().unwrap().as_str(), "1234");
+    }
+
+    #[test]
+    #[serial(env)]
+    fn read_rejects_as_for_a_different_base_agent() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+        let mut command = base_command();
+        command.actor = Some(format!("{TEST_SENDER}-other:1234"));
+
+        let error = command
+            .build_query(".".into(), ".".into())
+            .expect_err("different agent must be rejected");
+        assert!(error.to_string().contains("same base agent"));
+    }
+
+    #[test]
     fn cli_rejects_positional_mailbox_target_for_owner_only_read() {
         let error = crate::commands::Cli::try_parse_from(["atm", "read", "recipient@test-team"])
             .expect_err("owner-only read must reject positional target");
@@ -275,6 +335,8 @@ mod tests {
     fn base_command() -> ReadCommand {
         ReadCommand {
             team: None,
+            chat_id: None,
+            actor: None,
             all: false,
             unread: false,
             unread_only: false,

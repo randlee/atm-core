@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI24-MINOR-106>
+  a triage:Finding ;
+  triage:findingId "AI24-MINOR-106" ;
+  triage:title "README.md missing explicit AI.24 reference alongside 1.3.2-beta-24 release candidate note" ;
+  triage:description "README.md documents the 1.3.2-beta-24 release candidate but does not name AI.24 as required by the sprint doc's Required Document Updates section." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "req-qa" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-26T09:37:30Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T18:42:15Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:foundIn triage:AICH-S4 ;
+  triage:foundAt "2026-07-26T09:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-MINOR-106/S24-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI24-MINOR-106/S24-1>
+  a triage:Occurrence ;
+  triage:file "README.md" ;
+  triage:line 10 ;
+  triage:snippet "The current Phase AI branch candidate is `1.3.2-beta-24`; its CLI and daemon" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "ac465283747d3186667fab7ad2f752b1c4c1a968" ;
+  triage:occursIn <urn:atm:triage:worktree/S24-ac465283> .
+
+<urn:atm:triage:worktree/S24-ac465283>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pAI-s24" ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "ac465283747d3186667fab7ad2f752b1c4c1a968" ;
+  triage:orderIndex 24 .

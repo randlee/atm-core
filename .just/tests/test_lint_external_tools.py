@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
 JUST_DIR = Path(__file__).resolve().parents[1]
@@ -12,6 +14,7 @@ if str(JUST_DIR) not in sys.path:
 
 from lint_cargo_deny import build_command as build_cargo_deny_command
 from lint_cargo_deny import build_runtime_config
+from lint_cargo_deny import run_cargo_deny
 from lint_cargo_shear import annotate_sections
 from lint_cargo_shear import build_command as build_cargo_shear_command
 from lint_cargo_shear import evaluate_policy
@@ -63,12 +66,41 @@ allow = ["MIT"]
             self.assertIn('yanked = "deny"', text)
             self.assertIn('allow = ["MIT"]', text)
 
+    def test_cargo_deny_retries_dns_resolution_failure(self) -> None:
+        failure = subprocess.CompletedProcess(
+            ["cargo-deny"],
+            1,
+            stdout="",
+            stderr="Could not resolve hostname (Could not resolve host: static.crates.io)",
+        )
+        success = subprocess.CompletedProcess(["cargo-deny"], 0, stdout="ok", stderr="")
+        with mock.patch("lint_cargo_deny.subprocess.run", side_effect=[failure, success]) as run_mock:
+            with mock.patch("lint_cargo_deny.time.sleep") as sleep_mock:
+                completed = run_cargo_deny(["cargo-deny", "check"], Path("/repo"))
+
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(run_mock.call_count, 2)
+        sleep_mock.assert_called_once()
+
+    def test_cargo_deny_does_not_retry_policy_failure(self) -> None:
+        failure = subprocess.CompletedProcess(
+            ["cargo-deny"],
+            1,
+            stdout="",
+            stderr="error: failed license policy",
+        )
+        with mock.patch("lint_cargo_deny.subprocess.run", return_value=failure) as run_mock:
+            completed = run_cargo_deny(["cargo-deny", "check"], Path("/repo"))
+
+        self.assertEqual(completed.returncode, 1)
+        run_mock.assert_called_once()
+
     def test_build_cargo_shear_command_targets_workspace_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
             self.assertEqual(
                 build_cargo_shear_command(repo_root),
-                ["cargo-shear"],
+                ["cargo-shear", "--format", "github"],
             )
 
     def test_parse_sections_extracts_warning_files(self) -> None:

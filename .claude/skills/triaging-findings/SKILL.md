@@ -1,7 +1,18 @@
 ---
 name: triaging-findings
-version: 1.1.0
+version: 1.3.0
 description: Orchestrate pre-dispatch QA finding triage as team-lead. Launch one qa-triage agent per finding, collect phase-scoped Turtle records, aggregate by promoted branch, and only then dispatch branch-scoped fix assignments to arch-ctm.
+requires:
+  cli:
+    - name: sc-compose
+      minimum_version: 1.4.0
+    - name: oxigraph
+    - name: rg
+  python:
+    - package: rdflib
+    - package: sc-compose
+      import_name: sc_compose
+      minimum_version: 1.2.0
 depends_on:
   codex-orchestration: 0.x
   quality-management-gh: 1.x
@@ -14,6 +25,25 @@ Audience: `team-lead` only.
 Use this skill when QA has produced findings and you need to correlate them
 across worktrees before any fix work is sent to `arch-ctm`.
 
+## Step 1 — Verify CLI dependencies
+
+Run this preflight before reading inputs, delegating agents, or rendering a
+record:
+
+```bash
+python3 .claude/skills/triaging-findings/scripts/check_dependencies.py
+```
+
+The preflight requires the released v1.4.0 `sc-compose` CLI at the pinned source revision and
+the Python `sc_compose` binding at `>= 1.2.0`, plus `oxigraph`, `rg`, and Python `rdflib`. It checks PATH plus
+common Homebrew/Cargo/user-install locations and returns a structured result.
+A non-zero result is a hard stop; read
+`references/installation-and-troubleshooting.md`, fix the environment, and
+rerun the preflight. Do not silently continue with a missing or old CLI.
+
+The installation reference is intentionally separate from this entry point so
+it is loaded only when setup or troubleshooting is needed.
+
 For phase-end learning and process hardening, also read:
 - `references/post-mortem.md`
 
@@ -24,7 +54,8 @@ Before using this workflow:
 2. The target phase has an explicit `phase_id` such as `phase-R`.
 3. The ordered worktree list is known in promotion order.
 4. QA findings exist in a structured form with stable finding ids.
-5. `sc-compose` is installed for rendering assignment templates.
+5. The Step 1 preflight passes: the pinned `sc-compose` CLI and `sc_compose >= 1.2.0` Python binding,
+   `oxigraph`, `rg`, and Python `rdflib` are available.
 
 ## Ownership Model
 
@@ -43,14 +74,25 @@ For each triage batch, assemble:
 - `integration_worktree_path`
 - `triage_root`
 - ordered `worktrees` with branch, absolute path, head SHA, and order index
+- repository-relative `worktree_paths` labels aligned with `worktrees` (never
+  copy the runtime checkout paths)
 - finding records with:
   - `finding_id`
   - `title`
   - `description`
+  - `phase_id`
+  - `triage_mode`
+  - `category`
   - `severity`
   - `pattern`
   - `repeatable`
   - `sweep_scope`
+  - `status`
+  - `dispatch_ready`
+  - `triaged_at`
+  - `found_in` (declared sprint local id, such as `AICH-S7`)
+  - `found_at` (authoritative QA discovery/result timestamp in UTC ending in
+    `Z`)
 - triage mode:
   - `initial_pass`
   - `followup_pass`
@@ -62,6 +104,58 @@ Required ownership rule:
 - `triage_root` must live under `integration_worktree_path`
 - the phase integration worktree is the canonical source of truth for triage
   artifacts
+
+Runtime checkout paths (`integration_worktree_path`, `triage_root`, and
+`worktrees[].path`) may be absolute while the sweep runs, but they are not
+canonical finding data and must not be copied into the Turtle record. The
+`triage:Occurrence` `triage:file` and `triage:WorktreeSnapshot`
+`triage:path` values must be repository-relative (no leading `/` or `\\`, any
+`..` path component, or drive prefix). Supply a repository-relative worktree
+label in `worktree_paths`; never pass the runtime checkout path in that array.
+The template rejects invalid values before the Turtle parse check.
+
+## Canonical Turtle rendering
+
+Every finding record must be rendered from
+`.claude/skills/triaging-findings/triage-record.ttl.j2`; do not hand-write a
+parallel Turtle shape. Its frontmatter declares the required variables above,
+including `found_in` and `found_at`. The occurrence and worktree inputs are
+parallel scalar arrays (`occurrences` with `occurrence_files`,
+`occurrence_lines`, `occurrence_snippets`, `occurrence_statuses`,
+`occurrence_closed`, `occurrence_branches`, `occurrence_head_shas`, and
+`occurrence_worktree_ids`; likewise `worktrees` with `worktree_paths`,
+`worktree_branches`, `worktree_head_shas`, and `worktree_order_indices`). Keep
+each array aligned by index.
+
+Render to the canonical path and parse it before committing the batch:
+
+```bash
+TRIAGE_ROOT=/abs/integrate-phase-R/.triage
+PHASE_ID=phase-R
+FINDING_ID=FTQ-001
+OUTPUT="$TRIAGE_ROOT/$PHASE_ID/findings/$FINDING_ID.ttl"
+mkdir -p "$(dirname "$OUTPUT")"
+sc-compose render \
+  --root . \
+  --file .claude/skills/triaging-findings/triage-record.ttl.j2 \
+  --var-file /tmp/triage-record-vars.json \
+  --output "$OUTPUT"
+PARSED=$(mktemp)
+trap 'rm -f "$PARSED"' EXIT
+oxigraph convert \
+  --from-file "$OUTPUT" \
+  --from-format ttl \
+  --to-file "$PARSED" \
+  --to-format ttl
+```
+
+The rendered Finding must contain `triage:foundIn triage:<declared-sprint>` and
+`triage:foundAt "<UTC timestamp ending in Z>"^^xsd:dateTime`. Missing required
+vars must fail the render through the template frontmatter contract; a
+non-repository-relative occurrence path renders an invalid sentinel and must
+make `oxigraph convert` exit nonzero. Malformed Turtle must likewise make the
+conversion fail. Do not add `--strict` to this render until `sc-compose`
+supports loop-local names in strict token validation.
 
 ## Triage Modes
 
@@ -161,31 +255,6 @@ Reason:
 Do not dispatch dev work from uncommitted `.ttl` state.
 
 The per-finding `.ttl` record is canonical. Aggregation is derived.
-
-### 3.1 Commit triage artifacts before dispatch
-
-After all `qa-triage` agents in the batch have finished and after aggregation
-confirms the `.ttl` set is complete, stage, commit, and push the triage
-artifacts to git before sending any dev assignment to `arch-ctm`.
-
-Required commit scope:
-- the phase findings under `<triage_root>/<phase_id>/findings/`
-- any phase-local triage metadata needed for later follow-up, such as
-  worktree inventories under `<triage_root>/<phase_id>/`
-
-Required timing:
-- after triage batch aggregation
-- before branch-scoped fix dispatch
-- on the phase integration-branch worktree identified by
-  `integration_branch` / `integration_worktree_path`
-
-Reason:
-- parallel `qa-triage` agents write into one shared triage root
-- committing inside each agent would create batch races and partial evidence
-- leaving `.ttl` records untracked until phase end risks silent loss of the
-  canonical QA evidence
-
-Do not dispatch dev work from uncommitted `.ttl` state.
 
 ### 4. Dispatch branch-scoped fix work to `arch-ctm`
 

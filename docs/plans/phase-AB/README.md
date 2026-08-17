@@ -1,7 +1,16 @@
 # Phase AB
 
-Phase `AB` owns Windows/macOS cross-host ATM smoke testing after the completed
-same-host release-readiness line in `Phase Z`.
+Phase `AB` is a retained historical planning package for Windows/macOS
+cross-host ATM smoke testing after the completed same-host release-readiness
+line in `Phase Z`.
+
+It was not executed to readiness: see `readiness.md`, which remains
+`NOT READY`/`BLOCKED` with all sprint closure rows pending.
+
+Phase `AG` supersedes `AB` as the active cross-host validation namespace:
+
+- [`../phase-AG/README.md`](../phase-AG/README.md)
+- [`../phase-AG/plan-phase-AG.md`](../phase-AG/plan-phase-AG.md)
 
 Planning source of truth:
 - [`../plan-phase-AB.md`](../plan-phase-AB.md)

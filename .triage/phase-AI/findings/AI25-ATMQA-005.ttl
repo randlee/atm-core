@@ -1,0 +1,74 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI25-ATMQA-005>
+  a triage:Finding ;
+  triage:findingId "AI25-ATMQA-005" ;
+  triage:foundAt "2026-07-25T09:19:48Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
+  triage:title "New live-trust-refresh integration test bypasses the real CLI-mutation-to-signal-to-reload entry point" ;
+  triage:description "FIX-1 (commit a9e61fb0) added live_trust_refresh_keeps_one_listener_reachable — a genuine new test that binds a listener, calls refresh_trusted_peers, asserts the bound address is unchanged, and performs a real TLS handshake + HTTP round-trip through the same listener post-refresh. This test does close the base AI25-ATMQA-001 Blocking finding. However, req-qa flags (ATM-QA-103) that the test exercises HttpsListenerSet::refresh_trusted_peers directly, not the full CLI-mutation → operator-signal → reload_runtime_view → refresh_https_trust path through the real signal-handling entry point in lifecycle_control.rs. This means the rewritten Deliverable 4's own acceptance criterion is still not end-to-end proven. This residual gap should be fixed alongside (or resolved by the outcome of) AI25-ATMQA-002's governance/rescoping issue, since if a real CLI-to-daemon trigger is implemented for ATMQA-002, this test gap should be closed as part of the same work.\n\nFOLLOWUP (AICH-S5-FIX-2 recheck, branch feature/pAI-s25-peer-authority-resolution @ 0265c94f): arch-ctm's FIX-2 work (commits d6f7993a, 0265c94f) added three new tests targeting the ReloadRuntimeView reload operation, none of which close this finding: (1) crates/atm-core/src/api.rs::authenticated_runtime_reload_uses_the_shared_http_contract — an in-memory write_http_request/decode_request roundtrip with no real transport (verified: encodes to a Vec<u8> buffer and decodes from a slice, no socket); (2) crates/atm-daemon/src/runtime_health.rs::authenticated_local_runtime_reload_runs_the_installed_trust_refresh_hook — calls dispatcher.route(...) directly, an in-process function call, not a real socket (verified: DaemonRequestDispatcher::new_for_test wired to a tempdir, no listener bind); (3) crates/atm/src/composition.rs::cli_runtime_reload_uses_the_authenticated_shared_api_request — uses FakeClientTransport, not the real LocalIpcClientTransportAdapter over an actual bound socket/pipe (verified: transport is a closure-backed fake, composition.reload_runtime_view() never touches an OS socket). Independently confirmed the repo already has a real-socket integration harness pattern for OTHER requests in crates/atm-daemon/src/tests/local_ipc_depth.rs (send_doctor_request / connect_daemon_local_ipc_until_ready bind and connect over an actual local IPC socket path) — no equivalent test was added for the reload operation. crates/atm/tests/peer_cli.rs explicitly documents (file header comment) that it only invokes the real atm binary for --help output, not a real daemon. Verdict: finding remains OPEN after FIX-2. None of the 3 new tests satisfy the \"real CLI-to-daemon signal path end-to-end\" requirement. Concrete gap: add a real-socket integration test for the reload operation following the local_ipc_depth.rs pattern (bind a real local IPC socket/pipe, drive the CLI or an equivalent client transport against it, and assert ReloadRuntimeView is observed to run the installed trust-refresh hook through the actual wire path). Does not block the branch gate on its own (Important, not Blocking) but must be tracked forward and fixed alongside the new Blocking AI25-QA-003-RESIDUAL finding in the same FIX-3 dispatch, since both touch the reload/daemon-control surface." ;
+  triage:phaseId "phase-AI" ;
+  triage:category "test-coverage" ;
+  triage:severity "Important" ;
+  triage:triageMode "followup_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-005/s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-005/s25/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-005/s25/3> ;
+  triage:promoteTo <urn:atm:triage:worktree/s25/b520061e> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-005/s25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:snippet "live_trust_refresh_keeps_one_listener_reachable test exercises HttpsListenerSet::refresh_trusted_peers directly, not CLI → signal → reload path" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "a9e61fb0" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/a9e61fb0> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-005/s25/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/api.rs; crates/atm-daemon/src/runtime_health.rs; crates/atm/src/composition.rs" ;
+  triage:snippet "FIX-2 added 3 reload-operation tests (authenticated_runtime_reload_uses_the_shared_http_contract; authenticated_local_runtime_reload_runs_the_installed_trust_refresh_hook; cli_runtime_reload_uses_the_authenticated_shared_api_request), all in-memory/in-process/fake-transport — none drive a real bound socket the way crates/atm-daemon/src/tests/local_ipc_depth.rs does for other requests; crates/atm/tests/peer_cli.rs remains --help-only" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "0265c94f" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/0265c94f> .
+
+<urn:atm:triage:worktree/s25/a9e61fb0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "a9e61fb0" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s25/0265c94f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "0265c94f" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-005/s25/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/local_ipc_depth.rs" ;
+  triage:snippet "FIX-3 (b520061e) added local_ipc_reload_runtime_view_runs_trust_refresh_hook_over_a_real_socket: binds a real local IPC socket via LocalIpcServerTransportAdapter, drives a real client round-trip via send_reload_request, and asserts the installed trust-refresh hook fired through the actual wire path. Verified by quality-mgr to trace the same hook slot DaemonRequestDispatcher::dispatch drives in production (runtime_health.rs:560-563, 781, 802-812)." ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "b520061e" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/b520061e> .
+
+<urn:atm:triage:worktree/s25/b520061e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "b520061e" ;
+  triage:orderIndex 3 .

@@ -1,0 +1,60 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI23-MINOR-007>
+  a triage:Finding ;
+  triage:findingId "AI23-MINOR-007" ;
+  triage:foundAt "2026-07-25T06:25:35Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S3 ;
+  triage:title "Release identity 1.3.2-beta-23 deviates from documented prerelease grammar (dot vs hyphen separator)" ;
+  triage:description "The workspace release identity actually used (Cargo.toml: version = \"1.3.2-beta-23\", hyphen before the sprint number) is valid SemVer but does not follow the project's own documented prerelease convention (<version>-<label>.<n>, e.g. 1.3.2-beta.1) stated in docs/requirements.md REQ-P-RELEASE-007 and docs/adr/ADR-042-semver-release-and-http-compatibility.md:14 (both cite '1.3.2-beta.1' as the example form). Not a functional bug -- semver::Version::parse accepts the hyphen form fine -- but a real documented-convention deviation an operator reading REQ-P-RELEASE-007 would not expect." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "REQ" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-24T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-MINOR-007/AI23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-MINOR-007/AI30/1> ;
+  triage:openOn <urn:atm:triage:worktree/AI23/b88ca016> ;
+  triage:openOn <urn:atm:triage:worktree/AI30/7ad54d25> ;
+  triage:promoteTo <urn:atm:triage:worktree/AI30/7ad54d25> .
+
+<urn:atm:triage:occurrence/AI23-MINOR-007/AI23/1>
+  a triage:Occurrence ;
+  triage:file "Cargo.toml" ;
+  triage:line 23 ;
+  triage:snippet "version = \"1.3.2-beta-23\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AI.23" ;
+  triage:headSha "b88ca016" ;
+  triage:occursIn <urn:atm:triage:worktree/AI23/b88ca016> .
+
+<urn:atm:triage:occurrence/AI23-MINOR-007/AI30/1>
+  a triage:Occurrence ;
+  triage:file "Cargo.toml" ;
+  triage:line 23 ;
+  triage:snippet "version = \"1.3.2-beta-30\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AI.30" ;
+  triage:headSha "7ad54d25" ;
+  triage:occursIn <urn:atm:triage:worktree/AI30/7ad54d25> .
+
+<urn:atm:triage:worktree/AI23/b88ca016>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AI.23" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b88ca016" ;
+  triage:orderIndex 23 .
+
+<urn:atm:triage:worktree/AI30/7ad54d25>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AI.30" ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "7ad54d25" ;
+  triage:orderIndex 30 .

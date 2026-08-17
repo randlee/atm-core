@@ -1,0 +1,65 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-002-AN11>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-002-AN11" ;
+  triage:title "AN.11 sprint doc branch field mismatch" ;
+  triage:description "docs/plans/phase-an/sprint-AN11-workflow-analytics-projection.md frontmatter branch field says 'feature/an11-...' but the actual branch is 'feature/pan-s11-workflow-analytics-projection'." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "process-doc" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-14T00:30:18Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.11 ;
+  triage:foundAt "2026-08-14T00:08:17Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-14T01:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-AN11/AN11-S11-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-AN11/AN11-INT-1> ;
+  triage:closedAt "2026-08-14T02:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-002-AN11/AN11-S11-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-an/sprint-AN11-workflow-analytics-projection.md" ;
+  triage:line 4 ;
+  triage:snippet "branch: feature/an11-workflow-analytics-projection" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
+  triage:headSha "e971a226c3a944ec8eb8caa22b3aded76314ee5e" ;
+  triage:occursIn <urn:atm:triage:worktree/AN11-S11/e971a226c3a944ec8eb8caa22b3aded76314ee5e> .
+
+<urn:atm:triage:occurrence/ATM-QA-002-AN11/AN11-INT-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-an/sprint-AN11-workflow-analytics-projection.md" ;
+  triage:line 4 ;
+  triage:snippet "branch: feature/an11-workflow-analytics-projection" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "e8507167921788a98d864fa6da7d0e8534d058f6" ;
+  triage:occursIn <urn:atm:triage:worktree/AN11-INT/e8507167921788a98d864fa6da7d0e8534d058f6> .
+
+<urn:atm:triage:worktree/AN11-S11/e971a226c3a944ec8eb8caa22b3aded76314ee5e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pan-s11-workflow-analytics-projection" ;
+  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
+  triage:headSha "e971a226c3a944ec8eb8caa22b3aded76314ee5e" ;
+  triage:orderIndex 11 .
+
+<urn:atm:triage:worktree/AN11-INT/e8507167921788a98d864fa6da7d0e8534d058f6>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate/phase-an" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "e8507167921788a98d864fa6da7d0e8534d058f6" ;
+  triage:orderIndex 12 .

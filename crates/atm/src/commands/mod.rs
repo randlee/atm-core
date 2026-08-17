@@ -1,9 +1,13 @@
 use anyhow::Result;
+#[cfg(any(test, feature = "cli-surface-dump"))]
+use clap::ValueEnum;
 use clap::{Parser, Subcommand};
 
 pub mod ack;
+pub mod api;
 pub(crate) mod caller_context;
 pub mod clear;
+pub mod compose;
 pub mod doctor;
 pub mod help;
 pub(crate) mod internal_nudge;
@@ -11,14 +15,19 @@ pub mod list;
 pub mod log;
 pub mod members;
 pub mod peek;
+pub mod peer;
 pub mod read;
 pub(crate) mod retained_roster;
+pub mod search;
 pub mod send;
 pub mod teams;
+pub mod templates;
 pub(crate) mod util;
 
 pub use ack::AckCommand;
+pub use api::ApiCommand;
 pub use clear::ClearCommand;
+pub use compose::ComposeCommand;
 pub use doctor::DoctorCommand;
 pub use help::HelpCommand;
 pub(crate) use internal_nudge::InternalNudgeCommand;
@@ -26,11 +35,37 @@ pub use list::ListCommand;
 pub use log::LogCommand;
 pub use members::MembersCommand;
 pub use peek::PeekCommand;
+pub use peer::PeerCommand;
 pub use read::ReadCommand;
+pub use search::SearchCommand;
 pub use send::SendCommand;
 pub use teams::TeamsCommand;
+pub use templates::TemplatesCommand;
 
 use crate::observability::CliObservability;
+
+/// Output format for the hidden maintainer CLI-surface dump command.
+#[cfg(any(test, feature = "cli-surface-dump"))]
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub(crate) enum CliSurfaceFormat {
+    Json,
+    Markdown,
+}
+
+/// Emit the live clap command tree for maintainers and the structural CLI gate.
+#[cfg(any(test, feature = "cli-surface-dump"))]
+#[derive(Debug, clap::Args)]
+pub(crate) struct DumpCliSurfaceCommand {
+    #[arg(long, value_enum)]
+    format: CliSurfaceFormat,
+}
+
+#[cfg(any(test, feature = "cli-surface-dump"))]
+impl DumpCliSurfaceCommand {
+    fn run(self, _observability: &CliObservability) -> Result<()> {
+        crate::dump_cli_surface(self.format).map_err(Into::into)
+    }
+}
 
 #[derive(Debug, Parser)]
 #[command(
@@ -59,17 +94,21 @@ impl Cli {
     }
 
     /// Run the selected ATM subcommand.
-    pub fn run(self, observability: &CliObservability) -> Result<()> {
-        self.command.run(observability)
+    pub async fn run(self, observability: &CliObservability) -> Result<()> {
+        self.command.run(observability).await
     }
 }
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    Api(ApiCommand),
     Send(SendCommand),
+    Compose(ComposeCommand),
     List(ListCommand),
     Peek(PeekCommand),
+    Peer(PeerCommand),
     Read(ReadCommand),
+    Search(Box<SearchCommand>),
     Ack(AckCommand),
     Clear(ClearCommand),
     Log(LogCommand),
@@ -77,25 +116,36 @@ enum Command {
     Help(HelpCommand),
     #[command(hide = true)]
     InternalNudge(InternalNudgeCommand),
+    #[cfg(any(test, feature = "cli-surface-dump"))]
+    #[command(name = "__dump-cli-surface", hide = true)]
+    DumpCliSurface(DumpCliSurfaceCommand),
     Teams(TeamsCommand),
     Members(MembersCommand),
+    Templates(TemplatesCommand),
 }
 
 impl Command {
-    fn run(self, observability: &CliObservability) -> Result<()> {
+    async fn run(self, observability: &CliObservability) -> Result<()> {
         match self {
-            Self::Send(command) => command.run(observability),
-            Self::List(command) => command.run(observability),
-            Self::Peek(command) => command.run(observability),
-            Self::Read(command) => command.run(observability),
-            Self::Ack(command) => command.run(observability),
-            Self::Clear(command) => command.run(observability),
+            Self::Api(command) => command.run(observability),
+            Self::Send(command) => command.run(observability).await,
+            Self::Compose(command) => command.run(),
+            Self::List(command) => command.run(observability).await,
+            Self::Peek(command) => command.run(observability).await,
+            Self::Peer(command) => command.run(observability).await,
+            Self::Read(command) => command.run(observability).await,
+            Self::Search(command) => command.run(observability).await,
+            Self::Ack(command) => command.run(observability).await,
+            Self::Clear(command) => command.run(observability).await,
             Self::Log(command) => command.run(observability),
-            Self::Doctor(command) => command.run(observability),
+            Self::Doctor(command) => command.run(observability).await,
             Self::Help(command) => command.run(observability),
             Self::InternalNudge(command) => command.run(observability),
-            Self::Teams(command) => command.run(observability),
-            Self::Members(command) => command.run(observability),
+            #[cfg(any(test, feature = "cli-surface-dump"))]
+            Self::DumpCliSurface(command) => command.run(observability),
+            Self::Teams(command) => command.run(observability).await,
+            Self::Members(command) => command.run(observability).await,
+            Self::Templates(command) => command.run(observability).await,
         }
     }
 }

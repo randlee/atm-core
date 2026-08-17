@@ -1,0 +1,60 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI19-QA1-CONNECTED-001-BRIDGE-REIMPLEMENTS-TYPED-SURFACE>
+  a triage:Finding ;
+  triage:findingId "AI19-QA1-CONNECTED-001-BRIDGE-REIMPLEMENTS-TYPED-SURFACE" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:title "Hermes bridge reimplements Rust-owned validation/rendering instead of using typed AI.18 surface" ;
+  triage:description "Three connected req-qa/ruthless-boundary-qa findings: ATM-QA-003 sprint doc claims bridge calls AI.18 hermes_chat_key binding (doesn't exist); RBQA-F002 re-validates segments already done via PyAgentAddress.to_typed(); RBQA-F003 manually derives agent:chat_id@team vs PyAgentAddress.__str__(). Root cause: bridge uses getattr() and local hermes_chat_key() instead of typing inputs as PyAgentAddress/PyNudge and using str(source)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA/REQ" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI19-QA1-CONNECTED-001-BRIDGE-REIMPLEMENTS-TYPED-SURFACE/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI19-QA1-CONNECTED-001-BRIDGE-REIMPLEMENTS-TYPED-SURFACE/s20/1> ;
+  triage:openOn <urn:atm:triage:worktree/s19/bedc1bf1> ;
+  triage:openOn <urn:atm:triage:worktree/s20/32af5bb1> ;
+  triage:promoteTo <urn:atm:triage:worktree/s20/32af5bb1> .
+
+<urn:atm:triage:occurrence/AI19-QA1-CONNECTED-001-BRIDGE-REIMPLEMENTS-TYPED-SURFACE/s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/python/atm_graft_hermes_bridge.py" ;
+  triage:line 33 ;
+  triage:snippet "def hermes_chat_key(source: Any) -> str:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "bedc1bf1" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/bedc1bf1> .
+
+<urn:atm:triage:occurrence/AI19-QA1-CONNECTED-001-BRIDGE-REIMPLEMENTS-TYPED-SURFACE/s20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/python/atm_graft_hermes_bridge.py" ;
+  triage:line 33 ;
+  triage:snippet "def hermes_chat_key(source: Any) -> str:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "32af5bb1" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/32af5bb1> .
+
+<urn:atm:triage:worktree/s19/bedc1bf1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:path "feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "bedc1bf1" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/s20/32af5bb1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "32af5bb1" ;
+  triage:orderIndex 20 .

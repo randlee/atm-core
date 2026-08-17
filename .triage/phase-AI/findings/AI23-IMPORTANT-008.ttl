@@ -1,0 +1,158 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI23-IMPORTANT-008>
+  a triage:Finding ;
+  triage:findingId "AI23-IMPORTANT-008" ;
+  triage:foundAt "2026-07-25T06:53:26Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S3 ;
+  triage:title "openapi_surface test never cross-checks live api.rs routes against openapi.yaml, letting route drift ship silently" ;
+  triage:description "Surfaced by arch-qa during the AI.23 round-2 recheck. The only automated gate over docs/atm-daemon/openapi.yaml is crates/atm/tests/openapi_surface.rs, which only diffs the YAML against its own prior baseline snapshot (around line 88) - it never cross-checks the live route table in crates/atm-core/src/api.rs (endpoint_for and decode_route_request match arms) against openapi.yaml or ADR-033. This is a structural gap: it is why the PeerSync route in api.rs was able to ship with no corresponding OpenAPI entry, ADR-033 row, or http-api.md row, completely undetected by CI. Reconfirmed by req-qa round 3 (2026-07-26) on feature/pAI-s23-crosshost-shared-write-path @ 985a6d46. Finding remains open and unaddressed. Correction: extend openapi_surface test to parse crates/atm-core/src/api.rs route table (endpoint_for/decode_route_request/HTTP_ROUTE_INVENTORY constant) and assert every live route has a corresponding openapi.yaml entry." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "testing" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "AICH-S11-QA-OPENAPI: verified fixed on commit e474a00c (PR #653, fix/close-out-openapi-crosscheck). crates/atm/tests/openapi_surface.rs::openapi_routes_match_live_router_surface() now derives documented_route_surface() from the OpenAPI server base (all 8 HTTP verbs) and diffs it against atm_core::api::http_route_surface() (the live route table) in both directions in a single assert: missing_from_openapi = live.difference(documented) and undocumented_live_routes = documented.difference(live). Independently confirmed by reading the actual assertion logic (not the self-report) -- both directions are real, non-vacuous checks over live data, not commented out or left permissive. Only crates/atm/tests/openapi_surface.rs was touched in e474a00c. CI: Just lint all-green on all 3 OSes at time of review; Test legs pending." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-26T00:55:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-008/fix-closeout-openapi/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-008/pAI-s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-008/pAI-s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-008/pAI-s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-008/pAI-s23/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-008/pAI-s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-008/integrate-8750587b> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s21/42fbd9fa> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s22/a5aa6813> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s23/c528137c> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s23/985a6d46> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s24/af2fbb83> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s24/af2fbb83> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-008/fix-closeout-openapi/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/openapi_surface.rs" ;
+  triage:line 155 ;
+  triage:snippet "openapi_routes_match_live_router_surface() cross-checks documented_route_surface() against atm_core::api::http_route_surface() bidirectionally" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/close-out-openapi-crosscheck" ;
+  triage:headSha "e474a00c" ;
+  triage:notes "AICH-S11-QA-OPENAPI: fixed on e474a00c -- genuine bidirectional live-route/OpenAPI cross-check added, verified by reading assertion logic directly." ;
+  triage:occursIn <urn:atm:triage:worktree/fix-closeout-openapi/e474a00c> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-008/pAI-s21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/openapi_surface.rs" ;
+  triage:line 88 ;
+  triage:snippet "live_surface() function and openapi_surface_is_additions_only() test only compares YAML to baseline, never cross-checks live routes in crates/atm-core/src/api.rs (endpoint_for and decode_route_request)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s21/42fbd9fa> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-008/pAI-s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/openapi_surface.rs" ;
+  triage:line 88 ;
+  triage:snippet "live_surface() function and openapi_surface_is_additions_only() test only compares YAML to baseline, never cross-checks live routes in crates/atm-core/src/api.rs (endpoint_for and decode_route_request)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s22/a5aa6813> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-008/pAI-s23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/openapi_surface.rs" ;
+  triage:line 88 ;
+  triage:snippet "live_surface() function and openapi_surface_is_additions_only() test only compares YAML to baseline, never cross-checks live routes in crates/atm-core/src/api.rs (endpoint_for and decode_route_request)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s23/c528137c> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-008/pAI-s23/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/openapi_surface.rs" ;
+  triage:line 88 ;
+  triage:snippet "openapi_surface_is_additions_only (lines 88-129) diffs openapi.yaml against baseline snapshot only; never cross-checks live route table in crates/atm-core/src/api.rs endpoint_for/decode_route_request" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "985a6d46" ;
+  triage:note "Req-qa round 3 reconfirmation (2026-07-26): test gap persists. openapi_surface test only diffs YAML against baseline, never parses live route table in api.rs::HTTP_ROUTE_INVENTORY or endpoint_for/decode_route_request. This structural gap enables undocumented routes to ship undetected. Correction: extend test to parse api.rs route table and assert every live route has corresponding openapi.yaml entry." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s23/985a6d46> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-008/pAI-s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/openapi_surface.rs" ;
+  triage:line 88 ;
+  triage:snippet "live_surface() function and openapi_surface_is_additions_only() test only compares YAML to baseline, never cross-checks live routes in crates/atm-core/src/api.rs (endpoint_for and decode_route_request)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "af2fbb83" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s24/af2fbb83> .
+
+<urn:atm:triage:worktree/pAI-s21/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAI-s23/c528137c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-s23/985a6d46>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "985a6d46" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-s24/af2fbb83>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "af2fbb83" ;
+  triage:orderIndex 4 .
+
+# Mirrored occurrence on integrate/phase-AI (AI.23 PR #629 merged forward, 8750587b):
+<urn:atm:triage:occurrence/AI23-IMPORTANT-008/integrate-8750587b>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/openapi_surface.rs" ;
+  triage:line 88 ;
+  triage:snippet "fn live_surface() -> Value { ... } // openapi_surface_is_additions_only() only compares YAML to baseline, never cross-checks live atm-core routes" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:note "AI.23 merged into integrate/phase-AI (PR #629, 8750587b). Independently re-verified: openapi_surface_is_additions_only() still only diffs the YAML surface against its baseline; no cross-check against live atm-core route definitions exists. Unchanged, still reproduces." ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/8750587b> .
+
+<urn:atm:triage:worktree/integrate/8750587b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:orderIndex 100 .

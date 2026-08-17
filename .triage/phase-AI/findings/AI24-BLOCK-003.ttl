@@ -1,0 +1,65 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI24-BLOCK-003>
+  a triage:Finding ;
+  triage:findingId "AI24-BLOCK-003" ;
+  triage:foundAt "2026-07-25T08:09:06Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S4 ;
+  triage:title "AICH-S4-FIX-1 batch reintroduces retired peer-delivery construct replay_store" ;
+  triage:description "rust-qa-agent bisected: test workspace_source_must_not_reintroduce_retired_peer_delivery_constructs passes at af2fbb83 (the commit immediately preceding the AICH-S4-FIX-1 batch) but fails at HEAD (7bb63e01). A retired construct named replay_store was reintroduced in crates/atm-daemon/src/tests/runtime_root/peer_reconciliation.rs, added as part of this batch's idempotency-fix test additions (for the AI22-BLOCK-004 fix). Confirmed via direct bisection against the pre-batch commit, not a stale/flaky test." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:category "architecture" ;
+  triage:severity "Blocking" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-25T19:42:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Verified via 'git grep -n replay_store -- *.rs': 0 matches on integrate/phase-AI HEAD. The retired replay_store construct is completely absent from all Rust source files." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-BLOCK-003/s24/1> ;
+  triage:openOn <urn:atm:triage:worktree/s24/7bb63e01> ;
+  triage:promoteTo <urn:atm:triage:worktree/s24/7bb63e01> .
+
+<urn:atm:triage:occurrence/AI24-BLOCK-003/s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/peer_reconciliation.rs" ;
+  triage:line 220 ;
+  triage:snippet "fn successful_peer_write_does_not_automatically_replay_stored_messages()" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "7bb63e01" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/7bb63e01> .
+
+<urn:atm:triage:worktree/s21pre/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s23/c528137c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s24/7bb63e01>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "7bb63e01" ;
+  triage:orderIndex 4 .

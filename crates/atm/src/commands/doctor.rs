@@ -1,8 +1,11 @@
 use crate::observability::CliObservability;
 use crate::output;
 use anyhow::Result;
-use atm_core::doctor::{self, DoctorQuery};
-use atm_runtime::assemble_default_runtime;
+use atm_core::doctor::{self, DaemonRuntimeDoctorReport, DoctorQuery};
+#[cfg(not(test))]
+use atm_daemon_bootstrap::assemble_default_runtime;
+#[cfg(test)]
+use atm_runtime_test_support::open_sqlite_boundary;
 use clap::Args;
 
 use crate::composition::{
@@ -25,10 +28,10 @@ impl DoctorCommand {
     // without introducing a wider command abstraction before a concrete need
     // appears.
     /// Execute the `atm doctor` command.
-    pub fn run(self, observability: &CliObservability) -> Result<()> {
+    pub async fn run(self, observability: &CliObservability) -> Result<()> {
         let (home_dir, current_dir) = resolve_command_runtime_context("doctor")?;
         let json = self.json;
-        let report = self.execute(observability, home_dir, current_dir)?;
+        let report = self.execute(observability, home_dir, current_dir).await?;
 
         let has_errors = report.has_errors();
         output::print_doctor_result(&report, json)?;
@@ -46,22 +49,28 @@ impl DoctorCommand {
         let team_override = self
             .team
             .as_ref()
-            .map(|value| {
-                value.parse::<atm_core::types::TeamName>().map_err(|error| {
-                    error.with_recovery(
-                        "Use `--team <team>` with a valid ATM team name when running `atm doctor`.",
-                    )
-                })
-            })
+            .map(|value| value.parse::<atm_core::types::TeamName>())
             .transpose()?;
+        // Capture the invoking CLI process's identity here, where the process
+        // environment is genuinely the caller's. When the doctor request is
+        // serviced over IPC by the long-lived daemon, the daemon cannot read
+        // these values from its own frozen launch-time environment, so they
+        // must ride along in the request payload.
+        let caller_team =
+            atm_core::caller_context::read_cli_team_from_env_or_warn("atm::doctor::build_query");
+        let caller_identity = atm_core::caller_context::read_cli_identity_from_env_or_warn(
+            "atm::doctor::build_query",
+        );
         Ok(DoctorQuery {
             home_dir,
             current_dir,
             team_override,
+            caller_team,
+            caller_identity,
         })
     }
 
-    fn execute(
+    async fn execute(
         self,
         observability: &CliObservability,
         home_dir: std::path::PathBuf,
@@ -69,7 +78,7 @@ impl DoctorCommand {
     ) -> Result<atm_core::doctor::DoctorReport> {
         let local_report =
             self.execute_direct_local(observability, home_dir.clone(), current_dir.clone())?;
-        let query = self.build_query(home_dir, current_dir)?;
+        let query = self.build_query(home_dir.clone(), current_dir)?;
 
         match CliComposition::bootstrap(
             "doctor",
@@ -77,7 +86,7 @@ impl DoctorCommand {
             InvocationDir::new(&query.current_dir),
             AtmHomePath::new(&query.home_dir),
         ) {
-            Ok(composition) => composition.doctor(query).map_err(anyhow::Error::from),
+            Ok(composition) => composition.doctor(query).await.map_err(anyhow::Error::from),
             Err(_) => Ok(local_report),
         }
     }
@@ -88,14 +97,22 @@ impl DoctorCommand {
         home_dir: std::path::PathBuf,
         current_dir: std::path::PathBuf,
     ) -> Result<atm_core::doctor::DoctorReport> {
-        let query = self.build_query(home_dir, current_dir)?;
+        let query = self.build_query(home_dir.clone(), current_dir)?;
+        #[cfg(not(test))]
         let runtime = assemble_default_runtime()?;
+        #[cfg(test)]
+        let runtime = open_sqlite_boundary(home_dir.join(".atm").join("db").join("mail.db"))?;
+        let (peer_config, peer_findings) =
+            doctor::peer_config_doctor_report(runtime.peer_config_store().as_ref());
         doctor::run_doctor_with_runtime_ports(
             query,
             observability,
             &runtime.service_runtime,
             &runtime.doctor_ports,
-            None,
+            Some(DaemonRuntimeDoctorReport {
+                findings: peer_findings,
+                peer_config: Some(peer_config),
+            }),
         )
         .map_err(anyhow::Error::from)
     }
@@ -147,12 +164,7 @@ mod tests {
             .expect_err("invalid team override should fail");
         let atm_error = error.downcast_ref::<AtmError>().expect("atm error");
 
-        assert_eq!(
-            atm_error.primary_recovery(),
-            Some(
-                "Correct the ATM address format and retry with a valid <agent> or <agent>@<team> target."
-            )
-        );
+        assert!(atm_error.message().contains("Recovery:"));
     }
 
     #[test]
@@ -183,8 +195,12 @@ mod tests {
             .expect("report");
 
         assert!(
-            report.daemon_runtime.is_none(),
-            "hermetic local doctor must not report a daemon"
+            report
+                .daemon_runtime
+                .as_ref()
+                .and_then(|runtime| runtime.peer_config.as_ref())
+                .is_some(),
+            "direct-local doctor must retain peer configuration visibility"
         );
         assert!(
             report.runtime_status.is_none(),

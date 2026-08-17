@@ -1,15 +1,24 @@
 //! Phase R boundary skeleton contracts.
 
+use crate::address::AgentAddress;
 use crate::error::AtmError;
-use crate::protocol::{FramePayload, RequestEnvelope, RequestId, ResponseEnvelope};
 pub use crate::protocol::{NotificationEvent, RuntimeStatusSnapshot};
 use crate::schema::AtmMessageId;
-use crate::types::{AgentName, PaneId, TaskId, TeamName};
+use crate::types::{AgentName, ChatId, HostName, PaneId, TaskId, TeamName};
 pub use atm_storage::contract::{AckTransition, Message, MessageKey, TaskState};
 pub use atm_storage::{
     BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, TeamNudgeTemplateOverrideMode,
     TeamNudgeTemplateOverrideRow,
 };
+
+/// The retained tmux receiver nudge confirms its literal payload with two
+/// `send-keys Enter` events separated by this bounded delay. The active Tokio
+/// runtime and CLI command share this contract; frozen legacy daemon source
+/// remains reference-only until Phase AM removes it.
+pub const TMUX_DOUBLE_ENTER_DELAY: std::time::Duration = std::time::Duration::from_millis(275);
+
+/// Literal tmux key used for each confirmation in the shared nudge sequence.
+pub const TMUX_NUDGE_CONFIRM_KEY: &str = "Enter";
 
 /// Workspace-convention seal only; not compiler-enforced outside this crate.
 ///
@@ -23,86 +32,23 @@ pub mod sealed {
 }
 
 mod mail;
-mod runtime;
+mod message_received_hook_emitter;
 mod store;
+mod template_composer;
 
 // Intentional re-export façade: the boundary module is the stable public import
 // surface for Phase R/AA contracts, so callers should not need to know whether
 // an item lives in `mail` or `store`.
+pub use atm_storage::TemplateOutputFormat;
 pub use mail::*;
-pub use runtime::*;
+pub use message_received_hook_emitter::{
+    AsyncMessageReceivedHookEmitter, MessageReceivedHookEmitter, MessageReceivedHookSelector,
+};
 pub use store::*;
-
-/// BOUNDARY-AtmProtocol — see docs/atm-core/boundaries.md.
-pub trait AtmProtocol: sealed::Sealed {
-    /// # Errors
-    ///
-    /// Returns `AtmError` when a protocol request envelope cannot be converted
-    /// into a frame payload.
-    fn request_to_frame(
-        &self,
-        request_id: RequestId,
-        request: RequestEnvelope,
-    ) -> Result<FramePayload, AtmError>;
-
-    /// # Errors
-    ///
-    /// Returns `AtmError` when a frame payload cannot be decoded into a
-    /// protocol request envelope.
-    fn request_from_frame(
-        &self,
-        frame: FramePayload,
-    ) -> Result<(RequestId, RequestEnvelope), AtmError>;
-
-    /// # Errors
-    ///
-    /// Returns `AtmError` when a protocol response envelope cannot be
-    /// converted into a frame payload.
-    fn response_to_frame(
-        &self,
-        request_id: RequestId,
-        response: ResponseEnvelope,
-    ) -> Result<FramePayload, AtmError>;
-
-    /// # Errors
-    ///
-    /// Returns `AtmError` when a frame payload cannot be decoded into a
-    /// protocol response envelope.
-    fn response_from_frame(
-        &self,
-        frame: FramePayload,
-    ) -> Result<(RequestId, ResponseEnvelope), AtmError>;
-}
-
-/// BOUNDARY-ClientTransport — see docs/atm-core/boundaries.md.
-pub trait ClientTransport: sealed::Sealed + Send + Sync {
-    /// # Errors
-    ///
-    /// Returns `AtmError` when the framed request cannot be delivered or when
-    /// the peer returns an unrecoverable protocol response.
-    fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError>;
-}
-
-/// BOUNDARY-ServerTransport — see docs/atm-core/boundaries.md.
-pub trait ServerTransport: sealed::Sealed {
-    /// # Errors
-    ///
-    /// Returns `AtmError` when framing, transport serving, or dispatch handoff
-    /// cannot proceed reliably.
-    fn serve(
-        &self,
-        dispatcher: std::sync::Arc<dyn RequestDispatcher + Send + Sync>,
-    ) -> Result<(), AtmError>;
-}
-
-/// BOUNDARY-RequestDispatcher — see docs/atm-core/boundaries.md.
-pub trait RequestDispatcher: sealed::Sealed + Send + Sync {
-    /// # Errors
-    ///
-    /// Returns `AtmError` when protocol request routing or handler dispatch
-    /// cannot produce a valid response.
-    fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError>;
-}
+pub use template_composer::{
+    RenderedBody, SourceSpan, TemplateComposer, TemplateInspection, TemplateReference,
+    TemplateReferenceKind, TemplateRoot, TemplateSource,
+};
 
 /// BOUNDARY-StatusSource — see docs/atm-core/boundaries.md.
 pub trait StatusSource: sealed::Sealed {
@@ -115,7 +61,15 @@ pub trait StatusSource: sealed::Sealed {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct PostSendHookEvent {
     pub sender: AgentName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_chat_id: Option<ChatId>,
     pub sender_team: TeamName,
+    /// Host authenticated by peer ingress for a cross-host sender.
+    ///
+    /// Local sends intentionally leave this empty. The value is transport
+    /// provenance, never caller-provided nudge data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_host: Option<HostName>,
     pub recipient: AgentName,
     pub recipient_team: TeamName,
     pub message_id: AtmMessageId,
@@ -124,6 +78,19 @@ pub struct PostSendHookEvent {
     pub is_ack: bool,
     pub task_id: Option<TaskId>,
     pub recipient_pane_id: Option<PaneId>,
+}
+
+impl PostSendHookEvent {
+    /// The canonical source address carried by every post-write nudge.
+    pub fn source_address(&self) -> AgentAddress {
+        AgentAddress::new(
+            self.sender.clone(),
+            self.sender_chat_id.clone(),
+            Some(self.sender_team.clone()),
+            self.sender_host.clone(),
+        )
+        .expect("post-send event sender always has a team")
+    }
 }
 
 pub fn built_in_nudge_template_kind_from_post_send_event(
@@ -169,6 +136,8 @@ pub struct LocalTmuxNudgeTarget {
 pub struct GraftNudgeTarget {
     pub recipient: AgentName,
     pub recipient_team: TeamName,
+    /// Canonical database-resolved `<atm …>` nudge text for the receiver.
+    pub rendered_nudge: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
@@ -207,10 +176,7 @@ impl HookExecutionSummary {
         if succeeded_rules + failed_rules > matched_rules {
             return Err(AtmError::validation(format!(
                 "invalid post-send hook execution summary: succeeded ({succeeded_rules}) + failed ({failed_rules}) exceeds matched ({matched_rules})"
-            ))
-            .with_recovery(
-                "Count each matching post-send hook rule exactly once before constructing hook execution summary state.",
-            ));
+            )));
         }
         Ok(Self {
             matched_rules,
@@ -246,27 +212,5 @@ pub enum PostSendEmissionOutcome {
         warning: crate::send::WarningEntry,
     },
 }
-/// BOUNDARY-PostSendHookEmitter — see docs/atm-core/boundaries.md.
-pub trait PostSendHookEmitter: sealed::Sealed + Send + Sync {
-    /// # Errors
-    ///
-    /// Returns `AtmError` when one direct post-send emission attempt fails
-    /// after durable message persistence has already succeeded.
-    fn emit_post_send(
-        &self,
-        dispatch: &BuiltInPostSendDispatch,
-    ) -> Result<PostSendEmissionPath, AtmError>;
-}
-
-/// BOUNDARY-GraftPostSendPort — see docs/atm-core/boundaries.md.
-pub trait GraftPostSendPort: sealed::Sealed + Send + Sync {
-    /// # Errors
-    ///
-    /// Returns `AtmError` when one graft-backed post-send emission attempt
-    /// fails after durable message persistence has already succeeded.
-    fn deliver_post_send(
-        &self,
-        event: &PostSendHookEvent,
-        target: &GraftNudgeTarget,
-    ) -> Result<(), AtmError>;
-}
+// `PostSendHookEmitter` deliberately has no compatibility alias. Any use is
+// a compiler failure and must migrate to `MessageReceivedHookEmitter`.

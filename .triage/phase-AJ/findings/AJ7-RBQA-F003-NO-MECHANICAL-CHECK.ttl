@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AJ7-RBQA-F003-NO-MECHANICAL-CHECK>
+  a triage:Finding ;
+  triage:findingId "AJ7-RBQA-F003-NO-MECHANICAL-CHECK" ;
+  triage:title "No mechanical check prevents a future guard script from reinventing its own config pattern" ;
+  triage:description "There is no mechanical check ensuring new .just/check_*_boundary.py guard scripts follow the shared lint_common.py + .just/lint-config.toml + allowlist pattern established by check_env_var_boundary.py. AJ.7 is the first observed instance of this repeated leak shape. Nothing in run_lint.py, lint_common.py, or the sprint-planning/boundary-guard review docs currently catches this at merge time other than manual QA review. Found by ruthless-boundary-qa. QA source: PR #742, phase-aj-s7-qa-1." ;
+  triage:phaseId "phase-AJ" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "fixed-ci-green" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-04T19:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AJ-S7 ;
+  triage:foundAt "2026-08-04T18:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AJ7-RBQA-F003-NO-MECHANICAL-CHECK/AJ7-S7-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AJ7-RBQA-F003-NO-MECHANICAL-CHECK/AJ7-S7-1>
+  a triage:Occurrence ;
+  triage:file ".just/run_lint.py" ;
+  triage:line 104 ;
+  triage:snippet "\"runtime-observation-boundary\"" ;
+  triage:status "fixed-ci-green" ;
+  triage:closed true ;
+  triage:branch "feature/pAJ-s7-runtime-observation-source-guard" ;
+  triage:headSha "5896e86c719292e229a64d35a74ee7018c875878" ;
+  triage:occursIn <urn:atm:triage:worktree/AJ7-S7-1> .
+
+<urn:atm:triage:worktree/AJ7-S7-1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAJ-s7-runtime-observation-source-guard" ;
+  triage:branch "feature/pAJ-s7-runtime-observation-source-guard" ;
+  triage:headSha "5896e86c719292e229a64d35a74ee7018c875878" ;
+  triage:orderIndex 4 .

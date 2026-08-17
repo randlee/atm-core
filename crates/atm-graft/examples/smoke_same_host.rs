@@ -4,13 +4,13 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
-use atm_core::ack::AckRequest;
 use atm_core::boundary::PostSendHookEvent;
+use atm_core::graft::AtmGraftClient;
 use atm_core::read::ReadQuery;
 use atm_core::send::{SendCommandOutcome, SendMessageSource, SendRequest};
 use atm_core::types::{AgentName, ReadSelection, TeamName};
 use atm_graft::{
-    GraftClient, GraftSession, GraftSessionOptions, GraftSessionState, HostNudgeInjector,
+    GraftClient, GraftSession, GraftSessionOptions, GraftSessionState, HostNudge, HostNudgeInjector,
 };
 use serde_json::json;
 
@@ -31,8 +31,11 @@ impl RecordingInjector {
 }
 
 impl HostNudgeInjector for RecordingInjector {
-    fn inject_nudge(&self, nudge: &PostSendHookEvent) -> Result<(), atm_core::error::AtmError> {
-        self.nudges.lock().expect("nudges lock").push(nudge.clone());
+    fn inject_nudge(&self, nudge: &HostNudge) -> Result<(), atm_core::error::AtmError> {
+        self.nudges
+            .lock()
+            .expect("nudges lock")
+            .push(nudge.event.clone());
         let _ = self.delivered_tx.send(());
         Ok(())
     }
@@ -105,26 +108,22 @@ impl Args {
     }
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse()?;
     let home_dir = PathBuf::from(
         std::env::var_os("ATM_HOME")
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "ATM_HOME is not set"))?,
     );
 
-    let client = GraftClient::connect()?;
+    let client = GraftClient::connect_existing()?;
     let (delivered_tx, delivered_rx) = mpsc::channel();
     let injector = Arc::new(RecordingInjector {
         nudges: Mutex::new(Vec::new()),
         delivered_tx,
     });
     let session = GraftSession::activate(
-        client,
-        GraftSessionOptions::for_current_process(
-            &args.workspace_root,
-            args.team.clone(),
-            args.agent.clone(),
-        ),
+        GraftSessionOptions::new(&args.workspace_root, args.team.clone(), args.agent.clone()),
         Arc::clone(&injector) as Arc<dyn HostNudgeInjector>,
     )?;
 
@@ -172,22 +171,24 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let target_address = format!("{}@{}", args.agent, args.team);
     let nudge_message_id = nudge.message_id.to_string();
-    let read_outcome = session.read(ReadQuery::new(
-        home_dir.clone(),
-        args.workspace_root.clone(),
-        args.agent.parse().expect("caller"),
-        Some(target_address.as_str()),
-        args.team.parse().expect("team"),
-        ReadSelection::All,
-        false,
-        false,
-        Some(nudge_message_id.as_str()),
-        None,
-        None,
-        None,
-        None,
-        None,
-    )?)?;
+    let read_outcome = client
+        .read_message(ReadQuery::new(
+            home_dir.clone(),
+            args.workspace_root.clone(),
+            args.agent.parse().expect("caller"),
+            Some(target_address.as_str()),
+            args.team.parse().expect("team"),
+            ReadSelection::All,
+            false,
+            false,
+            Some(nudge_message_id.as_str()),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )?)
+        .await?;
     let read_selected_message_id = read_outcome
         .selected_message_id
         .ok_or_else(|| io::Error::other("graft read returned no selected_message_id"))?;
@@ -199,27 +200,20 @@ fn main() -> Result<(), Box<dyn Error>> {
         .into());
     }
 
-    let ack_outcome = session.ack(AckRequest {
-        home_dir: home_dir.clone(),
-        current_dir: args.workspace_root.clone(),
-        caller_identity: args.agent.parse().expect("caller"),
-        caller_team: args.team.parse().expect("team"),
-        message_id: nudge.message_id,
-        reply_body: "graft smoke ack reply".to_string(),
-    })?;
-
-    let follow_up_outcome = session.send(SendRequest::new(
-        home_dir,
-        args.workspace_root.clone(),
-        args.agent.parse().expect("caller"),
-        args.reply_target.as_str(),
-        args.team.parse().expect("team"),
-        SendMessageSource::Inline("graft smoke follow-up".to_string()),
-        None,
-        false,
-        None,
-        false,
-    )?)?;
+    let follow_up_outcome = client
+        .send_message(SendRequest::new(
+            home_dir,
+            args.workspace_root.clone(),
+            args.agent.parse().expect("caller"),
+            args.reply_target.as_str(),
+            args.team.parse().expect("team"),
+            SendMessageSource::Inline("graft smoke follow-up".to_string()),
+            None,
+            false,
+            None,
+            false,
+        )?)
+        .await?;
     if follow_up_outcome.outcome != SendCommandOutcome::Sent {
         return Err(io::Error::other(format!(
             "expected graft follow-up send outcome sent, found {:?}",
@@ -248,8 +242,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                 "task_id": nudge.task_id.map(|task_id| task_id.to_string()),
             },
             "read_selected_message_id": read_selected_message_id.to_string(),
-            "ack_message_id": ack_outcome.message_id.to_string(),
-            "ack_reply_disposition": ack_outcome.reply_disposition,
             "follow_up_message_id": follow_up_outcome.message_id.to_string(),
         }))?
     );

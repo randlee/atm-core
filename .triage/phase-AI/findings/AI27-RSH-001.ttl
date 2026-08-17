@@ -1,0 +1,108 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI27-RSH-001>
+  a triage:Finding ;
+  triage:findingId "AI27-RSH-001" ;
+  triage:title "MAX_PEER_LINK_STATUS_ENTRIES cap silently drops new entries instead of evicting oldest" ;
+  triage:description "crates/atm-daemon/src/peer_delivery_observability.rs: MAX_PEER_LINK_STATUS_ENTRIES = 256 cap silently drops new peer-status entries once the map is full (statuses.len() >= cap && !statuses.contains_key(peer) -> return early, warn-logged) rather than evicting the oldest entry (no LRU eviction). In practice this only matters when more than 256 distinct peers have ever been recorded, but the behavior is a silent-drop rather than a bounded, evicting cache." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "Minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-07-26T21:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "QA-1 gate was 0-Blocking-only; this Minor finding was explicitly deferred to phase-end CLEANUP. See PR #633 verdict comment https://github.com/randlee/atm-core/pull/633#issuecomment-5079255622. AICH-S7-QA-FIX-2: independently re-verified arch-ctm's 12d1e1b0 self-report against the real diff -- new ProjectedPeerLinkStatus{status,sequence}/PeerDeliveryProjectionState{statuses: BTreeMap<HostName,ProjectedPeerLinkStatus>, next_sequence: u64} replaces the silent-drop-at-256 behavior with real oldest-entry eviction, confirmed by new test projection_evicts_the_oldest_status_when_at_capacity (inserts 257 entries, confirms peer-0 evicted, peer-256 retained, count stays 256). Confirmed on feature/pAI-s27-peer-delivery-observability current head 4315ad0a." ;
+  triage:triagedAt "2026-07-25T16:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S7 ;
+  triage:foundAt "2026-07-25T16:26:33Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI27-RSH-001/pAI-s27/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s27/5e91a889> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s27/5e91a889> ;
+  triage:highestOpenBranch "feature/pAI-s27-peer-delivery-observability" .
+
+<urn:atm:triage:occurrence/AI27-RSH-001/pAI-s27/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_delivery_observability.rs" ;
+  triage:line 97 ;
+  triage:snippet "const MAX_PEER_LINK_STATUS_ENTRIES: usize = 256; if statuses.len() >= MAX_PEER_LINK_STATUS_ENTRIES && !statuses.contains_key(&event.peer) { ...return; } -- silent drop, no LRU eviction" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "4315ad0a" ;
+  triage:note "Fixed at 12d1e1b0: real oldest-entry eviction via PeerDeliveryProjectionState/ProjectedPeerLinkStatus sequence tracking. Verified on current head 4315ad0a." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s27/5e91a889> .
+
+<urn:atm:triage:worktree/pAI-s21pre/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAI-s23/c528137c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-s24/c326cbe7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "c326cbe7" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAI-s25/0265c94f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "0265c94f" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAI-s26/dc079fff>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:path "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "dc079fff" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pAI-s27/5e91a889>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "5e91a889" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/pAI-s28/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/pAI-s29/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pAI-s30/77252eca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "77252eca" ;
+  triage:orderIndex 10 .

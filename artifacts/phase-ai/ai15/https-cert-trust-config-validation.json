@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "sprint": "AI.15",
+  "evidence_class": "loopback-local",
+  "physical_peer_pair": false,
+  "physical_windows_hardware": false,
+  "marker": "Loopback-only validation of the same-host graft post-send control plane (capability + cert/trust contract shape). This is NOT reciprocal HTTPS/mTLS peer-trust proof between two physical hosts.",
+  "commit": "436493ab",
+  "validated_contracts": [
+    {
+      "name": "loopback_capability_authenticated_transport",
+      "how": "cargo test -p agent-team-mail-core --lib graft::",
+      "cases": [
+        "graft::tests::loopback_receiver_round_trips_a_capability_authenticated_request ... ok",
+        "graft::tests::receiver_rejects_a_forged_capability ... ok",
+        "graft::tests::atm_graft_client_trait_is_object_safe ... ok"
+      ],
+      "result": "3 passed; 0 failed",
+      "meaning": "The graft post-send channel binds 127.0.0.1:0, publishes an owner-only endpoint record, and authenticates each connection with a per-bind 32-byte LocalCapability token. A forged capability is rejected. Non-loopback peers are dropped without being served."
+    },
+    {
+      "name": "graft_receiver_runtime_and_faker_parity",
+      "how": "cargo test -p atm-graft",
+      "cases": [
+        "runtime::tests::receiver_listener_binds_at_expected_endpoint ... ok",
+        "runtime::tests::receiver_loop_delivers_direct_nudge_and_returns_ack_under_repeated_load ... ok",
+        "runtime::tests::receiver_loop_returns_typed_error_when_injector_fails ... ok"
+      ],
+      "result": "13 passed; 0 failed",
+      "meaning": "The receiver loop delivers capability-authenticated nudges over loopback TCP and returns typed errors, with no interprocess::local_socket / named-pipe backend on any platform."
+    }
+  ],
+  "certificate_trust_contract_reference": {
+    "note": "Reciprocal HTTPS interfaces, certificate fingerprints, and exact trusted-peer records are exercised by `atm doctor` peer_config and the peer-pair runner on two physical hosts. See artifacts/phase-ai/ai14/doctor-after-local-http.json for the single-host loopback peer_config shape (certificate_fingerprint present, trusted_peer_count 0).",
+    "physical_two_host_trust": "not-executed"
+  },
+  "meaning": "The local loopback control plane and its authentication gate are proven on this host. Reciprocal two-host certificate/trust validation is release-operator work that requires a real macOS host and a real Windows host and remains open."
+}

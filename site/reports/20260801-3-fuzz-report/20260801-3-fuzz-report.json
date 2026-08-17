@@ -1,0 +1,355 @@
+{
+  "campaign": {
+    "ai48_contract": {
+      "mode": "dry-run configuration validation",
+      "worker_ids": [
+        "shape-probe",
+        "template-probe",
+        "boundary-probe",
+        "differential-probe"
+      ],
+      "workflow": "just fuzz"
+    },
+    "baseline_ref": "integrate/phase-ai-31-33",
+    "cases_per_worker": 128,
+    "cpu_features": [],
+    "max_workers": 4,
+    "notes": "AI.51 bounded real reader campaign; every candidate is retained in outcome_ledger.",
+    "per_worker_timeout_s": 120,
+    "platform": "macOS-15.5-arm64-arm-64bit",
+    "promote_regressions": true,
+    "repeat_comparison": {
+      "classifications_match": true,
+      "compared_to": "20260801-2-fuzz-report.json",
+      "same_seed_baseline": true
+    },
+    "seed": 51051,
+    "target": "local-http-framing"
+  },
+  "footer_html": "<p>Generated from AI.48 coordinator evidence through sc-compose.</p>",
+  "generated_at": "2026-08-01T18:48:34.899322Z",
+  "json_output_path": "site/reports/20260801-3-fuzz-report/20260801-3-fuzz-report.json",
+  "metadata_rows": [
+    {
+      "label": "Session",
+      "value": "ai51-local-http-framing-seed-51051"
+    },
+    {
+      "label": "Execution mode",
+      "value": "real-local-http-frame-reader"
+    },
+    {
+      "label": "Worker count",
+      "value": 4
+    }
+  ],
+  "outcome_ledger": {
+    "benign": [
+      {
+        "candidate_id": "shape-probe",
+        "detail": "128 valid framed requests accepted by the real reader.",
+        "outcome": "benign"
+      },
+      {
+        "candidate_id": "template-probe",
+        "detail": "128 delimiter/body boundary cases preserved the next pipelined request.",
+        "outcome": "benign"
+      },
+      {
+        "candidate_id": "boundary-probe",
+        "detail": "Known malformed inputs returned their documented typed errors; no defect candidate remains.",
+        "outcome": "benign"
+      },
+      {
+        "candidate_id": "differential-probe",
+        "detail": "128 deterministic cases had identical optimized and scalar reader results.",
+        "outcome": "benign"
+      }
+    ],
+    "confirmed_bug": [],
+    "inconclusive": [],
+    "non_repro": []
+  },
+  "output_path": "site/reports/20260801-3-fuzz-report.html",
+  "rows": [
+    {
+      "iterations": 128,
+      "label": "valid frames fragmented and coalesced at deterministic byte boundaries",
+      "pass": "128/128",
+      "result": "PASS"
+    },
+    {
+      "iterations": 128,
+      "label": "prior-candidate replay: delimiter/body boundary split across independent reader executions",
+      "pass": "128/128",
+      "result": "PASS"
+    },
+    {
+      "iterations": 4,
+      "label": "malformed Content-Length, duplicate header, invalid UTF-8, and truncated frame boundaries",
+      "pass": "4/4",
+      "result": "PASS"
+    },
+    {
+      "iterations": 128,
+      "label": "optimized memmem delimiter finder compared with the scalar reference reader",
+      "pass": "128/128",
+      "result": "PASS"
+    }
+  ],
+  "sections": [
+    {
+      "body_html": "<section xmlns=\"http://www.w3.org/1999/xhtml\" class=\"fuzz-agent fuzz-agent-pass\">\n  <header class=\"agent-header fuzz-agent-header\">\n    <div>\n      <p class=\"eyebrow\">Adversarial fuzz worker</p>\n      <h2>shape-probe</h2>\n      <p class=\"agent-meta\">Session ai51-local-http-framing-seed-51051 \u00b7 Worker shape-probe</p>\n    </div>\n    <div class=\"agent-actions\" role=\"group\" aria-label=\"Copy worker data\">\n      <button type=\"button\" class=\"icon-button\" title=\"Copy JSON\" data-copy-text=\"{&quot;attempts&quot;: [{&quot;case_start&quot;: 0, &quot;cases&quot;: 128, &quot;command&quot;: [&quot;cargo&quot;, &quot;test&quot;, &quot;-p&quot;, &quot;agent-team-mail-core&quot;, &quot;--lib&quot;, &quot;api::http_frame_reader::ai51_campaign::benign_fragment_and_coalesce&quot;, &quot;--&quot;, &quot;--exact&quot;, &quot;--nocapture&quot;, &quot;--test-threads=1&quot;], &quot;ok&quot;: true, &quot;stage&quot;: &quot;initial&quot;, &quot;stderr&quot;: &quot;    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s\\n     Running unittests src&#x2f;lib.rs (target&#x2f;debug&#x2f;deps&#x2f;atm_core-e2e2c4aad434432a)\\n&quot;, &quot;stdout&quot;: &quot;\\nrunning 1 test\\ntest api::http_frame_reader::ai51_campaign::benign_fragment_and_coalesce ... ok\\n\\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 406 filtered out; finished in 0.00s\\n\\n&quot;, &quot;timed_out&quot;: false}], &quot;candidate_outcome&quot;: &quot;benign&quot;, &quot;cases_run&quot;: 128, &quot;classification&quot;: &quot;pass&quot;, &quot;correlation_id&quot;: &quot;shape-probe&quot;, &quot;error&quot;: null, &quot;failed&quot;: 0, &quot;finding_ids&quot;: [], &quot;fuzz_run_description&quot;: &quot;valid frames fragmented and coalesced at deterministic byte boundaries&quot;, &quot;passed&quot;: 128, &quot;status&quot;: &quot;success&quot;, &quot;summary&quot;: &quot;128 valid framed requests accepted by the real reader.&quot;, &quot;target&quot;: &quot;local-http-framing&quot;, &quot;test_inputs&quot;: [{&quot;case_id&quot;: &quot;AI51-shape-probe&quot;, &quot;description&quot;: &quot;valid frames fragmented and coalesced at deterministic byte boundaries&quot;, &quot;minimal_input&quot;: &quot;case_start=0; 1 independent deterministic execution(s)&quot;, &quot;minimal_template&quot;: &quot;HttpFrameReader::read_request&quot;, &quot;outcome&quot;: &quot;128 valid framed requests accepted by the real reader.&quot;, &quot;passed&quot;: true}]}\">{}</button>\n      <button type=\"button\" class=\"icon-button\" title=\"Copy Context\" data-copy-text=\"shape-probe: success; 128&#x2f;128 cases passed.\">\u2398</button>\n    </div>\n  </header>\n\n  <p class=\"status\">\n    <span class=\"status status-pass\">PASS</span>\n  </p>\n\n  <table class=\"agent-results\">\n    <thead><tr><th scope=\"col\">Fuzz run description</th><th scope=\"col\">Iterations</th><th scope=\"col\">Pass</th><th scope=\"col\">Result</th></tr></thead>\n    <tbody>\n      <tr>\n        <th scope=\"row\">valid frames fragmented and coalesced at deterministic byte boundaries</th>\n        <td>128</td>\n        <td>128/128</td>\n        <td>\n          <span class=\"status status-pass\">PASS</span>\n        </td>\n      </tr>\n    </tbody>\n  </table>\n\n  <section class=\"test-inputs\">\n    <h3>Inputs exercised</h3>\n    <table>\n      <thead><tr><th scope=\"col\">Case</th><th scope=\"col\">Template / input</th><th scope=\"col\">Outcome</th></tr></thead>\n      <tbody>\n        <tr><th scope=\"row\">AI51-shape-probe</th><td><code>valid frames fragmented and coalesced at deterministic byte boundaries</code></td><td>128 valid framed requests accepted by the real reader.</td></tr>\n      </tbody>\n    </table>\n  </section>\n\n</section>",
+      "context_text": "shape-probe: success; 128/128 cases passed.",
+      "fragment_source": "auto-generated",
+      "id": "shape-probe",
+      "json_payload": {
+        "attempts": [
+          {
+            "case_start": 0,
+            "cases": 128,
+            "command": [
+              "cargo",
+              "test",
+              "-p",
+              "agent-team-mail-core",
+              "--lib",
+              "api::http_frame_reader::ai51_campaign::benign_fragment_and_coalesce",
+              "--",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "ok": true,
+            "stage": "initial",
+            "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s\n     Running unittests src/lib.rs (target/debug/deps/atm_core-e2e2c4aad434432a)\n",
+            "stdout": "\nrunning 1 test\ntest api::http_frame_reader::ai51_campaign::benign_fragment_and_coalesce ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 406 filtered out; finished in 0.00s\n\n",
+            "timed_out": false
+          }
+        ],
+        "candidate_outcome": "benign",
+        "cases_run": 128,
+        "classification": "pass",
+        "correlation_id": "shape-probe",
+        "error": null,
+        "failed": 0,
+        "finding_ids": [],
+        "fuzz_run_description": "valid frames fragmented and coalesced at deterministic byte boundaries",
+        "passed": 128,
+        "status": "success",
+        "summary": "128 valid framed requests accepted by the real reader.",
+        "target": "local-http-framing",
+        "test_inputs": [
+          {
+            "case_id": "AI51-shape-probe",
+            "description": "valid frames fragmented and coalesced at deterministic byte boundaries",
+            "minimal_input": "case_start=0; 1 independent deterministic execution(s)",
+            "minimal_template": "HttpFrameReader::read_request",
+            "outcome": "128 valid framed requests accepted by the real reader.",
+            "passed": true
+          }
+        ]
+      },
+      "status": "PASS",
+      "title": "shape-probe",
+      "xhtml_path": "20260801-3-fuzz-report/20260801-3-fuzz-report-shape-probe.xhtml"
+    },
+    {
+      "body_html": "<section xmlns=\"http://www.w3.org/1999/xhtml\" class=\"fuzz-agent fuzz-agent-pass\">\n  <header class=\"agent-header fuzz-agent-header\">\n    <div>\n      <p class=\"eyebrow\">Adversarial fuzz worker</p>\n      <h2>template-probe</h2>\n      <p class=\"agent-meta\">Session ai51-local-http-framing-seed-51051 \u00b7 Worker template-probe</p>\n    </div>\n    <div class=\"agent-actions\" role=\"group\" aria-label=\"Copy worker data\">\n      <button type=\"button\" class=\"icon-button\" title=\"Copy JSON\" data-copy-text=\"{&quot;attempts&quot;: [{&quot;case_start&quot;: 0, &quot;cases&quot;: 128, &quot;command&quot;: [&quot;cargo&quot;, &quot;test&quot;, &quot;-p&quot;, &quot;agent-team-mail-core&quot;, &quot;--lib&quot;, &quot;api::http_frame_reader::ai51_campaign::candidate_replay&quot;, &quot;--&quot;, &quot;--exact&quot;, &quot;--nocapture&quot;, &quot;--test-threads=1&quot;], &quot;ok&quot;: true, &quot;stage&quot;: &quot;initial&quot;, &quot;stderr&quot;: &quot;    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s\\n     Running unittests src&#x2f;lib.rs (target&#x2f;debug&#x2f;deps&#x2f;atm_core-e2e2c4aad434432a)\\n&quot;, &quot;stdout&quot;: &quot;\\nrunning 1 test\\ntest api::http_frame_reader::ai51_campaign::candidate_replay ... ok\\n\\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 406 filtered out; finished in 0.00s\\n\\n&quot;, &quot;timed_out&quot;: false}], &quot;candidate_outcome&quot;: &quot;benign&quot;, &quot;cases_run&quot;: 128, &quot;classification&quot;: &quot;pass&quot;, &quot;correlation_id&quot;: &quot;template-probe&quot;, &quot;error&quot;: null, &quot;failed&quot;: 0, &quot;finding_ids&quot;: [], &quot;fuzz_run_description&quot;: &quot;prior-candidate replay: delimiter&#x2f;body boundary split across independent reader executions&quot;, &quot;passed&quot;: 128, &quot;status&quot;: &quot;success&quot;, &quot;summary&quot;: &quot;128 delimiter&#x2f;body boundary cases preserved the next pipelined request.&quot;, &quot;target&quot;: &quot;local-http-framing&quot;, &quot;test_inputs&quot;: [{&quot;case_id&quot;: &quot;AI51-template-probe&quot;, &quot;description&quot;: &quot;prior-candidate replay: delimiter&#x2f;body boundary split across independent reader executions&quot;, &quot;minimal_input&quot;: &quot;case_start=0; 1 independent deterministic execution(s)&quot;, &quot;minimal_template&quot;: &quot;HttpFrameReader::read_request&quot;, &quot;outcome&quot;: &quot;128 delimiter&#x2f;body boundary cases preserved the next pipelined request.&quot;, &quot;passed&quot;: true}]}\">{}</button>\n      <button type=\"button\" class=\"icon-button\" title=\"Copy Context\" data-copy-text=\"template-probe: success; 128&#x2f;128 cases passed.\">\u2398</button>\n    </div>\n  </header>\n\n  <p class=\"status\">\n    <span class=\"status status-pass\">PASS</span>\n  </p>\n\n  <table class=\"agent-results\">\n    <thead><tr><th scope=\"col\">Fuzz run description</th><th scope=\"col\">Iterations</th><th scope=\"col\">Pass</th><th scope=\"col\">Result</th></tr></thead>\n    <tbody>\n      <tr>\n        <th scope=\"row\">prior-candidate replay: delimiter&#x2f;body boundary split across independent reader executions</th>\n        <td>128</td>\n        <td>128/128</td>\n        <td>\n          <span class=\"status status-pass\">PASS</span>\n        </td>\n      </tr>\n    </tbody>\n  </table>\n\n  <section class=\"test-inputs\">\n    <h3>Inputs exercised</h3>\n    <table>\n      <thead><tr><th scope=\"col\">Case</th><th scope=\"col\">Template / input</th><th scope=\"col\">Outcome</th></tr></thead>\n      <tbody>\n        <tr><th scope=\"row\">AI51-template-probe</th><td><code>prior-candidate replay: delimiter&#x2f;body boundary split across independent reader executions</code></td><td>128 delimiter&#x2f;body boundary cases preserved the next pipelined request.</td></tr>\n      </tbody>\n    </table>\n  </section>\n\n</section>",
+      "context_text": "template-probe: success; 128/128 cases passed.",
+      "fragment_source": "auto-generated",
+      "id": "template-probe",
+      "json_payload": {
+        "attempts": [
+          {
+            "case_start": 0,
+            "cases": 128,
+            "command": [
+              "cargo",
+              "test",
+              "-p",
+              "agent-team-mail-core",
+              "--lib",
+              "api::http_frame_reader::ai51_campaign::candidate_replay",
+              "--",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "ok": true,
+            "stage": "initial",
+            "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s\n     Running unittests src/lib.rs (target/debug/deps/atm_core-e2e2c4aad434432a)\n",
+            "stdout": "\nrunning 1 test\ntest api::http_frame_reader::ai51_campaign::candidate_replay ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 406 filtered out; finished in 0.00s\n\n",
+            "timed_out": false
+          }
+        ],
+        "candidate_outcome": "benign",
+        "cases_run": 128,
+        "classification": "pass",
+        "correlation_id": "template-probe",
+        "error": null,
+        "failed": 0,
+        "finding_ids": [],
+        "fuzz_run_description": "prior-candidate replay: delimiter/body boundary split across independent reader executions",
+        "passed": 128,
+        "status": "success",
+        "summary": "128 delimiter/body boundary cases preserved the next pipelined request.",
+        "target": "local-http-framing",
+        "test_inputs": [
+          {
+            "case_id": "AI51-template-probe",
+            "description": "prior-candidate replay: delimiter/body boundary split across independent reader executions",
+            "minimal_input": "case_start=0; 1 independent deterministic execution(s)",
+            "minimal_template": "HttpFrameReader::read_request",
+            "outcome": "128 delimiter/body boundary cases preserved the next pipelined request.",
+            "passed": true
+          }
+        ]
+      },
+      "status": "PASS",
+      "title": "template-probe",
+      "xhtml_path": "20260801-3-fuzz-report/20260801-3-fuzz-report-template-probe.xhtml"
+    },
+    {
+      "body_html": "<section xmlns=\"http://www.w3.org/1999/xhtml\" class=\"fuzz-agent fuzz-agent-pass\">\n  <header class=\"agent-header fuzz-agent-header\">\n    <div>\n      <p class=\"eyebrow\">Adversarial fuzz worker</p>\n      <h2>boundary-probe</h2>\n      <p class=\"agent-meta\">Session ai51-local-http-framing-seed-51051 \u00b7 Worker boundary-probe</p>\n    </div>\n    <div class=\"agent-actions\" role=\"group\" aria-label=\"Copy worker data\">\n      <button type=\"button\" class=\"icon-button\" title=\"Copy JSON\" data-copy-text=\"{&quot;attempts&quot;: [{&quot;case_start&quot;: 0, &quot;cases&quot;: 4, &quot;command&quot;: [&quot;cargo&quot;, &quot;test&quot;, &quot;-p&quot;, &quot;agent-team-mail-core&quot;, &quot;--lib&quot;, &quot;api::http_frame_reader::ai51_campaign::known_boundaries&quot;, &quot;--&quot;, &quot;--exact&quot;, &quot;--nocapture&quot;, &quot;--test-threads=1&quot;], &quot;ok&quot;: true, &quot;stage&quot;: &quot;initial&quot;, &quot;stderr&quot;: &quot;    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s\\n     Running unittests src&#x2f;lib.rs (target&#x2f;debug&#x2f;deps&#x2f;atm_core-e2e2c4aad434432a)\\n&quot;, &quot;stdout&quot;: &quot;\\nrunning 1 test\\ntest api::http_frame_reader::ai51_campaign::known_boundaries ... ok\\n\\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 406 filtered out; finished in 0.00s\\n\\n&quot;, &quot;timed_out&quot;: false}], &quot;candidate_outcome&quot;: &quot;benign&quot;, &quot;cases_run&quot;: 4, &quot;classification&quot;: &quot;pass&quot;, &quot;correlation_id&quot;: &quot;boundary-probe&quot;, &quot;error&quot;: null, &quot;failed&quot;: 0, &quot;finding_ids&quot;: [], &quot;fuzz_run_description&quot;: &quot;malformed Content-Length, duplicate header, invalid UTF-8, and truncated frame boundaries&quot;, &quot;passed&quot;: 4, &quot;status&quot;: &quot;success&quot;, &quot;summary&quot;: &quot;Known malformed inputs returned their documented typed errors; no defect candidate remains.&quot;, &quot;target&quot;: &quot;local-http-framing&quot;, &quot;test_inputs&quot;: [{&quot;case_id&quot;: &quot;AI51-boundary-probe&quot;, &quot;description&quot;: &quot;malformed Content-Length, duplicate header, invalid UTF-8, and truncated frame boundaries&quot;, &quot;minimal_input&quot;: &quot;case_start=0; 1 independent deterministic execution(s)&quot;, &quot;minimal_template&quot;: &quot;HttpFrameReader::read_request&quot;, &quot;outcome&quot;: &quot;Known malformed inputs returned their documented typed errors; no defect candidate remains.&quot;, &quot;passed&quot;: true}]}\">{}</button>\n      <button type=\"button\" class=\"icon-button\" title=\"Copy Context\" data-copy-text=\"boundary-probe: success; 4&#x2f;4 cases passed.\">\u2398</button>\n    </div>\n  </header>\n\n  <p class=\"status\">\n    <span class=\"status status-pass\">PASS</span>\n  </p>\n\n  <table class=\"agent-results\">\n    <thead><tr><th scope=\"col\">Fuzz run description</th><th scope=\"col\">Iterations</th><th scope=\"col\">Pass</th><th scope=\"col\">Result</th></tr></thead>\n    <tbody>\n      <tr>\n        <th scope=\"row\">malformed Content-Length, duplicate header, invalid UTF-8, and truncated frame boundaries</th>\n        <td>4</td>\n        <td>4/4</td>\n        <td>\n          <span class=\"status status-pass\">PASS</span>\n        </td>\n      </tr>\n    </tbody>\n  </table>\n\n  <section class=\"test-inputs\">\n    <h3>Inputs exercised</h3>\n    <table>\n      <thead><tr><th scope=\"col\">Case</th><th scope=\"col\">Template / input</th><th scope=\"col\">Outcome</th></tr></thead>\n      <tbody>\n        <tr><th scope=\"row\">AI51-boundary-probe</th><td><code>malformed Content-Length, duplicate header, invalid UTF-8, and truncated frame boundaries</code></td><td>Known malformed inputs returned their documented typed errors; no defect candidate remains.</td></tr>\n      </tbody>\n    </table>\n  </section>\n\n</section>",
+      "context_text": "boundary-probe: success; 4/4 cases passed.",
+      "fragment_source": "auto-generated",
+      "id": "boundary-probe",
+      "json_payload": {
+        "attempts": [
+          {
+            "case_start": 0,
+            "cases": 4,
+            "command": [
+              "cargo",
+              "test",
+              "-p",
+              "agent-team-mail-core",
+              "--lib",
+              "api::http_frame_reader::ai51_campaign::known_boundaries",
+              "--",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "ok": true,
+            "stage": "initial",
+            "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s\n     Running unittests src/lib.rs (target/debug/deps/atm_core-e2e2c4aad434432a)\n",
+            "stdout": "\nrunning 1 test\ntest api::http_frame_reader::ai51_campaign::known_boundaries ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 406 filtered out; finished in 0.00s\n\n",
+            "timed_out": false
+          }
+        ],
+        "candidate_outcome": "benign",
+        "cases_run": 4,
+        "classification": "pass",
+        "correlation_id": "boundary-probe",
+        "error": null,
+        "failed": 0,
+        "finding_ids": [],
+        "fuzz_run_description": "malformed Content-Length, duplicate header, invalid UTF-8, and truncated frame boundaries",
+        "passed": 4,
+        "status": "success",
+        "summary": "Known malformed inputs returned their documented typed errors; no defect candidate remains.",
+        "target": "local-http-framing",
+        "test_inputs": [
+          {
+            "case_id": "AI51-boundary-probe",
+            "description": "malformed Content-Length, duplicate header, invalid UTF-8, and truncated frame boundaries",
+            "minimal_input": "case_start=0; 1 independent deterministic execution(s)",
+            "minimal_template": "HttpFrameReader::read_request",
+            "outcome": "Known malformed inputs returned their documented typed errors; no defect candidate remains.",
+            "passed": true
+          }
+        ]
+      },
+      "status": "PASS",
+      "title": "boundary-probe",
+      "xhtml_path": "20260801-3-fuzz-report/20260801-3-fuzz-report-boundary-probe.xhtml"
+    },
+    {
+      "body_html": "<section xmlns=\"http://www.w3.org/1999/xhtml\" class=\"fuzz-agent fuzz-agent-pass\">\n  <header class=\"agent-header fuzz-agent-header\">\n    <div>\n      <p class=\"eyebrow\">Adversarial fuzz worker</p>\n      <h2>differential-probe</h2>\n      <p class=\"agent-meta\">Session ai51-local-http-framing-seed-51051 \u00b7 Worker differential-probe</p>\n    </div>\n    <div class=\"agent-actions\" role=\"group\" aria-label=\"Copy worker data\">\n      <button type=\"button\" class=\"icon-button\" title=\"Copy JSON\" data-copy-text=\"{&quot;attempts&quot;: [{&quot;case_start&quot;: 0, &quot;cases&quot;: 128, &quot;command&quot;: [&quot;cargo&quot;, &quot;test&quot;, &quot;-p&quot;, &quot;agent-team-mail-core&quot;, &quot;--lib&quot;, &quot;api::http_frame_reader::ai51_campaign::optimized_scalar_parity&quot;, &quot;--&quot;, &quot;--exact&quot;, &quot;--nocapture&quot;, &quot;--test-threads=1&quot;], &quot;ok&quot;: true, &quot;stage&quot;: &quot;initial&quot;, &quot;stderr&quot;: &quot;    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s\\n     Running unittests src&#x2f;lib.rs (target&#x2f;debug&#x2f;deps&#x2f;atm_core-e2e2c4aad434432a)\\n&quot;, &quot;stdout&quot;: &quot;\\nrunning 1 test\\ntest api::http_frame_reader::ai51_campaign::optimized_scalar_parity ... ok\\n\\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 406 filtered out; finished in 0.00s\\n\\n&quot;, &quot;timed_out&quot;: false}], &quot;candidate_outcome&quot;: &quot;benign&quot;, &quot;cases_run&quot;: 128, &quot;classification&quot;: &quot;pass&quot;, &quot;correlation_id&quot;: &quot;differential-probe&quot;, &quot;error&quot;: null, &quot;failed&quot;: 0, &quot;finding_ids&quot;: [], &quot;fuzz_run_description&quot;: &quot;optimized memmem delimiter finder compared with the scalar reference reader&quot;, &quot;passed&quot;: 128, &quot;status&quot;: &quot;success&quot;, &quot;summary&quot;: &quot;128 deterministic cases had identical optimized and scalar reader results.&quot;, &quot;target&quot;: &quot;local-http-framing&quot;, &quot;test_inputs&quot;: [{&quot;case_id&quot;: &quot;AI51-differential-probe&quot;, &quot;description&quot;: &quot;optimized memmem delimiter finder compared with the scalar reference reader&quot;, &quot;minimal_input&quot;: &quot;case_start=0; 1 independent deterministic execution(s)&quot;, &quot;minimal_template&quot;: &quot;HttpFrameReader::read_request&quot;, &quot;outcome&quot;: &quot;128 deterministic cases had identical optimized and scalar reader results.&quot;, &quot;passed&quot;: true}]}\">{}</button>\n      <button type=\"button\" class=\"icon-button\" title=\"Copy Context\" data-copy-text=\"differential-probe: success; 128&#x2f;128 cases passed.\">\u2398</button>\n    </div>\n  </header>\n\n  <p class=\"status\">\n    <span class=\"status status-pass\">PASS</span>\n  </p>\n\n  <table class=\"agent-results\">\n    <thead><tr><th scope=\"col\">Fuzz run description</th><th scope=\"col\">Iterations</th><th scope=\"col\">Pass</th><th scope=\"col\">Result</th></tr></thead>\n    <tbody>\n      <tr>\n        <th scope=\"row\">optimized memmem delimiter finder compared with the scalar reference reader</th>\n        <td>128</td>\n        <td>128/128</td>\n        <td>\n          <span class=\"status status-pass\">PASS</span>\n        </td>\n      </tr>\n    </tbody>\n  </table>\n\n  <section class=\"test-inputs\">\n    <h3>Inputs exercised</h3>\n    <table>\n      <thead><tr><th scope=\"col\">Case</th><th scope=\"col\">Template / input</th><th scope=\"col\">Outcome</th></tr></thead>\n      <tbody>\n        <tr><th scope=\"row\">AI51-differential-probe</th><td><code>optimized memmem delimiter finder compared with the scalar reference reader</code></td><td>128 deterministic cases had identical optimized and scalar reader results.</td></tr>\n      </tbody>\n    </table>\n  </section>\n\n</section>",
+      "context_text": "differential-probe: success; 128/128 cases passed.",
+      "fragment_source": "auto-generated",
+      "id": "differential-probe",
+      "json_payload": {
+        "attempts": [
+          {
+            "case_start": 0,
+            "cases": 128,
+            "command": [
+              "cargo",
+              "test",
+              "-p",
+              "agent-team-mail-core",
+              "--lib",
+              "api::http_frame_reader::ai51_campaign::optimized_scalar_parity",
+              "--",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "ok": true,
+            "stage": "initial",
+            "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s\n     Running unittests src/lib.rs (target/debug/deps/atm_core-e2e2c4aad434432a)\n",
+            "stdout": "\nrunning 1 test\ntest api::http_frame_reader::ai51_campaign::optimized_scalar_parity ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 406 filtered out; finished in 0.00s\n\n",
+            "timed_out": false
+          }
+        ],
+        "candidate_outcome": "benign",
+        "cases_run": 128,
+        "classification": "pass",
+        "correlation_id": "differential-probe",
+        "error": null,
+        "failed": 0,
+        "finding_ids": [],
+        "fuzz_run_description": "optimized memmem delimiter finder compared with the scalar reference reader",
+        "passed": 128,
+        "status": "success",
+        "summary": "128 deterministic cases had identical optimized and scalar reader results.",
+        "target": "local-http-framing",
+        "test_inputs": [
+          {
+            "case_id": "AI51-differential-probe",
+            "description": "optimized memmem delimiter finder compared with the scalar reference reader",
+            "minimal_input": "case_start=0; 1 independent deterministic execution(s)",
+            "minimal_template": "HttpFrameReader::read_request",
+            "outcome": "128 deterministic cases had identical optimized and scalar reader results.",
+            "passed": true
+          }
+        ]
+      },
+      "status": "PASS",
+      "title": "differential-probe",
+      "xhtml_path": "20260801-3-fuzz-report/20260801-3-fuzz-report-differential-probe.xhtml"
+    }
+  ],
+  "source_label": "AI.48 fuzz coordinator contract",
+  "status": "PASS",
+  "subtitle": "AI.48 coordinator/probe evidence",
+  "summary_copy_context": "ai51-local-http-framing-seed-51051: PASS; 4 worker panels.",
+  "summary_copy_json": "{\"session_id\": \"ai51-local-http-framing-seed-51051\", \"status\": \"PASS\", \"workers\": 4}",
+  "summary_intro_html": "<p>AI.48 coordinator/probe evidence rendered through the copied sc-compose fuzz-report contract. Session <code>ai51-local-http-framing-seed-51051</code> contains one bounded panel per worker.</p><p>Candidate outcome ledger: zero confirmed bugs is explicit evidence, not an implicit pass.</p><table><thead><tr><th scope=\"col\">Candidate outcome</th><th scope=\"col\">Count</th></tr></thead><tbody><tr><th scope=\"row\">confirmed bug</th><td>0</td></tr><tr><th scope=\"row\">non repro</th><td>0</td></tr><tr><th scope=\"row\">benign</th><td>4</td></tr><tr><th scope=\"row\">inconclusive</th><td>0</td></tr></tbody></table>",
+  "title": "Adversarial fuzz session: ai51-local-http-framing-seed-51051",
+  "toc_rows": [
+    {
+      "id": "shape-probe",
+      "status": "PASS",
+      "title": "shape-probe"
+    },
+    {
+      "id": "template-probe",
+      "status": "PASS",
+      "title": "template-probe"
+    },
+    {
+      "id": "boundary-probe",
+      "status": "PASS",
+      "title": "boundary-probe"
+    },
+    {
+      "id": "differential-probe",
+      "status": "PASS",
+      "title": "differential-probe"
+    }
+  ]
+}

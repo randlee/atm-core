@@ -1,0 +1,118 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QA002-003-AN12-RULE002>
+  a triage:Finding ;
+  triage:findingId "QA002-003-AN12-RULE002" ;
+  triage:title "6 new RULE-002 hard function-length violations introduced in AN.12's diff" ;
+  triage:description "rust-qa-agent reported (AN12-QA-1, quality-mgr, PR #875): compile_query (109 lines, crates/atm-core/src/search.rs:108-216); decode_search_row_values (104 lines), compile_sql_filters (93 lines), decode_workflow_metadata (82 lines) in crates/atm-storage-rusqlite/src/search_store.rs; matches_filters (89 lines) in crates/atm-storage/src/search.rs; run_replacement_daemon_with_selector (84 lines) in crates/atm-daemon-bootstrap/src/lib.rs. `just lint` function-length gate fails." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "code-quality" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "repo_wide" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-13T20:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.12 ;
+  triage:foundAt "2026-08-14T02:04:48Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA002-003-AN12-RULE002/AN12-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA002-003-AN12-RULE002/AN12-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA002-003-AN12-RULE002/AN12-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA002-003-AN12-RULE002/AN12-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA002-003-AN12-RULE002/AN12-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA002-003-AN12-RULE002/AN12-6> ;
+  triage:closedAt "2026-08-13T18:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/QA002-003-AN12-RULE002/AN12-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/search.rs" ;
+  triage:line 108 ;
+  triage:snippet "pub fn compile_query(&self) -> Result<MessageSearchQuery, AtmError>" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "76485c590" ;
+  triage:occursIn <urn:atm:triage:worktree/AN12/76485c590> .
+
+<urn:atm:triage:occurrence/QA002-003-AN12-RULE002/AN12-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/search_store.rs" ;
+  triage:line 331 ;
+  triage:snippet "fn decode_search_row_values(row: &rusqlite::Row<'_>) -> rusqlite::Result<DecodedSearchRow>" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "76485c590" ;
+  triage:occursIn <urn:atm:triage:worktree/AN12/76485c590> .
+
+<urn:atm:triage:occurrence/QA002-003-AN12-RULE002/AN12-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/search_store.rs" ;
+  triage:line 477 ;
+  triage:snippet "fn decode_workflow_metadata(...)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "76485c590" ;
+  triage:occursIn <urn:atm:triage:worktree/AN12/76485c590> .
+
+<urn:atm:triage:occurrence/QA002-003-AN12-RULE002/AN12-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/search_store.rs" ;
+  triage:line 633 ;
+  triage:snippet "fn compile_sql_filters(filters: &atm_storage::SearchFilters) -> SqlFilters" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "76485c590" ;
+  triage:occursIn <urn:atm:triage:worktree/AN12/76485c590> .
+
+<urn:atm:triage:occurrence/QA002-003-AN12-RULE002/AN12-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/search.rs" ;
+  triage:line 697 ;
+  triage:snippet "fn matches_filters(record: &InMemorySearchDocument, filters: &SearchFilters) -> bool" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "76485c590" ;
+  triage:occursIn <urn:atm:triage:worktree/AN12/76485c590> .
+
+<urn:atm:triage:occurrence/QA002-003-AN12-RULE002/AN12-6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 179 ;
+  triage:snippet "async fn run_replacement_daemon_with_selector(...)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "76485c590" ;
+  triage:occursIn <urn:atm:triage:worktree/AN12/76485c590> .
+
+<urn:atm:triage:worktree/integrate/phase-an/f8e1f52d>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-an" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "f8e1f52d" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AN12/76485c590>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/an12-workflow-validation-evidence" ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "76485c590" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AN13/70c7b231b>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/an13-sc-composer-141-upgrade" ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "70c7b231b" ;
+  triage:orderIndex 2 .

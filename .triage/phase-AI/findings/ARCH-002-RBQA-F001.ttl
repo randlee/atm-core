@@ -1,0 +1,63 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-002-RBQA-F001>
+  a triage:Finding ;
+  triage:findingId "ARCH-002-RBQA-F001" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T00:00:00Z"^^xsd:dateTime ;
+  triage:title "MailStore/RosterStore boundary records claim state=retired with no live callers, but live production call sites still depend on the deprecated bridge" ;
+  triage:description "AI2-QA-1 (arch-qa + ruthless-boundary-qa, same defect, converged from different angles). atm_core::boundary::{MailStore, RosterStore} are #[deprecated] and their backing TOML records (boundaries/atm-core/mail-store.toml:43-45, roster-store.toml:45-47) claim state = \"retired\" with \"consumer cutover complete,\" yet live production call sites still depend on the deprecated bridge (atm/src/composition.rs:751,793,841; atm/src/commands/teams.rs:510; atm/src/commands/members.rs:152; atm-daemon/src/composition.rs:417; atm-daemon/src/runtime_health.rs:513,923,947) via crates/atm-runtime/src/legacy_storage_adapters.rs's BoundaryMailStoreView/BoundaryRosterStoreView, with the compiler warning suppressed via #[allow(deprecated, ...)] at 5 sites. 'Retired, no live callers' is factually false as currently stated. Confirmed by direct inspection: state = \"retired\" already present at AI.1 baseline; legacy_storage_adapters.rs present on AI.1, AI.2, and AI.3 unchanged -- this is not a new AI.2 regression, it originates at the AI.1 baseline and has propagated forward unfixed through AI.3." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "repo_wide" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-RBQA-F001/pAI-3/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-3/c9d62ff6> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-3/c9d62ff6> ;
+  triage:highestOpenBranch "feature/pAI-s3-error-contract-foundation" ;
+  triage:resolution "Fixed on feature/pAI-s2-storage-topology closure round; see PR #597 Windows validation notes." ;
+  triage:triagedAt "2026-07-20T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/ARCH-002-RBQA-F001/pAI-3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/legacy_storage_adapters.rs" ;
+  triage:line 1 ;
+  triage:snippet "BoundaryMailStoreView/BoundaryRosterStoreView bridge live production callers (atm/src/composition.rs:751,793,841; atm/src/commands/teams.rs:510; atm/src/commands/members.rs:152; atm-daemon/src/composition.rs:417; atm-daemon/src/runtime_health.rs:513,923,947) to deprecated boundary traits claimed 'retired' in boundaries/atm-core/mail-store.toml:44 and roster-store.toml:46" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s3-error-contract-foundation" ;
+  triage:headSha "c9d62ff6" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-3/c9d62ff6> .
+
+<urn:atm:triage:worktree/pAI-1/c479452e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-1-daemon-preag-reset" ;
+  triage:path "feature/pAI-1-daemon-preag-reset" ;
+  triage:headSha "c479452e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-2/770dd8ed>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s2-storage-topology" ;
+  triage:path "feature/pAI-s2-storage-topology" ;
+  triage:headSha "770dd8ed" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAI-3/c9d62ff6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s3-error-contract-foundation" ;
+  triage:path "feature/pAI-s3-error-contract-foundation" ;
+  triage:headSha "c9d62ff6" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/integrate-phase-AI/00fe6608>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
+  triage:headSha "00fe6608" ;
+  triage:orderIndex 0 .

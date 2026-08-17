@@ -1,0 +1,48 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI23-MINOR-003B>
+  a triage:Finding ;
+  triage:findingId "AI23-MINOR-003B" ;
+  triage:foundAt "2026-07-25T06:25:35Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S3 ;
+  triage:title "ReleaseVersion's semver validation is unreachable for wire-deserialized peer-supplied version strings" ;
+  triage:description "ReleaseVersion is #[serde(transparent)] over a bare String on AI.23 (crates/atm-core/src/protocol.rs:78-79). Deserializing a CompatibilityPreflight body (routed via POST /v1/atm/compatibility, reachable from peer HTTPS listener) populates client_release directly from wire string via serde -- bypasses ReleaseVersion::parse() validation. Daemon-side handler (crates/atm-daemon/src/runtime_health.rs) only does string equality, never re-validates. semver validation hardens only constructor path, has no effect on attacker-controlled wire strings. Impact is low (bounded by request cap, no panic). AI.30 fixes by changing ReleaseVersion(String) to ReleaseVersion(Version), which validates through semver deserializer." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-24T23:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-MINOR-003B/AI23/1> ;
+  triage:fixedOn <urn:atm:triage:worktree/AI23/b88ca016> .
+
+<urn:atm:triage:occurrence/AI23-MINOR-003B/AI23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 78 ;
+  triage:snippet "#[serde(transparent)]\npub struct ReleaseVersion(String);" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- Deserialize<ReleaseVersion> now explicitly calls Self::parse() which validates the version string (lines 140-147 of protocol.rs). Wire deserialization bypass concern is resolved. Stale occurrence from superseded branch feature/pAI-s23-crosshost-shared-write-path; closing to match current reality. (2026-07-26)" ;
+  triage:branch "AI.23" ;
+  triage:headSha "b88ca016" ;
+  triage:occursIn <urn:atm:triage:worktree/AI23/b88ca016> ;
+  triage:context "ReleaseVersion vulnerable to wire deserialization bypass; uses String instead of validated Version type" .
+
+<urn:atm:triage:worktree/AI23/b88ca016>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AI.23" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b88ca016" ;
+  triage:orderIndex 23 .
+
+<urn:atm:triage:worktree/AI30/7ad54d25>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AI.30" ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "7ad54d25" ;
+  triage:orderIndex 30 .

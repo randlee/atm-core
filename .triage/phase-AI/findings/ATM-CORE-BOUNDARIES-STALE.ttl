@@ -1,0 +1,70 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-CORE-BOUNDARIES-STALE>
+  a triage:Finding ;
+  triage:findingId "ATM-CORE-BOUNDARIES-STALE" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T18:40:00Z"^^xsd:dateTime ;
+  triage:title "docs/atm-core/boundaries.md and backing TOMLs still describe SourceIngress/ProjectionExport as live contracts" ;
+  triage:description "AI1-QA-1 (2026-07-20) on PR #592 found docs/atm-core/boundaries.md:285-348 still documents SourceIngress/ProjectionExport as live contracts (present-tense prose plus forward-looking 'Phase Yb'/'Phase Yc' language) despite zero implementing code anywhere in crates/ after the AI.1 cross-host/peer-transport deletion (confirmed: no `impl SourceIngress`/`impl ProjectionExport` anywhere in crates/). Backing TOMLs boundaries/atm-core/inbox-ingress.toml and boundaries/atm-core/inbox-export.toml still declare state='stub_landed'/'concrete_landed' instead of 'retired'. inbox-export.toml's named_callers list (`atm_core::direct_boundaries::export_source_files`, `atm_core::direct_boundaries::reexport_messages`) reference functions confirmed absent from crates/atm-core/src/direct_boundaries.rs (grep returns zero matches for either function name; the file exists but the functions do not). Same defect class as ARCH-003/RBQA-F008 (already fixed on the atm-daemon side), left unaddressed on the atm-core side." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-CORE-BOUNDARIES-STALE/pAI-1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-CORE-BOUNDARIES-STALE/pAI-1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-CORE-BOUNDARIES-STALE/pAI-1/3> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-1/da3f978e> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-1/da3f978e> ;
+  triage:highestOpenBranch "feature/pAI-1-daemon-preag-reset" ;
+  triage:triagedAt "2026-07-20T18:40:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/ATM-CORE-BOUNDARIES-STALE/pAI-1/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/boundaries.md" ;
+  triage:line 285 ;
+  triage:snippet "SourceIngress/ProjectionExport sections use present-tense governance prose and forward-looking Phase Yb/Yc language, no retired framing" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-1-daemon-preag-reset" ;
+  triage:headSha "da3f978e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-1/da3f978e> .
+
+<urn:atm:triage:occurrence/ATM-CORE-BOUNDARIES-STALE/pAI-1/2>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/inbox-ingress.toml" ;
+  triage:snippet "[status] state = \"stub_landed\" — should be \"retired\"" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-1-daemon-preag-reset" ;
+  triage:headSha "da3f978e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-1/da3f978e> .
+
+<urn:atm:triage:occurrence/ATM-CORE-BOUNDARIES-STALE/pAI-1/3>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/inbox-export.toml" ;
+  triage:snippet "[status] state = \"concrete_landed\" — should be \"retired\"; named_callers references atm_core::direct_boundaries::export_source_files and ::reexport_messages, neither of which exists in crates/atm-core/src/direct_boundaries.rs" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-1-daemon-preag-reset" ;
+  triage:headSha "da3f978e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-1/da3f978e> .
+
+<urn:atm:triage:worktree/pAI-1/da3f978e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-1-daemon-preag-reset" ;
+  triage:path "feature/pAI-1-daemon-preag-reset" ;
+  triage:headSha "da3f978e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-AI/bcfe0788>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
+  triage:headSha "bcfe0788" ;
+  triage:orderIndex 0 .

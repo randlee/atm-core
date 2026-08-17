@@ -15,8 +15,9 @@ SQLite, or business workflow semantics.
   recovery through the CLI render boundary.
 - Before a write-shaped RPC, the client sends the ADR-027 compatibility
   preflight after local-IPC connection. An incompatible daemon returns
-  `ATM_CLIENT_DAEMON_VERSION_INCOMPATIBLE` with recovery guidance and receives
-  no write-shaped request.
+  a typed schema/HTTP-major compatibility error with recovery guidance and
+  receives no write-shaped request. Product release versions are diagnostic;
+  a compatible release mismatch must not block dispatch.
 - RPC message-source DTOs must not represent caller stdin. The CLI consumes
   stdin before RPC and transmits a materialized body.
 - This crate must retain the dependency and extension restrictions in

@@ -4,7 +4,7 @@ use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
 use crate::address::validate_path_segment;
-use crate::error::{AtmError, AtmErrorKind};
+use crate::error::{AtmError, AtmErrorCode};
 use crate::home;
 use crate::types::AgentName;
 
@@ -36,47 +36,31 @@ fn normalize_hook_recipient(recipient: &str) -> Result<HookRecipient, AtmError> 
     let recipient = recipient.trim();
     if recipient.is_empty() {
         return Err(AtmError::new(
-            AtmErrorKind::Config,
+            AtmErrorCode::ConfigParseFailed,
             "post-send hook recipient must not be empty".to_string(),
-        )
-        .with_recovery(
-            "Set [[atm.post_send_hooks]].recipient to one concrete recipient name or '*'.",
         ));
     }
     if recipient == "*" {
         return Ok(HookRecipient::Wildcard);
     }
-    validate_path_segment(recipient, "hook recipient").map_err(|error| {
-        AtmError::new(AtmErrorKind::Config, error.message).with_recovery(
-            "Use one concrete recipient name or '*' in [[atm.post_send_hooks]].recipient.",
-        )
-    })?;
+    validate_path_segment(recipient, "hook recipient")
+        .map_err(|error| AtmError::new(AtmErrorCode::ConfigParseFailed, error.detail()))?;
     Ok(HookRecipient::Named(AgentName::from_validated(recipient)))
 }
 
 fn normalize_hook_program(command: &mut [String], config_root: &Path) -> Result<(), AtmError> {
     let Some(program) = command.first_mut() else {
-        return Err(
-            AtmError::new(
-                AtmErrorKind::Config,
-                "post-send hook command must not be empty".to_string(),
-            )
-            .with_recovery(
-                "Set [[atm.post_send_hooks]].command to a non-empty argv array beginning with the executable to run.",
-            ),
-        );
+        return Err(AtmError::new(
+            AtmErrorCode::ConfigParseFailed,
+            "post-send hook command must not be empty".to_string(),
+        ));
     };
     *program = program.trim().to_string();
     if program.is_empty() {
-        return Err(
-            AtmError::new(
-                AtmErrorKind::Config,
-                "post-send hook command program must not be empty".to_string(),
-            )
-            .with_recovery(
-                "Set [[atm.post_send_hooks]].command[0] to a relative path, absolute path, or bare executable name.",
-            ),
-        );
+        return Err(AtmError::new(
+            AtmErrorCode::ConfigParseFailed,
+            "post-send hook command program must not be empty".to_string(),
+        ));
     }
     let normalized = resolve_hook_program(program, config_root)?;
     *program = normalized;
@@ -110,11 +94,8 @@ fn resolve_hook_path(program: &str, config_root: &Path) -> Result<PathBuf, AtmEr
 fn hook_path_to_utf8(path: &Path) -> Result<&str, AtmError> {
     path.to_str().ok_or_else(|| {
         AtmError::new(
-            AtmErrorKind::Config,
+            AtmErrorCode::ConfigParseFailed,
             format!("hook command path is not valid UTF-8: {}", path.display()),
-        )
-        .with_recovery(
-            "Use a UTF-8 hook path or invoke the hook through a bare executable name so ATM can resolve it via PATH.",
         )
     })
 }
@@ -138,11 +119,11 @@ fn expand_home_tilde(program: &str) -> Result<Cow<'_, str>, AtmError> {
                 .to_str()
                 .ok_or_else(|| {
                     AtmError::new(
-                        AtmErrorKind::Config,
-                        format!("hook command path is not valid UTF-8: {}", expanded.display()),
-                    )
-                    .with_recovery(
-                        "Use a UTF-8 hook path or invoke the hook through a bare executable name so ATM can resolve it via PATH.",
+                        AtmErrorCode::ConfigParseFailed,
+                        format!(
+                            "hook command path is not valid UTF-8: {}",
+                            expanded.display()
+                        ),
                     )
                 })?
                 .to_string(),
@@ -175,14 +156,11 @@ fn expand_tilde_to_home_path(program: &str) -> Result<Option<PathBuf>, AtmError>
 fn validate_hook_command_path_length(path: &str) -> Result<(), AtmError> {
     if path.len() > MAX_POST_SEND_HOOK_COMMAND_PATH_BYTES {
         return Err(AtmError::new(
-            AtmErrorKind::Config,
+            AtmErrorCode::ConfigParseFailed,
             format!(
                 "post-send hook command path exceeds the maximum supported length of {} bytes",
                 MAX_POST_SEND_HOOK_COMMAND_PATH_BYTES
             ),
-        )
-        .with_recovery(
-            "Shorten [[atm.post_send_hooks]].command[0] to 4096 bytes or fewer before retrying.",
         ));
     }
     Ok(())
@@ -341,7 +319,7 @@ mod tests {
         )
         .expect_err("empty recipient should fail");
 
-        assert!(error.message.contains("recipient must not be empty"));
+        assert!(error.message().contains("recipient must not be empty"));
     }
 
     #[test]
@@ -358,8 +336,8 @@ mod tests {
 
         assert!(
             error
-                .message
-                .contains("hook recipient name must not contain path separators")
+                .message()
+                .contains("hook recipient name must use only ASCII letters, digits, '-' or '_'")
         );
     }
 
@@ -375,7 +353,7 @@ mod tests {
         )
         .expect_err("empty command should fail");
 
-        assert!(error.message.contains("command must not be empty"));
+        assert!(error.message().contains("command must not be empty"));
     }
 
     #[test]
@@ -390,7 +368,11 @@ mod tests {
         )
         .expect_err("blank program should fail");
 
-        assert!(error.message.contains("command program must not be empty"));
+        assert!(
+            error
+                .message()
+                .contains("command program must not be empty")
+        );
     }
 
     #[test]
@@ -408,7 +390,7 @@ mod tests {
 
         assert!(
             error
-                .message
+                .message()
                 .contains("exceeds the maximum supported length")
         );
     }

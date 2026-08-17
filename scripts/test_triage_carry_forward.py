@@ -138,6 +138,27 @@ class TestTriageCarryForward(unittest.TestCase):
             ],
         )
 
+    def test_invalid_query_json_fails_with_actionable_error(self):
+        completed = _MOD.subprocess.CompletedProcess(
+            args=["oxigraph", "query"], returncode=0, stdout="not-json", stderr=""
+        )
+        with patch.object(_MOD.subprocess, "run", return_value=completed):
+            with self.assertRaises(SystemExit) as exc:
+                _MOD.query_records(Path("/tmp/store"), "R.17")
+        self.assertIn("invalid JSON", str(exc.exception))
+
+    def test_malformed_query_binding_fails_with_row_number(self):
+        completed = _MOD.subprocess.CompletedProcess(
+            args=["oxigraph", "query"],
+            returncode=0,
+            stdout=json.dumps({"results": {"bindings": [{"finding_id": {}}]}}),
+            stderr="",
+        )
+        with patch.object(_MOD.subprocess, "run", return_value=completed):
+            with self.assertRaises(SystemExit) as exc:
+                _MOD.query_records(Path("/tmp/store"), "R.17")
+        self.assertIn("invalid binding at row 0", str(exc.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

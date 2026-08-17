@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FTQ-004-AL6>
+  a triage:Finding ;
+  triage:findingId "FTQ-004-AL6" ;
+  triage:title "storage_and_nudge_router.rs test still uses the sync-reserve/drop/reuse TOCTOU port pattern FTQ-001 fixed elsewhere" ;
+  triage:description "crates/atm-http-runtime/src/storage_and_nudge_router.rs:837-840 (test uds_runtime_reaches_the_canonical_storage_and_received_hook_path) still binds a TcpListener to reserve a port, reads its port number, then drops the listener and reuses the bare port number later -- the same TOCTOU pattern FTQ-001-AL6 fixed via port-0 passthrough elsewhere in lib.rs. Confirmed via a full workspace grep for TcpListener::bind(...)+drop(listener) that this is the only remaining occurrence." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "TEST" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-10T07:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:closureEvidence "7d2a69f3 makes the UDS integration test bind loopback port 0 directly through Tokio rather than reserving then dropping a port." ;
+  triage:triagedAt "2026-08-07T04:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL6 ;
+  triage:foundAt "2026-08-07T04:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004-AL6/AL6-QA2-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/FTQ-004-AL6/AL6-QA2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 837 ;
+  triage:snippet "let tcp_listener = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))... drop(tcp_listener);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "be0b8aeb76bccc9483763bb27c98fb5ce6a76f69" ;
+  triage:occursIn <urn:atm:triage:worktree/pal-s6-loopback-tcp/be0b8aeb> .
+
+<urn:atm:triage:worktree/pal-s6-loopback-tcp/be0b8aeb>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s6-loopback-tcp" ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "be0b8aeb76bccc9483763bb27c98fb5ce6a76f69" ;
+  triage:orderIndex 1 .

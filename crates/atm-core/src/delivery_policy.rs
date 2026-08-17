@@ -1,5 +1,6 @@
 use crate::boundary::{RosterEntry, RosterHarness};
 use crate::error::AtmError;
+use crate::provenance::ValidatedWriteProvenance;
 use crate::schema::{AtmMessageId, ThreadMode};
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::types::{AgentName, PaneId, TeamName};
@@ -40,9 +41,11 @@ impl DeliveryHarnessPath {
     pub(crate) fn from_roster_harness(harness: RosterHarness) -> Self {
         match harness {
             RosterHarness::ClaudeCode => Self::ClaudeCode,
-            RosterHarness::CodexCli | RosterHarness::GeminiCli | RosterHarness::Opencode => {
-                Self::NonClaude
-            }
+            RosterHarness::CodexCli
+            | RosterHarness::GeminiCli
+            | RosterHarness::Opencode
+            | RosterHarness::Hermes
+            | RosterHarness::PythonGraft => Self::NonClaude,
         }
     }
 }
@@ -59,6 +62,18 @@ pub(crate) struct DeliveryRecipientSnapshot {
 }
 
 impl DeliveryRecipientSnapshot {
+    pub(crate) fn remote(agent: AgentName, team: TeamName) -> Self {
+        Self {
+            agent,
+            team,
+            harness: DeliveryHarnessPath::NonClaude,
+            recipient_pane_id: None,
+            local_tmux_post_send: false,
+            graft_post_send: false,
+            roster_backed: false,
+        }
+    }
+
     fn from_roster(member: RosterEntry) -> Self {
         let local_tmux_post_send = member.recipient_pane_id.is_some()
             || member
@@ -68,7 +83,11 @@ impl DeliveryRecipientSnapshot {
                 == Some("tmux");
         let graft_post_send = matches!(
             member.harness,
-            RosterHarness::CodexCli | RosterHarness::GeminiCli | RosterHarness::Opencode
+            RosterHarness::CodexCli
+                | RosterHarness::GeminiCli
+                | RosterHarness::Opencode
+                | RosterHarness::Hermes
+                | RosterHarness::PythonGraft
         ) && !local_tmux_post_send;
         Self {
             agent: member.agent_name,
@@ -322,12 +341,30 @@ impl DeliveryPolicyCoordinator {
         runtime
             .load_roster_member(team, agent)?
             .map(DeliveryRecipientSnapshot::from_roster)
-            .ok_or_else(|| {
-                // Two steps joined as one string; callers must split on '\n' to present individually
-                AtmError::agent_not_found(agent, team).with_recovery(
-                    "Repair or reload the team roster before retrying delivery.\nUse 'atm teams add-member' for all active team members.",
-                )
-            })
+            .ok_or_else(|| AtmError::agent_not_found(agent, team))
+    }
+
+    /// Resolves the persistence-admission snapshot for the canonical writer.
+    ///
+    /// This is not a delivery action: `PostWriteRouter` alone selects local
+    /// nudge versus peer HTTPS after persistence. A local destination must be
+    /// validated against this host's roster before it is written. A
+    /// host-qualified origin destination cannot be validated locally, so it
+    /// retains its immutable origin record and the receiving host validates
+    /// its own recipient roster after peer delivery.
+    pub(crate) fn resolve_write_recipient_snapshot<R: RetainedServiceRuntime + ?Sized>(
+        &self,
+        runtime: &R,
+        recipient: &crate::send::ResolvedRecipient,
+        provenance: ValidatedWriteProvenance,
+    ) -> Result<DeliveryRecipientSnapshot, AtmError> {
+        if provenance.is_remote_origin() {
+            return Ok(DeliveryRecipientSnapshot::remote(
+                recipient.agent.clone(),
+                recipient.team.clone(),
+            ));
+        }
+        self.resolve_recipient_snapshot(runtime, &recipient.team, &recipient.agent)
     }
 
     #[allow(
@@ -483,39 +520,6 @@ pub(crate) fn persisted_success_transition_names(
     }
 }
 
-pub(crate) fn new_message_sqlite_failure_transitions(
-    harness: DeliveryHarnessPath,
-) -> &'static [&'static str] {
-    match harness {
-        DeliveryHarnessPath::ClaudeCode => &[
-            "delivery_policy.new_message.received",
-            "delivery_policy.new_message.harness_claude",
-            "delivery_policy.new_message.sqlite_failed",
-            "delivery_policy.new_message.compat_append_original",
-            "delivery_policy.new_message.compat_append_error",
-            "delivery_policy.new_message.primary_nudge",
-            "delivery_policy.new_message.error_nudge",
-            "delivery_policy.new_message.failed",
-        ],
-        DeliveryHarnessPath::NonClaude => &[
-            "delivery_policy.new_message.received",
-            "delivery_policy.new_message.harness_non_claude",
-            "delivery_policy.new_message.sqlite_failed",
-            "delivery_policy.new_message.non_claude_original",
-            "delivery_policy.new_message.non_claude_error",
-            "delivery_policy.new_message.primary_nudge",
-            "delivery_policy.new_message.error_nudge",
-            "delivery_policy.new_message.failed",
-        ],
-    }
-}
-
-pub(crate) fn sqlite_failure_transition_names(
-    harness: DeliveryHarnessPath,
-) -> &'static [&'static str] {
-    new_message_sqlite_failure_transitions(harness)
-}
-
 #[cfg(test)]
 pub(crate) fn claude_append_failure_transition_names() -> &'static [&'static str] {
     &[
@@ -588,15 +592,19 @@ mod tests {
         AckReplyStateMachine, DeliveryEventFamily, DeliveryHarnessPath, DeliveryPolicyCoordinator,
         DeliveryRecipientSnapshot, InboxRepairStateMachine, NewMessageCoordinatorState,
         RestoreInboxRebuildStateMachine, ack_reply_transitions, append_failure_transitions,
-        inbox_repair_transitions, new_message_sqlite_failure_transitions,
-        new_message_success_transitions, restore_inbox_rebuild_transitions,
-        thread_update_transitions,
+        inbox_repair_transitions, new_message_success_transitions,
+        restore_inbox_rebuild_transitions, thread_update_transitions,
     };
     use crate::error::AtmError;
     use crate::schema::ThreadMode;
     use crate::service_runtime::RetainedServiceRuntime;
     use crate::types::{AgentName, IsoTimestamp, TeamName};
-    use crate::{boundary::RosterEntry, config::AtmConfig, schema::TeamConfig};
+    use crate::{
+        boundary::{RosterEntry, RosterHarness, RosterMemberKind},
+        config::AtmConfig,
+    };
+    use atm_storage::contract::AgentType;
+    use serde_json::Map;
     use std::path::{Path, PathBuf};
 
     struct MissingRosterRuntime;
@@ -606,17 +614,6 @@ mod tests {
     impl RetainedServiceRuntime for MissingRosterRuntime {
         fn load_config(&self, _current_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
             Ok(None)
-        }
-
-        fn load_team_config_for_doctor_compare(
-            &self,
-            _team_dir: &Path,
-        ) -> Result<TeamConfig, AtmError> {
-            Ok(TeamConfig::default())
-        }
-
-        fn team_dir(&self, home_dir: &Path, _team: &TeamName) -> Result<PathBuf, AtmError> {
-            Ok(home_dir.to_path_buf())
         }
 
         fn inbox_path(
@@ -643,15 +640,6 @@ mod tests {
             _team: &TeamName,
             _agent: &AgentName,
             _timestamp: IsoTimestamp,
-        ) -> Result<(), AtmError> {
-            Ok(())
-        }
-
-        fn rebuild_compat_inbox_projection(
-            &self,
-            _inbox_path: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
         ) -> Result<(), AtmError> {
             Ok(())
         }
@@ -727,33 +715,22 @@ mod tests {
     }
 
     #[test]
-    fn sqlite_failure_contract_includes_original_and_error_for_both_paths() {
-        assert_eq!(
-            new_message_sqlite_failure_transitions(DeliveryHarnessPath::ClaudeCode),
-            &[
-                "delivery_policy.new_message.received",
-                "delivery_policy.new_message.harness_claude",
-                "delivery_policy.new_message.sqlite_failed",
-                "delivery_policy.new_message.compat_append_original",
-                "delivery_policy.new_message.compat_append_error",
-                "delivery_policy.new_message.primary_nudge",
-                "delivery_policy.new_message.error_nudge",
-                "delivery_policy.new_message.failed",
-            ]
-        );
-        assert_eq!(
-            new_message_sqlite_failure_transitions(DeliveryHarnessPath::NonClaude),
-            &[
-                "delivery_policy.new_message.received",
-                "delivery_policy.new_message.harness_non_claude",
-                "delivery_policy.new_message.sqlite_failed",
-                "delivery_policy.new_message.non_claude_original",
-                "delivery_policy.new_message.non_claude_error",
-                "delivery_policy.new_message.primary_nudge",
-                "delivery_policy.new_message.error_nudge",
-                "delivery_policy.new_message.failed",
-            ]
-        );
+    fn python_graft_harnesses_use_graft_delivery_without_tmux() {
+        for harness in [RosterHarness::Hermes, RosterHarness::PythonGraft] {
+            let entry = RosterEntry {
+                team_name: "team-a".parse().expect("team"),
+                agent_name: "python-agent".parse().expect("agent"),
+                member_kind: RosterMemberKind::Permanent,
+                harness,
+                agent_type: AgentType::Worker,
+                model: crate::types::ModelName::default(),
+                recipient_pane_id: None,
+                metadata_json: Map::new(),
+            };
+            let snapshot = DeliveryRecipientSnapshot::from_roster(entry);
+            assert_eq!(snapshot.harness, DeliveryHarnessPath::NonClaude);
+            assert!(snapshot.graft_post_send);
+        }
     }
 
     #[test]
@@ -842,14 +819,12 @@ mod tests {
             )
             .expect_err("missing roster member must fail");
 
-        assert!(error.is_agent_not_found());
-        assert_eq!(
-            error.message,
-            "agent 'recipient' was not found in team 'test-team'"
+        assert!(error.code() == crate::error_codes::AtmErrorCode::AgentNotFound);
+        assert!(
+            error
+                .message()
+                .starts_with("agent 'recipient' was not found in team 'test-team'")
         );
-        assert_eq!(
-            error.primary_recovery(),
-            Some("Update the team membership or target a different recipient.")
-        );
+        assert!(error.message().contains("Recovery:"));
     }
 }

@@ -1,0 +1,38 @@
+[package]
+name = "atm-graft-python"
+# Published to PyPI by Maturin as `atm-graft`; never cargo-publish this bridge
+# crate as a separate crates.io artifact.
+publish = false
+# Maturin consumes this crate's Cargo version as Python package metadata; keep
+# it equivalent to the workspace release while using PEP 440-compatible form.
+version = "1.4.2"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "PyO3 bindings for the typed atm-graft client."
+repository.workspace = true
+homepage.workspace = true
+
+[lib]
+name = "atm_graft_python"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["abi3"]
+# The public Python surface uses only PyO3 APIs compatible with CPython's
+# stable ABI.  One CPython 3.11 abi3 wheel therefore supports CPython 3.11+
+# on a given operating-system/architecture target.
+abi3 = ["pyo3/abi3-py311"]
+extension-module = ["pyo3/extension-module"]
+
+[dependencies]
+atm-graft = { path = "../atm-graft", version = "1.4.2" }
+atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.2" }
+pyo3 = "0.29"
+tokio.workspace = true
+
+[dev-dependencies]
+atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.2", features = ["test-utils"] }
+atm-graft = { path = "../atm-graft", version = "1.4.2", features = ["test-support"] }
+tempfile = "3"

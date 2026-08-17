@@ -38,9 +38,10 @@ Phase-S planning note:
   full daemon feature set must work on Windows as well as Unix-like hosts
 - the active planning line for that correction is Phase S, tracked in
   [`docs/plans/phase-S/plan-phase-S.md`](./plans/phase-S/plan-phase-S.md)
-- the canonical daemon wire contract, current daemon packet surface, and shared
-  local-IPC/host-host frame rules are tracked in
-  [`docs/atm-daemon/protocol-icd.md`](./atm-daemon/protocol-icd.md)
+- the canonical daemon API contract is
+  [`docs/atm-daemon/http-api.md`](./atm-daemon/http-api.md) and its checked-in
+  OpenAPI specification; the legacy frame `protocol-icd.md` was intentionally
+  removed
 - Phase S is not satisfied by Windows compilation or temporary unsupported-path
   stubs; it closes only when daemon functionality is production-ready on every
   supported operating system behind the documented portability boundaries
@@ -71,15 +72,40 @@ Phase-AA simplification note:
   concrete SQLite construction to a dedicated `atm-runtime` crate and
   restoring a direct local doctor/store-health path
 
-Phase-AB planning note:
-- `Phase AB` is the active cross-host smoke planning line that follows the
+Phase-AG planning note:
+- `Phase AG` is the active cross-host validation line that follows the
   completed same-host release-readiness work in `Phase Z`
 - the authoritative planning document is
-  [`docs/plans/phase-AB/plan-phase-AB.md`](./plans/phase-AB/plan-phase-AB.md)
-- `Phase AB` owns Windows/macOS real-binary cross-host smoke coverage on
-  disposable clean-room state first, then disposable copied-state revalidation
-- the planning branch is `plan/phase-AB`
-- the execution integration branch is `integrate/phase-AB`
+  [`docs/plans/phase-AG/plan-phase-AG.md`](./plans/phase-AG/plan-phase-AG.md)
+- `Phase AG` now has two historical sections:
+  - the completed early validation attempts on
+    `feature/cross-host-communication`
+  - the replan/corrective line on
+    `plan/phase-ag-multihost-advertise-allowlist`
+- early AG execution proved that validation alone could not close the phase:
+  the product was missing durable cross-host control-plane surfaces
+- the current AG prerequisite product work is:
+  - SQLite-backed interface selection/bind configuration
+  - SQLite-backed deny-by-default exact-host allowlist enforcement
+  - CLI commands to manage both
+  - `atm doctor` visibility for both
+  - retained loopback self-test support as a supported diagnostic mode
+- only after that product work lands does AG return to live Windows/macOS
+  host-pair validation and copied-state release proof
+- the AG corrective routing/revalidation plan is now merged into `develop`, and
+  execution proceeds on separate per-sprint worktrees beginning with
+  `feature/pAG-s11-remote-target-contract`
+- the remaining ruthless-boundary cleanup and cross-host unification line is
+  split into separate critically reviewed hardening sprints `AG.18` through
+  `AG.25` on top of the AG.11-AG.17 corrective line
+- transport security / encryption remains a later AG sprint concern and must
+  not be implied by earlier functional cross-host closure
+- standalone follow-up fix work also exists off `develop` for identifier
+  hardening: `fix/agent-team-name-charset-validation`, tracked by
+  [`docs/plans/sprint-agent-team-charset-hardening.md`](./plans/sprint-agent-team-charset-hardening.md).
+  Its scope is to tighten the repo-wide `<agent>` / `<team>` charset contract
+  to path-segment-safe, delimiter-safe identifiers and to inject the matching
+  centralized validation change through the normal develop-based path.
 
 Phase-AD planning note:
 - `Phase AD` is the active release-blocking correction line for caller
@@ -121,8 +147,7 @@ Phase-AF planning note:
 - the accepted implementation branch is `integrate/phase-AF`; AF-1, AF-2, and
   AF-3 are merged there at `52c5c338`, with docs-only readiness corrections at
   `d5420b0f`.
-- PR #539 (`integrate/phase-AF` -> `develop`) is the active phase-end review
-  candidate.
+- PR #539 is merged to `develop` at `98a4e66c`.
 - AF-1 is the release blocker: no 1.3.1 RC or daemon-spawning full smoke may
   proceed until its process-level singleton proof is green.
 - `smoke-test/1.3.1-cross-host` is the repo-published cross-host RC evidence
@@ -131,6 +156,12 @@ Phase-AF planning note:
   [`docs/plans/phase-af/smoke-1.3.1-cross-host-plan.md`](./plans/phase-af/smoke-1.3.1-cross-host-plan.md),
   and its Windows handoff checklist is
   [`docs/plans/phase-af/smoke-1.3.1-windows-checklist.md`](./plans/phase-af/smoke-1.3.1-windows-checklist.md).
+
+Prompt-hardening note:
+- `feature/prompt-hardening` is the prompt/template hardening branch for
+  concise evidence discipline across dev, QA, and review reporting.
+- the authoritative plan is
+  [`docs/plans/prompt-hardening/plan-prompt-hardening.md`](./plans/prompt-hardening/plan-prompt-hardening.md)
 
 Phase R execution entry:
 - Wave 1 deliverable: the new Phase R skeleton
@@ -169,8 +200,9 @@ Status:
 - Phase AA is the architectural simplification planning line for removing
   SQLite references from `atm-daemon` and moving concrete runtime assembly out
   to `atm-runtime`.
-- Phase AB is the active planning line for Windows/macOS cross-host ATM smoke
-  execution after the accepted Phase Z baseline.
+- Phase AG is the active planning line for Windows/macOS cross-host ATM
+  validation after the accepted Phase Z baseline; Phase AB is historical input
+  only.
 - Phase AD is the active planning line for release-blocking caller-identity,
   post-send, and retired-subsystem cleanup on top of the accepted `1.2.3`
   baseline.
@@ -255,7 +287,7 @@ Phase R sequencing rule:
 Status summary:
 - Phase AF is the active reliability-recovery line following 1.3.0 dogfood.
 - AF-1, AF-2, and AF-3 are merged on `integrate/phase-AF`; PR #539
-  (`integrate/phase-AF` -> `develop`) is under phase-end review.
+  is merged to `develop` at `98a4e66c`.
 - Accepted implementation branch: `integrate/phase-AF`.
 - Integration target: `develop`.
 - The authoritative plan is
@@ -654,59 +686,105 @@ Before implementation starts, the docs should be reviewed with these checks:
 
 - **Phase Z: Smoke, Dogfood, And Release Sign-Off [COMPLETE]** — Validated the first daemon + SQLite mail-SSOT release with real-binary smoke, roster truth cutover, watcher-owned Claude config ingest, boundary lint gates, `atm-dev` canary and dogfood, and final release sign-off; verdict `READY` on `feature/pZ-smoke-atm-graft @ 84935774` authorized in `docs/phase-Z/readiness.md` (`PZ-ATM-GRAFT-QA-3 PASS — PR #365`). (Sprints Z.1–Z.24 and Z.3–Z.4; integration branch: `integrate/phase-Z`)
 
-## 37. Phase AB Windows/macOS Cross-Host Smoke
+## 37. Phase AG Windows/macOS Cross-Host Validation [HISTORICAL]
 
 Status summary:
 - `Phase Z` is complete and remains the accepted same-host release-readiness
   line on `develop`.
 - Windows same-host build/test and release-binary daemon parity have been
   restored on the post-`Z` baseline.
-- cross-host messaging between Windows and macOS has not yet been validated in
-  one authoritative executable smoke phase.
-- `Phase AB` is the next planning line and is not yet started.
+- early AG validation attempts were executed and produced real findings, but
+  they also proved the original validation-only framing was insufficient.
+- the missing AG product surfaces are now explicit:
+  - durable daemon interface/bind configuration
+  - durable inbound exact-host allowlist enforcement
+  - CLI management for both
+  - `atm doctor` visibility for both
+  - retained loopback self-test support
+- Phase AG is retired. It documents the rejected custom-frame/TCP design and
+  must not be used for implementation or release evidence; Phase AI owns the
+  replacement HTTP/UDS and HTTPS proof line.
+- `Phase AB` remains historical source material only.
 
 Planning branch:
-- `plan/phase-AB`
+- historical early execution: `feature/cross-host-communication`
+- earlier corrective replan: `plan/phase-ag-multihost-advertise-allowlist`
+- current corrective routing/revalidation plan source: `develop`
 
-Future integration branch:
-- `integrate/phase-AB`
+Branch-routing note:
+- PR #542 (`feature/cross-host-communication` -> `develop`) is retained as the
+  historical early-AG planning/execution record
+- PR #555 (`plan/phase-ag-multihost-advertise-allowlist` -> `develop`) is the
+  earlier corrective AG replanning line
+- the hardened AG.11 through AG.15 execution line now uses separate sprint
+  branches/worktrees:
+  `feature/pAG-s11-remote-target-contract`,
+  `feature/pAG-s12-localhost-proof`,
+  `feature/pAG-s13-selfip-proof`,
+  `feature/pAG-s14-integration-coverage`, and
+  `feature/pAG-s15-othermac-smoke`
+- if AG later opens product-code fixes from concrete findings, those follow-up
+  branches must declare their own normal integration path explicitly
 
 Goal:
-- validate Windows <-> macOS cross-host ATM messaging on real binaries
-- keep clean-room disposable state as the first validation lane
-- prove durable send/read/ack, degraded notification visibility, and
-  retry-visible recovery across hosts
+- preserve what AG.1 / AG.2 / AG.3 already established
+- finish the missing product control plane before claiming real closure
+- validate Windows <-> macOS cross-host ATM interfaces on real binaries after
+  that product surface exists
+- prefer the simplest real network path first (plain LAN is acceptable and
+  preferable when available, including Mac Studio)
 - revalidate on copied state only after the disposable lane passes
+- sequence transport security / encryption after functional cross-host
+  operability is real
 
 Execution shape:
-- `AB.1` cross-host harness and clean-room baseline
-  - branch: `feature/pAB-s1-cross-host-harness-and-clean-room-baseline`
-- `AB.2` one-way cross-host delivery
-  - branch: `feature/pAB-s2-one-way-cross-host-delivery`
-- `AB.3` cross-host ack round-trip
-  - branch: `feature/pAB-s3-cross-host-ack-round-trip`
-- `AB.4` degraded notification and retry-visible recovery
-  - branch: `feature/pAB-s4-degraded-notification-and-retry-visible-recovery`
-- `AB.5` copied-state revalidation and readiness closeout
-  - branch: `feature/pAB-s5-copied-state-revalidation-and-readiness-closeout`
+- `AG.1` cross-host setup contract and channel bring-up
+- `AG.2` core cross-host interface validation
+- `AG.3` daemon loopback self-test surface
+- `AG.4` durable interface configuration and binding
+- `AG.5` durable host allowlist enforcement
+- `AG.6` doctor visibility for the cross-host control plane
+- `AG.7` live cross-host revalidation
+- `AG.8` transport security and encryption hardening
+- `AG.10` secured cross-host transport implementation
+- `AG.9` historical reviewed copied-state verdict for the pre-corrective line
+- `AG.11` exact remote-target contract and dispatch routing
+- `AG.12` localhost full-function same-host remote-target proof
+- `AG.13` self-IP full-function same-host remote-target proof
+- `AG.14` automated integration coverage for the corrective path
+- `AG.15` other-Mac cross-host smoke for the corrective path
+- `AG.16` Windows/macOS cross-host smoke for the corrective path
+- `AG.17` corrective copied-state revalidation and final release verdict
+- `AG.18` collapse Compose and DirectDeliver into one envelope/handler
+- `AG.19` delete separate remote-ack execution path
+- `AG.20` move deferred/replay policy out of transport
+- `AG.21` collapse duplicate dispatch routing and inbound persistence paths
+- `AG.22` relocate host matching and endpoint selection out of transport
+- `AG.23` remove synthetic deferred-receipt construction from daemon dispatch
+- `AG.24` stop transport from mutating request shape before send
+- `AG.25` live two-daemon-pair proof for the unified cross-host line
 
 Immediate planning outputs:
-- `docs/plans/phase-AB/plan-phase-AB.md`
-- `docs/plans/phase-AB/cross-host-smoke-checklist.md`
-- `docs/plans/phase-AB/cross-host-findings-ledger.md`
-- `docs/plans/phase-AB/readiness.md`
-- `docs/plans/phase-AB/sprint-AB1.md`
-- `docs/plans/phase-AB/sprint-AB2.md`
-- `docs/plans/phase-AB/sprint-AB3.md`
-- `docs/plans/phase-AB/sprint-AB4.md`
-- `docs/plans/phase-AB/sprint-AB5.md`
+- `docs/plans/phase-AG/plan-phase-AG.md`
+- `docs/plans/phase-AG/readiness.md`
+- `docs/plans/phase-AG/sprint-AG1.md`
+- `docs/plans/phase-AG/sprint-AG2.md`
+- `docs/plans/phase-AG/sprint-AG3.md`
+- `docs/plans/phase-AG/sprint-AG4.md`
+- `docs/plans/phase-AG/sprint-AG5.md`
+- `docs/plans/phase-AG/sprint-AG6.md`
+- `docs/plans/phase-AG/sprint-AG7.md`
+- `docs/plans/phase-AG/sprint-AG8.md`
+- `docs/plans/phase-AG/sprint-AG9.md`
+- `docs/plans/phase-AG/sprint-AG10.md`
 
 Acceptance / Phase Entry Gate:
 - `Phase Z` must remain closed on `develop`
+- no speculative code work begins before the first failed validation row exists
 - the clean-room disposable host-pair lane must pass before copied-state
   validation begins
 - the phase does not close until both disposable and copied-state cross-host
-  smoke lanes pass with retained evidence
+  validation lanes pass with retained evidence or are blocked by named findings
 
 ## 38. Phase AD Caller Identity And Post-Send Runtime Simplification [COMPLETE]
 
@@ -869,6 +947,344 @@ Acceptance:
   execution context only.
   - branch: `chore/docs-restructure`
   - authoritative source: `docs/adr/INDEX.md`
+
+## 40. Phase AI — HTTP daemon and minimal cross-host transport [ACTIVE — implementation through AI.38; readiness blocked]
+
+Planning branch: `plan/phase-ai-planning`
+Integration branch: `integrate/phase-ai-31-33`
+
+Implementation is merged through AI.38. Post-AI.38 legacy-finding and
+hardening cleanup is in progress on follow-up branches. This implementation
+status does not close the phase: [`docs/plans/phase-ai/readiness.md`](./plans/phase-ai/readiness.md)
+still blocks release pending physical two-Mac and Mac↔Windows peer evidence.
+
+The retained local roster-repair follow-up is planned in
+[`docs/plans/teams-remove-member/sprint-02.md`](./plans/teams-remove-member/sprint-02.md).
+It adds the narrowly scoped `atm teams remove-member` command on its own
+feature branch; it is not cross-host transport work and does not alter the
+Phase AI readiness gate.
+
+AI.1 (`feature/pAI-1-daemon-preag-reset`, PR #592) is the reviewed deletion
+baseline. It retains only the local-IPC singleton while deleting peer transport,
+replay/store support, and retired boundary adapters. It supersedes the abandoned
+PR #590 line. AI.2 onward rebuild from that baseline: HTTP over UDS replaces the
+custom local frame protocol, and the same router later serves authenticated
+HTTPS/TCP peers. The final line has no legacy Windows local-transport fallback, peer/replay state, parallel
+send/ack paths, or cross-host-specific mailbox logic.
+
+Implementation Branches:
+
+| Sprint | Status | Branch | Artifacts |
+| --- | --- | --- | --- |
+| `AI.1` | `complete` | `feature/pAI-1-daemon-preag-reset` | deleted peer transport/replay state and retired daemon compatibility adapters |
+| `AI.2` | `complete` | `feature/pAI-s2-storage-topology` | storage topology cleanup, backend-neutral runtime factory, atm-core boundary retirement gate |
+| `AI.3` | `complete` | `feature/pAI-s3-error-contract-foundation` | serializable error contract foundation and retired protocol error envelope cleanup |
+| `AI.4` | `complete` | `feature/pAI-s4-error-consumer-migration` | consumers migrated onto the two-field error contract |
+| `AI.5` | `complete` | `feature/pAI-s5-chat-address-identity` | chat-address identity contract aligned for HTTP daemon ingress |
+| `AI.6` | `complete` | `feature/pAI-s6-http-uds-router` | REST router and HTTP-over-UDS local daemon transport, with AI.7 write-graph waiver recorded |
+| `AI.7` | `complete` | `feature/pAI-s7-canonical-write-path` | canonical write request, single host-routing seam, and collapsed send/ack ingress |
+| `AI.8` | `complete` | `feature/pAI-s8-crosshost-control-plane` | durable HTTPS interface, certificate, and trust configuration |
+| `AI.9` | `complete` | `feature/pAI-s9-https-peer-transport` | peer HTTPS transport |
+| `AI.10` | `complete` | `feature/pAI-s10-crosshost-proof-closeout` | proof matrix and closeout; live physical-peer rows remain readiness blockers |
+| `AI.11` | `complete` | `feature/pAI-s11-post-merge-remediation` | route-specific HTTP bodies and Windows loopback-TCP local transport |
+| `AI.12` | `complete` | `feature/pAI-s12-post-write-router` | canonical post-write peer routing and immutable outbound persistence |
+| `AI.13` | `complete` | `feature/pAI-s13-peer-smoke-contract` | repository-owned peer-pair smoke runner and release evidence contract |
+| `AI.14` | `complete` | `feature/pAI-s14-mac-peer-smoke` | physical Mac↔Mac peer-pair proof implementation; live evidence remains blocked |
+| `AI.15` | `complete` | `feature/pAI-s15-windows-peer-smoke` | physical Mac↔Windows peer-pair proof implementation; live evidence remains blocked |
+| `AI.16` | `complete` | `feature/pAI-s16-offline-reconciliation` | durable-age-bounded canonical-message reconciliation |
+| `AI.17` | `complete` | `feature/pAI-s17-hermes-chat-identity` | ambient `ATM_CHAT_ID` identity context |
+| `AI.18` | `complete` | `feature/pAI-s18-graft-python-bindings` | PyO3/Maturin graft client/nudge binding |
+| `AI.19` | `complete` | `feature/pAI-s19-hermes-graft-integration` | typed Hermes graft bridge after canonical persistence |
+| `AI.20` | `complete` | `feature/pAI-s20-hermes-bridge-deployment` | per-profile launchd bridge deployment and runbook |
+| `AI.21` | `complete` | `feature/pAI-s21-hermes-closure` | retained Hermes end-to-end production evidence |
+| `AI.21-pre` | `complete` | `feature/pAI-s21pre-crosshost-evidence-harness` | supported peer-smoke harness and plaintext-test diagnostic profile |
+| `AI.22` | `complete` | `feature/pAI-s22-loopback-self-send-exemption` | host-qualified self-send exemption and advertised-IP proof path |
+| `AI.23` | `complete` | `feature/pAI-s23-crosshost-shared-write-path` | one shared HTTP write path and post-write router |
+| `AI.24` | `complete` | `feature/pAI-s24-host-qualified-ack-receipt` | host-qualified ACK receipt and peer nudge |
+| `AI.25` | `complete` | `feature/pAI-s25-peer-authority-resolution` | hostname/pin peer authority and live trust refresh |
+| `AI.26` | `complete` | `feature/pAI-s26-peer-write-deadline` | propagated peer-write deadline |
+| `AI.27` | `complete` | `feature/pAI-s27-peer-delivery-observability` | truthful peer delivery outcomes and terminal events |
+| `AI.28` | `complete` | `feature/pAI-s28-bounded-peer-recovery` | bounded recovery after connectivity loss |
+| `AI.29` | `complete` | `feature/pAI-s29-crosshost-smoke-rerun` | receiver-proven physical smoke implementation; live evidence remains blocked |
+| `AI.30` | `complete` | `feature/pAI-s30-semver-http-compatibility` | schema/HTTP compatibility admission and SemVer prerelease distribution |
+| `AI.31` | `complete` | `feature/pAI-s31-async-local-admission` | SQLite-only local admission response; host-qualified peer work signalled after response |
+| `AI.32` | `complete` | `feature/pAI-s32-independent-peer-jobs` | bounded non-durable per-ULID peer jobs |
+| `AI.33` | `abandoned/superseded` | `feature/pAI-s33-admission-capacity-smoke` | PR #695 closed, not merged; real M5 admission-capacity evidence retained a blocking HTTP 503 throughput failure despite green CI; AI.40 is the active owner of a clean benchmark runner/evidence path |
+| `AI.34` | `complete` | `fix/hermes-nudge-endpoint-mismatch` | canonical roster workspace-root resolution for graft nudge endpoint delivery |
+| `AI.35` | `complete` | `feature/pAI-s35-graft-root-fallback-observability` | graft-root fallback observability and operator runbook closure |
+| `AI.36` | `complete` | `feature/pAI-s36-graft-receiver-ownership` | lease-safe receiver ownership per canonical graft root/team/agent |
+| `AI.37` | `complete` | `feature/pAI-s37-hermes-recovery-summary` | ten-second durable-mail-derived recovery summary |
+| `AI.38` | `complete` | `feature/pAI-s38-hermes-steer-nudge-delivery` | live and recovery graft wake-ups via non-interrupting steer |
+| `AI.39` | `complete` | `feature/pAI-s39-buffered-local-http-framing` | bounded buffered local HTTP request framing |
+| `AI.40` | `in_progress` | `feature/pAI-s40-local-transport-benchmark` | clean local transport throughput benchmark; not an extension of abandoned AI.33 script |
+| `AI.43` | `complete` | `feature/pAI-s43-remote-https-response-framing` | buffered remote HTTPS response framing |
+| `AI.46` | `complete` | `feature/pAI-s46-reports-index` | generated durable reports index |
+| `AI.47` | `complete` | `feature/pAI-s47-pages-site-home` | GitHub Pages site home and deployment |
+| `AI.48` | `complete` | `feature/pAI-s48-fuzz-tooling-port` | ported `just fuzz` coordinator/probe tooling |
+| `AI.49` | `complete` | `feature/pAI-s49-benchmark-report` | durable benchmark JSON and aggregate HTML report |
+| `AI.50` | `complete` | `feature/pAI-s50-fuzz-report` | sc-compose-template fuzz report renderer |
+| `AI.51` | `complete` | `feature/pAI-s51-local-http-framing-adversarial-campaign` | bounded local HTTP framing campaign |
+| `AI.52` | `complete` | `feature/pAI-s52-windows-transport-benchmark` | cwin Windows TCP confirmation after accepted M5 performance evidence |
+| `AI3152-TOOLING` | `complete` | `feature/daemon-devcert-signing` | silent macOS `atm-daemon-dev` signing hook for local daemon builds |
+
+Authoritative plan: [Phase AI plan](./plans/phase-ai/plan-phase-ai.md).
+
+AI.3 (`feature/pAI-s3-error-contract-foundation`) completes the two-field
+serializable error contract and removes the retired protocol error envelope.
+
+## 41. Phase AK — Direct peer HTTP delivery [ABANDONED]
+
+Status summary:
+- Phase AK is abandoned. It was the planned simplification line for replacing
+  the Phase AI peer worker and custom TLS sender with one direct HTTP delivery
+  function; Phase AL/AM (the Tokio migration, `atm-http-runtime`) supersedes
+  it with a single Tokio-based transport replacement instead of an
+  incremental direct-HTTP-sender line.
+- `AK.1`–`AK.10` reached implementation completion and merged to
+  `integrate/phase-ak` before the line was abandoned; no further AK work is
+  dispatched.
+- `AK.11`–`AK.17` (the post-AK.10 mandate-correction line) do not proceed.
+  `AK.11`'s receiver-hook design is the sole salvaged artifact: AL.1 sources
+  it as `archived_reference_source` commit `88bca9d5e232006339f43a4e97eef335531b8a8f`
+  (hook-boundary file set and tests only, no wholesale cherry-pick), per
+  [Phase AL plan](./plans/phase-al/plan-phase-al.md#baseline-and-entry-gate).
+  This does not revive, complete, or re-authorize any other AK code, peer
+  transport, replay, listener, or scheduler.
+- Planning branch (historical): `plan/mvp-simplification`.
+- Integration branch (historical): `integrate/phase-ak`.
+- The historical plan is
+  [Phase AK plan](./plans/phase-ak/plan-phase-ak.md); its AK.11+ references
+  are non-authoritative per that document's own AK.11+ authority notice.
+
+Goal:
+- preserve immutable local admission and the one ordinary inbound
+  persistence/nudge path while removing peer worker, per-message-thread,
+  broad-scan, DNS-thread, and native custom-TLS delivery complexity
+- prove direct configured-host HTTP delivery before adding the small optional
+  resend cache
+
+Deliverables:
+- direct host-alias normalization, one direct no-retry HTTP sender, optional
+  timer-driven resend cache, and isolated curl-mTLS provisioning evidence
+- deletion of obsolete worker/replay/TLS transport state with governed
+  boundary-record updates
+
+Sprint line:
+- `AK.1` `feature/pak-s1-crosshost-ack-provenance-recovery`
+- `AK.2` `feature/pak-s2-delete-peer-worker`
+- `AK.3` `feature/pak-s3-canonical-peer-aliases`
+- `AK.4` `feature/pak-s4-direct-peer-http-no-retry`
+- `AK.5` `feature/pak-s5-direct-peer-timer-state`
+- `AK.6` `feature/pak-s6-remove-legacy-peer-transport`
+
+Acceptance:
+- Phase AK acceptance is defined by the authoritative plan's sprint
+  validations and its required bidirectional production send/read/ACK/nudge
+  proof on the accepted `integrate/phase-ak` line.
+
+## 42. Phase AJ — Runtime observation [IMPLEMENTATION COMPLETE — FINAL QA GATE OPEN]
+
+Phase AJ plans and reviews against `integrate/phase-ai-31-33 @
+150391ecdf2e003185bff7d78427cd21509a7981`, the HTTP local transport line for
+UDS and TCP. Phase AI merged to `develop`; team-lead recorded the post-merge
+SHA, cut `integrate/phase-AJ` from it, reconciled every AJ exact target against
+the pinned planning baseline, and revalidated drift before AJ.1 started. A
+pre-merge plan finding cites the pinned baseline; a post-merge reconciliation
+finding cites both SHAs and the changed target.
+
+All AJ implementation heads, closeout validation, and parent PR merges
+(`AJ.1`–`AJ.10`, PRs #735–#745, plus merge-content-recovery PR #758) are
+complete. Phase AJ is not closed: a final holistic QA gate finding (a
+transport-trust-boundary gap in heartbeat ingress) must be remediated and
+reverified before its final status changes.
+
+AJ keeps roster runtime observation in daemon memory: successful
+environment-attested CLI/graft activity and heartbeat converge on one current
+entry. Session, pid, and state are diagnostic telemetry, not inputs to routing,
+nudge, retry, admission, delivery, notification, or policy.
+
+| Sprint | Status | Branch | Purpose |
+| --- | --- | --- | --- |
+| `AJ.1` | `implementation complete` | `feature/pAJ-s1-session-id-and-protocol` | canonical `SessionId` and additive heartbeat fields |
+| `AJ.2` | `implementation complete` | `feature/pAJ-s2-caller-context-env` | environment-attested observation resolver |
+| `AJ.3` | `implementation complete` | `feature/pAJ-s3-cli-wire-payload` | transient local CLI/graft request metadata |
+| `AJ.4` | `implementation complete` | `feature/pAJ-s4-daemon-cache-touch` | shared daemon cache merge after successful local dispatch |
+| `AJ.5` | `implementation complete` | `feature/pAJ-s5-heartbeat-session` | heartbeat session observation convergence |
+| `AJ.6` | `implementation complete` | `feature/pAJ-s6-runtime-observation-snapshot` | runtime snapshot and roster projection |
+| `AJ.7` | `implementation complete` | `feature/pAJ-s7-runtime-observation-source-guard` | non-authoritative source-use guard |
+| `AJ.8` | `implementation complete` | `feature/pAJ-s8-runtime-observation-boundary-record` | machine and human daemon boundary record |
+| `AJ.9` | `implementation complete` | `feature/pAJ-s9-runtime-observation-contract-reconciliation` | requirements, ADR, architecture, and team-state reconciliation |
+| `AJ.10` | `implementation complete` | `feature/pAJ-s10-runtime-observation-phase-closeout` | evidence-backed phase and status closeout (final QA gate open) |
+
+Each AJ successor begins immediately when its parent's development head is
+merged forward into it; do not wait for parent QA approval. Merge the current
+parent branch into the child before every child dev/fix round. A child PR may
+not complete or merge its target before its parent PR merges.
+
+## 43. Phase AL — Build the Minimal Tokio HTTP Runtime [COMPLETE]
+
+Status summary:
+- Phase AL replaces ATM's hand-written synchronous HTTP framing and
+  transport-specific request processing with one small `atm-http-runtime`
+  library built on Tokio and maintained HTTP/TLS libraries, providing the
+  same typed application contract to all clients and all listeners.
+- AL is additive: it does not preserve the legacy transport as a
+  compatibility architecture and does not add resend/replay. Phase AM
+  deletes the legacy implementation once AL proves the replacement.
+- Planning branch: `plan/tokio-migration`.
+- Baseline: `develop @ 67401907039f92e58e883273f02372a637202f70` (includes
+  the completed Phase AJ merge).
+- Entry gate: AL.1 starts from that `develop` baseline; it does not require
+  Phase AK completion, merge, or revival. AL.1 sources only the approved
+  receiver-hook design from archived AK.11 commit `88bca9d5` (see Phase AK
+  status above).
+- Binding boundary rules:
+  [`phase-al-am-runtime-boundary-checklist.md`](./plans/phase-al-am-runtime-boundary-checklist.md).
+  Every AL PR must pass them before merging forward.
+- The authoritative plan is
+  [Phase AL plan](./plans/phase-al/plan-phase-al.md).
+
+Sprint line:
+- `AL.1 [COMPLETE]` `sprint-AL1-runtime-contract.md` — runtime contract and archived-hook
+  transplant
+- `AL.2 [COMPLETE]` `sprint-AL2-canonical-handler.md` — canonical handler
+- `AL.3 [COMPLETE]` `sprint-AL3-received-hook.md` — received hook wiring
+- `AL.4` `sprint-AL4-shared-client.md` — shared client
+- `AL.5 [COMPLETE]` `sprint-AL5-unix-uds.md` — Unix UDS listener
+- `AL.6` `sprint-AL6-loopback-tcp.md` — loopback TCP listener
+- `AL.7 [ABANDONED]` `sprint-AL7-peer-tls-m5-proof.md` — mTLS peer adapter
+  removed from the Phase AL MVP before implementation; retained TLS material
+  stays quarantined reference only
+- `AL.8` `sprint-AL8-daemon-composition-proof.md` — daemon composition and
+  static boundary proof
+- `AL.9` `sprint-AL9-physical-proof-ledger-freeze.md` — physical adapter
+  matrix, benchmark, cutover/abort, AM ledger freeze
+- `AL.10 [ABANDONED]` — proposed M4 hardware-smoke work was superseded before
+  a sprint record was accepted; its useful evidence moved to the direct M5 and
+  cwin tracks below
+- `AL.11 [SUPERSEDED]` — historical M5 hardware-smoke dispatch, replaced by
+  the pinned-candidate, direct-peer AL.13 plan
+- `AL.12 [SUPERSEDED]` — historical cwin hardware-smoke dispatch, replaced by
+  the direct public-CLI AL.14 plan
+- `AL.13 [COMPLETE]` `sprint-AL13-m5-direct-crosshost-smoke.md` — M5↔M4
+  direct-peer smoke and benchmark evidence
+- `AL.14 [BLOCKED]` `sprint-AL14-cwin-direct-crosshost-smoke.md` — cwin
+  local smoke and benchmark evidence retained; its Windows-originated
+  direct-peer row is infrastructure-blocked
+- `AL.15 [BLOCKED]` `sprint-AL15-direct-crosshost-evidence-closeout.md` —
+  coordinator closeout remains blocked until AL.9's final physical-proof rows
+  are rerun and accepted at one frozen candidate
+- `AL.16` `sprint-AL16-hermes-graft-live-proof.md` — installable generic
+  `atm-graft` and Hermes-facing `hermes-atm` package boundary; package-side
+  candidate is under review, while portable live proof is blocked on a
+  reviewed, immutable, deployed Hermes host contract
+- `AL.17` `sprint-AL17-hermes-gateway-lifecycle.md` — reviewed, immutable,
+  deployed Hermes runner lifecycle/injection contract for the queue MVP;
+  required before a portable live package claim
+- `AL.18` `sprint-AL18-hermes-telegram-live-proof.md` — installed-package M4
+  idle and same-session busy queue proof after AL.17 is deployed
+- `AL.19` `sprint-AL19-hermes-m5-py311-verify.md` — M5 multi-interpreter
+  package verification; CPython 3.11 is an early wheel-compatibility lane and
+  the active M5 Hermes-service lane must be inventoried and proven separately
+
+Acceptance:
+- Phase AL acceptance is defined by the authoritative plan's sprint
+  validations and the runtime boundary checklist's required evidence set.
+
+## 44. Phase AM — Deletion-Only Transport Cleanup [COMPLETE]
+
+Status summary:
+- Phase AM is deletion-only: it removes the legacy transport machinery made
+  redundant by `atm-http-runtime` (raw HTTP framing, legacy local/peer
+  transport workers, peer-only ingress, resend/replay machinery) without
+  preserving, repairing, or extending it.
+- Planning branch: `plan/tokio-migration`.
+- Baseline: `develop @ 67401907039f92e58e883273f02372a637202f70` plus
+  accepted Phase AL.
+- Entry gate: AM implementation begins only after AL.9 proves the new
+  runtime is the live local and cross-host path. AM may inventory and write
+  static guards in parallel with AL but must not delete a live path before
+  that proof.
+- Binding boundary and transition rules:
+  [`phase-al-am-runtime-boundary-checklist.md`](./plans/phase-al-am-runtime-boundary-checklist.md),
+  [`phase-al-am-boundary-transition.md`](./plans/phase-al-am-boundary-transition.md).
+- The authoritative plan is
+  [Phase AM plan](./plans/phase-am/plan-phase-am.md).
+
+Sprint line:
+- `AM.1` `sprint-AM1-removal-ledger.md` — deletion ledger, topological
+  deletion order, negative architecture guards
+- `AM.2` `sprint-AM2-delete-legacy-http.md` — migrate retained non-write
+  compatibility callers, then delete legacy HTTP framing
+- `AM.3` `sprint-AM3-delete-legacy-local.md` — delete legacy local transport
+- `AM.4` `sprint-AM4-delete-legacy-peer.md` — delete legacy peer transport
+- `AM.5` `sprint-AM5-delete-replay.md` — delete resend/replay machinery
+- `AM.6` `sprint-AM6-minimality-proof.md` — minimality proof
+
+Acceptance:
+- Phase AM acceptance is defined by the authoritative plan's sprint
+  validations: every production legacy reference has one ledger row or is
+  proven dead, no guard is merged early, and the minimality proof confirms
+  no compatibility shim survives.
+
+## 45. Phase AN — Decomposed Template Messages And Query Surface [AN.1–AN.15 COMPLETE]
+
+- **Phase AN: Decomposed Template Messages And Query Surface [AN.1–AN.10 COMPLETE]** —
+  Added a bounded `sc-composer` adapter boundary, durable template catalog and
+  decomposed-message records, render-on-read, FTS search, public
+  introspection/query surfaces, and compose guidance. AN.8 closes the original
+  decomposed-template phase
+  with Q1–Q4 read-only query fixtures, a template-agnostic vocabulary proof,
+  and the Tokio HTTP four-cell routing matrix on the Linux/macOS/Windows CI
+  lanes. Physical cross-host template synchronization remains intentionally
+  out of scope. (Authoritative plan:
+  [`plan-phase-an.md`](./plans/phase-an/plan-phase-an.md); evidence:
+  [`validation-evidence.md`](./plans/phase-an/validation-evidence.md))
+
+- **AN workflow-metadata extension [COMPLETE]** — adds optional
+  template-declared workflow facts, immutable admission snapshots of template
+  and instance tag provenance, generic local lifecycle analytics, and an
+  opt-in OpenTelemetry-compatible projection. It retains no ATM-specific
+  workflow vocabulary and is governed by
+  [`ADR-046`](./adr/ADR-046-template-declared-workflow-metadata.md).
+
+Sprint line:
+- `AN.9` `feature/pan-s9-template-workflow-contract`
+- `AN.10` `feature/pan-s10-template-workflow-admission`
+- `AN.11` `feature/pan-s11-workflow-analytics-projection` — local workflow
+  lifecycle analytics, query projection, and opt-in telemetry seam
+- `AN.12` `feature/an12-workflow-validation-evidence` — retained two-vocabulary
+  local validation for admission/provenance, CLI/HTTP/Python query, routing,
+  migration compatibility, and best-effort telemetry isolation
+- `AN.13` `feature/an13-sc-composer-141-upgrade` — durable output-format
+  catalog identity and exact released `sc-composer`/`sc-sha` 1.4.1 adapter pin
+- `AN.14` `feature/an14-sc-compose-141-checked-emission` — adapter-only
+  checked emission that rejects malformed JSON before send or render-on-read
+
+- **AN.13–AN.15 checked-render upgrade and assurance [COMPLETE]** — AN.13 establishes
+  durable adapter-derived output-format identity and adopts the released
+  exact `sc-sha`/`sc-composer` 1.4.1 dependency chain in its adapter; AN.14
+  makes the
+  `atm-template-sc-compose` adapter refuse malformed rendered JSON before
+  sending, caching, or render-on-read output. AN.15 then runs a bounded,
+  deterministic adversarial campaign over the checked template/catalog
+  lifecycle, including captured-environment and immutable-revision oracles.
+  The AN.15 HTTP-seam addendum (PR #887,
+  `feature/an15-http-fuzz-campaign`) is merged and exercises the current Tokio/Axum
+  `atm-http-runtime` boundary with a separately retained, commit-pinned
+  four-worker campaign; it is not duplicate pre-Tokio AI.51 work against the
+  removed `api::http_frame_reader` module. AN.15 does not make ATM a
+  template-approval or lineage-policy engine. The three
+  sprints required crates.io to publish `sc-sha`,
+  `sc-composer`, and `sc-compose` 1.4.1; published `sc-composer` exports
+  `check_rendered_output`, `CheckedOutput`, and `OutputFormat`; and
+  [sc-compose #448](https://github.com/randlee/sc-compose/issues/448) supplies
+  the direct-library checked-emission regression coverage.
+  [AN.13 retained release evidence](./plans/phase-an/sc-compose-141-evidence.md)
+  records the satisfied gate; the authoritative scope and closure gates are in
+  [`sprint-AN13-sc-compose-141-checked-render.md`](./plans/phase-an/sprint-AN13-sc-compose-141-checked-render.md),
+  [`sprint-AN14-sc-compose-141-checked-emission.md`](./plans/phase-an/sprint-AN14-sc-compose-141-checked-emission.md),
+  and [`sprint-AN15-adversarial-fuzzing.md`](./plans/phase-an/sprint-AN15-adversarial-fuzzing.md).
 
 ## Publishing Improvements
 

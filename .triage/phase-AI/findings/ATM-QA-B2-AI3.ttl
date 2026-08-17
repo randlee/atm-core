@@ -1,0 +1,81 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-B2-AI3>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-B2-AI3" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T22:05:00Z"^^xsd:dateTime ;
+  triage:title "RULE-002 function-length violation: crates/atm-storage/src/error_catalog.rs guidance() at 97 lines (17-113), fails just lint on all 3 CI platforms" ;
+  triage:resolution "FIXED in integrate/phase-AI @ 98e6fc38. error_catalog.rs guidance() function decomposed from 97 lines to 42 lines, respecting RULE-002 function-length ceiling. just lint passes on all platforms." ;
+  triage:description "AI3-QA-1 (req-qa, blocking, corroborated by live CI). guidance() at crates/atm-storage/src/error_catalog.rs:17-113 is 97 lines, overlapping this sprint's diff. Confirmed present at same location (line 17) on feature/pAI-s3-error-contract-foundation and feature/pAI-s4-error-consumer-migration; not yet present on integrate/phase-AI (file does not exist there -- sprint not merged). just lint fails on macos-latest, ubuntu-latest, and windows-latest CI as of latest check." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-B2-AI3/pAI-3/1>, <urn:atm:triage:occurrence/ATM-QA-B2-AI3/pAI-4/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-4/3679a9b3> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-4/3679a9b3> ;
+  triage:highestOpenBranch "feature/pAI-s4-error-consumer-migration" ;
+  triage:triagedAt "2026-07-20T22:05:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/ATM-QA-B2-AI3/pAI-3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/error_catalog.rs" ;
+  triage:line 17 ;
+  triage:snippet "const fn guidance(code: AtmErrorCode) -> &'static str { ... } -- 97 lines (17-113), exceeds RULE-002 100-line-ish function-length ceiling in practice per just lint" ;
+  triage:status "fixed" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s3-error-contract-foundation" ;
+  triage:headSha "0d448efe" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-3/0d448efe> .
+
+<urn:atm:triage:occurrence/ATM-QA-B2-AI3/pAI-4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/error_catalog.rs" ;
+  triage:line 17 ;
+  triage:snippet "const fn guidance(code: AtmErrorCode) -> &'static str { ... } -- 97 lines (17-113), exceeds RULE-002 function-length ceiling per just lint" ;
+  triage:status "fixed" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s4-error-consumer-migration" ;
+  triage:headSha "3679a9b3" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-4/3679a9b3> .
+
+<urn:atm:triage:worktree/pAI-1/c479452e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-1-daemon-preag-reset" ;
+  triage:path "feature/pAI-1-daemon-preag-reset" ;
+  triage:headSha "c479452e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-2/770dd8ed>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s2-storage-topology" ;
+  triage:path "feature/pAI-s2-storage-topology" ;
+  triage:headSha "770dd8ed" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAI-3/0d448efe>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s3-error-contract-foundation" ;
+  triage:path "feature/pAI-s3-error-contract-foundation" ;
+  triage:headSha "0d448efe" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-4/3679a9b3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s4-error-consumer-migration" ;
+  triage:path "feature/pAI-s4-error-consumer-migration" ;
+  triage:headSha "3679a9b3" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/integrate-phase-AI/52252a32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
+  triage:headSha "52252a32" ;
+  triage:orderIndex 0 .

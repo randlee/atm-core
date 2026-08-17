@@ -98,7 +98,7 @@ depends directly on Unix APIs.
    - `LifecycleControlSourceAdapter`
    - `HostOwnershipAdapter`
 7. Move logical endpoint naming and same-user access-control policy behind the
-   local-IPC adapter instead of leaving socket-path or named-pipe details in
+   local-IPC adapter instead of leaving platform endpoint details in
    callers.
 
 ## Required Document Updates

@@ -1,0 +1,137 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBQA-F003-S15-R3>
+  a triage:Finding ;
+  triage:findingId "RBQA-F003-S15-R3" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T19:54:00Z"^^xsd:dateTime ;
+  triage:title "daemon-log delta slice has no startswith check -- log rotation/truncation silently produces an always-passing empty delta" ;
+  triage:description "In scripts/smoke/run_peer_pair.py's semantic-verification mechanism (added on feature/pAI-s15-windows-peer-smoke, commit 12f4b96e), the daemon-log delta slice used for untrusted/allowlist rejection has no startswith check against the pre-case log snapshot. If the daemon log rotates or truncates between the pre-case snapshot and the post-case read, the delta slice silently computes empty, and the forbidden-entries check trivially passes with no real verification having occurred. This is a genuine code bug found by ruthless-boundary-qa during QA-2 verification of the BLOCKING-02/04 fix on PR #611." ;
+  triage:category "RBQA" ;
+  triage:phaseId "phase-AI" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "AICH-S7-QA-FIX-2: verified fixed on commit bb34e71a (PR #642, feature/pAI-s27-peer-delivery-observability) -- scripts/smoke/run_peer_pair.py:295 now has 'if not after.startswith(daemon_log_before)' guard, refusing an unverified delta and surfacing daemon_log_delta in the outcome instead of silently passing on rotation/truncation. Confirmed via direct git show of current branch head, not self-report." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003-S15-R3/s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003-S15-R3/s16/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003-S15-R3/s17/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003-S15-R3/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003-S15-R3/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003-S15-R3/s27/1> ;
+  triage:openOn <urn:atm:triage:worktree/s27> ;
+  triage:promoteTo <urn:atm:triage:worktree/s27> .
+
+<urn:atm:triage:occurrence/RBQA-F003-S15-R3/s15/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 223 ;
+  triage:snippet "delta = after[len(daemon_log_before):]" ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch feature/pAI-s15-windows-peer-smoke superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "12f4b96e" ;
+  triage:occursIn <urn:atm:triage:worktree/s15> .
+
+<urn:atm:triage:occurrence/RBQA-F003-S15-R3/s16/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 235 ;
+  triage:snippet "delta = after[len(daemon_log_before):]" ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch feature/pAI-s16-offline-reconciliation superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:occursIn <urn:atm:triage:worktree/s16> .
+
+<urn:atm:triage:occurrence/RBQA-F003-S15-R3/s17/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 235 ;
+  triage:snippet "delta = after[len(daemon_log_before):]" ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch feature/pAI-s17-hermes-chat-identity superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:occursIn <urn:atm:triage:worktree/s17> .
+
+<urn:atm:triage:occurrence/RBQA-F003-S15-R3/s18/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 235 ;
+  triage:snippet "delta = after[len(daemon_log_before):]" ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch feature/pAI-s18-graft-python-bindings superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:occursIn <urn:atm:triage:worktree/s18> .
+
+<urn:atm:triage:occurrence/RBQA-F003-S15-R3/s19/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 235 ;
+  triage:snippet "delta = after[len(daemon_log_before):]" ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch feature/pAI-s19-hermes-graft-integration superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:occursIn <urn:atm:triage:worktree/s19> .
+
+<urn:atm:triage:occurrence/RBQA-F003-S15-R3/s27/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 271 ;
+  triage:snippet "delta = after[len(daemon_log_before):]" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "bb34e71a" ;
+  triage:occursIn <urn:atm:triage:worktree/s27> ;
+  triage:notes "AICH-S7-QA-FIX-2: fixed on bb34e71a -- startswith(daemon_log_before) guard added at line 295, refusing an unverified delta on rotation/truncation instead of silently passing. Occurrence headSha 35cb19f8 was pre-fix." .
+
+<urn:atm:triage:worktree/s15>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "12f4b96e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s16>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s17>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s18>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:path "feature/pAI-s18-graft-python-bindings" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/s19>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:path "feature/pAI-s19-hermes-graft-integration" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/s27>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "35cb19f8" ;
+  triage:orderIndex 27 .

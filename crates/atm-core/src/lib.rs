@@ -1,7 +1,8 @@
-/// Acknowledgement workflows for ack-required mailbox messages.
 pub mod ack;
 /// Public agent-address parsing and normalization helpers.
 pub mod address;
+/// Acknowledgement workflows for ack-required mailbox messages.
+pub mod api;
 /// Phase R boundary traits and placeholder contract types.
 pub mod boundary;
 /// Hidden daemon-private ingress/export helpers used by concrete boundary
@@ -20,9 +21,6 @@ pub(crate) mod delivery_execution;
 pub(crate) mod delivery_plan;
 /// Internal delivery-policy coordinator and event-family state machines.
 pub(crate) mod delivery_policy;
-/// Hidden daemon-facing wrapper surface over crate-private boundary helpers.
-#[doc(hidden)]
-pub mod direct_boundaries;
 /// Doctor-report types and health checks for the CLI surface.
 pub mod doctor;
 /// Shared ATM error types and recovery-oriented error helpers.
@@ -37,6 +35,8 @@ pub mod home;
 pub(crate) mod identity;
 /// Bounded metadata queue query workflows and output models.
 pub mod list;
+/// Runtime-local endpoint metadata and capability validation for local HTTP.
+pub mod local_http;
 /// Log query and filtering types for the CLI log surface.
 pub mod log;
 /// Internal mailbox persistence and parsing helpers.
@@ -52,6 +52,8 @@ pub(crate) mod persistence;
 pub mod process;
 /// Shared protocol DTOs used by boundary transport and adapter contracts.
 pub mod protocol;
+/// Shared authenticated/immutable write provenance validation.
+pub mod provenance;
 /// Mailbox read/query workflows and output models.
 pub mod read;
 /// Reserved production role constants shared across runtime and tests.
@@ -62,6 +64,8 @@ pub mod roles;
 pub mod runtime_install_hooks;
 /// Public mailbox and team schema types shared with CLI tests and adapters.
 pub mod schema;
+/// Transport-neutral, local-only message search query contract.
+pub mod search;
 /// Mailbox send workflows and request/response models.
 pub mod send;
 /// Internal service-owned seams that isolate retained command orchestration
@@ -71,6 +75,8 @@ pub(crate) mod service_runtime;
 pub(crate) mod service_runtime_store;
 /// Retained local team discovery, roster repair, and backup/restore workflows.
 pub mod team_admin;
+/// Pure resolution of template-declared workflow snapshots.
+pub mod template_workflow;
 /// Shared synthetic test identities and role constants used across crate tests.
 #[doc(hidden)]
 #[cfg(any(test, feature = "test-utils"))]
@@ -85,24 +91,31 @@ pub(crate) mod threading;
 pub mod transport;
 /// Shared enums and semantic newtypes used across ATM core workflows.
 pub mod types;
+/// Generic local lifecycle projection over immutable workflow admission facts.
+pub mod workflow_analytics;
+/// First-party-only telemetry contract for workflow lifecycle projections.
+pub mod workflow_telemetry;
 
-pub use config::load_claude_team_config_document;
-
+pub use api::{
+    ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, DaemonApiClient,
+    MAX_HTTP_REQUEST_BODY_BYTES, RequestDeadline,
+};
 pub use atm_storage::derive_ack_requirement;
+pub use atm_storage::{TemplateFrontmatter, TemplateSha};
 #[allow(deprecated)]
 pub use boundary::{
-    AckTransition, AtmProtocol, BuiltInNudgeSinkTarget, BuiltInNudgeTemplateKind, ClientTransport,
-    ConfigDoctor, ConfigDoctorReport, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse,
-    DoctorFinding, InternalNudgeEnvelope, LoadMailMessageStateRequest,
+    AckTransition, AsyncMessageReceivedHookEmitter, BuiltInNudgeSinkTarget,
+    BuiltInNudgeTemplateKind, ConfigDoctor, ConfigDoctorReport, ConfigIngress, ConfigLoadRequest,
+    ConfigLoadResponse, DoctorFinding, InternalNudgeEnvelope, LoadMailMessageStateRequest,
     LoadMailMessageStateResponse, MailMessageState, MailStore, MailStoreDoctor,
-    MailStoreDoctorReport, MailStoreHealthSnapshot, MailStoreIngestReplayState,
-    MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, Message, MessageFingerprint,
-    MessageKey, NotificationEvent, NudgeTemplateOverrideStore, PostSendHookEmitter,
-    PostSendHookEvent, RemoteReplayStateRecord, RemoteReplayStore, RequestDispatcher,
-    ResolvedBuiltInNudgeTemplate, RosterEntry, RosterHarness, RosterMemberKind, RosterStore,
-    RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot, RuntimeStatusSnapshot,
-    RuntimeStorageFinalizer, ServerTransport, StatusSource, TaskState,
-    TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, UpsertMailMessageStateRequest,
+    MailStoreDoctorReport, MailStoreHealthSnapshot, MailStoreMailboxMetadataCounts,
+    MailStoreMailboxMetadataRow, Message, MessageFingerprint, MessageKey,
+    MessageReceivedHookEmitter, NotificationEvent, NudgeTemplateOverrideStore, PostSendHookEvent,
+    RenderedBody, ResolvedBuiltInNudgeTemplate, RosterEntry, RosterHarness, RosterMemberKind,
+    RosterStore, RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot,
+    RuntimeStatusSnapshot, SourceSpan, StatusSource, TaskState, TeamNudgeTemplateOverrideMode,
+    TeamNudgeTemplateOverrideRow, TemplateComposer, TemplateInspection, TemplateReference,
+    TemplateReferenceKind, TemplateRoot, TemplateSource, UpsertMailMessageStateRequest,
     UpsertMailMessageStateResponse,
 };
 pub use config::AtmConfig;
@@ -112,7 +125,16 @@ pub use config::types::GraftConfig;
 /// boundary. Shared advisory/session protocol DTOs are not part of the
 /// accepted `atm-core` surface.
 pub use graft::AtmGraftClient;
-pub use protocol::{FramePayload, RequestEnvelope, ResponseEnvelope};
+pub use protocol::{RequestEnvelope, ResponseEnvelope};
+pub use search::{SearchAggregateInput, SearchHit, SearchInput, SearchRequest, SearchResponse};
 pub use service_runtime::{
     LocalFileNonClaudeOutbound, LocalServiceRuntime, with_default_local_service_runtime,
+};
+pub use workflow_analytics::{
+    LifecycleObservation, WorkflowFact, WorkflowProjectionRequest, WorkflowSelector,
+    project_lifecycles,
+};
+pub use workflow_telemetry::{
+    NoopWorkflowTelemetrySink, WorkflowTelemetryError, WorkflowTelemetryObservation,
+    WorkflowTelemetryRecord, WorkflowTelemetrySink,
 };

@@ -13,6 +13,9 @@ from lint_common import monotonic_now
 from lint_common import print_report
 from lint_common import workspace_crate_section_lines
 from lint_common import workspace_manifest_paths
+from check_version_sync import expected_package_version
+from check_version_sync import validate_workspace_member_versions
+from check_version_sync import validate_workspace_version
 
 
 LINT_NAME = "manifests"
@@ -39,30 +42,6 @@ def tomllib_load(path: Path) -> dict:
     import tomllib
 
     return tomllib.loads(path.read_text(encoding="utf-8"))
-
-
-def workspace_version(repo_root: Path) -> str:
-    manifest = tomllib_load(repo_root / "Cargo.toml")
-    package = manifest.get("workspace", {}).get("package", {})
-    version = package.get("version")
-    if not isinstance(version, str):
-        raise SystemExit("workspace.package.version missing from Cargo.toml")
-    return version
-
-
-def expected_package_version(manifest: dict, workspace_version_value: str, manifest_label: str) -> str:
-    package = manifest.get("package", {})
-    if not isinstance(package, dict):
-        raise SystemExit(f"{manifest_label} missing [package] table")
-
-    version_value = package.get("version")
-    if isinstance(version_value, str) and version_value.strip():
-        return version_value
-    if isinstance(version_value, dict) and version_value.get("workspace") is True:
-        return workspace_version_value
-    raise SystemExit(
-        f"{manifest_label} must define [package].version either as a non-empty string or version.workspace = true"
-    )
 
 
 def member_manifests(repo_root: Path) -> list[Path]:
@@ -94,7 +73,16 @@ def dependency_sections(manifest: dict) -> list[tuple[str, dict]]:
 
 def collect_manifest_violations(repo_root: Path) -> list[ManifestViolation]:
     violations: list[ManifestViolation] = []
-    version = workspace_version(repo_root)
+    try:
+        version = validate_workspace_version(repo_root)
+    except SystemExit as error:
+        return [ManifestViolation("version sync", str(error))]
+
+    try:
+        validate_workspace_member_versions(repo_root, version)
+    except SystemExit as error:
+        violations.append(ManifestViolation("version sync", str(error)))
+
     manifests = member_manifests(repo_root)
     expected_versions: dict[Path, str] = {}
     publish_flags: dict[Path, bool] = {}

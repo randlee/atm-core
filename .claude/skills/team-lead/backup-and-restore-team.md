@@ -1,132 +1,111 @@
 ---
 name: backup-and-restore-team
-version: 0.2.0
-description: Procedure for backing up and restoring an ATM team. Referenced by the team-lead skill when a session ID mismatch is detected.
+version: 0.3.0
+description: Procedure for bootstrapping or repairing an ATM team's SQLite-backed roster. Referenced by the team-lead skill when Step 1's runtime/roster check finds a problem.
 ---
-# Team Backup And Restore Procedure
+# Team Bootstrap And Recovery Procedure
 
-Follow this procedure when Step 1 of the `team-lead` skill detects a session id
-mismatch and a full team restore is required. This is the startup or `clear`
-path where the live `SESSION_ID` changed and no longer matches
-`leadSessionId`.
+Follow this procedure when Step 1 of the `team-lead` skill finds the runtime
+unhealthy, or the roster missing/stale, for `$ATM_TEAM`.
 
-Do not use this procedure for same-session compaction or resume when the
-session id still matches. Use `/restore-team-communications` for that lighter
-repair path.
+atm-core 1.3.1+ keeps team membership in the daemon-owned SQLite store, not in
+`~/.claude/teams/<team>/config.json`. There is no `TeamCreate` / `TeamDelete` /
+`leadSessionId` model to reconcile — bootstrap and repair both go through
+`atm teams add-member` / `atm teams update-member`.
 
-## Step 2 — Backup Current State
+Do not use this procedure to repair native ATM communication when the roster
+is already healthy — use `/restore-team-communications` for that lighter path.
 
-Always back up before modifying the team:
-
-```bash
-atm teams backup atm-dev
-```
-
-Also back up the Claude Code project task list separately:
+## Step 1 — Confirm Runtime Health
 
 ```bash
-BACKUP_PATH=$(ls -td ~/.claude/teams/.backups/atm-dev/*/ | head -1)
-cp -r ~/.claude/tasks/agent-team-mail/ "$BACKUP_PATH/tasks-cc"
-echo "CC task list backed up to $BACKUP_PATH/tasks-cc"
+which atm
+atm --version
+echo "$ATM_DAEMON_BIN"
+atm doctor --team "$ATM_TEAM"
 ```
 
-Note: `atm teams backup` captures ATM team tasks under `~/.claude/tasks/atm-dev/`
-when present, but not the repo-local Claude Code task bucket
-`~/.claude/tasks/agent-team-mail/`.
+If `atm doctor` reports findings (daemon unreachable, binary mismatch, wrong
+`ATM_HOME`), resolve those first — a roster bootstrap on top of an unhealthy
+daemon will not stick. See `atm help errors` for how to read the reported
+error codes, and `atm help config` for the config surfaces `atm doctor`
+checks.
 
-## Step 3 — Clear Stale Team State
-
-```text
-TeamDelete
-```
-
-Then remove the stale team directory so the next create uses the correct name:
+## Step 2 — Check Current Roster
 
 ```bash
-rm -rf ~/.claude/teams/atm-dev
+atm members --team "$ATM_TEAM"
 ```
 
-If `TeamDelete` already removed the directory, the `rm -rf` is harmless.
+Compare against the expected roster for `atm-dev`:
 
-## Step 4 — Create Team
+| Member | Agent type | Model | Home dir |
+|--------|-----------|-------|----------|
+| team-lead | team-lead | sonnet (or current session model) | `/Users/randlee/Documents/github/atm-core` |
+| arch-ctm | codex | high | `/Users/randlee/Documents/github/atm-core` |
+| quality-mgr | quality-mgr | sonnet | `/Users/randlee/Documents/github/atm-core` |
 
-```text
-TeamCreate(team_name="atm-dev", description="ATM development team", agent_type="team-lead")
-```
-
-Verify that the returned team name is exactly `atm-dev`. If it is not, stop.
-
-Note: `/restore-team-communications` reuses this same `TeamCreate` primitive
-when communications are broken after compaction or resume, but that path should
-prove the failure first and avoid this destructive backup/delete/restore flow
-unless the lighter repair fails.
-
-## Step 5 — Restore Team Members And Inboxes
+If a member's `tmuxPaneId` is stale (pane no longer exists or now hosts a
+different agent), discover the correct pane before touching membership:
 
 ```bash
-atm teams restore atm-dev --from ~/.claude/teams/.backups/atm-dev/<timestamp>
+tmux list-panes -a -F '#{session_name}:#{window_index}.#{pane_index} #{pane_title} #{pane_current_command}'
 ```
 
-Verify members:
+## Step 3 — Add Or Update Members
+
+Add any member missing from the roster:
 
 ```bash
-atm members
+atm teams add-member "$ATM_TEAM" team-lead --agent-type team-lead --model claude-sonnet-4-6 --home-dir /Users/randlee/Documents/github/atm-core --pane-id <pane>
+atm teams add-member "$ATM_TEAM" {{TEAM_MEMBER}} --agent-type rust-arch --model codex-high --home-dir /Users/randlee/Documents/github/atm-core --pane-id <pane>
+atm teams add-member "$ATM_TEAM" quality-mgr --agent-type quality-mgr --model claude-sonnet --home-dir /Users/randlee/Documents/github/atm-core --pane-id <pane>
 ```
 
-If unexpected ghost members exist, trim the config manually:
+Note the flag is `--agent-type`, not `--type`.
+
+For a member that already exists but has a stale pane, model, or home dir,
+use `update-member` instead of re-adding:
 
 ```bash
-python3 -c "
-import json
-path = '/Users/randlee/.claude/teams/atm-dev/config.json'
-with open(path) as f:
-    cfg = json.load(f)
-keep = ['team-lead', 'arch-ctm', 'quality-mgr']
-cfg['members'] = [m for m in cfg['members'] if m['name'] in keep]
-with open(path, 'w') as f:
-    json.dump(cfg, f, indent=2)
-print('Members:', [m['name'] for m in cfg['members']])
-"
+atm teams update-member "$ATM_TEAM" <member> --pane-id <correct-pane-id>
 ```
 
-Adjust the `keep` list if additional named teammates are intentionally active.
+`update-member` also accepts `--home-dir`, `--harness`, `--agent-type`, and
+`--model` for other drifted fields.
 
-## Step 6 — Restore Claude Code Task List
+## Step 4 — Verify Roster And Runtime
 
 ```bash
-BACKUP_PATH=$(ls -td ~/.claude/teams/.backups/atm-dev/*/ | head -1)
-if [ -d "$BACKUP_PATH/tasks-cc" ]; then
-  mkdir -p ~/.claude/tasks/agent-team-mail
-  cp "$BACKUP_PATH/tasks-cc/"*.json ~/.claude/tasks/agent-team-mail/ 2>/dev/null || true
-  MAX_ID=$(ls ~/.claude/tasks/agent-team-mail/*.json 2>/dev/null \
-    | xargs -I{} basename {} .json \
-    | sort -n | tail -1)
-  [ -n "$MAX_ID" ] && echo -n "$MAX_ID" > ~/.claude/tasks/agent-team-mail/.highwatermark
-  echo "Task list restored. Highwatermark: $MAX_ID"
-else
-  echo "No tasks-cc/ in backup — task list not restored."
-fi
+atm members --team "$ATM_TEAM"
+atm doctor --team "$ATM_TEAM"
 ```
 
-The Claude Code UI task panel may not show restored tasks until one task is
-created through the task tool.
+Confirm all three expected members are present, active, and the pane ids
+resolve to real panes.
 
-## Step 7 — Verify Team Health
+## Step 5 — Minimal Functional Check
+
+ATM rejects self-addressed sends (`team-lead@$ATM_TEAM` may not send to
+itself), so the round-trip must target another roster member:
 
 ```bash
-atm members
-atm inbox
-atm gh pr list
+atm send arch-ctm "restart check ($SESSION_ID)" --team "$ATM_TEAM" --requires-ack
+atm read --team "$ATM_TEAM"
 ```
 
-Communication verification is also mandatory:
-1. `atm send --requires-ack` to another named teammate and receive its native
-   ATM acknowledgement.
-2. `atm send` to `quality-mgr` when that teammate is active to prove ATM
-   mailbox routing works.
-3. `atm send` to Codex and confirm the Codex-side nudge fires.
+If this round-trip fails, capture and report the diagnostic bundle below
+rather than guessing further:
 
-## Step 8 — Read Project Context
+```bash
+which atm
+atm --version
+echo "$ATM_DAEMON_BIN"
+atm doctor --team "$ATM_TEAM"
+atm members --team "$ATM_TEAM"
+```
+
+## Step 6 — Read Project Context
 
 1. Read `docs/project-plan.md`.
 2. Recreate pending tasks if the task list is empty.
@@ -136,32 +115,37 @@ Communication verification is also mandatory:
    - active teammates and their last known task
    - next sprint or sprints ready to execute
 
-## Step 9 — Notify Teammates
+## Step 7 — Notify Teammates
 
 ```bash
-atm send arch-ctm "New session (session-id: <SESSION_ID>). Team atm-dev restored. Please acknowledge and confirm status."
+atm send arch-ctm "New session (session-id: $SESSION_ID). Team $ATM_TEAM verified. Please acknowledge and confirm status."
 ```
 
-If no response arrives within about 60 seconds, nudge via tmux. Preferred
-structured nudge payload when task metadata is available:
-
-```text
-<atm><action>read atm</action><action>ack <TASK-ID></action><action>execute assigned task</action><when idle="immediate" busy="after-current-task"/><console announce="concise" pause="false"/></atm>
-```
-
-Fallback plain-text nudge:
-
-```bash
-tmux list-panes -a -F '#{session_name}:#{window_index}.#{pane_index} #{pane_title}'
-tmux send-keys -t <pane-id> "read atm for task <TASK-ID> and complete it before stopping" Enter
-```
+The recipient's `.atm.toml` `post_send_hooks` fires the nudge automatically on
+send — no manual `tmux send-keys` nudge is needed. See `atm help hooks` for
+how post-send hooks resolve and how to debug one that doesn't fire.
 
 ## Common Failure Modes
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| `TeamCreate` returns random name | `~/.claude/teams/atm-dev` still exists | remove the directory and retry |
-| `TeamDelete` says no team name found | fresh session with no active team context | expected, proceed |
-| task list looks empty after restore | highwatermark mismatch or UI stale state | set `.highwatermark`, then create one real task |
-| `atm send` fails with agent not found | member missing after restore | add the member back to the team |
-| self-send or wrong identity routing | teammate launched with wrong `ATM_IDENTITY` | relaunch with the correct identity |
+| `atm teams add-member` rejects `--type` | flag was renamed | use `--agent-type` |
+| `atm doctor` reports daemon unreachable | daemon not running or wrong `ATM_DAEMON_BIN` | check `echo "$ATM_DAEMON_BIN"` matches the installed binary, restart daemon if needed |
+| member present in `atm members` but sends never land | stale `--pane-id` | `atm teams update-member "$ATM_TEAM" <member> --pane-id <correct-pane-id>` |
+| `atm send` fails with agent not found | member missing from roster | `atm teams add-member` per Step 3 |
+| self-send or wrong identity routing | teammate launched with wrong `ATM_IDENTITY` | relaunch with the correct identity; see `atm help identity` |
+| task list looks empty after a restart | Claude Code UI task panel stale state | create one real task through the task tool to refresh it |
+
+## Last Resort — Full Backup/Restore
+
+Only needed for disaster recovery (corrupted SQLite store, wrong team
+entirely). `atm teams backup` / `atm teams restore` operate on the real
+daemon-owned store:
+
+```bash
+atm teams backup "$ATM_TEAM"
+atm teams restore "$ATM_TEAM" --from <backup-path> --dry-run
+atm teams restore "$ATM_TEAM" --from <backup-path>
+```
+
+Always run `--dry-run` first and review the plan before the real restore.

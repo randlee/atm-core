@@ -1,0 +1,13 @@
+{
+  "version": {
+    "num": "1.4.1",
+    "checksum": "bb3111c4fc261f4aff1e341bd76475ce13524b9b768021ceb79da9761e31dd05",
+    "created_at": "2026-08-14T01:16:45.141379Z",
+    "yanked": false
+  },
+  "crate": {
+    "id": null,
+    "repository": null,
+    "homepage": null
+  }
+}

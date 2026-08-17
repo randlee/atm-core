@@ -1,0 +1,48 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CI-LINT-001-AN1>
+  a triage:Finding ;
+  triage:findingId "CI-LINT-001-AN1" ;
+  triage:title "Just lint CI job fails on ubuntu/macos/windows for PR #838 — missing IO_FORBIDDEN_SOURCE_PATTERNS entries" ;
+  triage:description "Live CI on PR #838 (run 31459833077) shows the 'Just lint' job failing on all three platforms (ubuntu, macos, windows). Root cause: test_every_declared_io_forbidden_tag_has_source_pattern_mapping fails because new forbidden-edge tags introduced by this sprint's boundary manifest/lint extension — local_path_heuristics, storage_schema, http_runtime, cli_surface, catalog_persistence, transport — have no corresponding entry in IO_FORBIDDEN_SOURCE_PATTERNS." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ci-failure" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "closed" ;
+  triage:resolution "fixed" ;
+  triage:closedAt "2026-08-11T06:40:00Z"^^xsd:dateTime ;
+  triage:closedNote "INDEPENDENT VERIFICATION (quality-mgr, 3b22fe25dd1efcf5bdb2921709f8c169ff17c0d0, PR #838): .just/lint_boundaries.py IO_FORBIDDEN_SOURCE_PATTERNS now carries concrete regex entries for all six previously-missing tags (local_path_heuristics, storage_schema, http_runtime, cli_surface, catalog_persistence, transport), confirmed via diff e3929e597..3b22fe25d. Ran .just/tests/test_lint_boundaries.py::test_every_declared_io_forbidden_tag_has_source_pattern_mapping directly at this SHA -- 1 passed. Also independently re-ran the full `just lint` (python3 .just/run_lint.py all) at this SHA -- all 26 named checks passed. PR #838 CI confirmed green 9/9 (Test ubuntu/macos/windows, Just lint ubuntu/macos/windows, Clippy, Format check, Classify CI scope) via gh pr checks 838 --watch." ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-11T05:05:18Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.1 ;
+  triage:foundAt "2026-08-11T05:01:11Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-LINT-001-AN1/AN1-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/CI-LINT-001-AN1/AN1-1>
+  a triage:Occurrence ;
+  triage:file ".just/tests/test_lint_boundaries.py" ;
+  triage:line 1165 ;
+  triage:snippet "self.assertEqual(declared - set(IO_FORBIDDEN_SOURCE_PATTERNS), set())" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:resolution "fixed" ;
+  triage:closedAt "2026-08-11T06:40:00Z"^^xsd:dateTime ;
+  triage:closedNote "Six regex entries added to IO_FORBIDDEN_SOURCE_PATTERNS at 3b22fe25d; targeted test re-run PASS, full just lint 26/26 PASS." ;
+  triage:branch "feature/pan-s1-contract-gates" ;
+  triage:headSha "3b22fe25dd1efcf5bdb2921709f8c169ff17c0d0" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pan-s1-contract-gates/e3929e59> .
+
+<urn:atm:triage:worktree/feature-pan-s1-contract-gates/e3929e59>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pan-s1-contract-gates" ;
+  triage:branch "feature/pan-s1-contract-gates" ;
+  triage:headSha "e3929e59758bfb12f1c443ed03d61da140fe7052" ;
+  triage:orderIndex 0 .

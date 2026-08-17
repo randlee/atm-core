@@ -1,0 +1,114 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI18-QA1-ARCH-002-HARDCODED-LITERAL-DUP>
+  a triage:Finding ;
+  triage:findingId "AI18-QA1-ARCH-002-HARDCODED-LITERAL-DUP" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:title "Second occurrence of hardcoded production-significant literal pattern in the same test script" ;
+  triage:description "scripts/test_atm_graft_python.py:43 companion literal-hardcoding occurrence (arch-qa ARCH-002), same root cause as ARCH-001 but a distinct flagged location/aspect per the reviewer's report" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:category "QA" ;
+  triage:severity "blocking" ;
+  triage:status "invalid" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI18-QA1-ARCH-002-HARDCODED-LITERAL-DUP/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI18-QA1-ARCH-002-HARDCODED-LITERAL-DUP/s19/1> ;
+  triage:openOn <urn:atm:triage:worktree/s18/b8f46a1a> ;
+  triage:openOn <urn:atm:triage:worktree/s19/2e22b6b4> ;
+  triage:promoteTo <urn:atm:triage:worktree/s19/2e22b6b4> ;
+  triage:correctionNote "2026-07-26 (quality-mgr): independently re-verified at integrate/phase-AI tip against arch-ctm's legacy close/waive batch recommendation -- initially declined close, still OPEN: same underlying scripts/test_atm_graft_python.py:43,45,47 duplicate literal occurrence as AI18-QA1-ARCH-001-HARDCODED-LITERAL. Confirmed via direct file read, not self-report." ;
+  triage:closureNote "2026-07-27 (quality-mgr): superseding the correctionNote above, same reasoning as AI18-QA1-ARCH-001-HARDCODED-LITERAL (companion finding, identical root cause). Independently confirmed via .just/lint-config.toml [identities] forbidden_literals that neither 'omega-prime' nor 'hermes' is a configured production-canonical literal, and the enforcing lint (.just/check_test_identity_literals.py) only scans workspace Rust files -- scripts/test_atm_graft_python.py is a Python script outside its scope. Closing as invalid: the 'production-significant' premise does not hold against the actual configured rule, independently confirmed against the lint config and code." .
+
+<urn:atm:triage:occurrence/AI18-QA1-ARCH-002-HARDCODED-LITERAL-DUP/s18/1>
+  a triage:Occurrence ;
+  triage:file "scripts/test_atm_graft_python.py" ;
+  triage:line 43 ;
+  triage:snippet "address = atm_graft.PyAgentAddress('omega-prime', 'hermes', '1234')" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:headSha "b8f46a1a" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/b8f46a1a> .
+
+<urn:atm:triage:occurrence/AI18-QA1-ARCH-002-HARDCODED-LITERAL-DUP/s19/1>
+  a triage:Occurrence ;
+  triage:file "scripts/test_atm_graft_python.py" ;
+  triage:line 43 ;
+  triage:snippet "address = atm_graft.PyAgentAddress('omega-prime', 'hermes', '1234')" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "2e22b6b4" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/2e22b6b4> .
+
+<urn:atm:triage:worktree/s11/12056956>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "12056956" ;
+  triage:orderIndex 11 .
+
+<urn:atm:triage:worktree/s12/b6466aa1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
+  triage:headSha "b6466aa1" ;
+  triage:orderIndex 12 .
+
+<urn:atm:triage:worktree/s13/aecade2a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "aecade2a" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/s14/35e30fd6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "35e30fd6" ;
+  triage:orderIndex 14 .
+
+<urn:atm:triage:worktree/s15/56c08886>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "56c08886" ;
+  triage:orderIndex 15 .
+
+<urn:atm:triage:worktree/s16/5a35a6cd>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "5a35a6cd" ;
+  triage:orderIndex 16 .
+
+<urn:atm:triage:worktree/s17/85a6fcf6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "85a6fcf6" ;
+  triage:orderIndex 17 .
+
+<urn:atm:triage:worktree/s18/b8f46a1a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:path "feature/pAI-s18-graft-python-bindings" ;
+  triage:headSha "b8f46a1a" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/s19/2e22b6b4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:path "feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "2e22b6b4" ;
+  triage:orderIndex 19 .

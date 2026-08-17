@@ -173,7 +173,7 @@ restored daemon lane.
   boundary changes were made.
 - Added Windows-side logical parent validation in
   `crates/atm-daemon/src/local_ipc_transport/shutdown.rs` for non-pipe endpoint
-  inputs before they are converted into named-pipe addresses.
+  inputs before they are converted into legacy local endpoint addresses.
 - Added lifecycle reset coverage to
   `composition::tests::runtime_composition_failed_startup_returns_to_stopped`
   so the shared Windows lifecycle worker is drained between serial tests.

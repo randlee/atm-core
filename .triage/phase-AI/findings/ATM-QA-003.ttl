@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-003" ;
+  triage:title "AI.40 benchmark script not wired into CI" ;
+  triage:description "Followup pass: user decision 2026-08-01 -- do NOT gate regular CI on live hardware benchmark runs. Benchmarks are environment-sensitive (M5 roster state, HTTP body-guard limits, host-specific flakiness already demonstrated false failures) and blocking merges on them reproduces exactly that noise. ATM-QA-003's requirement is downgraded from 'benchmark must run in per-PR CI' to 'benchmark tooling/evidence must exist and be reproducible on demand', which is already satisfied by run_admission_capacity.py plus the committed site/reports/send-message-benchmark/ evidence. Waiving the CI-wiring requirement; not dispatched for further dev work." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "ci-gap" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "waived" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-01T06:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI40 ;
+  triage:foundAt "2026-08-01T05:19:32Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/S40-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-003/S40-2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 1 ;
+  triage:snippet "Waived by user decision: benchmark stays out of per-PR CI gate, runs on demand only" ;
+  triage:status "waived" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "795ebf83" ;
+  triage:occursIn <urn:atm:triage:worktree/S40/795ebf83> .
+
+<urn:atm:triage:worktree/S40/795ebf83>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/S40" ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "795ebf83" ;
+  triage:orderIndex 15 .

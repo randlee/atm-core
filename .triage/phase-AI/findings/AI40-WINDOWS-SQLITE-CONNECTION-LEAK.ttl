@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI40-WINDOWS-SQLITE-CONNECTION-LEAK>
+  a triage:Finding ;
+  triage:findingId "AI40-WINDOWS-SQLITE-CONNECTION-LEAK" ;
+  triage:title "verify_durable_admissions leaves the read-only SQLite connection open, breaking Windows tempdir cleanup and CI on both AI.40 and AI.43" ;
+  triage:description "scripts/smoke/run_admission_capacity.py:672 used `with sqlite3.connect(uri, uri=True) as connection:` to read the durability count. Python's sqlite3.Connection context manager only commits/rolls back the transaction on exit -- it does NOT close the connection or release the underlying file handle. On Windows this left the mail.db file locked, so the enclosing tempfile.TemporaryDirectory() cleanup in the test failed with PermissionError: [WinError 32] The process cannot access the file because it is being used by another process. Followup pass: re-verified fixed on both branches. feature/pAI-s40-local-transport-benchmark@7d63861d and feature/pAI-s43-remote-https-response-framing@56d9ac78 both now wrap the connection with `from contextlib import closing` (line 14) and `with closing(sqlite3.connect(uri, uri=True)) as connection:` (S40 line 722, S43 line 707), releasing the file handle before TemporaryDirectory cleanup. No other unwrapped sqlite3.connect() calls found in either file. Independently corroborated by quality-mgr's AI43-QA-4 verdict (PR #710 review comment) recommending closure." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "windows-portability" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI40 ;
+  triage:foundAt "2026-08-01T07:15:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI40-WINDOWS-SQLITE-CONNECTION-LEAK/S40-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI40-WINDOWS-SQLITE-CONNECTION-LEAK/S43-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AI40-WINDOWS-SQLITE-CONNECTION-LEAK/S40-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 722 ;
+  triage:snippet "with closing(sqlite3.connect(uri, uri=True)) as connection:" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "7d63861d" ;
+  triage:occursIn <urn:atm:triage:worktree/S40/7d63861d> .
+
+<urn:atm:triage:occurrence/AI40-WINDOWS-SQLITE-CONNECTION-LEAK/S43-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 707 ;
+  triage:snippet "with closing(sqlite3.connect(uri, uri=True)) as connection:" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s43-remote-https-response-framing" ;
+  triage:headSha "56d9ac78" ;
+  triage:occursIn <urn:atm:triage:worktree/S43/56d9ac78> .
+
+<urn:atm:triage:worktree/S40/7d63861d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/S40" ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "7d63861d" ;
+  triage:orderIndex 15 .
+
+<urn:atm:triage:worktree/S43/56d9ac78>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/S43" ;
+  triage:branch "feature/pAI-s43-remote-https-response-framing" ;
+  triage:headSha "56d9ac78" ;
+  triage:orderIndex 16 .

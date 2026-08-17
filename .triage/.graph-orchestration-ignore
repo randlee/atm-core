@@ -1,0 +1,26 @@
+# Phase directories under .triage/ that the graph-orchestration skill's
+# load_graph() should skip entirely, without opening or parsing any file
+# in <name>/findings/*.ttl. One directory name per line; # comments and
+# blank lines are ignored. See .claude/skills/graph-orchestration/scripts/
+# query_runner.py for the loader that reads this file.
+#
+# Listed phases are closed/dead: their findings predate the Turtle schema
+# and use an old pre-Turtle format (plain "key: value" or TOML-like
+# "key = \"value\""), so they will never parse and will never be migrated.
+# The membership-based scoping in load_graph() already guarantees these
+# files can't contaminate any other phase's cursor resolution even if
+# left out of this list — this file exists purely to stop the repeated
+# per-run "skipping malformed findings file" warning noise for files that
+# are permanently, deliberately unparseable, not to enforce correctness.
+phase-U
+phase-V
+phase-W
+pI-release-425
+phase-AD
+phase-R
+phase-S
+phase-T
+phase-Xb
+phase-Y
+phase-Yb
+phase-Ye

@@ -1,0 +1,56 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ARCH-002-AN11>
+  a triage:Finding ;
+  triage:findingId "ARCH-002-AN11" ;
+  triage:title "RULE-010 hardcoded 'team-lead'/'quality-mgr' literals, no constant" ;
+  triage:description "concat!() fragmentation defeats linter but still reconstructs forbidden literals at runtime. Lines 13-15 use concat!() to fragment 'team-lead' and 'quality-mgr' which passes linting but produces byte-identical forbidden strings. Proper fix requires using shared role constants from crates/atm-core/src/roles.rs (e.g., ROLE_TEAM_LEAD)." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "architecture" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-13T10:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.11 ;
+  triage:foundAt "2026-08-14T01:42:30Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-AN11/INTG12-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-AN11/INTG12-2> ;
+  triage:closedAt "2026-08-14T06:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/ARCH-002-AN11/INTG12-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
+  triage:line 13 ;
+  triage:snippet "const FIXTURE_TEAM_LEAD: &str = concat!(...);" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "95095a3788d08cf5c82dea8523f969c91816d20e" ;
+  triage:occursIn <urn:atm:triage:worktree/INTG12/95095a37> .
+
+<urn:atm:triage:occurrence/ARCH-002-AN11/INTG12-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
+  triage:line 15 ;
+  triage:snippet "const FIXTURE_QUALITY_MANAGER: &str = concat!(...);  # fragmented literals" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "95095a3788d08cf5c82dea8523f969c91816d20e" ;
+  triage:occursIn <urn:atm:triage:worktree/INTG12/95095a37> .
+
+<urn:atm:triage:worktree/INTG12/95095a37>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate/phase-an" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "95095a3788d08cf5c82dea8523f969c91816d20e" ;
+  triage:orderIndex 12 .

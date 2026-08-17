@@ -1,0 +1,104 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI23-IMPORTANT-001>
+  a triage:Finding ;
+  triage:findingId "AI23-IMPORTANT-001" ;
+  triage:foundAt "2026-07-25T06:25:35Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S3 ;
+  triage:title "semver crate dependency and ReleaseVersion::parse rewrite pre-empt AI.30's exclusively chartered deliverable" ;
+  triage:description "Commit 80da43238523398d4a5eede54c41b5bdcef1df96 adds a new semver workspace dependency (Cargo.toml, crates/atm-core/Cargo.toml) and rewrites ReleaseVersion::parse (crates/atm-core/src/protocol.rs:79-100) from a hand-rolled numeric-triplet check to semver::Version::parse. Sprint AI.30 explicitly and exclusively owns strict SemVer product release values as its own deliverable. AI.23 introduces a less-optimal implementation that duplicates/pre-empts AI.30's chartered work. AI.30 already has a superior implementation using semver::Version directly as the ReleaseVersion struct member." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-24T23:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-001/AI23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-001/AI23/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-001/AI24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-001/AI24/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-001/AI30/1> ;
+  triage:openOn <urn:atm:triage:worktree/AI23/b88ca016> ;
+  triage:openOn <urn:atm:triage:worktree/AI24/fc9832b3> ;
+  triage:partialOn <urn:atm:triage:worktree/AI30/7ad54d25> ;
+  triage:promoteTo <urn:atm:triage:worktree/AI30/7ad54d25> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-001/AI23/1>
+  a triage:Occurrence ;
+  triage:file "Cargo.toml" ;
+  triage:line 46 ;
+  triage:snippet "semver = \"1.0\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AI.23" ;
+  triage:headSha "b88ca016" ;
+  triage:occursIn <urn:atm:triage:worktree/AI23/b88ca016> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-001/AI23/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 88 ;
+  triage:snippet "if semver::Version::parse(value).is_err() { return Err(...); }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AI.23" ;
+  triage:headSha "b88ca016" ;
+  triage:occursIn <urn:atm:triage:worktree/AI23/b88ca016> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-001/AI24/1>
+  a triage:Occurrence ;
+  triage:file "Cargo.toml" ;
+  triage:line 46 ;
+  triage:snippet "semver = \"1.0\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AI.24" ;
+  triage:headSha "fc9832b3" ;
+  triage:occursIn <urn:atm:triage:worktree/AI24/fc9832b3> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-001/AI24/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 88 ;
+  triage:snippet "if semver::Version::parse(value).is_err() { return Err(...); }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AI.24" ;
+  triage:headSha "fc9832b3" ;
+  triage:occursIn <urn:atm:triage:worktree/AI24/fc9832b3> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-001/AI30/1>
+  a triage:Occurrence ;
+  triage:file "Cargo.toml" ;
+  triage:line 46 ;
+  triage:snippet "semver = \"1.0\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AI.30" ;
+  triage:headSha "7ad54d25" ;
+  triage:occursIn <urn:atm:triage:worktree/AI30/7ad54d25> .
+
+<urn:atm:triage:worktree/AI23/b88ca016>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AI.23" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b88ca016" ;
+  triage:orderIndex 23 .
+
+<urn:atm:triage:worktree/AI24/fc9832b3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AI.24" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "fc9832b3" ;
+  triage:orderIndex 24 .
+
+<urn:atm:triage:worktree/AI30/7ad54d25>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AI.30" ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "7ad54d25" ;
+  triage:orderIndex 30 .

@@ -95,7 +95,7 @@ target: integrate/phase-AD
 - Fixed AD.18-to-AD.19 merge fallout in `crates/atm-core/src/protocol.rs`:
   tests still referenced removed `daemon_socket_file_name`; updated tests to
   use the current `DAEMON_SOCKET_FILENAME` constant while preserving Windows
-  named-pipe endpoint normalization.
+  legacy local-endpoint normalization.
 - Fixed AD.18-to-AD.19 merge fallout in `crates/atm-daemon/src/lib.rs`:
   removed stale flat `tests_runtime_root` module declaration because
   runtime-root tests now live under `tests::runtime_root`.

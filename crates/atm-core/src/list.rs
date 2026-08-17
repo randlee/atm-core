@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::address::AgentAddress;
+use crate::boundary;
 use crate::error::AtmError;
 use crate::mailbox::source::resolve_target;
 use crate::observability::ObservabilityPort;
@@ -40,6 +41,15 @@ pub struct ListQuery {
 }
 
 impl ListQuery {
+    /// Replaces caller-supplied filesystem roots with the daemon-owned root
+    /// before a request crosses the long-lived service boundary.
+    #[must_use]
+    pub fn with_daemon_paths(mut self, daemon_home: PathBuf) -> Self {
+        self.home_dir = daemon_home.clone();
+        self.current_dir = daemon_home;
+        self
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         home_dir: PathBuf,
@@ -75,20 +85,13 @@ impl ListQuery {
 
 fn normalize_limit(limit: Option<usize>) -> Result<Option<usize>, AtmError> {
     match limit {
-        Some(0) => Err(
-            AtmError::validation("list limit must be at least 1".to_string()).with_recovery(
-                "Use `--limit` with a positive integer before retrying `atm list`.",
-            ),
-        ),
-        Some(value) if value > MAX_LIST_LIMIT => Err(
-            AtmError::validation(format!(
-                "list limit exceeds the {} row maximum",
-                MAX_LIST_LIMIT
-            ))
-            .with_recovery(
-                "Use a smaller `--limit` value before retrying `atm list` so daemon responses remain bounded.",
-            ),
-        ),
+        Some(0) => Err(AtmError::validation(
+            "list limit must be at least 1".to_string(),
+        )),
+        Some(value) if value > MAX_LIST_LIMIT => Err(AtmError::validation(format!(
+            "list limit exceeds the {} row maximum",
+            MAX_LIST_LIMIT
+        ))),
         Some(value) => Ok(Some(value)),
         None => Ok(Some(DEFAULT_LIST_LIMIT)),
     }
@@ -148,13 +151,6 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         &query.caller_team,
         config.as_ref(),
     )?;
-    let team_dir = runtime.team_dir(&query.home_dir, &target.team)?;
-    if !team_dir.exists() {
-        return Err(AtmError::team_not_found(&target.team).with_recovery(
-            "Create the team config for the requested team or target a different team before retrying `atm list`.",
-        ));
-    }
-
     validate_target_member_in_roster(runtime, &target)?;
 
     let seen_watermark = if query.seen_state_filter && query.selection_mode != ReadSelection::All {
@@ -163,11 +159,23 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         None
     };
 
-    let metadata_rows =
-        runtime.query_mailbox_metadata_rows(&query.home_dir, &target.team, &target.agent, None)?;
+    let storage_bucket_counts = runtime.query_mailbox_bucket_counts(&target.team, &target.agent)?;
+    let metadata_limit = metadata_limit_for_list(&query, storage_bucket_counts.is_some());
+    let metadata_rows = runtime.query_mailbox_metadata_rows(
+        &query.home_dir,
+        &target.team,
+        &target.agent,
+        metadata_limit,
+    )?;
     let classified_all = classify_mailbox_metadata_rows(&metadata_rows);
     let logical_current = logical_current_messages(classified_all);
-    let bucket_counts = bucket_counts_for(&logical_current);
+    let bucket_counts = storage_bucket_counts
+        .map(|counts| BucketCounts {
+            unread: counts.unread,
+            pending_ack: counts.pending_ack,
+            history: counts.history,
+        })
+        .unwrap_or_else(|| bucket_counts_for(&logical_current));
     let filtered = apply_list_filters(
         logical_current,
         query.sender_filter.as_ref(),
@@ -185,6 +193,8 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         contains_needle,
     )?;
     sort_and_limit_selected(&mut selected, query.limit);
+
+    render_selected_messages(runtime, &mut selected)?;
 
     let rows = selected
         .iter()
@@ -204,6 +214,34 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
     })
 }
 
+fn render_selected_messages<R: RetainedMailboxRuntime>(
+    runtime: &R,
+    selected: &mut [ClassifiedMessage],
+) -> Result<(), AtmError> {
+    for message in selected {
+        let key = boundary::MessageKey::new(message.source_path.to_string_lossy().into_owned())?;
+        message.envelope =
+            runtime.render_message_body(&key, message.envelope.message_id, &message.envelope)?;
+    }
+    Ok(())
+}
+
+fn metadata_limit_for_list(query: &ListQuery, storage_counts_available: bool) -> Option<usize> {
+    // The normal list view has no metadata predicates. Its bounded display
+    // window requires a backend aggregate; otherwise fallback counting needs
+    // full metadata. Predicate/contains views always retain full candidates.
+    storage_counts_available
+        .then(|| {
+            (query.sender_filter.is_none()
+                && query.timestamp_filter.is_none()
+                && query.task_filter.is_none()
+                && query.contains_filter.is_none())
+            .then_some(query.limit)
+            .flatten()
+        })
+        .flatten()
+}
+
 fn validate_target_member_in_roster<R: RetainedServiceRuntime>(
     runtime: &R,
     target: &crate::mailbox::source::ResolvedTarget,
@@ -216,11 +254,7 @@ fn validate_target_member_in_roster<R: RetainedServiceRuntime>(
         .load_roster_member(&target.team, &target.agent)?
         .is_none()
     {
-        return Err(
-            AtmError::agent_not_found(&target.agent, &target.team).with_recovery(
-                "Repair or reload the ATM roster, or list a different mailbox target.",
-            ),
-        );
+        return Err(AtmError::agent_not_found(&target.agent, &target.team));
     }
 
     Ok(())
@@ -265,8 +299,8 @@ fn list_row_from_message(message: &ClassifiedMessage) -> ListRow {
 mod tests {
     use std::collections::HashMap;
     use std::path::{Path, PathBuf};
-    use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Mutex};
 
     use serde_json::Map;
     use tempfile::tempdir;
@@ -301,10 +335,12 @@ mod tests {
             class: MessageClass::Unread,
             envelope: InboxMessage {
                 from: TEST_SENDER.parse::<AgentName>().expect("agent"),
+                source_chat_id: None,
                 text: text.to_string(),
                 timestamp: IsoTimestamp::now(),
                 read: false,
                 source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
+                destination_chat_id: None,
                 summary: None,
                 message_id: Some(message_id),
                 requires_ack: false,
@@ -364,11 +400,31 @@ mod tests {
     }
 
     struct ListRuntime {
-        team_dir: PathBuf,
         roster_present: bool,
-        metadata_rows: Vec<boundary::MailStoreMailboxMetadataRow>,
+        metadata_rows: TestMetadataRows,
         message_records: HashMap<MessageKey, boundary::Message>,
         load_message_record_count: Arc<AtomicUsize>,
+        metadata_query_limits: Arc<Mutex<Vec<Option<usize>>>>,
+    }
+
+    enum TestMetadataRows {
+        Static(Vec<boundary::MailStoreMailboxMetadataRow>),
+        Generated(usize),
+    }
+
+    impl TestMetadataRows {
+        fn query(&self, limit: Option<usize>) -> Vec<boundary::MailStoreMailboxMetadataRow> {
+            match self {
+                Self::Static(rows) => rows
+                    .iter()
+                    .take(limit.unwrap_or(usize::MAX))
+                    .cloned()
+                    .collect(),
+                Self::Generated(count) => (0..limit.unwrap_or(*count).min(*count))
+                    .map(generated_metadata_row)
+                    .collect(),
+            }
+        }
     }
 
     impl crate::boundary::sealed::Sealed for ListRuntime {}
@@ -379,17 +435,6 @@ mod tests {
             _current_dir: &Path,
         ) -> Result<Option<crate::config::AtmConfig>, AtmError> {
             Ok(None)
-        }
-
-        fn load_team_config_for_doctor_compare(
-            &self,
-            _team_dir: &Path,
-        ) -> Result<crate::schema::TeamConfig, AtmError> {
-            unreachable!("list roster-truth tests must not load team config")
-        }
-
-        fn team_dir(&self, _home_dir: &Path, _team: &TeamName) -> Result<PathBuf, AtmError> {
-            Ok(self.team_dir.clone())
         }
 
         fn inbox_path(
@@ -418,15 +463,6 @@ mod tests {
             _timestamp: IsoTimestamp,
         ) -> Result<(), AtmError> {
             Ok(())
-        }
-
-        fn rebuild_compat_inbox_projection(
-            &self,
-            _inbox_path: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-        ) -> Result<(), AtmError> {
-            unreachable!("list roster-truth tests do not rebuild projections")
         }
 
         fn deliver_non_claude_payloads(
@@ -463,14 +499,26 @@ mod tests {
     }
 
     impl RetainedMailboxRuntime for ListRuntime {
+        fn acknowledge_message_atomically(
+            &self,
+            _source: &atm_storage::contract::AcknowledgementSource,
+            _builder: std::sync::Arc<dyn atm_storage::contract::AcknowledgementReplyBuilder>,
+        ) -> Result<atm_storage::contract::AcknowledgementCommit, AtmError> {
+            unreachable!("list roster-truth tests do not admit acknowledgements")
+        }
+
         fn query_mailbox_metadata_rows(
             &self,
             _home_dir: &Path,
             _team: &TeamName,
             _agent: &AgentName,
-            _limit: Option<usize>,
+            limit: Option<usize>,
         ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, AtmError> {
-            Ok(self.metadata_rows.clone())
+            self.metadata_query_limits
+                .lock()
+                .expect("metadata query limits lock")
+                .push(limit);
+            Ok(self.metadata_rows.query(limit))
         }
 
         fn load_message_record(
@@ -525,10 +573,12 @@ mod tests {
         let message_key = MessageKey::new(format!("atm:{message_id}")).expect("message key");
         let envelope = InboxMessage {
             from: from.parse::<AgentName>().expect("agent"),
+            source_chat_id: None,
             text: text.to_string(),
             timestamp: IsoTimestamp::now(),
             read: false,
             source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
+            destination_chat_id: None,
             summary: summary.map(str::to_string),
             message_id: Some(message_id),
             requires_ack: false,
@@ -548,6 +598,8 @@ mod tests {
                 parent_message_id: None,
                 thread_mode: None,
                 from_agent: from.parse::<AgentName>().expect("agent"),
+                source_chat_id: None,
+                destination_chat_id: None,
                 summary: summary.map(str::to_string),
                 message_at: envelope.timestamp,
                 read: false,
@@ -566,8 +618,33 @@ mod tests {
         )
     }
 
+    const LARGE_MAILBOX_ROW_COUNT: usize = 500_000;
+
+    fn generated_metadata_row(index: usize) -> boundary::MailStoreMailboxMetadataRow {
+        let pending_ack =
+            (LARGE_MAILBOX_ROW_COUNT - 4..LARGE_MAILBOX_ROW_COUNT - 2).contains(&index);
+        let read = index >= LARGE_MAILBOX_ROW_COUNT - 2;
+        boundary::MailStoreMailboxMetadataRow {
+            message_key: MessageKey::new(format!("atm:scale-{index}")).expect("message key"),
+            message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            from_agent: AgentName::from_validated(TEST_SENDER),
+            source_chat_id: None,
+            destination_chat_id: None,
+            summary: None,
+            message_at: IsoTimestamp::now(),
+            read,
+            requires_ack: pending_ack,
+            pending_ack,
+            acknowledged_at: None,
+            expires_at: None,
+            task_id: None,
+        }
+    }
+
     fn runtime_with_messages(
-        tempdir: &tempfile::TempDir,
+        _tempdir: &tempfile::TempDir,
         rows_and_messages: Vec<(boundary::MailStoreMailboxMetadataRow, boundary::Message)>,
         roster_present: bool,
     ) -> (ListRuntime, Arc<AtomicUsize>) {
@@ -581,11 +658,11 @@ mod tests {
             .unzip();
         (
             ListRuntime {
-                team_dir: tempdir.path().join(".claude").join("teams").join(TEST_TEAM),
                 roster_present,
-                metadata_rows,
+                metadata_rows: TestMetadataRows::Static(metadata_rows),
                 message_records: message_records.into_iter().collect(),
                 load_message_record_count: load_message_record_count.clone(),
+                metadata_query_limits: Arc::new(Mutex::new(Vec::new())),
             },
             load_message_record_count,
         )
@@ -594,14 +671,12 @@ mod tests {
     #[test]
     fn list_mail_uses_atm_roster_truth_for_explicit_targets() {
         let tempdir = tempdir().expect("tempdir");
-        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
-        std::fs::create_dir_all(&team_dir).expect("team dir");
         let runtime = ListRuntime {
-            team_dir,
             roster_present: true,
-            metadata_rows: Vec::new(),
+            metadata_rows: TestMetadataRows::Static(Vec::new()),
             message_records: HashMap::new(),
             load_message_record_count: Arc::new(AtomicUsize::new(0)),
+            metadata_query_limits: Arc::new(Mutex::new(Vec::new())),
         };
 
         let outcome = list_mail_with_runtime_impl(
@@ -619,14 +694,12 @@ mod tests {
     #[test]
     fn list_mail_rejects_explicit_targets_missing_from_atm_roster() {
         let tempdir = tempdir().expect("tempdir");
-        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
-        std::fs::create_dir_all(&team_dir).expect("team dir");
         let runtime = ListRuntime {
-            team_dir,
             roster_present: false,
-            metadata_rows: Vec::new(),
+            metadata_rows: TestMetadataRows::Static(Vec::new()),
             message_records: HashMap::new(),
             load_message_record_count: Arc::new(AtomicUsize::new(0)),
+            metadata_query_limits: Arc::new(Mutex::new(Vec::new())),
         };
 
         let error = list_mail_with_runtime_impl(
@@ -636,7 +709,56 @@ mod tests {
         )
         .expect_err("missing ATM roster member should fail");
 
-        assert!(error.is_agent_not_found(), "{error:?}");
+        assert!(
+            error.code() == crate::error_codes::AtmErrorCode::AgentNotFound,
+            "{error:?}"
+        );
+    }
+
+    #[test]
+    fn list_mail_counts_a_500k_mailbox_correctly_without_backend_aggregate() {
+        let tempdir = tempdir().expect("tempdir");
+        let query_limits = Arc::new(Mutex::new(Vec::new()));
+        let runtime = ListRuntime {
+            roster_present: true,
+            metadata_rows: TestMetadataRows::Generated(LARGE_MAILBOX_ROW_COUNT),
+            message_records: HashMap::new(),
+            load_message_record_count: Arc::new(AtomicUsize::new(0)),
+            metadata_query_limits: query_limits.clone(),
+        };
+        let target = format!("recipient@{TEST_TEAM}");
+        let query = ListQuery::new(
+            tempdir.path().to_path_buf(),
+            tempdir.path().to_path_buf(),
+            TEST_SENDER.parse().expect("caller"),
+            Some(&target),
+            TEST_TEAM.parse().expect("team"),
+            ReadSelection::PendingAck,
+            false,
+            Some(1),
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("list query");
+
+        let outcome = list_mail_with_runtime_impl(query, &NullObservability, &runtime)
+            .expect("large fallback list outcome");
+
+        assert_eq!(outcome.count, 1);
+        assert_eq!(outcome.bucket_counts.unread, LARGE_MAILBOX_ROW_COUNT - 4);
+        assert_eq!(outcome.bucket_counts.pending_ack, 2);
+        assert_eq!(outcome.bucket_counts.history, 2);
+        assert!(outcome.history_collapsed);
+        assert_eq!(
+            query_limits
+                .lock()
+                .expect("metadata query limits lock")
+                .as_slice(),
+            &[None],
+            "the no-aggregate fallback must read full metadata before counting"
+        );
     }
 
     #[test]

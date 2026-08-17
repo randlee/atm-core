@@ -58,6 +58,10 @@ pub struct DoctorExecutionContext {
     pub identity: Option<AgentName>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<ReleaseVersion>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cli_schema_version: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub http_api_version: Option<crate::protocol::HttpApiVersion>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -101,6 +105,32 @@ pub struct BootstrapTraceReport {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct DaemonRuntimeDoctorReport {
     pub findings: Vec<DoctorFinding>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub peer_config: Option<PeerConfigDoctorReport>,
+}
+
+/// Safe control-plane visibility for cross-host HTTPS. Private key references
+/// and key material are intentionally omitted.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct PeerConfigDoctorReport {
+    pub configured_interface_count: usize,
+    pub enabled_interface_count: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub certificate_fingerprint: Option<String>,
+    pub trusted_peer_count: usize,
+    pub enabled_trusted_peer_count: usize,
+    #[serde(default)]
+    pub trusted_peers: Vec<PeerAuthorityDoctorReport>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub validation_failure: Option<DoctorFinding>,
+}
+
+/// Safe durable peer authority projection. Never includes DNS output or secrets.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PeerAuthorityDoctorReport {
+    pub host: String,
+    pub https_port: u16,
+    pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

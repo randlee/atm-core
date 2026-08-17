@@ -1,0 +1,36 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-AI4-ACCEPT-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AI4-ACCEPT-001" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T23:10:00Z"^^xsd:dateTime ;
+  triage:title "Missing cross-surface JSON/error-shape parity test for AI.4 acceptance criterion" ;
+  triage:description "AI4-QA-1 (req-qa, blocking). AI.4's own sprint-doc acceptance criterion requires that CLI, graft, UDS-client, and daemon surfaces observe an identical composed JSON/error shape for the same underlying error. No supporting test exists that asserts this cross-surface parity -- existing tests validate each surface's error handling independently but never assert the four surfaces produce byte-for-byte (or field-for-field) equivalent error output for the same triggering condition. Open/unverifiable as an acceptance criterion. Verified via req-qa's direct sprint-doc cross-check against the AI4-QA-1 test inventory; team-lead confirmed no such test exists on feature/pAI-s4-error-consumer-migration @ baf86e22." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "single_site" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AI4-ACCEPT-001/pAI-4/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-4/baf86e22> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-5/17bfb4c0> ;
+  triage:highestOpenBranch "feature/pAI-s5-chat-address-identity" ;
+  triage:highestFixedBranch "feature/pAI-s5-chat-address-identity" ;
+  triage:resolution "FIXED: owner-chat filtering wired into the real production read path -- apply_participant_filter/matches_participant_filter (crates/atm-core/src/read/filters.rs) are now genuine logic, invoked from selection_state_for_mailbox_metadata_rows (crates/atm-core/src/read/metadata_selection.rs:20-53) on both the message-ID lookup branch (lines 30-35) and the general listing branch via apply_metadata_only_filters (lines 44-50); load_read_selection (crates/atm-core/src/read/mod.rs:535) is the sole production call chain into it (the SourceFile/merged_surface helpers at mod.rs:1008-1084 are #[cfg(test)]-only, not a second production path). Genuine cross-surface parity added: new test cli_graft_daemon_and_read_preserve_one_chat_identity_contract (crates/atm/src/composition.rs) builds identical SendRequests through CliComposition and atm_graft::GraftClient (each via FakeClientTransport capturing the outbound RequestEnvelope), asserts envelope equality, then decodes through the real wire codec protocol::request_to_frame_payload/request_from_frame_payload (protocol.rs:294/306) -- the same functions atm-daemon's production accept_loop.rs uses, not a boundary bypass. Fixed on feature/pAI-s5-chat-address-identity @ 9fb4f292, merge-forwarded through AI6 (6b4645df), AI7 (2acc1d57), AI8 (317e061c), AI9 (dbf13eff), AI10 (fbd04cc6). quality-mgr independently re-verified against source, not self-report (AI5-ACCEPT-001-QA scoped recheck, message 01KY1FSPJ3APY12PEVK6T0RFDH): 2/2 PASS. AI-FIXROUND-2 (AI.5-scope) batch fully closed." ;
+  triage:triagedAt "2026-07-20T23:10:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/ATM-QA-AI4-ACCEPT-001/pAI-4/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-AI/sprint-AI4.md" ;
+  triage:line 0 ;
+  triage:snippet "Acceptance criterion: CLI/graft/UDS-client/daemon error surfaces must observe identical JSON/error shape for the same underlying error -- no supporting test found in AI4-QA-1 test inventory" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s4-error-consumer-migration" ;
+  triage:headSha "baf86e22" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-4/baf86e22> .

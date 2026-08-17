@@ -4,12 +4,12 @@ use std::fs::OpenOptions;
 use std::sync::{Arc, Barrier, mpsc};
 use std::thread;
 use std::time::Duration;
+#[cfg(unix)]
 use std::time::Instant;
 
-use atm_core::ack::{AckReplyDisposition, AckRequest, ack_mail};
+use atm_core::ack::{AckRequest, ack_mail};
 use atm_core::clear::{ClearQuery, clear_mail};
-#[cfg(unix)]
-use atm_core::error::AtmErrorCode;
+use atm_core::error_codes::AtmErrorCode;
 use atm_core::list::{ListQuery, list_mail};
 use atm_core::observability::NullObservability;
 use atm_core::read::{PeekQuery, ReadQuery, peek_mail, read_mail};
@@ -26,7 +26,7 @@ use atm_runtime_test_support::{
 };
 use chrono::Utc;
 #[cfg(unix)]
-use fs2::FileExt;
+use fs4::fs_std::FileExt;
 use tempfile::TempDir;
 
 // Test-side ceiling guard only; production lock timeout defaults to 5s per
@@ -414,7 +414,7 @@ fn concurrent_same_recipient_sends_preserve_sqlite_state() {
 
 #[test]
 #[serial_test::serial(env)]
-fn missing_config_notice_seeds_team_lead_sqlite_state() {
+fn missing_team_config_no_longer_seeds_team_lead_notice_state() {
     let fixture = Fixture::new();
     let observability = NullObservability;
     fixture.create_team_without_config("broken-dev");
@@ -431,20 +431,17 @@ fn missing_config_notice_seeds_team_lead_sqlite_state() {
     )
     .expect("missing-config send");
 
-    let notice = fixture.wait_for_missing_config_notice("broken-dev");
-    assert_eq!(notice.from, "atm-identity-missing");
-    let state = fixture.wait_for_mailbox_state_for_message("broken-dev", TEAM_LEAD, &notice);
     assert!(
-        state["messages"][message_workflow_key(&notice)]
-            .as_object()
-            .is_some(),
-        "missing-config SQLite state missing: {state:?}"
+        fixture
+            .inbox_contents_for_team("broken-dev", TEAM_LEAD)
+            .is_empty(),
+        "team-lead inbox should not receive a synthetic missing-config notice"
     );
 }
 
 #[test]
 #[serial_test::serial(env)]
-fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss() {
+fn concurrent_normal_send_and_sqlite_only_delivery_complete_without_data_loss() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
     fixture.create_team_without_config("broken-dev");
@@ -496,11 +493,11 @@ fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss()
             .any(|message| message.text == "broken send"),
         "missing-config recipient send was not persisted"
     );
-    let notice = fixture.wait_for_missing_config_notice("broken-dev");
-    let state = fixture.wait_for_mailbox_state_for_message("broken-dev", TEAM_LEAD, &notice);
     assert!(
-        state["messages"][message_workflow_key(&notice)]["pendingAckAt"].is_null(),
-        "missing-config notice SQLite state missing after concurrent send: {state:?}"
+        fixture
+            .inbox_contents_for_team("broken-dev", TEAM_LEAD)
+            .is_empty(),
+        "team-lead inbox should not receive a synthetic missing-config notice during concurrent send"
     );
 }
 
@@ -543,7 +540,7 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
     for (label, op) in [
         (
             "read",
-            CommandOp::Read(read_request, Arc::clone(&observability)),
+            CommandOp::Read(Box::new(read_request), Arc::clone(&observability)),
         ),
         (
             "clear",
@@ -556,7 +553,7 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
             barrier.wait();
             let result = match op {
                 CommandOp::Read(request, observability) => {
-                    read_mail(request, observability.as_ref()).map(|_| ())
+                    read_mail(*request, observability.as_ref()).map(|_| ())
                 }
                 CommandOp::Clear(request, observability) => {
                     clear_mail(request, observability.as_ref()).map(|_| ())
@@ -607,7 +604,7 @@ fn send_times_out_under_bounded_lock_contention() {
         .expect_err("timeout");
     join.join().expect("join send thread");
 
-    assert_eq!(error.code, AtmErrorCode::MailboxLockTimeout);
+    assert_eq!(error.code(), AtmErrorCode::MailboxLockTimeout);
 }
 
 #[test]
@@ -834,7 +831,79 @@ fn ack_persists_read_state_and_acknowledged_timestamp() {
 
 #[test]
 #[serial_test::serial(env)]
-fn ack_self_addressed_poison_message_suppresses_replacement_reply() {
+fn cross_team_ack_closes_the_recipient_pending_row_and_delivers_reply_to_source_team() {
+    const RECEIVER_TEAM: &str = "receiver-team";
+    const RECEIVER: &str = "receiver";
+
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let message_id = AtmMessageId::new();
+    create_team_with_config(
+        fixture.tempdir.path(),
+        fixture.sqlite_db_path().as_path(),
+        RECEIVER_TEAM,
+        &[RECEIVER],
+    );
+    fixture.write_primary_inbox_for_team(
+        RECEIVER_TEAM,
+        RECEIVER,
+        &[pending_ack_message(
+            PRIMARY_AGENT,
+            "cross-team acknowledgement requested",
+            message_id,
+            PRIMARY_TEAM,
+        )],
+    );
+
+    let outcome = ack_mail(
+        AckRequest {
+            home_dir: fixture.tempdir.path().to_path_buf(),
+            current_dir: fixture.tempdir.path().to_path_buf(),
+            caller_identity: RECEIVER.parse().expect("receiver identity"),
+            caller_chat_id: None,
+            caller_team: RECEIVER_TEAM.parse().expect("receiver team"),
+            activity_observation: None,
+            message_id,
+            reply_body: "cross-team acknowledgement delivered".to_string(),
+        },
+        &observability,
+    )
+    .expect("cross-team ack succeeds");
+
+    assert_eq!(outcome.team.as_str(), RECEIVER_TEAM);
+    assert_eq!(outcome.agent.as_str(), RECEIVER);
+    assert!(matches!(
+        &outcome.reply_disposition,
+        atm_core::ack::AckReplyDisposition::Sent { reply_target, .. }
+            if reply_target.to_string() == format!("{PRIMARY_AGENT}@{PRIMARY_TEAM}")
+    ));
+
+    let receiver_message = fixture
+        .inbox_contents_for_team(RECEIVER_TEAM, RECEIVER)
+        .into_iter()
+        .find(|message| message.message_id == Some(message_id))
+        .expect("receiver retains acknowledged source");
+    assert!(receiver_message.read);
+    assert!(receiver_message.pending_ack_at.is_none());
+    assert!(receiver_message.acknowledged_at.is_some());
+
+    let reply = fixture
+        .inbox_contents(PRIMARY_AGENT)
+        .into_iter()
+        .find(|message| message.acknowledges_message_id == Some(message_id))
+        .expect("reply is delivered to the source-team mailbox");
+    assert_eq!(reply.from.as_str(), RECEIVER);
+    assert_eq!(
+        reply.source_team.as_ref().map(TeamName::as_str),
+        Some(RECEIVER_TEAM)
+    );
+    assert_eq!(reply.text, "cross-team acknowledgement delivered");
+    assert!(reply.pending_ack_at.is_none());
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn ack_self_addressed_empty_host_target_rejects_without_mutating_source() {
     let fixture = Fixture::new();
     let observability = NullObservability;
     let message_id = AtmMessageId::new();
@@ -848,23 +917,18 @@ fn ack_self_addressed_poison_message_suppresses_replacement_reply() {
         )],
     );
 
-    let ack_outcome = ack_mail(
+    let error = ack_mail(
         fixture.ack_request(PRIMARY_AGENT, message_id, "resolved"),
         &observability,
     )
-    .expect("self ack outcome");
-
-    assert!(matches!(
-        ack_outcome.reply_disposition,
-        AckReplyDisposition::SuppressedSelfAck
-    ));
-    assert_eq!(ack_outcome.reply_text, "resolved");
+    .expect_err("empty-host self acknowledgement must be rejected");
+    assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
 
     let inbox = fixture.inbox_contents(PRIMARY_AGENT);
     assert_eq!(inbox.len(), 1);
     assert_eq!(inbox[0].message_id, Some(message_id));
-    assert!(inbox[0].pending_ack_at.is_none());
-    assert!(inbox[0].acknowledged_at.is_some());
+    assert!(inbox[0].pending_ack_at.is_some());
+    assert!(inbox[0].acknowledged_at.is_none());
     assert!(inbox[0].acknowledges_message_id.is_none());
 }
 
@@ -1146,7 +1210,7 @@ fn send_ignores_retired_file_lock_faults_on_sqlite_path() {
 }
 
 enum CommandOp {
-    Read(ReadQuery, Arc<NullObservability>),
+    Read(Box<ReadQuery>, Arc<NullObservability>),
     Clear(ClearQuery, Arc<NullObservability>),
 }
 
@@ -1190,7 +1254,9 @@ impl Fixture {
             home_dir: self.tempdir.path().to_path_buf(),
             current_dir: self.tempdir.path().to_path_buf(),
             caller_identity: actor.parse().expect("caller"),
+            caller_chat_id: None,
             caller_team: PRIMARY_TEAM.parse().expect("team"),
+            activity_observation: None,
             message_id,
             reply_body: reply_body.to_string(),
         }
@@ -1321,55 +1387,6 @@ impl Fixture {
             })
             .collect::<serde_json::Map<_, _>>();
         serde_json::json!({ "messages": states })
-    }
-
-    fn wait_for_missing_config_notice(&self, team: &str) -> InboxMessage {
-        let deadline = Instant::now() + TEST_RESULT_TIMEOUT;
-        let mut attempts = 0usize;
-        loop {
-            if let Some(notice) = self
-                .inbox_contents_for_team(team, TEAM_LEAD)
-                .into_iter()
-                .find(|message| {
-                    message.from.as_str() == "atm-identity-missing"
-                        && message.text.contains(&format!("{TEST_RECIPIENT}@{team}"))
-                })
-            {
-                return notice;
-            }
-            if Instant::now() >= deadline {
-                let notices = self.inbox_contents_for_team(team, TEAM_LEAD);
-                panic!(
-                    "missing-config notice not observed before timeout after {attempts} attempts: {notices:?}"
-                );
-            }
-            attempts = attempts.saturating_add(1);
-            thread::sleep(Duration::from_millis(5));
-        }
-    }
-
-    fn wait_for_mailbox_state_for_message(
-        &self,
-        team: &str,
-        agent: &str,
-        message: &InboxMessage,
-    ) -> serde_json::Value {
-        let message_key = message_workflow_key(message);
-        let deadline = Instant::now() + TEST_RESULT_TIMEOUT;
-        let mut attempts = 0usize;
-        loop {
-            let state = self.mailbox_state_contents_for_team(team, agent);
-            if state["messages"][&message_key].as_object().is_some() {
-                return state;
-            }
-            if Instant::now() >= deadline {
-                panic!(
-                    "SQLite state for missing-config notice not observed before timeout after {attempts} attempts"
-                );
-            }
-            attempts = attempts.saturating_add(1);
-            thread::sleep(Duration::from_millis(5));
-        }
     }
 
     fn write_primary_inbox(&self, agent: &str, messages: &[InboxMessage]) {
@@ -1515,11 +1532,7 @@ fn seed_sqlite_roster(sqlite_db_path: &std::path::Path, team: &str, members: &[&
         })
         .collect::<Vec<_>>();
     roster_store
-        .replace_roster(
-            &team,
-            &members,
-            Some(&atm_core::boundary::ReplaySource::new("config.json").expect("source")),
-        )
+        .replace_roster(&team, &members)
         .expect("seed sqlite roster");
 }
 
@@ -1583,10 +1596,12 @@ fn pending_ack_message_at(
 ) -> InboxMessage {
     InboxMessage {
         from: from.parse::<AgentName>().expect("agent"),
+        source_chat_id: None,
         text: text.to_string(),
         timestamp: IsoTimestamp::from_datetime(timestamp),
         read: true,
         source_team: Some(source_team.parse::<TeamName>().expect("team")),
+        destination_chat_id: None,
         summary: None,
         message_id: Some(message_id),
         requires_ack: true,
@@ -1613,10 +1628,12 @@ fn read_message_at(
 ) -> InboxMessage {
     InboxMessage {
         from: from.parse::<AgentName>().expect("agent"),
+        source_chat_id: None,
         text: text.to_string(),
         timestamp: IsoTimestamp::from_datetime(timestamp),
         read: true,
         source_team: Some(PRIMARY_TEAM.parse::<TeamName>().expect("team")),
+        destination_chat_id: None,
         summary: None,
         message_id: Some(message_id),
         requires_ack: false,
@@ -1643,10 +1660,12 @@ fn unread_message_at(
 ) -> InboxMessage {
     InboxMessage {
         from: from.parse::<AgentName>().expect("agent"),
+        source_chat_id: None,
         text: text.to_string(),
         timestamp: IsoTimestamp::from_datetime(timestamp),
         read: false,
         source_team: Some(PRIMARY_TEAM.parse::<TeamName>().expect("team")),
+        destination_chat_id: None,
         summary: None,
         message_id: Some(message_id),
         requires_ack: false,

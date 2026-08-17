@@ -1,0 +1,69 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI25-RBQA-F005-new>
+  a triage:Finding ;
+  triage:findingId "AI25-RBQA-F005-new" ;
+  triage:title "resolve_peer_addresses (bounded-thread DNS resolution) is duplicated verbatim between https_transport.rs and the new runtime_health/peer_authority.rs, introduced by the AI25-RBQA-F004 extraction itself" ;
+  triage:description "Reported by ruthless-boundary-qa during AICH-S5-QA-5 (PR #640, commit 96377687, branch feature/pAI-s25-peer-authority-resolution), while verifying the AI25-RBQA-F004 fix (recipient-routing extraction out of https_transport.rs). The extraction correctly moved resolve_peer_authority into crates/atm-daemon/src/runtime_health/peer_authority.rs, but instead of factoring the shared bounded-thread DNS-resolution primitive (resolve_peer_addresses) into one owner, it copy-pasted a near-identical implementation into the new module: crates/atm-daemon/src/https_transport.rs:619-654 and crates/atm-daemon/src/runtime_health/peer_authority.rs:70-102 both use the same thread::Builder + mpsc::sync_channel + recv_timeout pattern with near-identical map_err messages ('failed to start bounded HTTPS DNS resolution', 'HTTPS DNS resolution timed out...', 'failed to resolve configured HTTPS peer...'). This is exactly the duplicated-decision-logic-with-two-owners class of defect the AI25-RBQA-F004 fix was meant to eliminate, and prior triage records (AI25-RSH-001/RSH-002) already document one copy drifting from the other (missing a timeout on the singular variant). Correction: extract one resolve_peer_socket_addresses(peer, timeout) helper into a neutral shared location both crates already depend on (e.g. atm-storage alongside TrustedPeer, or a small atm-core utility), and have both https_transport.rs and peer_authority.rs call it." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-26T17:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T21:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Crimson-2f4c fixed on fix/close-out-pre-ai27-findings @ a5659742 (PR #656). New crates/atm-daemon/src/peer_resolution.rs::resolve_peer_socket_addresses is the single shared helper, pub(crate) (no new pub cross-crate surface), consumed by both https_transport.rs:619 and runtime_health/peer_authority.rs. Independently grepped both former call sites for the old thread::Builder+mpsc::sync_channel DNS block -- zero occurrences remain in peer_authority.rs; the remaining thread::Builder sites in https_transport.rs are the unrelated HTTP accept-loop/connection workers. ruthless-boundary-qa independently confirmed no new cross-crate dependency edges and correct crate-private placement. CI green (8/8)." ;
+  triage:foundIn triage:AICH-S5 ;
+  triage:foundAt "2026-07-26T17:15:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F005-new/preai27-a5659742> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F005-new/pAI-s25/96377687> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s25/96377687-f005> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s25/96377687-f005> ;
+  triage:highestOpenBranch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI25-RBQA-F005-new/pAI-s25/96377687>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/peer_authority.rs" ;
+  triage:line 70 ;
+  triage:snippet "fn resolve_peer_addresses(peer: &TrustedPeer, timeout: Duration) -> Result<Vec<IpAddr>, AtmError> { ... } // near-duplicate of https_transport.rs:619 resolve_peer_addresses" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "96377687" ;
+  triage:note "Discovered by ruthless-boundary-qa during AICH-S5-QA-5 (PR #640) while verifying AI25-RBQA-F004. Two near-identical bounded-thread DNS-resolution implementations now exist: https_transport.rs:619-654 and peer_authority.rs:70-102. Not blocking for this round's three named findings, but should be addressed as a follow-up before further drift (see AI25-RSH-001/RSH-002 precedent of these copies diverging)." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s25/96377687-f005> .
+
+<urn:atm:triage:worktree/pAI-s25/96377687-f005>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "96377687" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:occurrence/AI25-RBQA-F005-new/preai27-a5659742>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_resolution.rs" ;
+  triage:line 12 ;
+  triage:snippet "pub(crate) fn resolve_peer_socket_addresses(peer: &TrustedPeer, timeout: Duration) -> Result<Vec<SocketAddr>, AtmError>" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/close-out-pre-ai27-findings" ;
+  triage:headSha "a5659742" ;
+  triage:note "Independently re-verified against PR #656; single shared helper now used by both former duplicate sites. ruthless-boundary-qa PASS." ;
+  triage:occursIn <urn:atm:triage:worktree/preai27/a5659742> .
+
+<urn:atm:triage:worktree/preai27/a5659742>
+  a triage:WorktreeSnapshot ;
+  triage:branch "fix/close-out-pre-ai27-findings" ;
+  triage:path "fix/close-out-pre-ai27-findings" ;
+  triage:headSha "a5659742" ;
+  triage:orderIndex 101 .

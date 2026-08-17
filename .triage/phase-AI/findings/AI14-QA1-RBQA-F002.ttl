@@ -1,0 +1,74 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI14-QA1-RBQA-F002>
+  a triage:Finding ;
+  triage:findingId "AI14-QA1-RBQA-F002" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:title "boundaries/atm-daemon/socket-server-transport.toml has no record for local_tcp_transport" ;
+  triage:description "No mechanical lint rule catches a crate binding both the UDS and HTTP-loopback local transports for the same ingress role -- lint_boundaries.py has nothing to flag here. Companion to AI14-QA1-RBQA-F001 (the actual dual-listener defect); should land alongside that fix as an update to boundaries/atm-daemon/socket-server-transport.toml adding a canonical single-local-receive-path rule." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary-toml-missing-record" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "boundaries/atm-daemon/socket-server-transport.toml" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s11/3642430d> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s12/a8ea0017> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s13/2adc5fa1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s14/c5665204> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s15/5a7a762f> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s16/1c23ac04> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s16/1c23ac04> ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:worktree/pAI-s11/3642430d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "3642430d" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/pAI-s12/a8ea0017>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
+  triage:headSha "a8ea0017" ;
+  triage:orderIndex 2 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/pAI-s13/2adc5fa1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "2adc5fa1" ;
+  triage:orderIndex 3 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/pAI-s14/c5665204>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "c5665204" ;
+  triage:orderIndex 4 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/pAI-s15/5a7a762f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a7a762f" ;
+  triage:orderIndex 5 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/pAI-s16/1c23ac04>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "1c23ac04" ;
+  triage:orderIndex 6 ;
+  triage:status "open" .

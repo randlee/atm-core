@@ -1,0 +1,60 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBQA-F010>
+  a triage:Finding ;
+  triage:findingId "RBQA-F010" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T00:00:00Z"^^xsd:dateTime ;
+  triage:title "Blank-line spacing drift before 'Historical status:' in newly-retired sections" ;
+  triage:description "QA-4 on PR #590 found the two newly-retired sections added by this reset (DaemonInboxIngressAdapter, DaemonInboxExportAdapter) used 1 blank line before 'Historical status:', while pre-existing sibling retired sections (e.g. DaemonFileWatchEventSourceAdapter, DaemonReconcileCoordinatorAdapter) use 2 blank lines. Cosmetic drift from the established convention." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F010/pAI-1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F010/pAI-1/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-1/f56ce35e> ;
+  triage:closedOn <urn:atm:triage:worktree/pAI-1/f56ce35e> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-1/f56ce35e> ;
+  triage:triagedAt "2026-07-20T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/RBQA-F010/pAI-1/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/boundaries.md" ;
+  triage:snippet "DaemonInboxIngressAdapter section: 1 blank line before 'Historical status:'" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-1-daemon-preag-reset" ;
+  triage:headSha "f56ce35e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-1/f56ce35e> ;
+  triage:resolution "Added a second blank line before 'Historical status:' to match the 2-blank-line sibling convention." .
+
+<urn:atm:triage:occurrence/RBQA-F010/pAI-1/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/boundaries.md" ;
+  triage:snippet "DaemonInboxExportAdapter section: 1 blank line before 'Historical status:'" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-1-daemon-preag-reset" ;
+  triage:headSha "f56ce35e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-1/f56ce35e> ;
+  triage:resolution "Added a second blank line before 'Historical status:' to match the 2-blank-line sibling convention." .
+
+<urn:atm:triage:worktree/pAI-1/f56ce35e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-1-daemon-preag-reset" ;
+  triage:path "feature/pAI-1-daemon-preag-reset" ;
+  triage:headSha "f56ce35e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-AI/d316f0b4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
+  triage:headSha "d316f0b4" ;
+  triage:orderIndex 0 .

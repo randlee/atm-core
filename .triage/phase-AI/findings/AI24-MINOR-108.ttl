@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI24-MINOR-108>
+  a triage:Finding ;
+  triage:findingId "AI24-MINOR-108" ;
+  triage:title "Same-peer double-dispatch still serializes across full I/O window on per-peer PeerSyncProgress lock" ;
+  triage:description "crates/atm-daemon/src/runtime_health.rs sync_peer() (lines ~683-711) holds the per-peer Arc[Mutex[PeerSyncProgress]] guard across the full blocking reconcile_peer I/O (up to 5s) for the SAME peer, so two concurrent explicit sync_peer calls for one peer still serialize rather than the second fast-failing via next_allowed_at cooldown check. Cross-peer stalling (the original AI24-IMPORTANT-002 defect) is fixed; this same-peer double-dispatch latency is a smaller-blast-radius residual noted by rust-service-hardening-agent, flagged for an explicit accept/fix decision, not a regression of the closed finding."^^xsd:string ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "rust-service-hardening-agent" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-26T09:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S4 ;
+  triage:foundAt "2026-07-26T09:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-07-26T09:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-MINOR-108/AI24-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AI24-MINOR-108/AI24-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/peer_sync.rs" ;
+  triage:line 107 ;
+  triage:snippet "drop(state) BEFORE reconcile_peer(...) at line 110" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-07-26T09:45:00Z"^^xsd:dateTime ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "ac465283747d3186667fab7ad2f752b1c4c1a968" ;
+  triage:occursIn <urn:atm:triage:worktree/AI24/ac465283> .
+
+<urn:atm:triage:worktree/AI24/ac465283>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pAI-s24" ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "ac465283747d3186667fab7ad2f752b1c4c1a968" ;
+  triage:orderIndex 24 .

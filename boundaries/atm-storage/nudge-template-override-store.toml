@@ -19,7 +19,7 @@ io_owns = ["built_in_nudge_template_override_lookup_contract", "durable_ack_requ
 io_forbidden = ["direct_sqlite_io", "socket_io", "process_spawn", "template_rendering"]
 
 [dependencies]
-allowed_dependents = ["atm-core", "atm-daemon", "atm-daemon-client", "atm-runtime", "atm-storage-rusqlite", "atm-storage-sqlserver-proof"]
+allowed_dependents = ["atm", "atm-core", "atm-daemon-bootstrap", "atm-daemon-client", "atm-runtime", "atm-storage-rusqlite", "atm-storage-sqlserver-proof"]
 allowed_dependencies = []
 forbidden_edges = ["atm-storage -> atm-daemon", "atm-storage -> atm-storage-rusqlite"]
 

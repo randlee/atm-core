@@ -1,0 +1,156 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AJ4-RBP-F003-RELOAD-CAPACITY-GUIDANCE>
+  a triage:Finding ;
+  triage:findingId "AJ4-RBP-F003-RELOAD-CAPACITY-GUIDANCE" ;
+  triage:title "reload-capacity errors lack recovery guidance" ;
+  triage:description "reload-capacity errors (in reload_runtime_view's disk-I/O path, e.g. refresh_https_trust) lack recovery guidance in their returned error text. Found by rust-best-practices-agent RBP-F003. QA source: /Users/randlee/.config/atm/share/atm-dev/aj4-verdict.md, PR #739. (Note: the sibling RBP-F004 item in the same verdict, an unreachable-by-construction Err arm, was explicitly assessed by quality-mgr as a defensible trait-boundary decision, not a violation -- do not triage that half separately.)" ;
+  triage:phaseId "phase-AJ" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T05:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AJ-S4 ;
+  triage:foundAt "2026-08-04T04:50:14Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AJ4-RBP-F003-RELOAD-CAPACITY-GUIDANCE/S4-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AJ4-RBP-F003-RELOAD-CAPACITY-GUIDANCE/S5-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AJ4-RBP-F003-RELOAD-CAPACITY-GUIDANCE/S6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AJ4-RBP-F003-RELOAD-CAPACITY-GUIDANCE/S7-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AJ4-RBP-F003-RELOAD-CAPACITY-GUIDANCE/S8-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AJ4-RBP-F003-RELOAD-CAPACITY-GUIDANCE/S9-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AJ4-RBP-F003-RELOAD-CAPACITY-GUIDANCE/S10-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AJ4-RBP-F003-RELOAD-CAPACITY-GUIDANCE/S4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch.rs" ;
+  triage:line 270 ;
+  triage:snippet "pub(crate) fn reload_runtime_view(&self) -> Result<(), AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAJ-s4-daemon-cache-touch" ;
+  triage:headSha "daac42644de7f770f461a387d04bce43f65573ed" ;
+  triage:occursIn <urn:atm:triage:worktree/pAJ-s4/daac426> .
+
+<urn:atm:triage:occurrence/AJ4-RBP-F003-RELOAD-CAPACITY-GUIDANCE/S5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch.rs" ;
+  triage:line 270 ;
+  triage:snippet "pub(crate) fn reload_runtime_view(&self) -> Result<(), AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAJ-s5-heartbeat-session" ;
+  triage:headSha "db21583498bc2dca5871d167860084568b2503d4" ;
+  triage:occursIn <urn:atm:triage:worktree/pAJ-s5/db21583> .
+
+<urn:atm:triage:occurrence/AJ4-RBP-F003-RELOAD-CAPACITY-GUIDANCE/S6-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch.rs" ;
+  triage:line 270 ;
+  triage:snippet "pub(crate) fn reload_runtime_view(&self) -> Result<(), AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAJ-s6-runtime-observation-snapshot" ;
+  triage:headSha "26607c3b19acbf9c7c247386df5ffd0a1f58cfa4" ;
+  triage:occursIn <urn:atm:triage:worktree/pAJ-s6/26607c3> .
+
+<urn:atm:triage:occurrence/AJ4-RBP-F003-RELOAD-CAPACITY-GUIDANCE/S7-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch.rs" ;
+  triage:line 270 ;
+  triage:snippet "pub(crate) fn reload_runtime_view(&self) -> Result<(), AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAJ-s7-runtime-observation-source-guard" ;
+  triage:headSha "5896e86c719292e229a64d35a74ee7018c875878" ;
+  triage:occursIn <urn:atm:triage:worktree/pAJ-s7/5896e86> .
+
+<urn:atm:triage:occurrence/AJ4-RBP-F003-RELOAD-CAPACITY-GUIDANCE/S8-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch.rs" ;
+  triage:line 270 ;
+  triage:snippet "pub(crate) fn reload_runtime_view(&self) -> Result<(), AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAJ-s8-runtime-observation-boundary-record" ;
+  triage:headSha "9f66cef98afb97f4019ed58598ce71f47360803b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAJ-s8/9f66cef> .
+
+<urn:atm:triage:occurrence/AJ4-RBP-F003-RELOAD-CAPACITY-GUIDANCE/S9-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch.rs" ;
+  triage:line 270 ;
+  triage:snippet "pub(crate) fn reload_runtime_view(&self) -> Result<(), AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAJ-s9-runtime-observation-contract-reconciliation" ;
+  triage:headSha "afd9314534ed2a26788ad39b6fb5d7bafb496d92" ;
+  triage:occursIn <urn:atm:triage:worktree/pAJ-s9/afd9314> .
+
+<urn:atm:triage:occurrence/AJ4-RBP-F003-RELOAD-CAPACITY-GUIDANCE/S10-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch.rs" ;
+  triage:line 270 ;
+  triage:snippet "pub(crate) fn reload_runtime_view(&self) -> Result<(), AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAJ-s10-runtime-observation-phase-closeout" ;
+  triage:headSha "243ea2e0773463bee23b37bda6e58f4265fc5bb5" ;
+  triage:occursIn <urn:atm:triage:worktree/pAJ-s10/243ea2e> .
+
+<urn:atm:triage:worktree/pAJ-s4/daac426>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pAJ-s4" ;
+  triage:branch "feature/pAJ-s4-daemon-cache-touch" ;
+  triage:headSha "daac42644de7f770f461a387d04bce43f65573ed" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAJ-s5/db21583>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pAJ-s5" ;
+  triage:branch "feature/pAJ-s5-heartbeat-session" ;
+  triage:headSha "db21583498bc2dca5871d167860084568b2503d4" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAJ-s6/26607c3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pAJ-s6" ;
+  triage:branch "feature/pAJ-s6-runtime-observation-snapshot" ;
+  triage:headSha "26607c3b19acbf9c7c247386df5ffd0a1f58cfa4" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAJ-s7/5896e86>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pAJ-s7" ;
+  triage:branch "feature/pAJ-s7-runtime-observation-source-guard" ;
+  triage:headSha "5896e86c719292e229a64d35a74ee7018c875878" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAJ-s8/9f66cef>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pAJ-s8" ;
+  triage:branch "feature/pAJ-s8-runtime-observation-boundary-record" ;
+  triage:headSha "9f66cef98afb97f4019ed58598ce71f47360803b" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAJ-s9/afd9314>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pAJ-s9" ;
+  triage:branch "feature/pAJ-s9-runtime-observation-contract-reconciliation" ;
+  triage:headSha "afd9314534ed2a26788ad39b6fb5d7bafb496d92" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pAJ-s10/243ea2e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pAJ-s10" ;
+  triage:branch "feature/pAJ-s10-runtime-observation-phase-closeout" ;
+  triage:headSha "243ea2e0773463bee23b37bda6e58f4265fc5bb5" ;
+  triage:orderIndex 7 .

@@ -29,6 +29,17 @@ pub struct ClearQuery {
     pub dry_run: bool,
 }
 
+impl ClearQuery {
+    /// Replaces caller-supplied filesystem roots with the daemon-owned root
+    /// before a request crosses the long-lived service boundary.
+    #[must_use]
+    pub fn with_daemon_paths(mut self, daemon_home: PathBuf) -> Self {
+        self.home_dir = daemon_home.clone();
+        self.current_dir = daemon_home;
+        self
+    }
+}
+
 /// Counts of removed mailbox messages by ATM display class.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RemovedByClass {
@@ -141,8 +152,6 @@ fn load_clear_runtime_context<R: RetainedServiceRuntime + RetainedMailboxRuntime
     let actor = query.caller_identity.clone();
     let target = resolve_target(None, &actor, &query.caller_team, config.as_ref())?;
 
-    validate_clear_target(runtime, &query.home_dir, &target)?;
-
     let cutoff = cutoff_timestamp(query.older_than)?;
     let metadata_rows =
         runtime.query_mailbox_metadata_rows(&query.home_dir, &target.team, &target.agent, None)?;
@@ -161,21 +170,6 @@ fn load_clear_runtime_context<R: RetainedServiceRuntime + RetainedMailboxRuntime
         metadata_rows,
         removable,
     })
-}
-
-fn validate_clear_target<R: RetainedServiceRuntime>(
-    runtime: &R,
-    home_dir: &std::path::Path,
-    target: &ResolvedTarget,
-) -> Result<(), AtmError> {
-    let team_dir = runtime.team_dir(home_dir, &target.team)?;
-    if !team_dir.exists() {
-        return Err(AtmError::team_not_found(&target.team).with_recovery(
-            "Create the team config for the requested team or target a different team before retrying `atm clear`.",
-        ));
-    }
-
-    Ok(())
 }
 
 fn persist_deleted_messages<R: RetainedMailboxRuntime>(
@@ -225,10 +219,7 @@ fn sqlite_removable_messages<R: RetainedMailboxRuntime>(
             return Err(AtmError::validation(format!(
                 "sqlite mailbox metadata row {} could not be reloaded for clear",
                 row.message_key
-            ))
-            .with_recovery(
-                "Repair or remove the malformed sqlite mailbox row before retrying `atm clear`.",
-            ));
+            )));
         };
 
         let class = state::classify_message(&record.envelope);
@@ -249,11 +240,8 @@ fn cutoff_timestamp(
 ) -> Result<Option<chrono::DateTime<Utc>>, AtmError> {
     older_than
         .map(|duration| {
-            TimeDelta::from_std(duration).map_err(|error| {
-                AtmError::validation(format!("invalid duration filter: {error}")).with_recovery(
-                    "Use --older-than with a positive duration like 30s, 10m, 2h, or 7d.",
-                )
-            })
+            TimeDelta::from_std(duration)
+                .map_err(|error| AtmError::validation(format!("invalid duration filter: {error}")))
         })
         .transpose()
         .map(|delta| delta.map(|delta| Utc::now() - delta))
@@ -338,7 +326,6 @@ mod tests {
     }
 
     struct ClearRuntime {
-        team_dir: PathBuf,
         roster_present: bool,
     }
 
@@ -350,17 +337,6 @@ mod tests {
             _current_dir: &Path,
         ) -> Result<Option<crate::config::AtmConfig>, AtmError> {
             Ok(None)
-        }
-
-        fn load_team_config_for_doctor_compare(
-            &self,
-            _team_dir: &Path,
-        ) -> Result<crate::schema::TeamConfig, AtmError> {
-            unreachable!("clear roster-truth tests must not load team config")
-        }
-
-        fn team_dir(&self, _home_dir: &Path, _team: &TeamName) -> Result<PathBuf, AtmError> {
-            Ok(self.team_dir.clone())
         }
 
         fn inbox_path(
@@ -389,15 +365,6 @@ mod tests {
             _timestamp: crate::types::IsoTimestamp,
         ) -> Result<(), AtmError> {
             Ok(())
-        }
-
-        fn rebuild_compat_inbox_projection(
-            &self,
-            _inbox_path: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-        ) -> Result<(), AtmError> {
-            unreachable!("clear roster-truth tests do not rebuild projections")
         }
 
         fn deliver_non_claude_payloads(
@@ -434,6 +401,14 @@ mod tests {
     }
 
     impl RetainedMailboxRuntime for ClearRuntime {
+        fn acknowledge_message_atomically(
+            &self,
+            _source: &atm_storage::contract::AcknowledgementSource,
+            _builder: std::sync::Arc<dyn atm_storage::contract::AcknowledgementReplyBuilder>,
+        ) -> Result<atm_storage::contract::AcknowledgementCommit, AtmError> {
+            unreachable!("clear roster-truth tests do not admit acknowledgements")
+        }
+
         fn query_mailbox_metadata_rows(
             &self,
             _home_dir: &Path,
@@ -481,10 +456,7 @@ mod tests {
     #[test]
     fn clear_mail_targets_only_the_owner_mailbox() {
         let tempdir = tempdir().expect("tempdir");
-        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
-        std::fs::create_dir_all(&team_dir).expect("team dir");
         let runtime = ClearRuntime {
-            team_dir,
             roster_present: true,
         };
 

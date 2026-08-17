@@ -1,0 +1,72 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI3133-HERMES-GRAFT-NO-DURABLE-QUEUE>
+  a triage:Finding ;
+  triage:findingId "AI3133-HERMES-GRAFT-NO-DURABLE-QUEUE" ;
+  triage:title "Graft receiver has no durable nudge queue or reconciliation drain" ;
+  triage:description "The graft receiver is a loopback TCP listener with no persisted backlog. crates/atm-core/src/graft.rs:427 (run_graft_receiver_loop in crates/atm-graft/src/runtime.rs:427-501) accepts one connection via GraftReceiverListener::poll_accept (crates/atm-core/src/graft.rs:207-231), reads one request, synchronously invokes the registered Python injector callback, writes GraftPostSendResponse::Delivered (crates/atm-graft/src/runtime.rs:489-501), and closes. The only in-process replay protection is HermesGraftBridge's OrderedDict-based dedupe cache capped at recent_message_limit=1_024 (crates/atm-graft-python/python/atm_graft_hermes_bridge.py:25,33,50-63) — a purely in-memory LRU with no disk persistence. If Hermes/the injector callback is unavailable when a post-send nudge attempt is made (receiver not bound, process down, or the accept/read/callback cycle fails), deliver_graft_post_send on the sender side (crates/atm-core/src/graft.rs:306-343) returns a transport error back through DaemonGraftPostSendPort::deliver_post_send (crates/atm-daemon/src/runtime_health/post_commit_work.rs:250-278) and the underlying ATM message stays durable in the SQLite-backed ATM store — but nothing later re-drives the graft/nudge path. There is no queue, retry ledger, or reconciliation job that later notices the message was never nudged into Hermes and replays it once the receiver comes back. Read/reconcile after a missed nudge is not automatic; it depends on the recipient noticing on their own that they have unread ATM mail." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "architecture_review" ;
+  triage:category "HERMES-GRAFT-ARCHITECTURE" ;
+  triage:severity "major" ;
+  triage:repeatable false ;
+  triage:sweepScope "component" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:dispatchReady false ;
+  triage:blockingCurrentMerge false ;
+  triage:note "Architecture gap, not a regression in the reviewed merge (integrate/phase-ai-31-33@21957012). Do not fix under time pressure or as an incidental change. Requires an approved design (durable queue/outbox + reconciliation drain) before implementation; scope belongs to a future planning sprint, not the current phase-ai-31-33 branch. Current best-effort synchronous accept/inject/Delivered/close behavior must be preserved as-is until that design is approved." ;
+  triage:requirementNote "arch-ctm clarification (2026-07-29): live and restart-recovery nudges must enter Hermes through the non-interrupting steer/API tool-loop path, not normal Telegram user-message ingress. On recovery, emit exactly one delayed concise durable-mail summary (not a replay of every missed nudge individually)." ;
+  triage:foundIn triage:ARCH-CTM-REVIEW-phase-ai-31-33 ;
+  triage:foundAt "2026-07-28T00:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-28T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-09T18:30:58Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "By-design closure, operator-authorized (2026-08-09). The AL16/AL17/AL18 Hermes graft live-proof plan split (PR #807 @ 7a610fd3) codifies REQ-GRAFT-NOTIFY-002/ADR-043.2/6 as intentional: nudge is a bounded wake signal with no retry, durable graft state, or message replay by design. This finding's no-durable-queue/no-reconciliation-drain observation matches that accepted design rather than an unaddressed gap. Closed per quality-mgr's AL16-PLAN-QA-1 recommendation and team-lead's relayed operator authorization (ATM message 01KZKWN5BKE1959EPJ1V3K94CC)." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3133-HERMES-GRAFT-NO-DURABLE-QUEUE/receive-loop> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3133-HERMES-GRAFT-NO-DURABLE-QUEUE/poll-accept> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3133-HERMES-GRAFT-NO-DURABLE-QUEUE/in-memory-dedupe> ;
+  triage:openOn <urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33> ;
+  triage:promoteTo <urn:atm:triage:worktree/phase-AI/future-planning-sprint> ;
+  triage:highestOpenBranch "integrate/phase-ai-31-33" .
+
+<urn:atm:triage:occurrence/AI3133-HERMES-GRAFT-NO-DURABLE-QUEUE/receive-loop>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 427 ;
+  triage:snippet "pub(crate) fn run_graft_receiver_loop(ctx: GraftReceiverLoopContext) -> Result<(), AtmError> { ... match listener.poll_accept()? { ... } ... let request = listener.read_request(stream, GRAFT_RECEIVER_IO_DEADLINE)?; ... Ok(()) => GraftPostSendResponse::Delivered, ... listener.write_response(stream, &response) } — one accept, one synchronous injector call, one Delivered/Error response, then loop back for the next connection with no backlog." ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "21957012" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33> .
+
+<urn:atm:triage:occurrence/AI3133-HERMES-GRAFT-NO-DURABLE-QUEUE/poll-accept>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 207 ;
+  triage:snippet "pub fn poll_accept(&self) -> Result<Option<TcpStream>, AtmError> { match self.listener.accept() { ... } } — loopback TCP accept only, no persisted pending-nudge state if no connection is ever attempted." ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "21957012" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33> .
+
+<urn:atm:triage:occurrence/AI3133-HERMES-GRAFT-NO-DURABLE-QUEUE/in-memory-dedupe>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/python/atm_graft_hermes_bridge.py" ;
+  triage:line 25 ;
+  triage:snippet "recent_message_limit: int = 1_024 ... self._recent_message_ids: OrderedDict[str, None] = OrderedDict() ... while len(self._recent_message_ids) > self._recent_message_limit: self._recent_message_ids.popitem(last=False) — in-process-only dedupe LRU, lost on restart, no durable/replayable queue behind it." ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "21957012" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33> .
+
+<urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:path "phase-AI/integrate-phase-ai-31-33" ;
+  triage:headSha "21957012" ;
+  triage:orderIndex 1 .

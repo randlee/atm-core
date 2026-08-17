@@ -1,0 +1,98 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI22-BLOCK-001>
+  a triage:Finding ;
+  triage:findingId "AI22-BLOCK-001" ;
+  triage:foundAt "2026-07-25T06:42:14Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S2 ;
+  triage:title "is_same_host_peer_receipt misclassifies ordinary writes via None==None" ;
+  triage:description "crates/atm-core/src/send/mod.rs: fn is_same_host_peer_receipt(request) compares request.authenticated_source_host.as_ref() == request.to.as_ref().and_then(|d| d.host.as_ref()). When neither side is a host-qualified/authenticated write (the overwhelmingly common case for ordinary local sends), both sides are None and None==None evaluates true, causing every ordinary non-host-qualified write to be misclassified as a same-host peer receipt. This forces post_write_needed = true unconditionally for ordinary writes via prepare_persisted_write, and is reachable via unauthenticated UntrustedSmoke writes per rust-service-hardening-agent. Independently found by ruthless-boundary-qa (RBQA-F001, Critical) and rust-service-hardening-agent (RSH-002, Important) with the same root cause." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
+  triage:reassignReason "Fix confirmed present on later sprint branch s24 (af2fbb83); s22/s23 occurrences remain open only because forward-merge from s24 has not landed there -- no independent re-fix dispatched, s24's fix supersedes on forward merge." ;
+  triage:closedAt "2026-07-26T05:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Occurrence reconciliation per arch-ctm ruling 2026-07-26: finding-level status fixed (via s24/af2fbb83) is authoritative; the s22/s23 occurrence records below were stale open metadata never updated after the s24 fix, not an independently-open blocker on those branches. Reconciled to closed/fixed by supersession -- s22/s23 are pre-fix feature branches in the sprint chain and are not independently re-fixed under the merge-forward-collapse model; they close out via forward merge of s24's fix, not a separate dev dispatch. No code change performed; this is a record-accuracy correction, not a re-verification of the underlying code." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-001/s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-001/s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-001/s24/1> ;
+  triage:fixedOn <urn:atm:triage:worktree/s24/af2fbb83> ;
+  triage:promoteTo <urn:atm:triage:worktree/s24/af2fbb83> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-001/s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 569 ;
+  triage:snippet "fn is_same_host_peer_receipt(request: &WriteRequest) -> bool { request.authenticated_source_host.as_ref() == request.to.as_ref().and_then(|destination| destination.host.as_ref())" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:reason "Superseded by s24 fix (af2fbb83) under merge-forward-collapse; not independently re-fixed on this branch." ;
+  triage:occursIn <urn:atm:triage:worktree/s22/a5aa6813> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-001/s23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 569 ;
+  triage:snippet "fn is_same_host_peer_receipt(request: &WriteRequest) -> bool { request.authenticated_source_host.as_ref() == request.to.as_ref().and_then(|destination| destination.host.as_ref())" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:reason "Superseded by s24 fix (af2fbb83) under merge-forward-collapse; not independently re-fixed on this branch." ;
+  triage:occursIn <urn:atm:triage:worktree/s23/c528137c> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-001/s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 569 ;
+  triage:snippet "fn is_same_host_peer_receipt(request: &WriteRequest) -> bool { request.authenticated_source_host.as_ref() == request.to.as_ref().and_then(|destination| destination.host.as_ref())" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "af2fbb83" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/af2fbb83> .
+
+<urn:atm:triage:worktree/s0/e52fffb6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
+  triage:headSha "e52fffb6" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/s21/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 21 .
+
+<urn:atm:triage:worktree/s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 22 .
+
+<urn:atm:triage:worktree/s23/c528137c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:orderIndex 23 .
+
+<urn:atm:triage:worktree/s24/af2fbb83>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "af2fbb83" ;
+  triage:orderIndex 24 .

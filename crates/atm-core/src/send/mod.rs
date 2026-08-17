@@ -1,57 +1,70 @@
 //! Send command service implementation and post-send hook handling.
 
-use std::path::{Path, PathBuf};
-use std::time::Duration;
-
 use serde::{Deserialize, Serialize};
-use serde_json::Map;
+use serde_json::{Map, Value};
+use std::path::PathBuf;
 use tracing::warn;
 
+use crate::ack::AckOutcome;
 use crate::address::AgentAddress;
-use crate::boundary::PostSendHookEmitter;
-use crate::config;
+#[cfg(test)]
+use crate::boundary::MessageReceivedHookEmitter;
+use crate::boundary::{self, BuiltInPostSendDispatch};
+use crate::caller_context::ActivityObservation;
 use crate::delivery_execution::{
     DeliveryTransitionContext, emit_delivery_plan_transitions, execute_delivery_plan,
 };
-use crate::delivery_plan::{
-    DeliveryPlan, delivery_plan_disposition, logical_messages_from_persistence,
-};
-use crate::delivery_policy::{
-    DeliveryEventFamily, DeliveryPolicyCoordinator, DeliveryRecipientSnapshot,
-};
+use crate::delivery_policy::DeliveryPolicyCoordinator;
 use crate::error::AtmError;
-use crate::error_codes::AtmErrorCode;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
-use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage, ThreadMode};
+use crate::provenance::{
+    ValidatedWriteProvenance, WriteIngress, WriteProvenance, validate_write_provenance,
+};
+use crate::schema::{
+    AckIntentFields, AtmMessageId, InboxMessage, ThreadMode, set_authenticated_source_host,
+    set_peer_delivery_target,
+};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
-use crate::threading::{ThreadIndex, canonical_sender_identity, is_ephemeral};
-use crate::types::{AgentName, CommandAction, IsoTimestamp, TaskId, TeamName};
+use crate::types::{AgentName, ChatId, CommandAction, HostName, IsoTimestamp, TaskId, TeamName};
 
-#[allow(
-    dead_code,
-    reason = "Z.6 removes the production send-path config gate; alert-state helpers remain test-covered until the follow-on cleanup deletes the obsolete file-backed alert seam."
-)]
-mod alert_state;
+mod async_persistence;
 mod delivery_persistence;
 pub(crate) mod file_policy;
 pub(crate) mod hook;
-#[allow(
-    dead_code,
-    reason = "The s11 merge-forward keeps the older hook_tmux helper module while this branch still inlines the tmux seam in hook.rs; the follow-on cleanup can delete the obsolete duplicate once the AD forward-merge settles."
-)]
-mod hook_tmux;
 pub mod input;
-mod missing_config_notice;
 #[doc(hidden)]
-pub mod nudge_template;
+pub(crate) mod nudge_template;
+mod outcome;
+mod peer_routing;
 mod persistence;
+mod received_hook;
+mod recipient;
+mod request;
 pub(crate) mod summary;
+mod template;
+mod write_context;
 
-pub(crate) use delivery_persistence::{DeliveryPersistenceDisposition, DeliveryPersistenceResult};
+use async_persistence::prepare_persisted_write_async;
+pub(crate) use delivery_persistence::{
+    DeliveryPersistenceDisposition, DeliveryPersistenceResult, DuplicateWriteDisposition,
+};
+#[doc(hidden)]
+pub use nudge_template::{
+    default_template, qualified_sender_identity as qualified_nudge_sender_identity,
+    render_resolved_built_in_nudge,
+};
+pub use outcome::{SendCommandOutcome, SendOutcome, WarningEntry};
+pub(crate) use peer_routing::direct_peer_destination;
+#[cfg(test)]
 pub(crate) use persistence::persist_message;
-
-pub(super) const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
+use received_hook::{PreparedReceivedHook, prepare_received_hook};
+pub(crate) use recipient::{ResolvedRecipient, resolve_recipient, validate_non_self_recipient};
+use request::{prepare_threaded_message, resolve_message_body};
+use template::{requires_plain_template_fallback, verify_template_send};
+use write_context::{
+    SendExecutionContext, build_send_delivery_plan, build_send_outcome, prepare_send_context,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SendMessageSource {
@@ -60,26 +73,89 @@ pub enum SendMessageSource {
         path: PathBuf,
         message: Option<String>,
     },
+    /// A self-contained template request. The CLI captures all caller-owned
+    /// inputs before the local HTTP hop. The selected daemon owns inspection,
+    /// variable merge, verification render, and routing policy.
+    Template(TemplateSendSource),
+}
+
+/// Transport-safe caller input for a templated send.
+///
+/// This deliberately carries source bytes and captured environment values,
+/// rather than asking the daemon to inspect its environment after the local
+/// HTTP request has arrived.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemplateSendSource {
+    pub canonical_template_path: PathBuf,
+    pub canonical_template_root: PathBuf,
+    pub raw_file_bytes: Vec<u8>,
+    /// Caller-provided defaults that sit above frontmatter defaults but below
+    /// the explicit compose-time sources. Kept on the request so the daemon
+    /// merges a complete, reproducible input snapshot.
+    #[serde(default)]
+    pub input_defaults: Map<String, Value>,
+    pub var_file_values: Map<String, Value>,
+    pub explicit_values: Map<String, Value>,
+    pub environment_values: Map<String, Value>,
+}
+
+/// User-facing message classification. This stays on the canonical write
+/// request so ordinary and template-derived sends persist the same metadata.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MessageClassification {
+    pub category: Option<String>,
+    pub tags: Vec<String>,
+    pub content_format: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SendRequest {
+pub struct WriteRequest {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
     pub caller_identity: AgentName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caller_chat_id: Option<ChatId>,
     pub caller_team: TeamName,
-    pub to: AgentAddress,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activity_observation: Option<ActivityObservation>,
+    /// Set only by the authenticated HTTPS ingress before the shared writer
+    /// persists an inbound record. It is not trusted from wire JSON.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub authenticated_source_host: Option<HostName>,
+    /// The immutable identity assigned by the origin canonical writer.
+    /// Authenticated peer ingress preserves it so both hosts store one ULID.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin_message_id: Option<AtmMessageId>,
+    /// The immutable origin timestamp carried with a peer write.  It is set
+    /// alongside `origin_message_id` by the canonical origin writer so a
+    /// repeated peer delivery compares equal at the receiving store.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin_timestamp: Option<IsoTimestamp>,
+    /// Destination is omitted only by an `atm ack` command.  The daemon
+    /// resolves that destination from the acknowledged source before calling
+    /// the canonical writer.
+    pub to: Option<AgentAddress>,
     pub message_source: SendMessageSource,
+    #[serde(default)]
+    pub classification: MessageClassification,
+    /// Caller-selected payload limit carried across local HTTP so the daemon
+    /// applies the exact same inline/stdin policy after transport framing.
+    #[serde(default = "input::default_message_max_bytes")]
+    pub max_message_bytes: usize,
     pub summary_override: Option<String>,
     pub requires_ack: bool,
     pub task_id: Option<TaskId>,
     pub parent_message_id: Option<AtmMessageId>,
     pub thread_mode: Option<ThreadMode>,
     pub expires_at: Option<crate::types::IsoTimestamp>,
+    /// When present this write is an acknowledgement reply.  It otherwise
+    /// follows the exact same persistence and post-write path as a send.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acknowledges_message_id: Option<AtmMessageId>,
     pub dry_run: bool,
 }
 
-impl SendRequest {
+impl WriteRequest {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         home_dir: PathBuf,
@@ -97,99 +173,244 @@ impl SendRequest {
             home_dir,
             current_dir,
             caller_identity,
+            caller_chat_id: None,
             caller_team,
-            to: to.parse()?,
+            activity_observation: None,
+            authenticated_source_host: None,
+            origin_message_id: None,
+            origin_timestamp: None,
+            to: Some(to.parse()?),
             message_source,
+            classification: MessageClassification::default(),
+            max_message_bytes: input::default_message_max_bytes(),
             summary_override,
             requires_ack,
             task_id,
             parent_message_id: None,
             thread_mode: None,
             expires_at: None,
+            acknowledges_message_id: None,
             dry_run,
         })
     }
-}
 
-/// Result of sending one ATM mailbox message.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SendOutcome {
-    pub action: CommandAction,
-    pub team: TeamName,
-    pub agent: AgentName,
-    pub sender: AgentName,
-    pub outcome: SendCommandOutcome,
-    pub message_id: AtmMessageId,
-    pub requires_ack: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub task_id: Option<TaskId>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub summary: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub message: Option<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub warnings: Vec<WarningEntry>,
-    #[serde(default, skip_serializing_if = "is_false")]
-    pub dry_run: bool,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum SendCommandOutcome {
-    Sent,
-    DryRun,
-}
-
-impl SendCommandOutcome {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Sent => "sent",
-            Self::DryRun => "dry_run",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct WarningEntry {
-    pub message: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub code: Option<AtmErrorCode>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub recovery: Option<String>,
-}
-
-impl WarningEntry {
-    pub fn new(message: impl Into<String>, recovery: Option<impl Into<String>>) -> Self {
-        Self {
-            message: message.into(),
-            code: None,
-            recovery: recovery.map(Into::into),
-        }
+    #[must_use]
+    pub fn with_caller_chat_id(mut self, caller_chat_id: Option<ChatId>) -> Self {
+        self.caller_chat_id = caller_chat_id;
+        self
     }
 
-    pub fn with_code(
-        code: AtmErrorCode,
-        message: impl Into<String>,
-        recovery: Option<impl Into<String>>,
+    #[must_use]
+    pub fn with_max_message_bytes(mut self, max_message_bytes: usize) -> Self {
+        self.max_message_bytes = max_message_bytes;
+        self
+    }
+
+    #[must_use]
+    pub fn with_classification(mut self, classification: MessageClassification) -> Self {
+        self.classification = classification;
+        self
+    }
+
+    #[must_use]
+    pub fn with_activity_observation(
+        mut self,
+        activity_observation: Option<ActivityObservation>,
     ) -> Self {
-        Self {
-            message: message.into(),
-            code: Some(code),
-            recovery: recovery.map(Into::into),
+        self.activity_observation = activity_observation;
+        self
+    }
+
+    #[must_use]
+    pub fn with_origin_message_id(mut self, message_id: AtmMessageId) -> Self {
+        self.origin_message_id = Some(message_id);
+        self
+    }
+
+    /// Select the canonical acknowledgement write shape.
+    ///
+    /// Acknowledgements have no caller-supplied destination and can never ask
+    /// for another acknowledgement. They otherwise continue through the same
+    /// write pipeline as ordinary sends.
+    #[must_use]
+    pub fn with_acknowledges_message_id(mut self, message_id: AtmMessageId) -> Self {
+        self.to = None;
+        self.requires_ack = false;
+        self.acknowledges_message_id = Some(message_id);
+        self
+    }
+
+    #[must_use]
+    pub fn with_origin_metadata(
+        mut self,
+        message_id: AtmMessageId,
+        timestamp: IsoTimestamp,
+    ) -> Self {
+        self.origin_message_id = Some(message_id);
+        self.origin_timestamp = Some(timestamp);
+        self
+    }
+}
+
+/// Compatibility name for existing callers.  There is one write payload;
+/// acknowledgement is represented by `acknowledges_message_id` on it.
+pub type SendRequest = WriteRequest;
+
+/// Result of the one canonical write operation.
+///
+/// An acknowledgement is not a second transport operation: it is a write
+/// whose request carries `acknowledges_message_id`.  The distinct outcome only
+/// preserves the CLI/API response shape.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum WriteOutcome {
+    Sent(SendOutcome),
+    Acknowledged(AckOutcome),
+}
+
+impl WriteOutcome {
+    /// Returns the immutable identity persisted by this canonical write.
+    #[must_use]
+    pub fn persisted_message_id(&self) -> AtmMessageId {
+        match self {
+            Self::Sent(outcome) => outcome.message_id,
+            Self::Acknowledged(outcome) => match outcome.reply_disposition {
+                crate::ack::AckReplyDisposition::Sent {
+                    reply_message_id, ..
+                } => reply_message_id,
+            },
+        }
+    }
+}
+
+/// A durable write awaiting post-commit notification scheduling.
+///
+/// Acknowledgement state completes before any post-commit notification or peer
+/// work.  Delivery is never a prerequisite for an admitted local write.
+pub struct PreparedWrite {
+    outcome: SendOutcome,
+    outbound_request: WriteRequest,
+    persisted_timestamp: IsoTimestamp,
+    post_write_needed: bool,
+    same_store_peer_receipt: bool,
+    received_hook: Result<Option<PreparedReceivedHook>, AtmError>,
+    acknowledgement: Option<crate::ack::ResolvedAcknowledgement>,
+}
+
+/// Selects the owner of non-durable delivery work after a write commits.
+///
+/// Direct/core callers retain the historical synchronous contract. The
+/// replacement runtime selects `Deferred`: it retains all hook-planning data
+/// during the async durable write, so its post-commit path never has to reopen
+/// the just-written record through a synchronous storage reader.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DeliveryExecutionMode {
+    Inline,
+    Deferred,
+}
+
+impl PreparedWrite {
+    /// Returns the immutable identifier persisted by the canonical writer.
+    #[must_use]
+    pub fn persisted_message_id(&self) -> AtmMessageId {
+        self.outcome.message_id
+    }
+
+    #[must_use]
+    pub fn persisted_timestamp(&self) -> IsoTimestamp {
+        self.persisted_timestamp
+    }
+
+    /// Returns the canonical, resolved write payload for the post-write
+    /// router.  For an acknowledgement this includes the reply destination
+    /// resolved from the durable source record; it is not a second path.
+    #[must_use]
+    pub fn outbound_request(&self) -> WriteRequest {
+        self.outbound_request.clone()
+    }
+
+    /// Completes the canonical write before post-commit work is scheduled.
+    /// For acknowledgements this records the source transition before the
+    /// caller receives its local admission response.
+    pub fn finish(
+        &mut self,
+        runtime: &LocalServiceRuntime,
+        observability: &dyn ObservabilityPort,
+    ) -> Result<WriteOutcome, AtmError> {
+        self.finish_with_runtime(runtime, observability)
+    }
+
+    fn finish_with_runtime<R>(
+        &mut self,
+        runtime: &R,
+        observability: &dyn ObservabilityPort,
+    ) -> Result<WriteOutcome, AtmError>
+    where
+        R: RetainedMailboxRuntime,
+    {
+        match self.acknowledgement.take() {
+            Some(acknowledgement) => acknowledgement
+                .finish(runtime, observability, self.outcome.clone())
+                .map(WriteOutcome::Acknowledged),
+            None => Ok(WriteOutcome::Sent(self.outcome.clone())),
         }
     }
 
-    pub fn render(&self) -> String {
-        let message = match self.code {
-            Some(code) if !self.message.contains(code.as_str()) => {
-                format!("{} [{}]", self.message, code.as_str())
-            }
-            _ => self.message.clone(),
+    /// Whether this canonical write produced a new durable record that must
+    /// enter the receiver-side post-persistence route.
+    ///
+    /// Idempotent duplicate delivery deliberately returns `false`: the
+    /// already-recorded immutable message remains the successful result, but
+    /// it must not emit a second received-message hook.
+    #[must_use]
+    pub fn is_newly_persisted(&self) -> bool {
+        !self.outcome.dry_run && self.post_write_needed
+    }
+
+    /// Whether this write reused an existing immutable record after an
+    /// authenticated receipt returned to the same store. This is an
+    /// idempotent receiver-side duplicate: the explicit disposition is
+    /// recorded but no second received-message hook is emitted.
+    #[must_use]
+    pub fn is_same_store_peer_receipt(&self) -> bool {
+        self.same_store_peer_receipt
+    }
+
+    /// Whether this canonical write arrived from a peer transport.
+    ///
+    /// The canonical address deliberately preserves its host qualifier.  The
+    /// post-write router therefore must use ingress provenance—not the
+    /// address—to choose the one local-vs-peer action.
+    #[must_use]
+    pub fn is_peer_receipt(&self) -> bool {
+        has_authenticated_peer_provenance(&self.outbound_request)
+    }
+
+    /// Builds receiver-hook dispatches from the write's retained in-memory
+    /// planning data. This is valid only after durable admission has returned
+    /// successfully; it deliberately never reloads the committed record.
+    pub fn build_received_hook_dispatches(
+        &self,
+        runtime: &LocalServiceRuntime,
+    ) -> Result<Vec<BuiltInPostSendDispatch>, AtmError> {
+        let post_write = match &self.received_hook {
+            Ok(Some(post_write)) => post_write,
+            Ok(None) => return Ok(Vec::new()),
+            Err(error) => return Err(error.clone()),
         };
-        match &self.recovery {
-            Some(recovery) => format!("{message} Recovery: {recovery}"),
-            None => message,
+        let mut dispatches = Vec::new();
+        for message in &post_write.messages {
+            let event = hook::post_send_event_from_message(
+                &post_write.recipient,
+                message,
+                post_write.delivery_snapshot.recipient_pane_id.as_ref(),
+            )?;
+            if let Some(dispatch) =
+                hook::build_built_in_dispatch(runtime, &post_write.delivery_snapshot, &event)
+            {
+                dispatches.push(dispatch);
+            }
         }
+        Ok(dispatches)
     }
 }
 
@@ -217,44 +438,253 @@ pub fn send_mail(
     send_mail_with_runtime(request, observability, &runtime)
 }
 
+/// Execute one canonical write without daemon-owned post-write delivery.
+pub fn write_mail(
+    request: WriteRequest,
+    observability: &dyn ObservabilityPort,
+) -> Result<WriteOutcome, AtmError> {
+    let runtime = default_runtime()?;
+    write_mail_with_runtime(request, observability, &runtime)
+}
+
+/// Execute one canonical write with an explicit local runtime.
+pub fn write_mail_with_runtime(
+    request: WriteRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+) -> Result<WriteOutcome, AtmError> {
+    let mut prepared = write_mail_with_runtime_impl_with_mode(
+        request,
+        observability,
+        runtime,
+        DeliveryExecutionMode::Inline,
+    )?;
+    prepared.finish(runtime, observability)
+}
+
 pub fn send_mail_with_runtime(
     request: SendRequest,
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
 ) -> Result<SendOutcome, AtmError> {
-    send_mail_with_runtime_impl(request, observability, runtime, None)
+    match write_mail_with_runtime_impl_with_mode(
+        request,
+        observability,
+        runtime,
+        DeliveryExecutionMode::Inline,
+    )?
+    .finish(runtime, observability)?
+    {
+        WriteOutcome::Sent(outcome) => Ok(outcome),
+        WriteOutcome::Acknowledged(_) => Err(AtmError::validation(
+            "send helper cannot finish an acknowledgement write",
+        )),
+    }
 }
 
-pub fn send_mail_with_runtime_and_post_send_emitter(
-    request: SendRequest,
+/// Prepares the shared durable write for daemon-owned post-write routing.
+///
+/// This performs canonical validation and persistence, but deliberately does
+/// not emit a nudge, send to a peer, or mutate an acknowledgement source.
+/// `StorageAndNudgeRouter` owns those actions and calls [`PreparedWrite::finish`]
+/// after its selected action succeeds.
+pub fn prepare_write_with_runtime(
+    request: WriteRequest,
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
-    post_send_emitter: &dyn PostSendHookEmitter,
-) -> Result<SendOutcome, AtmError> {
-    send_mail_with_runtime_impl(request, observability, runtime, Some(post_send_emitter))
+) -> Result<PreparedWrite, AtmError> {
+    write_mail_with_runtime_impl_with_mode(
+        request,
+        observability,
+        runtime,
+        DeliveryExecutionMode::Deferred,
+    )
 }
 
-fn send_mail_with_runtime_impl<
+/// Prepares one canonical write through the Tokio durable-admission boundary.
+///
+/// Core validation and response construction remain shared with the legacy
+/// path. The immutable storage transition is the only await: it enqueues work
+/// to the backend's bounded writer lane and receives that lane's durable
+/// result without a blocking task in the HTTP runtime.
+pub async fn prepare_write_with_async_runtime(
+    request: WriteRequest,
+    observability: &(dyn ObservabilityPort + Send + Sync),
+    runtime: &LocalServiceRuntime,
+) -> Result<PreparedWrite, AtmError> {
+    validate_write_provenance(
+        WriteIngress::Canonical,
+        WriteProvenance {
+            target_host: request.to.as_ref().and_then(|address| address.host()),
+            authenticated_source_host: request.authenticated_source_host.as_ref(),
+            origin_message_id: request.origin_message_id.is_some(),
+            origin_timestamp: request.origin_timestamp.is_some(),
+        },
+    )?;
+    if request.acknowledges_message_id.is_none() {
+        if request.to.is_none() {
+            return Err(AtmError::validation(
+                "message write is missing a destination",
+            ));
+        }
+        return prepare_persisted_write_async(request, observability, runtime, None).await;
+    }
+    if has_authenticated_peer_provenance(&request) {
+        return prepare_persisted_write_async(request, observability, runtime, None).await;
+    }
+    let acknowledgement = crate::ack::admit_acknowledgement_write_async(request, runtime).await?;
+    prepare_atomic_acknowledgement_write(acknowledgement, observability, runtime)
+}
+
+/// The sole write pipeline. `acknowledges_message_id` selects only an
+/// acknowledgement-source normalization step; both variants persist through
+/// the same canonical writer exactly once.
+fn write_mail_with_runtime_impl_with_mode<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(
-    request: SendRequest,
+    request: WriteRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
-    post_send_emitter: Option<&dyn PostSendHookEmitter>,
-) -> Result<SendOutcome, AtmError> {
-    let context = prepare_send_context(runtime, &request)?;
+    delivery_mode: DeliveryExecutionMode,
+) -> Result<PreparedWrite, AtmError> {
+    validate_write_provenance(
+        WriteIngress::Canonical,
+        WriteProvenance {
+            target_host: request.to.as_ref().and_then(|address| address.host()),
+            authenticated_source_host: request.authenticated_source_host.as_ref(),
+            origin_message_id: request.origin_message_id.is_some(),
+            origin_timestamp: request.origin_timestamp.is_some(),
+        },
+    )?;
+    if request.acknowledges_message_id.is_none() {
+        if request.to.is_none() {
+            return Err(AtmError::validation(
+                "message write is missing a destination",
+            ));
+        }
+        return prepare_persisted_write(request, observability, runtime, None, delivery_mode);
+    }
+    // A locally invoked `atm ack` resolves and transitions its durable source
+    // atomically.  Its host-qualified reply is then received by the original
+    // sender as an ordinary canonical peer write carrying causal metadata.
+    // The direct-send model has no sender-side outbox record to mutate, so a
+    // peer ACK receipt must never attempt a second acknowledgement-source
+    // lookup or synthesize an acknowledgement-of-an-ack reply.
+    if has_authenticated_peer_provenance(&request) {
+        return prepare_persisted_write(request, observability, runtime, None, delivery_mode);
+    }
+    let acknowledgement = crate::ack::admit_acknowledgement_write(request, runtime)?;
+    prepare_atomic_acknowledgement_write(acknowledgement, observability, runtime)
+}
+
+#[cfg(test)]
+fn write_mail_with_runtime_impl<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
+    request: WriteRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &R,
+) -> Result<PreparedWrite, AtmError> {
+    write_mail_with_runtime_impl_with_mode(
+        request,
+        observability,
+        runtime,
+        DeliveryExecutionMode::Inline,
+    )
+}
+
+fn prepare_atomic_acknowledgement_write<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
+    acknowledgement: crate::ack::AtomicAcknowledgementWrite,
+    observability: &dyn ObservabilityPort,
+    _runtime: &R,
+) -> Result<PreparedWrite, AtmError> {
+    let source_task_id = acknowledgement.acknowledgement.source_task_id();
+    let reply = acknowledgement.reply;
+    let recipient = ResolvedRecipient {
+        team: reply.team.clone(),
+        agent: reply.agent.clone(),
+    };
+    let outcome = SendOutcome {
+        action: CommandAction::Send,
+        team: recipient.team.clone(),
+        agent: recipient.agent.clone(),
+        sender: reply.envelope.from.clone(),
+        outcome: SendCommandOutcome::Sent,
+        message_id: reply.envelope.message_id.ok_or_else(|| {
+            AtmError::mailbox_write("atomic acknowledgement reply is missing its message ID")
+        })?,
+        requires_ack: false,
+        task_id: source_task_id.clone(),
+        summary: reply.envelope.summary.clone(),
+        message: Some(reply.envelope.text.clone()),
+        warnings: Vec::new(),
+        dry_run: false,
+    };
+    emit_send_command_event(
+        observability,
+        SendCommandOutcome::Sent.as_str(),
+        &outcome,
+        source_task_id,
+        &reply.envelope.from,
+    );
+    let delivery_snapshot = DeliveryPolicyCoordinator::new().resolve_recipient_snapshot(
+        _runtime,
+        &recipient.team,
+        &recipient.agent,
+    )?;
+    let logical = crate::delivery_plan::LogicalMessage::new(reply.envelope.clone(), false, true)
+        .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
+    let received_hook = Ok(Some(PreparedReceivedHook {
+        recipient: recipient.clone(),
+        delivery_snapshot: delivery_snapshot.clone(),
+        messages: vec![logical.clone()],
+    }));
+    Ok(PreparedWrite {
+        outcome,
+        outbound_request: acknowledgement.canonical_request,
+        persisted_timestamp: reply.envelope.timestamp,
+        post_write_needed: true,
+        same_store_peer_receipt: false,
+        received_hook,
+        acknowledgement: Some(acknowledgement.acknowledgement),
+    })
+}
+
+fn request_requires_ack(request: &SendRequest, task_id: &Option<TaskId>) -> bool {
+    request.requires_ack
+        || task_id.is_some()
+        || matches!(
+            &request.message_source,
+            SendMessageSource::File { path, .. } if file_policy::is_task_envelope(path)
+        )
+}
+
+fn prepare_persisted_write<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
+    mut request: SendRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &R,
+    acknowledgement: Option<crate::ack::ResolvedAcknowledgement>,
+    delivery_mode: DeliveryExecutionMode,
+) -> Result<PreparedWrite, AtmError> {
+    let mut context = prepare_send_context(runtime, &request)?;
     let task_id = request.task_id.clone();
-    let requires_ack = request.requires_ack || task_id.is_some();
+    let requires_ack = request_requires_ack(&request, &task_id);
     let body = resolve_message_body(
         &request.message_source,
         &request.current_dir,
         &request.home_dir,
         &context.recipient.team,
+        request.max_message_bytes,
     )?;
+    annotate_path_only_body(&mut request, &mut context, &body);
     let summary = summary::build_summary(&body, request.summary_override.clone());
-    let message_id = AtmMessageId::new();
-    let timestamp = IsoTimestamp::now();
-
+    let message_id = request.origin_message_id.unwrap_or_default();
+    let timestamp = request.origin_timestamp.unwrap_or_else(IsoTimestamp::now);
+    let acknowledgement_source_update = None;
     let persistence = persist_send_message(
         runtime,
         &request,
@@ -265,11 +695,20 @@ fn send_mail_with_runtime_impl<
         timestamp,
         requires_ack,
         task_id.clone(),
+        acknowledgement_source_update,
     )?;
-    finalize_send_outcome(
+    let received_hook = prepare_received_hook(
+        runtime,
+        &context,
+        &persistence,
+        requires_ack,
+        acknowledgement.is_some(),
+    );
+    // A same-host HTTPS receipt deliberately reuses the origin ULID. Storage
+    // skips its duplicate row and the receiver-only hook is likewise skipped.
+    let outcome = finalize_send_outcome(
         runtime,
         observability,
-        post_send_emitter,
         &request,
         &context,
         &body,
@@ -277,8 +716,50 @@ fn send_mail_with_runtime_impl<
         message_id,
         requires_ack,
         task_id,
-        persistence,
+        &persistence,
+        delivery_mode,
+    )?;
+    Ok(PreparedWrite {
+        outcome,
+        outbound_request: request,
+        persisted_timestamp: timestamp,
+        post_write_needed: persistence.requires_post_write(),
+        same_store_peer_receipt: persistence.duplicate_disposition
+            == DuplicateWriteDisposition::SameStorePeerReceipt,
+        received_hook,
+        acknowledgement,
+    })
+}
+
+fn has_authenticated_peer_provenance(request: &WriteRequest) -> bool {
+    validate_write_provenance(
+        WriteIngress::Canonical,
+        WriteProvenance {
+            target_host: request.to.as_ref().and_then(|address| address.host()),
+            authenticated_source_host: request.authenticated_source_host.as_ref(),
+            origin_message_id: request.origin_message_id.is_some(),
+            origin_timestamp: request.origin_timestamp.is_some(),
+        },
     )
+    .is_ok_and(ValidatedWriteProvenance::is_authenticated_peer)
+}
+
+#[cfg(test)]
+fn send_mail_with_runtime_impl<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
+    request: WriteRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &R,
+    _post_send_emitter: Option<&dyn MessageReceivedHookEmitter>,
+) -> Result<SendOutcome, AtmError> {
+    let mut prepared = write_mail_with_runtime_impl(request, observability, runtime)?;
+    match prepared.finish_with_runtime(runtime, observability)? {
+        WriteOutcome::Sent(outcome) => Ok(outcome),
+        WriteOutcome::Acknowledged(_) => Err(AtmError::validation(
+            "test send helper cannot finish an acknowledgement write",
+        )),
+    }
 }
 
 #[expect(
@@ -290,7 +771,6 @@ fn finalize_send_outcome<
 >(
     runtime: &R,
     observability: &dyn ObservabilityPort,
-    post_send_emitter: Option<&dyn PostSendHookEmitter>,
     request: &SendRequest,
     context: &SendExecutionContext,
     body: &str,
@@ -298,7 +778,8 @@ fn finalize_send_outcome<
     message_id: AtmMessageId,
     requires_ack: bool,
     task_id: Option<TaskId>,
-    persistence: DeliveryPersistenceResult,
+    persistence: &DeliveryPersistenceResult,
+    delivery_mode: DeliveryExecutionMode,
 ) -> Result<SendOutcome, AtmError> {
     let command_outcome = if request.dry_run {
         SendCommandOutcome::DryRun
@@ -314,24 +795,11 @@ fn finalize_send_outcome<
         requires_ack,
         task_id.clone(),
         command_outcome,
-        &persistence,
+        persistence,
     );
-    if !request.dry_run {
-        if let Some(warning) = build_claude_roster_warning(runtime, request, context)? {
-            outcome.warnings.push(warning);
-        }
-        let post_send_messages = post_send_messages_from_persistence(&persistence, requires_ack)?;
-        hook::emit_post_send_effects(
-            runtime,
-            &mut outcome.warnings,
-            context.post_send_config.as_ref(),
-            post_send_emitter,
-            &context.recipient,
-            &context.delivery_snapshot,
-            &post_send_messages,
-        );
-        let plan = build_send_delivery_plan(context, requires_ack, &persistence)?;
-        let execution = execute_delivery_plan(runtime, context.command_config.as_ref(), &plan)?;
+    if !request.dry_run && delivery_mode == DeliveryExecutionMode::Inline {
+        let plan = build_send_delivery_plan(context, requires_ack, false, persistence)?;
+        let execution = execute_delivery_plan(runtime, None, &plan)?;
         emit_delivery_plan_transitions(
             observability,
             DeliveryTransitionContext {
@@ -351,190 +819,99 @@ fn finalize_send_outcome<
         observability,
         command_outcome.as_str(),
         &outcome,
-        task_id,
+        task_id.clone(),
         &context.canonical_sender,
     );
+    if looks_like_path_only_body(body, &request.current_dir, &request.home_dir) {
+        emit_path_body_detection_event(observability, &outcome, task_id, context);
+    }
     Ok(outcome)
 }
 
-fn build_claude_roster_warning<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
-    runtime: &R,
-    request: &SendRequest,
-    context: &SendExecutionContext,
-) -> Result<Option<WarningEntry>, AtmError> {
-    if !matches!(
-        context.delivery_snapshot.harness,
-        crate::delivery_policy::DeliveryHarnessPath::ClaudeCode
-    ) {
-        return Ok(None);
-    }
-    let team_dir = runtime.team_dir(&request.home_dir, &context.recipient.team)?;
-    if !team_dir.join("config.json").is_file() {
-        if !context.inbox_path.exists() {
-            return Ok(None);
-        }
-        let mut warnings = Vec::new();
-        missing_config_notice::warn_missing_team_config(
-            runtime,
-            request,
-            &context.recipient,
-            &team_dir,
-            &context.inbox_path,
-            &mut warnings,
-        )?;
-        return Ok(warnings.into_iter().next());
-    }
-    let roster = runtime.load_claude_code_team_roster(&context.recipient.team)?;
-    if roster.contains_member(&context.recipient.agent) {
-        return Ok(None);
-    }
-    Ok(Some(WarningEntry::new(
-        format!(
-            "'{}' is not on claude code roster {}/config.json",
-            context.recipient.agent, context.recipient.team
-        ),
-        Some(
-            "Import the member through the approved Claude config-ingress path or project ATM roster truth back into config.json before relying on Claude compatibility delivery.",
-        ),
-    )))
-}
-
-#[expect(
-    clippy::too_many_arguments,
-    reason = "Y.6 closeout keeps the explicit send outcome fields aligned with the command contract."
-)]
-fn build_send_outcome(
-    request: &SendRequest,
-    context: &SendExecutionContext,
+/// Detect the migration pattern where a rendered file path is sent instead
+/// of the file's content. This is deliberately advisory: the message is
+/// admitted and retained while telemetry guides callers toward `--template`.
+pub(crate) fn looks_like_path_only_body(
     body: &str,
-    summary: &str,
-    message_id: AtmMessageId,
-    requires_ack: bool,
-    task_id: Option<TaskId>,
-    command_outcome: SendCommandOutcome,
-    persistence: &DeliveryPersistenceResult,
-) -> SendOutcome {
-    let mut outcome = SendOutcome {
-        action: CommandAction::Send,
-        team: context.recipient.team.clone(),
-        agent: context.recipient.agent.clone(),
-        sender: context.canonical_sender.clone(),
-        outcome: command_outcome,
-        message_id,
-        requires_ack,
-        task_id,
-        summary: Some(summary.to_string()),
-        message: request.dry_run.then_some(body.to_string()),
-        warnings: context.warnings.clone(),
-        dry_run: request.dry_run,
-    };
-    outcome
-        .warnings
-        .extend(persistence.warnings.iter().cloned());
-    outcome
-}
-
-fn build_send_delivery_plan(
-    context: &SendExecutionContext,
-    requires_ack: bool,
-    persistence: &DeliveryPersistenceResult,
-) -> Result<DeliveryPlan, AtmError> {
-    Ok(DeliveryPlan::new(
-        crate::delivery_plan::DeliveryPlanKind::Send,
-        delivery_plan_disposition(persistence.disposition),
-        crate::delivery_plan::delivery_target_for_snapshot(
-            &context.inbox_path,
-            &context.delivery_snapshot,
-        ),
-        context.recipient.clone(),
-        logical_messages_from_persistence(persistence, requires_ack, false)
-            .map_err(|error| {
-                AtmError::mailbox_write(error.to_string()).with_recovery(
-                    "Repair the persisted delivery record shape before retrying delivery-plan execution.",
-                )
-            })?,
-        persistence.warnings.clone(),
-    ))
-}
-
-fn post_send_messages_from_persistence(
-    persistence: &DeliveryPersistenceResult,
-    requires_ack: bool,
-) -> Result<Vec<crate::delivery_plan::LogicalMessage>, AtmError> {
-    crate::delivery_plan::LogicalMessage::new(
-        persistence.original_message.clone(),
-        requires_ack,
-        false,
-    )
-    .map(|message| vec![message])
-    .map_err(|error| {
-        AtmError::mailbox_write(error.to_string()).with_recovery(
-            "Repair the persisted delivery record shape before retrying post-send emission.",
-        )
-    })
-}
-
-struct SendExecutionContext {
-    command_config: Option<config::AtmConfig>,
-    post_send_config: Option<config::AtmConfig>,
-    recipient: ResolvedRecipient,
-    canonical_sender: AgentName,
-    inbox_path: PathBuf,
-    delivery_snapshot: DeliveryRecipientSnapshot,
-    delivery_family: DeliveryEventFamily,
-    warnings: Vec<WarningEntry>,
-}
-
-fn prepare_send_context<
-    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
->(
-    runtime: &R,
-    request: &SendRequest,
-) -> Result<SendExecutionContext, AtmError> {
-    let command_config = runtime.load_config(&request.current_dir)?;
-    let (post_send_config, warnings) = match hook::load_post_send_config_for_sender(
-        runtime,
-        &request.caller_team,
-        &request.caller_identity,
-    ) {
-        Ok(config) => (config, Vec::new()),
-        Err(error) => (
-            None,
-            vec![WarningEntry::with_code(
-                error.code,
-                format!(
-                    "warning: post-send hook config lookup failed for {}@{}: {}.",
-                    request.caller_identity, request.caller_team, error.message
-                ),
-                error.primary_recovery().map(str::to_owned),
-            )],
-        ),
-    };
-    let canonical_sender = request.caller_identity.clone();
-    let recipient = resolve_recipient(&request.to, &request.caller_team, command_config.as_ref())?;
-    validate_non_self_recipient(&canonical_sender, &request.caller_team, &recipient)?;
-    let team_dir = runtime.team_dir(&request.home_dir, &recipient.team)?;
-    if !team_dir.exists() {
-        return Err(AtmError::team_not_found(&recipient.team));
+    current_dir: &std::path::Path,
+    home_dir: &std::path::Path,
+) -> bool {
+    if body.len() >= 512 || body.is_empty() || body.trim() != body {
+        return false;
     }
-    let inbox_path = runtime.inbox_path(&request.home_dir, &recipient.team, &recipient.agent)?;
-    let delivery_policy = DeliveryPolicyCoordinator::new();
-    let delivery_snapshot =
-        delivery_policy.resolve_recipient_snapshot(runtime, &recipient.team, &recipient.agent)?;
-    let delivery_family = DeliveryPolicyCoordinator::resolve_send_family(
-        request.parent_message_id,
-        request.thread_mode,
-    );
-    Ok(SendExecutionContext {
-        command_config,
-        post_send_config,
-        recipient,
-        canonical_sender,
-        inbox_path,
-        delivery_snapshot,
-        delivery_family,
-        warnings,
-    })
+    if body.contains(['\n', '\r']) {
+        return false;
+    }
+    let candidate = std::path::Path::new(body);
+    let resolved = if body == "~" || body.starts_with("~/") {
+        Some(if body == "~" {
+            home_dir.to_path_buf()
+        } else {
+            home_dir.join(body.trim_start_matches("~/"))
+        })
+    } else if candidate.is_absolute() {
+        Some(candidate.to_path_buf())
+    } else {
+        let from_current = current_dir.join(candidate);
+        let from_home = home_dir.join(candidate);
+        if from_current.is_file() {
+            Some(from_current)
+        } else if from_home.is_file() {
+            Some(from_home)
+        } else {
+            None
+        }
+    };
+    let Some(resolved) = resolved else {
+        return false;
+    };
+    // Whitespace is valid in an existing filename, but an unresolvable path
+    // containing prose must never become a false positive.
+    if body.chars().any(char::is_whitespace) && !resolved.is_file() {
+        return false;
+    }
+    true
+}
+
+fn annotate_path_only_body(
+    request: &mut SendRequest,
+    context: &mut SendExecutionContext,
+    body: &str,
+) {
+    if !looks_like_path_only_body(body, &request.current_dir, &request.home_dir) {
+        return;
+    }
+    // Detection is an admission fact, so it wins over an optional caller
+    // label; otherwise explicit labels could hide the migration telemetry.
+    request.classification.content_format = Some("path-ref".to_owned());
+    context.warnings.push(WarningEntry::new(
+        "message body looks like a file path; send file content with `atm send --template <path> --vars <file>` (path retained for compatibility)",
+        Some("use `atm compose --template <path>` to preview rendered content"),
+    ));
+}
+
+fn emit_path_body_detection_event(
+    observability: &dyn ObservabilityPort,
+    outcome: &SendOutcome,
+    task_id: Option<TaskId>,
+    context: &SendExecutionContext,
+) {
+    if let Err(error) = observability.emit(CommandEvent {
+        command: "send",
+        action: action_name("path_body_detected"),
+        outcome: outcome_label("warn"),
+        team: outcome.team.clone(),
+        agent: outcome.agent.clone(),
+        sender: context.canonical_sender.clone(),
+        message_id: Some(outcome.message_id),
+        requires_ack: outcome.requires_ack,
+        dry_run: outcome.dry_run,
+        task_id,
+        error_code: None,
+        error_message: Some("content_format=path-ref".to_owned()),
+    }) {
+        warn!(%error, command = "send", action = "path_body_detected", "failed to emit path-body detection event");
+    }
 }
 
 #[expect(
@@ -551,55 +928,136 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     timestamp: IsoTimestamp,
     requires_ack: bool,
     task_id: Option<TaskId>,
+    acknowledgement_source_update: Option<boundary::Message>,
 ) -> Result<DeliveryPersistenceResult, AtmError> {
-    let ack_intent = AckIntentFields::from_requires_ack(requires_ack, timestamp);
-    if request.dry_run {
-        return Ok(DeliveryPersistenceResult::persisted(InboxMessage {
-            from: context.canonical_sender.clone(),
-            text: body.to_string(),
-            timestamp,
-            read: false,
-            source_team: Some(request.caller_team.clone()),
-            summary: Some(summary.to_string()),
-            message_id: Some(message_id),
-            requires_ack: ack_intent.requires_ack,
-            pending_ack_at: ack_intent.pending_ack_at,
-            acknowledged_at: ack_intent.acknowledged_at,
-            acknowledges_message_id: None,
-            parent_message_id: request.parent_message_id,
-            thread_mode: request.thread_mode,
-            expires_at: request.expires_at,
-            task_id: task_id.clone(),
-            extra: Map::new(),
-        }));
-    }
-    let envelope = InboxMessage {
-        from: context.canonical_sender.clone(),
-        text: body.to_string(),
+    let mut envelope = build_send_envelope(
+        request,
+        context,
+        body,
+        summary,
+        message_id,
         timestamp,
-        read: false,
-        source_team: Some(request.caller_team.clone()),
-        summary: Some(summary.to_string()),
-        message_id: Some(message_id),
-        requires_ack: ack_intent.requires_ack,
-        pending_ack_at: ack_intent.pending_ack_at,
-        acknowledged_at: ack_intent.acknowledged_at,
-        acknowledges_message_id: None,
-        parent_message_id: request.parent_message_id,
-        thread_mode: request.thread_mode,
-        expires_at: request.expires_at,
-        task_id: task_id.clone(),
-        extra: Map::new(),
-    };
-    let persistence = persist_message(
+        requires_ack,
+        task_id,
+    );
+    if request.dry_run {
+        return Ok(DeliveryPersistenceResult::persisted(envelope));
+    }
+    // Origin metadata is assigned only by the canonical origin writer and is
+    // required on every peer receipt. It prevents an inbound peer write from
+    // becoming a second outbound peer delivery while preserving its original
+    // host-qualified address for the shared writer and a later ACK.
+    if let Some(destination) = request.to.as_ref()
+        && let Some(host) = direct_peer_destination(request, destination)
+    {
+        set_peer_delivery_target(&mut envelope, &host);
+    }
+    persistence::persist_message_with_ack_update(
         runtime,
         &request.home_dir,
         &context.delivery_snapshot,
         &context.inbox_path,
         &envelope,
         false,
-    )?;
-    Ok(persistence)
+        request
+            .authenticated_source_host
+            .as_ref()
+            .and_then(|source_host| {
+                request
+                    .to
+                    .as_ref()
+                    .and_then(|destination| destination.host())
+                    .map(|destination_host| (source_host, destination_host))
+            }),
+        acknowledgement_source_update,
+    )
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the immutable envelope is assembled from the canonical write fields"
+)]
+fn build_send_envelope(
+    request: &SendRequest,
+    context: &SendExecutionContext,
+    body: &str,
+    summary: &str,
+    message_id: AtmMessageId,
+    timestamp: IsoTimestamp,
+    requires_ack: bool,
+    task_id: Option<TaskId>,
+) -> InboxMessage {
+    let ack_intent = AckIntentFields::from_requires_ack(requires_ack, timestamp);
+    let mut envelope = InboxMessage {
+        from: context.canonical_sender.clone(),
+        source_chat_id: request.caller_chat_id.clone(),
+        text: body.to_string(),
+        timestamp,
+        read: false,
+        source_team: Some(request.caller_team.clone()),
+        destination_chat_id: request
+            .to
+            .as_ref()
+            .and_then(|address| address.chat_id().cloned()),
+        summary: Some(summary.to_string()),
+        message_id: Some(message_id),
+        requires_ack: ack_intent.requires_ack,
+        pending_ack_at: ack_intent.pending_ack_at,
+        acknowledged_at: ack_intent.acknowledged_at,
+        acknowledges_message_id: request.acknowledges_message_id,
+        parent_message_id: request.parent_message_id,
+        thread_mode: request.thread_mode,
+        expires_at: request.expires_at,
+        task_id: task_id.clone(),
+        extra: Map::new(),
+    };
+    insert_classification_metadata(&mut envelope, &request.classification);
+    set_authenticated_source_host(&mut envelope, request.authenticated_source_host.clone());
+    envelope
+}
+
+fn request_has_classification(request: &SendRequest) -> bool {
+    request_has_classification_from(&request.classification)
+}
+
+fn insert_classification_metadata(
+    envelope: &mut InboxMessage,
+    classification: &MessageClassification,
+) {
+    if !request_has_classification_from(classification) {
+        return;
+    }
+    envelope.extra.insert(
+        "category".to_owned(),
+        classification
+            .category
+            .clone()
+            .map_or(serde_json::Value::Null, serde_json::Value::String),
+    );
+    envelope.extra.insert(
+        "tags".to_owned(),
+        serde_json::Value::Array(
+            classification
+                .tags
+                .iter()
+                .cloned()
+                .map(serde_json::Value::String)
+                .collect(),
+        ),
+    );
+    envelope.extra.insert(
+        "content_format".to_owned(),
+        classification
+            .content_format
+            .clone()
+            .map_or(serde_json::Value::Null, serde_json::Value::String),
+    );
+}
+
+fn request_has_classification_from(classification: &MessageClassification) -> bool {
+    classification.category.is_some()
+        || !classification.tags.is_empty()
+        || classification.content_format.is_some()
 }
 
 fn emit_send_command_event(
@@ -627,206 +1085,63 @@ fn emit_send_command_event(
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ResolvedRecipient {
-    pub(crate) agent: AgentName,
-    pub(crate) team: TeamName,
-}
-
-pub(crate) fn validate_non_self_recipient(
-    sender: &AgentName,
-    sender_team: &TeamName,
-    recipient: &ResolvedRecipient,
-) -> Result<(), AtmError> {
-    if sender
-        .as_str()
-        .eq_ignore_ascii_case(recipient.agent.as_str())
-        && sender_team
-            .as_str()
-            .eq_ignore_ascii_case(recipient.team.as_str())
-    {
-        return Err(AtmError::self_addressed_send_invalid(format!(
-            "self-addressed messages are invalid ATM input: '{sender}@{sender_team}' may not send to itself"
-        )));
-    }
-    Ok(())
-}
-
 #[cfg(test)]
-mod self_address_tests {
-    use super::{ResolvedRecipient, validate_non_self_recipient};
-    use crate::error_codes::AtmErrorCode;
-    use crate::types::{AgentName, TeamName};
-
-    #[test]
-    fn validate_non_self_recipient_rejects_case_variant_self_target() {
-        let error = validate_non_self_recipient(
-            &AgentName::from_validated("Sender-A"),
-            &TeamName::from_validated("Test-Team"),
-            &ResolvedRecipient {
-                agent: AgentName::from_validated("sender-a"),
-                team: TeamName::from_validated("test-team"),
-            },
-        )
-        .expect_err("case-variant self target must be rejected");
-
-        assert!(error.is_validation(), "{error:?}");
-        assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
-    }
-}
-
-fn resolve_recipient(
-    target_address: &AgentAddress,
-    caller_team: &TeamName,
-    config: Option<&config::AtmConfig>,
-) -> Result<ResolvedRecipient, AtmError> {
-    let team = target_address
-        .team
-        .as_deref()
-        .and_then(|team| team.parse().ok())
-        .or_else(|| Some(caller_team.clone()))
-        .ok_or_else(AtmError::team_unavailable)?;
-
-    Ok(ResolvedRecipient {
-        agent: config::aliases::resolve_agent_name(&target_address.agent, config)?,
-        team,
-    })
-}
-
-fn resolve_message_body(
-    source: &SendMessageSource,
-    current_dir: &Path,
-    home_dir: &Path,
-    team_name: &TeamName,
-) -> Result<String, AtmError> {
-    match source {
-        SendMessageSource::Inline(message) => input::validate_message_text(message.clone()),
-        SendMessageSource::File { path, message } => {
-            input::validate_message_text(file_policy::process_file_reference(
-                path,
-                message.as_deref(),
-                team_name,
-                current_dir,
-                home_dir,
-            )?)
-        }
-    }
-}
-
-fn is_false(value: &bool) -> bool {
-    !*value
-}
-
-fn prepare_threaded_message(
-    envelope: &mut InboxMessage,
-    inbox_messages: &[InboxMessage],
-) -> Result<(), AtmError> {
-    match (
-        envelope.parent_message_id,
-        envelope.thread_mode,
-        envelope.expires_at,
-    ) {
-        (None, None, _) => Ok(()),
-        (Some(_), Some(_), Some(_)) => Err(AtmError::validation(
-            "ephemeral messages may not participate in a message thread",
-        )
-        .with_recovery(
-            "Send the message either as a standalone ephemeral note or as a non-ephemeral thread update.",
-        )),
-        (Some(parent_id), Some(_), None) => validate_thread_append(envelope, inbox_messages, parent_id),
-        (Some(_), None, _) | (None, Some(_), _) => Err(AtmError::validation(
-            "thread updates must set both parent_message_id and thread_mode",
-        )
-        .with_recovery(
-            "Provide both the parent message id and either add-details or supersede when appending to an existing thread.",
-        )),
-    }
-}
-
-fn validate_thread_append(
-    envelope: &mut InboxMessage,
-    inbox_messages: &[InboxMessage],
-    parent_id: AtmMessageId,
-) -> Result<(), AtmError> {
-    let index = ThreadIndex::new(inbox_messages);
-    let parent = index.message(parent_id).ok_or_else(|| {
-        AtmError::validation(format!(
-            "thread parent message {} was not found in the recipient inbox",
-            parent_id
-        ))
-        .with_recovery(
-            "Refresh the recipient inbox state and retry the update against a message id that still exists in that thread.",
-        )
-    })?;
-
-    if is_ephemeral(parent) {
-        return Err(AtmError::validation(
-            "ephemeral messages may not be updated or superseded",
-        )
-        .with_recovery(
-            "Send a fresh standalone message instead of trying to append to an ephemeral message.",
-        ));
-    }
-
-    let Some(root_id) = index.root_id(parent_id) else {
-        return Err(AtmError::validation(format!(
-            "thread root could not be resolved for parent message {}",
-            parent_id
-        ))
-        .with_recovery(
-            "Repair the malformed message thread or resend the correction as a fresh standalone message.",
-        ));
-    };
-    let root = index.message(root_id).ok_or_else(|| {
-        AtmError::validation(format!(
-            "thread root message {} was not found in the recipient inbox",
-            root_id
-        ))
-        .with_recovery(
-            "Repair the malformed message thread or resend the correction as a fresh standalone message.",
-        )
-    })?;
-
-    if canonical_sender_identity(root) != canonical_sender_identity(envelope) {
-        return Err(AtmError::validation(
-            "only the original sender may append details or supersede a message thread",
-        )
-        .with_recovery(
-            "Send a new message instead of appending to a thread you did not originate.",
-        ));
-    }
-
-    if index.has_successor(parent_id) {
-        return Err(AtmError::validation(format!(
-            "message {} already has a successor; ATM threads are strictly linear",
-            parent_id
-        ))
-        .with_recovery(
-            "Append to the current terminal message in the thread instead of branching from an older message.",
-        ));
-    }
-
-    let thread_requires_ack = index.thread_requires_ack(parent_id);
-    envelope.requires_ack = thread_requires_ack;
-    envelope.pending_ack_at = thread_requires_ack.then_some(envelope.timestamp);
-    envelope.acknowledged_at = None;
-    Ok(())
-}
-
-#[allow(
-    dead_code,
-    reason = "Retained for the dormant direct post-send hook helper."
-)]
-pub(super) fn qualified_sender_identity(
-    sender: &AgentName,
-    sender_team: Option<&TeamName>,
-) -> String {
-    sender_team
-        .map(|team| format!("{sender}@{team}"))
-        .unwrap_or_else(|| sender.to_string())
-}
-
-#[cfg(test)]
-mod graft_warning_tests;
+mod post_write_tests;
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod path_body_tests {
+    use super::looks_like_path_only_body;
+
+    #[test]
+    fn detects_existing_relative_and_absolute_files() {
+        let root = tempfile::tempdir().expect("temporary workspace");
+        let home = tempfile::tempdir().expect("temporary home");
+        let relative = root.path().join("rendered.xml");
+        std::fs::write(&relative, "<message />").expect("fixture");
+
+        assert!(looks_like_path_only_body(
+            "rendered.xml",
+            root.path(),
+            home.path()
+        ));
+        assert!(looks_like_path_only_body(
+            &relative.display().to_string(),
+            root.path(),
+            home.path()
+        ));
+    }
+
+    #[test]
+    fn detects_home_shorthand_but_not_prose_containing_a_path() {
+        let root = tempfile::tempdir().expect("temporary workspace");
+        let home = tempfile::tempdir().expect("temporary home");
+        assert!(looks_like_path_only_body(
+            "~/report.xml",
+            root.path(),
+            home.path()
+        ));
+        assert!(!looks_like_path_only_body(
+            "Please see /tmp/report.xml for details.",
+            root.path(),
+            home.path()
+        ));
+    }
+
+    #[test]
+    fn rejects_multiline_and_oversized_bodies() {
+        let root = tempfile::tempdir().expect("temporary workspace");
+        let home = tempfile::tempdir().expect("temporary home");
+        assert!(!looks_like_path_only_body(
+            "/tmp/report.xml\n",
+            root.path(),
+            home.path()
+        ));
+        assert!(!looks_like_path_only_body(
+            &"/".repeat(512),
+            root.path(),
+            home.path()
+        ));
+    }
+}

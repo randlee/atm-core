@@ -1,27 +1,23 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::fmt;
+use std::num::NonZeroU16;
 use std::ops::Deref;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use crate::error::AtmError;
 use crate::schema::{AtmMessageId, InboxMessage, MessageEnvelope};
-use crate::types::{AgentName, IsoTimestamp, ModelName, PaneId, TaskId, TeamName};
+use crate::types::{AgentName, HostName, IsoTimestamp, ModelName, PaneId, TaskId, TeamName};
 
 #[doc(hidden)]
 pub mod sealed {
     pub trait Sealed {}
 }
 
-fn require_non_blank(
-    value: String,
-    subject: &str,
-    recovery: &'static str,
-) -> Result<String, AtmError> {
+fn require_non_blank(value: String, subject: &str) -> Result<String, AtmError> {
     if value.trim().is_empty() {
-        return Err(
-            AtmError::validation(format!("{subject} must not be blank")).with_recovery(recovery)
-        );
+        return Err(AtmError::validation(format!("{subject} must not be blank")));
     }
     Ok(value)
 }
@@ -32,12 +28,7 @@ pub struct MessageKey(String);
 
 impl MessageKey {
     pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
-        require_non_blank(
-            value.into(),
-            "message key",
-            "Populate a stable ATM message key before calling the storage contract.",
-        )
-        .map(Self)
+        require_non_blank(value.into(), "message key").map(Self)
     }
 
     pub fn into_inner(self) -> String {
@@ -94,12 +85,7 @@ pub struct TaskState(String);
 
 impl TaskState {
     pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
-        require_non_blank(
-            value.into(),
-            "task state",
-            "Populate a non-empty task state before calling the storage contract.",
-        )
-        .map(Self)
+        require_non_blank(value.into(), "task state").map(Self)
     }
 }
 
@@ -143,12 +129,7 @@ pub struct AckTransition(String);
 
 impl AckTransition {
     pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
-        require_non_blank(
-            value.into(),
-            "ack transition",
-            "Populate a non-empty ack transition before calling the storage contract.",
-        )
-        .map(Self)
+        require_non_blank(value.into(), "ack transition").map(Self)
     }
 }
 
@@ -223,10 +204,7 @@ impl FromStr for BuiltInNudgeTemplateKind {
             "acknowledge_task" => Ok(Self::AcknowledgeTask),
             other => Err(AtmError::validation(format!(
                 "unsupported built-in nudge template kind `{other}`"
-            ))
-            .with_recovery(
-                "Use one of delivery, delivery_ack, delivery_task, delivery_task_ack, acknowledge, or acknowledge_task.",
-            )),
+            ))),
         }
     }
 }
@@ -283,6 +261,14 @@ pub struct Message {
     pub agent: AgentName,
     pub message_key: MessageKey,
     pub envelope: MessageEnvelope,
+}
+
+/// Aggregate display counts for one mailbox without materializing its messages.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct MailboxBucketCounts {
+    pub unread: usize,
+    pub pending_ack: usize,
+    pub history: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -364,6 +350,28 @@ pub enum RosterHarness {
     CodexCli,
     GeminiCli,
     Opencode,
+    Hermes,
+    PythonGraft,
+}
+
+impl RosterHarness {
+    /// Return the stable CLI/JSON spelling for this roster harness.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::ClaudeCode => "claude-code",
+            Self::CodexCli => "codex-cli",
+            Self::GeminiCli => "gemini-cli",
+            Self::Opencode => "opencode",
+            Self::Hermes => "hermes",
+            Self::PythonGraft => "python-graft",
+        }
+    }
+}
+
+impl fmt::Display for RosterHarness {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str((*self).as_str())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -470,6 +478,30 @@ pub struct MessageReceivedEvent {
     pub timestamp: IsoTimestamp,
 }
 
+/// Identifies the pending source record that an acknowledgement admission
+/// must resolve inside the writer transaction.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AcknowledgementSource {
+    pub team: TeamName,
+    pub agent: AgentName,
+    pub message_id: AtmMessageId,
+}
+
+/// Builds the immutable acknowledgement reply after the writer has loaded the
+/// pending source record, but before that transaction commits.  The callback
+/// deliberately receives no storage handle: it may derive the reply from the
+/// source but cannot perform a second application-layer source read.
+pub trait AcknowledgementReplyBuilder: Send + Sync {
+    fn build_reply(&self, source: &Message) -> Result<Message, AtmError>;
+}
+
+/// The records made durable by one acknowledgement admission transaction.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AcknowledgementCommit {
+    pub reply: Message,
+    pub source: Message,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RosterChangedEvent {
     pub team: TeamName,
@@ -477,20 +509,235 @@ pub struct RosterChangedEvent {
     pub timestamp: IsoTimestamp,
 }
 
-pub trait MessageStore {
+pub trait MessageStore: sealed::Sealed + Send + Sync {
     fn save_message(&self, message: &Message) -> Result<(), AtmError>;
+    /// Makes one immutable message durable, or returns the record that already
+    /// owns its key. Production stores should override this so the normal
+    /// insert path does not perform a separate reader round trip before the
+    /// writer transaction.
+    fn save_message_if_absent(&self, message: &Message) -> Result<Option<Message>, AtmError> {
+        if let Some(existing) = self.load_message(&message.message_key)? {
+            return Ok(Some(existing));
+        }
+        self.save_message(message)?;
+        Ok(None)
+    }
+    /// Commits related immutable mailbox records as one durable unit.
+    ///
+    /// AI.31 uses this for an acknowledgement reply plus the acknowledged
+    /// source record; adapters must not expose a partially committed pair.
+    fn save_messages_atomically(&self, messages: &[Message]) -> Result<(), AtmError>;
+    /// Resolves a pending source, builds its immutable reply, and transitions
+    /// the source in one writer transaction.  The default preserves backward
+    /// compatibility for narrow test doubles; production stores must override
+    /// it rather than compose a read plus `save_messages_atomically`.
+    fn acknowledge_message_atomically(
+        &self,
+        _source: &AcknowledgementSource,
+        _builder: Arc<dyn AcknowledgementReplyBuilder>,
+    ) -> Result<AcknowledgementCommit, AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "message store does not implement atomic acknowledgement admission",
+        ))
+    }
     fn load_message(&self, key: &MessageKey) -> Result<Option<Message>, AtmError>;
     fn list_messages(&self, query: &MessageQuery) -> Result<Vec<Message>, AtmError>;
+    /// Returns mailbox display counts when the backend can aggregate them
+    /// without materializing every immutable message record.
+    fn mailbox_bucket_counts(
+        &self,
+        _team: &TeamName,
+        _agent: &AgentName,
+    ) -> Result<Option<MailboxBucketCounts>, AtmError> {
+        Ok(None)
+    }
     fn delete_message(&self, key: &MessageKey) -> Result<(), AtmError>;
 }
 
-pub trait RosterStore {
+/// Async durable-admission boundary used by the Tokio HTTP runtime.
+///
+/// The future represents bounded admission to the backend's one ordered write
+/// lane and the durable result from that lane. Implementations may keep the
+/// actual database connection synchronous; callers must never create a
+/// blocking task merely to submit or await a message write.
+///
+/// `MessageStore` remains the compatibility surface for non-Tokio callers.
+/// New daemon write paths use this trait so an implementation can provide
+/// async backpressure without exposing its transaction queue or database.
+#[async_trait::async_trait]
+pub trait AsyncMessageStore: MessageStore {
+    /// Materializes a mailbox projection through the backend-owned async lane.
+    ///
+    /// Threaded-message validation needs this snapshot before it can submit
+    /// its immutable successor. The Tokio daemon must therefore not fall back
+    /// to [`MessageStore::list_messages`], which can synchronously open a
+    /// database reader on a request worker.
+    async fn list_messages_async(&self, _query: MessageQuery) -> Result<Vec<Message>, AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "message store does not implement async mailbox projection admission",
+        ))
+    }
+
+    /// Makes one immutable message durable, or returns the record that already
+    /// owns its key, without blocking the Tokio request executor.
+    async fn save_message_if_absent_async(
+        &self,
+        message: Message,
+    ) -> Result<Option<Message>, AtmError> {
+        self.save_message_if_absent(&message)
+    }
+
+    /// Atomically admits a mailbox record and its template decomposition on
+    /// the backend-owned async writer lane.
+    async fn admit_template_message_async(
+        &self,
+        _admission: crate::TemplateMessageAdmission,
+    ) -> Result<Option<Message>, AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "message store does not implement async template-message admission",
+        ))
+    }
+
+    /// Resolves a pending acknowledgement source, persists its reply, and
+    /// transitions that source as one async durable admission.
+    async fn acknowledge_message_atomically_async(
+        &self,
+        source: AcknowledgementSource,
+        builder: Arc<dyn AcknowledgementReplyBuilder>,
+    ) -> Result<AcknowledgementCommit, AtmError> {
+        self.acknowledge_message_atomically(&source, builder)
+    }
+}
+
+pub trait RosterStore: sealed::Sealed + Send + Sync {
     fn load_roster(&self, team: &TeamName) -> Result<RosterSnapshot, AtmError>;
     fn save_roster(&self, roster: &RosterSnapshot) -> Result<(), AtmError>;
     fn list_teams(&self) -> Result<Vec<TeamName>, AtmError>;
 }
 
-pub trait StorageNotifier {
+/// A non-empty, opaque certificate fingerprint. It cannot be confused with a
+/// private-key reference at storage and transport boundaries.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[serde(try_from = "String", into = "String")]
+pub struct CertificateFingerprint(String);
+
+impl CertificateFingerprint {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for CertificateFingerprint {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+impl FromStr for CertificateFingerprint {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        require_non_blank(value.to_owned(), "certificate fingerprint").map(Self)
+    }
+}
+
+impl TryFrom<String> for CertificateFingerprint {
+    type Error = AtmError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+
+impl From<CertificateFingerprint> for String {
+    fn from(value: CertificateFingerprint) -> Self {
+        value.0
+    }
+}
+
+/// A non-empty opaque reference to locally held private-key material.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[serde(try_from = "String", into = "String")]
+pub struct PrivateKeyRef(String);
+
+impl PrivateKeyRef {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for PrivateKeyRef {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+impl FromStr for PrivateKeyRef {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        require_non_blank(value.to_owned(), "certificate key reference").map(Self)
+    }
+}
+
+impl TryFrom<String> for PrivateKeyRef {
+    type Error = AtmError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+
+impl From<PrivateKeyRef> for String {
+    fn from(value: PrivateKeyRef) -> Self {
+        value.0
+    }
+}
+
+/// One durable HTTPS listener configuration. This is control-plane state only;
+/// it contains no delivery, retry, or mailbox data.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct HttpsInterface {
+    pub bind_addr: std::net::SocketAddr,
+    pub advertise_host: HostName,
+    pub enabled: bool,
+}
+
+/// Public identity of the local TLS certificate. The private key is referenced
+/// indirectly so doctor and callers cannot read secret material from storage.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LocalCertificate {
+    pub fingerprint: CertificateFingerprint,
+    pub private_key_ref: PrivateKeyRef,
+}
+
+/// One exact, pinned peer allowed to use the cross-host HTTPS listener.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TrustedPeer {
+    pub host: HostName,
+    pub fingerprint: CertificateFingerprint,
+    pub enabled: bool,
+    pub https_port: NonZeroU16,
+}
+
+/// Backend-neutral durable cross-host configuration.
+///
+/// This boundary deliberately excludes transport state, retries, receipts,
+/// and mailbox state. HTTPS adapters consume this contract but never SQLite
+/// implementation types.
+pub trait PeerConfigStore: sealed::Sealed + Send + Sync {
+    fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, AtmError>;
+    fn save_interface(&self, interface: &HttpsInterface) -> Result<(), AtmError>;
+    fn remove_interface(&self, bind_addr: std::net::SocketAddr) -> Result<bool, AtmError>;
+    fn local_certificate(&self) -> Result<Option<LocalCertificate>, AtmError>;
+    fn save_local_certificate(&self, certificate: &LocalCertificate) -> Result<(), AtmError>;
+    fn list_trusted_peers(&self) -> Result<Vec<TrustedPeer>, AtmError>;
+    fn trusted_peer(&self, host: &HostName) -> Result<Option<TrustedPeer>, AtmError>;
+    fn save_trusted_peer(&self, peer: &TrustedPeer) -> Result<(), AtmError>;
+    fn remove_trusted_peer(&self, host: &HostName) -> Result<bool, AtmError>;
+}
+
+pub trait StorageNotifier: sealed::Sealed + Send + Sync {
     fn message_received(&self, event: &MessageReceivedEvent) -> Result<(), AtmError>;
     fn roster_changed(&self, event: &RosterChangedEvent) -> Result<(), AtmError>;
 }
@@ -525,11 +772,11 @@ pub trait NudgeTemplateOverrideStore: sealed::Sealed + Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::{
-        AckRequirementState, BuiltInNudgeTemplateKind, Message, MessageKey, MessageQuery,
-        MessageReceivedEvent, MessageStore, NudgeTemplateOverrideStore, RosterChangedEvent,
-        RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore,
-        StorageNotifier, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
-        derive_ack_requirement, sealed,
+        AckRequirementState, BuiltInNudgeTemplateKind, CertificateFingerprint, Message, MessageKey,
+        MessageQuery, MessageReceivedEvent, MessageStore, NudgeTemplateOverrideStore,
+        PrivateKeyRef, RosterChangedEvent, RosterHarness, RosterMember, RosterMemberKind,
+        RosterSnapshot, RosterStore, StorageNotifier, TeamNudgeTemplateOverrideMode,
+        TeamNudgeTemplateOverrideRow, derive_ack_requirement, sealed,
     };
     use crate::ROLE_WORKER;
     use crate::error::AtmError;
@@ -544,8 +791,14 @@ mod tests {
     #[derive(Default)]
     struct DummyNudgeTemplateOverrideStore;
 
+    impl sealed::Sealed for DummyStore {}
+
     impl MessageStore for DummyStore {
         fn save_message(&self, _message: &Message) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn save_messages_atomically(&self, _messages: &[Message]) -> Result<(), AtmError> {
             Ok(())
         }
 
@@ -657,10 +910,12 @@ mod tests {
             message_key: key.clone(),
             envelope: MessageEnvelope {
                 from: agent.clone(),
+                source_chat_id: None,
                 text: "hello".to_string(),
                 timestamp: IsoTimestamp::from_datetime(Utc::now()),
                 read: false,
                 source_team: Some(team.clone()),
+                destination_chat_id: None,
                 summary: None,
                 message_id: None,
                 requires_ack: false,
@@ -745,10 +1000,12 @@ mod tests {
     fn derive_ack_requirement_ignores_task_id_and_uses_only_requires_ack_and_acknowledged_at() {
         let base = MessageEnvelope {
             from: "sender".parse().expect("agent"),
+            source_chat_id: None,
             text: "hello".to_string(),
             timestamp: IsoTimestamp::from_datetime(Utc::now()),
             read: false,
             source_team: Some("test-team".parse().expect("team")),
+            destination_chat_id: None,
             summary: None,
             message_id: None,
             requires_ack: false,
@@ -779,5 +1036,11 @@ mod tests {
             derive_ack_requirement(&pending),
             AckRequirementState::RequiredAcknowledged
         );
+    }
+
+    #[test]
+    fn security_reference_newtypes_reject_blank_deserialization() {
+        assert!(serde_json::from_str::<CertificateFingerprint>("\" \"").is_err());
+        assert!(serde_json::from_str::<PrivateKeyRef>("\" \"").is_err());
     }
 }

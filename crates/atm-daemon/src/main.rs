@@ -1,27 +1,45 @@
+use std::process::ExitCode;
 use std::sync::Arc;
 
 use atm_core::error::AtmError;
-use sc_observability as _;
-
-mod daemon_observability;
-
 use daemon_observability::DaemonObservability;
 
-const _: Option<fn(sc_observability::Logger)> = None;
+#[allow(
+    dead_code,
+    private_interfaces,
+    reason = "the retained logger adapter preserves its shutdown helpers while AL.9 consumes only its core ObservabilityPort boundary"
+)]
+mod daemon_observability;
 
-fn main() {
-    let exit_code = match run() {
-        Ok(()) => 0,
+#[tokio::main]
+async fn main() -> ExitCode {
+    match run().await {
+        Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("{error}");
-            atm_daemon::daemon_exit_code_for_error(&error).as_i32()
+            ExitCode::from(replacement_exit_code(&error))
         }
-    };
-    std::process::exit(exit_code);
+    }
 }
 
-fn run() -> Result<(), AtmError> {
-    let observability: Arc<dyn atm_daemon::DaemonRuntimeObservability> =
-        Arc::new(DaemonObservability::bootstrap()?);
-    atm_daemon::run_daemon_with_observability(observability)
+async fn run() -> Result<(), AtmError> {
+    let observability = Arc::new(DaemonObservability::bootstrap()?);
+    atm_daemon_bootstrap::run_replacement_daemon_with_observability(observability).await
+}
+
+fn replacement_exit_code(error: &AtmError) -> u8 {
+    if error.is_validation()
+        || matches!(
+            error.code(),
+            atm_core::error::AtmErrorCode::ConfigParseFailed
+                | atm_core::error::AtmErrorCode::ConfigHomeUnavailable
+                | atm_core::error::AtmErrorCode::DaemonServingStateRejected
+        )
+    {
+        64
+    } else if error.code() == atm_core::error::AtmErrorCode::DaemonUnavailable {
+        70
+    } else {
+        1
+    }
 }

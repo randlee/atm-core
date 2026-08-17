@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM2-LOST-TRANSPORT-PARITY-COVERAGE>
+  a triage:Finding ;
+  triage:findingId "AM2-LOST-TRANSPORT-PARITY-COVERAGE" ;
+  triage:title "The deleted UDS/TCP response-parity Rust integration test for atm-daemon-client's compatibility exchange was not replaced with an equivalent typed-client test" ;
+  triage:description "The old atm-daemon-client integration test 'uds_and_tcp_modes_share_the_http_response_contract' spun up a real listener and round-tripped a request through both UDS and TCP transports, asserting they shared the same HTTP response contract. It was deleted along with the raw-framing helpers it exercised. No equivalent Rust integration test was added for the migrated typed-client path. rust-qa-agent independently did a real empirical check (built and ran `atm doctor --json` against this worktree, confirming daemon_connect: connected round-trips through the migrated typed local client) which is good evidence the migration works functionally, but that is a manual one-off check, not durable regression coverage. Coverage of the retained non-write compatibility exchange over a live socket now rests on unit tests plus the external Python smoke suite only. This directly overlaps arch-ctm's own am2-closure-checklist.md item 3 ('Add focused typed-client compatibility coverage for the retained non-write UDS and loopback-TCP paths, including an in-runtime caller'), which was checked off without adding a durable in-repo test that would catch a future regression the way the deleted test did. RECHECK (QA-AM2-2, 2026-08-10, commit fab8bdbe): FIXED, overriding a 3-1 reviewer split. req-qa, arch-qa, and ruthless-boundary-qa all disposed this as open, citing crates/atm-http-runtime/src/client.rs's `uds_and_loopback_connectors_share_one_write_translation` -- a mock-connector unit test with no real socket -- as evidence the closure checklist's claim was hollow. rust-qa-agent instead cited crates/atm-http-runtime/src/lib.rs's `loopback_and_uds_return_identical_canonical_json`, which commit 5952dcb5 rewrote to start a real HttpRuntime with a real UDS socket and real loopback TCP, then drive a request through `unix_socket_client`/`loopback_tcp_client` on each -- the exact typed-client constructors atm-daemon-client's `typed_client_for_transport` delegates to. quality-mgr independently read the full test body and confirmed rust-qa-agent's citation is accurate: it is a real, currently-passing, real-socket integration test that durably protects the parity property that matters (do UDS and TCP-loopback diverge at the client-observable response level). The three other reviewers appear to have found and evaluated the wrong test. Residual, non-blocking gap noted: this coverage lives in atm-http-runtime rather than as an atm-daemon-client-local test exercising execute_typed_local_request's own sync-bridge wrapper end-to-end; a follow-up rust-best-practices/service-hardening pass may still want that, but the concrete regression risk this finding named is covered." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-10T20:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-08-10T20:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S2 ;
+  triage:foundAt "2026-08-10T20:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM2-LOST-TRANSPORT-PARITY-COVERAGE/AM2-QA1-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AM2-LOST-TRANSPORT-PARITY-COVERAGE/AM2-QA1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 0 ;
+  triage:snippet "uds_and_tcp_modes_share_the_http_response_contract deleted with no typed-client equivalent added" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s2-delete-legacy-http" ;
+  triage:headSha "46ff7c508b93e25aa0ff028e797071677145959e" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s2/46ff7c50> .
+
+<urn:atm:triage:worktree/pam-s2/46ff7c50>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s2-delete-legacy-http" ;
+  triage:branch "feature/pam-s2-delete-legacy-http" ;
+  triage:headSha "46ff7c508b93e25aa0ff028e797071677145959e" ;
+  triage:orderIndex 1 .

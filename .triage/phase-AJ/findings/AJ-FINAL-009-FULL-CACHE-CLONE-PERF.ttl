@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AJ-FINAL-009-FULL-CACHE-CLONE-PERF>
+  a triage:Finding ;
+  triage:findingId "AJ-FINAL-009-FULL-CACHE-CLONE-PERF" ;
+  triage:title "merge_observation clones the entire bounded RuntimeStatusCache HashMap on every single write" ;
+  triage:description "clone_state() (crates/atm-daemon/src/runtime_status_cache.rs, ~line 99) does self.state.load().as_ref().clone() on the full RuntimeStatusCacheState, called from merge_observation on every heartbeat/local-dispatch touch and from reload_state on every reload. This clones up to MAX_STATUS_CACHE_ENTRIES (4096) map entries even though only one entry actually changes per write, so per-write cost scales with total tracked population rather than the size of the update, on the primary write hot path (heartbeats + local dispatch touches). Recommend per-entry Arc-wrapping inside the map, or a structurally-shared map, so the ArcSwap-publish pattern stays O(1) per write. Found by rust-best-practices-agent (RBP-F001) during Phase AJ's final holistic gate review. QA source: PR #759." ;
+  triage:phaseId "phase-AJ" ;
+  triage:triageMode "phase_end_gate" ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-05T18:03:01Z"^^xsd:dateTime ;
+  triage:foundIn triage:AJ-S10 ;
+  triage:foundAt "2026-08-05T18:03:01Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AJ-FINAL-009-FULL-CACHE-CLONE-PERF/AJFG-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AJ-FINAL-009-FULL-CACHE-CLONE-PERF/AJFG-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
+  triage:line 99 ;
+  triage:snippet "fn clone_state(&self) -> RuntimeStatusCacheState" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aj" ;
+  triage:headSha "fadf351bd396ef41f8d416fe88e061b651f4f9af" ;
+  triage:occursIn <urn:atm:triage:worktree/AJFG-1> .
+
+<urn:atm:triage:worktree/AJFG-1>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-aj" ;
+  triage:branch "integrate/phase-aj" ;
+  triage:headSha "fadf351bd396ef41f8d416fe88e061b651f4f9af" ;
+  triage:orderIndex 1 .

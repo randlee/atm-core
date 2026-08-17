@@ -1,0 +1,56 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F002-AN11>
+  a triage:Finding ;
+  triage:findingId "RBQA-F002-AN11" ;
+  triage:title "Duplicate derived-tag SQL logic vs Rust admission function, no drift guard" ;
+  triage:description "The derived-tag computation exists twice: once as SQL logic (in template_catalog_schema.rs view) and once as a Rust admission function (in template_catalog.rs), with no test or lint guarding them from drifting apart." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "boundary" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-13T23:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.11 ;
+  triage:foundAt "2026-08-14T00:08:17Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002-AN11/AN13-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002-AN11/AN13-2> ;
+  triage:closedAt "2026-08-14T05:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "3" .
+
+<urn:atm:triage:occurrence/RBQA-F002-AN11/AN13-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/template_catalog.rs" ;
+  triage:line 272 ;
+  triage:snippet "let mut derived_tags = Vec::new(); // generative Rust algorithm" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
+  triage:headSha "2f6dd1164" ;
+  triage:occursIn <urn:atm:triage:worktree/pan-s11/2f6dd1164> .
+
+<urn:atm:triage:occurrence/RBQA-F002-AN11/AN13-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/template_catalog_schema.rs" ;
+  triage:line 38 ;
+  triage:snippet "derived_tags_json computed live via subtractive SQL (json_each/NOT EXISTS/json_group_array), no longer a stored column" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
+  triage:headSha "2f6dd1164" ;
+  triage:occursIn <urn:atm:triage:worktree/pan-s11/2f6dd1164> .
+
+<urn:atm:triage:worktree/AN13/95095a37>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AN13" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "95095a3788d08cf5c82dea8523f969c91816d20e" ;
+  triage:orderIndex 13 .

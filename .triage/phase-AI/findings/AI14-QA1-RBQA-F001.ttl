@@ -1,0 +1,164 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI14-QA1-RBQA-F001>
+  a triage:Finding ;
+  triage:findingId "AI14-QA1-RBQA-F001" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:title "Dual concurrent local-ingress listeners on Unix (UDS + HTTP loopback)" ;
+  triage:description "crates/atm-daemon/src/local_ipc_transport.rs is compiled #[cfg(not(windows))] (lib.rs:21) -- primary Unix/Mac local-IPC server. Its PreparedRuntimeServer struct carries a #[cfg(unix)] tcp_loopback: LocalTcpLoopbackServer field (local_ipc_transport.rs:162-163), and bind_after_install binds it (local_ipc_transport.rs:291-298) alongside the UDS LocalSocketListener -- both run as live threads (serve_runtime_scope, lines 458 and 752). crates/atm-daemon/src/local_tcp_transport.rs:55-57 self-documents this as 'Secondary Unix local ingress used for UDS/TCP parity.' Meanwhile crates/atm-daemon-client/src/lib.rs:148-151 (resolve_daemon_local_ipc_endpoint) resolves exclusively through atm_core::local_http::local_http_record_path -- client fully migrated off UDS (commits dbd112e2, c5665204), but server still binds/serves both UDS accept loop and HTTP loopback listener concurrently on every Mac daemon start -- dead/unreferenced-by-any-client production infrastructure kept alive, not removed. Single-receive-path boundary violation." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "critical" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-RBQA-F001/s11/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-RBQA-F001/s12/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-RBQA-F001/s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-RBQA-F001/s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-RBQA-F001/s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-RBQA-F001/s16/1> ;
+  triage:openOn <urn:atm:triage:worktree/s11/3642430d> ;
+  triage:openOn <urn:atm:triage:worktree/s12/a8ea0017> ;
+  triage:openOn <urn:atm:triage:worktree/s13/2adc5fa1> ;
+  triage:openOn <urn:atm:triage:worktree/s14/c5665204> ;
+  triage:openOn <urn:atm:triage:worktree/s15/5a7a762f> ;
+  triage:openOn <urn:atm:triage:worktree/s16/1c23ac04> ;
+  triage:promoteTo <urn:atm:triage:worktree/s16/1c23ac04> ;
+  triage:highestOpenBranch "feature/pAI-s16-offline-reconciliation" ;
+  triage:correctionNote "2026-07-27 (quality-mgr): arch-ctm recommended closing this as disproven by current code/docs. Independently re-verified against integrate/phase-AI@f3b6a77a: crates/atm-daemon/src/local_ipc_transport.rs still binds and serves BOTH the UDS LocalSocketListener and #[cfg(unix)] tcp_loopback: LocalTcpLoopbackServer concurrently (bind_after_install line 271, serve_runtime_scope line 404). Confirmed no production client anywhere connects via UDS: find crates -name '*.rs' | xargs grep -ln LocalSocketStream matches only server/test-only files (test_support.rs, local_ipc_transport.rs + submodules, local_ipc_wake.rs); the sole production client connection code, crates/atm-core/src/graft.rs:302,564, uses TcpStream::connect/connect_timeout exclusively, an intentional permanent migration per commit 88e8c784. Note: the s11 occurrence below was previously closed on the reasoning that 'concurrent UDS+TCP binding is REQUIRED per REQ-CORE-TRANSPORT-001, not dead infra' -- that reasoning answers a different question than the one this finding actually raises. REQ-CORE-TRANSPORT-001 does require the UDS listener to exist server-side; it says nothing about whether any client reaches it, and none currently does. The finding's real claim (dead/unreferenced-by-any-client production infrastructure kept alive) is CONFIRMED true, not disproven. Top-level status was never closed and remains correct as-is. Declining arch-ctm's batch-close recommendation for this finding and its AI11 pair (identical defect, see AI11-QA5-RBQA-F001.ttl)." ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/AI14-QA1-RBQA-F001/s11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 162 ;
+  triage:snippet "#[cfg(unix)] tcp_loopback: LocalTcpLoopbackServer field bound in bind_after_install (line 293) + listener: LocalSocketListener (line 299) both bound and served in serve_runtime_scope (lines 458, 752)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head at local_ipc_transport.rs lines 149,279-284,442-447,464,476-478 — concurrent UDS+TCP binding is REQUIRED per docs/requirements.md REQ-CORE-TRANSPORT-001 for Unix/Windows parity testing, not dead/unreferenced infrastructure. Finding premise (single-receive-path violation) determined to be false through re-triage. Stale occurrence from superseded branch feature/pAI-s11-post-merge-remediation; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "3642430d" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/3642430d> .
+
+<urn:atm:triage:occurrence/AI14-QA1-RBQA-F001/s12/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 162 ;
+  triage:snippet "#[cfg(unix)] tcp_loopback: LocalTcpLoopbackServer field bound in bind_after_install (line 293) + listener: LocalSocketListener (line 299) both bound and served in serve_runtime_scope (lines 458, 752)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head at local_ipc_transport.rs lines 149,279-284,442-447,464,476-478 — concurrent UDS+TCP binding is REQUIRED per docs/requirements.md REQ-CORE-TRANSPORT-001 for Unix/Windows parity testing, not dead/unreferenced infrastructure. Finding premise (single-receive-path violation) determined to be false through re-triage. Stale occurrence from superseded branch feature/pAI-s12-post-write-router; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:headSha "a8ea0017" ;
+  triage:occursIn <urn:atm:triage:worktree/s12/a8ea0017> .
+
+<urn:atm:triage:occurrence/AI14-QA1-RBQA-F001/s13/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 162 ;
+  triage:snippet "#[cfg(unix)] tcp_loopback: LocalTcpLoopbackServer field bound in bind_after_install (line 293) + listener: LocalSocketListener (line 299) both bound and served in serve_runtime_scope (lines 458, 752)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head at local_ipc_transport.rs lines 149,279-284,442-447,464,476-478 — concurrent UDS+TCP binding is REQUIRED per docs/requirements.md REQ-CORE-TRANSPORT-001 for Unix/Windows parity testing, not dead/unreferenced infrastructure. Finding premise (single-receive-path violation) determined to be false through re-triage. Stale occurrence from superseded branch feature/pAI-s13-peer-smoke-contract; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "2adc5fa1" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/2adc5fa1> .
+
+<urn:atm:triage:occurrence/AI14-QA1-RBQA-F001/s14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 162 ;
+  triage:snippet "#[cfg(unix)] tcp_loopback: LocalTcpLoopbackServer field bound in bind_after_install (line 293) + listener: LocalSocketListener (line 299) both bound and served in serve_runtime_scope (lines 458, 752)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head at local_ipc_transport.rs lines 149,279-284,442-447,464,476-478 — concurrent UDS+TCP binding is REQUIRED per docs/requirements.md REQ-CORE-TRANSPORT-001 for Unix/Windows parity testing, not dead/unreferenced infrastructure. Finding premise (single-receive-path violation) determined to be false through re-triage. Stale occurrence from superseded branch feature/pAI-s14-mac-peer-smoke; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "c5665204" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/c5665204> .
+
+<urn:atm:triage:occurrence/AI14-QA1-RBQA-F001/s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 162 ;
+  triage:snippet "#[cfg(unix)] tcp_loopback: LocalTcpLoopbackServer field bound in bind_after_install (line 293) + listener: LocalSocketListener (line 299) both bound and served in serve_runtime_scope (lines 458, 752)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head at local_ipc_transport.rs lines 149,279-284,442-447,464,476-478 — concurrent UDS+TCP binding is REQUIRED per docs/requirements.md REQ-CORE-TRANSPORT-001 for Unix/Windows parity testing, not dead/unreferenced infrastructure. Finding premise (single-receive-path violation) determined to be false through re-triage. Stale occurrence from superseded branch feature/pAI-s15-windows-peer-smoke; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a7a762f" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/5a7a762f> .
+
+<urn:atm:triage:occurrence/AI14-QA1-RBQA-F001/s16/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 162 ;
+  triage:snippet "#[cfg(unix)] tcp_loopback: LocalTcpLoopbackServer field bound in bind_after_install (line 293) + listener: LocalSocketListener (line 299) both bound and served in serve_runtime_scope (lines 458, 752)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head at local_ipc_transport.rs lines 149,279-284,442-447,464,476-478 — concurrent UDS+TCP binding is REQUIRED per docs/requirements.md REQ-CORE-TRANSPORT-001 for Unix/Windows parity testing, not dead/unreferenced infrastructure. Finding premise (single-receive-path violation) determined to be false through re-triage. Stale occurrence from superseded branch feature/pAI-s16-offline-reconciliation; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "1c23ac04" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/1c23ac04> .
+
+<urn:atm:triage:worktree/s11/3642430d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "3642430d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s12/a8ea0017>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
+  triage:headSha "a8ea0017" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s13/2adc5fa1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "2adc5fa1" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s14/c5665204>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "c5665204" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s15/5a7a762f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a7a762f" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s16/1c23ac04>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "1c23ac04" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:finding/AI14-QA1-RBQA-F001>
+  triage:status "scope-mismatch" ;
+  triage:dispatchReady false ;
+  triage:resolutionGuidance "HOLD -- do not implement either 'remove UDS' or 'remove TCP' as previously guided (both directions were dispatched and retracted). docs/requirements.md REQ-CORE-TRANSPORT-001 states: 'Unix same-host clients use HTTP over UDS and may use HTTP over loopback TCP; Windows same-host clients use HTTP over loopback TCP only' and explicitly requires 'Unix/Windows parity requires equivalent local HTTP request/response tests: UDS plus loopback TCP on Unix and loopback TCP on Windows.' This means concurrent UDS+TCP-loopback binding on Unix is the DOCUMENTED, REQUIRED contract, not dead/violating infrastructure. The finding's premise ('dead/unreferenced-by-any-client production infrastructure kept alive, not removed', 'Single-receive-path boundary violation') conflicts with this requirement and needs re-triage against REQ-CORE-TRANSPORT-001 before any dispatch. Client-side (atm-daemon-client) currently resolving only via local_http_record_path may itself be the real gap (missing UDS-path client support), not the server binding both listeners. Needs fresh triage, not implementation." ;
+  triage:correctionNote "2026-07-26 (quality-mgr): QA-1 dispatched against PR #665 (commit 780a8870, 'fix/legacy-uds-tcp-shared-client'), which attempts exactly the gap-closure this record's resolutionGuidance called for (client-side UDS support via a shared atm-daemon-client transport). Full 6-reviewer QA-1 set run independently, not by self-report. VERDICT: FAIL. Architecture/boundary-discipline of the shared-client approach is sound (ruthless-boundary-qa, req-qa both PASS on the core design), but the commit as pushed is not mergeable: (1) arch-qa BLOCKING/RULE-012 -- adding `interprocess` as a mandatory dependency of atm-daemon-client transitively reintroduces the forbidden `atm-graft -> interprocess` edge into atm-graft's default production transport (boundaries/atm-graft/shared-client-consumer.toml forbidden_edges, previously fixed under AI15-QA1-BLOCKING-01), and the boundary lint doesn't catch it because it only scans direct Cargo.toml edges, not transitive ones -- a real enforcement bypass. (2) rust-service-hardening-agent CRITICAL/RSH-001 -- UDS connect failures (NotFound/PermissionDenied/ConnectionRefused) all collapse into one identical operator-facing message because AtmError::Display drops .cause, defeating this commit's own stated diagnostic goal. (3) rust-qa-agent CRITICAL x2 -- QA-001: try_connect's return-type change (TcpStream -> LocalDaemonConnection) breaks the Windows compile of atm-daemon's test target (type mismatch in test_support.rs); QA-002: bisection-confirmed regression, test hardcodes UDS filename \"daemon.sock\" while the real client now resolves \"atm-daemon.sock\" via HOST_RUNTIME_SOCKET_FILE. (4) Independently reproduced in CI: Windows lint leg fails to compile (unconditional `use std::io::Write as _;` unused on non-unix, -D warnings), Ubuntu Test leg fails on the same test QA-002 identified. Do NOT close this finding or AI11-QA5-RBQA-F001 -- the real fix direction identified in this record's resolutionGuidance is confirmed correct, but this specific commit is not the resolution yet. FAIL verdict sent to team-lead; QA report posted to PR #665." .
+
+<urn:atm:triage:finding/AI14-QA1-RBQA-F001>
+  triage:correctionNote "2026-07-27 (quality-mgr): QA-2 dispatched against PR #665 fix-round-2 (commit 7a49a7f4). Independently re-verified all 7 review targets, not by self-report. VERDICT: FAIL. Six of seven targets are genuinely SATISFIED this round: (a) RULE-012 -- boundaries/atm-graft/shared-client-consumer.toml gained an explicit no-direct-interprocess note, backed by a real enforced test (test_graft_shared_client_has_no_direct_interprocess_dependency in .just/tests/test_lint_boundaries.py) asserting both no direct Cargo.toml edge and no collect_boundary_violations() hit; this is a deliberate narrowing to direct-edge-only enforcement (transitive reintroduction via atm-daemon-client is still technically present in the real dependency graph but is now explicitly the accepted architecture per the review target's own framing of a team-lead ruling), not an unauthorized bypass. (b) RSH-001 -- AtmError::daemon_unavailable_with_cause used at every UDS/TCP failure site, verified via a real test asserting error.cause() is non-empty. (c) UDS/TCP timeout-unsupported degrade parity -- confirmed via the single shared apply_local_ipc_deadline helper used by both transports. (d) QA-002 hardcoded socket filename -- fixed, HOST_RUNTIME_SOCKET_FILE used throughout. (e) ubuntu/macos CI legs and local lint+test all green. BUT (f) QA-001 Windows compile break is CONFIRMED STILL BROKEN, verified via live Windows CI (not code inspection): Just lint (windows-latest) fails with 'error: unused import: try_connect_with_transport -- could not compile atm-daemon-client (lib test)' (https://github.com/randlee/atm-core/actions/runs/30234256319/job/89878850611). Root cause: the mod tests use-list in crates/atm-daemon-client/src/lib.rs imports try_connect_with_transport unconditionally, but it is only referenced by the new #[cfg(unix)]-gated test uds_connect_failure_keeps_the_socket_cause_in_the_displayed_error -- same defect class as the original QA-001 finding, freshly reintroduced by this round's own new test. Do NOT close this finding or AI11-QA5-RBQA-F001 -- architecture now looks resolved (client is UDS-preferred by default on Unix, verified with a real bound-listener integration test) but the commit does not compile on Windows. FAIL verdict sent to team-lead and directly to arch-ctm with the exact fix (gate the import under #[cfg(unix)]); QA report posted to PR #665. arch-ctm acknowledged (msg 01KYGSPDJ3SDMQ7170QJYV1J2P) and pushed a follow-up commit 5ef43130 gating the import -- QA-3 pending against that commit." .
+
+<urn:atm:triage:finding/AI14-QA1-RBQA-F001>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "2026-07-27 (quality-mgr): QA-3 on PR #665 (commit 5ef43130) verdict: PASS, independently verified. Diff from the QA-2 FAIL point (7a49a7f4) is exactly 1 insertion/2 deletions in crates/atm-daemon-client/src/lib.rs -- try_connect_with_transport moved from the unconditional mod tests use-list into the existing #[cfg(unix)] block alongside the test that references it, matching the exact fix specified in the QA-2 verdict. No other production code changed. All 8 CI legs verified green live (not self-reported): Clippy, Format check, Just lint x3 platforms (including the previously-failing windows-latest), Test x3 platforms (run https://github.com/randlee/atm-core/actions/runs/30234629739). All 7 review targets from QA-1 now genuinely satisfied. Client is UDS-preferred by default on Unix with a real bound-listener integration test proving a production client now reaches the previously-dead UDS server infrastructure -- this finding's core defect (dead/unreferenced-by-any-client production infrastructure) is resolved. QA report posted to PR #665. Closing finding; merge itself still requires team-lead action with explicit user authorization, not implied by this closure." .

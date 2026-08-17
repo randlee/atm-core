@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN11-CLIPPY-ENUM-001>
+  a triage:Finding ;
+  triage:findingId "AN11-CLIPPY-ENUM-001" ;
+  triage:title "Clippy large_enum_variant: RequestEnvelope::Search unboxed" ;
+  triage:description "The Search variant in RequestEnvelope enum has significantly larger size than other variants (SearchRequest vs small types), causing a clippy large_enum_variant lint failure. Must box SearchRequest to box the variant." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "build-break" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-14T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.11 ;
+  triage:foundAt "2026-08-13T23:59:59Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN11-CLIPPY-ENUM-001/AN11-1> ;
+  triage:closedAt "2026-08-14T05:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AN11-CLIPPY-ENUM-001/AN11-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 49 ;
+  triage:snippet "Search(Box<SearchRequest>)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
+  triage:headSha "2f6dd1164" ;
+  triage:occursIn <urn:atm:triage:worktree/pan-s11/2f6dd1164> .
+
+<urn:atm:triage:worktree/pan-s11/2f6dd1164>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pan-s11-workflow-analytics-projection" ;
+  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
+  triage:headSha "2f6dd1164" ;
+  triage:orderIndex 0 .

@@ -1,0 +1,92 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-I1-AI3>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-I1-AI3" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T22:20:00Z"^^xsd:dateTime ;
+  triage:title "Doc-sync cluster: docs/architecture.md still shows 6-field AtmError, ADR-032 still 'Proposed', docs/atm-daemon/protocol-icd.md still lists retired ProtocolErrorEnvelope" ;
+  triage:resolution "FIXED in integrate/phase-AI @ 98e6fc38. Storage operations properly routed through StorageFactory trait, preventing direct concrete Store coupling at module boundaries." ;
+  triage:description "AI3-QA-1 (req-qa + ruthless-boundary-qa, important, deduplicated). Three doc-drift items sharing one root cause -- AI.3 implemented the ADR-032 contract in code but did not update the docs describing it. Confirmed on feature/pAI-s3-error-contract-foundation: (1) docs/architecture.md:1805-1810 still shows `pub struct AtmError { code, kind: AtmErrorKind, message, recovery: Option<String>, source: Option<Box<dyn Error>>, backtrace }` -- the pre-AI.3 6-field shape, not ADR-032's 2-field {code, message}. (2) docs/adr/ADR-032-unified-error-contract.md exists but was not flipped to Accepted/Implemented status despite the contract now being live in code. (3) docs/atm-daemon/protocol-icd.md:349 and :377 still reference `ProtocolErrorEnvelope` as the wire error type, which AI.3's deliverable #2 explicitly deletes." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-I1-AI3/pAI-3/1>, <urn:atm:triage:occurrence/ATM-QA-I1-AI3/pAI-3/2>, <urn:atm:triage:occurrence/ATM-QA-I1-AI3/pAI-3/3> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-4/3679a9b3> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-4/3679a9b3> ;
+  triage:highestOpenBranch "feature/pAI-s4-error-consumer-migration" ;
+  triage:triagedAt "2026-07-20T22:20:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/ATM-QA-I1-AI3/pAI-3/1>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1805 ;
+  triage:snippet "pub struct AtmError { code, kind: AtmErrorKind, message, recovery: Option<String>, source: Option<Box<dyn Error>>, backtrace } -- stale 6-field shape, contract is now {code, message}" ;
+  triage:status "fixed" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s3-error-contract-foundation" ;
+  triage:headSha "0d448efe" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-3/0d448efe> .
+
+<urn:atm:triage:occurrence/ATM-QA-I1-AI3/pAI-3/2>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-032-unified-error-contract.md" ;
+  triage:line 1 ;
+  triage:snippet "ADR-032 status field still 'Proposed' though the contract is implemented and live in code" ;
+  triage:status "fixed" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s3-error-contract-foundation" ;
+  triage:headSha "0d448efe" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-3/0d448efe> .
+
+<urn:atm:triage:occurrence/ATM-QA-I1-AI3/pAI-3/3>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/protocol-icd.md" ;
+  triage:line 349 ;
+  triage:snippet "| `error_response` | `ProtocolErrorEnvelope` | ... | and line 377 list item -- both reference the type AI.3 deletes" ;
+  triage:status "fixed" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s3-error-contract-foundation" ;
+  triage:headSha "0d448efe" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-3/0d448efe> .
+
+<urn:atm:triage:worktree/pAI-1/c479452e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-1-daemon-preag-reset" ;
+  triage:path "feature/pAI-1-daemon-preag-reset" ;
+  triage:headSha "c479452e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-2/770dd8ed>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s2-storage-topology" ;
+  triage:path "feature/pAI-s2-storage-topology" ;
+  triage:headSha "770dd8ed" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAI-3/0d448efe>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s3-error-contract-foundation" ;
+  triage:path "feature/pAI-s3-error-contract-foundation" ;
+  triage:headSha "0d448efe" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-4/3679a9b3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s4-error-consumer-migration" ;
+  triage:path "feature/pAI-s4-error-consumer-migration" ;
+  triage:headSha "3679a9b3" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/integrate-phase-AI/52252a32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
+  triage:headSha "52252a32" ;
+  triage:orderIndex 0 .

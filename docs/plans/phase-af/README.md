@@ -1,6 +1,6 @@
 ---
 title: Phase AF — 1.3.1 Reliability Recovery
-status: in_progress
+status: complete
 branch: integrate/phase-AF
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AF
 ---
@@ -21,9 +21,9 @@ required documentation alignment, or its required validation is deferred.
 
 AF-1, AF-2, and AF-3 are now merged on `integrate/phase-AF` at
 `52c5c338`; `d5420b0f` is the docs-only follow-up that corrected the
-accepted-line readiness record. This README remains `in_progress` only because
-phase-end review and release-gate evidence closeout continue on the accepted
-line.
+accepted-line readiness record. PR #539 then merged that accepted line to
+`develop` at `98a4e66c`, so this phase README is now complete as a dependency
+artifact for later phases.
 
 | Sprint | Closure | Sprint-local gate |
 | --- | --- | --- |

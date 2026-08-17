@@ -1,107 +1,84 @@
 ---
 name: restore-team-communications
-version: 0.2.0
+version: 0.3.0
 description: >
-  Repair ATM teammate coordination after same-session compaction or resume
-  when atm-dev still exists on disk and the saved leadSessionId still matches
-  the current SESSION_ID, but named-teammate ATM reachability is broken.
+  Repair native ATM teammate reachability when the SQLite-backed roster is
+  healthy (per team-lead Step 1) but a specific teammate is unreachable —
+  typically a stale tmux pane id after compaction, resume, or a pane restart.
 ---
 
 # Restore Team Communications
 
 Use this skill only when all of these are true:
 - `ATM_IDENTITY=team-lead`
-- `SESSION_ID` still matches `leadSessionId` in
-  `~/.claude/teams/atm-dev/config.json`
-- the team directory still exists on disk
-- teammate ATM communication is broken or suspect after compaction or resume
+- `atm doctor --team "$ATM_TEAM"` and `atm members --team "$ATM_TEAM"` show a
+  healthy runtime and a complete roster (per `team-lead` Step 1)
+- one or more named teammates are unreachable or suspect despite the healthy
+  roster
 
-Do not use this skill for fresh startup or after `clear`. If the current
-`SESSION_ID` does not match `leadSessionId`, use `/team-lead` and follow the
-full restore procedure instead.
+If the roster itself is missing members or `atm doctor` reports findings, use
+`.claude/skills/team-lead/backup-and-restore-team.md` instead — this skill
+does not touch roster membership beyond a single member's connection details.
 
 ## Step 0 — Prove Whether Repair Is Needed
 
-First, try native ATM communication with a named teammate before changing
+First, try native ATM communication with the suspect teammate before changing
 anything:
 
 ```bash
-atm send <teammate> "ping: verify atm-dev communications path" --team atm-dev --requires-ack
+atm send <teammate> "ping: verify atm-dev communications path" --team "$ATM_TEAM" --requires-ack
 ```
 
 If the message is delivered and acknowledged, stop. No repair is needed.
 
-Do not read inbox files, session files, or tmux panes directly on this path.
-
-## Step 1 — Back Up Current State
-
-Back up before any destructive recovery:
+## Step 1 — Confirm Runtime And Roster Health
 
 ```bash
-atm teams backup atm-dev
-BACKUP_PATH=$(ls -td ~/.claude/teams/.backups/atm-dev/*/ | head -1)
-cp -r ~/.claude/tasks/agent-team-mail/ "$BACKUP_PATH/tasks-cc"
-echo "CC task list backed up to $BACKUP_PATH/tasks-cc"
+atm doctor --team "$ATM_TEAM"
+atm members --team "$ATM_TEAM"
 ```
 
-## Step 2 — Remove Broken Team Registration
+If either shows a problem outside a single member's connection details,
+stop and use `.claude/skills/team-lead/backup-and-restore-team.md` instead.
 
-Clear both live Claude routing state and the persisted team directory:
+## Step 2 — Repair The Stale Member Entry
 
-```text
-TeamDelete
-```
+The most common cause is a stale `tmuxPaneId` after the pane was restarted or
+reassigned. Discover the current pane, then update the member in place —
+never remove and re-add:
 
 ```bash
-rm -rf ~/.claude/teams/atm-dev
+tmux list-panes -a -F '#{session_name}:#{window_index}.#{pane_index} #{pane_title} #{pane_current_command}'
+atm teams update-member "$ATM_TEAM" <teammate> --pane-id <correct-pane-id>
 ```
 
-If `TeamDelete` reports no active team name, proceed. That means live routing
-was already absent.
+`update-member` also accepts `--home-dir`, `--harness`, `--agent-type`, and
+`--model` if one of those drifted instead of the pane id.
 
-## Step 3 — Recreate Team And Restore ATM State
-
-Recreate the team:
-
-```text
-TeamCreate(team_name="atm-dev", description="ATM development team", agent_type="team-lead")
-```
-
-Then restore from the most recent backup:
-
-```bash
-atm teams restore atm-dev --from "$BACKUP_PATH"
-```
-
-If required members are missing after restore, add them before verification.
-
-## Step 4 — Verify Native ATM Communication
+## Step 3 — Verify Native ATM Communication
 
 Repair is not complete until all checks pass:
 
-1. `atm send --requires-ack` to another named teammate and receive its native
+1. `atm send --requires-ack` to the repaired teammate and receive its native
    ATM acknowledgement.
 2. `atm send` to `quality-mgr` when that teammate is active, and verify ATM
    mailbox routing.
-3. `atm send` to Codex and verify the nudge fires.
+3. `atm send` to `arch-ctm` (Codex) and verify the nudge fires. The recipient's
+   `.atm.toml` `post_send_hooks` fires this automatically on send — no manual
+   `tmux send-keys` nudge is needed. See `atm help hooks` if it doesn't fire.
 
-For Codex-directed ATM sends, the nudge must include a clear call to action, not
-just a passive unread-mail announcement. Preferred structured nudge payload:
+For Codex-directed ATM sends, the nudge must include a clear call to action,
+not just a passive unread-mail announcement. Preferred structured nudge
+payload:
 
 ```text
 <atm><action>read atm</action><action>ack <TASK-ID></action><action>execute assigned task</action><when idle="immediate" busy="after-current-task"/><console announce="concise" pause="false"/></atm>
 ```
 
-Fallback plain-text wording:
+If the task is queued behind active work, use a queued-task nudge instead of
+an interruptive one.
 
-```text
-read atm for task <TASK-ID> and complete it before stopping
-```
-
-If the task is queued behind active work, use a queued-task nudge instead of an
-interruptive one.
-
-## Step 5 — Resume Work Quietly
+## Step 4 — Resume Work Quietly
 
 If the repair succeeded:
 - do not broadcast internal restore diagnostics over ATM

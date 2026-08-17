@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN6-CONTRACT-001>
+  a triage:Finding ;
+  triage:findingId "AN6-CONTRACT-001" ;
+  triage:title "HTTP query endpoint contract diverges from sprint doc's literal types; no UDS/loopback integration test" ;
+  triage:description "SearchRequest.query is SearchInput not the documented MessageSearchQuery; SearchHit.from_agent/to_agent is StoredSearchAddress, missing optional team/host fields the sprint doc specifies. Local-only peer rejection is real and correctly ordered in core but uses a generic validation error code, not a distinct typed authorization error. No UDS/loopback integration test exists for search in atm-http-runtime. Contract snapshot test only covers request-side SimpleAggregate variants, never response-side SearchAggregate variants." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "contract-drift" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "branch" ;
+  triage:status "closed" ;
+  triage:resolution "fixed" ;
+  triage:closedAt "2026-08-13T08:20:34Z"^^xsd:dateTime ;
+  triage:closedNote "AN6-QUERYFIX-1 (36a75f3de): the maintained sprint contract and core types are aligned on SearchInput, StoredSearchAddress, and ATM_SEARCH_LOCAL_ONLY. Existing seeded UDS/loopback search parity, typed local-only rejection, and response aggregate coverage are retained; this round adds a response snapshot with sender/recipient team and chat-id dimensions, proving those fields survive the HTTP contract serialization boundary." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-12T10:09:50Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.6 ;
+  triage:foundAt "2026-08-12T10:09:50Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN6-CONTRACT-001/1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AN6-CONTRACT-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/search.rs" ;
+  triage:line 1 ;
+  triage:snippet "SearchRequest/SearchHit type divergence from sprint doc; missing UDS/loopback integration test" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-13T08:20:34Z"^^xsd:dateTime ;
+  triage:closedNote "AN6-QUERYFIX-1 (36a75f3de): HTTP search contract response snapshot now covers address dimensions in addition to all SearchAggregate variants." ;
+  triage:branch "feature/pan-s6-query-surface" ;
+  triage:headSha "8bdc985ac392b1eb9f6ad47794deec30e3c86c06" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pan-s6-query-surface> .
+
+<urn:atm:triage:worktree/feature-pan-s6-query-surface>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pan-s6-query-surface" ;
+  triage:branch "feature/pan-s6-query-surface" ;
+  triage:headSha "8bdc985ac392b1eb9f6ad47794deec30e3c86c06" ;
+  triage:orderIndex 1 .

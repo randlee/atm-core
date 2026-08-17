@@ -1,0 +1,160 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI25-RBQA-F004>
+  a triage:Finding ;
+  triage:findingId "AI25-RBQA-F004" ;
+  triage:title "resolve_peer_authority routing decision lives inside https_transport.rs, which peer-http-adapter.toml declares forbidden for recipient_routing" ;
+  triage:description "Reported by ruthless-boundary-qa during AICH-S5-QA-2 (AI.25 fix-round-2 recheck, PR #640, commit 5f794c42). The peer-http-adapter.toml boundary policy (boundaries/atm-daemon/peer-http-adapter.toml:20) declares recipient_routing decisions forbidden inside crates/atm-daemon/src/https_transport.rs via io_forbidden=[\"...\", \"recipient_routing\", ...]. However, resolve_peer_authority (the routing-decision function for peer authority resolution added in sprint S25) lives in exactly that file at line 97. This function makes authorization decisions that route a delivery target to one configured hostname authority, which is precisely the type of recipient_routing logic the boundary policy forbids from that module. This is a policy/boundary violation, not a functional bug -- the implementation is correct but placed in a forbidden location. The finding persists across all branches s23-s26 (at varying line numbers due to forward merges and subsequent fixes). All worktrees remain open for this boundary violation." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-26T12:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
+  triage:foundAt "2026-07-25T16:26:33Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T12:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F004/pAI-s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F004/pAI-s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F004/pAI-s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F004/pAI-s26/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F004/integrate-8750587b> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F004/pAI-s25/96377687> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s23/985a6d46> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s24/ac465283> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s26/bc1346e4> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s26/bc1346e4> ;
+  triage:highestOpenBranch "feature/pAI-s26-peer-write-deadline" ;
+  triage:highestFixedBranch "feature/pAI-s25-peer-authority-resolution" .
+
+<urn:atm:triage:occurrence/AI25-RBQA-F004/pAI-s23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 51 ;
+  triage:snippet "pub(crate) fn resolve_peer_authority( target: &atm_core::types::HostName, peers: &[TrustedPeer], ) -> Result<TrustedPeer, AtmError>" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- resolve_peer_authority no longer exists in https_transport.rs; grep confirms function extracted to runtime_health/peer_authority.rs. Stale occurrence from superseded branch feature/pAI-s23-crosshost-shared-write-path; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "985a6d46" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s23/985a6d46> .
+
+<urn:atm:triage:occurrence/AI25-RBQA-F004/pAI-s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 94 ;
+  triage:snippet "pub(crate) fn resolve_peer_authority( target: &atm_core::types::HostName, peers: &[TrustedPeer], ) -> Result<TrustedPeer, AtmError>" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- resolve_peer_authority no longer exists in https_transport.rs; grep confirms function extracted to runtime_health/peer_authority.rs. Stale occurrence from superseded branch feature/pAI-s24-host-qualified-ack-receipt; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "ac465283" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s24/ac465283> .
+
+<urn:atm:triage:occurrence/AI25-RBQA-F004/pAI-s25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 97 ;
+  triage:snippet "pub(crate) fn resolve_peer_authority( target: &atm_core::types::HostName, peers: &[TrustedPeer], ) -> Result<TrustedPeer, AtmError>" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- resolve_peer_authority no longer exists in https_transport.rs; grep confirms function extracted to runtime_health/peer_authority.rs. Stale occurrence from superseded branch feature/pAI-s25-peer-authority-resolution; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "a489691b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s25/a489691b> .
+
+<urn:atm:triage:occurrence/AI25-RBQA-F004/pAI-s26/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 79 ;
+  triage:snippet "pub(crate) fn resolve_peer_authority( target: &atm_core::types::HostName, peers: &[TrustedPeer], ) -> Result<TrustedPeer, AtmError>" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- resolve_peer_authority no longer exists in https_transport.rs; grep confirms function extracted to runtime_health/peer_authority.rs. Stale occurrence from superseded branch feature/pAI-s26-peer-write-deadline; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "bc1346e4" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s26/bc1346e4> .
+
+<urn:atm:triage:worktree/pAI-s23/985a6d46>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "985a6d46" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-s24/ac465283>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "ac465283" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAI-s25/a489691b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "a489691b" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAI-s26/bc1346e4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:path "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "bc1346e4" ;
+  triage:orderIndex 6 .
+
+# Mirrored occurrence on integrate/phase-AI (AI.23 PR #629 merged forward, 8750587b):
+# FIXED: This occurrence was recorded when integrate/phase-AI was at 8750587b.
+# Current integrate/phase-AI HEAD has the fix (resolve_peer_authority extracted to runtime_health/peer_authority.rs).
+<urn:atm:triage:occurrence/AI25-RBQA-F004/integrate-8750587b>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 51 ;
+  triage:snippet "pub(crate) fn resolve_peer_authority(target: &atm_core::types::HostName, peers: &[TrustedPeer]) -> Result<TrustedPeer, AtmError> { ... } // routing decision still lives in https_transport.rs, forbidden by peer-http-adapter.toml for recipient_routing" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI current HEAD -- resolve_peer_authority no longer exists in https_transport.rs; function extracted to runtime_health/peer_authority.rs by pAI-s25. This 8750587b occurrence is stale; closing to match current reality. (2026-07-26)" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:note "AI.23 merged into integrate/phase-AI (PR #629, 8750587b). Independently re-verified at current HEAD: resolve_peer_authority moved to runtime_health/peer_authority.rs; https_transport.rs no longer contains the boundary violation." ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/8750587b> .
+
+# 2026-07-26 (quality-mgr, AICH-S5-QA-5): fixed on feature/pAI-s25-peer-authority-resolution
+# @ 96377687 (PR #640, merge of fix/pAI-s25-local-findings @ 3265270e), independently confirmed
+# by ruthless-boundary-qa. resolve_peer_authority extracted into new dedicated module
+# crates/atm-daemon/src/runtime_health/peer_authority.rs; https_transport.rs no longer contains
+# any recipient-routing logic; post_write_router.rs is the sole caller and imports from the new
+# location. New AST guard test added (boundary_enforcement.rs::
+# ai25_peer_authority_selection_is_not_owned_by_the_https_adapter) prevents regression. Top-level
+# status remains "open" only because s23/s24/s26 forked before this fix and still carry the
+# violation on their own not-yet-merged branches (cascade, not a defect in this diff).
+<urn:atm:triage:occurrence/AI25-RBQA-F004/pAI-s25/96377687>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/peer_authority.rs" ;
+  triage:line 1 ;
+  triage:snippet "pub(crate) fn resolve_peer_authority(...) // moved out of https_transport.rs into a dedicated module, sole caller post_write_router.rs updated" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "96377687" ;
+  triage:note "AICH-S5-QA-5 (PR #640): independently re-verified by quality-mgr and ruthless-boundary-qa. resolve_peer_authority no longer exists in https_transport.rs (grep confirmed); lives in new runtime_health/peer_authority.rs; post_write_router.rs is the only workspace caller and imports the new location. Boundary violation resolved on this branch." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s25/96377687> .
+
+<urn:atm:triage:worktree/pAI-s25/96377687>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "96377687" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate/8750587b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:orderIndex 100 .

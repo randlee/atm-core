@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use crate::address::MessageParticipantFilter;
 use crate::boundary;
 use crate::error::AtmError;
 use crate::schema::InboxMessage;
@@ -26,6 +27,12 @@ pub(crate) fn selection_state_for_mailbox_metadata_rows(
         let selected = classified_all
             .iter()
             .filter(|message| message.envelope.message_id == Some(*message_id))
+            .filter(|message| {
+                filters::matches_participant_filter(
+                    message,
+                    query.mailbox.participant_filter.as_ref(),
+                )
+            })
             .cloned()
             .collect();
         let logical_current = logical_current_messages(classified_all);
@@ -37,6 +44,7 @@ pub(crate) fn selection_state_for_mailbox_metadata_rows(
     let filtered = apply_metadata_only_filters(
         logical_current,
         query.mailbox.sender_filter.as_ref(),
+        query.mailbox.participant_filter.as_ref(),
         query.mailbox.timestamp_filter,
         query.mailbox.task_filter.as_ref(),
     );
@@ -57,6 +65,7 @@ pub(crate) fn classify_mailbox_metadata_rows(
             class: MessageClass::Unread,
             envelope: InboxMessage {
                 from: row.from_agent.clone(),
+                source_chat_id: row.source_chat_id.clone(),
                 // Metadata rows intentionally do not carry durable message body
                 // text. AD.20 keeps this projection empty so later contains
                 // evaluation cannot accidentally treat summary-only data as the
@@ -65,6 +74,7 @@ pub(crate) fn classify_mailbox_metadata_rows(
                 timestamp: row.message_at,
                 read: row.read,
                 source_team: None,
+                destination_chat_id: row.destination_chat_id.clone(),
                 summary: row.summary.clone(),
                 message_id: row.message_id,
                 requires_ack: row.requires_ack,
@@ -105,12 +115,16 @@ pub(crate) fn classify_mailbox_metadata_rows(
 pub(crate) fn apply_metadata_only_filters(
     messages: Vec<ClassifiedMessage>,
     sender_filter: Option<&crate::types::AgentName>,
+    participant_filter: Option<&MessageParticipantFilter>,
     timestamp_filter: Option<IsoTimestamp>,
     task_filter: Option<&crate::types::TaskId>,
 ) -> Vec<ClassifiedMessage> {
     filters::apply_task_filter(
         filters::apply_timestamp_filter(
-            filters::apply_sender_filter(messages, sender_filter),
+            filters::apply_participant_filter(
+                filters::apply_sender_filter(messages, sender_filter),
+                participant_filter,
+            ),
             timestamp_filter,
         ),
         task_filter,
@@ -142,9 +156,7 @@ pub(crate) fn filter_metadata_backed_contains_candidates<R: RetainedMailboxRunti
                     "sqlite mailbox metadata source index {} is out of range during contains filtering",
                     message.source_index.get()
                 ))
-                .with_recovery(
-                    "Repair or remove the malformed sqlite mailbox metadata row before retrying `atm read` or `atm list`.",
-                )
+
             })?;
             let mut selection = MetadataBackedReadSelection {
                 summary_text: row.summary.clone(),
@@ -192,9 +204,6 @@ pub(crate) fn load_durable_metadata_message<R: RetainedMailboxRuntime>(
                 "sqlite mailbox metadata source index {} is out of range during durable reload",
                 selected_message.source_index.get()
             ))
-            .with_recovery(
-                "Repair or remove the malformed sqlite mailbox metadata row before retrying `atm read`.",
-            )
         })?;
     let Some(record) =
         runtime.load_message_record(home_dir, team, agent, &metadata_row.message_key)?
@@ -219,6 +228,8 @@ pub(crate) fn load_durable_metadata_message<R: RetainedMailboxRuntime>(
     } else {
         record.envelope
     };
+    let envelope =
+        runtime.render_message_body(&metadata_row.message_key, envelope.message_id, &envelope)?;
     Ok(ClassifiedMessage {
         source_index: selected_message.source_index,
         source_path: selected_message.source_path.clone(),
@@ -243,10 +254,7 @@ fn load_durable_message_text<R: RetainedMailboxRuntime>(
         return Err(AtmError::validation(format!(
             "sqlite mailbox metadata row {} could not be reloaded for contains filtering",
             metadata_row.message_key
-        ))
-        .with_recovery(
-            "Repair or remove the malformed sqlite mailbox row before retrying `atm read` or `atm list`.",
-        ));
+        )));
     };
     let envelope = if record.envelope.thread_mode == Some(crate::schema::ThreadMode::AddDetails) {
         load_logical_current_record(
@@ -261,7 +269,9 @@ fn load_durable_message_text<R: RetainedMailboxRuntime>(
     } else {
         record.envelope
     };
-    Ok(envelope.text)
+    Ok(runtime
+        .render_message_body(&metadata_row.message_key, envelope.message_id, &envelope)?
+        .text)
 }
 
 fn load_logical_current_record<R: RetainedMailboxRuntime>(
@@ -293,20 +303,14 @@ fn load_logical_current_record<R: RetainedMailboxRuntime>(
             return Err(AtmError::validation(format!(
                 "sqlite mailbox thread row for {} disappeared during logical-current reconstruction",
                 message_id
-            ))
-            .with_recovery(
-                "Repair the malformed sqlite thread chain before retrying `atm read` or `atm list`.",
-            ));
+            )));
         };
         let Some(record) = runtime.load_message_record(home_dir, team, agent, &row.message_key)?
         else {
             return Err(AtmError::validation(format!(
                 "sqlite mailbox thread row {} could not be reloaded for logical-current reconstruction",
                 row.message_key
-            ))
-            .with_recovery(
-                "Repair the malformed sqlite thread chain before retrying `atm read` or `atm list`.",
-            ));
+            )));
         };
         chain.push(record.envelope);
     }
@@ -320,9 +324,6 @@ fn load_logical_current_record<R: RetainedMailboxRuntime>(
         )
         .ok_or_else(|| {
             AtmError::validation("failed to reconstruct logical current thread envelope")
-                .with_recovery(
-                    "Repair or remove the malformed sqlite mailbox thread rows before retrying `atm read` or `atm list`.",
-                )
         })
 }
 

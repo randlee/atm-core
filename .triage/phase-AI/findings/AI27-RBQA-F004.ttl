@@ -1,0 +1,60 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI27-RBQA-F004>
+  a triage:Finding ;
+  triage:findingId "AI27-RBQA-F004" ;
+  triage:title "Duplicated AST-guard allowlist logic in boundary enforcement helpers" ;
+  triage:description "crates/atm-architecture/tests/boundary_enforcement.rs contains duplicated AST-guard allowlist logic between the helper functions is_runtime_dispatcher_source (matches runtime_health.rs and runtime_health/peer_sync.rs by exact path suffix) and is_delivery_function_name (checks function names emit_local_post_write or deliver_to_peer). Both helpers implement similar path-suffix-matching and name-matching logic independently rather than sharing a common matching utility, which risks drift between the two allowlists as new runtime_health submodules are added. This is a maintainability/duplication observation, not a functional defect — the current allowlists are correctly scoped and do not widen the module's public surface (verified independently)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "PR #659 (fix/ai27-28-cleanup-2 -> integrate/phase-AI, merge commit cbf2a66e) introduced a shared fn is_path_suffix(path, suffixes) helper. Re-verified against integrate/phase-AI current tip a6342ba9 (2026-07-26): crates/atm-architecture/tests/boundary_enforcement.rs is_runtime_dispatcher_source and is_post_write_router_helper both delegate to is_path_suffix (lines ~1004, ~1022); is_delivery_function_name is now the single canonical name-matching check, no separate inline exact-equality duplicate remains." ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-26T10:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S7 ;
+  triage:foundAt "2026-07-25T16:26:33Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI27-RBQA-F004/pAI-s27/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI27-RBQA-F004/pAI-s27/2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI27-RBQA-F004/pAI-s27/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 821 ;
+  triage:snippet "fn is_runtime_dispatcher_source(&self) -> bool { self.source_path.as_ref().is_some_and(|path| path.ends_with(Path::new(\"crates/atm-daemon/src/runtime_health.rs\")) || path.ends_with(Path::new(\"crates/atm-daemon/src/runtime_health/peer_sync.rs\"))) }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: fixed by PR #659 (cbf2a66e), now delegates to shared is_path_suffix. Re-verified on integrate/phase-AI tip a6342ba9. (2026-07-26)" ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "282fad38" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s27/282fad38> .
+
+<urn:atm:triage:occurrence/AI27-RBQA-F004/pAI-s27/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 839 ;
+  triage:snippet "fn is_delivery_function_name(name: &str) -> bool { name.starts_with(\"emit_local_post_write\") || name == \"deliver_to_peer\" } -- note: is_post_write_router_helper (line 830) also inline-matches!(name, \"emit_local_post_write\" | \"deliver_to_peer\") via exact equality, a subtly different (starts_with vs exact) duplicate of this same check." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: fixed by PR #659 (cbf2a66e), is_post_write_router_helper now calls the shared is_delivery_function_name via is_path_suffix-gated dispatch instead of an inline duplicate. Re-verified on integrate/phase-AI tip a6342ba9. (2026-07-26)" ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "282fad38" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s27/282fad38> .
+
+<urn:atm:triage:worktree/pAI-s27/282fad38>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "282fad38" ;
+  triage:orderIndex 1 .

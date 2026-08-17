@@ -1,0 +1,71 @@
+# open-findings-for-sprint.sparql — All unresolved findings for one sprint.
+#
+# Parameters: $SPRINT. A terminal triage:status excludes a finding in the
+# legacy origin-sprint mode. When $BRANCH is bound, the query instead uses
+# occurrence-level state: a finding is returned only when its own occurrence on
+# that branch is still open. This lets triage-report count downstream
+# promotions on their branch without keeping a closed origin sprint blocked.
+# Resolution events are honored in both modes. Results are ordered for dispatch
+# review: invalid severity first (fail closed), then Blocking, Important, and
+# Minor; ties use foundAt.
+
+PREFIX triage: <urn:atm:triage:>
+
+SELECT ?finding ?findingId ?severity ?rawSeverity ?status ?foundAt ?description WHERE {
+  ?finding a triage:Finding ;
+           triage:foundIn ?originSprint ;
+           triage:severity ?rawSeverity ;
+           triage:foundAt ?foundAt ;
+           triage:description ?description .
+  OPTIONAL { ?finding triage:findingId ?findingId . }
+  OPTIONAL { ?finding triage:status ?status . }
+
+  FILTER (
+    (!BOUND(?BRANCH) && ?originSprint = $SPRINT)
+    ||
+    (BOUND(?BRANCH) && EXISTS {
+      ?finding triage:hasOccurrence ?branchOccurrence .
+      ?branchOccurrence triage:branch $BRANCH .
+      FILTER NOT EXISTS { ?branchOccurrence triage:closed true . }
+      FILTER NOT EXISTS {
+        ?branchOccurrence triage:status ?branchStatus .
+        FILTER (
+          LCASE(STR(?branchStatus)) IN (
+            "absent", "accepted", "closed", "dismissed", "false_positive",
+            "fixed", "fixed-ci-green", "inherited-fix", "invalid", "merged", "waived"
+          )
+        )
+      }
+    })
+  )
+
+  FILTER NOT EXISTS {
+    ?resolution a triage:Resolution ;
+                triage:resolves ?finding .
+  }
+  FILTER (
+    !BOUND(?status)
+    || !(
+      LCASE(STR(?status)) IN (
+        "absent", "accepted", "closed", "dismissed", "false_positive",
+        "fixed", "fixed-ci-green", "inherited-fix", "invalid", "merged", "waived"
+      )
+    )
+  )
+  BIND(LCASE(STR(?rawSeverity)) AS ?normalizedSeverity)
+  BIND(
+    IF(?normalizedSeverity IN ("blocking", "critical"), "blocking",
+      IF(?normalizedSeverity = "important", "important",
+        IF(?normalizedSeverity = "minor", "minor", "invalid")
+      )
+    ) AS ?severity
+  )
+  BIND(
+    IF(?severity = "invalid", -1,
+      IF(?severity = "blocking", 0,
+        IF(?severity = "important", 1, 2)
+      )
+    ) AS ?severityOrder
+  )
+}
+ORDER BY ?severityOrder ?foundAt ?finding

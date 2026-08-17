@@ -1,0 +1,62 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM4-STALE-SPRINT-DOC-TLS>
+  a triage:Finding ;
+  triage:findingId "AM4-STALE-SPRINT-DOC-TLS" ;
+  triage:title "sprint-AM4-delete-legacy-peer.md still requires an AL.7 TLS/mTLS adapter that was never implemented and is not a real AM.4 requirement" ;
+  triage:description "docs/plans/phase-am/sprint-AM4-delete-legacy-peer.md deliverable 2 requires 'Retain only AL.7's TLS physical adapter around the shared AL.4 client and AL.2 handler', and its acceptance criteria / required validation list 'TLS/trust negative cases still fail before application dispatch' and 'M5 clean-checkout direct-send and mTLS-negative proof'. No TLS/mTLS implementation exists anywhere in crates/atm-http-runtime (confirmed by grep -- client.rs uses plain reqwest/TCP only). docs/plans/phase-am/plan-phase-am.md's AM.4 section was already corrected to state 'AL.7's TLS adapter was never implemented and TLS is quarantined outside the MVP, so it is neither a retained dependency nor an AM.4 proof requirement', and the AM.1 ledger's own critical-review item AM-PLAN-002 is checked off as resolving exactly this premise -- but the standalone sprint doc's literal text was never updated to match. Independently found by req-qa (as a Blocking cross-doc-conflict finding, ATM-QA-001) and arch-qa (as an Important gate-artifact finding, ARCH-003); both converged on the identical root cause and remediation. Quality-mgr confirms the contradiction is real via direct read of both files, but downgrades req-qa's Blocking classification to Important: the actual authoritative doc per this dispatch (plan-phase-am.md) is already correct, the code is correctly scoped against it, and this is pure documentation staleness with zero functional/security impact -- not a defect in the shipped behavior. RECHECK (2026-08-10, commit 241eb256): FIXED. Deliverable 2 now reads 'AL.7's TLS adapter was never implemented; TLS remains quarantined outside the MVP and is neither a retained dependency nor an AM.4 proof requirement', matching plan-phase-am.md. The stale mTLS-negative acceptance-criterion and required-validation lines are removed; required validation now reads 'M5 clean-checkout direct-send proof'. Confirmed by quality-mgr's own direct read of the current file." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doc-gap" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-10T21:55:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-08-10T21:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S4 ;
+  triage:foundAt "2026-08-10T21:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM4-STALE-SPRINT-DOC-TLS/AM4-QA1-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AM4-STALE-SPRINT-DOC-TLS/AM4-QA1-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-am/sprint-AM4-delete-legacy-peer.md" ;
+  triage:line 24 ;
+  triage:snippet "Retain only AL.7's TLS physical adapter... / TLS/trust negative cases still fail before application dispatch / M5 clean-checkout direct-send and mTLS-negative proof" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s4-delete-legacy-peer" ;
+  triage:headSha "a386a36a086ae54c86af5cd3ee30db3f8c16498e" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s4/a386a36a> .
+
+<urn:atm:triage:occurrence/AM4-STALE-SPRINT-DOC-TLS/AM4-QA2-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-am/sprint-AM4-delete-legacy-peer.md" ;
+  triage:line 24 ;
+  triage:snippet "AL.7's TLS adapter was never implemented; TLS remains quarantined outside the MVP and is neither a retained dependency nor an AM.4 proof requirement" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s4-delete-legacy-peer" ;
+  triage:headSha "241eb25699ee35e5048e50a0c00ee0f2e3f3f08d" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s4/241eb256> .
+
+<urn:atm:triage:worktree/pam-s4/a386a36a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s4-delete-legacy-peer" ;
+  triage:branch "feature/pam-s4-delete-legacy-peer" ;
+  triage:headSha "a386a36a086ae54c86af5cd3ee30db3f8c16498e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pam-s4/241eb256>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s4-delete-legacy-peer" ;
+  triage:branch "feature/pam-s4-delete-legacy-peer" ;
+  triage:headSha "241eb25699ee35e5048e50a0c00ee0f2e3f3f08d" ;
+  triage:orderIndex 2 .

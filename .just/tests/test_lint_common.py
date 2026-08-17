@@ -317,6 +317,14 @@ version = "0.1.0"
             ["hello", "raw value"],
         )
 
+    def test_iter_string_literal_contents_preserves_unicode_while_scanning_escapes(self) -> None:
+        line = r'let value = format!("case-{case_index}-🙂-漢字-\\\"-newline\\n");'
+
+        self.assertEqual(
+            iter_string_literal_contents(line),
+            [r'case-{case_index}-🙂-漢字-\"-newline\n'],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

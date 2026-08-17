@@ -1,0 +1,140 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI14-QA1-RBQA-F003>
+  a triage:Finding ;
+  triage:findingId "AI14-QA1-RBQA-F003" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:title "boundaries/atm-daemon/socket-server-transport.toml notes are stale re: UDS/HTTP split intent" ;
+  triage:description "The same TOML's notes still describe the UDS/HTTP split as jointly intentional, which is now stale relative to the client's HTTP-only migration (commits dbd112e2, c5665204). Minor doc gap, should be corrected as part of the same fix batch as AI14-QA1-RBQA-F001/F002." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doc-boundary" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-RBQA-F003/s11/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-RBQA-F003/s12/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-RBQA-F003/s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-RBQA-F003/s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-RBQA-F003/s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-RBQA-F003/s16/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s11/3642430d> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s12/a8ea0017> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s13/2adc5fa1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s14/c5665204> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s15/5a7a762f> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s16/1c23ac04> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s16/1c23ac04> ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/AI14-QA1-RBQA-F003/s11/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/socket-server-transport.toml" ;
+  triage:line 68 ;
+  triage:snippet "The live local IPC adapter now carries HTTP/UDS requests into ApiRouter rather than the retired ServerTransport trait or frame packet family." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "3642430d" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s11/3642430d> .
+
+<urn:atm:triage:occurrence/AI14-QA1-RBQA-F003/s12/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/socket-server-transport.toml" ;
+  triage:line 68 ;
+  triage:snippet "The live local IPC adapter now carries HTTP/UDS requests into ApiRouter rather than the retired ServerTransport trait or frame packet family." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:headSha "a8ea0017" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s12/a8ea0017> .
+
+<urn:atm:triage:occurrence/AI14-QA1-RBQA-F003/s13/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/socket-server-transport.toml" ;
+  triage:line 68 ;
+  triage:snippet "The live local IPC adapter now carries HTTP/UDS requests into ApiRouter rather than the retired ServerTransport trait or frame packet family." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "2adc5fa1" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s13/2adc5fa1> .
+
+<urn:atm:triage:occurrence/AI14-QA1-RBQA-F003/s14/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/socket-server-transport.toml" ;
+  triage:line 68 ;
+  triage:snippet "The live local IPC adapter now carries HTTP/UDS requests into ApiRouter rather than the retired ServerTransport trait or frame packet family." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "c5665204" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s14/c5665204> .
+
+<urn:atm:triage:occurrence/AI14-QA1-RBQA-F003/s15/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/socket-server-transport.toml" ;
+  triage:line 68 ;
+  triage:snippet "The live local IPC adapter now carries HTTP/UDS requests into ApiRouter rather than the retired ServerTransport trait or frame packet family." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a7a762f" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s15/5a7a762f> .
+
+<urn:atm:triage:occurrence/AI14-QA1-RBQA-F003/s16/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/socket-server-transport.toml" ;
+  triage:line 68 ;
+  triage:snippet "The live local IPC adapter now carries HTTP/UDS requests into ApiRouter rather than the retired ServerTransport trait or frame packet family." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "1c23ac04" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s16/1c23ac04> .
+
+<urn:atm:triage:worktree/pAI-s11/3642430d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "3642430d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-s12/a8ea0017>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
+  triage:headSha "a8ea0017" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAI-s13/2adc5fa1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "2adc5fa1" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-s14/c5665204>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "c5665204" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAI-s15/5a7a762f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a7a762f" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAI-s16/1c23ac04>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "1c23ac04" ;
+  triage:orderIndex 6 .

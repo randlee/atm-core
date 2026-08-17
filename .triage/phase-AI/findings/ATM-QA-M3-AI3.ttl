@@ -1,0 +1,70 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-M3-AI3>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-M3-AI3" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T22:43:00Z"^^xsd:dateTime ;
+  triage:title "ADR-032 status re-flagged at minor severity -- duplicate of ATM-QA-I1-AI3, not a separate dispatch item" ;
+  triage:description "AI3-QA-1 (minor). A second, lower-severity mention of ADR-032's stale status field. This is the same root item already captured at important severity in ATM-QA-I1-AI3 occurrence 2 (docs/adr/ADR-032-unified-error-contract.md). Recorded here only to close out the verdict's full finding list; not to be dispatched or fixed independently of ATM-QA-I1-AI3." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "duplicate" ;
+  triage:dispatchReady false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-M3-AI3/pAI-3/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-4/3679a9b3> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-4/3679a9b3> ;
+  triage:highestOpenBranch "feature/pAI-s4-error-consumer-migration" ;
+  triage:resolution "DUPLICATE: subsumed by ATM-QA-I1-AI3 (occurrence 2, docs/adr/ADR-032-unified-error-contract.md). Do not dispatch separately -- closing ATM-QA-I1-AI3 closes this finding." ;
+  triage:triagedAt "2026-07-20T22:43:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/ATM-QA-M3-AI3/pAI-3/1>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-032-unified-error-contract.md" ;
+  triage:line 1 ;
+  triage:snippet "ADR-032 status still 'Proposed' -- duplicate mention of the same item tracked at ATM-QA-I1-AI3 occurrence 2" ;
+  triage:status "duplicate" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s3-error-contract-foundation" ;
+  triage:headSha "0d448efe" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-3/0d448efe> .
+
+<urn:atm:triage:worktree/pAI-1/c479452e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-1-daemon-preag-reset" ;
+  triage:path "feature/pAI-1-daemon-preag-reset" ;
+  triage:headSha "c479452e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-2/770dd8ed>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s2-storage-topology" ;
+  triage:path "feature/pAI-s2-storage-topology" ;
+  triage:headSha "770dd8ed" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAI-3/0d448efe>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s3-error-contract-foundation" ;
+  triage:path "feature/pAI-s3-error-contract-foundation" ;
+  triage:headSha "0d448efe" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-4/3679a9b3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s4-error-consumer-migration" ;
+  triage:path "feature/pAI-s4-error-consumer-migration" ;
+  triage:headSha "3679a9b3" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/integrate-phase-AI/52252a32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
+  triage:headSha "52252a32" ;
+  triage:orderIndex 0 .

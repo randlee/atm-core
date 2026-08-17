@@ -164,7 +164,7 @@ Observability release boundary rules:
 Phase R makes `atm-core` the owner of the service-layer boundaries while the
 daemon remains a runtime wrapper only.
 
-Required subsystem boundaries:
+Historical-through-AI.5 subsystem boundaries (not accepted Phase AI targets):
 - `AtmProtocol` boundary
 - `ClientTransport` boundary
 - `ServerTransport` boundary
@@ -175,18 +175,16 @@ Required subsystem boundaries:
 - `RosterStoreDoctor` boundary
 - config-ingress boundary
 - `ConfigDoctor` boundary
-- `PostSendHookEmitter` boundary
+- `MessageReceivedHookEmitter` boundary
 - `StatusSource` boundary
-- `RemoteReplayStore` boundary
-- `RuntimeStorageFinalizer` boundary
 
 Phase AA shared runtime-composition contracts:
 - `RuntimeDoctorPorts` is the `atm-core` DTO that groups the storage-neutral
   doctor handles consumed by daemon and direct-doctor callers
 - `DoctorFinding` is the shared subsystem diagnostic DTO used by the doctor
   trait family
-- replay persistence ownership crosses the crate boundary through
-  `RemoteReplayStore`, not through daemon-private or SQLite-private helpers
+- ADR-038's bounded canonical-record query crosses through a storage trait;
+  no replay persistence boundary exists
 
 Required architectural rules:
 - business logic must live in service modules, not in concrete adapters
@@ -197,8 +195,9 @@ Required architectural rules:
   boundary bypass
 - typed error translation happens at the boundary layer, but must preserve
   discriminated error identity across store/ingress/export/service calls
-- `atm-core` owns ATM event and error models used by both CLI and daemon
-  `sc-observability` emitters
+- `atm-core` owns the service-facing error façade and ATM event models used by
+  both CLI and daemon `sc-observability` emitters; the dependency-light
+  `atm-error` crate owns the shared stable error-code vocabulary
 
 Sealing posture per boundary:
 - `MailStore`: sealed by default
@@ -209,7 +208,7 @@ Sealing posture per boundary:
 - `ProjectionExport`: sealed by default
 - `ConfigIngress`: sealed by default
 - `ConfigDoctor`: sealed by default
-- `PostSendHookEmitter` adapters: sealed by default unless an ADR explicitly
+- `MessageReceivedHookEmitter` adapters: sealed by default unless an ADR explicitly
   opens the boundary
 - `ObservabilityPort`: sealed
 
@@ -233,8 +232,9 @@ Phase R redesign notes:
 - `atm-core` owns the shared `AtmProtocol` contract
 - `atm-core` owns the public boundary contracts for transport, dispatch,
   store, config ingress, post-send emission, and notification/status surfaces
-- `atm-core` owns the ATM frame schema used by both same-host local IPC and
-  cross-host daemon transport
+- `atm-core` owns the transport-neutral HTTP application schema used by both
+  same-host local IPC and cross-host daemon transport; the retired ATM frame
+  schema is historical only and must not be extended
 - `atm-core` owns the immutable public runtime roster projection
   `ProjectionRoster`; that surface is derived from canonical ATM roster
   truth rather than from direct `config.json` reads
@@ -279,6 +279,28 @@ Phase AC supersession note:
 - `ack` remains a workflow/state concern, but thin-client protocol shape
   should carry it inside send-shaped requests rather than a separate top-level
   method family
+
+## 2.2 AI.23 Shared-Write Convergence Point
+
+AI.23 establishes one convergence point for every authenticated HTTP write.
+Local CLI HTTP, same-host advertised-IP HTTP, and remote peer HTTPS all decode
+the same transport-neutral `WriteRequest` and enter `ApiRouter::route`. The
+transport adapter owns authentication and ingress provenance only; it must not
+create a second persistence, acknowledgement, or notification path.
+
+`ApiRouter::route` delegates write handling to the daemon's
+`DaemonRequestDispatcher::route_write`, which invokes the canonical
+`MessageWriter::write` persistence operation before
+`PostWriteRouter::dispatch`. That single post-persistence route invokes the
+receiver hook only for a newly persisted inbound write and returns its
+advisory failure as a successful-response warning; a duplicate invokes no
+second hook. A host-qualified origin write retains only the temporary legacy
+peer wake-up until Phase AM deletion. This ordering is the crate-level
+shared-write-resource invariant: every ingress uses the same dispatcher,
+persistence boundary, and post-write router. See [`../atm-daemon/http-api.md`](../atm-daemon/http-api.md),
+[`../adr/ADR-033-http-endpoint-contract.md`](../adr/ADR-033-http-endpoint-contract.md),
+and [`boundaries.md`](./boundaries.md) for the corresponding transport and
+boundary contracts.
 - queue inspection must not remain one "read many full messages" surface once
   SQLite-backed mailbox history becomes the ordinary durable source of truth
 
@@ -313,15 +335,16 @@ Config-ingress ownership rules:
   explicit TOML allowlist with owner and sunset-sprint metadata; new matches
   are lint failures rather than review-time warnings
 
-Required frame direction:
-- transport framing must not depend on EOF or socket half-close semantics
-- receivers must validate the ATM frame header before payload decode
-- transport implementations may vary, but they must share one ATM packet
-  family and one framed helper layer
-- the canonical ATM daemon wire contract is documented in
-  [`../atm-daemon/protocol-icd.md`](../atm-daemon/protocol-icd.md)
-- the same protocol ICD governs same-host local IPC and cross-host
-  daemon-to-daemon transport
+Required HTTP direction:
+- HTTP request framing must not depend on EOF or socket half-close semantics
+- adapters validate HTTP method/resource/body limits before JSON decode and
+  call the shared `ApiRouter`
+- UDS, loopback TCP, and HTTPS implementations vary only in socket and ingress
+  authentication; they share one HTTP resource contract and `WriteRequest`
+- the canonical daemon wire contract is documented in
+  [`../atm-daemon/http-api.md`](../atm-daemon/http-api.md)
+- the same HTTP API governs same-host local IPC and cross-host daemon-to-daemon
+  transport
 
 ## 2.2 Phase R Semantic Wrapper Policy
 
@@ -421,7 +444,9 @@ Identity-specific policy:
   canonical sender identity is also persisted in SQLite-owned state for
   validation, routing, and audit use
 - the shared send-context builder rejects canonical same-team self-addressed
-  sends before any message persistence or `dry-run` success outcome is built
+  sends only when the destination has no host, before any message persistence
+  or `dry-run` success outcome is built; host-qualified destinations proceed
+  to ordinary host routing without DNS or local-interface inspection
 - post-send-hook execution is outside the atomic mailbox mutation boundary
 - the hook runs only after a successful non-`dry-run` send
 - hook matching is recipient-scoped only
@@ -490,7 +515,11 @@ Approved canonical roster-member schema direction:
 - `team_name`
 - `agent_name`
 - `member_kind` — `permanent` or `ephemeral`
-- `harness` — behavioral enum; approved values: `claude-code`, `codex-cli`, `gemini-cli`, `opencode`
+- `harness` — behavioral enum; approved values: `claude-code`, `codex-cli`,
+  `gemini-cli`, `opencode`, `hermes`, `python-graft`
+  - `hermes` identifies the Hermes Python gateway integration
+  - `python-graft` identifies any other Python host using the `atm-graft`
+    interface
 - `agent_type`
 - `model`
 - `metadata_json`
@@ -597,13 +626,13 @@ Architectural rules:
 - write-affecting mail events persist first, then emit direct post-send
   behavior only when the recipient exposes that capability
 - `atm-core` owns the direct post-send seam through
-  `PostSendHookEmitter`, not through `DeliveryPlan` or `NotificationSink`
+  `MessageReceivedHookEmitter`, not through `DeliveryPlan` or `NotificationSink`
 - `atm-core` owns one canonical post-send event model carrying sender/team,
   message id, description, task id, ack flags, and authoritative
   `recipient_pane_id` when known
 - any team-scoped built-in template override lookup must cross a
   storage-neutral `NudgeTemplateOverrideStore` contract upstream of
-  `PostSendHookEmitter`; the emitter itself receives resolved text or absence
+  `MessageReceivedHookEmitter`; the emitter itself receives resolved text or absence
   only and must not grow SQLite lookup behavior
 - any retained built-in CLI helper receives the already-resolved template
   through `InternalNudgeEnvelope`; the live production path stays in-process,
@@ -616,7 +645,7 @@ Architectural rules:
   tmux injection, or graft host-wakeup mechanics
 - the concrete receiver sinks behind that seam are:
   - `TmuxNudgeSink` for local tmux-backed recipients
-  - `GraftNudgeSink` for graft-backed recipients
+  - `GraftReceiveHook` for graft-backed recipients
 - `atm-core` owns the plan types and machine outputs; it must not allow outer
   send/ack/persistence modules to reintroduce harness policy after plan
   creation
@@ -673,11 +702,13 @@ The exact design is owned by:
 
 ## 6. Error-Code Registry Boundary
 
-`atm-core` owns the single source registry of ATM-owned error codes in source.
+`atm-error` owns the dependency-light source registry of ATM-owned error codes;
+`atm-storage` and `atm-core` re-export the same type for their respective
+consumers.
 
 Architectural rules:
 
-- the source registry must live in `crates/atm-core/src/error_codes.rs`
+- the source registry must live in `crates/atm-error/src/error_codes.rs`
 - `AtmError` must carry an `AtmErrorCode`
 - coarse `AtmErrorKind` classification must not replace the stable code
 - warning diagnostics emitted by `atm-core` must also select a registry code

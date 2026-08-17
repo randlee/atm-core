@@ -1,0 +1,194 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI13-QA1-BLOCKING-04-NO-PRE-ROUTING-REJECTION-PROOF>
+  a triage:Finding ;
+  triage:findingId "AI13-QA1-BLOCKING-04-NO-PRE-ROUTING-REJECTION-PROOF" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:title "Negative cases don't prove rejection happens before routing" ;
+  triage:description "In scripts/smoke/run_peer_pair.py, negative/rejection test cases never assert a routing-attempt was NOT made (no routing-attempt assertion) — they only check the final outcome, not that rejection happened at the correct point in the pipeline (before persistence/routing)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-04-NO-PRE-ROUTING-REJECTION-PROOF/s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-04-NO-PRE-ROUTING-REJECTION-PROOF/s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-04-NO-PRE-ROUTING-REJECTION-PROOF/s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-04-NO-PRE-ROUTING-REJECTION-PROOF/s16/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-04-NO-PRE-ROUTING-REJECTION-PROOF/s17/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-04-NO-PRE-ROUTING-REJECTION-PROOF/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-04-NO-PRE-ROUTING-REJECTION-PROOF/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-04-NO-PRE-ROUTING-REJECTION-PROOF/s20/1> ;
+  triage:fixedOn <urn:atm:triage:worktree/s13/34ffe677> ;
+  triage:fixedOn <urn:atm:triage:worktree/s14/6be71984> ;
+  triage:fixedOn <urn:atm:triage:worktree/s15/5a6bac5b> ;
+  triage:fixedOn <urn:atm:triage:worktree/s16/b3749b90> ;
+  triage:fixedOn <urn:atm:triage:worktree/s17/f3af571e> ;
+  triage:fixedOn <urn:atm:triage:worktree/s18/1c40c3a1> ;
+  triage:fixedOn <urn:atm:triage:worktree/s19/fb781b27> ;
+  triage:fixedOn <urn:atm:triage:worktree/s20/51897df0> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-04-NO-PRE-ROUTING-REJECTION-PROOF/s13/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 210 ;
+  triage:snippet "for case in config[\"cases\"]:\n            result = run_command(case[\"command\"], timeout)\n            if case[\"expect\"] == \"success\":\n                passed = result[\"exit_code\"] == 0\n            else:\n                passed = result[\"exit_code\"] != 0 and case[\"typed_error_code\"] in (result[\"stdout\"] + result[\"stderr\"])" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (line 47 in REQUIRED_ASSERTIONS defines rejected_before_routing assertion for untrusted_or_allowlist_rejection case). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "34ffe677" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/34ffe677> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-04-NO-PRE-ROUTING-REJECTION-PROOF/s14/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 210 ;
+  triage:snippet "for case in config[\"cases\"]:\n            result = run_command(case[\"command\"], timeout)\n            if case[\"expect\"] == \"success\":\n                passed = result[\"exit_code\"] == 0\n            else:\n                passed = result[\"exit_code\"] != 0 and case[\"typed_error_code\"] in (result[\"stdout\"] + result[\"stderr\"])" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (line 47 in REQUIRED_ASSERTIONS defines rejected_before_routing assertion for untrusted_or_allowlist_rejection case). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "6be71984" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/6be71984> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-04-NO-PRE-ROUTING-REJECTION-PROOF/s15/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 210 ;
+  triage:snippet "for case in config[\"cases\"]:\n            result = run_command(case[\"command\"], timeout)\n            if case[\"expect\"] == \"success\":\n                passed = result[\"exit_code\"] == 0\n            else:\n                passed = result[\"exit_code\"] != 0 and case[\"typed_error_code\"] in (result[\"stdout\"] + result[\"stderr\"])" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (line 47 in REQUIRED_ASSERTIONS defines rejected_before_routing assertion for untrusted_or_allowlist_rejection case). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a6bac5b" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/5a6bac5b> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-04-NO-PRE-ROUTING-REJECTION-PROOF/s16/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 210 ;
+  triage:snippet "for case in config[\"cases\"]:\n            result = run_command(case[\"command\"], timeout)\n            if case[\"expect\"] == \"success\":\n                passed = result[\"exit_code\"] == 0\n            else:\n                passed = result[\"exit_code\"] != 0 and case[\"typed_error_code\"] in (result[\"stdout\"] + result[\"stderr\"])" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (line 47 in REQUIRED_ASSERTIONS defines rejected_before_routing assertion for untrusted_or_allowlist_rejection case). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "b3749b90" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/b3749b90> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-04-NO-PRE-ROUTING-REJECTION-PROOF/s17/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 210 ;
+  triage:snippet "for case in config[\"cases\"]:\n            result = run_command(case[\"command\"], timeout)\n            if case[\"expect\"] == \"success\":\n                passed = result[\"exit_code\"] == 0\n            else:\n                passed = result[\"exit_code\"] != 0 and case[\"typed_error_code\"] in (result[\"stdout\"] + result[\"stderr\"])" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (line 47 in REQUIRED_ASSERTIONS defines rejected_before_routing assertion for untrusted_or_allowlist_rejection case). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "f3af571e" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/f3af571e> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-04-NO-PRE-ROUTING-REJECTION-PROOF/s18/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 210 ;
+  triage:snippet "for case in config[\"cases\"]:\n            result = run_command(case[\"command\"], timeout)\n            if case[\"expect\"] == \"success\":\n                passed = result[\"exit_code\"] == 0\n            else:\n                passed = result[\"exit_code\"] != 0 and case[\"typed_error_code\"] in (result[\"stdout\"] + result[\"stderr\"])" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (line 47 in REQUIRED_ASSERTIONS defines rejected_before_routing assertion for untrusted_or_allowlist_rejection case). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:headSha "1c40c3a1" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/1c40c3a1> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-04-NO-PRE-ROUTING-REJECTION-PROOF/s19/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 210 ;
+  triage:snippet "for case in config[\"cases\"]:\n            result = run_command(case[\"command\"], timeout)\n            if case[\"expect\"] == \"success\":\n                passed = result[\"exit_code\"] == 0\n            else:\n                passed = result[\"exit_code\"] != 0 and case[\"typed_error_code\"] in (result[\"stdout\"] + result[\"stderr\"])" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (line 47 in REQUIRED_ASSERTIONS defines rejected_before_routing assertion for untrusted_or_allowlist_rejection case). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "fb781b27" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/fb781b27> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-04-NO-PRE-ROUTING-REJECTION-PROOF/s20/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 224 ;
+  triage:snippet "for case in config[\"cases\"]:\n            result = run_command(case[\"command\"], timeout)\n            if case[\"expect\"] == \"success\":\n                passed = result[\"exit_code\"] == 0\n            else:\n                passed = (\n                    result[\"exit_code\"] != 0\n                    and case[\"typed_error_code\"] in (result[\"stdout\"] + result[\"stderr\"])\n                )" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (line 47 in REQUIRED_ASSERTIONS defines rejected_before_routing assertion for untrusted_or_allowlist_rejection case). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "51897df0" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/51897df0> .
+
+<urn:atm:triage:worktree/s12/2cb82716>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
+  triage:headSha "2cb82716" ;
+  triage:orderIndex 12 .
+
+<urn:atm:triage:worktree/s13/34ffe677>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "34ffe677" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/s14/6be71984>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "6be71984" ;
+  triage:orderIndex 14 .
+
+<urn:atm:triage:worktree/s15/5a6bac5b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a6bac5b" ;
+  triage:orderIndex 15 .
+
+<urn:atm:triage:worktree/s16/b3749b90>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "b3749b90" ;
+  triage:orderIndex 16 .
+
+<urn:atm:triage:worktree/s17/f3af571e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "f3af571e" ;
+  triage:orderIndex 17 .
+
+<urn:atm:triage:worktree/s18/1c40c3a1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:path "feature/pAI-s18-graft-python-bindings" ;
+  triage:headSha "1c40c3a1" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/s19/fb781b27>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:path "feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "fb781b27" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/s20/51897df0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "51897df0" ;
+  triage:orderIndex 20 .

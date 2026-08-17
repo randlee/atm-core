@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-002" ;
+  triage:title "AI.40 missing baseline-comparison / threshold-gating logic" ;
+  triage:description "Sprint doc requires the benchmark script to compare results against a recorded baseline and gate/flag on regression thresholds. run_admission_capacity.py reports raw throughput numbers only -- there is no baseline file, no comparison logic, and no pass/fail threshold gating implemented." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements-gap" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-01T05:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-31T22:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI40 ;
+  triage:foundAt "2026-07-31T21:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/S40-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-002/S40-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 1 ;
+  triage:snippet "evaluate_profile_thresholds/load_baseline_median implemented and unit-tested at run_admission_capacity.py:543-578, test_run_admission_capacity.py:121-147" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "727c50ea" ;
+  triage:occursIn <urn:atm:triage:worktree/S40/8a444607> .
+
+<urn:atm:triage:worktree/S40/8a444607>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/S40" ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "8a444607" ;
+  triage:orderIndex 15 .

@@ -1,36 +1,65 @@
 pub mod health;
 pub mod report;
 
+#[cfg(test)]
 use std::collections::BTreeSet;
-use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::boundary::{ConfigDoctor, MailStoreDoctor, RosterEntry, RosterStoreDoctor};
+use crate::boundary::{ConfigDoctor, MailStoreDoctor, RosterStoreDoctor};
 use crate::config;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::ObservabilityPort;
+#[cfg(test)]
 use crate::roles::ROLE_TEAM_LEAD;
-use crate::schema::{AgentMember, HomeDirPath, canonical_home_dir};
+#[cfg(test)]
+use crate::schema::AgentMember;
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::default_runtime;
 use crate::team_admin::{MembersList, ordered_roster_member_summaries};
 use crate::types::{AgentName, TeamName};
+use atm_storage::PeerConfigStore;
 use std::sync::Arc;
 
 pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
     BootstrapTraceReport, DaemonRuntimeDoctorReport, DoctorEnvironmentVisibility,
     DoctorExecutionContext, DoctorFinding, DoctorReport, DoctorSeverity, DoctorStatus,
-    DoctorSummary, PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport,
-    RecipientDeliveryPath, RecipientDeliveryPathReport,
+    DoctorSummary, PeerAuthorityDoctorReport, PeerConfigDoctorReport, PostSendDoctorReport,
+    PostSendHookRuleIndex, PostSendHookRuleReport, RecipientDeliveryPath,
+    RecipientDeliveryPathReport,
 };
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+/// Inputs for a doctor run, including the caller's resolved identity.
+///
+/// When the doctor request is serviced over IPC by the long-lived daemon
+/// singleton, the daemon process cannot observe the requesting shell's
+/// `ATM_TEAM`/`ATM_IDENTITY`; its own process environment is frozen at launch
+/// time. The `caller_team` and `caller_identity` fields carry the invoking
+/// CLI process's resolved values across the IPC boundary so the resulting
+/// report's `client_context` reflects the real caller rather than whatever
+/// environment happens to be visible where the report is evaluated.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct DoctorQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
     pub team_override: Option<TeamName>,
+    /// Caller's `ATM_TEAM`, captured in the invoking CLI process.
+    #[serde(default)]
+    pub caller_team: Option<TeamName>,
+    /// Caller's `ATM_IDENTITY`, captured in the invoking CLI process.
+    #[serde(default)]
+    pub caller_identity: Option<AgentName>,
+}
+
+impl DoctorQuery {
+    /// Replaces caller-supplied filesystem roots with the daemon-owned root
+    /// before a request crosses the long-lived service boundary.
+    #[must_use]
+    pub fn with_daemon_paths(mut self, daemon_home: PathBuf) -> Self {
+        self.home_dir = daemon_home.clone();
+        self.current_dir = daemon_home;
+        self
+    }
 }
 
 #[derive(Clone)]
@@ -70,71 +99,34 @@ pub fn run_doctor_with_runtime(
     runtime: &LocalServiceRuntime,
 ) -> Result<DoctorReport, crate::error::AtmError> {
     let config = runtime.load_config(&query.current_dir)?;
-    let home_dir = query.home_dir.clone();
-    let initial_lock_snapshot = snapshot_mailbox_lock_paths(&home_dir);
-    let resolved_team = resolved_doctor_team(&query, config.as_ref());
-    let environment = health::environment_visibility(query.home_dir, query.team_override);
+    let doctor_context = doctor_run_context(&query, config.as_ref());
     let (observability_health, finding) = doctor_observability_status(observability);
     let mut findings = Vec::new();
-    if config
-        .as_ref()
-        .is_some_and(|config| config.obsolete_identity.is_some())
-    {
-        findings.push(DoctorFinding {
-            severity: DoctorSeverity::Warning,
-            code: AtmErrorCode::WarningIdentityDrift,
-            message: "obsolete config identity is still present in .atm.toml (`[atm].identity` or legacy top-level `identity`); ATM no longer uses config identity as a runtime fallback.".to_string(),
-            remediation: Some(
-                "Remove `[atm].identity` or the legacy top-level `identity` key from `.atm.toml` and set `ATM_IDENTITY` in the active agent environment instead."
-                    .to_string(),
-            ),
-        });
-    }
-    let member_roster = resolved_team.as_ref().and_then(|team| {
+    push_obsolete_identity_warning(config.as_ref(), &mut findings);
+    let member_roster = doctor_context.resolved_team.as_ref().and_then(|team| {
         load_member_roster(
             runtime,
-            &home_dir,
             team,
-            config.as_ref(),
-            environment.atm_identity.as_ref(),
+            doctor_context.environment.atm_identity.as_ref(),
             Some(query.current_dir.as_path()),
             &mut findings,
         )
     });
-    push_stale_mailbox_lock_findings(
-        &initial_lock_snapshot,
-        &snapshot_mailbox_lock_paths(&home_dir),
-        &mut findings,
-    );
     findings.push(finding);
-    let summary = summarize_doctor_findings(&findings);
-    let recommendations = findings
-        .iter()
-        .filter_map(|finding| finding.remediation.clone())
-        .collect::<Vec<_>>();
-
-    Ok(DoctorReport {
-        summary,
+    Ok(build_doctor_report(
         findings,
-        recommendations,
-        environment: environment.clone(),
-        client_context: report::DoctorExecutionContext {
-            team: environment.atm_team.clone(),
-            identity: environment.atm_identity.clone(),
-            version: Some(crate::protocol::ReleaseVersion::current()),
-        },
-        daemon_context: None,
+        doctor_context.environment,
         member_roster,
-        observability: observability_health,
-        post_send: PostSendDoctorReport::default(),
-        config: crate::boundary::ConfigDoctorReport::default(),
-        mail_store: crate::boundary::MailStoreDoctorReport::default(),
-        roster_store: crate::boundary::RosterStoreDoctorReport::default(),
-        daemon_runtime: None,
-        drift_findings: Vec::new(),
-        runtime_status: None,
-        bootstrap_trace: None,
-    })
+        PostSendDoctorReport::default(),
+        crate::boundary::ConfigDoctorReport::default(),
+        crate::boundary::MailStoreDoctorReport::default(),
+        crate::boundary::RosterStoreDoctorReport::default(),
+        None,
+        Vec::new(),
+        observability_health,
+        None,
+        None,
+    ))
 }
 
 pub fn run_doctor_with_runtime_ports(
@@ -145,31 +137,21 @@ pub fn run_doctor_with_runtime_ports(
     daemon_runtime: Option<report::DaemonRuntimeDoctorReport>,
 ) -> Result<DoctorReport, crate::error::AtmError> {
     let config = runtime.load_config(&query.current_dir)?;
-    let home_dir = query.home_dir.clone();
-    let initial_lock_snapshot = snapshot_mailbox_lock_paths(&home_dir);
-    let resolved_team = resolved_doctor_team(&query, config.as_ref());
-    let environment = health::environment_visibility(query.home_dir, query.team_override);
+    let doctor_context = doctor_run_context(&query, config.as_ref());
     let (observability_health, observability_finding) = doctor_observability_status(observability);
     let mut general_findings = Vec::new();
     let mut drift_findings = Vec::new();
     let mut reports = inspect_runtime_doctor_sections(runtime_doctors, &mut general_findings);
     push_obsolete_identity_finding(config.as_ref(), &mut reports.config);
-    let member_roster = resolved_team.as_ref().and_then(|team| {
+    let member_roster = doctor_context.resolved_team.as_ref().and_then(|team| {
         load_member_roster(
             runtime,
-            &home_dir,
             team,
-            config.as_ref(),
-            environment.atm_identity.as_ref(),
+            doctor_context.environment.atm_identity.as_ref(),
             Some(query.current_dir.as_path()),
             &mut drift_findings,
         )
     });
-    push_stale_mailbox_lock_findings(
-        &initial_lock_snapshot,
-        &snapshot_mailbox_lock_paths(&home_dir),
-        &mut drift_findings,
-    );
     let findings = collect_doctor_findings(
         &reports,
         &drift_findings,
@@ -177,37 +159,172 @@ pub fn run_doctor_with_runtime_ports(
         observability_finding,
         daemon_runtime.as_ref(),
     );
-    let summary = summarize_doctor_findings(&findings);
-    let recommendations = collect_recommendations(&findings);
     let post_send = post_send_doctor_report(
         config.as_ref(),
         member_roster.as_ref(),
         runtime,
-        resolved_team.as_ref(),
+        doctor_context.resolved_team.as_ref(),
     );
 
-    Ok(DoctorReport {
+    Ok(build_doctor_report(
+        findings,
+        doctor_context.environment,
+        member_roster,
+        post_send,
+        reports.config,
+        reports.mail_store,
+        reports.roster_store,
+        daemon_runtime,
+        drift_findings,
+        observability_health,
+        None,
+        None,
+    ))
+}
+
+/// Project safe peer-control-plane state into doctor output. A storage or
+/// validation failure is report data, never a reason for `atm doctor` to abort.
+pub fn peer_config_doctor_report(
+    store: &(dyn PeerConfigStore + Send + Sync),
+) -> (PeerConfigDoctorReport, Vec<DoctorFinding>) {
+    match peer_config_doctor_report_inner(store) {
+        Ok(report) => (report, Vec::new()),
+        Err(error) => {
+            let finding = DoctorFinding {
+                severity: DoctorSeverity::Error,
+                code: error.code(),
+                message: error.message().to_string(),
+                remediation: Some(
+                    "Repair the peer HTTPS configuration or bind conflict, then rerun `atm doctor`."
+                        .to_string(),
+                ),
+            };
+            (
+                PeerConfigDoctorReport {
+                    validation_failure: Some(finding.clone()),
+                    ..PeerConfigDoctorReport::default()
+                },
+                vec![finding],
+            )
+        }
+    }
+}
+
+fn peer_config_doctor_report_inner(
+    store: &(dyn PeerConfigStore + Send + Sync),
+) -> Result<PeerConfigDoctorReport, crate::error::AtmError> {
+    let interfaces = store.list_interfaces()?;
+    let peers = store.list_trusted_peers()?;
+    let certificate = store.local_certificate()?;
+    Ok(PeerConfigDoctorReport {
+        configured_interface_count: interfaces.len(),
+        enabled_interface_count: interfaces
+            .iter()
+            .filter(|interface| interface.enabled)
+            .count(),
+        certificate_fingerprint: certificate.map(|certificate| certificate.fingerprint.to_string()),
+        trusted_peer_count: peers.len(),
+        enabled_trusted_peer_count: peers.iter().filter(|peer| peer.enabled).count(),
+        trusted_peers: peers
+            .iter()
+            .map(|peer| PeerAuthorityDoctorReport {
+                host: peer.host.to_string(),
+                https_port: peer.https_port.get(),
+                enabled: peer.enabled,
+            })
+            .collect(),
+        validation_failure: None,
+    })
+}
+
+struct DoctorRunContext {
+    resolved_team: Option<TeamName>,
+    environment: DoctorEnvironmentVisibility,
+}
+
+fn doctor_run_context(
+    query: &DoctorQuery,
+    config: Option<&crate::config::AtmConfig>,
+) -> DoctorRunContext {
+    DoctorRunContext {
+        resolved_team: resolved_doctor_team(query, config),
+        environment: health::environment_visibility(
+            query.home_dir.clone(),
+            query.team_override.clone(),
+            query.caller_team.clone(),
+            query.caller_identity.clone(),
+        ),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_doctor_report(
+    findings: Vec<DoctorFinding>,
+    environment: DoctorEnvironmentVisibility,
+    member_roster: Option<MembersList>,
+    post_send: PostSendDoctorReport,
+    config: crate::boundary::ConfigDoctorReport,
+    mail_store: crate::boundary::MailStoreDoctorReport,
+    roster_store: crate::boundary::RosterStoreDoctorReport,
+    daemon_runtime: Option<report::DaemonRuntimeDoctorReport>,
+    drift_findings: Vec<DoctorFinding>,
+    observability_health: crate::observability::AtmObservabilityHealth,
+    runtime_status: Option<crate::protocol::RuntimeStatusSnapshot>,
+    bootstrap_trace: Option<BootstrapTraceReport>,
+) -> DoctorReport {
+    let summary = summarize_doctor_findings(&findings);
+    let recommendations = collect_recommendations(&findings);
+    DoctorReport {
         summary,
         findings,
         recommendations,
         environment: environment.clone(),
-        client_context: report::DoctorExecutionContext {
-            team: environment.atm_team.clone(),
-            identity: environment.atm_identity.clone(),
-            version: Some(crate::protocol::ReleaseVersion::current()),
-        },
+        client_context: doctor_client_context(&environment),
         daemon_context: None,
         member_roster,
         observability: observability_health,
         post_send,
-        config: reports.config,
-        mail_store: reports.mail_store,
-        roster_store: reports.roster_store,
+        config,
+        mail_store,
+        roster_store,
         daemon_runtime,
         drift_findings,
-        runtime_status: None,
-        bootstrap_trace: None,
-    })
+        runtime_status,
+        bootstrap_trace,
+    }
+}
+
+fn doctor_client_context(environment: &DoctorEnvironmentVisibility) -> DoctorExecutionContext {
+    DoctorExecutionContext {
+        // A `--team` override reflects the team the caller explicitly asked
+        // the doctor to inspect, so it takes precedence over the ambient
+        // `ATM_TEAM` in the reported client context.
+        team: environment
+            .team_override
+            .clone()
+            .or_else(|| environment.atm_team.clone()),
+        identity: environment.atm_identity.clone(),
+        version: Some(crate::protocol::ReleaseVersion::current()),
+        cli_schema_version: Some(crate::protocol::CLI_SCHEMA_VERSION),
+        http_api_version: Some(crate::protocol::HttpApiVersion::current()),
+    }
+}
+
+fn push_obsolete_identity_warning(
+    config: Option<&crate::config::AtmConfig>,
+    findings: &mut Vec<DoctorFinding>,
+) {
+    if config.is_some_and(|config| config.obsolete_identity.is_some()) {
+        findings.push(DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmErrorCode::WarningIdentityDrift,
+            message: "obsolete config identity is still present in .atm.toml (`[atm].identity` or legacy top-level `identity`); ATM no longer uses config identity as a runtime fallback.".to_string(),
+            remediation: Some(
+                "Remove `[atm].identity` or the legacy top-level `identity` key from `.atm.toml` and set `ATM_IDENTITY` in the active agent environment instead."
+                    .to_string(),
+            ),
+        });
+    }
 }
 
 fn post_send_doctor_report(
@@ -416,26 +533,21 @@ fn summarize_doctor_findings(findings: &[DoctorFinding]) -> DoctorSummary {
 
 fn load_member_roster(
     runtime: &impl RetainedServiceRuntime,
-    home_dir: &Path,
     team: &TeamName,
-    config: Option<&config::AtmConfig>,
     caller_identity: Option<&AgentName>,
     live_cwd: Option<&Path>,
     findings: &mut Vec<DoctorFinding>,
 ) -> Option<MembersList> {
-    let team_dir = resolve_doctor_team_dir(runtime, home_dir, team, findings)?;
-    check_restore_marker(team, &team_dir, findings);
-    let (team_config, atm_roster) =
-        load_doctor_roster_compare_inputs(runtime, team, &team_dir, findings)?;
-    let baseline = config
-        .map(|config| config.team_members.as_slice())
-        .unwrap_or(&[]);
-    check_inbox_directory(team, &team_dir.join("inboxes"), findings);
-    record_doctor_roster_drift(team, &team_config, atm_roster.as_deref(), findings);
-
-    let members = match atm_roster {
-        Some(ref roster) => ordered_roster_member_summaries(roster, caller_identity, live_cwd),
-        None => ordered_member_summaries(&team_config.members, baseline, caller_identity, live_cwd),
+    if let Err(error) = crate::address::validate_path_segment(team.as_str(), "team") {
+        push_doctor_error(findings, DoctorSeverity::Error, error);
+        return None;
+    }
+    let members = match runtime.load_team_roster(team) {
+        Ok(roster) => ordered_roster_member_summaries(&roster, caller_identity, live_cwd),
+        Err(error) => {
+            push_doctor_error(findings, DoctorSeverity::Error, error);
+            return None;
+        }
     };
 
     Some(MembersList {
@@ -444,325 +556,21 @@ fn load_member_roster(
     })
 }
 
-fn resolve_doctor_team_dir(
-    runtime: &impl RetainedServiceRuntime,
-    home_dir: &Path,
-    team: &TeamName,
-    findings: &mut Vec<DoctorFinding>,
-) -> Option<PathBuf> {
-    let team_dir = match runtime.team_dir(home_dir, team) {
-        Ok(team_dir) => team_dir,
-        Err(error) => {
-            push_doctor_error(findings, DoctorSeverity::Error, error);
-            return None;
-        }
-    };
-    if !team_dir.is_dir() {
-        findings.push(DoctorFinding {
-            severity: DoctorSeverity::Error,
-            code: AtmErrorCode::TeamNotFound,
-            message: format!(
-                "team directory is missing at {} for '{}'",
-                team_dir.display(),
-                team
-            ),
-            remediation: Some(format!(
-                "Create .claude/teams/{team} or correct ATM_HOME / --team before rerunning `atm doctor`."
-            )),
-        });
-        return None;
-    }
-    Some(team_dir)
-}
-
-fn load_doctor_roster_compare_inputs(
-    runtime: &impl RetainedServiceRuntime,
-    team: &TeamName,
-    team_dir: &Path,
-    findings: &mut Vec<DoctorFinding>,
-) -> Option<(crate::schema::TeamConfig, Option<Vec<RosterEntry>>)> {
-    let team_config = match runtime.load_team_config_for_doctor_compare(team_dir) {
-        Ok(team_config) => team_config,
-        Err(error) => {
-            push_doctor_error(findings, DoctorSeverity::Error, error);
-            return None;
-        }
-    };
-    let atm_roster = match runtime.load_team_roster(team) {
-        Ok(roster) => Some(roster),
-        Err(error) => {
-            push_doctor_error(findings, DoctorSeverity::Error, error);
-            None
-        }
-    };
-    Some((team_config, atm_roster))
-}
-
-fn record_doctor_roster_drift(
-    team: &TeamName,
-    team_config: &crate::schema::TeamConfig,
-    atm_roster: Option<&[RosterEntry]>,
-    findings: &mut Vec<DoctorFinding>,
-) {
-    let present = team_config
-        .members
-        .iter()
-        .map(|member| member.name.clone())
-        .collect::<BTreeSet<_>>();
-    let Some(atm_roster) = atm_roster else {
-        return;
-    };
-    let atm_members = atm_roster
-        .iter()
-        .map(|member| member.agent_name.clone())
-        .collect::<BTreeSet<_>>();
-
-    record_roster_membership_drift(team, &present, &atm_members, findings);
-    record_roster_member_metadata_drift(team, &team_config.members, atm_roster, findings);
-}
-
-fn record_roster_membership_drift(
-    team: &TeamName,
-    config_members: &BTreeSet<AgentName>,
-    roster_members: &BTreeSet<AgentName>,
-    findings: &mut Vec<DoctorFinding>,
-) {
-    for member in roster_members.difference(config_members) {
-        push_missing_config_member_finding(team, member.as_str(), findings);
-    }
-
-    for member in config_members.difference(roster_members) {
-        push_missing_roster_member_finding(team, member.as_str(), findings);
-    }
-}
-
-fn record_roster_member_metadata_drift(
-    team: &TeamName,
-    config_members: &[crate::schema::AgentMember],
-    atm_roster: &[RosterEntry],
-    findings: &mut Vec<DoctorFinding>,
-) {
-    for config_member in config_members {
-        let Some(roster_member) = atm_roster
-            .iter()
-            .find(|member| member.agent_name == config_member.name)
-        else {
-            continue;
-        };
-
-        record_member_metadata_drift(team, config_member, roster_member, findings);
-    }
-}
-
-fn push_missing_config_member_finding(
-    team: &TeamName,
-    member: &str,
-    findings: &mut Vec<DoctorFinding>,
-) {
-    findings.push(DoctorFinding {
-        severity: DoctorSeverity::Warning,
-        code: AtmErrorCode::WarningRosterDrift,
-        message: format!("ATM roster member '{member}' is missing from team config.json for '{team}'"),
-        remediation: Some(format!(
-            "Project the ATM roster back into .claude/teams/{team}/config.json or restore the missing Claude team member before rerunning `atm doctor`."
-        )),
-    });
-}
-
-fn push_missing_roster_member_finding(
-    team: &TeamName,
-    member: &str,
-    findings: &mut Vec<DoctorFinding>,
-) {
-    findings.push(DoctorFinding {
-        severity: DoctorSeverity::Warning,
-        code: AtmErrorCode::WarningRosterDrift,
-        message: format!("Claude team member '{member}' is missing from ATM roster truth for '{team}'"),
-        remediation: Some(format!(
-            "Import the Claude team member into the ATM roster or remove it from .claude/teams/{team}/config.json before rerunning `atm doctor`."
-        )),
-    });
-}
-
-fn record_member_metadata_drift(
-    team: &TeamName,
-    config_member: &crate::schema::AgentMember,
-    roster_member: &RosterEntry,
-    findings: &mut Vec<DoctorFinding>,
-) {
-    if roster_member.recipient_pane_id != config_member.tmux_pane_id {
-        findings.push(DoctorFinding {
-            severity: DoctorSeverity::Warning,
-            code: AtmErrorCode::WarningRosterDrift,
-            message: format!(
-                "member '{}' has pane drift for '{}': ATM roster has {:?}, config.json has {:?}",
-                config_member.name, team, roster_member.recipient_pane_id, config_member.tmux_pane_id
-            ),
-            remediation: Some(format!(
-                "Repair the authoritative pane id with `atm teams update-member {team} {} --pane-id <pane>` and rerun `atm doctor`.",
-                config_member.name
-            )),
-        });
-    }
-
-    let roster_home_dir = roster_member_home_dir(roster_member);
-    let config_home_dir = config_member_home_dir(config_member);
-    if roster_home_dir != config_home_dir {
-        findings.push(DoctorFinding {
-            severity: DoctorSeverity::Warning,
-            code: AtmErrorCode::WarningRosterDrift,
-            message: format!(
-                "member '{}' has home-dir drift for '{}': ATM roster has {:?}, config.json has {:?}",
-                config_member.name, team, roster_home_dir, config_home_dir
-            ),
-            remediation: Some(format!(
-                "Repair the authoritative member home with `atm teams update-member {team} {} --home-dir <path>` and rerun `atm doctor`.",
-                config_member.name
-            )),
-        });
-    }
-}
-
 fn push_doctor_error(
     findings: &mut Vec<DoctorFinding>,
     severity: DoctorSeverity,
     error: crate::error::AtmError,
 ) {
-    let remediation = error.primary_recovery().map(str::to_owned);
+    let remediation = Some(error.message().to_owned());
     findings.push(DoctorFinding {
         severity,
-        code: error.code,
-        message: error.message,
+        code: error.code(),
+        message: error.into_message(),
         remediation,
     });
 }
 
-fn check_inbox_directory(team: &TeamName, inboxes_dir: &Path, findings: &mut Vec<DoctorFinding>) {
-    if !inboxes_dir.is_dir() {
-        findings.push(DoctorFinding {
-            severity: DoctorSeverity::Error,
-            code: AtmErrorCode::MailboxWriteFailed,
-            message: format!(
-                "inbox directory is missing at {} for '{}'",
-                inboxes_dir.display(),
-                team
-            ),
-            remediation: Some(format!(
-                "Create .claude/teams/{team}/inboxes and ensure ATM can write inbox files before rerunning `atm doctor`."
-            )),
-        });
-        return;
-    }
-
-    if let Err(error) = probe_directory_writable(inboxes_dir) {
-        findings.push(DoctorFinding {
-            severity: DoctorSeverity::Error,
-            code: AtmErrorCode::MailboxWriteFailed,
-            message: format!(
-                "inbox directory is not writable at {}: {error}",
-                inboxes_dir.display()
-            ),
-            remediation: Some(
-                "Check inbox directory permissions and ensure ATM can create and remove inbox files before rerunning `atm doctor`."
-                    .to_string(),
-            ),
-        });
-    }
-}
-
-fn check_restore_marker(team: &TeamName, team_dir: &Path, findings: &mut Vec<DoctorFinding>) {
-    let marker = team_dir.join(".restore-in-progress");
-    if !marker.is_file() {
-        return;
-    }
-
-    findings.push(DoctorFinding {
-        severity: DoctorSeverity::Warning,
-        code: AtmErrorCode::WarningRestoreInProgress,
-        message: format!(
-            "stale restore marker is present at {} for '{}'; a prior `atm teams restore` may have been interrupted",
-            marker.display(),
-            team
-        ),
-        remediation: Some(format!(
-            "Inspect {} for partial restore state, rerun `atm teams restore {team}`, then remove the marker once recovery is complete.",
-            team_dir.display()
-        )),
-    });
-}
-
-fn snapshot_mailbox_lock_paths(home_dir: &Path) -> BTreeSet<PathBuf> {
-    let teams_root = home_dir.join(".claude").join("teams");
-    let Ok(team_entries) = fs::read_dir(&teams_root) else {
-        return BTreeSet::new();
-    };
-
-    let mut locks = BTreeSet::new();
-    for team_entry in team_entries.filter_map(Result::ok) {
-        let inboxes_dir = team_entry.path().join("inboxes");
-        let Ok(lock_entries) = fs::read_dir(inboxes_dir) else {
-            continue;
-        };
-        for lock_entry in lock_entries.filter_map(Result::ok) {
-            let path = lock_entry.path();
-            let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
-                continue;
-            };
-            if !(file_name.ends_with(".lock") || file_name.contains(".lock.")) {
-                continue;
-            }
-            if !lock_entry
-                .file_type()
-                .is_ok_and(|file_type| file_type.is_file())
-            {
-                continue;
-            }
-            locks.insert(path);
-        }
-    }
-
-    locks
-}
-
-fn push_stale_mailbox_lock_findings(
-    initial: &BTreeSet<PathBuf>,
-    final_snapshot: &BTreeSet<PathBuf>,
-    findings: &mut Vec<DoctorFinding>,
-) {
-    for path in initial.intersection(final_snapshot) {
-        findings.push(DoctorFinding {
-            severity: DoctorSeverity::Warning,
-            code: AtmErrorCode::WarningStaleMailboxLock,
-            message: format!(
-                "mailbox lock sentinel persisted for the full doctor run at {}; the lock is likely stale",
-                path.display()
-            ),
-            remediation: Some(format!(
-                "Confirm no live ATM process still owns the mailbox, then remove the stale sentinel with `rm -f {}`.",
-                path.display()
-            )),
-        });
-    }
-}
-
-fn probe_directory_writable(directory: &Path) -> Result<(), std::io::Error> {
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    let probe_path = directory.join(format!(
-        ".atm-doctor-write-probe-{}-{nonce}",
-        std::process::id()
-    ));
-    let file = OpenOptions::new()
-        .create_new(true)
-        .write(true)
-        .open(&probe_path)?;
-    drop(file);
-    fs::remove_file(&probe_path)?;
-    Ok(())
-}
-
+#[cfg(test)]
 fn ordered_member_summaries(
     members: &[AgentMember],
     baseline: &[TeamName],
@@ -803,6 +611,7 @@ fn ordered_member_summaries(
     ordered
 }
 
+#[cfg(test)]
 fn member_summary(
     member: &AgentMember,
     caller_identity: Option<&AgentName>,
@@ -812,6 +621,7 @@ fn member_summary(
         name: AgentName::from_validated(member.name.clone()),
         agent_id: member.agent_id.to_string(),
         agent_type: member.agent_type.to_string(),
+        harness: crate::boundary::RosterHarness::ClaudeCode,
         model: member.model.clone(),
         joined_at: member.joined_at,
         tmux_pane_id: member.tmux_pane_id.clone(),
@@ -826,20 +636,12 @@ fn member_summary(
     }
 }
 
-fn roster_member_home_dir(member: &RosterEntry) -> Option<HomeDirPath> {
-    canonical_home_dir(&member.metadata_json)
-}
-
-fn config_member_home_dir(member: &AgentMember) -> Option<HomeDirPath> {
-    (!member.home_dir.is_empty()).then(|| member.home_dir.clone())
-}
-
 #[cfg(test)]
 mod tests {
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
 
-    use super::ordered_member_summaries;
+    use super::{ordered_member_summaries, peer_config_doctor_report};
     use crate::config::AtmConfig;
     use crate::config::types::{HookRecipient, PostSendHookRule};
     use crate::doctor::{
@@ -857,6 +659,10 @@ mod tests {
     use crate::team_admin::MembersList;
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, TeamName};
+    use atm_storage::{
+        CertificateFingerprint, HostName, HttpsInterface, LocalCertificate, PeerConfigStore,
+        PrivateKeyRef, TrustedPeer,
+    };
 
     enum StubHealth {
         Ok(AtmObservabilityHealth),
@@ -885,11 +691,7 @@ mod tests {
         fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
             match &self.health {
                 StubHealth::Ok(health) => Ok(health.clone()),
-                StubHealth::Err(error) => Err(AtmError::new_with_code(
-                    error.code,
-                    error.kind,
-                    error.message.clone(),
-                )),
+                StubHealth::Err(error) => Err(error.clone()),
             }
         }
     }
@@ -900,12 +702,100 @@ mod tests {
     }
     struct NoopNudgeTemplateOverrideStore;
 
+    impl atm_storage::contract::sealed::Sealed for UnusedMailStore {}
+    impl atm_storage::contract::sealed::Sealed for TestRosterStore {}
+
+    struct StubPeerConfigStore {
+        failure: Option<AtmError>,
+    }
+
+    impl atm_storage::contract::sealed::Sealed for StubPeerConfigStore {}
+
+    impl StubPeerConfigStore {
+        fn healthy() -> Self {
+            Self { failure: None }
+        }
+
+        fn failing(error: AtmError) -> Self {
+            Self {
+                failure: Some(error),
+            }
+        }
+
+        fn result<T>(&self, value: T) -> Result<T, AtmError> {
+            self.failure.clone().map_or(Ok(value), Err)
+        }
+    }
+
+    impl PeerConfigStore for StubPeerConfigStore {
+        fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, AtmError> {
+            self.result(vec![HttpsInterface {
+                bind_addr: "127.0.0.1:43101".parse().expect("socket address"),
+                advertise_host: "localhost".parse().expect("host name"),
+                enabled: true,
+            }])
+        }
+
+        fn save_interface(&self, _interface: &HttpsInterface) -> Result<(), AtmError> {
+            unreachable!("doctor test never mutates peer configuration")
+        }
+
+        fn remove_interface(&self, _bind_addr: std::net::SocketAddr) -> Result<bool, AtmError> {
+            unreachable!("doctor test never mutates peer configuration")
+        }
+
+        fn local_certificate(&self) -> Result<Option<LocalCertificate>, AtmError> {
+            self.result(Some(LocalCertificate {
+                fingerprint: "sha256:local"
+                    .parse::<CertificateFingerprint>()
+                    .expect("fingerprint"),
+                private_key_ref: "keychain:secret"
+                    .parse::<PrivateKeyRef>()
+                    .expect("key reference"),
+            }))
+        }
+
+        fn save_local_certificate(&self, _certificate: &LocalCertificate) -> Result<(), AtmError> {
+            unreachable!("doctor test never mutates peer configuration")
+        }
+
+        fn list_trusted_peers(&self) -> Result<Vec<TrustedPeer>, AtmError> {
+            self.result(vec![TrustedPeer {
+                host: "peer.example".parse::<HostName>().expect("host name"),
+                fingerprint: "sha256:peer"
+                    .parse::<CertificateFingerprint>()
+                    .expect("fingerprint"),
+                enabled: true,
+                https_port: std::num::NonZeroU16::new(43101).expect("non-zero port"),
+            }])
+        }
+
+        fn trusted_peer(&self, _host: &HostName) -> Result<Option<TrustedPeer>, AtmError> {
+            unreachable!("doctor test never reads an individual peer")
+        }
+
+        fn save_trusted_peer(&self, _peer: &TrustedPeer) -> Result<(), AtmError> {
+            unreachable!("doctor test never mutates peer configuration")
+        }
+
+        fn remove_trusted_peer(&self, _host: &HostName) -> Result<bool, AtmError> {
+            unreachable!("doctor test never mutates peer configuration")
+        }
+    }
+
     #[allow(
         deprecated,
         reason = "doctor tests intentionally exercise the transitional shared storage traits"
     )]
     impl atm_storage::MessageStore for UnusedMailStore {
         fn save_message(&self, _message: &atm_storage::Message) -> Result<(), AtmError> {
+            unreachable!("doctor tests do not touch the mail store boundary")
+        }
+
+        fn save_messages_atomically(
+            &self,
+            _messages: &[atm_storage::Message],
+        ) -> Result<(), AtmError> {
             unreachable!("doctor tests do not touch the mail store boundary")
         }
 
@@ -1021,6 +911,7 @@ mod tests {
                 name: TEST_SENDER.parse().expect("member"),
                 agent_id: TEST_SENDER.to_string(),
                 agent_type: "general".to_string(),
+                harness: crate::boundary::RosterHarness::ClaudeCode,
                 model: Default::default(),
                 joined_at: None,
                 tmux_pane_id: None,
@@ -1140,6 +1031,7 @@ mod tests {
             home_dir: paths.home_dir.clone(),
             current_dir: paths.current_dir.clone(),
             team_override: Some(TEST_TEAM.parse().expect("team")),
+            ..DoctorQuery::default()
         }
     }
 
@@ -1177,6 +1069,7 @@ mod tests {
                 home_dir: paths.home_dir.clone(),
                 current_dir: paths.current_dir.clone(),
                 team_override: Some(crate::types::TeamName::from_validated("../evil")),
+                ..DoctorQuery::default()
             },
             &StubObservability {
                 health: StubHealth::Ok(AtmObservabilityHealth {
@@ -1191,7 +1084,6 @@ mod tests {
         )
         .expect("doctor report");
 
-        assert!(report.member_roster.is_none());
         assert!(
             report
                 .findings
@@ -1326,7 +1218,7 @@ mod tests {
     }
 
     #[test]
-    fn run_doctor_reports_missing_team_directory_as_error() {
+    fn run_doctor_ignores_missing_team_directory_without_roster_truth_error() {
         let paths = TestPaths::new();
         let report = run_doctor(
             &paths,
@@ -1344,18 +1236,18 @@ mod tests {
         )
         .expect("doctor report");
 
-        assert_eq!(report.summary.status, DoctorStatus::Error);
+        assert_eq!(report.summary.status, DoctorStatus::Healthy);
         assert!(
             report
                 .findings
                 .iter()
-                .any(|finding| finding.code == AtmErrorCode::TeamNotFound),
+                .all(|finding| finding.code != AtmErrorCode::TeamNotFound),
             "{report:#?}"
         );
     }
 
     #[test]
-    fn run_doctor_reports_team_config_parse_failure_as_error() {
+    fn run_doctor_ignores_team_config_parse_failure() {
         let paths = TestPaths::new();
         paths.write_raw_team_config("{\"members\":");
         let report = run_doctor(
@@ -1374,18 +1266,18 @@ mod tests {
         )
         .expect("doctor report");
 
-        assert_eq!(report.summary.status, DoctorStatus::Error);
+        assert_eq!(report.summary.status, DoctorStatus::Healthy);
         assert!(
             report
                 .findings
                 .iter()
-                .any(|finding| finding.code == AtmErrorCode::ConfigTeamParseFailed),
+                .all(|finding| finding.code != AtmErrorCode::ConfigTeamParseFailed),
             "{report:#?}"
         );
     }
 
     #[test]
-    fn run_doctor_reports_missing_inboxes_directory_as_error() {
+    fn run_doctor_ignores_missing_inboxes_directory() {
         let paths = TestPaths::new();
         paths.write_raw_team_config(&format!(r#"{{"members":[{{"name":"{TEST_SENDER}"}}]}}"#));
         let report = run_doctor(
@@ -1404,18 +1296,18 @@ mod tests {
         )
         .expect("doctor report");
 
-        assert_eq!(report.summary.status, DoctorStatus::Error);
+        assert_eq!(report.summary.status, DoctorStatus::Healthy);
         assert!(
             report
                 .findings
                 .iter()
-                .any(|finding| finding.code == AtmErrorCode::MailboxWriteFailed),
+                .all(|finding| finding.code != AtmErrorCode::MailboxWriteFailed),
             "{report:#?}"
         );
     }
 
     #[test]
-    fn run_doctor_reports_atm_roster_and_claude_roster_drift_as_warning() {
+    fn run_doctor_uses_atm_roster_without_claude_roster_drift_checks() {
         let paths = TestPaths::new();
         paths.write_team_layout(&[TEST_SENDER]);
         let runtime = test_runtime_with_roster(&[TEST_SENDER, ROLE_TEAM_LEAD]);
@@ -1435,21 +1327,20 @@ mod tests {
         )
         .expect("doctor report");
 
-        assert_eq!(report.summary.status, DoctorStatus::Warning);
+        assert_eq!(report.summary.status, DoctorStatus::Healthy);
         assert!(
-            report.findings.iter().any(|finding| {
-                finding.code == AtmErrorCode::WarningRosterDrift
-                    && finding.message.contains(&format!(
-                        "ATM roster member '{}' is missing from team config.json",
-                        ROLE_TEAM_LEAD
-                    ))
-            }),
+            report
+                .findings
+                .iter()
+                .all(|finding| finding.code != AtmErrorCode::WarningRosterDrift),
             "{report:#?}"
         );
+        let member_roster = report.member_roster.expect("member roster");
+        assert_eq!(member_roster.members.len(), 2);
     }
 
     #[test]
-    fn run_doctor_reports_pane_and_home_dir_drift_from_roster_truth() {
+    fn run_doctor_reports_member_metadata_from_roster_truth() {
         let paths = TestPaths::new();
         paths.write_team_layout(&[TEST_SENDER]);
         paths.write_raw_team_config(&format!(
@@ -1494,19 +1385,19 @@ mod tests {
         )
         .expect("doctor report");
 
-        assert_eq!(report.summary.status, DoctorStatus::Warning);
+        assert_eq!(report.summary.status, DoctorStatus::Healthy);
         assert!(
             report
                 .findings
                 .iter()
-                .any(|finding| finding.message.contains("pane drift")),
+                .all(|finding| !finding.message.contains("pane drift")),
             "{report:#?}"
         );
         assert!(
             report
                 .findings
                 .iter()
-                .any(|finding| finding.message.contains("home-dir drift")),
+                .all(|finding| !finding.message.contains("home-dir drift")),
             "{report:#?}"
         );
         let member_roster = report.member_roster.expect("member roster");
@@ -1540,7 +1431,7 @@ mod tests {
     }
 
     #[test]
-    fn run_doctor_reports_stale_mailbox_lock_as_warning() {
+    fn run_doctor_ignores_stale_mailbox_lock_scan() {
         let paths = TestPaths::new();
         paths.write_team_layout(&[TEST_SENDER]);
         let stale_lock = paths
@@ -1564,13 +1455,128 @@ mod tests {
         )
         .expect("doctor report");
 
-        assert_eq!(report.summary.status, DoctorStatus::Warning);
+        assert_eq!(report.summary.status, DoctorStatus::Healthy);
         assert!(
-            report.findings.iter().any(|finding| {
-                finding.code == AtmErrorCode::WarningStaleMailboxLock
-                    && finding.message.contains(&stale_lock.display().to_string())
-            }),
+            report
+                .findings
+                .iter()
+                .all(|finding| finding.code != AtmErrorCode::WarningStaleMailboxLock),
             "{report:#?}"
+        );
+    }
+
+    fn healthy_observability(paths: &TestPaths) -> StubObservability {
+        StubObservability {
+            health: StubHealth::Ok(AtmObservabilityHealth {
+                active_log_path: Some(paths.active_log_path.clone()),
+                logging_state: AtmObservabilityHealthState::Healthy,
+                query_state: Some(AtmObservabilityHealthState::Healthy),
+                maintenance: None,
+                diagnostic: None,
+                detail: None,
+            }),
+        }
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn client_context_reflects_caller_not_ambient_environment() {
+        let paths = TestPaths::new();
+        paths.write_team_layout(&[TEST_SENDER]);
+        // Ambient process env stands in for the long-lived daemon's frozen
+        // launch-time identity; the caller's threaded values must win.
+        let _env = crate::test_support::EnvGuard::set_many([
+            ("ATM_TEAM", Some("daemon-launch-team")),
+            ("ATM_IDENTITY", Some("daemon-launch-identity")),
+        ]);
+        let query = DoctorQuery {
+            home_dir: paths.home_dir.clone(),
+            current_dir: paths.current_dir.clone(),
+            team_override: None,
+            caller_team: Some(TEST_TEAM.parse().expect("team")),
+            caller_identity: Some(TEST_SENDER.parse().expect("identity")),
+        };
+
+        let report =
+            run_doctor(&paths, query, &healthy_observability(&paths)).expect("doctor report");
+
+        assert_eq!(
+            report.client_context.team.as_ref().map(TeamName::as_str),
+            Some(TEST_TEAM)
+        );
+        assert_eq!(
+            report
+                .client_context
+                .identity
+                .as_ref()
+                .map(AgentName::as_str),
+            Some(TEST_SENDER)
+        );
+        assert_eq!(
+            report.environment.atm_team.as_ref().map(TeamName::as_str),
+            Some(TEST_TEAM)
+        );
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn team_override_is_reflected_in_client_context() {
+        let paths = TestPaths::new();
+        paths.write_team_layout(&[TEST_SENDER]);
+        let _env =
+            crate::test_support::EnvGuard::set_many([("ATM_TEAM", None), ("ATM_IDENTITY", None)]);
+        let override_team = format!("{TEST_TEAM}-override");
+        let query = DoctorQuery {
+            home_dir: paths.home_dir.clone(),
+            current_dir: paths.current_dir.clone(),
+            team_override: Some(override_team.parse().expect("team override")),
+            caller_team: Some(TEST_TEAM.parse().expect("team")),
+            caller_identity: Some(TEST_SENDER.parse().expect("identity")),
+        };
+
+        let report =
+            run_doctor(&paths, query, &healthy_observability(&paths)).expect("doctor report");
+
+        assert_eq!(
+            report.client_context.team.as_ref().map(TeamName::as_str),
+            Some(override_team.as_str())
+        );
+    }
+
+    #[test]
+    fn peer_config_doctor_projection_redacts_private_key_reference_from_store() {
+        let (report, findings) = peer_config_doctor_report(&StubPeerConfigStore::healthy());
+
+        assert!(findings.is_empty());
+        assert_eq!(report.configured_interface_count, 1);
+        assert_eq!(report.enabled_interface_count, 1);
+        assert_eq!(report.trusted_peer_count, 1);
+        assert_eq!(report.enabled_trusted_peer_count, 1);
+        assert_eq!(
+            report.certificate_fingerprint.as_deref(),
+            Some("sha256:local")
+        );
+        assert!(report.validation_failure.is_none());
+
+        let serialized = serde_json::to_string(&report).expect("serialize doctor projection");
+        assert!(!serialized.contains("keychain:secret"));
+        assert!(!serialized.contains("private_key_ref"));
+    }
+
+    #[test]
+    fn peer_config_doctor_projects_configuration_failure_without_aborting() {
+        let (report, findings) = peer_config_doctor_report(&StubPeerConfigStore::failing(
+            AtmError::peer_config_validation("missing certificate reference"),
+        ));
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].code, AtmErrorCode::PeerConfigValidationFailed);
+        assert_eq!(
+            report
+                .validation_failure
+                .as_ref()
+                .map(|finding| finding.code),
+            Some(AtmErrorCode::PeerConfigValidationFailed)
         );
     }
 }

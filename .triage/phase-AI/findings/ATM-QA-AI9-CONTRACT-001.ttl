@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-AI9-CONTRACT-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AI9-CONTRACT-001" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T21:00:00Z"^^xsd:dateTime ;
+  triage:title "AI.9 sprint doc names PostWriteRouter type that does not exist; actual mechanism is DaemonRequestDispatcher::dispatch" ;
+  triage:description "quality-mgr's AI9-QA-1 verdict (PR #604 @ 7cf40edd, feature/pAI-s9-https-peer-transport) reports a contract-fidelity gap: the sprint doc (docs/plans/phase-ai/sprint-ai-9.md) names a `PostWriteRouter` type that doesn't exist in the workspace. The actual mechanism is `DaemonRequestDispatcher::dispatch` in runtime_health.rs (lines 558-568), which examines write.to.host and routes to dispatch_peer_write or dispatch_local. This echoes the same MessageWriter/PostWriteRouter naming gap already known from AI.6/AI.7 (see ATM-QA-AI6-DELIVERABLE-8 and the AI.7 FAIL 2/17 finding referencing the same missing types). Both AI.9 and AI.10 sprint docs inherit this reference from the shared AI.9 deliverable text." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AI9-CONTRACT-001/pAI-s9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AI9-CONTRACT-001/pAI-s10/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s9/7cf40edd> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s10/d461c936> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s10/d461c936> ;
+  triage:highestOpenBranch "feature/pAI-s10-crosshost-proof-closeout" ;
+  triage:highestFixedBranch "none" ;
+  triage:triagedAt "2026-07-20T21:00:00Z"^^xsd:dateTime ;
+  triage:notes "FIXED: option (1) selected -- workspace-wide grep confirmed zero .rs files reference the literal 'PostWriteRouter' name (no type-level identity dependency), so renaming the doc text is code-safe. docs/plans/phase-ai/sprint-ai-9.md line 52 renamed 'PostWriteRouter' -> 'DaemonRequestDispatcher::dispatch' (the real mechanism, crates/atm-daemon/src/runtime_health.rs:558-568) on plan/phase-ai-planning @ 749bf621. Scoped strictly to AI.9's own doc line; the same pattern in sprint-ai-6.md/sprint-ai-7.md is out of scope, tracked by their own findings. Will propagate via merge-forward." .
+
+<urn:atm:triage:occurrence/ATM-QA-AI9-CONTRACT-001/pAI-s9/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-9.md" ;
+  triage:line 18 ;
+  triage:snippet "Make the post-write router the sole destination-host decision point" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s9-https-peer-transport" ;
+  triage:headSha "7cf40edd" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s9/7cf40edd> .
+
+<urn:atm:triage:occurrence/ATM-QA-AI9-CONTRACT-001/pAI-s10/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-9.md" ;
+  triage:line 52 ;
+  triage:snippet "outbound delivery is selected only by `PostWriteRouter`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s10-crosshost-proof-closeout" ;
+  triage:headSha "d461c936" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s10/d461c936> .
+
+<urn:atm:triage:worktree/pAI-s9/7cf40edd>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s9-https-peer-transport" ;
+  triage:path "feature/pAI-s9-https-peer-transport" ;
+  triage:headSha "7cf40edd" ;
+  triage:orderIndex 9 ;
+  triage:prNumber 604 ;
+  triage:targetBranch "integrate/phase-AI" .
+
+<urn:atm:triage:worktree/pAI-s10/d461c936>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s10-crosshost-proof-closeout" ;
+  triage:path "feature/pAI-s10-crosshost-proof-closeout" ;
+  triage:headSha "d461c936" ;
+  triage:orderIndex 10 ;
+  triage:targetBranch "integrate/phase-AI" .

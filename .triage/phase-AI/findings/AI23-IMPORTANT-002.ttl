@@ -1,0 +1,174 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI23-IMPORTANT-002>
+  a triage:Finding ;
+  triage:findingId "AI23-IMPORTANT-002" ;
+  triage:foundAt "2026-07-25T06:25:35Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S3 ;
+  triage:title "Peer HTTPS listener spawns unbounded per-connection threads with no concurrency cap or handle reaping" ;
+  triage:description "crates/atm-daemon/src/https_transport.rs accept_loop (around line 339-402) spawns a new OS thread per accepted TCP connection via spawn_request_worker with no concurrency limit, unlike the local loopback listener in the same crate (local_tcp_transport.rs) which enforces MAX_CONCURRENT_CONNECTIONS = 64. Resulting JoinHandles accumulate in HttpsListenerSet.requests: Arc<Mutex<Vec<JoinHandle<()>>>> and are only drained at full listener shutdown -- nothing reaps completed handles during normal uptime. This listener is untrusted-by-default per ADR-034 (peer authentication happens inside the spawned worker, after accept), so a remote peer can open connections faster than they complete, growing live thread count and the tracking Vec unboundedly for the life of the process." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:category "RSH" ;
+  triage:severity "important" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-24T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T22:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently re-verified against PR #642 real current head 4315ad0a (not accepted from arch-ctm self-report). Root cause of the ubuntu-latest CI regression documented in the prior closureNote (accept_loop treating shutdown's own local wake-up connection as real peer work, consuming the bounded shutdown join window) was fixed at 569ccb47: accept_loop now calls peer_connection_admission(stop, active_connections) and takes PeerConnectionAdmission::Stop before ever spawning a worker for a post-shutdown accept -- read the diff directly, this is a real production-code change, not a test-only suppression. 4315ad0a then removed the two real-socket/wall-clock tests that were flaky on ubuntu-latest (shutdown_bounds_an_incomplete_peer_handshake, shutdown_joins_an_incomplete_peer_request_within_its_deadline) and replaced them with peer_connection_admission_is_deterministic_for_shutdown_and_capacity, a pure unit test asserting the Stop/CapacityExceeded/Admit decision table exhaustively. This directly and deterministically covers the mechanism that caused the regression. NOTED GAP (not blocking): no remaining test asserts, via a real socket and wall-clock, that HttpsListenerSet::shutdown() actually joins a genuinely incomplete external connection within its deadline end-to-end -- that integration-level timing assertion was dropped along with the flaky tests, and only the pure admission-decision logic is now covered. gh pr checks 642 at real head 4315ad0a: 8/8 legs pass (verified directly, not from any prior claim)." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-002/AI23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-002/AI24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-002/AI26/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-002/s27/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-002/s27-fixed-5a528661> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-002/s27-fixed-4315ad0a> ;
+  triage:fixedOn <urn:atm:triage:worktree/s27/4315ad0a> ;
+  triage:promoteTo <urn:atm:triage:worktree/s27/4315ad0a> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-002/AI23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 348 ;
+  triage:snippet "spawn_request_worker(stream, &security, &router, &requests)" ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch AI.23 superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
+  triage:branch "AI.23" ;
+  triage:headSha "b88ca016" ;
+  triage:occursIn <urn:atm:triage:worktree/AI23/b88ca016> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-002/AI23/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 384 ;
+  triage:snippet "std::thread::Builder::new().name(\"atm-peer-http-request\".to_string()).spawn({...})" ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch AI.23 superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
+  triage:branch "AI.23" ;
+  triage:headSha "b88ca016" ;
+  triage:occursIn <urn:atm:triage:worktree/AI23/b88ca016> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-002/AI24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 270 ;
+  triage:snippet "spawn_request_worker(stream, &config, &router, &requests, &peer_verifier)" ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch AI.24 superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
+  triage:branch "AI.24" ;
+  triage:headSha "fc9832b3" ;
+  triage:occursIn <urn:atm:triage:worktree/AI24/fc9832b3> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-002/AI24/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 306 ;
+  triage:snippet "std::thread::Builder::new().name(\"atm-https-peer-request\".to_string()).spawn({...})" ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch AI.24 superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
+  triage:branch "AI.24" ;
+  triage:headSha "fc9832b3" ;
+  triage:occursIn <urn:atm:triage:worktree/AI24/fc9832b3> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-002/AI26/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 270 ;
+  triage:snippet "spawn_request_worker(stream, &config, &router, &requests, &peer_verifier)" ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch AI.26 superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
+  triage:branch "AI.26" ;
+  triage:headSha "b5eec1bf" ;
+  triage:occursIn <urn:atm:triage:worktree/AI26/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-002/AI26/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 306 ;
+  triage:snippet "std::thread::Builder::new().name(\"atm-https-peer-request\".to_string()).spawn({...})" ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch AI.26 superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
+  triage:branch "AI.26" ;
+  triage:headSha "b5eec1bf" ;
+  triage:occursIn <urn:atm:triage:worktree/AI26/b5eec1bf> .
+
+# 2026-07-26 (quality-mgr, stale branch reconciliation): consolidated open occurrence from superseded branches onto s27.
+<urn:atm:triage:occurrence/AI23-IMPORTANT-002/s27/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 398 ;
+  triage:snippet "std::thread::Builder::new().name(\"atm-peer-http-request\".to_string()).spawn({...})" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "35cb19f8" ;
+  triage:note "Consolidated from superseded branches AI.23/AI.24/AI.26. The unbounded thread spawning in the peer listener's accept_loop (spawn_request_worker at line 398) persists on s27: no concurrency limit, JoinHandles accumulate in Arc<Mutex<Vec<...>>> until full listener shutdown." ;
+  triage:occursIn <urn:atm:triage:worktree/s27/35cb19f8> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-002/s27-fixed-5a528661>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 356 ;
+  triage:snippet "if requests.active_connections() >= MAX_PEER_HTTP_CONNECTIONS { ...continue; } spawn_request_worker(stream, &security, &router, &requests);" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "5a528661" ;
+  triage:note "Independently re-run: cargo test -p atm-daemon --lib https_transport:: (13 pass) and active_connection_registry:: (3 pass)." ;
+  triage:occursIn <urn:atm:triage:worktree/s27/5a528661> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-002/s27-fixed-4315ad0a>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 355 ;
+  triage:snippet "match peer_connection_admission(stop.load(Ordering::SeqCst), requests.active_connections()) { PeerConnectionAdmission::Stop => break, ... }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "4315ad0a" ;
+  triage:note "Independently verified: read 569ccb47 and 4315ad0a diffs directly, not accepted from arch-ctm description. 569ccb47 is a real production fix (accept_loop no longer treats shutdown's own wake-up connection as peer work). 4315ad0a replaces two ubuntu-flaky real-socket/timing tests with a deterministic unit test of the same decision logic. gh pr checks 642 confirms 8/8 legs pass at this exact head. Gap noted in finding-level closureNote: no remaining real-socket/timing integration test of shutdown's join-within-deadline behavior for a genuinely incomplete connection." ;
+  triage:occursIn <urn:atm:triage:worktree/s27/4315ad0a> .
+
+<urn:atm:triage:worktree/s27/4315ad0a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "4315ad0a" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/AI23/b88ca016>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AI.23" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b88ca016" ;
+  triage:orderIndex 23 .
+
+<urn:atm:triage:worktree/AI24/fc9832b3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AI.24" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "fc9832b3" ;
+  triage:orderIndex 24 .
+
+<urn:atm:triage:worktree/AI26/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AI.26" ;
+  triage:path "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 26 .
+
+<urn:atm:triage:worktree/s27/35cb19f8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "35cb19f8" ;
+  triage:orderIndex 7 .

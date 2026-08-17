@@ -1,0 +1,195 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI15-QA1-BLOCKING-01-GRAFT-WINDOWS-LOCAL-SOCKET>
+  a triage:Finding ;
+  triage:findingId "AI15-QA1-BLOCKING-01-GRAFT-WINDOWS-LOCAL-SOCKET" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:title "Unconditional interprocess::local_socket usage in atm-graft (Windows incompatible)" ;
+  triage:description "crates/atm-graft/src/runtime.rs imports and uses interprocess::local_socket unconditionally (no #[cfg(not(windows))] gate) at bind_graft_receiver_listener (~line 643) and wake_graft_receiver_listener (~line 509), lines 20-23 for the import. This directly contradicts AI.11's stated closure criterion ('no Windows named-pipe or AF_UNIX local transport support') and is the same defect family as AI.11 QA-5's RBQA-F001 and AI.14's RBQA-F001 — confirmed independently by req-qa, arch-qa, and ruthless-boundary-qa (critical) on AI.15. Recommended fix shape: migrate to the same loopback-TCP local transport atm-daemon already uses on Windows (local_tcp_transport.rs) instead of a graft-private socket implementation." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AI15" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI15-QA1-BLOCKING-01-GRAFT-WINDOWS-LOCAL-SOCKET/11/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI15-QA1-BLOCKING-01-GRAFT-WINDOWS-LOCAL-SOCKET/11/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI15-QA1-BLOCKING-01-GRAFT-WINDOWS-LOCAL-SOCKET/12/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI15-QA1-BLOCKING-01-GRAFT-WINDOWS-LOCAL-SOCKET/12/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI15-QA1-BLOCKING-01-GRAFT-WINDOWS-LOCAL-SOCKET/13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI15-QA1-BLOCKING-01-GRAFT-WINDOWS-LOCAL-SOCKET/13/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI15-QA1-BLOCKING-01-GRAFT-WINDOWS-LOCAL-SOCKET/14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI15-QA1-BLOCKING-01-GRAFT-WINDOWS-LOCAL-SOCKET/14/2> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAI-s11/1205695651>, <urn:atm:triage:worktree/pAI-s12/b6466aa17d>, <urn:atm:triage:worktree/pAI-s13/aecade2a23>, <urn:atm:triage:worktree/pAI-s14/35e30fd6f1>, <urn:atm:triage:worktree/pAI-s15/56c08886> ;
+  triage:highestFixedBranch "feature/pAI-s15-windows-peer-smoke" .
+
+<urn:atm:triage:occurrence/AI15-QA1-BLOCKING-01-GRAFT-WINDOWS-LOCAL-SOCKET/11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 20 ;
+  triage:snippet "use interprocess::local_socket::prelude::*;" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- grep confirms crates/atm-graft/src/runtime.rs contains no interprocess::local_socket import; unconditional Windows local_socket usage has been removed. Stale occurrence from superseded branch feature/pAI-s11-post-merge-remediation; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "120569565107f958e00ac6d3a7bffa7927f13ae5" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s11/1205695651> .
+
+<urn:atm:triage:occurrence/AI15-QA1-BLOCKING-01-GRAFT-WINDOWS-LOCAL-SOCKET/11/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 643 ;
+  triage:snippet "fn bind_graft_receiver_listener(endpoint_path: &Path) -> Result<LocalSocketListener, AtmError>" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- grep confirms fn bind_graft_receiver_listener no longer exists in crates/atm-graft/src/runtime.rs; Windows-incompatible local_socket transport has been removed. Stale occurrence from superseded branch feature/pAI-s11-post-merge-remediation; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "120569565107f958e00ac6d3a7bffa7927f13ae5" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s11/1205695651> .
+
+<urn:atm:triage:occurrence/AI15-QA1-BLOCKING-01-GRAFT-WINDOWS-LOCAL-SOCKET/12/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 20 ;
+  triage:snippet "use interprocess::local_socket::prelude::*;" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- grep confirms crates/atm-graft/src/runtime.rs contains no interprocess::local_socket import; unconditional Windows local_socket usage has been removed. Stale occurrence from superseded branch feature/pAI-s12-post-write-router; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:headSha "b6466aa17d9564b104d292485e26dd7614b65cb4" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s12/b6466aa17d> .
+
+<urn:atm:triage:occurrence/AI15-QA1-BLOCKING-01-GRAFT-WINDOWS-LOCAL-SOCKET/12/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 643 ;
+  triage:snippet "fn bind_graft_receiver_listener(endpoint_path: &Path) -> Result<LocalSocketListener, AtmError>" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- grep confirms fn bind_graft_receiver_listener no longer exists in crates/atm-graft/src/runtime.rs; Windows-incompatible local_socket transport has been removed. Stale occurrence from superseded branch feature/pAI-s12-post-write-router; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:headSha "b6466aa17d9564b104d292485e26dd7614b65cb4" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s12/b6466aa17d> .
+
+<urn:atm:triage:occurrence/AI15-QA1-BLOCKING-01-GRAFT-WINDOWS-LOCAL-SOCKET/13/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 20 ;
+  triage:snippet "use interprocess::local_socket::prelude::*;" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- grep confirms crates/atm-graft/src/runtime.rs contains no interprocess::local_socket import; unconditional Windows local_socket usage has been removed. Stale occurrence from superseded branch feature/pAI-s13-peer-smoke-contract; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "aecade2a23b264bb26afc3c941974aea2627e4ae" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s13/aecade2a23> .
+
+<urn:atm:triage:occurrence/AI15-QA1-BLOCKING-01-GRAFT-WINDOWS-LOCAL-SOCKET/13/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 643 ;
+  triage:snippet "fn bind_graft_receiver_listener(endpoint_path: &Path) -> Result<LocalSocketListener, AtmError>" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- grep confirms fn bind_graft_receiver_listener no longer exists in crates/atm-graft/src/runtime.rs; Windows-incompatible local_socket transport has been removed. Stale occurrence from superseded branch feature/pAI-s13-peer-smoke-contract; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "aecade2a23b264bb26afc3c941974aea2627e4ae" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s13/aecade2a23> .
+
+<urn:atm:triage:occurrence/AI15-QA1-BLOCKING-01-GRAFT-WINDOWS-LOCAL-SOCKET/14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 20 ;
+  triage:snippet "use interprocess::local_socket::prelude::*;" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- grep confirms crates/atm-graft/src/runtime.rs contains no interprocess::local_socket import; unconditional Windows local_socket usage has been removed. Stale occurrence from superseded branch feature/pAI-s14-mac-peer-smoke; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "35e30fd6f1405bde0a988ece0acb524987092926" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s14/35e30fd6f1> .
+
+<urn:atm:triage:occurrence/AI15-QA1-BLOCKING-01-GRAFT-WINDOWS-LOCAL-SOCKET/14/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 643 ;
+  triage:snippet "fn bind_graft_receiver_listener(endpoint_path: &Path) -> Result<LocalSocketListener, AtmError>" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- grep confirms fn bind_graft_receiver_listener no longer exists in crates/atm-graft/src/runtime.rs; Windows-incompatible local_socket transport has been removed. Stale occurrence from superseded branch feature/pAI-s14-mac-peer-smoke; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "35e30fd6f1405bde0a988ece0acb524987092926" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s14/35e30fd6f1> .
+
+<urn:atm:triage:worktree/pAI-s11/1205695651>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "120569565107f958e00ac6d3a7bffa7927f13ae5" ;
+  triage:orderIndex 11 .
+
+<urn:atm:triage:worktree/pAI-s12/b6466aa17d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
+  triage:headSha "b6466aa17d9564b104d292485e26dd7614b65cb4" ;
+  triage:orderIndex 12 .
+
+<urn:atm:triage:worktree/pAI-s13/aecade2a23>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "aecade2a23b264bb26afc3c941974aea2627e4ae" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/pAI-s14/35e30fd6f1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "35e30fd6f1405bde0a988ece0acb524987092926" ;
+  triage:orderIndex 14 .
+
+<urn:atm:triage:worktree/pAI-s15/56c08886>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "56c088866cb42adecc2270035e273df660f8c3db" ;
+  triage:orderIndex 15 .
+
+<urn:atm:triage:worktree/pAI-s16/5a35a6cd>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "5a35a6cd06403a218de594a87ea4d2f2db9e2be7" ;
+  triage:orderIndex 16 .
+
+<urn:atm:triage:worktree/pAI-s17/32407754>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "324077541b47567f6ffe2f7521ebcab75890b7db" ;
+  triage:orderIndex 17 .
+
+<urn:atm:triage:worktree/pAI-s18/02aff5ca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:path "feature/pAI-s18-graft-python-bindings" ;
+  triage:headSha "02aff5caf2b2dfa4609073b1d97a7bff6f8a73fd" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/pAI-s19/1bd8e54d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:path "feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "1bd8e54d3d78c51a89914127b402a94e2106e444" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/pAI-s20/82fb2441>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "82fb2441e590debf4630cf918c79e33f6bb2b38e" ;
+  triage:orderIndex 20 .

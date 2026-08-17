@@ -19,6 +19,26 @@ class ReleaseHomebrewWorkflowTests(unittest.TestCase):
         self.assertIn("--formula homebrew-tap/Formula/agent-team-mail.rb \\", text)
         self.assertIn("--formula homebrew-tap/Formula/atm.rb", text)
 
+    def test_stable_release_selects_only_stable_formulas(self) -> None:
+        text = WORKFLOW.read_text(encoding="utf-8")
+        stable_update = text[text.index("- name: Update stable Homebrew formulas") : text.index(
+            "- name: Update opt-in Homebrew prerelease formula", text.index("- name: Update stable Homebrew formulas")
+        )]
+        self.assertIn("outputs.prerelease == 'false'", stable_update)
+        self.assertIn("--formula homebrew-tap/Formula/agent-team-mail.rb", stable_update)
+        self.assertIn("--formula homebrew-tap/Formula/atm.rb", stable_update)
+        self.assertNotIn("atm-beta.rb", stable_update)
+
+    def test_prerelease_release_selects_only_atm_beta(self) -> None:
+        text = WORKFLOW.read_text(encoding="utf-8")
+        start = text.index("- name: Update opt-in Homebrew prerelease formula")
+        end = text.index("- name: Validate stable Homebrew formulas", start)
+        prerelease_update = text[start:end]
+        self.assertIn("outputs.prerelease == 'true'", prerelease_update)
+        self.assertIn("--formula homebrew-tap/Formula/atm-beta.rb", prerelease_update)
+        self.assertNotIn("Formula/atm.rb", prerelease_update)
+        self.assertNotIn("Formula/agent-team-mail.rb", prerelease_update)
+
 
 if __name__ == "__main__":
     unittest.main()

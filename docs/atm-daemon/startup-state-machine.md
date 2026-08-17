@@ -36,9 +36,10 @@ Each machine must satisfy:
   - `crates/atm-daemon-client/src/lib.rs`
   - `crates/atm/src/composition.rs`
 - daemon runtime lifecycle root:
-  - `crates/atm-daemon/src/composition.rs`
+  - active: `atm_daemon_bootstrap::run_replacement_daemon_with_observability`
+  - historical/retired: `crates/atm-daemon/src/composition.rs` (deleted by
+    AM.3)
 - startup dependencies that may fail:
-  - `crates/atm-daemon/src/composition.rs`
   - `crates/atm-rusqlite/src/shared_db.rs`
 ## Machine 1: CLI Bootstrap
 
@@ -60,13 +61,13 @@ Source:
 
 - [runtime-lifecycle-state-machine.mmd](./runtime-lifecycle-state-machine.mmd)
 
-Code:
+Historical retired code (deleted by AM.3):
 
 - `crates/atm-daemon/src/composition.rs::RuntimeLifecycle`
 - `crates/atm-daemon/src/composition.rs::RuntimeComposition::start`
 
-This machine owns the legal daemon lifecycle transitions and fail-closed
-rollback to `Stopped`.
+The active replacement bootstrap owns the legal daemon lifecycle transitions
+and fail-closed rollback to `Stopped`.
 
 ## Machine 3: Reachable-Daemon Request Outcomes
 
@@ -114,8 +115,6 @@ When communicating startup status, use these layers separately:
 2. daemon lifecycle
    - did the runtime reach `Starting`, `Running`, `Draining`, or `Stopped`?
 3. startup dependency result
-   - replay store ready?
-   - runtime lanes started?
    - SQLite schema/init succeeded?
    - roster truth hydrated or still empty?
 

@@ -1,16 +1,33 @@
 # ATM-Daemon Boundary Inventory
 
-This document captures runtime-owned concrete adapters established in Phase R
-and tightened for the Phase S cross-platform daemon host line.
+> **Phase AL active composition:** `atm-daemon` is a thin Tokio process root.
+> It invokes `atm-daemon-bootstrap::run_replacement_daemon`, which acquires the
+> owner lock, selects the approved storage factory once, injects the sealed
+> received-message hook selector, and starts `atm-http-runtime`'s Axum router.
+> The runtime exposes only framework-managed UDS (where supported) and
+> capability-authenticated loopback TCP. TLS, replay, and resend are not active
+> daemon dependencies. `crates/atm-daemon`'s historical server source is
+> reference-only until Phase AM deletes it.
 
-Current design assumption:
-- `atm-daemon` is the production runtime composition root
-- `allowed_dependents: []` means no external crate should depend on these
-  daemon-private concrete adapters
-- after `AA.5`, `atm-daemon` reaches SQLite-backed stores only through
-  `atm-runtime`; a direct `atm-daemon -> atm-rusqlite` dependency is a
-  boundary violation guarded by both the boundary TOMLs and
-  `cargo test --package atm-architecture`
+The active machine-readable composition record is
+[`../../boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml`](../../boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml).
+
+## Historical legacy-daemon inventory
+
+The remainder of this document records pre-AL daemon-private boundaries for
+Phase AM deletion planning. They do not describe an active process path.
+
+This historical inventory captures runtime-owned concrete adapters established
+in Phase R and tightened for the Phase S cross-platform daemon host line.
+
+Historical pre-AL design assumption (not active composition):
+- `atm_daemon::RuntimeComposition` was the legacy server root. It is now
+  reference-only; the active root is the replacement-bootstrap boundary above.
+- `allowed_dependents: []` describes the retained legacy types while Phase AM
+  prepares their deletion; it does not authorize their use by the executable.
+- Direct `atm-daemon -> atm-storage-rusqlite` remains a boundary violation.
+  The sole approved concrete factory selection is
+  `atm-daemon-bootstrap`, whose active manifest records that exception.
 - Phase AD retired the watch/reconcile runtime lanes; any retained
   watch/reconcile/notifier references in older planning material are
   historical only and must not be treated as accepted production subsystem
@@ -22,36 +39,37 @@ Current design assumption:
 - Phase `Y.4` adds the retained delivery-policy coordinator/state-machine seam
   above that owner boundary; harness-specific compatibility-export policy must
   now stay centralized there rather than leaking back into command callers.
+- This daemon-side retained runtime policy coordinator is distinct from the
+  `atm-core` delivery policy module, which owns message delivery-plan
+  decisions inside the reusable service library.
 
-Important daemon-private control-plane structs that must stay visible in review,
+Historical daemon-private control-plane structs retained for AM deletion review,
 even though they are not public cross-crate traits:
-- `RuntimeComposition` in `atm_daemon::composition`
-  - owns startup/shutdown sequencing and lifecycle state transitions
-  - must not be skipped in boundary or production-readiness review just because
-    it is not itself a public trait boundary
+- `RuntimeComposition` in `atm_daemon::composition` (retired and deleted by
+  AM.3)
+  - formerly owned startup/shutdown sequencing and lifecycle state transitions
+  - was not selected by active composition before its deletion; this historical
+    entry preserves its provenance only
 - `LifecycleControlSourceAdapter` / `HostOwnershipAdapter` in `atm_daemon`
-  - own process-lifecycle admission and shutdown mechanics
+  - formerly owned process-lifecycle admission and shutdown mechanics
   - the Unix signal-hook implementation is now hidden inside the extracted
     lifecycle-control adapter rather than referenced directly from runtime
     orchestration
-  - must remain runtime-private and must not be bypassed by transport or
+  - are reference-only and must not be reached by active transport or
     business-logic code
 - `PreparedRuntimeServer` / `ActiveConnectionRegistry` in `atm_daemon`
-  - own listener accept, active connection tracking, drain sequencing, and
-    force-cancel escalation
-  - must remain runtime-private and must not absorb dispatcher or store logic
-- `RuntimeStatusCache` in `atm_daemon::runtime_health`
-  - owns live daemon-memory member state and cache-cap semantics
-  - hydrates durable team/member truth only through `RosterStore`; it must not
-    rediscover teams by walking `ATM_HOME/.claude/teams`
-  - must remain separate from socket serving and peer transport code
-  - immutable snapshot publication is the accepted design for readers; no
-    daemon-shared mutable cache lock is used
+  - formerly owned listener accept, active connection tracking, drain
+    sequencing, and force-cancel escalation
+  - are reference-only; HttpRuntime owns the active framework lifecycle
+- `RuntimeStatusCache` in `atm_daemon::runtime_health` was deleted with the
+  unselected dispatcher stack in AM.6. It has no active cache, router, or
+  status projection role; the replacement bootstrap/runtime owns current
+  lifecycle reporting.
 
-## Planned R.20 partition map
+## Historical R.20 partition map
 
-The current daemon implementation remains one crate, but the review-visible
-daemon-private ownership map is:
+The historical daemon implementation remains one crate; its review-visible
+daemon-private ownership map was:
 - `ownership`
   - `HostOwnershipAdapter`, lock-path helpers, stale-owner recovery
 - `server_runtime`
@@ -61,7 +79,6 @@ daemon-private ownership map is:
 - `runtime_status`
   - `RuntimeStatusCache`, roster hydration, reload assembly, and
     `atm doctor` runtime-health projection
-- `peer_transport`
 
 Historical pre-AD planning names that no longer describe the accepted current
 daemon-private ownership map:
@@ -82,57 +99,73 @@ Observability note:
 - the authoritative design contract is
   [`./observability.md`](./observability.md)
 
-## RuntimeLifecycleController
+## Historical RuntimeLifecycleController
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-daemon/runtime-lifecycle-daemon.toml](../../boundaries/atm-daemon/runtime-lifecycle-daemon.toml)
 
-Purpose:
-- Own the daemon-private runtime lifecycle/admission controller that coordinates
-  startup, shutdown, and singleton ownership.
+Historical purpose:
+- Owned the legacy daemon-private lifecycle/admission controller. AL.8 has
+  replaced it with the typed HttpRuntime lifecycle.
 
 Notes:
 - This record exists so the control-plane struct is treated as an architectural
   boundary surface even though it is not a public shared trait today.
-- The active implementation is `RuntimeComposition` plus the crate-private
-  `RuntimeLifecycle` state machine plus the runtime-owned
-  `LifecycleControlSourceAdapter` and `HostOwnershipAdapter`.
-- `run_daemon()` must enter the daemon only through this lifecycle boundary;
-  direct listener bootstrap is a boundary violation.
+- The historical implementation was `RuntimeComposition` plus the
+  crate-private `RuntimeLifecycle` state machine and related adapters.
+- Active composition must enter only through
+  `atm_daemon_bootstrap::run_replacement_daemon`; use of `run_daemon()` is a
+  boundary violation.
 
-## LocalIpcServerTransportAdapter
+## Historical local transport adapters
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-daemon/socket-server-transport.toml](../../boundaries/atm-daemon/socket-server-transport.toml)
 
 
 Purpose:
-- Owns the same-host runtime listener implementation for the ServerTransport
-  contract.
+- Own Unix HTTP-over-UDS and loopback-TCP listeners, plus the Windows
+  loopback-TCP listener. Every listener authenticates its ingress then calls
+  `ApiRouter`.
 
 Notes:
 - Runtime composition stays in daemon-owned code, but business logic does not.
-- The historical machine-readable boundary id remains
-  `BOUNDARY-ServerTransport-Socket` for continuity, but the target boundary
-  surface is one cross-platform local IPC contract:
-  - Unix implementation: Unix domain socket
-  - Windows implementation: named-pipe-backed local IPC
-- release closeout requires both Unix and Windows implementations to exist
-  behind this boundary; non-Unix unsupported-path stubs are an intermediate
-  implementation state only
-- the local IPC adapter must use the same ATM frame header and request/response
-  packet family as the remote peer transport
-- the adapter must not treat EOF or half-close as the stable request boundary;
-  framed read/write helpers own packet delimiting
+- Unix provides HTTP-over-UDS plus loopback TCP; Windows provides loopback TCP
+  only. Legacy Windows local transports, custom frame headers, and frame
+  decoders are retired and must not be retained as fallback.
+- The adapter owns HTTP decode/response translation and same-user endpoint
+  ownership only; `ApiRouter` owns route selection and application handlers.
 - the adapter owns logical endpoint naming and same-user access-control
   semantics; callers above the adapter must not construct Unix socket paths,
-  Windows pipe names, or platform-specific ACL details directly
+  loopback ports/capabilities, Windows pipe names, or platform-specific ACL
+  details directly
 - local-IPC adapter code should live under a dedicated transport module tree
   rather than remaining mixed into crate-root runtime code
-- the current integrate/phase-S branch still keeps `handle_connection(...)`
-  co-located with the listener runtime inside `atm_daemon::local_ipc_transport`
-  so request accounting and shutdown remain in one place during Phase S
-  closeout; the follow-on partitioning sprint owns the final split
+- Historical: Phase S kept `handle_connection(...)` co-located with the
+  listener runtime inside `atm_daemon::local_ipc_transport`. AM.3 deleted that
+  legacy local-listener family; it is not an active boundary.
+
+## Historical: PeerClientTransportAdapter (retired)
+
+`PeerClientTransport`, its `peer_transport` module, and the corresponding
+machine-readable boundary manifest were retired during the Phase AI reset.
+This section is retained only to explain older references; it describes no
+current adapter, module, manifest, timeout/retry, or replay behavior. The
+current daemon API contract is the HTTP/OpenAPI surface documented in
+[`http-api.md`](./http-api.md).
+
+## Historical Phase AI post-commit admission boundary
+
+Historical Phase AI worker model, superseded by AK.2:
+
+- `runtime_health` and `PostWriteRouter` were deleted in AM.6 with the dead
+  dispatcher stack. The active `StorageAndNudgeRouter` performs the
+  post-durability received-hook call and starts no worker, queue, retry, DNS,
+  socket, or TLS work.
+- `crates/atm-architecture/tests/boundary_enforcement.rs` and the relevant
+  `boundaries/atm-daemon/*.toml` records fail closed if retired peer worker
+  ownership reappears or the local nudge seam grows durable queue/receipt/retry
+  state.
 
 ## LifecycleControlSourceAdapter
 
@@ -201,28 +234,6 @@ Phase S adds these review rules for the three daemon portability boundaries:
   allowed in daemon-owned test modules; use `#[cfg(unix)]` on individual test
   functions when one assertion is OS-specific
 
-## PeerClientTransportAdapter
-
-Canonical machine-readable boundary source:
-- [../../boundaries/atm-daemon/peer-client-transport.toml](../../boundaries/atm-daemon/peer-client-transport.toml)
-
-
-Purpose:
-- Owns the daemon-side outbound client transport used for remote peer delivery.
-
-Notes:
-- The concrete `PeerClientTransport` implementation stays runtime-private inside
-  `atm_daemon::peer_transport`.
-- Runtime composition owns replay resume and exposes the transport only through
-  the shared `ClientTransport` contract.
-- Runtime composition also owns peer-transport config resolution through the
-  daemon-side `ConfigIngress` adapter; `PeerClientTransport` must not call the
-  workspace config loader directly or silently fall back to defaults after a
-  config-load failure.
-- The peer transport must reuse the shared ATM frame header and packet DTOs
-  used by the same-host local IPC boundary; host-host traffic is not a second
-  daemon message system.
-
 ## FileWatchEventSourceAdapter
 
 Canonical machine-readable boundary source:
@@ -269,29 +280,14 @@ Notes:
 - Any surviving references should be treated as historical documentation, not
   live implementation guidance.
 
-## DaemonRequestDispatcherAdapter
+## Historical DaemonRequestDispatcherAdapter (deleted)
 
-Canonical machine-readable boundary source:
-- [../../boundaries/atm-daemon/daemon-request-dispatcher.toml](../../boundaries/atm-daemon/daemon-request-dispatcher.toml)
-
-
-Purpose:
-- Owns the runtime dispatcher implementation that routes protocol requests into core services.
-
-Notes:
-- This adapter exists to keep transport loops and service logic separate.
-- The active dispatcher now owns:
-  - typed heartbeat request routing
-  - durable pid continuity checks through the SQLite boundary assembly
-  - daemon-backed doctor health projection over runtime status
-  - direct post-send emission that may surface typed sender warnings when a
-    receiver-owned graft path is unavailable
-- The dispatcher must not own graft session registration, pending nudge
-  queues, fetch/drain inspection, or any client-specific receive loop.
-- `R.20` planning treats this as an overgrown adapter surface. The follow-on
-  cleanup sprint must split dispatcher shell concerns from runtime-status,
-  heartbeat-continuity, and doctor-projection helpers without changing the
-  external boundary contract.
+AM.6 deleted `DaemonRequestDispatcher`, `MessageWriter`, `PostWriteRouter`,
+and their machine-readable manifest because the stack had no non-test caller.
+They are not a retained historical implementation or an active daemon
+dispatcher. The active typed HTTP route is owned by `atm-http-runtime`'s
+`CanonicalWriteHandler` and `StorageAndNudgeRouter`, assembled only by
+`atm-daemon-bootstrap`.
 
 ## DaemonConfigIngressAdapter
 
@@ -317,11 +313,20 @@ Canonical machine-readable boundary source:
 - [../../boundaries/atm-daemon/daemon-inbox-ingress.toml](../../boundaries/atm-daemon/daemon-inbox-ingress.toml)
 
 
+Historical status:
+- retired by `DAEMON-PREAG-RESET-1`
+- retained only as a historical boundary record while deleted code paths age
+  out of planning/review references
+
 Purpose:
-- Owns the daemon runtime adapter behind the SourceIngress contract.
+- Historically owned the daemon runtime adapter behind the SourceIngress
+  contract.
 
 Notes:
-- This adapter owns compatibility inbox import, fingerprint, and diagnostic behavior at the daemon boundary.
+- The deleted adapter previously owned compatibility inbox import, fingerprint,
+  and diagnostic behavior at the daemon boundary.
+- Any surviving references should be treated as historical documentation, not
+  live implementation guidance.
 
 ## DaemonInboxExportAdapter
 
@@ -329,54 +334,44 @@ Canonical machine-readable boundary source:
 - [../../boundaries/atm-daemon/daemon-inbox-export.toml](../../boundaries/atm-daemon/daemon-inbox-export.toml)
 
 
+Historical status:
+- retired by `DAEMON-PREAG-RESET-1`
+- retained only as a historical boundary record while deleted code paths age
+  out of planning/review references
+
 Purpose:
-- Owns the daemon runtime adapter behind the ProjectionExport contract.
+- Historically owned the daemon runtime adapter behind the ProjectionExport
+  contract.
 
 Notes:
-- This adapter owns compatibility export and write-bound projection behavior at the daemon boundary.
-- Phase `Yb` tightens this adapter further:
-  - runtime compatibility export and repair/rebuild export must be reviewed as
-    separate caller classes
-  - only approved delivery executors may invoke normal runtime export
-  - repair/rebuild re-export must remain outside the normal send/ack path
-  - see:
-    - [../phase-Yb/plan-phase-Yb.md](../phase-Yb/plan-phase-Yb.md)
-    - [../phase-Yb/lintable-boundary-plan.md](../phase-Yb/lintable-boundary-plan.md)
-- `Phase Yc` adds one final recovered-Claude seam requirement:
-  - `Y.12` must document the daemon-side adapter behavior for the recovered
-    logical-message-set seam through
-    `ProjectionExport::append_message_set(...)` rather than treating
-    `DaemonInboxExportAdapter` as append-only by implication
-  - the daemon adapter must expose the recovered Claude message-set export as
-    one owned `ProjectionExport` operation, not as repeated single-message appends
+- The deleted adapter previously owned compatibility export and write-bound
+  projection behavior at the daemon boundary.
+- Any surviving references should be treated as historical documentation, not
+  live implementation guidance.
 
 ## Policy Placement
 
-Compatibility and recovery policy placement for daemon-owned config/inbox adapters:
 
-- `ConfigIngress` may own document loading, syntax validation, and translation into typed ATM config models.
-- `ConfigIngress` must not own daemon auto-start policy, retained command fallback policy, or mailbox/task workflow mutation.
-- `ConfigIngress` must not be used by retained command/runtime flows as a
-  second roster-truth lookup path; canonical runtime roster truth belongs to
-  the ATM roster store and its immutable projections.
-- repository-local lint / later `sc-lint` extraction should gate generic
-  `load_claude_team_config_document(...)` use outside the explicit allowlist.
-- `SourceIngress` may own compatibility-shape translation, identity fingerprint derivation, and ingress diagnostics over imported source files.
-- `SourceIngress` must not own read/ack/clear business policy, workflow-state mutation policy, or mailbox lifecycle transitions beyond import normalization.
-- `ProjectionExport` may own projection from ATM-owned source records back into compatibility mailbox shapes and write-bound export validation.
-- `ProjectionExport` must not own read-path reconciliation, task-state updates, or notification/runtime policy.
-- one delivery-policy coordinator above `ProjectionExport` must decide:
-  - whether a given event may use compatibility export
-  - which harness path applies
-  - which event-family state machine owns the transition
-- Phase `Yb` adds:
-  - the coordinator and state machines must emit one uniform delivery plan
-  - the daemon must not branch on harness outside that plan-to-executor seam
-  - notification fallback remains a side effect after the plan, not a second
-    delivery policy surface
-  - plan-to-target translation and transition emission must remain in the
-    shared `atm_core` plan/execution seam rather than reappearing in daemon
-    adapters
+Historical status:
+- retired by `DAEMON-PREAG-RESET-1`
+- retained only as a historical boundary record while deleted code paths age
+  out of planning/review references
+
+Purpose:
+- Historically documented compatibility and recovery policy placement across
+  the `ConfigIngress`, `SourceIngress`, and `ProjectionExport` contracts,
+  including a forward-looking delivery-policy-coordinator design.
+
+Notes:
+- The `SourceIngress` and `ProjectionExport` contracts and their governing
+  adapters were deleted by `DAEMON-PREAG-RESET-1`; the daemon runs as a
+  local-IPC-only singleton with no compatibility export/ingress boundary to
+  place policy against.
+- `ConfigIngress` remains live; its retained placement rules are documented
+  under `DaemonConfigIngressAdapter` above, not here.
+- Any surviving references to the deleted delivery-policy-coordinator design
+  should be treated as historical documentation, not live implementation
+  guidance.
 
 ## DaemonNotificationSinkAdapter
 
@@ -396,49 +391,22 @@ Notes:
 - Post-send notification logging, when retained, is a direct append at the
   event site.
 
-## DaemonNonClaudeOutboundAdapter
+## Historical DaemonNonClaudeOutboundAdapter
 
-Canonical machine-readable boundary source:
-- [../../boundaries/atm-daemon/daemon-non-claude-outbound.toml](../../boundaries/atm-daemon/daemon-non-claude-outbound.toml)
+AM.6 verified that `DaemonNonClaudeOutbound` had no non-test caller in the
+selected runtime. It and its retired boundary manifest are deleted; the active
+replacement composition selects its backend-neutral outbound implementation
+through `RuntimeAssembly` instead.
 
-
-Purpose:
-- Owns the daemon runtime adapter behind the `NonClaudeOutbound` boundary.
-
-Notes:
-- This adapter must deliver the same logical `message[]` payload set that the
-  Claude path receives.
-- It must not downgrade message delivery into notification-only metadata.
-- Its callers are limited to the approved delivery executor seam.
-- the current daemon-owned adapter is
-  `atm_daemon::non_claude_outbound_runtime::DaemonNonClaudeOutbound`
-- the current runtime-owned sink is `~/.atm/non_claude_outbound.jsonl`, which
-  records the typed non-Claude outbound payload requests for the daemon-owned
-  delivery lane
-
-## DaemonStatusSourceAdapter
+## Historical DaemonStatusSourceAdapter (retired)
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-daemon/daemon-status-source.toml](../../boundaries/atm-daemon/daemon-status-source.toml)
 
 
-Purpose:
-- Owns the daemon runtime adapter behind the StatusSource contract.
-
-Notes:
-- Durable roster truth remains separate from runtime status sourcing.
-- The active implementation is a daemon-memory status cache shared with the
-  dispatcher and projected into `atm doctor`.
-- The cache-cap rule must bound actual retained entries, not only member-state
-  labels.
-- immutable snapshot publication through `ArcSwap` is the accepted design for
-  readers; no daemon-shared mutable cache lock is used.
-- `Phase Yd` adds one daemon-private liveness DTO family owned by
-  `atm_daemon::runtime_health` for final `Phase Y` closeout:
-  - `NotificationWorkerLiveness`
-  - `RuntimeHealthSnapshot`
-  - `project_runtime_health(...)`
-- these are daemon-private health projection artifacts, not public cross-crate
-  boundary exports
-- `runtime_health` must not reconstruct deleted notification-worker state or
-  reintroduce notification-runtime liveness as a daemon-private health input
+This retired manifest remains only for historical inventory continuity. AM.6
+deleted its `runtime_health`/status-cache implementation alongside the dead
+dispatcher stack. It does not describe a live daemon cache, a live
+`NotificationWorkerLiveness` projection, or a current `atm doctor` path.
+Current lifecycle reporting belongs to the replacement bootstrap/runtime
+composition.

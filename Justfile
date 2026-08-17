@@ -97,6 +97,10 @@ _lint-identities:
     {{python_cmd}} .just/check_test_identity_literals.py
 
 [private]
+_lint-env-var-boundary:
+    {{python_cmd}} .just/check_env_var_boundary.py
+
+[private]
 _lint-fixed-sleep:
     {{python_cmd}} .just/check_fixed_sleep_hygiene.py
 
@@ -128,10 +132,35 @@ _lint-same-host-portability:
 # Build the full workspace.
 build:
     cargo build --workspace
+    {{python_cmd}} .just/sign_daemon_dev.py
 
 # Run the full workspace test suite or explicit coverage reporting.
 test mode='default':
     {{python_cmd}} .just/run_tests.py {{mode}}
+
+# Validate and plan a bounded adversarial-fuzz campaign (no real execution).
+fuzz *args:
+    {{python_cmd}} .just/run_fuzz.py {{args}}
+
+# Generate or verify the durable public verification-report index.
+reports-index *args:
+    {{python_cmd}} .just/generate_report_index.py {{args}}
+
+# Build the PyO3 extension with Maturin and prove Python can import it.
+test-graft-python:
+    {{python_cmd}} scripts/test_atm_graft_python.py
+
+# Build the PyO3 extension and run the Hermes graft reference-adapter tests.
+test-hermes-graft-bridge:
+    {{python_cmd}} .just/run_hermes_graft_bridge_tests.py
+
+# Compatibility alias for the canonical `just smoke graft-hermes` entry point.
+test-hermes-graft-smoke:
+    just smoke graft-hermes
+
+# Validate a Hermes bridge registry; append --active only for real operator profiles.
+verify-hermes-bridge-deployment profile_registry *args:
+    scripts/phase-ai/run-hermes-bridge-probes.sh {{profile_registry}} {{args}}
 
 # Remove workspace build artifacts.
 clean:
@@ -145,9 +174,29 @@ lint target='all':
 validate target='all':
     {{python_cmd}} scripts/validate_release.py {{target}}
 
-# Run the Phase Z smoke harness.
-smoke level='normal':
-    {{python_cmd}} scripts/smoke/run.py {{level}} --write-artifacts
+# The sole operator entry point for smoke testing. Every Python smoke module is
+# internal to this recipe; use `just smoke <feature>` instead of invoking one.
+# `localhost` proves an ordinary explicit `--host localhost` self-send;
+# `local-ip` then adds the enabled, dynamically discovered advertised host.
+# Cross-host stages use public ATM clients against already-running peer daemons.
+smoke feature='normal' *args:
+    {{python_cmd}} .just/run_smoke.py {{feature}} {{args}}
+
+# Run one isolated, release-built local admission benchmark. On Unix choose
+# UDS or loopback TCP; Windows accepts TCP only. The runner rejects ambient
+# daemon/database state and writes one report-compatible JSON artifact per run.
+benchmark *args:
+    cargo build --release -p agent-team-mail -p atm-daemon
+    # The isolated capacity runner launches this feature-gated bootstrap binary.
+    cargo build --release -p atm-daemon-bootstrap --features benchmark-harness --bin atm-daemon-benchmark
+    {{python_cmd}} .just/sign_daemon_dev.py
+    {{python_cmd}} scripts/smoke/run_admission_capacity.py {{args}}
+    # Publish all captured variants into the canonical report site.
+    {{python_cmd}} scripts/smoke/benchmark_report.py --rebuild
+
+# Persist AI.40 benchmark JSON and render the aggregate public report.
+benchmark-report *args:
+    {{python_cmd}} scripts/smoke/benchmark_report.py {{args}}
 
 # Generate architecture visualization artifacts.
 view target='all':

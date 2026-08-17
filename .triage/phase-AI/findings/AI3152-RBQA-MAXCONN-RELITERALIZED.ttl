@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3152-RBQA-MAXCONN-RELITERALIZED>
+  a triage:Finding ;
+  triage:findingId "AI3152-RBQA-MAXCONN-RELITERALIZED" ;
+  triage:title "MAX_CONCURRENT_CONNECTIONS re-literalized in Windows cfg" ;
+  triage:description "MAX_CONCURRENT_CONNECTIONS=64 is re-literalized under the Windows cfg arm in local_tcp_transport.rs:89 instead of reusing the existing Unix-branch definition from local_ipc_transport.rs:53. Arch-ctm confirmed (2026-08-03T02:09:03Z) this is load-bearing: UDS defines it at local_ipc_transport.rs:50-53; Unix TCP derives it at local_tcp_transport.rs:89-95; Windows still declares 64 at :76-77 and admits at :433-469. Unify the 64 source if desired in a separate refactor, but keep bounded limits on all transport paths. Deferred to 'local-HTTP constant unification' (not in scope for fix/localipcwake-accept-interrupt)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-03T02:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S13 ;
+  triage:foundAt "2026-08-02T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-RBQA-MAXCONN-RELITERALIZED/ipc-def-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-RBQA-MAXCONN-RELITERALIZED/tcp-dup-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AI3152-RBQA-MAXCONN-RELITERALIZED/ipc-def-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 53 ;
+  triage:snippet "pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 64;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/localipcwake-accept-interrupt" ;
+  triage:headSha "44f09b37" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/44f09b37> .
+
+<urn:atm:triage:occurrence/AI3152-RBQA-MAXCONN-RELITERALIZED/tcp-dup-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_tcp_transport.rs" ;
+  triage:line 89 ;
+  triage:snippet "pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 64; // under #[cfg(windows)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/localipcwake-accept-interrupt" ;
+  triage:headSha "44f09b37" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/44f09b37> .
+
+<urn:atm:triage:worktree/fix-localipcwake/44f09b37>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-localipcwake" ;
+  triage:branch "fix/localipcwake-accept-interrupt" ;
+  triage:headSha "44f09b37" ;
+  triage:orderIndex 0 .

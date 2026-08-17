@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI17-QA1-MINOR-02-ENV-VAR-LINT-GAP>
+  a triage:Finding ;
+  triage:findingId "AI17-QA1-MINOR-02-ENV-VAR-LINT-GAP" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T13:42:00Z"^^xsd:dateTime ;
+  triage:title "ATM_CHAT_ID not tracked in env-var-boundary lint" ;
+  triage:description "ATM_CHAT_ID isn't tracked in the env-var-boundary lint the way ATM_TEAM/ATM_IDENTITY are. No active leak today; future-enforcement gap only. The lint-config.toml [env_var_boundary].forbidden_env_vars list includes ATM_TEAM and ATM_IDENTITY but omits ATM_CHAT_ID, which should be treated as a client-boundary variable alongside the other CLI-identity environment variables." ;
+  triage:category "lint-coverage" ;
+  triage:severity "minor" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "2026-07-27 (quality-mgr): independently re-verified at integrate/phase-AI@f3b6a77a — lint-config.toml [env_var_boundary].forbidden_env_vars now reads [\"ATM_TEAM\", \"ATM_IDENTITY\", \"ATM_CHAT_ID\"]. Confirmed via direct grep of current file, not self-report." ;
+  triage:dispatchReady false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI17-QA1-MINOR-02-ENV-VAR-LINT-GAP/pAI-s17/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s17/5560bf8d> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s17/5560bf8d> ;
+  triage:triagedAt "2026-07-22T13:42:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/AI17-QA1-MINOR-02-ENV-VAR-LINT-GAP/pAI-s17/1>
+  a triage:Occurrence ;
+  triage:file ".just/lint-config.toml" ;
+  triage:line 25 ;
+  triage:snippet "forbidden_env_vars = [\"ATM_TEAM\", \"ATM_IDENTITY\"]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "5560bf8d" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s17/5560bf8d> .
+
+<urn:atm:triage:worktree/pAI-s17/5560bf8d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "5560bf8d" ;
+  triage:orderIndex 17 .

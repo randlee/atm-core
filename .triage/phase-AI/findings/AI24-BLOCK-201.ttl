@@ -1,0 +1,30 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI24-BLOCK-201>
+  a triage:Finding ;
+  triage:findingId "AI24-BLOCK-201" ;
+  triage:title "boundary_enforcement.rs new AI.24 assertion embeds a literal LF-only multi-line substring match, breaking under Windows CRLF checkout" ;
+  triage:description "crates/atm-architecture/tests/boundary_enforcement.rs:152-156, inside ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects: embedded newline pattern in .contains() matched against fs::read_to_string() output without CRLF/LF normalization. The assertion panics on windows-latest CI runners due to CRLF line endings. Fixed in current HEAD via replace-backslash-r-backslash-n normalization at line 148." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "Blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-26T10:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S4 ;
+  triage:foundAt "2026-07-26T10:05:00Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:worktree/feature-pAI-s24-host-qualified-ack-receipt/d66a895b>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "d66a895b" ;
+  triage:orderIndex 24 .

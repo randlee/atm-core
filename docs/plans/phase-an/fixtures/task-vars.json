@@ -1,0 +1,12 @@
+{
+  "task_id": "AN7-DOC-FIXTURE",
+  "sprint": "AN.7",
+  "sprint_doc": "docs/plans/phase-an/sprint-AN7-compose-guidance.md",
+  "description": "Exercise the content-first team protocol example.",
+  "worktree_path": "/tmp/atm-an7-doc-fixture",
+  "branch": "feature/an7-doc-fixture",
+  "pr_target": "integrate/phase-an",
+  "deliverables": "- Render the fixture through atm compose.",
+  "acceptance_criteria": "- The composed body is delivered as content, never as a local path.",
+  "references": "- docs/team-protocol.md"
+}

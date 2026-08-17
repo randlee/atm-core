@@ -3,19 +3,79 @@
     reason = "the retained runtime bridge still consumes the transitional shared storage traits until the direct boundary fully replaces it"
 )]
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, RwLock};
 
-use atm_storage::{MessageStore as SharedMessageStore, RosterStore as SharedRosterStore};
+use atm_storage::{
+    AsyncMessageSearchStore, AsyncMessageStore as SharedAsyncMessageStore,
+    MessageStore as SharedMessageStore, RosterStore as SharedRosterStore, TemplateCatalogStore,
+};
 
+use crate::boundary::TemplateComposer;
 use crate::config::{self, AtmConfig};
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
+#[cfg(test)]
 use crate::protocol::NotificationEvent;
 use crate::read::seen_state;
-use crate::schema::{InboxMessage, TeamConfig};
+use crate::schema::InboxMessage;
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 const MAX_NON_CLAUDE_PAYLOAD_BYTES: usize = 1024 * 1024;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum WorkspaceConfigAccess {
+    #[default]
+    Client,
+    Disabled,
+}
+
+/// Reload-scoped cache for immutable roster snapshots used during admission.
+#[derive(Default)]
+struct RosterSnapshotCache {
+    snapshots: RwLock<BTreeMap<TeamName, Arc<[crate::boundary::RosterEntry]>>>,
+}
+
+impl RosterSnapshotCache {
+    fn clear(&self) {
+        let mut snapshots = match self.snapshots.write() {
+            Ok(snapshots) => snapshots,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        snapshots.clear();
+    }
+
+    fn load(
+        &self,
+        team: &TeamName,
+        load: impl FnOnce() -> Result<Arc<[crate::boundary::RosterEntry]>, AtmError>,
+    ) -> Result<Arc<[crate::boundary::RosterEntry]>, AtmError> {
+        {
+            let snapshots = match self.snapshots.read() {
+                Ok(snapshots) => snapshots,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            if let Some(snapshot) = snapshots.get(team) {
+                return Ok(Arc::clone(snapshot));
+            }
+        }
+
+        // Hold the write lock across the one backing-store read. This makes a
+        // cold admission burst load a team once instead of creating one SQLite
+        // reader per concurrent request.
+        let mut snapshots = match self.snapshots.write() {
+            Ok(snapshots) => snapshots,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        if let Some(snapshot) = snapshots.get(team) {
+            return Ok(Arc::clone(snapshot));
+        }
+        let snapshot = load()?;
+        snapshots.insert(team.clone(), Arc::clone(&snapshot));
+        Ok(snapshot)
+    }
+}
 
 /// Invoke a closure with the installed retained local runtime.
 #[doc(hidden)]
@@ -35,8 +95,6 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
     ) -> Result<Option<crate::boundary::TeamNudgeTemplateOverrideRow>, AtmError> {
         Ok(None)
     }
-    fn load_team_config_for_doctor_compare(&self, team_dir: &Path) -> Result<TeamConfig, AtmError>;
-    fn team_dir(&self, home_dir: &Path, team: &TeamName) -> Result<PathBuf, AtmError>;
     fn inbox_path(
         &self,
         home_dir: &Path,
@@ -56,16 +114,6 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
         agent: &AgentName,
         timestamp: IsoTimestamp,
     ) -> Result<(), AtmError>;
-    #[allow(
-        dead_code,
-        reason = "Repair/rebuild-only seam; called from tests and explicit repair paths, not from the normal runtime delivery pipeline."
-    )]
-    fn rebuild_compat_inbox_projection(
-        &self,
-        inbox_path: &Path,
-        team: &TeamName,
-        agent: &AgentName,
-    ) -> Result<(), AtmError>;
     fn deliver_non_claude_payloads(
         &self,
         recipient: &DeliveryRecipientSnapshot,
@@ -80,26 +128,33 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
         &self,
         team: &TeamName,
     ) -> Result<Vec<crate::boundary::RosterEntry>, AtmError>;
-    fn load_claude_code_team_roster(
-        &self,
-        team: &TeamName,
-    ) -> Result<crate::boundary::ProjectionRoster, AtmError> {
-        let records = self.load_team_roster(team)?;
-        Ok(crate::boundary::ProjectionRoster::from_roster_snapshot(
-            team.clone(),
-            &records,
-        ))
-    }
 }
 
 #[derive(Clone)]
 pub struct LocalServiceRuntime {
     pub(crate) message_store: std::sync::Arc<dyn SharedMessageStore + Send + Sync>,
+    async_message_store: Option<std::sync::Arc<dyn SharedAsyncMessageStore + Send + Sync>>,
+    async_message_search_store: Option<std::sync::Arc<dyn AsyncMessageSearchStore + Send + Sync>>,
     pub(crate) roster_store: std::sync::Arc<dyn SharedRosterStore + Send + Sync>,
     pub(crate) nudge_template_override_store:
         std::sync::Arc<dyn crate::boundary::NudgeTemplateOverrideStore + Send + Sync>,
     pub(crate) non_claude_outbound:
         std::sync::Arc<dyn crate::boundary::NonClaudeOutbound + Send + Sync>,
+    /// Optional renderer selected by the bootstrap composition root. Core send
+    /// policy sees only this port; it never depends on `sc-composer` itself.
+    pub(crate) template_composer: Option<std::sync::Arc<dyn TemplateComposer>>,
+    /// The sealed storage capability for the one atomic
+    /// template-registration-plus-decomposed-message operation.
+    pub(crate) template_catalog_store:
+        Option<std::sync::Arc<dyn TemplateCatalogStore + Send + Sync>>,
+    /// Immutable roster snapshots used by daemon-owned admission.
+    ///
+    /// A daemon reload clears this cache before publishing its replacement
+    /// admission view. Keeping the roster snapshot here prevents every local
+    /// message admission from opening another SQLite reader connection merely
+    /// to rediscover an unchanged recipient.
+    roster_cache: Arc<RosterSnapshotCache>,
+    workspace_config_access: WorkspaceConfigAccess,
 }
 
 impl LocalServiceRuntime {
@@ -113,10 +168,167 @@ impl LocalServiceRuntime {
     ) -> Self {
         Self {
             message_store,
+            async_message_store: None,
+            async_message_search_store: None,
             roster_store,
             nudge_template_override_store,
             non_claude_outbound,
+            template_composer: None,
+            template_catalog_store: None,
+            roster_cache: Arc::new(RosterSnapshotCache::default()),
+            workspace_config_access: WorkspaceConfigAccess::Client,
         }
+    }
+
+    /// Installs the storage catalog and the composition-root renderer port
+    /// used by render-on-read. The core remains independent of the concrete
+    /// adapter; tests may leave this seam unset for plain-text mailboxes.
+    #[must_use]
+    pub fn with_template_rendering(
+        mut self,
+        template_catalog_store: std::sync::Arc<dyn TemplateCatalogStore + Send + Sync>,
+        template_composer: Option<std::sync::Arc<dyn crate::boundary::TemplateComposer>>,
+    ) -> Self {
+        self.template_catalog_store = Some(template_catalog_store);
+        self.template_composer = template_composer;
+        self
+    }
+
+    /// Attaches the Tokio-safe durable-admission boundary selected by the
+    /// composition root. The legacy synchronous store remains available only
+    /// to transitional non-Tokio callers.
+    #[must_use]
+    pub fn with_async_message_store(
+        mut self,
+        async_message_store: std::sync::Arc<dyn SharedAsyncMessageStore + Send + Sync>,
+    ) -> Self {
+        self.async_message_store = Some(async_message_store);
+        self
+    }
+
+    /// Attaches the Tokio-safe typed search capability selected by the one
+    /// storage composition root.  HTTP awaits this port directly; it never
+    /// opens a synchronous SQLite reader on a request worker.
+    #[must_use]
+    pub fn with_async_message_search_store(
+        mut self,
+        async_message_search_store: std::sync::Arc<dyn AsyncMessageSearchStore + Send + Sync>,
+    ) -> Self {
+        self.async_message_search_store = Some(async_message_search_store);
+        self
+    }
+
+    /// Returns the runtime-selected typed asynchronous search capability.
+    pub fn async_message_search_store(
+        &self,
+    ) -> Result<std::sync::Arc<dyn AsyncMessageSearchStore + Send + Sync>, AtmError> {
+        self.async_message_search_store.clone().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "Tokio typed message search was not installed in this runtime",
+            )
+        })
+    }
+
+    /// Attaches the approved template renderer port at the composition root.
+    #[must_use]
+    pub fn with_template_composer(
+        mut self,
+        template_composer: std::sync::Arc<dyn TemplateComposer>,
+    ) -> Self {
+        self.template_composer = Some(template_composer);
+        self
+    }
+
+    /// Attaches the matching durable immutable-template capability.
+    #[must_use]
+    pub fn with_template_catalog_store(
+        mut self,
+        template_catalog_store: std::sync::Arc<dyn TemplateCatalogStore + Send + Sync>,
+    ) -> Self {
+        self.template_catalog_store = Some(template_catalog_store);
+        self
+    }
+
+    /// Returns the bootstrap-installed renderer, if this runtime supports
+    /// template-aware sends.
+    #[must_use]
+    pub fn template_composer(&self) -> Option<std::sync::Arc<dyn TemplateComposer>> {
+        self.template_composer.clone()
+    }
+
+    /// Returns the bootstrap-installed catalog capability, if this runtime
+    /// supports decomposed template admission.
+    #[must_use]
+    pub fn template_catalog_store(
+        &self,
+    ) -> Option<std::sync::Arc<dyn TemplateCatalogStore + Send + Sync>> {
+        self.template_catalog_store.clone()
+    }
+
+    /// Awaits bounded admission and the durable outcome without blocking a
+    /// Tokio request executor. This is the replacement daemon's write seam.
+    pub async fn save_message_if_absent_async(
+        &self,
+        message: crate::boundary::Message,
+    ) -> Result<Option<crate::boundary::Message>, AtmError> {
+        let store = self.async_message_store.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "Tokio durable message admission was not installed in this runtime",
+            )
+        })?;
+        store.save_message_if_absent_async(message).await
+    }
+
+    /// One durable Tokio admission for a decomposed template message.
+    pub async fn admit_template_message_async(
+        &self,
+        admission: atm_storage::TemplateMessageAdmission,
+    ) -> Result<Option<crate::boundary::Message>, AtmError> {
+        let store = self.async_message_store.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "Tokio template message admission was not installed in this runtime",
+            )
+        })?;
+        store.admit_template_message_async(admission).await
+    }
+
+    /// Loads a threaded-message validation projection through the Tokio-safe
+    /// storage lane. Unlike the retained compatibility runtime, this never
+    /// opens a synchronous SQLite reader on an HTTP request worker.
+    pub async fn list_messages_async(
+        &self,
+        query: atm_storage::MessageQuery,
+    ) -> Result<Vec<crate::boundary::Message>, AtmError> {
+        let store = self.async_message_store.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "Tokio async mailbox projection was not installed in this runtime",
+            )
+        })?;
+        store.list_messages_async(query).await
+    }
+
+    /// Performs the acknowledgement source transition and reply insertion on
+    /// the same async durable-admission lane as ordinary writes.
+    pub async fn acknowledge_message_atomically_async(
+        &self,
+        source: atm_storage::AcknowledgementSource,
+        builder: std::sync::Arc<dyn atm_storage::AcknowledgementReplyBuilder>,
+    ) -> Result<atm_storage::AcknowledgementCommit, AtmError> {
+        let store = self.async_message_store.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "Tokio acknowledgement admission was not installed in this runtime",
+            )
+        })?;
+        store
+            .acknowledge_message_atomically_async(source, builder)
+            .await
+    }
+
+    /// Returns the daemon-owned runtime view. A system daemon must not read a
+    /// caller-supplied workspace path while handling an IPC or peer request.
+    pub fn without_workspace_config(mut self) -> Self {
+        self.workspace_config_access = WorkspaceConfigAccess::Disabled;
+        self
     }
 
     pub fn load_roster_member(
@@ -125,20 +337,35 @@ impl LocalServiceRuntime {
         agent: &AgentName,
     ) -> Result<Option<crate::boundary::RosterEntry>, AtmError> {
         Ok(self
-            .roster_store
-            .load_roster(team)?
-            .members
-            .into_iter()
-            .find(|member| &member.agent_name == agent))
+            .load_cached_roster(team)?
+            .iter()
+            .find(|member| &member.agent_name == agent)
+            .cloned())
     }
 
     pub fn load_team_roster(
         &self,
         team: &TeamName,
     ) -> Result<Vec<crate::boundary::RosterEntry>, AtmError> {
-        self.roster_store
-            .load_roster(team)
-            .map(|snapshot| snapshot.members)
+        Ok(self.load_cached_roster(team)?.as_ref().to_vec())
+    }
+
+    /// Drops roster data held by this runtime before a control-plane reload.
+    ///
+    /// Cache invalidation is deliberately explicit: mutable roster state is
+    /// observed only at the daemon's existing reload boundary, never through
+    /// a reader connection on the synchronous message-admission path.
+    pub fn clear_roster_cache(&self) {
+        self.roster_cache.clear();
+    }
+
+    fn load_cached_roster(
+        &self,
+        team: &TeamName,
+    ) -> Result<Arc<[crate::boundary::RosterEntry]>, AtmError> {
+        self.roster_cache.load(team, || {
+            Ok(self.roster_store.load_roster(team)?.members.into())
+        })
     }
 
     #[doc(hidden)]
@@ -154,6 +381,7 @@ impl fmt::Debug for LocalServiceRuntime {
                 "message_store",
                 &std::sync::Arc::as_ptr(&self.message_store),
             )
+            .field("async_message_store", &self.async_message_store.is_some())
             .field("roster_store", &std::sync::Arc::as_ptr(&self.roster_store))
             .field(
                 "nudge_template_override_store",
@@ -214,35 +442,25 @@ impl crate::boundary::NonClaudeOutbound for LocalFileNonClaudeOutbound {
         &self,
         request: crate::boundary::NonClaudeOutboundDeliveryRequest,
     ) -> Result<crate::boundary::NonClaudeOutboundDeliveryResponse, AtmError> {
-        let output_path = (self.path_factory)().map_err(|e| {
-            e.with_recovery(
-                "Set ATM_HOME to a writable directory or ensure the user home directory is accessible before retrying non-Claude outbound delivery.",
-            )
-        })?;
+        let output_path = (self.path_factory)()?;
         let bytes = serde_json::to_vec(&request)?;
         if bytes.len() > MAX_NON_CLAUDE_PAYLOAD_BYTES {
             return Err(AtmError::mailbox_write(format!(
                 "non-Claude outbound payload for {} exceeded {MAX_NON_CLAUDE_PAYLOAD_BYTES} bytes",
                 output_path.display()
-            ))
-            .with_recovery(
-                "Reduce message count or body size before retrying non-Claude delivery through the outbound payload sink.",
-            ));
+            )));
         }
         let parent = output_path.parent().ok_or_else(|| {
             AtmError::mailbox_write(format!(
                 "non-Claude outbound path {} has no parent directory",
                 output_path.display()
             ))
-            .with_recovery("Check that ATM_HOME directory is writable and the parent path exists.")
         })?;
         std::fs::create_dir_all(parent).map_err(|error| {
             AtmError::mailbox_write(format!(
                 "failed to create non-Claude outbound directory {}: {error}",
                 parent.display()
             ))
-            .with_recovery("Check that ATM_HOME directory is writable and the parent path exists.")
-            .with_source(error)
         })?;
         crate::mailbox::atomic::append_jsonl_record(&output_path, &request)?;
         Ok(crate::boundary::NonClaudeOutboundDeliveryResponse {
@@ -251,13 +469,7 @@ impl crate::boundary::NonClaudeOutbound for LocalFileNonClaudeOutbound {
     }
 }
 
-pub(crate) fn append_notification_log(event: &NotificationEvent) -> Result<(), AtmError> {
-    append_notification_log_at_path(
-        &crate::home::host_runtime_dir()?.join("notifications.jsonl"),
-        event,
-    )
-}
-
+#[cfg(test)]
 pub(crate) fn append_notification_log_at_path(
     path: &Path,
     event: &NotificationEvent,
@@ -267,24 +479,19 @@ pub(crate) fn append_notification_log_at_path(
             "notification log path {} has no parent directory",
             path.display()
         ))
-        .with_recovery("Choose a notification log path with an existing parent directory.")
     })?;
     std::fs::create_dir_all(parent).map_err(|error| {
         AtmError::mailbox_write(format!(
             "failed to create notification log directory {}: {error}",
             parent.display()
         ))
-        .with_recovery(
-            "Check that the notification log directory is writable before retrying post-send logging.",
-        )
-        .with_source(error)
     })?;
     crate::mailbox::atomic::append_jsonl_record(path, event)
 }
 
 impl RetainedServiceRuntime for LocalServiceRuntime {
     fn load_config(&self, current_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
-        config::load_config(current_dir)
+        load_workspace_config(self.workspace_config_access, current_dir)
     }
 
     fn load_nudge_template_override(
@@ -294,14 +501,6 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
     ) -> Result<Option<crate::boundary::TeamNudgeTemplateOverrideRow>, AtmError> {
         self.nudge_template_override_store
             .load_template_override(team, kind)
-    }
-
-    fn load_team_config_for_doctor_compare(&self, team_dir: &Path) -> Result<TeamConfig, AtmError> {
-        config::load_claude_team_config_document(team_dir)
-    }
-
-    fn team_dir(&self, home_dir: &Path, team: &TeamName) -> Result<PathBuf, AtmError> {
-        crate::home::team_dir_from_home(home_dir, team)
     }
 
     fn inbox_path(
@@ -330,16 +529,6 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         timestamp: IsoTimestamp,
     ) -> Result<(), AtmError> {
         seen_state::save_seen_watermark(home_dir, team, agent, timestamp)
-    }
-
-    fn rebuild_compat_inbox_projection(
-        &self,
-        inbox_path: &Path,
-        team: &TeamName,
-        agent: &AgentName,
-    ) -> Result<(), AtmError> {
-        let messages = load_store_backed_mailbox_projection(self, team, agent)?;
-        crate::mailbox::export_compat_mailbox_projection(inbox_path, &messages)
     }
 
     fn load_roster_member(
@@ -373,182 +562,57 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
     }
 }
 
-#[allow(
-    dead_code,
-    reason = "Called only from rebuild_compat_inbox_projection, which is a repair/rebuild-only seam exercised via tests and explicit repair paths."
-)]
-fn load_store_backed_mailbox_projection(
-    runtime: &LocalServiceRuntime,
-    team: &TeamName,
-    agent: &AgentName,
-) -> Result<Vec<InboxMessage>, AtmError> {
-    let mut metadata_rows =
-        crate::service_runtime_store::RetainedMailboxRuntime::query_mailbox_metadata_rows(
-            runtime,
-            Path::new(""),
-            team,
-            agent,
-            None,
-        )?;
-    metadata_rows.sort_by(|left, right| {
-        left.message_at
-            .cmp(&right.message_at)
-            .then_with(|| left.message_key.as_ref().cmp(right.message_key.as_ref()))
-    });
-
-    let mut messages = Vec::with_capacity(metadata_rows.len());
-    for row in metadata_rows {
-        // Keep the repair/rebuild projection consistent with the live send
-        // export path: a row deleted between metadata enumeration and reload is
-        // a legal concurrent-clear race, not a fatal rebuild error.
-        let Some(record) =
-            crate::service_runtime_store::RetainedMailboxRuntime::load_message_record(
-                runtime,
-                Path::new(""),
-                team,
-                agent,
-                &row.message_key,
-            )?
-        else {
-            continue;
-        };
-        messages.push(record.envelope);
+fn load_workspace_config(
+    access: WorkspaceConfigAccess,
+    current_dir: &Path,
+) -> Result<Option<AtmConfig>, AtmError> {
+    match access {
+        WorkspaceConfigAccess::Client => config::load_config(current_dir),
+        WorkspaceConfigAccess::Disabled => Ok(None),
     }
-    Ok(messages)
+}
+
+#[cfg(test)]
+mod workspace_config_tests {
+    use super::{WorkspaceConfigAccess, load_workspace_config};
+
+    #[test]
+    fn disabled_runtime_never_reads_a_callers_workspace_config() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        std::fs::write(workspace.path().join(".atm.toml"), "not valid toml = [")
+            .expect("fixture config");
+
+        let config = load_workspace_config(WorkspaceConfigAccess::Disabled, workspace.path())
+            .expect("daemon config access is disabled");
+
+        assert!(config.is_none());
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        LocalFileNonClaudeOutbound, LocalServiceRuntime, MAX_NON_CLAUDE_PAYLOAD_BYTES,
-        RetainedServiceRuntime, append_notification_log_at_path,
+        LocalFileNonClaudeOutbound, MAX_NON_CLAUDE_PAYLOAD_BYTES, RosterSnapshotCache,
+        append_notification_log_at_path,
     };
     use crate::error_codes::AtmErrorCode;
     use crate::protocol::{NotificationEvent, NotificationKind};
     use crate::schema::InboxMessage;
     use crate::types::{AgentName, IsoTimestamp, TeamName};
     use chrono::Utc;
-    use std::fs::File;
-    use std::io::Read;
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use tempfile::tempdir;
-
-    #[derive(Debug)]
-    struct NoopMessageStore;
-
-    #[allow(
-        deprecated,
-        reason = "service-runtime tests intentionally exercise the transitional shared storage traits"
-    )]
-    impl atm_storage::MessageStore for NoopMessageStore {
-        fn save_message(
-            &self,
-            _message: &atm_storage::Message,
-        ) -> Result<(), crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn load_message(
-            &self,
-            _key: &atm_storage::MessageKey,
-        ) -> Result<Option<atm_storage::Message>, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn list_messages(
-            &self,
-            _query: &atm_storage::MessageQuery,
-        ) -> Result<Vec<atm_storage::Message>, crate::error::AtmError> {
-            Ok(Vec::new())
-        }
-
-        fn delete_message(
-            &self,
-            _key: &atm_storage::MessageKey,
-        ) -> Result<(), crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-    }
-
-    #[derive(Debug)]
-    struct NoopRosterStore;
-
-    #[allow(
-        deprecated,
-        reason = "service-runtime tests intentionally exercise the transitional shared storage traits"
-    )]
-    impl atm_storage::RosterStore for NoopRosterStore {
-        fn load_roster(
-            &self,
-            _team: &TeamName,
-        ) -> Result<atm_storage::RosterSnapshot, crate::error::AtmError> {
-            Ok(atm_storage::RosterSnapshot {
-                team_name: _team.clone(),
-                members: Vec::new(),
-                refreshed_at: None,
-            })
-        }
-
-        fn list_teams(&self) -> Result<Vec<TeamName>, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn save_roster(
-            &self,
-            _roster: &atm_storage::RosterSnapshot,
-        ) -> Result<(), crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-    }
-
-    #[derive(Debug)]
-    struct NoopNudgeTemplateOverrideStore;
-
-    impl atm_storage::contract::sealed::Sealed for NoopNudgeTemplateOverrideStore {}
-
-    impl crate::boundary::NudgeTemplateOverrideStore for NoopNudgeTemplateOverrideStore {
-        fn load_template_override(
-            &self,
-            _team: &TeamName,
-            _kind: crate::boundary::BuiltInNudgeTemplateKind,
-        ) -> Result<Option<crate::boundary::TeamNudgeTemplateOverrideRow>, crate::error::AtmError>
-        {
-            Ok(None)
-        }
-
-        fn save_template_override(
-            &self,
-            _team: &TeamName,
-            _kind: crate::boundary::BuiltInNudgeTemplateKind,
-            _template_body: &str,
-        ) -> Result<crate::boundary::TeamNudgeTemplateOverrideRow, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn disable_template_override(
-            &self,
-            _team: &TeamName,
-            _kind: crate::boundary::BuiltInNudgeTemplateKind,
-        ) -> Result<crate::boundary::TeamNudgeTemplateOverrideRow, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-
-        fn clear_template_override(
-            &self,
-            _team: &TeamName,
-            _kind: crate::boundary::BuiltInNudgeTemplateKind,
-        ) -> Result<bool, crate::error::AtmError> {
-            unimplemented!("test stub")
-        }
-    }
 
     fn message() -> InboxMessage {
         InboxMessage {
             from: "sender".parse::<AgentName>().expect("sender"),
+            source_chat_id: None,
             text: "hello".to_string(),
             timestamp: IsoTimestamp::from_datetime(Utc::now()),
             read: false,
             source_team: Some("test-team".parse::<TeamName>().expect("team")),
+            destination_chat_id: None,
             summary: None,
             message_id: None,
             requires_ack: false,
@@ -569,30 +633,6 @@ mod tests {
             .lines()
             .map(|line| serde_json::from_str(line).expect("notification event"))
             .collect()
-    }
-
-    #[test]
-    fn rebuild_compat_inbox_projection_reexports_store_backed_mailbox() {
-        let tempdir = tempdir().expect("tempdir");
-        let inbox_path = tempdir.path().join("recipient.jsonl");
-        let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
-            Arc::new(NoopMessageStore),
-            Arc::new(NoopRosterStore),
-            Arc::new(NoopNudgeTemplateOverrideStore),
-            Arc::new(LocalFileNonClaudeOutbound::new()),
-        );
-        let team = "test-team".parse::<TeamName>().expect("team");
-        let agent = "recipient".parse::<AgentName>().expect("agent");
-
-        runtime
-            .rebuild_compat_inbox_projection(&inbox_path, &team, &agent)
-            .expect("rebuild must succeed");
-
-        let mut file = File::open(&inbox_path).expect("rebuild should create projection file");
-        let mut content = String::new();
-        file.read_to_string(&mut content)
-            .expect("read projection file");
-        assert_eq!(content, "[]\n");
     }
 
     #[test]
@@ -634,14 +674,40 @@ mod tests {
         )
         .expect_err("oversized non-claude payload must fail");
 
-        assert_eq!(error.code, AtmErrorCode::MailboxWriteFailed);
-        assert!(error.message.contains("exceeded"));
-        assert_eq!(
-            error.primary_recovery(),
-            Some(
-                "Check that the mailbox/workflow path is writable, has free space, and was not modified concurrently before retrying the ATM command."
-            )
-        );
+        assert_eq!(error.code(), AtmErrorCode::MailboxWriteFailed);
+        assert!(error.message().contains("exceeded"));
+        assert!(error.message().contains("Recovery:"));
         assert!(!output_path.exists());
+    }
+
+    #[test]
+    fn cached_roster_is_reused_until_explicit_reload_invalidation() {
+        let cache = RosterSnapshotCache::default();
+        let team = TeamName::from_validated("test-team");
+        let loads = AtomicUsize::new(0);
+        let empty_roster: Arc<[crate::boundary::RosterEntry]> = Arc::from([]);
+
+        cache
+            .load(&team, || {
+                loads.fetch_add(1, Ordering::Relaxed);
+                Ok(Arc::clone(&empty_roster))
+            })
+            .expect("first roster lookup");
+        cache
+            .load(&team, || {
+                loads.fetch_add(1, Ordering::Relaxed);
+                Ok(Arc::clone(&empty_roster))
+            })
+            .expect("cached roster lookup");
+        assert_eq!(loads.load(Ordering::Relaxed), 1);
+
+        cache.clear();
+        cache
+            .load(&team, || {
+                loads.fetch_add(1, Ordering::Relaxed);
+                Ok(empty_roster)
+            })
+            .expect("reloaded roster lookup");
+        assert_eq!(loads.load(Ordering::Relaxed), 2);
     }
 }

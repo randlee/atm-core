@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-302>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-302" ;
+  triage:title "plan-phase-ai.md missing supersession table row for AI.42" ;
+  triage:description "plan-phase-ai.md's supersession table documents AI.41's supersession but omits a row for AI.42, even though AI.42 (bare stub) is effectively superseded/continued by AI.51 (local-http-framing-adversarial-campaign) in the same way AI.41 is tracked. AI46-SCC-QA-2-001.ttl already tracks the AI.41 half of this gap; this record covers the AI.42 half specifically." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doc_consistency" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-31T23:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI-REPLAN ;
+  triage:foundAt "2026-07-31T23:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-302/ATM-QA-302-001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-302/ATM-QA-302-001>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/plan-phase-ai.md" ;
+  triage:line 0 ;
+  triage:snippet "Missing AI.42 supersession row (should point to AI.51 successor)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "plan/http-framing-performance" ;
+  triage:headSha "395046f5" ;
+  triage:occursIn <urn:atm:triage:worktree/.worktrees/plan-http-framing-performance/395046f5> .
+
+<urn:atm:triage:worktree/.worktrees/plan-http-framing-performance/395046f5>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/plan-http-framing-performance" ;
+  triage:branch "plan/http-framing-performance" ;
+  triage:headSha "395046f5" ;
+  triage:orderIndex 1 .

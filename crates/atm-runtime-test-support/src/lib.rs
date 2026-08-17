@@ -6,11 +6,14 @@ use std::sync::{Mutex, OnceLock};
 
 use atm_core::error::AtmError;
 use atm_core::test_support::{lock_env, remove_env_var, set_env_var};
-use atm_core::{LocalFileNonClaudeOutbound, LocalServiceRuntime, home::atm_home};
-use atm_runtime::{
-    RuntimeAssembly, RuntimeAssemblyInputs, RuntimeSqliteEvent, RuntimeSqliteObserver,
-    assemble_sqlite_runtime,
+use atm_core::{
+    LocalFileNonClaudeOutbound, LocalServiceRuntime,
+    home::{atm_home, current_host_runtime_scope},
 };
+use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime};
+use atm_storage_rusqlite::SqliteStorageFactory;
+
+pub use atm_storage_rusqlite::{TemplateAdmissionMessage, TemplateAdmissionSnapshot};
 
 // Mutex required because sqlite retained runtimes are cached across concurrent
 // tests; bulk clear() is safe because entries are deterministic per path and
@@ -19,15 +22,6 @@ static SQLITE_RUNTIME_CACHE: OnceLock<Mutex<HashMap<PathBuf, LocalServiceRuntime
     OnceLock::new();
 const MAX_SQLITE_RUNTIME_CACHE_ENTRIES: usize = 16;
 pub const SQLITE_RUNTIME_PATH_ENV: &str = "ATM_TEST_SQLITE_RUNTIME_PATH";
-
-#[derive(Debug, Default)]
-struct NoopRuntimeSqliteObserver;
-
-impl RuntimeSqliteObserver for NoopRuntimeSqliteObserver {
-    fn emit_sqlite_event(&self, _event: RuntimeSqliteEvent) -> Result<(), AtmError> {
-        Ok(())
-    }
-}
 
 pub fn install_sqlite_retained_runtime_factory() {
     // The test runtime provider is process-global and production-style
@@ -63,23 +57,39 @@ impl Drop for SqliteRuntimeGuard {
 }
 
 pub fn open_sqlite_boundary(path: impl AsRef<Path>) -> Result<RuntimeAssembly, AtmError> {
-    let config_current_dir = std::env::current_dir().map_err(|source| {
+    let config_current_dir = std::env::current_dir().map_err(|_source| {
         AtmError::config("failed to resolve current directory for sqlite test runtime assembly")
-            .with_recovery(
-                "Run sqlite runtime tests from a readable ATM workspace so retained runtime composition can resolve config.",
-            )
-            .with_source(source)
     })?;
     {
         let _env_lock = lock_env();
         let _ = atm_home()?;
     }
-    assemble_sqlite_runtime(RuntimeAssemblyInputs {
-        sqlite_db_path: path.as_ref().to_path_buf(),
+    assemble_runtime(RuntimeAssemblyInputs {
+        host_runtime_scope: current_host_runtime_scope()?,
+        storage_factory: std::sync::Arc::new(SqliteStorageFactory::at_path(
+            path.as_ref().to_path_buf(),
+        )),
         config_current_dir,
-        sqlite_observer: std::sync::Arc::new(NoopRuntimeSqliteObserver),
         non_claude_outbound: std::sync::Arc::new(LocalFileNonClaudeOutbound::new()),
+        template_composer: None,
+        workflow_telemetry: None,
     })
+}
+
+/// Build an isolated SQLite runtime from a test-owned directory.
+///
+/// Every caller receives a distinct database filename, so independent unit
+/// fixtures can safely create their durable state even when another test owns
+/// a transaction in the same process.
+pub fn open_isolated_sqlite_boundary(root: impl AsRef<Path>) -> Result<RuntimeAssembly, AtmError> {
+    open_sqlite_boundary(root.as_ref().join("runtime").join("mail.sqlite3"))
+}
+
+/// Install the current test's isolated runtime path before composing a
+/// loopback client. The caller must hold the test environment guard while the
+/// returned value remains alive.
+pub fn install_isolated_sqlite_runtime(root: impl AsRef<Path>) -> SqliteRuntimeGuard {
+    SqliteRuntimeGuard::install(root.as_ref().join("runtime").join("mail.sqlite3"))
 }
 
 pub struct SqliteWriterLockGuard {
@@ -91,6 +101,24 @@ pub fn hold_sqlite_writer_lock(path: impl AsRef<Path>) -> Result<SqliteWriterLoc
         .map(|inner| SqliteWriterLockGuard { _inner: inner })
 }
 
+/// Configure the isolated SQLite fixture to reject every mailbox insert.
+///
+/// This is a deterministic durable-write failure probe for adapter tests. It
+/// avoids using lock contention as a proxy for an error, which is sensitive to
+/// SQLite busy-timeout scheduling across operating systems.
+pub fn install_sqlite_message_write_failure(path: impl AsRef<Path>) -> Result<(), AtmError> {
+    atm_storage_rusqlite::install_message_write_failure_for_test(path)
+}
+
+/// Inspects a SQLite fixture through test support, never from the replacement
+/// HTTP runtime itself. Production callers must use storage contracts.
+pub fn inspect_template_admission_for_test(
+    path: impl AsRef<Path>,
+    message_keys: &[String],
+) -> Result<TemplateAdmissionSnapshot, AtmError> {
+    atm_storage_rusqlite::inspect_template_admission_for_test(path, message_keys)
+}
+
 fn sqlite_retained_runtime() -> Result<LocalServiceRuntime, AtmError> {
     let path = std::env::var_os(SQLITE_RUNTIME_PATH_ENV)
         .map(PathBuf::from)
@@ -98,9 +126,7 @@ fn sqlite_retained_runtime() -> Result<LocalServiceRuntime, AtmError> {
             AtmError::daemon_unavailable(
                 "sqlite retained runtime is unavailable because no sqlite test runtime path is installed",
             )
-            .with_recovery(
-                "Install a sqlite retained-runtime guard before running retained-runtime integration tests.",
-            )
+
         })?;
 
     let runtime_cache = SQLITE_RUNTIME_CACHE.get_or_init(|| Mutex::new(HashMap::new()));

@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-005-AN14>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-005-AN14" ;
+  triage:title "No AN.14-scoped retained-evidence artifact" ;
+  triage:description "AN.14's 'Required validation' section requires retained evidence (crates.io version/checksum lookup, closed sc-compose #448 URL, upstream 1.4.1 API call sites, no-leak test output, final CI commit). Only an AN.13-scoped evidence doc exists (docs/plans/phase-an/sc-compose-141-evidence.md), and it explicitly excludes the checked-emission path AN.14 owns. No AN.14-scoped evidence artifact exists." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "docs" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-14T06:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.14 ;
+  triage:foundAt "2026-08-13T23:44:15Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005-AN14/AN14-missing-evidence> ;
+  triage:closedAt "2026-08-14T07:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/ATM-QA-005-AN14/AN14-missing-evidence>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-an/sc-compose-141-checked-emission-evidence.md" ;
+  triage:line 1 ;
+  triage:snippet "(missing file - required evidence artifact)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an14-sc-compose-141-checked-emission" ;
+  triage:headSha "51d79af01ebb5b227a3fc77cbdacb76ded006fcd" ;
+  triage:occursIn <urn:atm:triage:worktree/AN14/51d79af01> .
+
+<urn:atm:triage:worktree/AN12/94a89924>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/an12-workflow-validation-evidence" ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "94a89924131ef1553b54743443355bf9317afe5e" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AN13/a9443c0b8>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/an13-sc-composer-141-upgrade" ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "a9443c0b87dffd7c7e090151d5ca9aacab02f385" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AN14/51d79af01>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/an14-sc-compose-141-checked-emission" ;
+  triage:branch "feature/an14-sc-compose-141-checked-emission" ;
+  triage:headSha "51d79af01ebb5b227a3fc77cbdacb76ded006fcd" ;
+  triage:orderIndex 2 .

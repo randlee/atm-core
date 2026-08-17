@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Hermes smoke testing: nudge routing gap in AtmGraftAdapter
+# Found by Cipher-311d during smoke run 20260729T005743Z on testing/hermes-smoke-testing branch
+# Root cause: _dispatch_nudge() sets platform=ATM/LOCAL regardless of original platform
+# Current head: ed8fdcb5 (Merge PR #684)
+
+<urn:atm:triage:finding/AI3133-HERMES-NUDGE-ROUTING-GAP>
+  a triage:Finding ;
+  triage:findingId "AI3133-HERMES-NUDGE-ROUTING-GAP" ;
+  triage:title "AtmGraftAdapter nudge dispatch loses original platform routing information" ;
+  triage:description "Hermes smoke run 20260729T005743Z: preflight nudge reached the integrate graft endpoint (listener 127.0.0.1:50085) and was consumed by Hermes as an inbound message, but the gateway logged platform=local (not the original platform, Telegram) and no reply arrived in the receiving Telegram chat (8991600178). Root cause: AtmGraftAdapter._dispatch_nudge() (crates/atm-graft-python/python/atm_graft_hermes_adapter.py:256-281) always sets SessionSource.platform = Platform.ATM or Platform.LOCAL (line 266), regardless of which platform originally sent the message. When a nudge arrives via the graft bridge from Telegram, the adapter receives only the ATM recipient address (e.g. 'atm:Cipher-311d:8991600178@atm-dev') with no metadata about the original sending platform. The adapter creates a MessageEvent with platform=LOCAL and injects it into Hermes's pipeline, which then treats replies as destined for the ATM platform instead of routing them back to Telegram. This is a routing bug introduced at commit c388710b 'fix(hermes): implement gateway adapter contract' and not addressed by the followup fix at 7673152a 'fix(hermes): preserve graft chat key for replies', which correctly preserved chat_id for replies but did not preserve platform information for nudges. Scope: nudge path only (replies use the send() method which correctly routes via _target_from_chat_id)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "HERMES" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-28T11:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI-S3133-HERMES-SMOKE ;
+  triage:foundAt "2026-07-29T00:57:43Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3133-HERMES-NUDGE-ROUTING-GAP/dispatch-nudge-platform> ;
+  triage:highestOpenBranch "testing/hermes-smoke-testing" ;
+  triage:promoteTo "testing/hermes-smoke-testing" ;
+  triage:rootCause "PyNudge callback contract does not include original platform metadata, and adapter cannot infer it from chat_key alone. Nudge routing must preserve original platform context (e.g., Telegram) through graft bridge callback or encode platform in PyNudge structure." ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI3133-HERMES-NUDGE-ROUTING-GAP/dispatch-nudge-platform>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/python/atm_graft_hermes_adapter.py" ;
+  triage:line 266 ;
+  triage:snippet "platform=Platform.ATM if hasattr(Platform, \"ATM\") else Platform.LOCAL," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "testing/hermes-smoke-testing" ;
+  triage:headSha "ed8fdcb5" ;
+  triage:occursIn <urn:atm:triage:worktree/hermes-smoke-testing> ;
+  triage:evidence "Live smoke test 20260729T005743Z: preflight nudge logged at gateway with platform=local, no Telegram reply in chat 8991600178. Expected: platform=telegram, reply arrives." .
+
+<urn:atm:triage:worktree/hermes-smoke-testing>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/testing/hermes-smoke-testing" ;
+  triage:branch "testing/hermes-smoke-testing" ;
+  triage:headSha "ed8fdcb5" ;
+  triage:orderIndex 1 .

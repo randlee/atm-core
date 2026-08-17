@@ -14,11 +14,10 @@ Satisfied by:
 
 The product is a local command-line tool named `atm`.
 
-The current target architecture no longer treats daemon removal as a product
-goal. The current SQLite/daemon architecture uses a tightly-bounded singleton daemon runtime because
-mail routing, native agent notification, and cross-host transport need one
-coordinating process, while ATM command behavior remains the user-facing
-surface.
+The current target architecture uses a tightly-bounded singleton daemon runtime
+for same-host local IPC, mail routing, and native-agent notification. ATM
+command behavior remains the user-facing surface. The prior custom cross-host
+transport is superseded; Phase AI defines the replacement HTTPS/TCP adapter.
 
 Phase-AA simplification direction:
 - the daemon remains part of the product, but it must return to the original
@@ -143,17 +142,15 @@ Phase-R redesign note:
   dependency; `sc-lint` is not part of the ATM product surface even when its
   verification model constrains Phase R gates
 
-Phase-S portability note:
-- Phase S closes the missed requirement that ATM daemon functionality must be
-  first-class on Windows as well as Unix-like hosts
-- the current authoritative target for same-host daemon access is one
-  cross-platform local IPC contract rather than a Unix-only local transport
-- the canonical daemon wire contract is documented in
-  [`./atm-daemon/protocol-icd.md`](./atm-daemon/protocol-icd.md)
-- exact frame constants, packet-kind numeric assignments, payload DTO mapping,
-  and the current daemon packet-surface inventory are owned by that ICD rather
-  than restated piecemeal across product docs
-- the current daemon request/response packet family covers:
+Phase-AI portability note:
+- ATM daemon functionality is first-class on Windows as well as Unix-like hosts
+- the authoritative local access contract is Unix HTTP/UDS or loopback TCP and
+  Windows loopback TCP; peer access is HTTPS/TCP
+- the canonical daemon interface is documented in
+  [`./atm-daemon/http-api.md`](./atm-daemon/http-api.md) and ADR-033
+- route-specific schemas, HTTP status codes, and the OpenAPI artifact are
+  owned by that contract rather than restated piecemeal across product docs
+- the current daemon HTTP resource surface covers:
   - `send`
   - `ack` through the send-shaped acknowledge request
   - `read`
@@ -256,6 +253,24 @@ Satisfied by:
   - recovery guidance for that distinct timeout must tell callers to inspect
     mailbox or service-side effects before retrying
 
+- `REQ-P-RUNTIME-006` Every standard `atm-daemon` launch path—including the
+  shared CLI/graft auto-start path, LaunchAgent/launchd plists, and equivalent
+  OS-native service launchers—must sanitize its inherited environment before
+  `atm-daemon` starts. It must strip `ATM_TEAM`, `ATM_IDENTITY`, and
+  `ATM_ENVIRONMENT` before exec (for example, `/usr/bin/env -u` on supported
+  Unix launchers or the platform equivalent), so the daemon never receives
+  ambient caller-identity variables at process start.
+
+  Required behavior:
+  - every standard launch entry point applies the same three removals before
+    daemon exec; the CLI/graft auto-start path is not exempt
+  - sanitation is pre-exec defense in depth, not a daemon runtime self-check
+    and not a replacement for `REQ-CORE-CONFIG-001`'s prohibition on daemon
+    ambient identity/team fallback
+  - daemon production code must not read, default from, or report these three
+    values as caller context; resolved caller identity/team arrive only in
+    typed request data from the invoking CLI/graft process
+
 - `REQ-P-DAEMON-PARTITION-001` Phase R daemon cleanup work must use one
   explicit daemon-private partition map so ownership, review scope, and later
   lint enforcement do not depend on ad hoc file boundaries.
@@ -309,8 +324,10 @@ Satisfied by:
 - SQLite-backed ATM mail source of truth
 - SQLite-backed team roster source of truth
 - singleton daemon runtime
-- same-host daemon API over cross-platform local IPC
-- cross-host daemon API over TCP/TLS
+- Phase AI target daemon API: Unix HTTP over local UDS and loopback TCP,
+  Windows HTTP over loopback TCP, and HTTPS over TCP for remote
+  peers. AI.1 intentionally retains the pre-migration local IPC baseline; the
+  local HTTP target becomes live in AI.6 and the remote HTTPS target in AI.9.
 - Claude-compatible JSONL inbox ingress and export
 - configuration resolution
 - caller identity resolution through explicit CLI override or invoking-shell
@@ -382,6 +399,10 @@ Product requirement ID:
   distribution infrastructure must be made explicit in the repo-owned release
   plan before `1.0` release automation is considered complete.
 
+- `REQ-P-RELEASE-007` ATM release identifiers must be strict SemVer. The
+  project supports opt-in prerelease builds such as `1.3.2-beta.1` and
+  `1.3.2-alpha.1`; prereleases are never the default customer channel.
+
 Required behavior:
 - the `1.0` release must publish the retained CLI and core crates under the
   legacy crates.io package names:
@@ -411,6 +432,34 @@ Required behavior:
 - release readiness proof for `winget` must validate successful submission or
   manifest update dispatch; it cannot require same-day installability because
   Microsoft review introduces a normal 1-2 day publication lag
+- the normal Homebrew `atm` formula tracks stable releases only; prereleases
+  are published, when approved, through an explicit opt-in `atm-beta` formula
+  in the project-owned tap
+
+### 2.4 HTTP Compatibility Scope
+
+Product requirement ID:
+
+- `REQ-P-HTTP-COMPAT-001` The daemon HTTP API has a strict, independently
+  declared SemVer version. Product release versions identify builds only; they
+  are never the CLI-to-daemon compatibility gate.
+
+Required behavior:
+
+- `/v{major}/atm` and the HTTP API's declared SemVer have the same major;
+  different major versions fail before a write with a typed compatibility
+  error
+- the compatibility preflight compares the explicit CLI/daemon schema version
+  and HTTP API major, not `atm` or `atm-daemon` product release strings
+- an additive endpoint, optional JSON field, response field, or error detail
+  increments the HTTP API minor version and must preserve successful
+  communication for clients and servers sharing the same major; patch versions
+  are corrective only and do not add or remove contract elements
+- requests accept omitted additive fields with documented defaults and servers
+  ignore unknown additive fields; an operation requiring a new capability must
+  declare that requirement rather than relying on a minor-version mismatch
+- OpenAPI, generated clients, and compatibility tests are the authoritative
+  proof of this contract
 
 ## 3. External Contracts
 
@@ -486,6 +535,41 @@ Required behavior:
     home subtree
 - validation must happen before any path construction in address parsing or
   home/path helpers
+
+Product requirement ID:
+
+- `REQ-CORE-IDENTITY-CHAT-001` ATM must support an optional chat-id as an
+  independent component of a sender or recipient identity.
+
+Required behavior:
+
+- canonical address grammar is `<agent>[:<chat-id>]@<team>[.<host>]`
+- `agent[:<chat-id>]` is the canonical agent-identity grammar used wherever a
+  full team/host address is not required; therefore `agent:XXX` means agent
+  `agent` with chat-id `XXX`
+- CLI address composition is equivalent to canonical text: base agent plus
+  `--team <team>` yields logical `agent@team`; adding `--chat-id XXX` yields
+  logical `agent:XXX@team`, before a single normalization to the structured
+  address
+- for `atm send`, `--host <host>` qualifies the resolved recipient as
+  `agent@team.host`; it is equivalent to spelling that host in the recipient
+  address, and supplying both forms with different hosts fails before daemon
+  dispatch
+- caller chat-id resolution is ordered: qualified `--as <agent>:<chat-id>`,
+  then `--chat-id`, then `ATM_CHAT_ID`, then a chat-id embedded in
+  `ATM_IDENTITY=<agent>:<chat-id>`, then no chat-id. An explicit unqualified
+  `--as <agent>` is a complete caller override and selects no chat-id.
+- `agent`, `team`, and `chat-id` use the safe segment alphabet already
+  required above; only the address parser interprets `:` and `.` delimiters
+- storage keeps nullable source and destination chat-id columns rather than
+  concatenating a chat-id into an agent-name column
+- reads render a present source chat-id in `from` as `agent:chat-id`; writes,
+  nudges, replies, and acknowledgements preserve the full destination address
+- `agent` without a chat-id, `agent:chat-a`, and `agent:chat-b` are distinct
+  identities for inbox visibility and owner-only mutations
+- `atm read --agent <agent>` searches that agent across all chat IDs;
+  `atm read --agent <agent> --chat <chat-id>` narrows to one chat identity
+- chat-id is not a daemon session, transport-session, or message-thread field
 - JSON number normalization must cap exponent-driven string expansion at 64
   characters
 - if exponent expansion would exceed 64 characters, ATM must:
@@ -644,6 +728,9 @@ Runtime caller-context rules:
 - runtime identity must come from:
   - explicit command override when supported
   - `ATM_IDENTITY`
+- runtime caller chat-id must come from the caller-context precedence in
+  `docs/requirements.md` §4.1; `ATM_CHAT_ID` is the environment-level source
+  and a qualified `ATM_IDENTITY` is its lower-precedence fallback
 - runtime caller team for commands that require it must come from:
   - explicit command override when supported
   - `ATM_TEAM`
@@ -800,10 +887,10 @@ Global caller-context rules:
 
 | Command | Caller identity required | Caller identity may come from | Caller team required | Caller team may come from | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `atm send` | Yes | `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | target recipient/team are not caller context; mutating identity impersonation is forbidden |
+| `atm send` | Yes | `--as`, else `--chat-id`, else `ATM_CHAT_ID`, else qualified `ATM_IDENTITY`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | `--as`/`--chat-id` select caller context; target recipient/team are not caller context |
 | `atm peek` | Yes | `--as`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | inspection-only; `--from` remains a sender filter |
-| `atm read` | Yes | `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | owner-only mutating read path |
-| `atm ack` | Yes | `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | reply target metadata is not caller context |
+| `atm read` | Yes | `--as`, else `--chat-id`, else `ATM_CHAT_ID`, else qualified `ATM_IDENTITY`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | owner-only mutating read path |
+| `atm ack` | Yes | `ATM_CHAT_ID`, else qualified `ATM_IDENTITY`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | reply target preserves the received full source address |
 | `atm list` | Yes | `--as`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | `--from` is a sender filter, not caller identity |
 | `atm clear` | Yes | `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | owner-only mutating clear path |
 | `atm log` | Yes | `ATM_IDENTITY` | Yes | `ATM_TEAM` | no explicit caller override surface |
@@ -817,9 +904,30 @@ Global caller-context rules:
 
 ### 4.2 Command-Specific Notes
 
+- `atm send --as <agent>[:<chat-id>]` is the explicit caller agent/chat
+  override; its caller team still comes from `--team` or `ATM_TEAM`
+- with ambient `ATM_IDENTITY=<agent>`, `atm send <to> --chat-id <chat-id>` is
+  equivalent to `atm send <to> --as <agent>:<chat-id>`; `--chat-id` and
+  `--as` are mutually exclusive and failure to resolve the ambient base agent
+  fails before daemon dispatch
+- with ambient `ATM_IDENTITY=<agent>`, `atm read --chat-id <chat-id>` is
+  equivalent to `atm read --as <agent>:<chat-id>`; it resolves the owner
+  mailbox before the existing owner-only read path, and the two flags are
+  mutually exclusive
+- caller chat-id precedence is exactly: `--as` (including its explicit absence
+  of chat-id), then `--chat-id`, then `ATM_CHAT_ID`, then a chat-id embedded in
+  `ATM_IDENTITY`, then no chat-id. `ATM_CHAT_ID` must be a valid `ChatId` and
+  requires `ATM_IDENTITY` to supply the base agent; an invalid value fails
+  locally before daemon dispatch.
+- on mutating `send` and owner-only `read`, `--as` must use the same base
+  agent as `ATM_IDENTITY`; a different base agent is an impersonation attempt
+  and fails before daemon dispatch
+- a chat-qualified recipient is expressed only in canonical `<to>` syntax:
+  `<agent>:<chat-id>@<team>[.<host>]`
 - `--from` on `send` is not an accepted caller-identity override
 - `--from` on `read` / `list` is a sender filter only
-- `--as` is accepted only on inspection-only surfaces such as `peek` and `list`
+- `--as` is accepted on `send` and `read` for the caller agent/chat override,
+  and on inspection-only surfaces such as `peek` and `list`
 - any command without an explicit caller override surface must rely on the
   invoking shell when caller context is required
 - `atm doctor` may inspect `ATM_IDENTITY` visibility and team override
@@ -1021,7 +1129,10 @@ Retired from the current implementation:
   persist the canonical sender identity in SQLite-owned state and use it for
   validation, self-send checks, routing, and audit behavior
 - reject canonical same-team self-addressed sends before any persistence or
-  `--dry-run` success reporting
+  `--dry-run` success reporting only when the resolved destination has no
+  host; `atm send --host <host>` is a second way to produce that qualified
+  destination, and every syntactically valid host-qualified destination
+  continues to the ordinary host-routing contract
 - verify target team existence and target agent membership as part of address
   resolution before mailbox path selection, except for the documented
   `missing-document` fallback in §6.3.1
@@ -1209,12 +1320,15 @@ Shared rules:
   defined precedence
 - `atm list` and `atm peek` may resolve caller identity from `--as`, else the
   invoking-shell `ATM_IDENTITY`
-- `atm read` must resolve caller identity from invoking-shell `ATM_IDENTITY`
-  only
+- `atm read` resolves caller identity from `--as`, else `--chat-id`, else
+  `ATM_CHAT_ID`, else qualified invoking-shell `ATM_IDENTITY`, else invoking-
+  shell `ATM_IDENTITY`; its
+  existing owner-only mutation rule applies to the resolved full identity
 - if required caller identity cannot be resolved from the documented source
   for that command, fail before daemon dispatch
-- `--as <name>` changes caller identity resolution on inspection-only
-  commands, not message matching
+- `--as <name>` changes caller identity resolution on `send`, owner-only
+  `read`, and inspection-only commands, never message matching; mutating
+  commands require the base-agent match specified in the command matrix
 - `--json` changes output format only and is not a message-selection filter
 - all three commands must verify target team exists
 - `atm list` and `atm peek` must verify an explicit target agent exists in the
@@ -1563,15 +1677,18 @@ Acknowledge a pending-ack message in the caller's own inbox and send a visible r
   - remove `pendingAckAt`
   - set `acknowledgedAt`
   - append a reply message to the original sender's inbox unless the
-    acknowledged pending-ack message is already self-addressed to the current actor
+    acknowledged pending-ack message is an unqualified same-agent/same-team
+    historical self-addressed message
 - preserve `acknowledgesMessageId` on the emitted reply
 - hardcode `requires_ack = false` on the emitted reply
 - do not allow an acknowledgement reply to request acknowledgement itself
 - reject duplicate acknowledgement of an already acknowledged message
 - run matching `[[atm.post_send_hooks]]` rules after a successful ack, using the reply message as the hook subject
-- when the pending-ack message is self-addressed to the current actor, mark it
-  acknowledged, suppress reply emission, and report the suppression explicitly
-  in the ack output contract
+- when the pending-ack message is an unqualified same-agent/same-team
+  historical self-addressed message, mark it acknowledged, suppress reply
+  emission, and report the suppression explicitly in the ack output contract.
+  A host-qualified source is never this suppression case: it produces the
+  ordinary canonical ACK reply write.
 
 Phase R continuation semantics:
 - one successful acknowledgement clears the chain-level acknowledgement
@@ -1672,8 +1789,8 @@ JSON output must include:
 - `reply_disposition`
   - `kind = "sent"` with `reply_message_id` and `reply_target` when a reply
     message was emitted
-  - `kind = "suppressed_self_ack"` when the historical pending-ack message was
-    self-addressed and no reply message was emitted
+  - `kind = "suppressed_self_ack"` only when the historical pending-ack
+    message was unqualified same-agent/same-team and no reply was emitted
 - `reply_text` (validated reply body; retained even when self-ack suppression
   prevents reply emission)
 - `task_id` (optional String, present when the source message has `taskId`)
@@ -1935,6 +2052,7 @@ The retained `teams` surface for initial release is:
 - `atm teams`
 - `atm teams add-member`
 - `atm teams update-member`
+- `atm teams remove-member`
 - `atm teams backup`
 - `atm teams restore`
 
@@ -1943,7 +2061,6 @@ orchestration commands such as:
 - `spawn`
 - `join`
 - `resume`
-- `remove-member`
 - `cleanup`
 
 ### 12.3 Required Behavior
@@ -1979,6 +2096,14 @@ Bare `atm teams` must:
 - project the repaired metadata deterministically into compatibility
   `config.json`
 - preserve unchanged member metadata when a field is not supplied
+
+`atm teams remove-member` must:
+- require the caller identity to belong to the target team
+- validate that the target team and member exist
+- remove exactly the requested member from the canonical roster
+- allow removing the last member or the currently authenticated caller
+- leave the removed member's inbox state untouched
+- support human-readable and pretty-printed JSON output
 
 `atm teams backup` must:
 - create a timestamped snapshot under the ATM team backup area
@@ -2025,6 +2150,9 @@ JSON output must include:
 - `member`
 
 `update-member` JSON output must additionally include:
+- `member`
+
+`remove-member` JSON output must additionally include:
 - `member`
 
 `backup` JSON output must additionally include:
@@ -2083,8 +2211,8 @@ follow-up without depending on daemon-only or hook-only state.
     startup logs; never durable roster metadata
 - never use bare `cwd` when `launch_cwd` or `live_cwd` is the real meaning
 - expose currently persisted member metadata that ATM already knows durably,
-  such as `home_dir`, type, model, or pane id, and may overlay `live_cwd` for
-  the invoking member only
+  such as `home_dir`, type, harness, model, or pane id, and may overlay
+  `live_cwd` for the invoking member only
 - not persist `live_cwd` or `launch_cwd` as canonical member roster metadata
 - remain useful without daemon or hook state
 
@@ -2104,6 +2232,8 @@ JSON output must include:
 
 Each member object must expose at least:
 - `name`
+- `harness`: the persisted roster harness using its stable kebab-case spelling
+  (for example `hermes` or `python-graft`)
 - persisted local member metadata when present
 
 ## 14. `atm help` (Phase Y additive CLI feature)
@@ -2224,10 +2354,49 @@ Required behavior:
 Product requirement ID:
 - `REQ-P-WORKFLOW-001` The message/workflow model must satisfy the documented
   persisted-field, two-axis, and legal-transition rules.
+- `REQ-P-TEMPLATE-WORKFLOW-001` A decomposed templated message may carry a
+  template-declared, generic workflow snapshot whose scope, state, stage,
+  transition, and optional iteration are resolved at admission and retained
+  immutably. ATM validates structure but must not reserve orchestration
+  vocabulary or infer state from rendered content. The canonical decision is
+  [ADR-046](./adr/ADR-046-template-declared-workflow-metadata.md).
+- `REQ-P-TEMPLATE-TAGS-001` Template-declared literal tags, sender/instance
+  tags, and ATM-derived search tags must retain distinct provenance. The
+  admission-time applied-template snapshot is historical truth; an effective
+  tag projection is a deterministic search aid only; derived tags are
+  reproducible from the immutable snapshot rather than caller-writable data.
+  Reserved generated tag prefixes must not be caller-spoofable.
+- `REQ-P-WORKFLOW-ANALYTICS-001` ATM must make the immutable template workflow
+  snapshot available through its local query surfaces for generic duration and
+  iteration analysis. Optional OpenTelemetry-compatible export is a projection
+  of durable facts and must not alter routing, admission, policy, or security
+  decisions.
 
 Satisfied by:
 - `REQ-CORE-WORKFLOW-001` for the canonical two-axis model and legal
   transitions
+- `REQ-CORE-TEMPLATE-WORKFLOW-001` `atm-core` must own the transport-neutral
+  declaration validation and pure merged-variable resolution for optional
+  template workflow facts. It must carry opaque bounded scope, state, stage,
+  transition, and iteration values into an immutable admission snapshot;
+  neither it nor any downstream surface may reserve orchestration vocabulary
+  or infer facts from rendered content. The requirement derives from ADR-046
+  and satisfies `REQ-P-TEMPLATE-WORKFLOW-001`.
+- `REQ-RUSQLITE-TEMPLATE-WORKFLOW-001` `atm-storage-rusqlite` must own the
+  additive migration, atomic persistence, and indexed query projection for
+  the already-validated workflow snapshot. Its durable tag columns are limited
+  to existing caller/instance tags, the immutable applied-template tag
+  snapshot, and the atomically computed `effective_tags_json` search
+  projection; derived tags have no independently persisted column. It adds no
+  storage capability trait and never rebuilds history from mutable catalog
+  data. The requirement derives from ADR-046 and satisfies
+  `REQ-P-TEMPLATE-WORKFLOW-001` and `REQ-P-TEMPLATE-TAGS-001`.
+- `REQ-CORE-WORKFLOW-ANALYTICS-001` `atm-core` must expose immutable workflow
+  facts and their tag provenance through local query/projection contracts for
+  generic duration and iteration analysis. Any optional telemetry sink is a
+  non-authoritative read-side projection only: it cannot affect message
+  admission, routing, retry, policy, or security. The requirement derives
+  from ADR-046 and satisfies `REQ-P-WORKFLOW-ANALYTICS-001`.
 
 ### 15.1 Persisted Message Fields
 
@@ -2705,10 +2874,9 @@ Required testing architecture:
 - there is no approved "test daemon launch" path for ordinary ATM correctness
   tests
 - the primary test tiers are:
-  - CLI/composition tests using injected transport doubles such as
-    `FakeClientTransport`
-  - in-process integration tests using `LoopbackClientTransport` over the
-    shared request/response contracts
+  - CLI/composition tests using a fake HTTP application client
+  - in-process integration tests using the HTTP adapter over the shared
+    request/response contracts
   - a narrow daemon-runtime suite for singleton/startup/shutdown/recovery
     requirements only
 - real daemon process tests, if any, must be isolated to the daemon-runtime
@@ -3360,6 +3528,20 @@ mail correctness.
   - no production mutating path may rely on implicit per-statement autocommit
     as the normal correctness model
 
+- `REQ-CORE-STORE-003` All database access must use the backend-neutral
+  storage-trait contract.
+
+  Required behavior:
+  - only `atm-storage-rusqlite` may import `rusqlite`, own schema/SQL, or
+    expose concrete SQLite behavior
+  - daemon, core, CLI, graft, and transport code must hold storage traits only
+  - `atm-runtime` may assemble selected backend trait objects but must not
+    expose SQLite types or introduce a daemon-specific persistence trait
+  - new backend selection occurs at composition without changing daemon,
+    transport, CLI, or graft source
+  - replay/outbox/finalizer traits created solely for daemon transport state are
+    forbidden
+
 - `REQ-CORE-INGEST-001` Inbox/config ingest must use one owned contract for
   replay, backpressure, and degradation.
 
@@ -3378,18 +3560,9 @@ mail correctness.
 - roster/config ingest must apply one deterministic last-write-wins policy
   for replacing roster truth in SQLite
 
-- `REQ-CORE-RUNTIME-003` Crash recovery and replay must preserve the durable
-  ordering rule for daemon-managed export work.
-
-  Required behavior:
-  - the ordering rule is `SQLite commit -> export / remote handoff`
-  - re-export/replay must be keyed by durable `message_key`
-  - if daemon-managed retry/re-export state survives crash, it must be stored
-    durably with a bounded expiry/deadline
-  - daemon startup must fail closed if the persisted replay store cannot be
-    opened, because the bounded replay-resume sweep is part of the serving
-    startup contract
-  - persisted retry state must not become a long-lived remote outbox
+- `REQ-CORE-RUNTIME-003` Crash recovery preserves committed local mailbox
+  state. The daemon must not maintain a replay store, remote outbox, or retry
+  state.
 
 - `REQ-CORE-RUNTIME-002` Live agent status must not use SQLite as its
   authoritative live truth.
@@ -3398,16 +3571,79 @@ mail correctness.
   - live status is runtime-owned daemon state
   - SQLite stores canonical roster membership and optional routing metadata,
     but not the current process `pid`
-  - daemon memory caches the current `pid` as the primary liveness field
+  - daemon memory caches the current `pid` as observational metadata, not a
+    liveness-policy input
   - daemon runtime state must include `last_active_at` for each known active
     agent/member entry
   - the shared protocol must expose typed heartbeat request/response DTOs for
-    runtime state updates and PID continuity handling
+    runtime state updates and observational pid continuity
   - SQLite must not own live `last_active_at`; it remains daemon-memory-only
     runtime state
   - roster truth and live-status truth must remain distinct
 - `pid` is transient daemon-owned runtime state rather than durable roster
   truth and must not be persisted in SQLite
+
+> **Phase AJ implemented contract.** The following clauses are reconciled with
+> the merged AJ.1–AJ.8 source and named tests in ADR-045's evidence table.
+
+- `REQ-CORE-RUNTIME-004` Runtime observation is best-effort telemetry, not a
+  business-policy input.
+
+  Required behavior:
+  - successful heartbeat and successful local `send`, `read`, or `ack` may
+    update in-memory observation only
+  - graft may update observation only through its environment-derived caller
+    context; no other ingress or daemon side effect may synthesize an update
+  - each defined state/session value retains independent source and timestamp;
+    absent/default values are no-ops and cannot overwrite prior valid data;
+    accepted ingress order, not client-clock ordering, determines the current
+    observation; a trusted changed pid/session becomes the current observation
+    and is retained as diagnostic evidence only
+  - every actual pid/session mutation, including initial set, emits one
+    structured info audit event with prior/new value, member, source, and time;
+    no-op input emits no mutation event
+  - the existing heartbeat `pid_changed` response field remains additive
+    observation metadata: it is true only when a prior defined pid is replaced
+    by a different defined pid; initial pid observation is audited but is not a
+    replacement
+  - normal heartbeat, CLI, and graft updates may not restore `Unknown` or clear
+    a defined session; roster removal drops its runtime entry and a later re-add
+    starts without observation
+  - `Unknown` means no trustworthy state observation; `Offline` means an
+    explicit heartbeat session-end observation. They are distinct values and
+    must not be substituted for one another
+  - trusted environment-attested CLI/graft `send`, `read`, and `ack` transition
+    state to `Active`; heartbeat activity transitions to `Active`, `Idle`, or
+    `Offline` only from its explicit activity value
+  - each cache member carries `state_changed_at`; it changes only on a real
+    lifecycle-state transition and is shown only for defined non-default state;
+    human roster output renders its relative age while structured output keeps
+    the absolute timestamp; repeated same-state evidence never resets it
+  - external hook heartbeat mapping is startup/active → `ActiveToolUse`, idle
+    → `Idle`, and stop → `SessionEnded`; ATM consumes, but does not install or
+    emit, those hooks
+  - identity change and malformed/suppressed observation are retained
+    anomalies, not roster lifecycle state. They must not reject ingress, emit
+    `IdentityConflict`, degrade readiness, alter cache eviction, or alter
+    routing, notification, or delivery behavior. A future doctor phase may
+    diagnose them.
+  - local observation requires matching, parseable `ATM_IDENTITY` and
+    `ATM_TEAM`; args-only or mismatched invocation leaves normal command
+    behavior unchanged and suppresses observation
+  - local read/write request DTOs carry one optional `ActivityObservation`
+    (team, member, optional session/pid), constructed only by that
+    environment-attestation step; the daemon accepts it only on existing
+    authenticated local UDS/loopback ingress, and remote HTTPS ingress clears
+    it before shared dispatch
+  - session, pid, heartbeat activity, and derived state must not drive routing,
+    nudge, notification, retry, admission, delivery, or policy logic
+  - any exception requires an explicit requirement, ADR, boundary record, and
+    test; telemetry never enters SQLite, durable roster state, mail rows, or
+    message payloads
+  - the existing roster-view command may display a member's non-default state
+    age, defined pid, and shortened session identifier as an observational
+    projection; JSON preserves raw values. Default `Unknown` state with no
+    session/pid is omitted from human output
 
 ### 22.2 Singleton Daemon Runtime
 
@@ -3526,55 +3762,58 @@ mail correctness.
 
 ### 22.4 Transport And Routing Model
 
-- `REQ-CORE-TRANSPORT-001` ATM must use one logical daemon API with two
-  production transport implementations and one test transport.
+> **AK.6 status:** REQ-CORE-TRANSPORT-002, -002A, -002B, -002B1, -002C,
+> -002D, -003, -003B, -004, and -005A retain their historical requirement
+> records for traceability, but their transport-specific TLS, authority, and
+> outcome status is superseded by ADR-047. Alias/configuration semantics remain
+> AK.3-owned, direct-delivery semantics remain AK.4-owned, and resend-cache
+> semantics remain AK.5-owned.
+
+- `REQ-CORE-TRANSPORT-001` Phase AI must replace the local frame protocol with
+  one HTTP daemon API with local and peer production ingress classes plus one
+  test adapter.
 
   Required behavior:
-  - same-host transport: one cross-platform local IPC contract
-    - Unix implementation: Unix domain socket
-    - Windows implementation: named-pipe-backed local IPC
-  - cross-host transport: TCP/TLS
-  - test transport: in-process `test-socket` implementation of the same
-    protocol/interface for subsystem and daemon-boundary tests; this is the
-    Tier 2 `LoopbackClientTransport` shape in the testing guidelines
-  - these are implementations of one protocol/interface, not separate systems
-  - local-IPC and TCP/TLS receive logic must remain a small framed-message
-    loop that:
-    - reads one request frame
-    - parses it into a qualified request enum/value
-    - dispatches immediately to the owning handler boundary
-    - returns a typed response
-  - request-kind routing must live behind one dispatcher boundary with
-    injectable typed handlers for request families
-  - adding a new request family must not require embedding business logic into
-    same-host local-IPC or TCP/TLS transport adapters
-  - transport receive logic must not perform SQL, filesystem watch, or
-    post-send emission
-    business logic inline
-  - any violation of this transport isolation rule is a direct QA failure for
-    the current SQLite/daemon implementation line
-  - subsystem and runtime tests must be able to replace local-IPC/TCP transport
-    adapters with the `test-socket` transport without changing business logic
-  - same-host daemon functionality must be production-complete on every
-    supported operating system; transport-specific non-Unix stubs are allowed
-    only as temporary intermediate implementation states and must not survive
-    the Phase S closeout line
-  - platform `cfg(...)` for same-host transport may appear only inside the
-    owned local-IPC adapter modules and their platform-specific tests
-  - shared test infrastructure must exercise the same handler/dispatcher
-    contract on Unix and Windows rather than maintaining separate product-level
-    transport semantics per platform
+  - Unix same-host clients use HTTP over UDS through the shared
+    `atm-daemon-client` facade and may use HTTP over loopback TCP; consumers
+    such as `atm-graft` must not take a direct `interprocess` dependency.
+    Windows same-host clients use HTTP over loopback TCP only
+  - normal remote peers use HTTPS over TCP; the explicit daemon-only
+    `plaintext-test` smoke profile is governed by
+    `REQ-CORE-TRANSPORT-002B1` and cannot create a second HTTP route
+  - all production adapters call one HTTP router and the same application handlers
+  - the stable initial resources are `/v1/atm/messages`,
+    `/v1/atm/message/{message-id}`, `/v1/atm/message/{message-id}/read`, and
+    `/v1/atm/doctor`; their typed route-specific schemas and methods are the
+    versioned OpenAPI contract
+  - the test adapter exercises the same router/handler contract without a live
+    socket
+  - HTTP adapters perform decode, authentication, and response translation
+  only; they must not perform SQLite mutation, acknowledgement mutation,
+  recipient routing, or post-send emission
+  - Windows loopback TCP binds only a loopback address and requires a daemon
+    created owner-readable endpoint record plus a 32-byte base64url local
+    capability; Unix UDS uses owner-only endpoint permissions
+  - ingress authentication creates `AuthenticatedIngress::Local` only after
+    the local capability or UDS ownership check, and
+    `AuthenticatedIngress::Peer` only after mTLS plus allowlist verification;
+    adapters must not infer local/peer status from socket family or address
+  - Unix/Windows parity requires equivalent local HTTP request/response tests:
+    UDS plus loopback TCP on Unix and loopback TCP on Windows
+  - Unix clients select UDS by default. `ATM_LOCAL_TRANSPORT=tcp` is the
+    explicit, observable loopback-TCP parity/diagnostic mode; an unavailable
+    UDS endpoint must fail rather than silently falling back to TCP
 
-- `REQ-CORE-TRANSPORT-001B` Request routing must live behind one explicit
-  dispatcher boundary with injectable typed handlers.
+- `REQ-CORE-TRANSPORT-001B` Request routing must live behind one explicit HTTP
+  router and injectable typed application handlers.
 
   Required behavior:
-  - transport adapters hand parsed qualified requests to the dispatcher
-  - the dispatcher owns request-kind routing only
+  - transport adapters hand authenticated HTTP requests to the router
+  - the router owns route selection only
   - concrete request-family behavior lives in injectable handlers behind the
     dispatcher
-  - adding a new request family must not require transport-adapter logic
-    growth beyond decode + dispatch
+  - adding a route must not duplicate an existing handler or require adapter
+    logic beyond decode + dispatch
   - any violation of this dispatcher/handler rule is a direct QA failure for
     the current SQLite/daemon implementation line
 
@@ -3596,78 +3835,393 @@ mail correctness.
     closed with typed backpressure instead of silently buffering unbounded
     plugin traffic
 
-- `REQ-CORE-TRANSPORT-002` Cross-host traffic must be daemon-to-daemon only.
+- `REQ-CORE-TRANSPORT-002` After AI.9, cross-host traffic must be daemon-to-daemon HTTPS
+  only.
 
   Required behavior:
   - native agent/plugin code talks only to the local daemon
   - cross-host delivery happens only between daemons
-  - remote routing uses an address form equivalent to `agent@team.host`
-  - sender-side daemons must not write remote host inbox JSONL directly
+  - agent/member names and team names are path-segment-like identifiers, not
+    free-form labels
+  - the only allowed characters in agent/member names and team names are ASCII
+    letters, ASCII digits, `-`, and `_`
+  - agent/member names and team names must reject:
+    - path delimiters: `/` and `\`
+    - traversal forms: `.` and `..`
+    - reserved address delimiters: `.` and `:`
+    - whitespace
+    - wildcard or pattern characters that could be interpreted by current or
+      future parsers, including at minimum `*`, `?`, `[` and `]`
+  - the supported remote-send CLI form is exactly
+    `atm send <agent>@<team>.<host> ...`; host qualification is part of the
+    typed address grammar, not a second flag or alternate route
+  - because team names cannot contain `.`, the inline form splits at the first
+    `.` after `@`; the remainder is the host and may be a DNS name or IP
+    address containing additional periods
+  - one post-write router invokes the receiver hook after a newly persisted
+    inbound write (peer provenance or an empty destination host); it emits no
+    second hook for an idempotent duplicate. A host-qualified origin write
+    retains only the temporary peer wake-up until Phase AM deletion, including
+    `localhost` and the daemon's own advertised or bound IP address
+  - local CLI HTTP, host-qualified same-host HTTP, and remote peer HTTP submit
+    the same canonical write resource and request schema; TLS/authentication
+    is adapter work before that resource, never a second write endpoint,
+    persistence path, ACK path, or nudge path
+  - every canonical write orders idempotent persistence, optional receiver-side
+    acknowledgement mutation, and exactly one post-write router dispatch;
+    nudge or peer delivery must never occur before persistence
+  - a destination host is consumed as an origin-side routing selector before
+    an authenticated peer request reaches receiver-side routing; source host is
+    durable provenance shown by read/nudge/ack projections
+  - the canonical local write may persist the sender's immutable outbound
+    message record before post-write routing, but it must not create a local
+    recipient-inbox row for a remote recipient or any remote-delivery queue
+  - when a host-qualified same-host peer receipt encounters that daemon's own
+    identical retained origin ULID, storage logs
+    `peer_duplicate_write_skipped` with the ULID, both hosts,
+    `same_store_peer_receipt=true`, `database_write=skipped`, and
+    `delivery=continued`; it skips the second database write without altering origin destination-host
+    metadata; the duplicate emits neither a receiver hook nor another peer
+    wake-up. A later ACK to that
+    retained record derives its host-qualified reply target from the preserved
+    origin destination metadata and still creates the ordinary canonical ACK
+    write
 
-- `REQ-CORE-TRANSPORT-003` Remote delivery must not leave durable long-lived
-  pending messages behind when a host is unreachable.
+- `REQ-CORE-TRANSPORT-002A` Cross-host HTTPS listener, local certificate, and
+  peer-trust configuration must use durable storage-backed state rather than
+  environment variables. SQLite is the initial backend behind that trait.
 
   Required behavior:
-  - bounded transient retry is allowed for short intermittent failures
-  - retryable failures are limited to transient connect/read/write/socket-path
-    failures before remote acceptance, including timeout, connection refused,
-    connection reset, broken pipe, network unreachable, and host unreachable
-  - non-retryable failures include protocol decode/encode violations,
-    certificate validation failure, TLS/authentication mismatch, and explicit
-    remote daemon rejection
-  - after the bounded retry window expires, the send fails
-  - ATM must not keep a durable remote outbox that can leave stale messages
-    queued for days
+  - the daemon reads enabled bind/advertise interfaces, certificate identity,
+    and trusted peers from durable state
+  - CLI commands are the sole operator surface for adding, enabling,
+    disabling, replacing, removing, and listing those records
+  - if no enabled interface rows exist, no cross-host listener binds
+  - environment variables must not configure cross-host networking or trust
 
-- `REQ-CORE-TRANSPORT-004` Remote send success must require remote daemon
-  acceptance within the bounded retry window.
+- `REQ-CORE-TRANSPORT-002D` A peer authority is one durable registered DNS
+  hostname, HTTPS port, and pinned certificate fingerprint.
 
   Required behavior:
-  - sender-side daemons may record observability/audit information locally
-    while attempting remote delivery
-  - a remote send must not be reported as successfully delivered until the
-    remote daemon accepts it
-  - if the connection drops after the sender finishes writing the request but
-    before remote acceptance is confirmed, the daemon must return one typed
-    `RemoteDeliveryOutcomeUnknown` failure (`ATM_REMOTE_OUTCOME_UNKNOWN`) and
-    must not report success
-  - `RemoteDeliveryOutcomeUnknown` must be recoverable through the bounded
-    replay/re-export path rather than by silently assuming success
-  - if the bounded retry window expires without remote acceptance, the send
-    fails and must not leave durable delivered-message state behind
-  - pending replay/re-export state must be persisted in the host-scoped SQLite
-    root keyed by mailbox identity plus `message_key`, with bounded expiry and
-    operator-visible retained-failure state
+  - a hostname target exact-matches one registered authority name; its durable
+    HTTPS port selects the endpoint
+  - a literal IP target is accepted only when a bounded fresh DNS lookup of
+    exactly one registered hostname contains that address
+  - resolved addresses are not stored in SQLite or another durable alias store
+  - zero or multiple matching registered names fail closed before TLS or route
+  - reverse DNS is forbidden; an IP-only registration never authorizes a name
+  - every registered hostname must be forward-resolvable by the peers that
+    use it; a changing VPN or Wi-Fi address is updated by the host's normal
+    DNS/DDNS mechanism, never by ATM reverse lookup or a SQLite IP alias
+  - several account-owned daemons may use the same current host IP only when
+    each authority has a distinct `(hostname, port)` endpoint and certificate
+    pin; an OS bind collision fails closed and must not select another port
+  - trust add, replace, and revoke refresh the one live daemon's verifier
+    atomically without starting a second daemon
+
+- `REQ-CORE-TRANSPORT-002B` Cross-host inbound authorization must use mTLS and
+  a durable deny-by-default exact peer allowlist before routing.
+
+  Required behavior:
+  - inbound peers are rejected unless their declared stable host identity,
+    configured HTTPS port, and pinned certificate fingerprint match one
+    enabled record; the TCP source IP is routing information only
+  - wildcard, prefix/suffix, subnet-derived, and regex trust are forbidden
+  - rejection happens before router, mailbox, acknowledgement, or roster work
+  - doctor output must surface listener, certificate, and trust state without
+    exposing private key material
+
+- `REQ-CORE-TRANSPORT-002B1` A daemon may run an explicit, process-local
+  plaintext peer-wire profile only for debug/smoke diagnosis.
+
+  Required behavior:
+  - default and every normal release invocation use mTLS plus the exact peer
+    allowlist; no TLS, certificate, or allowlist failure may fall back to
+    plaintext
+  - only `atm-daemon --peer-wire-security plaintext-test` enables plaintext;
+    the setting is non-durable, not environment-driven, and a restart without
+    that argument restores mTLS
+  - plaintext-test uses the same HTTP resource, `WriteRequest`, router,
+    persistence, and post-write path as mTLS. It must not introduce a
+    plaintext-only message shape, route, nudge, or acknowledgement path
+  - plaintext-test does not authenticate or authorize a peer. A declared
+    source-host is untrusted smoke provenance only and must not be presented as
+    authenticated, used to authorize a recipient, or treated as production
+    trust evidence
+  - doctor, retained logs, smoke JSON, and XHTML label the active wire-security
+    mode. Plaintext-test evidence never satisfies mTLS/allowlist acceptance
+    criteria
+
+- `REQ-CORE-TRANSPORT-002C` Same-host proof must use the ordinary remote-host
+  contract and must not be implemented as a special loopback-only send mode.
+
+  Required behavior:
+  - same-host transport proof uses the same daemon peer listener/send path as
+    any other remote host proof
+  - `localhost` and the host's own advertised or bound IP address are valid
+    ordinary remote-host targets
+  - the required same-host transport proof targets the daemon's advertised or
+    bound virtual-Ethernet IP over TCP; a `localhost` row is address-grammar
+    coverage only and cannot substitute for that proof
+  - same-host proof must not require a dedicated wire field, request flag, or
+    special-case routing branch outside the normal remote-host classifier
+  - successful same-host rows do not by themselves authorize second-host
+    release claims
+
+- `REQ-CORE-TRANSPORT-003` Cross-host transport owns no delivery state.
+
+  **AK.2 status:** the worker-specific clauses below are historical. AK.2
+  removes the scheduler and every transient peer-work key; AK.4 and AK.5
+  replace delivery and optional resend semantics with their own requirements.
+
+  Required behavior:
+  - no replay store, outbox, retry queue, deferred receipt, remote
+    acknowledgement state, or duplicate-delivery subsystem may exist
+  - after local admission, an unavailable peer records the typed asynchronous
+    `peer_delivery_unconfirmed` outcome for the attempted immutable write; it
+    does not relabel the already-returned local admission response as a
+    transport error. A later ordinary canonical attempt reuses that identity
+  - duplicate arrival is idempotent at storage by the existing message ULID;
+    an identical already-delivered remote duplicate has no side effect, while
+    the narrow same-host retained-origin receipt defined by
+    `REQ-CORE-TRANSPORT-002` logs its skipped write and continues the ordinary
+    inbound recipient nudge without a second database write
+  - `REQ-CORE-TRANSPORT-003B` is historical and separately authorized future
+    work only; it supplies no scheduler, policy, queue, cursor, configuration,
+    or compatibility path to the current implementation
+
+- `REQ-CORE-TRANSPORT-003A` **Historical; superseded by
+  `REQ-CORE-TRANSPORT-003B`.** It records the AI.28 ordered-coordinator
+  contract and is not an active implementation requirement. Phase AK
+  supersedes the remaining worker model.
+
+  Required behavior:
+  - durable backend-neutral `PeerSyncPolicy.max_message_age` and
+    `max_batch_messages` control the feature; zero age disables it by default
+    and the batch cap defaults to 100
+  - an operator can enable policy and request a one-shot sync. Automatic work
+    is signalled only by a locally persisted host-qualified write or an
+    unconfirmed peer delivery; ordinary peer success does not create a probe
+    loop or a second scheduler
+  - storage queries locally persisted outbound records for the exact peer newer
+    than the configured age and returns their original ULID and immutable
+    payload through a storage trait
+  - every selected record uses the ordinary canonical HTTPS write request; no
+    receiver-specific replay path exists
+  - no outbox, replay store, retry queue, background monitor, checkpoint,
+    cursor, receipt, retry budget, or per-message delivery state is allowed
+  - an exact duplicate ULID/payload is a no-op except for the
+    same-host-retained-origin receipt defined by `REQ-CORE-TRANSPORT-002`,
+    which logs a skipped write and continues its inbound nudge without a
+    database write; same ULID with different immutable data returns a typed
+    conflict, logs the discrepancy, preserves the original record, and has no
+    side effect or panic
+  - explicit sync runs one bounded pass through the same per-host coordinator
+    as automatic recovery; it introduces no second transport or write route
+
+- `REQ-CORE-TRANSPORT-004` A remote write succeeds only after the remote daemon
+  accepts the canonical write request.
+
+  Required behavior:
+  - local admission alone is not remote success
+  - a failed HTTPS request may leave the already-persisted immutable local
+    sender record, but creates no remote recipient row, delivery receipt,
+    retry state, or sender-side acknowledgement mutation
+  - the receiving daemon validates the recipient against its own local roster
+    in the shared write handler; it never reads or preflights the sender host's
+    roster. A remote rejection returns the ordinary `AtmError` response and
+    leaves receiver mailbox state unchanged
+  - acknowledgement is an ordinary canonical write with
+    `acknowledges_message_id` populated; its state transition occurs only in
+    the receiver's shared write handler
+  - the origin-created message ULID and all immutable fields are preserved on
+    the receiver; exact already-delivered remote duplicates do not repeat a
+    nudge or acknowledgement transition. The same-host retained-origin
+    receipt is the narrow exception defined by `REQ-CORE-TRANSPORT-002`: it
+    logs the skipped database write and continues the inbound nudge without a
+    second record or peer re-delivery. A conflicting payload for the same ULID
+    is a typed error
 
 - `REQ-CORE-TRANSPORT-005` The daemon runtime must use concrete timeout and
   capacity limits for transport/store/health operations.
 
+  **AK.2 status:** the peer-worker deadline, job-cap, DNS, and custom-HTTPS
+  listener clauses below are historical worker-model evidence, not current
+  implementation requirements.
+
   Required behavior:
-  - same-host daemon request deadline: `3s`
-  - per-leg TCP/TLS connect deadline: `5s`
-  - per-leg TCP/TLS read/write deadline: `5s`
-  - total remote retry budget default: `30s`
-  - the remote retry budget must be configurable through one daemon transport
-    setting (`daemon.remote_retry_budget`) so operators can lengthen it on
-    unstable networks without changing code
+  - every local admission request has one absolute `RequestDeadline`; local
+    HTTP, router, dispatcher, validation, SQLite transaction, post-commit
+    signal, and response consume only its remaining budget
+  - after the admission response, a peer worker has one separate absolute
+    `PEER_DELIVERY_WORKER_DEADLINE = 10s` for its full DNS/connect/TLS/request/
+    response attempt. Neither admission nor worker code may create nested or
+    extended per-leg deadlines
   - SQLite `busy_timeout`: `5000ms`
   - ingest batch processing slice: `2s`
   - doctor health query deadline: `3s`
   - max concurrent accepts: `64`
   - max per-connection inflight requests: `32`
   - ingest queue depth: `1024`
-  - retry queue depth: `256`
+  - post-commit work queue depth: `256`; global active peer jobs: `64`; active
+    peer jobs per host: `8`. These are load/file-descriptor bounds, not FIFO
+    controls; saturation coalesces a host rescan signal and never blocks or
+    drops a committed admission
   - SQLite handle budget: `1..=4`
   - live status-cache cap: `4096`
   - saturation behavior must fail with typed errors or structured degradation,
     never silent drop
-  - outbound peer connections must resolve/bind per attempt so ordinary local
-    interface up/down changes do not require daemon restart
-  - inbound TCP/TLS listeners bound to wildcard/unspecified local addresses
-    must survive ordinary interface rebinding without daemon restart
+  - outbound peer connections resolve/bind per attempted request so ordinary
+    local interface changes do not require daemon restart
+  - inbound HTTPS listeners bound to wildcard/unspecified local addresses must
+    survive ordinary interface rebinding without daemon restart
   - if the configured listener bind address itself changes or disappears, the
     daemon must require bounded reload/rebind through the documented reload
     path and must surface degraded status until rebind succeeds
+  - HTTP request bodies are capped at `1_048_576` bytes and rejected before decode; UDS,
+    loopback TCP, and HTTPS shutdown stop accepts then drain or cancel tracked requests within
+    the one documented daemon shutdown deadline
+
+- `REQ-CORE-TRANSPORT-005A` A remote write is confirmed only after the peer
+  daemon returns canonical HTTP acceptance.
+
+  **AK.2 status:** the asynchronous worker clauses below are historical until
+  AK.4 restores direct delivery. Local admission remains durable and distinct
+  from remote acceptance.
+
+  Required behavior:
+  - origin persistence is observable separately and is never labelled sent
+  - deadline, disconnect, or failed response after dispatch returns the typed
+    `REMOTE_DELIVERY_UNCONFIRMED` error, never `DAEMON_UNAVAILABLE` when the
+    local daemon accepted the request
+  - local admission completes at the SQLite response boundary. Later bounded
+    peer work is runtime-tracked independently of the closed local connection;
+    it is not detached, because the scheduler owns cancellation, concurrency,
+    and observability, but it is not cancelled by the completed admission
+    request
+  - the possible remote side effect is resolved only by repeating the same
+    immutable ULID through ordinary idempotent write handling
+  - daemon logs record `write_persisted`, `peer_delivery_confirmed`, or
+    `peer_delivery_unconfirmed`; terminal handler/response-write failures are
+    retained structured events
+
+- `REQ-CORE-TRANSPORT-005B` The local daemon must admit and respond to at
+  least 1,000 host-qualified `send` requests per second through the public ATM
+  API.
+
+  **AK.2 status:** worker signalling, DNS, connection, TLS, and remote receipt
+  clauses below are historical. The local SQLite admission requirement and
+  its isolated evidence remain active.
+
+  Required behavior:
+  - the SQLite transaction that durably persists the immutable origin record
+    is the only synchronous operation on the admission-response path. Once it
+    commits, the daemon returns the typed local admission response; peer-job
+    signalling, DNS, connection, TLS, remote receipt, duplicate handling,
+    acknowledgement source resolution/mutation and the acknowledgement reply
+    insertion are the one atomic SQLite transaction; peer delivery, duplicate
+    handling, nudge, and hook work run asynchronously
+  - pre-persistence admission validation uses only request syntax, provenance,
+    and identity rules. The sole post-persistence `PostWriteRouter` remains
+    the owner of local-versus-host-qualified routing and consults a
+    daemon-owned reloadable runtime view, never a per-request config-file,
+    peer-config/policy store, outbound-page, DNS, socket/TLS, hook, or nudge.
+    An acknowledgement resolves its source, inserts its immutable reply, and
+    conditionally marks the source acknowledged within one SQLite transaction;
+    it has no application-layer source read before that transaction
+  - the response proves only local admission. Remote acceptance remains the
+    separate asynchronous outcome defined by `REQ-CORE-TRANSPORT-005A`; a
+    local admission response must never claim remote delivery
+  - distinct CLI/API write requests are independent. ATM makes no ordering
+    promise between their delivery attempts, even when they target the same
+    peer. Byte ordering is required only within one HTTP request/response
+    exchange, and an acknowledgement is correlated solely by its immutable
+    message ULID
+  - post-commit work uses a bounded, non-durable scheduler. It may hold
+    transient `HostName`/message-ULID jobs and in-flight coalescing markers,
+    but no payload, receipt, retry history, delivery result, or durable
+    checkpoint. A restart drops that work and rebuilds eligibility from the
+    immutable SQLite records and enabled peer policy
+  - the throughput requirement applies while the destination peer is
+    unavailable as well as healthy. Release evidence runs ten consecutive
+    one-second admission intervals against one release-built daemon using a
+    disposable isolated `ATM_HOME` and SQLite database; it must never run
+    against a shared or production ATM store. Each interval has at least 1,000
+    accepted requests and responses. Mock routers, direct dispatcher calls,
+    and disabled peer delivery do not satisfy this evidence
+  - Unix release evidence records HTTP/UDS and loopback-TCP results separately;
+    Windows records loopback TCP. Every record names its transport and uses
+    identical public request/response semantics rather than omitting response
+    handling on one transport
+  - local HTTP framing reads bounded chunks and retains over-read bytes for the
+    next frame. It must not implement header delimiter discovery as one system
+    read per byte
+
+- `REQ-CORE-REPORT-001` Durable verification evidence must be published as a
+  deterministic static report site.
+
+  Required behavior:
+  - `site/` is the publish root; `site/index.html` links to the generated
+    `site/reports/index.html`
+  - each recognized report has one HTML entry under `site/reports/` and a
+    same-named directory containing its JSON/XHTML evidence
+  - every report envelope declares `schema_version`, `report_type`,
+    `generated_at` (UTC), a relative report HTML path, and the ADR-044-safe
+    opaque `host_label`; the initial report types are `benchmark` and `fuzz`
+  - the repository report-index command regenerates the reports index after
+    every successful or failed report artifact write; a check mode fails when
+    a recognized envelope, report link, or generated index is stale
+  - the index groups report types and lists entries newest-first by UTC;
+    benchmark run envelopes aggregate to their one benchmark HTML entry
+  - transient development views under `artifacts/view` may link to reports but
+    must not duplicate, copy, or become the source of durable evidence
+  - `site/` artifacts follow ADR-044's public-data classification; raw host,
+    endpoint, identity, path, secret, and message data are rejected before
+    publication
+
+- `REQ-CORE-TRANSPORT-003B` **Historical; superseded by Phase AK.** It records
+  the retired worker reconciliation contract. AK.2 deletes its policy,
+  scheduler, and observability projection; AK.5 defines any later optional
+  resend cache only after AK.4 proves direct delivery.
+
+  Required behavior:
+  - policy selects a bounded send window and batch; zero window disables it
+  - the non-durable scheduler bounds global and per-host in-flight delivery
+    jobs. It may coalesce duplicate in-flight ULIDs, but it makes no ordering
+    promise across distinct messages and owns no durable delivery state
+  - a scheduler scan pages eligible exact-peer records through the storage
+    trait and enqueues ordinary canonical writes. It has no batch request
+    shape, recovery-only endpoint, or durable cursor; restart/next signal may
+    safely rediscover an immutable ULID through idempotent recipient storage
+  - every newly persisted outbound write signals scheduling. A signal arriving
+    during a scan or active work must cause a further eligibility scan before
+    the host is considered idle; no write may be lost between scan completion
+    and idle transition
+  - the post-write router has one `PeerDeliveryCoordinator::signal_after_persist`
+    handoff for host-qualified writes. It signals bounded background work after
+    local admission and never waits for DNS, a socket, TLS, remote receipt, or
+    another message's delivery
+  - first recovery attempt is no earlier than 60 seconds; later failures use
+    exponential backoff capped at 15 minutes
+  - each individual peer job consumes the one
+    `PEER_DELIVERY_WORKER_DEADLINE = 10s` defined by
+    `REQ-CORE-TRANSPORT-005`; the scheduler never extends it with per-leg
+    timeouts
+  - recovery submits original ULIDs through normal HTTPS; no ping, outbox,
+    cursor, receipt, payload cache, per-message attempt state, or alternate
+    write route is allowed
+  - empty window, policy disable, or peer revoke stops scheduling
+  - retained events use stable typed codes and distinguish
+    `peer_delivery_scheduled`, `peer_delivery_attempted`,
+    `peer_delivery_confirmed`, `peer_delivery_unconfirmed`, and terminal
+    `peer_delivery_expired` (eligible record aged beyond the configured
+    window), without body or certificate material. `peer_delivery_expired`
+    is observability only: it creates no durable delivery state and cannot
+    change the prior local admission result
+  - doctor exposes a bounded, secret-free per-host link projection: quality,
+    last success/failure, last typed error, next attempt, drain state, and
+    bounded candidate count. It is observability only, not durable delivery
+    state
 
 ### 22.5 Direct Post-Send And Native Agent Path
 
@@ -3697,6 +4251,26 @@ mail correctness.
   - native agent/plugin delivery and notification uses the daemon API only
   - thin-client surfaces such as graft align to the shared daemon/API contract
     rather than to a mailbox-JSON transport
+
+- `REQ-CORE-GRAFT-001` Graft is a thin embedded daemon client and bounded
+  host-wake transport, not a second mailbox or host conversation subsystem.
+
+  Required behavior:
+  - graft `send`, `read`, and `ack` use the normal daemon API and durable ATM
+    mailbox; graft has no direct SQLite, mailbox-file, or durable nudge queue
+  - a graft receiver has one explicit live owner per canonical receiver
+    identity; competing live activation fails without replacing the current
+    endpoint, and process death permits safe reclaim
+  - a host session identifier such as ADR-037 `ChatId` is preserved as an
+    opaque profile/session binding, never parsed into a second ATM transport
+    or conversation manager
+  - a host integration must deliver a nudge through its documented safe
+    between-tool-call mechanism. A Hermes integration uses non-interrupting
+    steer delivery, not normal user-message ingress
+  - after host restart/reconnect, a host integration may issue one bounded
+    advisory wake-up derived from durable unread/pending-ack counts. It must
+    not replay mail, mutate mail, create a retry loop, or persist recovery
+    state outside the ATM mailbox
 
 - `REQ-CORE-COMPAT-003` Post-send behavior must use one direct post-persist
   emitter seam.

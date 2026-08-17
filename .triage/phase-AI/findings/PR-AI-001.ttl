@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/PR-AI-001>
+  a triage:Finding ;
+  triage:findingId "PR-AI-001" ;
+  triage:title "Physical two-Mac / Mac-Windows cross-host evidence not yet run" ;
+  triage:description "docs/plans/phase-ai/readiness.md is status: blocked, recording AI10-TWOMAC-001 and AI10-WINDOWS-001 as unrun. Release blockers require real two-Mac and Mac<->Windows message/read/nudge/ack/duplicate/unavailable-peer evidence. Default `just smoke` is fixture-only (run_feature_smoke.py routes normal -> run.py) and does not close physical-host evidence. Deferred by user decision to a scheduled full smoke-test session (2026-07-28) rather than routed into the current worktree fix batch -- this is a hardware-execution gap, not a code defect." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "REQ" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "deferred" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-27T05:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-PHASE-END-QA-1 ;
+  triage:foundAt "2026-07-27T05:03:10Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PR-AI-001/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/PR-AI-001/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/readiness.md" ;
+  triage:line 1 ;
+  triage:snippet "status: blocked -- AI10-TWOMAC-001 and AI10-WINDOWS-001 recorded unrun" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "c052afe8" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate_phase_ai_c052afe8> .
+
+<urn:atm:triage:worktree/integrate_phase_ai_c052afe8>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "c052afe8" ;
+  triage:orderIndex 999 .

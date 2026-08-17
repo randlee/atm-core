@@ -1,0 +1,84 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI28-RSH-002>
+  a triage:Finding ;
+  triage:findingId "AI28-RSH-002" ;
+  triage:title "Mutex poisoning silently swallowed in 4 bookkeeping helpers" ;
+  triage:description "Four bookkeeping helper functions in peer_drain_coordinator.rs silently ignore mutex poisoning (errors from Mutex::lock() when the lock-holding thread panicked): release(), mark_generation_observed(), generation_changed(), and reset_backoff(). When any of these helpers encounter a poisoned lock (due to a panic in another thread holding the lock), they use `.unwrap_or_else()` or similar constructs to swallow the error and continue. This creates a silent failure mode: a poisoned slot lock permanently wedges that slot's state at running=true with zero observability or logging. The host loses the ability to schedule further recovery for that peer and silently stops attempting delivery. This is particularly dangerous because: (1) the lock poisoning is silent (no error is logged), (2) the coordinator worker thread can panic for legitimate reasons (e.g., a computation overflow in backoff math, or an internal invariant violation), and (3) the operator has no way to detect that recovery has stalled for a specific peer. Fix required: propagate poisoning errors as real failures (log with context, mark the slot as poisoned/stalled, and potentially take recovery offline for that peer), or at minimum log a critical-level error every time a poisoning is encountered." ;
+  triage:category "Service-Hardening" ;
+  triage:severity "Important" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-07-26T22:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently re-verified against real code on feature/pAI-s28-bounded-peer-recovery current head c0445b1a. All 4 cited functions (release() line 163, mark_generation_observed() line 172, generation_changed() line 179, reset_backoff() line 186) now return Result<_, AtmError> and propagate poisoning via self.slots()? instead of swallowing it with unwrap_or_default()/similar." ;
+  triage:foundIn triage:AICH-S8 ;
+  triage:foundAt "2026-07-25T16:53:36Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-25T09:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-RSH-002/pAI-s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-RSH-002/pAI-s28/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-RSH-002/pAI-s28/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-RSH-002/pAI-s28/4> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s28/7163648b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:occurrence/AI28-RSH-002/pAI-s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 1 ;
+  triage:snippet "release() silently ignores Mutex::lock() poisoning" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "c0445b1a" ;
+  triage:note "release() now returns Result<_, AtmError>, propagates poisoning via self.slots()?. Verified on current head c0445b1a." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:occurrence/AI28-RSH-002/pAI-s28/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 1 ;
+  triage:snippet "mark_generation_observed() silently ignores Mutex::lock() poisoning" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "c0445b1a" ;
+  triage:note "mark_generation_observed() now returns Result<_, AtmError>, propagates poisoning via self.slots()?. Verified on current head c0445b1a." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:occurrence/AI28-RSH-002/pAI-s28/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 1 ;
+  triage:snippet "generation_changed() silently ignores Mutex::lock() poisoning" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "c0445b1a" ;
+  triage:note "generation_changed() now returns Result<_, AtmError>, propagates poisoning via self.slots()?. Verified on current head c0445b1a." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:occurrence/AI28-RSH-002/pAI-s28/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 1 ;
+  triage:snippet "reset_backoff() silently ignores Mutex::lock() poisoning" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "c0445b1a" ;
+  triage:note "reset_backoff() now returns Result<_, AtmError>, propagates poisoning via self.slots()?. Verified on current head c0445b1a." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:worktree/pAI-s28/7163648b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "7163648b" ;
+  triage:orderIndex 28 ;
+  triage:status "open" .

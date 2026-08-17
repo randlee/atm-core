@@ -71,7 +71,7 @@ implementation sprints will follow.
 
 ## Non-Goals
 
-- implementing named pipes
+- implementing a Windows-specific local endpoint
 - implementing Windows service support
 - changing `atm-core` code without a documented boundary reason
 

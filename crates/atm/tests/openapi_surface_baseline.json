@@ -1,0 +1,324 @@
+{
+  "paths": {
+    "/compatibility": {
+      "post": {
+        "operation_id": "compatibilityPreflight",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/CompatibilityVerdict"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
+    "/doctor": {
+      "get": {
+        "operation_id": "doctor",
+        "request_required": false,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": null
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
+    "/heartbeat": {
+      "post": {
+        "operation_id": "teamMemberHeartbeat",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/HeartbeatResponse"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
+    "/messages": {
+      "delete": {
+        "operation_id": "clearMessages",
+        "request_required": true,
+        "responses": {
+          "204": {
+            "error": false,
+            "schema": null
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      },
+      "get": {
+        "operation_id": "listMessages",
+        "request_required": false,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/MessageList"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      },
+      "post": {
+        "operation_id": "writeMessage",
+        "request_required": true,
+        "responses": {
+          "201": {
+            "error": false,
+            "schema": "#/components/schemas/Message"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
+    "/messages/inspect": {
+      "post": {
+        "operation_id": "inspectMessages",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/MessageList"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
+    "/messages/read": {
+      "post": {
+        "operation_id": "readMessages",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/MessageList"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
+    "/messages/search": {
+      "get": {
+        "operation_id": "searchMessages",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/SearchResponse"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
+    "/runtime/reload": {
+      "post": {
+        "operation_id": "reloadRuntimeView",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": null
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    }
+  },
+  "schemas": {
+    "AgentAddress": {
+      "properties": [
+        "agent",
+        "chat_id",
+        "host",
+        "team"
+      ],
+      "required": [
+        "agent",
+        "team"
+      ]
+    },
+    "AtmError": {
+      "properties": [
+        "code",
+        "message"
+      ],
+      "required": [
+        "code",
+        "message"
+      ]
+    },
+    "ClearQuery": {
+      "properties": [],
+      "required": []
+    },
+    "CompatibilityPreflight": {
+      "properties": [],
+      "required": []
+    },
+    "CompatibilityVerdict": {
+      "properties": [],
+      "required": []
+    },
+    "HeartbeatRequest": {
+      "properties": [],
+      "required": []
+    },
+    "HeartbeatResponse": {
+      "properties": [],
+      "required": []
+    },
+    "ListQuery": {
+      "properties": [],
+      "required": []
+    },
+    "Message": {
+      "properties": [
+        "acknowledges_message_id",
+        "body",
+        "from",
+        "message_id",
+        "requires_ack",
+        "to"
+      ],
+      "required": [
+        "body",
+        "from",
+        "message_id",
+        "to"
+      ]
+    },
+    "MessageList": {
+      "properties": [
+        "cursor",
+        "messages"
+      ],
+      "required": [
+        "messages"
+      ]
+    },
+    "PeekQuery": {
+      "properties": [],
+      "required": []
+    },
+    "ReadQuery": {
+      "properties": [],
+      "required": []
+    },
+    "SearchHit": {
+      "properties": [
+        "category",
+        "from_agent",
+        "key",
+        "message_at",
+        "message_id",
+        "snippet",
+        "template_type",
+        "to_agent"
+      ],
+      "required": [
+        "from_agent",
+        "key",
+        "message_at",
+        "snippet",
+        "to_agent"
+      ]
+    },
+    "SearchRequest": {
+      "properties": [
+        "lifecycle",
+        "query"
+      ],
+      "required": [
+        "query"
+      ]
+    },
+    "SearchResponse": {
+      "properties": [
+        "aggregate",
+        "hits",
+        "next_cursor"
+      ],
+      "required": [
+        "hits"
+      ]
+    },
+    "WorkflowProjectionRequest": {
+      "properties": [
+        "end",
+        "scope_id",
+        "scope_kind",
+        "start",
+        "time_range"
+      ],
+      "required": [
+        "end",
+        "scope_kind",
+        "start"
+      ]
+    },
+    "WorkflowSelector": {
+      "properties": [
+        "stage",
+        "state",
+        "transition"
+      ],
+      "required": []
+    },
+    "WorkflowTimeRange": {
+      "properties": [
+        "since",
+        "until"
+      ],
+      "required": []
+    },
+    "WriteRequest": {
+      "properties": [
+        "acknowledges_message_id",
+        "body",
+        "from",
+        "message_id",
+        "requires_ack",
+        "to"
+      ],
+      "required": [
+        "body",
+        "from",
+        "message_id",
+        "to"
+      ]
+    }
+  }
+}

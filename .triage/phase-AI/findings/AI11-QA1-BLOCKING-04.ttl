@@ -1,0 +1,144 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI11-QA1-BLOCKING-04>
+  a triage:Finding ;
+  triage:findingId "AI11-QA1-BLOCKING-04" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-21T12:28:16Z"^^xsd:dateTime ;
+  triage:title "docs/project-plan.md has no AI.11 entry" ;
+  triage:description "req-qa finding: grep -n 'AI.11' docs/project-plan.md -> no hits. Phase AI table jumps AI.7 -> AI.8 -> AI.9 -> AI.10 with no AI.11 row." ;
+  triage:category "QA" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "docs/project-plan.md Phase AI table -- check whether AI.12-16 rows are also missing since those sprints have not yet reported completion" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "2026-07-27 (quality-mgr): independently re-verified at integrate/phase-AI@f3b6a77a — docs/project-plan.md:978 now has 'AI.11 | route-specific HTTP bodies and Windows loopback-TCP local transport' row; the original 'no AI.11 entry, table jumps AI.7->AI.10' complaint no longer holds. Separate observation, NOT part of this finding's original claim and not blocking its closure: the row's status column still reads 'in progress' though AI.11 has long since merged forward through many later sprints (s27+) -- that staleness is a new, distinct doc-status defect; filing a fresh finding if not already tracked elsewhere is appropriate, but does not reopen this one. Confirmed via direct grep of current file, not self-report." ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-21T12:28:16Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA1-BLOCKING-04/pAI-s11/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA1-BLOCKING-04/pAI-s12/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA1-BLOCKING-04/pAI-s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA1-BLOCKING-04/pAI-s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA1-BLOCKING-04/pAI-s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA1-BLOCKING-04/pAI-s16/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s11/568723c5> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s12/b64e8358> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s13/b64e8358> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s14/b64e8358> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s15/b64e8358> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s16/b64e8358> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s16/b64e8358> .
+
+<urn:atm:triage:occurrence/AI11-QA1-BLOCKING-04/pAI-s11/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 979 ;
+  triage:snippet "Phase AI table ends at AI.10; no AI.11 row" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "568723c5" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s11/568723c5> .
+
+<urn:atm:triage:occurrence/AI11-QA1-BLOCKING-04/pAI-s12/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 979 ;
+  triage:snippet "Phase AI table ends at AI.10; no AI.12 row" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:headSha "b64e8358" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s12/b64e8358> .
+
+<urn:atm:triage:occurrence/AI11-QA1-BLOCKING-04/pAI-s13/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 979 ;
+  triage:snippet "Phase AI table ends at AI.10; no AI.13 row" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "b64e8358" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s13/b64e8358> .
+
+<urn:atm:triage:occurrence/AI11-QA1-BLOCKING-04/pAI-s14/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 979 ;
+  triage:snippet "Phase AI table ends at AI.10; no AI.14 row" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "b64e8358" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s14/b64e8358> .
+
+<urn:atm:triage:occurrence/AI11-QA1-BLOCKING-04/pAI-s15/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 979 ;
+  triage:snippet "Phase AI table ends at AI.10; no AI.15 row" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "b64e8358" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s15/b64e8358> .
+
+<urn:atm:triage:occurrence/AI11-QA1-BLOCKING-04/pAI-s16/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 979 ;
+  triage:snippet "Phase AI table ends at AI.10; no AI.16 row" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "b64e8358" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s16/b64e8358> .
+
+<urn:atm:triage:worktree/pAI-s11/568723c5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "568723c5" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pAI-s12/b64e8358>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
+  triage:headSha "b64e8358" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-s13/b64e8358>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "b64e8358" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAI-s14/b64e8358>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "b64e8358" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-s15/b64e8358>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "b64e8358" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAI-s16/b64e8358>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "b64e8358" ;
+  triage:orderIndex 5 .

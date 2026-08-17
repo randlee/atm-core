@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ARCH-AI-002>
+  a triage:Finding ;
+  triage:findingId "ARCH-AI-002" ;
+  triage:title "atm-daemon-client/src/lib.rs exceeds RULE-003 1000-line non-test ceiling" ;
+  triage:description "crates/atm-daemon-client/src/lib.rs non-test body is 1626 lines (test mod starts at 1124; re-verified total is 1626, larger than originally cited 1495) -- RULE-003 violation, needs module split." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-27T05:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-PHASE-END-QA-1 ;
+  triage:foundAt "2026-07-27T05:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AI-002/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ARCH-AI-002/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 1 ;
+  triage:snippet "1626 non-test lines, exceeds 1000-line RULE-003 ceiling" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "1ea59d89" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate_phase_ai_1ea59d89> .
+
+<urn:atm:triage:worktree/integrate_phase_ai_1ea59d89>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "1ea59d89" ;
+  triage:orderIndex 999 .
+
+<urn:atm:triage:finding/ARCH-AI-002>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:correctionNote "quality-mgr (2026-07-27): QA-1 for PR #667 (fix/phase-ai-arch-line-ceilings @ 46d2af22) closes this finding. Module extraction of crates/atm-daemon-client/src/http_exchange.rs (new, 134 lines, all pub(crate), wired into the hot local-IPC path via exchange_request_with_transport) plus the pre-existing compatibility.rs/local_transport.rs splits reduced lib.rs's non-test body. Independently re-ran the repo's actual canonical classifier (lint_common.classify_rust_test_scope + is_code_line -- the literal per-file code path .just/check_line_counts.py executes) directly against lib.rs: prod=859, test=459, total=1481 -- under the 1000-line ceiling, matching arch-ctm's cited figure exactly. Confirmed by req-qa, arch-qa, ruthless-boundary-qa (boundary clean, no leaked internals), rust-qa-agent (fmt/clippy/tests clean), rust-best-practices-agent (no dead code from extraction), and quality-mgr direct verification." .

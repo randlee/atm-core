@@ -1,0 +1,59 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI28-QA1-F002>
+  a triage:Finding ;
+  triage:findingId "AI28-QA1-F002" ;
+  triage:aliasIds "AI28-RBQA-F001,AI28-ARCH-002,RBQA-AI28-2" ;
+  triage:title "Sprint-doc-mandated concurrency/race tests entirely absent" ;
+  triage:description "crates/atm-daemon/src/peer_drain_coordinator.rs (515 new lines, the component owning the worker thread, slot leasing, generation-based missed-write detection, and exponential backoff) has zero #[cfg(test)] coverage of its own. The sprint acceptance criteria explicitly require: fake-clock tests for backoff min/cap/reset/revoke/empty-window/restart; a single-flight same-host contention test; and tests forcing both generation-change race windows. None of these exist. The component's only coverage is indirect through integration tests exercising the happy path. Additionally, AI.27's prior cooldown-map test (automatic_peer_sync_cooldown_is_bounded_and_expires) was deleted with no bounded-capacity replacement for the new per-host slot map, violating the no-test-deletion-during-coupling-moves policy. This is classified as Blocking because it is an explicitly-named, sprint-scoped acceptance criterion, not an optional follow-up. Independently corroborated by 4 of 6 reviewers (req-qa, rust-best-practices-agent, arch-qa, ruthless-boundary-qa) as the same underlying gap, though severity classifications differ." ;
+  triage:category "QA" ;
+  triage:severity "blocking" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-07-26T22:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently re-verified against real code on feature/pAI-s28-bounded-peer-recovery current head c0445b1a (not accepted from arch-ctm's b7d84882 self-report). 7 dedicated tests now present in peer_drain_coordinator.rs covering all cited acceptance criteria: retry_backoff_starts_at_one_minute_caps_and_resets (min/cap/reset), generation_change_requires_another_final_scan (generation final scan), only_unconfirmed_delivery_errors_schedule_recovery (retry classification), scheduled_timestamp_reports_the_real_backoff_not_the_current_instant + failed_recovery_records_the_real_next_attempt_timestamp (real timestamp), same_host_waiter_is_released_without_polling_after_the_active_lease (same-host lease contention), coordinator_rejects_a_new_host_once_slot_capacity_is_reached (capacity)." ;
+  triage:foundIn triage:AICH-S8 ;
+  triage:foundAt "2026-07-25T16:53:36Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-25T09:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-QA1-F002/pAI-s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-QA1-F002/pAI-s28/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s28/7163648b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:occurrence/AI28-QA1-F002/pAI-s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 1 ;
+  triage:snippet "Missing: no #[cfg(test)] module for backoff/contention/race-window tests" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "c0445b1a" ;
+  triage:note "Fixed at b7d84882: 7 direct deterministic tests added. Verified on current head c0445b1a." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:occurrence/AI28-QA1-F002/pAI-s28/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_observability.rs" ;
+  triage:line 1 ;
+  triage:snippet "Missing: test-time generation of PeerDeliveryEvent with real coordinator path (only hand-constructed objects with next_attempt_at: None)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "c0445b1a" ;
+  triage:note "Covered by failed_recovery_records_the_real_next_attempt_timestamp exercising the real coordinator path. Verified on current head c0445b1a." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:worktree/pAI-s28/7163648b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "7163648b" ;
+  triage:orderIndex 28 ;
+  triage:status "open" .

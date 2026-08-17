@@ -1,0 +1,73 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F012>
+  a triage:Finding ;
+  triage:findingId "RBP-F012" ;
+  triage:title "unaliased 4-level generic Mutex<Option<Arc<dyn HttpsMessageTransport>>> repeated with inconsistent wrapping" ;
+  triage:description "crates/atm-daemon/src/composition.rs:138 + peer_drain_coordinator.rs:99/119 + runtime_health.rs:163/174 repeat an unaliased 4-level generic (Mutex<Option<Arc<dyn HttpsMessageTransport>>>) with two inconsistent wrapping conventions across sites, no shared type alias." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-27T05:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-PHASE-END-QA-1 ;
+  triage:foundAt "2026-07-27T05:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F012/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F012/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F012/3> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBP-F012/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 138 ;
+  triage:snippet "Mutex<Option<Arc<dyn HttpsMessageTransport>>>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "1ea59d89" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate_phase_ai_1ea59d89> .
+
+<urn:atm:triage:occurrence/RBP-F012/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 99 ;
+  triage:snippet "same generic, inconsistent wrapping" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "1ea59d89" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate_phase_ai_1ea59d89> .
+
+<urn:atm:triage:occurrence/RBP-F012/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 163 ;
+  triage:snippet "same generic, inconsistent wrapping" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "1ea59d89" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate_phase_ai_1ea59d89> .
+
+<urn:atm:triage:worktree/integrate_phase_ai_1ea59d89>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "1ea59d89" ;
+  triage:orderIndex 999 .
+
+<urn:atm:triage:finding/RBP-F012>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:correctionNote "quality-mgr (2026-07-27): QA-1 for PR #668 (fix/phase-ai-rbp-boundary-cleanup @ de438f19). SharedHttpsTransport type alias (pub(crate) type SharedHttpsTransport = Arc<Mutex<Option<Arc<dyn HttpsMessageTransport>>>>;) defined once at crates/atm-daemon/src/https_transport.rs:92, now consumed consistently at all 3 former divergent sites: composition.rs:138, peer_drain_coordinator.rs:100/120, runtime_health.rs:165/176 (plus construction sites at runtime_health.rs:450/974). No leftover unaliased occurrences confirmed by ruthless-boundary-qa workspace sweep. All 6 QA-1 reviewers independently confirmed. CI green 8/8 legs." .

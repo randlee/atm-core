@@ -1,11 +1,13 @@
 ---
 name: sprint-report
-description: Generate a sprint status report for the current phase. Default is --table.
+version: 1.1.0
+description: Generate an authoritative sprint status report from an integrate/phase-* worktree and repair reported TTL, QA, or GitHub source-data gaps before rendering. Use for sprint status, phase reports, report data gaps, or `/sprint-report`.
 ---
 
-# Sprint Report Skill
+# Sprint Report
 
-Build fenced JSON and pipe to the Jinja2 template. `mode` controls table vs detailed.
+Generate canonical JSON, repair every reported gap at its source, then render.
+`mode` controls table versus detailed output.
 
 ## Usage
 
@@ -17,25 +19,52 @@ Default: `--table`
 
 ---
 
-## Data Source
-
-**Always use `atm gh pr list` first** - single call, returns all open PRs with CI and merge state:
+## Step 1 — Verify CLI dependencies
 
 ```bash
-atm gh pr list
+which sc-compose && sc-compose --version
+python3 -c 'import rdflib'
 ```
 
-This is faster and sufficient for populating `sprint_rows` and `integration_row`. Only drill into individual `gh run view` calls if you need failure details for a specific job.
+If either check fails, read
+[`references/installation-and-troubleshooting.md`](references/installation-and-troubleshooting.md),
+repair the environment, and rerun these checks before continuing.
 
-**Dogfooding rule**: If `atm gh pr list` output is missing information needed to fill the report (e.g., no per-job failure detail, no QA state, truncated CI summary), **file a GitHub issue** describing what field or format change would make it sufficient, then improve the command. Do not silently work around gaps with extra `gh` CLI calls - surface them as product issues.
+## Step 2 — Produce the canonical source
 
-## Render Command
+Use the canonical triage report. It resolves the current `integrate/phase-*`
+worktree and reads only that phase's Turtle findings; never assemble counts from
+a sprint worktree, a QA snapshot, or a hand-maintained metadata file.
+
+```bash
+python3 .claude/skills/triage-report/scripts/triage_report.py \
+  --phase AICH --format vars > /tmp/sprint-report.json
+```
+
+The command includes current GitHub PR/CI state.
+
+## Step 3 — Repair a nonzero result
+
+For either `kind: "data_gap"` (exit 3) or `kind: "error"` (exit 2), do not
+render, substitute values, or switch source worktrees. Read the single repair
+authority: [TTL Repair Guide](../../../docs/triage/ttl-repair.md).
+
+For `data_gap`, process every JSON `remediations[]` item:
+
+1. Use its `target_branch` integration worktree and repair its exact `path`.
+2. Perform the direct `action`, then run the validation required by the guide.
+3. Commit and land the source correction through the normal PR/QA path.
+4. Rerun the command. Repeat until it exits zero.
+
+For `error`, follow `error.suggested_action` and the same guide. A structural
+failure is repaired in source, not explained away in the report.
+
+## Step 4 — Render only a zero-exit report
 
 The template path is relative - must run from the **main repo root** (not a worktree).
 
 ```bash
 cd "${CLAUDE_PROJECT_DIR:-$(git worktree list | head -1 | awk '{print $1}')}"
-echo '<json>' > /tmp/sprint-report.json
 sc-compose render .claude/skills/sprint-report/report.md.j2 --var-file /tmp/sprint-report.json
 ```
 

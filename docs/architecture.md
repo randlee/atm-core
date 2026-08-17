@@ -1,5 +1,11 @@
 # ATM CLI Architecture
 
+> **Phase AI target — not yet implemented:** the daemon API becomes REST over
+> HTTP: Unix HTTP/UDS or loopback TCP, Windows loopback TCP, and HTTPS/TCP for
+> remote peers. ADR-032 through ADR-038 and `REQ-CORE-TRANSPORT-*` govern that
+> migration. The current implementation remains the custom transport contract
+> documented by the current boundary manifests.
+
 ## 1. Overview
 
 The current target architecture keeps the ATM CLI surface, but moves durable
@@ -14,7 +20,7 @@ The current merged workspace contains:
 The daemon/runtime expansion adds:
 - `atm-daemon`: daemon runtime binary / transport host
 - `atm-runtime`: concrete runtime/store composition root
-- `atm-rusqlite`: first concrete SQLite store implementation
+- `atm-storage-rusqlite`: first concrete SQLite store implementation
 
 The CLI stays thin. Product logic moves into `atm-core`.
 
@@ -78,6 +84,21 @@ moved into:
 - [`docs/atm-runtime/architecture.md`](./atm-runtime/architecture.md)
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 
+### 1.3 Verification Report Site
+
+`site/` is the repository's durable static verification-report publish root.
+`just reports-index` runs `.just/generate_report_index.py` to discover
+schema-versioned report envelopes, validate their relative HTML/evidence
+paths, and generate `site/reports/index.html`. AI.47 owns generation of
+`site/index.html`, which links to that reports index. The generator owns report
+discovery: benchmark envelopes aggregate to one report; fuzz envelopes produce
+one report entry per campaign. Report producers invoke it after every artifact
+write, and `just reports-index --check` rejects stale or invalid report
+indexes. Under ADR-044, `site/` is public data: envelopes carry only an opaque
+`host_label`, never raw host or endpoint data.
+`.just/build_view_site.py` may expose links only; `artifacts/view` is transient
+and never a second report renderer.
+
 Phase-Q supersession note:
 - earlier daemon-free architecture statements in this file are historical from
   the prior rewrite line
@@ -104,14 +125,9 @@ Phase-S portability note:
 - feature parity across supported operating systems is mandatory; platform-
   specific implementation differences are allowed only behind documented ATM-
   owned portability boundaries
-- the canonical daemon wire contract is documented in
-  [`docs/atm-daemon/protocol-icd.md`](./atm-daemon/protocol-icd.md)
-- exact wire-header constants, packet-kind assignments, payload DTO mapping,
-  and the current daemon packet-surface inventory are owned by that ICD
-- the current daemon packet family is intentionally smaller than the retained
-  CLI surface:
-  - daemon packets: `send`, `ack`, `read`, `clear`, `doctor`, heartbeat
-  - non-packet retained surfaces: `log`, `teams`, `members`
+- the legacy frame protocol is deleted and has no fallback contract
+- Phase AI's target HTTP resources and schemas are owned by
+  [`docs/atm-daemon/http-api.md`](./atm-daemon/http-api.md)
 - S.5 planning adds `atm list` as a distinct CLI query surface; S.7 owns the
   implementation line that refines the queue-query packet mapping instead of
   preserving the old multi-message `read` response shape as the final
@@ -238,17 +254,22 @@ Crate-local boundary detail is owned by:
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 - [`docs/atm-rusqlite/boundaries.md`](./atm-rusqlite/boundaries.md)
 
-Current Phase R boundary direction:
+Historical Phase R boundary direction (retired by Phase AI):
 - shared protocol contract: `AtmProtocol` in `atm-core`
 - outbound transport boundary: `ClientTransport`
 - inbound transport boundary: `ServerTransport`
 - request routing boundary: `RequestDispatcher`
-- outbound post-send boundary: `PostSendHookEmitter`
+- receiver-only notification boundary: `MessageReceivedHookEmitter`
 - inbound runtime status boundary: `StatusSource`
-- current production composition ownership:
+- historical production composition ownership:
   - `atm` is the CLI client composition root
   - `atm-daemon` is the runtime composition root
   - a separate composition crate remains out of scope unless an ADR opens it
+- Phase AI target boundaries (not yet implemented):
+  - `ApiRequest` / `ApiResponse` application contract
+  - `DaemonApiClient` for CLI, graft, and tests
+  - `ApiRouter` reached by every HTTP transport adapter
+  - `PostWriteRouter` invoked after canonical persistence
 - Phase AA target ownership:
   - `atm` remains the CLI composition root
   - `atm-runtime` becomes the concrete runtime/store composition root
@@ -692,8 +713,10 @@ Architectural rules:
   canonical sender identity in SQLite-owned state
 - self-send checks, target validation, routing, and audit logic must use the
   canonical sender identity rather than the display-oriented `from` projection
-- the shared send-context path must reject canonical same-team self-addressed
-  sends before message-body persistence and before `dry-run` can report success
+- the shared send-context path rejects canonical same-team self-addressed sends
+  only when their destination has no host, before message-body persistence and
+  before `dry-run` can report success; a host-qualified destination proceeds
+  to ordinary host routing without a locality lookup
 - ATM-owned post-send hooks are best-effort recipient-scoped helpers, not part
   of the atomic send boundary
 - the hook runs only after a successful non-`dry-run` send or ack; it fires
@@ -1371,13 +1394,21 @@ Architectural rules:
 The retained `members` surface is a local roster inspection service.
 
 Architectural rules:
-- it must succeed without daemon or hook-only state
+- it must succeed without daemon or hook-only state; live runtime enrichment is
+  best-effort and the command falls back to the durable local roster when the
+  daemon is unavailable
 - it must load the roster from local team config
 - it should order members deterministically, with `team-lead` first when
   present
 - it may surface persisted member metadata already present in config
-- later hook/session enrichment may be layered on without changing the base
-  local verification purpose of the command
+- daemon-sourced session, pid, state, and timestamp enrichment may be layered
+  on without changing the base local verification purpose of the command; the
+  enrichment is diagnostic telemetry and is never required for roster
+  inspection to succeed
+- this daemon-free fallback is the CLI-side half of the runtime-health
+  observation boundary described in Section 21.6.3: `MembersCommand::run`
+  renders the retained roster even when `runtime_snapshot` cannot obtain a
+  daemon response, while any returned observation remains telemetry only
 
 ## 7. Read Pipeline
 
@@ -1789,21 +1820,24 @@ Logging architecture:
 
 ## 15. Error Model
 
+**Current implementation.** `AtmError` is defined in `atm-storage` as ATM's
+sole serializable error contract. The Phase AI HTTP response body uses this
+same stable `{ code, message, cause? }` shape; it does not introduce a second
+public error model.
+
 Root public error:
 
 ```rust
 pub struct AtmError {
-    pub code: AtmErrorCode,
-    pub kind: AtmErrorKind,
-    pub message: String,
-    pub recovery: Option<String>,
-    pub source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    code: AtmErrorCode,
+    message: String,
+    cause: Option<String>,
 }
 ```
 
 ```rust
 pub enum AtmErrorCode {
-    // single central registry re-exported from crates/atm-core/src/error_codes.rs
+    // single central registry re-exported from atm-storage
 }
 ```
 
@@ -2239,7 +2273,7 @@ Governing ADR:
   lives on a read-only filesystem, so ATM cannot create, update, or remove the
   required mailbox-lock artifact
 - `MailboxLockTimeout` / `ATM_MAILBOX_LOCK_TIMEOUT` — lock not acquired within timeout
-- New `AtmErrorKind::MailboxLock` variant in `error.rs`
+- New `AtmErrorCode::MailboxLock` code in the central registry
 
 ### 18.6 Shared Mutable File Atomicity
 
@@ -2559,6 +2593,12 @@ Minimum canonical roster-member durable fields:
 - `recipient_pane_id TEXT NULL`
   - authoritative post-send-hook pane mapping when known
 
+The canonical harness values are `claude-code`, `codex-cli`, `gemini-cli`,
+`opencode`, `hermes`, and `python-graft`. `hermes` is the named Hermes Python
+gateway integration; `python-graft` is the generic value for any Python host
+that receives messages through the `atm-graft` interface. Both Python graft
+harnesses use the non-Claude delivery path and do not require a tmux pane.
+
 `pid` is not part of the canonical roster-member durable schema. It remains
 transient daemon-owned runtime state only.
 
@@ -2583,26 +2623,10 @@ Required invariants:
 - no normal command path relies on implicit autocommit as its correctness
   model
 
-### 21.1.3 Crash Recovery And Replay
+### 21.1.3 Crash Recovery
 
-Crash recovery must preserve durable truth before any historical compatibility
-export or remote handoff.
-
-Required architectural rules:
-- the ordering rule is `SQLite commit -> historical export / remote handoff`
-- re-export/replay is keyed by durable `message_key`
-- if daemon-managed retry/re-export state must survive crash, it is stored in
-  SQLite with a bounded expiry/deadline rather than remaining RAM-only
-- remote replay rows live in the host-scoped SQLite root and are keyed by
-  mailbox identity plus durable `message_key` so startup resume can replay
-  pending remote handoff without duplicating committed local state
-- daemon startup is fail-closed when the persisted replay store cannot be
-  opened, because the bounded replay-resume sweep is part of the serving
-  startup contract rather than an optional degraded-mode feature
-- WAL checkpoint is part of graceful shutdown, but recovery correctness must
-  not depend on graceful shutdown having succeeded
-- persisted retry state must not become a long-lived remote outbox; expired
-  retry rows fail closed during replay
+Crash recovery preserves the committed local mailbox. The daemon owns no
+remote replay store, deferred outbox, or retry state.
 
 ### 21.2 Compatibility Surfaces
 
@@ -2682,12 +2706,6 @@ There are three distinct paths:
    - native agents talk to the local daemon API
    - the daemon commits through the SQLite store boundary
 
-3. Remote host path
-   - cross-host delivery is daemon-to-daemon only
-   - routing expands from `agent@team` to `agent@team.host`
-   - sender-side daemons do not write remote host mailbox JSON directly
-   - successful remote delivery requires remote daemon acceptance
-
 ### 21.3.1 New-Message Failure Contract
 
 The accepted daemon + SQLite runtime keeps one direct post-persist rule for new
@@ -2698,8 +2716,8 @@ Architectural rules:
 - send success is durable ATM persistence
 - after persistence, ATM may emit one post-send effect when the recipient
   exposes that capability
-- the shipped default emitter path is the built-in in-process
-  `PostSendHookEmitter` delivery path
+- the shipped default emitter path is the receiver-only
+  `MessageReceivedHookEmitter` delivery path
 - the built-in renderer selects exactly one of six named template kinds:
   `delivery`, `delivery_ack`, `delivery_task`, `delivery_task_ack`,
   `acknowledge`, and `acknowledge_task`
@@ -2731,15 +2749,11 @@ Architectural rules:
   `DeliveryPlan`/`NotificationSink` or a daemon-owned notification
   worker/runtime
 
-### 21.4 One Interface, Two Transport Implementations
+### 21.4 One Same-Host Interface
 
-ATM uses one daemon API with two production transport adapters plus one
-test transport:
+ATM uses one same-host daemon API plus one test transport:
 
-- same-host: one cross-platform local IPC contract
-  - Unix implementation: Unix domain socket
-  - Windows implementation: named-pipe-backed local IPC
-- cross-host: TCP/TLS
+- same-host target: HTTP over Unix UDS or loopback TCP; Windows loopback TCP
 - tests: in-process `test-socket`
 
 This is one protocol with multiple implementations, not multiple systems.
@@ -2760,14 +2774,6 @@ Test-transport rule:
 - `test-socket` implements the same dispatcher/handler contract without real
   socket I/O so subsystem and daemon-boundary tests can exercise the transport
   boundary in process
-
-Remote-delivery semantics:
-- bounded transient retry is acceptable for short intermittent failures
-- there is no durable long-lived remote outbox
-- if the remote host remains unreachable after the bounded retry window, send
-  fails rather than leaving stale pending delivery behind
-- sender-side daemons do not treat a remote send as delivered until the remote
-  daemon accepts it
 
 ### 21.5 Singleton Daemon
 
@@ -2909,17 +2915,16 @@ Minimum method set:
 #### Transport
 
 Dispatch model:
-- request/response for same-host and remote daemon traffic
+- request/response for same-host daemon traffic
 - the same dispatch contract must also support the in-process `test-socket`
   transport used by tests
 
 Object-safety rule:
-- callers depend on an object-safe transport trait or façade so local and
-  remote adapters remain swappable
+- callers depend on an object-safe transport trait or façade so the local
+  adapter remains replaceable by the test transport
 
 Minimum method set:
 - serve local daemon API
-- send remote daemon request
 - query daemon health
 - shut down listener/connection set gracefully
 - construct or bind an in-process `test-socket` endpoint for transport-boundary
@@ -2930,7 +2935,7 @@ Dispatcher rule:
 - the dispatcher owns request-kind routing only
 - request-family behavior lives in injectable handlers behind that dispatcher
 - adding a new request type must not require embedding business logic into
-  Unix-socket or TCP/TLS adapter code
+  local-IPC adapter code
 
 Socket receive loop rule:
 - the receive loop must stay intentionally small
@@ -3052,6 +3057,13 @@ Architectural rules:
   - aggregate active/idle/offline/unknown member counts
 - CLI code must not inspect private daemon state directly to synthesize health
   answers
+- Runtime observation (state, pid, session, and timestamps) is daemon-memory
+  telemetry. Only heartbeat and successful environment-attested local CLI or
+  graft ingress update it; it never selects routing, nudge, retry, admission,
+  delivery, notification, or policy behavior.
+- Changed trusted pid/session replaces the current observation and emits
+  retained diagnostic evidence. It does not reject ingress, create an
+  `IdentityConflict` lifecycle state, degrade readiness, or alter cache policy.
 
 Phase AA target doctor split:
 - daemon health remains a separate explicit request/response boundary for
@@ -3086,10 +3098,6 @@ Phase R operational defaults:
 - daemon auto-start publish deadline: `10s`
   (`AUTO_START_PUBLISH_TIMEOUT`)
 - same-host daemon request deadline: `3s`
-- per-leg TCP/TLS connect deadline: `5s`
-- per-leg TCP/TLS read/write deadline: `5s`
-- total remote retry budget default: `30s` via
-  `daemon.remote_retry_budget`
 - SQLite `busy_timeout`: `5000ms`
   - authoritative since `R.5`; supersedes the pre-`R.5` `1500ms` baseline
 - ingest batch processing slice: `2s`
@@ -3099,7 +3107,6 @@ Required caps:
 - max concurrent accepted connections: `64`
 - max per-connection inflight requests: `32`
 - ingest queue depth: `1024`
-- retry queue depth: `256`
 - SQLite handle budget: `1..=4`
 - status-cache cap: `4096`
 
@@ -3111,31 +3118,6 @@ Required runtime-control behavior:
   sequence on every platform
 - the reload control path triggers bounded rescan/reload without dropping
   singleton ownership
-
-Remote peer transport rules:
-- retryable remote peer failures are limited to transient socket/network
-  failures before remote acceptance:
-  - timeout
-  - connection refused
-  - connection reset / aborted
-  - broken pipe
-  - host unreachable / network unreachable
-- non-retryable failures include:
-  - protocol/frame decode failures
-  - TLS/certificate/authentication mismatch
-  - explicit remote daemon rejection
-- if a connection drops after the request write completes but before the remote
-  daemon confirms acceptance, the send result is one typed
-  `RemoteDeliveryOutcomeUnknown` failure (`ATM_REMOTE_OUTCOME_UNKNOWN`)
-- outbound peer delivery must resolve and open a fresh connection per attempt;
-  ordinary local interface changes must not require daemon restart for new
-  outbound attempts
-- TCP/TLS listeners bound to wildcard/unspecified local addresses must remain
-  the default so cable/unplug or Wi-Fi/ethernet rebinding does not require
-  restart in the normal case
-- if an operator binds the listener to one explicit local address and that
-  address disappears or changes, the daemon must surface degraded status and
-  require bounded reload/rebind rather than silently claiming readiness
 
 Phase R daemon implementation notes:
 - per-connection inflight cap `32` is documented now, but the current daemon

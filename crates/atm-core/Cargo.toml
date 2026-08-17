@@ -20,7 +20,8 @@ name = "atm_core"
 test-utils = []
 
 [dependencies]
-atm-storage = { path = "../atm-storage", version = "1.3.1" }
+atm-error = { path = "../atm-error", version = "1.4.2" }
+atm-storage = { path = "../atm-storage", version = "1.4.2" }
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
@@ -30,12 +31,17 @@ chrono = { version = "0.4", features = ["serde"] }
 toml = "0.8"
 parking_lot = "0.12"
 ulid.workspace = true
+base64.workspace = true
+getrandom.workspace = true
+semver.workspace = true
+fs4 = "0.13"
+async-trait.workspace = true
 
 [dev-dependencies]
-fs2 = "0.4"
 atm-runtime-test-support = { path = "../atm-runtime-test-support" }
 serial_test = "3"
 tempfile = "3"
+tracing-subscriber.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_Threading", "Win32_UI_Shell"] }

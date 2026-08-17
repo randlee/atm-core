@@ -1,5 +1,12 @@
 # ATM-Daemon Crate Requirements
 
+> **Phase AI supersession notice:** `REQ-DAEMON-TRANSPORT-001` through `008`
+> are the proposed target contract for Unix UDS/loopback-TCP HTTP, Windows
+> loopback-TCP HTTP, and remote HTTPS. Any
+> older text in this document that permits a custom ATM frame, replay/retry
+> state, or a peer-transport runtime is historical and will be
+> removed by the owning Phase AI sprint; it is not authority for new work.
+
 ## 1. Purpose
 
 This document defines the `atm-daemon` crate requirements.
@@ -15,7 +22,7 @@ The crate-local machine-readable boundary inventory lives in:
 - [`./boundaries.md`](./boundaries.md)
 
 The canonical daemon transport wire contract lives in:
-- [`./protocol-icd.md`](./protocol-icd.md)
+- [`./http-api.md`](./http-api.md)
 
 The canonical daemon observability boundary contract lives in:
 - [`./observability.md`](./observability.md)
@@ -29,7 +36,6 @@ The canonical daemon/client recovery text rule set lives in:
 
 - singleton daemon startup and host ownership
 - same-host daemon API transport
-- cross-host daemon-to-daemon transport
 - daemon-private orchestration around injected `atm-core` service boundaries
 - live agent status cache
 - daemon-side `sc-observability` emission
@@ -116,11 +122,6 @@ Initial crate requirement IDs:
 - `REQ-DAEMON-RUNTIME-004` `atm-daemon` owns concrete resource-cap and
   saturation policy for runtime queues, accepts, and store handles. Satisfies:
   `REQ-CORE-QA-RUNTIME-001`.
-- `REQ-DAEMON-RUNTIME-005` `atm-daemon` owns crash-recovery and replay policy
-  around daemon-managed delivery/export work. Satisfies:
-  `REQ-CORE-TRANSPORT-004`, `REQ-CORE-LOCK-RETIRE-001`.
-  The replay store is a fail-closed startup dependency because the bounded
-  replay-resume sweep must run before the daemon can enter serving state.
 - `REQ-DAEMON-RUNTIME-006` `atm-daemon` daemon-private control-plane code must
   be partitioned into explicit ownership modules rather than one mixed
   crate-root implementation surface. Satisfies:
@@ -138,50 +139,80 @@ Initial crate requirement IDs:
   Phase AD note:
   - daemon watch/reconcile lanes are retired from the accepted runtime rather
     than preserved as the active closure of this rule
-- `REQ-DAEMON-TRANSPORT-001` `atm-daemon` owns one protocol with two
-  production transport implementations plus one test transport:
-  - one cross-platform local IPC contract for same-host
-    - Unix implementation: Unix domain socket
-    - Windows implementation: named-pipe-backed local IPC
-  - TCP/TLS for cross-host daemon-to-daemon traffic
-  - `test-socket` — implemented as `LoopbackClientTransport`; see ADR-003
-    §Tier 2 — for in-process transport-boundary tests
+- `REQ-DAEMON-TRANSPORT-001` `atm-daemon` owns one HTTP router with local,
+  peer, and test adapters:
+  - Unix: HTTP over UDS and supported HTTP over loopback TCP for same-host
+    access
+  - Windows: HTTP over loopback TCP only for same-host access
+  - HTTPS over TCP for cross-host daemon-to-daemon traffic
+  - an in-process HTTP adapter; see ADR-003 §Tier 2 — for transport-boundary
+    tests
   Satisfies:
   `REQ-CORE-TRANSPORT-001`, `REQ-CORE-TRANSPORT-002`.
-- `REQ-DAEMON-TRANSPORT-002` `atm-daemon` owns bounded transient retry for
-  remote delivery and must not create a durable long-lived remote outbox.
+- `REQ-DAEMON-TRANSPORT-002` `atm-daemon` owns no cross-host delivery state.
+  It must not create a replay store, remote outbox, retry queue, deferred
+  receipt, remote acknowledgement state, or duplicate-delivery subsystem.
   Satisfies:
   `REQ-CORE-TRANSPORT-003`, `REQ-CORE-TRANSPORT-004`.
-- `REQ-DAEMON-TRANSPORT-003` `atm-daemon` owns the concrete timeout budget
-  policy for transport, store busy timeout, ingest batch, retry, and doctor
-  query operations. Satisfies:
-  `REQ-CORE-TRANSPORT-003`, `REQ-CORE-DOCTOR-002`.
+- `REQ-DAEMON-TRANSPORT-002D` `atm-daemon` owns one bounded non-durable
+  single-flight drain coordinator per canonical trusted hostname. It queries
+  canonical outbound records through storage traits, opens one ordinary HTTPS
+  connection, and submits existing `WriteRequest`s oldest-first through the
+  normal peer endpoint. A generation signal closes the final-scan/release race.
+  The coordinator contains no message ID, payload, cursor, receipt, queue, or
+  per-message delivery state. It schedules only eligible backlog recovery no
+  earlier than 60 seconds after failure with capped exponential backoff, never
+  a ping/empty-peer monitor. `atm peer sync` uses this same coordinator.
+  Satisfies: `REQ-CORE-TRANSPORT-003A`, `REQ-CORE-TRANSPORT-003B`.
+- `REQ-DAEMON-TRANSPORT-002A` `atm-daemon` owns loading and enforcing durable
+  cross-host HTTPS bind, certificate, and peer-trust records. Satisfies:
+  `REQ-CORE-TRANSPORT-002A`.
+- `REQ-DAEMON-TRANSPORT-002B` `atm-daemon` enforces mTLS plus a durable
+  deny-by-default registered-hostname and certificate-fingerprint allowlist
+  before routing. It resolves direct IP targets only as ADR-040 permits and
+  never persists DNS aliases. Satisfies:
+  `REQ-CORE-TRANSPORT-002B`.
+- `REQ-DAEMON-TRANSPORT-002B1` `atm-daemon` accepts the explicit
+  non-durable `--peer-wire-security plaintext-test` process mode only for
+  debug/smoke diagnosis. It disables peer TLS/pin/allowlist checks without
+  changing HTTP routing, canonical writes, persistence, or post-write routing;
+  declared source-host data is untrusted smoke provenance. Normal startup is
+  mTLS, never falls back to plaintext, and doctor/logs must expose the active
+  mode. Satisfies: `REQ-CORE-TRANSPORT-002B1`.
+- `REQ-DAEMON-TRANSPORT-002C` localhost and a daemon's own advertised address
+  are ordinary HTTPS peer targets; no loopback-only transport branch exists.
+  Satisfies:
+  `REQ-CORE-TRANSPORT-002C`.
+- `REQ-DAEMON-TRANSPORT-003` `atm-daemon` owns the one absolute request
+  deadline budget for HTTP(S), store busy timeout, ingest batch, and doctor
+  query operations. It propagates the remaining request budget to HTTPS and
+  returns the ADR-041 typed outcome rather than misclassifying a live daemon
+  as unavailable. Satisfies:
+  `REQ-CORE-TRANSPORT-005`, `REQ-CORE-DOCTOR-002`.
 - `REQ-DAEMON-TRANSPORT-004` request work launched from the daemon server path
   must remain tracked by runtime drain ownership until it finishes or is
   cancelled; detached untracked request execution is forbidden. Satisfies:
   `REQ-DAEMON-RUNTIME-003`, `REQ-P-DAEMON-DISPATCHER-001`,
   `REQ-CORE-DAEMON-001`.
-- `REQ-DAEMON-TRANSPORT-005` same-host local IPC and cross-host daemon
-  transport must use one shared ATM frame header and one typed
-  request/response packet family rather than separate local and remote daemon
-  message systems, as defined by `docs/atm-daemon/protocol-icd.md`. Satisfies:
+- `REQ-DAEMON-TRANSPORT-005` Unix UDS HTTP, loopback-TCP HTTP, and HTTPS must call one router and one
+  canonical read/write application contract rather than separate local and
+  remote message systems. Satisfies:
   `REQ-CORE-TRANSPORT-001`, `REQ-CORE-TRANSPORT-002`,
   `REQ-P-CONTRACT-001`.
-- `REQ-DAEMON-TRANSPORT-006` the daemon request/response transport must use
-  explicit frame-length delimiting; EOF-delimited request framing and
-  mid-stream resynchronization after partial-frame failure are forbidden, as
-  defined by `docs/atm-daemon/protocol-icd.md`. Satisfies:
+- `REQ-DAEMON-TRANSPORT-006` HTTP framing is owned by the HTTP implementation;
+  ATM must not retain a second custom frame header, EOF-delimited request
+  protocol, or resynchronization state machine. Satisfies:
   `REQ-CORE-TRANSPORT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-DAEMON-TRANSPORT-007` UDP is not an accepted same-host CLI-daemon
   request/response transport for the retained product surface. Satisfies:
   `REQ-P-RELIABILITY-001`, `REQ-P-CONTRACT-001`.
-- `REQ-DAEMON-TRANSPORT-008` same-host local IPC must expose one logical ATM
-  endpoint contract and one same-user access-control policy across Unix and
-  Windows. Callers above the local-IPC adapter must not construct Unix socket
-  paths, Windows pipe names, or platform-specific ACL semantics directly.
-  Adapter-internal mapping from the logical endpoint contract to the concrete
-  Windows named-pipe name is allowed, but the mapping must be deterministic
-  and shared by the daemon and CLI.
+- `REQ-DAEMON-TRANSPORT-008` same-host local IPC must expose owner-authenticated
+  HTTP: Unix UDS plus loopback TCP, and Windows loopback TCP only. Loopback
+  TCP binds only loopback and requires a daemon-created owner-readable endpoint
+  record plus local capability; Unix UDS uses owner-only endpoint permissions.
+  Callers above adapters must not construct endpoint paths, ports, capabilities,
+  or ACL semantics directly. Alternate local transports and fallback paths are
+  forbidden.
   Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-PLATFORM-002`.
 - `REQ-DAEMON-STATUS-001` `atm-daemon` owns the live agent-status cache and
@@ -202,14 +233,13 @@ Initial crate requirement IDs:
   and on lifecycle-control-triggered reload or rescan. The minimum daemon-owned
   config inventory includes:
   - same-host endpoint contract inputs
-  - remote peer transport endpoint and credential inputs
-  - timeout and retry-budget inputs
+  - same-host timeout inputs
   - queue/cap inputs
   - retained-log / observability sink inputs
   Invalid config must produce a typed failure or bounded reload rejection
   rather than a silent degraded state. Startup-fatal or reload-fatal validation
-  applies to ownership, transport, replay-store, timeout-floor, retry-budget,
-  and cap violations; warning-only handling is allowed only for optional
+  applies to ownership, transport, timeout-floor, and cap violations;
+  warning-only handling is allowed only for optional
   observability sinks when the daemon keeps one documented degraded fallback
   path. Satisfies:
   `REQ-CORE-CONFIG-001`, `REQ-CORE-CONFIG-003`, `REQ-DAEMON-SIGNAL-001`.
@@ -320,7 +350,7 @@ The `atm-daemon` crate docs must remain aligned with:
 - [`../atm-core/architecture.md`](../atm-core/architecture.md)
 - [`./boundaries.md`](./boundaries.md)
 - [`./observability.md`](./observability.md)
-- [`./protocol-icd.md`](./protocol-icd.md)
+- [`./http-api.md`](./http-api.md)
 - [`./logging.md`](./logging.md)
 - [`./recovery-text-rules.md`](./recovery-text-rules.md)
 
@@ -412,28 +442,17 @@ Required runtime rules:
   ownership transfer
 - graceful shutdown must stop accepts, drain or cancel inflight work within one
   bounded deadline, checkpoint WAL, and release singleton ownership
-- the same-host and remote daemon transport families must share one ATM frame
-  contract defined by `docs/atm-daemon/protocol-icd.md`
-- the governing ICD owns the exact `magic`, `version`, `flags`,
-  `request_id`, `payload_length`, `message_kind`, and public packet-payload
-  mapping contract
-- same-host local IPC must expose one logical endpoint contract and same-user
-  access-control policy across Unix and Windows instead of leaking socket-path
-  or named-pipe details above the adapter line
-- `message_kind` must be available before payload decode so transport handlers
-  can switch on packet type before touching payload JSON
-- explicit frame-length delimiting is required; connection shutdown/EOF is not
-  the request boundary contract
-- invalid header, partial frame, timeout, oversize payload, or decode failure
-  must fail the connection rather than triggering best-effort mid-stream
-  resynchronization
+- **Historical local-frame contract:** the retired ATM frame ICD, its header
+  fields, frame decoder, and platform-specific fallback mappings are not
+  accepted runtime behavior. Phase AI replaces them with Unix UDS/loopback TCP
+  and Windows loopback-TCP HTTP in
+  `REQ-DAEMON-TRANSPORT-001`, `005`, `006`, and `008`.
 - daemon-private runtime control must be partitioned into explicit ownership
   modules for these accepted runtime partitions:
   - singleton ownership
   - server runtime / connection registry / drain
   - request execution ownership
   - runtime status / reload / doctor projection
-  - peer transport
 - historical watch / reconcile lanes are not part of the accepted runtime
   requirement set
 - if temporary deletion scaffolding remains while `AD.4` / `AD.5` are in
@@ -452,13 +471,11 @@ Required runtime rules:
   supported operating system; compile-only support or typed unsupported-path
   stubs are not a releasable end state
 - the same-host transport boundary must remain platform-neutral above the
-  adapter layer:
-  - Unix may use Unix domain sockets
-  - Windows may use named-pipe-backed local IPC
-  - caller-visible runtime code above the transport adapter must not depend on
-    Unix-only stream or listener types
+  adapter layer: Unix uses UDS HTTP plus loopback TCP; Windows uses loopback
+  TCP only; caller-visible runtime code must not depend on platform socket-path
+  or listener types
 - platform cfg is allowed only inside owned daemon adapter modules; composition,
-  dispatcher, health, replay, and runtime-lane code must not embed transport-
+  dispatcher, health, and runtime-lane code must not embed transport-
   or control-source-specific OS branching
 - supported operating system differences are limited to these daemon-owned
   portability boundaries:
@@ -468,7 +485,6 @@ Required runtime rules:
 - unsupported-path stubs are allowed only as short-lived implementation
   scaffolding while the owning Phase S sprint is in flight; they are a direct
   release blocker once the parity line is declared complete
-- remote delivery must be daemon-to-daemon only
 - the same transport protocol must be exercisable through an in-process
   `test-socket` without changing handler/business logic
 - same-host functional tests must use shared infrastructure on Unix and Windows
@@ -484,14 +500,11 @@ Required runtime rules:
   - configured values may raise the documented defaults, but they must not
     drop below the daemon timeout floor of `250ms`; same-host request and
     daemon-health deadlines must not drop below `1s`
-  - `daemon.remote_retry_budget` is configurable only in the inclusive range
-    `1s..=300s`; out-of-range values are startup-fatal and reload-fatal
 - runtime queues and handles must obey one documented concrete cap policy
 - resource-cap matrix:
   - max concurrent accepted connections: `64`
   - max per-connection inflight requests: `32`
   - ingest queue depth: `1024`
-  - bounded remote retry queue depth: `256`
   - SQLite handle/pool budget: min `1`, max `4`
   - live status-cache cap: `4096`
 - request work launched from the server path must remain tracked by runtime
@@ -526,18 +539,10 @@ Required runtime rules:
 - the semantic pid newtype closure for daemon-owned runtime state is assigned
   to `AA.3`, which already owns the runtime-health and doctor DTO rewrite
 - crash recovery must preserve the ordering rule `SQLite commit -> export`
-  and any retry/re-export state needed after daemon crash must be durable rather
-  than RAM-only
-- replay-store unavailability after startup must fail closed for new replay
-  work, emit typed degraded retry findings, and require operator restart or
-  bounded runtime reload rather than silently bypassing replay durability
 - daemon code must not bypass `atm-core` subsystem boundaries
 - the current Phase R baseline keeps `atm-daemon` as the runtime composition
   root for production runtime wiring unless a later ADR extracts a separate
   composition crate
-- remote daemon-to-daemon client behavior uses the same shared `AtmProtocol`
-  and `ClientTransport` / `ServerTransport` contract family as local runtime
-  transport
 - daemon transport/runtime adapter implementations must remain private to the
   crate or tightly-scoped internal surfaces; public callers must not depend on
   concrete socket/runtime adapter types
@@ -553,13 +558,13 @@ Required runtime rules:
   inbox-file access
 - tests and tools are not exempt from the singleton rule; any attempt to start
   a second daemon process must fail through the same runtime ownership checks
-- the socket receive loop must remain a thin dispatcher only:
-  - read framed request
-  - parse qualified request type
+- the HTTP receive loop must remain a thin dispatcher only:
+  - decode an HTTP request
+  - map it to a typed request
   - dispatch through the owning dispatcher/handler boundary
   - return typed response
 - request-kind routing must stay in the dispatcher boundary, not in concrete
-  local-IPC or TCP/TLS adapter code
+  local-IPC adapter code
 - handler implementations for request families must be injectable behind that
   dispatcher
 - the dispatcher boundary itself must remain thin and must not absorb request
@@ -584,7 +589,7 @@ Required runtime rules:
 - no `atm-daemon` crate API, helper, or test support path may bless daemon
   spawning as a routine correctness strategy
 
-## Phase Yb Non-Claude Delivery Adapter
+## Historical Phase Yb Non-Claude Delivery Adapter
 
 Requirement IDs:
 
@@ -592,10 +597,7 @@ Requirement IDs:
 
 Required daemon rules:
 
-- `atm-daemon` must implement
-  `atm_daemon::non_claude_outbound_runtime::DaemonNonClaudeOutbound`
-- the daemon adapter must preserve the same logical `message[]` payload set
-  used by the Claude path
-- the daemon adapter must not degrade non-Claude message delivery into
-  notification-only metadata
-- only the approved delivery executor seam may call the adapter directly
+- This historical daemon adapter was unselected and had no non-test caller.
+  AM.6 deletes it rather than retaining a second outbound implementation.
+- The selected replacement composition owns any active backend-neutral outbound
+  implementation through `RuntimeAssembly`.

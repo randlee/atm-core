@@ -100,16 +100,15 @@ Required follow-on ownership in `atm-core`:
   operations using the same shared message family as CLI:
   - `send`
   - `read`
-  - `ack`
   - no additional graft-private packet family unless it is proven to be shared
     ATM semantics
 - typed daemon-originated event payloads needed by `atm-graft`, at minimum:
   - post-send hook event payloads sufficient for host handoff
   - activation rejection / shutdown notices if surfaced to the client
 - typed config models for `[atm.graft]`
-- protocol/interface documentation updates in
-  `docs/atm-daemon/protocol-icd.md` for every graft-facing request, response,
-  and daemon-originated event boundary added by `U.8` / `U.10`
+- HTTP/OpenAPI interface documentation updates in
+  `docs/atm-daemon/http-api.md` for every graft-facing request, response, and
+  daemon-originated event boundary added by `U.8` / `U.10`
 
 Boundary correction note:
 - any graft-specific protocol or runtime naming from the abandoned earlier line
@@ -121,13 +120,25 @@ Boundary correction note:
   surface; `atm-graft` must not rely on lockstep crate-version equality as an
   architectural requirement
 
+## 2.4 Python Host Binding (AI.18–AI.21)
+
+AI.18 may package the existing graft surface with PyO3/Maturin. It owns only
+typed Rust-to-Python translation: `AgentAddress`, canonical nudge projection,
+graft lifecycle, and daemon API results. It does not own a Python transport,
+storage adapter, address parser, or post-write behavior.
+
+AI.17 maps client-neutral `ATM_CHAT_ID` to ADR-037 `ChatId` before the shared caller
+address is built. AI.19 maps the canonical nudge source address to a Hermes
+`atm:` chat and injects the body after the daemon's post-write event. Neither
+step re-renders and reparses an address or changes the persisted message.
+
 Rust boundary rules:
 - semantic request / response / event types must not remain raw
   `serde_json::Value` payloads for the published `atm-graft` boundary
 - transport correlation ids and ATM mail ids must remain distinct semantic
   types
-- do not add a dedicated graft-specific public trait family if the existing
-  shared `ClientTransport` and protocol DTOs are sufficient
+- do not add a dedicated graft-specific public trait family when the shared
+  HTTP client contract and application DTOs are sufficient
 - stream-oriented traits intended for dynamic dispatch must remain object-safe
 
 ## 2.4 Activation And Config Boundary
@@ -215,7 +226,7 @@ Concrete runtime shape:
 flowchart LR
     D[atm-daemon] --> TX[Commit mailbox change to SQLite]
     TX --> SQ[(SQLite SSOT)]
-    TX --> E[PostSendHookEmitter]
+    RX --> E[MessageReceivedHookEmitter]
     E --> GR[Graft receiver implementation]
     GR --> EV[Host wake or event callback]
     GR --> HI[HostNudgeInjector]
@@ -228,7 +239,7 @@ Architectural rules:
 - when the recipient uses the graft capability, the graft receiver
   implementation is responsible for handing that event to the host injection
   seam
-- the concrete graft-backed sink is `GraftNudgeSink`; it is one receiver sink
+- the concrete graft-backed sink is `GraftReceiveHook`; it is one receiver sink
   behind the shared post-send boundary, not a special daemon-owned runtime
 - the host-facing payload is structured and contains at least:
   - `from`
@@ -280,12 +291,12 @@ Non-production companion rule:
 
 Required public capability groups:
 - graft-session lifecycle
-- same-host daemon client calls for `send`, `read`, and `ack`
+- same-host daemon client calls for `send` and `read`
 - host-facing automatic nudge injection integration
 
 Lean contract shape:
 - `GraftClient` reuses the shared `atm-core` transport and protocol DTOs for
-  unary `send` / `read` / `ack`
+  unary `send` / `read`
 - `GraftSession` owns only receiver-local activation and host wake/injection
   behavior
 - receiver-private runtime details stay inside `atm-graft`; they do not become
@@ -298,7 +309,8 @@ Boundary rule:
 
 Architectural rules:
 - `read` uses the daemon API rather than direct SQLite access
-- `send` and `ack` use the same daemon-backed semantic contract as `atm`
+- `send` uses the same daemon-backed semantic contract as `atm`; `atm ack`
+  is a CLI convenience command that emits a canonical linked write
 - any optional runtime heartbeat or activity reporting must also use the daemon
   API instead of side channels
 

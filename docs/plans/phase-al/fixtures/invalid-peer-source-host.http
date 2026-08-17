@@ -1,0 +1,13 @@
+# Baseline fixture: invalid authenticated peer provenance header.
+# Source: develop cd03ef337b36ca785dd15270f16cdc2e96ec89cf.
+#
+# The header is validated before decode_request in the legacy TLS peer
+# adapter. Its error is propagated and the connection closes without a
+# response. AL.2 must replace that divergent behavior with the selected
+# direct ADR-032 error response shared by every connector.
+POST /v1/atm/messages HTTP/1.1
+Content-Type: application/json
+X-ATM-Peer-Source-Host: not a valid host
+Content-Length: 2
+
+{}

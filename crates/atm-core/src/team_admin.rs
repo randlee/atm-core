@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::boundary::{
-    BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, RosterEntry, RosterStore,
+    BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, RosterEntry, RosterHarness, RosterStore,
     TeamNudgeTemplateOverrideMode,
 };
 use crate::error::AtmError;
@@ -26,8 +26,9 @@ mod projection;
 mod restore;
 
 pub use member_mutation::{
-    AddMemberOutcome, AddMemberRequest, MemberName, UpdateMemberOutcome, UpdateMemberRequest,
-    add_member_with_roster_store, update_member_with_roster_store,
+    AddMemberOutcome, AddMemberRequest, MemberName, RemoveMemberOutcome, RemoveMemberRequest,
+    UpdateMemberOutcome, UpdateMemberRequest, add_member_with_roster_store,
+    remove_member_with_roster_store, update_member_with_roster_store,
 };
 
 /// One discovered team and its current member count.
@@ -51,6 +52,7 @@ pub struct MemberSummary {
     pub name: AgentName,
     pub agent_id: String,
     pub agent_type: String,
+    pub harness: RosterHarness,
     pub model: ModelName,
     pub joined_at: Option<u64>,
     pub tmux_pane_id: Option<PaneId>,
@@ -246,12 +248,12 @@ pub struct ClearNudgeTemplateOverrideOutcome {
     pub cleared: bool,
 }
 
-/// List teams currently discoverable under ATM home.
+/// List teams currently discoverable from canonical ATM roster state.
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] when `.atm.toml` cannot be loaded or the teams root
-/// cannot be enumerated.
+/// Returns [`AtmError`] when the canonical ATM roster store cannot enumerate
+/// teams or load roster snapshots for summary counts.
 pub fn list_teams_with_roster_store(
     roster_store: &(dyn RosterStore + Send + Sync),
     current_team: TeamName,
@@ -263,8 +265,8 @@ pub fn list_teams_with_roster_store(
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] when team resolution fails, the team directory is
-/// missing, or `config.json` cannot be loaded.
+/// Returns [`AtmError`] when the canonical ATM roster store cannot load the
+/// target team roster or when the team is absent from canonical ATM state.
 pub fn list_members_with_roster_store(
     roster_store: &(dyn RosterStore + Send + Sync),
     query: MembersQuery,
@@ -415,15 +417,12 @@ pub fn clear_nudge_template_override_with_store(
 fn validate_nudge_template_override_team(
     caller_team: TeamName,
     team: TeamName,
-    action: &'static str,
+    _action: &'static str,
 ) -> Result<(), AtmError> {
     if caller_team != team {
         return Err(AtmError::validation(format!(
             "caller team '{}' does not match nudge-template target team '{}'",
             caller_team, team
-        ))
-        .with_recovery(format!(
-            "Run `atm teams {action}` from the same ATM team that owns the target override row.",
         )));
     }
     Ok(())
@@ -455,20 +454,21 @@ mod tests {
 
     use super::{
         AddMemberRequest, BackupRequest, ClearNudgeTemplateOverrideRequest,
-        DisableNudgeTemplateOverrideRequest, MemberName, MembersQuery, RestoreRequest,
-        SetNudgeTemplateOverrideRequest, UpdateMemberRequest, add_member_with_roster_store,
-        backup_team_with_roster_store, clear_nudge_template_override_with_store,
-        disable_nudge_template_override_with_store, list_members_with_roster_store,
-        list_teams_with_roster_store, set_nudge_template_override_with_store,
+        DisableNudgeTemplateOverrideRequest, MemberName, MembersQuery, RemoveMemberRequest,
+        RestoreRequest, SetNudgeTemplateOverrideRequest, UpdateMemberRequest,
+        add_member_with_roster_store, backup_team_with_roster_store,
+        clear_nudge_template_override_with_store, disable_nudge_template_override_with_store,
+        list_members_with_roster_store, list_teams_with_roster_store,
+        remove_member_with_roster_store, set_nudge_template_override_with_store,
         update_member_with_roster_store,
     };
     use crate::boundary::{
-        self, BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, ReplaySource, RosterEntry,
-        RosterHarness, RosterMemberKind, RosterStore, RosterStoreHealthSnapshot,
-        TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
+        self, BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, RosterEntry, RosterHarness,
+        RosterMemberKind, RosterStore, RosterStoreHealthSnapshot, TeamNudgeTemplateOverrideMode,
+        TeamNudgeTemplateOverrideRow,
     };
     use crate::error_codes::AtmErrorCode;
-    use crate::schema::{HOME_DIR_METADATA_KEY, TeamConfig};
+    use crate::schema::{HOME_DIR_METADATA_KEY, TeamConfig, WORKSPACE_ROOT_METADATA_KEY};
     use crate::test_support::{
         EnvGuard, ROLE_TEAM_LEAD, TEST_ARCH_CTM, TEST_RECIPIENT, TEST_SENDER, TEST_TEAM,
     };
@@ -505,7 +505,6 @@ mod tests {
             &self,
             team: &TeamName,
             members: &[RosterEntry],
-            _source: Option<&ReplaySource>,
         ) -> Result<(), crate::error::AtmError> {
             self.teams
                 .lock()
@@ -679,7 +678,7 @@ mod tests {
         )
         .expect_err("invalid member");
 
-        assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
+        assert_eq!(error.code(), AtmErrorCode::AddressParseFailed);
     }
 
     #[test]
@@ -696,14 +695,13 @@ mod tests {
         )
         .expect_err("invalid team");
 
-        assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
+        assert_eq!(error.code(), AtmErrorCode::AddressParseFailed);
     }
 
     #[test]
     #[serial(team_config_write_env)]
     fn add_member_normalizes_tmux_shape_when_pane_is_provided() {
         let tempdir = tempdir().expect("tempdir");
-        write_team_config(tempdir.path(), TEST_TEAM);
         let roster_store = RecordingRosterStore::default();
 
         add_member_with_roster_store(
@@ -720,26 +718,20 @@ mod tests {
         )
         .expect("add member");
 
-        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
-        let config: TeamConfig = serde_json::from_slice(
-            &std::fs::read(team_dir.join("config.json")).expect("read config"),
-        )
-        .expect("parse config");
-        let member = config
-            .members
-            .iter()
-            .find(|member| member.name == TEST_SENDER)
-            .expect("member");
-
-        assert_eq!(member.tmux_pane_id.as_deref(), Some("%7"));
-        assert_eq!(member.extra["backendType"], serde_json::json!("tmux"));
-        assert_eq!(member.extra["isActive"], serde_json::json!(true));
-
         let roster = roster_store
             .load_roster(&TEST_TEAM.parse().expect("team"))
             .expect("load roster");
         assert_eq!(roster.len(), 1);
         assert_eq!(roster[0].recipient_pane_id.as_deref(), Some("%7"));
+        assert!(
+            !tempdir
+                .path()
+                .join(".claude")
+                .join("teams")
+                .join(TEST_TEAM)
+                .join("config.json")
+                .exists()
+        );
     }
 
     #[test]
@@ -796,6 +788,12 @@ mod tests {
         assert_eq!(members.team.as_str(), TEST_TEAM);
         assert_eq!(members.members.len(), 1);
         assert_eq!(members.members[0].name.as_str(), TEST_SENDER);
+        assert_eq!(members.members[0].harness, RosterHarness::ClaudeCode);
+        assert_eq!(
+            serde_json::to_value(&members).expect("serialize members")["members"][0]["harness"],
+            serde_json::json!("claude-code")
+        );
+        assert_eq!(RosterHarness::PythonGraft.to_string(), "python-graft");
         assert_eq!(members.members[0].tmux_pane_id.as_deref(), Some("%9"));
         assert_eq!(
             members.members[0].home_dir.as_ref(),
@@ -817,9 +815,9 @@ mod tests {
         )
         .expect_err("invalid persisted agent id");
 
-        assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
-        assert!(error.message.contains("invalid persisted agentId"));
-        assert!(error.message.contains("bad/agent/id"));
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(error.message().contains("invalid persisted agentId"));
+        assert!(error.message().contains("bad/agent/id"));
     }
 
     #[test]
@@ -855,9 +853,8 @@ mod tests {
 
     #[test]
     #[serial(team_config_write_env)]
-    fn add_member_projects_config_from_updated_atm_roster_truth() {
+    fn add_member_bootstraps_roster_without_team_config_projection() {
         let tempdir = tempdir().expect("tempdir");
-        write_team_config(tempdir.path(), TEST_TEAM);
         let roster_store = RecordingRosterStore::default();
         let mut existing = roster_member(TEST_TEAM, ROLE_TEAM_LEAD);
         let lead_home_dir = tempdir.path().join("team-lead-home");
@@ -889,18 +886,15 @@ mod tests {
         assert_eq!(roster.len(), 2);
         assert!(roster.iter().any(|member| member.agent_name == TEST_SENDER));
 
-        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
-        let config: TeamConfig = serde_json::from_slice(
-            &std::fs::read(team_dir.join("config.json")).expect("read config"),
-        )
-        .expect("parse config");
-        assert_eq!(config.members.len(), 2);
-        let member = config
-            .members
-            .iter()
-            .find(|member| member.name == TEST_SENDER)
-            .expect("member");
-        assert_eq!(member.tmux_pane_id.as_deref(), Some("%12"));
+        assert!(
+            !tempdir
+                .path()
+                .join(".claude")
+                .join("teams")
+                .join(TEST_TEAM)
+                .join("config.json")
+                .exists()
+        );
     }
 
     #[test]
@@ -919,13 +913,13 @@ mod tests {
 
         update_member_with_roster_store(
             &roster_store,
-            tempdir.path(),
             UpdateMemberRequest {
                 caller_identity: TEST_SENDER.parse().expect("caller"),
                 caller_team: TEST_TEAM.parse().expect("team"),
                 team: TEST_TEAM.parse().expect("team"),
                 member: MemberName(TEST_SENDER.parse().expect("member")),
                 home_dir: Some(PathBuf::from("/repo/worktree").into()),
+                workspace_root: Some(PathBuf::from("/repo/workspace").into()),
                 harness: Some(RosterHarness::CodexCli),
                 agent_type: Some(crate::schema::AgentType::from("worker".to_string())),
                 model: Some(crate::types::ModelName::new("gpt-5").expect("model")),
@@ -948,22 +942,17 @@ mod tests {
             member.metadata_json.get(HOME_DIR_METADATA_KEY),
             Some(&serde_json::json!("/repo/worktree"))
         );
+        assert_eq!(
+            member.metadata_json.get(WORKSPACE_ROOT_METADATA_KEY),
+            Some(&serde_json::json!("/repo/workspace"))
+        );
 
         let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
         let config: TeamConfig = serde_json::from_slice(
             &std::fs::read(team_dir.join("config.json")).expect("read config"),
         )
         .expect("parse config");
-        let projected_member = config
-            .members
-            .iter()
-            .find(|member| member.name == TEST_SENDER)
-            .expect("member");
-        assert_eq!(projected_member.tmux_pane_id.as_deref(), Some("%22"));
-        assert_eq!(
-            projected_member.home_dir.as_path(),
-            PathBuf::from("/repo/worktree").as_path()
-        );
+        assert_eq!(config.members.len(), 0);
     }
 
     #[test]
@@ -984,13 +973,13 @@ mod tests {
 
         update_member_with_roster_store(
             &roster_store,
-            tempdir.path(),
             UpdateMemberRequest {
                 caller_identity: ROLE_TEAM_LEAD.parse().expect("caller"),
                 caller_team: TEST_TEAM.parse().expect("team"),
                 team: TEST_TEAM.parse().expect("team"),
                 member: MemberName(ROLE_TEAM_LEAD.parse().expect("member")),
                 home_dir: None,
+                workspace_root: None,
                 harness: None,
                 agent_type: None,
                 model: None,
@@ -1001,13 +990,13 @@ mod tests {
 
         update_member_with_roster_store(
             &roster_store,
-            tempdir.path(),
             UpdateMemberRequest {
                 caller_identity: ROLE_TEAM_LEAD.parse().expect("caller"),
                 caller_team: TEST_TEAM.parse().expect("team"),
                 team: TEST_TEAM.parse().expect("team"),
                 member: MemberName(TEST_ARCH_CTM.parse().expect("member")),
                 home_dir: None,
+                workspace_root: None,
                 harness: None,
                 agent_type: None,
                 model: None,
@@ -1035,18 +1024,7 @@ mod tests {
             &std::fs::read(team_dir.join("config.json")).expect("read config"),
         )
         .expect("parse config");
-        let projected_team_lead = config
-            .members
-            .iter()
-            .find(|member| member.name == ROLE_TEAM_LEAD)
-            .expect("projected lead member");
-        let projected_arch_ctm = config
-            .members
-            .iter()
-            .find(|member| member.name == TEST_ARCH_CTM)
-            .expect("projected arch fixture member");
-        assert_eq!(projected_team_lead.tmux_pane_id.as_deref(), Some("%0"));
-        assert_eq!(projected_arch_ctm.tmux_pane_id.as_deref(), Some("%1"));
+        assert_eq!(config.members.len(), 0);
     }
 
     #[test]
@@ -1058,13 +1036,13 @@ mod tests {
 
         let error = update_member_with_roster_store(
             &roster_store,
-            tempdir.path(),
             UpdateMemberRequest {
                 caller_identity: TEST_SENDER.parse().expect("caller"),
                 caller_team: "other-team".parse().expect("team"),
                 team: TEST_TEAM.parse().expect("team"),
                 member: MemberName(TEST_SENDER.parse().expect("member")),
                 home_dir: Some(PathBuf::from("/repo/worktree").into()),
+                workspace_root: None,
                 harness: None,
                 agent_type: None,
                 model: None,
@@ -1073,8 +1051,8 @@ mod tests {
         )
         .expect_err("caller team mismatch");
 
-        assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
-        assert!(error.message.contains("caller team"));
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(error.message().contains("caller team"));
     }
 
     #[test]
@@ -1086,13 +1064,13 @@ mod tests {
 
         let error = update_member_with_roster_store(
             &roster_store,
-            tempdir.path(),
             UpdateMemberRequest {
                 caller_identity: TEST_SENDER.parse().expect("caller"),
                 caller_team: TEST_TEAM.parse().expect("team"),
                 team: TEST_TEAM.parse().expect("team"),
                 member: MemberName(TEST_RECIPIENT.parse().expect("member")),
                 home_dir: Some(PathBuf::from("/repo/worktree").into()),
+                workspace_root: None,
                 harness: None,
                 agent_type: None,
                 model: None,
@@ -1101,8 +1079,8 @@ mod tests {
         )
         .expect_err("missing caller");
 
-        assert_eq!(error.code, AtmErrorCode::MemberNotFound);
-        assert!(error.message.contains(TEST_SENDER));
+        assert_eq!(error.code(), AtmErrorCode::MemberNotFound);
+        assert!(error.message().contains(TEST_SENDER));
     }
 
     #[test]
@@ -1114,13 +1092,13 @@ mod tests {
 
         let error = update_member_with_roster_store(
             &roster_store,
-            tempdir.path(),
             UpdateMemberRequest {
                 caller_identity: ROLE_TEAM_LEAD.parse().expect("caller"),
                 caller_team: TEST_TEAM.parse().expect("team"),
                 team: TEST_TEAM.parse().expect("team"),
                 member: MemberName(TEST_SENDER.parse().expect("member")),
                 home_dir: Some(PathBuf::from("/repo/worktree").into()),
+                workspace_root: None,
                 harness: None,
                 agent_type: None,
                 model: None,
@@ -1129,7 +1107,183 @@ mod tests {
         )
         .expect_err("missing member");
 
-        assert_eq!(error.code, AtmErrorCode::MemberNotFound);
+        assert_eq!(error.code(), AtmErrorCode::MemberNotFound);
+    }
+
+    #[test]
+    fn remove_member_removes_exact_roster_entry() {
+        let roster_store = RecordingRosterStore::default();
+        roster_store.seed_team(
+            TEST_TEAM,
+            vec![
+                roster_member(TEST_TEAM, ROLE_TEAM_LEAD),
+                roster_member(TEST_TEAM, TEST_SENDER),
+                roster_member(TEST_TEAM, TEST_RECIPIENT),
+            ],
+        );
+
+        let outcome = remove_member_with_roster_store(
+            &roster_store,
+            RemoveMemberRequest::new(
+                TEST_SENDER.parse().expect("caller"),
+                TEST_TEAM.parse().expect("caller team"),
+                TEST_TEAM,
+                TEST_RECIPIENT,
+            )
+            .expect("request"),
+        )
+        .expect("remove member");
+
+        assert_eq!(outcome.action, "remove-member");
+        assert_eq!(outcome.member.as_str(), TEST_RECIPIENT);
+        let roster = roster_store
+            .load_roster(&TEST_TEAM.parse().expect("team"))
+            .expect("load roster");
+        assert_eq!(
+            roster
+                .iter()
+                .map(|member| member.agent_name.as_str())
+                .collect::<Vec<_>>(),
+            vec![ROLE_TEAM_LEAD, TEST_SENDER]
+        );
+    }
+
+    #[test]
+    fn remove_member_allows_self_removal() {
+        let roster_store = RecordingRosterStore::default();
+        roster_store.seed_team(
+            TEST_TEAM,
+            vec![
+                roster_member(TEST_TEAM, TEST_SENDER),
+                roster_member(TEST_TEAM, TEST_RECIPIENT),
+            ],
+        );
+
+        remove_member_with_roster_store(
+            &roster_store,
+            RemoveMemberRequest::new(
+                TEST_SENDER.parse().expect("caller"),
+                TEST_TEAM.parse().expect("caller team"),
+                TEST_TEAM,
+                TEST_SENDER,
+            )
+            .expect("request"),
+        )
+        .expect("self removal");
+
+        let roster = roster_store
+            .load_roster(&TEST_TEAM.parse().expect("team"))
+            .expect("load roster");
+        assert_eq!(roster.len(), 1);
+        assert_eq!(roster[0].agent_name.as_str(), TEST_RECIPIENT);
+    }
+
+    #[test]
+    fn remove_member_allows_removing_last_member() {
+        let roster_store = RecordingRosterStore::default();
+        roster_store.seed_team(TEST_TEAM, vec![roster_member(TEST_TEAM, TEST_SENDER)]);
+
+        remove_member_with_roster_store(
+            &roster_store,
+            RemoveMemberRequest::new(
+                TEST_SENDER.parse().expect("caller"),
+                TEST_TEAM.parse().expect("caller team"),
+                TEST_TEAM,
+                TEST_SENDER,
+            )
+            .expect("request"),
+        )
+        .expect("last-member removal");
+
+        assert!(
+            roster_store
+                .load_roster(&TEST_TEAM.parse().expect("team"))
+                .expect("load roster")
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn remove_member_rejects_missing_member_without_mutation() {
+        let roster_store = RecordingRosterStore::default();
+        let initial = vec![roster_member(TEST_TEAM, TEST_SENDER)];
+        roster_store.seed_team(TEST_TEAM, initial.clone());
+
+        let error = remove_member_with_roster_store(
+            &roster_store,
+            RemoveMemberRequest::new(
+                TEST_SENDER.parse().expect("caller"),
+                TEST_TEAM.parse().expect("caller team"),
+                TEST_TEAM,
+                TEST_RECIPIENT,
+            )
+            .expect("request"),
+        )
+        .expect_err("missing member");
+
+        assert_eq!(error.code(), AtmErrorCode::MemberNotFound);
+        assert_eq!(
+            roster_store
+                .load_roster(&TEST_TEAM.parse().expect("team"))
+                .expect("load roster"),
+            initial
+        );
+    }
+
+    #[test]
+    fn remove_member_rejects_cross_team_caller_before_mutation() {
+        let roster_store = RecordingRosterStore::default();
+        let initial = vec![roster_member(TEST_TEAM, TEST_SENDER)];
+        roster_store.seed_team(TEST_TEAM, initial.clone());
+
+        let error = remove_member_with_roster_store(
+            &roster_store,
+            RemoveMemberRequest::new(
+                TEST_SENDER.parse().expect("caller"),
+                "other-team".parse().expect("caller team"),
+                TEST_TEAM,
+                TEST_SENDER,
+            )
+            .expect("request"),
+        )
+        .expect_err("cross-team caller");
+
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(error.message().contains("caller team"));
+        assert_eq!(
+            roster_store
+                .load_roster(&TEST_TEAM.parse().expect("team"))
+                .expect("load roster"),
+            initial
+        );
+    }
+
+    #[test]
+    fn remove_member_rejects_same_team_missing_caller_before_mutation() {
+        let roster_store = RecordingRosterStore::default();
+        let initial = vec![roster_member(TEST_TEAM, TEST_RECIPIENT)];
+        roster_store.seed_team(TEST_TEAM, initial.clone());
+
+        let error = remove_member_with_roster_store(
+            &roster_store,
+            RemoveMemberRequest::new(
+                TEST_SENDER.parse().expect("caller"),
+                TEST_TEAM.parse().expect("caller team"),
+                TEST_TEAM,
+                TEST_RECIPIENT,
+            )
+            .expect("request"),
+        )
+        .expect_err("missing caller");
+
+        assert_eq!(error.code(), AtmErrorCode::MemberNotFound);
+        assert!(error.message().contains(TEST_SENDER));
+        assert_eq!(
+            roster_store
+                .load_roster(&TEST_TEAM.parse().expect("team"))
+                .expect("load roster"),
+            initial
+        );
     }
 
     #[test]
@@ -1169,10 +1323,10 @@ mod tests {
         )
         .expect_err("invalid kind");
 
-        assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
         assert!(
             error
-                .message
+                .message()
                 .contains("unsupported built-in nudge template kind")
         );
     }
@@ -1187,7 +1341,7 @@ mod tests {
         )
         .expect_err("empty body");
 
-        assert_eq!(error.code, AtmErrorCode::EmptyNudgeTemplateBody);
+        assert_eq!(error.code(), AtmErrorCode::EmptyNudgeTemplateBody);
     }
 
     #[test]
@@ -1205,8 +1359,8 @@ mod tests {
         )
         .expect_err("caller mismatch");
 
-        assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
-        assert!(error.message.contains("caller team"));
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(error.message().contains("caller team"));
     }
 
     #[test]
@@ -1331,8 +1485,8 @@ mod tests {
         )
         .expect_err("invalid model");
 
-        assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
-        assert!(error.message.contains("model"));
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(error.message().contains("model"));
     }
 
     #[test]
@@ -1342,7 +1496,7 @@ mod tests {
         let error =
             BackupRequest::new(tempdir.path().to_path_buf(), "../evil").expect_err("invalid team");
 
-        assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
+        assert_eq!(error.code(), AtmErrorCode::AddressParseFailed);
     }
 
     #[test]
@@ -1352,7 +1506,7 @@ mod tests {
         let error = RestoreRequest::new(tempdir.path().to_path_buf(), "../evil", None, false)
             .expect_err("invalid team");
 
-        assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
+        assert_eq!(error.code(), AtmErrorCode::AddressParseFailed);
     }
 
     #[test]
@@ -1361,7 +1515,7 @@ mod tests {
         let error = super::filesystem::backup_root_from_home(tempdir.path(), "../evil")
             .expect_err("invalid team");
 
-        assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
+        assert_eq!(error.code(), AtmErrorCode::AddressParseFailed);
     }
 
     #[test]
@@ -1370,6 +1524,6 @@ mod tests {
         let error = super::filesystem::tasks_dir_from_home(tempdir.path(), "../evil")
             .expect_err("invalid team");
 
-        assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
+        assert_eq!(error.code(), AtmErrorCode::AddressParseFailed);
     }
 }

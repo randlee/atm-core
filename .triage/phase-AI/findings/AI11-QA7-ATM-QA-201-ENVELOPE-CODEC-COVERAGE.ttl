@@ -1,0 +1,91 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI11-QA7-ATM-QA-201-ENVELOPE-CODEC-COVERAGE>
+  a triage:Finding ;
+  triage:findingId "AI11-QA7-ATM-QA-201-ENVELOPE-CODEC-COVERAGE" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:title "Deletion gate has zero coverage for the generic envelope wire codec construct family" ;
+  triage:description "AI.11 sprint doc requires deletion gate test to reject six construct families: pipe, Windows AF_UNIX, generic envelope wire codec, duplicate router, non-loopback bind, and adapter storage/nudge calls. Test ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() covers five families (pipe/AF_UNIX, non-loopback bind, duplicate router, adapter storage/nudge calls) but has zero test coverage for the retired generic HTTP RequestEnvelope/ResponseEnvelope wire-codec pattern. No active production violation exists; risk is purely the gate's inability to catch future regression reintroducing the generic envelope codec." ;
+  triage:category "test-coverage-gap" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA7-ATM-QA-201-ENVELOPE-CODEC-COVERAGE/s11/1> ;
+  triage:openOn <urn:atm:triage:worktree/s11/bb20fd9a> ;
+  triage:fixedOn <urn:atm:triage:worktree/s12/b6466aa1> ;
+  triage:promoteTo <urn:atm:triage:worktree/s11/bb20fd9a> ;
+  triage:highestFixedBranch "feature/pAI-s12-post-write-router" ;
+  triage:notes "RESOLUTION (2026-07-22 sweep): verifiably fixed on current integrate/phase-AI. A dedicated test, fn ai11_deletion_gate_detector_rejects_retired_envelope_wire_codec_ast_fixtures() (boundary_enforcement.rs ~line 478), now covers the retired generic HTTP RequestEnvelope/ResponseEnvelope wire-codec construct family that this finding identified as missing. Cross-referenced with sibling finding AI11-QA7-ARCH-001-HARDCODED-ALLOWLIST.ttl (same cwin fast-follow batch, PR #607), already recorded fixed on feature/pAI-s12-post-write-router (b6466aa1); this finding's fix landed in the same batch." .
+
+<urn:atm:triage:finding/AI11-QA7-ATM-QA-201-ENVELOPE-CODEC-COVERAGE>
+  triage:assignedTo "cwin" ;
+  triage:dispatchChannel "direct-paste-non-atm" ;
+  triage:notes "ASSIGNMENT UPDATE (team-lead, 2026-07-22): the AI.11 QA-7 fast-follow batch (this finding plus AI11-QA7-ARCH-001-HARDCODED-ALLOWLIST and AI11-QA7-ARCH-002-TAUTOLOGICAL-DUPLICATE-CHECK) was reassigned from arch-ctm to cwin. Original ATM dispatch was message 01KY5PZ9PCJMZP3ZFA92NGCGS5 (task id AI11-QA7-FASTFOLLOW-DELETION-GATE-SCOPE, sent to arch-ctm). arch-ctm was subsequently stood down from this batch via ATM message 01KY5S0ZFQCPA89KD5WTM0Z6CA. cwin has no ATM identity, so the reassignment dispatch to cwin was delivered by direct-paste outside the ATM channel and left no ATM message trail on cwin's side; the stand-down message to arch-ctm is the only ATM-side record of the handoff. This note is the canonical audit trail for the reassignment." .
+
+<urn:atm:triage:occurrence/AI11-QA7-ATM-QA-201-ENVELOPE-CODEC-COVERAGE/s11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 1255 ;
+  triage:snippet "fn ai11_deletion_gate_detector_rejects_retired_envelope_wire_codec_ast_fixtures()" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (efe73e1c) -- dedicated test ai11_deletion_gate_detector_rejects_retired_envelope_wire_codec_ast_fixtures() exists at line 1255 with AST fixtures validating rejection of FrameHeader, FrameCodec, read_framed_request, write_framed_response constructs. Defect closed. Stale occurrence from superseded branch feature/pAI-s11-post-merge-remediation; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "bb20fd9a" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/bb20fd9a> .
+
+<urn:atm:triage:worktree/s11/bb20fd9a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "bb20fd9a" ;
+  triage:orderIndex 11 .
+
+<urn:atm:triage:worktree/s12/b6466aa1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
+  triage:headSha "b6466aa1" ;
+  triage:orderIndex 12 .
+
+<urn:atm:triage:worktree/s13/2adc5fa1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "2adc5fa1" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/s14/672ffc34>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "672ffc34" ;
+  triage:orderIndex 14 .
+
+<urn:atm:triage:worktree/s15/b7d2f1c7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "b7d2f1c7" ;
+  triage:orderIndex 15 .
+
+<urn:atm:triage:worktree/s16/853abcfc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "853abcfc" ;
+  triage:orderIndex 16 .
+
+<urn:atm:triage:worktree/s17/2a5a57c8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "2a5a57c8" ;
+  triage:orderIndex 17 .

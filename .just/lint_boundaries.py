@@ -15,6 +15,7 @@ from lint_common import load_lint_config
 from lint_common import monotonic_now
 from lint_common import print_report
 from lint_common import render_table
+from lint_common import rust_file_test_scope
 from lint_common import workspace_crate_section_lines
 from lint_common import workspace_manifest_paths
 
@@ -32,6 +33,8 @@ REQUIRED_BOUNDARY_FIELDS = (
     ("dependencies", "allowed_dependents"),
     ("dependencies", "allowed_dependencies"),
     ("dependencies", "forbidden_edges"),
+    ("ownership", "io_owns"),
+    ("ownership", "io_forbidden"),
     ("references", "scope"),
     ("references", "forbidden"),
     ("testing", "allowed_test_double_paths"),
@@ -42,7 +45,7 @@ REQUIRED_BOUNDARY_FIELDS = (
 )
 VISIBILITY_VALUES = {"private", "pub(crate)", "public", "trait_only"}
 CONSTRUCTOR_VALUES = {"private", "pub(crate)", "public", "none"}
-REFERENCE_SCOPE_VALUES = {"global", "outside_owner_crate"}
+REFERENCE_SCOPE_VALUES = {"global", "inside_owner_crate", "outside_owner_crate"}
 STATE_VALUES = {
     "planned",
     "active",
@@ -62,6 +65,176 @@ FORBIDDEN_EDGE_RE = re.compile(
 PUBLIC_TYPE_TEMPLATE = r"^\s*pub(?:\([^)]*\))?\s+(?:struct|enum|type)\s+{name}\b"
 PUBLIC_REEXPORT_TEMPLATE = r"^\s*pub(?:\([^)]*\))?\s+use\b.*\b{name}\b"
 PUBLIC_FUNCTION_RE = re.compile(r"^\s*pub(?:\([^)]*\))?\s+fn\s+[A-Za-z_][A-Za-z0-9_]*\b")
+
+# ``ownership.io_forbidden`` is a source-level policy, not merely metadata.
+# Keep the vocabulary explicit so adding a new tag cannot silently create an
+# unenforced boundary declaration.  Patterns are intentionally scoped to
+# concrete implementation modules below; they are not searched through the
+# entire owner crate (which would conflate sibling boundaries).
+IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
+    "ambient_singleton_lookup": (
+        r"\bdefault_runtime\s*\(",
+        r"\bget_default_runtime\s*\(",
+        r"\binstall_default_runtime(?:_factory|_instance)?\s*\(",
+    ),
+    "backend_specific_storage": (r"\b(?:rusqlite|sqlx|diesel)::", r"\b(?:Sqlite|SQLite)[A-Za-z0-9_]*\b"),
+    "business_logic_dispatch": (
+        r"\bbusiness_logic_dispatch\b",
+        r"\bdispatch_(?:write|non_write)\s*\(",
+        r"\broute_write\s*\(",
+    ),
+    "database_io": (
+        r"\b(?:rusqlite|sqlx|diesel)::",
+        r"\b(?:Sqlite|SQLite)(?:Connection|Transaction|Store|Database|Pool|Backend)\b",
+        r"\bdatabase_io\b",
+    ),
+    "compatibility_jsonl_append": (
+        r"\bappend_compat_inbox_message\s*\(",
+        r"\bcompatibility_jsonl_append\b",
+        r"\bcompatibility[^\n]*\.jsonl\b",
+    ),
+    "cursor": (r"\bcursor\b", r"\bCursor\b"),
+    "catalog_persistence": (
+        r"\b(?:TemplateCatalogStore|TemplateCatalogRecord|CatalogPersistence)\b",
+        r"\b(?:persist|store|load)_[A-Za-z0-9_]*catalog[A-Za-z0-9_]*\s*\(",
+        r"\bcatalog_persistence\b",
+    ),
+    "cli_surface": (
+        r"\bclap::",
+        r"\b(?:Args|Subcommand|Parser)::",
+        r"\bcli_surface\b",
+    ),
+    "daemon_lifecycle": (r"\b(?:start|stop|shutdown|restart)_daemon\s*\(", r"\bdaemon_lifecycle\b"),
+    "daemon_private_graft_api": (r"\bdaemon_private_graft_api\b", r"\bDaemonGraft[A-Za-z0-9_]*\b", r"\bdaemon::graft\b"),
+    "daemon_request_dispatch": (r"\bdaemon_request_dispatch\b", r"\bdispatch_request\s*\(", r"\bDaemonRequestDispatcher\b"),
+    "daemon_runtime_bootstrap": (r"\bdaemon_runtime_bootstrap\b", r"\bbootstrap_daemon_runtime\s*\(", r"\bDaemonRuntime::new\s*\("),
+    "daemon_runtime_dispatch": (r"\bdaemon_runtime_dispatch\b", r"\bdispatch_runtime_request\s*\("),
+    "daemon_transport": (r"\bdaemon_transport\b", r"\bDaemon(?:Http|Tcp|Ipc)Transport\b", r"\bdaemon::(?:http|tcp|ipc)_transport\b"),
+    "delivery_plan_construction": (r"\b(?:Reply)?DeliveryPlan\b", r"\bexecute_(?:reply_)?delivery_plan\s*\(", r"\bdelivery_plan_construction\b"),
+    "delivery_queue": (r"\bdelivery_queue\b", r"\bDeliveryQueue\b", r"\bqueue_delivery\s*\("),
+    "delivery_state": (r"\bdelivery_state\b", r"\bDeliveryState\b"),
+    "dns": (r"\b(?:lookup_host|to_socket_addrs|DnsResolver|resolve_peer_authority)\b",),
+    "direct_socket_io": (
+        r"\b(?:std|tokio)::net::",
+        r"\b(?:Tcp|Udp|Unix)(?:Stream|Listener|Socket)\b",
+        r"\bdirect_socket_io\b",
+    ),
+    "direct_sqlite_io": (r"\b(?:rusqlite|sqlx)::", r"\b(?:Sqlite|SQLite)[A-Za-z0-9_]*\b", r"\bdirect_sqlite_io\b"),
+    "direct_rusqlite_calls": (
+        r"\brusqlite::",
+        r"\bSqlite(?:Connection|Transaction|Statement|Database)\b",
+    ),
+    "graft_crate_dependency": (r"\batm[_-]graft\b",),
+    "graft_session_runtime": (r"\bgraft_session_runtime\b", r"\bGraftSession\b"),
+    "inbox_jsonl": (r"\binbox[^\n]*\.jsonl\b", r"\b(?:append|write)_[A-Za-z0-9_]*inbox[A-Za-z0-9_]*\s*\("),
+    "mailbox_storage_selection": (r"\bmailbox_storage_selection\b", r"\b(?:select|choose)_[A-Za-z0-9_]*mailbox[A-Za-z0-9_]*\s*\("),
+    "message_delivery": (r"\bmessage_delivery\b", r"\b(?:deliver|send)_message\s*\(", r"\bMessageDelivery\b"),
+    "production_delivery": (
+        r"\bproduction_delivery\b",
+        r"\b(?:deliver|send|route)_production(?:_message|_request)?\s*\(",
+    ),
+    "message_persistence": (r"\bmessage_persistence\b", r"\b(?:persist|store)_message\s*\(", r"\bMessageStore\b"),
+    "local_path_heuristics": (
+        r"\b(?:std::path::|Path(?:Buf)?::|canonicalize\s*\()",
+        r"\b(?:is_absolute|starts_with)\s*\(",
+        r"\blocal_path_heuristics\b",
+    ),
+    "named_pipe": (r"\bNamedPipe\b", r"\bnamed_pipe\b", r"\b(?:pipe|fifo)_(?:read|write|open)\s*\("),
+    "nudge": (r"\bnudge\b", r"\bNudge\b"),
+    "nudge_emission": (r"\bnudge_emission\b", r"\b(?:emit|send|deliver)_nudge\s*\(", r"\bNudgeEmitter\b"),
+    "graft_delivery": (
+        r"\b(?:deliver_graft_post_send|deliver_published_receiver_hook|GraftPostSendRequest)\b",
+    ),
+    "hook_execution": (r"\b(?:emit_post_send_effects|load_post_send_config_for_sender)\b",),
+    "http_server": (
+        r"\baxum::serve\s*\(",
+        r"\bserve_(?:loopback|unix)_http1\s*\(",
+        r"\bhyper::server\b",
+    ),
+    "http_runtime": (
+        r"\b(?:axum|hyper|tower)::",
+        r"\b(?:HttpRuntime|ApiRouter)\b",
+        r"\bhttp_runtime\b",
+    ),
+    "process_spawn": (r"\bstd::process::Command\b", r"\bCommand::new\s*\(", r"\)\.spawn\s*\("),
+    "process_spawn_for_notifications": (r"\bstd::process::Command\b", r"\bCommand::new\s*\(", r"\)\.spawn\s*\("),
+    "process_spawn_outside_owned_runtime_path": (r"\bstd::process::Command\b", r"\bCommand::new\s*\(", r"\)\.spawn\s*\("),
+    "raw_http_framing": (
+        r"\bHttpFrameReader\b",
+        r"\b(?:read|write)_http_(?:request|response)\s*\(",
+        r"\bwrite_http_request_with_headers\s*\(",
+    ),
+    "replay_or_resend": (
+        r"\b(?:Peer)?(?:Replay|Resend)[A-Za-z0-9_]*\b",
+        r"\bPeerDrainCoordinator\b",
+    ),
+    "receipt": (r"\breceipt\b", r"\bReceipt\b"),
+    "recipient_routing": (
+        r"\brecipient_routing\b",
+        r"\b(?:resolve|route|select)_recipient\s*\(",
+        r"\b(?:RecipientRouting|RecipientRouter)\b",
+        r"\bresolve_peer_authority\s*\(",
+    ),
+    "retry_queue": (r"\bretry_queue\b", r"\bRetryQueue\b", r"\bqueue_retry\s*\("),
+    "retry_state": (r"\bretry_state\b", r"\bRetryState\b"),
+    "background_work": (
+        r"\bbackground_work\b",
+        r"\bthread::spawn\s*\(",
+    ),
+    "router": (r"\brouter\b", r"\bRouter\b"),
+    "storage_schema": (
+        r"\b(?:CREATE|ALTER|DROP)\s+(?:VIRTUAL\s+)?TABLE\b",
+        r"\b(?:schema_json|migration(?:s)?)\b",
+        r"\bstorage_schema\b",
+    ),
+    "socket_io": (
+        r"\b(?:std|tokio)::net::",
+        r"\b(?:Tcp|Udp|Unix)(?:Stream|Listener|Socket)\b",
+        r"\bsocket_io\b",
+    ),
+    "tls": (r"\b(?:TlsConnector|TlsAcceptor|rustls|ServerName)\b",),
+    "tls_adapter": (r"\b(?:TlsConnector|TlsAcceptor|rustls|ServerName)\b",),
+    "peer_only_ingress": (
+        r"\bPeerMessageArray\b",
+        r"\bpeer_(?:delivery|http_listener)\b",
+        r"\bAuthenticatedConnector::peer\b",
+    ),
+    "peer_specific_dto_or_route": (
+        r"\bPeerMessageArray\b",
+        r"\bpeer_(?:delivery|http_listener)\b",
+    ),
+    "sqlite": (
+        r"\b(?:rusqlite|sqlx)::",
+        r"\b(?:Sqlite|SQLite)(?:Connection|Transaction|Store|Database|Pool|Backend)\b",
+        r"\bsqlite_(?:open|connect|transaction|query|write)\s*\(",
+    ),
+    "storage_write": (r"\bstorage_write\b", r"\b(?:write|put|insert|update)_storage\s*\("),
+    "task_changed_notifications": (r"\btask_changed_notifications\b", r"\bTaskChanged(?:Notification|Event)?\b", r"\btask_changed\b"),
+    "template_rendering": (r"\btemplate_rendering\b", r"\b(?:render|render_template)\s*\(", r"\bTemplateRenderer\b"),
+    "tls_handshake": (r"\b(?:rustls|native_tls)::", r"\b(?:Client|Server)Connection\b", r"\b(?:tls|TLS)[^\n]*handshake\b"),
+    "tmux_nudge_delivery": (r"\btmux_nudge_delivery\b", r"\btmux[^\n]*nudge\b", r"\b(?:send|emit)_tmux_nudge\s*\("),
+    "transport_dispatch": (r"\btransport_dispatch\b", r"\bdispatch_transport\s*\(", r"\bTransportDispatcher\b"),
+    "transport": (
+        r"\b(?:Tcp|Udp|Unix)(?:Stream|Listener|Socket)\b",
+        r"\b(?:reqwest|hyper)::",
+        r"\btransport\b",
+    ),
+}
+
+# The runtime composition crate performs a deliberately short-lived listener
+# bind as configuration preflight; it does not own a live transport.  Keep the
+# exception explicit and narrow while still checking every other socket call
+# in this implementation module.
+IO_FORBIDDEN_SOURCE_EXCEPTIONS: dict[tuple[str, str], tuple[str, ...]] = {
+    (
+        "BOUNDARY-AtmRuntime-Composition",
+        "direct_socket_io",
+    ): (
+        r"\bstd::net::TcpListener\b",
+        r"\bTcpListener::bind\s*\(",
+        r"\bstd::net::SocketAddr\b",
+    ),
+}
 SCB_CONFIG_ALLOWLIST_PATH = Path(".just/allowlists/scb_config_allowlist.toml")
 SCB_CONFIG_FIXTURE_PATH = Path(".just/fixtures/scb_config_known_bad.rs")
 SCB_RETAINED_ALLOWLIST_PATH = Path(".just/allowlists/scb_retained_allowlist.toml")
@@ -74,10 +247,10 @@ SCB_OBSERVABILITY_ALLOWLIST_PATH = Path(".just/allowlists/scb_observability_allo
 SCB_OBSERVABILITY_FIXTURE_PATH = Path(".just/fixtures/scb_observability_known_bad.rs")
 SCB_CONFIG_DIRECT_PATTERNS = ("config::load_team_config(", "load_claude_team_config_document(")
 SCB_CONFIG_GENERIC_HELPER_PATTERNS = (
-    "fn load_team_config(",
-    "crate::boundary_support::load_team_config(",
-    "direct_boundaries::load_team_config(",
-    "atm_core::direct_boundaries::load_team_config(",
+    "fn load_workspace_config(",
+    "crate::boundary_support::load_workspace_config(",
+    "direct_boundaries::load_workspace_config(",
+    "atm_core::direct_boundaries::load_workspace_config(",
 )
 SCB_CONFIG_SEND_PATTERNS = (
     "config::load_team_config(",
@@ -86,10 +259,10 @@ SCB_CONFIG_SEND_PATTERNS = (
 )
 SCB_CONFIG_BOUNDARY_FILES = (
     Path("crates/atm-core/src/boundary_support.rs"),
+    # Keep guarding this retired duplicate path if it is ever reintroduced.
     Path("crates/atm-core/src/direct_boundaries.rs"),
-    Path("crates/atm-daemon/src/boundary_adapters.rs"),
-    Path("crates/atm-daemon/src/direct_boundaries.rs"),
 )
+SCB_CONFIG_CANONICAL_HELPER_FILE = Path("crates/atm-core/src/boundary_support.rs")
 # team_admin's sibling split files (restore.rs, filesystem.rs, projection.rs) were
 # reviewed as of the member_mutation.rs split (PR #471) and found not to call
 # service_runtime_store::default_runtime() or load_config() -- no gate entry needed
@@ -167,6 +340,8 @@ class BoundaryRecord:
     implementation_visibility: str
     implementation_constructor: str
     composition_roots: tuple[str, ...]
+    io_owns: tuple[str, ...]
+    io_forbidden: tuple[str, ...]
     allowed_dependents: tuple[str, ...]
     allowed_dependencies: tuple[str, ...]
     forbidden_edges: tuple[str, ...]
@@ -224,6 +399,13 @@ class ManifestSectionRule:
     dependency_package: str
     allowed_sections: tuple[str, ...]
     message: str
+
+
+@dataclass(frozen=True)
+class ManifestDependencyAllowlist:
+    owner_manifest_path: Path
+    allowed_dependencies: tuple[str, ...]
+    boundary_record_path: Path | None
 
 
 @dataclass(frozen=True)
@@ -444,6 +626,53 @@ def manifest_section_rules(repo_root: Path) -> list[ManifestSectionRule]:
                 dependency_package=dependency_package,
                 allowed_sections=tuple(allowed_sections),
                 message=message,
+            )
+        )
+    return rules
+
+
+def manifest_dependency_allowlists(repo_root: Path) -> list[ManifestDependencyAllowlist]:
+    config = boundary_config(repo_root)
+    raw_rules = config.get("manifest_dependency_allowlists", [])
+    if not isinstance(raw_rules, list):
+        raise SystemExit(
+            "[[boundaries.manifest_dependency_allowlists]] entries must be an array of tables"
+        )
+
+    rules: list[ManifestDependencyAllowlist] = []
+    for index, raw_rule in enumerate(raw_rules):
+        if not isinstance(raw_rule, dict):
+            raise SystemExit(
+                f"[boundaries.manifest_dependency_allowlists][{index}] must be a TOML table"
+            )
+        owner_manifest_path = raw_rule.get("owner_manifest_path")
+        allowed_dependencies = raw_rule.get("allowed_dependencies")
+        boundary_record_path = raw_rule.get("boundary_record_path")
+        if not isinstance(owner_manifest_path, str) or not owner_manifest_path:
+            raise SystemExit(
+                f"[boundaries.manifest_dependency_allowlists][{index}].owner_manifest_path must be a non-empty string"
+            )
+        if not isinstance(allowed_dependencies, list) or not all(
+            isinstance(item, str) and item for item in allowed_dependencies
+        ):
+            raise SystemExit(
+                f"[boundaries.manifest_dependency_allowlists][{index}].allowed_dependencies must be an array of non-empty strings"
+            )
+        if boundary_record_path is not None and (
+            not isinstance(boundary_record_path, str) or not boundary_record_path
+        ):
+            raise SystemExit(
+                f"[boundaries.manifest_dependency_allowlists][{index}].boundary_record_path must be a non-empty string when present"
+            )
+        rules.append(
+            ManifestDependencyAllowlist(
+                owner_manifest_path=Path(owner_manifest_path),
+                allowed_dependencies=tuple(allowed_dependencies),
+                boundary_record_path=(
+                    Path(boundary_record_path)
+                    if boundary_record_path is not None
+                    else None
+                ),
             )
         )
     return rules
@@ -1037,6 +1266,16 @@ def build_boundary_record(
         ("composition", "roots"),
         field_name="composition.roots",
     )
+    io_owns, io_owns_errors = validate_list_field(
+        data,
+        ("ownership", "io_owns"),
+        field_name="ownership.io_owns",
+    )
+    io_forbidden, io_forbidden_errors = validate_list_field(
+        data,
+        ("ownership", "io_forbidden"),
+        field_name="ownership.io_forbidden",
+    )
     allowed_dependents, allowed_dependent_errors = validate_list_field(
         data,
         ("dependencies", "allowed_dependents"),
@@ -1082,6 +1321,8 @@ def build_boundary_record(
 
     errors.extend(
         composition_errors
+        + io_owns_errors
+        + io_forbidden_errors
         + allowed_dependent_errors
         + allowed_dependency_errors
         + forbidden_edge_errors
@@ -1242,6 +1483,8 @@ def build_boundary_record(
         implementation_visibility=implementation_visibility,
         implementation_constructor=implementation_constructor,
         composition_roots=tuple(composition_roots),
+        io_owns=tuple(io_owns),
+        io_forbidden=tuple(io_forbidden),
         allowed_dependents=tuple(allowed_dependents),
         allowed_dependencies=tuple(allowed_dependencies),
         forbidden_edges=tuple(forbidden_edges),
@@ -1452,6 +1695,136 @@ def collect_allowed_dependent_violations(repo_root: Path, records: list[Boundary
     return violations
 
 
+def collect_manifest_dependency_allowlist_violations(
+    repo_root: Path,
+    records: list[BoundaryRecord],
+) -> list[BoundaryViolation]:
+    """Require every active boundary owner to declare all direct Cargo dependencies.
+
+    ``BoundaryRecord.allowed_dependencies`` remains per-seam documentation unless
+    a manifest policy explicitly names ``boundary_record_path``. That opt-in
+    makes the record and manifest allowlist mechanically identical. This policy
+    intentionally includes dependencies from normal, dev, build, and
+    target-specific sections so a new test dependency cannot silently bypass
+    review.
+    """
+    allowlists = manifest_dependency_allowlists(repo_root)
+    if not allowlists:
+        return []
+
+    violations: list[BoundaryViolation] = []
+    infos = manifest_info(repo_root)
+    alias_map = manifest_by_alias(repo_root)
+    infos_by_path = {
+        info.path.relative_to(repo_root): info
+        for info in infos
+    }
+    records_by_path = {record.source_path: record for record in records}
+    active_owner_paths = {
+        alias_map[record.owner_package].path.relative_to(repo_root)
+        for record in records
+        if record.is_active and record.owner_package in alias_map
+    }
+    allowlist_by_path: dict[Path, ManifestDependencyAllowlist] = {}
+    for allowlist in allowlists:
+        existing = allowlist_by_path.get(allowlist.owner_manifest_path)
+        if existing is not None:
+            violations.append(
+                BoundaryViolation(
+                    allowlist.owner_manifest_path.as_posix(),
+                    "duplicate manifest dependency allowlist",
+                )
+            )
+            continue
+        allowlist_by_path[allowlist.owner_manifest_path] = allowlist
+
+    for manifest_path in sorted(active_owner_paths):
+        if manifest_path not in allowlist_by_path:
+            violations.append(
+                BoundaryViolation(
+                    manifest_path.as_posix(),
+                    "active boundary owner has no manifest dependency allowlist",
+                )
+            )
+
+    for manifest_path, allowlist in sorted(allowlist_by_path.items()):
+        info = infos_by_path.get(manifest_path)
+        if info is None:
+            violations.append(
+                BoundaryViolation(
+                    manifest_path.as_posix(),
+                    "manifest dependency allowlist does not name a workspace crate manifest",
+                )
+            )
+            continue
+        if manifest_path not in active_owner_paths:
+            violations.append(
+                BoundaryViolation(
+                    manifest_path.as_posix(),
+                    "manifest dependency allowlist does not belong to an active boundary owner",
+                )
+            )
+            continue
+
+        if allowlist.boundary_record_path is not None:
+            record = records_by_path.get(allowlist.boundary_record_path)
+            if record is None:
+                violations.append(
+                    BoundaryViolation(
+                        manifest_path.as_posix(),
+                        "manifest dependency allowlist names no parsed boundary record",
+                    )
+                )
+            elif record.owner_package not in info.aliases:
+                violations.append(
+                    BoundaryViolation(
+                        record.location,
+                        "manifest dependency allowlist and boundary record have different owners",
+                    )
+                )
+            else:
+                documented = set(record.allowed_dependencies)
+                allowlisted = set(allowlist.allowed_dependencies)
+                missing = sorted(allowlisted - documented)
+                extra = sorted(documented - allowlisted)
+                if missing or extra:
+                    violations.append(
+                        BoundaryViolation(
+                            record.location,
+                            "boundary record allowed_dependencies diverges from its manifest dependency allowlist "
+                            f"(missing {missing!r}; extra {extra!r})",
+                        )
+                    )
+
+        manifest = tomllib_load(info.path)
+        actual_dependencies: set[str] = set()
+        for _section_name, dependencies in dependency_sections(manifest):
+            for dependency_name, dependency in dependencies.items():
+                package_name = dependency_package_name(dependency_name, dependency)
+                dependency_info = alias_map.get(package_name) or alias_map.get(dependency_name)
+                actual_dependencies.add(
+                    dependency_info.crate_dir_name if dependency_info is not None else package_name
+                )
+
+        allowed_dependencies = set(allowlist.allowed_dependencies)
+        location = f"{manifest_path.as_posix()} [manifest-dependency-allowlist]"
+        for dependency in sorted(actual_dependencies - allowed_dependencies):
+            violations.append(
+                BoundaryViolation(
+                    location,
+                    f"Cargo dependency {dependency!r} is not allowlisted",
+                )
+            )
+        for dependency in sorted(allowed_dependencies - actual_dependencies):
+            violations.append(
+                BoundaryViolation(
+                    location,
+                    f"allowlisted dependency {dependency!r} is not declared by Cargo.toml",
+                )
+            )
+    return violations
+
+
 def collect_forbidden_edge_violations(repo_root: Path, records: list[BoundaryRecord]) -> list[BoundaryViolation]:
     violations: list[BoundaryViolation] = []
     alias_map = manifest_by_alias(repo_root)
@@ -1502,6 +1875,76 @@ def resolve_module_file(repo_root: Path, module_path: str) -> list[Path]:
     return [path for path in candidates if path.exists()]
 
 
+def collect_io_forbidden_source_violations(
+    repo_root: Path,
+    records: list[BoundaryRecord],
+) -> list[BoundaryViolation]:
+    """Enforce ``ownership.io_forbidden`` against concrete implementation modules.
+
+    A boundary record may describe a trait-only contract or a retired module;
+    those records have no implementation region to inspect.  Concrete active
+    records are deliberately checked only in their declared implementation
+    module so sibling boundaries in the same crate do not contaminate one
+    another.  Unknown tags are reported as policy errors instead of being
+    silently ignored, which keeps the mapping table mechanically complete.
+    """
+
+    violations: list[BoundaryViolation] = []
+    compiled_patterns = {
+        tag: tuple(re.compile(pattern, re.IGNORECASE) for pattern in patterns)
+        for tag, patterns in IO_FORBIDDEN_SOURCE_PATTERNS.items()
+    }
+    compiled_exceptions = {
+        key: tuple(re.compile(pattern, re.IGNORECASE) for pattern in patterns)
+        for key, patterns in IO_FORBIDDEN_SOURCE_EXCEPTIONS.items()
+    }
+    for record in records:
+        for tag in record.io_forbidden:
+            patterns = compiled_patterns.get(tag)
+            if patterns is None:
+                violations.append(
+                    BoundaryViolation(
+                        record.location,
+                        f"{record.boundary_id} io_forbidden tag {tag!r} has no source-pattern mapping",
+                    )
+                )
+                continue
+            if not record.is_active or record.implementation_visibility == "trait_only":
+                continue
+            if record.implementation_module is None:
+                continue
+            source_paths = resolve_module_file(repo_root, record.implementation_module)
+            for source_path in source_paths:
+                rel_source = source_path.relative_to(repo_root).as_posix()
+                source_lines = source_path.read_text(encoding="utf-8").splitlines()
+                test_scope = rust_file_test_scope(source_path, source_lines)
+                for line_number, line in enumerate(source_lines, start=1):
+                    if is_comment_line(line):
+                        continue
+                    if tag == "background_work" and test_scope[line_number - 1]:
+                        continue
+                    if any(
+                        pattern.search(line)
+                        for pattern in compiled_exceptions.get(
+                            (record.boundary_id, tag), ()
+                        )
+                    ):
+                        continue
+                    matched_pattern = next(
+                        (pattern.pattern for pattern in patterns if pattern.search(line)),
+                        None,
+                    )
+                    if matched_pattern is None:
+                        continue
+                    violations.append(
+                        BoundaryViolation(
+                            f"{rel_source}:{line_number}",
+                            f"{record.boundary_id} forbids io {tag!r}; matched source pattern {matched_pattern!r}",
+                        )
+                    )
+    return violations
+
+
 def exempt_reference_files(repo_root: Path, record: BoundaryRecord) -> set[Path]:
     files: set[Path] = set()
     alias_map = manifest_by_alias(repo_root)
@@ -1515,9 +1958,21 @@ def exempt_reference_files(repo_root: Path, record: BoundaryRecord) -> set[Path]
 
 def collect_reference_violations(repo_root: Path, records: list[BoundaryRecord]) -> list[BoundaryViolation]:
     violations: list[BoundaryViolation] = []
-    source_paths = rust_sources(repo_root)
+    workspace_sources = rust_sources(repo_root)
     for record in records:
-        exempt_files = exempt_reference_files(repo_root, record) if record.references_scope == "outside_owner_crate" else set()
+        if record.references_scope == "inside_owner_crate":
+            owner = manifest_by_alias(repo_root).get(record.owner_package)
+            source_paths = source_files_for_crate(owner) if owner is not None else []
+            exempt_files: set[Path] = set()
+            reference_scope = "owner-crate"
+        else:
+            source_paths = workspace_sources
+            exempt_files = (
+                exempt_reference_files(repo_root, record)
+                if record.references_scope == "outside_owner_crate"
+                else set()
+            )
+            reference_scope = "external" if record.references_scope == "outside_owner_crate" else "global"
         compiled_patterns = [(reference, compile_reference_pattern(reference)) for reference in record.forbidden_references]
         if not compiled_patterns:
             continue
@@ -1525,15 +1980,19 @@ def collect_reference_violations(repo_root: Path, records: list[BoundaryRecord])
             if source_path.resolve() in exempt_files:
                 continue
             rel_source = source_path.relative_to(repo_root).as_posix()
-            for line_number, line in enumerate(source_path.read_text(encoding="utf-8").splitlines(), start=1):
+            source_lines = source_path.read_text(encoding="utf-8").splitlines()
+            test_scope = rust_file_test_scope(source_path, source_lines)
+            for line_number, line in enumerate(source_lines, start=1):
                 if is_comment_line(line):
+                    continue
+                if test_scope[line_number - 1]:
                     continue
                 for reference, pattern in compiled_patterns:
                     if pattern.search(line):
                         violations.append(
                             BoundaryViolation(
                                 f"{rel_source}:{line_number}",
-                                f"{record.boundary_id} forbids external reference {reference!r}",
+                                f"{record.boundary_id} forbids {reference_scope} reference {reference!r}",
                             )
                         )
     return violations
@@ -1630,17 +2089,77 @@ def find_public_constructor_violations(record: BoundaryRecord, source_path: Path
     return violations
 
 
+def source_module_path(info: ManifestInfo, source_path: Path) -> str:
+    """Return the crate-qualified module path represented by a Rust source file."""
+
+    relative = source_path.relative_to(info.path.parent / "src")
+    parts = list(relative.with_suffix("").parts)
+    if parts and parts[-1] in {"lib", "main", "mod"}:
+        parts.pop()
+    return "::".join(("crate", *parts))
+
+
+def find_trait_only_test_double_violations(
+    record: BoundaryRecord,
+    owner_info: ManifestInfo,
+    source_path: Path,
+    repo_root: Path,
+) -> list[BoundaryViolation]:
+    """Require every owner-crate trait-only implementation to be an approved double.
+
+    A trait-only boundary that declares approved test doubles must name every
+    owner-crate implementation in ``testing.allowed_test_double_paths``. Keeping
+    this check in the generic boundary linter prevents a second ad-hoc test
+    emitter from silently bypassing the boundary manifest. Empty allowlists keep
+    legacy trait-only records observational until their test-double policy is
+    explicitly declared.
+    """
+
+    if record.public_trait is None:
+        return []
+    trait_pattern = re.compile(
+        rf"\bimpl(?:<[^>]+>)?\s+(?:[A-Za-z_][A-Za-z0-9_:]*::)?"
+        rf"{re.escape(record.public_trait)}(?:<[^>]+>)?\s+for\s+([A-Za-z_][A-Za-z0-9_]*)"
+    )
+    module_path = source_module_path(owner_info, source_path)
+    allowed_paths = set(record.allowed_test_double_paths)
+    violations: list[BoundaryViolation] = []
+    rel_source = source_path.relative_to(repo_root).as_posix()
+    for line_number, line in enumerate(source_path.read_text(encoding="utf-8").splitlines(), start=1):
+        if is_comment_line(line):
+            continue
+        match = trait_pattern.search(line)
+        if match is None:
+            continue
+        implementation_path = f"{module_path}::{match.group(1)}"
+        if implementation_path in allowed_paths:
+            continue
+        violations.append(
+            BoundaryViolation(
+                f"{rel_source}:{line_number}",
+                f"{record.boundary_id} trait-only implementation {implementation_path!r} "
+                "is not listed in testing.allowed_test_double_paths",
+            )
+        )
+    return violations
+
+
 def collect_active_implementation_violations(repo_root: Path, records: list[BoundaryRecord]) -> list[BoundaryViolation]:
     violations: list[BoundaryViolation] = []
     alias_map = manifest_by_alias(repo_root)
     for record in records:
-        if not record.is_active or record.implementation_visibility == "trait_only":
+        if not record.is_active:
             continue
         owner_info = alias_map.get(record.owner_package)
         if owner_info is None:
             continue
         source_files = source_files_for_crate(owner_info)
         for source_path in source_files:
+            if record.implementation_visibility == "trait_only" and record.allowed_test_double_paths:
+                violations.extend(
+                    find_trait_only_test_double_violations(record, owner_info, source_path, repo_root)
+                )
+                continue
             if record.implementation_visibility == "private":
                 violations.extend(find_public_type_violations(record, source_path, repo_root))
                 violations.extend(find_public_reexport_violations(record, source_path, repo_root))
@@ -1736,10 +2255,14 @@ def collect_scb_config_rule_violations(
                         )
                     )
 
-            if is_boundary_file and any(pattern in stripped for pattern in SCB_CONFIG_GENERIC_HELPER_PATTERNS):
+            if (
+                is_boundary_file
+                and rel_path != SCB_CONFIG_CANONICAL_HELPER_FILE
+                and any(pattern in stripped for pattern in SCB_CONFIG_GENERIC_HELPER_PATTERNS)
+            ):
                 violations.append(
                     BoundaryViolation(
-                        f"SCB-CONFIG-002 {rel_source}:{line_number} generic load_team_config helper surface is forbidden",
+                        f"SCB-CONFIG-002 {rel_source}:{line_number} generic load_workspace_config helper surface is forbidden",
                         "",
                     )
                 )
@@ -1936,10 +2459,12 @@ def collect_boundary_violations(repo_root: Path) -> list[BoundaryViolation]:
     violations.extend(collect_duplicate_record_violations(records))
     violations.extend(collect_manifest_consistency_violations(repo_root, records))
     violations.extend(collect_allowed_dependent_violations(repo_root, records))
+    violations.extend(collect_manifest_dependency_allowlist_violations(repo_root, records))
     violations.extend(collect_forbidden_edge_violations(repo_root, records))
     violations.extend(collect_reference_violations(repo_root, records))
     violations.extend(collect_test_bypass_violations(repo_root, records))
     violations.extend(collect_active_implementation_violations(repo_root, records))
+    violations.extend(collect_io_forbidden_source_violations(repo_root, records))
     violations.extend(collect_special_case_violations(repo_root))
     violations.extend(collect_scb_config_rule_violations(repo_root, rust_sources(repo_root)))
     violations.extend(collect_scb_retained_rule_violations(repo_root, rust_sources(repo_root)))
@@ -2114,10 +2639,12 @@ def run(repo_root: Path) -> int:
     violations.extend(collect_duplicate_record_violations(records))
     violations.extend(collect_manifest_consistency_violations(repo_root, records))
     violations.extend(collect_allowed_dependent_violations(repo_root, records))
+    violations.extend(collect_manifest_dependency_allowlist_violations(repo_root, records))
     violations.extend(collect_forbidden_edge_violations(repo_root, records))
     violations.extend(collect_reference_violations(repo_root, records))
     violations.extend(collect_test_bypass_violations(repo_root, records))
     violations.extend(collect_active_implementation_violations(repo_root, records))
+    violations.extend(collect_io_forbidden_source_violations(repo_root, records))
     violations.extend(collect_special_case_violations(repo_root))
     violations.extend(collect_scb_config_rule_violations(repo_root, rust_sources(repo_root)))
     violations.extend(collect_scb_retained_rule_violations(repo_root, rust_sources(repo_root)))

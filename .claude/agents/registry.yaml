@@ -20,6 +20,9 @@ agents:
   boundary-guard:
     version: 0.2.0
     path: .claude/agents/boundary-guard.md
+  ruthless-boundary-qa:
+    version: 0.1.0
+    path: .claude/agents/ruthless-boundary-qa.md
   flaky-test-qa:
     version: 0.1.0
     path: .claude/agents/flaky-test-qa.md
@@ -62,6 +65,12 @@ agents:
   sc-git-worktree-update:
     version: 0.12.0
     path: .claude/agents/sc-git-worktree-update.md
+  sc-adversarial-fuzz-coordinator:
+    version: 1.0.0
+    path: .claude/agents/sc-adversarial-fuzz-coordinator.md
+  sc-adversarial-fuzz-probe:
+    version: 1.0.0
+    path: .claude/agents/sc-adversarial-fuzz-probe.md
 skills:
   codex-orchestration:
     version: 0.1.0
@@ -71,6 +80,7 @@ skills:
       req-qa: 0.x
       arch-qa: 0.x
       flaky-test-qa: 0.x
+      ruthless-boundary-qa: 0.x
       rust-qa-agent: 0.x
       rust-best-practices-agent: 0.x
       rust-service-hardening-agent: 0.x

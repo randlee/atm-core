@@ -1,0 +1,63 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN15-SHAPEPROBE-ORACLE-UNVERIFIED>
+  a triage:Finding ;
+  triage:findingId "AN15-SHAPEPROBE-ORACLE-UNVERIFIED" ;
+  triage:title "Shape-probe's no-mutation oracle against catalog/message rows is unverified" ;
+  triage:description "The sprint doc's shape-probe oracle requires proving 'malformed input cannot mutate catalog/message rows.' The originally-cited test, crates/atm-core/src/send/template.rs:238, only exercised resolve_merged_vars in isolation. RESOLVED: crates/atm-http-runtime/src/storage_and_nudge_router.rs:1459 (an15_shape_probe_missing_required_input_mutates_no_catalog_or_mailbox_rows) asserts zero catalog/mailbox mutation on malformed template write via inspect_template_admission_for_test and list_messages. Confirmed by AN-PHASEEND-REVIEW template reviewer (task #1767) as an unrecorded fix landing outside the record's original sweep scope." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-14T14:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.15 ;
+  triage:foundAt "2026-08-14T08:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN15-SHAPEPROBE-ORACLE-UNVERIFIED/an15-0> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN15-SHAPEPROBE-ORACLE-UNVERIFIED/integrate-fix-0> ;
+  triage:closedAt "2026-08-14T20:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AN15-SHAPEPROBE-ORACLE-UNVERIFIED/an15-0>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/template.rs" ;
+  triage:line 238 ;
+  triage:snippet "fn an15_shape_probe_captures_environment_values_without_consulting_process_environment" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an15-adversarial-fuzzing" ;
+  triage:headSha "9ddf105b5dd7c3d7ec592cac1602dd7ab1c743bb" ;
+  triage:occursIn <urn:atm:triage:worktree/an15/9ddf105b> .
+
+<urn:atm:triage:occurrence/AN15-SHAPEPROBE-ORACLE-UNVERIFIED/integrate-fix-0>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 1459 ;
+  triage:snippet "fn an15_shape_probe_missing_required_input_mutates_no_catalog_or_mailbox_rows" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "628d6531bd77db0507447e587088fb9abdfeb4bc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/628d6531> .
+
+<urn:atm:triage:worktree/an15/9ddf105b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/an15" ;
+  triage:branch "feature/an15-adversarial-fuzzing" ;
+  triage:headSha "9ddf105b5dd7c3d7ec592cac1602dd7ab1c743bb" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/integrate/628d6531>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-an" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "628d6531bd77db0507447e587088fb9abdfeb4bc" ;
+  triage:orderIndex 1 .

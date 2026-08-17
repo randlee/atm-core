@@ -4,12 +4,18 @@
 )]
 
 use std::path::Path;
+use std::sync::Arc;
+
+use atm_storage::contract::{
+    AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource,
+};
 #[cfg(any(test, feature = "test-utils"))]
 use std::sync::Mutex;
 use std::sync::OnceLock;
 
 use atm_storage::{
-    AckRequirementState, Message as SharedMessage, MessageQuery, derive_ack_requirement,
+    AckRequirementState, MailboxBucketCounts, Message as SharedMessage, MessageQuery,
+    derive_ack_requirement,
 };
 
 use crate::boundary;
@@ -70,9 +76,7 @@ pub(crate) fn default_runtime() -> Result<LocalServiceRuntime, AtmError> {
             AtmError::daemon_unavailable(
                 "sqlite-backed retained runtime is unavailable because no default runtime factory is installed",
             )
-            .with_recovery(
-                "Start the daemon-backed ATM runtime or install the sqlite default runtime factory before retrying this command.",
-            )
+
         })
         .and_then(|provider| match provider {
             DefaultRuntimeProvider::Factory(factory) => factory(),
@@ -81,6 +85,15 @@ pub(crate) fn default_runtime() -> Result<LocalServiceRuntime, AtmError> {
 }
 
 pub(crate) trait RetainedMailboxRuntime {
+    /// The one sealed acknowledgement-admission operation. Implementations
+    /// must resolve the pending source and commit the reply/source pair as one
+    /// transaction; application callers cannot compose a source read with a
+    /// later write.
+    fn acknowledge_message_atomically(
+        &self,
+        source: &AcknowledgementSource,
+        builder: Arc<dyn AcknowledgementReplyBuilder>,
+    ) -> Result<AcknowledgementCommit, AtmError>;
     fn query_mailbox_metadata_rows(
         &self,
         home_dir: &Path,
@@ -88,6 +101,13 @@ pub(crate) trait RetainedMailboxRuntime {
         agent: &AgentName,
         limit: Option<usize>,
     ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, AtmError>;
+    fn query_mailbox_bucket_counts(
+        &self,
+        _team: &TeamName,
+        _agent: &AgentName,
+    ) -> Result<Option<MailboxBucketCounts>, AtmError> {
+        Ok(None)
+    }
     fn load_message_record(
         &self,
         home_dir: &Path,
@@ -95,11 +115,58 @@ pub(crate) trait RetainedMailboxRuntime {
         agent: &AgentName,
         message_key: &boundary::MessageKey,
     ) -> Result<Option<boundary::Message>, AtmError>;
+    /// Resolves a decomposed body through the core renderer port when the
+    /// runtime has one installed. Compatibility test runtimes retain plain
+    /// envelopes through the default implementation.
+    fn render_message_body(
+        &self,
+        message_key: &boundary::MessageKey,
+        message_id: Option<crate::schema::AtmMessageId>,
+        envelope: &crate::schema::InboxMessage,
+    ) -> Result<crate::schema::InboxMessage, AtmError> {
+        let _ = (message_key, message_id);
+        Ok(envelope.clone())
+    }
+    /// Atomically admits a new immutable record or returns the existing record
+    /// for duplicate classification. The default retains compatibility for
+    /// narrow test runtimes; the production SQLite runtime overrides it to
+    /// keep the normal admission path on its writer lane.
+    fn admit_message_record(
+        &self,
+        home_dir: &Path,
+        record: boundary::Message,
+    ) -> Result<Option<boundary::Message>, AtmError> {
+        if let Some(existing) =
+            self.load_message_record(home_dir, &record.team, &record.agent, &record.message_key)?
+        {
+            return Ok(Some(existing));
+        }
+        self.persist_message_record(record)?;
+        Ok(None)
+    }
     fn persist_message_record(&self, record: boundary::Message) -> Result<(), AtmError>;
+    fn persist_message_records_atomically(
+        &self,
+        records: Vec<boundary::Message>,
+    ) -> Result<(), AtmError> {
+        for record in records {
+            self.persist_message_record(record)?;
+        }
+        Ok(())
+    }
     fn persist_message_state(&self, state: boundary::MailMessageState) -> Result<(), AtmError>;
 }
 
 impl RetainedMailboxRuntime for LocalServiceRuntime {
+    fn acknowledge_message_atomically(
+        &self,
+        source: &AcknowledgementSource,
+        builder: Arc<dyn AcknowledgementReplyBuilder>,
+    ) -> Result<AcknowledgementCommit, AtmError> {
+        self.message_store
+            .acknowledge_message_atomically(source, builder)
+    }
+
     fn query_mailbox_metadata_rows(
         &self,
         _home_dir: &Path,
@@ -123,6 +190,14 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
             })
     }
 
+    fn query_mailbox_bucket_counts(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<Option<MailboxBucketCounts>, AtmError> {
+        self.message_store.mailbox_bucket_counts(team, agent)
+    }
+
     fn load_message_record(
         &self,
         _home_dir: &Path,
@@ -137,6 +212,39 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
             .map(shared_message_to_record))
     }
 
+    fn render_message_body(
+        &self,
+        message_key: &boundary::MessageKey,
+        message_id: Option<crate::schema::AtmMessageId>,
+        envelope: &crate::schema::InboxMessage,
+    ) -> Result<crate::schema::InboxMessage, AtmError> {
+        let Some(catalog) = self.template_catalog_store.as_deref() else {
+            return Ok(envelope.clone());
+        };
+        crate::read::render::render_message_body(
+            catalog,
+            self.template_composer.as_deref(),
+            message_key,
+            message_id,
+            envelope,
+        )
+    }
+
+    fn admit_message_record(
+        &self,
+        _home_dir: &Path,
+        record: boundary::Message,
+    ) -> Result<Option<boundary::Message>, AtmError> {
+        self.message_store
+            .save_message_if_absent(&SharedMessage {
+                team: record.team,
+                agent: record.agent,
+                message_key: record.message_key,
+                envelope: record.envelope,
+            })
+            .map(|existing| existing.map(shared_message_to_record))
+    }
+
     fn persist_message_record(&self, record: boundary::Message) -> Result<(), AtmError> {
         self.message_store.save_message(&SharedMessage {
             team: record.team,
@@ -144,6 +252,22 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
             message_key: record.message_key,
             envelope: record.envelope,
         })
+    }
+
+    fn persist_message_records_atomically(
+        &self,
+        records: Vec<boundary::Message>,
+    ) -> Result<(), AtmError> {
+        let records = records
+            .into_iter()
+            .map(|record| SharedMessage {
+                team: record.team,
+                agent: record.agent,
+                message_key: record.message_key,
+                envelope: record.envelope,
+            })
+            .collect::<Vec<_>>();
+        self.message_store.save_messages_atomically(&records)
     }
 
     fn persist_message_state(&self, state: boundary::MailMessageState) -> Result<(), AtmError> {
@@ -188,6 +312,8 @@ fn shared_message_to_metadata_row(message: SharedMessage) -> boundary::MailStore
         parent_message_id: message.envelope.parent_message_id,
         thread_mode: message.envelope.thread_mode,
         from_agent: message.envelope.from,
+        source_chat_id: message.envelope.source_chat_id,
+        destination_chat_id: message.envelope.destination_chat_id,
         summary: message.envelope.summary,
         message_at: message.envelope.timestamp,
         read: message.envelope.read,

@@ -12,26 +12,31 @@
 //! `atm-core` dependency or another storage-architecture reset.
 
 use atm_storage::{
-    AtmError, AtmErrorKind, Message, MessageKey, MessageQuery, MessageStore, RosterSnapshot,
+    AtmError, AtmErrorCode, Message, MessageKey, MessageQuery, MessageStore, RosterSnapshot,
     RosterStore, TeamName,
 };
 
 fn compile_only_error(surface: &str) -> AtmError {
     AtmError::new(
-        AtmErrorKind::Internal,
+        AtmErrorCode::InternalError,
         format!("{surface} is compile-only in atm-storage-sqlserver-proof"),
-    )
-    .with_recovery(
-        "Replace atm-storage-sqlserver-proof with a real atm-storage-sqlserver backend before using SQL Server at runtime.",
     )
 }
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SqlServerMessageStore;
 
+impl atm_storage::contract::sealed::Sealed for SqlServerMessageStore {}
+
 impl MessageStore for SqlServerMessageStore {
     fn save_message(&self, _message: &Message) -> Result<(), AtmError> {
         Err(compile_only_error("SqlServerMessageStore::save_message"))
+    }
+
+    fn save_messages_atomically(&self, _messages: &[Message]) -> Result<(), AtmError> {
+        Err(compile_only_error(
+            "SqlServerMessageStore::save_messages_atomically",
+        ))
     }
 
     fn load_message(&self, _key: &MessageKey) -> Result<Option<Message>, AtmError> {
@@ -49,6 +54,8 @@ impl MessageStore for SqlServerMessageStore {
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SqlServerRosterStore;
+
+impl atm_storage::contract::sealed::Sealed for SqlServerRosterStore {}
 
 impl RosterStore for SqlServerRosterStore {
     fn load_roster(&self, _team: &TeamName) -> Result<RosterSnapshot, AtmError> {

@@ -1,0 +1,89 @@
+---
+name: triage-record
+version: 1.0.0
+description: Canonical one-finding Turtle record for pre-dispatch QA triage.
+format: ttl
+required_variables:
+  - finding_id
+  - title
+  - description
+  - phase_id
+  - triage_mode
+  - category
+  - severity
+  - repeatable
+  - sweep_scope
+  - status
+  - dispatch_ready
+  - triaged_at
+  - found_in
+  - found_at
+  - occurrences
+  - occurrence_files
+  - occurrence_lines
+  - occurrence_snippets
+  - occurrence_statuses
+  - occurrence_closed
+  - occurrence_branches
+  - occurrence_head_shas
+  - occurrence_worktree_ids
+  - worktrees
+  - worktree_paths
+  - worktree_branches
+  - worktree_head_shas
+  - worktree_order_indices
+optional_variables:
+  - triage_record_version
+  - closed_at
+  - closed_by
+---
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/{{ finding_id }}>
+  a triage:Finding ;
+  triage:findingId "{{ finding_id }}" ;
+  triage:title "{{ title }}" ;
+  triage:description "{{ description }}" ;
+  triage:phaseId "{{ phase_id }}" ;
+  triage:triageMode "{{ triage_mode }}" ;
+  triage:category "{{ category }}" ;
+  triage:severity "{{ severity }}" ;
+  triage:repeatable {% if repeatable %}true{% else %}false{% endif %} ;
+  triage:sweepScope "{{ sweep_scope }}" ;
+  triage:status "{{ status }}" ;
+  triage:dispatchReady {% if dispatch_ready %}true{% else %}false{% endif %} ;
+  triage:triagedAt "{{ triaged_at }}"^^xsd:dateTime ;
+  triage:foundIn triage:{{ found_in }} ;
+  triage:foundAt "{{ found_at }}"^^xsd:dateTime ;
+{% for occurrence_id in occurrences %}  triage:hasOccurrence <urn:atm:triage:occurrence/{{ finding_id }}/{{ occurrence_id }}> ;
+{% endfor %}{% if closed_at %}  triage:closedAt "{{ closed_at }}"^^xsd:dateTime ;
+{% endif %}{% if closed_by %}  triage:closedBy "{{ closed_by }}" ;
+{% endif %}  triage:triageRecordVersion "{% if triage_record_version %}{{ triage_record_version }}{% else %}1{% endif %}" .
+
+{% for occurrence_id in occurrences %}<urn:atm:triage:occurrence/{{ finding_id }}/{{ occurrence_id }}>
+  a triage:Occurrence ;
+{% if occurrence_files[loop.index0][0:1] == "/" or ".." in occurrence_files[loop.index0] or occurrence_files[loop.index0][1:2] == ":" %}__ERROR_REPOSITORY_RELATIVE_OCCURRENCE_PATH_REQUIRED__ .
+{% endif %}
+  triage:file "{{ occurrence_files[loop.index0] }}" ;
+  triage:line {{ occurrence_lines[loop.index0] }} ;
+  triage:snippet "{{ occurrence_snippets[loop.index0] }}" ;
+  triage:status "{{ occurrence_statuses[loop.index0] }}" ;
+  triage:closed {% if occurrence_closed[loop.index0] == "true" %}true{% else %}false{% endif %} ;
+  triage:branch "{{ occurrence_branches[loop.index0] }}" ;
+  triage:headSha "{{ occurrence_head_shas[loop.index0] }}" ;
+  triage:occursIn <urn:atm:triage:worktree/{{ occurrence_worktree_ids[loop.index0] }}> .
+
+{% endfor %}{% for worktree_id in worktrees %}<urn:atm:triage:worktree/{{ worktree_id }}>
+  a triage:WorktreeSnapshot ;
+{% if worktree_paths[loop.index0][0:1] == "/" or worktree_paths[loop.index0][0:1] == "\\" or ".." in worktree_paths[loop.index0] or worktree_paths[loop.index0][1:2] == ":" %}__ERROR_REPOSITORY_RELATIVE_WORKTREE_PATH_REQUIRED__ .
+{% endif %}
+  triage:path "{{ worktree_paths[loop.index0] }}" ;
+  triage:branch "{{ worktree_branches[loop.index0] }}" ;
+  triage:headSha "{{ worktree_head_shas[loop.index0] }}" ;
+  triage:orderIndex {{ worktree_order_indices[loop.index0] }} .
+
+{% endfor %}

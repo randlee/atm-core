@@ -1,0 +1,23 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F001-AN14>
+  a triage:Finding ;
+  triage:findingId "RBP-F001-AN14" ;
+  triage:title "Hand-written inline TemplateOutputFormat<->sc_composer::OutputFormat conversion instead of From impl" ;
+  triage:description "Duplicate of RBQA-F002-AN14. Independently reported by rust-best-practices-agent and ruthless-boundary-qa describing the same underlying defect: TemplateOutputFormat<->sc_composer::OutputFormat conversion logic appearing at 4 call sites in crates/atm-template-sc-compose/src/lib.rs. This finding is subsumed by RBQA-F002-AN14, which was already dispatched to arch-ctm in fix round AN14QA1-FIX-1. Not re-dispatched to avoid duplicate fix work." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-best-practices" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "duplicate" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-14T06:02:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.14 ;
+  triage:foundAt "2026-08-14T05:44:15Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "1" .

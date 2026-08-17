@@ -180,7 +180,7 @@ Safe repair:
 Why this is not recoverable:
 - the collection boundary is wrong, so record-level isolation is not safe
 
-### 3.6 Missing Team Config During `send`
+### 3.6 Historical Missing Team Config Case
 
 Example:
 
@@ -194,22 +194,17 @@ Issue:
 - `config.json` is missing entirely, but the recipient inbox already exists
 
 Expected ATM behavior:
-- treat this as `missing-document`, not as malformed JSON
-- allow `send` to proceed only because the inbox path already exists
-- surface an actionable warning to the sender
-- send a best-effort repair notification to `team-lead` when that target can be
-  resolved without guesswork
-- deduplicate repeated repair notifications while the same missing-config
-  condition remains unresolved
+- current ATM send paths do not consult `config.json`
+- delivery proceeds from canonical SQLite roster truth only
+- no synthetic repair notice is emitted because `config.json` is not runtime truth
 
 Safe repair:
 - restore or recreate `config.json` for the team
 
-Why this is only conditionally recoverable:
-- delivery can proceed without guessing membership only because the inbox path
-  already exists
+Why this is historical-only:
+- older retained flows used inbox fallback, but current runtime commands do not
 
-### 3.7 Missing Team Config Without Safe Fallback
+### 3.7 Historical Missing Team Config Without Safe Fallback
 
 Example:
 
@@ -223,10 +218,8 @@ Issue:
 - `config.json` is missing and the requested recipient inbox does not exist
 
 Expected ATM behavior:
-- fail the `send`
-- explain that the missing config could not be bypassed safely
-- tell the operator to restore team configuration or create the correct team
-  state
+- current ATM runtime ignores `config.json` for routing
+- send success/failure depends on canonical ATM roster truth, not the file
 
 Safe repair:
 - restore `config.json` and retry, or create the intended team/inbox state by
@@ -244,8 +237,8 @@ When repairing persisted data manually:
 - keep unknown fields unless the field is known to be corrupt
 - validate JSON syntax before retrying ATM commands
 - if the file may have been truncated, restore from backup before hand-editing
-- when ATM used missing-config fallback, repair the team config promptly so
-  future sends do not remain in degraded mode
+- if historical compatibility files are corrupt, repair them only when a
+  dedicated tooling lane still consumes them
 
 ## 5. Implementation Note
 
@@ -255,5 +248,5 @@ written against the same cases:
 - compatibility-recoverable forms should have positive tests
 - isolated invalid-record handling should have scoped recovery tests
 - non-recoverable document failures should assert file and parser context
-- missing-config send fallback should assert sender warning, best-effort
-  `team-lead` notification, and deduplication
+- historical missing-config fallback behavior should not be used as a runtime
+  correctness requirement

@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RSH-TIMEOUT-DEADLINE-MISMATCH-001>
+  a triage:Finding ;
+  triage:findingId "RSH-TIMEOUT-DEADLINE-MISMATCH-001" ;
+  triage:title "MAX_TIMEOUT_SECS (3600s) validates long-poll read/peek waits, but every same-host client is bound to a fixed 3-second transport deadline that never derives from the query's own timeout_secs" ;
+  triage:description "rust-service-hardening-agent found this during QA-HERMES-RC-1 (a scoped QA-1 round for PR #896, fix/hermes-atm-rc-verification) while reviewing the read/peek path's timeout handling. crates/atm-core/src/read/request.rs:12 declares 'pub const MAX_TIMEOUT_SECS: u64 = 3600;' and validate_timeout_secs (request.rs:408-415) accepts any caller-supplied timeout_secs up to that bound for both ReadQuery and the newer PeekQuery. read/mod.rs's load_read_selection genuinely performs a real blocking wait keyed off that value for both read and peek. However every same-host client that constructs these queries -- GraftClient (crates/atm-graft/src/lib.rs, via atm_http_runtime::preferred_local_client(endpoint, SAME_HOST_REQUEST_DEADLINE)) and the CLI's CliComposition -- is bound to a fixed SAME_HOST_REQUEST_DEADLINE = Duration::from_secs(3) (crates/atm-http-runtime/src/client.rs:44). HttpRuntimeClient::execute() always computes its deadline from this fixed request_timeout, never from the query payload's own timeout_secs. Practical effect: any ReadQuery/PeekQuery requesting a wait longer than ~3 seconds (up to the documented 3600s ceiling) has its client-side transport abort with a deadline/WaitTimeout error before the server's poll loop (wait_for_eligible_message) can ever succeed -- the documented long-poll feature (atm read --timeout N, atm peek --timeout N) is non-functional for any N greater than the fixed 3-second client budget over the primary same-host daemon path. There is also a resource-hygiene side effect: even after the client aborts, the server-side spawn_blocking job (via BlockingCoreBridge) keeps running and holding a bounded semaphore permit for the full requested wait, so a client-abandoned long-poll request still consumes shared blocking-pool capacity. quality-mgr independently confirmed both constants (MAX_TIMEOUT_SECS and SAME_HOST_REQUEST_DEADLINE) are unchanged on develop -- this predates the hermes-atm-rc-verification branch entirely and is not a regression from HERMES-RC-001/002/003. Not blocking PR #896; filed separately for a future dedicated fix." ;
+  triage:phaseId "phase-RC" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-16T02:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:QA-HERMES-RC-1 ;
+  triage:foundAt "2026-08-16T02:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-TIMEOUT-DEADLINE-MISMATCH-001/o1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-TIMEOUT-DEADLINE-MISMATCH-001/o2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RSH-TIMEOUT-DEADLINE-MISMATCH-001/o1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/request.rs" ;
+  triage:line 12 ;
+  triage:snippet "pub const MAX_TIMEOUT_SECS: u64 = 3600;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "cf7adf5b5" ;
+  triage:occursIn <urn:atm:triage:worktree/rctimeout/w1> .
+
+<urn:atm:triage:occurrence/RSH-TIMEOUT-DEADLINE-MISMATCH-001/o2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 44 ;
+  triage:snippet "pub const SAME_HOST_REQUEST_DEADLINE: Duration = Duration::from_secs(3);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "cf7adf5b5" ;
+  triage:occursIn <urn:atm:triage:worktree/rctimeout/w1> .
+
+<urn:atm:triage:worktree/rctimeout/w1>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/hermes-atm-rc-verification" ;
+  triage:branch "fix/hermes-atm-rc-verification" ;
+  triage:headSha "26da32b73d328ccd6289205c2ab477a46fbd18b5" ;
+  triage:orderIndex 0 .

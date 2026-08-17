@@ -44,8 +44,6 @@ Reusable generic current-develop building blocks:
   - `DoctorOnlyDispatcher` in `crates/atm-daemon/src/test_support.rs`
   - daemon local IPC transport tests in
     `crates/atm-daemon/src/local_ipc_transport.rs`
-  - peer transport protocol round-trip tests in
-    `crates/atm-daemon/src/peer_transport.rs`
 - current shared ICD inventory in `docs/atm-daemon/protocol-icd.md`
 
 Current `develop @ b6506ef` graft-specific discovery references:

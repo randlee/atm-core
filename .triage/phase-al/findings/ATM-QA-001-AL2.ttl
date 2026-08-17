@@ -1,0 +1,51 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-001-AL2>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-001-AL2" ;
+  triage:title "OpenAPI/Serde regression check is a substring match, not a structured snapshot comparison" ;
+  triage:description "req-qa (ATM-QA-001, minor) reports that the required OpenAPI/Serde regression check added this sprint (per the sprint doc's required validation: 'OpenAPI/Serde regression snapshot from the AL.1 compatibility oracle') is implemented as a substring match rather than a structured snapshot comparison, weakening its ability to catch real regressions. Source: quality-mgr AL2-QA-1 verdict, ATM message-id 01KZAYN25F8XMBDDFTSBEEJSM4, PR #768 comment https://github.com/randlee/atm-core/pull/768#issuecomment-5201543670." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-quality" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "feature/pal-s2-canonical-handler" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-06T23:16:46Z"^^xsd:dateTime ;
+  triage:closureNote "Verified fixed in 7bc70539 (test(http-runtime): structure OpenAPI and Serde contract check). Current crates/atm/tests/openapi_surface.rs builds structured live/baseline JSON and recursively compares object, array, and scalar removals via compare_value at lines 175-213; the additions-only test enforces the result at lines 215-265. just test and just lint pass on the merged branch." ;
+  triage:foundIn triage:AL2 ;
+  triage:foundAt "2026-08-05T23:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-AL2/AL2-canonical-handler-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-001-AL2/AL2-canonical-handler-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/openapi_surface.rs" ;
+  triage:line 208 ;
+  triage:snippet "baseline != live" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s2-canonical-handler" ;
+  triage:headSha "d557d662cdb0d6a30ba3d67675b10e13d15feb16" ;
+  triage:occursIn <urn:atm:triage:worktree/pal-s2-canonical-handler/d557d662cdb0d6a30ba3d67675b10e13d15feb16> .
+
+<urn:atm:triage:worktree/integrate/phase-al/572cc4b334ffe534ddecb3ad8600a9803d6d87a2>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate/phase-al" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "572cc4b334ffe534ddecb3ad8600a9803d6d87a2" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pal-s2-canonical-handler/d557d662cdb0d6a30ba3d67675b10e13d15feb16>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s2-canonical-handler" ;
+  triage:branch "feature/pal-s2-canonical-handler" ;
+  triage:headSha "d557d662cdb0d6a30ba3d67675b10e13d15feb16" ;
+  triage:orderIndex 1 .

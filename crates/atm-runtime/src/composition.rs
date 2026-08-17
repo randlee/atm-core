@@ -1,38 +1,63 @@
 use std::fmt;
-use std::path::{Path, PathBuf};
+use std::net::TcpListener;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use atm_core::boundary::{
-    self, ConfigDoctor, ConfigDoctorReport, NonClaudeOutbound, RuntimeStorageFinalizer,
+    self, ConfigDoctor, ConfigDoctorReport, NonClaudeOutbound, TemplateComposer,
 };
 use atm_core::doctor::RuntimeDoctorPorts;
+use atm_core::doctor::{DoctorFinding, DoctorSeverity};
 use atm_core::error::AtmError;
-use atm_core::home::host_mail_db_path;
-use atm_core::{LocalFileNonClaudeOutbound, LocalServiceRuntime, load_atm_config};
-use atm_storage::{MessageStore as SharedMessageStore, RosterStore as SharedRosterStore};
-use atm_storage_rusqlite::SqliteStorageBackend;
+use atm_core::home::HostRuntimeScope;
+use atm_core::{LocalServiceRuntime, load_atm_config};
+use atm_storage::{
+    MessageStore as SharedMessageStore, PeerConfigStore, RosterStore as SharedRosterStore,
+    StorageFactory,
+};
 
 use crate::legacy_storage_adapters::{
     StorageBackends, boundary_mail_store_view, boundary_roster_store_view, runtime_doctor_ports,
 };
-use crate::replay_store::{SqliteRemoteReplayStore, SqliteRuntimeStorageFinalizer};
-use crate::sqlite_observability::{RuntimeSqliteObservability, RuntimeSqliteObserver};
+use crate::workflow_telemetry::{
+    WorkflowTelemetryDiagnostics, WorkflowTelemetryRuntime, WorkflowTelemetrySetup,
+};
 
 #[derive(Clone)]
 pub struct RuntimeAssemblyInputs {
-    pub sqlite_db_path: PathBuf,
+    pub host_runtime_scope: HostRuntimeScope,
+    pub storage_factory: Arc<dyn StorageFactory>,
     pub config_current_dir: PathBuf,
-    pub sqlite_observer: Arc<dyn RuntimeSqliteObserver>,
     pub non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
+    /// Optional application port supplied by the bootstrap composition root.
+    /// Runtime owns no template-adapter dependency or implementation detail.
+    pub template_composer: Option<Arc<dyn TemplateComposer>>,
+    /// Optional bootstrap-owned telemetry exporter. `None` selects the core
+    /// no-op sink; invalid supplied limits degrade doctor only.
+    pub workflow_telemetry: Option<WorkflowTelemetrySetup>,
 }
 
 impl fmt::Debug for RuntimeAssemblyInputs {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RuntimeAssemblyInputs")
-            .field("sqlite_db_path", &self.sqlite_db_path)
+            .field("host_runtime_scope", &self.host_runtime_scope)
+            .field("storage_factory", &"dyn StorageFactory")
             .field("config_current_dir", &self.config_current_dir)
-            .field("sqlite_observer", &"dyn RuntimeSqliteObserver")
             .field("non_claude_outbound", &"dyn NonClaudeOutbound")
+            .field(
+                "template_composer",
+                &self
+                    .template_composer
+                    .as_ref()
+                    .map(|_| "dyn TemplateComposer"),
+            )
+            .field(
+                "workflow_telemetry",
+                &self
+                    .workflow_telemetry
+                    .as_ref()
+                    .map(|_| "configured exporter"),
+            )
             .finish()
     }
 }
@@ -45,9 +70,10 @@ pub struct RuntimeAssembly {
         Arc<dyn SharedRosterStore + Send + Sync>,
     >,
     pub nudge_template_override_store: Arc<dyn boundary::NudgeTemplateOverrideStore + Send + Sync>,
+    pub peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
     pub doctor_ports: RuntimeDoctorPorts,
-    pub remote_replay_store: Arc<dyn boundary::RemoteReplayStore + Send + Sync>,
-    pub storage_finalizer: Arc<dyn RuntimeStorageFinalizer + Send + Sync>,
+    pub workflow_telemetry: WorkflowTelemetryRuntime,
+    template_composer: Option<Arc<dyn TemplateComposer>>,
 }
 
 impl fmt::Debug for RuntimeAssembly {
@@ -59,118 +85,173 @@ impl fmt::Debug for RuntimeAssembly {
                 "nudge_template_override_store",
                 &"dyn NudgeTemplateOverrideStore",
             )
+            .field("peer_config_store", &"dyn PeerConfigStore")
             .field("doctor_ports", &self.doctor_ports)
-            .field("remote_replay_store", &"dyn RemoteReplayStore")
-            .field("storage_finalizer", &"dyn RuntimeStorageFinalizer")
+            .field("workflow_telemetry", &"WorkflowTelemetryRuntime")
+            .field(
+                "template_composer",
+                &self
+                    .template_composer
+                    .as_ref()
+                    .map(|_| "dyn TemplateComposer"),
+            )
             .finish()
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct RuntimeConfigDoctor {
-    config_current_dir: PathBuf,
+    // `None` is the daemon-owned doctor.  A system daemon has no caller
+    // workspace and therefore must not read `.atm.toml` while answering
+    // doctor requests.
+    config_current_dir: Option<PathBuf>,
+    workflow_telemetry: Arc<WorkflowTelemetryDiagnostics>,
 }
 
 impl boundary::sealed::Sealed for RuntimeConfigDoctor {}
 
 impl ConfigDoctor for RuntimeConfigDoctor {
     fn inspect_config(&self) -> Result<ConfigDoctorReport, AtmError> {
-        let _ = load_atm_config(&self.config_current_dir)?;
-        Ok(ConfigDoctorReport {
-            findings: Vec::new(),
-        })
+        if let Some(config_current_dir) = &self.config_current_dir {
+            let _ = load_atm_config(config_current_dir)?;
+        }
+        let mut findings = Vec::new();
+        if self
+            .workflow_telemetry
+            .config_invalid
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            findings.push(DoctorFinding {
+                severity: DoctorSeverity::Warning,
+                code: atm_storage::AtmErrorCode::WorkflowTelemetryConfigInvalid,
+                message: "workflow telemetry configuration is invalid; telemetry is disabled"
+                    .to_owned(),
+                remediation: Some(
+                    "Repair the configured telemetry queue or timeout limits, then restart the daemon."
+                        .to_owned(),
+                ),
+            });
+        }
+        Ok(ConfigDoctorReport { findings })
     }
 }
 
-pub fn assemble_sqlite_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly, AtmError> {
-    assemble_sqlite_runtime_at_path(
-        &inputs.sqlite_db_path,
-        inputs.config_current_dir.clone(),
-        Arc::clone(&inputs.sqlite_observer),
-        Arc::clone(&inputs.non_claude_outbound),
+pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly, AtmError> {
+    let template_composer = inputs.template_composer;
+    let workflow_telemetry = inputs
+        .workflow_telemetry
+        .map_or_else(WorkflowTelemetryRuntime::disabled, |setup| {
+            WorkflowTelemetryRuntime::start(setup.config, setup.sink)
+        });
+    let storage = inputs
+        .storage_factory
+        .open(inputs.host_runtime_scope.durable_state_root.as_ref())?;
+    let storage_backends = StorageBackends {
+        messages: storage.message_store(),
+        rosters: storage.roster_store(),
+    };
+    let async_message_store = storage.async_message_store();
+    let async_message_search_store = storage.async_message_search_store();
+    let template_catalog_store = storage.template_catalog_store();
+    let nudge_template_override_store = storage.nudge_template_override_store();
+    let peer_config_store = storage.peer_config_store();
+    let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
+        storage_backends.messages.clone(),
+        storage_backends.rosters.clone(),
+        Arc::clone(&nudge_template_override_store),
+        inputs.non_claude_outbound,
     )
-}
-
-fn assemble_sqlite_runtime_at_path(
-    sqlite_db_path: &Path,
-    config_current_dir: PathBuf,
-    sqlite_observer: Arc<dyn RuntimeSqliteObserver>,
-    non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
-) -> Result<RuntimeAssembly, AtmError> {
-    let sqlite_observability = Arc::new(RuntimeSqliteObservability::new(sqlite_observer));
-    let sqlite_backend = Arc::new(SqliteStorageBackend::new_with_observability(
-        sqlite_db_path,
-        sqlite_observability,
-    )?);
-    let shared_messages = sqlite_backend.message_store();
-    let shared_rosters = sqlite_backend.roster_store();
-    let storage_backends = StorageBackends {
-        messages: shared_messages.clone(),
-        rosters: shared_rosters.clone(),
-    };
-    let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
-        storage_backends.messages.clone(),
-        storage_backends.rosters.clone(),
-        sqlite_backend.nudge_template_override_store(),
-        non_claude_outbound,
-    );
-    let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor { config_current_dir }));
-    let remote_replay_store: Arc<dyn boundary::RemoteReplayStore + Send + Sync> =
-        Arc::new(SqliteRemoteReplayStore::new(Arc::clone(&sqlite_backend)));
-    let storage_finalizer: Arc<dyn RuntimeStorageFinalizer + Send + Sync> = Arc::new(
-        SqliteRuntimeStorageFinalizer::new(Arc::clone(&sqlite_backend)),
-    );
+    .with_async_message_store(async_message_store)
+    .with_async_message_search_store(async_message_search_store)
+    .with_template_rendering(template_catalog_store, template_composer.clone());
+    let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor {
+        config_current_dir: Some(inputs.config_current_dir),
+        workflow_telemetry: Arc::clone(workflow_telemetry.diagnostics()),
+    }));
     Ok(RuntimeAssembly {
         service_runtime,
         storage_backends,
-        nudge_template_override_store: sqlite_backend.nudge_template_override_store(),
+        nudge_template_override_store,
+        peer_config_store,
         doctor_ports,
-        remote_replay_store,
-        storage_finalizer,
+        workflow_telemetry,
+        template_composer,
     })
 }
 
-pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
-    let config_current_dir = std::env::current_dir().map_err(|source| {
-        AtmError::config("failed to resolve current directory for direct runtime assembly")
-            .with_recovery(
-                "Run the direct retained runtime path from a readable ATM workspace so config inspection and runtime assembly share one validated root.",
-            )
-            .with_source(source)
+/// Validate all enabled HTTPS configuration before the daemon publishes any
+/// HTTPS service. AI.8 performs a bind preflight only; AI.9 owns the actual
+/// listener lifetime and request handling.
+/// Validate the peer-listener configuration immediately before daemon startup.
+/// Ordinary CLI commands intentionally do not call this: they use the shared
+/// runtime assembly only to reach durable configuration and mailbox boundaries.
+pub fn validate_enabled_peer_configuration(
+    store: &(dyn PeerConfigStore + Send + Sync),
+) -> Result<(), AtmError> {
+    validate_enabled_peer_configuration_for_reload(store)?;
+    let enabled = store
+        .list_interfaces()?
+        .into_iter()
+        .filter(|interface| interface.enabled)
+        .collect::<Vec<_>>();
+    for interface in enabled {
+        TcpListener::bind(interface.bind_addr).map_err(|error| {
+            AtmError::bind_preflight(format!(
+                "HTTPS bind preflight failed for {}: {error}",
+                interface.bind_addr
+            ))
+        })?;
+    }
+    Ok(())
+}
+
+pub fn validate_enabled_peer_configuration_for_reload(
+    store: &(dyn PeerConfigStore + Send + Sync),
+) -> Result<(), AtmError> {
+    for peer in store.list_trusted_peers()? {
+        if peer.enabled && peer.fingerprint.as_str().trim().is_empty() {
+            return Err(AtmError::peer_config_validation(
+                "enabled trusted peers require a non-empty pinned fingerprint",
+            ));
+        }
+    }
+    let enabled = store
+        .list_interfaces()?
+        .into_iter()
+        .filter(|interface| interface.enabled)
+        .collect::<Vec<_>>();
+    if enabled.is_empty() {
+        return Ok(());
+    }
+    let certificate = store.local_certificate()?.ok_or_else(|| {
+        AtmError::peer_config_validation(
+            "enabled HTTPS interfaces require a configured local certificate reference",
+        )
     })?;
-    let sqlite_backend = Arc::new(SqliteStorageBackend::new_with_observability(
-        host_mail_db_path()?,
-        RuntimeSqliteObservability::disabled(),
-    )?);
-    let shared_messages = sqlite_backend.message_store();
-    let shared_rosters = sqlite_backend.roster_store();
-    let storage_backends = StorageBackends {
-        messages: shared_messages.clone(),
-        rosters: shared_rosters.clone(),
-    };
-    let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
-        storage_backends.messages.clone(),
-        storage_backends.rosters.clone(),
-        sqlite_backend.nudge_template_override_store(),
-        Arc::new(LocalFileNonClaudeOutbound::new()),
-    );
-    let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor { config_current_dir }));
-    let remote_replay_store: Arc<dyn boundary::RemoteReplayStore + Send + Sync> =
-        Arc::new(SqliteRemoteReplayStore::new(Arc::clone(&sqlite_backend)));
-    let storage_finalizer: Arc<dyn RuntimeStorageFinalizer + Send + Sync> = Arc::new(
-        SqliteRuntimeStorageFinalizer::new(Arc::clone(&sqlite_backend)),
-    );
-    Ok(RuntimeAssembly {
-        service_runtime,
-        storage_backends,
-        nudge_template_override_store: sqlite_backend.nudge_template_override_store(),
-        doctor_ports,
-        remote_replay_store,
-        storage_finalizer,
-    })
+    if certificate.fingerprint.as_str().trim().is_empty()
+        || certificate.private_key_ref.as_str().trim().is_empty()
+    {
+        return Err(AtmError::peer_config_validation(
+            "enabled HTTPS interfaces require a non-empty certificate fingerprint and key reference",
+        ));
+    }
+    Ok(())
 }
 
 impl RuntimeAssembly {
+    /// Select the system-daemon view of the assembled runtime.
+    ///
+    /// IPC and peer requests carry caller context but must never cause the
+    /// daemon to read a caller workspace's `.atm.toml` file.
+    pub fn for_daemon(mut self) -> Self {
+        self.service_runtime = self.service_runtime.without_workspace_config();
+        self.doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor {
+            config_current_dir: None,
+            workflow_telemetry: Arc::clone(self.workflow_telemetry.diagnostics()),
+        }));
+        self
+    }
+
     pub fn message_store_arc(&self) -> Arc<dyn SharedMessageStore + Send + Sync> {
         self.storage_backends.messages.clone()
     }
@@ -186,24 +267,13 @@ impl RuntimeAssembly {
     pub fn shared_roster_store_arc(&self) -> Arc<dyn SharedRosterStore + Send + Sync> {
         self.storage_backends.rosters.clone()
     }
-}
 
-pub fn default_local_runtime() -> Result<LocalServiceRuntime, AtmError> {
-    assemble_default_runtime().map(|assembly| assembly.service_runtime)
-}
-
-pub fn with_default_roster_store<T>(
-    f: impl FnOnce(&(dyn boundary::RosterStore + Send + Sync)) -> Result<T, AtmError>,
-) -> Result<T, AtmError> {
-    let assembly = assemble_default_runtime()?;
-    let roster_store = assembly.roster_store_arc();
-    let result = f(roster_store.as_ref());
-    let finalize_result = assembly.storage_finalizer.finalize_storage_shutdown();
-    match (result, finalize_result) {
-        (Ok(value), Ok(())) => Ok(value),
-        (Ok(_), Err(error)) => Err(error),
-        (Err(error), Ok(())) => Err(error),
-        (Err(error), Err(_)) => Err(error),
+    pub fn peer_config_store(&self) -> Arc<dyn PeerConfigStore + Send + Sync> {
+        Arc::clone(&self.peer_config_store)
+    }
+    /// Returns the bootstrap-provided template-composition port, if enabled.
+    pub fn template_composer(&self) -> Option<Arc<dyn TemplateComposer>> {
+        self.service_runtime.template_composer()
     }
 }
 
@@ -218,21 +288,171 @@ pub fn with_installed_roster_store<T>(
     })
 }
 
-pub fn with_default_nudge_template_override_store<T>(
-    f: impl FnOnce(&(dyn boundary::NudgeTemplateOverrideStore + Send + Sync)) -> Result<T, AtmError>,
-) -> Result<T, AtmError> {
-    let sqlite_backend = Arc::new(SqliteStorageBackend::new_with_observability(
-        host_mail_db_path()?,
-        RuntimeSqliteObservability::disabled(),
-    )?);
-    let override_store = sqlite_backend.nudge_template_override_store();
-    let result = f(override_store.as_ref());
-    let finalize_result =
-        SqliteRuntimeStorageFinalizer::new(sqlite_backend).finalize_storage_shutdown();
-    match (result, finalize_result) {
-        (Ok(value), Ok(())) => Ok(value),
-        (Ok(_), Err(error)) => Err(error),
-        (Err(error), Ok(())) => Err(error),
-        (Err(error), Err(_)) => Err(error),
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    use atm_core::boundary::ConfigDoctor;
+    use atm_storage::{
+        CertificateFingerprint, HostName, HttpsInterface, LocalCertificate, PeerConfigStore,
+        PrivateKeyRef, TrustedPeer,
+    };
+
+    use super::{RuntimeConfigDoctor, validate_enabled_peer_configuration};
+    use crate::workflow_telemetry::WorkflowTelemetryDiagnostics;
+
+    #[test]
+    fn daemon_config_doctor_does_not_read_a_caller_workspace() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos();
+        let workspace = std::env::temp_dir().join(format!(
+            "atm-runtime-daemon-doctor-{}-{nonce}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&workspace).expect("workspace fixture");
+        std::fs::write(workspace.join(".atm.toml"), "not = [valid")
+            .expect("write invalid workspace config");
+
+        let caller_doctor = RuntimeConfigDoctor {
+            config_current_dir: Some(PathBuf::from(&workspace)),
+            workflow_telemetry: Arc::new(WorkflowTelemetryDiagnostics::default()),
+        };
+        assert!(caller_doctor.inspect_config().is_err());
+
+        RuntimeConfigDoctor {
+            config_current_dir: None,
+            workflow_telemetry: Arc::new(WorkflowTelemetryDiagnostics::default()),
+        }
+        .inspect_config()
+        .expect("daemon doctor must ignore caller workspace config");
+        std::fs::remove_dir_all(workspace).expect("remove workspace fixture");
+    }
+
+    #[test]
+    fn invalid_telemetry_configuration_is_a_doctor_warning_not_a_runtime_failure() {
+        let diagnostics = Arc::new(WorkflowTelemetryDiagnostics::default());
+        diagnostics
+            .config_invalid
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        let report = RuntimeConfigDoctor {
+            config_current_dir: None,
+            workflow_telemetry: diagnostics,
+        }
+        .inspect_config()
+        .expect("doctor report");
+        assert_eq!(report.findings.len(), 1);
+        assert_eq!(
+            report.findings[0].code,
+            atm_storage::AtmErrorCode::WorkflowTelemetryConfigInvalid
+        );
+        assert_eq!(
+            report.findings[0].severity,
+            atm_core::doctor::DoctorSeverity::Warning
+        );
+    }
+
+    #[derive(Default)]
+    struct TestPeerConfigStore {
+        interfaces: Vec<HttpsInterface>,
+        certificate: Option<LocalCertificate>,
+        peers: Vec<TrustedPeer>,
+    }
+
+    impl atm_storage::contract::sealed::Sealed for TestPeerConfigStore {}
+
+    impl PeerConfigStore for TestPeerConfigStore {
+        fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, atm_storage::AtmError> {
+            Ok(self.interfaces.clone())
+        }
+
+        fn save_interface(&self, _interface: &HttpsInterface) -> Result<(), atm_storage::AtmError> {
+            unreachable!("validation fixture is read-only")
+        }
+
+        fn remove_interface(
+            &self,
+            _bind_addr: std::net::SocketAddr,
+        ) -> Result<bool, atm_storage::AtmError> {
+            unreachable!("validation fixture is read-only")
+        }
+
+        fn local_certificate(&self) -> Result<Option<LocalCertificate>, atm_storage::AtmError> {
+            Ok(self.certificate.clone())
+        }
+
+        fn save_local_certificate(
+            &self,
+            _certificate: &LocalCertificate,
+        ) -> Result<(), atm_storage::AtmError> {
+            unreachable!("validation fixture is read-only")
+        }
+
+        fn list_trusted_peers(&self) -> Result<Vec<TrustedPeer>, atm_storage::AtmError> {
+            Ok(self.peers.clone())
+        }
+
+        fn trusted_peer(
+            &self,
+            _host: &HostName,
+        ) -> Result<Option<TrustedPeer>, atm_storage::AtmError> {
+            unreachable!("validation fixture is read-only")
+        }
+
+        fn save_trusted_peer(&self, _peer: &TrustedPeer) -> Result<(), atm_storage::AtmError> {
+            unreachable!("validation fixture is read-only")
+        }
+
+        fn remove_trusted_peer(&self, _host: &HostName) -> Result<bool, atm_storage::AtmError> {
+            unreachable!("validation fixture is read-only")
+        }
+    }
+
+    fn enabled_interface() -> HttpsInterface {
+        HttpsInterface {
+            bind_addr: "127.0.0.1:0".parse().expect("bind address"),
+            advertise_host: "localhost".parse().expect("host"),
+            enabled: true,
+        }
+    }
+
+    fn certificate() -> LocalCertificate {
+        LocalCertificate {
+            fingerprint: "sha256:test"
+                .parse::<CertificateFingerprint>()
+                .expect("fingerprint"),
+            private_key_ref: "keychain://atm/test"
+                .parse::<PrivateKeyRef>()
+                .expect("key ref"),
+        }
+    }
+
+    #[test]
+    fn enabled_peer_configuration_accepts_complete_configuration() {
+        let store = TestPeerConfigStore {
+            interfaces: vec![enabled_interface()],
+            certificate: Some(certificate()),
+            peers: Vec::new(),
+        };
+        validate_enabled_peer_configuration(&store).expect("complete peer config");
+    }
+
+    #[test]
+    fn enabled_peer_configuration_rejects_missing_certificate() {
+        let store = TestPeerConfigStore {
+            interfaces: vec![enabled_interface()],
+            certificate: None,
+            peers: Vec::new(),
+        };
+        let error = validate_enabled_peer_configuration(&store).expect_err("missing cert");
+        assert!(error.message().contains("configured local certificate"));
+    }
+
+    #[test]
+    fn disabled_peer_configuration_requires_no_certificate() {
+        validate_enabled_peer_configuration(&TestPeerConfigStore::default())
+            .expect("disabled peer configuration");
     }
 }

@@ -1,0 +1,105 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI22-BLOCK-005>
+  a triage:Finding ;
+  triage:findingId "AI22-BLOCK-005" ;
+  triage:foundAt "2026-07-25T06:42:14Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S2 ;
+  triage:title "No committed evidence of a live advertised-IP TCP/TLS self-send round trip; acceptance criterion explicitly disallows mock/direct-dispatch closure" ;
+  triage:description "docs/plans/phase-ai/sprint-ai-22-loopback-self-send-exemption.md Acceptance Criteria require an independent quality review to run the release-built branch daemon through the real CLI and advertised-IP TCP listener, explicitly stating 'a mock router or direct-dispatch test cannot close this sprint.' No sanitized log, results.json, or doctor output is committed proving this was run. The only test resembling an integration proof, authenticated_host_qualified_peer_receipt_routes_local_without_redelivery (atm-daemon/src/tests/runtime_root.rs:270-328), calls dispatcher.dispatch() directly with no TCP/TLS listener, and uses mismatched sender/recipient identities ('remote-agent'@'remote-team' -> 'team-lead'@'test-team'), so it doesn't even exercise the actual self-send scenario. Required Validation (sprint doc lines 165-176) also mandates a sanitized log from the advertised-IP same-host send row and a running branch daemon for review; neither is present. Found by req-qa (ATM-QA-003 Blocking, ATM-QA-005 Important) -- the two are merged here as one evidence-gap finding." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:category "evidence-gap" ;
+  triage:severity "blocking" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-24T23:59:59Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T03:33:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closed by commit 95dbb094 on feature/pAI-s22-loopback-self-send-exemption. Two parts: (1) code -- is_same_host_peer_receipt broadened to is_authenticated_peer_receipt and a new regression test authenticated_duplicate_peer_receipt_still_uses_one_local_post_write (crates/atm-core/src/send/post_write_tests.rs) exercises an authenticated-peer scenario rather than the mismatched-identity direct-dispatch mock this finding flagged; (2) evidence -- commit adds artifacts/phase-ai/ai22/advertised-ip-tls-self-send.md, a committed sanitized log of a live advertised-IP HTTPS self-send run (message ID 01KYE6DWS2YVTDX0AFZ115QF39; atm doctor healthy/ready; atm send over 192.168.128.82:43101 with a pinned trusted-peer entry; live recipient nudge and atm read --message-id both returned the same ULID; peer delivery log shows write_persisted followed by peer_delivery_confirmed for that ULID), satisfying the sprint doc's explicit no-mock/no-direct-dispatch requirement. Verified directly: read the artifact at 95dbb094, confirmed it describes an ordinary host-qualified peer send (no mock transport/direct dispatch/loopback-only route), and re-ran cargo fmt/test/clippy -D warnings clean in a fresh detached worktree. QA verdict: PASS, 0 Blocking/0 Important/0 Minor." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-005/s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-005/s22/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-005/s23/1> ;
+  triage:openOn <urn:atm:triage:worktree/s23/b88ca016> ;
+  triage:fixedOn <urn:atm:triage:worktree/s22/95dbb094> ;
+  triage:promoteTo <urn:atm:triage:worktree/s22/95dbb094> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-005/s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root.rs" ;
+  triage:line 272 ;
+  triage:snippet "fn authenticated_host_qualified_peer_receipt_routes_local_without_redelivery() { ... dispatcher.dispatch(...) }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:reason "Test uses direct-dispatch mock with mismatched caller/recipient identities; does not exercise TCP/TLS advertised-IP self-send; acceptance criteria explicitly disallow mock-based closure" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/a5aa6813> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-005/s23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root.rs" ;
+  triage:line 271 ;
+  triage:snippet "fn authenticated_host_qualified_peer_receipt_routes_local_without_redelivery() { ... dispatcher.dispatch(...) }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b88ca016" ;
+  triage:reason "Test inherited from s22; same insufficiency: direct-dispatch mock, not advertised-IP TCP/TLS" ;
+  triage:occursIn <urn:atm:triage:worktree/s23/b88ca016> .
+
+<urn:atm:triage:worktree/integrate-phase-AI/e52fffb6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
+  triage:headSha "e52fffb6" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/s21/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 21 .
+
+<urn:atm:triage:worktree/s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 22 .
+
+<urn:atm:triage:worktree/s23/b88ca016>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b88ca016" ;
+  triage:orderIndex 23 .
+
+<urn:atm:triage:worktree/s24/fc9832b3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "fc9832b3" ;
+  triage:orderIndex 24 .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-005/s22/2>
+  a triage:Occurrence ;
+  triage:file "artifacts/phase-ai/ai22/advertised-ip-tls-self-send.md" ;
+  triage:snippet "Committed sanitized log of a live advertised-IP HTTPS self-send (message ID 01KYE6DWS2YVTDX0AFZ115QF39) -- ordinary host-qualified peer send, no mock/direct-dispatch/loopback-only route" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "95dbb094" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/95dbb094> .
+
+<urn:atm:triage:worktree/s22/95dbb094>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "95dbb094" ;
+  triage:orderIndex 22 ;
+  triage:status "contains-fix-verified" .

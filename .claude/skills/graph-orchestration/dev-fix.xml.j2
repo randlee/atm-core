@@ -1,0 +1,80 @@
+---
+name: graph-dev-fix
+version: 1.0.0
+description: Fix pass for a sprint node — includes all open findings at the cursor position. Used for both mid-sprint fix passes (TRAVERSAL with findings) and end-of-sprint cleanup (CLEANUP phase).
+format: xml
+required_variables:
+  - task_id
+  - sprint
+  - node_id
+  - node_order
+  - criteria_doc
+  - findings
+  - worktree_path
+  - branch
+  - pr_target
+  - assignee
+optional_variables:
+  - test_command
+  - references
+  - cleanup_mode
+defaults:
+  test_command: "just test"
+  references: ""
+  cleanup_mode: "false"
+---
+<atm-task id="{{ task_id }}" sprint="{{ sprint }}" node="{{ node_id }}" order="{{ node_order }}" assignee="{{ assignee }}" mode="fix"{% if cleanup_mode == "true" %} phase="CLEANUP"{% endif %}>
+  {# When cleanup_mode == "true": this is a CONSOLIDATED phase cleanup on the highest sprint's merged branch.
+     All prior sprint branches have been merged forward into this branch before dispatch.
+     The findings list covers the ENTIRE phase — not just one sprint. Fix all findings here;
+     do not return any finding to its origin branch. #}
+  <description>Fix pass on sprint node {{ node_id }} (order {{ node_order }}) in {{ sprint }}. Address all open findings listed below before sending ATM completion to team-lead.</description>
+
+  <worktree>{{ worktree_path }}</worktree>
+  <branch>{{ branch }}</branch>
+  <pr-target>{{ pr_target }}</pr-target>
+  <acceptance-criteria-doc>{{ criteria_doc }}</acceptance-criteria-doc>
+
+  <open-findings>
+{{ findings }}
+  </open-findings>
+
+  {% if references %}
+  <references>
+{{ references }}
+  </references>
+  {% endif %}
+
+  <fix-instructions>
+    <rule id="priority-order">Fix ALL findings in order: Blocking → Important → Minor. Do not defer non-blocking findings to a later pass.</rule>
+    <rule id="blocking">Blocking findings: fix completely. Team-lead will append a triage:Completion event after verifying your fix. Do NOT append any triage events yourself.</rule>
+    <rule id="non-blocking">Important/Minor: fix all. Note each finding IRI in your ATM completion message — team-lead will append triage:Resolution events. Skip only if fixing conflicts with a blocking fix; explain the reason in your completion message.</rule>
+    <rule id="immutability">Never amend, edit, or delete existing findings. Never reference the old finding when re-assessing — QA files a new finding at the new severity if needed.</rule>
+    <rule id="no-ttl-writes">Do NOT append any triage:Completion, triage:Resolution, or other triage events to any TTL file. Team-lead is the sole writer of TTL events.</rule>
+  </fix-instructions>
+
+  <workflow>
+    <step id="a">ACK this message immediately.</step>
+    <step id="b">Read `{{ criteria_doc }}` before editing. All acceptance criteria must still be met — do not weaken or skip any criterion from the original spec.</step>
+    <step id="c">Update the worktree from `{{ pr_target }}` before any edits: `git fetch origin && git merge origin/{{ pr_target }}`.</step>
+    <step id="c2">Before fixing each finding, verify the defect it describes is still actually present at the cited file:line in this worktree's current state. If a finding does not reproduce — already fixed, superseded by other work, or the described code path no longer exists — refuse to perform speculative or invented work to "address" it. Do not edit unrelated code in its name. Note it in your completion message as `not-reproducible` with the file:line you checked instead, and skip it. This applies per-finding, not to the whole task — fix every finding that does reproduce as normal.</step>
+    <step id="d">Work through every finding in `<open-findings>` in listed order. Fix all. For blocking: address root cause fully. For non-blocking: fix all; skip only on direct conflict with a blocking fix.</step>
+  </workflow>
+
+  <final-actions>
+    {% if cleanup_mode == "true" %}
+    <step id="0">Confirm this is the merged highest-sprint branch. Verify `git log --oneline` shows commits from all prior sprints in this phase — do not proceed if any sprint's work is missing.</step>
+    <step id="1">Fix ALL listed findings — important findings before minor.</step>
+    <step id="2">Run `{{ test_command }}` and confirm it passes with zero failures. Fix any failures before continuing.</step>
+    <step id="3">Commit all changes and push to remote: `git push origin {{ branch }}`. Note the full commit SHA.</step>
+    <step id="4">Send an ATM completion message to team-lead including: branch `{{ branch }}`, the full commit SHA, and for each finding in `<open-findings>`: its IRI, whether you fixed it, and a one-line note if skipped with reason. Do NOT append any triage events — team-lead handles all TTL writes.</step>
+    <step id="5">Open a PR from `{{ branch }}` to `{{ pr_target }}` (the phase integration branch). Do NOT merge into a next sprint worktree — this branch is the final consolidated cleanup target.</step>
+    {% else %}
+    <step id="0">Critically review the sprint plan and your implementation. Confirm all blocking findings are fully resolved and every acceptance criterion in `{{ criteria_doc }}` is met. Do not proceed if any blocking finding is unaddressed or any criterion is incomplete.</step>
+    <step id="1">Run `{{ test_command }}` and confirm it passes with zero failures. Fix any failures before continuing.</step>
+    <step id="2">Commit all changes and push to remote: `git push origin {{ branch }}`. Note the full commit SHA.</step>
+    <step id="3">Send an ATM completion message to team-lead including: node `{{ node_id }}`, branch `{{ branch }}`, the full commit SHA, and for each finding in `<open-findings>`: its IRI, whether you fixed it, and a one-line note if skipped with reason. Do NOT append any triage events — team-lead handles all TTL writes.</step>
+    <step id="4">Merge this branch into the next sprint worktree: from within the next sprint's worktree, run `git fetch origin && git merge origin/{{ branch }}`.</step>
+    {% endif %}
+  </final-actions>
+</atm-task>

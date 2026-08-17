@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM6-PREEXISTING-RACY-TEST-COUNTER>
+  a triage:Finding ;
+  triage:findingId "AM6-PREEXISTING-RACY-TEST-COUNTER" ;
+  triage:title "racy nonlocal counter in test_run_admission_capacity.py:1085" ;
+  triage:description "quality-mgr QA-AM6-1/QA-AM6-2 (minor, flaky-test-qa/req-qa, corrected after an initial mis-triage): the real defect is a racy nonlocal counter in scripts/smoke/test_run_admission_capacity.py:1085, unrelated to this PR's changes. The original triage record for this finding was filed with 'file: unknown' (team-lead's compression error from a summary lacking exact detail), which caused both arch-ctm's fix attempt and arch-qa's independent QA-2 recheck to mistakenly resolve a different, already-fixed AM5 finding (WAL tempdir counter) instead of this one. Independently confirmed still open by req-qa and flaky-test-qa in QA-2 with the exact current line content. Document it as a known pre-existing issue (not introduced by AM.6) rather than fixing it as part of this closure PR, unless trivial to fix alongside the other findings -- but the closure-proof doc's note about it must describe THIS issue, not the AM5 WAL-tempdir issue it currently and incorrectly cites." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "test-flakiness" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-11T01:25:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S6 ;
+  triage:foundAt "2026-08-11T00:44:02Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-11T01:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Fixed @ 463b23cb (third attempt, first two mis-targeted the unrelated already-fixed AM5 WAL-tempdir issue): the racy nonlocal 'calls' counter at test_run_admission_capacity.py:1086 is now guarded by a threading.Lock() covering both the increment and the derived failure-selection check, making the sequence atomic. am6-closure-proof.md's note now accurately describes this exact issue. Independently confirmed by req-qa, arch-qa, and flaky-test-qa in QA-3." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM6-PREEXISTING-RACY-TEST-COUNTER/AM6-PREEXISTING-RACY-TEST-COUNTER/AM6-QA2-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AM6-PREEXISTING-RACY-TEST-COUNTER/AM6-PREEXISTING-RACY-TEST-COUNTER/AM6-QA2-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_admission_capacity.py" ;
+  triage:line 1085 ;
+  triage:snippet "racy nonlocal counter, pre-existing, unrelated to this PR" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s6-minimality-proof" ;
+  triage:headSha "b71910de" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s6/b71910de> .
+
+<urn:atm:triage:worktree/pam-s6/b71910de>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s6-minimality-proof" ;
+  triage:branch "feature/pam-s6-minimality-proof" ;
+  triage:headSha "b71910de" ;
+  triage:orderIndex 1 .

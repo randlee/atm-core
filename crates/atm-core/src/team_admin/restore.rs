@@ -8,28 +8,19 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use chrono::Utc;
-use serde_json::Value;
 use tracing::warn;
 
-use crate::boundary::{RosterEntry, RosterStore};
-use crate::config::load_claude_team_config_document;
-use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
+use crate::boundary::RosterStore;
+use crate::error::{AtmError, AtmErrorCode};
 use crate::home;
 use crate::persistence;
 use crate::roles::ROLE_TEAM_LEAD;
-use crate::schema::AgentMember;
 
 use super::{RestoreOutcome, RestorePlan, RestoreRequest, RestoreResult};
-
-struct RecreatedLeadShellState {
-    lead_member: AgentMember,
-    lead_session_id: Option<Value>,
-}
 
 struct RestoreExecutionPlan {
     team_dir: PathBuf,
     backup_dir: PathBuf,
-    updated_config: crate::schema::TeamConfig,
     members_to_restore: Vec<crate::types::AgentName>,
     inboxes_to_restore: Vec<String>,
     tasks_to_restore: usize,
@@ -70,11 +61,6 @@ fn build_restore_execution_plan(
     request: &RestoreRequest,
 ) -> Result<RestoreExecutionPlan, AtmError> {
     let team_dir = home::team_dir_from_home(&request.home_dir, &request.team)?;
-    if !team_dir.exists() {
-        return Err(AtmError::team_not_found(&request.team));
-    }
-
-    let recreated_shell = load_recreated_lead_shell_state(&team_dir)?;
     let canonical_roster = super::projection::load_team_roster(roster_store, &request.team)?;
     if canonical_roster.is_empty() {
         return Err(AtmError::team_not_found(&request.team));
@@ -88,12 +74,10 @@ fn build_restore_execution_plan(
         .collect::<Vec<_>>();
     let inboxes_to_restore = filter_restore_inboxes(&backup_dir, &members_to_restore)?;
     let tasks_to_restore = count_numeric_task_files(&backup_dir.join("tasks"))?;
-    let updated_config = build_restored_team_config(&recreated_shell, &canonical_roster)?;
 
     Ok(RestoreExecutionPlan {
         team_dir,
         backup_dir,
-        updated_config,
         members_to_restore,
         inboxes_to_restore,
         tasks_to_restore,
@@ -147,9 +131,6 @@ fn apply_restore_execution_plan(
 
     let tasks_dir = super::filesystem::tasks_dir_from_home(&request.home_dir, &request.team)?;
     restore_task_state_from_backup(&plan.backup_dir.join("tasks"), &tasks_dir)?;
-    super::filesystem::write_team_config(&plan.team_dir, &plan.updated_config).map_err(
-        |error| error.with_recovery("Check team config permissions and rerun `atm teams restore`."),
-    )?;
 
     Ok(RestoreOutcome {
         action: "restore",
@@ -174,52 +155,6 @@ fn restore_with_cleanup_failure(
         );
     }
     Err(error)
-}
-
-fn default_lead_member() -> Result<AgentMember, AtmError> {
-    Ok(AgentMember::with_name(ROLE_TEAM_LEAD.parse()?))
-}
-
-fn load_recreated_lead_shell_state(team_dir: &Path) -> Result<RecreatedLeadShellState, AtmError> {
-    // Z.11 still preserves recreated-shell lead metadata that Claude Code mints
-    // during TeamCreate before ATM projects the full canonical roster back out.
-    let current_config = load_claude_team_config_document(team_dir)?;
-    Ok(RecreatedLeadShellState {
-        lead_member: match current_config
-            .members
-            .iter()
-            .find(|member| member.name == ROLE_TEAM_LEAD)
-            .cloned()
-        {
-            Some(member) => member,
-            None => default_lead_member()?,
-        },
-        lead_session_id: current_config.extra.get("leadSessionId").cloned(),
-    })
-}
-
-fn build_restored_team_config(
-    recreated_shell: &RecreatedLeadShellState,
-    canonical_roster: &[RosterEntry],
-) -> Result<crate::schema::TeamConfig, AtmError> {
-    let non_lead_roster = canonical_roster
-        .iter()
-        .filter(|member| member.agent_name != ROLE_TEAM_LEAD)
-        .cloned()
-        .collect::<Vec<_>>();
-    let mut updated_config = super::projection::project_team_config_from_roster(
-        serde_json::Map::new(),
-        &non_lead_roster,
-    )?;
-    updated_config
-        .members
-        .insert(0, recreated_shell.lead_member.clone());
-    if let Some(value) = recreated_shell.lead_session_id.clone() {
-        updated_config
-            .extra
-            .insert("leadSessionId".to_string(), value);
-    }
-    Ok(updated_config)
 }
 
 fn locate_backup_dir(
@@ -250,8 +185,6 @@ fn locate_backup_dir(
                 "failed to read backup directory {}: {error}",
                 root.display()
             ))
-            .with_source(error)
-            .with_recovery("Check backup directory permissions or pass an explicit --from path.")
         })?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| {
@@ -259,8 +192,6 @@ fn locate_backup_dir(
                 "failed to read backup directory entry under {}: {error}",
                 root.display()
             ))
-            .with_source(error)
-            .with_recovery("Check backup directory permissions or pass an explicit --from path.")
         })?
         .into_iter()
         .map(|entry| entry.path())
@@ -284,8 +215,6 @@ pub(super) fn list_backup_inboxes(backup_dir: &Path) -> Result<Vec<String>, AtmE
                 "failed to read backup inbox directory {}: {error}",
                 inbox_dir.display()
             ))
-            .with_source(error)
-            .with_recovery("Check backup inbox permissions and retry the restore.")
         })?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| {
@@ -293,8 +222,6 @@ pub(super) fn list_backup_inboxes(backup_dir: &Path) -> Result<Vec<String>, AtmE
                 "failed to read backup inbox directory entry under {}: {error}",
                 inbox_dir.display()
             ))
-            .with_source(error)
-            .with_recovery("Check backup inbox permissions and retry the restore.")
         })?
         .into_iter()
         .filter(|entry| entry.path().is_file())
@@ -314,8 +241,6 @@ pub(super) fn count_numeric_task_files(tasks_dir: &Path) -> Result<usize, AtmErr
                 "failed to read task directory {}: {error}",
                 tasks_dir.display()
             ))
-            .with_source(error)
-            .with_recovery("Check task directory permissions and retry the restore.")
         })?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| {
@@ -323,8 +248,6 @@ pub(super) fn count_numeric_task_files(tasks_dir: &Path) -> Result<usize, AtmErr
                 "failed to read task directory entry under {}: {error}",
                 tasks_dir.display()
             ))
-            .with_source(error)
-            .with_recovery("Check task directory permissions and retry the restore.")
         })?
         .into_iter()
         .map(|entry| entry.path())
@@ -348,8 +271,6 @@ fn restore_task_bucket(src: &Path, dst: &Path) -> Result<(), AtmError> {
                 "failed to create task directory {}: {error}",
                 dst.display()
             ))
-            .with_source(error)
-            .with_recovery("Check task directory permissions and rerun the restore.")
         })?;
         return Ok(());
     }
@@ -367,8 +288,6 @@ fn restore_task_bucket(src: &Path, dst: &Path) -> Result<(), AtmError> {
                 "failed to clear task staging directory {}: {error}",
                 staging.display()
             ))
-            .with_source(error)
-            .with_recovery("Check task staging directory permissions and rerun the restore.")
         })?;
     }
     super::filesystem::copy_regular_files_strict(src, &staging, |name| {
@@ -381,8 +300,6 @@ fn restore_task_bucket(src: &Path, dst: &Path) -> Result<(), AtmError> {
                 "failed to clear existing task directory {}: {error}",
                 dst.display()
             ))
-            .with_source(error)
-            .with_recovery("Check task directory permissions and rerun the restore.")
         })?;
     }
     if let Some(parent) = dst.parent() {
@@ -391,8 +308,6 @@ fn restore_task_bucket(src: &Path, dst: &Path) -> Result<(), AtmError> {
                 "failed to create task parent directory {}: {error}",
                 parent.display()
             ))
-            .with_source(error)
-            .with_recovery("Check task parent directory permissions and rerun the restore.")
         })?;
     }
     fs::rename(&staging, dst).map_err(|error| {
@@ -400,8 +315,6 @@ fn restore_task_bucket(src: &Path, dst: &Path) -> Result<(), AtmError> {
             "failed to install restored task directory {}: {error}",
             dst.display()
         ))
-        .with_source(error)
-        .with_recovery("Check task directory permissions and rerun the restore.")
     })?;
     Ok(())
 }
@@ -412,8 +325,6 @@ fn recompute_highwatermark(tasks_dir: &Path) -> Result<usize, AtmError> {
             "failed to create task directory {}: {error}",
             tasks_dir.display()
         ))
-        .with_source(error)
-        .with_recovery("Check task directory permissions and rerun the restore.")
     })?;
 
     let max_id = fs::read_dir(tasks_dir)
@@ -422,8 +333,6 @@ fn recompute_highwatermark(tasks_dir: &Path) -> Result<usize, AtmError> {
                 "failed to read task directory {}: {error}",
                 tasks_dir.display()
             ))
-            .with_source(error)
-            .with_recovery("Check task directory permissions and rerun the restore.")
         })?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| {
@@ -431,8 +340,6 @@ fn recompute_highwatermark(tasks_dir: &Path) -> Result<usize, AtmError> {
                 "failed to read task directory entry under {}: {error}",
                 tasks_dir.display()
             ))
-            .with_source(error)
-            .with_recovery("Check task directory permissions and rerun the restore.")
         })?
         .into_iter()
         .map(|entry| entry.path())
@@ -450,7 +357,7 @@ fn recompute_highwatermark(tasks_dir: &Path) -> Result<usize, AtmError> {
     persistence::atomic_write_string(
         &tasks_dir.join(".highwatermark"),
         &format!("{max_id}\n"),
-        AtmErrorKind::FilePolicy,
+        AtmErrorCode::FilePolicyRejected,
         "task highwatermark",
         "Check task directory permissions and rerun the restore.",
     )?;
@@ -475,10 +382,7 @@ fn prepare_restore_staging_dir(team_dir: &Path) -> Result<(), AtmError> {
         return Err(AtmError::file_policy(format!(
             "restore staging directory already exists at {}",
             staging_root.display()
-        ))
-        .with_recovery(
-            "Inspect the stale restore staging directory, remove it after confirming no restore is running, and rerun `atm teams restore`.",
-        ));
+        )));
     }
     Ok(())
 }
@@ -512,8 +416,6 @@ pub(super) fn cleanup_restore_workspace(team_dir: &Path) -> Result<(), AtmError>
             "failed to remove restore staging directory {}: {error}",
             staging_root.display()
         ))
-        .with_source(error)
-        .with_recovery("Remove the restore staging directory after confirming the restore completed successfully.")
     })
 }
 
@@ -528,8 +430,6 @@ pub(super) fn apply_restored_inboxes(
             "failed to create inbox directory {}: {error}",
             inboxes_dir.display()
         ))
-        .with_source(error)
-        .with_recovery("Check inbox directory permissions and rerun `atm teams restore`.")
     })?;
     let inbox_staging_dir = restore_staging_inboxes_dir(team_dir);
     fs::create_dir_all(&inbox_staging_dir).map_err(|error| {
@@ -537,8 +437,6 @@ pub(super) fn apply_restored_inboxes(
             "failed to create inbox restore staging directory {}: {error}",
             inbox_staging_dir.display()
         ))
-        .with_source(error)
-        .with_recovery("Check inbox staging permissions and rerun `atm teams restore`.")
     })?;
     for inbox_name in inboxes_to_restore {
         let from = backup_dir.join("inboxes").join(inbox_name);
@@ -549,8 +447,6 @@ pub(super) fn apply_restored_inboxes(
                 staged.display(),
                 from.display()
             ))
-            .with_source(error)
-            .with_recovery("Check inbox permissions and backup integrity, then rerun the restore.")
         })?;
     }
     for inbox_name in inboxes_to_restore {
@@ -562,8 +458,6 @@ pub(super) fn apply_restored_inboxes(
                 to.display(),
                 staged.display()
             ))
-            .with_source(error)
-            .with_recovery("Check inbox permissions and rerun `atm teams restore`.")
         })?;
     }
     Ok(())
@@ -588,7 +482,7 @@ fn write_restore_marker(team_dir: &Path, backup_dir: &Path) -> Result<(), AtmErr
     persistence::atomic_write_bytes(
         &marker,
         &bytes,
-        AtmErrorKind::FilePolicy,
+        AtmErrorCode::FilePolicyRejected,
         "restore marker",
         "Check team directory permissions and rerun `atm teams restore`.",
     )
@@ -604,10 +498,7 @@ pub(super) fn clear_restore_marker(team_dir: &Path) -> Result<(), AtmError> {
         return Err(AtmError::file_policy(format!(
             "failed to remove restore marker {}: forced test failure",
             marker.display()
-        ))
-        .with_recovery(
-            "Remove the stale restore marker after verifying the restored team state.",
-        ));
+        )));
     }
 
     fs::remove_file(&marker).map_err(|error| {
@@ -615,8 +506,6 @@ pub(super) fn clear_restore_marker(team_dir: &Path) -> Result<(), AtmError> {
             "failed to remove restore marker {}: {error}",
             marker.display()
         ))
-        .with_source(error)
-        .with_recovery("Remove the stale restore marker after verifying the restored team state.")
     })
 }
 
@@ -637,8 +526,7 @@ mod tests {
         restore_task_state_from_backup, restore_team_with_roster_store,
     };
     use crate::boundary::{
-        self, ReplaySource, RosterEntry, RosterHarness, RosterMemberKind, RosterStore,
-        RosterStoreHealthSnapshot,
+        self, RosterEntry, RosterHarness, RosterMemberKind, RosterStore, RosterStoreHealthSnapshot,
     };
     use crate::error::AtmError;
     use crate::roles::ROLE_TEAM_LEAD;
@@ -664,12 +552,7 @@ mod tests {
     impl boundary::sealed::Sealed for RecordingRosterStore {}
 
     impl RosterStore for RecordingRosterStore {
-        fn replace_roster(
-            &self,
-            team: &TeamName,
-            members: &[RosterEntry],
-            _source: Option<&ReplaySource>,
-        ) -> Result<(), AtmError> {
+        fn replace_roster(&self, team: &TeamName, members: &[RosterEntry]) -> Result<(), AtmError> {
             self.teams
                 .lock()
                 .expect("roster store lock")
@@ -773,10 +656,12 @@ mod tests {
     fn write_inbox(path: &Path, text: &str) {
         let envelope = crate::schema::InboxMessage {
             from: ROLE_TEAM_LEAD.parse().expect("agent"),
+            source_chat_id: None,
             text: text.to_string(),
             timestamp: crate::types::IsoTimestamp::from_datetime(Utc::now()),
             read: false,
             source_team: Some(TEST_TEAM.parse().expect("team")),
+            destination_chat_id: None,
             summary: None,
             message_id: None,
             requires_ack: false,
@@ -810,10 +695,10 @@ mod tests {
 
         let error = prepare_restore_workspace(&team_dir, &backup_dir).expect_err("staging error");
 
-        assert!(error.is_file_policy());
+        assert!(error.code() == crate::error_codes::AtmErrorCode::FilePolicyRejected);
         assert!(
             error
-                .message
+                .message()
                 .contains("restore staging directory already exists")
         );
         assert!(!restore_marker_path(&team_dir).exists());
@@ -854,7 +739,7 @@ mod tests {
 
     #[test]
     #[serial(team_config_write_env)]
-    fn restore_team_keeps_config_last_and_marker_on_config_write_failure() {
+    fn restore_team_ignores_legacy_config_write_failure_hook() {
         let tempdir = tempdir().expect("tempdir");
         let roster_store = RecordingRosterStore::default();
         roster_store.seed_team(
@@ -899,14 +784,16 @@ mod tests {
             )
         });
 
-        let error = result.expect_err("restore failure");
-        assert!(error.is_file_policy());
+        let outcome = result.expect("restore succeeds without config writes");
+        match outcome {
+            RestoreResult::Applied(outcome) => {
+                assert_eq!(outcome.members_restored, 1);
+                assert_eq!(outcome.inboxes_restored, 1);
+                assert_eq!(outcome.tasks_restored, 1);
+            }
+            RestoreResult::DryRun(_) => panic!("expected applied restore"),
+        }
         let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
-        let config: TeamConfig =
-            serde_json::from_slice(&fs::read(team_dir.join("config.json")).expect("config"))
-                .expect("parse config");
-        assert_eq!(config.members.len(), 1);
-        assert_eq!(config.members[0].name, ROLE_TEAM_LEAD);
         assert!(
             team_dir
                 .join("inboxes")
@@ -922,7 +809,7 @@ mod tests {
                 .join("80.json")
                 .is_file()
         );
-        assert!(restore_marker_path(&team_dir).is_file());
+        assert!(!restore_marker_path(&team_dir).is_file());
     }
 
     #[test]
@@ -974,14 +861,11 @@ mod tests {
         );
         let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
         assert!(restore_marker_path(&team_dir).is_file());
-        let config: TeamConfig =
-            serde_json::from_slice(&fs::read(team_dir.join("config.json")).expect("config"))
-                .expect("parse config");
         assert!(
-            config
-                .members
-                .iter()
-                .any(|member| member.name == TEST_SENDER)
+            team_dir
+                .join("inboxes")
+                .join(format!("{TEST_SENDER}.json"))
+                .is_file()
         );
     }
 
@@ -1030,13 +914,11 @@ mod tests {
         });
 
         let error = result.expect_err("restore should fail on injected inbox stage error");
-        assert!(error.is_mailbox_write());
+        assert_eq!(
+            error.code(),
+            crate::error_codes::AtmErrorCode::MailboxWriteFailed
+        );
         assert!(!restore_staging_dir(&team_dir).exists());
-        let config: TeamConfig =
-            serde_json::from_slice(&fs::read(team_dir.join("config.json")).expect("config"))
-                .expect("parse config");
-        assert_eq!(config.members.len(), 1);
-        assert_eq!(config.members[0].name, ROLE_TEAM_LEAD);
         assert!(
             !team_dir
                 .join("inboxes")
@@ -1048,7 +930,7 @@ mod tests {
 
     #[test]
     #[serial(team_config_write_env)]
-    fn restore_team_rebuilds_config_from_atm_roster_without_backup_config_truth() {
+    fn restore_team_no_longer_projects_config_from_roster() {
         let tempdir = tempdir().expect("tempdir");
         let roster_store = RecordingRosterStore::default();
         let mut recipient = roster_member(TEST_TEAM, TEST_RECIPIENT);
@@ -1120,29 +1002,8 @@ mod tests {
         let config: TeamConfig =
             serde_json::from_slice(&fs::read(team_dir.join("config.json")).expect("config"))
                 .expect("parse config");
-        let member_names = config
-            .members
-            .iter()
-            .map(|member| member.name.as_str().to_string())
-            .collect::<Vec<_>>();
-        assert_eq!(
-            member_names,
-            vec![
-                ROLE_TEAM_LEAD.to_string(),
-                TEST_SENDER.to_string(),
-                TEST_RECIPIENT.to_string()
-            ]
-        );
-        let recipient = config
-            .members
-            .iter()
-            .find(|member| member.name == TEST_RECIPIENT)
-            .expect("recipient");
-        assert_eq!(recipient.tmux_pane_id.as_deref(), Some("%12"));
-        assert_eq!(
-            recipient.home_dir.as_path(),
-            std::path::PathBuf::from("/repo/recipient").as_path()
-        );
+        assert_eq!(config.members.len(), 1);
+        assert_eq!(config.members[0].name, ROLE_TEAM_LEAD);
         assert_eq!(config.extra["leadSessionId"], json!("lead-current"));
     }
 

@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN-FLAKY-GRAFT-ROOT-TEST-001>
+  a triage:Finding ;
+  triage:findingId "AN-FLAKY-GRAFT-ROOT-TEST-001" ;
+  triage:title "canonical_graft_root_logs_workspace_root_and_home_fallback_sources is a known-flaky tracing-capture test under parallel CI execution" ;
+  triage:description "The test schema::agent_member::tests::canonical_graft_root_logs_workspace_root_and_home_fallback_sources (crates/atm-core/src/schema/agent_member.rs, test body ~lines 351-379) intermittently fails in CI (observed: PR #882, Test (ubuntu-latest), job 94929566211, panic at agent_member.rs:363 asserting graft_root_source=workspace_root). Independently root-caused by quality-mgr: the production function canonical_graft_root() (agent_member.rs:53-73) is pure and deterministic (string-only metadata lookup, no env/FS/timing dependency) and was unchanged at the time of failure, ruling out a logic regression. The test's capture_fields() helper (agent_member.rs ~219-224) uses tracing::subscriber::with_default() with a bare tracing_subscriber::registry().with(CaptureLayer) and no explicit level filter, invoked under CI's default multi-threaded `cargo test --workspace`. This is a known class of tracing-crate flakiness: global callsite-interest-cache races across parallel test threads can cause an event macro invocation to be treated as not-enabled for one thread's with_default-scoped subscriber depending on registration order/timing from concurrently running tests, even though the local subscriber itself has no filter that would exclude the event. This exact test previously required one prior patch (commit ff7977056, 'test(windows): capture tracing fields structurally') specifically because the original formatter-text-assertion version of this test intermittently failed in CI; the current structural-Layer version reduced but did not eliminate the flakiness class, since the root mechanism (global interest-cache races under with_default) is unrelated to how output is asserted. Locally reproduced 8/8 pass on isolated --exact runs and 3/3 pass on full `cargo test -p agent-team-mail-core --lib` (428/428) with default parallelism -- unable to force the failure locally, consistent with a low-probability race rather than a deterministic defect. Recommendation for a real de-flake (not another symptom patch): make the test's tracing capture race-proof by avoiding the global with_default default-dispatcher swap entirely -- e.g. construct the Subscriber via tracing::subscriber::set_default() is equivalent and has the same issue; the robust fix is to have canonical_graft_root() (or a thin test-only wrapper) return/receive its classification via a plain return value or an explicit injected sink rather than emitting through the global tracing dispatch and capturing via a thread-scoped override, OR pin this specific test to run serially (e.g. via the serial_test crate, already a workspace dev-dependency per Cargo.lock) so no other test's callsite registration can race with it during CI's parallel run. This is filed as a non-blocking, low-priority process-hardening finding per team-lead's explicit direction after accepting quality-mgr's PR #882 root-cause verdict (CONFIRMED pre-existing flaky, not a regression) -- do not block any current merge on this." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-flakiness" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-15T00:32:36Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.15 ;
+  triage:foundAt "2026-08-15T00:32:36Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN-FLAKY-GRAFT-ROOT-TEST-001/R1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AN-FLAKY-GRAFT-ROOT-TEST-001/R1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/schema/agent_member.rs" ;
+  triage:line 363 ;
+  triage:snippet "assert!(contains_field(&workspace_events, \"graft_root_source\", \"workspace_root\")) intermittently fails under with_default() tracing capture race" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "2ce52dea12ca1af4ba1989637b9d20c8dd8f98cf" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-an/2ce52dea> .
+
+<urn:atm:triage:worktree/integrate-phase-an/2ce52dea>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-an" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "2ce52dea12ca1af4ba1989637b9d20c8dd8f98cf" ;
+  triage:orderIndex 1 .

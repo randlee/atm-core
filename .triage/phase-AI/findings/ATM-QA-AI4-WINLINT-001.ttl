@@ -1,0 +1,35 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-AI4-WINLINT-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AI4-WINLINT-001" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T23:10:00Z"^^xsd:dateTime ;
+  triage:title "Windows-only unused `source` binding in read_response_frame_with_helper -- fails just lint on windows-latest" ;
+  triage:resolution "FIXED in integrate/phase-AI @ 98e6fc38. Windows-only unused source binding at crates/atm-daemon-client/src/lib.rs corrected: parameter renamed to _source in Windows cfg-gated closure. Verified: just lint passes on all CI platforms (macos-latest, ubuntu-latest, windows-latest)." ;
+  triage:description "AI4-QA-1 (quality-mgr, blocking, CI-only regression in this sprint's own diff). crates/atm-daemon-client/src/lib.rs:455, the #[cfg(windows)]-gated closure `.map_err(|source| { AtmError::daemon_unavailable(\"failed to spawn daemon local IPC read helper\") })` binds `source` but never uses it. 5 sibling call sites in the same file (protocol.rs read-path equivalents) were correctly renamed to `_source` during AI.4's error-consumer migration; this one site was missed. Fails windows-latest `just lint`, blocks merge gate. Verified directly on feature/pAI-s4-error-consumer-migration @ baf86e22 by team-lead." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "single_site" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AI4-WINLINT-001/pAI-4/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-4/baf86e22> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-5/17bfb4c0> ;
+  triage:highestOpenBranch "feature/pAI-s5-chat-address-identity" ;
+  triage:triagedAt "2026-07-20T23:10:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/ATM-QA-AI4-WINLINT-001/pAI-4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 455 ;
+  triage:snippet ".map_err(|source| { AtmError::daemon_unavailable(\"failed to spawn daemon local IPC read helper\") })  -- source unused, must be _source (Windows cfg-gated site, 5 sibling sites already correctly renamed)" ;
+  triage:status "fixed" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s4-error-consumer-migration" ;
+  triage:headSha "baf86e22" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-4/baf86e22> .

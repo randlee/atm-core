@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI21-IMPORTANT-003>
+  a triage:Finding ;
+  triage:findingId "AI21-IMPORTANT-003" ;
+  triage:foundAt "2026-07-25T04:58:56Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S1 ;
+  triage:title "plaintext-test listener has no compensating interface restriction" ;
+  triage:description "crates/atm-daemon/src/composition.rs:308-312 — plaintext-test binds to the same interface list as production mTLS, with no additional loopback/allowlist restriction in code; reachability is scoped only by the CLI flag itself, not a compensating control. Recommend documenting the interface-scoping requirement in the runbook. Reported by rust-service-hardening-agent (QA-1)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "AI21" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "this-branch-only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-24T12:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI21-IMPORTANT-003/pAI-s21pre/1> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAI-s21pre/42fbd9fa> .
+
+<urn:atm:triage:occurrence/AI21-IMPORTANT-003/pAI-s21pre/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 309 ;
+  triage:snippet "HttpsListenerSet::bind_plaintext_test(&interfaces, self.request_dispatcher())" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s21pre/42fbd9fa> .
+
+<urn:atm:triage:worktree/pAI-s21pre/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-s21pre/5678337c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "5678337c" ;
+  triage:orderIndex 1 .

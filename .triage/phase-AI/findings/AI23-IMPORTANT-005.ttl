@@ -1,0 +1,178 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI23-IMPORTANT-005>
+  a triage:Finding ;
+  triage:findingId "AI23-IMPORTANT-005" ;
+  triage:title "Advertised-IP self-send evidence artifact omits required router/dispatcher/persistence component naming" ;
+  triage:description "docs/plans/phase-ai/sprint-ai-22-loopback-self-send-exemption.md requires (line 142) that evidence show \"the receiver enters the same HTTP write resource, ApiRouter::route, dispatcher, persistence method, and PostWriteRouter\" and (lines 161-162) that \"evidence names the router, dispatcher, persistence, and post-write log events observed.\" The committed artifact at artifacts/phase-ai/ai22/advertised-ip-tls-self-send.md reports atm doctor --json output, atm send/read commands, a message ID, a live recipient nudge, and a peer-delivery log line (write_persisted -> peer_delivery_confirmed), but does not name ApiRouter::route, the DaemonRequestDispatcher, or the specific persistence method by name anywhere in the document -- only the post-write log events are actually named, not the router/dispatcher/persistence components the sprint doc explicitly requires. Confirmed by an independent req-qa review pass reading the artifact directly against the sprint doc's exact required language." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "EVIDENCE-GAP" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "AICH-S11-QA-BATCH-2: verified Crimson's 'no edit needed' claim on fix/close-out-round2-easy (673a6fff, PR #652). Commit 673a6fff does not touch artifacts/phase-ai/ai22/advertised-ip-tls-self-send.md at all (confirmed via git show --stat). Read the artifact's '## Canonical-path component evidence' section directly: it already names all required components -- ApiRouter::route, DaemonRequestDispatcher (route_write), MessageWriter::write, and PostWriteRouter::dispatch -- satisfying the sprint doc's exact required language. No-op close is genuinely correct, not an incorrect dismissal." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-25T20:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S3 ;
+  triage:foundAt "2026-07-25T20:37:38Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-005/fix-close-out-round2-easy/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-005/S22-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-005/S23-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-005/S24-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-005/S25-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-005/integrate-8750587b> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-005/fix-close-out-round2-easy/1>
+  a triage:Occurrence ;
+  triage:file "artifacts/phase-ai/ai22/advertised-ip-tls-self-send.md" ;
+  triage:line 1 ;
+  triage:snippet "## Canonical-path component evidence names ApiRouter::route, DaemonRequestDispatcher, MessageWriter::write, and PostWriteRouter::dispatch" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/close-out-round2-easy" ;
+  triage:headSha "673a6fff" ;
+  triage:notes "AICH-S11-QA-BATCH-2: no-op close confirmed correct -- required component names already present in the artifact, unrelated to this commit's actual 3-file diff." ;
+  triage:occursIn <urn:atm:triage:worktree/fix-close-out-round2-easy/673a6fff> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-005/S22-1>
+  a triage:Occurrence ;
+  triage:file "artifacts/phase-ai/ai22/advertised-ip-tls-self-send.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing ApiRouter::route, DaemonRequestDispatcher, and persistence method names (lines 1-19)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "95dbb094" ;
+  triage:occursIn <urn:atm:triage:worktree/AICH-S22/95dbb094> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-005/S23-1>
+  a triage:Occurrence ;
+  triage:file "artifacts/phase-ai/ai22/advertised-ip-tls-self-send.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing ApiRouter::route, DaemonRequestDispatcher, and persistence method names (lines 1-19)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "acaa2a43" ;
+  triage:occursIn <urn:atm:triage:worktree/AICH-S23/acaa2a43> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-005/S24-1>
+  a triage:Occurrence ;
+  triage:file "artifacts/phase-ai/ai22/advertised-ip-tls-self-send.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing ApiRouter::route, DaemonRequestDispatcher, and persistence method names (lines 1-19)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "7f85b1e6" ;
+  triage:occursIn <urn:atm:triage:worktree/AICH-S24/7f85b1e6> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-005/S25-1>
+  a triage:Occurrence ;
+  triage:file "artifacts/phase-ai/ai22/advertised-ip-tls-self-send.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing ApiRouter::route, DaemonRequestDispatcher, and persistence method names (lines 1-19)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "9dfc8de1" ;
+  triage:occursIn <urn:atm:triage:worktree/AICH-S25/9dfc8de1> .
+
+<urn:atm:triage:worktree/AICH-S21pre/7cf131fa>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "7cf131fa" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AICH-S22/95dbb094>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "95dbb094" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AICH-S23/acaa2a43>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "acaa2a43" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AICH-S24/7f85b1e6>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "7f85b1e6" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AICH-S25/9dfc8de1>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "9dfc8de1" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/AICH-S26/28190ce1>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s26-peer-write-deadline" ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "28190ce1" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AICH-S27/bed01b4d>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "bed01b4d" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/AICH-S28/8e6c533a>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "8e6c533a" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/AICH-S29/415a2db1>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "415a2db1" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/AICH-S30/9fd44444>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "9fd44444" ;
+  triage:orderIndex 10 .
+
+# Mirrored occurrence on integrate/phase-AI (AI.23 PR #629 merged forward, 8750587b):
+<urn:atm:triage:occurrence/AI23-IMPORTANT-005/integrate-8750587b>
+  a triage:Occurrence ;
+  triage:file "artifacts/phase-ai/ai22/advertised-ip-tls-self-send.md" ;
+  triage:line 1 ;
+  triage:snippet "Advertised-IP self-send evidence artifact still omits required router/dispatcher/persistence component naming" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:note "AI.23 merged into integrate/phase-AI (PR #629, 8750587b). This is a documentation/evidence-artifact gap unrelated to the AI.23 code fix; not resolved by the merge. Unchanged, still reproduces." ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/8750587b> .
+
+<urn:atm:triage:worktree/integrate/8750587b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:orderIndex 100 .

@@ -1,0 +1,79 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI14-BLOCKING-01-TRANSPORT-ARCHITECTURE-DOC-GAP>
+  a triage:Finding ;
+  triage:findingId "AI14-BLOCKING-01-TRANSPORT-ARCHITECTURE-DOC-GAP" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:title "Ambiguous 'retired local transport' phrasing in sprint docs caused production deletion of required Unix UDS transport" ;
+  triage:description "Root-cause review of commit cd640a84 ('fix(ai14): remove retired unix local ingress', authored on feature/pAI-s14-mac-peer-smoke) shows the target transport architecture (Windows = loopback TCP only; Unix/macOS/Linux = both UDS and loopback TCP required; one shared HTTP router/wire-format across every local and peer transport) IS stated clearly and consistently in canonical docs: docs/requirements.md REQ-CORE-TRANSPORT-001 (lines 3590-3616, 'Unix same-host clients use HTTP over UDS and may use HTTP over loopback TCP; Windows same-host clients use HTTP over loopback TCP only ... Unix/Windows parity requires equivalent local HTTP request/response tests: UDS plus loopback TCP on Unix and loopback TCP on Windows'); docs/architecture.md Sec 21.4 'One Same-Host Interface' (lines 2729-2754, 'same-host target: HTTP over Unix UDS or loopback TCP; Windows loopback TCP ... This is one protocol with multiple implementations, not multiple systems.'); docs/adr/ADR-033-http-endpoint-contract.md Decision/Consequences ('Unix local clients use HTTP over UDS and may use HTTP over loopback TCP; Windows local clients use HTTP over loopback TCP only ... Windows CI proves local loopback-TCP HTTP; Unix CI proves both UDS and loopback-TCP HTTP.'); and docs/plans/phase-ai/plan-phase-ai.md line 22 ('Local client transport | Unix HTTP/UDS plus supported loopback HTTP/TCP; Windows loopback HTTP/TCP only'). The gap is not absence of the statement but that (1) none of these four canonical statements is cited or restated inside the sprint docs that actually touch the transport modules at execution time (sprint-ai-14-mac-peer-smoke.md and sprint-ai-15-windows-peer-smoke.md never restate or cross-reference REQ-CORE-TRANSPORT-001/ADR-033), and (2) sprint-ai-10.md's acceptance criteria uses an unscoped phrase that reads as covering the still-mandatory Unix UDS module: 'No prior custom frame, retired local transport, peer/replay, duplicate write-path, or runtime SQLite escape-hatch source remains' (line 61). Nothing in that sentence, or elsewhere in sprint-ai-10.md/sprint-ai-11-windows-transport.md, names which artifacts 'retired local transport' actually refers to (the pre-AI.6 custom-frame ICD and pre-AI.11 Windows named-pipe/AF_UNIX code only -- NOT the Unix UDS local_ipc_transport module, which REQ-CORE-TRANSPORT-001/ADR-033 require to remain). Under this ambiguity, commit cd640a84 deleted crates/atm-daemon/src/local_ipc_transport.rs (1053 lines) plus local_ipc_transport/accept_loop.rs, local_ipc_transport/request_worker.rs, local_ipc_transport/shutdown.rs, local_ipc_connection.rs, local_ipc_wake.rs, shutdown_beacon.rs, and tests/local_ipc_depth.rs (2957 total deletions across 20 files), removing Unix UDS support entirely and going TCP-only everywhere -- directly contradicting the target architecture and breaking two architecture-guard tests in crates/atm-architecture/tests/boundary_enforcement.rs. This is a real, already-occurred regression, not a hypothetical risk, and the same ambiguity remains live for sprint-ai-15-windows-peer-smoke.md, whose deliverable 1 also depends on 'macOS UDS plus loopback-TCP smoke' surviving intact." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "root_cause_review" ;
+  triage:category "documentation-clarity" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "2026-07-27 (quality-mgr): independently re-verified both remediation halves at integrate/phase-AI@f3b6a77a. (1) docs/plans/phase-ai/sprint-ai-10.md line 61-64 now explicitly names the retired artifacts ('the pre-AI.6 local frame transport, the pre-AI.11 Windows named-pipe/AF_UNIX transport') and states 'Unix HTTP/UDS remains required by REQ-CORE-TRANSPORT-001 and ADR-033' -- no longer an unscoped phrase. (2) docs/plans/phase-ai/sprint-ai-14-mac-peer-smoke.md:12 and sprint-ai-15-windows-peer-smoke.md:12 both now carry 'Transport invariant: per REQ-CORE-TRANSPORT-001 and ADR-033, Unix hosts...' restating the matrix inline. Both prescribed doc remediations from this finding's notes are present. Note: the separate code-level dead-UDS-client-reachability defect (AI11-QA5-RBQA-F001/AI14-QA1-RBQA-F001) remains open independently -- this finding was always scoped doc-only per its own notes and is not affected by that." ;
+  triage:dispatchReady false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-BLOCKING-01/sprint-ai-10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-BLOCKING-01/sprint-ai-14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-BLOCKING-01/sprint-ai-15/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-integrate/3836c3b8> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s20/bed07594> ;
+  triage:highestOpenBranch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:highestFixedBranch "none" ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:reviewedBy "team-lead" ;
+  triage:notes "Doc-only finding, not a code finding: the code regression from cd640a84 is tracked separately (this finding does not duplicate or supersede any existing code-level UDS-deletion finding; if none exists yet, file a companion code finding against the highest open branch to restore local_ipc_transport.rs). Remediation for THIS finding is docs-only: (1) edit docs/plans/phase-ai/sprint-ai-10.md line 61 to name the retired artifacts explicitly instead of the generic phrase 'retired local transport' -- e.g. 'No prior custom-frame ICD (pre-AI.6) or Windows named-pipe/AF_UNIX local transport (pre-AI.11) source remains; the Unix UDS local_ipc_transport module is not retired and must remain'; (2) add a one-line restatement of the transport matrix to docs/plans/phase-ai/sprint-ai-14-mac-peer-smoke.md and docs/plans/phase-ai/sprint-ai-15-windows-peer-smoke.md, cross-referencing REQ-CORE-TRANSPORT-001 and ADR-033 by ID, e.g. 'Target architecture (REQ-CORE-TRANSPORT-001, ADR-033): Windows = loopback TCP only; macOS/Linux = both UDS and loopback TCP required; identical HTTP wire protocol across every transport. Do not delete or narrow UDS support on this branch.' Findings dispatch to arch-ctm for the actual doc edits; team-lead does not edit these docs directly per project convention." .
+
+<urn:atm:triage:occurrence/AI14-BLOCKING-01/sprint-ai-10/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-10.md" ;
+  triage:line 61 ;
+  triage:snippet "No prior custom frame, retired local transport, peer/replay, duplicate write-path, or runtime SQLite escape-hatch source remains." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "3836c3b8" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-integrate/3836c3b8> .
+
+<urn:atm:triage:occurrence/AI14-BLOCKING-01/sprint-ai-14/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-14-mac-peer-smoke.md" ;
+  triage:line 1 ;
+  triage:snippet "Sprint doc never restates or cross-references REQ-CORE-TRANSPORT-001/ADR-033 target transport matrix despite depending on local_ipc_transport.rs (UDS) survival" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "3836c3b8" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-integrate/3836c3b8> .
+
+<urn:atm:triage:occurrence/AI14-BLOCKING-01/sprint-ai-15/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-15-windows-peer-smoke.md" ;
+  triage:line 1 ;
+  triage:snippet "Sprint doc never restates or cross-references REQ-CORE-TRANSPORT-001/ADR-033 target transport matrix despite deliverable 1 requiring macOS UDS plus loopback-TCP smoke to remain intact" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "3836c3b8" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-integrate/3836c3b8> .
+
+<urn:atm:triage:worktree/pAI-integrate/3836c3b8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
+  triage:headSha "3836c3b8" ;
+  triage:orderIndex 999 .
+
+<urn:atm:triage:worktree/pAI-s20/bed07594>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "bed07594" ;
+  triage:orderIndex 20 .

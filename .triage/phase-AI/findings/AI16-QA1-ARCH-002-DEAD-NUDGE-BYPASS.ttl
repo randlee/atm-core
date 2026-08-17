@@ -1,0 +1,161 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI16-QA1-ARCH-002-DEAD-NUDGE-BYPASS>
+  a triage:Finding ;
+  triage:findingId "AI16-QA1-ARCH-002-DEAD-NUDGE-BYPASS" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:title "pub mod nudge_template publicly exports internal post-send hook, bypassing canonical send_mail path" ;
+  triage:description "pub mod nudge_template; in crates/atm-core/src/send/mod.rs publicly exports internal post-send hook functions, allowing callers to bypass the canonical send_mail path boundary. Present on all 7 branches at the same location. Recommended fix: change to pub(crate) mod nudge_template;" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:category "boundary-violation" ;
+  triage:severity "important" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-ARCH-002-DEAD-NUDGE-BYPASS/s11/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-ARCH-002-DEAD-NUDGE-BYPASS/s12/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-ARCH-002-DEAD-NUDGE-BYPASS/s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-ARCH-002-DEAD-NUDGE-BYPASS/s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-ARCH-002-DEAD-NUDGE-BYPASS/s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-ARCH-002-DEAD-NUDGE-BYPASS/s16/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-ARCH-002-DEAD-NUDGE-BYPASS/s17/1> ;
+  triage:openOn <urn:atm:triage:worktree/s11/bb20fd9a> ;
+  triage:openOn <urn:atm:triage:worktree/s12/b6466aa1> ;
+  triage:openOn <urn:atm:triage:worktree/s13/aecade2a> ;
+  triage:openOn <urn:atm:triage:worktree/s14/672ffc34> ;
+  triage:openOn <urn:atm:triage:worktree/s15/b7d2f1c7> ;
+  triage:openOn <urn:atm:triage:worktree/s16/853abcfc> ;
+  triage:openOn <urn:atm:triage:worktree/s17/2a5a57c8> ;
+  triage:promoteTo <urn:atm:triage:worktree/s16/853abcfc> ;
+  triage:correctionNote "2026-07-22: promote_to_branch corrected from feature/pAI-s17-hermes-chat-identity to feature/pAI-s16-offline-reconciliation. arch-ctm caught scope-boundary conflict: AI.17 (docs/plans/phase-ai/sprint-ai-17-hermes-chat-identity.md) is scoped strictly to the ambient chat-context resolver and states 'may run in parallel with AI.11-AI.16 because it does not modify atm-graft, daemon transport, HTTP, storage, or a shared Phase AI contract' -- dispatching an unrelated crates/atm-core/src/send/mod.rs visibility fix there would break that parallel-safety contract. This finding is a workspace-wide repeatable pattern present on all branches s11-s17 and is not uniquely owned by AI.16 either, but s16 carries no equivalent narrow-scope restriction, so it is bundled onto the same corrected fix-assignment batch for dispatch efficiency rather than left on the out-of-scope s17 branch. Original mis-target was applied via unverified highest-open-branch heuristic." .
+
+<urn:atm:triage:occurrence/AI16-QA1-ARCH-002-DEAD-NUDGE-BYPASS/s11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 39 ;
+  triage:snippet "pub mod nudge_template;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "bb20fd9a9290895c55ae9981a718f33e11e0a751" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/bb20fd9a> .
+
+<urn:atm:triage:occurrence/AI16-QA1-ARCH-002-DEAD-NUDGE-BYPASS/s12/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 39 ;
+  triage:snippet "pub mod nudge_template;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:headSha "b6466aa17d9564b104d292485e26dd7614b65cb4" ;
+  triage:occursIn <urn:atm:triage:worktree/s12/b6466aa1> .
+
+<urn:atm:triage:occurrence/AI16-QA1-ARCH-002-DEAD-NUDGE-BYPASS/s13/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 39 ;
+  triage:snippet "pub mod nudge_template;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "aecade2a23b264bb26afc3c941974aea2627e4ae" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/aecade2a> .
+
+<urn:atm:triage:occurrence/AI16-QA1-ARCH-002-DEAD-NUDGE-BYPASS/s14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 39 ;
+  triage:snippet "pub mod nudge_template;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "672ffc349b1faabc769e8f1e81cafede34479fb5" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/672ffc34> .
+
+<urn:atm:triage:occurrence/AI16-QA1-ARCH-002-DEAD-NUDGE-BYPASS/s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 39 ;
+  triage:snippet "pub mod nudge_template;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "b7d2f1c7f487e9bb57e75b4b4f778c32b4bc7d9b" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/b7d2f1c7> .
+
+<urn:atm:triage:occurrence/AI16-QA1-ARCH-002-DEAD-NUDGE-BYPASS/s16/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 40 ;
+  triage:snippet "pub mod nudge_template;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "853abcfccad834ae36e441a995c3851333eb7a8e" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/853abcfc> .
+
+<urn:atm:triage:occurrence/AI16-QA1-ARCH-002-DEAD-NUDGE-BYPASS/s17/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 40 ;
+  triage:snippet "pub mod nudge_template;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/2a5a57c8> .
+
+<urn:atm:triage:worktree/s11/bb20fd9a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "bb20fd9a9290895c55ae9981a718f33e11e0a751" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s12/b6466aa1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
+  triage:headSha "b6466aa17d9564b104d292485e26dd7614b65cb4" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s13/aecade2a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "aecade2a23b264bb26afc3c941974aea2627e4ae" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s14/672ffc34>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "672ffc349b1faabc769e8f1e81cafede34479fb5" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s15/b7d2f1c7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "b7d2f1c7f487e9bb57e75b4b4f778c32b4bc7d9b" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s16/853abcfc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "853abcfccad834ae36e441a995c3851333eb7a8e" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/s17/2a5a57c8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2" ;
+  triage:orderIndex 7 .

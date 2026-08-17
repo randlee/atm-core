@@ -6,7 +6,118 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::error::AtmError;
-use crate::validation::validate_path_segment;
+use crate::template_workflow::TemplateVariableName;
+use crate::validation::{validate_agent_at_team, validate_path_segment};
+
+/// Lowercase SHA-256 identity for an immutable raw template file.
+///
+/// This value is the storage-facing representation of the upstream
+/// `sc-composer` raw-byte template digest. It deliberately does not perform
+/// hashing itself: callers must obtain the digest through the approved
+/// template-composer adapter.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct TemplateSha(String);
+
+impl TemplateSha {
+    /// Construct a validated lowercase hexadecimal SHA-256 identity.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] when `value` is not exactly 64 lowercase
+    /// hexadecimal characters.
+    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
+        let value = value.into();
+        let is_lower_hex = value.len() == 64
+            && value
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'));
+        if !is_lower_hex {
+            return Err(AtmError::validation(
+                "template SHA must be exactly 64 lowercase hexadecimal characters",
+            ));
+        }
+        Ok(Self(value))
+    }
+
+    /// Borrow the lowercase hexadecimal digest.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Consume this identity into its lowercase hexadecimal digest.
+    #[must_use]
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl FromStr for TemplateSha {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::new(value)
+    }
+}
+
+impl AsRef<str> for TemplateSha {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl fmt::Display for TemplateSha {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Parsed, storage-ready frontmatter for a template file.
+///
+/// The values are produced by the approved template-composer adapter and will
+/// be persisted as schema JSON by the Phase AN catalog capability.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct TemplateFrontmatter {
+    /// Required variable names declared by the template.
+    pub required_variables: Vec<TemplateVariableName>,
+    /// Default values declared by the template.
+    pub defaults: serde_json::Map<String, serde_json::Value>,
+    /// Descriptive frontmatter metadata, including the template type key.
+    pub metadata: serde_json::Map<String, serde_json::Value>,
+    /// Canonical literal tags parsed from `metadata.tags` at catalog admission.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub template_tags: Vec<crate::template_workflow::TemplateTag>,
+    /// Canonical workflow declaration parsed from `metadata.workflow`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workflow: Option<crate::template_workflow::TemplateWorkflowDeclaration>,
+}
+
+impl TemplateFrontmatter {
+    /// Captures supported metadata as canonical immutable catalog data.
+    ///
+    /// The raw `metadata` map remains available for general template authoring
+    /// data, while workflow-facing consumers use these validated fields.
+    pub fn with_normalized_workflow_metadata(mut self) -> Result<Self, AtmError> {
+        let declaration =
+            crate::template_workflow::TemplateTagDeclaration::from_frontmatter(&self)?;
+        self.template_tags = declaration.tags;
+        self.workflow = declaration.workflow;
+        Ok(self)
+    }
+
+    /// Ensures pre-parsed metadata still matches the immutable raw metadata.
+    pub fn validate_workflow_metadata(&self) -> Result<(), AtmError> {
+        let declaration = crate::template_workflow::TemplateTagDeclaration::from_frontmatter(self)?;
+        if self.template_tags != declaration.tags || self.workflow != declaration.workflow {
+            return Err(AtmError::new(
+                crate::AtmErrorCode::TemplateWorkflowInvalid,
+                "template workflow metadata must be normalized before catalog admission",
+            ));
+        }
+        Ok(())
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -117,6 +228,154 @@ impl PartialEq<&str> for AgentName {
     }
 }
 
+/// Validated, durable identifier for one independently-addressable agent
+/// context. It deliberately uses the same safe segment policy as agent and
+/// team names; `:` remains an address delimiter owned by `AgentIdentity`.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[serde(transparent)]
+pub struct ChatId(String);
+
+impl ChatId {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl FromStr for ChatId {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let trimmed = value.trim();
+        validate_path_segment(trimmed, "chat id")?;
+        Ok(Self(trimmed.to_string()))
+    }
+}
+
+impl<'de> Deserialize<'de> for ChatId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        value.parse().map_err(serde::de::Error::custom)
+    }
+}
+
+impl fmt::Display for ChatId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Validated DNS-name or IPv4-style host component in an ATM address.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[serde(transparent)]
+pub struct HostName(String);
+
+impl HostName {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Reports whether this host is suitable as a durable peer identity.
+    ///
+    /// `HostName` remains permissive because ATM addresses and transport
+    /// provenance must continue to represent historical IP and mDNS values.
+    /// Peer configuration uses this explicit semantic check before accepting a
+    /// host that will later be used as the source qualifier in a nudge.
+    pub fn is_durable_hostname(&self) -> bool {
+        let ipv4_shaped = self.0.split('.').count() == 4
+            && self
+                .0
+                .split('.')
+                .all(|label| !label.is_empty() && label.bytes().all(|byte| byte.is_ascii_digit()));
+        !ipv4_shaped && !self.0.to_ascii_lowercase().ends_with(".local")
+    }
+}
+
+impl FromStr for HostName {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            return Err(AtmError::address_parse("host must not be empty"));
+        }
+        for label in trimmed.split('.') {
+            validate_path_segment(label, "host label")?;
+        }
+        Ok(Self(trimmed.to_string()))
+    }
+}
+
+impl<'de> Deserialize<'de> for HostName {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        value.parse().map_err(serde::de::Error::custom)
+    }
+}
+
+impl fmt::Display for HostName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// The sole parser and renderer for `agent[:chat-id]`. Transport and adapter
+/// layers consume this value rather than splitting `:` themselves.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct AgentIdentity {
+    pub agent: AgentName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chat_id: Option<ChatId>,
+}
+
+impl AgentIdentity {
+    pub fn new(agent: AgentName, chat_id: Option<ChatId>) -> Self {
+        Self { agent, chat_id }
+    }
+}
+
+impl FromStr for AgentIdentity {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            return Err(AtmError::address_parse("agent identity must not be empty"));
+        }
+        let (agent, chat_id) = match trimmed.split_once(':') {
+            Some((agent, chat_id)) => {
+                if chat_id.contains(':') {
+                    return Err(AtmError::address_parse(
+                        "agent identity may contain only one ':'",
+                    ));
+                }
+                (agent.parse()?, Some(chat_id.parse()?))
+            }
+            None => (trimmed.parse()?, None),
+        };
+        Ok(Self { agent, chat_id })
+    }
+}
+
+impl fmt::Display for AgentIdentity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.agent.as_str())?;
+        if let Some(chat_id) = &self.chat_id {
+            write!(f, ":{chat_id}")?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(transparent)]
 pub struct AgentId(String);
@@ -125,13 +384,7 @@ impl AgentId {
     pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
         let value = value.into();
         let trimmed = value.trim();
-        match trimmed.split_once('@') {
-            Some((agent, team)) => {
-                validate_path_segment(agent, "agent id")?;
-                validate_path_segment(team, "agent id")?;
-            }
-            None => validate_path_segment(trimmed, "agent id")?,
-        }
+        validate_agent_at_team(trimmed, "agent id")?;
         Ok(Self(trimmed.to_string()))
     }
 
@@ -259,7 +512,35 @@ impl fmt::Display for TeamName {
 
 #[cfg(test)]
 mod tests {
-    use super::{AgentId, AgentName, IsoTimestamp};
+    use super::{AgentId, AgentIdentity, AgentName, ChatId, HostName, IsoTimestamp, TemplateSha};
+    use std::str::FromStr;
+
+    #[test]
+    fn agent_identity_owns_chat_id_parsing_and_rendering() {
+        let base = AgentIdentity::from_str("omega-prime").expect("base identity");
+        assert_eq!(base.agent, AgentName::from_validated("omega-prime"));
+        assert_eq!(base.chat_id, None);
+
+        let qualified = AgentIdentity::from_str("omega-prime:1234").expect("chat identity");
+        assert_eq!(
+            qualified.chat_id,
+            Some(ChatId::from_str("1234").expect("chat id"))
+        );
+        assert_eq!(qualified.to_string(), "omega-prime:1234");
+
+        for invalid in [
+            "",
+            ":1234",
+            "omega-prime:",
+            "omega-prime:one:two",
+            "omega-prime:bad/name",
+        ] {
+            assert!(
+                AgentIdentity::from_str(invalid).is_err(),
+                "{invalid} must fail"
+            );
+        }
+    }
 
     #[test]
     fn agent_id_new_matches_agent_name_validation_for_valid_value() {
@@ -271,7 +552,14 @@ mod tests {
 
     #[test]
     fn agent_id_new_rejects_invalid_path_segments() {
-        for invalid in ["", ".hidden", "two..dots", "bad/name", "bad name"] {
+        for invalid in [
+            "",
+            ".hidden",
+            "two..dots",
+            "bad/name",
+            "bad name",
+            "role@bad.team",
+        ] {
             assert!(
                 AgentId::new(invalid).is_err(),
                 "expected `{invalid}` to fail"
@@ -288,7 +576,11 @@ mod tests {
         assert_eq!(compound.as_str(), "worker-2@test-team");
 
         let error = serde_json::from_str::<AgentId>("\"bad/name\"").expect_err("invalid id");
-        assert!(error.to_string().contains("path separators"));
+        assert!(
+            error
+                .to_string()
+                .contains("must use only ASCII letters, digits, '-' or '_'")
+        );
     }
 
     #[test]
@@ -296,6 +588,48 @@ mod tests {
         let timestamp: IsoTimestamp = "2026-07-11T01:20:17Z".parse().expect("timestamp");
 
         assert_eq!(timestamp.to_string(), "2026-07-11T01:20:17+00:00");
+    }
+
+    #[test]
+    fn host_name_distinguishes_durable_peer_names_from_attachment_names() {
+        for attachment_name in [
+            "192.168.128.29",
+            "192.168.128.029",
+            "999.1.1.1",
+            "peer.local",
+            "PEER.LOCAL",
+        ] {
+            let host: HostName = attachment_name.parse().expect("generic host syntax");
+            assert!(
+                !host.is_durable_hostname(),
+                "{attachment_name} must not be treated as a durable peer identity"
+            );
+        }
+
+        for durable_name in ["peer.example", "peer.localhost"] {
+            let host: HostName = durable_name.parse().expect("host");
+            assert!(
+                host.is_durable_hostname(),
+                "{durable_name} should be accepted as a durable peer identity"
+            );
+        }
+    }
+
+    #[test]
+    fn template_sha_requires_exact_lowercase_sha256_hex() {
+        let sha =
+            TemplateSha::new("d3d06622826ac021d6e65098cc412034df9cdddd7248b46283029e43ca636b72")
+                .expect("valid SHA-256 fixture");
+        assert_eq!(sha.as_str(), sha.to_string());
+
+        for invalid in [
+            "",
+            "D3D06622826AC021D6E65098CC412034DF9CDDDD7248B46283029E43CA636B72",
+            "d3d06622826ac021d6e65098cc412034df9cdddd7248b46283029e43ca636b7",
+            "d3d06622826ac021d6e65098cc412034df9cdddd7248b46283029e43ca636b7zz",
+        ] {
+            assert!(TemplateSha::new(invalid).is_err(), "{invalid} must fail");
+        }
     }
 }
 
@@ -325,11 +659,7 @@ impl FromStr for TaskId {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let trimmed = value.trim();
         if trimmed.is_empty() {
-            return Err(
-                AtmError::validation("task id must not be blank").with_recovery(
-                    "Provide a non-empty --task-id value or omit --task-id for non-task messages.",
-                ),
-            );
+            return Err(AtmError::validation("task id must not be blank"));
         }
         Ok(Self(trimmed.to_string()))
     }

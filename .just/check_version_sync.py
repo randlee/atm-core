@@ -11,6 +11,28 @@ from lint_common import workspace_crate_section_lines
 from lint_common import workspace_manifest_paths
 
 
+PYTHON_RELEASE_MANIFESTS = (
+    (Path("crates/atm-graft-python/Cargo.toml"), "package"),
+    (Path("crates/atm-graft-python/pyproject.toml"), "project"),
+    (Path("crates/atm-query-python/Cargo.toml"), "package"),
+    (Path("crates/atm-query-python/pyproject.toml"), "project"),
+    (Path("crates/hermes-atm/pyproject.toml"), "project"),
+)
+PYTHON_RELEASE_CARGO_MANIFESTS = frozenset(
+    manifest_path
+    for manifest_path, table_name in PYTHON_RELEASE_MANIFESTS
+    if table_name == "package"
+)
+PYTHON_DYNAMIC_VERSION_SOURCES = {
+    Path("crates/atm-graft-python/pyproject.toml"): Path("crates/atm-graft-python/Cargo.toml"),
+}
+VERSION_BASE_PATTERN = re.compile(
+    r"^(?P<base>\d+\.\d+\.\d+)"
+    r"(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
+)
+
+
 def fail(message: str) -> None:
     raise SystemExit(message)
 
@@ -39,10 +61,11 @@ def dependency_sections(manifest: dict) -> list[tuple[str, dict]]:
 
 
 def extract_version_from_url(url: str) -> str | None:
-    match = re.search(r"/download/v(?P<version>\d+\.\d+\.\d+)/", url)
+    semver = r"\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
+    match = re.search(rf"/download/v(?P<version>{semver})/", url)
     if match:
         return match.group("version")
-    match = re.search(r"[_-](?P<version>\d+\.\d+\.\d+)[_/]", url)
+    match = re.search(rf"[_-](?P<version>{semver})[/_]", url)
     if match:
         return match.group("version")
     return None
@@ -63,6 +86,61 @@ def validate_workspace_version(repo_root: Path) -> str:
     return workspace_version
 
 
+def normalized_version_base(version: str, label: str) -> str:
+    """Return the numeric MAJOR.MINOR.PATCH base of a Cargo version."""
+
+    match = VERSION_BASE_PATTERN.fullmatch(version.strip())
+    if match is None:
+        fail(f"{label} ({version}) is not a valid Cargo semantic version")
+    return match.group("base")
+
+
+def validate_python_release_versions(
+    repo_root: Path,
+    workspace_version: str,
+    manifests: tuple[tuple[Path, str], ...] = PYTHON_RELEASE_MANIFESTS,
+) -> None:
+    """Require every released Python artifact to use the workspace numeric base."""
+
+    expected = normalized_version_base(workspace_version, "workspace version")
+    for manifest_path, table_name in manifests:
+        rel_manifest = manifest_path.as_posix()
+        manifest = tomllib.loads(read_text(repo_root / manifest_path))
+        table = manifest.get(table_name, {})
+        actual = table.get("version") if isinstance(table, dict) else None
+        dynamic = table.get("dynamic", []) if isinstance(table, dict) else []
+        cargo_manifest = PYTHON_DYNAMIC_VERSION_SOURCES.get(manifest_path)
+        if actual is None and cargo_manifest is not None and "version" in dynamic:
+            cargo_data = tomllib.loads(read_text(repo_root / cargo_manifest))
+            cargo_package = cargo_data.get("package", {})
+            cargo_version = cargo_package.get("version") if isinstance(cargo_package, dict) else None
+            if isinstance(cargo_version, str) and cargo_version.strip():
+                actual = cargo_version
+            elif isinstance(cargo_version, dict) and cargo_version.get("workspace") is True:
+                actual = workspace_version
+            else:
+                fail(
+                    f"{rel_manifest} dynamically derives version from "
+                    f"{cargo_manifest.as_posix()}, which must define [package].version"
+                )
+            if actual != expected:
+                fail(
+                    f"{rel_manifest} dynamically derives version from "
+                    f"{cargo_manifest.as_posix()} [package].version ({actual}) "
+                    f"but it must equal workspace version base ({expected})"
+                )
+        if not isinstance(actual, str) or not actual.strip():
+            fail(
+                f"{rel_manifest} [{table_name}].version ({actual!r}) must equal "
+                f"workspace version base ({expected})"
+            )
+        if actual != expected:
+            fail(
+                f"{rel_manifest} [{table_name}].version ({actual}) must equal "
+                f"workspace version base ({expected})"
+            )
+
+
 def expected_package_version(manifest: dict, workspace_version: str, manifest_label: str) -> str:
     package = manifest.get("package", {})
     if not isinstance(package, dict):
@@ -76,6 +154,33 @@ def expected_package_version(manifest: dict, workspace_version: str, manifest_la
     fail(
         f"{manifest_label} must define [package].version either as a non-empty string or version.workspace = true"
     )
+
+
+def validate_workspace_member_versions(repo_root: Path, workspace_version: str) -> None:
+    """Require Cargo members to use the workspace version, except PyPI bridges.
+
+    The two Maturin bridge crates are ``publish = false`` Cargo members whose
+    Cargo package version becomes public Python package metadata.  Python
+    wheels use the numeric workspace base because PEP 440 does not accept the
+    repository's release qualifiers, so those two manifests intentionally use
+    that base while every other workspace member uses the exact Cargo version.
+    """
+
+    for manifest_path in workspace_manifest_paths(repo_root):
+        rel_path = manifest_path.relative_to(repo_root)
+        rel_manifest = rel_path.as_posix()
+        manifest = tomllib.loads(read_text(manifest_path))
+        package_version = expected_package_version(manifest, workspace_version, rel_manifest)
+        expected_version = (
+            normalized_version_base(workspace_version, "workspace version")
+            if rel_path in PYTHON_RELEASE_CARGO_MANIFESTS
+            else workspace_version
+        )
+        if package_version != expected_version:
+            fail(
+                f"{rel_manifest} [package].version ({package_version}) "
+                f"must equal expected workspace member version ({expected_version})"
+            )
 
 
 def validate_crate_versions(repo_root: Path, workspace_version: str) -> None:
@@ -254,10 +359,17 @@ def main() -> int:
     repo_root = Path(__file__).resolve().parent.parent
     config = version_sync_config(repo_root)
     workspace_version = validate_workspace_version(repo_root)
+    validate_python_release_versions(repo_root, workspace_version)
+    validate_workspace_member_versions(repo_root, workspace_version)
     validate_crate_versions(repo_root, workspace_version)
     validate_lockfile(repo_root, workspace_version)
 
-    executed_checks = ["workspace member versions", "internal path deps", "Cargo.lock"]
+    executed_checks = [
+        "released Python artifact versions",
+        "workspace member versions",
+        "internal path deps",
+        "Cargo.lock",
+    ]
     if validate_winget_manifests(repo_root, workspace_version, config):
         executed_checks.append("winget")
     if validate_release_wiring(repo_root, config):

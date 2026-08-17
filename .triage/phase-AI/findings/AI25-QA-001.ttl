@@ -1,0 +1,90 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI25-QA-001>
+  a triage:Finding ;
+  triage:findingId "AI25-QA-001" ;
+  triage:foundAt "2026-07-25T09:19:48Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
+  triage:title "Missing test coverage for the ambiguous-DNS-match (fail-closed multi-match) branch" ;
+  triage:description "resolve_peer_authority's multi-match rejection (crates/atm-daemon/src/https_transport.rs:90) is implemented correctly (fail-closed: both 0-match and multi-match are rejected before any TLS/route attempt) but has zero test coverage; only single-match and no-match paths are tested." ;
+  triage:category "test-coverage" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:reportedBy "rust-qa-agent" ;
+  triage:reportedBy "ruthless-boundary-qa" ;
+  triage:originatingBranch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:originatingOrderIndex 5 ;
+  triage:aliases "rust-qa-agent:QA-001" ;
+  triage:aliases "ruthless-boundary-qa:RBQA-F003" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-QA-001/s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-QA-001/s26/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-QA-001/s27/1-migrated> ;
+  triage:openOn <urn:atm:triage:worktree/s27/35cb19f8> ;
+  triage:promoteTo <urn:atm:triage:worktree/s27/35cb19f8> ;
+  triage:triagedAt "2026-07-25T02:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T12:09:48Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion 1 .
+
+<urn:atm:triage:occurrence/AI25-QA-001/s25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 90 ;
+  triage:snippet "_ => Err(AtmError::validation(format!(\"literal peer IP {target} matches multiple trusted hostnames\")))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:closedAt "2026-07-26T12:09:48Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> .
+
+<urn:atm:triage:occurrence/AI25-QA-001/s26/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 90 ;
+  triage:snippet "_ => Err(AtmError::validation(format!(\"literal peer IP {target} matches multiple trusted hostnames\")))" ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch feature/pAI-s26-peer-write-deadline superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:occursIn <urn:atm:triage:worktree/s26/b5eec1bf> .
+
+# 2026-07-26 (quality-mgr, stale branch reconciliation): consolidated open occurrence from superseded branches onto s27.
+<urn:atm:triage:occurrence/AI25-QA-001/s27/1-migrated>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 90 ;
+  triage:snippet "_ => Err(AtmError::validation(format!(\"literal peer IP {target} matches multiple trusted hostnames\")))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "35cb19f8" ;
+  triage:note "Consolidated from s26. Test coverage gap for multi-match rejection path remains unfixed on s27." ;
+  triage:occursIn <urn:atm:triage:worktree/s27/35cb19f8> .
+
+<urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "b49f08407b8f5b150ae9210f64f4f34aa6beb152" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s26/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:path "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/s27/35cb19f8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "35cb19f8" ;
+  triage:orderIndex 7 .

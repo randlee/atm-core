@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FTQ-001>
+  a triage:Finding ;
+  triage:findingId "FTQ-001" ;
+  triage:title "test_teardown_never_deletes_runtime_without_matching_pid_marker leaks unreaped child process" ;
+  triage:description ".just/tests/test_peer_pair_smoke.py::test_teardown_never_deletes_runtime_without_matching_pid_marker spawns a real 30s child process with no try/finally or addCleanup -- leaks an un-reaped process on every run (assertion requires the process to survive, so it's intentional-but-unmanaged). Flaky-CI risk on parallel/repeat runs." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-27T05:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-PHASE-END-QA-1 ;
+  triage:foundAt "2026-07-27T05:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/FTQ-001/1>
+  a triage:Occurrence ;
+  triage:file ".just/tests/test_peer_pair_smoke.py" ;
+  triage:line 1 ;
+  triage:snippet "spawns 30s child process, no try/finally or addCleanup" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "1ea59d89" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate_phase_ai_1ea59d89> .
+
+<urn:atm:triage:worktree/integrate_phase_ai_1ea59d89>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "1ea59d89" ;
+  triage:orderIndex 999 .
+
+<urn:atm:triage:finding/FTQ-001>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:correctionNote "quality-mgr (2026-07-27): QA-1 for PR #668 (fix/phase-ai-rbp-boundary-cleanup @ de438f19). .just/tests/test_peer_pair_smoke.py::test_teardown_never_deletes_runtime_without_matching_pid_marker now wraps the spawned process in try/finally: process.terminate() -> wait(timeout=5) -> fallback process.kill() + wait(timeout=5) on TimeoutExpired. Process reliably reaped on every run including assertion-failure paths. rust-qa-agent confirmed via a live run of the full test_peer_pair_smoke.py suite (43 passed) against the real repo. All 6 QA-1 reviewers independently confirmed. CI green 8/8 legs." .

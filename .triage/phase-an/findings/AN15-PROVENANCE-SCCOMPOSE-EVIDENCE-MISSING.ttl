@@ -1,0 +1,51 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN15-PROVENANCE-SCCOMPOSE-EVIDENCE-MISSING>
+  a triage:Finding ;
+  triage:findingId "AN15-PROVENANCE-SCCOMPOSE-EVIDENCE-MISSING" ;
+  triage:title "Provenance record lacks evidence sc-compose 1.4.1 was actually published / sc-compose#448 closed" ;
+  triage:description "Provenance record retained sc-composer/sc-sha 1.4.1 checksums but no evidence sc-compose itself published 1.4.1 or that sc-compose#448 is closed. RESOLVED: site/reports/fuzz/an15-sc-compose-1.4.1-crates-io.json and site/reports/fuzz/an15-sc-compose-448-github.json now retain that upstream evidence alongside the campaign report, confirmed by AN-PHASEEND-REVIEW fuzz reviewer (task #1767) at integrate/phase-an @ 628d6531b." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "docs" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "site/reports/fuzz/" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-14T08:02:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.15 ;
+  triage:foundAt "2026-08-14T08:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN15-PROVENANCE-SCCOMPOSE-EVIDENCE-MISSING/AN15-missing-provenance> ;
+  triage:closedAt "2026-08-14T20:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AN15-PROVENANCE-SCCOMPOSE-EVIDENCE-MISSING/AN15-missing-provenance>
+  a triage:Occurrence ;
+  triage:file "site/reports/fuzz/an15-sc-compose-1.4.1-crates-io.json" ;
+  triage:line 1 ;
+  triage:snippet "upstream provenance evidence retained (crates.io + sc-compose#448 closure)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "628d6531bd77db0507447e587088fb9abdfeb4bc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-an/628d6531> .
+
+<urn:atm:triage:worktree/AN15-0/9ddf105b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/an15" ;
+  triage:branch "feature/an15-adversarial-fuzzing" ;
+  triage:headSha "9ddf105b5dd7c3d7ec592cac1602dd7ab1c743bb" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/integrate-an/628d6531>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate/phase-an" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "628d6531bd77db0507447e587088fb9abdfeb4bc" ;
+  triage:orderIndex 1 .

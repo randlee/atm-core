@@ -25,7 +25,7 @@ pub struct AckCommand {
 
 impl AckCommand {
     /// Execute the `atm ack` command.
-    pub fn run(self, observability: &CliObservability) -> Result<()> {
+    pub async fn run(self, observability: &CliObservability) -> Result<()> {
         let (home_dir, current_dir) = resolve_command_runtime_context("ack")?;
         let json = self.json;
         let request = self.build_request(home_dir.clone(), current_dir.clone())?;
@@ -35,7 +35,7 @@ impl AckCommand {
             InvocationDir::new(&current_dir),
             AtmHomePath::new(&home_dir),
         )?;
-        let outcome = composition.ack(request)?;
+        let outcome = composition.ack(request).await?;
 
         output::print_ack_result(&outcome, json)
     }
@@ -56,7 +56,9 @@ impl AckCommand {
             home_dir,
             current_dir,
             caller_identity: caller_context.caller_identity,
+            caller_chat_id: caller_context.caller_chat_id,
             caller_team: caller_context.caller_team,
+            activity_observation: caller_context.activity_observation,
             message_id,
             reply_body: self.reply,
         })

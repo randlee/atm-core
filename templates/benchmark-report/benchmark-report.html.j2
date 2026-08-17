@@ -1,0 +1,57 @@
+---
+metadata:
+  name: benchmark-report
+  description: Aggregate ATM local transport benchmark report
+required_variables:
+  - title
+  - generated_at
+  - status
+  - rows
+  - campaign_host_label
+  - campaign_transport
+  - campaign_source_revision
+  - campaign_profile_count
+  - campaign_passed_count
+  - campaign_failed_count
+  - campaign_missing_frames
+  - history_count
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title | e }}</title>
+  <style>
+    body { font: 16px system-ui, sans-serif; max-width: 80rem; margin: 2rem auto; padding: 0 1rem; color: #1f2937; }
+    h1 { margin-bottom: .25rem; } .meta { color: #64748b; }
+    .status { display: inline-block; padding: .2rem .6rem; border-radius: 999px; font-weight: 700; }
+    .PASS { color: #065f46; background: #d1fae5; } .FAIL { color: #991b1b; background: #fee2e2; } .INFO { color: #1e40af; background: #dbeafe; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    th, td { border: 1px solid #d1d5db; padding: .55rem; text-align: left; } th { background: #f3f4f6; }
+    .pass { color: #065f46; } .fail { color: #991b1b; }
+  </style>
+</head>
+<body>
+  <h1>{{ title | e }}</h1>
+  <p class="meta">Generated {{ generated_at | e }} · <span class="status {{ status | e }}">{{ status | e }}</span></p>
+  <p>Current candidate campaign: {{ campaign_host_label | e }} / {{ campaign_transport | e }} / {{ campaign_source_revision | default('unversioned', true) | e }} — {{ campaign_profile_count }}/{{ 6 }} profiles, {{ campaign_passed_count }} passed, {{ campaign_failed_count }} failed; missing frames: {{ campaign_missing_frames | e }}. {{ history_count }} immutable historical runs retained.</p>
+  <h2>UTC benchmark history</h2>
+  <table>
+    <thead><tr><th>UTC timestamp</th><th>Host</th><th>Transport</th><th>Frames/connection</th><th>Direct SQLite msg/s</th><th>Status</th><th>Evidence</th></tr></thead>
+    <tbody>
+{% for row in rows %}
+      <tr>
+        <td><time datetime="{{ row.generated_at | e }}">{{ row.generated_at | e }}</time></td>
+        <td>{{ row.host_label | e }}</td>
+        <td>{{ row.transport | e }}</td>
+        <td>{{ row.frames_per_connection }}</td>
+        <td>{{ 'n/a' if row.direct_sqlite_admissions_per_second is none else '%.2f' | format(row.direct_sqlite_admissions_per_second) }}</td>
+        <td class="{{ 'pass' if row.passed else 'fail' }}">{{ 'PASS' if row.passed else 'FAIL' }}</td>
+        <td><a href="{{ row.json_href | e }}">JSON</a> · <a href="{{ row.xhtml_href | e }}">XHTML panel</a></td>
+      </tr>
+{% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>

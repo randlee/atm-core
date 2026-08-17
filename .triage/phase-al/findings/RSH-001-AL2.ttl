@@ -1,0 +1,51 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RSH-001-AL2>
+  a triage:Finding ;
+  triage:findingId "RSH-001-AL2" ;
+  triage:title "Configured request timeout never enforced at the HTTP boundary" ;
+  triage:description "rust-service-hardening-agent (RSH-001) reports that the configured request timeout is never actually enforced at the HTTP boundary in the new AL.2 handler: no tokio::time::timeout or Tower TimeoutLayer wraps the ApiRouter dispatch call, so a hung downstream dispatch can hold the request indefinitely despite ADR-032's overload-control intent." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "runtime-hardening" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-06T23:16:46Z"^^xsd:dateTime ;
+  triage:closureNote "Verified fixed in 91c39cbf (fix(http-runtime): enforce HTTP request deadline). Current post_messages wraps dispatch_on_blocking_pool in tokio::time::timeout using state.request_timeout and returns WaitTimeout on expiry at message_handler.rs:145-156. just test and just lint pass on the merged branch." ;
+  triage:foundIn triage:AL2 ;
+  triage:foundAt "2026-08-05T23:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001-AL2/AL2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RSH-001-AL2/AL2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 125 ;
+  triage:snippet "let deadline = RequestDeadline::after(state.request_timeout);" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s2-canonical-handler" ;
+  triage:headSha "d557d662cdb0d6a30ba3d67675b10e13d15feb16" ;
+  triage:occursIn <urn:atm:triage:worktree/AL2/d557d662> .
+
+<urn:atm:triage:worktree/AL2-base/572cc4b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-al" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "572cc4b334ffe534ddecb3ad8600a9803d6d87a2" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AL2-s2/d557d66>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pal-s2-canonical-handler" ;
+  triage:branch "feature/pal-s2-canonical-handler" ;
+  triage:headSha "d557d662cdb0d6a30ba3d67675b10e13d15feb16" ;
+  triage:orderIndex 1 .

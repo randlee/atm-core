@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI25-QA-003>
+  a triage:Finding ;
+  triage:findingId "AI25-QA-003" ;
+  triage:foundAt "2026-07-25T09:19:48Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
+  triage:title "just lint still fails — winget manifest ManifestVersion field left stale after PackageVersion fix" ;
+  triage:description "After PackageVersion in .winget/randlee.agent-team-mail.yaml was correctly updated to 1.3.2-beta.25 (resolving AI25-QA-002), the ManifestVersion field on line 27 was left at 1.3.1. The version mismatch causes just lint to fail its consistency check. arch-ctm's FINAL PASS self-report for FIX-1 claimed all validation gates passed; this is inaccurate for just lint due to this stale field." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "build/lint/release-hygiene" ;
+  triage:severity "Minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T16:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion 1 ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-QA-003/s25/1> ;
+  triage:fixedOn <urn:atm:triage:worktree/s25/a9e61fb081de28d706071981e54d179c6e1f9265> .
+
+<urn:atm:triage:occurrence/AI25-QA-003/s25/1>
+  a triage:Occurrence ;
+  triage:file ".winget/randlee.agent-team-mail.yaml" ;
+  triage:line 27 ;
+  triage:snippet "ManifestVersion: 1.3.2-beta.25" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-26T16:00:00Z"^^xsd:dateTime ;
+  triage:headSha "a9e61fb081de28d706071981e54d179c6e1f9265" ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:orderIndex 5 ;
+  triage:occursIn <urn:atm:triage:worktree/s25/a9e61fb081de28d706071981e54d179c6e1f9265> .
+
+<urn:atm:triage:worktree/s25/a9e61fb081de28d706071981e54d179c6e1f9265>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "a9e61fb081de28d706071981e54d179c6e1f9265" ;
+  triage:orderIndex 5 .

@@ -137,12 +137,9 @@ fn validate_observability_name(
 ) -> Result<String, AtmError> {
     let value = value.into();
     if value.trim().is_empty() {
-        return Err(
-            AtmError::validation(format!("ATM observability {kind} must not be empty"))
-                .with_recovery(format!(
-                    "Provide a non-empty ATM observability {kind} before retrying."
-                )),
-        );
+        return Err(AtmError::validation(format!(
+            "ATM observability {kind} must not be empty"
+        )));
     }
     Ok(value)
 }
@@ -234,11 +231,7 @@ impl LogFieldKey {
     pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
         let value = value.into();
         if value.trim().is_empty() {
-            return Err(
-                AtmError::validation("ATM log field key must not be empty").with_recovery(
-                    "Provide a non-empty field key when building ATM log queries or records.",
-                ),
-            );
+            return Err(AtmError::validation("ATM log field key must not be empty"));
         }
         Ok(Self(value))
     }
@@ -286,11 +279,7 @@ impl AtmJsonNumber {
     pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
         let value = value.into();
         let parsed: Value = serde_json::from_str(&value).map_err(|source| {
-            AtmError::validation(format!("invalid ATM JSON number `{value}`"))
-                .with_recovery(
-                    "Provide a valid RFC 8259 JSON number such as `1`, `-2.5`, or `6.02e23`.",
-                )
-                .with_source(source)
+            AtmError::validation(format!("invalid ATM JSON number `{value}`")).with_cause(source)
         })?;
         match parsed {
             Value::Number(number) => Ok(Self {
@@ -298,11 +287,9 @@ impl AtmJsonNumber {
                 number,
                 normalized: normalize_json_number(&value),
             }),
-            _ => Err(
-                AtmError::validation(format!("invalid ATM JSON number `{value}`")).with_recovery(
-                    "Provide a valid RFC 8259 JSON number such as `1`, `-2.5`, or `6.02e23`.",
-                ),
-            ),
+            _ => Err(AtmError::validation(format!(
+                "invalid ATM JSON number `{value}`"
+            ))),
         }
     }
 

@@ -1,0 +1,30 @@
+# all-complete.sparql — Returns sprints that are NOT cleanly done.
+#
+# A sprint is NOT cleanly done if it lacks a valid Completion.
+# A Completion is valid iff no blocking finding was filed with foundAt > completedAt.
+#
+# Used after cursor returns empty to distinguish:
+#   - AWAITING: cursor is empty but some sprints lack valid Completions
+#     (e.g. they have in-flight Assignments with no Completion yet — which
+#     cursor skips — but we need to surface this rather than falsely declaring DONE)
+#   - CLEANUP/DONE: all sprints have valid Completions
+#
+# Zero rows = all sprints have valid Completions → proceed to CLEANUP/DONE check.
+# Non-zero rows = some sprints are incomplete → return AWAITING.
+#
+# Parameter: $PHASE (bound via initBindings)
+
+PREFIX triage: <urn:atm:triage:>
+
+SELECT ?sprint WHERE {
+  ?sprint a triage:Sprint ; triage:inPhase $PHASE .
+
+  # Keep sprints that lack a valid Completion
+  FILTER NOT EXISTS {
+    ?c a triage:Completion ; triage:ofSprint ?sprint ; triage:at ?ct .
+    FILTER NOT EXISTS {
+      ?f a triage:Finding ; triage:foundIn ?sprint ; triage:severity "blocking" ; triage:foundAt ?ft .
+      FILTER (?ft > ?ct)
+    }
+  }
+}

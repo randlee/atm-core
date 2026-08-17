@@ -1,0 +1,103 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI25-RBQA-F002-new>
+  a triage:Finding ;
+  triage:findingId "AI25-RBQA-F002-new" ;
+  triage:title "lint_boundaries.py never validates the [ownership]/io_forbidden table, so forbidden-dependency violations like AI25-RBQA-F001 are invisible to the mechanical boundary gate" ;
+  triage:description "Reported by ruthless-boundary-qa during AICH-S5-QA-2 (AI.25 fix-round-2 recheck, PR #640, commit 5f794c42d449687b6badca46193592f11bc25529, branch feature/pAI-s25-peer-authority-resolution), as a companion finding to AI25-RBQA-F001 (a boundary policy leak that the mechanical gate failed to catch). The boundary-enforcement lint script (locate it -- likely lint_boundaries.py or similar under scripts/ or .claude/) does not validate declared [ownership]/io_forbidden tables in adapter boundary TOML files (e.g. peer-http-adapter.toml), meaning policy violations like resolve_peer_authority living in a forbidden file for recipient_routing are not mechanically caught. Multiple boundary TOML files declare [ownership]/io_forbidden tables (peer-http-adapter.toml and others in boundaries/ directory), but lint_boundaries.py does not check that code-level implementations respect these forbidden-dependency declarations. The lint script's REQUIRED_BOUNDARY_FIELDS tuple does not include ('ownership', 'io_forbidden'), and no validation function exists to check io_forbidden entries against actual source code patterns." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:severity "Minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "AICH-S11-QA-BOUNDARYLINT: verified fixed on fix/close-out-boundary-lint-mapping (00683e72, PR #655). .just/lint_boundaries.py now has IO_FORBIDDEN_SOURCE_PATTERNS mapping every declared ownership.io_forbidden tag (independently enumerated all 40 unique tags across boundaries/*/*.toml, all mapped) to a real source-code regex pattern, wired into collect_io_forbidden_source_violations() which runs in both collect_boundary_violations() and run(). Unmapped tags fail closed (produce a violation), confirmed by direct code read of the branch logic. Independently reproduced the manual violation proof myself (injected resolve_peer_authority() into https_transport.rs, lint caught it with the exact expected error, then cleanly reverted). ruthless-boundary-qa PASS on all 4 review concerns (mapping completeness, exceptions-allowlist narrowness, fail-closed behavior, real-improvement/no-regression), with 3 non-blocking follow-up findings recorded separately (AI25-RBQA-F005 important/boundary_tightening: bespoke AI25 AST test not yet collapsed into the new generic mechanism; AI25-RBQA-F006 minor: no direct unit test for the fail-closed unmapped-tag branch; a third pre-existing minor duplication note not requiring a new record). CI fully green (8/8 legs after one flaky macOS rerun, confirmed unrelated to this 3-file Python-only change). QA report posted to PR #655." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-26T12:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
+  triage:foundAt "2026-07-25T16:26:33Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F002-new/lint-gap-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F002-new/pAI-s25/96377687> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F002-new/fix-close-out-boundary-lint-mapping/1> ;
+  triage:triageRecordVersion "3" .
+
+# 2026-07-26 (quality-mgr, AICH-S5-QA-5): PARTIALLY fixed on feature/pAI-s25-peer-authority-resolution
+# @ 96377687 (PR #640). lint_boundaries.py now validates ownership.io_owns/io_forbidden as
+# well-formed, non-empty string lists (schema-shape only). Independently confirmed by
+# ruthless-boundary-qa that there is still NO generic mapping from io_forbidden tag values
+# (recipient_routing, sqlite, delivery_queue, retry_state, nudge_emission, ...) to source-code
+# patterns checked against the owning module -- the only thing catching the AI25-RBQA-F004 leak
+# class is a single hardcoded AST test (boundary_enforcement.rs::
+# ai25_peer_authority_selection_is_not_owned_by_the_https_adapter), not a general mechanism.
+# Kept OPEN (not closed) -- reclassified as the narrower "lint_gap: io_forbidden not semantically
+# enforced" scope requested in the finding's own title.
+
+<urn:atm:triage:occurrence/AI25-RBQA-F002-new/lint-gap-1>
+  a triage:Occurrence ;
+  triage:file ".just/lint_boundaries.py" ;
+  triage:line 25 ;
+  triage:snippet "REQUIRED_BOUNDARY_FIELDS does not include ('ownership', 'io_forbidden')" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "bc1346e4" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s26-peer-write-deadline/bc1346e4> .
+
+<urn:atm:triage:worktree/pAI-s23-crosshost-shared-write-path/985a6d46>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "985a6d46" ;
+  triage:orderIndex 23 .
+
+<urn:atm:triage:worktree/pAI-s24-host-qualified-ack-receipt/ac465283>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "ac465283" ;
+  triage:orderIndex 24 .
+
+<urn:atm:triage:worktree/pAI-s25-peer-authority-resolution/5f794c42>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAI-s25-peer-authority-resolution" ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "5f794c42" ;
+  triage:orderIndex 25 .
+
+<urn:atm:triage:worktree/pAI-s26-peer-write-deadline/bc1346e4>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAI-s26-peer-write-deadline" ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "bc1346e4" ;
+  triage:orderIndex 26 .
+
+<urn:atm:triage:occurrence/AI25-RBQA-F002-new/pAI-s25/96377687>
+  a triage:Occurrence ;
+  triage:file ".just/lint_boundaries.py" ;
+  triage:line 1040 ;
+  triage:snippet "io_owns, io_owns_errors = validate_list_field(data, (\"ownership\", \"io_owns\"), ...) // schema-shape validation only, no source-pattern cross-check" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "96377687" ;
+  triage:note "AICH-S5-QA-5 (PR #640): independently re-verified by quality-mgr and ruthless-boundary-qa. REQUIRED_BOUNDARY_FIELDS now includes (ownership, io_owns)/(ownership, io_forbidden) and validates them as well-formed lists, but there is still no mechanism mapping io_forbidden tag values to source-code patterns checked against the owning module -- grep of lint_boundaries.py for the literal tag values (recipient_routing, sqlite, delivery_queue, retry_state, nudge_emission) returns zero matches outside the schema validator. The only enforcement for the AI25-RBQA-F004 leak class is a single hardcoded AST test, not a generic gate. Recommend adding a tag-to-pattern table (similar to how references.forbidden already works) so this closes for the general case, not just this one incident." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s25/96377687> .
+
+<urn:atm:triage:occurrence/AI25-RBQA-F002-new/fix-close-out-boundary-lint-mapping/1>
+  a triage:Occurrence ;
+  triage:file ".just/lint_boundaries.py" ;
+  triage:line 118 ;
+  triage:snippet "IO_FORBIDDEN_SOURCE_PATTERNS maps every declared io_forbidden tag (40 unique tags) to a real regex; unmapped tags fail closed" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/close-out-boundary-lint-mapping" ;
+  triage:headSha "00683e72" ;
+  triage:notes "AICH-S11-QA-BOUNDARYLINT: general tag-to-pattern mechanism now exists as recommended in the pAI-s25/96377687 occurrence note above; independently verified comprehensive and fail-closed." ;
+  triage:occursIn <urn:atm:triage:worktree/fix-close-out-boundary-lint-mapping/00683e72> .

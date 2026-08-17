@@ -4,7 +4,13 @@ no-default-features = false
 
 [advisories]
 yanked = "deny"
-ignore = []
+# sc-composer 1.3.0 (the published containment/render adapter required by
+# AN.3) pins quick-xml 0.38.4. Remove both entries when upstream releases an
+# advisory-compatible sc-composer; ATM carries no local quick-xml patch.
+ignore = [
+  "RUSTSEC-2026-0194",
+  "RUSTSEC-2026-0195",
+]
 
 [bans]
 multiple-versions = "allow"
@@ -21,8 +27,14 @@ allow-git = []
 [licenses]
 allow = [
   "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
   "MIT",
   "0BSD",
   "Unicode-3.0",
   "Zlib",
-]
+  "BSD-3-Clause",
+  "ISC",
+  # `reqwest`'s AL.1 Rustls feature brings webpki-roots, whose root-store
+  # metadata uses this permissive license.
+  "CDLA-Permissive-2.0",
+  ]

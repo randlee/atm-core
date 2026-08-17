@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QA-001-AL1>
+  a triage:Finding ;
+  triage:findingId "QA-001-AL1" ;
+  triage:title "clippy::empty_line_after_doc_comments in post_send_emitter.rs" ;
+  triage:description "crates/atm-daemon/src/post_send_emitter.rs:52-53 — dangling doc comment separated from fn deliver_tmux_nudge by a blank line. Causes workspace clippy -D warnings failure." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "lint" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-daemon/src/post_send_emitter.rs" ;
+  triage:status "waived" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-06T04:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL1 ;
+  triage:foundAt "2026-08-06T04:38:07Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-001-AL1/AL1-1> ;
+  triage:closureEvidence "The occurrence is exclusively in frozen legacy crates/atm-daemon source. Phase AL's active daemon is Tokio/Axum atm-http-runtime; plan-phase-al.md 'Architecture' declares legacy atm-daemon reference-only and never executed. Phase AM owns its deletion and any legacy-only cleanup, so Phase AL intentionally applies no code or regression-test change." ;
+  triage:closedAt "2026-08-10T09:31:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:triageRecordVersion "3" .
+
+<urn:atm:triage:occurrence/QA-001-AL1/AL1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/post_send_emitter.rs" ;
+  triage:line 52 ;
+  triage:snippet "/// Deleted receiver implementation name. Its absence makes stale wiring a" ;
+  triage:status "waived" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T09:31:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444" ;
+  triage:occursIn <urn:atm:triage:worktree/pal-s1-1/ee3ca444> .
+
+<urn:atm:triage:worktree/integrate-phase-al/cd03ef33>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-al" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "cd03ef33" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pal-s1-1/ee3ca444>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s1-1" ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444" ;
+  triage:orderIndex 1 .

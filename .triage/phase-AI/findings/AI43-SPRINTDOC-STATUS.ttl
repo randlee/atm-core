@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI43-SPRINTDOC-STATUS>
+  a triage:Finding ;
+  triage:findingId "AI43-SPRINTDOC-STATUS" ;
+  triage:title "AI.43 sprint doc and project-plan.md still show status 'planned', not 'complete', despite functional work being done and QA in progress" ;
+  triage:description "quality-mgr's AI43-QA-2 verdict (req-qa, deliverable completion 8/14 = 57.1%) reports docs/plans/phase-ai/sprint-ai-43-remote-https-response-framing.md and docs/project-plan.md still carry AI.43's status as 'planned' rather than 'complete'/'in-review', which req-qa treats as an explicit deliverable-tracking gate blocking PASS. This is a documentation-currency gap, not a functional defect -- the sprint-doc status field must reflect real branch/PR state so deliverable-completion accounting is accurate." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doc-status-gap" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-01T07:25:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI43 ;
+  triage:foundAt "2026-08-01T07:21:30Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI43-SPRINTDOC-STATUS/S43-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI43-SPRINTDOC-STATUS/S43-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-43-remote-https-response-framing.md" ;
+  triage:line 1 ;
+  triage:snippet "Independently re-verified fixed on integrate/phase-ai-31-33 @ 4169f3d9 (>= cited fix commit 9cb723ac): sprint doc frontmatter status now reads 'complete', and docs/project-plan.md:1020 AI.43 row now reads 'complete', matching the AI.36-39/46-49 convention." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s43-remote-https-response-framing" ;
+  triage:headSha "12f1260a" ;
+  triage:occursIn <urn:atm:triage:worktree/S43/12f1260a> .
+
+<urn:atm:triage:worktree/S43/12f1260a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/S43" ;
+  triage:branch "feature/pAI-s43-remote-https-response-framing" ;
+  triage:headSha "12f1260a" ;
+  triage:orderIndex 16 .

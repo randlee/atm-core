@@ -21,7 +21,7 @@ with free-form input.
 
 ```json
 {
-  "review_mode": "sprint_review | round_limit | phase_end | integration_review",
+  "review_mode": "sprint_review | round_limit | phase_end | integration_review | doc_review",
   "worktree_path": "/absolute/path/to/worktree",
   "branch": "feature/branch-name",
   "commit": "abc1234",
@@ -49,6 +49,9 @@ Rules:
 - `review_mode` is required
 - `authoritative_sprint_doc` is the primary task-level architecture source when
   provided
+- `doc_review` is valid for docs-only plan review and should inspect planning,
+  boundary, packaging, checklist, readiness, and gate artifacts without
+  expecting implementation code changes
 - if required inputs are missing or malformed, return `FAIL`
 
 ## Architectural Rules
@@ -244,6 +247,8 @@ Rules:
 - Every violation found is a finding regardless of age.
 - List each finding with `file:line` and a remediation note.
 - The pre-existing/new distinction is informational only.
+
+**Legacy Daemon Exemption**: Do not file a finding against legacy synchronous-daemon runtime behavior (e.g. a private Tokio runtime bridged via `spawn_blocking`, duplicate sync/async dispatch paths, or the sync daemon's coexistence with `atm-http-runtime`) solely because it predates this sprint. That code is a known, deferred Phase-AM deletion target — the daemon's target architecture is Tokio+Axum (`atm-http-runtime`); remodeling the legacy path invalidates the AM deletion plan. Note it under `notes` instead of `findings`, and never propose remediation that patches or restructures the legacy daemon in place. Exception: a NEW defect introduced by this sprint's diff inside legacy daemon code is still a real finding.
 
 ## Output Contract
 

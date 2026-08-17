@@ -1,0 +1,74 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ARCH-001>
+  a triage:Finding ;
+  triage:findingId "ARCH-001" ;
+  triage:title "RULE-008 raw 'atm-dev' team literal in test_hermes_adapter.py" ;
+  triage:description "crates/atm-graft-python/tests/test_hermes_adapter.py lines 58, 62, and 80 hardcode the production team literal 'atm-dev' inline instead of a TEST_TEAM-style constant, violating RULE-008 (no raw production team-name literals in tests). Required correction: define TEST_TEAM = \"test-team\" and reuse it at all call sites." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture_violation" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:dispatchReady false ;
+  triage:blockingCurrentMerge false ;
+  triage:closedAt "2026-07-31T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
+  triage:closureNote "Fixed by commit 82b1fafb (\"fix(graft): close AI.37 QA findings\"), which introduced TEST_TEAM = \"test-team\" and replaced all three raw 'atm-dev' literals at lines 58, 62, 80. Verified during develop merge-conflict resolution on integrate/phase-ai-31-33: grep of current test_hermes_adapter.py for 'atm-dev'/'TEST_TEAM' confirms zero raw literals remain; 82b1fafb is an ancestor of this branch." ;
+  triage:note "RULE-008 violation: raw 'atm-dev' literal at lines 58, 62, 80. Remediation: define TEST_TEAM = \"test-team\" module-level constant and replace all three call sites." ;
+  triage:foundIn triage:AI37-QA-1 ;
+  triage:foundAt "2026-07-29T06:10:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-29T07:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001/test-hermes-adapter-58> ,
+    <urn:atm:triage:occurrence/ARCH-001/test-hermes-adapter-62> ,
+    <urn:atm:triage:occurrence/ARCH-001/test-hermes-adapter-80> ;
+  triage:openOn <urn:atm:triage:worktree/phase-AI/feature-pAI-s37-hermes-recovery-summary> ;
+  triage:highestOpenBranch "feature/pAI-s37-hermes-recovery-summary" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ARCH-001/test-hermes-adapter-58>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/tests/test_hermes_adapter.py" ;
+  triage:line 58 ;
+  triage:snippet "FakeGraft, \"atm:team-lead:chat-42@atm-dev\"" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s37-hermes-recovery-summary" ;
+  triage:headSha "5e122cf7f7ab8575b111aa0b6d3fcbf598d1a801" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-AI/feature-pAI-s37-hermes-recovery-summary> .
+
+<urn:atm:triage:occurrence/ARCH-001/test-hermes-adapter-62>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/tests/test_hermes_adapter.py" ;
+  triage:line 62 ;
+  triage:snippet "(\"team-lead\", \"atm-dev\", \"chat-42\")," ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s37-hermes-recovery-summary" ;
+  triage:headSha "5e122cf7f7ab8575b111aa0b6d3fcbf598d1a801" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-AI/feature-pAI-s37-hermes-recovery-summary> .
+
+<urn:atm:triage:occurrence/ARCH-001/test-hermes-adapter-80>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/tests/test_hermes_adapter.py" ;
+  triage:line 80 ;
+  triage:snippet "chat_key = \"atm:Cipher-311d:8991600178@atm-dev\"" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s37-hermes-recovery-summary" ;
+  triage:headSha "5e122cf7f7ab8575b111aa0b6d3fcbf598d1a801" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-AI/feature-pAI-s37-hermes-recovery-summary> .
+
+<urn:atm:triage:worktree/phase-AI/feature-pAI-s37-hermes-recovery-summary>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s37-hermes-recovery-summary" ;
+  triage:path "feature/pAI-s37-hermes-recovery-summary" ;
+  triage:headSha "5e122cf7f7ab8575b111aa0b6d3fcbf598d1a801" ;
+  triage:orderIndex 1 .

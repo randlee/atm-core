@@ -7,6 +7,10 @@ use crate::types::{AgentId, AgentName, ModelName, PaneId};
 pub use atm_storage::contract::AgentType;
 
 pub const HOME_DIR_METADATA_KEY: &str = "home_dir";
+/// Optional host workspace root used by graft receivers. When present it is
+/// the canonical root for the receiver endpoint; `home_dir` remains the
+/// compatibility fallback for roster members that predate this field.
+pub const WORKSPACE_ROOT_METADATA_KEY: &str = "workspace_root";
 #[deprecated(note = "Phase AD obsolete: derived compatibility field only")]
 pub const LEGACY_CWD_METADATA_KEY: &str = "cwd";
 
@@ -46,13 +50,52 @@ pub fn canonical_home_dir(metadata_json: &Map<String, Value>) -> Option<HomeDirP
     metadata_home_dir(metadata_json, HOME_DIR_METADATA_KEY)
 }
 
+pub fn canonical_graft_root(metadata_json: &Map<String, Value>) -> Option<HomeDirPath> {
+    if let Some(workspace_root) = metadata_home_dir(metadata_json, WORKSPACE_ROOT_METADATA_KEY) {
+        tracing::debug!(
+            graft_root_source = "workspace_root",
+            "resolved canonical graft root from workspace_root metadata"
+        );
+        return Some(workspace_root);
+    }
+    if let Some(home_dir) = canonical_home_dir(metadata_json) {
+        tracing::debug!(
+            graft_root_source = "home_dir_fallback",
+            "resolved canonical graft root from home_dir fallback"
+        );
+        return Some(home_dir);
+    }
+    tracing::debug!(
+        graft_root_source = "missing",
+        "canonical graft root is absent"
+    );
+    None
+}
+
 #[allow(
     deprecated,
     reason = "Phase AD obsolete: bounded fallback remains only to read pre-AD compatibility metadata."
 )]
 pub fn compatible_home_dir(metadata_json: &Map<String, Value>) -> Option<HomeDirPath> {
-    canonical_home_dir(metadata_json)
-        .or_else(|| metadata_home_dir(metadata_json, LEGACY_CWD_METADATA_KEY))
+    if let Some(home_dir) = canonical_home_dir(metadata_json) {
+        tracing::debug!(
+            compatible_home_dir_source = "home_dir",
+            "resolved compatible home directory from home_dir metadata"
+        );
+        return Some(home_dir);
+    }
+    if let Some(legacy_cwd) = metadata_home_dir(metadata_json, LEGACY_CWD_METADATA_KEY) {
+        tracing::debug!(
+            compatible_home_dir_source = "legacy_cwd_fallback",
+            "resolved compatible home directory from legacy cwd fallback"
+        );
+        return Some(legacy_cwd);
+    }
+    tracing::debug!(
+        compatible_home_dir_source = "missing",
+        "compatible home directory is absent"
+    );
+    None
 }
 
 fn metadata_home_dir(metadata_json: &Map<String, Value>, key: &str) -> Option<HomeDirPath> {
@@ -117,16 +160,79 @@ impl AgentMember {
 
 #[cfg(test)]
 mod tests {
+    use std::fmt;
     use std::path::{Path, PathBuf};
+    use std::sync::{Arc, Mutex};
 
     use serde_json::{Map, Value};
+    use tracing::{
+        Event, Subscriber,
+        field::{Field, Visit},
+    };
+    use tracing_subscriber::layer::{Context, Layer};
+    use tracing_subscriber::prelude::*;
 
     use super::{
-        AgentMember, AgentType, HOME_DIR_METADATA_KEY, HomeDirPath, canonical_home_dir,
-        compatible_home_dir,
+        AgentMember, AgentType, HOME_DIR_METADATA_KEY, HomeDirPath, WORKSPACE_ROOT_METADATA_KEY,
+        canonical_graft_root, canonical_home_dir, compatible_home_dir,
     };
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::AgentName;
+
+    type CapturedFields = Vec<(String, String)>;
+    type CapturedEvents = Arc<Mutex<Vec<CapturedFields>>>;
+
+    #[derive(Clone, Default)]
+    struct CaptureLayer(CapturedEvents);
+
+    #[derive(Default)]
+    struct CaptureVisitor {
+        fields: Vec<(String, String)>,
+    }
+
+    impl Visit for CaptureVisitor {
+        fn record_str(&mut self, field: &Field, value: &str) {
+            self.fields
+                .push((field.name().to_owned(), value.to_owned()));
+        }
+
+        fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
+            self.fields
+                .push((field.name().to_owned(), format!("{value:?}")));
+        }
+    }
+
+    impl<S> Layer<S> for CaptureLayer
+    where
+        S: Subscriber,
+    {
+        fn on_event(&self, event: &Event<'_>, _context: Context<'_, S>) {
+            let mut visitor = CaptureVisitor::default();
+            event.record(&mut visitor);
+            self.0
+                .lock()
+                .expect("capture layer lock")
+                .push(visitor.fields);
+        }
+    }
+
+    fn capture_fields<T>(operation: impl FnOnce() -> T) -> Vec<CapturedFields> {
+        let fields = Arc::new(Mutex::new(Vec::new()));
+        let subscriber = tracing_subscriber::registry().with(CaptureLayer(fields.clone()));
+        tracing::subscriber::with_default(subscriber, operation);
+        fields.lock().expect("capture layer lock").clone()
+    }
+
+    fn contains_field(
+        events: &[Vec<(String, String)>],
+        field_name: &str,
+        expected_value: &str,
+    ) -> bool {
+        events
+            .iter()
+            .flatten()
+            .any(|(name, value)| name == field_name && value.trim_matches('"') == expected_value)
+    }
 
     #[test]
     fn parse_name_only_record_defaults_optional_fields() {
@@ -218,6 +324,76 @@ mod tests {
                 .map(HomeDirPath::as_path),
             Some(Path::new("/repo/home"))
         );
+    }
+
+    #[test]
+    fn canonical_graft_root_prefers_workspace_root_over_profile_home() {
+        let metadata = Map::from_iter([
+            (
+                HOME_DIR_METADATA_KEY.to_string(),
+                Value::from("/profile/home"),
+            ),
+            (
+                WORKSPACE_ROOT_METADATA_KEY.to_string(),
+                Value::from("/workspace/root"),
+            ),
+        ]);
+
+        assert_eq!(
+            canonical_graft_root(&metadata)
+                .as_ref()
+                .map(HomeDirPath::as_path),
+            Some(Path::new("/workspace/root"))
+        );
+    }
+
+    #[test]
+    fn canonical_graft_root_logs_workspace_root_and_home_fallback_sources() {
+        let workspace_metadata = Map::from_iter([
+            (
+                HOME_DIR_METADATA_KEY.to_string(),
+                Value::from("/profile/home"),
+            ),
+            (
+                WORKSPACE_ROOT_METADATA_KEY.to_string(),
+                Value::from("/workspace/root"),
+            ),
+        ]);
+        let workspace_events = capture_fields(|| canonical_graft_root(&workspace_metadata));
+        assert!(contains_field(
+            &workspace_events,
+            "graft_root_source",
+            "workspace_root"
+        ));
+
+        let home_metadata = Map::from_iter([(
+            HOME_DIR_METADATA_KEY.to_string(),
+            Value::from("/profile/home"),
+        )]);
+        let fallback_events = capture_fields(|| canonical_graft_root(&home_metadata));
+        assert!(contains_field(
+            &fallback_events,
+            "graft_root_source",
+            "home_dir_fallback"
+        ));
+    }
+
+    #[test]
+    #[allow(
+        deprecated,
+        reason = "The test covers the retained pre-AD compatibility fallback."
+    )]
+    fn compatible_home_dir_logs_legacy_fallback_source() {
+        let metadata = Map::from_iter([(
+            super::LEGACY_CWD_METADATA_KEY.to_string(),
+            Value::from("/legacy/cwd"),
+        )]);
+        let events = capture_fields(|| compatible_home_dir(&metadata));
+        assert!(contains_field(
+            &events,
+            "compatible_home_dir_source",
+            "legacy_cwd_fallback"
+        ));
     }
 
     #[test]

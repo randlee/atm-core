@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AJ6-ATM-QA-001-MEMBERS-CLI-MISSING>
+  a triage:Finding ;
+  triage:findingId "AJ6-ATM-QA-001-MEMBERS-CLI-MISSING" ;
+  triage:title "atm members CLI runtime-observation projection was never implemented despite AJ.6 status: complete" ;
+  triage:description "crates/atm/src/commands/members.rs is byte-for-byte untouched by any AJ.6 commit. MembersCommand::run still only calls team_admin::list_members_with_roster_store / output::print_members_result -- pure static-roster types (MembersList/MemberSummary) carrying no state/session_id/pid/timestamp fields at all. There is zero code path from atm members into RuntimeStatusCache, snapshot_for_members(), or RuntimeMemberObservation anywhere in the atm crate. The required short_session_id_for_human helper does not exist anywhere in the repository (only mentioned in the sprint doc itself). Confirmed independently by req-qa, arch-qa, ruthless-boundary-qa, and rust-qa-agent via matching grep evidence. QA source: PR #741, phase-aj-s6-qa-1." ;
+  triage:phaseId "phase-AJ" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed-ci-green" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T17:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AJ-S6 ;
+  triage:foundAt "2026-08-04T17:30:14Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AJ6-ATM-QA-001-MEMBERS-CLI-MISSING/AJ6-S6-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AJ6-ATM-QA-001-MEMBERS-CLI-MISSING/AJ6-S6-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/members.rs" ;
+  triage:line 1 ;
+  triage:snippet "pub fn run(...) { team_admin::list_members_with_roster_store(...) }" ;
+  triage:status "fixed-ci-green" ;
+  triage:closed true ;
+  triage:branch "feature/pAJ-s6-runtime-observation-snapshot" ;
+  triage:headSha "26607c3b19acbf9c7c247386df5ffd0a1f58cfa4" ;
+  triage:occursIn <urn:atm:triage:worktree/AJ6-S6-1> .
+
+<urn:atm:triage:worktree/AJ6-S6-1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAJ-s6-runtime-observation-snapshot" ;
+  triage:branch "feature/pAJ-s6-runtime-observation-snapshot" ;
+  triage:headSha "26607c3b19acbf9c7c247386df5ffd0a1f58cfa4" ;
+  triage:orderIndex 3 .

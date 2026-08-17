@@ -43,6 +43,7 @@ Initial allocation:
 - `REQ-RUSQLITE-MIGRATION-*`
 - `REQ-RUSQLITE-ERROR-*`
 - `REQ-RUSQLITE-TEST-*`
+- `REQ-RUSQLITE-TEMPLATE-WORKFLOW-*`
 
 Initial crate requirement IDs:
 
@@ -60,6 +61,16 @@ Initial crate requirement IDs:
 - `REQ-RUSQLITE-TEST-001` `atm-storage-rusqlite` must be testable in process without
   requiring daemon or real socket runtime. Satisfies:
   `REQ-CORE-TEST-RUNTIME-001`.
+- `REQ-RUSQLITE-TEMPLATE-WORKFLOW-001` `atm-storage-rusqlite` owns the
+  additive, deterministic migration and single-transaction persistence of a
+  decomposed message's template-declared workflow snapshot and tag
+  provenance. It must preserve pre-extension rows, never reconstruct facts
+  from current catalog state, and expose only the storage capability defined
+  by `atm-core`; SQLite JSON/FTS/index choices remain private. Satisfies:
+  `REQ-CORE-TEMPLATE-WORKFLOW-001`,
+  `REQ-CORE-WORKFLOW-ANALYTICS-001`,
+  `REQ-P-TEMPLATE-WORKFLOW-001`, `REQ-P-TEMPLATE-TAGS-001`, and
+  `REQ-P-WORKFLOW-ANALYTICS-001` per ADR-046.
 
 ## 4. Required References
 

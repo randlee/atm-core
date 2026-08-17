@@ -1,0 +1,33 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI25-RBQA-F006>
+  a triage:Finding ;
+  triage:findingId "AI25-RBQA-F006" ;
+  triage:title "No direct unit test pins down the fail-closed behavior for an unmapped io_forbidden tag" ;
+  triage:description "Reported by ruthless-boundary-qa during AICH-S11-QA-BOUNDARYLINT (PR #655, commit 00683e72). The unknown-tag branch in collect_io_forbidden_source_violations() (.just/lint_boundaries.py) is architecturally fail-closed (appends a violation and continues before any is_active/trait_only short-circuit), confirmed correct by code reading, but no test declares a boundary TOML with a deliberately unmapped io_forbidden tag and asserts a violation is produced. Existing tests only cover mapping-completeness (today's tags) and detection-of-a-mapped-violation, not the fail-closed guarantee itself." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S11 ;
+  triage:foundAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F006/fix-close-out-boundary-lint-mapping/1> ;
+  triage:notes "Non-blocking test-coverage gap only, not a code defect. Recommend adding a unit test with a deliberately unmapped tag asserting 'has no source-pattern mapping' violation text." ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI25-RBQA-F006/fix-close-out-boundary-lint-mapping/1>
+  a triage:Occurrence ;
+  triage:file ".just/tests/test_lint_boundaries.py" ;
+  triage:line 0 ;
+  triage:snippet "missing direct unit test for the fail-closed unmapped-tag branch" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/close-out-boundary-lint-mapping" ;
+  triage:headSha "00683e72" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-close-out-boundary-lint-mapping/00683e72> .

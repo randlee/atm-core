@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI33-M5-LATENCY-MEASURE-MISSING>
+  a triage:Finding ;
+  triage:findingId "AI33-M5-LATENCY-MEASURE-MISSING" ;
+  triage:title "No separate measure of successful SQLite transaction/response latency distinct from overall gate result" ;
+  triage:description "arch-ctm's M5 investigation notes that the admission-capacity evidence records an overall p50 latency (~5ms) that is dominated by the mass-rejection (503) responses, not by the small number of genuinely successful (201) admissions. There is no separate measurement isolating successful SQLite transaction/response latency from the rejection-path latency, making it hard to reason about whether the accepted-path itself is healthy or whether it too degrades under load. FOLLOWUP: arch-ctm confirms fix in commits 1b0f8ab8/4100afee — full-response latency measurements now retain isolated p50 86-94ms figures for successful transactions." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "observability" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-29T18:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S13 ;
+  triage:foundAt "2026-07-29T10:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI33-M5-LATENCY-MEASURE-MISSING/S33-latency> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI33-M5-LATENCY-MEASURE-MISSING/S33-latency>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 0 ;
+  triage:snippet "latency summary conflates rejected (503) and accepted (201) response latencies; no isolated successful-transaction latency metric" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
+  triage:headSha "4100afee" ;
+  triage:occursIn <urn:atm:triage:worktree/s33-latency/4100afee> .
+
+<urn:atm:triage:worktree/s33-latency/4100afee>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s33-admission-capacity-smoke" ;
+  triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
+  triage:headSha "4100afee" ;
+  triage:orderIndex 0 .

@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ARCH-AI-001>
+  a triage:Finding ;
+  triage:findingId "ARCH-AI-001" ;
+  triage:title "BootstrapTraceReport and 3 supporting enums independently redefined verbatim in two crates" ;
+  triage:description "BootstrapTraceReport (+ BootstrapConnectOutcome/BootstrapLaunchGateOutcome/BootstrapAutoStartOutcome) is defined verbatim in both crates/atm-core/src/doctor/report.rs:93 and crates/atm-daemon-client/src/lib.rs:66 -- no shared source of truth, can silently drift. RULE-005 violation." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-27T05:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-PHASE-END-QA-1 ;
+  triage:foundAt "2026-07-27T05:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AI-001/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AI-001/2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ARCH-AI-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/report.rs" ;
+  triage:line 93 ;
+  triage:snippet "struct BootstrapTraceReport (+3 enums)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "1ea59d89" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate_phase_ai_1ea59d89> .
+
+<urn:atm:triage:occurrence/ARCH-AI-001/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 66 ;
+  triage:snippet "struct BootstrapTraceReport (+3 enums) -- verbatim duplicate" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "1ea59d89" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate_phase_ai_1ea59d89> .
+
+<urn:atm:triage:worktree/integrate_phase_ai_1ea59d89>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "1ea59d89" ;
+  triage:orderIndex 999 .
+
+<urn:atm:triage:finding/ARCH-AI-001>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:correctionNote "quality-mgr (2026-07-27): QA-1 for PR #667 (fix/phase-ai-arch-line-ceilings @ 46d2af22) closes this finding. crates/atm-daemon-client/src/lib.rs:20-23 now reads `pub use atm_core::doctor::{BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome, BootstrapTraceReport};` -- a re-export, not a redefinition. Sole canonical definition remains at crates/atm-core/src/doctor/report.rs:69-103. Workspace-wide grep sweep (ruthless-boundary-qa, req-qa, rust-qa-agent, rust-best-practices-agent, quality-mgr direct) confirms no other definition site exists anywhere in the workspace. Independently re-verified by 5 of 6 QA-1 reviewers plus quality-mgr direct source inspection; rust-qa-agent confirms fmt/clippy/tests all clean. New non-blocking follow-up: ruthless-boundary-qa found crates/atm/src/composition.rs:478 bootstrap_trace_to_core() is now a dead identity-conversion function (converts the type into itself via 15 redundant match arms, since this fix made atm_daemon_client's and atm_core's types identical via re-export) -- tracked as RBQA-F001, not blocking this closure." .

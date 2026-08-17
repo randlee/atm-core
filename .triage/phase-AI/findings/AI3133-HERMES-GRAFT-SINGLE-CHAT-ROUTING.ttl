@@ -1,0 +1,72 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI3133-HERMES-GRAFT-SINGLE-CHAT-ROUTING>
+  a triage:Finding ;
+  triage:findingId "AI3133-HERMES-GRAFT-SINGLE-CHAT-ROUTING" ;
+  triage:title "Hermes adapter collapses all ATM senders into one Telegram DM instead of per-agent/per-sender sessions" ;
+  triage:description "Separate recipient agents are individually addressable at the endpoint layer — each has its own record at .atm/graft/<team>/<agent>.json (crates/atm-core/src/graft.rs graft_receiver_record_path_from_root/graft_receiver_record_path_from_home) and its own GraftReceiverListener/HermesGraftBridge instance. But AtmGraftAdapter._dispatch_nudge in crates/atm-graft-python/python/atm_graft_hermes_adapter.py:256-302 intentionally discards that separation on the inbound side: every nudge, regardless of which ATM agent/team sent it, is wrapped in a single SessionSource (line 283-293) using platform=Platform.TELEGRAM, chat_id=self._chat_id, and user_id=self._chat_id — all sourced from the single ATM_CHAT_ID environment variable read once in __init__ (line 126: self._chat_id = os.environ.get('ATM_CHAT_ID') or None). The actual ATM sender (chat_key, built from nudge.source in atm_graft_hermes_bridge.py:55) is retained only as user_name=chat_key (line 292), a display-only field, not as a distinct session/chat identity. The code comment at lines 265-270 states this is deliberate ('Graft is an ingress transport, not a second Hermes conversation... must not become the session/chat key'), and a hard failure is raised if ATM_CHAT_ID is unset (lines 277-281: 'ATM graft nudge dropped: ATM_CHAT_ID is required for Telegram routing'). Net effect: there is no per-agent or per-sender Hermes conversation/session; every distinct ATM sender's nudges land in the same one Telegram DM thread, sender-distinguished only by a log-line-equivalent username field." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "architecture_review" ;
+  triage:category "HERMES-GRAFT-ARCHITECTURE" ;
+  triage:severity "major" ;
+  triage:repeatable false ;
+  triage:sweepScope "component" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:dispatchReady false ;
+  triage:blockingCurrentMerge false ;
+  triage:note "Architecture gap, not a regression in the reviewed merge (integrate/phase-ai-31-33@21957012); the single-DM routing is a deliberate, documented design choice in the current code, not an oversight. Do not fix under time pressure or as an incidental change. Per-agent/per-sender Hermes session routing requires an approved design (e.g. per-sender Hermes conversations, or a routing table keyed by recipient endpoint) before implementation; scope belongs to a future planning sprint, not the current phase-ai-31-33 branch. Current single-ATM_CHAT_ID collapse behavior must be preserved as-is until that design is approved." ;
+  triage:requirementNote "arch-ctm clarification (2026-07-29): each Hermes profile owns exactly one ATM identity — routing design should key sessions by (Hermes profile <-> ATM identity), not attempt arbitrary N-sender-to-1-profile fan-in. Live and restart-recovery nudges must enter Hermes through the non-interrupting steer/API tool-loop path, not normal Telegram user-message ingress." ;
+  triage:foundIn triage:ARCH-CTM-REVIEW-phase-ai-31-33 ;
+  triage:foundAt "2026-07-28T00:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-28T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-09T18:30:58Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "By-design closure, operator-authorized (2026-08-09). The AL16/AL17/AL18 Hermes graft live-proof plan split (PR #807 @ 7a610fd3) codifies one-profile-one-ATM-identity binding (REQ-GRAFT-HERMES-002, ADR-039, ADR-043.3): each Hermes profile owns exactly one (ATM_HOME, ATM_TEAM, ATM_IDENTITY, ATM_CHAT_ID) tuple, and ATM_CHAT_ID resolves to that profile's one runtime session — there is no N-sender-to-1-profile fan-in requirement to satisfy. This finding's single-chat-id/single-session collapse observation matches that accepted design (multi-session isolation is proven per-profile, not per-ATM-sender, in AL.17 acceptance item 2). Closed per quality-mgr's AL16-PLAN-QA-1 recommendation and team-lead's relayed operator authorization (ATM message 01KZKWN5BKE1959EPJ1V3K94CC)." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3133-HERMES-GRAFT-SINGLE-CHAT-ROUTING/dispatch-nudge> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3133-HERMES-GRAFT-SINGLE-CHAT-ROUTING/single-chat-id-init> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3133-HERMES-GRAFT-SINGLE-CHAT-ROUTING/chat-key-source> ;
+  triage:openOn <urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33> ;
+  triage:promoteTo <urn:atm:triage:worktree/phase-AI/future-planning-sprint> ;
+  triage:highestOpenBranch "integrate/phase-ai-31-33" .
+
+<urn:atm:triage:occurrence/AI3133-HERMES-GRAFT-SINGLE-CHAT-ROUTING/dispatch-nudge>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/python/atm_graft_hermes_adapter.py" ;
+  triage:line 256 ;
+  triage:snippet "async def _dispatch_nudge(self, chat_key: str, body: str) -> None: ... source = SessionSource(platform=telegram_platform, chat_id=self._chat_id, chat_type='dm', user_id=self._chat_id, user_name=chat_key) — every sender routed into the same configured Telegram chat_id, sender kept only in user_name." ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "21957012" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33> .
+
+<urn:atm:triage:occurrence/AI3133-HERMES-GRAFT-SINGLE-CHAT-ROUTING/single-chat-id-init>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/python/atm_graft_hermes_adapter.py" ;
+  triage:line 126 ;
+  triage:snippet "self._chat_id = os.environ.get('ATM_CHAT_ID') or None — one process-wide chat id, no per-sender/per-agent session table." ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "21957012" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33> .
+
+<urn:atm:triage:occurrence/AI3133-HERMES-GRAFT-SINGLE-CHAT-ROUTING/chat-key-source>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/python/atm_graft_hermes_bridge.py" ;
+  triage:line 55 ;
+  triage:snippet "chat_key = f'atm:{nudge.source}' — per-sender identity is computed here but is only forwarded as a display user_name by the adapter, never used to select or create a distinct Hermes session." ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "21957012" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33> .
+
+<urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:path "phase-AI/integrate-phase-ai-31-33" ;
+  triage:headSha "21957012" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,40 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI17-QA1-BLOCKING-02-CLI-AS-REGRESSION>
+  a triage:Finding ;
+  triage:findingId "AI17-QA1-BLOCKING-02-CLI-AS-REGRESSION" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:title "resolve_cli_inspection_caller_context unconditionally resolves ambient ATM_IDENTITY before --as check" ;
+  triage:description "resolve_cli_inspection_caller_context calls resolve_identity_component(None) to resolve ambient_identity unconditionally before checking overrides.identity_override, so `atm list --as <agent>` / `atm peek --as <agent>` fails with IdentityUnavailable when ATM_IDENTITY is unset. Breaks documented '--as, else ATM_IDENTITY' OR semantics (requirements.md 4.1). Untested by existing suite." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "functional-regression" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:triageClosureTime "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI17-QA1-BLOCKING-02-CLI-AS-REGRESSION/pAI-s17/1> .
+
+<urn:atm:triage:occurrence/AI17-QA1-BLOCKING-02-CLI-AS-REGRESSION/pAI-s17/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/caller_context.rs" ;
+  triage:line 37 ;
+  triage:snippet "let ambient_identity = resolve_identity_component(None)?;" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- resolve_cli_inspection_caller_context at line 37-38 now correctly implements '--as, else ATM_IDENTITY' by calling resolve_identity_component(overrides.identity_override.map(...)), which checks overrides first. Test inspection_as_override_does_not_require_ambient_identity at line 280-297 confirms --as works without ATM_IDENTITY. Stale occurrence from superseded branch feature/pAI-s17-hermes-chat-identity; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "5560bf8d" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s17/5560bf8d> .
+
+<urn:atm:triage:worktree/pAI-s17/5560bf8d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "5560bf8d" ;
+  triage:orderIndex 17 .

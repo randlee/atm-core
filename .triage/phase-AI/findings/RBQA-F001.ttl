@@ -1,0 +1,80 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBQA-F001>
+  a triage:Finding ;
+  triage:findingId "RBQA-F001" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:title "Daemon reap fix has an un-guarded panic/poison window that leaks the spawned child" ;
+  triage:description "In crates/atm-daemon-client/src/lib.rs, arch-ctm's fix (commit a8567ca4 on feature/pAI-s20-hermes-bridge-deployment) makes spawn_daemon() retain and reap only its own spawned Child on a normal publish-wait failure. But ruthless-boundary-qa found a residual gap: a panic occurring between spawn_daemon() success and wait_for_published_daemon() returning — reachable via BootstrapTraceability's shared mutex getting poisoned — unwinds past reap_failed_auto_start() and leaks the child, because there is no Drop guard holding the Child across that window. Additionally, s12-s19 retain the original vulnerability: spawn_daemon() returns () and the child is never tracked or reaped." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:category "RBQA" ;
+  triage:severity "blocking" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "arch-ctm reported (message re: dbe489db) a new FailedAutoStartChild Drop-guard replacing the bare post-hoc reap_failed_auto_start() call. Independently re-verified against feature/pAI-s27-peer-delivery-observability @ dbe489db: crates/atm-daemon-client/src/lib.rs ~866-889 -- FailedAutoStartChild(Option<Child>) wraps the spawned child immediately after spawn_daemon() succeeds; its Drop impl calls reap_failed_auto_start() unconditionally unless disarm() was called; disarm() is only called on the success path (result.is_ok()). This closes the panic/poison-unwind window: any panic between spawn and disarm now reaps via the Drop path instead of requiring the old post-hoc if result.is_err() check to execute. Ran cargo test -p atm-daemon-client --lib -- 14 passed, including failed_auto_start_reaps_the_daemon_child and auto_start_guard_reaps_the_daemon_child_on_unwind_scope_exit, both of which directly assert the unwind-safety property this finding called out as missing." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/s20/panic-window> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/s27/panic-window> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/s27-fixed-dbe489db> ;
+  triage:openOn <urn:atm:triage:worktree/s27/35cb19f8> ;
+  triage:promoteTo <urn:atm:triage:worktree/s27/35cb19f8> .
+
+<urn:atm:triage:occurrence/RBQA-F001/s20/panic-window>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 747 ;
+  triage:snippet "let mut child = match self.spawn_daemon() { ... } ... let result = self.wait_for_published_daemon(...); if result.is_err() { reap_failed_auto_start(&mut child); } result" ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch feature/pAI-s20-hermes-bridge-deployment superseded by later sprints; panic-window vulnerability still present on s27, consolidating to latest. (2026-07-26)" ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "a8567ca4" ;
+  triage:pattern "missing-drop-guard-on-panic-unwind" ;
+  triage:vulnerability "panic in wait_for_published_daemon or traceability.emit() unwinds past reap logic, leaking child" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/a8567ca4> .
+
+<urn:atm:triage:occurrence/RBQA-F001/s27/panic-window>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 735 ;
+  triage:snippet "let mut child = match self.spawn_daemon() { ... } let result = self.wait_for_published_daemon(...); if result.is_err() { reap_failed_auto_start(&mut child); } result" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "35cb19f8" ;
+  triage:pattern "missing-drop-guard-on-panic-unwind" ;
+  triage:vulnerability "panic in wait_for_published_daemon() (lines 748-754) or traceability.emit() calls (lines 742-747, 804-809) unwind past reap_failed_auto_start() (line 756), leaking child; no Drop guard protects Child across critical window" ;
+  triage:occursIn <urn:atm:triage:worktree/s27/35cb19f8> .
+
+<urn:atm:triage:occurrence/RBQA-F001/s27-fixed-dbe489db>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 866 ;
+  triage:snippet "struct FailedAutoStartChild(Option<Child>); impl Drop for FailedAutoStartChild { fn drop(&mut self) { if let Some(child) = self.0.as_mut() { reap_failed_auto_start(child); } } }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "dbe489db" ;
+  triage:note "Independently re-run: cargo test -p atm-daemon-client --lib (14 pass, incl. the two unwind-safety tests naming this guard)." ;
+  triage:occursIn <urn:atm:triage:worktree/s27/dbe489db> .
+
+<urn:atm:triage:worktree/s20/a8567ca4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "a8567ca4" ;
+  triage:orderIndex 20 .
+
+<urn:atm:triage:worktree/s27/35cb19f8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "35cb19f8" ;
+  triage:orderIndex 27 .

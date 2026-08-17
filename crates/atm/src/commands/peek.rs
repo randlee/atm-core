@@ -1,5 +1,5 @@
 use anyhow::Result;
-use atm_core::read::{MAX_TIMEOUT_SECS, PeekQuery};
+use atm_core::read::{MAX_TIMEOUT_SECS, MailboxQueryFilters, PeekQuery};
 use atm_core::types::ReadSelection;
 use clap::Args;
 
@@ -72,7 +72,7 @@ pub struct PeekCommand {
 }
 
 impl PeekCommand {
-    pub fn run(self, observability: &CliObservability) -> Result<()> {
+    pub async fn run(self, observability: &CliObservability) -> Result<()> {
         let warnings = self.deprecation_warnings();
         let (home_dir, current_dir) = resolve_command_runtime_context("peek")?;
         let json = self.json;
@@ -83,7 +83,7 @@ impl PeekCommand {
             InvocationDir::new(&current_dir),
             AtmHomePath::new(&home_dir),
         )?;
-        let outcome = composition.peek(query)?;
+        let outcome = composition.peek(query).await?;
         output::print_read_result(&outcome, json)?;
         for warning in warnings {
             eprintln!("{warning}");
@@ -98,6 +98,7 @@ impl PeekCommand {
     ) -> Result<PeekQuery> {
         let caller_context = resolve_cli_inspection_caller_context(CallerContextOverrides {
             identity_override: self.actor.as_deref().map(CallerIdentityOverride),
+            chat_id_override: None,
             team_override: self.team.as_deref().map(CallerTeamOverride),
         })?;
         if let Some(timeout_secs) = self.timeout
@@ -107,26 +108,27 @@ impl PeekCommand {
                 "timeout exceeds the {} second maximum",
                 MAX_TIMEOUT_SECS
             ))
-            .with_recovery("Use a timeout no greater than one hour before retrying `atm peek`.")
             .into());
         }
         let _ = self.since_last_seen;
         let selection_mode = self.selection_mode();
         let timestamp_filter = self.since.as_deref().map(parse_timestamp).transpose()?;
-        PeekQuery::new(
+        let filters = MailboxQueryFilters::default()
+            .target_address_opt(self.target.as_deref())
+            .message_id_opt(self.message_id.as_deref())
+            .sender_opt(self.from.as_deref())
+            .timestamp_opt(timestamp_filter)
+            .task_opt(self.task.as_deref())
+            .contains_opt(self.contains.as_deref())
+            .timeout_secs_opt(self.timeout);
+        PeekQuery::from_filters(
             home_dir,
             current_dir,
             caller_context.caller_identity,
-            self.target.as_deref(),
             caller_context.caller_team,
             selection_mode,
             !self.no_since_last_seen && selection_mode != ReadSelection::All,
-            self.message_id.as_deref(),
-            self.from.as_deref(),
-            timestamp_filter,
-            self.task.as_deref(),
-            self.contains.as_deref(),
-            self.timeout,
+            filters,
         )
         .map_err(Into::into)
     }
@@ -175,7 +177,7 @@ impl PeekCommand {
 #[cfg(test)]
 mod tests {
     use atm_core::test_support::EnvGuard;
-    use atm_core::test_support::ROLE_TEAM_LEAD;
+    use atm_core::test_support::{ROLE_TEAM_LEAD, TEST_TEAM};
     use atm_core::types::ReadSelection;
     use serde_json::json;
     use serial_test::serial;
@@ -249,6 +251,25 @@ mod tests {
             query_json["mailbox"]["message_id_filter"],
             json!("01KRFK5QTF2R6NRS3Q0F8Z9K0S")
         );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn build_query_accepts_as_without_ambient_identity() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", None),
+            ("ATM_CHAT_ID", None),
+            ("ATM_TEAM", None),
+        ]);
+        let mut command = base_command();
+        command.actor = Some(ROLE_TEAM_LEAD.to_string());
+        command.team = Some(TEST_TEAM.to_string());
+
+        let query = command.build_query(".".into(), ".".into()).expect("query");
+        let query_json = serde_json::to_value(&query).expect("serialized query");
+
+        assert_eq!(query_json["caller_identity"], json!(ROLE_TEAM_LEAD));
+        assert_eq!(query_json["caller_team"], json!(TEST_TEAM));
     }
 
     fn base_command() -> PeekCommand {

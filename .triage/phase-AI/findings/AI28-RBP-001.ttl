@@ -1,0 +1,152 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI28-RBP-001>
+  a triage:Finding ;
+  triage:findingId "AI28-RBP-001" ;
+  triage:title "Inconsistent error-cause preservation in HTTPS transport and peer coordination" ;
+  triage:description "This fix round correctly added cause-preserving errors at 5 specific sites in https_transport.rs (TcpStream::connect_timeout ~289, ServerName::try_from ~301, ClientConnection::new ~307, TLS PEM load ~156-175, resolve_peer_address ~757), but left sibling call sites in the SAME FILE still discarding the cause via bare map_err(|_source| ...): TcpListener::bind (line 389), listener.set_nonblocking (395), listener.local_addr (398), ServerConnection::new (576), apply_deadline's set_read_timeout/set_write_timeout (682-687), client_config's with_client_auth_cert (791), server_config's with_single_cert (805). Also peer_drain_coordinator.rs has two related sites: drain()/deliver_current() re-wrap transport errors via error.message() alone dropping the original error's cause/code (lines ~292-295, ~399), and decode_page_requests (line ~326-330) discards a serde_json parse error via map_err(|_| ...) with no cause attached. Architectural issue: error causes are systematically lost at multiple boundaries, preventing root-cause diagnosis of HTTPS/peer-delivery failures. The https_transport.rs sites are more consequential; the peer_drain_coordinator sites and serde_json site are supporting causes." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "PR #659 (fix/ai27-28-cleanup-2 -> integrate/phase-AI, merge commit cbf2a66e) closed occurrences 8-9. Re-verified against integrate/phase-AI current tip a6342ba9 (2026-07-26): crates/atm-daemon/src/peer_drain_coordinator.rs now has remote_delivery_error_with_cause() which folds the source cause into the wrapped error's cause chain before re-wrapping (drain()/deliver_current() call sites), and decode_page_requests() uses map_err(|source| AtmError::mailbox_read(...).with_cause(source)) -- no remaining bare map_err(|_| ...) discards. Combined with the already-fixed occurrences 1-7 in https_transport.rs, all 9 occurrences are now cause-preserving." ;
+  triage:dispatchReady true ;
+  triage:closureNote "PARTIAL -- independently re-verified against real code on fix/ai28-phase-general-cleanup at commit 025bc6c7 (not accepted from self-report). Occurrences 1-7 (all in crates/atm-daemon/src/https_transport.rs: TcpListener::bind:389, set_nonblocking:395, local_addr:398, ServerConnection::new:576/525, apply_deadline set_read_timeout:634/set_write_timeout:637, with_client_auth_cert:745, with_single_cert:762) now all preserve error cause via map_err(|source| ...).with_cause(source); confirmed no remaining bare map_err(|_source| ...) discards anywhere in https_transport.rs. Occurrences 8-9 (crates/atm-daemon/src/peer_drain_coordinator.rs) are NOT part of this branch's baseline -- that file does not exist on fix/ai28-phase-general-cleanup or integrate/phase-AI (only on unmerged feature/pAI-s28-bounded-peer-recovery) and were explicitly out of scope for this PR per AI28-CLEANUP-QA-1. Left open/unevaluated pending arrival on a branch where the file exists. Top-level status intentionally remains open -- do not close as fully fixed while occurrences 8-9 are unresolved. ruthless-boundary-qa (scoped to https_transport.rs against boundaries/atm-daemon/peer-http-adapter.toml) returned PASS: all touched sites remain private/pub(crate), no new pub surface, io_forbidden list untouched -- pure map_err cause-chaining, no boundary crossing. Non-blocking style note: new sites at lines ~276-291/525 use the chained AtmError::daemon_unavailable(msg).with_cause(source) form instead of the existing daemon_unavailable_with_cause(msg, source) convenience constructor already used elsewhere in the same file (10+ call sites); functionally identical, cosmetic only, not filed as a separate finding. SUPERSEDED 2026-07-26 (quality-mgr): occurrences 8-9 closed by PR #659; see triage:closureEvidence for the current-tip re-verification." ;
+  triage:triagedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S8 ;
+  triage:foundAt "2026-07-25T16:53:36Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-RBP-001/pAI-s28/b7d8488/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-RBP-001/pAI-s28/b7d8488/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-RBP-001/pAI-s28/b7d8488/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-RBP-001/pAI-s28/b7d8488/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-RBP-001/pAI-s28/b7d8488/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-RBP-001/pAI-s28/b7d8488/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-RBP-001/pAI-s28/b7d8488/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-RBP-001/pAI-s28/b7d8488/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-RBP-001/pAI-s28/b7d8488/9> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI28-RBP-001/pAI-s28/b7d8488/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 389 ;
+  triage:snippet "TcpListener::bind() discards error cause via map_err(|_source|)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/ai28-phase-general-cleanup" ;
+  triage:headSha "025bc6c7" ;
+  triage:note "Now map_err(|source| ...).with_cause(source). Verified on current head 025bc6c7." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/b7d8488> .
+
+<urn:atm:triage:occurrence/AI28-RBP-001/pAI-s28/b7d8488/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 395 ;
+  triage:snippet "listener.set_nonblocking() discards error cause via map_err(|_source|)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/ai28-phase-general-cleanup" ;
+  triage:headSha "025bc6c7" ;
+  triage:note "Now map_err(|source| ...).with_cause(source). Verified on current head 025bc6c7." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/b7d8488> .
+
+<urn:atm:triage:occurrence/AI28-RBP-001/pAI-s28/b7d8488/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 398 ;
+  triage:snippet "listener.local_addr() discards error cause via map_err(|_source|)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/ai28-phase-general-cleanup" ;
+  triage:headSha "025bc6c7" ;
+  triage:note "Now map_err(|source| ...).with_cause(source). Verified on current head 025bc6c7." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/b7d8488> .
+
+<urn:atm:triage:occurrence/AI28-RBP-001/pAI-s28/b7d8488/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 576 ;
+  triage:snippet "ServerConnection::new() discards error cause via map_err(|_source|)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/ai28-phase-general-cleanup" ;
+  triage:headSha "025bc6c7" ;
+  triage:note "Now map_err(|source| ...).with_cause(source) (line 525). Verified on current head 025bc6c7." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/b7d8488> .
+
+<urn:atm:triage:occurrence/AI28-RBP-001/pAI-s28/b7d8488/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 682 ;
+  triage:snippet "apply_deadline set_read_timeout() discards error cause via map_err(|_source|)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/ai28-phase-general-cleanup" ;
+  triage:headSha "025bc6c7" ;
+  triage:note "Now map_err(|source| ...).with_cause via AtmError::daemon_unavailable_with_cause (line 634). Verified on current head 025bc6c7." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/b7d8488> .
+
+<urn:atm:triage:occurrence/AI28-RBP-001/pAI-s28/b7d8488/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 687 ;
+  triage:snippet "apply_deadline set_write_timeout() discards error cause via map_err(|_source|)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/ai28-phase-general-cleanup" ;
+  triage:headSha "025bc6c7" ;
+  triage:note "Now map_err(|source| ...).with_cause via AtmError::daemon_unavailable_with_cause (line 637). Verified on current head 025bc6c7." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/b7d8488> .
+
+<urn:atm:triage:occurrence/AI28-RBP-001/pAI-s28/b7d8488/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 791 ;
+  triage:snippet "server_config with_single_cert() discards error cause via map_err(|_source|)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/ai28-phase-general-cleanup" ;
+  triage:headSha "025bc6c7" ;
+  triage:note "Now map_err(|source| ...).with_cause(source) (line 762, and with_client_auth_cert at line 745 also fixed). Verified on current head 025bc6c7." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/b7d8488> .
+
+<urn:atm:triage:occurrence/AI28-RBP-001/pAI-s28/b7d8488/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 292 ;
+  triage:snippet "drain()/deliver_current() re-wraps transport error via error.message() dropping cause" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: fixed by PR #659 (cbf2a66e). remote_delivery_error_with_cause() now folds source.cause() into the wrapped error before re-wrap. Re-verified on integrate/phase-AI tip a6342ba9. (2026-07-26)" ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b7d8488" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/b7d8488> .
+
+<urn:atm:triage:occurrence/AI28-RBP-001/pAI-s28/b7d8488/9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 327 ;
+  triage:snippet "decode_page_requests discards serde_json parse error via map_err(|_|)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: fixed by PR #659 (cbf2a66e). decode_page_requests now uses map_err(|source| AtmError::mailbox_read(...).with_cause(source)). Re-verified on integrate/phase-AI tip a6342ba9. (2026-07-26)" ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b7d8488" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/b7d8488> .
+
+<urn:atm:triage:worktree/pAI-s28/b7d8488>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b7d8488" ;
+  triage:orderIndex 28 .

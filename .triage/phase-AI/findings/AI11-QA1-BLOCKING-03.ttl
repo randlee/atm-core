@@ -1,0 +1,124 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI11-QA1-BLOCKING-03>
+  a triage:Finding ;
+  triage:findingId "AI11-QA1-BLOCKING-03" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T05:39:02Z"^^xsd:dateTime ;
+  triage:title "AuthenticatedIngress/HttpResponse boundary-contract types don't match sprint doc's documented signatures" ;
+  triage:description "Sprint doc (docs/plans/phase-ai/sprint-ai-11-windows-transport.md, section: Boundary contract, lines 55-81) specifies AuthenticatedIngress::Local(LocalCapability) and AuthenticatedIngress::Peer(AuthenticatedPeer) as payload-carrying variants, plus standalone HttpResponse{status,headers,body} struct with HttpStatus and HttpHeaders types. Actual implementation in all worktrees (crates/atm-core/src/api.rs:331-336) defines AuthenticatedIngress with unit variants Local and Peer only — no payload carrying. LocalCapability, AuthenticatedPeer, LocalHttpEndpointRecord, HttpResponse, HttpStatus, and HttpHeaders types do not exist anywhere in any crate (verified grep zero hits across all worktrees). Boundary contract is incompletely or incorrectly realized relative to sprint doc specification." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/plans/phase-ai/sprint-ai-11-windows-transport.md" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "2026-07-27 (quality-mgr): independently re-verified at integrate/phase-AI@f3b6a77a — the doc was corrected to match code, not the reverse. docs/plans/phase-ai/sprint-ai-11-windows-transport.md 'Boundary contract' section (lines 55-69) now reads 'pub enum AuthenticatedIngress { Local, Peer }' (unit variants, matching crates/atm-core/src/api.rs:721-723 exactly) and explicitly states 'The private HTTP adapter maps ApiResponse to status, headers, and a route-specific body. It does not expose a generic HTTP response domain type' -- directly disclaiming the HttpResponse/HttpStatus/HttpHeaders types this finding flagged as missing. LocalCapability now exists at crates/atm-core/src/local_http.rs:23 as a standalone type (used by the capability-file record path, not as an AuthenticatedIngress payload) and AuthenticatedPeer/LocalHttpEndpointRecord as originally specified are gone from the doc too. No remaining doc/code mismatch. Confirmed via direct read of both doc and code, not self-report." ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-22T05:39:02Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s11/568723c5> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s12/b64e8358> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s13/b64e8358> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s14/b64e8358> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s15/b64e8358> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s16/b64e8358> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s20/bed07594> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA1-BLOCKING-03/pAI-s11/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA1-BLOCKING-03/pAI-s11/2> .
+  # STALE-POINTER FIX (2026-07-22 sweep): promoteTo previously targeted feature/pAI-s11-post-merge-remediation
+  # (merged, PR #607). Re-verified: AuthenticatedIngress::Local/Peer remain unit variants on integrate/phase-AI
+  # (crates/atm-core/src/api.rs:544-549), not payload-carrying; the sprint-doc mismatch is still live. Redirected
+  # to the current highest open branch, feature/pAI-s20-hermes-bridge-deployment.
+
+<urn:atm:triage:occurrence/AI11-QA1-BLOCKING-03/pAI-s11/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-11-windows-transport.md" ;
+  triage:line 56 ;
+  triage:snippet "Local(LocalCapability)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "568723c5" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s11/568723c5> ;
+  triage:mismatchedWith "crates/atm-core/src/api.rs:332" ;
+  triage:actualCode "Local," .
+
+<urn:atm:triage:occurrence/AI11-QA1-BLOCKING-03/pAI-s11/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-11-windows-transport.md" ;
+  triage:line 58 ;
+  triage:snippet "Peer(AuthenticatedPeer)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "568723c5" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s11/568723c5> ;
+  triage:mismatchedWith "crates/atm-core/src/api.rs:335" ;
+  triage:actualCode "Peer," .
+
+<urn:atm:triage:occurrence/AI11-QA1-BLOCKING-03/pAI-s11/3>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-11-windows-transport.md" ;
+  triage:line 76 ;
+  triage:snippet "pub struct HttpResponse { pub status: HttpStatus, pub headers: HttpHeaders, pub body: Vec<u8>, }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "568723c5" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s11/568723c5> ;
+  triage:mismatchedWith "crates/atm-core/src/api.rs:25-29" ;
+  triage:actualCode "pub struct HttpRequest { pub method: String, pub path: String, pub body: Vec<u8>, }" .
+
+<urn:atm:triage:worktree/pAI-s11/568723c5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "568723c5" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pAI-s12/b64e8358>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
+  triage:headSha "b64e8358" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-s13/b64e8358>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "b64e8358" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAI-s14/b64e8358>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "b64e8358" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-s15/b64e8358>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "b64e8358" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAI-s16/b64e8358>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "b64e8358" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAI-s20/bed07594>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "bed07594" ;
+  triage:orderIndex 20 .

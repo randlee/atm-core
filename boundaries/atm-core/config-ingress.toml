@@ -19,7 +19,7 @@ io_owns = ["persisted_config_loading", "config_document_validation"]
 io_forbidden = ["sqlite", "socket_io", "process_spawn"]
 
 [dependencies]
-allowed_dependents = ["atm", "atm-daemon"]
+allowed_dependents = ["atm", "atm-daemon", "atm-daemon-client", "atm-peer-tls-interop"]
 allowed_dependencies = []
 forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
 
@@ -42,4 +42,4 @@ review_gates = ["no_direct_config_parser_calls", "no_generic_runtime_team_lookup
 
 [status]
 state = "stub_landed"
-notes = ["typed workspace config request/response contracts landed in atm_core::boundary", "generic team-config lookup was removed from the ConfigIngress trait during Phase Z Z.7", "the former startup-only helper, hydrate_roster_from_team_config_once_at_startup_if_empty(...), was deleted in Phase Z Z.8 once watcher / reconcile became the sole external Claude roster-ingest lane; watcher/reconcile has since been retired under ADR-019, see docs/atm-core/requirements.md", "parsing and validation of [atm].claude_jsonl_body_export_max_bytes remains owned here for the ADR-010 compatibility-envelope contract"]
+notes = ["typed workspace config request/response contracts landed in atm_core::boundary", "atm-daemon-client is an allowed dependent only for canonical ATM-owned caller/environment/config and daemon-endpoint resolution used by shared same-host bootstrap", "generic team-config lookup was removed from the ConfigIngress trait during Phase Z Z.7", "the former startup-only helper, hydrate_roster_from_team_config_once_at_startup_if_empty(...), was deleted in Phase Z Z.8 once watcher / reconcile became the sole external Claude roster-ingest lane; watcher/reconcile has since been retired under ADR-019, see docs/atm-core/requirements.md", "parsing and validation of [atm].claude_jsonl_body_export_max_bytes remains owned here for the ADR-010 compatibility-envelope contract"]

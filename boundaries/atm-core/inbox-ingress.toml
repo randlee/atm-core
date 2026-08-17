@@ -19,7 +19,7 @@ io_owns = ["inbound_mailbox_import", "compatibility_surface_translation"]
 io_forbidden = ["sqlite", "socket_io", "process_spawn"]
 
 [dependencies]
-allowed_dependents = ["atm-daemon"]
+allowed_dependents = []
 allowed_dependencies = []
 forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
 
@@ -41,5 +41,5 @@ lint_rules = ["LINT-BOUNDARY-INBOX-INGRESS-REFERENCES"]
 review_gates = ["no_direct_mailbox_helper_calls"]
 
 [status]
-state = "stub_landed"
-notes = ["typed import, fingerprint, and diagnostics request/response contracts landed in atm_core::boundary", "watcher-driven reconcile should call this boundary rather than store helpers directly", "retained send/read/ack/clear cutover to this boundary is formally deferred to R.7 in docs/plans/phase-R/plan-phase-R.md"]
+state = "retired"
+notes = ["retired by AI.1 with the deleted daemon peer/compatibility adapter line", "no accepted runtime path constructs or calls this contract"]

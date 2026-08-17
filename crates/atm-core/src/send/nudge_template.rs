@@ -17,15 +17,8 @@ pub fn resolve_template(
     ResolvedBuiltInNudgeTemplate { kind, body }
 }
 
-pub fn resolve_template_body(
-    override_row: Option<TeamNudgeTemplateOverrideRow>,
-    kind: BuiltInNudgeTemplateKind,
-) -> Option<String> {
-    resolve_template(override_row, kind).body
-}
-
 pub fn qualified_sender_identity(event: &PostSendHookEvent) -> String {
-    format!("{}@{}", event.sender, event.sender_team)
+    event.source_address().to_string()
 }
 
 pub fn render_resolved_built_in_nudge(
@@ -99,9 +92,6 @@ fn render_template(
     if template.contains("{%") || template.contains("%}") {
         return Err(AtmError::validation(
             "built-in nudge templates do not support Jinja or conditional blocks",
-        )
-        .with_recovery(
-            "Use only the documented placeholder tokens in the stored template body before retrying built-in nudge rendering.",
         ));
     }
 
@@ -111,19 +101,15 @@ fn render_template(
         output.push_str(&rest[..start]);
         let after_start = &rest[start + 2..];
         let Some(end) = after_start.find("}}") else {
-            return Err(AtmError::validation("unterminated built-in nudge placeholder")
-                .with_recovery(
-                    "Close every built-in nudge placeholder with `}}` before retrying template rendering.",
-                ));
+            return Err(AtmError::validation(
+                "unterminated built-in nudge placeholder",
+            ));
         };
         let key = after_start[..end].trim();
         let Some(value) = values.get(key) else {
             return Err(AtmError::validation(format!(
                 "unsupported built-in nudge placeholder `{{{{{key}}}}}`"
-            ))
-            .with_recovery(
-                "Use only {{from}}, {{team}}, {{message_id}}, {{description}}, and {{task_id}} in built-in nudge templates.",
-            ));
+            )));
         };
         output.push_str(value);
         rest = &after_start[end + 2..];
@@ -136,19 +122,20 @@ fn render_template(
 mod tests {
     use super::{
         default_template, qualified_sender_identity, render_built_in_nudge, resolve_template,
-        resolve_template_body,
     };
     use crate::boundary::{
         BuiltInNudgeTemplateKind, PostSendHookEvent, ResolvedBuiltInNudgeTemplate,
         TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
     };
     use crate::test_support::{TEST_ARCH_CTM, TEST_LEAD, TEST_TEAM};
-    use crate::types::{AgentName, IsoTimestamp, PaneId, TeamName};
+    use crate::types::{AgentName, ChatId, IsoTimestamp, PaneId, TeamName};
 
     fn base_event() -> PostSendHookEvent {
         PostSendHookEvent {
             sender: AgentName::from_validated(TEST_LEAD),
+            sender_chat_id: None,
             sender_team: TeamName::from_validated(TEST_TEAM),
+            sender_host: None,
             recipient: AgentName::from_validated(TEST_ARCH_CTM),
             recipient_team: TeamName::from_validated(TEST_TEAM),
             message_id: "01KX1TEST00000000000000000".parse().expect("message id"),
@@ -158,28 +145,6 @@ mod tests {
             task_id: None,
             recipient_pane_id: Some(PaneId::from_cli("%9").expect("pane")),
         }
-    }
-
-    #[test]
-    fn resolve_template_body_uses_default_when_no_override_exists() {
-        assert_eq!(
-            resolve_template_body(None, BuiltInNudgeTemplateKind::Delivery),
-            Some(default_template(BuiltInNudgeTemplateKind::Delivery).to_string())
-        );
-    }
-
-    #[test]
-    fn resolve_template_body_treats_disabled_override_as_disabled() {
-        let row = TeamNudgeTemplateOverrideRow {
-            team_name: TeamName::from_validated(TEST_TEAM),
-            kind: BuiltInNudgeTemplateKind::Delivery,
-            mode: TeamNudgeTemplateOverrideMode::Disabled,
-            updated_at: IsoTimestamp::now(),
-        };
-        assert_eq!(
-            resolve_template_body(Some(row), BuiltInNudgeTemplateKind::Delivery),
-            None
-        );
     }
 
     #[test]
@@ -206,6 +171,33 @@ mod tests {
         assert_eq!(
             qualified_sender_identity(&base_event()),
             format!("{TEST_LEAD}@{TEST_TEAM}")
+        );
+    }
+
+    #[test]
+    fn qualified_sender_identity_includes_authenticated_sender_host() {
+        let mut event = base_event();
+        event.sender_host = Some("rand-m4.local".parse().expect("sender host"));
+
+        assert_eq!(
+            qualified_sender_identity(&event),
+            format!("{TEST_LEAD}@{TEST_TEAM}.rand-m4.local")
+        );
+        assert!(
+            render_built_in_nudge(&event, default_template(BuiltInNudgeTemplateKind::Delivery))
+                .expect("render nudge")
+                .contains(&format!("from=\"{TEST_LEAD}@{TEST_TEAM}.rand-m4.local\""))
+        );
+    }
+
+    #[test]
+    fn qualified_sender_identity_preserves_chat_id() {
+        let mut event = base_event();
+        event.sender_chat_id = Some("chat-42".parse::<ChatId>().expect("chat id"));
+
+        assert_eq!(
+            qualified_sender_identity(&event),
+            format!("{TEST_LEAD}:chat-42@{TEST_TEAM}")
         );
     }
 

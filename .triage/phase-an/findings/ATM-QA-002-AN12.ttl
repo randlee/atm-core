@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-002-AN12>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-002-AN12" ;
+  triage:title "AN.12 documentation does not link required governing docs (acceptance criterion 6 unmet)" ;
+  triage:description "req-qa reported (AN12-QA-1, quality-mgr, PR #875 comment https://github.com/randlee/atm-core/pull/875#issuecomment-5288572849): acceptance criterion 6 ('documentation labels only completed proof as complete and links the one authoring guide plus ADR/requirements/sprint evidence') unmet — neither docs/plans/phase-an/sprint-AN12-workflow-validation-evidence.md nor validation-evidence.md link docs/template-workflow-metadata.md, ADR-046, or docs/requirements.md (zero matches on direct grep at the time of report)." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-13T20:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.12 ;
+  triage:foundAt "2026-08-14T02:04:48Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-AN12/AN12-occurrence-1> ;
+  triage:closedAt "2026-08-13T18:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/ATM-QA-002-AN12/AN12-occurrence-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-an/sprint-AN12-workflow-validation-evidence.md" ;
+  triage:line 61 ;
+  triage:snippet "Documentation labels only completed proof as complete and links the one authoring guide plus ADR/requirements/sprint evidence" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "76485c590" ;
+  triage:occursIn <urn:atm:triage:worktree/AN12/76485c590> .
+
+<urn:atm:triage:worktree/integrate-phase-an/f8e1f52d4>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-an" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "f8e1f52d4" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AN12/76485c590>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/an12" ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "76485c590" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AN13/70c7b231b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/an13" ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "70c7b231b" ;
+  triage:orderIndex 2 .

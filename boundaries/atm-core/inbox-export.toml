@@ -19,14 +19,13 @@ io_owns = ["outbound_mailbox_projection", "compatibility_surface_translation"]
 io_forbidden = ["sqlite", "socket_io", "process_spawn"]
 
 [dependencies]
-allowed_dependents = ["atm-daemon"]
+allowed_dependents = []
 allowed_dependencies = []
 forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
 
 [references]
 scope = "outside_owner_crate"
 forbidden = ["finalize_send_outcome", "finalize_ack_outcome", "recover_after_sqlite_failure"]
-named_callers = ["atm_core::direct_boundaries::export_source_files", "atm_core::direct_boundaries::reexport_messages"]
 
 [contracts]
 request_types = ["export write requests"]
@@ -43,5 +42,5 @@ lint_rules = ["LINT-BOUNDARY-INBOX-EXPORT-REFERENCES"]
 review_gates = ["no_direct_mailbox_helper_calls", "repair_rebuild_only_reexport"]
 
 [status]
-state = "concrete_landed"
-notes = ["typed record/export request and response contracts landed in atm_core::boundary", "send and receive state transitions should reach compatibility files through this boundary only", "the ADR-010 compatibility envelope keeps full ATM-authored bodies durable in SQLite while this boundary owns the bounded Claude JSONL projection", "Yb Y.10 restricts full mailbox re-export to repair/rebuild seams and removes silent append-path rewrite fallback from normal runtime delivery"]
+state = "retired"
+notes = ["retired by AI.1 with the deleted daemon peer/compatibility adapter line", "no accepted runtime path constructs or calls this contract"]

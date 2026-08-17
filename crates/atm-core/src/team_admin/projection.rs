@@ -6,8 +6,12 @@ use crate::boundary::{RosterEntry, RosterStore};
 use crate::error::AtmError;
 use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::agent_member::LEGACY_CWD_METADATA_KEY;
-use crate::schema::{AgentMember, HOME_DIR_METADATA_KEY, TeamConfig, canonical_home_dir};
-use crate::types::{AgentId, AgentName};
+#[cfg(test)]
+use crate::schema::{AgentMember, TeamConfig};
+use crate::schema::{HOME_DIR_METADATA_KEY, canonical_home_dir};
+#[cfg(test)]
+use crate::types::AgentId;
+use crate::types::AgentName;
 
 use super::{MemberSummary, MembersList, MembersQuery};
 
@@ -37,6 +41,7 @@ pub(super) fn load_team_roster(
     roster_store.load_roster(team)
 }
 
+#[cfg(test)]
 pub(super) fn project_team_config_from_roster(
     extra: serde_json::Map<String, Value>,
     records: &[RosterEntry],
@@ -96,6 +101,7 @@ fn member_summary_from_roster(
         agent_id: metadata_string(&record.metadata_json, "agentId")
             .unwrap_or_else(|| format!("{}@{}", record.agent_name, record.team_name)),
         agent_type: record.agent_type.to_string(),
+        harness: record.harness,
         model: record.model.clone(),
         joined_at: metadata_u64(&record.metadata_json, "joinedAt"),
         tmux_pane_id: record.recipient_pane_id.clone(),
@@ -105,6 +111,7 @@ fn member_summary_from_roster(
     }
 }
 
+#[cfg(test)]
 fn agent_member_from_roster_record(record: &RosterEntry) -> Result<AgentMember, AtmError> {
     let mut extra = compatibility_extra_fields(&record.metadata_json);
     Ok(AgentMember {
@@ -129,6 +136,7 @@ fn agent_member_from_roster_record(record: &RosterEntry) -> Result<AgentMember, 
     })
 }
 
+#[cfg(test)]
 fn roster_record_agent_id(record: &RosterEntry) -> Result<AgentId, AtmError> {
     let raw_agent_id = metadata_string(&record.metadata_json, "agentId")
         .unwrap_or_else(|| format!("{}@{}", record.agent_name, record.team_name));
@@ -137,9 +145,6 @@ fn roster_record_agent_id(record: &RosterEntry) -> Result<AgentId, AtmError> {
             "roster member {}@{} has invalid persisted agentId '{}': {error}",
             record.agent_name, record.team_name, raw_agent_id
         ))
-        .with_recovery(
-            "Repair the malformed ATM roster row or rerun `atm teams update-member` so ATM rewrites the member metadata with a valid agentId.",
-        )
     })
 }
 

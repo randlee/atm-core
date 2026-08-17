@@ -29,23 +29,15 @@ pub fn read_hook_identity() -> Result<Option<AgentName>, AtmError> {
 
     let raw = std::fs::read_to_string(&path).map_err(|error| {
         AtmError::new(
-            crate::error::AtmErrorKind::Identity,
+            crate::error::AtmErrorCode::IdentityUnavailable,
             format!("failed to read hook file {}: {error}", path.display()),
-        )
-        .with_source(error)
-        .with_recovery(
-            "The hook identity file is ephemeral. Rerun the triggering hook or ignore if hook identity is optional.",
         )
     })?;
 
     let data: HookFileData = serde_json::from_str(&raw).map_err(|error| {
         AtmError::new(
-            crate::error::AtmErrorKind::Identity,
+            crate::error::AtmErrorCode::IdentityUnavailable,
             format!("invalid hook file JSON at {}: {error}", path.display()),
-        )
-        .with_source(error)
-        .with_recovery(
-            "The hook identity file is ephemeral. Rerun the triggering hook or ignore if hook identity is optional.",
         )
     })?;
 
@@ -62,13 +54,13 @@ pub fn read_hook_identity() -> Result<Option<AgentName>, AtmError> {
         .map(|value| {
             value.parse().map_err(|error: AtmError| {
                 AtmError::new(
-                    crate::error::AtmErrorKind::Identity,
-                    format!("invalid hook agent_name in {}: {}", path.display(), error.message),
+                    crate::error::AtmErrorCode::IdentityUnavailable,
+                    format!(
+                        "invalid hook agent_name in {}: {}",
+                        path.display(),
+                        error.detail()
+                    ),
                 )
-                .with_recovery(
-                    "The hook identity file is ephemeral. Rerun the triggering hook or ignore if hook identity is optional.",
-                )
-                .with_source(error)
             })
         })
         .transpose()

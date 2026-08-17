@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AJ6-ATM-QA-002-INTEGRATION-TEST-MISSING>
+  a triage:Finding ;
+  triage:findingId "AJ6-ATM-QA-002-INTEGRATION-TEST-MISSING" ;
+  triage:title "Required UDS send/read, heartbeat-without-session, TCP-loopback ack integration test does not exist" ;
+  triage:description "Sprint doc requires 'a UDS send/read, heartbeat-without-session, and TCP-loopback ack integration test [that] proves the same member retains its known session when a later trusted command omits session metadata.' The only related test, heartbeat_session_metadata_is_retained_when_a_later_observation_is_absent (runtime_status_cache.rs), calls record_heartbeat_for_test directly in-process -- never touches a real UDS or TCP transport. No crates/atm-daemon/tests/ directory exists. Confirmed by req-qa, arch-qa, ruthless-boundary-qa, rust-qa-agent. QA source: PR #741, phase-aj-s6-qa-1." ;
+  triage:phaseId "phase-AJ" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed-ci-green" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T17:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AJ-S6 ;
+  triage:foundAt "2026-08-04T17:30:14Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AJ6-ATM-QA-002-INTEGRATION-TEST-MISSING/AJ6-S6-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AJ6-ATM-QA-002-INTEGRATION-TEST-MISSING/AJ6-S6-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
+  triage:line 620 ;
+  triage:snippet "fn heartbeat_session_metadata_is_retained_when_a_later_observation_is_absent()" ;
+  triage:status "fixed-ci-green" ;
+  triage:closed true ;
+  triage:branch "feature/pAJ-s6-runtime-observation-snapshot" ;
+  triage:headSha "26607c3b19acbf9c7c247386df5ffd0a1f58cfa4" ;
+  triage:occursIn <urn:atm:triage:worktree/AJ6-S6-1> .
+
+<urn:atm:triage:worktree/AJ6-S6-1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAJ-s6-runtime-observation-snapshot" ;
+  triage:branch "feature/pAJ-s6-runtime-observation-snapshot" ;
+  triage:headSha "26607c3b19acbf9c7c247386df5ffd0a1f58cfa4" ;
+  triage:orderIndex 3 .

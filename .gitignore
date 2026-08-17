@@ -21,13 +21,19 @@ Cargo.toml.ci
 **/__pycache__/
 scripts/__pycache__/
 
-# Local session artifacts and compose logs from sc tooling
-.sc/sessions/
+# Local Synaptic Canvas orchestration state: retain it locally for agent
+# history/status, but never treat it as repository content.
+.sc/
 .sc-compose/logs/
 .just/logs/
 artifacts/view/
+artifacts/benchmark/
 reports/smoke/[0-9][0-9][0-9][0-9]-*-smoke*.md
 reports/smoke/[0-9][0-9][0-9][0-9]-*-smoke*.json
+reports/smoke/index.html
+reports/smoke/*/*.json
+reports/smoke/*/*.xhtml
+reports/smoke/*/*.html
 reports/coverage/[0-9][0-9][0-9][0-9]-*-mac.md
 reports/coverage/[0-9][0-9][0-9][0-9]-*-mac.json
 reports/coverage/[0-9][0-9][0-9][0-9]-*-win.md

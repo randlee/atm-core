@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ATM verification reports</title>
+  <style>body{font:16px system-ui,sans-serif;max-width:64rem;margin:2rem auto;padding:0 1rem;line-height:1.5}h1{margin-bottom:.25rem}ul{padding:0;list-style:none}li{display:grid;grid-template-columns:minmax(12rem,2fr) auto 1fr;gap:1rem;padding:.55rem 0;border-bottom:1px solid #ddd}time,.report-meta{color:#555;font-size:.9em}.empty{color:#666;font-style:italic}</style>
+</head>
+<body>
+  <h1>ATM verification reports</h1>
+  <p>Generated from schema-validated public report envelopes.</p>
+  <section><h2>Benchmark</h2>
+    <ul>
+      <li><a href="send-message-benchmark.html">send-message-benchmark</a><time datetime="2026-08-01T22:48:29.996132Z">2026-08-01T22:48:29.996132Z</time><span class="report-meta">benchmark · 61 runs · hosts: m5-arm64-01, mac-arm64-01, windows-x64-01</span></li>
+      <li><a href="send-message-benchmark/20260809-cwin-windows-tcp-campaign.html">20260809 CWin Windows TCP campaign</a><time datetime="2026-08-09T19:32:38.569731Z">2026-08-09T19:32:38.569731Z</time><span class="report-meta">benchmark · PASS · host: FastPC4 (Windows) · TCP F1/F2/F4/F8/F16/F64</span></li>
+    </ul>
+  </section>
+  <section><h2>Fuzz</h2>
+    <ul>
+      <li><a href="20260815-an15-v2-fuzz-report.html">20260815-an15-v2-fuzz-report</a><time datetime="2026-08-15T02:34:30.499946Z">2026-08-15T02:34:30.499946Z</time><span class="report-meta">fuzz · hosts: local</span></li>
+      <li><a href="20260801-3-fuzz-report.html">20260801-3-fuzz-report</a><time datetime="2026-08-01T18:48:34.899322Z">2026-08-01T18:48:34.899322Z</time><span class="report-meta">fuzz · hosts: darwin-arm64</span></li>
+      <li><a href="20260801-2-fuzz-report.html">20260801-2-fuzz-report</a><time datetime="2026-08-01T18:48:34.268005Z">2026-08-01T18:48:34.268005Z</time><span class="report-meta">fuzz · hosts: darwin-arm64</span></li>
+      <li><a href="20260801-1-fuzz-report.html">20260801-1-fuzz-report</a><time datetime="2026-08-01T03:30:00Z">2026-08-01T03:30:00Z</time><span class="report-meta">fuzz · hosts: mac-arm64</span></li>
+    </ul>
+  </section>
+  <section><h2>Smoke</h2>
+    <ul>
+      <li><a href="smoke/macos/rand-m5.local/20260808T203610076893Z-pid39023-crosshost-ack/index.html">M5 cross-host acknowledgement</a><time datetime="2026-08-08T20:36:10.125907Z">2026-08-08T20:36:10.125907Z</time><span class="report-meta">smoke · PASS · host: rand-m5.local</span></li>
+      <li><a href="smoke/macos/rand-m5.local/20260808T191605199584Z-pid24045-crosshost-send/index.html">M5 cross-host send</a><time datetime="2026-08-08T19:16:05.231956Z">2026-08-08T19:16:05.231956Z</time><span class="report-meta">smoke · PASS · host: rand-m5.local</span></li>
+      <li><a href="smoke/macos/rand-m5.local/20260808T191457421442Z-pid23503-peer-preflight/index.html">M5 peer preflight</a><time datetime="2026-08-08T19:14:57.454158Z">2026-08-08T19:14:57.454158Z</time><span class="report-meta">smoke · PASS · hosts: rand-m5.local, rand-m4.local</span></li>
+      <li><a href="smoke/macos/rand-m5.local/20260808T191410895708Z-pid23245-local-ip/index.html">M5 same-IP</a><time datetime="2026-08-08T19:14:10.922661Z">2026-08-08T19:14:10.922661Z</time><span class="report-meta">smoke · PASS · host: rand-m5.local</span></li>
+      <li><a href="smoke/macos/rand-m5.local/20260808T191357786414Z-pid23030-localhost/index.html">M5 localhost</a><time datetime="2026-08-08T19:13:57.811749Z">2026-08-08T19:13:57.811749Z</time><span class="report-meta">smoke · PASS · host: rand-m5.local</span></li>
+      <li><a href="smoke/windows/FastPC4/al14-cwin-local-ip-f3f66d6a-pid22492-local-ip/index.html">CWin same-IP</a><time datetime="2026-08-08T18:53:12.315399Z">2026-08-08T18:53:12.315399Z</time><span class="report-meta">smoke · PASS · host: FastPC4 (Windows)</span></li>
+      <li><a href="smoke/windows/FastPC4/al14-cwin-localhost-f3f66d6a-pid22832-localhost/index.html">CWin localhost</a><time datetime="2026-08-08T18:53:05.918705Z">2026-08-08T18:53:05.918705Z</time><span class="report-meta">smoke · PASS · host: FastPC4 (Windows)</span></li>
+    </ul>
+  </section>
+</body>
+</html>

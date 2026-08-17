@@ -69,7 +69,7 @@ violations when kept in their current narrow role:
 | Path | Reason |
 | --- | --- |
 | `crates/atm-core/src/send/missing_config_notice.rs` | path/warning construction for missing team config; not a roster-truth source |
-| `crates/atm-core/src/send/alert_state.rs` | path-based alert-state diagnostics; not a roster-truth source |
+| `crates/atm-core/src/send/alert_state.rs` | historical only — deleted in `CLAUDE-TEAMS-DIR-REMOVAL-1` / PR #554; no longer present in the codebase |
 | `crates/atm-core/src/error_codes.rs` | error-code documentation |
 
 ## Post-Z.10 Boundary Violations

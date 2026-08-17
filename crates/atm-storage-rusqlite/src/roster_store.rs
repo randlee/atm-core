@@ -76,9 +76,7 @@ impl RosterStore for SqliteRosterStore {
                     "roster-store load rejected team {} because persisted roster rows exceeded the canonical cap of {}",
                     team, MAX_CANONICAL_ROSTER_MEMBERS
                 ))
-                .with_recovery(
-                    "Reduce the canonical team_roster rows for that team or raise the documented roster cap before retrying load_roster.",
-                ));
+                );
             }
             Ok(members)
         })?;
@@ -98,10 +96,7 @@ impl RosterStore for SqliteRosterStore {
                 team,
                 roster.members.len(),
                 MAX_CANONICAL_ROSTER_MEMBERS
-            ))
-            .with_recovery(
-                "Reduce the roster payload size or raise the documented canonical roster cap before retrying save_roster.",
-            ));
+            )));
         }
 
         let updated_at = chrono::Utc::now().to_rfc3339();
@@ -118,9 +113,7 @@ impl RosterStore for SqliteRosterStore {
                         "roster-store replace rejected member {} because team_name {} did not match request team {}",
                         member.agent_name, member.team_name, team
                     ))
-                    .with_recovery(
-                        "Repair the incoming roster payload so every member row uses the same team_name as the roster snapshot before retrying.",
-                    ));
+                    );
                 }
                 let metadata_json = serialize_json(&member.metadata_json, "team-roster metadata")?;
                 transaction
@@ -183,9 +176,6 @@ impl RosterStore for SqliteRosterStore {
                     AtmError::validation(format!(
                         "failed to parse canonical roster team_name `{raw}`: {error}"
                     ))
-                    .with_recovery(
-                        "Repair the malformed team_roster.team_name row before retrying list_teams.",
-                    )
                 })?);
             }
             Ok(teams)
@@ -202,9 +192,6 @@ fn build_roster_member(
         AtmError::validation(format!(
             "failed to parse canonical team-roster agent_name `{agent_name}`: {error}"
         ))
-        .with_recovery(
-            "Repair the malformed team_roster.agent_name row before retrying the roster query.",
-        )
     })?;
     let metadata_json =
         deserialize_json::<Map<String, Value>>(&row.metadata_json, "team-roster metadata")?;
@@ -215,9 +202,6 @@ fn build_roster_member(
             AtmError::validation(format!(
                 "failed to parse canonical team-roster model: {error}"
             ))
-            .with_recovery(
-                "Repair the malformed team_roster.model row before retrying the roster query.",
-            )
         })?
     };
     let recipient_pane_id = row
@@ -227,9 +211,6 @@ fn build_roster_member(
                 AtmError::validation(format!(
                     "failed to parse canonical team-roster recipient_pane_id `{pane}`: {error}"
                 ))
-                .with_recovery(
-                    "Repair the malformed team_roster.recipient_pane_id row before retrying the roster query.",
-                )
             })
         })
         .transpose()?;
@@ -252,10 +233,7 @@ fn parse_member_kind(raw: &str) -> Result<RosterMemberKind, AtmError> {
         "ephemeral" => Ok(RosterMemberKind::Ephemeral),
         other => Err(AtmError::validation(format!(
             "failed to parse canonical team-roster member_kind `{other}`"
-        ))
-        .with_recovery(
-            "Repair the malformed team_roster.member_kind row before retrying the roster query.",
-        )),
+        ))),
     }
 }
 
@@ -265,12 +243,11 @@ fn parse_harness(raw: &str) -> Result<RosterHarness, AtmError> {
         "codex-cli" => Ok(RosterHarness::CodexCli),
         "gemini-cli" => Ok(RosterHarness::GeminiCli),
         "opencode" => Ok(RosterHarness::Opencode),
+        "hermes" => Ok(RosterHarness::Hermes),
+        "python-graft" => Ok(RosterHarness::PythonGraft),
         other => Err(AtmError::validation(format!(
             "failed to parse canonical team-roster harness `{other}`"
-        ))
-        .with_recovery(
-            "Repair the malformed team_roster.harness row before retrying the roster query.",
-        )),
+        ))),
     }
 }
 
@@ -287,6 +264,8 @@ fn roster_harness_value(harness: RosterHarness) -> &'static str {
         RosterHarness::CodexCli => "codex-cli",
         RosterHarness::GeminiCli => "gemini-cli",
         RosterHarness::Opencode => "opencode",
+        RosterHarness::Hermes => "hermes",
+        RosterHarness::PythonGraft => "python-graft",
     }
 }
 
@@ -297,6 +276,51 @@ mod tests {
     use atm_storage::IsoTimestamp;
 
     const TEST_WORKER: &str = "worker";
+
+    #[test]
+    fn save_and_load_support_python_graft_harnesses() {
+        let store = SqliteStorageBackend::in_memory_for_test()
+            .expect("backend")
+            .roster_store;
+        let team: TeamName = "team-a".parse().expect("team");
+        let roster = RosterSnapshot {
+            team_name: team.clone(),
+            members: vec![
+                RosterMember {
+                    team_name: team.clone(),
+                    agent_name: "hermes-agent".parse().expect("agent"),
+                    member_kind: RosterMemberKind::Permanent,
+                    harness: RosterHarness::Hermes,
+                    agent_type: AgentType::Worker,
+                    model: ModelName::default(),
+                    recipient_pane_id: None,
+                    metadata_json: Map::new(),
+                },
+                RosterMember {
+                    team_name: team.clone(),
+                    agent_name: "python-agent".parse().expect("agent"),
+                    member_kind: RosterMemberKind::Permanent,
+                    harness: RosterHarness::PythonGraft,
+                    agent_type: AgentType::Worker,
+                    model: ModelName::default(),
+                    recipient_pane_id: None,
+                    metadata_json: Map::new(),
+                },
+            ],
+            refreshed_at: None,
+        };
+
+        store.save_roster(&roster).expect("save roster");
+        let loaded = store.load_roster(&team).expect("load roster");
+        assert_eq!(
+            loaded
+                .members
+                .iter()
+                .map(|member| member.harness)
+                .collect::<Vec<_>>(),
+            vec![RosterHarness::Hermes, RosterHarness::PythonGraft]
+        );
+    }
 
     #[test]
     fn save_roster_rejects_mismatched_team_names() {
@@ -322,6 +346,6 @@ mod tests {
         };
 
         let error = store.save_roster(&roster).expect_err("mismatch");
-        assert!(error.message.contains("did not match request team"));
+        assert!(error.message().contains("did not match request team"));
     }
 }

@@ -96,7 +96,7 @@ Unix-only behavior.
 
 ## QA-1 Closeout Notes
 
-- Windows named-pipe endpoint preparation is intentionally a no-op in
+- Windows legacy endpoint preparation is intentionally a no-op in
   `crates/atm-daemon/src/local_ipc_transport.rs` because no filesystem socket path exists to
   create or unlink.
 - Phase S records the remaining accepted production polling exceptions in

@@ -62,13 +62,13 @@ while the lock handle remains readable.
 
 ### `ErrorKind::Unsupported` Is Not a Timeout Exemption
 
-Windows named pipes report `ErrorKind::Unsupported` for `set_recv_timeout()` and
+The current legacy Windows local transport reports `ErrorKind::Unsupported` for `set_recv_timeout()` and
 `set_send_timeout()`. Code may tolerate that result only when it immediately installs a bounded
 fallback contract.
 
 Required fallback shapes:
 - request reads: a watchdog or equivalent bounded fallback that prevents blocked Windows
-  named-pipe reads from pinning the connection slot or shutdown drain past the documented deadline
+  local-transport reads from pinning the connection slot or shutdown drain past the documented deadline
 - shutdown wake connections: no unbounded `flush()`/drain after the `Unsupported` bypass; the wake
   path must still return within the same bounded deadline
 - shutdown drain: unsupported socket deadlines must not leave `active_connections` pinned past the
@@ -104,7 +104,7 @@ from Windows PowerShell in the repository root.
 
 Observed result on the first Windows machine for this branch:
 - `PASS` after pulling `feature/windows-test-parity` and running the same-host daemon smoke flow
-- verified outcomes: `doctor --json` reached ready, the named pipe was published, `send` succeeded,
+- verified outcomes: `doctor --json` reached ready, the local endpoint was published, `send` succeeded,
   and `read --all --json` returned the delivered body
 - one environment caveat: stale local daemon/test processes can hold the host owner lock and must
   be cleared before rerunning the smoke
@@ -123,14 +123,18 @@ Observed result on the first Windows machine for this branch:
    $SmokeRoot = Join-Path $env:TEMP "atm-win-smoke"
    Remove-Item $SmokeRoot -Recurse -Force -ErrorAction SilentlyContinue
    New-Item -ItemType Directory -Force -Path $SmokeRoot | Out-Null
-   New-Item -ItemType Directory -Force -Path (Join-Path $SmokeRoot ".claude\\teams\\smoke-team\\inboxes") | Out-Null
-   Set-Content -Path (Join-Path $SmokeRoot ".claude\\teams\\smoke-team\\config.json") -Value '{"members":[{"name":"smoke-user"}]}'
    Set-Content -Path (Join-Path (Get-Location) ".atm.toml") -Value "[atm]`ndefault_team = `"smoke-team`"`n"
    $env:ATM_HOME = $SmokeRoot
    $env:ATM_CONFIG_HOME = $SmokeRoot
    $env:ATM_TEAM = "smoke-team"
    $env:ATM_IDENTITY = "smoke-user"
-   $env:ATM_DAEMON_SOCKET = "\\.\pipe\atm-win-smoke"
+   ```
+   Windows local clients discover the daemon-owned `local-http.json` record
+   under the runtime directory. Do not set a local socket or fixed-port
+   environment variable.
+   Then initialize the roster with ATM itself:
+   ```powershell
+   .\target\debug\atm.exe teams add-member smoke-team smoke-user worker gpt-5 --home-dir $SmokeRoot
    ```
 
 3. Build the workspace
@@ -156,14 +160,14 @@ Observed result on the first Windows machine for this branch:
    - `doctor` exits non-zero
    - `runtime_status.readiness` is absent or not `ready`
 
-5. Verify the named-pipe IPC endpoint is published
+5. Verify the current local endpoint remains usable
    ```powershell
-   Get-ChildItem \\.\pipe\ | Where-Object { $_.Name -eq "atm-win-smoke" }
+   .\target\debug\atm.exe doctor --json
    ```
    Pass indicator:
-   - the command returns one pipe entry named `atm-win-smoke`
+   - `runtime_status.readiness` remains `ready` after the client reaches the daemon
    Fail indicator:
-   - no matching pipe appears after the `doctor` step
+   - the command reports daemon unavailable or a non-ready runtime
 
 6. Confirm the daemon accepts a connection and a round-trip mailbox operation
    ```powershell

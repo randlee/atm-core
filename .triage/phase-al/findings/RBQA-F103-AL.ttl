@@ -1,0 +1,77 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F103-AL>
+  a triage:Finding ;
+  triage:findingId "RBQA-F103-AL" ;
+  triage:title "TokioTmuxReceivedHook re-derives legacy tmux send-keys sequence/delay as an independent constant" ;
+  triage:description "New replacement code TokioTmuxReceivedHook (crates/atm-daemon-bootstrap/src/received_hook_selector.rs around line 120) re-derives the legacy TmuxMessageReceivedHookEmitter's exact tmux send-keys sequence and 275ms double-Enter delay as an independent constant instead of sharing one atm-core-owned definition. Should own the send-keys sequence and delay constant once in atm-core and have both the legacy and Tokio-path hook implementations reference it." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-10T17:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL9 ;
+  triage:foundAt "2026-08-10T17:06:52Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-10T17:50:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "DISPOSITION (quality-mgr): split occurrence 2 (crates/atm-daemon, frozen legacy) as waived per standing never-patch-legacy-daemon rule; occurrences 1 and 3 (active Tokio path + CLI) required a genuine dedup fix. INDEPENDENT REVIEW of arch-ctm's fix (commit 9e303af7 on fix/phase-al-ending-qa1-findings): read the full diff (3 files) and recreated the commit in a disposable worktree. crates/atm-core/src/boundary/mod.rs now owns TMUX_DOUBLE_ENTER_DELAY and TMUX_NUDGE_CONFIRM_KEY as the single shared definitions; received_hook_selector.rs and internal_nudge.rs both delete their local consts and import from atm_core::boundary. crates/atm-daemon/src/message_received_emitter.rs confirmed absent from the diff and still independently defines its own const -- untouched, as required. Repo-wide grep at this commit found no third duplicate. Independently re-ran cargo fmt --all --check (clean), cargo test -p agent-team-mail --bin atm internal_nudge (8/8), cargo test -p atm-daemon-bootstrap --lib (8/8) -- all matched arch-ctm's claim exactly. Closing all three occurrences: 1 and 3 fixed, 2 waived." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F103-AL/AL-CE437712-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F103-AL/AL-CE437712-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F103-AL/AL-CE437712-3> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RBQA-F103-AL/AL-CE437712-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/received_hook_selector.rs" ;
+  triage:line 21 ;
+  triage:snippet "const TMUX_DOUBLE_ENTER_DELAY: Duration = Duration::from_millis(275);" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T17:50:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "ce437712" ;
+  triage:occursIn <urn:atm:triage:worktree/AL-integrate-phase-al/ce437712> .
+
+<urn:atm:triage:occurrence/RBQA-F103-AL/AL-CE437712-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/message_received_emitter.rs" ;
+  triage:line 12 ;
+  triage:snippet "const TMUX_DOUBLE_ENTER_DELAY: Duration = Duration::from_millis(275);" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T17:50:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:waived true ;
+  triage:waivedReason "frozen legacy sync daemon, Phase-AM deletion target -- never patch" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "ce437712" ;
+  triage:occursIn <urn:atm:triage:worktree/AL-integrate-phase-al/ce437712> .
+
+<urn:atm:triage:occurrence/RBQA-F103-AL/AL-CE437712-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/internal_nudge.rs" ;
+  triage:line 31 ;
+  triage:snippet "const TMUX_DOUBLE_ENTER_DELAY: Duration = Duration::from_millis(275);" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T17:50:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "ce437712" ;
+  triage:occursIn <urn:atm:triage:worktree/AL-integrate-phase-al/ce437712> .
+
+<urn:atm:triage:worktree/AL-integrate-phase-al/ce437712>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL-integrate-phase-al" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "ce437712" ;
+  triage:orderIndex 0 .

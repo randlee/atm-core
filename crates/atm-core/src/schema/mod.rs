@@ -7,9 +7,13 @@ pub mod settings;
 pub mod team_config;
 
 pub use agent_member::{
-    AgentMember, HOME_DIR_METADATA_KEY, HomeDirPath, canonical_home_dir, compatible_home_dir,
+    AgentMember, HOME_DIR_METADATA_KEY, HomeDirPath, WORKSPACE_ROOT_METADATA_KEY,
+    canonical_graft_root, canonical_home_dir, compatible_home_dir,
 };
 pub use atm_storage::contract::AgentType;
-pub(crate) use inbox_message::AckIntentFields;
+pub(crate) use inbox_message::{
+    AckIntentFields, authenticated_source_host, clear_transport_delivery_metadata,
+    peer_delivery_target, set_authenticated_source_host, set_peer_delivery_target,
+};
 pub use inbox_message::{AlertKind, AtmMessageId, InboxMessage, PendingAck, ThreadMode};
 pub use team_config::TeamConfig;

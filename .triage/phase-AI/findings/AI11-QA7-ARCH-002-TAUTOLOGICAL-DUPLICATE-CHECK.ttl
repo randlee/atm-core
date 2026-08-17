@@ -1,0 +1,130 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI11-QA7-ARCH-002-TAUTOLOGICAL-DUPLICATE-CHECK>
+  a triage:Finding ;
+  triage:findingId "AI11-QA7-ARCH-002-TAUTOLOGICAL-DUPLICATE-CHECK" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T12:55:00Z"^^xsd:dateTime ;
+  triage:title "Duplicate-router and adapter-storage/nudge checks are each scoped to a single already-known file" ;
+  triage:description "Two sub-checks inside fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() (crates/atm-architecture/tests/boundary_enforcement.rs, commit bb20fd9a on feature/pAI-s11-post-merge-remediation, PR #607) share the same narrow-scope defect. (a) The duplicate-router check does `dispatcher_source.matches(\"impl ApiRouter for\").count()` against exactly one hardcoded file, crates/atm-daemon/src/runtime_health.rs (`dispatcher_source`), so the count is tautologically always 1 regardless of whether a duplicate ApiRouter impl is added anywhere else in the workspace -- it can never actually detect a duplicate. (b) The adapter storage/nudge-call check (forbidden list: LocalServiceRuntime, persist_message, emit_post_send_effects, write_mail_with_runtime) only scans `local_tcp_source` (crates/atm-daemon/src/local_tcp_transport.rs, the Windows loopback-TCP adapter) -- one of three production transport adapters in crates/atm-daemon/src. The other two, local_ipc_transport.rs (Unix UDS) and https_transport.rs (cross-host HTTPS), are never scanned for storage/nudge-call violations. No active production violation exists today for either sub-check -- the risk is purely the gate's ability to catch a FUTURE regression." ;
+  triage:category "boundary-gate-weakness" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-22T12:55:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA7-ARCH-002/s11/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA7-ARCH-002/s11/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA7-ARCH-002/s11/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA7-ARCH-002/s11/4> ;
+  triage:openOn <urn:atm:triage:worktree/s11/bb20fd9a> ;
+  triage:fixedOn <urn:atm:triage:worktree/s12/b6466aa1> ;
+  triage:promoteTo <urn:atm:triage:worktree/s11/bb20fd9a> ;
+  triage:highestFixedBranch "feature/pAI-s12-post-write-router" ;
+  triage:notes "RESOLUTION (2026-07-22 sweep): both sub-checks verifiably fixed on current integrate/phase-AI. (a) The adapter storage/nudge scan now iterates adapter_sources = [local TCP, local IPC, peer HTTPS] rather than only local_tcp_source (boundary_enforcement.rs ~line 423-439). (b) The duplicate-router check now sums production_api_router_implementation_count(path) across ai11_guarded_workspace_sources(&root) rather than matching a single hardcoded dispatcher file (~line 442-449). Cross-referenced with sibling finding AI11-QA7-ARCH-001-HARDCODED-ALLOWLIST.ttl (same cwin fast-follow batch, PR #607), already recorded fixed on feature/pAI-s12-post-write-router (b6466aa1); this finding's fix landed in the same batch." .
+
+<urn:atm:triage:finding/AI11-QA7-ARCH-002-TAUTOLOGICAL-DUPLICATE-CHECK>
+  triage:assignedTo "cwin" ;
+  triage:dispatchChannel "direct-paste-non-atm" ;
+  triage:notes "ASSIGNMENT UPDATE (team-lead, 2026-07-22): the AI.11 QA-7 fast-follow batch (this finding plus AI11-QA7-ATM-QA-201-ENVELOPE-CODEC-COVERAGE and AI11-QA7-ARCH-001-HARDCODED-ALLOWLIST) was reassigned from arch-ctm to cwin. Original ATM dispatch was message 01KY5PZ9PCJMZP3ZFA92NGCGS5 (task id AI11-QA7-FASTFOLLOW-DELETION-GATE-SCOPE, sent to arch-ctm). arch-ctm was subsequently stood down from this batch via ATM message 01KY5S0ZFQCPA89KD5WTM0Z6CA. cwin has no ATM identity, so the reassignment dispatch to cwin was delivered by direct-paste outside the ATM channel and left no ATM message trail on cwin's side; the stand-down message to arch-ctm is the only ATM-side record of the handoff. This note is the canonical audit trail for the reassignment." .
+
+<urn:atm:triage:occurrence/AI11-QA7-ARCH-002/s11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 1202 ;
+  triage:snippet "let adapter_sources = [(\"local TCP\", read_source(&local_tcp)), (\"peer HTTPS\", read_source(&peer_https)),];" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (efe73e1c) -- adapter storage/nudge scan now iterates over adapter_sources array (local TCP and peer HTTPS) instead of single hardcoded local_tcp file. Check applied uniformly to both adapters. Defect resolved. Stale occurrence from superseded branch feature/pAI-s11-post-merge-remediation; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "bb20fd9a" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/bb20fd9a> .
+
+<urn:atm:triage:occurrence/AI11-QA7-ARCH-002/s11/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 1193 ;
+  triage:snippet "let non_loopback_binds = local_tcp_source.lines().filter(|line| line.contains(\"TcpListener::bind\")).filter(|line| !line.contains(\"Ipv4Addr::LOCALHOST\")).collect::<Vec<_>>();" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (efe73e1c) -- non-loopback bind check remains correctly scoped to local_tcp_source; this is appropriate as only TCP adapters use TcpListener. Overall adapter scan now iterates multiple adapters. Stale occurrence from superseded branch feature/pAI-s11-post-merge-remediation; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "bb20fd9a" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/bb20fd9a> .
+
+<urn:atm:triage:occurrence/AI11-QA7-ARCH-002/s11/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 1214 ;
+  triage:snippet "!source.contains(forbidden)," ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (efe73e1c) -- forbidden storage/write/nudge pattern check now iterates over adapter_sources array (both local TCP and peer HTTPS adapters) in lines 1212-1218, not just local_tcp alone. Defect resolved. Stale occurrence from superseded branch feature/pAI-s11-post-merge-remediation; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "bb20fd9a" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/bb20fd9a> .
+
+<urn:atm:triage:occurrence/AI11-QA7-ARCH-002/s11/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 1220 ;
+  triage:snippet "let router_implementations = ai11_guarded_workspace_sources(&root).iter().filter(|path| !is_test_only_source(path)).map(|path| production_api_router_implementation_count(path)).sum::<usize>();" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (efe73e1c) -- duplicate-router check now sums production_api_router_implementation_count across ai11_guarded_workspace_sources (full workspace sweep via collect_rust_files) instead of tautologically matching against single hardcoded dispatcher_source file. Non-tautological check now in place. Stale occurrence from superseded branch feature/pAI-s11-post-merge-remediation; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "bb20fd9a" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/bb20fd9a> .
+
+<urn:atm:triage:worktree/s11/bb20fd9a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "bb20fd9a" ;
+  triage:orderIndex 11 .
+
+<urn:atm:triage:worktree/s12/b6466aa1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
+  triage:headSha "b6466aa1" ;
+  triage:orderIndex 12 .
+
+<urn:atm:triage:worktree/s13/2adc5fa1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "2adc5fa1" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/s14/672ffc34>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "672ffc34" ;
+  triage:orderIndex 14 .
+
+<urn:atm:triage:worktree/s15/b7d2f1c7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "b7d2f1c7" ;
+  triage:orderIndex 15 .
+
+<urn:atm:triage:worktree/s16/853abcfc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "853abcfc" ;
+  triage:orderIndex 16 .
+
+<urn:atm:triage:worktree/s17/2a5a57c8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "2a5a57c8" ;
+  triage:orderIndex 17 .

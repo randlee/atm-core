@@ -1,0 +1,34 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI29-RBP-003>
+  a triage:Finding ;
+  triage:findingId "AI29-RBP-003" ;
+  triage:title "read_http_response_with_deadline parameter name misleading" ;
+  triage:description "read_http_response_with_deadline's parameter _request_deadline (lib.rs:476) actually receives grace-inclusive response_deadline. Misleading name risks future regression." ;
+  triage:phaseId "phase-AI" ;
+  triage:category "RBP" ;
+  triage:severity "Minor" ;
+  triage:status "open" ;
+  triage:repeatable false ;
+  triage:foundIn triage:AICH-S10 ;
+  triage:foundAt "2026-07-25T19:04:04Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence_AI29-RBP-003_8b4bea66> ;
+  triage:openOn <urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_8b4bea66> .
+
+<urn:atm:triage:occurrence_AI29-RBP-003_8b4bea66>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:snippet "read_http_response_with_deadline parameter name misleading" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "8b4bea66" ;
+  triage:occursIn <urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_8b4bea66> .
+
+<urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_8b4bea66>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "8b4bea66" ;
+  triage:orderIndex 29 .

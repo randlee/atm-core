@@ -1,0 +1,48 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/LINT-BOUNDARIES-STALE-ENTRIES>
+  a triage:Finding ;
+  triage:findingId "LINT-BOUNDARIES-STALE-ENTRIES" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T18:40:00Z"^^xsd:dateTime ;
+  triage:title ".just/lint_boundaries.py still lists 2 deleted atm-daemon files in SCB_CONFIG_BOUNDARY_FILES" ;
+  triage:description "AI1-QA-1 (2026-07-20) on PR #592 found .just/lint_boundaries.py:87-92's SCB_CONFIG_BOUNDARY_FILES tuple still lists crates/atm-daemon/src/boundary_adapters.rs and crates/atm-daemon/src/direct_boundaries.rs, both confirmed deleted by the AI.1 cross-host/peer-transport reset (neither file exists in the worktree). Inert — the lint does not fail since the files are simply absent — but stale and should be removed to avoid confusion." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/LINT-BOUNDARIES-STALE-ENTRIES/pAI-1/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-1/da3f978e> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-1/da3f978e> ;
+  triage:highestOpenBranch "feature/pAI-1-daemon-preag-reset" ;
+  triage:triagedAt "2026-07-20T18:40:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/LINT-BOUNDARIES-STALE-ENTRIES/pAI-1/1>
+  a triage:Occurrence ;
+  triage:file ".just/lint_boundaries.py" ;
+  triage:line 87 ;
+  triage:snippet "SCB_CONFIG_BOUNDARY_FILES includes Path(\"crates/atm-daemon/src/boundary_adapters.rs\") and Path(\"crates/atm-daemon/src/direct_boundaries.rs\"), both files deleted" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-1-daemon-preag-reset" ;
+  triage:headSha "da3f978e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-1/da3f978e> .
+
+<urn:atm:triage:worktree/pAI-1/da3f978e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-1-daemon-preag-reset" ;
+  triage:path "feature/pAI-1-daemon-preag-reset" ;
+  triage:headSha "da3f978e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-AI/bcfe0788>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
+  triage:headSha "bcfe0788" ;
+  triage:orderIndex 0 .

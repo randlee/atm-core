@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN15R-COMPOSITION-ERROR-CONFIG-002>
+  a triage:Finding ;
+  triage:findingId "AN15R-COMPOSITION-ERROR-CONFIG-002" ;
+  triage:title "composition_error() (compose_file() path) still collapses ComposeError::Config into the generic TemplateRenderVerificationFailed code, reproducing the AN15R-AMBIGUOUS-INSPECTION-ERROR-CODE-001 ambiguity on a sibling entrypoint" ;
+  triage:description "PR #884 (fix/an15-templatehash-error-code-ambiguity, commit 28668949b19b0f9a368680f4661292298cf5362d) fixed AN15R-AMBIGUOUS-INSPECTION-ERROR-CODE-001 by splitting inspection_error() (crates/atm-template-sc-compose/src/lib.rs:97-105, used by inspect()) into a typed match that routes ComposeError::Config to the new AtmErrorCode::TemplateInspectionParseFailed via inspection_parse_error(). However composition_error() (lib.rs:78-87), the sibling helper used by compose_file() (the production method backing the local `atm compose` preview command, sole caller crates/atm/src/commands/compose.rs:66-69, production call site lib.rs:323 via sc_composer::compose()), was not updated: it still maps ComposeError::Validation | Render | Config uniformly to AtmErrorCode::TemplateRenderVerificationFailed. The same upstream ComposeError::Config condition (a frontmatter/config parse failure) therefore produces a different, code-inconsistent ATM error code depending on which of the adapter's two entrypoints handled it -- the same class of ambiguity the AN15R-AMBIGUOUS-INSPECTION-ERROR-CODE-001 fix was chartered to eliminate, just on compose_file() instead of inspect(). Independently confirmed by three sources: req-qa (ATM-QA-001, Important, FAIL), ruthless-boundary-qa (RBQA-F002-AN15R, Important), and rust-best-practices-agent (RBP-F001, Important), plus direct read of lib.rs:78-113 by quality-mgr. Does not resurrect the original TEMPLATE_HASH_API_FAILED code (composition_error never produced that code), so it is not a reopening of AN15R-AMBIGUOUS-INSPECTION-ERROR-CODE-001's original occurrence -- it is a new, narrower finding blocking that finding's full closure." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "diagnostics" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-15T00:50:39Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.15 ;
+  triage:foundAt "2026-08-15T00:50:39Z"^^xsd:dateTime ;
+  triage:resolutionNotes "Update 2026-08-15 by quality-mgr, AN15R-COMPOSITIONFIX-QA-1: PR #884 commit 7397b6c16 independently verified fixed. composition_error() (crates/atm-template-sc-compose/src/lib.rs:78-86) now routes ComposeError::Config to inspection_parse_error() -> AtmErrorCode::TemplateInspectionParseFailed, mirroring inspection_error()'s already-approved discrimination (Include/Resolve -> template_include_unresolved; Validation/Render -> template_render_verification_failed; Config -> inspection_parse_error). New real (non-mocked, file-backed) test production_adapter_compose_maps_config_parse_to_inspection_error (lib.rs:1279-1311) exercises the actual production compose_file() entrypoint via atm-daemon-bootstrap::template_composer() -> ScComposeTemplateComposer, the same path backing `atm compose` (crates/atm/src/commands/compose.rs:66-69). Sealed-adapter boundary reconfirmed intact: ComposeError never crosses the port; only AtmError (Option<String> cause) does. Independently verified by five sources: quality-mgr direct diff read, two independent arch-qa passes, two independent ruthless-boundary-qa passes (one ad-hoc, one properly scope-locked per template), and req-qa -- all PASS/fixed, 0 blocking findings. Sole non-blocking observation (all reviewers, out of scope): composition_error() and inspection_error() are now byte-for-byte identical match bodies, a future de-duplication candidate, not a defect. cargo-deny --config wrapper failure reported alongside this fix (locally installed cargo-deny 0.20.2 rejects `check --config <path>` ordering) confirmed pre-existing environment/tooling drift unrelated to this fix: CI pins cargo-deny@0.19.9 (.github/workflows/ci.yml:75), where that ordering is valid, and all CI lint jobs pass. CI green on PR #884 (all checks pass). Closing." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN15R-COMPOSITION-ERROR-CONFIG-002/AN15-OCC-001> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AN15R-COMPOSITION-ERROR-CONFIG-002/AN15-OCC-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-template-sc-compose/src/lib.rs" ;
+  triage:line 83 ;
+  triage:snippet "ComposeError::Validation(_) | ComposeError::Render(_) | ComposeError::Config(_) => AtmError::template_render_verification_failed(error)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-08-15T01:40:00Z"^^xsd:dateTime ;
+  triage:branch "fix/an15-templatehash-error-code-ambiguity" ;
+  triage:headSha "7397b6c16" ;
+  triage:occursIn <urn:atm:triage:worktree/AN15R-002/28668949b19b0f9a368680f4661292298cf5362d> .
+
+<urn:atm:triage:worktree/AN15R-002/28668949b19b0f9a368680f4661292298cf5362d>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/an15-templatehash-error-code-ambiguity" ;
+  triage:branch "fix/an15-templatehash-error-code-ambiguity" ;
+  triage:headSha "28668949b19b0f9a368680f4661292298cf5362d" ;
+  triage:orderIndex 0 .

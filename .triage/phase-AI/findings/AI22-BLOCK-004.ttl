@@ -1,0 +1,147 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI22-BLOCK-004>
+  a triage:Finding ;
+  triage:findingId "AI22-BLOCK-004" ;
+  triage:foundAt "2026-07-25T06:42:14Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S2 ;
+  triage:title "Same-host receipt classification is non-idempotent, amplifying via reconcile_after_success redelivery" ;
+  triage:description "crates/atm-daemon/src/runtime_health.rs reconcile_after_success (~617-708) redelivers 'recent' outbound writes for a peer host after every successful delivery, bounded by policy.max_batch_messages/max_message_age and a 60s per-host cooldown. Combined with is_same_host_peer_receipt's flawed classification (see AI22-BLOCK-001) forcing post_write_needed=true on ordinary writes, this can cause repeated hook-subprocess/notification amplification for what should be a single logical delivery." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "hardening" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T03:33:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Fixed by commit 95dbb094 on feature/pAI-s22-loopback-self-send-exemption: reconcile_after_success renamed to reconcile_peer and its automatic post-write-success invocation removed -- it is now called ONLY from the explicit manual peer-sync path (PeerSyncOutcome), eliminating the redelivery-amplification pattern this finding describes. Verified via direct diff review (crates/atm-daemon/src/runtime_health.rs) plus an independent cargo fmt/test/clippy -D warnings run against the commit in a fresh detached worktree -- all clean, 0 test failures. QA verdict: PASS, 0 Blocking/0 Important/0 Minor." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-004/pAI/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-004/pAI-s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-004/pAI-s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-004/pAI-s22/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-004/pAI-s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-004/pAI-s24/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI/87ca7889> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s21/42fbd9fa> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s23/c528137c> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s24/af2fbb83> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAI-s22/95dbb094> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s22/95dbb094> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-004/pAI/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 617 ;
+  triage:snippet "fn reconcile_after_success(...) redelivers recent outbound writes" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "87ca7889" ;
+  triage:reason "Superseded by later fix under merge-forward-collapse; not independently re-fixed on this branch." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI/87ca7889> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-004/pAI-s21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 620 ;
+  triage:snippet "fn reconcile_after_success(...) redelivers recent outbound writes" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:reason "Superseded by later fix under merge-forward-collapse; not independently re-fixed on this branch." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s21/42fbd9fa> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-004/pAI-s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 630 ;
+  triage:snippet "fn reconcile_after_success(...) redelivers recent outbound writes" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:reason "Superseded by later fix under merge-forward-collapse; not independently re-fixed on this branch." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s22/a5aa6813> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-004/pAI-s22/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:snippet "fn reconcile_peer(...) -- called only from the explicit manual peer-sync path, never from automatic post-write success" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "95dbb094" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s22/95dbb094> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-004/pAI-s23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 630 ;
+  triage:snippet "fn reconcile_after_success(...) redelivers recent outbound writes" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:reason "Superseded by later fix under merge-forward-collapse; not independently re-fixed on this branch." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s23/c528137c> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-004/pAI-s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 639 ;
+  triage:snippet "fn reconcile_after_success(...) redelivers recent outbound writes" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "af2fbb83" ;
+  triage:reason "Superseded by later fix under merge-forward-collapse; not independently re-fixed on this branch." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s24/af2fbb83> .
+
+<urn:atm:triage:worktree/pAI/87ca7889>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
+  triage:headSha "87ca7889" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pAI-s21/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAI-s23/c528137c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-s24/af2fbb83>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "af2fbb83" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAI-s22/95dbb094>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "95dbb094" ;
+  triage:orderIndex 2 ;
+  triage:status "contains-fix-verified" .

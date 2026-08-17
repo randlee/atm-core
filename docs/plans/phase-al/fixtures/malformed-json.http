@@ -1,0 +1,12 @@
+# Baseline fixture: malformed JSON on the canonical write route.
+# Source: develop cd03ef337b36ca785dd15270f16cdc2e96ec89cf.
+#
+# Local UDS/loopback disposition: HTTP 400; direct ADR-032 AtmError JSON
+# serialized by write_http_response(ResponseEnvelope::Error(error)).
+# Legacy authenticated TLS disposition: decoder error is propagated; the
+# connection closes without an HTTP response.
+POST /v1/atm/messages HTTP/1.1
+Content-Type: application/json
+Content-Length: 1
+
+{

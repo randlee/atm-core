@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI29-CI-001>
+  a triage:Finding ;
+  triage:findingId "AI29-CI-001" ;
+  triage:title "Windows just-test compile break: local_tcp_transport.rs test module imports #[cfg(unix)]-gated LocalTcpLoopbackServer without matching cfg(unix) gate" ;
+  triage:description "The test module at crates/atm-daemon/src/local_tcp_transport.rs:593-594 is gated only on #[cfg(test)], not #[cfg(unix)]. However, the module imports LocalTcpLoopbackServer (line 612) unconditionally via use super::{ LOCAL_CAPABILITY_HEADER, LocalCapability, LocalTcpLoopbackServer, handle_connection, }. LocalTcpLoopbackServer is defined only on unix (line 47-48) via #[cfg(unix)] pub(crate) struct LocalTcpLoopbackServer. This import pattern was introduced by commit 8b4bea669 ('fix: keep local HTTP responsive during peer recovery') and is present at d36709b1. On Windows, the test compilation fails with error[E0432]: unresolved import `super::LocalTcpLoopbackServer`, rustc note: 'found an item that was configured out' pointing at line 47's #[cfg(unix)] gate. GitHub Actions run 30172089936 (headSha d36709b1), job 'Test (windows-latest)' and 'Just lint (windows-latest)' both fail to compile. Fix scope is narrow: add #[cfg(unix)] to the entire mod tests block, or split unix-only tests into a separate cfg-gated submodule." ;
+  triage:phaseId "phase-AI" ;
+  triage:category "CI" ;
+  triage:severity "Blocking" ;
+  triage:status "open" ;
+  triage:repeatable false ;
+  triage:foundIn triage:AICH-S10 ;
+  triage:foundAt "2026-07-25T19:54:23Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence_AI29-CI-001_1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence_AI29-CI-001_2> ;
+  triage:openOn <urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_d36709b1> .
+
+<urn:atm:triage:occurrence_AI29-CI-001_1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_tcp_transport.rs" ;
+  triage:line 47 ;
+  triage:snippet "#[cfg(unix)] pub(crate) struct LocalTcpLoopbackServer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "d36709b1" ;
+  triage:occursIn <urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_d36709b1> .
+
+<urn:atm:triage:occurrence_AI29-CI-001_2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_tcp_transport.rs" ;
+  triage:line 612 ;
+  triage:snippet "use super::{ LOCAL_CAPABILITY_HEADER, LocalCapability, LocalTcpLoopbackServer, handle_connection, };" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "d36709b1" ;
+  triage:occursIn <urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_d36709b1> .
+
+<urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_d36709b1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "d36709b1" ;
+  triage:orderIndex 29 .

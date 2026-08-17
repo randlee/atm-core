@@ -1,0 +1,95 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-002B>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-002B" ;
+  triage:title "advertised_ip_peer_write_uses_real_dispatcher_persists_and_nudges test does not use distinct non-loopback advertised IP" ;
+  triage:description "Req-qa round 2 acceptance-gap finding on feature/pAI-s23-crosshost-shared-write-path @ 985a6d46. The new test advertised_ip_peer_write_uses_real_dispatcher_persists_and_nudges (crates/atm-daemon/src/https_transport.rs:1089-1105) closes the RecordingRouter defect and delivers real dispatcher/persistence/nudge proof as required by the sprint doc. However, its TrustedPeer.host is literally 'localhost' and binds to 127.0.0.1:0 (loopback interface). The sprint doc acceptance criteria explicitly require (docs/plans/phase-ai/sprint-ai-23-crosshost-shared-write-path.md:215-219, lines 215-219): 'not satisfied by localhost...target must use a genuinely non-loopback advertise interface configured distinctly from sender's own address binding' and 'the acceptance bar is high: runtime proof of real dispatcher + real persistence + real nudge, targeting a configured virtual-Ethernet / advertised IP not localhost 127.0.0.1'. The test satisfies the dispatcher/persistence/nudge bar but not the advertised-IP requirement. Correction: add/extend a test variant targeting a genuinely non-loopback advertise interface (e.g., distinct virtual network interface or configured secondary IP), or amend the sprint doc's acceptance-criteria wording to explicitly accept localhost as equivalent to advertised-IP when verified via the real dispatcher path." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "PR #660 (fix/atmqa002b-ai19qa1 -> integrate/phase-AI, commit 1be484e3). Independently re-verified: crates/atm-daemon/src/https_transport.rs adds non_loopback_interface() helper (lines 985-997) used by advertised_ip_peer_write_uses_real_dispatcher_persists_and_nudges (line 1220) and advertised_ip_peer_send_and_ack_reach_the_shared_router (line 1485), both targeting a genuinely non-loopback advertise interface via the real dispatcher path. cargo test -p atm-daemon https_transport: 14/14 pass. ruthless-boundary-qa: FIXED (minor non-blocking note only). gh pr checks 660: all legs green. QA report posted https://github.com/randlee/atm-core/pull/660#issuecomment-5086217242." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-26T00:55:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S3 ;
+  triage:foundAt "2026-07-26T00:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002B/s23-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002B/integrate-8750587b> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002B/s27-1-migrated> ;
+  triage:openOn <urn:atm:triage:worktree/s27/35cb19f8> ;
+  triage:promoteTo <urn:atm:triage:worktree/s27/35cb19f8> ;
+  triage:triageRecordVersion "2" .
+
+# Acceptance-gap occurrence on s23: test uses localhost/127.0.0.1 instead of non-loopback interface
+<urn:atm:triage:occurrence/ATM-QA-002B/s23-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 1089 ;
+  triage:snippet "fn advertised_ip_peer_write_uses_real_dispatcher_persists_and_nudges() { ... TrustedPeer { host: \"localhost\", tls_root_cert: ... bind(\"127.0.0.1:0\") ... } // Uses loopback interface, not distinct advertised-IP" ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch feature/pAI-s23-crosshost-shared-write-path superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "985a6d46" ;
+  triage:note "Req-qa acceptance-gap: test satisfies real dispatcher/persistence/nudge evidence requirement but does not target a genuinely non-loopback advertised IP as explicitly required by sprint doc. Acceptance gap remains unfixed on s27." ;
+  triage:occursIn <urn:atm:triage:worktree/s23/985a6d46> .
+
+<urn:atm:triage:worktree/s23/985a6d46>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "985a6d46" ;
+  triage:orderIndex 3 .
+
+# Mirrored occurrence on integrate/phase-AI (AI.23 PR #629 merged forward, 8750587b):
+<urn:atm:triage:occurrence/ATM-QA-002B/integrate-8750587b>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 1089 ;
+  triage:snippet "fn advertised_ip_peer_write_uses_real_dispatcher_persists_and_nudges() { ... TrustedPeer { host: 'localhost', ... } bind('127.0.0.1:0') ... } // still uses loopback, not a distinct advertised IP" ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: integrate/phase-AI @ 8750587b is a historical snapshot; current HEAD has not fixed this acceptance gap. Consolidating open occurrence onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:note "AI.23 merged into integrate/phase-AI (PR #629, 8750587b). Acceptance gap remains unfixed." ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/8750587b> .
+
+# 2026-07-26 (quality-mgr, stale branch reconciliation): consolidated open occurrence from superseded branches onto s27.
+<urn:atm:triage:occurrence/ATM-QA-002B/s27-1-migrated>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 1215 ;
+  triage:snippet "fn advertised_ip_peer_send_and_ack_reach_the_shared_router() { ... TrustedPeer { host: \"localhost\", ... } bind(\"127.0.0.1:0\") ... } // still uses loopback, not a distinct advertised IP" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "35cb19f8" ;
+  triage:closureNote "quality-mgr: fixed by PR #660 (1be484e3). advertised_ip_peer_send_and_ack_reach_the_shared_router now uses non_loopback_interface() instead of localhost/127.0.0.1. (2026-07-27)" ;
+  triage:note "Consolidated from s23/integrate. Test advertised_ip_peer_send_and_ack_reach_the_shared_router constructs TrustedPeer with host 'localhost' and binds to '127.0.0.1:0' (loopback). Sprint doc explicitly requires non-loopback interface. Acceptance gap persists. SUPERSEDED 2026-07-27 (quality-mgr): fixed by PR #660, see closureNote." ;
+  triage:occursIn <urn:atm:triage:worktree/s27/35cb19f8> .
+
+<urn:atm:triage:worktree/integrate/8750587b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:orderIndex 100 .
+
+<urn:atm:triage:worktree/s27/35cb19f8>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "35cb19f8" ;
+  triage:orderIndex 7 .

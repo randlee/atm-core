@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI28-QA-001>
+  a triage:Finding ;
+  triage:findingId "AI28-QA-001" ;
+  triage:title "Function-length RULE-002 hard violation in drain()" ;
+  triage:description "crates/atm-daemon/src/peer_drain_coordinator.rs:190-281 contains a drain() function that is 92 lines long, exceeding the enforced 80-line RULE-002 limit. This is a NEW violation introduced in this sprint, directly observable via `just lint` execution failure. The violation is confirmed by execution of the function-length lint check at .just/logs/20260725164730-function-length.log. This is an objective CI-equivalent gate failure, not a judgment call. Fix required: refactor drain() to extract per-page delivery/response-handling logic into a separate function to bring the function under the 80-line limit." ;
+  triage:category "QA" ;
+  triage:severity "blocking" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-07-26T22:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently re-verified against real code on feature/pAI-s28-bounded-peer-recovery current head c0445b1a (not accepted from arch-ctm's b7d84882 self-report). drain() now spans lines 250-321 (72 lines), below the 80-line RULE-002 threshold, verified by brace-depth counting. gh pr checks 634: 8/8 green including Just-lint on all three OS legs at c0445b1a." ;
+  triage:foundIn triage:AICH-S8 ;
+  triage:foundAt "2026-07-25T16:53:36Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-25T09:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-QA-001/pAI-s28/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s28/7163648b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:occurrence/AI28-QA-001/pAI-s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 190 ;
+  triage:snippet "fn drain(...) { ... } // 92 lines total" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "c0445b1a" ;
+  triage:note "Fixed at b7d84882: drain() now lines 250-321 (72 lines). Verified on current head c0445b1a." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:worktree/pAI-s28/7163648b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "7163648b" ;
+  triage:orderIndex 28 ;
+  triage:status "open" .

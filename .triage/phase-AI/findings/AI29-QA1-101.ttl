@@ -1,0 +1,34 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI29-QA1-101>
+  a triage:Finding ;
+  triage:findingId "AI29-QA1-101" ;
+  triage:title "No regression test for MAX_CONCURRENT_CONNECTIONS=64 capacity boundary" ;
+  triage:description "No dedicated regression test drives connection registry to MAX_CONCURRENT_CONNECTIONS=64 and asserts documented rejection fires on 65th connection. Only 2-concurrent-connection starvation-avoidance tested. Requirement: qa-required finding." ;
+  triage:phaseId "phase-AI" ;
+  triage:category "ATM-QA" ;
+  triage:severity "Important" ;
+  triage:status "open" ;
+  triage:repeatable false ;
+  triage:foundIn triage:AICH-S10 ;
+  triage:foundAt "2026-07-25T19:04:04Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence_AI29-QA1-101_8b4bea66> ;
+  triage:openOn <urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_8b4bea66> .
+
+<urn:atm:triage:occurrence_AI29-QA1-101_8b4bea66>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/active_connection_registry.rs" ;
+  triage:snippet "No regression test for MAX_CONCURRENT_CONNECTIONS=64 capacity boundary" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "8b4bea66" ;
+  triage:occursIn <urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_8b4bea66> .
+
+<urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_8b4bea66>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "8b4bea66" ;
+  triage:orderIndex 29 .

@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-001" ;
+  triage:title "AI.40 missing M5 SSH cross-host benchmark evidence/baseline" ;
+  triage:description "Sprint doc docs/plans/phase-ai/sprint-ai-40-local-transport-benchmark.md requires an M5 SSH-tunnel cross-host benchmark deliverable with a recorded baseline. QA-1 (req-qa) found no SSH benchmark evidence or baseline artifact committed on this branch -- only the local UDS/TCP admission benchmark (M1-M4 scope) was actually delivered and evidenced." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements-gap" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-31T22:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI40 ;
+  triage:foundAt "2026-07-31T21:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/S40-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-001/S40-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 1 ;
+  triage:snippet "No SSH-tunnel cross-host benchmark path or baseline artifact present" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "8a444607" ;
+  triage:occursIn <urn:atm:triage:worktree/S40/8a444607> .
+
+<urn:atm:triage:worktree/S40/8a444607>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/S40" ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "8a444607" ;
+  triage:orderIndex 15 .

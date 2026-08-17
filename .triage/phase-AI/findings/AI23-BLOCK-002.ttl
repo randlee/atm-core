@@ -1,0 +1,432 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI23-BLOCK-002>
+  a triage:Finding ;
+  triage:findingId "AI23-BLOCK-002" ;
+  triage:title "Local ingress does not validate/strip authenticated_source_host, allowing forged peer-authenticated status" ;
+  triage:description "ApiRouter::route (crates/atm-daemon/src/runtime_health.rs:901-907) only rejects AuthenticatedIngress::Local writes carrying origin_message_id/origin_timestamp; it never rejects or strips authenticated_source_host on Local ingress. WriteRequest.authenticated_source_host (crates/atm-core/src/send/mod.rs:70-74) is documented as 'not trusted from wire JSON' but commit 95dbb094 broadened its consumer from a host-equality check to a bare presence check: is_same_host_peer_receipt -> is_authenticated_peer_receipt (crates/atm-core/src/send/mod.rs:570-572) now returns true whenever authenticated_source_host.is_some(), with no host comparison. validate_non_self_recipient (crates/atm-core/src/send/mod.rs:930-952) takes an authenticated_peer_ingress bool and skips self-address rejection whenever true. PostWriteRouter::dispatch (crates/atm-daemon/src/runtime_health/peer_delivery_router.rs:20-34 in s22, line 20 in later versions) unconditionally takes the 'authenticated peer receipt' local-post-write branch whenever authenticated_source_host.is_some(), bypassing the normal host-based peer-delivery branch regardless of actual destination. Because Local ingress never validates/strips this field, any local caller (buggy client, stale/reused WriteRequest, or same-host adversary) can set authenticated_source_host on an ordinary local write to (1) bypass self-addressed-send rejection and (2) force the post-write router down the 'already a peer receipt' branch even for a legitimately host-qualified remote recipient, silently skipping actual outbound HTTPS peer delivery (message loss) while still reporting success. This is undocumented per RULE-012 (no ADR/boundary-record update accompanies this widened trust semantic). Vulnerability introduced in commit 95dbb094 on feature/pAI-s22-loopback-self-send-exemption." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture/security-boundary" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-25T21:15:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T22:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently re-verified against real current branch heads (not accepted from arch-ctm's fb1994b9/s27 claim, which does not address the live s28/s29 regression). s28 current head aee3433a6b (PR #634, fetched directly from origin/feature/pAI-s28-bounded-peer-recovery): runtime_health.rs Local-ingress arm rejects authenticated_source_host.is_some() (matches s27's fix, no longer dropped). s29 current head 5590302146c6c6c85d7f7e6f9ed9f9a7134e6f74 (PR #638): identical fix present. Both branches' send/mod.rs::is_peer_receipt delegates to has_authenticated_peer_provenance (3-field AND), not a bare is_some(). Task #1145 can be closed; the regression this finding tracked is fixed on both previously-regressed branches at their real current heads." ;
+  triage:foundIn triage:AICH-S3 ;
+  triage:foundAt "2026-07-25T20:40:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:promoteToBranch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:highestFixedBranch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  # Occurrences on s22 (where vulnerability was introduced)
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s22-primary> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s23-fixed> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/integrate-8750587b> ;
+  # Representative occurrences on open branches
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s25-primary> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s25-fixed-06f21c70> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s30-primary> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s30-secondary-is-peer-receipt> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/pAI-s30/b7ad9f6c-primary> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/pAI-s30/b7ad9f6c-secondary> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s27-fixed-f378a830> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s27-fixed-fb1994b9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s28-regressed-2d7ca600> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s29-regressed-ab442ac3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s28-fixed-aee3433a> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s29-fixed-5590302146> ;
+  triage:triageRecordVersion "8" .
+
+# 2026-07-26 (quality-mgr, AICH-S7-QA-FIX-2): arch-ctm's self-reported forward-merge
+# fix e1b754b5 on feature/pAI-s28-bounded-peer-recovery does NOT touch runtime_health.rs
+# at all (git show --stat e1b754b5: peer_delivery_observability.rs, peer_drain_coordinator.rs,
+# runtime_health/peer_delivery_router.rs, tests/runtime_root/peer_observability.rs only).
+# Independently re-confirmed via git show origin/feature/pAI-s28-bounded-peer-recovery
+# (and identically on s29, inherited via 7e73866a): the Local ingress arm at
+# runtime_health.rs:899-902 only rejects on origin_message_id/origin_timestamp presence;
+# authenticated_source_host is neither checked nor stripped on Local ingress. The
+# s28-regressed-2d7ca600/s29-regressed-ab442ac3 occurrences below remain live and
+# UNFIXED by this commit chain. Task #1145 (fix AI23-BLOCK-002 regression on s28) is
+# still open; arch-ctm's "just test PASS" self-report did not address this finding.
+# s30 (b4b304d0, current head unchanged from prior b7ad9f6c verification) remains fixed.
+
+# 2026-07-26 (quality-mgr, arch-ctm audit evidence re-verification): arch-ctm reported
+# (message 01KYG2HZWP9YXBXEJDR06M6RAF) that AI23-BLOCK-002 is not an open occurrence
+# on feature/pAI-s27-peer-delivery-observability current HEAD fb1994b9. Independently
+# confirmed by direct git show: runtime_health.rs:876-892 rejects Local writes carrying
+# authenticated_source_host/origin_message_id/origin_timestamp and requires all 3 fields
+# for Peer ingress; send/mod.rs:323-325 is_peer_receipt() delegates to
+# has_authenticated_peer_provenance() (send/mod.rs:597-601), a 3-field AND. Matches
+# arch-ctm's claim exactly. New s27-fixed-fb1994b9 occurrence added below superseding
+# the stale f378a830 snapshot. This does NOT close the top-level finding -- s28/s29
+# regressed occurrences above remain open and are the actual live blockers; arch-ctm's
+# message states he is addressing those plus a separate Windows regression.
+
+# 2026-07-26 (quality-mgr, AICH-S10-QA-FWDMERGE-2, PR #623 fwd-merge sweep):
+# REGRESSION FOUND. Merge 2d7ca600 (feature/pAI-s27-peer-delivery-observability
+# -> feature/pAI-s28-bounded-peer-recovery) resolved runtime_health.rs entirely
+# in favor of s28's own pre-fix content (git diff 2d7ca600^1 2d7ca600 --
+# runtime_health.rs is empty) -- s27's fix (f378a830) was silently dropped
+# during the merge, not intentionally reverted. s29 (ab442ac3) inherited the
+# regression unfixed from s28; s30 (3c46f917) is unaffected because it already
+# carried its own independent fix before merging s29 in. Do NOT close s25/s30
+# occurrences by assuming s26-s29 propagation from ancestry alone -- that
+# assumption is exactly what broke here. highestOpenBranch/promoteToBranch
+# moved to s28 (earliest affected, root cause of the regression); fix must
+# land there first, then forward-merge to s29.
+
+# 2026-07-26 (quality-mgr, AICH-S9-QA-FWDMERGE-1, PR #623): re-verified against
+# feature/pAI-s30-semver-http-compatibility CURRENT HEAD b7ad9f6c (the recorded
+# s30-primary/s30-secondary occurrences below are STALE -- headSha 9fd44444
+# predates arch-ctm's forward-merge sweep AI25->AI26->AI27->AI28->AI29->AI30).
+# Independently confirmed (quality-mgr direct grep + ruthless-boundary-qa,
+# 2 sources agree): the s30-secondary-is-peer-receipt occurrence's own snippet
+# and note cite function names (is_authenticated_peer_receipt,
+# is_same_host_peer_receipt) and a regression test
+# (local_write_rejects_forged_peer_provenance at runtime_health.rs:1136-1168)
+# that do NOT exist anywhere in the current worktree, and quote code
+# (`authenticated_source_host.is_some() || origin_message_id.is_some()`) that
+# does not match the real function at send/mod.rs:597-601. This looks like
+# stale/fabricated content carried over from an already-fixed finding rather
+# than a live re-derivation against s30. On CURRENT s30 HEAD (b7ad9f6c):
+# ApiRouter::route (runtime_health.rs:915,923,932) strips authenticated_source_host
+# on Local ingress and requires all 3 fields on Peer ingress; is_peer_receipt()
+# (send/mod.rs:323-325) delegates to has_authenticated_peer_provenance()
+# (send/mod.rs:597-601), a 3-field AND, not a bare is_some(). authenticated_source_host
+# is set to Some(...) only after TLS peer authentication (https_transport.rs:549,627)
+# and is explicitly nulled on local/untrusted ingress. Both the primary and
+# secondary occurrences are FIXED on s30's current head. Top-level status
+# remains "open" ONLY because s26-s29 have not been independently re-verified
+# against their own CURRENT heads this round (this task's scope was the s30
+# forward-merge, not a full re-triage) -- given s23-s30 form a linear branch
+# lineage (each sprint branched from the prior), it is likely s26-s29 already
+# carry this fix too, but that must be confirmed by a dedicated re-triage pass,
+# not assumed. Recommend team-lead schedule that follow-up sweep; also recommend
+# auditing other .ttl records for similarly stale/fabricated occurrence content.
+
+# Closure note: s22-primary and s23 occurrences confirmed fixed at root/introduction site.
+# Round-2 fix verified on feature/pAI-s23-crosshost-shared-write-path @ b0781316.
+# Validated by 3 independent reviewers (quality-mgr, rust-qa-agent, team-lead).
+# Root cause (authenticated_source_host bare is_some() check) now replaced with ALL THREE field AND logic.
+#
+# 2026-07-26 (quality-mgr): AI.23 merged into integrate/phase-AI via PR #629
+# (merge commit 8750587b3e24c6e5a18e14315c363b6ea0f2d8e0). Independently
+# re-verified against integrate/phase-AI HEAD: ApiRouter::route
+# (runtime_health.rs:919-931) now rejects Local writes carrying
+# authenticated_source_host (not just origin_message_id/origin_timestamp) and
+# requires all 3 provenance fields on Peer ingress; is_peer_receipt()
+# (send/mod.rs:311-313) delegates to has_authenticated_peer_provenance()
+# (send/mod.rs:570-574), which ANDs all 3 fields, replacing the vulnerable
+# bare is_some() check entirely. Regression test
+# local_write_rejects_forged_peer_provenance present (runtime_health.rs:1137).
+# This is NOT an unresolved AI.23 blocker on the current integration branch --
+# the s25/s30 occurrences below are stale pre-merge-forward snapshots on
+# branches that have not yet merged this fix forward themselves; status
+# remains "open" at the top level only to track that cascade, not because the
+# fix is missing on integrate/phase-AI.
+
+# Primary occurrence: Local ingress validation gap in ApiRouter::route
+# 2026-07-26 (team-lead): closed via merge-forward-collapse/supersession, same
+# reconciliation pattern applied to AI22-BLOCK-001. s22
+# (feature/pAI-s22-loopback-self-send-exemption) is the introduction site and
+# is already merged (PR #628); no independent fix will ever land on this
+# closed branch. The vulnerability introduced here at 95dbb094 was fixed
+# downstream on s23 @ b0781316 (see s23-fixed occurrence below) and that fix
+# is now independently re-verified as merged into integrate/phase-AI @
+# 8750587b (see integrate-8750587b occurrence below). Reconciling this stale
+# occurrence to fixed/closed to match reality; no code change performed.
+<urn:atm:triage:occurrence/AI23-BLOCK-002/s22-primary>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 901 ;
+  triage:snippet "AuthenticatedIngress::Local if write.origin_message_id.is_some() || write.origin_timestamp.is_some() => { ... } // MISSING: no validation/strip of authenticated_source_host" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "Superseded by s23 fix (b0781316), now confirmed merged into integrate/phase-AI at 8750587b. s22 is already merged (PR #628); occurrence closes by supersession, not independent re-fix." ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "95dbb094" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/95dbb094> .
+
+# Same pattern on s25 -- headSha 9dfc8de1 predates PR #640,
+# "fix(ai25): enforce peer authority boundaries" et al., merged into
+# integrate/phase-AI at 06f21c70 on 2026-07-26. The branch-scoped live-findings
+# gate (open-findings-for-sprint.sparql) requires closing THIS occurrence
+# directly -- it does not consult sibling occurrences on the same branch, so a
+# parallel s25-fixed-06f21c70 occurrence alone does not clear the gate.
+<urn:atm:triage:occurrence/AI23-BLOCK-002/s25-primary>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 901 ;
+  triage:snippet "AuthenticatedIngress::Local if write.origin_message_id.is_some() || write.origin_timestamp.is_some() => { ... } // MISSING: no validation/strip of authenticated_source_host" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "Independently re-verified by team-lead directly against integrate/phase-AI @ 06f21c70 (PR #640 merge, feature/pAI-s25-peer-authority-resolution branch): Local ingress rejects authenticated_source_host (runtime_health.rs:832-837), Peer ingress requires all 3 fields (runtime_health.rs:841-846), is_peer_receipt() delegates to the 3-field AND (send/mod.rs:323-324/597). See s25-fixed-06f21c70 for the current-head snippet." ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "9dfc8de1" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/9dfc8de1> .
+
+# Fixed occurrence on s25 current head (post PR #640 merge into integrate/phase-AI).
+# 2026-07-26 (team-lead): independently re-verified directly against
+# integrate/phase-AI @ 06f21c70 (git show 06f21c70:crates/atm-daemon/src/runtime_health.rs,
+# git show 06f21c70:crates/atm-core/src/send/mod.rs). Local ingress rejects writes
+# carrying authenticated_source_host (runtime_health.rs:832-837), Peer ingress
+# requires all 3 fields (runtime_health.rs:841-846), is_peer_receipt()
+# (send/mod.rs:323-324) delegates to has_authenticated_peer_provenance()
+# (send/mod.rs:597), a 3-field AND. Supersedes the stale s25-primary occurrence.
+<urn:atm:triage:occurrence/AI23-BLOCK-002/s25-fixed-06f21c70>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 832 ;
+  triage:snippet "AuthenticatedIngress::Local if write.authenticated_source_host.is_some() || write.origin_message_id.is_some() || write.origin_timestamp.is_some() => { ... } // FIXED: rejects authenticated_source_host on Local ingress" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "06f21c70" ;
+  triage:note "Independently re-verified by team-lead directly against integrate/phase-AI @ 06f21c70 (PR #640 merge). Supersedes the stale s25-primary occurrence at headSha 9dfc8de1." ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/06f21c70> .
+
+# Same pattern on s30 (highest open branch)
+<urn:atm:triage:occurrence/AI23-BLOCK-002/s30-primary>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 901 ;
+  triage:snippet "AuthenticatedIngress::Local if write.origin_message_id.is_some() || write.origin_timestamp.is_some() => { ... } // MISSING: no validation/strip of authenticated_source_host" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "9fd44444" ;
+  triage:occursIn <urn:atm:triage:worktree/s30/9fd44444> .
+
+# Fixed occurrence on s23: authenticated_source_host validation now enforced
+<urn:atm:triage:occurrence/AI23-BLOCK-002/s23-fixed>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 919 ;
+  triage:snippet "AuthenticatedIngress::Peer if write.authenticated_source_host.is_none() || write.origin_message_id.is_none() || write.origin_timestamp.is_none() => ... // FIXED: requires ALL THREE fields via AND" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b0781316" ;
+  triage:note "Round-2 fix confirmed: combined validation at runtime_health.rs:919-940 (Peer ingress requires all 3 fields) and send/mod.rs:570-572 (is_authenticated_peer_receipt now properly validates). Regression test: runtime_health.rs:1136-1168 (local_write_rejects_forged_peer_provenance)." ;
+  triage:occursIn <urn:atm:triage:worktree/s23/b0781316> .
+
+# Fixed occurrence on integrate/phase-AI: AI.23 (PR #629) merged forward, carrying
+# the s23 fix onto the integration branch itself.
+<urn:atm:triage:occurrence/AI23-BLOCK-002/integrate-8750587b>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 919 ;
+  triage:snippet "AuthenticatedIngress::Peer if write.authenticated_source_host.is_none() || write.origin_message_id.is_none() || write.origin_timestamp.is_none() => ... // FIXED: requires ALL THREE fields via AND (merged forward from s23)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:note "AI.23 (PR #629) merged into integrate/phase-AI at 8750587b3e24c6e5a18e14315c363b6ea0f2d8e0. Independently re-verified: Local ingress now rejects authenticated_source_host too (runtime_health.rs:919-926), Peer ingress requires all 3 fields (runtime_health.rs:927-931), is_peer_receipt() delegates to has_authenticated_peer_provenance() (send/mod.rs:311-313, 570-574) which ANDs all 3 fields. Regression test local_write_rejects_forged_peer_provenance present." ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/8750587b> .
+
+# Secondary occurrence: is_peer_receipt() vulnerability in send/mod.rs (repeatable sweep finding)
+<urn:atm:triage:occurrence/AI23-BLOCK-002/s30-secondary-is-peer-receipt>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 323 ;
+  triage:snippet "pub fn is_peer_receipt(&self) -> bool { self.outbound_request.authenticated_source_host.is_some() || self.outbound_request.origin_message_id.is_some() } // Vulnerable: checks is_some() without validation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "9fd44444" ;
+  triage:occursIn <urn:atm:triage:worktree/s30/9fd44444> .
+
+# Fixed occurrences on s30 current HEAD (post forward-merge sweep)
+<urn:atm:triage:occurrence/AI23-BLOCK-002/pAI-s30/b7ad9f6c-primary>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 915 ;
+  triage:snippet "AuthenticatedIngress::Local => { write.authenticated_source_host = None; ... } // FIXED: strips the field; Peer arm (line 923/932) requires all 3 fields" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "b7ad9f6c" ;
+  triage:note "AICH-S9-QA-FWDMERGE-1 (PR #623): independently re-verified by quality-mgr and ruthless-boundary-qa against current s30 HEAD. Supersedes the stale s30-primary occurrence recorded at headSha 9fd44444." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s30/b7ad9f6c> .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-002/pAI-s30/b7ad9f6c-secondary>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 323 ;
+  triage:snippet "pub fn is_peer_receipt(&self) -> bool { has_authenticated_peer_provenance(&self.outbound_request) } // delegates to a 3-field AND (line 597-601), not a bare is_some()" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "b7ad9f6c" ;
+  triage:note "AICH-S9-QA-FWDMERGE-1 (PR #623): independently re-verified by quality-mgr and ruthless-boundary-qa. Supersedes the stale s30-secondary-is-peer-receipt occurrence, whose snippet/note cite code and a test that do not exist in this worktree." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s30/b7ad9f6c> .
+
+<urn:atm:triage:worktree/pAI-s30/b7ad9f6c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "b7ad9f6c" ;
+  triage:orderIndex 11 .
+
+# Fixed occurrence on s27 (post AI.26->AI.27 forward merge)
+<urn:atm:triage:occurrence/AI23-BLOCK-002/s27-fixed-f378a830>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 863 ;
+  triage:snippet "AuthenticatedIngress::Local if write.authenticated_source_host.is_some() || write.origin_message_id.is_some() || write.origin_timestamp.is_some() => Err(...) // FIXED: reject-style, rejects authenticated_source_host on Local ingress" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "f378a830" ;
+  triage:note "Confirmed by quality-mgr (AICH-S10-QA-FWDMERGE-2): runtime_health.rs:863-866, reject-style fix, correct." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s27/f378a830> .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-002/s27-fixed-fb1994b9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 876 ;
+  triage:snippet "AuthenticatedIngress::Local if write.authenticated_source_host.is_some() || write.origin_message_id.is_some() || write.origin_timestamp.is_some() => Err(...) // FIXED: reject-style, still correct on current s27 HEAD" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "fb1994b9" ;
+  triage:note "Independently re-verified by quality-mgr against arch-ctm's audit claim (message 01KYG2HZWP9YXBXEJDR06M6RAF): runtime_health.rs:876-892 and send/mod.rs:323-325/597-601 confirmed matching exactly. Supersedes the stale f378a830 snapshot." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s27/fb1994b9> .
+
+# REGRESSED occurrence on s28: the s27 fix was silently dropped during the
+# s27->s28 forward merge (2d7ca600 resolved runtime_health.rs entirely in
+# favor of s28's own pre-fix content).
+<urn:atm:triage:occurrence/AI23-BLOCK-002/s28-regressed-2d7ca600>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 899 ;
+  triage:snippet "AuthenticatedIngress::Local if write.origin_message_id.is_some() || write.origin_timestamp.is_some() => { ... } // REGRESSED: authenticated_source_host NOT checked or stripped" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "2d7ca600" ;
+  triage:note "quality-mgr (AICH-S10-QA-FWDMERGE-2): merge 2d7ca600 dropped s27's fix (git diff 2d7ca600^1 2d7ca600 -- crates/atm-daemon/src/runtime_health.rs is empty). A Local IPC caller can forge authenticated_source_host and it passes through to send/mod.rs ack-resolution/peer-persistence logic, which trusts it." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/2d7ca600> .
+
+# REGRESSED occurrence on s29: inherited unfixed from s28, never independently fixed.
+<urn:atm:triage:occurrence/AI23-BLOCK-002/s29-regressed-ab442ac3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 899 ;
+  triage:snippet "AuthenticatedIngress::Local if write.origin_message_id.is_some() || write.origin_timestamp.is_some() => { ... } // REGRESSED: identical to s28, inherited via merge, never independently fixed" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "ab442ac3" ;
+  triage:note "quality-mgr (AICH-S10-QA-FWDMERGE-2): identical regression to s28, inherited via ab442ac3 merge." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s29/ab442ac3> .
+
+<urn:atm:triage:worktree/pAI-s27/f378a830>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "f378a830" ;
+  triage:orderIndex 12 .
+
+<urn:atm:triage:worktree/pAI-s28/2d7ca600>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "2d7ca600" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/pAI-s29/ab442ac3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "ab442ac3" ;
+  triage:orderIndex 14 .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-002/s28-fixed-aee3433a>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 899 ;
+  triage:snippet "AuthenticatedIngress::Local if write.authenticated_source_host.is_some() || write.origin_message_id.is_some() || write.origin_timestamp.is_some() => Err(...) // FIXED: regression resolved on current head" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "aee3433a" ;
+  triage:note "Independently re-verified by quality-mgr against real current PR #634 head (fetched directly from origin), not accepted from arch-ctm's fb1994b9/s27 claim which does not cover this branch. Regression from 2d7ca600 is resolved." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/aee3433a> .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-002/s29-fixed-5590302146>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 899 ;
+  triage:snippet "AuthenticatedIngress::Local if write.authenticated_source_host.is_some() || write.origin_message_id.is_some() || write.origin_timestamp.is_some() => Err(...) // FIXED: regression resolved on current head" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "5590302146c6c6c85d7f7e6f9ed9f9a7134e6f74" ;
+  triage:note "Independently re-verified by quality-mgr against real current PR #638 head (fetched directly from origin). Regression inherited from s28/ab442ac3 is resolved." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s29/5590302146> .
+
+<urn:atm:triage:worktree/pAI-s28/aee3433a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "aee3433a" ;
+  triage:orderIndex 100 .
+
+<urn:atm:triage:worktree/pAI-s29/5590302146>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "5590302146c6c6c85d7f7e6f9ed9f9a7134e6f74" ;
+  triage:orderIndex 101 .
+
+# Worktree snapshots
+<urn:atm:triage:worktree/s22/95dbb094>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "95dbb094" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s25/9dfc8de1>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "9dfc8de1" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s23/b0781316>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b0781316" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s30/9fd44444>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "9fd44444" ;
+  triage:orderIndex 10 .
+
+<urn:atm:triage:worktree/integrate/8750587b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:orderIndex 100 .
+
+<urn:atm:triage:worktree/integrate/06f21c70>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "06f21c70" ;
+  triage:orderIndex 101 .

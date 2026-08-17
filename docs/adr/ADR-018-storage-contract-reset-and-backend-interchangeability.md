@@ -11,6 +11,11 @@ Phase AD supersession note:
 - this ADR still governs the requirement for a shared storage contract,
   backend interoperability, and future SQL backend support
 
+Phase AI supersession note:
+- ADR-033 retires this ADR's generic byte-envelope RPC decision. Phase AI uses
+  versioned HTTP JSON over UDS/HTTPS, while this ADR continues to govern
+  backend-neutral storage traits and canonical domain records.
+
 ## Context
 
 The original ATM architecture required:
@@ -124,19 +129,14 @@ Optional capability traits are allowed only when they express truly additional
 backend capability rather than operation wrapper growth. More than four
 capability traits requires a follow-up ADR.
 
-### 4. RPC Uses A Generic Envelope
+### 4. Historical RPC Envelope (superseded)
 
-RPC is not the storage API.
+The former generic byte-envelope RPC is not the storage API and is no longer
+the accepted transport contract.
 
-The required RPC model is:
-
-- one generic RPC envelope
-- `RpcHeader`
-- `RpcBody` as bytes
-- body decoding to the same canonical domain structs used by storage
-
-ATM must not define separate per-message transport clones where the body
-semantics are already represented by a canonical domain struct.
+ADR-033 replaces it with a versioned HTTP/OpenAPI contract whose adapters
+encode the same canonical domain types. ATM must not define per-transport
+message clones where an existing canonical type suffices.
 
 ### 5. Canonical Domain Structs Are Shared Across Layers
 

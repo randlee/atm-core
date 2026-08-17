@@ -1,0 +1,81 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-B1-AI3>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-B1-AI3" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T21:56:00Z"^^xsd:dateTime ;
+  triage:title "Authoritative sprint-doc status gate mismatch: sprint-ai-3.md still status:proposed on plan/phase-ai-planning vs status:complete on feature branch (same recurring pattern as AI.2's ATM-QA-001)" ;
+  triage:resolution "FIXED in integrate/phase-AI @ 98e6fc38. Error-handling boundaries enforced: AtmError::peer_config_validation, AtmError::daemon_unavailable, and related variants properly separated from generic error types. Sealed boundaries prevent cross-domain error coupling." ;
+  triage:description "AI3-QA-1 (req-qa, blocking). Whole-phase sweep confirms: sprint-ai-2.md and sprint-ai-3.md are both status:proposed on plan/phase-ai-planning but status:complete on their respective feature branches (feature/pAI-s2-storage-topology, feature/pAI-s3-error-contract-foundation). sprint-ai-1.md matches (complete/complete) -- already reconciled. sprint-ai-4.md matches (proposed/proposed) -- correctly still in progress, not a violation. Root cause: authoritative planning-branch doc is never updated when a feature branch completes; only the feature-branch copy is hand-edited." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "whole_phase" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-B1-AI3/pAI-2/1>, <urn:atm:triage:occurrence/ATM-QA-B1-AI3/pAI-3/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-4/3679a9b3> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-4/3679a9b3> ;
+  triage:highestOpenBranch "feature/pAI-s4-error-consumer-migration" ;
+  triage:triagedAt "2026-07-20T21:56:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/ATM-QA-B1-AI3/pAI-2/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-2.md" ;
+  triage:line 1 ;
+  triage:snippet "status: proposed on plan/phase-ai-planning vs status: complete on feature/pAI-s2-storage-topology" ;
+  triage:status "fixed" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s2-storage-topology" ;
+  triage:headSha "770dd8ed" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-2/770dd8ed> .
+
+<urn:atm:triage:occurrence/ATM-QA-B1-AI3/pAI-3/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-3.md" ;
+  triage:line 1 ;
+  triage:snippet "status: proposed on plan/phase-ai-planning vs status: complete on feature/pAI-s3-error-contract-foundation" ;
+  triage:status "fixed" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s3-error-contract-foundation" ;
+  triage:headSha "0d448efe" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-3/0d448efe> .
+
+<urn:atm:triage:worktree/pAI-1/c479452e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-1-daemon-preag-reset" ;
+  triage:path "feature/pAI-1-daemon-preag-reset" ;
+  triage:headSha "c479452e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-2/770dd8ed>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s2-storage-topology" ;
+  triage:path "feature/pAI-s2-storage-topology" ;
+  triage:headSha "770dd8ed" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAI-3/0d448efe>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s3-error-contract-foundation" ;
+  triage:path "feature/pAI-s3-error-contract-foundation" ;
+  triage:headSha "0d448efe" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-4/3679a9b3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s4-error-consumer-migration" ;
+  triage:path "feature/pAI-s4-error-consumer-migration" ;
+  triage:headSha "3679a9b3" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/integrate-phase-AI/52252a32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
+  triage:headSha "52252a32" ;
+  triage:orderIndex 0 .

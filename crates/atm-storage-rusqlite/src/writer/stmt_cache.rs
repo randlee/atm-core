@@ -11,39 +11,11 @@ impl WriterStatementCache {
     ) -> SqlResult<usize> {
         let mut statement = cached(
             connection,
-            "INSERT INTO mail_messages(team, agent, message_key, envelope_json, from_agent, message_text, summary, message_at, message_id, parent_message_id, thread_mode, recorded_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+            "INSERT INTO mail_messages(team, agent, message_key, envelope_json, from_agent, source_chat_id, destination_chat_id, message_text, category, content_format, tags_json, summary, message_at, message_id, parent_message_id, thread_mode, recorded_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
              ON CONFLICT(team, agent, message_key) DO NOTHING;",
         )?;
         statement.execute(params)
-    }
-
-    pub(crate) fn load_successor_owner<P: Params>(
-        &mut self,
-        connection: &Connection,
-        params: P,
-    ) -> SqlResult<String> {
-        let mut statement = cached(
-            connection,
-            "SELECT message_key
-             FROM mail_messages
-             WHERE team = ?1 AND agent = ?2 AND parent_message_id = ?3;",
-        )?;
-        statement.query_row(params, |row| row.get(0))
-    }
-
-    pub(crate) fn load_message_id_owner<P: Params>(
-        &mut self,
-        connection: &Connection,
-        params: P,
-    ) -> SqlResult<String> {
-        let mut statement = cached(
-            connection,
-            "SELECT message_key
-             FROM mail_messages
-             WHERE team = ?1 AND agent = ?2 AND message_id = ?3;",
-        )?;
-        statement.query_row(params, |row| row.get(0))
     }
 
     pub(crate) fn upsert_message_state<P: Params>(

@@ -1,6 +1,5 @@
-use std::collections::HashMap;
 use std::ops::Deref;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 #[allow(
     deprecated,
@@ -8,10 +7,9 @@ use std::sync::{Arc, Mutex};
 )]
 use atm_core::boundary::{
     self, ConfigDoctor, LoadMailMessageStateRequest, LoadMailMessageStateResponse, MailStore,
-    MailStoreDoctor, MailStoreDoctorReport, MailStoreHealthSnapshot, MailStoreIngestReplayState,
-    MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, Message, ReplaySource,
-    RosterStoreDoctor, RosterStoreDoctorReport, UpsertMailMessageStateRequest,
-    UpsertMailMessageStateResponse,
+    MailStoreDoctor, MailStoreDoctorReport, MailStoreHealthSnapshot,
+    MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, Message, RosterStoreDoctor,
+    RosterStoreDoctorReport, UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
 };
 use atm_core::doctor::RuntimeDoctorPorts;
 use atm_core::error::AtmError;
@@ -50,25 +48,9 @@ struct DefaultMailStoreDoctor;
 #[derive(Clone, Default)]
 struct DefaultRosterStoreDoctor;
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-struct ReplayStateKey {
-    team: String,
-    agent: String,
-    source: String,
-}
-
-#[derive(Clone, Default)]
-struct InMemoryIngestReplayState {
-    // Cloned boundary views must observe and mutate the same replay-state map so
-    // a read path and a write path in the same runtime composition do not fork
-    // in-memory replay cursors while AC.4 keeps this temporary compile bridge.
-    states: Arc<Mutex<HashMap<ReplayStateKey, MailStoreIngestReplayState>>>,
-}
-
 #[derive(Clone)]
 struct BoundaryMailStoreView {
     store: Arc<dyn SharedMessageStore + Send + Sync>,
-    replay_state: InMemoryIngestReplayState,
 }
 
 #[derive(Clone)]
@@ -78,10 +60,7 @@ struct BoundaryRosterStoreView {
 
 impl BoundaryMailStoreView {
     fn new(store: Arc<dyn SharedMessageStore + Send + Sync>) -> Self {
-        Self {
-            store,
-            replay_state: InMemoryIngestReplayState::default(),
-        }
+        Self { store }
     }
 
     fn shared_query(team: &TeamName, agent: &AgentName, limit: Option<usize>) -> MessageQuery {
@@ -102,6 +81,8 @@ impl BoundaryMailStoreView {
             parent_message_id: message.envelope.parent_message_id,
             thread_mode: message.envelope.thread_mode,
             from_agent: message.envelope.from,
+            source_chat_id: message.envelope.source_chat_id,
+            destination_chat_id: message.envelope.destination_chat_id,
             summary: message.envelope.summary,
             message_at: message.envelope.timestamp,
             read: message.envelope.read,
@@ -246,54 +227,6 @@ impl MailStore for BoundaryMailStoreView {
         })
     }
 
-    fn record_ingest_replay_state(
-        &self,
-        team: &TeamName,
-        agent: &AgentName,
-        source: &ReplaySource,
-        state: &MailStoreIngestReplayState,
-    ) -> Result<(), AtmError> {
-        let key = ReplayStateKey {
-            team: team.as_str().to_string(),
-            agent: agent.as_str().to_string(),
-            source: source.as_str().to_string(),
-        };
-        self.replay_state
-            .states
-            .lock()
-            .map_err(|_| {
-                AtmError::daemon_unavailable("ingest replay state lock poisoned").with_recovery(
-                    "If the lock is poisoned restart the daemon process to reset the in-process state.",
-                )
-            })?
-            .insert(key, state.clone());
-        Ok(())
-    }
-
-    fn load_ingest_replay_state(
-        &self,
-        team: &TeamName,
-        agent: &AgentName,
-        source: &ReplaySource,
-    ) -> Result<Option<MailStoreIngestReplayState>, AtmError> {
-        let key = ReplayStateKey {
-            team: team.as_str().to_string(),
-            agent: agent.as_str().to_string(),
-            source: source.as_str().to_string(),
-        };
-        Ok(self
-            .replay_state
-            .states
-            .lock()
-            .map_err(|_| {
-                AtmError::daemon_unavailable("ingest replay state lock poisoned").with_recovery(
-                    "If the lock is poisoned restart the daemon process to reset the in-process state.",
-                )
-            })?
-            .get(&key)
-            .cloned())
-    }
-
     fn health_snapshot(
         &self,
         team: &TeamName,
@@ -317,7 +250,6 @@ impl boundary::RosterStore for BoundaryRosterStoreView {
         &self,
         team: &TeamName,
         members: &[boundary::RosterEntry],
-        _source: Option<&ReplaySource>,
     ) -> Result<(), AtmError> {
         self.store.save_roster(&RosterSnapshot {
             team_name: team.clone(),

@@ -37,7 +37,7 @@ Phase S hardens the daemon around four portability boundaries:
 1. `LocalIpcServerTransportAdapter`
    - same-host daemon listener and stream contract
    - Unix implementation: Unix domain socket
-   - Windows implementation: named-pipe-backed local IPC
+   - Windows implementation: legacy local IPC
    - owns logical endpoint naming and same-user local-IPC access control
 
 2. `LifecycleControlSourceAdapter`
@@ -79,7 +79,7 @@ Phase S parity does not depend on introducing a separate SCM-only daemon model.
 
 | Area | Boundary | Unix implementation | Windows implementation | Shared contract | Key Files/Types | Responsible Sprint |
 |---|---|---|---|---|---|---|
-| Same-host local IPC | `BOUNDARY-ServerTransport-Socket` | Unix domain socket | named-pipe-backed local IPC | same request/response framing, deadlines, and typed error surface | `crates/atm-daemon/src/local_ipc_transport.rs`, `crates/atm-daemon/src/composition.rs`, `PreparedRuntimeServer`, `LocalIpcServerTransportAdapter` | `S.1` |
+| Same-host local IPC | `BOUNDARY-ServerTransport-Socket` | Unix domain socket | legacy local IPC | same request/response framing, deadlines, and typed error surface | `crates/atm-daemon/src/local_ipc_transport.rs`, `crates/atm-daemon/src/composition.rs`, `PreparedRuntimeServer`, `LocalIpcServerTransportAdapter` | `S.1` |
 | Lifecycle control | `BOUNDARY-LifecycleControlSource-Daemon` | signal-backed control source | console or service-control event source | same bounded shutdown and reload semantics | `crates/atm-daemon/src/lifecycle_control.rs`, `crates/atm-daemon/src/composition.rs`, `LifecycleControlSourceAdapter`, `RuntimeComposition` | `S.1` |
 | Host ownership | `BOUNDARY-HostOwnership-Daemon` | Unix file-lock and owner-record mechanics | Windows file-lock and owner-record mechanics | same singleton admission, stable `launch.lock` / `owner.lock` paths, stale-owner recovery, and ordered release semantics | `crates/atm-daemon/src/host_ownership.rs`, `crates/atm-daemon/src/composition.rs`, `HostOwnershipAdapter`, `host_runtime_lock_path*`, `write_owner_record`, `recover_stale_owner_lock` | `S.1` |
 
@@ -343,7 +343,7 @@ Required code targets:
   - shared same-host production-path coverage through the real local IPC path
 
 Required refactor direction:
-- move Unix socket path handling and Windows named-pipe name mapping behind the
+- move Unix socket path handling and Windows endpoint mapping behind the
   local-IPC adapter plus shared endpoint helper
 - replace Unix-only same-host runtime stubs with a real Windows transport
   implementation

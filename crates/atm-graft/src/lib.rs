@@ -1,7 +1,6 @@
 //! Thin embedded ATM client crate for graft-aware host agents.
 //! Production embedded delivery uses a receiver-owned same-host listener that
 //! accepts one bounded nudge request per connection.
-
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Sender};
@@ -9,39 +8,39 @@ use std::sync::{Arc, RwLock};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use atm_core::ack::{AckOutcome, AckRequest};
-use atm_core::boundary::{ClientTransport, PostSendHookEvent};
-use atm_core::error::AtmError;
+use atm_core::api::{ApiRequest, DaemonApiClient};
+use atm_core::boundary::PostSendHookEvent;
+use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::AtmGraftClient;
-use atm_core::observability::{
-    CommandEvent, NullObservability, ObservabilityPort, action_name, outcome_label,
-};
-use atm_core::protocol::{
-    RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
-};
-use atm_core::read::{ReadOutcome, ReadQuery};
-use atm_core::send::{SendOutcome, SendRequest};
-use atm_core::types::{AgentName, TeamName};
-use atm_daemon_client::{
-    BootstrapTraceability, DaemonSupervisor, parse_bootstrap_agent, parse_bootstrap_team,
-    resolve_daemon_bin, resolve_daemon_local_ipc_endpoint,
-};
+use atm_core::list::{ListOutcome, ListQuery};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
+use atm_core::read::{PeekQuery, ReadOutcome, ReadQuery};
+use atm_core::send::{SendOutcome, SendRequest, WriteOutcome};
+use atm_core::types::{AgentName, ChatId, TeamName};
+use atm_daemon_client::{resolve_daemon_local_ipc_endpoint, unexpected_response};
+use atm_http_runtime::SAME_HOST_REQUEST_DEADLINE;
 
 mod nudge_sink;
 mod runtime;
-mod transport;
 
 use runtime::{
     GraftReceiverLoopContext, RECEIVE_LOOP_READY_DEADLINE, ReceiverReadyLatch,
     join_receive_loop_with_deadline, load_graft_config, read_snapshot, run_graft_receiver_loop,
-    set_session_state, wake_graft_receiver_listener,
+    set_session_state,
 };
-use transport::{GraftLocalIpcClientTransport, unexpected_response};
 
-const SAME_HOST_REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 pub(crate) const RECEIVE_LOOP_JOIN_DEADLINE: Duration = Duration::from_secs(5);
 
 pub use atm_core::{AtmConfig, GraftConfig};
+
+/// Count-only durable mailbox work projection for graft recovery notices.
+///
+/// This intentionally contains no message body, identifier, or mutable state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MailboxWorkCounts {
+    pub unread: usize,
+    pub pending_ack: usize,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GraftSessionState {
@@ -67,13 +66,25 @@ pub mod prelude {
     };
 }
 
+/// One nudge as presented to a host-owned agent session.
+///
+/// `body` is the canonical ATM dispatch payload for the agent loop.  The
+/// separately rendered `notice_text` is safe, human-facing context for the
+/// user-visible gateway channel; it must never be inferred by parsing `body`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostNudge {
+    pub event: PostSendHookEvent,
+    pub body: String,
+    pub notice_text: String,
+}
+
 /// Host-owned bridge for automatic between-tool-call nudge injection.
 pub trait HostNudgeInjector: Send + Sync {
     /// # Errors
     ///
     /// Returns [`AtmError`] when the host cannot safely inject the nudge into
     /// its between-tool-call context flow.
-    fn inject_nudge(&self, nudge: &PostSendHookEvent) -> Result<(), AtmError>;
+    fn inject_nudge(&self, nudge: &HostNudge) -> Result<(), AtmError>;
 }
 
 /// ATM-owned graft observability boundary supplied by the embedding host.
@@ -83,6 +94,15 @@ pub trait GraftObservability: Send + Sync {
     fn nudge_delivered(&self, _snapshot: &SessionSnapshot, _nudge: &PostSendHookEvent) {}
 
     fn session_error(&self, _snapshot: &SessionSnapshot, _action: &'static str, _error: &AtmError) {
+    }
+
+    /// Records receiver-ownership lifecycle without exposing endpoint capability material.
+    fn receiver_ownership(
+        &self,
+        _snapshot: &SessionSnapshot,
+        _action: &'static str,
+        _outcome: &'static str,
+    ) {
     }
 }
 
@@ -98,6 +118,7 @@ pub struct GraftSessionOptions {
     workspace_root: PathBuf,
     team: TeamName,
     agent: AgentName,
+    owner_chat_id: Option<ChatId>,
 }
 
 impl GraftSessionOptions {
@@ -106,15 +127,15 @@ impl GraftSessionOptions {
             workspace_root: workspace_root.into(),
             team,
             agent,
+            owner_chat_id: None,
         }
     }
 
-    pub fn for_current_process(
-        workspace_root: impl Into<PathBuf>,
-        team: TeamName,
-        agent: AgentName,
-    ) -> Self {
-        Self::new(workspace_root, team, agent)
+    /// Retain the host session identity as receiver-owner metadata.
+    #[must_use]
+    pub fn with_owner_chat_id(mut self, owner_chat_id: Option<ChatId>) -> Self {
+        self.owner_chat_id = owner_chat_id;
+        self
     }
 
     fn activation_state(&self) -> SessionSnapshot {
@@ -136,66 +157,64 @@ impl GraftSessionOptions {
     pub(crate) fn agent(&self) -> &AgentName {
         &self.agent
     }
+
+    pub(crate) fn owner_chat_id(&self) -> Option<ChatId> {
+        self.owner_chat_id.clone()
+    }
 }
 
 /// Thin daemon-backed same-host client for embedded graft consumers.
 #[derive(Clone)]
 pub struct GraftClient {
-    transport: Arc<dyn ClientTransport + Send + Sync>,
+    /// The one Tokio/Axum client boundary for every graft daemon operation.
+    async_transport: Arc<dyn DaemonApiClient + Send + Sync>,
 }
 
 impl fmt::Debug for GraftClient {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("GraftClient")
-            .field("transport", &"dyn ClientTransport")
+            .field("async_transport", &"dyn DaemonApiClient")
             .finish()
     }
 }
 
 impl GraftClient {
+    /// Connect only to the daemon selected and already running for this host.
+    ///
+    /// This deliberately never resolves a daemon executable or invokes the
+    /// supervisor. Embedded hosts use it so a graft session cannot create a
+    /// competing local daemon while the operator-owned runtime is being
+    /// switched or recovered.
+    ///
     /// # Errors
     ///
-    /// Returns [`AtmError`] when the daemon endpoint or daemon binary cannot
-    /// be resolved or the same-host daemon cannot be reached or started.
-    pub fn connect() -> Result<Self, AtmError> {
+    /// Returns [`AtmError`] when the published local endpoint is absent or the
+    /// selected daemon cannot be reached. Recover by restoring the one managed
+    /// runtime through `/daemon-switch`, then verify `atm doctor --json`.
+    pub fn connect_existing() -> Result<Self, AtmError> {
         let endpoint = resolve_daemon_local_ipc_endpoint()?;
-        let daemon_bin = resolve_daemon_bin("graft host")?;
-        let transport = Arc::new(GraftLocalIpcClientTransport::new(endpoint.clone()));
-        let supervisor = DaemonSupervisor::new(endpoint, daemon_bin);
-        let observability = NullObservability;
-        let emit_bootstrap_event = |event: atm_daemon_client::BootstrapCommandEvent| {
-            observability.emit(CommandEvent {
-                command: event.command,
-                action: action_name(event.action),
-                outcome: outcome_label(event.outcome),
-                team: event.team,
-                agent: event.agent.clone(),
-                sender: event.agent,
-                message_id: None,
-                requires_ack: false,
-                dry_run: false,
-                task_id: None,
-                error_code: event.error_code,
-                error_message: event.error_message,
-            })
-        };
-        let traceability = BootstrapTraceability::new(
-            "graft_connect",
-            &emit_bootstrap_event,
-            parse_bootstrap_team()?,
-            parse_bootstrap_agent()?,
-        );
-        supervisor.ensure_daemon_available_with_traceability(&traceability, || {
-            transport.probe_connection()
-        })?;
+        Self::from_existing_endpoint(endpoint)
+    }
+
+    fn from_existing_endpoint(
+        endpoint: atm_daemon_client::DaemonLocalIpcEndpoint,
+    ) -> Result<Self, AtmError> {
         Ok(Self {
-            transport: transport as Arc<dyn ClientTransport + Send + Sync>,
+            async_transport: atm_http_runtime::preferred_local_client(
+                endpoint.as_ref(),
+                SAME_HOST_REQUEST_DEADLINE,
+            )?,
         })
     }
 
-    #[cfg(test)]
-    fn from_transport(transport: Arc<dyn ClientTransport + Send + Sync>) -> Self {
-        Self { transport }
+    #[cfg(any(test, feature = "test-support"))]
+    #[doc(hidden)]
+    pub fn from_fake_transport_for_test(
+        transport: Arc<atm_core::transport::testing::FakeClientTransport>,
+    ) -> Self {
+        Self {
+            async_transport: transport,
+        }
     }
 
     /// # Errors
@@ -208,52 +227,113 @@ impl GraftClient {
         injector: Arc<dyn HostNudgeInjector>,
     ) -> Result<GraftSession, AtmError> {
         GraftSession::activate_with_observability(
-            self.clone(),
             options,
             injector,
             Arc::new(NoopGraftObservability),
         )
     }
 
-    fn send_request(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        match self.transport.send(request)? {
-            ResponseEnvelope::Error(error) => Err(error.into_atm_error()),
+    async fn execute_request(
+        &self,
+        request: RequestEnvelope,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        match self
+            .async_transport
+            .execute(ApiRequest::new(request))
+            .await?
+            .into_inner()
+        {
+            ResponseEnvelope::Error(error) => Err(error),
             response => Ok(response),
         }
     }
+
+    /// Read a mailbox projection without changing the selected message state.
+    pub async fn peek_message(&self, query: PeekQuery) -> Result<ReadOutcome, AtmError> {
+        match self.execute_request(RequestEnvelope::Peek(query)).await? {
+            ResponseEnvelope::Peek(outcome) => Ok(*outcome),
+            other => Err(unexpected_response("peek", other)),
+        }
+    }
+
+    /// Execute the one canonical write operation, including acknowledgement writes.
+    pub async fn write_message(&self, request: SendRequest) -> Result<WriteOutcome, AtmError> {
+        let transport =
+            atm_http_runtime::selected_write_transport(&request, &self.async_transport)?;
+        match transport
+            .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request))))
+            .await?
+            .into_inner()
+        {
+            ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
+                Ok(WriteOutcome::Sent(outcome))
+            }
+            ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => {
+                Ok(WriteOutcome::Acknowledged(outcome))
+            }
+            other => Err(unexpected_response("write", other)),
+        }
+    }
+
+    /// Read the daemon's existing mailbox bucket counts without mutating mail.
+    pub async fn mailbox_work_counts(
+        &self,
+        query: ReadQuery,
+    ) -> Result<MailboxWorkCounts, AtmError> {
+        if query.seen_state_update() {
+            return Err(AtmError::new(
+                AtmErrorCode::CallerContextRequestInvalid,
+                "mailbox work counts require a non-mutating read query",
+            ));
+        }
+        let outcome = self.read_message(query).await?;
+        Ok(MailboxWorkCounts {
+            unread: outcome.bucket_counts.unread,
+            pending_ack: outcome.bucket_counts.pending_ack,
+        })
+    }
 }
 
+#[async_trait::async_trait]
 impl AtmGraftClient for GraftClient {
-    fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Send(SendRequestEnvelope::Compose(request)))? {
+    async fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
+        let transport =
+            atm_http_runtime::selected_write_transport(&request, &self.async_transport)?;
+        match transport
+            .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request))))
+            .await?
+            .into_inner()
+        {
             ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => Ok(outcome),
             other => Err(unexpected_response("send", other)),
         }
     }
 
-    fn read_message(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Receive(query))? {
+    async fn read_message(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
+        match self
+            .execute_request(RequestEnvelope::Receive(query))
+            .await?
+        {
             ResponseEnvelope::Receive(outcome) => Ok(*outcome),
             other => Err(unexpected_response("read", other)),
         }
     }
 
-    fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(
-            request,
-        )))? {
-            ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => Ok(outcome),
-            other => Err(unexpected_response("ack", other)),
+    async fn list_messages(&self, query: ListQuery) -> Result<ListOutcome, AtmError> {
+        match self.execute_request(RequestEnvelope::List(query)).await? {
+            ResponseEnvelope::List(outcome) => Ok(outcome),
+            other => Err(unexpected_response("list", other)),
         }
     }
 }
 
 /// Concrete embedded graft session runtime.
 pub struct GraftSession {
-    client: Arc<dyn AtmGraftClient>,
+    // Reads dominate (status projection and hook delivery) while updates only
+    // replace a complete snapshot, so an RwLock permits concurrent readers
+    // without exposing partial session state to a receiver callback.
     snapshot: Arc<RwLock<SessionSnapshot>>,
     observability: Arc<dyn GraftObservability>,
-    endpoint_path: Option<PathBuf>,
     stop_tx: Option<Sender<()>>,
     join_handle: Option<JoinHandle<Result<(), AtmError>>>,
 }
@@ -284,16 +364,10 @@ impl GraftSession {
     /// Returns [`AtmError`] when configuration gating allows graft mode but
     /// receiver-loop startup fails.
     pub fn activate(
-        client: GraftClient,
         options: GraftSessionOptions,
         injector: Arc<dyn HostNudgeInjector>,
     ) -> Result<Self, AtmError> {
-        Self::activate_with_observability(
-            client,
-            options,
-            injector,
-            Arc::new(NoopGraftObservability),
-        )
+        Self::activate_with_observability(options, injector, Arc::new(NoopGraftObservability))
     }
 
     /// # Errors
@@ -301,23 +375,15 @@ impl GraftSession {
     /// Returns [`AtmError`] when configuration gating allows graft mode but
     /// receiver-loop startup fails.
     pub fn activate_with_observability(
-        client: GraftClient,
         options: GraftSessionOptions,
         injector: Arc<dyn HostNudgeInjector>,
         observability: Arc<dyn GraftObservability>,
     ) -> Result<Self, AtmError> {
         let graft_config = load_graft_config(&options.workspace_root)?;
-        Self::activate_with_graft_config(
-            Arc::new(client),
-            graft_config,
-            options,
-            injector,
-            observability,
-        )
+        Self::activate_with_graft_config(graft_config, options, injector, observability)
     }
 
     fn activate_with_graft_config(
-        client: Arc<dyn AtmGraftClient>,
         graft_config: Option<GraftConfig>,
         options: GraftSessionOptions,
         injector: Arc<dyn HostNudgeInjector>,
@@ -327,19 +393,19 @@ impl GraftSession {
         let snapshot = Arc::new(RwLock::new(initial_snapshot));
 
         let Some(graft_config) = graft_config else {
-            return inactive_session(client, snapshot, observability);
+            return inactive_session(snapshot, observability);
         };
         if !graft_config.enabled {
-            return inactive_session(client, snapshot, observability);
+            return inactive_session(snapshot, observability);
         }
 
-        let endpoint_path = atm_core::graft::graft_receiver_socket_path_from_home(
+        let endpoint_path = atm_core::graft::graft_receiver_record_path_from_root(
             options.workspace_root(),
             options.team(),
             options.agent(),
         );
         let (stop_tx, join_handle) = Self::start_graft_receive_loop(
-            endpoint_path.clone(),
+            endpoint_path,
             options,
             Arc::clone(&snapshot),
             injector,
@@ -352,10 +418,8 @@ impl GraftSession {
             observability.as_ref(),
         )?;
         Ok(Self {
-            client,
             snapshot,
             observability,
-            endpoint_path: Some(endpoint_path),
             stop_tx: Some(stop_tx),
             join_handle: Some(join_handle),
         })
@@ -379,30 +443,12 @@ impl GraftSession {
             ready_latch.notifier(),
             stop_rx,
         )?;
-        ready_latch
-            .wait_until_listening(RECEIVE_LOOP_READY_DEADLINE)
-            .map_err(|error| {
-                error.with_recovery(
-                    "Retry graft activation after the same-host receiver loop can bind and signal readiness within the bounded startup deadline.",
-                )
-            })?;
+        ready_latch.wait_until_listening(RECEIVE_LOOP_READY_DEADLINE)?;
         Ok((stop_tx, join_handle))
     }
 
     pub fn snapshot(&self) -> Result<SessionSnapshot, AtmError> {
         read_snapshot(&self.snapshot)
-    }
-
-    pub fn send(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
-        self.client.send_message(request)
-    }
-
-    pub fn read(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
-        self.client.read_message(query)
-    }
-
-    pub fn ack(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
-        self.client.acknowledge_message(request)
     }
 
     /// # Errors
@@ -414,11 +460,10 @@ impl GraftSession {
     }
 
     fn close_internal(&mut self) -> Result<(), AtmError> {
+        // The non-blocking accept loop notices the stop signal within one poll
+        // interval, so stopping needs no wake-by-connect side channel.
         if let Some(stop_tx) = self.stop_tx.take() {
             let _ = stop_tx.send(());
-        }
-        if let Some(endpoint_path) = self.endpoint_path.as_ref() {
-            let _ = wake_graft_receiver_listener(endpoint_path);
         }
         if let Some(join_handle) = self.join_handle.take()
             && let Err(error) = join_receive_loop_with_deadline(join_handle)
@@ -440,16 +485,13 @@ impl GraftSession {
 }
 
 fn inactive_session(
-    client: Arc<dyn AtmGraftClient>,
     snapshot: Arc<RwLock<SessionSnapshot>>,
     observability: Arc<dyn GraftObservability>,
 ) -> Result<GraftSession, AtmError> {
     observability.session_state_changed(&read_snapshot(&snapshot)?);
     Ok(GraftSession {
-        client,
         snapshot,
         observability,
-        endpoint_path: None,
         stop_tx: None,
         join_handle: None,
     })
@@ -470,6 +512,7 @@ fn spawn_graft_receive_loop(
         .spawn(move || {
             run_graft_receiver_loop(GraftReceiverLoopContext {
                 endpoint_path,
+                owner_chat_id: options.owner_chat_id(),
                 snapshot: worker_snapshot,
                 injector,
                 observability: worker_observability,
@@ -481,11 +524,7 @@ fn spawn_graft_receive_loop(
 }
 
 fn spawn_receive_loop_error(source: std::io::Error) -> AtmError {
-    AtmError::daemon_unavailable("failed to spawn graft receive loop")
-        .with_source(source)
-        .with_recovery(
-            "Retry graft activation after the embedding host allows one live receive thread for the active session.",
-        )
+    AtmError::daemon_unavailable("failed to spawn graft receive loop").with_cause(source)
 }
 
 impl Drop for GraftSession {
@@ -500,25 +539,11 @@ impl Drop for GraftSession {
                 .unwrap_or_else(|snapshot_error| format!("unavailable:{snapshot_error}"));
             tracing::warn!(
                 identity,
-                error_code = %error.code,
-                error_message = %error.message,
+                error_code = %error.code(),
+                error_message = %error.message(),
                 "graft session drop cleanup failed"
             );
         }
-    }
-}
-
-impl AtmGraftClient for GraftSession {
-    fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
-        self.client.send_message(request)
-    }
-
-    fn read_message(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
-        self.client.read_message(query)
-    }
-
-    fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
-        self.client.acknowledge_message(request)
     }
 }
 
@@ -536,7 +561,6 @@ mod tests {
     use atm_core::test_support::{EnvGuard, TEST_LEAD, TEST_TEAM};
     use atm_core::transport::testing::FakeClientTransport;
     use atm_core::types::{AgentName, CommandAction, ReadSelection, TeamName};
-    use serde_json::json;
     use tempfile::TempDir;
 
     use super::*;
@@ -545,25 +569,8 @@ mod tests {
     struct NoopInjector;
 
     impl HostNudgeInjector for NoopInjector {
-        fn inject_nudge(&self, _nudge: &PostSendHookEvent) -> Result<(), AtmError> {
+        fn inject_nudge(&self, _nudge: &HostNudge) -> Result<(), AtmError> {
             Ok(())
-        }
-    }
-
-    #[derive(Debug, Default)]
-    struct StubSessionClient;
-
-    impl AtmGraftClient for StubSessionClient {
-        fn send_message(&self, _request: SendRequest) -> Result<SendOutcome, AtmError> {
-            panic!("send_message should not run in inactive-session tests")
-        }
-
-        fn read_message(&self, _query: ReadQuery) -> Result<ReadOutcome, AtmError> {
-            panic!("read_message should not run in inactive-session tests")
-        }
-
-        fn acknowledge_message(&self, _request: AckRequest) -> Result<AckOutcome, AtmError> {
-            panic!("acknowledge_message should not run in inactive-session tests")
         }
     }
 
@@ -587,20 +594,19 @@ mod tests {
     }
 
     fn session_options(paths: &TestPaths) -> GraftSessionOptions {
-        GraftSessionOptions::for_current_process(
+        GraftSessionOptions::new(
             paths.workspace_root.clone(),
             TeamName::from_validated(TEST_TEAM),
             AgentName::from_validated("qa-a"),
         )
     }
 
-    #[test]
-    fn client_routes_send_read_and_ack_over_transport() {
+    #[tokio::test]
+    async fn client_routes_send_and_read_over_transport() {
         let paths = test_paths();
         let transport = Arc::new(FakeClientTransport::new(Box::new(
-            |request| {
-                match request {
-                CoreRequestEnvelope::Send(SendRequestEnvelope::Compose(_)) => Ok(
+            |request| match request {
+                CoreRequestEnvelope::Write(request) if request.to.is_some() => Ok(
                     CoreResponseEnvelope::Send(SendResponseEnvelope::Sent(SendOutcome {
                         action: CommandAction::Send,
                         team: TeamName::from_validated(TEST_TEAM),
@@ -654,30 +660,10 @@ mod tests {
                         },
                     })))
                 }
-                CoreRequestEnvelope::Send(SendRequestEnvelope::Acknowledge(_)) => Ok(
-                    CoreResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
-                        serde_json::from_value(json!({
-                            "action": "ack",
-                            "team": TEST_TEAM,
-                            "agent": TEST_LEAD,
-                            "message_id": atm_core::schema::AtmMessageId::new().to_string(),
-                            "task_id": null,
-                            "reply_disposition": {
-                                "kind": "sent",
-                                "reply_target": format!("{TEST_LEAD}@{TEST_TEAM}"),
-                                "reply_message_id": atm_core::schema::AtmMessageId::new().to_string()
-                            },
-                            "reply_text": "ack",
-                            "warnings": [],
-                        }))
-                        .expect("ack outcome"),
-                    )),
-                ),
                 other => panic!("unexpected request: {other:?}"),
-            }
             },
         )));
-        let client = GraftClient::from_transport(transport);
+        let client = GraftClient::from_fake_transport_for_test(transport);
 
         let send_request = SendRequest::new(
             paths.home_dir.clone(),
@@ -692,7 +678,7 @@ mod tests {
             false,
         )
         .expect("send request");
-        client.send_message(send_request).expect("send");
+        client.send_message(send_request).await.expect("send");
 
         let read_query = ReadQuery::new(
             paths.home_dir.clone(),
@@ -711,24 +697,104 @@ mod tests {
             None,
         )
         .expect("read query");
-        client.read_message(read_query).expect("read");
+        client.read_message(read_query).await.expect("read");
+    }
 
-        let ack_request = AckRequest {
-            home_dir: paths.home_dir.clone(),
-            current_dir: paths.workspace_root.clone(),
-            caller_identity: AgentName::from_validated(TEST_LEAD),
-            caller_team: TeamName::from_validated(TEST_TEAM),
-            message_id: atm_core::schema::AtmMessageId::new(),
-            reply_body: "ack".to_string(),
-        };
-        client.acknowledge_message(ack_request).expect("ack");
+    #[tokio::test]
+    async fn mailbox_work_counts_projects_existing_non_mutating_read_buckets() {
+        for (unread, pending_ack) in [(0, 0), (2, 0), (0, 3), (2, 3)] {
+            let paths = test_paths();
+            let transport = Arc::new(FakeClientTransport::new(Box::new(
+                move |request| match request {
+                    CoreRequestEnvelope::Receive(query) => {
+                        assert!(
+                            !query.seen_state_update(),
+                            "count projection must not mutate read state"
+                        );
+                        Ok(CoreResponseEnvelope::Receive(Box::new(ReadOutcome {
+                            action: CommandAction::Read,
+                            team: TeamName::from_validated(TEST_TEAM),
+                            agent: AgentName::from_validated(TEST_LEAD),
+                            selection_mode: ReadSelection::All,
+                            mutation_applied: false,
+                            count: unread + pending_ack,
+                            message: None,
+                            selected_message_id: None,
+                            match_count: unread + pending_ack,
+                            additional_match_count: 0,
+                            bucket_counts: BucketCounts {
+                                unread,
+                                pending_ack,
+                                history: 9,
+                            },
+                        })))
+                    }
+                    other => panic!("unexpected request: {other:?}"),
+                },
+            )));
+            let client = GraftClient::from_fake_transport_for_test(transport);
+            let query = ReadQuery::new(
+                paths.home_dir,
+                paths.workspace_root,
+                AgentName::from_validated(TEST_LEAD),
+                None,
+                TeamName::from_validated(TEST_TEAM),
+                ReadSelection::All,
+                false,
+                false,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("query");
+            assert_eq!(
+                client.mailbox_work_counts(query).await.expect("counts"),
+                MailboxWorkCounts {
+                    unread,
+                    pending_ack
+                }
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn mailbox_work_counts_rejects_a_mutating_query_before_transport() {
+        let paths = test_paths();
+        let transport = Arc::new(FakeClientTransport::new(Box::new(|request| {
+            panic!("mutating count query reached transport: {request:?}")
+        })));
+        let query = ReadQuery::new(
+            paths.home_dir,
+            paths.workspace_root,
+            AgentName::from_validated(TEST_LEAD),
+            None,
+            TeamName::from_validated(TEST_TEAM),
+            ReadSelection::All,
+            false,
+            true,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("query");
+
+        let error = GraftClient::from_fake_transport_for_test(transport)
+            .mailbox_work_counts(query)
+            .await
+            .expect_err("mutating count query must be rejected");
+        assert_eq!(error.code(), AtmErrorCode::CallerContextRequestInvalid);
     }
 
     #[test]
     fn session_stays_inactive_without_atm_config() {
         let paths = test_paths();
         let session = GraftSession::activate_with_graft_config(
-            Arc::new(StubSessionClient),
             None,
             session_options(&paths),
             Arc::new(NoopInjector),
@@ -746,7 +812,6 @@ mod tests {
     fn session_stays_inactive_when_graft_is_disabled() {
         let paths = test_paths();
         let session = GraftSession::activate_with_graft_config(
-            Arc::new(StubSessionClient),
             Some(GraftConfig { enabled: false }),
             session_options(&paths),
             Arc::new(NoopInjector),
@@ -778,9 +843,8 @@ mod tests {
         ]);
 
         let session = GraftSession::activate_with_graft_config(
-            Arc::new(StubSessionClient),
             load_graft_config(tempdir.path()).expect("graft config"),
-            GraftSessionOptions::for_current_process(
+            GraftSessionOptions::new(
                 tempdir.path(),
                 TeamName::from_validated(TEST_TEAM),
                 AgentName::from_validated("qa-a"),

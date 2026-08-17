@@ -1,0 +1,31 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-201>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-201" ;
+  triage:title "AI.33 admission-capacity smoke deliverable entirely absent" ;
+  triage:description "req-qa confirmed via direct `ls` that scripts/smoke/run_admission_capacity.py does not exist anywhere in the tree at integrate/phase-ai-31-33 @ 05cc0d91. No admission-capacity throughput/latency evidence exists. AI.33's acceptance criteria (10/10 one-second intervals >=1,000 admissions/s, per docs/plans/phase-ai/sprint-ai-33-admission-capacity-smoke.md) is entirely unverified — not partially done, not built at all. team-lead independently confirmed via task-ledger review that AI.33 was never dispatched as a dev sprint at all (no #task entry exists for it, unlike AI.31/32/34/35/36/37/38 which all have dev-dispatch tasks) — this is not a false-completion, it was simply skipped in sprint dispatch sequencing." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-30T00:16:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-PHASE-END-QA-1 ;
+  triage:foundAt "2026-07-30T00:14:52Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "2" ;
+  triage:progressNote "AI33-QA-1 (PR #695 @ 199111d3) verdict: FAIL, 3/7 deliverables (42.9%). The runner deliverable now exists (closing the original 'entirely absent' gap), but the ADR-026 deferred-execution question this record's closure depended on is now resolved by real evidence, not a waiver: arch-ctm's M5 isolated-OS-user live run (see AI33-M5-CAPACITY-THROUGHPUT-FAIL, blocking) shows the daemon admission path only sustains ~170 accepted/s vs the required >=1,000/s (97.9% HTTP 503 rejection rate under load). This is a genuine capacity/backpressure defect, not a missing-evidence gap — quality-mgr does not rule 'runner exists + unit-tested' as satisfying this record. Also independently blocking: RBQA-F002 (static placeholder per-stage timing data, not real instrumentation), a plan-sequencing violation (AI.33 marked complete in docs/project-plan.md while AI.32 was still in_progress), and a genuine Windows CI lint failure (hardcoded POSIX paths in the new test suite). This record stays open until the daemon admission-path bottleneck is root-caused and fixed, throughput evidence meets the >=1,000/s bar, and the independent findings above are resolved." .
+
+<urn:atm:triage:worktree/integrate-phase-ai-31-33/05cc0d91>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ai-31-33" ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "05cc0d91" ;
+  triage:orderIndex 0 .

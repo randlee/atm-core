@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ARCH-001>
+  a triage:Finding ;
+  triage:findingId "ARCH-001" ;
+  triage:title "remove_file is a plain path-based unlink with no inode re-verification at the point of removal" ;
+  triage:description "The dev/ino re-check at 112-127 guards the window between initial stat and recheck, but std::fs::remove_file(path) at line 128 does not re-verify inode identity at the instant of removal. Two same-uid concurrent daemon starts racing through this function can result in the later process deleting the pathname of a socket the earlier process just legitimately bound and published (publish_prepared_unix_socket, line 207), orphaning the earlier process's listener from its pathname. Not attacker-exploitable (parent-dir ownership/mode checks block cross-uid interference) but a real same-uid concurrent-restart race. Recommend wrapping reclaim-check-bind-publish with an advisory flock on a sibling lock file in the parent directory, or explicitly documenting as an accepted narrow limitation." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-10T07:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:closureEvidence "7d2a69f3 re-inspects the socket identity and unlinks in one blocking operation while UnixSocketStartupLock serializes supported same-user startup; stale_recovery_never_unlinks_a_replacement_socket passes." ;
+  triage:triagedAt "2026-08-08T17:21:02Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL5 ;
+  triage:foundAt "2026-08-08T17:21:02Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001/W0> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/ARCH-001/W0>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
+  triage:line 128 ;
+  triage:snippet "fs::remove_file(path).map_err(|source|" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/daemon-switch-stale-socket-al" ;
+  triage:headSha "98da044a85fd5101afbe98d83e07187c1d2bc916" ;
+  triage:occursIn <urn:atm:triage:worktree/AL/98da044a> .
+
+<urn:atm:triage:worktree/AL/98da044a>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/fix/daemon-switch-stale-socket-al" ;
+  triage:branch "fix/daemon-switch-stale-socket-al" ;
+  triage:headSha "98da044a85fd5101afbe98d83e07187c1d2bc916" ;
+  triage:orderIndex 0 .

@@ -7,19 +7,18 @@ use crate::observability::{
     SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
 };
 use crate::shared_db::{
-    SharedDbTarget, SqliteConnection, ensure_schema, open_connection_for_target, sqlite_error,
+    SharedDbTarget, SqliteConnection, ensure_schema, open_writer_connection_for_target,
+    sqlite_error,
 };
 use atm_storage::{AtmError, AtmErrorCode};
 use rusqlite::TransactionBehavior;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TryRecvError, TrySendError};
+use std::sync::mpsc::{self, RecvTimeoutError, SyncSender};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 pub(crate) const CHANNEL_CAPACITY: usize = 256;
-pub(crate) const BATCH_SIZE_MAX: usize = 64;
-pub(crate) const BATCH_TIME_BUDGET: Duration = Duration::from_millis(2);
 // Bound one write request long enough for a short lock wait + flush cycle while
 // still surfacing wedged durable-state work as an actionable timeout.
 const WRITE_OP_DEADLINE: Duration = Duration::from_secs(10);
@@ -28,7 +27,23 @@ const WRITE_OP_DEADLINE: Duration = Duration::from_secs(10);
 const WRITER_SHUTDOWN_JOIN_DEADLINE: Duration = Duration::from_secs(5);
 const SUBMIT_RETRY_INTERVAL: Duration = Duration::from_millis(5);
 
-type ReplyTx = SyncSender<Result<WriteOpResult, AtmError>>;
+enum ReplyTx {
+    Sync(SyncSender<Result<WriteOpResult, AtmError>>),
+    Async(tokio::sync::oneshot::Sender<Result<WriteOpResult, AtmError>>),
+}
+
+impl ReplyTx {
+    fn send(self, result: Result<WriteOpResult, AtmError>) {
+        match self {
+            Self::Sync(sender) => {
+                let _ = sender.send(result);
+            }
+            Self::Async(sender) => {
+                let _ = sender.send(result);
+            }
+        }
+    }
+}
 
 enum WriterMessage {
     Submit { op: Box<WriteOp>, reply: ReplyTx },
@@ -41,7 +56,7 @@ struct QueuedWrite {
 }
 
 pub(crate) struct SqliteWriter {
-    sender: Option<SyncSender<WriterMessage>>,
+    sender: Option<tokio::sync::mpsc::Sender<WriterMessage>>,
     worker: Option<JoinHandle<()>>,
     observability: Arc<dyn SqliteObservability>,
     write_op_deadline: Duration,
@@ -80,10 +95,10 @@ impl SqliteWriter {
         write_op_deadline: Duration,
         shutdown_join_deadline: Duration,
     ) -> Result<Self, AtmError> {
-        let mut connection = open_connection_for_target(target.as_ref())?;
+        let mut connection = open_writer_connection_for_target(target.as_ref())?;
         ensure_schema(&mut connection, target.as_ref())?;
 
-        let (sender, receiver) = mpsc::sync_channel(channel_capacity);
+        let (sender, receiver) = tokio::sync::mpsc::channel(channel_capacity);
         let worker_observability = Arc::clone(&observability);
         let worker = thread::Builder::new()
             .name("atm-sqlite-writer".to_string())
@@ -91,16 +106,12 @@ impl SqliteWriter {
             .map_err(|error| {
                 let error = AtmError::daemon_unavailable(format!(
                     "failed to start sqlite writer thread: {error}"
-                ))
-                .with_recovery(
-                    "Inspect process thread limits or host resource exhaustion before retrying sqlite writer startup.",
-                )
-                .with_source(error);
+                ));
                 observability.emit_or_warn(SqliteObservabilityEvent::new(
                     "writer_start",
                     SqliteObservabilityOutcome::Failed,
-                    error.message.clone(),
-                    Some(error.code),
+                    error.message().to_owned(),
+                    Some(error.code()),
                 ));
                 error
             })?;
@@ -120,8 +131,8 @@ impl SqliteWriter {
                 .emit_or_warn(SqliteObservabilityEvent::new(
                     "writer_submit",
                     SqliteObservabilityOutcome::Failed,
-                    error.message.clone(),
-                    Some(error.code),
+                    error.message().to_owned(),
+                    Some(error.code()),
                 ));
             error
         })?;
@@ -129,34 +140,34 @@ impl SqliteWriter {
         let deadline = Instant::now() + self.write_op_deadline;
         let mut message = WriterMessage::Submit {
             op: Box::new(op),
-            reply: reply_tx,
+            reply: ReplyTx::Sync(reply_tx),
         };
         loop {
             match sender.try_send(message) {
                 Ok(()) => break,
-                Err(TrySendError::Full(returned)) => {
+                Err(tokio::sync::mpsc::error::TrySendError::Full(returned)) => {
                     if Instant::now() >= deadline {
                         let error = writer_queue_timeout_error(self.write_op_deadline);
                         self.observability
                             .emit_or_warn(SqliteObservabilityEvent::new(
                                 "writer_submit",
                                 SqliteObservabilityOutcome::Timeout,
-                                error.message.clone(),
-                                Some(error.code),
+                                error.message().to_owned(),
+                                Some(error.code()),
                             ));
                         return Err(error);
                     }
                     message = returned;
                     thread::park_timeout(SUBMIT_RETRY_INTERVAL);
                 }
-                Err(TrySendError::Disconnected(_)) => {
+                Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
                     let error = writer_channel_closed_error();
                     self.observability
                         .emit_or_warn(SqliteObservabilityEvent::new(
                             "writer_submit",
                             SqliteObservabilityOutcome::Failed,
-                            error.message.clone(),
-                            Some(error.code),
+                            error.message().to_owned(),
+                            Some(error.code()),
                         ));
                     return Err(error);
                 }
@@ -171,8 +182,8 @@ impl SqliteWriter {
                         .emit_or_warn(SqliteObservabilityEvent::new(
                             "writer_reply",
                             SqliteObservabilityOutcome::Timeout,
-                            error.message.clone(),
-                            Some(error.code),
+                            error.message().to_owned(),
+                            Some(error.code()),
                         ));
                     error
                 }
@@ -182,11 +193,80 @@ impl SqliteWriter {
                         .emit_or_warn(SqliteObservabilityEvent::new(
                             "writer_reply",
                             SqliteObservabilityOutcome::Failed,
-                            error.message.clone(),
-                            Some(error.code),
+                            error.message().to_owned(),
+                            Some(error.code()),
                         ));
                     error
                 }
+            })?
+    }
+
+    /// Enqueues one operation without blocking the Tokio executor, then awaits
+    /// the reply from the single synchronous SQLite writer thread.
+    pub(crate) async fn submit_async(&self, op: WriteOp) -> Result<WriteOpResult, AtmError> {
+        let sender = self.sender.as_ref().ok_or_else(|| {
+            let error = writer_channel_closed_error();
+            self.observability
+                .emit_or_warn(SqliteObservabilityEvent::new(
+                    "writer_submit",
+                    SqliteObservabilityOutcome::Failed,
+                    error.message().to_owned(),
+                    Some(error.code()),
+                ));
+            error
+        })?;
+        let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+        let message = WriterMessage::Submit {
+            op: Box::new(op),
+            reply: ReplyTx::Async(reply_tx),
+        };
+        tokio::time::timeout(self.write_op_deadline, sender.send(message))
+            .await
+            .map_err(|_| {
+                let error = writer_queue_timeout_error(self.write_op_deadline);
+                self.observability
+                    .emit_or_warn(SqliteObservabilityEvent::new(
+                        "writer_submit",
+                        SqliteObservabilityOutcome::Timeout,
+                        error.message().to_owned(),
+                        Some(error.code()),
+                    ));
+                error
+            })?
+            .map_err(|_| {
+                let error = writer_channel_closed_error();
+                self.observability
+                    .emit_or_warn(SqliteObservabilityEvent::new(
+                        "writer_submit",
+                        SqliteObservabilityOutcome::Failed,
+                        error.message().to_owned(),
+                        Some(error.code()),
+                    ));
+                error
+            })?;
+        tokio::time::timeout(self.write_op_deadline, reply_rx)
+            .await
+            .map_err(|_| {
+                let error = writer_reply_timeout_error(self.write_op_deadline);
+                self.observability
+                    .emit_or_warn(SqliteObservabilityEvent::new(
+                        "writer_reply",
+                        SqliteObservabilityOutcome::Timeout,
+                        error.message().to_owned(),
+                        Some(error.code()),
+                    ));
+                error
+            })?
+            .map_err(|_| {
+                let error = writer_reply_channel_closed_error();
+                self.observability
+                    .emit_or_warn(SqliteObservabilityEvent::new(
+                        "writer_reply",
+                        SqliteObservabilityOutcome::Failed,
+                        error.message().to_owned(),
+                        Some(error.code()),
+                    ));
+                error
             })?
     }
 }
@@ -198,11 +278,11 @@ impl Drop for SqliteWriter {
 
         if let Some(sender) = sender {
             match sender.try_send(WriterMessage::Shutdown) {
-                Ok(()) | Err(TrySendError::Disconnected(_)) => {}
+                Ok(()) | Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {}
                 // Accepted risk: std::sync::mpsc::SyncSender does not expose a
                 // queue-depth probe here, so shutdown logging cannot report an
                 // exact depth without replacing the channel primitive.
-                Err(TrySendError::Full(_)) => {
+                Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
                     let detail = "sqlite writer shutdown signal skipped because the bounded queue was full; relying on channel disconnect to let the writer exit once in-flight work drains";
                     tracing::warn!("{detail}");
                     self.observability
@@ -274,9 +354,7 @@ impl Drop for SqliteWriter {
 }
 
 fn writer_channel_closed_error() -> AtmError {
-    AtmError::daemon_unavailable("sqlite writer submission channel closed").with_recovery(
-        "Restart the ATM daemon or reopen the sqlite boundary assembly before retrying the write.",
-    )
+    AtmError::daemon_unavailable("sqlite writer submission channel closed")
 }
 
 fn writer_queue_timeout_error(deadline: Duration) -> AtmError {
@@ -284,9 +362,6 @@ fn writer_queue_timeout_error(deadline: Duration) -> AtmError {
         "sqlite writer submission queue did not accept a write within {:?}",
         deadline
     ))
-    .with_recovery(
-        "Retry after the sqlite writer backlog drains or restart the ATM daemon if the writer lane is stalled.",
-    )
 }
 
 fn writer_reply_timeout_error(deadline: Duration) -> AtmError {
@@ -294,31 +369,27 @@ fn writer_reply_timeout_error(deadline: Duration) -> AtmError {
         "sqlite writer reply did not arrive within {:?}",
         deadline
     ))
-    .with_recovery(
-        "Retry after the sqlite writer backlog drains or restart the ATM daemon if the writer lane is stalled.",
-    )
 }
 
 fn writer_reply_channel_closed_error() -> AtmError {
-    AtmError::daemon_unavailable("sqlite writer reply channel closed").with_recovery(
-        "Restart the ATM daemon or reopen the sqlite boundary assembly before retrying the write.",
-    )
+    AtmError::daemon_unavailable("sqlite writer reply channel closed")
 }
 
 fn writer_unavailable_reply_error() -> AtmError {
-    AtmError::daemon_unavailable("sqlite writer is unavailable during shutdown").with_recovery(
-        "Retry after the sqlite boundary assembly is restarted and the writer lane is accepting submissions again.",
-    )
+    AtmError::daemon_unavailable("sqlite writer is unavailable during shutdown")
 }
 
-fn drain_submit_replies(receiver: &Receiver<WriterMessage>) {
+fn drain_submit_replies(receiver: &mut tokio::sync::mpsc::Receiver<WriterMessage>) {
     loop {
         match receiver.try_recv() {
             Ok(WriterMessage::Submit { reply, .. }) => {
-                let _ = reply.send(Err(writer_unavailable_reply_error()));
+                reply.send(Err(writer_unavailable_reply_error()));
             }
             Ok(WriterMessage::Shutdown) => continue,
-            Err(TryRecvError::Empty | TryRecvError::Disconnected) => break,
+            Err(
+                tokio::sync::mpsc::error::TryRecvError::Empty
+                | tokio::sync::mpsc::error::TryRecvError::Disconnected,
+            ) => break,
         }
     }
 }
@@ -347,8 +418,8 @@ fn checkpoint_writer_connection(
         observability.emit_or_warn(SqliteObservabilityEvent::new(
             "writer_shutdown_checkpoint",
             SqliteObservabilityOutcome::Failed,
-            error.message.clone(),
-            Some(error.code),
+            error.message().to_owned(),
+            Some(error.code()),
         ));
     }
 }
@@ -356,17 +427,17 @@ fn checkpoint_writer_connection(
 fn writer_loop(
     target: Arc<SharedDbTarget>,
     mut connection: SqliteConnection,
-    receiver: Receiver<WriterMessage>,
+    mut receiver: tokio::sync::mpsc::Receiver<WriterMessage>,
     observability: Arc<dyn SqliteObservability>,
 ) {
     let mut cache = stmt_cache::WriterStatementCache;
     let mut shutting_down = false;
     loop {
-        let Some(first) = receive_first_message(&receiver, shutting_down) else {
+        let Some(first) = receive_first_message(&mut receiver, shutting_down) else {
             break;
         };
         let mut batch = vec![first];
-        if collect_batch(&receiver, &mut batch, &mut shutting_down).is_none() {
+        if collect_batch(&mut receiver, &mut batch, &mut shutting_down).is_none() {
             break;
         }
         process_batch(&target, &mut connection, &mut cache, batch);
@@ -375,7 +446,7 @@ fn writer_loop(
 }
 
 fn receive_first_message(
-    receiver: &Receiver<WriterMessage>,
+    receiver: &mut tokio::sync::mpsc::Receiver<WriterMessage>,
     shutting_down: bool,
 ) -> Option<QueuedWrite> {
     if shutting_down {
@@ -385,27 +456,33 @@ fn receive_first_message(
                 drain_submit_replies(receiver);
                 None
             }
-            Err(TryRecvError::Empty | TryRecvError::Disconnected) => None,
+            Err(
+                tokio::sync::mpsc::error::TryRecvError::Empty
+                | tokio::sync::mpsc::error::TryRecvError::Disconnected,
+            ) => None,
         }
     } else {
-        match receiver.recv() {
-            Ok(WriterMessage::Submit { op, reply }) => Some(QueuedWrite { op, reply }),
-            Ok(WriterMessage::Shutdown) => {
+        match receiver.blocking_recv() {
+            Some(WriterMessage::Submit { op, reply }) => Some(QueuedWrite { op, reply }),
+            Some(WriterMessage::Shutdown) => {
                 drain_submit_replies(receiver);
                 None
             }
-            Err(_) => None,
+            None => None,
         }
     }
 }
 
 fn collect_batch(
-    receiver: &Receiver<WriterMessage>,
+    receiver: &mut tokio::sync::mpsc::Receiver<WriterMessage>,
     batch: &mut Vec<QueuedWrite>,
     shutting_down: &mut bool,
 ) -> Option<()> {
-    let deadline = Instant::now() + BATCH_TIME_BUDGET;
-    while batch.len() < BATCH_SIZE_MAX {
+    // The admission channel is already bounded. Drain every write that has
+    // arrived during the fixed coalescing window into one durable commit;
+    // an arbitrary operation-count ceiling would turn a burst into repeated
+    // fsyncs without improving admission safety or backpressure.
+    loop {
         match receiver.try_recv() {
             Ok(WriterMessage::Submit { op, reply }) => {
                 batch.push(QueuedWrite { op, reply });
@@ -415,30 +492,17 @@ fn collect_batch(
                 *shutting_down = true;
                 continue;
             }
-            Err(TryRecvError::Disconnected) => {
+            Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
                 *shutting_down = true;
                 return Some(());
             }
-            Err(TryRecvError::Empty) => {
-                let Some(remaining) = deadline.checked_duration_since(Instant::now()) else {
-                    break;
-                };
-                if remaining.is_zero() {
-                    break;
-                }
-                match receiver.recv_timeout(remaining) {
-                    Ok(WriterMessage::Submit { op, reply }) => {
-                        batch.push(QueuedWrite { op, reply });
-                    }
-                    Ok(WriterMessage::Shutdown) => {
-                        *shutting_down = true;
-                    }
-                    Err(RecvTimeoutError::Timeout) => break,
-                    Err(RecvTimeoutError::Disconnected) => {
-                        *shutting_down = true;
-                        return Some(());
-                    }
-                }
+            Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {
+                // Tokio's bounded channel keeps the async side cancellable;
+                // drain every operation already admitted to preserve one
+                // ordered SQLite transaction for a concurrent burst. Waiting
+                // for a later arrival would block this dedicated writer thread
+                // and merely add latency to a lone durable write.
+                break;
             }
         }
     }
@@ -488,7 +552,7 @@ fn process_batch(
         } else {
             result
         };
-        let _ = reply.send(final_result);
+        reply.send(final_result);
     }
 }
 
@@ -503,7 +567,7 @@ fn send_batch_transaction_open_error(
         error,
     );
     for queued in batch {
-        let _ = queued.reply.send(Err(copy_error(target, &error)));
+        queued.reply.send(Err(copy_error(target, &error)));
     }
 }
 
@@ -547,8 +611,8 @@ fn finalize_queued_write(
         }
         Err(_) => {
             drop(savepoint);
-            Err(AtmError::daemon_unavailable("sqlite writer operation panicked").with_recovery(
-                "Inspect the sqlite writer hot-path operation and retry after correcting the panic source.",
+            Err(AtmError::daemon_unavailable(
+                "sqlite writer operation panicked",
             ))
         }
     }
@@ -566,32 +630,38 @@ fn commit_savepoint(
 }
 
 fn copy_error(target: &SharedDbTarget, error: &AtmError) -> AtmError {
-    let mut copied = match error
-        .source
-        .as_deref()
-        .and_then(|source| source.downcast_ref::<rusqlite::Error>())
-    {
-        Some(rusqlite::Error::SqliteFailure(inner, _))
-            if matches!(
-                inner.code,
-                rusqlite::ffi::ErrorCode::DatabaseBusy | rusqlite::ffi::ErrorCode::DatabaseLocked
-            ) =>
-        {
-            match target {
-                SharedDbTarget::Path(path) => AtmError::mailbox_lock_timeout(path),
-                #[cfg(test)]
-                SharedDbTarget::InMemory { .. } => AtmError::mailbox_lock(format!(
-                    "timed out waiting for sqlite database lock on {}",
-                    target.display()
-                )),
-            }
+    let _ = target;
+    error.clone()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn queued_write() -> WriterMessage {
+        let (reply, _receiver) = mpsc::sync_channel(1);
+        WriterMessage::Submit {
+            op: Box::new(WriteOp::UpsertMessages(Vec::new())),
+            reply: ReplyTx::Sync(reply),
         }
-        _ => match error.code {
-            AtmErrorCode::DaemonUnavailable => AtmError::daemon_unavailable(error.message.clone()),
-            _ => AtmError::mailbox_write(error.message.clone()),
-        },
-    };
-    copied.code = error.code;
-    copied.recovery = error.recovery.clone();
-    copied
+    }
+
+    #[test]
+    fn batch_collection_drains_all_currently_queued_writes() {
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(128);
+        sender.try_send(queued_write()).expect("first queued write");
+        for _ in 0..96 {
+            sender.try_send(queued_write()).expect("queued write");
+        }
+        let WriterMessage::Submit { op, reply } = receiver.try_recv().expect("first write") else {
+            panic!("test queue contains only submit messages");
+        };
+        let mut batch = vec![QueuedWrite { op, reply }];
+        let mut shutting_down = false;
+
+        collect_batch(&mut receiver, &mut batch, &mut shutting_down).expect("batch collection");
+
+        assert_eq!(batch.len(), 97);
+        assert!(!shutting_down);
+    }
 }

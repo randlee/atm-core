@@ -1,0 +1,146 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI14-QA1-RBP-RECOVERYPATH>
+  a triage:Finding ;
+  triage:findingId "AI14-QA1-RBP-RECOVERYPATH" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:title "local_http.rs reuses DaemonUnavailable error for capability revocation (wrong recovery path)" ;
+  triage:description "rust-best-practices-agent (RBP): crates/atm-core/src/local_http.rs reuses the DaemonUnavailable error variant to signal capability revocation, which is a distinct failure mode from daemon-unreachable and implies the wrong caller recovery path (retry/backoff vs re-authenticate/re-register). Important, non-blocking." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA1" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/local_http.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-RBP-RECOVERYPATH/pAI-s11/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-RBP-RECOVERYPATH/pAI-s12/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-RBP-RECOVERYPATH/pAI-s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-RBP-RECOVERYPATH/pAI-s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-RBP-RECOVERYPATH/pAI-s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-RBP-RECOVERYPATH/pAI-s16/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s11> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s12> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s13> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s14> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s15> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s16> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s16> .
+
+<urn:atm:triage:occurrence/AI14-QA1-RBP-RECOVERYPATH/pAI-s11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/local_http.rs" ;
+  triage:line 98 ;
+  triage:snippet "AtmError::daemon_unavailable(\"local HTTP endpoint record is revoked\")" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- line 102 now uses local_http_capability_revoked() instead of daemon_unavailable(). Defect resolved. Stale occurrence from superseded branch s11; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "3642430d" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s11> .
+
+<urn:atm:triage:occurrence/AI14-QA1-RBP-RECOVERYPATH/pAI-s12/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/local_http.rs" ;
+  triage:line 98 ;
+  triage:snippet "AtmError::daemon_unavailable(\"local HTTP endpoint record is revoked\")" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- line 102 now uses local_http_capability_revoked() instead of daemon_unavailable(). Defect resolved. Stale occurrence from superseded branch s12; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:headSha "a8ea0017" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s12> .
+
+<urn:atm:triage:occurrence/AI14-QA1-RBP-RECOVERYPATH/pAI-s13/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/local_http.rs" ;
+  triage:line 98 ;
+  triage:snippet "AtmError::daemon_unavailable(\"local HTTP endpoint record is revoked\")" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- line 102 now uses local_http_capability_revoked() instead of daemon_unavailable(). Defect resolved. Stale occurrence from superseded branch s13; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "2adc5fa1" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s13> .
+
+<urn:atm:triage:occurrence/AI14-QA1-RBP-RECOVERYPATH/pAI-s14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/local_http.rs" ;
+  triage:line 98 ;
+  triage:snippet "AtmError::daemon_unavailable(\"local HTTP endpoint record is revoked\")" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- line 102 now uses local_http_capability_revoked() instead of daemon_unavailable(). Defect resolved. Stale occurrence from superseded branch s14; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "c5665204" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s14> .
+
+<urn:atm:triage:occurrence/AI14-QA1-RBP-RECOVERYPATH/pAI-s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/local_http.rs" ;
+  triage:line 98 ;
+  triage:snippet "AtmError::daemon_unavailable(\"local HTTP endpoint record is revoked\")" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- line 102 now uses local_http_capability_revoked() instead of daemon_unavailable(). Defect resolved. Stale occurrence from superseded branch s15; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a7a762f" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s15> .
+
+<urn:atm:triage:occurrence/AI14-QA1-RBP-RECOVERYPATH/pAI-s16/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/local_http.rs" ;
+  triage:line 98 ;
+  triage:snippet "AtmError::daemon_unavailable(\"local HTTP endpoint record is revoked\")" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- line 102 now uses local_http_capability_revoked() instead of daemon_unavailable(). Defect resolved. Stale occurrence from superseded branch s16; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "1c23ac04" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s16> .
+
+<urn:atm:triage:worktree/pAI-s11>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "3642430d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-s12>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
+  triage:headSha "a8ea0017" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAI-s13>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "2adc5fa1" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-s14>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "c5665204" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAI-s15>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a7a762f" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAI-s16>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "1c23ac04" ;
+  triage:orderIndex 6 .

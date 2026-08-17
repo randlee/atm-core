@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBQA-AI28-1>
+  a triage:Finding ;
+  triage:findingId "RBQA-AI28-1" ;
+  triage:title "Stale #[allow(dead_code)] left on PeerDeliveryEventKind" ;
+  triage:description "PeerDeliveryEventKind enum still retains a #[allow(dead_code)] attribute despite AI.28 now genuinely driving all 4 recovery event variants through the new bounded peer recovery coordinator. The attribute was originally justified when only a subset of variants were actually generated during recovery; now that the coordinator produces all variants (Attempt, Reset, Revoke, UnconfirmedRecoveryStarted), the suppression is stale and masks future dead-code warnings. The allow directive should be removed and any truly unused variants should be deleted or marked with a targeted #[allow] on specific variants if still needed for schema reasons. Fix required: remove or narrow the #[allow(dead_code)] attribute and verify all four variants are genuinely reachable in the current logic." ;
+  triage:category "Code-Review" ;
+  triage:severity "Important" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-07-26T22:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently re-verified against real code on feature/pAI-s28-bounded-peer-recovery current head c0445b1a. Zero #[allow(dead_code)] occurrences remain in peer_delivery_observability.rs or peer_drain_coordinator.rs (grep confirmed empty)." ;
+  triage:foundIn triage:AICH-S8 ;
+  triage:foundAt "2026-07-25T16:53:36Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-25T09:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AI28-1/pAI-s28/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s28/7163648b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:occurrence/RBQA-AI28-1/pAI-s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_observability.rs" ;
+  triage:line 1 ;
+  triage:snippet "#[allow(dead_code)] on PeerDeliveryEventKind enum definition" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "c0445b1a" ;
+  triage:note "#[allow(dead_code)] removed. Verified on current head c0445b1a." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:worktree/pAI-s28/7163648b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "7163648b" ;
+  triage:orderIndex 28 ;
+  triage:status "open" .

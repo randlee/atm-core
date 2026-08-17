@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# assignee-busy — Is this assignee already working on something in this phase?
+#
+# Usage: assignee-busy <PHASE_LOCAL> <TTL_DIR> <ASSIGNEE>
+#   PHASE_LOCAL  e.g. "AICH" (expanded to urn:atm:triage:PhaseAICH)
+#   TTL_DIR      path to directory containing structure.ttl and events.ttl
+#   ASSIGNEE     agent name exactly as used in triage:assignedTo, e.g. "arch-ctm"
+#
+# Team-lead MUST run this before appending any new Assignment event for an
+# agent and get "busy": false. This check is independent of cursor.sparql —
+# a sprint being "ready" per the cursor never overrides an agent already
+# having an open, unfinished Assignment. One task per developer, no
+# redirects, no exceptions.
+#
+# Returns JSON on stdout; exits non-zero on error.
+
+set -euo pipefail
+
+if [[ $# -ne 3 ]]; then
+  message="Usage: assignee-busy <PHASE_LOCAL> <TTL_DIR> <ASSIGNEE>"
+  echo >&2 "$message"
+  printf '%s\n' "{\"schema\":\"graph-orchestration/v1\",\"kind\":\"error\",\"error_code\":\"usage\",\"message\":\"$message\",\"diagnostics\":[],\"dispatch_blocked\":true}"
+  exit 1
+fi
+
+PHASE="$1"
+TTL_DIR="$2"
+ASSIGNEE="$3"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PYTHON_BIN="${GRAPH_ORCH_PYTHON:-python3}"
+
+if ! "$PYTHON_BIN" -c "import rdflib" 2>/dev/null; then
+  message="rdflib not found. Install with: pip3 install rdflib"
+  echo >&2 "ERROR: $message"
+  printf '%s\n' "{\"schema\":\"graph-orchestration/v1\",\"kind\":\"error\",\"error_code\":\"dependency\",\"message\":\"$message\",\"diagnostics\":[],\"dispatch_blocked\":true}"
+  exit 1
+fi
+
+exec "$PYTHON_BIN" "$SCRIPT_DIR/check_assignee.py" "$PHASE" "$TTL_DIR" "$SCRIPT_DIR" "$ASSIGNEE"

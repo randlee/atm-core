@@ -9,6 +9,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+CLI_SUBPROCESS_TIMEOUT_SECONDS = 45
+
 from daemon_lifecycle import (
     assert_no_process_leak,
     count_atm_daemon_processes,
@@ -87,7 +89,7 @@ def run_atm_result(
                 encoding="utf-8",
                 errors="replace",
                 check=False,
-                timeout=30,
+                timeout=CLI_SUBPROCESS_TIMEOUT_SECONDS,
                 input=stdin,
             )
         except subprocess.TimeoutExpired as error:
@@ -137,12 +139,32 @@ def run_atm_raw(
         encoding="utf-8",
         errors="replace",
         check=False,
-        timeout=30,
+        timeout=CLI_SUBPROCESS_TIMEOUT_SECONDS,
     )
 
 
 def parse_json_output(raw: str) -> dict[str, object]:
     return json.loads(raw)
+
+
+def assert_replacement_runtime_status(payload: dict[str, object], *, label: str) -> int:
+    """Reject a smoke child unless doctor proves the Tokio runtime is serving.
+
+    The `atm-daemon` executable is intentionally only the thin replacement
+    launcher.  The durable assertion is its live doctor projection: the
+    replacement runtime publishes a running/ready status and its singleton
+    owner PID.  This check remains fail-closed instead of treating a merely
+    reachable compatibility process as a passing smoke subject.
+    """
+    status = payload.get("runtime_status")
+    if not isinstance(status, dict):
+        raise RuntimeError(f"{label} doctor did not publish replacement runtime status")
+    if status.get("liveness") != "running" or status.get("readiness") != "ready":
+        raise RuntimeError(f"{label} replacement runtime is not running and ready: {status!r}")
+    owner_pid = status.get("singleton_owner_pid")
+    if not isinstance(owner_pid, int) or owner_pid <= 0:
+        raise RuntimeError(f"{label} replacement runtime did not publish a valid singleton owner PID")
+    return owner_pid
 
 
 def verify_af1_preflight_contract() -> None:
@@ -214,9 +236,9 @@ def main() -> int:
         shared_doctor_b = parse_json_output(
             run_atm(root, shared_env_b, shared_b.workspace_dir, "doctor", "--json")
         )
-        shared_pid_a = shared_doctor_a.get("runtime_status", {}).get("singleton_owner_pid")
-        shared_pid_b = shared_doctor_b.get("runtime_status", {}).get("singleton_owner_pid")
-        shared_daemon_pid = int(shared_pid_a) if shared_pid_a is not None else None
+        shared_pid_a = assert_replacement_runtime_status(shared_doctor_a, label="workspace A")
+        shared_pid_b = assert_replacement_runtime_status(shared_doctor_b, label="workspace B")
+        shared_daemon_pid = shared_pid_a
         def ensure_member(
             fixture_item: object,
             env_item: dict[str, str],
@@ -287,7 +309,9 @@ def main() -> int:
         invalid_stdin_doctor = parse_json_output(
             run_atm(root, shared_env_a, shared_a.workspace_dir, "doctor", "--json")
         )
-        invalid_stdin_pid = invalid_stdin_doctor.get("runtime_status", {}).get("singleton_owner_pid")
+        invalid_stdin_pid = assert_replacement_runtime_status(
+            invalid_stdin_doctor, label="workspace A after rejected input"
+        )
         invalid_stdin_pids_after = count_atm_daemon_processes()
         invalid_stdin_error_text = (
             f"{invalid_stdin_send.get('stdout', '')}\n{invalid_stdin_send.get('stderr', '')}"

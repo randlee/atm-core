@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI25-BLOCK-001>
+  a triage:Finding ;
+  triage:findingId "AI25-BLOCK-001" ;
+  triage:title "ReleaseVersion::parse rejects the project's actual `beta-NN` prerelease format, requires `beta.NN` instead -- breaks CI and will panic ReleaseVersion::current() at the next beta version bump" ;
+  triage:description """crates/atm-core/src/protocol.rs ReleaseVersion::parse (around line 96) splits the version string on the first '-' into core/prerelease, then requires the prerelease segment to satisfy prerelease.starts_with("beta.") followed by all-ASCII-digit bytes. The project's actual prerelease format is `beta-NN` (hyphen-separated, e.g. `1.3.2-beta-24` as documented in README.md and referenced by AI24-MINOR-106), not `beta.NN` (dot-separated). Parsing `v1.3.2-beta-24` therefore splits into core=`1.3.2`, prerelease=`beta-24`, which fails the `starts_with("beta.")` check and returns AtmErrorCode::ClientDaemonVersionIncompatible instead of succeeding. This is a real parser defect, not just a stale test: ReleaseVersion::current() calls Self::parse(env!("CARGO_PKG_VERSION")).expect(...) -- if/when the crate version is bumped to a `-beta-NN` suffix (as the README already anticipates for 1.3.2), this will panic at daemon startup. Currently masked because Cargo.toml version is still 1.3.1 (no prerelease suffix), so no runtime panic yet -- but confirmed CI-red today via two failing tests: protocol::tests::release_version_accepts_semver_prereleases_and_rejects_non_semver (asserts `v1.3.2-beta-24` parses successfully; commit 6776b530dffad35ae44336f092be6d9ba0e2687b fails this) and protocol::tests::release_version_rejects_invalid_wire_deserialization (asserts the wire-deserialization error message contains "unexpected character"; current error message is "invalid ATM release version `{value}`", which does not contain that substring -- a second, independent assertion mismatch in the same function's error-message text). Confirmed identical failure on all 3 OS legs (ubuntu-latest, macos-latest, windows-latest) of CI run 30197603631 on PR #640 (feature/pAI-s25-peer-authority-resolution @ 6776b530), so this is not a platform-specific issue -- it is a real logic defect. Hard merge-blocking: Test (ubuntu/macos/windows-latest) all fail on PR #640.""" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "ci-gate" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-26T11:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
+  triage:foundAt "2026-07-26T11:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-BLOCK-001/AI25-BLOCK-001-1> ;
+  triage:closedAt "2026-07-26T11:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AI25-BLOCK-001/AI25-BLOCK-001-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 96 ;
+  triage:snippet """prerelease.starts_with("beta.") -- rejects the project's actual `beta-NN` format""" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "5f794c42d449687b6badca46193592f11bc25529" ;
+  triage:occursIn <urn:atm:triage:worktree/S25/5f794c42d449687b6badca46193592f11bc25529> .
+
+<urn:atm:triage:worktree/S25/5f794c42d449687b6badca46193592f11bc25529>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-pAI-s25" ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "5f794c42d449687b6badca46193592f11bc25529" ;
+  triage:orderIndex 25 .

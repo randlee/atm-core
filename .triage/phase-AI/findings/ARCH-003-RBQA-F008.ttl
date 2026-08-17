@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-003-RBQA-F008>
+  a triage:Finding ;
+  triage:findingId "ARCH-003-RBQA-F008" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T00:00:00Z"^^xsd:dateTime ;
+  triage:title "Stale present-tense Policy Placement governance prose adjacent to retired sections" ;
+  triage:description "QA-4 on PR #590 (fix/daemon-pre-ag-deletion-reset) found docs/atm-daemon/boundaries.md's Policy Placement section (originally ~lines 331-357) still stated present-tense SourceIngress/ProjectionExport governance language plus a forward-looking 'Phase Yb adds:' block, immediately adjacent to two sibling sections already corrected to retired/local-IPC-only framing by an earlier fix round. Same class of stale prose as the original ARCH-001/RBQA-F006 finding but missed by that round's diff scope." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-003-RBQA-F008/pAI-1/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-1/f56ce35e> ;
+  triage:closedOn <urn:atm:triage:worktree/pAI-1/f56ce35e> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-1/f56ce35e> ;
+  triage:triagedAt "2026-07-20T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/ARCH-003-RBQA-F008/pAI-1/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/boundaries.md" ;
+  triage:line 331 ;
+  triage:snippet "## Policy Placement ... ConfigIngress/SourceIngress/ProjectionExport governance bullet list ... 'Phase Yb adds:' forward-looking block" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-1-daemon-preag-reset" ;
+  triage:headSha "f56ce35e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-1/f56ce35e> ;
+  triage:resolution "Replaced the present-tense governance list and forward-looking Phase Yb block with a Historical status: / Purpose: / Notes: retired-section rewrite matching the sibling DaemonInboxIngressAdapter/DaemonInboxExportAdapter convention, citing DAEMON-PREAG-RESET-1 as the retiring event." .
+
+<urn:atm:triage:worktree/pAI-1/f56ce35e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-1-daemon-preag-reset" ;
+  triage:path "feature/pAI-1-daemon-preag-reset" ;
+  triage:headSha "f56ce35e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-AI/d316f0b4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
+  triage:headSha "d316f0b4" ;
+  triage:orderIndex 0 .

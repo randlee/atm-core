@@ -1,0 +1,48 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI23-IMPORTANT-003>
+  a triage:Finding ;
+  triage:findingId "AI23-IMPORTANT-003" ;
+  triage:foundAt "2026-07-25T06:25:35Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S3 ;
+  triage:title "New AI.23 adapter-side-effect boundary gate uses gameable substring matching instead of AST-based enforcement" ;
+  triage:description "crates/atm-architecture/tests/boundary_enforcement.rs::ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects enforces its forbidden-call list via raw substring matching against literal tokens instead of AST-based enforcement. This is trivially defeated by differently-named private helpers that duplicate logic without matching the forbidden tokens. The same file already contains HostRoutingVisitor with alias/binding resolution (lines 310-616) for AI.12, which was not extended to this new check despite AI.23 sub-task 2 requiring fail-closed enforcement." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-25T21:55:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-003/s23-fixed> ;
+  triage:fixedOn <urn:atm:triage:worktree/s23/b0781316> ;
+  triage:triageRecordVersion "2" .
+
+# Closure note: Round-2 fix verified on feature/pAI-s23-crosshost-shared-write-path @ b0781316.
+# boundary_enforcement.rs:317-350 now uses genuine AST-based enforcement via syn::Visit visitor
+# (IngressWriteSideEffectVisitor) instead of substring matching. Visitor walks syn::ItemImpl and
+# syn::ExprCall nodes with negative fixture demonstrating fail-closed behavior.
+# Verified by ruthless-boundary-qa and team-lead direct code review.
+
+# Fixed occurrence on s23: AST-based ingress adapter side-effect gate
+<urn:atm:triage:occurrence/AI23-IMPORTANT-003/s23-fixed>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 317 ;
+  triage:snippet "IngressWriteSideEffectVisitor with syn::Visit implementation (lines 317-350) walks syn::ItemImpl and syn::ExprCall nodes; negative fixture validates expected violations" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b0781316" ;
+  triage:note "Round-2 fix: genuine AST-based enforcement using syn crate visitor pattern. Test uses real negative fixture demonstrating fail-closed behavior. Previously was substring matching with .contains(); now uses structured AST traversal." ;
+  triage:occursIn <urn:atm:triage:worktree/s23/b0781316> .
+
+<urn:atm:triage:worktree/s23/b0781316>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b0781316" ;
+  triage:orderIndex 3 .

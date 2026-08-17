@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-003-AN13>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-003-AN13" ;
+  triage:title "AN.13 evidence doc missing final-CI-commit record" ;
+  triage:description "The AN.13 evidence documentation at docs/plans/phase-an/sprint-AN13-sc-composer-141-checked-render.md states that 'Retained evidence records' must include 'final CI commit' but the document itself does not record which specific green-CI commit sha the validation was tied to." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-14T03:21:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.13 ;
+  triage:foundAt "2026-08-14T03:09:39Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003-AN13/integrate-phase-an-1> ;
+  triage:closedAt "2026-08-14T08:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/ATM-QA-003-AN13/integrate-phase-an-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-an/sprint-AN13-sc-composer-141-checked-render.md" ;
+  triage:line 0 ;
+  triage:snippet "Missing: final CI commit record in Retained evidence records section" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "f8e1f52d" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-an/f8e1f52d> .
+
+<urn:atm:triage:worktree/integrate-phase-an/f8e1f52d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-an" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "f8e1f52d" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/an12/76485c59>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/an12" ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "76485c59" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/an13/70c7b231>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/an13" ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "70c7b231" ;
+  triage:orderIndex 2 .

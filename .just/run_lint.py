@@ -26,16 +26,23 @@ PYTHON_LINT_ORDER = (
     "same-host-portability",
     "runtime-waits",
     "manifests",
+    "daemon-signing-coupling",
     "silent-emit",
     "function-length",
     "legacy-mailbox-paths",
     "capability-degradation",
     "identities",
+    "env-var-boundary",
+    "runtime-observation-boundary",
     "fixed-sleep",
     "ttl-triage",
     "lines",
     "spell",
+    "hermes-adapter",
+    "hermes-atm-boundary",
+    "atm-graft-python-boundary",
     "daemon-singleton",
+    "legacy-transport-removal",
     "pytests",
 )
 EXTRA_LINTS = ("sc-boundary", "sc-portability")
@@ -45,12 +52,14 @@ FAST_LINT_ORDER = (
     "version",
     "boundaries",
     "manifests",
+    "daemon-signing-coupling",
     "shear",
     "silent-emit",
     "function-length",
     "legacy-mailbox-paths",
     "capability-degradation",
     "spell",
+    "hermes-adapter",
     "pytests",
 )
 HIGH_VOLUME_LINTS = {"identities", "lines"}
@@ -92,6 +101,13 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         "identities": LintTask(
             "identities", [*python_command, str(repo_root / ".just/check_test_identity_literals.py")]
         ),
+        "env-var-boundary": LintTask(
+            "env-var-boundary", [*python_command, str(repo_root / ".just/check_env_var_boundary.py")]
+        ),
+        "runtime-observation-boundary": LintTask(
+            "runtime-observation-boundary",
+            [*python_command, str(repo_root / ".just/check_runtime_observation_boundary.py")],
+        ),
         "lines": LintTask("lines", [*python_command, str(repo_root / ".just/check_line_counts.py")]),
         "boundaries": LintTask("boundaries", [*python_command, str(repo_root / ".just/lint_boundaries.py")]),
         "unix-gating": LintTask(
@@ -111,6 +127,10 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
             "sc-portability", [*python_command, str(repo_root / ".just/lint_sc_portability.py")]
         ),
         "manifests": LintTask("manifests", [*python_command, str(repo_root / ".just/lint_manifests.py")]),
+        "daemon-signing-coupling": LintTask(
+            "daemon-signing-coupling",
+            [*python_command, str(repo_root / ".just/lint_daemon_signing_coupling.py")],
+        ),
         "silent-emit": LintTask(
             "silent-emit", [*python_command, str(repo_root / "scripts/check-silent-emit.py")]
         ),
@@ -126,6 +146,15 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
             [*python_command, str(repo_root / "scripts/check-capability-degradation.py")],
         ),
         "spell": LintTask("spell", [*python_command, str(repo_root / ".just/lint_codespell.py")]),
+        "hermes-adapter": LintTask(
+            "hermes-adapter", [*python_command, str(repo_root / ".just/lint_hermes_adapter.py")]
+        ),
+        "hermes-atm-boundary": LintTask(
+            "hermes-atm-boundary", [*python_command, str(repo_root / ".just/lint_hermes_atm_boundary.py")]
+        ),
+        "atm-graft-python-boundary": LintTask(
+            "atm-graft-python-boundary", [*python_command, str(repo_root / ".just/lint_atm_graft_python_boundary.py")]
+        ),
         "fixed-sleep": LintTask(
             "fixed-sleep", [*python_command, str(repo_root / ".just/check_fixed_sleep_hygiene.py")]
         ),
@@ -135,6 +164,23 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         "daemon-singleton": LintTask(
             "daemon-singleton",
             [*python_command, str(repo_root / "scripts/lint_daemon_singleton.py")],
+        ),
+        "legacy-transport-removal": LintTask(
+            "legacy-transport-removal",
+            [
+                *python_command,
+                str(repo_root / "scripts/phase-am/check_legacy_transport_removal.py"),
+                "--category",
+                "raw-framing",
+                "--category",
+                "peer-ingress",
+                "--category",
+                "resend-replay",
+                "--category",
+                "direct-sqlite",
+                "--category",
+                "dead-daemon-dispatch",
+            ],
         ),
         "pytests": LintTask("pytests", [*python_command, str(repo_root / ".just/run_pytests.py")]),
     }
@@ -218,6 +264,13 @@ def preview_lines_for_task(task_name: str, lines: list[str]) -> list[str]:
     return filtered or lines
 
 
+def failure_preview(task_name: str, lines: list[str]) -> list[str]:
+    """Return actionable CI output without hiding a Python test traceback."""
+    if task_name == "pytests":
+        return lines[-40:]
+    return prioritize_error_lines(lines)[:4]
+
+
 def build_transcript(task: LintTask, result: LintResult, repo_root: Path) -> list[str]:
     transcript = [
         f"lint: {task.name}",
@@ -292,8 +345,7 @@ def print_result(result: LintResult, repo_root: Path) -> None:
             print(f"  full log: {log_display}")
         return
 
-    preview = lines[:4]
-    preview = prioritize_error_lines(lines)[:4]
+    preview = failure_preview(result.task.name, lines)
     for line in preview:
         print(f"  {line}")
     print(f"  full log: {log_display}")
@@ -303,6 +355,14 @@ def run_parallel(tasks: list[LintTask], repo_root: Path) -> list[LintResult]:
     with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
         futures = [executor.submit(run_task, task, repo_root) for task in tasks]
         return [future.result() for future in futures]
+
+
+def partition_python_tasks(tasks: list[LintTask]) -> tuple[list[LintTask], list[LintTask]]:
+    """Keep repository-tool tests out of the concurrent lint batch."""
+    return (
+        [task for task in tasks if task.name != "pytests"],
+        [task for task in tasks if task.name == "pytests"],
+    )
 
 
 def main(argv: list[str]) -> int:
@@ -331,7 +391,16 @@ def main(argv: list[str]) -> int:
         results.append(result)
 
     if python_tasks:
-        for result in run_parallel(python_tasks, repo_root):
+        # The Python suite invokes repository tools and may create their normal
+        # output paths.  Running it beside the lint tasks that inspect those
+        # paths makes the overall lint gate race-dependent on CI.
+        parallel_python_tasks, serial_python_tasks = partition_python_tasks(python_tasks)
+        if parallel_python_tasks:
+            for result in run_parallel(parallel_python_tasks, repo_root):
+                print_result(result, repo_root)
+                results.append(result)
+        for task in serial_python_tasks:
+            result = run_task(task, repo_root)
             print_result(result, repo_root)
             results.append(result)
 

@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI17-QA1-IMPORTANT-02-DOC-PLACEMENT>
+  a triage:Finding ;
+  triage:findingId "AI17-QA1-IMPORTANT-02-DOC-PLACEMENT" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:title "ATM_CHAT_ID doc sentence misplaced in nav-footer paragraph" ;
+  triage:description "The new ATM_CHAT_ID doc sentence in identity-and-team.md is misplaced in the nav-footer paragraph rather than the guidance section." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doc-placement" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "2026-07-27 (quality-mgr): independently re-verified at integrate/phase-AI@f3b6a77a — docs/user-documents/identity-and-team.md:66-69 now places the ATM_CHAT_ID sentence inside the guidance bullet list alongside ATM_TEAM/ATM_IDENTITY ('use ATM_CHAT_ID to select the optional ambient chat identity...'), not in a nav-footer paragraph. Confirmed via direct file read, not self-report." ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI17-QA1-IMPORTANT-02-DOC-PLACEMENT/pAI-s17/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s17/5560bf8d> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s17/5560bf8d> .
+
+<urn:atm:triage:occurrence/AI17-QA1-IMPORTANT-02-DOC-PLACEMENT/pAI-s17/1>
+  a triage:Occurrence ;
+  triage:file "docs/user-documents/identity-and-team.md" ;
+  triage:line 79 ;
+  triage:snippet "`ATM_CHAT_ID` optionally selects the ambient chat identity. Chat precedence is `--as agent:chat`, `--chat-id`, `ATM_CHAT_ID`, qualified `ATM_IDENTITY`, then no chat ID." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "5560bf8d" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s17/5560bf8d> .
+
+<urn:atm:triage:worktree/pAI-s17/5560bf8d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "5560bf8d" ;
+  triage:orderIndex 17 .

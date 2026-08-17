@@ -5,7 +5,7 @@ name = "RuntimeAssembly"
 
 [public]
 facade = "RuntimeAssembly"
-notes = "Phase AA concrete composition seam that assembles storage-neutral runtime inputs for atm and atm-daemon"
+notes = "Phase AA concrete composition seam that assembles storage-neutral runtime inputs for replacement daemon composition"
 
 [implementation]
 type = "RuntimeAssembly"
@@ -14,21 +14,19 @@ visibility = "public"
 constructor = "public"
 
 [composition]
-roots = [
-  "atm_runtime::composition::assemble_sqlite_runtime",
-  "atm_runtime::composition::assemble_default_runtime",
-]
+roots = ["atm_runtime::composition::assemble_runtime"]
 
 [ownership]
-io_owns = ["runtime_dependency_assembly", "config_doctor_assembly", "replay_store_assembly"]
+io_owns = ["runtime_dependency_assembly", "config_doctor_assembly"]
 io_forbidden = ["daemon_transport", "daemon_lifecycle", "direct_socket_io"]
 
 [dependencies]
-allowed_dependents = ["atm", "atm-daemon", "atm-daemon-bootstrap", "atm-runtime-test-support"]
-allowed_dependencies = ["atm-core", "atm-storage", "atm-storage-rusqlite"]
+allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime-test-support"]
+allowed_dependencies = ["atm-core", "atm-storage", "tokio"]
 forbidden_edges = [
   "atm -> atm-storage-rusqlite",
   "atm-daemon -> atm-storage-rusqlite",
+  "atm-runtime -> atm-storage-rusqlite",
   "atm-runtime -> atm-daemon",
 ]
 
@@ -38,7 +36,7 @@ forbidden = []
 
 [contracts]
 request_types = ["RuntimeAssemblyInputs"]
-response_types = ["RuntimeAssembly", "RuntimeDoctorPorts", "RuntimeStorageFinalizer"]
+response_types = ["RuntimeAssembly", "RuntimeDoctorPorts"]
 error_types = ["AtmError"]
 
 [testing]
@@ -52,7 +50,7 @@ review_gates = ["no_direct_backend_leakage", "no_runtime_to_daemon_backedge"]
 [status]
 state = "concrete_landed"
 notes = [
-  "implemented by AA.2 as the concrete runtime/store composition root for atm and atm-daemon",
-  "daemon startup remains fail-closed on any RuntimeAssembly failure",
+  "AI.2 leaves runtime backend-neutral; concrete backend selection lives outside this crate",
+  "replacement daemon startup remains fail-closed on any RuntimeAssembly failure",
   "the sqlite boundary TOMLs and runtime composition record agree on the forbidden atm-daemon -> atm-storage-rusqlite edge",
 ]

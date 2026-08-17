@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI22-RBP-F002>
+  a triage:Finding ;
+  triage:findingId "AI22-RBP-F002" ;
+  triage:title "Lost Minor finding from AI22 QA-1 rust-best-practices-agent review (never triaged)" ;
+  triage:description "rust-best-practices-agent reported a Minor severity finding during AI22 QA-1 pass (ai22-qa1-verdict.txt line 31-32), but the descriptive detail was lost to a prior context compaction. The finding was never triaged into a canonical record. During audit recovery, a fresh standalone re-review of the same commit (a5aa6813) discovered two different Important-level findings (AI22-IMPORTANT-004 and AI22-IMPORTANT-005), neither confirmed to correspond to the lost original. This record documents the gap: the original RBP-F002 was reported as Minor, cannot be recovered, and should not be silently dropped from the QA gate. Recommend: either recover the original via direct inquiry with rust-best-practices-agent if historical context is available, or treat this as an indicator that the QA-1 round itself may have had incomplete record-keeping and should be re-validated. The discovery of AI22-IMPORTANT-004/005 in the recovery pass should be treated as two separate (unconfirmed-related) findings from that review." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "process" ;
+  triage:severity "Minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "waived" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-26T20:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-25T12:00:00Z"^^xsd:dateTime ;
+  triage:foundAt "2026-07-25T06:42:14Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S2 ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-RBP-F002/pAI-s22/1> ;
+  triage:relatedFinding "AI22-IMPORTANT-004" ;
+  triage:relatedFinding "AI22-IMPORTANT-005" ;
+  triage:closureNote "This finding documents a lost triage record from QA-1. Recovery attempt (ai22-rbpf002-recovery-report.md) found two different Important-level findings but could not confirm either was the lost original (different severity: lost was Minor, found were Important; no baseline to compare against). Per standing policy: QA findings cannot be silently dropped; this record preserves the fact that RBP-F002 was reported but lost, and cross-references the recovery attempt's findings for downstream reconciliation. RESOLUTION (team-lead, 2026-07-26): both cross-referenced candidate findings, AI22-IMPORTANT-004 and AI22-IMPORTANT-005, were independently verified fixed and merged via PR #651 (AICH-S11-FIX-BATCH-1, commit 82226b4c). Whichever finding RBP-F002 actually was, its only two plausible candidates are now closed. Waiving this record rather than leaving it permanently unresolvable." .
+
+<urn:atm:triage:occurrence/AI22-RBP-F002/pAI-s22/1>
+  a triage:Occurrence ;
+  triage:file "unknown" ;
+  triage:description "rust-best-practices-agent finding from ai22-qa1-verdict.txt, line 31-32: reported as Minor severity, descriptive detail lost to context compaction, never triaged. Recovery attempt found AI22-IMPORTANT-004 (AgentAddress all-public fields panic on Display::fmt) and AI22-IMPORTANT-005 (SendCommand::message_validation_error unused recovery parameter), but neither is confirmed to be the lost original." ;
+  triage:status "waived" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s22/a5aa6813> .
+
+<urn:atm:triage:worktree/pAI-s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 8 .

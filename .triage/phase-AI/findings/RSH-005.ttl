@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RSH-005>
+  a triage:Finding ;
+  triage:findingId "RSH-005" ;
+  triage:title "peer_drain_coordinator.rs drain() multi-page pagination/retry loop has zero test coverage" ;
+  triage:description "crates/atm-daemon/src/peer_drain_coordinator.rs:277 -- the real multi-page pagination/retry loop in drain() has zero test coverage for >1 page or mid-page partial-failure; every test that sets max_batch_messages uses either 1 or sends only a single message. Fresh, independently-discovered gap in the same functional area as RSH-003/RSH-004, but a distinct concern (missing coverage, not incorrect logic). Fix already in progress under AICH-PEER-DRAIN-RETRY-1 (fix/phase-ai-peer-drain-partial-retry) dispatched to arch-ctm." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-27T05:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-PHASE-END-QA-1 ;
+  triage:foundAt "2026-07-27T05:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-005/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RSH-005/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 277 ;
+  triage:snippet "drain() multi-page pagination/retry loop, zero test coverage for >1 page or partial-failure" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "1ea59d89" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate_phase_ai_1ea59d89> .
+
+<urn:atm:triage:worktree/integrate_phase_ai_1ea59d89>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "1ea59d89" ;
+  triage:orderIndex 999 .
+
+<urn:atm:triage:finding/RSH-005>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "quality-mgr (2026-07-27): QA-1 for PR #666 (fix/phase-ai-peer-drain-partial-retry @ 3e16092d) closes this gap. New deterministic test crates/atm-daemon/src/tests/runtime_root/peer_reconciliation.rs:494-647 (reconciliation_retries_a_partial_page_without_losing_or_duplicating_receiver_rows) with fixture PartialPageFailureThenReceiver (:66-129) covers the mid-page/partial-failure branch of drain()'s pagination/retry loop (peer_drain_coordinator.rs:277, unchanged by this PR) with a genuine >1-message page (max_batch_messages=8, 2 writes queued). Combined with pre-existing multi-page loop-continuation coverage in explicit_peer_sync_resends_one_bounded_immutable_write (peer_reconciliation.rs:258-366), both structurally distinct branches of drain() now have direct test coverage. rust-service-hardening-agent (disposition-only re-check), req-qa, rust-qa-agent (10x + 25x repeated execution, no flakiness), rust-best-practices-agent, and arch-qa all independently confirmed in this round; production code confirmed unchanged via git diff (single file, +225/-0). Note: this record lives on integrate/phase-AI (committed b0510a3e) but was not yet present in the fix/phase-ai-peer-drain-partial-retry worktree, which forked from the parent commit 1ea59d89 before b0510a3e landed -- reviewers correctly identified and traced this to the canonical record rather than treating it as a fabricated citation. Residual (non-blocking, informational, not a new finding): no single test combines a >1-page drain() sequence with a failure occurring on page 2+ rather than page 1; left for a future low-priority follow-up if judged worth the coverage." .

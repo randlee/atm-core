@@ -26,7 +26,7 @@ io_forbidden = [
 ]
 
 [dependencies]
-allowed_dependents = ["atm-runtime", "atm-runtime-test-support"]
+allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime-test-support"]
 allowed_dependencies = [
   "atm-storage",
   "rusqlite",
@@ -35,6 +35,8 @@ forbidden_edges = [
   "atm -> atm-storage-rusqlite",
   "atm-daemon -> atm-storage-rusqlite",
   "atm-graft -> atm-storage-rusqlite",
+  "atm-runtime -> atm-storage-rusqlite",
+  "atm-storage-rusqlite -> atm-runtime",
 ]
 
 [references]
@@ -69,5 +71,6 @@ review_gates = [
 state = "active"
 notes = [
   "SQLite message persistence is a backend-only implementation of the shared atm-storage MessageStore trait",
+  "AsyncMessageStore admission awaits a bounded Tokio channel; one dedicated synchronous SQLite writer owns ordered transaction batching",
   "notification semantics remain post-commit only",
 ]

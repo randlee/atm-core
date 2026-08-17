@@ -9,13 +9,11 @@ use crate::send::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DeliveryPlanDisposition {
     Persisted,
-    SqliteFailedRecovered,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DeliveryPlanKind {
     Send,
-    Reply,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -68,26 +66,19 @@ pub(crate) fn logical_messages_from_persistence(
     requires_ack: bool,
     is_ack: bool,
 ) -> Result<Vec<LogicalMessage>, LogicalMessageError> {
-    let mut messages = vec![LogicalMessage::new(
+    let messages = vec![LogicalMessage::new(
         persistence.original_message.clone(),
         requires_ack,
         is_ack,
     )?];
-    if let Some(companion_message) = persistence.companion_message.clone() {
-        messages.push(LogicalMessage::new(companion_message, false, is_ack)?);
-    }
     Ok(messages)
 }
 
 pub(crate) fn delivery_plan_disposition(
     disposition: DeliveryPersistenceDisposition,
 ) -> DeliveryPlanDisposition {
-    match disposition {
-        DeliveryPersistenceDisposition::Persisted => DeliveryPlanDisposition::Persisted,
-        DeliveryPersistenceDisposition::SqliteFailedRecovered => {
-            DeliveryPlanDisposition::SqliteFailedRecovered
-        }
-    }
+    let DeliveryPersistenceDisposition::Persisted = disposition;
+    DeliveryPlanDisposition::Persisted
 }
 
 pub(crate) fn delivery_target_for_snapshot(

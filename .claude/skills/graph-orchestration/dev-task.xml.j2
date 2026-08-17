@@ -1,0 +1,56 @@
+---
+name: graph-dev-task
+version: 1.0.0
+description: Initial dev pass for a sprint node in graph-orchestration. No prior findings on this node.
+format: xml
+required_variables:
+  - task_id
+  - sprint
+  - node_id
+  - node_order
+  - criteria_doc
+  - worktree_path
+  - branch
+  - pr_target
+  - assignee
+  - phase_local
+  - ttl_dir
+optional_variables:
+  - finding_ids
+  - test_command
+  - references
+defaults:
+  test_command: "just test"
+  references: ""
+  finding_ids: ""
+---
+<atm-task id="{{ task_id }}" sprint="{{ sprint }}" node="{{ node_id }}" order="{{ node_order }}" assignee="{{ assignee }}">
+  <description>Implement sprint node {{ node_id }} (order {{ node_order }}) in {{ sprint }}.</description>
+
+  <worktree>{{ worktree_path }}</worktree>
+  <branch>{{ branch }}</branch>
+  <pr-target>{{ pr_target }}</pr-target>
+  <acceptance-criteria-doc>{{ criteria_doc }}</acceptance-criteria-doc>
+
+  {% if references %}
+  <references>
+{{ references }}
+  </references>
+  {% endif %}
+
+  <workflow>
+    <step id="a">ACK this message immediately. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
+    <step id="b">Before reading code or editing, update from `{{ pr_target }}` first (`git fetch origin && git merge origin/{{ pr_target }}`) so `{{ ttl_dir }}/events.ttl` reflects team-lead's latest writes, then run `.claude/skills/graph-orchestration/scripts/next-dev-task {{ phase_local }} {{ ttl_dir }}` and retain its JSON. Note: once team-lead appends this task's Assignment event, `{{ node_id }}` is "in-flight" and the cursor query correctly advances past it — do not expect `vars.sprint` to equal `{{ node_id }}`. Instead confirm directly against `{{ ttl_dir }}/events.ttl` that a `triage:Assignment` exists with `triage:ofSprint triage:{{ node_id }}` and `triage:assignedTo` naming you, and that no `triage:Completion` for `triage:{{ node_id }}` exists yet — that is what makes this a valid, currently-assigned task. With an empty `findings` array this is a new/greenfield sprint. Otherwise, `{{ finding_ids }}` must be non-empty and every listed id must appear in `findings` with severity `blocking`; any other result is an invalid assignment—stop and report it. The array is ordered Blocking, Important, Minor.</step>
+    <step id="c">Read `{{ criteria_doc }}` before coding. This is the authoritative acceptance criteria for this node. Satisfy every criterion completely — do not weaken or skip any.</step>
+    <step id="d">Update the worktree from `{{ pr_target }}` before any edits: `git fetch origin && git merge origin/{{ pr_target }}`.</step>
+    <step id="e">Implement the work. Commit incrementally on `{{ branch }}`.</step>
+  </workflow>
+
+  <final-actions>
+    <step id="0">Critically review the sprint plan and your implementation. Read `{{ criteria_doc }}` again and confirm every acceptance criterion is fully and completely met. Do not proceed if any criterion is unresolved or partially met.</step>
+    <step id="1">Run `{{ test_command }}` and confirm it passes with zero failures. Fix any failures before continuing — do not proceed with a failing test suite.</step>
+    <step id="2">Commit all remaining changes and push to remote: `git push origin {{ branch }}`. Note the full commit SHA.</step>
+    <step id="3">Send a completion message to team-lead via ATM including: node `{{ node_id }}`, branch `{{ branch }}`, and the full commit SHA from the push. Do NOT append any triage events — team-lead handles all TTL event writes.</step>
+    <step id="4">Merge this branch into the next sprint worktree: from within the next sprint's worktree, run `git fetch origin && git merge origin/{{ branch }}`.</step>
+  </final-actions>
+</atm-task>

@@ -13,8 +13,10 @@ if str(JUST_DIR) not in sys.path:
 from run_lint import build_tasks
 from run_lint import build_transcript
 from run_lint import extract_count
+from run_lint import failure_preview
 from run_lint import LintResult
 from run_lint import LintTask
+from run_lint import partition_python_tasks
 from run_lint import preview_lines_for_task
 from run_lint import prioritize_error_lines
 from run_lint import resolve_task_names
@@ -34,6 +36,7 @@ resolver = "2"
         self.assertIn("unix-gating", names)
         self.assertIn("runtime-waits", names)
         self.assertIn("manifests", names)
+        self.assertIn("daemon-signing-coupling", names)
         self.assertIn("silent-emit", names)
         self.assertIn("function-length", names)
         self.assertIn("legacy-mailbox-paths", names)
@@ -44,6 +47,7 @@ resolver = "2"
         self.assertIn("ttl-triage", names)
         self.assertIn("spell", names)
         self.assertIn("daemon-singleton", names)
+        self.assertIn("hermes-adapter", names)
         self.assertIn("pytests", names)
         self.assertNotIn("sc-boundary", names)
         self.assertNotIn("sc-portability", names)
@@ -77,6 +81,30 @@ resolver = "2"
             ],
         )
 
+    def test_failure_preview_keeps_python_test_traceback_context(self) -> None:
+        lines = [f"setup {index}" for index in range(45)]
+        lines.extend(
+            [
+                "FAIL: test_expected_behavior",
+                "Traceback (most recent call last):",
+                "AssertionError: expected value",
+                "FAILED (failures=1)",
+            ]
+        )
+
+        preview = failure_preview("pytests", lines)
+
+        self.assertEqual(preview, lines[-40:])
+        self.assertIn("FAIL: test_expected_behavior", preview)
+
+    def test_failure_preview_keeps_other_lints_concise(self) -> None:
+        lines = ["progress", "error: one", "error: two", "error: three", "error: four", "error: five"]
+
+        self.assertEqual(
+            failure_preview("boundaries", lines),
+            ["error: one", "error: two", "error: three", "error: four"],
+        )
+
     def test_strip_ansi_and_prioritize_error_lines_handles_colored_cargo_output(self) -> None:
         lines = [
             strip_ansi("\x1b[1m\x1b[92m  Downloaded\x1b[0m thiserror v2.0.18"),
@@ -103,6 +131,10 @@ resolver = "2"
             self.assertEqual(tasks["sc-boundary"].command[-1], str(repo_root / ".just/lint_sc_boundary.py"))
             self.assertEqual(tasks["sc-portability"].command[-1], str(repo_root / ".just/lint_sc_portability.py"))
             self.assertEqual(tasks["manifests"].command[-1], str(repo_root / ".just/lint_manifests.py"))
+            self.assertEqual(
+                tasks["daemon-signing-coupling"].command[-1],
+                str(repo_root / ".just/lint_daemon_signing_coupling.py"),
+            )
             self.assertEqual(
                 tasks["silent-emit"].command[-1],
                 str(repo_root / "scripts/check-silent-emit.py"),
@@ -131,6 +163,10 @@ resolver = "2"
             )
             self.assertEqual(tasks["spell"].command[-1], str(repo_root / ".just/lint_codespell.py"))
             self.assertEqual(
+                tasks["hermes-adapter"].command[-1],
+                str(repo_root / ".just/lint_hermes_adapter.py"),
+            )
+            self.assertEqual(
                 tasks["daemon-singleton"].command[-1],
                 str(repo_root / "scripts/lint_daemon_singleton.py"),
             )
@@ -144,15 +180,27 @@ resolver = "2"
                 "version",
                 "boundaries",
                 "manifests",
+                "daemon-signing-coupling",
                 "shear",
                 "silent-emit",
                 "function-length",
                 "legacy-mailbox-paths",
                 "capability-degradation",
                 "spell",
+                "hermes-adapter",
                 "pytests",
             ],
         )
+
+    def test_partition_python_tasks_runs_pytests_after_independent_lints(self) -> None:
+        version = LintTask("version", ["python3", "version.py"])
+        pytests = LintTask("pytests", ["python3", "run_pytests.py"])
+        boundaries = LintTask("boundaries", ["python3", "boundaries.py"])
+
+        parallel, serial = partition_python_tasks([version, pytests, boundaries])
+
+        self.assertEqual(parallel, [version, boundaries])
+        self.assertEqual(serial, [pytests])
 
     def test_build_transcript_adds_crate_inventory_for_crate_scoped_lints(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

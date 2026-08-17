@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI21-QA2-001>
+  a triage:Finding ;
+  triage:findingId "AI21-QA2-001" ;
+  triage:title "Shipped smoke example config missing nudge entry (same gap as AI21-IMPORTANT-006)" ;
+  triage:description "req-qa's AI21-QA2-001 is the same underlying issue as AI21-IMPORTANT-006: scripts/smoke/inbound-peer-smoke.example.json lacks the nudge entry in host.local_checks, causing the nudge check to be silently not-run under the documented two-peer workflow. The code-path fix (run() function now correctly invokes all declared checks) is correct, but the shipped example config remains incomplete. This triage record consolidates req-qa's reported finding into the canonical AI21-QA2-001 identifier." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "configuration" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "AICH-S11-QA-BATCH-1: verified Crimson's 'no edit needed' claim on fix/findings-closeout (82226b4c, PR #651). Commit 82226b4c does not touch scripts/smoke/inbound-peer-smoke.example.json at all. Confirmed via git log --follow that the nudge entry was already added by an earlier commit 7cf131fa ('fix(smoke): require complete local evidence matrix', fixing the related AI21-IMPORTANT-006), which predates this branch's HEAD. No scope mismatch -- the no-op close is genuinely correct, not an incorrect dismissal." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-25T12:00:00Z"^^xsd:dateTime ;
+  triage:foundAt "2026-07-25T05:48:10Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S1 ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI21-QA2-001/fix-findings-closeout/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI21-QA2-001/pAI-s21pre/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s21pre/42fbd9fa> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s21pre/42fbd9fa> ;
+  triage:relatedFinding "AI21-IMPORTANT-006" .
+
+<urn:atm:triage:occurrence/AI21-QA2-001/fix-findings-closeout/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/inbound-peer-smoke.example.json" ;
+  triage:line 14 ;
+  triage:snippet "\"nudge\": [...] already present in host.local_checks" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/findings-closeout" ;
+  triage:headSha "82226b4c" ;
+  triage:notes "AICH-S11-QA-BATCH-1: no-op close confirmed correct -- nudge entry already present, added by 7cf131fa prior to this branch's history." ;
+  triage:occursIn <urn:atm:triage:worktree/fix-findings-closeout/82226b4c> .
+
+<urn:atm:triage:occurrence/AI21-QA2-001/pAI-s21pre/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/inbound-peer-smoke.example.json" ;
+  triage:line 14 ;
+  triage:snippet "\"local_checks\": { \"localhost/local loopback\": [...], \"own-IP\": [...] }" ;
+  triage:description "Shipped example config declares only 2 of 3 required host.local_checks keys. Missing nudge entry causes nudge check to be silently not-run under the documented two-peer workflow, contradicting the sprint's own acceptance criterion that no result row shall be an inferred/silent success." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s21pre/42fbd9fa> .
+
+<urn:atm:triage:worktree/pAI-s21pre/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 1 .

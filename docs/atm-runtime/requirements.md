@@ -18,10 +18,6 @@ live in `atm-daemon`.
   - `StorageBackends<M, R>` over the shared `atm-storage` message/roster traits
   - legacy compile-bridge `MailStore`
   - legacy compile-bridge `RosterStore`
-  - SQLite-backed `RemoteReplayStore`
-- `atm-runtime` must export a storage-neutral shutdown/finalization seam so
-  daemon runtime code can finalize storage without depending directly on
-  SQLite-owned types.
 - `atm-runtime` must expose storage-neutral runtime inputs to callers through
   the `atm-core` trait surfaces frozen by `Phase AA`.
 - `atm-runtime` must own the concrete `ConfigDoctor` implementation used by

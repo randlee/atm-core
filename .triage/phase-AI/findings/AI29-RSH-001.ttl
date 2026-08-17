@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI29-RSH-001>
+  a triage:Finding ;
+  triage:findingId "AI29-RSH-001" ;
+  triage:title "ActiveConnectionRegistry push_dispatch_handle capacity error propagates to accept loop" ;
+  triage:description "ActiveConnectionRegistry::push_dispatch_handle returns Err when at MAX_CONCURRENT_CONNECTIONS, causing entire local HTTP listener to tear down via ? operator instead of refusing single connection. Both Unix (local_tcp_transport.rs:125-131) and Windows (:311-317) accept-loop call sites use ?, so capacity exceeded kills entire listener instead of staying responsive." ;
+  triage:phaseId "phase-AI" ;
+  triage:category "RSH" ;
+  triage:severity "Blocking" ;
+  triage:status "fixed" ;
+  triage:repeatable false ;
+  triage:foundIn triage:AICH-S10 ;
+  triage:foundAt "2026-07-25T19:04:04Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-25T19:48:57Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "ActiveConnectionRegistry::try_register (crates/atm-daemon/src/active_connection_registry.rs:70-93) now does atomic CAS-based capacity reservation BEFORE thread::spawn at both accept-loop call sites (crates/atm-daemon/src/local_tcp_transport.rs:112-115 Unix, :300-303 Windows). The defect itself is fixed: hitting capacity now continues the accept loop instead of propagating Err. RESIDUAL GAP (not fixed, disclosed per requirement): push_dispatch_handle (active_connection_registry.rs:123-143) still returns Err at its own separate handles.len() >= max_handles check, and both call sites (local_tcp_transport.rs:126-132, :314-320) still call it with ?, making this a fatal branch. The branch is currently unreachable because upstream try_register already caps at MAX_CONCURRENT_CONNECTIONS=64 before push_dispatch_handle runs (call-site invariant, not structural guarantee). REGRESSION TEST GAP: No test drives the real MAX_CONCURRENT_CONNECTIONS=64 bound through the actual accept loop; only cap-of-1 unit test (composition_admission_is_atomic_and_recovers_after_drop) and legacy 2-connection integration test exist. Regression coverage for this fix is inadequate." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence_AI29-RSH-001_d36709b1> ;
+  triage:fixedOn <urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_d36709b1> .
+
+<urn:atm:triage:occurrence_AI29-RSH-001_d36709b1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/active_connection_registry.rs" ;
+  triage:snippet "ActiveConnectionRegistry push_dispatch_handle capacity error propagates to accept loop" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "d36709b1" ;
+  triage:occursIn <urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_d36709b1> .
+
+<urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_d36709b1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "d36709b1" ;
+  triage:orderIndex 29 .

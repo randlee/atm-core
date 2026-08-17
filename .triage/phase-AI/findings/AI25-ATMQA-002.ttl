@@ -1,0 +1,275 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI25-ATMQA-002>
+  a triage:Finding ;
+  triage:findingId "AI25-ATMQA-002" ;
+  triage:foundAt "2026-07-25T09:19:48Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
+  triage:title "CLI trust mutation doesn't actually trigger the daemon refresh" ;
+  triage:description "atm peer trust add/replace/revoke writes directly to PeerConfigStore and never signals a running daemon; refresh_https_trust is only reachable via the generic SIGHUP-driven reload_runtime_view hook, not \"after\" the CLI mutation as sprint Deliverable 4 states. Either wire the CLI to trigger reload directly, or correct the sprint doc's deliverable language to describe the actual (external-signal-required) design. FOLLOWUP (AICH-S5-FIX-1 recheck, a9e61fb0): escalated to Blocking. FIX-1 attempted closure by narrowing Deliverable 4's scope in the sprint doc rather than wiring the CLI trigger, but that rescoping was done unilaterally as part of a fix round without going through an explicit plan-change process -- a governance violation per standing policy (QA findings never rescope the plan; rescoping requires its own review). Additionally, the new live_trust_refresh_keeps_one_listener_reachable test added under AI25-ATMQA-001 calls refresh_https_trust directly rather than exercising the real CLI-to-signal-to-reload_runtime_view entry point, so the residual gap (ATM-QA-103/ATM-QA-005 signal-path coverage) is still unverified end-to-end. Both the improper rescoping and the residual signal-path gap must be resolved before this finding closes." ;
+  triage:phaseId "phase-AI" ;
+  triage:category "ATM-QA" ;
+  triage:triageMode "followup_pass" ;
+  triage:severity "Blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-25T10:54:00Z"^^xsd:dateTime ;
+  triage:reassignReason "s26-s30 occurrences were stale snapshots recorded against an old headSha (b5eec1bf for s26-s29, 77252eca for s30) taken before those branches picked up the S5 fix (d6f7993a). Team-lead independently verified via git show origin/<branch>:crates/atm/src/commands/peer.rs at each branch's ACTUAL current HEAD (s26=28190ce1, s27=bed01b4d, s28=8e6c533a, s29=415a2db1, s30=9fd44444) that reload_runtime_view is present in all 5; quality-mgr independently re-verified the same 5 shas directly via git show. No merge-forward code work was needed -- the fix had already propagated; only the TTL records were stale." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-002/s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-002/s25/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-002/s26/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-002/s26/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-002/s27/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-002/s27/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-002/s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-002/s28/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-002/s29/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-002/s29/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-002/s30/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-002/s30/2> ;
+  triage:fixedOn <urn:atm:triage:worktree/s25/d6f7993a> ;
+  triage:fixedOn <urn:atm:triage:worktree/s26/28190ce1> ;
+  triage:fixedOn <urn:atm:triage:worktree/s27/bed01b4d> ;
+  triage:fixedOn <urn:atm:triage:worktree/s28/8e6c533a> ;
+  triage:fixedOn <urn:atm:triage:worktree/s29/415a2db1> ;
+  triage:fixedOn <urn:atm:triage:worktree/s30/9fd44444> ;
+  triage:promoteTo <urn:atm:triage:worktree/s30/9fd44444> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-002/s25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/peer.rs" ;
+  triage:line 319 ;
+  triage:snippet "store.save_trusted_peer(&peer)?; println!(\"added trusted peer {}\", peer.host); Ok(())" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "b49f0840" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/b49f0840> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-002/s25/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/peer.rs" ;
+  triage:snippet "FIX-2 (d6f7993a) wired PeerCommand::run's Trust arm to call Self::reload_runtime_view(observability) whenever TrustCommand::run_with_store returns changed=true (Add/Replace/Revoke), which bootstraps CliComposition and calls composition.reload_runtime_view() -- a genuine CLI-mutation-to-daemon-reload trigger, not a doc rescope. Verified via git diff a9e61fb0..b520061e on crates/atm/src/commands/peer.rs." ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "d6f7993a" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/0265c94f> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-002/s26/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/peer.rs" ;
+  triage:line 319 ;
+  triage:snippet "store.save_trusted_peer(&peer)?; println!(\"added trusted peer {}\", peer.host); Ok(())" ;
+  triage:status "stale-snapshot" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "b5eec1bf" ;
+  triage:occursIn <urn:atm:triage:worktree/s26/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-002/s26/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/peer.rs" ;
+  triage:snippet "Self::reload_runtime_view(observability)? present at current HEAD -- fix already propagated" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "28190ce1" ;
+  triage:occursIn <urn:atm:triage:worktree/s26/28190ce1> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-002/s27/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/peer.rs" ;
+  triage:line 319 ;
+  triage:snippet "store.save_trusted_peer(&peer)?; println!(\"added trusted peer {}\", peer.host); Ok(())" ;
+  triage:status "stale-snapshot" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "b5eec1bf" ;
+  triage:occursIn <urn:atm:triage:worktree/s27/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-002/s27/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/peer.rs" ;
+  triage:snippet "Self::reload_runtime_view(observability)? present at current HEAD -- fix already propagated" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "bed01b4d" ;
+  triage:occursIn <urn:atm:triage:worktree/s27/bed01b4d> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-002/s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/peer.rs" ;
+  triage:line 319 ;
+  triage:snippet "store.save_trusted_peer(&peer)?; println!(\"added trusted peer {}\", peer.host); Ok(())" ;
+  triage:status "stale-snapshot" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b5eec1bf" ;
+  triage:occursIn <urn:atm:triage:worktree/s28/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-002/s28/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/peer.rs" ;
+  triage:snippet "Self::reload_runtime_view(observability)? present at current HEAD -- fix already propagated" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "8e6c533a" ;
+  triage:occursIn <urn:atm:triage:worktree/s28/8e6c533a> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-002/s29/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/peer.rs" ;
+  triage:line 319 ;
+  triage:snippet "store.save_trusted_peer(&peer)?; println!(\"added trusted peer {}\", peer.host); Ok(())" ;
+  triage:status "stale-snapshot" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "b5eec1bf" ;
+  triage:occursIn <urn:atm:triage:worktree/s29/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-002/s29/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/peer.rs" ;
+  triage:snippet "Self::reload_runtime_view(observability)? present at current HEAD -- fix already propagated" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "415a2db1" ;
+  triage:occursIn <urn:atm:triage:worktree/s29/415a2db1> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-002/s30/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/peer.rs" ;
+  triage:line 319 ;
+  triage:snippet "store.save_trusted_peer(&peer)?; println!(\"added trusted peer {}\", peer.host); Ok(())" ;
+  triage:status "stale-snapshot" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "77252eca" ;
+  triage:occursIn <urn:atm:triage:worktree/s30/77252eca> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-002/s30/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/peer.rs" ;
+  triage:snippet "Self::reload_runtime_view(observability)? present at current HEAD -- fix already propagated" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "9fd44444" ;
+  triage:occursIn <urn:atm:triage:worktree/s30/9fd44444> .
+
+<urn:atm:triage:worktree/s21pre/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s23/c528137c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s24/c326cbe7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "c326cbe7" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s25/b49f0840>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "b49f0840" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s26/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:path "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/s27/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/s28/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/s29/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/s30/77252eca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "77252eca" ;
+  triage:orderIndex 10 .
+
+<urn:atm:triage:worktree/s26/28190ce1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:path "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "28190ce1" ;
+  triage:orderIndex 6 ;
+  triage:status "contains-fix-verified" .
+
+<urn:atm:triage:worktree/s27/bed01b4d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "bed01b4d" ;
+  triage:orderIndex 7 ;
+  triage:status "contains-fix-verified" .
+
+<urn:atm:triage:worktree/s28/8e6c533a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "8e6c533a" ;
+  triage:orderIndex 8 ;
+  triage:status "contains-fix-verified" .
+
+<urn:atm:triage:worktree/s29/415a2db1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "415a2db1" ;
+  triage:orderIndex 9 ;
+  triage:status "contains-fix-verified" .
+
+<urn:atm:triage:worktree/s30/9fd44444>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "9fd44444" ;
+  triage:orderIndex 10 ;
+  triage:status "contains-fix-verified" .

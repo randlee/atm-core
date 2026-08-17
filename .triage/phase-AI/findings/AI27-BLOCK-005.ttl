@@ -1,0 +1,74 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI27-BLOCK-005>
+  a triage:Finding ;
+  triage:findingId "AI27-BLOCK-005" ;
+  triage:title "PR #642 (AI.27/AICH-S7) CI red on all 3 OS legs: new RULE-002 hard violation (dispatch, 118 lines), RULE-003 hard violation (runtime_health.rs prod=1072), and a real test failure (peer sync progress lock poisoned)" ;
+  triage:description """Independently verified via `gh pr checks 642` at commit d636a522586943f93a63f8083bcec8d888d4cee7 (branch feature/pAI-s27-peer-delivery-observability, run 30206923692): Just lint (windows/macos/ubuntu-latest) and Test (windows/macos/ubuntu-latest) all FAIL identically on every OS leg; Clippy and Format check pass. Three distinct root causes confirmed by direct local reproduction against a fresh detached checkout of this exact commit:
+
+1. RULE-002 (function-length) new hard violation, confirmed via `python3 scripts/check-function-length.py`: crates/atm-daemon/src/runtime_health.rs:628-745 `dispatch` (118 lines) -- this is new and overlaps the diff (not the pre-existing grandfathered atm-core/src/observability.rs normalize_json_number violation, which remains unchanged and out of scope). This escalates/refines AI27-ARCH-001 -- that record was written against an earlier commit (5e91a889) before AI.26's forward-merge and further AI.27 work grew `dispatch` past the 80-line hard-fail threshold; AI27-ARCH-001 does not mention this specific function.
+
+2. RULE-003 (file-size) hard violation, confirmed via `python3 .just/check_line_counts.py`: crates/atm-daemon/src/runtime_health.rs prod=1072 (limit prod<=1000). NOTE: this directly contradicts AI27-ARCH-001's classification as `severity Important ... deferred to phase-end CLEANUP, not gating` -- that assumption is empirically false for the current commit: `just lint` on this branch fails hard (non-zero exit, `lines failed` step) specifically because of this violation, on all 3 OS legs. AI27-ARCH-001 was accurate for its own commit (5e91a889, prod under some other measurement) but the file has since regressed back over the limit -- independently confirmed by team-lead diffing prod-line counts between origin/feature/pAI-s26-peer-write-deadline (prod=843, PASS) and origin/feature/pAI-s27-peer-delivery-observability (prod=1072, FAIL) via the identical `.just/check_line_counts.py` script. This is a real, current, CI-blocking regression, not deferred debt, and AI27-ARCH-001 should be treated as superseded/escalated by this record for the RULE-003 portion (do not additionally dispatch AI27-ARCH-001 separately for this same file).
+
+3. Test failure, confirmed on all 3 OS legs (ubuntu run job 89806645443, macos job 89806645392, windows job 89806645399): `tests::runtime_root::peer_reconciliation::peer_sync_for_one_peer_does_not_hold_the_progress_map_during_another_delivery` FAILED. Panic trace: a background thread first panics at crates/atm-daemon/src/tests/runtime_root/peer_reconciliation.rs:22:18 with `release blocked peer delivery: Timeout`, which poisons a shared mutex; the main test thread then panics at peer_reconciliation.rs:381:10 with `same-peer sync must not wait for the in-flight delivery: AtmError { code: DaemonUnavailable, message: "peer sync progress lock poisoned ... " }`. This reads as a genuine test-harness/production concurrency defect (the test's simulated in-flight delivery legitimately times out and poisons the progress-map lock that peer_sync depends on for its same-peer-does-not-block guarantee), not flakiness -- identical failure on all 3 independent OS runners in the same CI run.""" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ci-gate" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-26T15:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S7 ;
+  triage:foundAt "2026-07-26T15:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI27-BLOCK-005/pAI-s27/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI27-BLOCK-005/pAI-s27/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI27-BLOCK-005/pAI-s27/3> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s27/d636a522> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s27/d636a522> ;
+  triage:highestOpenBranch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:supersedes <urn:atm:triage:finding/AI27-ARCH-001> ;
+  triage:closedAt "2026-07-26T16:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" .
+
+<urn:atm:triage:occurrence/AI27-BLOCK-005/pAI-s27/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 628 ;
+  triage:snippet "fn dispatch(&self, message: &mut MessageRecord, deadline: RequestDeadline) -> Result<(), AtmError> { ... } -- 118 lines (628-745), RULE-002 new hard violation. FIXED at 282fad38: dispatch split into runtime_health/post_write_router.rs and runtime_health/peer_sync.rs; no new hard violation per scripts/check-function-length.py." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "282fad38" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s27/d636a522> .
+
+<urn:atm:triage:occurrence/AI27-BLOCK-005/pAI-s27/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 857 ;
+  triage:snippet "prod=1072 (limit prod<=1000) per .just/check_line_counts.py -- RULE-003 hard violation, regressed vs. s26 (prod=843, passing). FIXED at 282fad38: prod=857 (under limit) after module split (peer_sync.rs prod=120, post_write_router.rs prod=134)." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "282fad38" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s27/d636a522> .
+
+<urn:atm:triage:occurrence/AI27-BLOCK-005/pAI-s27/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/peer_reconciliation.rs" ;
+  triage:line 381 ;
+  triage:snippet "same-peer sync must not wait for the in-flight delivery: AtmError { code: DaemonUnavailable, message: \"peer sync progress lock poisoned...\" } -- panics identically on all 3 OS legs. FIXED at 282fad38: sync_peer now drops the progress-map lock before calling reconcile_peer's blocking transport.deliver(); peer_sync_for_one_peer_does_not_hold_the_progress_map_during_another_delivery passes (cargo test -p atm-daemon, release, ok) and CI is green on all 3 OS legs (run 30208718630)." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "282fad38" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s27/d636a522> .
+
+<urn:atm:triage:worktree/pAI-s27/d636a522>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "d636a522586943f93a63f8083bcec8d888d4cee7" ;
+  triage:orderIndex 7 .
