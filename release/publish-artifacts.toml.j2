@@ -1,0 +1,62 @@
+---
+name: publish-artifacts
+version: 0.1.0
+description: Render a repository-specific release-artifact manifest.
+format: toml
+required_variables:
+  - release.version_source
+  - release.tag_prefix
+  - artifacts.crates
+  - artifacts.crates.name
+  - artifacts.crates.publish_order
+  - artifacts.wheels
+  - artifacts.wheels.package
+  - artifacts.wheels.python_package
+  - artifacts.binaries
+  - channels.github_release.enabled
+  - channels.crates_io.enabled
+  - channels.pypi.enabled
+  - channels.pypi.workflow
+  - channels.homebrew.enabled
+  - channels.scoop.enabled
+  - channels.winget.enabled
+---
+[release]
+version_source = "{{ release.version_source }}"
+tag_prefix = "{{ release.tag_prefix }}"
+
+{% for crate in artifacts.crates %}
+[[artifacts.crates]]
+name = "{{ crate.name }}"
+publish_order = {{ crate.publish_order }}
+{% endfor %}
+
+{% for wheel in artifacts.wheels %}
+[[artifacts.wheels]]
+package = "{{ wheel.package }}"
+python_package = "{{ wheel.python_package }}"
+{% endfor %}
+
+{% for binary in artifacts.binaries %}
+[[release_binaries]]
+name = "{{ binary }}"
+{% endfor %}
+
+[channels.github_release]
+enabled = {{ channels.github_release.enabled }}
+
+[channels.crates_io]
+enabled = {{ channels.crates_io.enabled }}
+
+[channels.pypi]
+enabled = {{ channels.pypi.enabled }}
+workflow = "{{ channels.pypi.workflow }}"
+
+[channels.homebrew]
+enabled = {{ channels.homebrew.enabled }}
+
+[channels.scoop]
+enabled = {{ channels.scoop.enabled }}
+
+[channels.winget]
+enabled = {{ channels.winget.enabled }}
