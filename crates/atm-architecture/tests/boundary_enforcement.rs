@@ -1139,7 +1139,14 @@ fn ao1_peer_tls_is_the_only_concrete_active_io_adapter() {
         &root.join("crates/atm-http-runtime/src"),
         &mut runtime_sources,
     );
-    let forbidden_runtime_tls = ["tokio_rustls", "PeerConfigStore", "atm_storage::tls"];
+    let forbidden_runtime_tls = [
+        "rustls",
+        "tokio_rustls",
+        "TlsConnector",
+        "TlsAcceptor",
+        "PeerConfigStore",
+        "atm_storage::tls",
+    ];
     let violations = runtime_sources
         .iter()
         .flat_map(|path| {
