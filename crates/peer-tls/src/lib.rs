@@ -224,7 +224,7 @@ fn exactly_one_enabled_interface(
     })?;
     if enabled.next().is_some() {
         return Err(AtmError::validation(
-            "peer TLS has multiple enabled interfaces; select exactly one before using mTLS",
+            "peer TLS has multiple enabled interfaces; configure exactly one before using mTLS",
         ));
     }
     Ok(interface)
