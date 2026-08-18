@@ -1,4 +1,8 @@
-# Shared Publish-Kit Migration Plan
+# Shared Publish-Kit Migration Design Record
+
+> **Superseded as the authoritative plan by [Phase AS](../phase-as/README.md).**
+> This file remains the supporting audit/evidence record, including the full
+> 31-path review and legacy-value analysis.
 
 **Branch:** `plan/sc-compose-publish-kit-migration`
 **Status:** proposed — planning only
