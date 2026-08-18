@@ -1,4 +1,4 @@
-# ADR-050 — Permissive Declared Sender Identity and Roster Advisory
+# ADR-051 — Permissive Declared Sender Identity and Roster Advisory
 
 | Field | Value |
 | --- | --- |

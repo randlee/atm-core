@@ -408,13 +408,6 @@ impl SendCommand {
     }
 }
 
-/// Return an advisory only when the claimed local sender has no roster entry.
-///
-/// Sender identity is intentionally a trusted-local assertion rather than an
-/// authorization credential. A missing roster row must therefore never block
-/// or alter a completed send. The roster read is best-effort too: failure to
-/// inspect local metadata cannot turn a successful daemon result into a CLI
-/// failure.
 fn resolve_cli_recipient(
     input: &CliRecipientInput,
     caller_team: &TeamName,
