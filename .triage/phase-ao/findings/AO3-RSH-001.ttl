@@ -54,11 +54,13 @@
   triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
   triage:line 364 ;
   triage:snippet "body: Bytes," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
-  triage:headSha "4408867ef" ;
-  triage:occursIn <urn:atm:triage:worktree/pao-s3/4408867ef> .
+  triage:headSha "d8bcd0ed04aafa62d8810237f9fb1075aa7c2082" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s3/4408867ef> ;
+  triage:closedAt "2026-08-18T23:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" .
 
 <urn:atm:triage:occurrence/AO3-RSH-001/S4>
   a triage:Occurrence ;
