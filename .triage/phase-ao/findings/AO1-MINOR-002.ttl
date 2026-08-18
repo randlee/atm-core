@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO1-MINOR-002>
+  a triage:Finding ;
+  triage:findingId "AO1-MINOR-002" ;
+  triage:title "boundary_enforcement.rs TLS guard narrower than plan table" ;
+  triage:description "quality-mgr flagged (minor, non-blocking) that the Rust-side boundary_enforcement.rs TLS guard is narrower than the plan's literal table -- missing bare rustls/TlsConnector/TlsAcceptor literals -- though the Python lint layer already covers the full set (feature/pao-s1-tls-module-rehome, PR #942). Identify the exact guard list in boundary_enforcement.rs and which literals are missing." ;
+  triage:phaseId "phase-ao" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-18T05:31:13Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO-S1 ;
+  triage:foundAt "2026-08-18T05:31:13Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO1-MINOR-002/pao-s1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO1-MINOR-002/pao-s1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 1142 ;
+  triage:snippet "forbidden_runtime_tls array missing rustls, TlsConnector, TlsAcceptor" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "e41afce8aab312450d39210690601d626eb00998" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s1/e41afce8> .
+
+<urn:atm:triage:worktree/pao-s1/e41afce8>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s1-tls-module-rehome" ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "e41afce8aab312450d39210690601d626eb00998" ;
+  triage:orderIndex 1 .

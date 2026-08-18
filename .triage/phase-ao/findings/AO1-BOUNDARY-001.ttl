@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO1-BOUNDARY-001>
+  a triage:Finding ;
+  triage:findingId "AO1-BOUNDARY-001" ;
+  triage:title "Boundary TOML owner_crate_path mismatch" ;
+  triage:description "peer-io-adapter.toml uses owner_crate_path = \"agent_team_mail_core\" but should use \"atm_core\" (the lib name override in atm-core Cargo.toml) to match all other atm-core boundary files." ;
+  triage:phaseId "phase-ao" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-18T05:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO-S1 ;
+  triage:foundAt "2026-08-18T05:31:13Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO1-BOUNDARY-001/AO1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO1-BOUNDARY-001/AO1-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/peer-io-adapter.toml" ;
+  triage:line 3 ;
+  triage:snippet "owner_crate_path = \"agent_team_mail_core\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "e41afce8aab312450d39210690601d626eb00998" ;
+  triage:occursIn <urn:atm:triage:worktree/feature/pao-s1-tls-module-rehome/e41afce8> .
+
+<urn:atm:triage:worktree/feature/pao-s1-tls-module-rehome/e41afce8>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s1-tls-module-rehome" ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "e41afce8aab312450d39210690601d626eb00998" ;
+  triage:orderIndex 1 .
