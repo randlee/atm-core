@@ -1,4 +1,4 @@
-# AS.4 — Authorized PyPI 1.4.3 publication
+# AS.4 — Authorized PyPI 1.4.4 publication
 
 ```yaml
 plan_type: sprint_plan
@@ -12,14 +12,28 @@ estimated_scope: one authorized production channel
 
 ## Goal
 
-Publish only the already-built `1.4.3` Python artifacts from immutable `main`
-through the canonical PyPI channel and retain a public verification receipt.
+**Amended 2026-08-18** (Rand, direct decision): the already-built immutable
+`1.4.3` artifacts predate both the ADR-049 first-public-release disclosure
+and the current `[[python_distributions]]` manifest contract, and AS.4's
+original Non-Goals forbid rebuilding/retagging `1.4.3` to fix that. Rather
+than fold this into AS.6, AS.4 now cuts and publishes a fresh, minimal
+version — `1.4.4`, PyPI channel only — with the disclosure and current
+manifest baked in from the start. This keeps AS.4 as the narrow,
+low-risk proof that the PyPI channel actually works end-to-end, ahead of
+AS.6's larger multi-channel release. Publish only the newly built `1.4.4`
+Python artifacts through the canonical PyPI channel and retain a public
+verification receipt. AS.6 remains the full multi-channel release; it may
+target a later version, or complete the remaining (non-PyPI) channels for
+`1.4.4` if versions line up — that call is made when AS.6 is dispatched, not
+here.
 
 ## Scope Summary
 
-This is an authorized production operation, not a rebuild or full release.
-The canonical agents may be launched from the Phase AS branch, but artifacts
-and workflow source are pinned to immutable `main`.
+This is an authorized production operation. Unlike the original AS.4 design,
+it does include a version bump and a fresh build/tag — narrowly scoped to
+carrying the ADR-049 disclosure and the current manifest contract, PyPI
+channel only. It is still not a full multi-channel release; that remains
+AS.6's job. The canonical agents may be launched from the Phase AS branch.
 
 ## Governing Requirements
 
@@ -46,7 +60,8 @@ and workflow source are pinned to immutable `main`.
   or on `sc-publish`'s upstream fail-closed receipt PR (sc-publish#25)
   merging first. Neither upstream PR is a blocking dependency for this
   sprint.
-- Exact immutable `main` commit/tag and manifest-matching 1.4.3 artifacts.
+- A freshly built, tagged `1.4.4` on immutable `main` with the ADR-049
+  disclosure and current manifest contract, and manifest-matching artifacts.
 - Human production authorization.
 - ADR-049’s first-public-release disclosure is present in the package README
   and GitHub release notes before the PyPI action — an atm-core-owned doc fix,
@@ -60,7 +75,12 @@ and workflow source are pinned to immutable `main`.
 
 ## Non-Goals
 
-- Rebuilding artifacts, recreating tags, publishing crates, or version bumping.
+- Publishing crates, GitHub Release binaries, Homebrew, Scoop, winget, or any
+  channel other than PyPI.
+- Rebuilding or republishing the now-superseded `1.4.3` immutable artifacts;
+  they stay as-is, unpublished, superseded by `1.4.4`.
+- Any version bump or unrelated change beyond the single `1.4.4` bump needed
+  to carry the ADR-049 disclosure and current manifest contract.
 
 ## Sub-Tasks
 
@@ -75,12 +95,14 @@ and workflow source are pinned to immutable `main`.
 
 ## Split Recommendation
 
-Keep this one-channel release separate from AS.6’s full 1.4.4 release.
+Keep this one-channel `1.4.4` PyPI release separate from AS.6, which remains
+the full multi-channel release (a later version, or the remaining non-PyPI
+channels for `1.4.4` — decided when AS.6 is dispatched).
 
 ## Acceptance Criteria
 
 - Only the authorized PyPI channel ran.
-- Public PyPI exposes the approved 1.4.3 artifacts.
+- Public PyPI exposes the approved 1.4.4 artifacts.
 - Python 3.11–3.14 verification succeeds.
 - Receipts prove immutable source/artifact identity and public availability.
 - The ADR-049 first-public-release disclosure is visible in the published
@@ -91,7 +113,7 @@ Keep this one-channel release separate from AS.6’s full 1.4.4 release.
 ```bash
 python3 .github/scripts/release_artifacts.py verify-python-release-assets \
   --manifest release/publish-artifacts.toml --asset-dir dist
-python3 -m pip install --only-binary=:all: hermes-atm==1.4.3
+python3 -m pip install --only-binary=:all: hermes-atm==1.4.4
 ```
 
 ## Required Document Updates
