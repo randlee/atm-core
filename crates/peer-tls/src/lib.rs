@@ -499,8 +499,11 @@ mod tests {
         });
 
         let error = PeerTlsAdapter::new(store).expect_err("multiple interfaces must reject");
-        assert!(error.message().contains("configure exactly one"));
-        assert!(!error.message().contains("select"));
+        assert!(
+            error
+                .message()
+                .starts_with("peer TLS has multiple enabled interfaces; configure exactly one")
+        );
     }
 
     #[test]
