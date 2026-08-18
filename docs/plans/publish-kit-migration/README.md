@@ -159,6 +159,15 @@ commit, requested version, enabled channels/artifacts in dependency order,
 toolchain, and all validations. It emits the manifest and toolchain digests.
 Release refuses to publish unless they equal the successful preflight receipt.
 
+### One release-version contract
+
+The resolved plan must enumerate the version of every published crate, wheel,
+binary, archive, manifest, and channel artifact. Stable releases require exact
+`X.Y.Z` equality across all of them. For a Cargo prerelease
+`X.Y.Z-beta…`, a Python wheel may use only the declared base-version projection
+`X.Y.Z`, since wheel metadata cannot carry that suffix. Any other version drift
+fails the resolved-plan and version-lock checks.
+
 ### One tool bootstrap
 
 The shared kit must own one reusable bootstrap action/resolver which installs

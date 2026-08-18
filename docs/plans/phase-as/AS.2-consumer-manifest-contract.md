@@ -33,6 +33,12 @@ an ATM adapter, wrapper, or workflow fork.
 - Every Python distribution derives its release version from its corresponding
   Cargo package. Python metadata must declare `dynamic = ["version"]`; a
   literal `[project].version` is not an alternative source of truth.
+- One release-version contract governs every crate, wheel, binary, generated
+  manifest, archive, and channel declaration. Stable releases use the exact
+  same `X.Y.Z` everywhere. For a prerelease Cargo version such as
+  `X.Y.Z-beta-AS`, Python wheels use the explicitly derived base `X.Y.Z`
+  because they cannot carry that `-beta…` suffix; this is the sole permitted
+  version projection.
 
 ## Governing ADRs
 
@@ -82,6 +88,9 @@ an ATM adapter, wrapper, or workflow fork.
    versions to Cargo-derived `dynamic = ["version"]`, matching
    `atm-graft-python`. Add/extend the version-lock test so every published
    Python distribution resolves to the workspace release version.
+9. Extend the shared release-version receipt and ATM version-lock test to
+   enumerate every deliverable. It must reject any mismatch except the
+   declared prerelease-to-wheel base-version projection above.
 
 ## Split Recommendation
 
@@ -101,6 +110,9 @@ evidence and must not silently add schema behavior.
 - `atm-graft-python`, `atm-query-python`, and `hermes-atm` all resolve their
   version from Cargo; the version-lock test fails if any published Python
   distribution can drift from the workspace release version.
+- The release receipt enumerates every crate, wheel, binary, archive, and
+  manifest version. Stable releases are exactly equal; prerelease wheels may
+  differ only by the declared removal of the `-beta…` suffix.
 - No ATM-only shared-code adaptation exists.
 - Every unmet generic capability has an upstream tracking item, not a local
   workaround.

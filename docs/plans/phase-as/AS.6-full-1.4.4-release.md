@@ -27,6 +27,9 @@ introduce new channel behavior during release execution.
   validations must be locked before publication.
 - Each published Python distribution derives its version from Cargo and the
   resolved value matches the workspace release version.
+- The release receipt proves every deliverable shares the requested release
+  version. The only allowed exception is a prerelease wheel’s declared
+  `X.Y.Z-beta…` to `X.Y.Z` projection.
 - Readiness preflight occurs before main; final preflight occurs on exact
   immutable main.
 - Partial registry state uses PF-3 actions, never an implicit version bump.
@@ -73,6 +76,8 @@ new upstream or ATM work after the release is closed.
 ## Acceptance Criteria
 
 - The version, source, manifest, toolchain, and validation evidence agree.
+- Every deliverable version matches the release contract, including an
+  explicitly recorded wheel prerelease projection when applicable.
 - All and only authorized manifest channels completed or have PF-3 accepted
   skip/block results.
 - Public verification and Python 3.11–3.14 matrix pass.
