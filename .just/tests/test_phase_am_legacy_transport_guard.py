@@ -84,6 +84,18 @@ class PhaseAmLegacyTransportGuardTests(unittest.TestCase):
             "dead-daemon-dispatch",
         )
 
+    def test_frozen_legacy_daemon_composition_mutation_fails(self) -> None:
+        self.assert_reintroduced_symbol_fails(
+            "crates/atm-http-runtime/src/lib.rs", "let _ = run_legacy_daemon();", "frozen-legacy-fixtures"
+        )
+
+    def test_frozen_peer_tls_interop_dependency_mutation_fails(self) -> None:
+        self.assert_reintroduced_symbol_fails(
+            "crates/atm-http-runtime/Cargo.toml",
+            'atm-peer-tls-interop = { path = "../atm-peer-tls-interop" }',
+            "frozen-legacy-fixtures",
+        )
+
     def test_selected_category_ignores_other_category(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir)
