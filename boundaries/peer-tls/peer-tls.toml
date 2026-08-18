@@ -21,7 +21,7 @@ io_owns = ["tokio_tcp_connect", "tokio_rustls_client_handshake", "tokio_rustls_s
 io_forbidden = ["http_request_encoding", "recipient_routing", "message_delivery", "storage_sql", "certificate_fingerprint_algorithm", "certificate_parser", "trust_policy_duplication", "daemon_lifecycle", "legacy_daemon_composition"]
 
 [dependencies]
-allowed_dependents = []
+allowed_dependents = ["atm-daemon-bootstrap"]
 allowed_dependencies = ["atm-core", "atm-storage", "tokio", "rustls", "tokio-rustls"]
 forbidden_edges = ["peer-tls -> atm-daemon", "peer-tls -> atm-http-runtime", "peer-tls -> atm-peer-tls-interop", "peer-tls -> atm-storage-rusqlite", "atm-daemon -> peer-tls"]
 
