@@ -1,4 +1,6 @@
+use std::net::{IpAddr, Ipv4Addr, ToSocketAddrs};
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use anyhow::Result;
 use atm_core::address::AgentAddress;
@@ -6,7 +8,9 @@ use atm_core::load_atm_config;
 use atm_core::send::{
     MessageClassification, SendMessageSource, SendRequest, TemplateSendSource, input,
 };
-use atm_core::types::{HostName, TaskId, TeamName};
+use atm_core::types::{AgentIdentity, HostName, TaskId, TeamName};
+use atm_daemon_bootstrap::with_default_peer_address_stores;
+use atm_storage::{AtmError, PeerConfigStore, RosterStore, TrustedPeer};
 use clap::Args;
 
 use crate::commands::caller_context::{
@@ -182,40 +186,75 @@ impl SendCommand {
     }
 
     fn target_with_explicit_host(&self, caller_team: &TeamName) -> Result<String> {
-        let explicit_host = match self.host.as_deref() {
-            Some(raw_host) => Some(raw_host.parse::<HostName>().map_err(|_source| {
-                Self::message_validation_error(
-                    "invalid --host",
-                    "Pass a valid hostname or IP address to `--host` before retrying `atm send`.",
-                )
-            })?),
-            None => None,
+        if !self.requires_peer_authority_lookup(caller_team) {
+            return self.legacy_target_with_explicit_host(caller_team);
+        }
+
+        // The shorthand is resolved at CLI composition time. The daemon and
+        // HTTP request receive the same canonical AgentAddress as if the user
+        // had typed the full `agent@team.host` form themselves.
+        with_default_peer_address_stores(|roster_store, peer_store| {
+            self.target_with_authorities(caller_team, roster_store, peer_store)
+        })
+        .map_err(Into::into)
+    }
+
+    fn requires_peer_authority_lookup(&self, caller_team: &TeamName) -> bool {
+        if self
+            .host
+            .as_deref()
+            .is_some_and(|host| !is_legacy_direct_host(host))
+        {
+            return true;
+        }
+
+        let Some((_, destination)) = self.to.trim().split_once('@') else {
+            return false;
         };
+        if destination.eq(caller_team.as_str()) {
+            return false;
+        }
+        destination
+            .split_once('.')
+            .is_none_or(|(_, host)| !host.eq_ignore_ascii_case("localhost"))
+    }
+
+    fn target_with_authorities(
+        &self,
+        caller_team: &TeamName,
+        roster_store: &(dyn RosterStore + Send + Sync),
+        peer_store: &(dyn PeerConfigStore + Send + Sync),
+    ) -> std::result::Result<String, AtmError> {
+        let known_teams = roster_store.list_teams()?;
+        let peers = peer_store.list_trusted_peers()?;
+        self.target_with_peer_records(caller_team, &known_teams, &peers)
+    }
+
+    fn target_with_peer_records(
+        &self,
+        caller_team: &TeamName,
+        known_teams: &[TeamName],
+        peers: &[TrustedPeer],
+    ) -> std::result::Result<String, AtmError> {
+        let parsed = CliRecipientInput::parse(&self.to)?;
+        let recipient = resolve_cli_recipient(&parsed, caller_team, known_teams, peers)?;
+
+        let explicit_host = self
+            .host
+            .as_deref()
+            .map(|host| resolve_host_input(host, peers))
+            .transpose()?;
+
+        merge_recipient_host(recipient, explicit_host, caller_team).map(|target| target.to_string())
+    }
+
+    fn legacy_target_with_explicit_host(&self, caller_team: &TeamName) -> Result<String> {
+        let explicit_host = self.host.as_deref().map(parse_host_input).transpose()?;
         let recipient: AgentAddress = self.to.parse().map_err(anyhow::Error::from)?;
 
-        match (recipient.host(), explicit_host) {
-            (Some(address_host), Some(flag_host)) if address_host != &flag_host => {
-                Err(Self::message_validation_error(
-                    "recipient host and --host disagree",
-                    "Use the same host in both places, or specify it once with either `recipient@team.host` or `--host <host>`.",
-                ))
-            }
-            (Some(_), _) => Ok(recipient.to_string()),
-            (None, None) => Ok(recipient.to_string()),
-            (None, Some(host)) => AgentAddress::new(
-                recipient.agent().clone(),
-                recipient.chat_id().cloned(),
-                Some(
-                    recipient
-                        .team()
-                        .cloned()
-                        .unwrap_or_else(|| caller_team.clone()),
-                ),
-                Some(host),
-            )
+        merge_recipient_host(recipient, explicit_host, caller_team)
             .map(|target| target.to_string())
-            .map_err(Into::into),
-        }
+            .map_err(Into::into)
     }
 
     fn build_message_source(
@@ -362,6 +401,267 @@ impl SendCommand {
     }
 }
 
+fn resolve_cli_recipient(
+    input: &CliRecipientInput,
+    caller_team: &TeamName,
+    known_teams: &[TeamName],
+    peers: &[TrustedPeer],
+) -> std::result::Result<AgentAddress, AtmError> {
+    let Some(destination) = input.destination.as_deref() else {
+        return cli_recipient_address(input, None, None);
+    };
+    if destination == caller_team.as_str() {
+        return cli_recipient_address(input, Some(caller_team.clone()), None);
+    }
+    if let Some(team) = known_teams.iter().find(|team| team.as_str() == destination) {
+        return cli_recipient_address(input, Some(team.clone()), None);
+    }
+    resolve_cli_destination(input, destination, caller_team, peers)
+}
+
+fn resolve_cli_destination(
+    input: &CliRecipientInput,
+    destination: &str,
+    caller_team: &TeamName,
+    peers: &[TrustedPeer],
+) -> std::result::Result<AgentAddress, AtmError> {
+    if Ipv4Addr::from_str(destination).is_ok() {
+        let host = resolve_host_input(destination, peers)?;
+        return cli_recipient_address(input, Some(caller_team.clone()), Some(host));
+    }
+    let has_team_host_shape = destination.contains('.');
+    if let Some((team, host_input)) = destination.split_once('.') {
+        let team = team.parse::<TeamName>()?;
+        if let Some(host) = try_resolve_host_input(host_input, peers)? {
+            return cli_recipient_address(input, Some(team), Some(host));
+        }
+    }
+    if let Some(host) = resolve_trusted_host(destination, peers)? {
+        return cli_recipient_address(input, Some(caller_team.clone()), Some(host));
+    }
+    if has_team_host_shape {
+        return Err(peer_resolution_error(
+            format!("no enabled trusted peer matches '{destination}'"),
+            "Run `atm peer trust list`; add or enable the intended peer, then retry using `agent@team.host`.",
+        ));
+    }
+    Err(peer_resolution_error(
+        format!("'{destination}' is neither a known local team nor an enabled trusted peer"),
+        "Use `atm team list` to select a local team, or add/list the peer with `atm peer trust list` and retry with `agent@team.host`.",
+    ))
+}
+
+fn cli_recipient_address(
+    input: &CliRecipientInput,
+    team: Option<TeamName>,
+    host: Option<HostName>,
+) -> std::result::Result<AgentAddress, AtmError> {
+    AgentAddress::new(
+        input.identity.agent.clone(),
+        input.identity.chat_id.clone(),
+        team,
+        host,
+    )
+}
+
+/// CLI-only recipient syntax before a destination is normalized against the
+/// local roster and durable peer authorities. It intentionally never crosses
+/// into `atm-core`: every downstream boundary receives `AgentAddress`.
+#[derive(Debug)]
+struct CliRecipientInput {
+    identity: AgentIdentity,
+    destination: Option<String>,
+}
+
+impl CliRecipientInput {
+    fn parse(raw: &str) -> std::result::Result<Self, AtmError> {
+        let raw = raw.trim();
+        let Some((identity, destination)) = raw.split_once('@') else {
+            return Ok(Self {
+                identity: raw.parse()?,
+                destination: None,
+            });
+        };
+        if destination.contains('@') {
+            return Err(AtmError::address_parse("address may contain only one '@'"));
+        }
+        if destination.is_empty() {
+            return Err(AtmError::address_parse("destination must not be empty"));
+        }
+        Ok(Self {
+            identity: identity.parse()?,
+            destination: Some(destination.to_string()),
+        })
+    }
+}
+
+/// Merges an optional CLI `--host` with an already parsed recipient.
+///
+/// This is deliberately CLI-only: callers have either canonicalized the host
+/// against trusted peer records or validated a diagnostic direct host. The
+/// returned address is therefore the ordinary canonical `AgentAddress` that
+/// crosses the daemon and HTTP boundaries.
+fn merge_recipient_host(
+    recipient: AgentAddress,
+    explicit_host: Option<HostName>,
+    caller_team: &TeamName,
+) -> std::result::Result<AgentAddress, AtmError> {
+    if let (Some(address_host), Some(flag_host)) = (recipient.host(), explicit_host.as_ref())
+        && !address_host
+            .as_str()
+            .eq_ignore_ascii_case(flag_host.as_str())
+    {
+        return Err(peer_resolution_error(
+            "recipient host and --host disagree",
+            "Use the same host in both places, or specify it once with either `recipient@team.host` or `--host <host>`.",
+        ));
+    }
+
+    if recipient.host().is_some() || explicit_host.is_none() {
+        return Ok(recipient);
+    }
+
+    AgentAddress::new(
+        recipient.agent().clone(),
+        recipient.chat_id().cloned(),
+        Some(
+            recipient
+                .team()
+                .cloned()
+                .unwrap_or_else(|| caller_team.clone()),
+        ),
+        explicit_host,
+    )
+}
+
+fn parse_host_input(raw_host: &str) -> Result<HostName> {
+    raw_host.parse::<HostName>().map_err(|_source| {
+        SendCommand::message_validation_error(
+            "invalid --host",
+            "Pass a valid hostname or IP address to `--host` before retrying `atm send`.",
+        )
+    })
+}
+
+fn is_legacy_direct_host(raw_host: &str) -> bool {
+    raw_host.eq_ignore_ascii_case("localhost")
+}
+
+fn resolve_host_input(
+    raw_host: &str,
+    peers: &[TrustedPeer],
+) -> std::result::Result<HostName, AtmError> {
+    try_resolve_host_input(raw_host, peers)?.ok_or_else(|| {
+        peer_resolution_error(
+            format!("no enabled trusted peer matches '{raw_host}'"),
+            "Run `atm peer trust list`; add or enable the intended peer, then retry using its registered hostname.",
+        )
+    })
+}
+
+fn try_resolve_host_input(
+    raw_host: &str,
+    peers: &[TrustedPeer],
+) -> std::result::Result<Option<HostName>, AtmError> {
+    let host = raw_host.parse::<HostName>().map_err(|_source| {
+        peer_resolution_error(
+            "invalid host",
+            "Pass a valid trusted hostname (optionally omitting terminal `.local`) or a diagnostic localhost/IP value.",
+        )
+    })?;
+    if is_legacy_direct_host(host.as_str()) {
+        return Ok(Some(host));
+    }
+    if let Ok(ip) = Ipv4Addr::from_str(host.as_str()) {
+        return resolve_trusted_ipv4(ip, peers).map(Some);
+    }
+    resolve_trusted_host(host.as_str(), peers)
+}
+
+fn resolve_trusted_ipv4(
+    target_ip: Ipv4Addr,
+    peers: &[TrustedPeer],
+) -> std::result::Result<HostName, AtmError> {
+    resolve_trusted_ipv4_with_lookup(target_ip, peers, |peer| {
+        let authority = (peer.host.as_str(), peer.https_port.get());
+        authority
+            .to_socket_addrs()
+            .map(|addresses| addresses.map(|address| address.ip()).collect())
+            .map_err(|error| {
+                peer_resolution_error(
+                    format!("trusted peer '{}' could not be resolved: {error}", peer.host),
+                    "Verify the registered DNS/mDNS authority is resolvable, then retry the send with its hostname.",
+                )
+            })
+    })
+}
+
+fn resolve_trusted_ipv4_with_lookup(
+    target_ip: Ipv4Addr,
+    peers: &[TrustedPeer],
+    lookup: impl Fn(&TrustedPeer) -> std::result::Result<Vec<IpAddr>, AtmError>,
+) -> std::result::Result<HostName, AtmError> {
+    const MAX_ENABLED_PEER_LOOKUPS: usize = 32;
+
+    let enabled_peers: Vec<&TrustedPeer> = peers.iter().filter(|peer| peer.enabled).collect();
+    if enabled_peers.len() > MAX_ENABLED_PEER_LOOKUPS {
+        return Err(peer_resolution_error(
+            format!(
+                "literal IP authority resolution exceeds the {MAX_ENABLED_PEER_LOOKUPS}-peer lookup bound"
+            ),
+            "Use the registered hostname directly, or reduce the enabled peer set before retrying the literal IP diagnostic.",
+        ));
+    }
+
+    let mut matches = Vec::new();
+    for peer in enabled_peers {
+        if lookup(peer)?.contains(&IpAddr::V4(target_ip)) {
+            matches.push(peer);
+        }
+    }
+    match matches.as_slice() {
+        [peer] => Ok(peer.host.clone()),
+        [] => Err(peer_resolution_error(
+            format!("no enabled trusted peer resolves to literal IP '{target_ip}'"),
+            "Use a registered hostname, or add/enable the exact trusted peer before retrying.",
+        )),
+        _ => Err(peer_resolution_error(
+            format!("literal IP '{target_ip}' resolves to multiple enabled trusted peers"),
+            "Use the exact registered hostname instead of the shared IP address.",
+        )),
+    }
+}
+
+fn resolve_trusted_host(
+    raw_host: &str,
+    peers: &[TrustedPeer],
+) -> std::result::Result<Option<HostName>, AtmError> {
+    let exact_or_local = |host: &HostName| {
+        let canonical_lower = host.as_str().to_ascii_lowercase();
+        host.as_str().eq_ignore_ascii_case(raw_host)
+            || (!raw_host.to_ascii_lowercase().ends_with(".local")
+                && canonical_lower
+                    .strip_suffix(".local")
+                    .is_some_and(|short| short.eq_ignore_ascii_case(raw_host)))
+    };
+    let matches: Vec<&TrustedPeer> = peers
+        .iter()
+        .filter(|peer| peer.enabled && exact_or_local(&peer.host))
+        .collect();
+    match matches.as_slice() {
+        [] => Ok(None),
+        [peer] => Ok(Some(peer.host.clone())),
+        _ => Err(peer_resolution_error(
+            format!("trusted peer shorthand '{raw_host}' is ambiguous"),
+            "Use the exact registered hostname from `atm peer trust list`, or remove the duplicate enabled peer record before retrying.",
+        )),
+    }
+}
+
+fn peer_resolution_error(message: impl Into<String>, recovery: impl Into<String>) -> AtmError {
+    AtmError::validation_with_recovery(message, recovery)
+}
+
 pub(crate) fn parse_assignment_values(
     values: &[String],
 ) -> Result<serde_json::Map<String, serde_json::Value>> {
@@ -472,12 +772,16 @@ fn validate_classification(
 
 #[cfg(test)]
 mod tests {
+    use std::net::{IpAddr, Ipv4Addr};
+    use std::num::NonZeroU16;
     use std::path::{Path, PathBuf};
 
-    use super::SendCommand;
+    use super::{SendCommand, resolve_trusted_ipv4_with_lookup};
     use atm_core::roles::ROLE_TEAM_LEAD;
     use atm_core::send::{SendMessageSource, input};
     use atm_core::test_support::{EnvGuard, TEST_SENDER};
+    use atm_core::types::TeamName;
+    use atm_storage::{HostName, TrustedPeer};
     use clap::Parser;
     use serial_test::serial;
     use tempfile::TempDir;
@@ -509,6 +813,213 @@ mod tests {
         }
     }
 
+    fn trusted_peer(host: &str) -> TrustedPeer {
+        TrustedPeer {
+            host: host.parse::<HostName>().expect("host"),
+            fingerprint: "a".repeat(64).parse().expect("fingerprint"),
+            enabled: true,
+            https_port: NonZeroU16::new(43101).expect("port"),
+        }
+    }
+
+    fn known_teams() -> Vec<TeamName> {
+        vec![
+            TEST_TEAM.parse().expect("caller team"),
+            "other-team".parse().expect("team"),
+        ]
+    }
+
+    #[test]
+    fn same_team_host_shorthand_builds_the_existing_canonical_target() {
+        let command = send_command("arch-ctm@rand-m5", None);
+        let target = command
+            .target_with_peer_records(
+                &TEST_TEAM.parse().expect("caller team"),
+                &known_teams(),
+                &[trusted_peer("rand-m5.local")],
+            )
+            .expect("same-team host shorthand");
+
+        assert_eq!(target, "arch-ctm@test-team.rand-m5.local");
+    }
+
+    #[test]
+    fn m_dns_suffix_and_hostname_case_are_cli_only_conveniences() {
+        let command = send_command("arch-ctm@RAND-M5.LOCAL", None);
+        let target = command
+            .target_with_peer_records(
+                &TEST_TEAM.parse().expect("caller team"),
+                &known_teams(),
+                &[trusted_peer("rand-m5.local")],
+            )
+            .expect("case-insensitive mDNS authority");
+
+        assert_eq!(target, "arch-ctm@test-team.rand-m5.local");
+    }
+
+    #[test]
+    fn dotted_m_dns_host_shorthand_is_not_mistaken_for_team_host_syntax() {
+        let command = send_command("arch-ctm@fastpc4.radiant.local", None);
+        let target = command
+            .target_with_peer_records(
+                &TEST_TEAM.parse().expect("caller team"),
+                &known_teams(),
+                &[trusted_peer("fastpc4.radiant.local")],
+            )
+            .expect("multi-label mDNS authority");
+
+        assert_eq!(target, "arch-ctm@test-team.fastpc4.radiant.local");
+    }
+
+    #[test]
+    fn explicit_remote_team_preserves_team_and_canonicalizes_host() {
+        let command = send_command("arch-ctm@other-team.rand-m5", None);
+        let target = command
+            .target_with_peer_records(
+                &TEST_TEAM.parse().expect("caller team"),
+                &known_teams(),
+                &[trusted_peer("rand-m5.local")],
+            )
+            .expect("explicit remote team host");
+
+        assert_eq!(target, "arch-ctm@other-team.rand-m5.local");
+    }
+
+    #[test]
+    fn explicit_team_host_form_wins_over_a_coincidentally_matching_full_hostname() {
+        let command = send_command("arch-ctm@other-team.rand-m5.local", None);
+        let target = command
+            .target_with_peer_records(
+                &TEST_TEAM.parse().expect("caller team"),
+                &known_teams(),
+                &[
+                    trusted_peer("rand-m5.local"),
+                    trusted_peer("other-team.rand-m5.local"),
+                ],
+            )
+            .expect("explicit team host form");
+
+        assert_eq!(target, "arch-ctm@other-team.rand-m5.local");
+    }
+
+    #[test]
+    fn known_team_wins_over_a_matching_host_shorthand() {
+        let command = send_command("arch-ctm@other-team", None);
+        let target = command
+            .target_with_peer_records(
+                &TEST_TEAM.parse().expect("caller team"),
+                &known_teams(),
+                &[trusted_peer("other-team.local")],
+            )
+            .expect("known team retains legacy meaning");
+
+        assert_eq!(target, "arch-ctm@other-team");
+    }
+
+    #[test]
+    fn untrusted_and_ambiguous_host_shorthand_fail_with_recovery() {
+        let caller_team = TEST_TEAM.parse().expect("caller team");
+        let no_peer_error = send_command("arch-ctm@rand-m5", None)
+            .target_with_peer_records(&caller_team, &known_teams(), &[])
+            .expect_err("untrusted peer must fail closed");
+        assert!(
+            no_peer_error
+                .to_string()
+                .contains("neither a known local team nor an enabled trusted peer")
+        );
+
+        let ambiguous_error = send_command("arch-ctm@rand-m5", None)
+            .target_with_peer_records(
+                &caller_team,
+                &known_teams(),
+                &[trusted_peer("rand-m5.local"), trusted_peer("RAND-M5.LOCAL")],
+            )
+            .expect_err("ambiguous shorthand must fail closed");
+        assert!(ambiguous_error.to_string().contains("ambiguous"));
+
+        let no_fuzzy_error = send_command("arch-ctm@rand-m5.example", None)
+            .target_with_peer_records(
+                &caller_team,
+                &known_teams(),
+                &[trusted_peer("rand-m5.local")],
+            )
+            .expect_err("only terminal .local completion is permitted");
+        assert!(
+            no_fuzzy_error
+                .to_string()
+                .contains("no enabled trusted peer")
+        );
+    }
+
+    #[test]
+    fn explicit_host_flag_uses_the_same_trusted_authority_canonicalization() {
+        let command = send_command("arch-ctm@test-team", Some("RAND-M5"));
+        let target = command
+            .target_with_peer_records(
+                &TEST_TEAM.parse().expect("caller team"),
+                &known_teams(),
+                &[trusted_peer("rand-m5.local")],
+            )
+            .expect("canonicalized --host");
+
+        assert_eq!(target, "arch-ctm@test-team.rand-m5.local");
+    }
+
+    #[test]
+    fn caller_team_remains_known_when_the_roster_is_empty() {
+        let command = send_command("arch-ctm@test-team", Some("rand-m5"));
+        let target = command
+            .target_with_peer_records(
+                &TEST_TEAM.parse().expect("caller team"),
+                &[],
+                &[trusted_peer("rand-m5.local")],
+            )
+            .expect("caller team must not depend on a roster row");
+
+        assert_eq!(target, "arch-ctm@test-team.rand-m5.local");
+    }
+
+    #[test]
+    fn literal_ip_resolves_to_the_single_canonical_trusted_hostname() {
+        let peers = [trusted_peer("rand-m5.local")];
+        let canonical =
+            resolve_trusted_ipv4_with_lookup(Ipv4Addr::new(192, 168, 1, 63), &peers, |_| {
+                Ok(vec![IpAddr::V4(Ipv4Addr::new(192, 168, 1, 63))])
+            })
+            .expect("single trusted authority");
+
+        assert_eq!(canonical.as_str(), "rand-m5.local");
+    }
+
+    #[test]
+    fn literal_ip_fails_closed_when_multiple_trusted_hosts_resolve_to_it() {
+        let peers = [
+            trusted_peer("rand-m5.local"),
+            trusted_peer("fastpc4.radiant.local"),
+        ];
+        let error =
+            resolve_trusted_ipv4_with_lookup(Ipv4Addr::new(192, 168, 1, 63), &peers, |_| {
+                Ok(vec![IpAddr::V4(Ipv4Addr::new(192, 168, 1, 63))])
+            })
+            .expect_err("shared IP must not choose a peer");
+
+        assert!(error.to_string().contains("multiple enabled trusted peers"));
+    }
+
+    #[test]
+    fn literal_ip_resolution_rejects_an_unbounded_enabled_peer_set() {
+        let peers: Vec<TrustedPeer> = (0..33)
+            .map(|index| trusted_peer(&format!("peer-{index}.local")))
+            .collect();
+        let error =
+            resolve_trusted_ipv4_with_lookup(Ipv4Addr::new(192, 168, 1, 63), &peers, |_| {
+                panic!("lookup must not begin after the preflight bound fails")
+            })
+            .expect_err("lookup set must remain bounded");
+
+        assert!(error.to_string().contains("32-peer lookup bound"));
+    }
+
     #[test]
     #[serial(env)]
     fn explicit_host_is_wire_equivalent_to_a_host_qualified_destination() {
@@ -528,32 +1039,41 @@ mod tests {
     }
 
     #[test]
-    #[serial(env)]
-    fn explicit_same_ip_host_qualifies_a_self_send_for_the_shared_guard() {
-        let _env = EnvGuard::set_many([("ATM_IDENTITY", Some(TEST_SENDER))]);
-        let request = send_command(
-            &format!("{TEST_SENDER}@{TEST_TEAM}"),
-            Some("192.168.128.82"),
+    fn legacy_explicit_host_compares_hostnames_case_insensitively() {
+        let caller_team = TEST_TEAM.parse().expect("caller team");
+        let target = send_command(
+            &format!("{TEST_SENDER}@{TEST_TEAM}.LOCALHOST"),
+            Some("localhost"),
         )
-        .build_request(".".into(), ".".into())
-        .expect("same-IP target");
+        .target_with_explicit_host(&caller_team)
+        .expect("case-only loopback host difference must be accepted");
 
-        assert_eq!(
-            request.to.expect("target").to_string(),
-            format!("{TEST_SENDER}@{TEST_TEAM}.192.168.128.82")
-        );
+        assert_eq!(target, format!("{TEST_SENDER}@{TEST_TEAM}.LOCALHOST"));
     }
 
     #[test]
     #[serial(env)]
-    fn explicit_host_rejects_a_conflicting_destination_suffix() {
+    fn explicit_localhost_qualifies_a_self_send_for_the_shared_guard() {
         let _env = EnvGuard::set_many([("ATM_IDENTITY", Some(TEST_SENDER))]);
-        let error = send_command(
-            &format!("{TEST_SENDER}@{TEST_TEAM}.localhost"),
-            Some("192.168.128.82"),
-        )
-        .build_request(".".into(), ".".into())
-        .expect_err("mismatched host selection must be rejected");
+        let request = send_command(&format!("{TEST_SENDER}@{TEST_TEAM}"), Some("localhost"))
+            .build_request(".".into(), ".".into())
+            .expect("same-host target");
+
+        assert_eq!(
+            request.to.expect("target").to_string(),
+            format!("{TEST_SENDER}@{TEST_TEAM}.localhost")
+        );
+    }
+
+    #[test]
+    fn explicit_host_rejects_a_conflicting_destination_suffix() {
+        let error = send_command("arch-ctm@test-team.rand-m5", Some("fastpc4"))
+            .target_with_peer_records(
+                &TEST_TEAM.parse().expect("caller team"),
+                &known_teams(),
+                &[trusted_peer("rand-m5.local"), trusted_peer("fastpc4.local")],
+            )
+            .expect_err("mismatched host selection must be rejected");
 
         assert!(
             error
