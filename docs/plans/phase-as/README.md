@@ -80,7 +80,7 @@ must not recreate the retired script or patch the package locally.
 | [AS.1](AS.1-overlay-contract.md) | Freeze and justify the exact upstream overlay. | in_progress |
 | [AS.2](AS.2-consumer-manifest-contract.md) | Justify ATM consumer data and raise upstream gaps. | must_follow AS.1 |
 | [AS.3](AS.3-worktree-preflight-proof.md) | Prove canonical preflight from the exact sync worktree. | must_follow AS.2 |
-| [AS.4](AS.4-authorized-pypi-1.4.3.md) | Publish the already-built 1.4.3 PyPI artifacts from immutable `main`. | must_follow AS.3 |
+| [AS.4](AS.4-authorized-pypi-1.4.3.md) | Cut and publish a fresh `1.4.4` PyPI-only release (ADR-049 disclosure + current manifest baked in; the already-built `1.4.3` artifacts predate both and cannot be republished as-is). | must_follow AS.3 |
 | [AS.5](AS.5-main-migration-merge.md) | Promote the verified migration from `develop` to `main`. | must_follow AS.3 and AS.4 |
 | [AS.6](AS.6-full-1.4.4-release.md) | Execute and verify the first full canonical release. | must_follow AS.5 |
 
