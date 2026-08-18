@@ -73,26 +73,23 @@ manifest behavior change in ATM.
 4. Require an upstream closure test that fails whenever a copied shared file
    references an unvendored relative dependency not declared as a generic
    consumer interface.
-5. Require the shared installer to consume complete explicit artifact/channel
-   input. Source discovery may produce an example only; it must never infer a
-   production publish surface, crate dependency/publish order, or enabled
-   destination.
+5. Require the shared installer's sole consumer input to be complete declared
+   data: source/version policy, artifacts, explicit crate dependency/publish
+   order, wheels, binaries, channels, and channel settings. It must reject
+   missing production input. Source discovery may produce an advisory example
+   only; it must never infer a production publish surface, crate
+   dependency/publish order, or enabled destination.
 6. Require the shared bootstrap to provision the exact `sc-compose` CLI used
    by install/render and run the semantic installer integration test in CI
    through that bootstrap.
-7. Require the installer’s sole consumer input to be complete declared data:
-   source/version policy, artifacts, explicit crate dependency/publish order,
-   wheels, binaries,
-   channels, and channel settings. It must reject missing production input;
-   discovery is allowed only for an advisory example command.
-8. Require an installation proof that runs the installer with the ATM input,
+7. Require an installation proof that runs the installer with the ATM input,
    verifies every copied shared asset against the package source, parses the
    generated manifests, and proves their semantic values equal the supplied
    JSON. A second installer `--dry-run` must be clean.
-9. Require upstream consumer CI coverage that fails on a byte difference in a
+8. Require upstream consumer CI coverage that fails on a byte difference in a
    synchronized file or any workflow-local tool installation that bypasses the
    common bootstrap. This is a shared-kit capability, not an ATM CI fork.
-10. Classify each discovered gap as either advisory or safety-load-bearing. For
+9. Classify each discovered gap as either advisory or safety-load-bearing. For
     a safety-load-bearing gap — including the resolved receipt fields
     `source_commit`, `manifest_sha256`, `toolchain_sha256`, and
     `validation_sha256` needed by AS.3/AS.4/AS.6 — require the capability to
