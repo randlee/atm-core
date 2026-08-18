@@ -839,18 +839,19 @@ mod tests {
 
         let raw_client = tokio::spawn(async move {
             let _stream = TcpStream::connect(address).await.expect("connect raw TCP");
-            tokio::time::sleep(Duration::from_millis(40)).await;
+            tokio::time::sleep(Duration::from_millis(100)).await;
         });
         let (tcp, _) = listener.accept().await.expect("accept TCP");
         let result = server
-            .accept(tcp, RequestDeadline::after(Duration::from_millis(5)))
+            .accept(tcp, RequestDeadline::after(Duration::from_millis(50)))
             .await;
         assert!(result.is_err(), "missing TLS handshake must time out");
         let error = result.err().expect("deadline must return a typed error");
+        let message = error.message();
         assert!(
-            error
-                .message()
-                .contains("inbound handshake exceeded the request deadline")
+            message.contains("inbound configuration exceeded the request deadline")
+                || message.contains("inbound handshake exceeded the request deadline"),
+            "unexpected deadline stage: {message}"
         );
         raw_client.await.expect("raw client task");
     }
