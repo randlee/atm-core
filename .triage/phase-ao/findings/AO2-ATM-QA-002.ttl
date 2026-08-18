@@ -15,8 +15,10 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-18T07:50:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-08-18T07:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO-S2 ;
   triage:foundAt "2026-08-18T07:15:43Z"^^xsd:dateTime ;
@@ -28,10 +30,10 @@
   triage:file "docs/project-plan.md" ;
   triage:line 1 ;
   triage:snippet "stale Phase AO status entry" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s2-optional-runtime-activation" ;
-  triage:headSha "99fd70563c50fa3d9992c33d7cd85ba42b4bd750" ;
+  triage:headSha "8c918570614fb8b1faec096160c28f8d35de9db8" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s2-feature/pao-s2-optional-runtime-activation> .
 
 <urn:atm:triage:worktree/pao-s2-feature/pao-s2-optional-runtime-activation>
