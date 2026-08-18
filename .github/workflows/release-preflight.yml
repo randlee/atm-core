@@ -176,7 +176,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cargo run -p sc-lint-boundary --release -- analyze --root . --format json
+          cargo run -p sc-lint-boundary --release -- analyze --root . --format json > boundary-lint.json
+          python3 .github/scripts/check_boundary_lint_status.py boundary-lint.json
 
       - name: Normalize version input
         id: meta

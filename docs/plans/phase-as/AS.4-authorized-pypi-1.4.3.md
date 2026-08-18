@@ -120,6 +120,19 @@ PyPI path writes a source-commit, manifest-SHA-256, version, and per-artifact
 SHA-256 receipt before upload. No upstream `sc-lint` or `sc-publish` merge is
 required for those checks.
 
+**Boundary-lint triage (2026-08-18):** The workspace analyzer reports
+`status: fail` with 21 findings on both the AS.3 baseline commit
+`3f5f2db474dc66b34be38d60193ba259fe8e78e4` and this AS.4 branch: seven
+`SCB-CYCLE-001` multi-owner architectural cycles, nine `SCB-CYCLE-002`
+type/method self-loops, and five `SCB-CYCLE-003` trait-implementation
+self-loops. The seven multi-owner cycles are pre-existing hard failures under
+the analyzer's `finding_is_failure` policy; the self-loop categories are
+reported advisory findings. They are neither introduced by AS.4 nor accepted
+as clean, and AS.4 does not suppress or reclassify them. The preflight gate
+therefore captures the analyzer JSON and exits nonzero unless its status is
+`pass`, while retaining `continue-on-error` so the final receipt records the
+real boundary-lint failure rather than aborting all remaining evidence.
+
 The immutable tag also fails ADR-049's publication-disclosure prerequisite:
 neither `crates/hermes-atm/README.md` nor the v1.4.3 GitHub release notes
 states that this is the first public release and explains the internal 1.x

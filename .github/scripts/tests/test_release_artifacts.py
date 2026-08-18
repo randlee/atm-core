@@ -1661,6 +1661,8 @@ def test_release_preflight_uses_atm_workspace_boundary_analyzer() -> None:
 
     assert 'include-sc-lint: "false"' in preflight_text
     assert "cargo run -p sc-lint-boundary --release -- analyze --root . --format json" in preflight_text
+    assert "> boundary-lint.json" in preflight_text
+    assert "python3 .github/scripts/check_boundary_lint_status.py boundary-lint.json" in preflight_text
     assert "BOUNDARY_LINT" in preflight_text
     assert "include-sc-lint:" in toolchain_text
     assert "if: inputs.include-sc-lint == 'true'" in toolchain_text
