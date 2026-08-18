@@ -44,7 +44,7 @@ not in ATM's artifact manifest or workflow literals.
 
 | Finding | Observed evidence | Required resolution before any ATM change |
 | --- | --- | --- |
-| PF-1 environment-secret check | `GITHUB_TOKEN` receives HTTP 403 when listing protected environment-secret metadata. | Determine the upstream, non-disclosing metadata/liveness mechanism required by the shared channel contract. Do not replace it locally with a different workflow design. |
+| PF-1 environment-secret check | `GITHUB_TOKEN` receives HTTP 403 when listing protected environment-secret metadata. | Adopt the existing plan-owned GitHub variable/credential verification workflow, which verifies required values exist and are current without disclosing them. Do not replace it with environment-secret listing or a local redesign. |
 | PF-2 crates.io liveness check | The raw `/api/v1/me` curl returns 403 while the same configured credential successfully published crates using Cargo. | Establish the correct generic liveness probe and authentication semantics from the shared contract. Do not rotate or replace a working production token based on the raw curl. |
 | PF-3 registry state | Candidate `1.4.3` is already published for all release crates. | Treat as the correct fail-closed result. Run preflight only with an unpublished candidate version; do not weaken the registry check. |
 
