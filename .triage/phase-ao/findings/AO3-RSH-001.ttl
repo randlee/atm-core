@@ -15,7 +15,7 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed_partial" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-18T19:42:55Z"^^xsd:dateTime ;
   triage:foundIn triage:AO.3 ;
@@ -76,10 +76,10 @@
   triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
   triage:line 364 ;
   triage:snippet "body: Bytes," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s5-platform-benchmark-proof" ;
-  triage:headSha "8245717e9" ;
+  triage:headSha "56f5bc9ead24d0080acb640eb96d09fd4fdb2ff8" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s5/8245717e9> .
 
 <urn:atm:triage:worktree/pao-s1/cb5d8b4ba>

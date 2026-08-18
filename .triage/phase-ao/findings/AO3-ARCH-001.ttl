@@ -54,10 +54,10 @@
   triage:file "crates/atm-http-runtime/src/lib.rs" ;
   triage:line 1085 ;
   triage:snippet "recipient@atm-dev.localhost" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
-  triage:headSha "a576a7b395216b4161a5c7bc74efd773fb530e00" ;
+  triage:headSha "dfaebe02d6a6a3f7df528af523c71cd7e16440bc" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s3/4408867ef> .
 
 <urn:atm:triage:occurrence/AO3-ARCH-001/pao-s4>
