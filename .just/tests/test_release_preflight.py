@@ -19,7 +19,15 @@ class ReleasePreflightWorkflowTests(unittest.TestCase):
         text = WORKFLOW.read_text(encoding="utf-8")
 
         self.assertIn("public-registry-check-plan", text)
-        self.assertNotIn("randlee/atm-core", text)
+
+    def test_release_preflight_has_environment_metadata_and_crates_io_access(self) -> None:
+        text = WORKFLOW.read_text(encoding="utf-8")
+
+        self.assertIn("deployments: read", text)
+        self.assertEqual(
+            text.count('User-Agent: atm-core-release-preflight (https://github.com/randlee/atm-core)'),
+            2,
+        )
 
     def test_release_preflight_installs_canonical_python_tools(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
@@ -29,6 +37,13 @@ class ReleasePreflightWorkflowTests(unittest.TestCase):
         self.assertLess(install_python, validate)
         self.assertIn("uses: ./.github/actions/setup-python-release-tools", text)
         self.assertNotIn("python -m pip install codespell", text)
+
+    def test_release_preflight_installs_sc_compose_before_workspace_tests(self) -> None:
+        text = WORKFLOW.read_text(encoding="utf-8")
+
+        install_sc_compose = text.index("uses: ./.github/actions/setup-sc-compose-cli")
+        workspace_tests = text.index("- id: workspace_tests")
+        self.assertLess(install_sc_compose, workspace_tests)
 
 
 if __name__ == "__main__":

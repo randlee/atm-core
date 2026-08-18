@@ -30,6 +30,19 @@ os = "windows-latest"
 archive = "zip"
 
 [[crates]]
+# This Maturin package is published to PyPI as `atm-graft`, not to crates.io.
+# Keep it in the release inventory so validation cannot silently omit it.
+artifact = "atm-graft-python"
+package = "atm-graft-python"
+cargo_toml = "crates/atm-graft-python/Cargo.toml"
+required = true
+publish = false
+publish_order = 0
+preflight_check = "locked"
+wait_after_publish_seconds = 0
+verify_install = true
+
+[[crates]]
 artifact = "atm-error"
 package = "atm-error"
 cargo_toml = "crates/atm-error/Cargo.toml"
@@ -157,19 +170,6 @@ cargo_toml = "crates/atm/Cargo.toml"
 required = true
 publish = true
 publish_order = 12
-preflight_check = "locked"
-wait_after_publish_seconds = 0
-verify_install = true
-
-[[crates]]
-# This Maturin package is published to PyPI as `atm-graft`, not to crates.io.
-# Keep it in the release inventory so validation cannot silently omit it.
-artifact = "atm-graft-python"
-package = "atm-graft-python"
-cargo_toml = "crates/atm-graft-python/Cargo.toml"
-required = true
-publish = false
-publish_order = 0
 preflight_check = "locked"
 wait_after_publish_seconds = 0
 verify_install = true
