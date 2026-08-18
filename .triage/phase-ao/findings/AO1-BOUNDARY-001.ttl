@@ -15,8 +15,10 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-18T06:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-08-18T05:35:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO.1 ;
   triage:foundAt "2026-08-18T05:31:13Z"^^xsd:dateTime ;
@@ -28,8 +30,8 @@
   triage:file "boundaries/atm-core/peer-io-adapter.toml" ;
   triage:line 3 ;
   triage:snippet "owner_crate_path = \"agent_team_mail_core\"" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s1-tls-module-rehome" ;
   triage:headSha "e41afce8aab312450d39210690601d626eb00998" ;
   triage:occursIn <urn:atm:triage:worktree/feature/pao-s1-tls-module-rehome/e41afce8> .
