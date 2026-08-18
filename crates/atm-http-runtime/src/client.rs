@@ -38,6 +38,12 @@ use reqwest::header::{HeaderName, HeaderValue};
 /// replacement daemon owns this protocol port on its active IPv4 interfaces.
 pub const DIRECT_PEER_TCP_PORT: u16 = 43_101;
 const REQUEST_ID_HEADER: &str = "X-ATM-Request-Id";
+/// Maximum encoded response size accepted from any one daemon peer.
+///
+/// This mirrors the canonical one-mebibyte message cap plus bounded HTTP
+/// envelope overhead. Client response decoding must never let an untrusted
+/// peer choose an allocation size.
+const MAX_RESPONSE_BODY_BYTES: usize = 1024 * 1024 + 64 * 1024;
 
 /// One bounded budget for the capability-authenticated local daemon client.
 ///
@@ -437,44 +443,77 @@ impl HttpRuntimeConnector for PeerIoConnector {
                     target: self.host.to_string(),
                     cause: format!("authenticated HTTP/1 handshake failed: {error}"),
                 })?;
-        tokio::spawn(async move {
+        let connection_driver = tokio::spawn(async move {
             if let Err(error) = connection.await {
                 tracing::debug!(%error, "authenticated direct-peer HTTP/1 connection ended");
             }
         });
-        let request = http1_request(request)?;
-        let remaining = deadline
-            .remaining()
-            .ok_or_else(|| self.deadline_elapsed())?;
-        let response = tokio::time::timeout(remaining, sender.send_request(request))
-            .await
-            .map_err(|_| self.deadline_elapsed())?
-            .map_err(|error| HttpRuntimeClientFailure::PeerConnect {
-                target: self.host.to_string(),
-                cause: format!("authenticated direct-peer HTTP request failed: {error}"),
-            })?;
-        let status = response.status();
-        let headers = response.headers().clone();
-        let body = to_bytes(Body::new(response.into_body()), usize::MAX)
-            .await
-            .map_err(|error| {
-                HttpRuntimeClientFailure::ResponseDecode(
-                    AtmError::daemon_unavailable("failed to read authenticated peer HTTP response")
-                        .with_cause(error),
-                )
-            })?;
-        let mut builder = axum::http::Response::builder().status(status);
-        for (name, value) in &headers {
-            builder = builder.header(name.as_str(), value.as_bytes());
-        }
-        builder.body(body.to_vec()).map_err(|error| {
+        let result =
+            exchange_authenticated_peer_request(&mut sender, request, deadline, &self.host).await;
+        stop_connection_driver(connection_driver).await;
+        result
+    }
+}
+
+async fn exchange_authenticated_peer_request(
+    sender: &mut http1::SendRequest<Body>,
+    request: HttpRequest,
+    deadline: RequestDeadline,
+    host: &HostName,
+) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
+    let request = http1_request(request)?;
+    let remaining = deadline
+        .remaining()
+        .ok_or_else(|| direct_peer_deadline_elapsed(host))?;
+    let response = tokio::time::timeout(remaining, sender.send_request(request))
+        .await
+        .map_err(|_| direct_peer_deadline_elapsed(host))?
+        .map_err(|error| HttpRuntimeClientFailure::PeerConnect {
+            target: host.to_string(),
+            cause: format!("authenticated HTTP/1 request failed: {error}"),
+        })?;
+    let status = response.status();
+    let headers = response.headers().clone();
+    let body = to_bytes(Body::new(response.into_body()), MAX_RESPONSE_BODY_BYTES)
+        .await
+        .map_err(|error| {
             HttpRuntimeClientFailure::ResponseDecode(
                 AtmError::daemon_unavailable(
-                    "failed to construct authenticated peer HTTP response",
+                    "authenticated peer HTTP response exceeded the bounded body limit",
                 )
                 .with_cause(error),
             )
-        })
+        })?;
+    let mut builder = axum::http::Response::builder().status(status);
+    for (name, value) in &headers {
+        builder = builder.header(name.as_str(), value.as_bytes());
+    }
+    builder.body(body.to_vec()).map_err(|error| {
+        HttpRuntimeClientFailure::ResponseDecode(
+            AtmError::daemon_unavailable("failed to construct authenticated peer HTTP response")
+                .with_cause(error),
+        )
+    })
+}
+
+fn direct_peer_deadline_elapsed(host: &HostName) -> HttpRuntimeClientFailure {
+    HttpRuntimeClientFailure::PeerConnectTimeout {
+        target: host.to_string(),
+        cause: format!(
+            "authenticated direct peer `{host}` did not establish an authenticated connection before the configured request deadline"
+        ),
+    }
+}
+
+async fn stop_connection_driver(connection_driver: tokio::task::JoinHandle<()>) {
+    // Each direct-peer exchange owns one HTTP/1 connection. It cannot be
+    // reused after this call, so stopping and joining the driver prevents a
+    // detached task from outliving a failed or completed exchange.
+    connection_driver.abort();
+    if let Err(error) = connection_driver.await
+        && !error.is_cancelled()
+    {
+        tracing::debug!(%error, "authenticated direct-peer HTTP/1 driver task ended unexpectedly");
     }
 }
 
@@ -763,16 +802,12 @@ async fn execute_reqwest_request(
         outbound.headers_mut().insert(name, value);
     }
 
-    let response = client.execute(outbound).await.map_err(|source| {
+    let mut response = client.execute(outbound).await.map_err(|source| {
         HttpRuntimeClientFailure::Connect(format!("HTTP connector request failed: {source}"))
     })?;
     let status = response.status();
     let headers = response.headers().clone();
-    let body = response.bytes().await.map_err(|source| {
-        HttpRuntimeClientFailure::ResponseDecode(
-            AtmError::daemon_unavailable("failed to read HTTP response body").with_cause(source),
-        )
-    })?;
+    let body = read_bounded_reqwest_response_body(&mut response).await?;
     let mut builder = axum::http::Response::builder().status(status);
     for (name, value) in &headers {
         builder = builder.header(name.as_str(), value.as_bytes());
@@ -783,6 +818,34 @@ async fn execute_reqwest_request(
                 .with_cause(source),
         )
     })
+}
+
+async fn read_bounded_reqwest_response_body(
+    response: &mut reqwest::Response,
+) -> Result<Vec<u8>, HttpRuntimeClientFailure> {
+    if response
+        .content_length()
+        .is_some_and(|length| length > MAX_RESPONSE_BODY_BYTES as u64)
+    {
+        return Err(HttpRuntimeClientFailure::ResponseDecode(
+            AtmError::daemon_unavailable("HTTP response exceeded the bounded body limit"),
+        ));
+    }
+    let mut body = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(|source| {
+        HttpRuntimeClientFailure::ResponseDecode(
+            AtmError::daemon_unavailable("failed to read HTTP response body").with_cause(source),
+        )
+    })? {
+        let next_len = body.len().saturating_add(chunk.len());
+        if next_len > MAX_RESPONSE_BODY_BYTES {
+            return Err(HttpRuntimeClientFailure::ResponseDecode(
+                AtmError::daemon_unavailable("HTTP response exceeded the bounded body limit"),
+            ));
+        }
+        body.extend_from_slice(&chunk);
+    }
+    Ok(body)
 }
 
 /// One framework-backed client operation for every physical adapter.
@@ -906,12 +969,13 @@ mod tests {
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendRequest};
     use atm_core::test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
     use atm_core::types::{AgentName, CommandAction, HostName, TeamName};
-    use tokio::net::TcpStream;
+    use axum::body::{Body, to_bytes};
+    use tokio::net::{TcpListener, TcpStream};
 
     use super::{
         DirectPeerTcpConnector, HttpRuntimeClient, HttpRuntimeClientFailure, HttpRuntimeConnector,
-        direct_peer_adapter_write_client, direct_peer_connection_failure, direct_peer_tcp_client,
-        selected_write_transport,
+        MAX_RESPONSE_BODY_BYTES, direct_peer_adapter_write_client, direct_peer_connection_failure,
+        direct_peer_tcp_client, read_bounded_reqwest_response_body, selected_write_transport,
     };
 
     #[derive(Default)]
@@ -1069,6 +1133,43 @@ mod tests {
                 .is_some_and(|cause| cause.contains("certificate, hostname, pin, or handshake")),
             "the adapter failure remains attributable without changing to plain TCP"
         );
+    }
+
+    #[tokio::test]
+    async fn peer_response_body_limit_rejects_oversized_payloads() {
+        let error = to_bytes(
+            Body::from(vec![b'x'; MAX_RESPONSE_BODY_BYTES + 1]),
+            MAX_RESPONSE_BODY_BYTES,
+        )
+        .await
+        .expect_err("peer response decoding must cap the allocation size");
+        assert!(error.to_string().contains("length limit"));
+    }
+
+    #[tokio::test]
+    async fn reqwest_response_body_limit_rejects_oversized_payloads() {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind test response server");
+        let address = listener.local_addr().expect("test server address");
+        let router = axum::Router::new().route(
+            "/",
+            axum::routing::get(|| async { vec![b'x'; MAX_RESPONSE_BODY_BYTES + 1] }),
+        );
+        let server = tokio::spawn(async move {
+            axum::serve(listener, router)
+                .await
+                .expect("test response server serves")
+        });
+        let mut response = reqwest::get(format!("http://{address}/"))
+            .await
+            .expect("request test response server");
+        let error = read_bounded_reqwest_response_body(&mut response)
+            .await
+            .expect_err("reqwest response decoding must cap the allocation size");
+        assert!(matches!(error, HttpRuntimeClientFailure::ResponseDecode(_)));
+        server.abort();
+        let _ = server.await;
     }
 
     fn sent_response() -> axum::http::Response<Vec<u8>> {
