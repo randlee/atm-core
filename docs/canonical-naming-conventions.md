@@ -40,4 +40,3 @@ These examples show how ATM Core refers to the SSOT without redefining it:
 
 Historical files may use older spellings.  They are tracked in the migration
 inventory and must not be used as templates for new plans or evidence.
-

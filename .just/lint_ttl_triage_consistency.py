@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-from fnmatch import fnmatch
 import re
 import sys
 from dataclasses import dataclass
@@ -27,6 +26,9 @@ SPRINT_FIELD_RE = re.compile(
 CANONICAL_SPRINT_RE = re.compile(r"^(?P<phase>[A-Za-z][A-Za-z0-9]*)\.(?P<number>[1-9][0-9]*)$")
 LEGACY_DASH_SPRINT_RE = re.compile(
     r"^(?P<phase>[A-Za-z][A-Za-z0-9]*)-S(?P<number>[0-9]+)$", re.IGNORECASE
+)
+LEGACY_DASH_NUMBER_SPRINT_RE = re.compile(
+    r"^(?P<phase>[A-Za-z][A-Za-z0-9]*)-(?P<number>[1-9][0-9]*)$", re.IGNORECASE
 )
 LEGACY_COMPACT_SPRINT_RE = re.compile(r"^(?P<phase>[A-Za-z][A-Za-z0-9]*?)(?P<number>[0-9]+)$")
 SPRINT_LIKE_RE = re.compile(r"^[A-Za-z]{2}(?:\.\d+|-S?\d+)$", re.IGNORECASE)
@@ -60,16 +62,16 @@ def load_legacy_allowlist(repo_root: Path) -> list[tuple[str, str]]:
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
-        path_glob, separator, raw_value = line.partition("\t")
-        if separator and path_glob and raw_value:
-            entries.append((path_glob, raw_value))
+        path, separator, raw_value = line.partition("\t")
+        if separator and path and raw_value:
+            entries.append((path, raw_value))
     return entries
 
 
 def is_allowlisted_legacy(allowlist: list[tuple[str, str]], path: str, raw_value: str) -> bool:
     return any(
-        fnmatch(path, path_glob) and raw_value == allowed_value
-        for path_glob, allowed_value in allowlist
+        path == allowed_path and raw_value == allowed_value
+        for allowed_path, allowed_value in allowlist
     )
 
 
@@ -115,6 +117,13 @@ def canonical_sprint_id(raw_value: str) -> tuple[str | None, str]:
         return canonical, "ok" if value == canonical else "NAMING.NON_CANONICAL"
 
     match = LEGACY_DASH_SPRINT_RE.fullmatch(value)
+    if match:
+        return (
+            f"{match.group('phase').upper()}.{int(match.group('number'))}",
+            "TTL.QA_RUN_KEY_MISMATCH",
+        )
+
+    match = LEGACY_DASH_NUMBER_SPRINT_RE.fullmatch(value)
     if match:
         return (
             f"{match.group('phase').upper()}.{int(match.group('number'))}",

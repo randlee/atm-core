@@ -130,6 +130,25 @@ class LintTtlTriageConsistencyTests(unittest.TestCase):
             self.assertIn("TTL.QA_RUN_KEY_MISMATCH", violations[0].message)
             self.assertIn("canonical candidate=AN.1", violations[0].message)
 
+    def test_flags_legacy_dash_number_sprint_key_with_canonical_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            write_ttl(
+                repo_root / ".triage/phase-ai/findings/F005B.ttl",
+                """
+                triage:F005B
+                  a triage:Finding ;
+                  triage:status "open" ;
+                  triage:foundIn triage:AI-52 .
+                """,
+            )
+
+            violations = collect_ttl_triage_violations(repo_root)
+
+            self.assertEqual(len(violations), 1)
+            self.assertIn("TTL.QA_RUN_KEY_MISMATCH", violations[0].message)
+            self.assertIn("canonical candidate=AI.52", violations[0].message)
+
     def test_flags_case_only_sprint_key_before_persistence(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
@@ -195,6 +214,28 @@ class LintTtlTriageConsistencyTests(unittest.TestCase):
 
             self.assertEqual(len(violations), 1)
             self.assertIn("F009.ttl", violations[0].path)
+
+    def test_allowlist_path_is_literal_not_glob(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            (repo_root / ".just").mkdir()
+            (repo_root / ".just/ttl-naming-legacy-allowlist.txt").write_text(
+                ".triage/phase-an/findings/F*.ttl\tAN-S1\n", encoding="utf-8"
+            )
+            write_ttl(
+                repo_root / ".triage/phase-an/findings/F011.ttl",
+                """
+                triage:F011
+                  a triage:Finding ;
+                  triage:status "open" ;
+                  triage:foundIn triage:AN-S1 .
+                """,
+            )
+
+            violations = collect_ttl_triage_violations(repo_root)
+
+            self.assertEqual(len(violations), 1)
+            self.assertIn("TTL.QA_RUN_KEY_MISMATCH", violations[0].message)
 
     def test_flags_unknown_sprint_format_in_explicit_sprint_field(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
