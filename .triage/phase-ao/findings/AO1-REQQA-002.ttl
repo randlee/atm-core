@@ -18,7 +18,7 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-17T22:35:00Z"^^xsd:dateTime ;
-  triage:foundIn triage:AO.1 ;
+  triage:foundIn triage:AO-S1 ;
   triage:foundAt "2026-08-18T05:31:13Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AO1-REQQA-002/ao1-reqqa-002-1> ;
   triage:triageRecordVersion "1" .
