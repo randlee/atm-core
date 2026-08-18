@@ -21,6 +21,36 @@ publish. A release is not eligible until this plan's proof gates pass.
 4. Production publish remains an explicit authorization after a real GitHub
    preflight and authorized TestPyPI proof.
 
+## Shared-kit freeze rule
+
+ATM must **not** modify shared `sc-compose` code, workflows, actions,
+contracts, tests, or copied files. The only allowed ATM-side changes are:
+
+- byte-for-byte synchronization from an accepted upstream source commit;
+- ATM manifest data; and
+- clearly namespaced ATM-only adapters outside the shared path list.
+
+If a preflight or publishing defect appears to require a shared-file change,
+the work stops. The defect and the required behavior are recorded in this plan,
+then proposed and resolved upstream in `sc-compose`. ATM adopts the next
+accepted source revision by sync; it does not make a local workaround.
+
+The normative upstream source is `sc-compose/docs/publish-kit-requirements.md`.
+Its channel contract is `release/publish-channel-contracts.toml`; credentials,
+environments, public registry endpoints, and liveness semantics belong there,
+not in ATM's artifact manifest or workflow literals.
+
+## Unresolved preflight findings — no local workaround
+
+| Finding | Observed evidence | Required resolution before any ATM change |
+| --- | --- | --- |
+| PF-1 environment-secret check | `GITHUB_TOKEN` receives HTTP 403 when listing protected environment-secret metadata. | Determine the upstream, non-disclosing metadata/liveness mechanism required by the shared channel contract. Do not replace it locally with a different workflow design. |
+| PF-2 crates.io liveness check | The raw `/api/v1/me` curl returns 403 while the same configured credential successfully published crates using Cargo. | Establish the correct generic liveness probe and authentication semantics from the shared contract. Do not rotate or replace a working production token based on the raw curl. |
+| PF-3 registry state | Candidate `1.4.3` is already published for all release crates. | Treat as the correct fail-closed result. Run preflight only with an unpublished candidate version; do not weaken the registry check. |
+
+These findings are inputs to the upstream design review, not authorization for
+ATM workflow edits.
+
 ## Ownership boundary
 
 | Surface | Owner | Rule |
