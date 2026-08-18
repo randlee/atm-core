@@ -16,6 +16,10 @@ name = "atm_query"
 crate-type = ["cdylib", "rlib"]
 
 [features]
+default = ["abi3"]
+# The published query wheel uses CPython's stable ABI from 3.11 onward, so
+# one wheel per operating-system/architecture target serves CPython 3.11+.
+abi3 = ["pyo3/abi3-py311"]
 extension-module = ["pyo3/extension-module"]
 
 [dependencies]

@@ -69,6 +69,35 @@ class As2ConsumerContractTests(unittest.TestCase):
         self.assertTrue(all(not channel["enabled"] for channel in values["channels"].values()))
         self.assertEqual(values["channels"]["pypi"]["workflow"], "pypi-publish.yml")
 
+    def test_release_manifest_uses_the_validator_schema(self) -> None:
+        with (ROOT / "release/publish-artifacts.toml").open("rb") as file:
+            manifest = tomllib.load(file)
+        self.assertIn("crates", manifest)
+        self.assertNotIn("artifacts", manifest)
+        self.assertEqual(
+            [crate["package"] for crate in manifest["crates"] if crate["publish"]],
+            list(EXPECTED_CRATES),
+        )
+        self.assertEqual(
+            [package["package"] for package in manifest["python_packages"]],
+            ["atm-graft", "atm-query", "hermes-atm"],
+        )
+        self.assertEqual(
+            [distribution["name"] for distribution in manifest["python_distributions"]],
+            ["atm-graft", "atm-query", "hermes-atm"],
+        )
+
+    def test_atm_query_declares_the_same_abi3_release_contract_as_atm_graft(self) -> None:
+        query_cargo = (ROOT / "crates/atm-query-python/Cargo.toml").read_text(encoding="utf-8")
+        query_pyproject = (ROOT / "crates/atm-query-python/pyproject.toml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('default = ["abi3"]', query_cargo)
+        self.assertIn('abi3 = ["pyo3/abi3-py311"]', query_cargo)
+        self.assertIn('requires-python = ">=3.11,<3.15"', query_pyproject)
+        self.assertIn('features = ["abi3", "extension-module"]', query_pyproject)
+
 
 if __name__ == "__main__":
     unittest.main()
