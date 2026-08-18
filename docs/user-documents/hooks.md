@@ -1,7 +1,7 @@
 ---
 title: Hooks
 audience: end-user
-reviewed_for_release: 1.4.2
+reviewed_for_release: 1.4.3
 ---
 
 # Hooks

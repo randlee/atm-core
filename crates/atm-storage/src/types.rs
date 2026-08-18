@@ -293,7 +293,11 @@ impl HostName {
                 .0
                 .split('.')
                 .all(|label| !label.is_empty() && label.bytes().all(|byte| byte.is_ascii_digit()));
-        !ipv4_shaped && !self.0.to_ascii_lowercase().ends_with(".local")
+        // A stable local-network mDNS name (for example, `rand-m5.local`) is
+        // a durable authority even though the address it resolves to may
+        // change with Wi-Fi, Ethernet, VPN, or DHCP. Literal IPv4 values are
+        // routing observations, not durable peer identities.
+        !ipv4_shaped
     }
 }
 
@@ -592,13 +596,7 @@ mod tests {
 
     #[test]
     fn host_name_distinguishes_durable_peer_names_from_attachment_names() {
-        for attachment_name in [
-            "192.168.128.29",
-            "192.168.128.029",
-            "999.1.1.1",
-            "peer.local",
-            "PEER.LOCAL",
-        ] {
+        for attachment_name in ["192.168.128.29", "192.168.128.029", "999.1.1.1"] {
             let host: HostName = attachment_name.parse().expect("generic host syntax");
             assert!(
                 !host.is_durable_hostname(),
@@ -606,7 +604,7 @@ mod tests {
             );
         }
 
-        for durable_name in ["peer.example", "peer.localhost"] {
+        for durable_name in ["peer.example", "peer.localhost", "peer.local", "PEER.LOCAL"] {
             let host: HostName = durable_name.parse().expect("host");
             assert!(
                 host.is_durable_hostname(),

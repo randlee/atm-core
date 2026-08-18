@@ -266,7 +266,9 @@ impl AtmError {
     pub fn agent_not_found(agent: &str, team: &str) -> Self {
         Self::new(
             AtmErrorCode::AgentNotFound,
-            format!("agent '{agent}' was not found in team '{team}'"),
+            format!(
+                "agent '{agent}' was not found in team '{team}'; add it with `atm teams add-member {team} {agent}`"
+            ),
         )
     }
 
@@ -505,6 +507,18 @@ mod tests {
         let error = AtmError::member_not_found("test-agent", "test-team");
 
         assert_eq!(error.code(), AtmErrorCode::MemberNotFound);
+    }
+
+    #[test]
+    fn agent_not_found_names_the_roster_repair_command() {
+        let error = AtmError::agent_not_found("test-agent", "test-team");
+
+        assert_eq!(error.code(), AtmErrorCode::AgentNotFound);
+        assert!(
+            error
+                .message()
+                .contains("atm teams add-member test-team test-agent")
+        );
     }
 
     #[test]
