@@ -548,7 +548,6 @@ pub fn with_default_peer_address_stores<T>(
 
 #[cfg(test)]
 mod replacement_runtime_tests {
-    use std::net::SocketAddr;
     use std::num::{NonZeroU16, NonZeroUsize};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
@@ -564,11 +563,11 @@ mod replacement_runtime_tests {
         LoopbackTcpConfig, NonZeroDuration, RuntimeLimits, RuntimeTimeouts,
         authenticated_peer_client,
     };
-    use atm_storage::contract::sealed;
     use atm_storage::{
         HttpsInterface, LocalCertificate, PeerConfigStore, TrustedPeer, certificate_fingerprint,
     };
     use atm_template_sc_compose::ScComposeTemplateComposer;
+    use peer_tls::test_support::TestPeerConfigStore;
     use rcgen::generate_simple_self_signed;
     use serde_json::Map;
     use tempfile::TempDir;
@@ -578,60 +577,6 @@ mod replacement_runtime_tests {
         REPLACEMENT_DRAIN_DEADLINE, ShutdownSignal, assemble_host_runtime_with_template_composer,
         write_ready_signal_if_requested,
     };
-
-    #[derive(Clone)]
-    struct TestPeerConfigStore {
-        interfaces: Vec<HttpsInterface>,
-        local_certificate: LocalCertificate,
-        trusted_peers: Vec<TrustedPeer>,
-    }
-
-    impl sealed::Sealed for TestPeerConfigStore {}
-
-    impl PeerConfigStore for TestPeerConfigStore {
-        fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, AtmError> {
-            Ok(self.interfaces.clone())
-        }
-
-        fn save_interface(&self, _interface: &HttpsInterface) -> Result<(), AtmError> {
-            Ok(())
-        }
-
-        fn remove_interface(&self, _bind_addr: SocketAddr) -> Result<bool, AtmError> {
-            Ok(false)
-        }
-
-        fn local_certificate(&self) -> Result<Option<LocalCertificate>, AtmError> {
-            Ok(Some(self.local_certificate.clone()))
-        }
-
-        fn save_local_certificate(&self, _certificate: &LocalCertificate) -> Result<(), AtmError> {
-            Ok(())
-        }
-
-        fn list_trusted_peers(&self) -> Result<Vec<TrustedPeer>, AtmError> {
-            Ok(self.trusted_peers.clone())
-        }
-
-        fn trusted_peer(
-            &self,
-            host: &atm_storage::HostName,
-        ) -> Result<Option<TrustedPeer>, AtmError> {
-            Ok(self
-                .trusted_peers
-                .iter()
-                .find(|peer| &peer.host == host)
-                .cloned())
-        }
-
-        fn save_trusted_peer(&self, _peer: &TrustedPeer) -> Result<(), AtmError> {
-            Ok(())
-        }
-
-        fn remove_trusted_peer(&self, _host: &atm_storage::HostName) -> Result<bool, AtmError> {
-            Ok(false)
-        }
-    }
 
     struct TestIdentity {
         certificate: LocalCertificate,
@@ -686,11 +631,11 @@ mod replacement_runtime_tests {
         certificate: LocalCertificate,
         trusted_peers: Vec<TrustedPeer>,
     ) -> Arc<dyn PeerConfigStore> {
-        Arc::new(TestPeerConfigStore {
-            interfaces: vec![enabled_interface()],
-            local_certificate: certificate,
+        Arc::new(TestPeerConfigStore::new(
+            vec![enabled_interface()],
+            Some(certificate),
             trusted_peers,
-        })
+        ))
     }
 
     /// First-party composition test double, explicitly listed by the

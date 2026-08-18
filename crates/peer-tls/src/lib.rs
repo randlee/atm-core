@@ -229,6 +229,130 @@ struct LocalTlsSnapshot {
     trusted_peers: Vec<TrustedPeer>,
 }
 
+/// First-party peer configuration fixture shared by TLS adapter integration tests.
+///
+/// This is test-only API: production code must use the durable peer-config store.
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support {
+    use std::net::SocketAddr;
+    use std::sync::{Arc, Mutex};
+
+    use atm_storage::contract::sealed;
+    use atm_storage::{AtmError, HttpsInterface, LocalCertificate, PeerConfigStore, TrustedPeer};
+
+    #[derive(Clone)]
+    pub struct TestPeerConfigStore {
+        interfaces: Vec<HttpsInterface>,
+        local_certificate: Option<LocalCertificate>,
+        trusted_peers: Vec<TrustedPeer>,
+        configuration_delay: Arc<Mutex<Option<ConfigurationDelay>>>,
+    }
+
+    #[derive(Clone)]
+    pub struct ConfigurationDelay {
+        pub started: std::sync::mpsc::Sender<()>,
+        pub release: Arc<Mutex<std::sync::mpsc::Receiver<()>>>,
+    }
+
+    impl ConfigurationDelay {
+        fn wait(&self) {
+            self.started
+                .send(())
+                .expect("test must wait for configuration loading to begin");
+            self.release
+                .lock()
+                .expect("configuration delay receiver lock")
+                .recv()
+                .expect("test must release configuration loading");
+        }
+    }
+
+    impl TestPeerConfigStore {
+        pub fn new(
+            interfaces: Vec<HttpsInterface>,
+            local_certificate: Option<LocalCertificate>,
+            trusted_peers: Vec<TrustedPeer>,
+        ) -> Self {
+            Self {
+                interfaces,
+                local_certificate,
+                trusted_peers,
+                configuration_delay: Arc::new(Mutex::new(None)),
+            }
+        }
+
+        pub fn with_configuration_delay(
+            mut self,
+            delay: Arc<Mutex<Option<ConfigurationDelay>>>,
+        ) -> Self {
+            self.configuration_delay = delay;
+            self
+        }
+
+        fn delay_if_requested(&self) {
+            if let Some(delay) = self
+                .configuration_delay
+                .lock()
+                .expect("configuration delay lock")
+                .clone()
+            {
+                delay.wait();
+            }
+        }
+    }
+
+    impl sealed::Sealed for TestPeerConfigStore {}
+
+    impl PeerConfigStore for TestPeerConfigStore {
+        fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, AtmError> {
+            self.delay_if_requested();
+            Ok(self.interfaces.clone())
+        }
+
+        fn save_interface(&self, _interface: &HttpsInterface) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn remove_interface(&self, _bind_addr: SocketAddr) -> Result<bool, AtmError> {
+            Ok(false)
+        }
+
+        fn local_certificate(&self) -> Result<Option<LocalCertificate>, AtmError> {
+            self.delay_if_requested();
+            Ok(self.local_certificate.clone())
+        }
+
+        fn save_local_certificate(&self, _certificate: &LocalCertificate) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn list_trusted_peers(&self) -> Result<Vec<TrustedPeer>, AtmError> {
+            self.delay_if_requested();
+            Ok(self.trusted_peers.clone())
+        }
+
+        fn trusted_peer(
+            &self,
+            host: &atm_storage::HostName,
+        ) -> Result<Option<TrustedPeer>, AtmError> {
+            self.delay_if_requested();
+            Ok(self
+                .trusted_peers
+                .iter()
+                .find(|peer| &peer.host == host)
+                .cloned())
+        }
+
+        fn save_trusted_peer(&self, _peer: &TrustedPeer) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn remove_trusted_peer(&self, _host: &atm_storage::HostName) -> Result<bool, AtmError> {
+            Ok(false)
+        }
+    }
+}
+
 fn exactly_one_enabled_interface(
     interfaces: Vec<HttpsInterface>,
 ) -> Result<HttpsInterface, AtmError> {
@@ -347,105 +471,14 @@ mod tests {
     use std::time::Duration;
 
     use atm_core::PeerIoAdapter;
-    use atm_storage::contract::sealed;
     use atm_storage::{LocalCertificate, certificate_fingerprint};
     use rcgen::generate_simple_self_signed;
     use tempfile::TempDir;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
 
+    use super::test_support::{ConfigurationDelay, TestPeerConfigStore};
     use super::*;
-
-    #[derive(Clone)]
-    struct TestPeerConfigStore {
-        interfaces: Vec<HttpsInterface>,
-        local_certificate: Option<LocalCertificate>,
-        trusted_peers: Vec<TrustedPeer>,
-        configuration_delay: Arc<Mutex<Option<ConfigurationDelay>>>,
-    }
-
-    #[derive(Clone)]
-    struct ConfigurationDelay {
-        started: std::sync::mpsc::Sender<()>,
-        release: Arc<Mutex<std::sync::mpsc::Receiver<()>>>,
-    }
-
-    impl ConfigurationDelay {
-        fn wait(&self) {
-            self.started
-                .send(())
-                .expect("test must wait for configuration loading to begin");
-            self.release
-                .lock()
-                .expect("configuration delay receiver lock")
-                .recv()
-                .expect("test must release configuration loading");
-        }
-    }
-
-    impl TestPeerConfigStore {
-        fn delay_if_requested(&self) {
-            if let Some(delay) = self
-                .configuration_delay
-                .lock()
-                .expect("configuration delay lock")
-                .clone()
-            {
-                delay.wait();
-            }
-        }
-    }
-
-    impl sealed::Sealed for TestPeerConfigStore {}
-
-    impl PeerConfigStore for TestPeerConfigStore {
-        fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, AtmError> {
-            self.delay_if_requested();
-            Ok(self.interfaces.clone())
-        }
-
-        fn save_interface(&self, _interface: &HttpsInterface) -> Result<(), AtmError> {
-            Ok(())
-        }
-
-        fn remove_interface(&self, _bind_addr: SocketAddr) -> Result<bool, AtmError> {
-            Ok(false)
-        }
-
-        fn local_certificate(&self) -> Result<Option<LocalCertificate>, AtmError> {
-            self.delay_if_requested();
-            Ok(self.local_certificate.clone())
-        }
-
-        fn save_local_certificate(&self, _certificate: &LocalCertificate) -> Result<(), AtmError> {
-            Ok(())
-        }
-
-        fn list_trusted_peers(&self) -> Result<Vec<TrustedPeer>, AtmError> {
-            self.delay_if_requested();
-            Ok(self.trusted_peers.clone())
-        }
-
-        fn trusted_peer(
-            &self,
-            host: &atm_storage::HostName,
-        ) -> Result<Option<TrustedPeer>, AtmError> {
-            self.delay_if_requested();
-            Ok(self
-                .trusted_peers
-                .iter()
-                .find(|peer| &peer.host == host)
-                .cloned())
-        }
-
-        fn save_trusted_peer(&self, _peer: &TrustedPeer) -> Result<(), AtmError> {
-            Ok(())
-        }
-
-        fn remove_trusted_peer(&self, _host: &atm_storage::HostName) -> Result<bool, AtmError> {
-            Ok(false)
-        }
-    }
 
     struct TestIdentity {
         certificate: LocalCertificate,
@@ -498,12 +531,11 @@ mod tests {
         certificate: LocalCertificate,
         trusted_peers: Vec<TrustedPeer>,
     ) -> Arc<dyn PeerConfigStore> {
-        Arc::new(TestPeerConfigStore {
-            interfaces: vec![enabled_interface()],
-            local_certificate: Some(certificate),
+        Arc::new(TestPeerConfigStore::new(
+            vec![enabled_interface()],
+            Some(certificate),
             trusted_peers,
-            configuration_delay: Arc::new(Mutex::new(None)),
-        })
+        ))
     }
 
     #[tokio::test]
@@ -661,27 +693,25 @@ mod tests {
 
     #[test]
     fn constructor_rejects_disabled_interface_before_handshake() {
-        let store: Arc<dyn PeerConfigStore> = Arc::new(TestPeerConfigStore {
-            interfaces: vec![HttpsInterface {
+        let store: Arc<dyn PeerConfigStore> = Arc::new(TestPeerConfigStore::new(
+            vec![HttpsInterface {
                 enabled: false,
                 ..enabled_interface()
             }],
-            local_certificate: None,
-            trusted_peers: vec![],
-            configuration_delay: Arc::new(Mutex::new(None)),
-        });
+            None,
+            vec![],
+        ));
         let error = PeerTlsAdapter::new(store).expect_err("disabled interface must reject");
         assert!(error.message().contains("no enabled interface"));
     }
 
     #[test]
     fn constructor_rejects_multiple_enabled_interfaces_with_clear_guidance() {
-        let store: Arc<dyn PeerConfigStore> = Arc::new(TestPeerConfigStore {
-            interfaces: vec![enabled_interface(), enabled_interface()],
-            local_certificate: None,
-            trusted_peers: vec![],
-            configuration_delay: Arc::new(Mutex::new(None)),
-        });
+        let store: Arc<dyn PeerConfigStore> = Arc::new(TestPeerConfigStore::new(
+            vec![enabled_interface(), enabled_interface()],
+            None,
+            vec![],
+        ));
 
         let error = PeerTlsAdapter::new(store).expect_err("multiple interfaces must reject");
         assert!(
@@ -729,12 +759,11 @@ mod tests {
 
     #[test]
     fn constructor_rejects_missing_or_invalid_local_certificate_without_secret_output() {
-        let missing: Arc<dyn PeerConfigStore> = Arc::new(TestPeerConfigStore {
-            interfaces: vec![enabled_interface()],
-            local_certificate: None,
-            trusted_peers: vec![],
-            configuration_delay: Arc::new(Mutex::new(None)),
-        });
+        let missing: Arc<dyn PeerConfigStore> = Arc::new(TestPeerConfigStore::new(
+            vec![enabled_interface()],
+            None,
+            vec![],
+        ));
         let missing_error =
             PeerTlsAdapter::new(missing).expect_err("missing certificate must reject");
         assert!(
@@ -743,9 +772,9 @@ mod tests {
                 .contains("no configured local certificate")
         );
 
-        let invalid: Arc<dyn PeerConfigStore> = Arc::new(TestPeerConfigStore {
-            interfaces: vec![enabled_interface()],
-            local_certificate: Some(LocalCertificate {
+        let invalid: Arc<dyn PeerConfigStore> = Arc::new(TestPeerConfigStore::new(
+            vec![enabled_interface()],
+            Some(LocalCertificate {
                 fingerprint: "00".repeat(32).parse().expect("fingerprint"),
                 private_key_ref: PathBuf::from("/not/a/real/private-key.pem")
                     .display()
@@ -753,9 +782,8 @@ mod tests {
                     .parse()
                     .expect("private key reference"),
             }),
-            trusted_peers: vec![],
-            configuration_delay: Arc::new(Mutex::new(None)),
-        });
+            vec![],
+        ));
         let invalid_error =
             PeerTlsAdapter::new(invalid).expect_err("invalid certificate must reject");
         assert!(
@@ -767,15 +795,14 @@ mod tests {
 
         let directory = tempfile::tempdir().expect("temporary directory");
         let identity = write_identity(&directory, "mismatched", "localhost");
-        let mismatched: Arc<dyn PeerConfigStore> = Arc::new(TestPeerConfigStore {
-            interfaces: vec![enabled_interface()],
-            local_certificate: Some(LocalCertificate {
+        let mismatched: Arc<dyn PeerConfigStore> = Arc::new(TestPeerConfigStore::new(
+            vec![enabled_interface()],
+            Some(LocalCertificate {
                 fingerprint: "11".repeat(32).parse().expect("fingerprint"),
                 private_key_ref: identity.certificate.private_key_ref,
             }),
-            trusted_peers: vec![trusted_peer("localhost", &identity.fingerprint, 43101)],
-            configuration_delay: Arc::new(Mutex::new(None)),
-        });
+            vec![trusted_peer("localhost", &identity.fingerprint, 43101)],
+        ));
         let mismatch_error = PeerTlsAdapter::new(mismatched)
             .expect_err("certificate fingerprint mismatch must reject");
         assert!(
@@ -1009,16 +1036,18 @@ mod tests {
             .expect("bind listener");
         let address = listener.local_addr().expect("listener address");
         let delay = Arc::new(Mutex::new(None));
-        let store = Arc::new(TestPeerConfigStore {
-            interfaces: vec![enabled_interface()],
-            local_certificate: Some(server_identity.certificate),
-            trusted_peers: vec![trusted_peer(
-                "client.test",
-                &expected_client.fingerprint,
-                address.port(),
-            )],
-            configuration_delay: delay.clone(),
-        });
+        let store = Arc::new(
+            TestPeerConfigStore::new(
+                vec![enabled_interface()],
+                Some(server_identity.certificate),
+                vec![trusted_peer(
+                    "client.test",
+                    &expected_client.fingerprint,
+                    address.port(),
+                )],
+            )
+            .with_configuration_delay(delay.clone()),
+        );
         let server = PeerTlsAdapter::new(store).expect("server configuration");
         let (started_tx, started_rx) = std::sync::mpsc::channel();
         let (release_tx, release_rx) = std::sync::mpsc::channel();

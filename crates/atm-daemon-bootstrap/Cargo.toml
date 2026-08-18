@@ -33,5 +33,6 @@ ulid.workspace = true
 
 [dev-dependencies]
 atm-http-runtime = { path = "../atm-http-runtime", version = "1.4.3", features = ["test-support"] }
+peer-tls = { path = "../peer-tls", version = "1.4.3", features = ["test-support"] }
 rcgen = "0.13"
 tempfile = "3"
