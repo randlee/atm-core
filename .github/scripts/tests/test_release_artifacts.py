@@ -1651,6 +1651,19 @@ def test_release_preflight_collects_independent_failures_before_denial() -> None
     assert "REGISTRY_STATE" in preflight_text
 
 
+def test_release_preflight_uses_atm_workspace_boundary_analyzer() -> None:
+    preflight_text = release_preflight_workflow_text()
+    toolchain_text = (
+        repo_root() / ".github" / "actions" / "setup-lint-toolchain" / "action.yml"
+    ).read_text(encoding="utf-8")
+
+    assert 'include-sc-lint: "false"' in preflight_text
+    assert "cargo run -p sc-lint-boundary --release -- analyze --root . --format json" in preflight_text
+    assert "BOUNDARY_LINT" in preflight_text
+    assert "include-sc-lint:" in toolchain_text
+    assert "if: inputs.include-sc-lint == 'true'" in toolchain_text
+
+
 def test_release_workflow_collects_wheels_without_redundant_zip_sweep() -> None:
     text = release_workflow_text()
 

@@ -159,12 +159,24 @@ jobs:
 
       - name: Set up lint toolchain
         uses: ./.github/actions/setup-lint-toolchain
+        with:
+          # Boundary inventory validation must use this checkout's analyzer.
+          # The externally released sc-lint bundle can lag ATM's owned schema.
+          include-sc-lint: "false"
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.94.1
           components: rustfmt, clippy
+
+      - id: boundary_lint
+        name: Validate boundary inventory with workspace source
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo run -p sc-lint-boundary --release -- analyze --root . --format json
 
       - name: Normalize version input
         id: meta
@@ -372,6 +384,7 @@ jobs:
           CREDENTIAL_LIVENESS: ${{ steps.credential_liveness.outcome }}
           REGISTRY_STATE: ${{ steps.registry_state.outcome }}
           META: ${{ steps.meta.outcome }}
+          BOUNDARY_LINT: ${{ steps.boundary_lint.outcome }}
           FORMATTING: ${{ steps.formatting.outcome }}
           CLIPPY: ${{ steps.clippy.outcome }}
           WORKSPACE_TESTS: ${{ steps.workspace_tests.outcome }}
@@ -403,6 +416,7 @@ jobs:
           record credential-liveness "${CREDENTIAL_LIVENESS}"
           record registry-state "${REGISTRY_STATE}"
           record version-input "${META}"
+          record boundary-lint "${BOUNDARY_LINT}"
           record formatting "${FORMATTING}"
           record clippy "${CLIPPY}"
           record workspace-tests "${WORKSPACE_TESTS}"
