@@ -222,7 +222,6 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\bsocket_io\b",
     ),
     "tls": (r"\b(?:TlsConnector|TlsAcceptor|rustls|ServerName)\b",),
-    "tls_adapter": (r"\b(?:TlsConnector|TlsAcceptor|rustls|ServerName)\b",),
     "peer_only_ingress": (
         r"\bPeerMessageArray\b",
         r"\bpeer_(?:delivery|http_listener)\b",
