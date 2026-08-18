@@ -93,11 +93,24 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\bcompatibility_jsonl_append\b",
         r"\bcompatibility[^\n]*\.jsonl\b",
     ),
+    "concrete_rustls_types": (
+        r"\b(?:ClientConfig|ServerConfig|TlsConnector|TlsAcceptor)\b",
+        r"\brustls::",
+    ),
     "cursor": (r"\bcursor\b", r"\bCursor\b"),
     "catalog_persistence": (
         r"\b(?:TemplateCatalogStore|TemplateCatalogRecord|CatalogPersistence)\b",
         r"\b(?:persist|store|load)_[A-Za-z0-9_]*catalog[A-Za-z0-9_]*\s*\(",
         r"\bcatalog_persistence\b",
+    ),
+    "certificate_fingerprint_algorithm": (r"\b(?:Sha256|Sha512)::digest\s*\(",),
+    "certificate_parser": (
+        r"\bCertificateDer::(?:pem_slice_iter|from_pem_slice)\b",
+        r"\bPrivateKeyDer::from_pem_slice\b",
+    ),
+    "certificate_parsing": (
+        r"\bCertificateDer::(?:pem_slice_iter|from_pem_slice)\b",
+        r"\bPrivateKeyDer::from_pem_slice\b",
     ),
     "cli_surface": (
         r"\bclap::",
@@ -127,6 +140,8 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
     "graft_crate_dependency": (r"\batm[_-]graft\b",),
     "graft_session_runtime": (r"\bgraft_session_runtime\b", r"\bGraftSession\b"),
     "inbox_jsonl": (r"\binbox[^\n]*\.jsonl\b", r"\b(?:append|write)_[A-Za-z0-9_]*inbox[A-Za-z0-9_]*\s*\("),
+    "legacy_daemon_composition": (r"\b(?:LegacyDaemon|run_legacy_daemon)\b",),
+    "listener_lifecycle": (r"\b(?:run|start)_(?:listener|server)\s*\(",),
     "mailbox_storage_selection": (r"\bmailbox_storage_selection\b", r"\b(?:select|choose)_[A-Za-z0-9_]*mailbox[A-Za-z0-9_]*\s*\("),
     "message_delivery": (r"\bmessage_delivery\b", r"\b(?:deliver|send)_message\s*\(", r"\bMessageDelivery\b"),
     "production_delivery": (
@@ -156,13 +171,22 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\b(?:HttpRuntime|ApiRouter)\b",
         r"\bhttp_runtime\b",
     ),
+    "http_request_encoding": (
+        r"\b(?:encode|decode)_(?:http|request|response)\s*\(",
+        r"\b(?:HttpRequestEncoder|HttpResponseEncoder)\b",
+    ),
     "process_spawn": (r"\bstd::process::Command\b", r"\bCommand::new\s*\(", r"\)\.spawn\s*\("),
     "process_spawn_for_notifications": (r"\bstd::process::Command\b", r"\bCommand::new\s*\(", r"\)\.spawn\s*\("),
     "process_spawn_outside_owned_runtime_path": (r"\bstd::process::Command\b", r"\bCommand::new\s*\(", r"\)\.spawn\s*\("),
+    "peer_config_store": (r"\bPeerConfigStore\b",),
     "raw_http_framing": (
         r"\bHttpFrameReader\b",
         r"\b(?:read|write)_http_(?:request|response)\s*\(",
         r"\bwrite_http_request_with_headers\s*\(",
+    ),
+    "rustls_configuration": (
+        r"\b(?:ClientConfig|ServerConfig)::builder\s*\(",
+        r"\bwith_(?:client_auth_cert|single_cert|custom_certificate_verifier)\s*\(",
     ),
     "replay_or_resend": (
         r"\b(?:Peer)?(?:Replay|Resend)[A-Za-z0-9_]*\b",
@@ -187,13 +211,17 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\b(?:schema_json|migration(?:s)?)\b",
         r"\bstorage_schema\b",
     ),
+    "storage_configuration": (
+        r"\b(?:save|remove)_(?:interface|local_certificate|trusted_peer)\s*\(",
+    ),
+    "storage_sql": (r"\b(?:rusqlite|sqlx|diesel)::", r"\b(?:SELECT|INSERT|UPDATE|DELETE)\b"),
+    "storage_tls_helpers": (r"\batm_storage::tls\b",),
     "socket_io": (
         r"\b(?:std|tokio)::net::",
         r"\b(?:Tcp|Udp|Unix)(?:Stream|Listener|Socket)\b",
         r"\bsocket_io\b",
     ),
     "tls": (r"\b(?:TlsConnector|TlsAcceptor|rustls|ServerName)\b",),
-    "tls_adapter": (r"\b(?:TlsConnector|TlsAcceptor|rustls|ServerName)\b",),
     "peer_only_ingress": (
         r"\bPeerMessageArray\b",
         r"\bpeer_(?:delivery|http_listener)\b",
@@ -212,6 +240,8 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
     "task_changed_notifications": (r"\btask_changed_notifications\b", r"\bTaskChanged(?:Notification|Event)?\b", r"\btask_changed\b"),
     "template_rendering": (r"\btemplate_rendering\b", r"\b(?:render|render_template)\s*\(", r"\bTemplateRenderer\b"),
     "tls_handshake": (r"\b(?:rustls|native_tls)::", r"\b(?:Client|Server)Connection\b", r"\b(?:tls|TLS)[^\n]*handshake\b"),
+    "tls_policy": (r"\b(?:struct|enum)\s+\w*(?:Verifier|Policy)\b",),
+    "tokio_rustls_handshake": (r"\btokio_rustls::",),
     "tmux_nudge_delivery": (r"\btmux_nudge_delivery\b", r"\btmux[^\n]*nudge\b", r"\b(?:send|emit)_tmux_nudge\s*\("),
     "transport_dispatch": (r"\btransport_dispatch\b", r"\bdispatch_transport\s*\(", r"\bTransportDispatcher\b"),
     "transport": (
@@ -219,6 +249,7 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\b(?:reqwest|hyper)::",
         r"\btransport\b",
     ),
+    "trust_policy_duplication": (r"\b(?:struct|enum)\s+\w*(?:Verifier|TrustPolicy)\b",),
 }
 
 # The runtime composition crate performs a deliberately short-lived listener
@@ -405,6 +436,7 @@ class ManifestSectionRule:
 class ManifestDependencyAllowlist:
     owner_manifest_path: Path
     allowed_dependencies: tuple[str, ...]
+    allowed_dev_dependencies: tuple[str, ...] | None
     boundary_record_path: Path | None
 
 
@@ -647,6 +679,7 @@ def manifest_dependency_allowlists(repo_root: Path) -> list[ManifestDependencyAl
             )
         owner_manifest_path = raw_rule.get("owner_manifest_path")
         allowed_dependencies = raw_rule.get("allowed_dependencies")
+        allowed_dev_dependencies = raw_rule.get("allowed_dev_dependencies")
         boundary_record_path = raw_rule.get("boundary_record_path")
         if not isinstance(owner_manifest_path, str) or not owner_manifest_path:
             raise SystemExit(
@@ -658,6 +691,13 @@ def manifest_dependency_allowlists(repo_root: Path) -> list[ManifestDependencyAl
             raise SystemExit(
                 f"[boundaries.manifest_dependency_allowlists][{index}].allowed_dependencies must be an array of non-empty strings"
             )
+        if allowed_dev_dependencies is not None and (
+            not isinstance(allowed_dev_dependencies, list)
+            or not all(isinstance(item, str) and item for item in allowed_dev_dependencies)
+        ):
+            raise SystemExit(
+                f"[boundaries.manifest_dependency_allowlists][{index}].allowed_dev_dependencies must be an array of non-empty strings when present"
+            )
         if boundary_record_path is not None and (
             not isinstance(boundary_record_path, str) or not boundary_record_path
         ):
@@ -668,6 +708,11 @@ def manifest_dependency_allowlists(repo_root: Path) -> list[ManifestDependencyAl
             ManifestDependencyAllowlist(
                 owner_manifest_path=Path(owner_manifest_path),
                 allowed_dependencies=tuple(allowed_dependencies),
+                allowed_dev_dependencies=(
+                    tuple(allowed_dev_dependencies)
+                    if allowed_dev_dependencies is not None
+                    else None
+                ),
                 boundary_record_path=(
                     Path(boundary_record_path)
                     if boundary_record_path is not None
@@ -1704,9 +1749,9 @@ def collect_manifest_dependency_allowlist_violations(
     ``BoundaryRecord.allowed_dependencies`` remains per-seam documentation unless
     a manifest policy explicitly names ``boundary_record_path``. That opt-in
     makes the record and manifest allowlist mechanically identical. This policy
-    intentionally includes dependencies from normal, dev, build, and
-    target-specific sections so a new test dependency cannot silently bypass
-    review.
+    normally covers every dependency section. A rule can opt into an explicit
+    ``allowed_dev_dependencies`` list, which keeps production boundary
+    documentation distinct from test-only packages while still checking both.
     """
     allowlists = manifest_dependency_allowlists(repo_root)
     if not allowlists:
@@ -1798,16 +1843,40 @@ def collect_manifest_dependency_allowlist_violations(
 
         manifest = tomllib_load(info.path)
         actual_dependencies: set[str] = set()
-        for _section_name, dependencies in dependency_sections(manifest):
+        actual_dev_dependencies: set[str] = set()
+        for section_name, dependencies in dependency_sections(manifest):
+            target = (
+                actual_dev_dependencies
+                if section_name == "dev-dependencies" or section_name.endswith(".dev-dependencies")
+                else actual_dependencies
+            )
             for dependency_name, dependency in dependencies.items():
                 package_name = dependency_package_name(dependency_name, dependency)
                 dependency_info = alias_map.get(package_name) or alias_map.get(dependency_name)
-                actual_dependencies.add(
+                target.add(
                     dependency_info.crate_dir_name if dependency_info is not None else package_name
                 )
 
         allowed_dependencies = set(allowlist.allowed_dependencies)
         location = f"{manifest_path.as_posix()} [manifest-dependency-allowlist]"
+        if allowlist.allowed_dev_dependencies is None:
+            actual_dependencies.update(actual_dev_dependencies)
+        else:
+            allowed_dev_dependencies = set(allowlist.allowed_dev_dependencies)
+            for dependency in sorted(actual_dev_dependencies - allowed_dev_dependencies):
+                violations.append(
+                    BoundaryViolation(
+                        location,
+                        f"Cargo dev-dependency {dependency!r} is not allowlisted",
+                    )
+                )
+            for dependency in sorted(allowed_dev_dependencies - actual_dev_dependencies):
+                violations.append(
+                    BoundaryViolation(
+                        location,
+                        f"allowlisted dev-dependency {dependency!r} is not declared by Cargo.toml",
+                    )
+                )
         for dependency in sorted(actual_dependencies - allowed_dependencies):
             violations.append(
                 BoundaryViolation(

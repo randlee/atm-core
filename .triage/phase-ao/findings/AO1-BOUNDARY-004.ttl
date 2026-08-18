@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO1-BOUNDARY-004>
+  a triage:Finding ;
+  triage:findingId "AO1-BOUNDARY-004" ;
+  triage:title "New test assertion re-introduces forbidden 'select' substring, re-triggering boundary lint" ;
+  triage:description "The AO1-REQQA-002 fix commit (bede69ff6) added a new test assertion assert!(!error.message().contains(select)) at crates/peer-tls/src/lib.rs:503, which itself contains the literal substring select and re-triggers the peer-tls boundary lint SQL-keyword collision check. just lint boundaries fails on both ubuntu and windows CI for PR #942 as a result. Reword the assertion so it no longer contains the forbidden token." ;
+  triage:phaseId "phase-ao" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-18T06:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO.1 ;
+  triage:foundAt "2026-08-18T06:04:35Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO1-BOUNDARY-004/ao1-boundary-004-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO1-BOUNDARY-004/ao1-boundary-004-1>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 503 ;
+  triage:snippet "assert!(!error.message().contains(\"select\"));" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "b87d576f925abaec5099055009f6d70da8a57848" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s1-feature/pao-s1-tls-module-rehome> .
+
+<urn:atm:triage:worktree/pao-s1-feature/pao-s1-tls-module-rehome>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pao-s1-tls-module-rehome" ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "b87d576f925abaec5099055009f6d70da8a57848" ;
+  triage:orderIndex 1 .

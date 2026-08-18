@@ -4,6 +4,7 @@
 //! connectors are deliberately introduced by AL.5--AL.7.  It owns the one
 //! route-body encoder and result decoder used after a connector is selected.
 
+#[cfg(test)]
 use std::num::NonZeroU16;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -13,6 +14,7 @@ use std::time::Duration;
 use std::os::unix::fs::MetadataExt;
 
 use async_trait::async_trait;
+use atm_core::PeerIoAdapter;
 use atm_core::api::{
     ApiRequest, ApiResponse, DaemonApiClient, HttpRequest, RequestDeadline, decode_http_response,
     encode_http_request,
@@ -25,29 +27,30 @@ use atm_core::schema::AtmMessageId;
 use atm_core::send::SendRequest;
 use atm_core::types::{HostName, IsoTimestamp};
 
+use axum::body::{Body, to_bytes};
+use hyper::client::conn::http1;
+use hyper_util::rt::TokioIo;
 use reqwest::header::{HeaderName, HeaderValue};
 
-/// Fixed plain-TCP port for direct peer writes.
+/// Fixed direct-peer listener port.
 ///
-/// A host-qualified recipient supplies the remote authority from peer
-/// storage.  Local bind addresses and ports are never operator configuration:
-/// every replacement daemon owns this protocol port on its active IPv4
-/// interfaces.
+/// Local bind addresses and ports are never operator configuration: every
+/// replacement daemon owns this protocol port on its active IPv4 interfaces.
 pub const DIRECT_PEER_TCP_PORT: u16 = 43_101;
 const REQUEST_ID_HEADER: &str = "X-ATM-Request-Id";
+/// Maximum encoded response size accepted from any one daemon peer.
+///
+/// This mirrors the canonical one-mebibyte message cap plus bounded HTTP
+/// envelope overhead. Client response decoding must never let an untrusted
+/// peer choose an allocation size.
+const MAX_RESPONSE_BODY_BYTES: usize = 1024 * 1024 + 64 * 1024;
 
-/// One bounded budget for the selected write connector.
+/// One bounded budget for the capability-authenticated local daemon client.
 ///
 /// CLI and graft deliberately share this value and
-/// [`selected_write_transport`], so a host-qualified write cannot acquire a
-/// different deadline or silently select a different connector by caller.
+/// [`selected_write_transport`], so neither caller can select a peer
+/// connector or acquire a different local admission deadline.
 pub const SAME_HOST_REQUEST_DEADLINE: Duration = Duration::from_secs(3);
-
-/// Returns the fixed direct-peer protocol port.
-#[must_use]
-pub fn direct_peer_port() -> NonZeroU16 {
-    NonZeroU16::new(DIRECT_PEER_TCP_PORT).expect("direct peer port is non-zero")
-}
 
 /// Connector-stage failure vocabulary retained by the shared client before it
 /// becomes the public ATM error contract. Keeping the stage explicit prevents
@@ -122,13 +125,11 @@ pub fn loopback_tcp_client(
     )))
 }
 
-/// Builds the shared typed client for one explicitly configured direct peer.
-///
-/// The physical authority is the only peer-specific input. The existing
-/// [`HttpRuntimeClient`] remains responsible for request encoding, the
-/// canonical route, deadline enforcement, response decoding, and errors.
-/// This adapter deliberately adds neither a peer DTO nor delivery recovery.
-pub fn direct_peer_tcp_client(
+/// Test-only plaintext client retained to exercise the named diagnostic
+/// listener. Production delivery can reach a peer only through the opaque
+/// [`PeerIoAdapter`] below.
+#[cfg(test)]
+pub(crate) fn direct_peer_tcp_client(
     host: HostName,
     port: NonZeroU16,
     request_timeout: Duration,
@@ -140,11 +141,12 @@ pub fn direct_peer_tcp_client(
     )?))
 }
 
+#[cfg(test)]
 pub(crate) fn direct_peer_write_client(
     host: HostName,
     port: NonZeroU16,
     request_timeout: Duration,
-) -> Result<DirectPeerWriteClient, AtmError> {
+) -> Result<DirectPeerWriteClient<DirectPeerTcpConnector>, AtmError> {
     if request_timeout.is_zero() {
         return Err(AtmError::config(
             "direct peer HTTP client request timeout must be greater than zero",
@@ -155,20 +157,38 @@ pub(crate) fn direct_peer_write_client(
     Ok(DirectPeerWriteClient { client })
 }
 
-/// Selects the one physical connector for a canonical write before encoding.
+pub(crate) fn direct_peer_adapter_write_client(
+    host: HostName,
+    peer_io_adapter: Arc<dyn PeerIoAdapter>,
+    request_timeout: Duration,
+) -> Result<DirectPeerWriteClient<PeerIoConnector>, AtmError> {
+    if request_timeout.is_zero() {
+        return Err(AtmError::config(
+            "direct peer HTTP client request timeout must be greater than zero",
+        ));
+    }
+    let connector = PeerIoConnector {
+        host,
+        peer_io_adapter,
+    };
+    let client = Arc::new(HttpRuntimeClient::new(Arc::new(connector), request_timeout));
+    Ok(DirectPeerWriteClient { client })
+}
+
+/// Selects the caller's one capability-authenticated daemon connector.
 ///
-/// An unqualified recipient stays on the caller-supplied, owner-authorized
-/// same-host client. A host-qualified recipient is an explicit direct-peer
-/// request and selects the shared direct-peer HTTP client; configuration or
-/// connection failures never downgrade it to same-host IPC.
+/// A host-qualified recipient is still represented in the canonical write
+/// DTO, but it no longer gives CLI or graft authority to open a peer socket.
+/// The replacement daemon owns the bootstrap-composed [`PeerIoAdapter`] and
+/// performs that one authenticated peer exchange after local admission. This
+/// keeps normal CLI, graft, and acknowledgement delivery on the same opaque
+/// transport boundary; neither a missing configuration nor a failed mTLS
+/// attempt can fall back to a caller-owned plain-TCP connector.
 pub fn selected_write_transport<'client>(
-    request: &SendRequest,
+    _request: &SendRequest,
     same_host_transport: &Arc<dyn DaemonApiClient + Send + Sync + 'client>,
 ) -> Result<Arc<dyn DaemonApiClient + Send + Sync + 'client>, AtmError> {
-    let Some(host) = request.to.as_ref().and_then(|recipient| recipient.host()) else {
-        return Ok(Arc::clone(same_host_transport));
-    };
-    direct_peer_tcp_client(host.clone(), direct_peer_port(), SAME_HOST_REQUEST_DEADLINE)
+    Ok(Arc::clone(same_host_transport))
 }
 
 /// Builds the one selected same-host client for retained write call chains.
@@ -224,10 +244,10 @@ struct LoopbackTcpConnector {
     endpoint_record_path: PathBuf,
 }
 
-/// Reqwest owns DNS, connection and HTTP. This adapter owns only the
-/// configured peer authority; it does not duplicate ATM request processing.
+/// Test-only plaintext connector for the explicitly named diagnostic listener.
+#[cfg(test)]
 #[derive(Debug)]
-struct DirectPeerTcpConnector {
+pub(crate) struct DirectPeerTcpConnector {
     client: reqwest::Client,
     authority: String,
 }
@@ -240,20 +260,29 @@ struct DirectPeerTcpConnector {
 /// write.  Supplying a caller-originated provenance pair is supported for
 /// handoff from an origin writer; otherwise the first peer boundary creates
 /// the immutable pair once.
-pub(crate) struct DirectPeerWriteClient {
-    client: Arc<HttpRuntimeClient<DirectPeerTcpConnector>>,
+pub(crate) struct DirectPeerWriteClient<Connector> {
+    client: Arc<HttpRuntimeClient<Connector>>,
 }
 
-impl boundary::sealed::Sealed for DirectPeerWriteClient {}
+impl<Connector> boundary::sealed::Sealed for DirectPeerWriteClient<Connector> where
+    Connector: Send + Sync
+{
+}
 
 #[async_trait]
-impl DaemonApiClient for DirectPeerWriteClient {
+impl<Connector> DaemonApiClient for DirectPeerWriteClient<Connector>
+where
+    Connector: HttpRuntimeConnector + 'static,
+{
     async fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
         self.execute_with_optional_request_id(request, None).await
     }
 }
 
-impl DirectPeerWriteClient {
+impl<Connector> DirectPeerWriteClient<Connector>
+where
+    Connector: HttpRuntimeConnector,
+{
     pub(crate) async fn execute_with_request_id(
         &self,
         request: ApiRequest,
@@ -303,6 +332,23 @@ impl DirectPeerWriteClient {
     }
 }
 
+/// Opaque mTLS-backed direct-peer connector. Concrete TLS remains behind
+/// `PeerIoAdapter`; this type owns only the existing HTTP/1 client exchange.
+pub(crate) struct PeerIoConnector {
+    host: HostName,
+    peer_io_adapter: Arc<dyn PeerIoAdapter>,
+}
+
+impl std::fmt::Debug for PeerIoConnector {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("PeerIoConnector")
+            .field("host", &self.host)
+            .finish_non_exhaustive()
+    }
+}
+
+#[cfg(test)]
 impl DirectPeerTcpConnector {
     fn new(host: HostName, port: NonZeroU16) -> Result<Self, AtmError> {
         let client = reqwest::Client::builder()
@@ -323,6 +369,7 @@ impl DirectPeerTcpConnector {
 }
 
 #[async_trait]
+#[cfg(test)]
 impl HttpRuntimeConnector for DirectPeerTcpConnector {
     fn connection_target(&self) -> String {
         format!("direct peer `{}`", self.authority)
@@ -356,9 +403,145 @@ impl HttpRuntimeConnector for DirectPeerTcpConnector {
     }
 }
 
+#[async_trait]
+impl HttpRuntimeConnector for PeerIoConnector {
+    fn connection_target(&self) -> String {
+        format!("authenticated direct peer `{}`", self.host)
+    }
+
+    fn deadline_elapsed(&self) -> HttpRuntimeClientFailure {
+        HttpRuntimeClientFailure::PeerConnectTimeout {
+            target: self.host.to_string(),
+            cause: format!(
+                "{} did not establish an authenticated connection before the configured request deadline",
+                self.connection_target()
+            ),
+        }
+    }
+
+    async fn exchange(
+        &self,
+        request: HttpRequest,
+        deadline: RequestDeadline,
+    ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
+        let stream = self
+            .peer_io_adapter
+            .connect(self.host.clone(), deadline)
+            .await
+            .map_err(|error| HttpRuntimeClientFailure::PeerConnect {
+                target: self.host.to_string(),
+                cause: error.to_string(),
+            })?;
+        let remaining = deadline
+            .remaining()
+            .ok_or_else(|| self.deadline_elapsed())?;
+        let (mut sender, connection) =
+            tokio::time::timeout(remaining, http1::handshake(TokioIo::new(stream)))
+                .await
+                .map_err(|_| self.deadline_elapsed())?
+                .map_err(|error| HttpRuntimeClientFailure::PeerConnect {
+                    target: self.host.to_string(),
+                    cause: format!("authenticated HTTP/1 handshake failed: {error}"),
+                })?;
+        let connection_driver = tokio::spawn(async move {
+            if let Err(error) = connection.await {
+                tracing::debug!(%error, "authenticated direct-peer HTTP/1 connection ended");
+            }
+        });
+        let result =
+            exchange_authenticated_peer_request(&mut sender, request, deadline, &self.host).await;
+        stop_connection_driver(connection_driver).await;
+        result
+    }
+}
+
+async fn exchange_authenticated_peer_request(
+    sender: &mut http1::SendRequest<Body>,
+    request: HttpRequest,
+    deadline: RequestDeadline,
+    host: &HostName,
+) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
+    let request = http1_request(request)?;
+    let remaining = deadline
+        .remaining()
+        .ok_or_else(|| direct_peer_deadline_elapsed(host))?;
+    let response = tokio::time::timeout(remaining, sender.send_request(request))
+        .await
+        .map_err(|_| direct_peer_deadline_elapsed(host))?
+        .map_err(|error| HttpRuntimeClientFailure::PeerConnect {
+            target: host.to_string(),
+            cause: format!("authenticated HTTP/1 request failed: {error}"),
+        })?;
+    let status = response.status();
+    let headers = response.headers().clone();
+    let body = to_bytes(Body::new(response.into_body()), MAX_RESPONSE_BODY_BYTES)
+        .await
+        .map_err(|error| {
+            HttpRuntimeClientFailure::ResponseDecode(
+                AtmError::daemon_unavailable(
+                    "authenticated peer HTTP response exceeded the bounded body limit",
+                )
+                .with_cause(error),
+            )
+        })?;
+    let mut builder = axum::http::Response::builder().status(status);
+    for (name, value) in &headers {
+        builder = builder.header(name.as_str(), value.as_bytes());
+    }
+    builder.body(body.to_vec()).map_err(|error| {
+        HttpRuntimeClientFailure::ResponseDecode(
+            AtmError::daemon_unavailable("failed to construct authenticated peer HTTP response")
+                .with_cause(error),
+        )
+    })
+}
+
+fn direct_peer_deadline_elapsed(host: &HostName) -> HttpRuntimeClientFailure {
+    HttpRuntimeClientFailure::PeerConnectTimeout {
+        target: host.to_string(),
+        cause: format!(
+            "authenticated direct peer `{host}` did not establish an authenticated connection before the configured request deadline"
+        ),
+    }
+}
+
+async fn stop_connection_driver(connection_driver: tokio::task::JoinHandle<()>) {
+    // Each direct-peer exchange owns one HTTP/1 connection. It cannot be
+    // reused after this call, so stopping and joining the driver prevents a
+    // detached task from outliving a failed or completed exchange.
+    connection_driver.abort();
+    if let Err(error) = connection_driver.await
+        && !error.is_cancelled()
+    {
+        tracing::debug!(%error, "authenticated direct-peer HTTP/1 driver task ended unexpectedly");
+    }
+}
+
+fn http1_request(
+    request: HttpRequest,
+) -> Result<axum::http::Request<Body>, HttpRuntimeClientFailure> {
+    let mut builder = axum::http::Request::builder()
+        .method(request.method.as_str())
+        .uri(request.path.as_str());
+    for header in request.headers {
+        let (name, value) = header.split_once(':').ok_or_else(|| {
+            HttpRuntimeClientFailure::RequestWrite(format!(
+                "shared HTTP request has a malformed header `{header}`"
+            ))
+        })?;
+        builder = builder.header(name, value.trim_start());
+    }
+    builder.body(Body::from(request.body)).map_err(|error| {
+        HttpRuntimeClientFailure::RequestWrite(format!(
+            "shared HTTP request cannot be encoded for the authenticated peer: {error}"
+        ))
+    })
+}
+
 /// Preserve the direct-peer authority when the shared HTTP exchange fails
 /// before a response.  A host-qualified recipient never uses the local daemon
 /// endpoint, so reporting this as local daemon unavailability is misleading.
+#[cfg(test)]
 fn direct_peer_connection_failure(
     authority: &str,
     failure: HttpRuntimeClientFailure,
@@ -619,16 +802,12 @@ async fn execute_reqwest_request(
         outbound.headers_mut().insert(name, value);
     }
 
-    let response = client.execute(outbound).await.map_err(|source| {
+    let mut response = client.execute(outbound).await.map_err(|source| {
         HttpRuntimeClientFailure::Connect(format!("HTTP connector request failed: {source}"))
     })?;
     let status = response.status();
     let headers = response.headers().clone();
-    let body = response.bytes().await.map_err(|source| {
-        HttpRuntimeClientFailure::ResponseDecode(
-            AtmError::daemon_unavailable("failed to read HTTP response body").with_cause(source),
-        )
-    })?;
+    let body = read_bounded_reqwest_response_body(&mut response).await?;
     let mut builder = axum::http::Response::builder().status(status);
     for (name, value) in &headers {
         builder = builder.header(name.as_str(), value.as_bytes());
@@ -639,6 +818,34 @@ async fn execute_reqwest_request(
                 .with_cause(source),
         )
     })
+}
+
+async fn read_bounded_reqwest_response_body(
+    response: &mut reqwest::Response,
+) -> Result<Vec<u8>, HttpRuntimeClientFailure> {
+    if response
+        .content_length()
+        .is_some_and(|length| length > MAX_RESPONSE_BODY_BYTES as u64)
+    {
+        return Err(HttpRuntimeClientFailure::ResponseDecode(
+            AtmError::daemon_unavailable("HTTP response exceeded the bounded body limit"),
+        ));
+    }
+    let mut body = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(|source| {
+        HttpRuntimeClientFailure::ResponseDecode(
+            AtmError::daemon_unavailable("failed to read HTTP response body").with_cause(source),
+        )
+    })? {
+        let next_len = body.len().saturating_add(chunk.len());
+        if next_len > MAX_RESPONSE_BODY_BYTES {
+            return Err(HttpRuntimeClientFailure::ResponseDecode(
+                AtmError::daemon_unavailable("HTTP response exceeded the bounded body limit"),
+            ));
+        }
+        body.extend_from_slice(&chunk);
+    }
+    Ok(body)
 }
 
 /// One framework-backed client operation for every physical adapter.
@@ -756,21 +963,67 @@ mod tests {
 
     use async_trait::async_trait;
     use atm_core::api::{ApiRequest, DaemonApiClient, HttpRequest, RequestDeadline};
+    use atm_core::boundary::{AcceptedPeerIo, BoxedPeerIo, PeerIoAdapter};
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendRequest};
     use atm_core::test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
-    use atm_core::types::{AgentName, CommandAction, TeamName};
+    use atm_core::types::{AgentName, CommandAction, HostName, TeamName};
+    use axum::body::{Body, to_bytes};
+    use tokio::net::{TcpListener, TcpStream};
 
     use super::{
         DirectPeerTcpConnector, HttpRuntimeClient, HttpRuntimeClientFailure, HttpRuntimeConnector,
-        direct_peer_connection_failure, direct_peer_tcp_client,
+        MAX_RESPONSE_BODY_BYTES, direct_peer_adapter_write_client, direct_peer_connection_failure,
+        direct_peer_tcp_client, read_bounded_reqwest_response_body, selected_write_transport,
     };
 
     #[derive(Default)]
     struct RecordingConnector {
         requests: Mutex<Vec<HttpRequest>>,
         responses: Mutex<VecDeque<Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure>>>,
+    }
+
+    struct RejectingPeerIoAdapter {
+        connect_calls: std::sync::atomic::AtomicUsize,
+    }
+
+    impl atm_core::boundary::sealed::Sealed for RejectingPeerIoAdapter {}
+
+    impl PeerIoAdapter for RejectingPeerIoAdapter {
+        fn accept<'adapter>(
+            &'adapter self,
+            _stream: TcpStream,
+            _deadline: RequestDeadline,
+        ) -> std::pin::Pin<
+            Box<
+                dyn std::future::Future<Output = Result<AcceptedPeerIo, AtmError>>
+                    + Send
+                    + 'adapter,
+            >,
+        > {
+            Box::pin(async {
+                Err(AtmError::validation(
+                    "test transport rejects inbound stream",
+                ))
+            })
+        }
+
+        fn connect<'adapter>(
+            &'adapter self,
+            _peer: HostName,
+            _deadline: RequestDeadline,
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<BoxedPeerIo, AtmError>> + Send + 'adapter>,
+        > {
+            self.connect_calls
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Box::pin(async {
+                Err(AtmError::validation(
+                    "certificate, hostname, pin, or handshake rejected by test transport",
+                ))
+            })
+        }
     }
 
     #[async_trait]
@@ -812,6 +1065,33 @@ mod tests {
     }
 
     #[test]
+    fn host_qualified_write_stays_on_the_local_daemon_client() {
+        let connector = Arc::new(RecordingConnector::default());
+        let same_host_transport: Arc<dyn DaemonApiClient + Send + Sync> =
+            Arc::new(HttpRuntimeClient::new(connector, Duration::from_secs(1)));
+        let request = SendRequest::new(
+            ".".into(),
+            ".".into(),
+            AgentName::from_validated(TEST_SENDER),
+            "recipient@test-team.peer.example.test",
+            TeamName::from_validated(TEST_TEAM),
+            SendMessageSource::Inline("daemon-owned peer selection".to_owned()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("host-qualified request");
+
+        let selected = selected_write_transport(&request, &same_host_transport)
+            .expect("selection remains local and cannot open raw peer TCP");
+        assert!(
+            Arc::ptr_eq(&selected, &same_host_transport),
+            "the daemon owns host-qualified peer transport selection"
+        );
+    }
+
+    #[test]
     fn direct_peer_client_rejects_a_zero_request_budget_before_connecting() {
         let error = direct_peer_tcp_client(
             "peer.example.test".parse().expect("host"),
@@ -821,6 +1101,75 @@ mod tests {
         .err()
         .expect("zero budget must fail before a peer request is attempted");
         assert!(error.message().contains("timeout"));
+    }
+
+    #[tokio::test]
+    async fn authenticated_peer_rejection_never_downgrades_to_plain_tcp() {
+        let adapter = Arc::new(RejectingPeerIoAdapter {
+            connect_calls: std::sync::atomic::AtomicUsize::new(0),
+        });
+        let client = direct_peer_adapter_write_client(
+            "peer.example.test".parse().expect("host"),
+            adapter.clone(),
+            Duration::from_secs(1),
+        )
+        .expect("non-zero request budget");
+
+        let error = client
+            .execute(ApiRequest::new(write_request()))
+            .await
+            .expect_err("transport rejection must not attempt a plaintext second connection");
+        assert_eq!(
+            adapter
+                .connect_calls
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "one authenticated connection attempt is the complete outbound transport path"
+        );
+        assert_eq!(error.code().as_str(), "REMOTE_DELIVERY_UNCONFIRMED");
+        assert!(
+            error
+                .cause()
+                .is_some_and(|cause| cause.contains("certificate, hostname, pin, or handshake")),
+            "the adapter failure remains attributable without changing to plain TCP"
+        );
+    }
+
+    #[tokio::test]
+    async fn peer_response_body_limit_rejects_oversized_payloads() {
+        let error = to_bytes(
+            Body::from(vec![b'x'; MAX_RESPONSE_BODY_BYTES + 1]),
+            MAX_RESPONSE_BODY_BYTES,
+        )
+        .await
+        .expect_err("peer response decoding must cap the allocation size");
+        assert!(error.to_string().contains("length limit"));
+    }
+
+    #[tokio::test]
+    async fn reqwest_response_body_limit_rejects_oversized_payloads() {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind test response server");
+        let address = listener.local_addr().expect("test server address");
+        let router = axum::Router::new().route(
+            "/",
+            axum::routing::get(|| async { vec![b'x'; MAX_RESPONSE_BODY_BYTES + 1] }),
+        );
+        let server = tokio::spawn(async move {
+            axum::serve(listener, router)
+                .await
+                .expect("test response server serves")
+        });
+        let mut response = reqwest::get(format!("http://{address}/"))
+            .await
+            .expect("request test response server");
+        let error = read_bounded_reqwest_response_body(&mut response)
+            .await
+            .expect_err("reqwest response decoding must cap the allocation size");
+        assert!(matches!(error, HttpRuntimeClientFailure::ResponseDecode(_)));
+        server.abort();
+        let _ = server.await;
     }
 
     fn sent_response() -> axum::http::Response<Vec<u8>> {

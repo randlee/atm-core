@@ -33,6 +33,7 @@ pub mod sealed {
 
 mod mail;
 mod message_received_hook_emitter;
+mod peer_io_adapter;
 mod store;
 mod template_composer;
 
@@ -44,6 +45,7 @@ pub use mail::*;
 pub use message_received_hook_emitter::{
     AsyncMessageReceivedHookEmitter, MessageReceivedHookEmitter, MessageReceivedHookSelector,
 };
+pub use peer_io_adapter::{AcceptedPeerIo, BoxedPeerIo, PeerIo, PeerIoAdapter};
 pub use store::*;
 pub use template_composer::{
     RenderedBody, SourceSpan, TemplateComposer, TemplateInspection, TemplateReference,

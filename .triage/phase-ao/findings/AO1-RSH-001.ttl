@@ -1,0 +1,56 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO1-RSH-001>
+  a triage:Finding ;
+  triage:findingId "AO1-RSH-001" ;
+  triage:title "Sync store/cert-load work not spawn_blocking'd on async accept/connect path" ;
+  triage:description "rust-service-hardening-agent found that synchronous certificate-store loading work runs directly on the async TLS accept/connect path in the peer-tls module (feature/pao-s1-tls-module-rehome, PR #942) instead of being wrapped in spawn_blocking, risking executor-thread stalls under load. Identify the exact function(s)/file:line performing this sync work inline on the async path." ;
+  triage:phaseId "phase-ao" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "runtime-hardening" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-08-18T06:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-08-17T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO.1 ;
+  triage:foundAt "2026-08-18T05:31:13Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO1-RSH-001/AO1-RSH-001-R1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO1-RSH-001/AO1-RSH-001-R2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO1-RSH-001/AO1-RSH-001-R1>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 129 ;
+  triage:snippet "let config = self.server_config()?;" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "e41afce8aab312450d39210690601d626eb00998" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s1/e41afce8> .
+
+<urn:atm:triage:occurrence/AO1-RSH-001/AO1-RSH-001-R2>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 151 ;
+  triage:snippet "let (config, port) = self.client_config(&peer)?;" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "e41afce8aab312450d39210690601d626eb00998" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s1/e41afce8> .
+
+<urn:atm:triage:worktree/pao-s1/e41afce8>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s1-tls-module-rehome" ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "e41afce8aab312450d39210690601d626eb00998" ;
+  triage:orderIndex 1 .

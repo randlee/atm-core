@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO1-CLIPPY-002>
+  a triage:Finding ;
+  triage:findingId "AO1-CLIPPY-002" ;
+  triage:title "Clippy build error in peer-tls/src/lib.rs" ;
+  triage:description "Clippy diagnostic: needless_borrow at line 328, column 51. Expression creates a reference which is immediately dereferenced by the compiler. Suggestion: remove the & before generated.cert.der()" ;
+  triage:phaseId "phase-ao" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "build" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-08-18T06:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-08-17T21:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO.1 ;
+  triage:foundAt "2026-08-18T05:31:13Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO1-CLIPPY-002/AO1-S1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO1-CLIPPY-002/AO1-S1-1>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 328 ;
+  triage:snippet "let fingerprint = certificate_fingerprint(&generated.cert.der());" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "e41afce8aab312450d39210690601d626eb00998" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s1-1/e41afce8> .
+
+<urn:atm:triage:worktree/pao-s1-1/e41afce8>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pao-s1-tls-module-rehome" ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "e41afce8aab312450d39210690601d626eb00998" ;
+  triage:orderIndex 1 .

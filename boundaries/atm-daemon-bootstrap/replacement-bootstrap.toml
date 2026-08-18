@@ -17,12 +17,12 @@ constructor = "public"
 roots = ["atm_daemon_bootstrap::run_replacement_daemon"]
 
 [ownership]
-io_owns = ["singleton_owner_lock", "concrete_backend_selection", "receiver_hook_harness_selection", "shutdown_signal_wait"]
-io_forbidden = ["http_server", "raw_http_framing", "direct_rusqlite_calls", "graft_crate_dependency", "replay_or_resend", "tls_adapter"]
+io_owns = ["singleton_owner_lock", "concrete_backend_selection", "receiver_hook_harness_selection", "opaque_peer_io_adapter_composition", "shutdown_signal_wait"]
+io_forbidden = ["http_server", "raw_http_framing", "direct_rusqlite_calls", "graft_crate_dependency", "replay_or_resend", "concrete_rustls_types", "tokio_rustls_handshake", "tls_policy"]
 
 [dependencies]
 allowed_dependents = ["atm", "atm-daemon"]
-allowed_dependencies = ["atm-core", "atm-runtime", "atm-storage-rusqlite", "atm-template-sc-compose", "atm-http-runtime", "tokio", "fs4", "ulid"]
+allowed_dependencies = ["atm-core", "atm-runtime", "atm-storage-rusqlite", "atm-template-sc-compose", "atm-http-runtime", "peer-tls", "tokio", "fs4", "ulid"]
 forbidden_edges = ["atm-daemon -> atm-storage-rusqlite", "atm-daemon -> atm-runtime", "atm-http-runtime -> atm-daemon-bootstrap", "atm-daemon-bootstrap -> atm-graft"]
 
 [references]
@@ -33,7 +33,7 @@ forbidden = []
 request_types = ["core RuntimeAssembly inputs", "core sealed MessageReceivedHookSelector"]
 response_types = ["typed runtime lifecycle outcome"]
 error_types = ["AtmError"]
-notes = ["The concrete storage factory is legal only at this composition boundary; atm-daemon and atm-http-runtime remain backend-neutral."]
+notes = ["The concrete storage factory is legal only at this composition boundary; atm-daemon and atm-http-runtime remain backend-neutral.", "AO.1 permits this one composition root to construct peer-tls in AO.2. The bootstrap receives only the opaque PeerIoAdapter contract and must not configure Rustls or TLS policy itself."]
 
 [testing]
 allowed_test_double_paths = []

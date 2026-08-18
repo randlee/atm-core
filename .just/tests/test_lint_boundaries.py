@@ -900,6 +900,45 @@ allowed_dependencies = ["atm-core", "rusqlite"]
                 rendered,
             )
 
+    def test_manifest_dependency_allowlist_supports_separate_dev_dependencies(self) -> None:
+        """A production boundary need not document test-only packages as runtime edges."""
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            self.write_toml_record(
+                repo_root,
+                "atm-storage-rusqlite",
+                text=BASE_BOUNDARY_TOML.replace('state = "planned"', 'state = "active"'),
+            )
+            config_path = repo_root / ".just/lint-config.toml"
+            config_path.write_text(
+                config_path.read_text(encoding="utf-8")
+                + """
+[[boundaries.manifest_dependency_allowlists]]
+owner_manifest_path = "crates/atm-storage-rusqlite/Cargo.toml"
+boundary_record_path = "boundaries/atm-storage-rusqlite/mail-store.toml"
+allowed_dependencies = ["atm-core", "rusqlite"]
+allowed_dev_dependencies = ["tempfile"]
+""",
+                encoding="utf-8",
+            )
+            manifest_path = repo_root / "crates/atm-storage-rusqlite/Cargo.toml"
+            manifest_path.write_text(
+                manifest_path.read_text(encoding="utf-8")
+                + """
+[dev-dependencies]
+tempfile = "3"
+""",
+                encoding="utf-8",
+            )
+
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            self.assertFalse(
+                any("manifest-dependency-allowlist" in violation for violation in rendered),
+                rendered,
+            )
+
     def test_run_rejects_manifest_dependency_not_allowlisted(self) -> None:
         """The production lint entrypoint must enforce dependency allowlists."""
         with tempfile.TemporaryDirectory() as tempdir:

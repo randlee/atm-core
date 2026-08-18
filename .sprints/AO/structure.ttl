@@ -1,0 +1,8 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:PhaseAO a triage:Phase .
+
+triage:AO-S1 a triage:Sprint ; triage:inPhase triage:PhaseAO ; triage:order 1 ; triage:criteria "docs/plans/phase-ao/sprint-ao1-tls-module-rehome.md" ; triage:branch "feature/pao-s1-tls-module-rehome" .
+triage:AO-S2 a triage:Sprint ; triage:inPhase triage:PhaseAO ; triage:order 2 ; triage:criteria "docs/plans/phase-ao/sprint-ao2-optional-runtime-activation.md" ; triage:branch "feature/pao-s2-optional-runtime-activation" .
+triage:AO-S3 a triage:Sprint ; triage:inPhase triage:PhaseAO ; triage:order 3 ; triage:criteria "docs/plans/phase-ao/sprint-ao3-tls-proof-and-evidence.md" ; triage:branch "feature/pao-s3-tls-proof-and-evidence" .

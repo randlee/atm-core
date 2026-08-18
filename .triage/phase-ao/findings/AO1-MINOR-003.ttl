@@ -1,0 +1,32 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO1-MINOR-003>
+  a triage:Finding ;
+  triage:findingId "AO1-MINOR-003" ;
+  triage:title "Missing negative test for missing client certificate" ;
+  triage:description "quality-mgr flagged (minor, non-blocking) that the peer-tls test suite (feature/pao-s1-tls-module-rehome, PR #942) covers the 'wrong client cert' negative case but not the 'missing client cert' negative case. The suite has: (1) configured_client_certificate_is_accepted_by_one_shot_fixture (positive), (2) mismatched_client_certificate_is_rejected_before_response (wrong cert), (3) rejects_untrusted_client_certificate_before_yielding_a_stream (wrong cert). The gap: no test covers the case where a client does not present a certificate at all (TLS client auth omitted)." ;
+  triage:phaseId "phase-ao" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-08-18T06:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-08-17T22:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO.1 ;
+  triage:foundAt "2026-08-18T05:31:13Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:worktree/feature/pao-s1-tls-module-rehome>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s1-tls-module-rehome" ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "e41afce8aab312450d39210690601d626eb00998" ;
+  triage:orderIndex 1 .

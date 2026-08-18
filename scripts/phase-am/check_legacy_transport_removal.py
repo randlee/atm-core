@@ -45,6 +45,9 @@ RULES = (
     GuardRule("daemon-harness", "daemon graft code or dependency", re.compile(r"\b(?:atm_graft|GraftClient|GraftReceiveHook)\b|^\s*atm-graft\s*="), ("crates/atm-daemon/",)),
     GuardRule("dead-daemon-dispatch", "retired daemon request dispatcher", re.compile(r"\bDaemonRequestDispatcher\b"), ("crates/atm-daemon/",)),
     GuardRule("dead-daemon-dispatch", "retired daemon write dispatcher seam", re.compile(r"\b(?:MessageWriter|PostWriteRouter|run_received_hook)\b"), ("crates/atm-daemon/",)),
+    GuardRule("frozen-legacy-fixtures", "frozen legacy daemon composition", re.compile(r"\b(?:LegacyDaemon|run_legacy_daemon)\b"), ("crates/",)),
+    GuardRule("frozen-legacy-fixtures", "frozen peer TLS interop import", re.compile(r"\batm_peer_tls_interop\b"), ("crates/",)),
+    GuardRule("frozen-legacy-fixtures", "frozen peer TLS interop dependency", re.compile(r"^\s*atm-peer-tls-interop\s*="), ("crates/",)),
 )
 
 

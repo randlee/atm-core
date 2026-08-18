@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO1-BOUNDARY-002>
+  a triage:Finding ;
+  triage:findingId "AO1-BOUNDARY-002" ;
+  triage:title "Boundary TOML missing dev-deps in allowlist" ;
+  triage:description "rust-qa-agent/ruthless-boundary-qa flagged that the boundary manifest allowlist is missing required dev-dependency entries introduced by the peer-tls module rehome (feature/pao-s1-tls-module-rehome, PR #942), contributing to CI lint failures. The lint-config.toml file lists rcgen and tempfile in allowed_dependencies for crates/peer-tls/Cargo.toml, but these are dev-dependencies in the Cargo.toml, not production dependencies. They should be declared in a separate allowed_dev_dependencies field." ;
+  triage:phaseId "phase-ao" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-08-18T06:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-08-18T05:31:50Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO.1 ;
+  triage:foundAt "2026-08-18T05:31:13Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO1-BOUNDARY-002/AO1-BOUNDARY-002-occurrence-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO1-BOUNDARY-002/AO1-BOUNDARY-002-occurrence-1>
+  a triage:Occurrence ;
+  triage:file ".just/lint-config.toml" ;
+  triage:line 154 ;
+  triage:snippet "allowed_dependencies = [atm-core, atm-storage, rcgen, rustls, tempfile, tokio, tokio-rustls]" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "e41afce8aab312450d39210690601d626eb00998" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s1-tls-module-rehome/e41afce8> .
+
+<urn:atm:triage:worktree/pao-s1-tls-module-rehome/e41afce8>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s1-tls-module-rehome" ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "e41afce8aab312450d39210690601d626eb00998" ;
+  triage:orderIndex 1 .
