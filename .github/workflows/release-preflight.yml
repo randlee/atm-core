@@ -63,7 +63,7 @@ jobs:
       - name: Install cargo-deny
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-deny@0.19.9
+          tool: cargo-deny@0.20.2
 
       - name: Install cargo-audit
         uses: taiki-e/install-action@cargo-audit
