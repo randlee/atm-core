@@ -636,6 +636,42 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn connect_rejects_a_disabled_configured_trusted_peer() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let identity = write_identity(&directory, "client", "client.test");
+        let mut disabled_target = trusted_peer("localhost", &identity.fingerprint, 43101);
+        disabled_target.enabled = false;
+        let adapter = PeerTlsAdapter::new(store(
+            identity.certificate,
+            vec![
+                disabled_target,
+                trusted_peer("other.test", &identity.fingerprint, 43101),
+            ],
+        ))
+        .expect("another enabled peer keeps the local TLS configuration valid");
+
+        let result = adapter
+            .connect(
+                "localhost".parse().expect("configured peer host"),
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await;
+        assert!(
+            result.is_err(),
+            "disabled trusted peer must reject before opening a connection"
+        );
+        let error = match result {
+            Ok(_) => unreachable!("rejection was asserted"),
+            Err(error) => error,
+        };
+        assert!(
+            error
+                .message()
+                .contains("trusted peer `localhost` is disabled")
+        );
+    }
+
     #[test]
     fn constructor_rejects_missing_or_invalid_local_certificate_without_secret_output() {
         let missing: Arc<dyn PeerConfigStore> = Arc::new(TestPeerConfigStore {
