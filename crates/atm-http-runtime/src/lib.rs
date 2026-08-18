@@ -1093,6 +1093,82 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn plaintext_and_authenticated_direct_peer_listeners_share_the_canonical_handler() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let handler = Arc::new(RecordingPeerRouter::default());
+        let authenticated = HttpRuntimeBuilder::new(
+            config_with_record(0, temporary_directory.path().join("authenticated.json"))
+                .with_direct_peer_tcp(DirectPeerTcpConfig::ephemeral_for_test()),
+            handler.clone(),
+        )
+        .with_peer_io_adapter(Arc::new(PassthroughPeerIoAdapter {
+            source_host: "authenticated.test".parse().expect("valid test host"),
+            accept_calls: AtomicUsize::new(0),
+        }))
+        .build()
+        .expect("valid authenticated peer configuration")
+        .start()
+        .await
+        .expect("authenticated direct-peer listener starts");
+        let plaintext = HttpRuntimeBuilder::new(
+            config_with_record(0, temporary_directory.path().join("plaintext.json"))
+                .with_direct_peer_tcp(DirectPeerTcpConfig::ephemeral_for_test())
+                .with_plaintext_direct_peer_diagnostic(DirectPeerPlaintextDiagnostic::Test),
+            handler.clone(),
+        )
+        .build()
+        .expect("valid plaintext diagnostic configuration")
+        .start()
+        .await
+        .expect("plaintext direct-peer listener starts");
+
+        for port in [
+            authenticated
+                .direct_peer_address()
+                .expect("authenticated listener is bound")
+                .port(),
+            plaintext
+                .direct_peer_address()
+                .expect("plaintext listener is bound")
+                .port(),
+        ] {
+            let response = direct_peer_tcp_client(
+                "localhost".parse().expect("direct host"),
+                std::num::NonZeroU16::new(port).expect("non-zero port"),
+                Duration::from_secs(1),
+            )
+            .expect("direct typed client")
+            .execute(ApiRequest::new(write_request()))
+            .await
+            .expect("direct peer request reaches the shared handler");
+            assert!(matches!(
+                response.into_inner(),
+                ResponseEnvelope::Error(ref error)
+                    if error.code().as_str() == "ATM_MESSAGE_VALIDATION_FAILED"
+            ));
+        }
+        {
+            let calls = handler.calls.lock().expect("recorded peer calls");
+            assert_eq!(calls.len(), 2, "both listeners invoke the one handler");
+            assert!(
+                calls
+                    .iter()
+                    .all(|(_, ingress)| *ingress == AuthenticatedIngress::Peer)
+            );
+        }
+        authenticated
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("authenticated runtime shuts down cleanly");
+        plaintext
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("plaintext runtime shuts down cleanly");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn rejected_peer_adapter_never_reaches_the_http_router() {
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let config = config_with_record(0, temporary_directory.path().join("local-http.json"))
