@@ -18,7 +18,7 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-18T15:45:00Z"^^xsd:dateTime ;
-  triage:foundIn triage:AO-S2 ;
+  triage:foundIn triage:AO.2 ;
   triage:foundAt "2026-08-18T15:41:24Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AO2-BOUNDARY-FALSEPOSITIVE-001/AO2-S2-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AO2-BOUNDARY-FALSEPOSITIVE-001/AO2-S2-2> ;

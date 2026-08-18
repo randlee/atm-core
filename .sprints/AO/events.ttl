@@ -2,15 +2,15 @@
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
 triage:a1 a triage:Assignment ;
-    triage:ofSprint triage:AO-S1 ;
+    triage:ofSprint triage:AO.1 ;
     triage:assignedTo "arch-ctm" ;
     triage:assignedAt "2026-08-18T04:46:02Z"^^xsd:dateTime .
 
 triage:c1 a triage:Completion ;
-    triage:ofSprint triage:AO-S1 ;
+    triage:ofSprint triage:AO.1 ;
     triage:at "2026-08-18T05:18:37Z"^^xsd:dateTime .
 
 triage:a2 a triage:Assignment ;
-    triage:ofSprint triage:AO-S2 ;
+    triage:ofSprint triage:AO.2 ;
     triage:assignedTo "arch-ctm" ;
     triage:assignedAt "2026-08-17T00:00:00Z"^^xsd:dateTime .

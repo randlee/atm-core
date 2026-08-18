@@ -20,7 +20,7 @@
   triage:closedAt "2026-08-18T08:15:00Z"^^xsd:dateTime ;
   triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-08-18T07:30:00Z"^^xsd:dateTime ;
-  triage:foundIn triage:AO-S2 ;
+  triage:foundIn triage:AO.2 ;
   triage:foundAt "2026-08-18T07:15:43Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AO2-RSH-003/ao2-rsh-003-1> ;
   triage:triageRecordVersion "1" .
