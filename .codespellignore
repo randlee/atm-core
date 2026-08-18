@@ -4,3 +4,6 @@ de
 
 # Add project-specific false positives here if codespell reports any.
 FO
+
+# TTL predicate spelling.
+foundIn
