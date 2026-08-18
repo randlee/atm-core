@@ -5,13 +5,13 @@
 
 ## Goal
 
-Converge ATM on the unmodified shared `sc-compose` publishing kit and make a
+Converge ATM on the unmodified shared `sc-publish` publishing kit and make a
 single manifest-derived toolchain and validation plan govern both preflight and
 publish. A release is not eligible until this plan's proof gates pass.
 
 ## Invariants
 
-1. Shared-kit files are copied only by the canonical `sc-compose` sync tool
+1. Shared-kit files are copied only by the canonical `sc-publish` sync tool
    from an immutable, recorded source commit. Its `--dry-run` diff and
    verification mode establish exact parity. No copied file is patched locally.
 2. ATM-specific policy lives only in ATM manifest data or ATM-namespaced
@@ -23,7 +23,7 @@ publish. A release is not eligible until this plan's proof gates pass.
 
 ## Shared-kit freeze rule
 
-ATM must **not** modify shared `sc-compose` code, workflows, actions,
+ATM must **not** modify shared `sc-publish` code, workflows, actions,
 contracts, tests, or copied files. The only allowed ATM-side changes are:
 
 - byte-for-byte synchronization from an accepted upstream source commit;
@@ -32,10 +32,10 @@ contracts, tests, or copied files. The only allowed ATM-side changes are:
 
 If a preflight or publishing defect appears to require a shared-file change,
 the work stops. The defect and the required behavior are recorded in this plan,
-then proposed and resolved upstream in `sc-compose`. ATM adopts the next
+then proposed and resolved upstream in `sc-publish`. ATM adopts the next
 accepted source revision by sync; it does not make a local workaround.
 
-The normative upstream source is `sc-compose/docs/publish-kit-requirements.md`.
+The normative upstream source is `sc-publish/docs/publish-kit-requirements.md`.
 Its channel contract is `release/publish-channel-contracts.toml`; credentials,
 environments, public registry endpoints, and liveness semantics belong there,
 not in ATM's artifact manifest or workflow literals.
@@ -60,9 +60,55 @@ ATM workflow edits.
 | ATM installed-document helpers | ATM | Extract to `scripts/atm_release_artifacts.py`; ATM callers import that module. |
 | Credential approval and execution | `publisher` / GitHub environment | Publisher supplies evidence; a person authorizes real publication. |
 
-The frozen source revision is selected after its `sc-compose` PR is accepted.
+The frozen source revision is selected after its `sc-publish` PR is accepted.
 The canonical sync tool's manifest records that SHA and the complete owned-path
 list; ATM does not maintain a second sync implementation or metadata format.
+
+## Canonical overlay audit
+
+The canonical `sc-publish` `sync-overlay.sh --dry-run` initially found 31 ATM
+differences. Each has been reviewed below. They are one atomic, byte-for-byte
+overlay: ATM must not select or edit individual files. A channel remains dormant
+until ATM declares it in its repository-specific artifact manifest.
+
+| Canonical path | Why it is required | Activation / proof |
+| --- | --- | --- |
+| `.claude/agents/publisher.md` | Replaces ATM-specific release prose with the manifest-driven coordinator contract. | Publisher evals and structured receipt. |
+| `.claude/agents/publisher-channel-protocol.md` | Defines evidence-gated worker behavior and isolated retry. | Channel-worker eval. |
+| `.claude/agents/crates-io-publisher.md` | Owns crates inquiry, publication, and partial retry. | Existing shared crates receipt. |
+| `.claude/agents/github-release-publisher.md` | Owns immutable GitHub Release creation only. | Root-release preflight. |
+| `.claude/agents/homebrew-publisher.md` | Owns manifest-declared Homebrew work. | Dormant unless Homebrew is declared. |
+| `.claude/agents/pypi-publisher.md` | Owns normalized PyPI/TestPyPI inquiry and publication. | Authorized TestPyPI rehearsal. |
+| `.claude/agents/scoop-publisher.md` | Owns manifest-declared Scoop work. | Dormant unless Scoop is declared. |
+| `.claude/agents/winget-publisher.md` | Owns manifest-declared winget work. | Dormant unless winget is declared. |
+| `.claude/skills/publishing/SKILL.md` | Provides the shared launch and release discipline. | Publishing skill evaluation. |
+| `.claude/skills/publishing/agents/openai.yaml` | Registers the shared skill for discovery. | Skill discovery check. |
+| `.claude/skills/publishing/evals/channel-name-inquiry.md` | Tests read-only registry inquiry delegation. | Shared evaluation. |
+| `.claude/skills/publishing/evals/publisher-preflight.md` | Tests non-disclosing complete preflight behavior. | Shared evaluation. |
+| `.claude/skills/publishing/evals/publisher-recovery.md` | Tests retry of only failed channels. | Shared evaluation. |
+| `.claude/skills/publishing/preflight.xml.j2` | Supplies the canonical preflight task envelope. | Rendered-task test. |
+| `.claude/skills/publishing/publish.xml.j2` | Supplies the canonical publish/retry task envelope. | Rendered-task test. |
+| `.claude/skills/publishing/ref/channel-contracts.md` | Documents operation of the machine-readable channel contract. | Source-parity check. |
+| `.claude/skills/publishing/ref/release-state-strategy.md` | Makes readiness and final-main preflights distinct. | Publisher preflight eval. |
+| `.github/actions/extract-published-renderer/action.yml` | Safely extracts a verified release renderer for manifest-driven channels. | Channel workflow test. |
+| `.github/actions/verify-published-release/action.yml` | Requires an immutable, non-draft release and declared assets. | Channel workflow test. |
+| `.github/workflows/release-preflight.yml` | Runs shared complete, non-disclosing preflight and emits receipts. | Real preflight dispatch. |
+| `.github/workflows/release.yml` | Uses the same resolved plan/tooling to build, publish, and release. | Preflight/release digest comparison. |
+| `.github/workflows/pypi-publish.yml` | Allows PyPI/TestPyPI retry from immutable release assets. | Authorized TestPyPI rehearsal. |
+| `.github/workflows/homebrew-publish.yml` | Allows independent manifest-driven Homebrew retry. | Dormant unless Homebrew is declared. |
+| `.github/workflows/scoop-publish.yml` | Allows independent manifest-driven Scoop retry. | Dormant unless Scoop is declared. |
+| `.github/workflows/winget-publish.yml` | Allows independent manifest-driven winget retry. | Dormant unless winget is declared. |
+| `docs/publish-kit-requirements.md` | Carries the normative shared requirements in the consumer. | Review against upstream SHA. |
+| `release/publish-channel-contracts.toml` | Centralizes channel names, secret names, environments, endpoints, and liveness rules. | Contract/parser tests. |
+| `scripts/release_manifest.py` | Parses manifest plus channel contract without workflow literals. | Manifest parser tests. |
+| `scripts/release_artifacts.py` | Resolves plans, receipts, registry checks, version checks, and release assets. | Shared helper test suite. |
+| `scripts/release_gate.sh` | Enforces main/develop convergence and manifest version checks. | Gate test on an eligible candidate. |
+| `scripts/tests/test_release_artifacts.py` | Regression coverage for the shared helper and manifest contract. | Run unchanged after sync. |
+
+The source at `sc-publish` `develop` (`579b477d555b40754cba8243c7e72848e3590bca`)
+was synchronized into the ATM staging worktree using only the canonical script;
+a second `--dry-run` reported **in sync**. That proves source parity, not
+runtime readiness.
 
 ## Required shared-kit contract
 
