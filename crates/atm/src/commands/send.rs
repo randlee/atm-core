@@ -17,6 +17,7 @@ use crate::commands::caller_context::{
     CallerChatIdOverride, CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride,
     resolve_cli_mutation_caller_context, resolve_cli_mutation_caller_context_with_overrides,
 };
+use crate::commands::sender_roster::unrostered_sender_warning;
 use crate::composition::{
     AtmHomePath, CliComposition, InvocationDir, resolve_command_runtime_context,
 };
@@ -137,7 +138,13 @@ impl SendCommand {
             InvocationDir::new(&current_dir),
             AtmHomePath::new(&home_dir),
         )?;
-        let outcome = composition.send(request).await?;
+        let caller_identity = request.caller_identity.clone();
+        let caller_team = request.caller_team.clone();
+        let mut outcome = composition.send(request).await?;
+
+        if let Some(warning) = unrostered_sender_warning(&caller_identity, &caller_team) {
+            outcome.warnings.push(warning);
+        }
 
         output::print_send_result(&outcome, json)
     }
