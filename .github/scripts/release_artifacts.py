@@ -33,6 +33,7 @@ from release_manifest import (
     package_name,
     workspace_members,
     workspace_version,
+    validate_publish_order,
 )
 
 
@@ -865,6 +866,11 @@ def main() -> int:
     p.add_argument("--manifest", required=True)
     p.add_argument("--workspace-toml", required=True)
     p.set_defaults(func=cmd_validate_manifest)
+
+    p = sub.add_parser("validate-publish-order")
+    p.add_argument("--manifest", required=True)
+    p.add_argument("--workspace-toml", required=True)
+    p.set_defaults(func=validate_publish_order)
 
     p = sub.add_parser("list-publish-plan")
     p.add_argument("--manifest", required=True)

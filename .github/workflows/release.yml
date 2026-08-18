@@ -63,19 +63,19 @@ jobs:
 
       - name: Verify requested version matches workspace
         run: |
-          python3 scripts/release_artifacts.py verify-version \
+          python3 .github/scripts/release_artifacts.py verify-version \
             --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
             --workspace-toml Cargo.toml \
             --version '${{ steps.meta.outputs.release_version }}'
 
       - name: Verify release version lockstep
         run: |
-          python3 scripts/release_artifacts.py verify-version-lockstep \
+          python3 .github/scripts/release_artifacts.py verify-version-lockstep \
             --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
             --workspace-toml Cargo.toml
 
       - name: Run release gate
-        run: scripts/release_gate.sh origin/main origin/develop '${{ steps.meta.outputs.release_version }}' "${RELEASE_ARTIFACT_MANIFEST}"
+        run: .github/scripts/release_gate.sh origin/main origin/develop '${{ steps.meta.outputs.release_version }}' "${RELEASE_ARTIFACT_MANIFEST}"
 
       - name: Ensure tag is correct or create it
         id: release-ref
@@ -138,7 +138,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bin_args="$(python3 scripts/release_artifacts.py cargo-build-bin-args --manifest "${RELEASE_ARTIFACT_MANIFEST}")"
+          bin_args="$(python3 .github/scripts/release_artifacts.py cargo-build-bin-args --manifest "${RELEASE_ARTIFACT_MANIFEST}")"
           cargo build --release --target ${{ matrix.target }} ${bin_args}
 
       - name: Package manifest-declared release archive
@@ -160,7 +160,7 @@ jobs:
               subprocess.check_output(
                   [
                       "python3",
-                      "scripts/release_artifacts.py",
+                      ".github/scripts/release_artifacts.py",
                       "release-package-config",
                       "--manifest",
                       os.environ["RELEASE_ARTIFACT_MANIFEST"],
@@ -254,7 +254,7 @@ jobs:
 
           while IFS='|' read -r package wait_secs; do
             publish_if_missing "$package" "${wait_secs:-0}"
-          done < <(python3 scripts/release_artifacts.py list-publish-plan --manifest "${RELEASE_ARTIFACT_MANIFEST}")
+          done < <(python3 .github/scripts/release_artifacts.py list-publish-plan --manifest "${RELEASE_ARTIFACT_MANIFEST}")
 
   release-plan:
     needs: gate-and-tag
@@ -272,9 +272,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "release_target_matrix=$(python3 scripts/release_artifacts.py release-target-matrix --manifest release/publish-artifacts.toml)" >> "$GITHUB_OUTPUT"
-          echo "python_wheel_matrix=$(python3 scripts/release_artifacts.py python-wheel-matrix --manifest release/publish-artifacts.toml)" >> "$GITHUB_OUTPUT"
-          echo "python_sdist_matrix=$(python3 scripts/release_artifacts.py python-sdist-matrix --manifest release/publish-artifacts.toml)" >> "$GITHUB_OUTPUT"
+          echo "release_target_matrix=$(python3 .github/scripts/release_artifacts.py release-target-matrix --manifest release/publish-artifacts.toml)" >> "$GITHUB_OUTPUT"
+          echo "python_wheel_matrix=$(python3 .github/scripts/release_artifacts.py python-wheel-matrix --manifest release/publish-artifacts.toml)" >> "$GITHUB_OUTPUT"
+          echo "python_sdist_matrix=$(python3 .github/scripts/release_artifacts.py python-sdist-matrix --manifest release/publish-artifacts.toml)" >> "$GITHUB_OUTPUT"
 
   build-python-wheels:
     needs: [gate-and-tag, release-plan]
@@ -351,7 +351,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/release_artifacts.py verify-python-release-assets \
+          python3 .github/scripts/release_artifacts.py verify-python-release-assets \
             --manifest release/publish-artifacts.toml \
             --asset-dir dist
       - name: Publish wheels and sdist to TestPyPI

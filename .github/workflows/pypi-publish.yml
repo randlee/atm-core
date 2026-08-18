@@ -45,7 +45,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "config=$(python3 scripts/release_artifacts.py channel-config --manifest release/publish-artifacts.toml --channel pypi)" >> "$GITHUB_OUTPUT"
+          echo "config=$(python3 .github/scripts/release_artifacts.py channel-config --manifest release/publish-artifacts.toml --channel pypi)" >> "$GITHUB_OUTPUT"
 
   publish:
     needs: verify-release
@@ -70,7 +70,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/release_artifacts.py verify-python-release-assets \
+          python3 .github/scripts/release_artifacts.py verify-python-release-assets \
             --manifest release/publish-artifacts.toml \
             --asset-dir release-assets \
             --copy-to dist

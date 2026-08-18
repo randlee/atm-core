@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -176,6 +177,155 @@ class InstallValuesTests(unittest.TestCase):
             path.write_text("{}", encoding="utf-8")
             with self.assertRaisesRegex(Exception, "release must be an object"):
                 INSTALL.load_install_values(path)
+
+    def test_install_places_executable_release_helpers_at_every_workflow_path(self) -> None:
+        """The byte-exact overlay keeps helpers under .github/scripts/.
+
+        This exercises a real install into a temporary consumer. It prevents a
+        parity-only check from accepting workflows that still call an obsolete
+        consumer-local scripts/ path.
+        """
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            consumer = root / "consumer"
+            consumer.mkdir()
+            input_path = root / "install.json"
+            input_path.write_text(json.dumps(self.valid_values()), encoding="utf-8")
+
+            def render_empty_toml(_template: Path, _values: dict[str, object], output: Path) -> None:
+                output.write_text("schema_version = 1\n", encoding="utf-8")
+
+            with (
+                patch.object(INSTALL, "render_template", side_effect=render_empty_toml),
+                patch.object(sys, "argv", [str(INSTALLER), "--input", str(input_path), str(consumer)]),
+            ):
+                self.assertEqual(INSTALL.main(), 0)
+
+            artifacts = consumer / ".github" / "scripts" / "release_artifacts.py"
+            gate = consumer / ".github" / "scripts" / "release_gate.sh"
+            self.assertTrue(artifacts.is_file())
+            self.assertTrue(gate.is_file())
+
+            workflows = (
+                "release.yml",
+                "release-preflight.yml",
+                "pypi-publish.yml",
+                "homebrew-publish.yml",
+                "scoop-publish.yml",
+                "winget-publish.yml",
+            )
+            for name in workflows:
+                text = (consumer / ".github" / "workflows" / name).read_text(encoding="utf-8")
+                self.assertIn(".github/scripts/release_artifacts.py", text, name)
+                self.assertNotIn("python3 scripts/release_artifacts.py", text, name)
+            release = (consumer / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+            preflight = (consumer / ".github" / "workflows" / "release-preflight.yml").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn(".github/scripts/release_gate.sh", release)
+            self.assertNotIn("run: scripts/release_gate.sh", release)
+            self.assertIn(".github/scripts/release_artifacts.py validate-publish-order", preflight)
+            self.assertNotIn("scripts/ci/validate_publish_order.sh", preflight)
+            self.assertNotIn("docs/publishing-agent.md", preflight)
+            packaged_runtime_files = (
+                list((consumer / ".github" / "workflows").glob("*.yml"))
+                + list((consumer / ".github" / "scripts").glob("*.py"))
+                + list((consumer / ".github" / "scripts").glob("*.sh"))
+                + list((consumer / ".github" / "actions").rglob("action.yml"))
+            )
+            for path in packaged_runtime_files:
+                self.assertNotRegex(
+                    path.read_text(encoding="utf-8"),
+                    r"(?<![./\\w])scripts/",
+                    path.relative_to(consumer).as_posix(),
+                )
+
+            pending = list((consumer / ".github" / "workflows").glob("*.yml"))
+            seen: set[Path] = set()
+            while pending:
+                source = pending.pop()
+                if source in seen:
+                    continue
+                seen.add(source)
+                for action_name in re.findall(
+                    r"uses:\s+\./\.github/actions/([^\s]+)", source.read_text(encoding="utf-8")
+                ):
+                    action = consumer / ".github" / "actions" / action_name / "action.yml"
+                    self.assertTrue(action.is_file(), action.relative_to(consumer).as_posix())
+                    pending.append(action)
+
+            helper = subprocess.run(
+                [sys.executable, str(artifacts), "validate-publish-order", "--help"],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(helper.returncode, 0, helper.stderr)
+            (consumer / "Cargo.toml").write_text(
+                '[workspace]\nmembers = ["crates/base", "crates/leaf"]\n', encoding="utf-8"
+            )
+            base = consumer / "crates" / "base"
+            leaf = consumer / "crates" / "leaf"
+            base.mkdir(parents=True)
+            leaf.mkdir(parents=True)
+            (base / "Cargo.toml").write_text(
+                '[package]\nname = "base"\nversion = "1.0.0"\n', encoding="utf-8"
+            )
+            (leaf / "Cargo.toml").write_text(
+                '[package]\nname = "leaf"\nversion = "1.0.0"\n\n'
+                '[dependencies]\nbase = { path = "../base" }\n',
+                encoding="utf-8",
+            )
+            manifest = consumer / "release" / "publish-artifacts.toml"
+            manifest.write_text(
+                "\n".join(
+                    (
+                        "schema_version = 1",
+                        "",
+                        "[[crates]]",
+                        'artifact = "base"',
+                        'package = "base"',
+                        'cargo_toml = "crates/base/Cargo.toml"',
+                        "publish = true",
+                        "publish_order = 1",
+                        "wait_after_publish_seconds = 0",
+                        "",
+                        "[[crates]]",
+                        'artifact = "leaf"',
+                        'package = "leaf"',
+                        'cargo_toml = "crates/leaf/Cargo.toml"',
+                        "publish = true",
+                        "publish_order = 2",
+                        "wait_after_publish_seconds = 0",
+                        "",
+                    )
+                ),
+                encoding="utf-8",
+            )
+            order = subprocess.run(
+                [
+                    sys.executable,
+                    str(artifacts),
+                    "validate-publish-order",
+                    "--manifest",
+                    str(manifest),
+                    "--workspace-toml",
+                    str(consumer / "Cargo.toml"),
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(order.returncode, 0, order.stderr)
+            self.assertIn("matches the workspace dependency graph", order.stdout)
+            gate_check = subprocess.run(
+                ["bash", "-n", str(gate)],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(gate_check.returncode, 0, gate_check.stderr)
 
 
 if __name__ == "__main__":

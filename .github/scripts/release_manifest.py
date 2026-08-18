@@ -71,6 +71,75 @@ def package_name(cargo_toml: Path) -> str:
     return data["package"]["name"]
 
 
+def workspace_dependency_names(crate_toml: Path, workspace_toml: Path) -> set[str]:
+    """Return dependencies that resolve to another package in this workspace."""
+    workspace_root = workspace_toml.parent.resolve()
+    workspace_data = tomllib.loads(workspace_toml.read_text(encoding="utf-8"))
+    workspace_deps = workspace_data.get("workspace", {}).get("dependencies", {})
+    workspace_packages = {
+        package_name(workspace_root / member / "Cargo.toml")
+        for member in workspace_members(workspace_toml)
+        if (workspace_root / member / "Cargo.toml").is_file()
+    }
+    crate_data = tomllib.loads(crate_toml.read_text(encoding="utf-8"))
+    crate_dir = crate_toml.parent
+    dependencies: set[str] = set()
+
+    def resolve(name: str, spec: object) -> str | None:
+        if isinstance(spec, str):
+            return name if name in workspace_packages else None
+        if not isinstance(spec, dict):
+            return None
+        if spec.get("workspace") is True:
+            workspace_spec = workspace_deps.get(name, {})
+            if isinstance(workspace_spec, dict):
+                package = workspace_spec.get("package", name)
+                if "path" in workspace_spec or package in workspace_packages:
+                    return package
+            return name if name in workspace_packages else None
+        package = spec.get("package", name)
+        if "path" in spec and (crate_dir / spec["path"]).resolve().is_relative_to(workspace_root):
+            return package
+        return package if package in workspace_packages else None
+
+    def collect(table: object) -> None:
+        if not isinstance(table, dict):
+            return
+        for name, spec in table.items():
+            package = resolve(name, spec)
+            if package:
+                dependencies.add(package)
+
+    collect(crate_data.get("dependencies", {}))
+    collect(crate_data.get("build-dependencies", {}))
+    for target in crate_data.get("target", {}).values():
+        if isinstance(target, dict):
+            collect(target.get("dependencies", {}))
+            collect(target.get("build-dependencies", {}))
+    return dependencies
+
+
+def validate_publish_order(args: object) -> int:
+    """Check that package publication order follows workspace dependencies."""
+    manifest = load_manifest(Path(args.manifest))
+    workspace_toml = Path(args.workspace_toml)
+    publishable = [crate for crate in manifest["crates"] if crate["publish"]]
+    order = {crate["package"]: crate["publish_order"] for crate in publishable}
+    violations = []
+    for crate in publishable:
+        crate_toml = workspace_toml.parent / crate["cargo_toml"]
+        for dependency in sorted(workspace_dependency_names(crate_toml, workspace_toml)):
+            if dependency in order and order[crate["package"]] <= order[dependency]:
+                violations.append(
+                    f"{crate['package']} (publish_order={order[crate['package']]}) depends on "
+                    f"{dependency} (publish_order={order[dependency]})"
+                )
+    if violations:
+        raise SystemExit("publish_order violation(s):\n  - " + "\n  - ".join(violations))
+    print("ok: publish_order matches the workspace dependency graph")
+    return 0
+
+
 def workspace_version(workspace_toml: Path) -> str:
     data = tomllib.loads(workspace_toml.read_text(encoding="utf-8"))
     return data["workspace"]["package"]["version"]

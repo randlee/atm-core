@@ -47,7 +47,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "plan=$(python3 scripts/release_artifacts.py preflight-secret-plan --manifest "${RELEASE_ARTIFACT_MANIFEST}")" >> "$GITHUB_OUTPUT"
+          echo "plan=$(python3 .github/scripts/release_artifacts.py preflight-secret-plan --manifest "${RELEASE_ARTIFACT_MANIFEST}")" >> "$GITHUB_OUTPUT"
 
       - id: repository_secrets
         name: Verify required release secrets are available
@@ -201,28 +201,30 @@ jobs:
         name: Validate manifest completeness
         continue-on-error: true
         run: |
-          python3 scripts/release_artifacts.py validate-manifest \
+          python3 .github/scripts/release_artifacts.py validate-manifest \
             --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
             --workspace-toml Cargo.toml
 
       - id: publish_order
         name: Validate publish_order dependency graph
         continue-on-error: true
-        run: bash scripts/ci/validate_publish_order.sh
+        run: |
+          python3 .github/scripts/release_artifacts.py validate-publish-order \
+            --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
+            --workspace-toml Cargo.toml
 
       - id: helpers
         name: Verify release helper files exist
         continue-on-error: true
         run: |
-          test -f scripts/release_gate.sh
-          test -f docs/publishing-agent.md
+          test -f .github/scripts/release_gate.sh
 
       - id: version
         name: Verify requested version matches workspace
         if: ${{ always() && steps.meta.outcome == 'success' }}
         continue-on-error: true
         run: |
-          python3 scripts/release_artifacts.py verify-version \
+          python3 .github/scripts/release_artifacts.py verify-version \
             --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
             --workspace-toml Cargo.toml \
             --version '${{ steps.meta.outputs.release_version }}'
@@ -231,7 +233,7 @@ jobs:
         name: Verify release version lockstep
         continue-on-error: true
         run: |
-          python3 scripts/release_artifacts.py verify-version-lockstep \
+          python3 .github/scripts/release_artifacts.py verify-version-lockstep \
             --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
             --workspace-toml Cargo.toml
 
@@ -240,7 +242,7 @@ jobs:
         if: ${{ always() && steps.meta.outcome == 'success' }}
         continue-on-error: true
         run: |
-          python3 scripts/release_artifacts.py check-version-unpublished \
+          python3 .github/scripts/release_artifacts.py check-version-unpublished \
             --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
             --version '${{ steps.meta.outputs.release_version }}'
 
@@ -285,7 +287,7 @@ jobs:
                 failures+=("${channel}/${registry}: registry state for ${normalized_name}@${expected_version} is indeterminate (project=${project_status}, version=${version_status}).")
                 ;;
             esac
-          done < <(python3 scripts/release_artifacts.py public-registry-check-plan \
+          done < <(python3 .github/scripts/release_artifacts.py public-registry-check-plan \
             --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
             --version '${{ steps.meta.outputs.release_version }}' \
             | jq -r '.checks[] | [.channel, .agent, .registry, .name, .normalized_name, .expected_version, .project_lookup_url, .version_lookup_url, .version_policy] | @tsv')
@@ -303,7 +305,7 @@ jobs:
           set -euo pipefail
           while IFS='|' read -r package _; do
             cargo package -p "$package" --locked --allow-dirty
-          done < <(python3 scripts/release_artifacts.py list-publish-plan --manifest "${RELEASE_ARTIFACT_MANIFEST}")
+          done < <(python3 .github/scripts/release_artifacts.py list-publish-plan --manifest "${RELEASE_ARTIFACT_MANIFEST}")
 
       - id: github_release_permissions
         name: Verify GitHub Release workflow permissions
@@ -348,7 +350,7 @@ jobs:
             --arg registry_state "${REGISTRY_STATE}" \
             --arg github_release_permissions "${GITHUB_RELEASE_PERMISSIONS}" \
             '{ownership: $ownership, release_metadata: $release_metadata, repository_secrets: $repository_secrets, repository_secret_channels: $repository_secret_channels, environment_secrets: $environment_secrets, credential_liveness: $credential_liveness, credential_liveness_channels: $credential_liveness_channels, registry_state: $registry_state, github_release_permissions: $github_release_permissions}')"
-          results="$(python3 scripts/release_artifacts.py channel-preflight-results \
+          results="$(python3 .github/scripts/release_artifacts.py channel-preflight-results \
             --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
             --outcomes "${outcomes}" \
             --tag "${RELEASE_TAG}")"

@@ -35,7 +35,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          config="$(python3 scripts/release_artifacts.py channel-config --manifest release/publish-artifacts.toml --channel scoop)"
+          config="$(python3 .github/scripts/release_artifacts.py channel-config --manifest release/publish-artifacts.toml --channel scoop)"
           echo "channel_config=${config}" >> "$GITHUB_OUTPUT"
           {
             echo 'asset_patterns<<EOF'

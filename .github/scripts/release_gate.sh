@@ -33,11 +33,11 @@ if ! git diff --quiet "$MAIN_REF" "$DEVELOP_REF"; then
   fail "$DEVELOP_REF differs in content from $MAIN_REF (merge develop->main before release)"
 fi
 
-python3 scripts/release_artifacts.py check-version-unpublished \
+python3 .github/scripts/release_artifacts.py check-version-unpublished \
   --manifest "$MANIFEST" \
   --version "$VERSION" >/dev/null
 
-python3 scripts/release_artifacts.py verify-version-lockstep \
+python3 .github/scripts/release_artifacts.py verify-version-lockstep \
   --manifest "$MANIFEST" \
   --workspace-toml Cargo.toml >/dev/null
 

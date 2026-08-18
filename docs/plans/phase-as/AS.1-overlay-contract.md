@@ -43,6 +43,9 @@ manifest behavior change in ATM.
 - `sc-publish` promotion baseline
   `240fd52` is reachable.
 - The canonical package installer is available from that source.
+- The current synchronization candidate is `sc-publish/develop@5e49b6ac` (PR
+  #15). It is not accepted for activation until its generated artifact manifest
+  passes the copied validator.
 
 ## Hard Dependencies
 
@@ -159,7 +162,7 @@ python3 "$PUBLISH_KIT_SOURCE/plugins/sc-publish/install.py" --help
 | `sc-publish` #12 — `extra_validations` runner/evidence | safety-load-bearing | Must be accepted and synchronized before AS.3. |
 | `sc-publish` #13 — Cargo-derived dynamic PEP 621 validation | safety-load-bearing | Must be accepted and synchronized before AS.3. |
 | `sc-publish` #14 — generic release-version wiring | safety-load-bearing | Atomic sync revealed that ATM's legacy version check inspects an ATM-only workflow job. The generic manifest/workflow contract must replace that assertion before AS.3. |
-| Explicit installer input / generated-manifest parity | closed | Implemented by `sc-publish` PR #7 at `240fd52`; AS.1 verifies it below. |
+| Explicit installer input / generated-manifest parity | blocked | PR #7 at `240fd52` supplies explicit input and PR #15 at `5e49b6ac` closes the source-layout defect. However, the canonical installer renders `[[artifacts.crates]]` while its copied `release_artifacts.py` requires `[[crates]]`; exact synced consumers fail both `validate-manifest` and `validate-publish-order`. Upstream must restore schema parity and add a rendered-input-to-validator integration test before AS.1 can close. |
 
 The safety items are intentionally **not** represented as closed by their
 issue creation. AS.3 remains blocked until the stated upstream implementation
@@ -167,8 +170,9 @@ and exact consumer sync proof exist. For any receipt mismatch, publication is
 blocked; record escalation upstream and obtain a new matching preflight after
 the correction is accepted.
 
-AS.1 canonical-install result: the installer and clean second `--dry-run`
-passed at `240fd52`, and rendered manifest semantics matched the input JSON.
+Historical AS.1 canonical-install result: the installer and clean second
+`--dry-run` passed at `240fd52`. This was byte parity, not the required
+execution-level validation.
 AS.1 QA-1 corrected the ATM-owned version-sync assertion: it now requires the
 canonical requested-version and lockstep checks rather than the retired
 ATM-specific `update-homebrew` inline job. The assertion continues to check
@@ -181,9 +185,29 @@ consumer's existing `scripts/` helpers are legacy and lack the invoked
 subcommands; its legacy `release_gate.sh` also has a three-argument interface
 while canonical `release.yml` passes four arguments. This cannot be repaired
 in ATM without locally editing a synchronized workflow or helper, which is
-prohibited by AS.1. AS.1 remains in progress until `sc-publish` accepts an
-atomic source-layout correction and ATM synchronizes it unchanged, followed by
-an execution-level path-and-argument proof.
+prohibited by AS.1. `sc-publish` PR #15 closed that source-layout defect at
+`5e49b6ac`; ATM synchronized it unchanged and the second canonical `--dry-run`
+reported `Publish-kit assets are in sync.`
+
+The resulting execution proof exposed a second critical upstream contract
+defect: the installer rendered `[[artifacts.crates]]` in
+`release/publish-artifacts.toml`, but the copied
+`.github/scripts/release_artifacts.py` requires top-level `[[crates]]`.
+Consequently, both of the following canonical consumer commands fail with
+`manifest must define [[crates]]`:
+
+```bash
+python3 .github/scripts/release_artifacts.py validate-manifest \
+  --manifest release/publish-artifacts.toml --workspace-toml Cargo.toml
+python3 .github/scripts/release_artifacts.py validate-publish-order \
+  --manifest release/publish-artifacts.toml --workspace-toml Cargo.toml
+```
+
+The upstream installer suite passed while missing this cross-asset invariant.
+AS.1 remains in progress until `sc-publish` fixes schema parity, adds a test
+which renders a complete input and then runs both validators, and ATM performs
+another unchanged canonical synchronization plus the path, argument, and
+semantic proof.
 
 ## Risks And Watchouts
 
