@@ -242,8 +242,13 @@ def main(argv: list[str]) -> int:
     policy_findings, downgraded = evaluate_policy(sections, policy)
 
     if completed.returncode != 0:
-        unused_findings = parse_unused_dependency_findings(stdout)
-        error_lines = [line for line in stdout.splitlines() if line.startswith("::error ")]
+        # cargo-shear's GitHub-format diagnostics may arrive on either stream
+        # depending on the host/tool release.  Policy evaluation must use the
+        # complete diagnostic set or an intentional allowlist becomes
+        # platform-dependent.
+        diagnostics = "\n".join(part for part in (stdout, completed.stderr) if part)
+        unused_findings = parse_unused_dependency_findings(diagnostics)
+        error_lines = [line for line in diagnostics.splitlines() if line.startswith("::error ")]
         allowed_unused = policy["allowed_unused_dependencies"]
         unapproved_unused = [
             finding
