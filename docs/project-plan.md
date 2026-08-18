@@ -1286,7 +1286,7 @@ Sprint line:
   [`sprint-AN14-sc-compose-141-checked-emission.md`](./plans/phase-an/sprint-AN14-sc-compose-141-checked-emission.md),
   and [`sprint-AN15-adversarial-fuzzing.md`](./plans/phase-an/sprint-AN15-adversarial-fuzzing.md).
 
-## 46. Phase AO — Optional mTLS for the Canonical HTTP Peer Path [PROPOSED]
+## 46. Phase AO — Optional mTLS for the Canonical HTTP Peer Path [ACTIVE]
 
 Phase AO adds opt-in mTLS to the active Tokio/Axum peer HTTP path without
 changing canonical HTTP request handling, storage, acknowledgement, or nudge
@@ -1300,6 +1300,14 @@ Implementation begins only after the accepted Tokio/Axum runtime line is
 active. Phase AM's explicit AO TLS exception preserves the existing TLS helper
 boundary while AO is decided; it is not an additional AO entry gate. The
 authoritative plan is [Phase AO plan](./plans/phase-ao/plan-phase-ao.md).
+
+| Sprint | Status | Scope |
+|---|---|---|
+| AO.1 | Complete | Bounded `peer-tls` adapter rehome |
+| AO.2 | Complete | Optional adapter activation on the canonical runtime path |
+| AO.3 | In review | TLS proof, negative coverage, and retained evidence |
+| AO.4 | Planned | Benchmark TLS/plaintext mode selection |
+| AO.5 | Planned | Physical-host benchmark and proof campaign |
 
 ## 47. Phase AP — Outbound-Only Corporate Network Peer Connectivity [PROPOSED]
 
