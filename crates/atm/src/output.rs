@@ -828,6 +828,36 @@ mod tests {
     use super::{render_bootstrap_trace_section, render_doctor_peer_config};
 
     #[test]
+    fn send_outcome_json_preserves_unrostered_sender_advisory() {
+        let outcome = json!({
+            "action": "send",
+            "team": "test-team",
+            "agent": "recipient",
+            "sender": "unregistered-tool",
+            "outcome": "sent",
+            "message_id": "01KX5TEST00000000000000001",
+            "requires_ack": false,
+            "warnings": [{
+                "message": "declared sender unregistered-tool@test-team is not on the ATM roster; this identity has no inbox and cannot receive replies or assignments.",
+                "recovery": "Add it with `atm teams add-member test-team unregistered-tool` if this identity needs an inbox."
+            }]
+        });
+
+        let outcome: atm_core::send::SendOutcome =
+            serde_json::from_value(outcome).expect("send outcome with advisory");
+        let rendered = serde_json::to_value(outcome).expect("JSON output");
+
+        assert_eq!(
+            rendered["warnings"][0]["message"],
+            "declared sender unregistered-tool@test-team is not on the ATM roster; this identity has no inbox and cannot receive replies or assignments."
+        );
+        assert_eq!(
+            rendered["warnings"][0]["recovery"],
+            "Add it with `atm teams add-member test-team unregistered-tool` if this identity needs an inbox."
+        );
+    }
+
+    #[test]
     fn bootstrap_trace_section_renders_doctor_output_block() {
         let rendered = render_bootstrap_trace_section(&BootstrapTraceReport {
             daemon_connect: BootstrapConnectOutcome::Connected,
