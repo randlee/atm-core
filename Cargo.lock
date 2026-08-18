@@ -286,6 +286,7 @@ version = "1.4.3"
 dependencies = [
  "agent-team-mail-core",
  "atm-storage",
+ "peer-tls",
  "serde_json",
  "tokio",
  "tracing",

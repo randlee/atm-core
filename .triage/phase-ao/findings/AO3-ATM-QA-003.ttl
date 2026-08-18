@@ -15,7 +15,9 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-18T20:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-18T19:45:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO.3 ;
@@ -28,10 +30,10 @@
   triage:file "crates/peer-tls/src/lib.rs" ;
   triage:line -1 ;
   triage:snippet "Missing test: rejects plaintext TCP connection against mTLS adapter" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
-  triage:headSha "4408867ef" ;
+  triage:headSha "a4f21c29ec189894d2de92602a0fd86594db5578" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s3/4408867ef> .
 
 <urn:atm:triage:worktree/pao-s1/cb5d8b4ba>

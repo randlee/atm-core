@@ -124,7 +124,8 @@ started, tested, restored, or made a dependency.
 | --- | --- | --- |
 | [AO.1](sprint-ao1-tls-module-rehome.md) | `peer-tls`, its explicit boundary records, and focused TLS configuration/stream tests exist without activating ATM traffic. | Accepted Tokio/Axum baseline. |
 | [AO.2](sprint-ao2-optional-runtime-activation.md) | The runtime uses the opaque adapter for inbound and outbound peer traffic while retaining one HTTP handler/client path. | AO.1 development pushed; merge AO.1 before every AO.2 dev/fix round. |
-| [AO.3](sprint-ao3-tls-proof-and-evidence.md) | Automated and two-host evidence proves canonical mTLS delivery, rejection before application dispatch, and no plaintext downgrade. | AO.2 PR merged. |
+| [AO.3](sprint-ao3-tls-proof-and-evidence.md) | Automated and local evidence proves canonical mTLS delivery, rejection before application dispatch, no plaintext downgrade, and supplies AO.5's reusable two-host runbook. | AO.2 PR merged. |
+| [AO.4](sprint-ao4-tls-benchmark-modes.md) | Cross-platform direct-peer TCP benchmark modes compare the named plaintext diagnostic profile with mTLS without recompiling the benchmark binary. | AO.3 PR merged; merge AO.3 before every AO.4 dev/fix round. |
 
 ## Invariants
 
@@ -152,6 +153,7 @@ started, tested, restored, or made a dependency.
 
 AO is complete when the active Tokio runtime proves bidirectional mTLS
 send/read/requires-ack/reply through the unchanged HTTP handler, all required
-certificate/pin/hostname negatives fail before application dispatch, plaintext
-works only under its explicit override, and indexed reports under
-`site/reports/` retain the evidence.
+certificate/pin/hostname negatives fail before application dispatch, AO.4's
+two benchmark modes are available without recompilation, plaintext works only
+under its explicit override, and AO.5 retains real-host evidence under
+`site/reports/`.
