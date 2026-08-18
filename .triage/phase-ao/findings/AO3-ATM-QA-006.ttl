@@ -15,10 +15,8 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "fixed" ;
+  triage:status "open" ;
   triage:dispatchReady false ;
-  triage:closedAt "2026-08-18T23:00:00Z"^^xsd:dateTime ;
-  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-08-18T19:45:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO.3 ;
   triage:foundAt "2026-08-18T19:42:55Z"^^xsd:dateTime ;
@@ -30,8 +28,8 @@
   triage:file "site/reports" ;
   triage:line 0 ;
   triage:snippet "Deliverable 4 (indexed safe site/reports/) - incomplete due to M5 host-availability blockage" ;
-  triage:status "fixed" ;
-  triage:closed true ;
+  triage:status "open" ;
+  triage:closed false ;
   triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
   triage:headSha "d8bcd0ed04aafa62d8810237f9fb1075aa7c2082" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s3/4408867ef> .
