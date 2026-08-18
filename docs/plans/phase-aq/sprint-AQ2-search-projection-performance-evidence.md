@@ -18,7 +18,7 @@ pre-merge snapshot is invalid evidence.
 **parallel_safe:** no production implementation sprint. Documentation-only
 benchmark report work is parallel-safe after AQ.1 has a pinned candidate.
 
-**traceability:** ADR-050; `REQ-P-SEARCH-INDEX-001`,
+**traceability:** ADR-052; `REQ-P-SEARCH-INDEX-001`,
 `REQ-RUSQLITE-SEARCH-INDEX-001`, `REQ-P-SMOKE-001`, `REQ-P-TEST-001`, and
 `REQ-P-PLATFORM-002`.
 

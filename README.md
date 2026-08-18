@@ -68,6 +68,21 @@ The library crate is also published as:
 cargo add agent-team-mail-core
 ```
 
+### PyPI
+
+`hermes-atm` and `atm-graft` 1.4.2 are live on TestPyPI; publishing to
+production PyPI is pending.
+
+```bash
+python -m pip install --upgrade \
+  --index-url https://test.pypi.org/simple \
+  --extra-index-url https://pypi.org/simple \
+  "hermes-atm==1.4.2" "atm-graft==1.4.2"
+```
+
+For Hermes setup and verification, see
+[the hermes-atm guide](docs/user-documents/hermes-atm.md).
+
 ### winget
 
 ```powershell

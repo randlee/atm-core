@@ -153,6 +153,36 @@ def validate_lint(root: Path, findings: list[Finding]) -> None:
     )
 
 
+def validate_cli_surface(root: Path, findings: list[Finding]) -> None:
+    """Run the feature-gated ATM CLI compatibility contract explicitly.
+
+    The inspector command is deliberately omitted from shipped binaries, so
+    Cargo's ordinary workspace test invocation skips this integration target.
+    Release validation must opt into the feature or released CLI drift would
+    evade the phase-end gate.
+    """
+    completed = run_capture(
+        [
+            "cargo",
+            "test",
+            "-p",
+            "agent-team-mail",
+            "--features",
+            "cli-surface-dump",
+            "--test",
+            "cli_surface",
+        ],
+        cwd=root,
+    )
+    append_completed_findings(
+        findings,
+        "cli-surface",
+        completed,
+        "CLI surface contract passed",
+        "CLI surface contract failed",
+    )
+
+
 def validate_staged_install_docs(
     root: Path,
     findings: list[Finding],
@@ -976,6 +1006,7 @@ def build_parser() -> argparse.ArgumentParser:
             "all",
             "validate",
             "lint",
+            "cli-surface",
             "support-files",
             "manifest",
             "publish-surface",
@@ -1015,6 +1046,7 @@ def main(argv: list[str] | None = None) -> int:
     actions = {
         "support-files": lambda: validate_support_files(root, findings),
         "lint": lambda: validate_lint(root, findings),
+        "cli-surface": lambda: validate_cli_surface(root, findings),
         "manifest": lambda: validate_manifest(
             root,
             findings,
@@ -1045,6 +1077,7 @@ def main(argv: list[str] | None = None) -> int:
             for target in (
                 "support-files",
                 "lint",
+                "cli-surface",
                 "manifest",
                 "publish-surface",
                 "release-binaries",

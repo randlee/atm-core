@@ -345,19 +345,17 @@ Architectural rules:
   `1.0` without Rust tooling or manual archive extraction
 
 Release-process ownership rules:
-- release automation is repo-owned infrastructure, not ad hoc operator
-  procedure
-- the new repo must own:
-  - release artifact manifest
-  - preflight workflow
-  - release workflow
-  - release-gate script/helpers
-  - release inventory generation and verification
-  - Homebrew formula update automation
-  - `winget` manifest/update automation and verification
-- the `publisher` agent instructions are part of the release-control surface
-  and must be ported into this repo with source-of-truth paths updated to the
-  new repo layout and retained crate list
+- as specified by [ADR-050](./adr/ADR-050-shared-publish-kit-ownership.md),
+  the generic release automation is shared `sc-publish` infrastructure, not
+  an ATM-local operator procedure or workflow fork;
+- ATM owns its artifact manifest, enabled destinations, release inventory and
+  verification evidence, plus explicitly namespaced ATM-only validation data;
+- `sc-publish` owns the release/preflight workflows, release-gate helpers,
+  common bootstrap, publishing-agent instructions, and common tests. Those
+  assets are consumed only through the canonical installer and may not be
+  locally edited after synchronization;
+- a defect in a shared asset is repaired and tested in `sc-publish`, then
+  synchronized into ATM unchanged.
 
 Release infrastructure notes:
 - Homebrew continues to use the shared `randlee/homebrew-tap` repository and

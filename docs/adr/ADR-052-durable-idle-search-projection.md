@@ -1,4 +1,4 @@
-# ADR-050 — Durable Idle Search Projection
+# ADR-052 — Durable Idle Search Projection
 
 | Field | Value |
 | --- | --- |

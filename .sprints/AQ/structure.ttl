@@ -3,4 +3,6 @@
 
 triage:PhaseAQ a triage:Phase .
 
-triage:AQ.0 a triage:Sprint ; triage:inPhase triage:PhaseAQ ; triage:order 0 ; triage:branch "plan/search-indexing-admission-performance" ; triage:criteria "docs/plans/phase-aq/plan-phase-aq.md" .
+triage:AQ.1 a triage:Sprint ; triage:inPhase triage:PhaseAQ ; triage:order 1 ; triage:branch "feature/aq1-durable-idle-search-projection" ; triage:criteria "docs/plans/phase-aq/sprint-AQ1-durable-idle-search-projection.md" .
+
+triage:AQ.2 a triage:Sprint ; triage:inPhase triage:PhaseAQ ; triage:order 2 ; triage:branch "feature/aq2-search-projection-performance-evidence" ; triage:criteria "docs/plans/phase-aq/sprint-AQ2-search-projection-performance-evidence.md" .

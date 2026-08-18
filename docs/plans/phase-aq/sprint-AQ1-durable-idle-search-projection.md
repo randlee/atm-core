@@ -19,7 +19,7 @@ checked-render/search surface, including its current HTTP fuzz coverage.
 writer, the `MessageSearchStore` contract, and every local presentation of
 its freshness state.
 
-**traceability:** ADR-050; ADR-001, ADR-008, ADR-018, ADR-036,
+**traceability:** ADR-052; ADR-001, ADR-008, ADR-018, ADR-036,
 ADR-ATM-RUSQLITE-002; `REQ-P-SEARCH-INDEX-001`,
 `REQ-RUSQLITE-SEARCH-INDEX-001`, `REQ-P-DAEMON-LANES-001`, and
 `REQ-P-PLATFORM-002`.

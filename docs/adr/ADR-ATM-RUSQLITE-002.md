@@ -6,7 +6,7 @@ crate: atm-storage-rusqlite
 title: Single in-process SQLite write worker
 status: accepted
 related_adrs:
-  - ADR-050 # extends this writer's private scheduling with durable idle search projection
+  - ADR-052 # extends this writer's private scheduling with durable idle search projection
 date: 2026-05-10
 decided-date: 2026-05-10
 deciders:

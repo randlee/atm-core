@@ -316,6 +316,12 @@ Satisfied by:
     observable product behavior, error semantics, and test obligations
   - a feature that lacks one supported-operating-system implementation is
     incomplete and must not be documented as production-ready
+  - peer authority canonicalization is platform-identical. DNS/DDNS is the
+    portable baseline; a `.local` authority is available on any supported OS
+    only when that OS has an mDNS resolver. When mDNS is unavailable (including
+    a Windows installation without the facility enabled), resolution fails
+    closed with actionable recovery to use DNS/DDNS or enable mDNS; it must not
+    fall back to a durable or inferred IP alias
 
 ### 2.1 In Scope
 
@@ -385,10 +391,13 @@ Product requirement ID:
   `agent-team-mail` and `agent-team-mail-core` while keeping the installed CLI
   binary name `atm`.
 
-- `REQ-P-RELEASE-004` This repo must own the release-process control surface
-  needed to ship and verify the replacement release, including the release
-  workflows, artifact manifest, supporting scripts, and `publisher` agent
-  instructions.
+- `REQ-P-RELEASE-004` **Superseded in part by ADR-050.** ATM owns its release
+  manifest, declared artifacts and destinations, and release evidence. The
+  shared release-process implementation — workflows, actions, helpers,
+  publisher/channel-agent prompts, bootstrap, and tests — is owned only by
+  `sc-publish` and installed into ATM byte-for-byte through its canonical
+  installer. ATM must repair a shared defect upstream rather than locally
+  modifying a synchronized shared file.
 
 - `REQ-P-RELEASE-005` Windows installation must be first-class for `1.0`
   without requiring Rust tooling or manual archive extraction; `winget` is
@@ -553,8 +562,8 @@ Required behavior:
   address
 - for `atm send`, `--host <host>` qualifies the resolved recipient as
   `agent@team.host`; it is equivalent to spelling that host in the recipient
-  address, and supplying both forms with different hosts fails before daemon
-  dispatch
+  address, passes through ADR-040 trusted-host canonicalization, and supplying
+  both forms with different canonical hosts fails before daemon dispatch
 - caller chat-id resolution is ordered: qualified `--as <agent>:<chat-id>`,
   then `--chat-id`, then `ATM_CHAT_ID`, then a chat-id embedded in
   `ATM_IDENTITY=<agent>:<chat-id>`, then no chat-id. An explicit unqualified
@@ -943,22 +952,29 @@ command identity.
 
 Product requirement ID:
 - `REQ-P-ADDRESS-001` Address resolution must support the documented
-  `agent`/`agent@team` forms and precedence rules.
+  local-team and CLI-only cross-host convenience forms and precedence rules.
 
-Satisfied by:
-- `REQ-CORE-CONFIG-002` for address parsing, alias rewrite, and
-  team/member validation policy
+The canonical precedence, trusted-host matching, completion exclusions, and
+error/recovery contract are defined by ADR-040. This requirement intentionally
+does not re-derive those rules; implementations must follow ADR-040.
 
 Supported address forms:
 - `agent`
 - `agent@team`
+- `agent@team.host`
+- `agent@host` (CLI same-team cross-host shorthand only)
 
-Resolution order:
-1. explicit `agent@team`
-2. bare `agent` plus `--team`
-3. bare `agent` plus configured default team
+ADR-040 defines this order: explicit `agent@team.host`, exact known
+`agent@team`, same-team `agent@host` shorthand, then the existing bare-agent
+team/default resolution. It also defines `.local`-only completion,
+ASCII-case-insensitive host comparison, canonical-host persistence, and the
+fail-closed structured recovery for unknown or ambiguous authorities. An
+explicit `@team` suffix takes precedence over `--team`.
 
-An explicit `@team` suffix takes precedence over `--team`.
+`--host <host>` uses the same CLI-only trusted-authority canonicalization as
+an inline host. Before HTTP dispatch, either form becomes the existing
+fully-qualified `agent@team.canonical-host` request; it adds no daemon-side
+resolution path, HTTP/wire field, storage field, or graft/native-tool API.
 
 Aliases are resolved after splitting `agent@team`, so only the agent token is
 rewritten.
@@ -1102,7 +1118,8 @@ Write one message into one target inbox.
 
 ### 6.2 Required Flags And Inputs
 
-- positional target: `agent` or `agent@team`
+- positional target: `agent`, `agent@team`, `agent@team.host`, or the
+  ADR-040 same-team shorthand `agent@host`
 - optional positional message text
 - `--team <name>`
 - `--file <path>`
@@ -2378,7 +2395,7 @@ Product requirement ID:
   idle worker must coalesce, recover, and expose bounded freshness status
   without blocking mail admission, routing, acknowledgement, or canonical
   reads. The canonical decision is
-  [ADR-050](./adr/ADR-050-durable-idle-search-projection.md).
+  [ADR-052](./adr/ADR-052-durable-idle-search-projection.md).
 
 Satisfied by:
 - `REQ-CORE-WORKFLOW-001` for the canonical two-axis model and legal
@@ -2409,7 +2426,7 @@ Satisfied by:
   read-only search-projection freshness DTO through local presentation
   contracts. It must not schedule/drain work, import SQLite/FTS details, or
   make a send/read/ack decision depend on projection backlog. This derives
-  from ADR-050 and satisfies `REQ-P-SEARCH-INDEX-001`.
+  from ADR-052 and satisfies `REQ-P-SEARCH-INDEX-001`.
 
 ### 15.1 Persisted Message Fields
 
@@ -3865,9 +3882,11 @@ mail correctness.
     - whitespace
     - wildcard or pattern characters that could be interpreted by current or
       future parsers, including at minimum `*`, `?`, `[` and `]`
-  - the supported remote-send CLI form is exactly
+  - the canonical remote-send CLI form is
     `atm send <agent>@<team>.<host> ...`; host qualification is part of the
-    typed address grammar, not a second flag or alternate route
+    typed address grammar. Per ADR-040, `agent@host` and `--host <host>` are
+    CLI-only same-team aliases that normalize to that exact form before the
+    existing request is constructed; they are not a second route
   - because team names cannot contain `.`, the inline form splits at the first
     `.` after `@`; the remainder is the host and may be a DNS name or IP
     address containing additional periods
@@ -3912,20 +3931,24 @@ mail correctness.
   - if no enabled interface rows exist, no cross-host listener binds
   - environment variables must not configure cross-host networking or trust
 
-- `REQ-CORE-TRANSPORT-002D` A peer authority is one durable registered DNS
+- `REQ-CORE-TRANSPORT-002D` A peer authority is one durable registered
   hostname, HTTPS port, and pinned certificate fingerprint.
 
   Required behavior:
-  - a hostname target exact-matches one registered authority name; its durable
-    HTTPS port selects the endpoint
-  - a literal IP target is accepted only when a bounded fresh DNS lookup of
+  - a canonical hostname target exact-matches one registered authority name;
+    its durable HTTPS port selects the endpoint. CLI input may omit the
+    terminal `.local` only as specified by `REQ-P-ADDRESS-001`, and must be
+    canonicalized before request construction
+  - a literal IP target is accepted only when a bounded fresh DNS/mDNS lookup of
     exactly one registered hostname contains that address
   - resolved addresses are not stored in SQLite or another durable alias store
   - zero or multiple matching registered names fail closed before TLS or route
   - reverse DNS is forbidden; an IP-only registration never authorizes a name
   - every registered hostname must be forward-resolvable by the peers that
-    use it; a changing VPN or Wi-Fi address is updated by the host's normal
-    DNS/DDNS mechanism, never by ATM reverse lookup or a SQLite IP alias
+    use it through ordinary DNS/DDNS or local-network mDNS. A changing VPN,
+    Wi-Fi, Ethernet, DHCP, or VPS address is updated by the host's normal
+    name-resolution mechanism, never by ATM reverse lookup or a SQLite IP
+    alias
   - several account-owned daemons may use the same current host IP only when
     each authority has a distinct `(hostname, port)` endpoint and certificate
     pin; an OS bind collision fails closed and must not select another port

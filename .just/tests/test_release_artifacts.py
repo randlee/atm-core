@@ -223,6 +223,59 @@ class ReleaseArtifactsTests(unittest.TestCase):
             completed.stdout,
         )
 
+    def test_validate_manifest_rejects_non_publishable_runtime_path_dependency(self) -> None:
+        workspace_toml, manifest_toml = self.write_workspace(
+            crate_package_block="""
+            [package]
+            name = "demo-crate"
+            version.workspace = true
+            edition.workspace = true
+            rust-version.workspace = true
+            description.workspace = true
+            license.workspace = true
+
+            [dependencies]
+            private-crate = { path = "../private-crate" }
+            """
+        )
+        workspace_toml.write_text(
+            workspace_toml.read_text(encoding="utf-8").replace(
+                'members = ["crates/demo-crate"]',
+                'members = ["crates/demo-crate", "crates/private-crate"]',
+            ),
+            encoding="utf-8",
+        )
+        private_manifest = self.root / "crates" / "private-crate" / "Cargo.toml"
+        private_manifest.parent.mkdir(parents=True)
+        private_manifest.write_text(
+            textwrap.dedent(
+                """
+                [package]
+                name = "private-crate"
+                version.workspace = true
+                edition.workspace = true
+                rust-version.workspace = true
+                description.workspace = true
+                license.workspace = true
+                publish = false
+                """
+            ).strip()
+            + "\n",
+            encoding="utf-8",
+        )
+
+        completed = self.run_validate_manifest(
+            workspace_toml=workspace_toml,
+            manifest_toml=manifest_toml,
+        )
+
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("publish dependency violation(s):", completed.stdout)
+        self.assertIn(
+            "demo-crate has runtime/build path dependency private-crate whose Cargo.toml sets publish = false",
+            completed.stdout,
+        )
+
     def test_update_homebrew_formulas_rewrites_each_platform_block_to_its_own_asset(self) -> None:
         release_dir, formula_path = self.write_homebrew_fixture()
 

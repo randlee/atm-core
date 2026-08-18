@@ -20,8 +20,8 @@ name = "atm_core"
 test-utils = []
 
 [dependencies]
-atm-error = { path = "../atm-error", version = "1.4.2" }
-atm-storage = { path = "../atm-storage", version = "1.4.2" }
+atm-error = { path = "../atm-error", version = "1.4.3" }
+atm-storage = { path = "../atm-storage", version = "1.4.3" }
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true

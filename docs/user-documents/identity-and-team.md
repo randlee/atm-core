@@ -1,7 +1,7 @@
 ---
 title: Identity And Team
 audience: end-user
-reviewed_for_release: 1.3.1
+reviewed_for_release: 1.4.3
 ---
 
 # Identity And Team
@@ -19,7 +19,8 @@ comes from the supported CLI and environment surfaces for the active command.
 The accepted operator model is:
 
 - inspection-only commands may inspect another mailbox explicitly
-- mutating commands act as the real caller only
+- mutating commands require the ambient caller and cannot impersonate another
+  base agent
 - command-line values override environment values when that command supports
   the override
 
@@ -44,7 +45,9 @@ atm peek quality-mgr@atm-dev --team atm-dev --as quality-mgr
 Mailbox inspection and mailbox mutation are different surfaces:
 
 - inspection commands observe queue state
-- mutating commands act as the real caller
+- mutating commands act as the real caller. Where a mutating command accepts
+  `--as`, its base agent must match `ATM_IDENTITY`; it may select the caller's
+  chat identity but cannot impersonate another agent.
 
 Inspection-only surfaces:
 
@@ -68,7 +71,9 @@ Mutating surfaces:
   `ATM_IDENTITY`, then no chat ID. An unqualified `--as agent` explicitly
   selects no chat ID.
 - use `--team <team>` when the command supports an explicit team override
-- use `--as <agent>` only on inspection-only commands
+- use `--as <agent>` to inspect that agent's mailbox on inspection-only
+  commands. On a mutating command that accepts `--as`, use only the same base
+  agent as `ATM_IDENTITY`.
 
 Do not assume that runtime state under `~/.atm/` changes your caller identity.
 Caller identity is resolved by ATM command inputs and environment rules, not by

@@ -11,6 +11,7 @@ use atm_core::observability::{AtmLogRecord, AtmLogSnapshot};
 use atm_core::protocol::{RuntimeLivenessState, RuntimeReadinessState, RuntimeStatusSnapshot};
 use atm_core::read::ReadOutcome;
 use atm_core::send::SendOutcome;
+use atm_core::send::WarningEntry;
 use atm_core::team_admin::{
     AddMemberOutcome, BackupOutcome, ClearNudgeTemplateOverrideOutcome,
     DisableNudgeTemplateOverrideOutcome, RemoveMemberOutcome, RestoreOutcome, RestorePlan,
@@ -19,18 +20,8 @@ use atm_core::team_admin::{
 
 /// Print one send result in human-readable or JSON form.
 pub fn print_send_result(outcome: &SendOutcome, json: bool) -> Result<()> {
-    if json {
-        println!("{}", serde_json::to_string_pretty(outcome)?);
-    } else {
-        println!(
-            "Sent to {}@{} [message_id: {}]",
-            outcome.agent, outcome.team, outcome.message_id
-        );
-    }
-
-    for warning in &outcome.warnings {
-        eprintln!("{}", warning.render());
-    }
+    print!("{}", render_send_stdout(outcome, json)?);
+    print_warnings_to_stderr(&outcome.warnings);
 
     Ok(())
 }
@@ -165,11 +156,34 @@ pub fn print_ack_result(outcome: &AckOutcome, json: bool) -> Result<()> {
         println!("{}", render_ack_result_line(outcome));
     }
 
-    for warning in &outcome.warnings {
-        eprintln!("{}", warning.render());
-    }
+    print_warnings_to_stderr(&outcome.warnings);
 
     Ok(())
+}
+
+fn render_send_stdout(outcome: &SendOutcome, json: bool) -> Result<String> {
+    if json {
+        return Ok(format!("{}\n", serde_json::to_string_pretty(outcome)?));
+    }
+
+    Ok(format!(
+        "Sent to {}@{} [message_id: {}]\n",
+        outcome.agent, outcome.team, outcome.message_id
+    ))
+}
+
+fn print_warnings_to_stderr(warnings: &[WarningEntry]) {
+    let rendered = render_warnings_to_stderr(warnings);
+    if !rendered.is_empty() {
+        eprint!("{rendered}");
+    }
+}
+
+fn render_warnings_to_stderr(warnings: &[WarningEntry]) -> String {
+    warnings
+        .iter()
+        .map(|warning| format!("{}\n", warning.render()))
+        .collect()
 }
 
 fn render_ack_result_line(outcome: &AckOutcome) -> String {
@@ -825,7 +839,70 @@ mod tests {
     };
     use serde_json::json;
 
-    use super::{render_bootstrap_trace_section, render_doctor_peer_config};
+    use super::{
+        render_bootstrap_trace_section, render_doctor_peer_config, render_send_stdout,
+        render_warnings_to_stderr,
+    };
+
+    #[test]
+    fn send_outcome_json_preserves_unrostered_sender_advisory() {
+        let outcome = json!({
+            "action": "send",
+            "team": "test-team",
+            "agent": "recipient",
+            "sender": "unregistered-tool",
+            "outcome": "sent",
+            "message_id": "01KX5TEST00000000000000001",
+            "requires_ack": false,
+            "warnings": [{
+                "message": "declared sender unregistered-tool@test-team is not on the ATM roster; this identity has no inbox and cannot receive replies or assignments.",
+                "recovery": "Add it with `atm teams add-member test-team unregistered-tool` if this identity needs an inbox."
+            }]
+        });
+
+        let outcome: atm_core::send::SendOutcome =
+            serde_json::from_value(outcome).expect("send outcome with advisory");
+        let rendered = serde_json::to_value(outcome).expect("JSON output");
+
+        assert_eq!(
+            rendered["warnings"][0]["message"],
+            "declared sender unregistered-tool@test-team is not on the ATM roster; this identity has no inbox and cannot receive replies or assignments."
+        );
+        assert_eq!(
+            rendered["warnings"][0]["recovery"],
+            "Add it with `atm teams add-member test-team unregistered-tool` if this identity needs an inbox."
+        );
+    }
+
+    #[test]
+    fn sender_advisory_stays_on_stderr_while_json_stdout_remains_parseable() {
+        let outcome: atm_core::send::SendOutcome = serde_json::from_value(json!({
+            "action": "send",
+            "team": "test-team",
+            "agent": "recipient",
+            "sender": "unregistered-tool",
+            "outcome": "sent",
+            "message_id": "01KX5TEST00000000000000001",
+            "requires_ack": false,
+            "warnings": [{
+                "message": "declared sender unregistered-tool@test-team is not on the ATM roster; this identity has no inbox and cannot receive replies or assignments.",
+                "recovery": "Add it with `atm teams add-member test-team unregistered-tool` if this identity needs an inbox."
+            }]
+        }))
+        .expect("send outcome");
+
+        let stdout = render_send_stdout(&outcome, true).expect("JSON stdout");
+        let stderr = render_warnings_to_stderr(&outcome.warnings);
+
+        let parsed: serde_json::Value = serde_json::from_str(&stdout).expect("valid JSON stdout");
+        assert_eq!(
+            parsed["warnings"][0]["message"],
+            outcome.warnings[0].message
+        );
+        assert!(!stdout.contains("Recovery:"));
+        assert!(stderr.contains("Recovery:"));
+        assert!(stderr.contains("unregistered-tool@test-team"));
+    }
 
     #[test]
     fn bootstrap_trace_section_renders_doctor_output_block() {

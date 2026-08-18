@@ -1325,10 +1325,45 @@ merged into this documentation line.
   replace that historical comparison with a reduced absolute threshold.
 
 The authoritative decision and sprint scopes are
-[`ADR-050`](./adr/ADR-050-durable-idle-search-projection.md),
+[`ADR-052`](./adr/ADR-052-durable-idle-search-projection.md),
 [`Phase AQ plan`](./plans/phase-aq/plan-phase-aq.md),
 [`sprint-AQ1`](./plans/phase-aq/sprint-AQ1-durable-idle-search-projection.md),
 and [`sprint-AQ2`](./plans/phase-aq/sprint-AQ2-search-projection-performance-evidence.md).
+
+## 49. Phase AS — Shared Publish-Kit Migration [PLANNING]
+
+Status summary:
+
+- Phase AS adopts the upstream-owned `sc-publish` package without local edits
+  to shared workflows, helpers, agents, or tests. ATM supplies only complete
+  consumer release data and evidence.
+- Planning branch: `plan/sc-compose-publish-kit-migration`.
+- Baseline: `sc-publish/develop @ 240fd52`.
+- Entry gate: AS.1 records exact source parity and classifies shared gaps.
+  Safety-load-bearing capabilities must be implemented and accepted upstream
+  before AS.3 can dispatch; a filed issue is not a release gate.
+- The authoritative plan is [Phase AS plan](./plans/phase-as/README.md).
+
+Sprint line:
+
+- `AS.1` `AS.1-overlay-contract.md` — exact source parity, ownership, and
+  upstream safety-capability gates
+- `AS.2` `AS.2-consumer-manifest-contract.md` — consumer manifest and unified
+  release-version contract
+- `AS.3` `AS.3-worktree-preflight-proof.md` — canonical worktree preflight
+  proof
+- `AS.4` `AS.4-authorized-pypi-1.4.3.md` — separately authorized immutable
+  main PyPI release
+- `AS.5` `AS.5-main-migration-merge.md` — verified migration promotion from
+  `develop` to `main`
+- `AS.6` `AS.6-full-1.4.4-release.md` — first full canonical release
+
+Acceptance:
+
+- Phase AS acceptance is defined by the authoritative sprint plan: byte-exact
+  shared parity, complete explicit consumer data, implemented upstream safety
+  gates, matching preflight receipts, independent QA, and explicit human
+  production authorization for AS.4–AS.6.
 
 ## Publishing Improvements
 

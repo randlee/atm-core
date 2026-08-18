@@ -37,7 +37,7 @@ merge-order, or shared-artifact coordination required between them.
 
 ## Governing decision and boundaries
 
-[ADR-050](../../adr/ADR-050-durable-idle-search-projection.md) is the
+[ADR-052](../../adr/ADR-052-durable-idle-search-projection.md) is the
 authoritative architecture decision. Its non-negotiable boundaries are:
 
 - `atm-storage-rusqlite` exclusively owns the additive ledger, FTS state,
