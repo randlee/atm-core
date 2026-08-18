@@ -110,6 +110,39 @@ was synchronized into the ATM staging worktree using only the canonical script;
 a second `--dry-run` reported **in sync**. That proves source parity, not
 runtime readiness.
 
+## Legacy-value coverage analysis
+
+The legacy ATM release flow was compared with the synchronized overlay. The
+table retains useful behavior, moves repository data to the manifest, and
+explicitly removes only policy that was more restrictive than the shared
+contract.
+
+| Legacy value | Canonical coverage | Required action |
+| --- | --- | --- |
+| No manual tag mutation | `publisher.md` plus the gated root release workflow. | Covered. |
+| Develop readiness preflight plus final immutable-main preflight | `release-state-strategy.md`. | Covered; the old mandatory `release/vX.Y.Z` branch is intentionally removed. |
+| Version normalization, workspace match, and lockstep | `verify-version`, `verify-version-lockstep`, and `release_gate.sh`. | Covered. |
+| Complete crate inventory and dependency publish order | `validate-manifest`, manifest `publish_order`, and the crates.io worker receipt. | Covered after ATM manifest migration. |
+| Package-before-publish audit | Canonical preflight `cargo package` checks plus workspace tests. | Covered. |
+| Public registry state and partial publish | Shared `crates-io` fenced receipt and idempotent manifest publish plan. | Covered; PF-2/PF-3 use this path. |
+| Native archive build, checksums, and GitHub Release | Canonical manifest-driven build and root release jobs. | Covered after ATM target/binary manifest entries are supplied. |
+| Python wheels, sdists, TestPyPI rehearsal, and PyPI retry | Canonical Python matrices and `pypi-publish.yml`. | Covered after ATM Python distribution manifest entries are supplied. |
+| Homebrew stable/prerelease formulas | `homebrew-publish.yml` selects manifest formula tracks. | Covered after ATM formula declarations are supplied. |
+| winget retry | `winget-publish.yml` uses manifest package data. | Covered after ATM winget declaration is supplied. |
+| Scoop publication | New canonical `scoop-publish.yml`. | Enable only when ATM has a declared bucket and explicit authorization. |
+| Single toolchain across preflight and release | Canonical shared setup actions and resolved tool receipt. | Covered by exact overlay; verify in real preflight. |
+| Release inventory with version, commit, artifact, required/waiver, and verification facts | Not yet represented by a canonical resolved-release-plan receipt with this retained schema. | Upstream `sc-publish` requirement; do not retain or rewrite ATM's private inventory generator. |
+| Installed user docs in release archives and installed-doc freshness proof | The overlay currently omits generic manifest support for installed archive members and the existing Phase-AE proof/finding output. | Upstream `sc-publish` requirement; do not retain an ATM workflow fork or private shared-helper replacement. |
+| Full retained release validation / `release-findings.json` | The overlay has no implemented manifest `extra_validations` runner/receipt. | Upstream `sc-publish` requirement; use the generic manifest contract once accepted. |
+| Manual release notes gate, fixed release-branch rule, and hardcoded release surface/token prose | Superseded by the manifest, shared release-state policy, generated GitHub notes, and channel contract. | Intentionally removed as overly restrictive or repository-specific. |
+
+ATM cannot declare migration complete until the three upstream gaps have landed
+in `sc-publish`: generic installed archive members, a resolved release-plan
+receipt that preserves required/waiver/verification evidence, and manifest
+`extra_validations` with structured results. Their implementations must be
+synced unchanged; ATM then supplies only manifest data and validates the
+consumer proof.
+
 ## Required shared-kit contract
 
 ### One resolved plan
@@ -169,9 +202,11 @@ enter shared files.
 1. Compare ATM's existing artifact manifest to the canonical parser schema.
 2. For every required ATM manifest addition, record the corresponding
    canonical workflow/helper that consumes it and the required proof.
-3. Declare only ATM artifacts, destinations, and enabled channels; do not put
+3. Submit the three identified generic gaps to `sc-publish`; wait for accepted
+   shared implementations rather than creating an ATM adapter or workflow fork.
+4. Declare only ATM artifacts, destinations, and enabled channels; do not put
    credentials, tool versions, or workflow behavior in the manifest.
-4. Keep every undeclared channel dormant and record why it is not enabled.
+5. Keep every undeclared channel dormant and record why it is not enabled.
 
 This sprint changes only ATM data after the justification record is accepted;
 it does not modify any copied shared path.
