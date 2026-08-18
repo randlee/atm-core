@@ -15,8 +15,10 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-18T08:25:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-08-18T07:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO.2 ;
   triage:foundAt "2026-08-18T07:15:43Z"^^xsd:dateTime ;
@@ -28,10 +30,10 @@
   triage:file "crates/atm-http-runtime/src/lib.rs" ;
   triage:line 1 ;
   triage:snippet "'select' substring false-positive in boundary lint" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s2-optional-runtime-activation" ;
-  triage:headSha "99fd70563c50fa3d9992c33d7cd85ba42b4bd750" ;
+  triage:headSha "06bf1057c9a131d4b73e1021a9b97e515c90f547" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s2-feature/pao-s2-optional-runtime-activation> .
 
 <urn:atm:triage:worktree/pao-s2-feature/pao-s2-optional-runtime-activation>
