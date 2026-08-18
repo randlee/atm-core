@@ -41,7 +41,7 @@ error_types = ["AtmError"]
 notes = ["No runtime-private request, response, error, or persistence type is authorized.", "Received-message hooks cross only the sealed core selector/emitter boundary after a newly durable write; their failure is a response warning, never a write failure."]
 
 [testing]
-allowed_test_double_paths = ["crate::tests::TestRouter"]
+allowed_test_double_paths = ["crate::tests::TestRouter", "atm_daemon_bootstrap::replacement_runtime_tests::RecordingAuthenticatedHandler"]
 forbidden_test_bypasses = ["listener_bind", "endpoint_publication"]
 
 [enforcement]

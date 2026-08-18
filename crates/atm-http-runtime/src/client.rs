@@ -4,7 +4,7 @@
 //! connectors are deliberately introduced by AL.5--AL.7.  It owns the one
 //! route-body encoder and result decoder used after a connector is selected.
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 use std::num::NonZeroU16;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -128,8 +128,8 @@ pub fn loopback_tcp_client(
 /// Test-only plaintext client retained to exercise the named diagnostic
 /// listener. Production delivery can reach a peer only through the opaque
 /// [`PeerIoAdapter`] below.
-#[cfg(test)]
-pub(crate) fn direct_peer_tcp_client(
+#[cfg(any(test, feature = "test-support"))]
+pub fn direct_peer_tcp_client(
     host: HostName,
     port: NonZeroU16,
     request_timeout: Duration,
@@ -141,7 +141,7 @@ pub(crate) fn direct_peer_tcp_client(
     )?))
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub(crate) fn direct_peer_write_client(
     host: HostName,
     port: NonZeroU16,
@@ -173,6 +173,25 @@ pub(crate) fn direct_peer_adapter_write_client(
     };
     let client = Arc::new(HttpRuntimeClient::new(Arc::new(connector), request_timeout));
     Ok(DirectPeerWriteClient { client })
+}
+
+/// Builds the existing typed HTTP client over an opaque authenticated peer
+/// adapter for first-party composition integration tests.
+///
+/// This test-support helper exposes neither TLS configuration nor a listener
+/// constructor. Production delivery remains daemon-owned through
+/// [`selected_write_transport`].
+#[cfg(any(test, feature = "test-support"))]
+pub fn authenticated_peer_client(
+    host: HostName,
+    peer_io_adapter: Arc<dyn PeerIoAdapter>,
+    request_timeout: Duration,
+) -> Result<Arc<dyn DaemonApiClient + Send + Sync>, AtmError> {
+    Ok(Arc::new(direct_peer_adapter_write_client(
+        host,
+        peer_io_adapter,
+        request_timeout,
+    )?))
 }
 
 /// Selects the caller's one capability-authenticated daemon connector.
@@ -245,7 +264,7 @@ struct LoopbackTcpConnector {
 }
 
 /// Test-only plaintext connector for the explicitly named diagnostic listener.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 #[derive(Debug)]
 pub(crate) struct DirectPeerTcpConnector {
     client: reqwest::Client,
@@ -348,7 +367,7 @@ impl std::fmt::Debug for PeerIoConnector {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 impl DirectPeerTcpConnector {
     fn new(host: HostName, port: NonZeroU16) -> Result<Self, AtmError> {
         let client = reqwest::Client::builder()
@@ -369,7 +388,7 @@ impl DirectPeerTcpConnector {
 }
 
 #[async_trait]
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 impl HttpRuntimeConnector for DirectPeerTcpConnector {
     fn connection_target(&self) -> String {
         format!("direct peer `{}`", self.authority)
@@ -541,7 +560,7 @@ fn http1_request(
 /// Preserve the direct-peer authority when the shared HTTP exchange fails
 /// before a response.  A host-qualified recipient never uses the local daemon
 /// endpoint, so reporting this as local daemon unavailability is misleading.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 fn direct_peer_connection_failure(
     authority: &str,
     failure: HttpRuntimeClientFailure,

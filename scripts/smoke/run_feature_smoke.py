@@ -34,6 +34,7 @@ from feature_smoke_report import (
     summarize_cases,
 )
 from run_inbound_peer_smoke import PANE_TEMPLATE, compose
+from smoke_evidence import collect_live_evidence_metadata
 from smoke_common import (
     SmokeError,
     advertised_host_from_value as advertised_host_from_json,
@@ -273,6 +274,26 @@ def resolve_dns_addresses(host: str) -> list[str]:
     return sorted({record[4][0] for record in records})
 
 
+def connect_address(advertised_host: str) -> str:
+    """Resolve one advertised endpoint to the IP required by curl --resolve.
+
+    ``curl --resolve`` keeps the certificate authority name in the URL while
+    overriding only its TCP destination. Its three fields are therefore
+    ``certificate-host:port:ip-address``; an advertised hostname is not a
+    valid replacement for the last field.
+    """
+    try:
+        return str(ipaddress.ip_address(advertised_host))
+    except ValueError:
+        addresses = resolve_dns_addresses(advertised_host)
+        if not addresses:
+            raise SmokeError(f"DNS resolution for advertised host {advertised_host} returned no addresses")
+        for address in addresses:
+            if isinstance(ipaddress.ip_address(address), ipaddress.IPv4Address):
+                return address
+        return addresses[0]
+
+
 def remote_resolve_dns_addresses(peer: str, host: str) -> list[str]:
     """Resolve a hostname through the remote computer's normal resolver."""
     script = (
@@ -345,6 +366,8 @@ def curl_doctor(
                     raise SmokeError(f"could not copy {peer} public certificate: {copied_remote['stderr'].strip()}")
                 local_authority = certificate_authority(local_public)
                 remote_authority = certificate_authority(remote_public)
+                local_address = connect_address(advertised_host(atm))
+                remote_address = connect_address(remote_host)
                 scheme = "http" if plaintext else "https"
                 local_url = f"{scheme}://{local_authority}:43101/v1/atm/doctor"
                 remote_url = f"{scheme}://{remote_authority}:43101/v1/atm/doctor"
@@ -352,14 +375,14 @@ def curl_doctor(
                 remote_curl = ["curl", "--silent", "--show-error", "--fail", "--connect-timeout", "2", "--max-time", "5", "-X", "GET", *headers]
                 if not plaintext:
                     remote_curl.extend(["--cert", remote_bundle, "--cacert", remote_local_ca])
-                remote_curl.extend(["--resolve", f"{local_authority}:43101:{advertised_host(atm)}", "--data", DOCTOR_BODY, local_url])
+                remote_curl.extend(["--resolve", f"{local_authority}:43101:{local_address}", "--data", DOCTOR_BODY, local_url])
                 remote_result = remote_shell(peer, " ".join(shlex.quote(value) for value in remote_curl))
                 remote_report = parse_json(remote_result, f"{peer} curl doctor to local")
                 add_case(cases, f"{peer} curl {'plaintext' if plaintext else 'mTLS'} to local doctor", doctor_ready(remote_report, expected_version), "HTTP 200 real daemon doctor" if doctor_ready(remote_report, expected_version) else "doctor response was not healthy/ready", origin=peer, destination=platform.node())
                 local_curl = ["curl", "--silent", "--show-error", "--fail", "--connect-timeout", "2", "--max-time", "5", "-X", "GET", *headers]
                 if not plaintext:
                     local_curl.extend(["--cert", local_bundle, "--cacert", str(remote_public)])
-                local_curl.extend(["--resolve", f"{remote_authority}:43101:{remote_host}", "--data", DOCTOR_BODY, remote_url])
+                local_curl.extend(["--resolve", f"{remote_authority}:43101:{remote_address}", "--data", DOCTOR_BODY, remote_url])
                 local_result = command(local_curl)
                 local_report = parse_json(local_result, f"curl doctor to {peer}")
                 add_case(cases, f"local curl {'plaintext' if plaintext else 'mTLS'} to {peer} doctor", doctor_ready(local_report, expected_version), "HTTP 200 real daemon doctor" if doctor_ready(local_report, expected_version) else "doctor response was not healthy/ready", origin=platform.node(), destination=peer)
@@ -725,7 +748,11 @@ def crosshost_ack(
         add_case(cases, f"{peer} reverse crosshost requires-ack", False, str(error), origin=peer, destination=platform.node())
 
 
-def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
+def write_report(
+    feature: str,
+    cases: list[dict[str, Any]],
+    evidence_metadata: dict[str, Any] | None = None,
+) -> Path:
     directory, identity = smoke_report_directory(feature)
     host = identity["host"]
     directory.mkdir(parents=True, exist_ok=True)
@@ -737,6 +764,7 @@ def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
                 **identity,
                 "status": "PASS" if passed else "FAIL",
                 "cases": cases,
+                **({"evidence_metadata": evidence_metadata} if evidence_metadata is not None else {}),
             },
             indent=2,
         )
@@ -933,7 +961,28 @@ def run_live(feature: str, peers: list[str]) -> int:
         for case in attempt_cases:
             case["attempt"] = attempt
         cases.extend(attempt_cases)
-    report = write_report(feature, cases)
+    atm, _, _ = require_environment()
+    try:
+        evidence_metadata = collect_live_evidence_metadata(
+            command=command,
+            repo_root=ROOT,
+            atm=atm,
+            feature=feature,
+            version=branch_version(),
+            operating_system=operating_system_label(),
+            architecture=platform.machine(),
+            cases=cases,
+        )
+    except SmokeError as error:
+        add_case(cases, "safe evidence metadata", False, str(error))
+        evidence_metadata = {
+            "candidate": {"git_sha": None, "version": None},
+            "environment": {"os": operating_system_label(), "architecture": platform.machine()},
+            "registered_hostnames": [],
+            "public_tls_fingerprints": {"local": None, "trusted_peers": []},
+            "commands": [f"just smoke {feature}"],
+        }
+    report = write_report(feature, cases, evidence_metadata)
     passed = all(case["status"] == "PASS" for case in cases)
     print(f"{'PASS' if passed else 'FAIL'} evidence: {report}")
     return 0 if passed else 1
