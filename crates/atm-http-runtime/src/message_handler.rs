@@ -23,10 +23,10 @@ use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::search::SearchRequest;
 use atm_core::send::WriteRequest;
 use atm_core::types::HostName;
-use axum::body::{Body, Bytes};
+use axum::body::{Body, Bytes, to_bytes};
 use axum::error_handling::HandleErrorLayer;
 use axum::extract::rejection::JsonRejection;
-use axum::extract::{ConnectInfo, DefaultBodyLimit, Extension, State};
+use axum::extract::{ConnectInfo, DefaultBodyLimit, Extension, Request, State};
 use axum::http::header::{CONTENT_TYPE, LOCATION};
 use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, Uri};
 use axum::response::Response;
@@ -358,20 +358,53 @@ async fn post_messages_with_request_id(
 async fn dispatch_request(
     State(state): State<MessageRouteState>,
     peer: Option<Extension<ConnectInfo<SocketAddr>>>,
-    method: Method,
-    uri: Uri,
-    headers: HeaderMap,
-    body: Bytes,
+    request: Request,
 ) -> Response {
+    let (parts, body) = request.into_parts();
+    let method = parts.method;
+    let uri = parts.uri;
+    let headers = parts.headers;
     let request_id = request_id_from_headers(&headers).unwrap_or_else(next_request_id);
     let request_method = method.clone();
     let request_path = uri.path_and_query().map_or_else(
         || uri.path().to_owned(),
         |path_and_query| path_and_query.as_str().to_owned(),
     );
+    let body = match read_request_body(body, state.max_body_bytes, state.request_timeout).await {
+        Ok(body) => body,
+        Err(RequestBodyReadFailure::TimedOut) => return request_body_timeout_response(),
+        Err(RequestBodyReadFailure::Rejected(error)) => return error_response(error),
+    };
     dispatch_request_with_request_id(state, peer, method, uri, headers, body, request_id)
         .instrument(info_span!("atm_http_request", %request_id, method = %request_method, path = %request_path))
         .await
+}
+
+enum RequestBodyReadFailure {
+    TimedOut,
+    Rejected(AtmError),
+}
+
+/// Reads a framework request body inside the runtime's one request budget.
+///
+/// Extraction is deliberately bounded here rather than relying only on Axum's
+/// byte limit: a peer that declares a body and then stops sending bytes must
+/// receive the same finite admission policy as downstream dispatch.
+async fn read_request_body(
+    body: Body,
+    max_body_bytes: usize,
+    request_timeout: std::time::Duration,
+) -> Result<Bytes, RequestBodyReadFailure> {
+    match tokio::time::timeout(request_timeout, to_bytes(body, max_body_bytes)).await {
+        Ok(Ok(body)) => Ok(body),
+        Ok(Err(source)) => Err(RequestBodyReadFailure::Rejected(
+            AtmError::validation_with_recovery(
+                format!("daemon HTTP request body could not be read: {source}"),
+                "send a complete request body within the configured size limit and retry",
+            ),
+        )),
+        Err(_) => Err(RequestBodyReadFailure::TimedOut),
+    }
 }
 
 async fn dispatch_request_with_request_id(
@@ -680,6 +713,15 @@ pub(crate) fn error_response(error: AtmError) -> Response {
     // causes before serializing through the untrusted HTTP boundary.
     let body = HttpErrorBody::from(&error);
     json_response(status, &body, None).unwrap_or_else(|_| Response::new(Body::empty()))
+}
+
+fn request_body_timeout_response() -> Response {
+    let error = AtmError::daemon_unavailable(
+        "daemon HTTP request body read exceeded the configured request timeout",
+    );
+    let body = HttpErrorBody::from(&error);
+    json_response(StatusCode::REQUEST_TIMEOUT, &body, None)
+        .unwrap_or_else(|_| Response::new(Body::empty()))
 }
 
 fn json_response<T: Serialize>(

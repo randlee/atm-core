@@ -1905,11 +1905,12 @@ mod tests {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let record_path = temporary_directory.path().join("local-http.json");
         let configured = HttpRuntimeBuilder::new(
             HttpRuntimeConfig::new(
                 loopback_tcp(
                     SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
-                    temporary_directory.path().join("local-http.json"),
+                    record_path.clone(),
                 ),
                 None,
                 limits(1024, 8),
@@ -1920,7 +1921,6 @@ mod tests {
         .build()
         .expect("valid loopback configuration");
         let running = configured.start().await.expect("runtime starts");
-
         let mut stream = tokio::net::TcpStream::connect(running.local_address())
             .await
             .expect("connect incomplete request fixture");
@@ -1940,6 +1940,68 @@ mod tests {
             .finish()
             .await
             .expect("runtime shuts down after header deadline test");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn loopback_body_read_deadline_returns_a_canonical_408_response() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let record_path = temporary_directory.path().join("local-http.json");
+        let configured = HttpRuntimeBuilder::new(
+            HttpRuntimeConfig::new(
+                loopback_tcp(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                    record_path.clone(),
+                ),
+                None,
+                limits(1024, 8),
+                timeouts(Duration::from_millis(25), Duration::from_secs(1)),
+            ),
+            Arc::new(TestRouter),
+        )
+        .build()
+        .expect("valid loopback configuration");
+        let running = configured.start().await.expect("runtime starts");
+        let record: LocalHttpEndpointRecord = serde_json::from_slice(
+            &std::fs::read(&record_path).expect("read active endpoint record"),
+        )
+        .expect("decode active endpoint record");
+
+        let mut stream = tokio::net::TcpStream::connect(running.local_address())
+            .await
+            .expect("connect incomplete body fixture");
+        stream
+            .write_all(
+                format!(
+                    "POST /v1/atm/messages HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\n{LOCAL_CAPABILITY_HEADER}: {}\r\nContent-Length: 2\r\nConnection: close\r\n\r\n",
+                    record.capability_base64url,
+                )
+                .as_bytes(),
+            )
+            .await
+            .expect("write complete headers without the declared body");
+        let mut response = Vec::new();
+        tokio::time::timeout(Duration::from_secs(1), stream.read_to_end(&mut response))
+            .await
+            .expect("HTTP body deadline must return promptly")
+            .expect("read timeout response");
+        let response =
+            String::from_utf8(response).expect("HTTP response is UTF-8 headers and JSON");
+        assert!(
+            response.starts_with("HTTP/1.1 408 Request Timeout"),
+            "slow request body must receive a canonical 408 response: {response}"
+        );
+        assert!(
+            response.contains("ATM_DAEMON_UNAVAILABLE"),
+            "408 response retains the stable ATM error schema: {response}"
+        );
+
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("runtime shuts down after body deadline test");
     }
 
     #[tokio::test(flavor = "current_thread")]
