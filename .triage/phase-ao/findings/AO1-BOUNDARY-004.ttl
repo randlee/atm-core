@@ -15,7 +15,9 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-18T21:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-18T06:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO.1 ;
@@ -28,10 +30,10 @@
   triage:file "crates/peer-tls/src/lib.rs" ;
   triage:line 503 ;
   triage:snippet "assert!(!error.message().contains(\"select\"));" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s1-tls-module-rehome" ;
-  triage:headSha "b87d576f925abaec5099055009f6d70da8a57848" ;
+  triage:headSha "5cfdc868b4781d3edf81f2d399ab736eb928102c" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s1-feature/pao-s1-tls-module-rehome> .
 
 <urn:atm:triage:worktree/pao-s1-feature/pao-s1-tls-module-rehome>

@@ -15,7 +15,9 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-18T20:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-18T19:50:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO.3 ;
@@ -30,10 +32,10 @@
   triage:file "crates/peer-tls/src/lib.rs" ;
   triage:line 102 ;
   triage:snippet "if !configured_peer.enabled { return Err(...) }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s1-tls-module-rehome" ;
-  triage:headSha "cb5d8b4ba" ;
+  triage:headSha "a4f21c29ec189894d2de92602a0fd86594db5578" ;
   triage:occursIn <urn:atm:triage:worktree/S1/cb5d8b4ba> .
 
 <urn:atm:triage:occurrence/AO3-ATM-QA-002/S2-1>
@@ -41,10 +43,10 @@
   triage:file "crates/peer-tls/src/lib.rs" ;
   triage:line 102 ;
   triage:snippet "if !configured_peer.enabled { return Err(...) }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s2-optional-runtime-activation" ;
-  triage:headSha "c606b8659" ;
+  triage:headSha "a4f21c29ec189894d2de92602a0fd86594db5578" ;
   triage:occursIn <urn:atm:triage:worktree/S2/c606b8659> .
 
 <urn:atm:triage:occurrence/AO3-ATM-QA-002/S3-1>
@@ -52,10 +54,10 @@
   triage:file "crates/peer-tls/src/lib.rs" ;
   triage:line 102 ;
   triage:snippet "if !configured_peer.enabled { return Err(...) }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
-  triage:headSha "4408867ef" ;
+  triage:headSha "a4f21c29ec189894d2de92602a0fd86594db5578" ;
   triage:occursIn <urn:atm:triage:worktree/S3/4408867ef> .
 
 <urn:atm:triage:worktree/S1/cb5d8b4ba>

@@ -15,7 +15,9 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-18T20:50:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-18T20:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO.3 ;
@@ -28,10 +30,10 @@
   triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
   triage:line 0 ;
   triage:snippet "--peer-wire-security plaintext-test CLI flag not wired in replacement_runtime_config" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s5-platform-benchmark-proof" ;
-  triage:headSha "8245717e9" ;
+  triage:headSha "e788b9ae1a2f7890e94b986cba7ca9daef7eef4e" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s5/8245717e9> .
 
 <urn:atm:triage:worktree/pao-s1/cb5d8b4ba>

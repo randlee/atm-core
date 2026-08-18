@@ -15,7 +15,9 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-18T20:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-18T20:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO.3 ;
@@ -31,10 +33,10 @@
   triage:file "crates/atm-storage/src/tls.rs" ;
   triage:line 55 ;
   triage:snippet "AtmError::validation(...).with_cause(source) [line 55-56]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
-  triage:headSha "4408867ef" ;
+  triage:headSha "c584b38bd61adf492e9acc5fe689f93de01098da" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s3/4408867ef> .
 
 <urn:atm:triage:occurrence/AO3-RBP-F002/pao-s3-line-59>
@@ -42,10 +44,10 @@
   triage:file "crates/atm-storage/src/tls.rs" ;
   triage:line 59 ;
   triage:snippet "AtmError::validation(...) [line 59-60]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
-  triage:headSha "4408867ef" ;
+  triage:headSha "c584b38bd61adf492e9acc5fe689f93de01098da" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s3/4408867ef> .
 
 <urn:atm:triage:occurrence/AO3-RBP-F002/pao-s3-line-62>
@@ -53,10 +55,10 @@
   triage:file "crates/atm-storage/src/tls.rs" ;
   triage:line 62 ;
   triage:snippet "AtmError::validation(...) [line 62-65]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
-  triage:headSha "4408867ef" ;
+  triage:headSha "c584b38bd61adf492e9acc5fe689f93de01098da" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s3/4408867ef> .
 
 <urn:atm:triage:occurrence/AO3-RBP-F002/pao-s3-line-67>
@@ -64,10 +66,10 @@
   triage:file "crates/atm-storage/src/tls.rs" ;
   triage:line 67 ;
   triage:snippet "AtmError::validation(...).with_cause(source) [line 67-68]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
-  triage:headSha "4408867ef" ;
+  triage:headSha "c584b38bd61adf492e9acc5fe689f93de01098da" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s3/4408867ef> .
 
 <urn:atm:triage:worktree/pao-s1/cb5d8b4ba>
