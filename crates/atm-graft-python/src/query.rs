@@ -128,12 +128,7 @@ impl PyGraftSession {
         let client = self.client()?;
         python_extension_runtime()?
             .lock()
-            .map_err(|_| {
-                atm_error(AtmError::new(
-                    AtmErrorCode::InternalError,
-                    "ATM Python extension runtime lock poisoned",
-                ))
-            })?
+            .map_err(|_| poisoned_lock_error("ATM Python extension runtime"))?
             .block_on(async move {
                 match operation {
                     ReadOperation::Read(query) => client.read_message(query).await,
@@ -155,12 +150,7 @@ impl PyGraftSession {
         let client = self.client()?;
         python_extension_runtime()?
             .lock()
-            .map_err(|_| {
-                atm_error(AtmError::new(
-                    AtmErrorCode::InternalError,
-                    "ATM Python extension runtime lock poisoned",
-                ))
-            })?
+            .map_err(|_| poisoned_lock_error("ATM Python extension runtime"))?
             .block_on(client.list_messages(query))
             .map(AtmListResult::from)
             .map_err(atm_error)

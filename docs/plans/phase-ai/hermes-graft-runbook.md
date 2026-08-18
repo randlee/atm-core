@@ -48,17 +48,11 @@ loop; neither callback selects a source-derived host session.
 The bridge process is restartable by launchd. It does not start, stop, restart,
 or own `atm-daemon`.
 
-Before starting the bridge, ensure the Hermes workspace contains a discovered
-`.atm.toml`. Graft activation is configuration-gated: when no file is found,
-the session remains `inactive` even though graft is enabled by default. A
-minimal workspace configuration is sufficient:
-
-```toml
-[atm]
-```
-
-To disable graft explicitly, use `[atm.graft] enabled = false`; otherwise the
-presence of `[atm]` keeps the default enabled behavior.
+The bridge activates from its configured ATM team and identity; its workspace
+does not need a `.atm.toml`. A present `.atm.toml` supplies optional ATM
+defaults only and must not suppress the receiver. Any malformed configuration,
+invalid workspace root, endpoint ownership conflict, or listener bind failure
+is an explicit startup error rather than an inert successful session.
 
 ## Reconcile the graft workspace root
 

@@ -23,7 +23,8 @@ graft-specific protocol, frame codec, write path, or chat-address parser.
 - automatic graft-backed post-send receipt when graft mode is active
 - automatic between-tool-call nudge injection bridge for the embedding host
 - host wake/event signaling when a new nudge arrives while the host is idle
-- graft-mode activation rules based on discovered `.atm.toml`
+- identity-driven graft receiver activation with optional ATM-owned `.atm.toml`
+  configuration
 - graft-side observability through an ATM-owned injected boundary supplied by
   the embedding host
 
@@ -206,8 +207,9 @@ Requirement IDs:
 - `REQ-GRAFT-OBS-001`
 
 Required rules:
-- if no `.atm.toml` is discovered, `atm-graft` remains inactive and performs no
-  daemon interaction or post-send handoff work
+- a valid `ATM_IDENTITY` and `ATM_TEAM` activation envelope starts the receiver
+  regardless of whether `.atm.toml` is present; activation may not
+  successfully return with an inert receiver
 - the `atm-graft` crate must rely on ATM-owned config loading via
   `atm_core::load_atm_config`; it must not privately reparse `.atm.toml`
 - if graft mode is active, runtime identity comes from `ATM_IDENTITY`; graft
@@ -219,8 +221,10 @@ Required rules:
   and the standard same-host daemon endpoint can be derived from ATM-owned
   config/environment inputs, `atm-graft` may attempt the standard supervised
   daemon auto-start path instead of requiring the daemon to be pre-running
-- graft mode is enabled by default when active and may be disabled only by
-  explicit config or runtime opt-out
+- `.atm.toml` is optional configuration only. Its absence and legacy
+  `[atm.graft].enabled` values must not gate receiver activation; malformed
+  configuration, an invalid workspace root, ownership conflict, or bind
+  failure must surface as an error
 - `atm-graft` must use the same-host daemon API for:
   - `send`
   - `read`
@@ -335,9 +339,11 @@ Scope-simplification rule for the first implementation pass:
 `req-qa` should treat these as fail-closed presence checks:
 
 - `REQ-GRAFT-CONFIG-001`
-  - `[atm.graft].enabled` exists in ATM-owned config models and config loading
+  - optional ATM configuration is loaded through ATM-owned config models and
+    config loading
   - `atm_core::load_atm_config` is the public loader consumed by `atm-graft`
-  - `atm-graft` remains inert when `.atm.toml` is absent
+  - a bare workspace receiver either reaches `listening` and publishes its
+    endpoint record or returns an error; it never successfully no-ops
 - `REQ-GRAFT-RUNTIME-001`
   - the concrete `GraftSession` lifecycle type exists once `U.9` lands
   - embedded mode automatically surfaces post-send nudges to the host and
