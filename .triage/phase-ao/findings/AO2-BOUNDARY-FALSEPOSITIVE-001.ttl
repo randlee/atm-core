@@ -15,8 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-18T16:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-08-18T15:45:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO.2 ;
   triage:foundAt "2026-08-18T15:41:24Z"^^xsd:dateTime ;
@@ -31,10 +33,10 @@
   triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
   triage:line 331 ;
   triage:snippet "peer_transport_enabled: bool," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s2-optional-runtime-activation" ;
-  triage:headSha "8e082939a" ;
+  triage:headSha "0b6160384f5e7d896fbd2d9ea64479b79a5499db" ;
   triage:occursIn <urn:atm:triage:worktree/AO2/8e082939a> .
 
 <urn:atm:triage:occurrence/AO2-BOUNDARY-FALSEPOSITIVE-001/AO2-S2-2>
@@ -42,10 +44,10 @@
   triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
   triage:line 351 ;
   triage:snippet "if peer_transport_enabled {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s2-optional-runtime-activation" ;
-  triage:headSha "8e082939a" ;
+  triage:headSha "0b6160384f5e7d896fbd2d9ea64479b79a5499db" ;
   triage:occursIn <urn:atm:triage:worktree/AO2/8e082939a> .
 
 <urn:atm:triage:occurrence/AO2-BOUNDARY-FALSEPOSITIVE-001/AO2-S3-1>
@@ -53,10 +55,10 @@
   triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
   triage:line 331 ;
   triage:snippet "peer_transport_enabled: bool," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
-  triage:headSha "f3701c789" ;
+  triage:headSha "0b6160384f5e7d896fbd2d9ea64479b79a5499db" ;
   triage:occursIn <urn:atm:triage:worktree/AO3/f3701c789> .
 
 <urn:atm:triage:occurrence/AO2-BOUNDARY-FALSEPOSITIVE-001/AO2-S3-2>
@@ -64,10 +66,10 @@
   triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
   triage:line 351 ;
   triage:snippet "if peer_transport_enabled {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
-  triage:headSha "f3701c789" ;
+  triage:headSha "0b6160384f5e7d896fbd2d9ea64479b79a5499db" ;
   triage:occursIn <urn:atm:triage:worktree/AO3/f3701c789> .
 
 <urn:atm:triage:worktree/AO1/c77b0f95f>
