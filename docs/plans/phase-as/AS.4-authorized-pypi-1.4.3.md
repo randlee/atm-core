@@ -39,15 +39,23 @@ and workflow source are pinned to immutable `main`.
 
 ## Prerequisites
 
-- AS.3 evidence accepted.
+- **Amended 2026-08-18** (see phase [README](README.md) governing-boundaries
+  amendment): AS.3 evidence is atm-core's own preflight validation, run via
+  the workspace-source `sc-lint-boundary` crate directly rather than gated on
+  the externally-released `sc-lint` binary's schema catching up (sc-lint#115)
+  or on `sc-publish`'s upstream fail-closed receipt PR (sc-publish#25)
+  merging first. Neither upstream PR is a blocking dependency for this
+  sprint.
 - Exact immutable `main` commit/tag and manifest-matching 1.4.3 artifacts.
 - Human production authorization.
 - ADR-049’s first-public-release disclosure is present in the package README
-  and GitHub release notes before the PyPI action.
+  and GitHub release notes before the PyPI action — an atm-core-owned doc fix,
+  not blocked on anything upstream.
 
 ## Hard Dependencies
 
-- `AS.3`: `must_follow`; receipt digest must match.
+- `AS.3`: `must_follow`; receipt digest must match an atm-core-owned
+  validation receipt (not an external `sc-publish` receipt PR).
 - `AS.5`: `must_follow`; migration merge waits for publication proof.
 
 ## Non-Goals
