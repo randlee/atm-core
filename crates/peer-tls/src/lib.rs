@@ -7,7 +7,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use atm_core::{BoxedPeerIo, PeerIoAdapter, RequestDeadline};
+use atm_core::{AcceptedPeerIo, BoxedPeerIo, PeerIoAdapter, RequestDeadline};
 use atm_storage::{
     AtmError, HttpsInterface, PeerConfigStore, PinnedClientVerifier, PinnedServerVerifier,
     TlsIdentity, TrustedPeer, install_tls_provider,
@@ -74,11 +74,13 @@ impl PeerTlsAdapter {
         })
     }
 
-    fn server_config(&self) -> Result<ServerConfig, AtmError> {
+    fn server_config(&self) -> Result<(ServerConfig, Arc<PinnedClientVerifier>), AtmError> {
         let snapshot = self.local_snapshot()?;
         install_tls_provider();
-        ServerConfig::builder()
-            .with_client_cert_verifier(Arc::new(PinnedClientVerifier::new(snapshot.trusted_peers)))
+        let verifier = Arc::new(PinnedClientVerifier::new(snapshot.trusted_peers));
+        let config_verifier: Arc<dyn rustls::server::danger::ClientCertVerifier> = verifier.clone();
+        let config = ServerConfig::builder()
+            .with_client_cert_verifier(config_verifier)
             .with_single_cert(
                 snapshot.identity.certificates().to_vec(),
                 snapshot.identity.private_key().clone_key(),
@@ -86,7 +88,8 @@ impl PeerTlsAdapter {
             .map_err(|source| {
                 AtmError::validation("configured peer TLS certificate/key pair is invalid")
                     .with_cause(source)
-            })
+            })?;
+        Ok((config, verifier))
     }
 
     fn client_config(
@@ -125,9 +128,9 @@ impl PeerTlsAdapter {
         &self,
         stream: TcpStream,
         deadline: RequestDeadline,
-    ) -> Result<BoxedPeerIo, AtmError> {
+    ) -> Result<AcceptedPeerIo, AtmError> {
         let adapter = self.clone();
-        let config = load_configuration_with_deadline(
+        let (config, verifier) = load_configuration_with_deadline(
             deadline,
             "peer TLS inbound configuration",
             move || adapter.server_config(),
@@ -146,7 +149,8 @@ impl PeerTlsAdapter {
                 source,
             )
         })?;
-        Ok(Box::new(stream))
+        let source_host = verifier.authenticated_host(stream.get_ref().1)?;
+        Ok(AcceptedPeerIo::new(Box::new(stream), source_host))
     }
 
     async fn connect_inner(
@@ -200,7 +204,7 @@ impl PeerIoAdapter for PeerTlsAdapter {
         stream: TcpStream,
         deadline: RequestDeadline,
     ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<BoxedPeerIo, AtmError>> + Send + 'adapter>,
+        Box<dyn std::future::Future<Output = Result<AcceptedPeerIo, AtmError>> + Send + 'adapter>,
     > {
         Box::pin(self.accept_inner(stream, deadline))
     }
@@ -444,10 +448,12 @@ mod tests {
 
         let server_task = tokio::spawn(async move {
             let (tcp, _) = listener.accept().await.expect("accept TCP");
-            let mut stream = server
+            let accepted = server
                 .accept(tcp, RequestDeadline::after(Duration::from_secs(1)))
                 .await
                 .expect("accept mTLS");
+            let (mut stream, source_host) = accepted.into_parts();
+            assert_eq!(source_host.as_str(), "client.test");
             let mut request = [0_u8; 4];
             stream
                 .read_exact(&mut request)

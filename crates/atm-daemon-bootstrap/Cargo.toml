@@ -20,11 +20,13 @@ required-features = ["benchmark-harness"]
 [dependencies]
 atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.3" }
 atm-http-runtime = { path = "../atm-http-runtime", version = "1.4.3" }
+peer-tls = { path = "../peer-tls", version = "1.4.3" }
 atm-runtime = { path = "../atm-runtime", version = "1.4.3" }
 atm-storage = { path = "../atm-storage", version = "1.4.3" }
 atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.3" }
 atm-template-sc-compose = { path = "../atm-template-sc-compose", version = "1.4.3" }
 tokio.workspace = true
+tracing.workspace = true
 fs4 = "0.13"
 serde_json.workspace = true
 ulid.workspace = true

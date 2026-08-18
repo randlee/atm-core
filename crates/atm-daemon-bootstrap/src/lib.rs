@@ -179,6 +179,7 @@ pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode) -> Result<(), At
 fn build_replacement_handler(
     assembly: RuntimeAssembly,
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
+    peer_io_adapter: Option<Arc<dyn atm_core::PeerIoAdapter>>,
     selector_factory: impl FnOnce(
         atm_core::LocalServiceRuntime,
     ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
@@ -186,22 +187,25 @@ fn build_replacement_handler(
     runtime_health: RuntimeHealth,
 ) -> Result<Arc<StorageAndNudgeRouter>, AtmError> {
     let selector = selector_factory(assembly.service_runtime.clone());
-    Ok(Arc::new(
-        StorageAndNudgeRouter::new(
-            assembly.service_runtime,
-            observability,
-            selector,
-            atm_core::home::atm_home()?,
-        )
-        .with_runtime_health(runtime_health, assembly.doctor_ports)
-        .with_daemon_context(atm_core::doctor::DoctorExecutionContext {
-            team: daemon_launch_identity.team.clone(),
-            identity: daemon_launch_identity.identity.clone(),
-            version: Some(atm_core::protocol::ReleaseVersion::current()),
-            cli_schema_version: Some(atm_core::protocol::CLI_SCHEMA_VERSION),
-            http_api_version: Some(atm_core::protocol::HttpApiVersion::current()),
-        }),
-    ))
+    let router = StorageAndNudgeRouter::new(
+        assembly.service_runtime,
+        observability,
+        selector,
+        atm_core::home::atm_home()?,
+    )
+    .with_runtime_health(runtime_health, assembly.doctor_ports)
+    .with_daemon_context(atm_core::doctor::DoctorExecutionContext {
+        team: daemon_launch_identity.team.clone(),
+        identity: daemon_launch_identity.identity.clone(),
+        version: Some(atm_core::protocol::ReleaseVersion::current()),
+        cli_schema_version: Some(atm_core::protocol::CLI_SCHEMA_VERSION),
+        http_api_version: Some(atm_core::protocol::HttpApiVersion::current()),
+    });
+    let router = match peer_io_adapter {
+        Some(peer_io_adapter) => router.with_peer_io_adapter(peer_io_adapter),
+        None => router,
+    };
+    Ok(Arc::new(router))
 }
 
 async fn run_replacement_daemon_with_selector(
@@ -217,11 +221,25 @@ async fn run_replacement_daemon_with_selector(
     let runtime_health = RuntimeHealth::with_owner(std::process::id());
     let assembly = assemble_daemon_runtime()?;
     let workflow_telemetry = assembly.workflow_telemetry.clone();
+    // AO.2 composes concrete TLS only at the daemon bootstrap boundary. The
+    // runtime receives this sealed, opaque core adapter and never observes a
+    // certificate, peer store, or Rustls type.
+    let peer_io_adapter = match peer_tls::mtls_adapter(assembly.peer_config_store()) {
+        Ok(adapter) => Some(adapter),
+        Err(error) => {
+            // mTLS is optional until a valid exchange configuration exists.
+            // Disable the direct-peer listener rather than falling back to
+            // plaintext; local transports continue serving normally.
+            tracing::info!(error = %error, "direct peer mTLS is unavailable; listener remains disabled");
+            None
+        }
+    };
     // The shipped daemon always keeps the injected receiver hook active.
     // Benchmark-only selection is available only from the separate binary.
     let handler = build_replacement_handler(
         assembly,
         observability,
+        peer_io_adapter.clone(),
         selector_factory,
         &daemon_launch_identity,
         runtime_health.clone(),
@@ -244,12 +262,17 @@ async fn run_replacement_daemon_with_selector(
             NonZeroDuration::new(REPLACEMENT_DRAIN_DEADLINE).expect("non-zero shutdown timeout"),
         ),
     );
-    let config = config.with_direct_peer_tcp(DirectPeerTcpConfig::standard());
-    let mut running = HttpRuntimeBuilder::new(config, handler)
-        .with_runtime_health(runtime_health)
-        .build()?
-        .start()
-        .await?;
+    let config = if peer_io_adapter.is_some() {
+        config.with_direct_peer_tcp(DirectPeerTcpConfig::standard())
+    } else {
+        config
+    };
+    let builder = HttpRuntimeBuilder::new(config, handler).with_runtime_health(runtime_health);
+    let builder = match peer_io_adapter {
+        Some(peer_io_adapter) => builder.with_peer_io_adapter(peer_io_adapter),
+        None => builder,
+    };
+    let mut running = builder.build()?.start().await?;
     if let Err(error) = emit_ready_signal_if_requested() {
         // The process has not advertised readiness, so it must not retain an
         // otherwise-live listener when its supervisor handshake fails.

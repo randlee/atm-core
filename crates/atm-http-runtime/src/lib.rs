@@ -41,8 +41,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use atm_core::PeerIoAdapter;
 use atm_core::error::AtmError;
 use atm_core::local_http::LocalCapability;
+use atm_core::types::HostName;
 use tokio::net::TcpListener;
 #[cfg(unix)]
 use tokio::net::UnixListener;
@@ -59,9 +61,9 @@ mod storage_and_nudge_router;
 #[cfg(unix)]
 mod unix_socket;
 
-use http1_server::serve_loopback_http1;
 #[cfg(unix)]
 use http1_server::serve_unix_http1;
+use http1_server::{serve_loopback_http1, serve_peer_http1};
 use loopback_tcp::{
     LoopbackEndpointRecordGuard, authenticated_loopback_router, cleanup_loopback_endpoint_record,
     publish_loopback_endpoint_record, validate_loopback_config,
@@ -76,11 +78,13 @@ use unix_socket::{
 /// configured shutdown deadline without bound.
 const ABORT_JOIN_GRACE: Duration = Duration::from_millis(100);
 
+#[cfg(test)]
+pub(crate) use client::direct_peer_tcp_client;
 #[cfg(unix)]
 pub use client::unix_socket_client;
 pub use client::{
-    DIRECT_PEER_TCP_PORT, SAME_HOST_REQUEST_DEADLINE, direct_peer_port, direct_peer_tcp_client,
-    loopback_tcp_client, preferred_local_client, selected_write_transport,
+    DIRECT_PEER_TCP_PORT, SAME_HOST_REQUEST_DEADLINE, loopback_tcp_client, preferred_local_client,
+    selected_write_transport,
 };
 pub use loopback_tcp::LoopbackTcpConfig;
 pub use message_handler::{
@@ -98,6 +102,7 @@ pub struct HttpRuntimeConfig {
     loopback_tcp: LoopbackTcpConfig,
     unix_socket: Option<UnixSocketConfig>,
     direct_peer_tcp: Option<DirectPeerTcpConfig>,
+    direct_peer_plaintext_diagnostic: Option<DirectPeerPlaintextDiagnostic>,
     limits: RuntimeLimits,
     timeouts: RuntimeTimeouts,
 }
@@ -116,12 +121,15 @@ impl HttpRuntimeConfig {
             loopback_tcp,
             unix_socket,
             direct_peer_tcp: None,
+            direct_peer_plaintext_diagnostic: None,
             limits,
             timeouts,
         }
     }
 
-    /// Enables the plain-TCP peer adapter.
+    /// Enables the direct-peer listener, which requires an opaque
+    /// [`PeerIoAdapter`] at runtime unless an explicit diagnostic override is
+    /// selected by the composition root.
     ///
     /// The production daemon uses [`DirectPeerTcpConfig::standard`].  It has
     /// no operator-provided local address or peer identity: the listener owns
@@ -131,6 +139,44 @@ impl HttpRuntimeConfig {
     pub fn with_direct_peer_tcp(mut self, direct_peer_tcp: DirectPeerTcpConfig) -> Self {
         self.direct_peer_tcp = Some(direct_peer_tcp);
         self
+    }
+
+    /// Selects a temporary, named plaintext diagnostic mode for the direct
+    /// peer listener.
+    ///
+    /// This is intentionally an opt-in configuration value rather than a
+    /// fallback: a TLS configuration, DNS, certificate, hostname, pin, or
+    /// handshake error never reaches this path. Production bootstrap does not
+    /// select it; benchmarks and operator debugging must name their reason.
+    #[must_use]
+    pub fn with_plaintext_direct_peer_diagnostic(
+        mut self,
+        diagnostic: DirectPeerPlaintextDiagnostic,
+    ) -> Self {
+        self.direct_peer_plaintext_diagnostic = Some(diagnostic);
+        self
+    }
+}
+
+/// Explicitly named reasons to run the direct-peer listener without mTLS.
+///
+/// This mode exists only for isolated testing, controlled benchmarks, and
+/// operator debugging. It is reported in runtime health detail and must never
+/// be selected automatically after an mTLS failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DirectPeerPlaintextDiagnostic {
+    Test,
+    Benchmark,
+    Debug,
+}
+
+impl DirectPeerPlaintextDiagnostic {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Test => "test",
+            Self::Benchmark => "benchmark",
+            Self::Debug => "debug",
+        }
     }
 }
 
@@ -331,6 +377,7 @@ impl RuntimeTimeouts {
 pub struct HttpRuntimeBuilder {
     config: HttpRuntimeConfig,
     handler: Arc<dyn CanonicalWriteHandler>,
+    peer_io_adapter: Option<Arc<dyn PeerIoAdapter>>,
     health: RuntimeHealth,
 }
 
@@ -340,8 +387,17 @@ impl HttpRuntimeBuilder {
         Self {
             config,
             handler,
+            peer_io_adapter: None,
             health: RuntimeHealth::default(),
         }
+    }
+
+    /// Installs the sole opaque direct-peer transport adapter. The runtime
+    /// receives neither TLS configuration nor certificate/storage types.
+    #[must_use]
+    pub fn with_peer_io_adapter(mut self, peer_io_adapter: Arc<dyn PeerIoAdapter>) -> Self {
+        self.peer_io_adapter = Some(peer_io_adapter);
+        self
     }
 
     /// Attaches the one process-owned health projection to lifecycle
@@ -362,9 +418,30 @@ impl HttpRuntimeBuilder {
             self.health.mark_not_ready(error.to_string());
             return Err(error);
         }
+        if self.config.direct_peer_tcp.is_some()
+            && self.peer_io_adapter.is_none()
+            && self.config.direct_peer_plaintext_diagnostic.is_none()
+        {
+            let error = preflight(
+                "direct_peer_tcp.security",
+                "requires a PeerIoAdapter; select a named plaintext diagnostic override only for test, benchmark, or debug",
+            );
+            self.health.mark_not_ready(error.to_string());
+            return Err(error);
+        }
+        if self.peer_io_adapter.is_some() && self.config.direct_peer_plaintext_diagnostic.is_some()
+        {
+            let error = preflight(
+                "direct_peer_tcp.security",
+                "cannot select both PeerIoAdapter and a plaintext diagnostic override",
+            );
+            self.health.mark_not_ready(error.to_string());
+            return Err(error);
+        }
         Ok(HttpRuntime {
             config: self.config,
             handler: self.handler,
+            peer_io_adapter: self.peer_io_adapter,
             health: self.health,
             state: Configured,
         })
@@ -394,6 +471,7 @@ pub struct Stopped;
 pub struct HttpRuntime<State> {
     config: HttpRuntimeConfig,
     handler: Arc<dyn CanonicalWriteHandler>,
+    peer_io_adapter: Option<Arc<dyn PeerIoAdapter>>,
     health: RuntimeHealth,
     state: State,
 }
@@ -434,19 +512,47 @@ impl HttpRuntime<Configured> {
             self.config.timeouts,
         );
         let loopback_router = authenticated_loopback_router(canonical_router.clone(), capability);
-        let direct_peer_router = direct_peer_listener.as_ref().map(|_| {
-            canonical_api_router(
-                Arc::clone(&self.handler),
-                AuthenticatedConnector::peer_socket(),
-                self.config.limits,
-                self.config.timeouts,
-            )
+        let direct_peer = direct_peer_listener.map(|listener| {
+            if let Some(adapter) = &self.peer_io_adapter {
+                let handler = Arc::clone(&self.handler);
+                let limits = self.config.limits;
+                let timeouts = self.config.timeouts;
+                DirectPeerServer::Authenticated {
+                    listener,
+                    adapter: Arc::clone(adapter),
+                    router_for_peer: Arc::new(move |source_host: HostName| {
+                        canonical_api_router(
+                            Arc::clone(&handler),
+                            AuthenticatedConnector::peer(source_host),
+                            limits,
+                            timeouts,
+                        )
+                    }),
+                }
+            } else {
+                let diagnostic = self
+                    .config
+                    .direct_peer_plaintext_diagnostic
+                    .expect("build validates explicit plaintext diagnostic mode");
+                tracing::warn!(
+                    mode = diagnostic.label(),
+                    "direct-peer listener is running in explicit plaintext diagnostic mode"
+                );
+                DirectPeerServer::PlaintextDiagnostic {
+                    listener,
+                    router: canonical_api_router(
+                        Arc::clone(&self.handler),
+                        AuthenticatedConnector::peer_socket(),
+                        self.config.limits,
+                        self.config.timeouts,
+                    ),
+                }
+            }
         });
         let server_task = match start_server_task(ServerTaskInputs {
             listener,
             loopback_router,
-            direct_peer_listener,
-            direct_peer_router,
+            direct_peer,
             #[cfg(unix)]
             canonical_router,
             #[cfg(unix)]
@@ -467,10 +573,23 @@ impl HttpRuntime<Configured> {
                 return Err(error);
             }
         };
-        self.health.mark_ready();
+        let ready_detail = if self.peer_io_adapter.is_some() && direct_peer_address.is_some() {
+            Some("direct-peer transport: mTLS".to_owned())
+        } else {
+            self.config
+                .direct_peer_plaintext_diagnostic
+                .map(|diagnostic| {
+                    format!(
+                        "direct-peer transport: plaintext diagnostic override ({})",
+                        diagnostic.label()
+                    )
+                })
+        };
+        self.health.mark_ready_with_detail(ready_detail);
         Ok(HttpRuntime {
             config: self.config,
             handler: self.handler,
+            peer_io_adapter: self.peer_io_adapter,
             health: self.health,
             state: Running {
                 local_address,
@@ -619,8 +738,7 @@ async fn publish_loopback_endpoint(
 struct ServerTaskInputs {
     listener: TcpListener,
     loopback_router: axum::Router,
-    direct_peer_listener: Option<TcpListener>,
-    direct_peer_router: Option<axum::Router>,
+    direct_peer: Option<DirectPeerServer>,
     #[cfg(unix)]
     canonical_router: axum::Router,
     #[cfg(unix)]
@@ -631,6 +749,18 @@ struct ServerTaskInputs {
     shutdown_rx: watch::Receiver<()>,
     server_stopped_tx: watch::Sender<bool>,
     health: RuntimeHealth,
+}
+
+enum DirectPeerServer {
+    Authenticated {
+        listener: TcpListener,
+        adapter: Arc<dyn PeerIoAdapter>,
+        router_for_peer: Arc<dyn Fn(HostName) -> axum::Router + Send + Sync>,
+    },
+    PlaintextDiagnostic {
+        listener: TcpListener,
+        router: axum::Router,
+    },
 }
 
 /// Marks the process-owned status projection when the one managed server task
@@ -675,8 +805,7 @@ async fn start_server_task(
     let ServerTaskInputs {
         listener,
         loopback_router,
-        direct_peer_listener,
-        direct_peer_router,
+        direct_peer,
         #[cfg(unix)]
         canonical_router,
         #[cfg(unix)]
@@ -694,7 +823,7 @@ async fn start_server_task(
         async move {
             drain_server_group(ServerGroupInputs {
                 loopback: (listener, loopback_router),
-                direct_peer: direct_peer_listener.zip(direct_peer_router),
+                direct_peer,
                 #[cfg(unix)]
                 unix_socket: unix_listener
                     .map(|(listener, cleanup)| (listener, cleanup, canonical_router)),
@@ -710,7 +839,7 @@ async fn start_server_task(
 
 struct ServerGroupInputs {
     loopback: (TcpListener, axum::Router),
-    direct_peer: Option<(TcpListener, axum::Router)>,
+    direct_peer: Option<DirectPeerServer>,
     #[cfg(unix)]
     unix_socket: Option<(UnixListener, UnixSocketPathGuard, axum::Router)>,
     max_connections: usize,
@@ -741,14 +870,32 @@ async fn drain_server_group(inputs: ServerGroupInputs) -> std::io::Result<()> {
         header_read_timeout,
         shutdown_rx.clone(),
     ));
-    if let Some((listener, router)) = direct_peer {
-        servers.spawn(serve_loopback_http1(
-            listener,
-            router,
-            max_connections,
-            header_read_timeout,
-            shutdown_rx.clone(),
-        ));
+    if let Some(direct_peer) = direct_peer {
+        match direct_peer {
+            DirectPeerServer::Authenticated {
+                listener,
+                adapter,
+                router_for_peer,
+            } => {
+                servers.spawn(serve_peer_http1(
+                    listener,
+                    router_for_peer,
+                    adapter,
+                    max_connections,
+                    header_read_timeout,
+                    shutdown_rx.clone(),
+                ));
+            }
+            DirectPeerServer::PlaintextDiagnostic { listener, router } => {
+                servers.spawn(serve_loopback_http1(
+                    listener,
+                    router,
+                    max_connections,
+                    header_read_timeout,
+                    shutdown_rx.clone(),
+                ));
+            }
+        }
     }
     #[cfg(unix)]
     if let Some((listener, cleanup, router)) = unix_socket {
@@ -825,6 +972,7 @@ impl HttpRuntime<Running> {
         HttpRuntime {
             config: self.config,
             handler: self.handler,
+            peer_io_adapter: self.peer_io_adapter,
             health: self.health,
             state: Draining {
                 server_task: self.state.server_task,
@@ -884,6 +1032,7 @@ impl HttpRuntime<Draining> {
         Ok(HttpRuntime {
             config: self.config,
             handler: self.handler,
+            peer_io_adapter: self.peer_io_adapter,
             health: self.health,
             state: Stopped,
         })
@@ -959,23 +1108,97 @@ mod tests {
 
     use atm_core::api::ApiRequest;
     use atm_core::api::{ApiResponse, AuthenticatedIngress, RequestDeadline};
+    use atm_core::boundary::{AcceptedPeerIo, BoxedPeerIo, PeerIoAdapter};
     use atm_core::error::AtmError;
     use atm_core::home::HOST_RUNTIME_OWNER_LOCK_FILE;
     use atm_core::local_http::{LOCAL_CAPABILITY_HEADER, LocalCapability, LocalHttpEndpointRecord};
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, RuntimeReadinessState};
     use atm_core::send::{SendMessageSource, SendRequest};
     use atm_core::test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
-    use atm_core::types::{AgentName, TeamName};
-    use tokio::net::TcpListener;
+    use atm_core::types::{AgentName, HostName, TeamName};
+    use tokio::net::{TcpListener, TcpStream};
 
     use super::{
-        CanonicalWriteHandler, DirectPeerTcpConfig, HttpRuntimeBuilder, HttpRuntimeConfig,
-        LoopbackTcpConfig, NonZeroDuration, RuntimeHealth, RuntimeLimits, RuntimeTimeouts,
-        UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid, direct_peer_tcp_client,
+        CanonicalWriteHandler, DirectPeerPlaintextDiagnostic, DirectPeerTcpConfig,
+        HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig, NonZeroDuration, RuntimeHealth,
+        RuntimeLimits, RuntimeTimeouts, UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid,
+        direct_peer_tcp_client,
     };
     use ulid::Ulid;
 
     struct TestRouter;
+
+    /// Test-only opaque transport. It intentionally passes bytes through, but
+    /// the test proves the runtime uses only the adapter-supplied identity,
+    /// never the socket peer address.
+    struct PassthroughPeerIoAdapter {
+        source_host: HostName,
+        accept_calls: AtomicUsize,
+    }
+
+    impl atm_core::boundary::sealed::Sealed for PassthroughPeerIoAdapter {}
+
+    impl PeerIoAdapter for PassthroughPeerIoAdapter {
+        fn accept<'adapter>(
+            &'adapter self,
+            stream: TcpStream,
+            _deadline: RequestDeadline,
+        ) -> std::pin::Pin<
+            Box<
+                dyn std::future::Future<Output = Result<AcceptedPeerIo, AtmError>>
+                    + Send
+                    + 'adapter,
+            >,
+        > {
+            self.accept_calls.fetch_add(1, Ordering::SeqCst);
+            let source_host = self.source_host.clone();
+            Box::pin(async move { Ok(AcceptedPeerIo::new(Box::new(stream), source_host)) })
+        }
+
+        fn connect<'adapter>(
+            &'adapter self,
+            _peer: HostName,
+            _deadline: RequestDeadline,
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<BoxedPeerIo, AtmError>> + Send + 'adapter>,
+        > {
+            Box::pin(async {
+                Err(AtmError::validation(
+                    "passthrough peer adapter test does not implement outbound transport",
+                ))
+            })
+        }
+    }
+
+    struct RejectingPeerIoAdapter;
+
+    impl atm_core::boundary::sealed::Sealed for RejectingPeerIoAdapter {}
+
+    impl PeerIoAdapter for RejectingPeerIoAdapter {
+        fn accept<'adapter>(
+            &'adapter self,
+            _stream: TcpStream,
+            _deadline: RequestDeadline,
+        ) -> std::pin::Pin<
+            Box<
+                dyn std::future::Future<Output = Result<AcceptedPeerIo, AtmError>>
+                    + Send
+                    + 'adapter,
+            >,
+        > {
+            Box::pin(async { Err(AtmError::validation("test transport rejected peer")) })
+        }
+
+        fn connect<'adapter>(
+            &'adapter self,
+            _peer: HostName,
+            _deadline: RequestDeadline,
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<BoxedPeerIo, AtmError>> + Send + 'adapter>,
+        > {
+            Box::pin(async { Err(AtmError::validation("test transport rejected peer")) })
+        }
+    }
 
     #[derive(Default)]
     struct RecordingPeerRouter {
@@ -1306,6 +1529,25 @@ mod tests {
         assert!(error.message().contains("direct_peer_tcp.port"));
     }
 
+    #[test]
+    fn direct_peer_configuration_requires_an_adapter_or_named_diagnostic_override() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let config = config_with_record(0, temporary_directory.path().join("local-http.json"))
+            .with_direct_peer_tcp(DirectPeerTcpConfig::new(43_101));
+
+        let error = match HttpRuntimeBuilder::new(config, Arc::new(TestRouter)).build() {
+            Ok(_) => panic!("an unprotected direct peer listener must be rejected"),
+            Err(error) => error,
+        };
+        assert!(error.message().contains("direct_peer_tcp.security"));
+        assert!(
+            error
+                .cause()
+                .is_some_and(|cause| cause.contains("PeerIoAdapter")),
+            "the operator error explains the one permitted production seam"
+        );
+    }
+
     #[tokio::test(flavor = "current_thread")]
     async fn direct_peer_port_collision_keeps_the_local_runtime_ready() {
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
@@ -1319,7 +1561,8 @@ mod tests {
         let endpoint_record = temporary_directory.path().join("local-http.json");
         let health = RuntimeHealth::with_owner(42);
         let config = config_with_record(0, endpoint_record.clone())
-            .with_direct_peer_tcp(DirectPeerTcpConfig::new(occupied_port));
+            .with_direct_peer_tcp(DirectPeerTcpConfig::new(occupied_port))
+            .with_plaintext_direct_peer_diagnostic(DirectPeerPlaintextDiagnostic::Test);
 
         let running = HttpRuntimeBuilder::new(config, Arc::new(TestRouter))
             .with_runtime_health(health.clone())
@@ -1335,6 +1578,11 @@ mod tests {
             RuntimeReadinessState::Ready,
             "direct-peer unavailability must not make the local daemon unready"
         );
+        assert_eq!(
+            health.snapshot().detail.as_deref(),
+            Some("direct-peer transport: plaintext diagnostic override (test)"),
+            "the explicit plaintext diagnostic mode is visible to doctor/status"
+        );
 
         running
             .begin_shutdown()
@@ -1349,7 +1597,12 @@ mod tests {
         let config = config_with_record(0, temporary_directory.path().join("local-http.json"))
             .with_direct_peer_tcp(DirectPeerTcpConfig::ephemeral_for_test());
         let handler = Arc::new(RecordingPeerRouter::default());
+        let adapter = Arc::new(PassthroughPeerIoAdapter {
+            source_host: "authenticated.test".parse().expect("valid test host"),
+            accept_calls: AtomicUsize::new(0),
+        });
         let running = HttpRuntimeBuilder::new(config, handler.clone())
+            .with_peer_io_adapter(adapter.clone())
             .build()
             .expect("valid peer configuration")
             .start()
@@ -1395,7 +1648,8 @@ mod tests {
                     .authenticated_source_host
                     .as_ref()
                     .map(|host| host.as_str()),
-                Some("127.0.0.1")
+                Some("authenticated.test"),
+                "peer provenance comes only from the adapter-authenticated host"
             );
             assert!(request.origin_message_id.is_some());
             assert!(request.origin_timestamp.is_some());
@@ -1404,6 +1658,55 @@ mod tests {
                 "the delivered mailbox address has no physical host qualifier"
             );
         }
+        assert_eq!(
+            adapter.accept_calls.load(Ordering::SeqCst),
+            1,
+            "the runtime invokes the opaque inbound adapter exactly once before HTTP dispatch"
+        );
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("runtime shuts down cleanly");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn rejected_peer_adapter_never_reaches_the_http_router() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let config = config_with_record(0, temporary_directory.path().join("local-http.json"))
+            .with_direct_peer_tcp(DirectPeerTcpConfig::ephemeral_for_test());
+        let handler = Arc::new(RecordingPeerRouter::default());
+        let running = HttpRuntimeBuilder::new(config, handler.clone())
+            .with_peer_io_adapter(Arc::new(RejectingPeerIoAdapter))
+            .build()
+            .expect("adapter-protected direct peer configuration")
+            .start()
+            .await
+            .expect("runtime starts local and direct listeners");
+        let peer_port = running
+            .direct_peer_address()
+            .expect("ephemeral direct peer listener is bound")
+            .port();
+        let client = direct_peer_tcp_client(
+            "localhost".parse().expect("direct host"),
+            std::num::NonZeroU16::new(peer_port).expect("non-zero port"),
+            Duration::from_secs(1),
+        )
+        .expect("direct typed client");
+
+        let result = client.execute(ApiRequest::new(write_request())).await;
+        assert!(
+            result.is_err(),
+            "rejected transport returns no HTTP response"
+        );
+        assert!(
+            handler
+                .calls
+                .lock()
+                .expect("recorded peer calls")
+                .is_empty(),
+            "adapter rejection occurs before HTTP decoding, router dispatch, and hooks"
+        );
         running
             .begin_shutdown()
             .finish()

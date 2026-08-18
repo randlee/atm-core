@@ -177,9 +177,11 @@ dependencies = [
  "atm-storage-rusqlite",
  "atm-template-sc-compose",
  "fs4",
+ "peer-tls",
  "serde_json",
  "tempfile",
  "tokio",
+ "tracing",
  "ulid",
 ]
 
