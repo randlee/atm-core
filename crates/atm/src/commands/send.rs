@@ -876,7 +876,7 @@ mod tests {
 
     #[test]
     fn rostered_declared_sender_does_not_add_an_advisory() {
-        let sender = "arch-ctm".parse().expect("sender");
+        let sender = TEST_SENDER.parse().expect("sender");
         let team = TEST_TEAM.parse().expect("team");
 
         assert!(sender_roster_warning(&sender, &team, [&sender]).is_none());
@@ -885,7 +885,7 @@ mod tests {
     #[test]
     fn unrostered_declared_sender_gets_non_blocking_inbox_advisory() {
         let sender = "unregistered-tool".parse().expect("sender");
-        let rostered_member = "arch-ctm".parse().expect("rostered member");
+        let rostered_member = TEST_SENDER.parse().expect("rostered member");
         let team = TEST_TEAM.parse().expect("team");
 
         let warning = sender_roster_warning(&sender, &team, [&rostered_member])
