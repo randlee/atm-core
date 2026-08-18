@@ -437,6 +437,7 @@ class ManifestSectionRule:
 class ManifestDependencyAllowlist:
     owner_manifest_path: Path
     allowed_dependencies: tuple[str, ...]
+    allowed_dev_dependencies: tuple[str, ...] | None
     boundary_record_path: Path | None
 
 
@@ -679,6 +680,7 @@ def manifest_dependency_allowlists(repo_root: Path) -> list[ManifestDependencyAl
             )
         owner_manifest_path = raw_rule.get("owner_manifest_path")
         allowed_dependencies = raw_rule.get("allowed_dependencies")
+        allowed_dev_dependencies = raw_rule.get("allowed_dev_dependencies")
         boundary_record_path = raw_rule.get("boundary_record_path")
         if not isinstance(owner_manifest_path, str) or not owner_manifest_path:
             raise SystemExit(
@@ -690,6 +692,13 @@ def manifest_dependency_allowlists(repo_root: Path) -> list[ManifestDependencyAl
             raise SystemExit(
                 f"[boundaries.manifest_dependency_allowlists][{index}].allowed_dependencies must be an array of non-empty strings"
             )
+        if allowed_dev_dependencies is not None and (
+            not isinstance(allowed_dev_dependencies, list)
+            or not all(isinstance(item, str) and item for item in allowed_dev_dependencies)
+        ):
+            raise SystemExit(
+                f"[boundaries.manifest_dependency_allowlists][{index}].allowed_dev_dependencies must be an array of non-empty strings when present"
+            )
         if boundary_record_path is not None and (
             not isinstance(boundary_record_path, str) or not boundary_record_path
         ):
@@ -700,6 +709,11 @@ def manifest_dependency_allowlists(repo_root: Path) -> list[ManifestDependencyAl
             ManifestDependencyAllowlist(
                 owner_manifest_path=Path(owner_manifest_path),
                 allowed_dependencies=tuple(allowed_dependencies),
+                allowed_dev_dependencies=(
+                    tuple(allowed_dev_dependencies)
+                    if allowed_dev_dependencies is not None
+                    else None
+                ),
                 boundary_record_path=(
                     Path(boundary_record_path)
                     if boundary_record_path is not None
@@ -1736,9 +1750,9 @@ def collect_manifest_dependency_allowlist_violations(
     ``BoundaryRecord.allowed_dependencies`` remains per-seam documentation unless
     a manifest policy explicitly names ``boundary_record_path``. That opt-in
     makes the record and manifest allowlist mechanically identical. This policy
-    intentionally includes dependencies from normal, dev, build, and
-    target-specific sections so a new test dependency cannot silently bypass
-    review.
+    normally covers every dependency section. A rule can opt into an explicit
+    ``allowed_dev_dependencies`` list, which keeps production boundary
+    documentation distinct from test-only packages while still checking both.
     """
     allowlists = manifest_dependency_allowlists(repo_root)
     if not allowlists:
@@ -1830,16 +1844,40 @@ def collect_manifest_dependency_allowlist_violations(
 
         manifest = tomllib_load(info.path)
         actual_dependencies: set[str] = set()
-        for _section_name, dependencies in dependency_sections(manifest):
+        actual_dev_dependencies: set[str] = set()
+        for section_name, dependencies in dependency_sections(manifest):
+            target = (
+                actual_dev_dependencies
+                if section_name == "dev-dependencies" or section_name.endswith(".dev-dependencies")
+                else actual_dependencies
+            )
             for dependency_name, dependency in dependencies.items():
                 package_name = dependency_package_name(dependency_name, dependency)
                 dependency_info = alias_map.get(package_name) or alias_map.get(dependency_name)
-                actual_dependencies.add(
+                target.add(
                     dependency_info.crate_dir_name if dependency_info is not None else package_name
                 )
 
         allowed_dependencies = set(allowlist.allowed_dependencies)
         location = f"{manifest_path.as_posix()} [manifest-dependency-allowlist]"
+        if allowlist.allowed_dev_dependencies is None:
+            actual_dependencies.update(actual_dev_dependencies)
+        else:
+            allowed_dev_dependencies = set(allowlist.allowed_dev_dependencies)
+            for dependency in sorted(actual_dev_dependencies - allowed_dev_dependencies):
+                violations.append(
+                    BoundaryViolation(
+                        location,
+                        f"Cargo dev-dependency {dependency!r} is not allowlisted",
+                    )
+                )
+            for dependency in sorted(allowed_dev_dependencies - actual_dev_dependencies):
+                violations.append(
+                    BoundaryViolation(
+                        location,
+                        f"allowlisted dev-dependency {dependency!r} is not declared by Cargo.toml",
+                    )
+                )
         for dependency in sorted(actual_dependencies - allowed_dependencies):
             violations.append(
                 BoundaryViolation(

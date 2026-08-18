@@ -1,6 +1,6 @@
 boundary_id = "BOUNDARY-PeerIoAdapter"
 owner_package = "atm-core"
-owner_crate_path = "agent_team_mail_core"
+owner_crate_path = "atm_core"
 name = "PeerIoAdapter"
 
 [public]
