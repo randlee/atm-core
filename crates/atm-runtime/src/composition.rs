@@ -294,10 +294,8 @@ mod tests {
     use std::sync::Arc;
 
     use atm_core::boundary::ConfigDoctor;
-    use atm_storage::{
-        CertificateFingerprint, HostName, HttpsInterface, LocalCertificate, PeerConfigStore,
-        PrivateKeyRef, TrustedPeer,
-    };
+    use atm_storage::{CertificateFingerprint, HttpsInterface, LocalCertificate, PrivateKeyRef};
+    use peer_tls::test_support::TestPeerConfigStore;
 
     use super::{RuntimeConfigDoctor, validate_enabled_peer_configuration};
     use crate::workflow_telemetry::WorkflowTelemetryDiagnostics;
@@ -354,62 +352,6 @@ mod tests {
         );
     }
 
-    #[derive(Default)]
-    struct TestPeerConfigStore {
-        interfaces: Vec<HttpsInterface>,
-        certificate: Option<LocalCertificate>,
-        peers: Vec<TrustedPeer>,
-    }
-
-    impl atm_storage::contract::sealed::Sealed for TestPeerConfigStore {}
-
-    impl PeerConfigStore for TestPeerConfigStore {
-        fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, atm_storage::AtmError> {
-            Ok(self.interfaces.clone())
-        }
-
-        fn save_interface(&self, _interface: &HttpsInterface) -> Result<(), atm_storage::AtmError> {
-            unreachable!("validation fixture is read-only")
-        }
-
-        fn remove_interface(
-            &self,
-            _bind_addr: std::net::SocketAddr,
-        ) -> Result<bool, atm_storage::AtmError> {
-            unreachable!("validation fixture is read-only")
-        }
-
-        fn local_certificate(&self) -> Result<Option<LocalCertificate>, atm_storage::AtmError> {
-            Ok(self.certificate.clone())
-        }
-
-        fn save_local_certificate(
-            &self,
-            _certificate: &LocalCertificate,
-        ) -> Result<(), atm_storage::AtmError> {
-            unreachable!("validation fixture is read-only")
-        }
-
-        fn list_trusted_peers(&self) -> Result<Vec<TrustedPeer>, atm_storage::AtmError> {
-            Ok(self.peers.clone())
-        }
-
-        fn trusted_peer(
-            &self,
-            _host: &HostName,
-        ) -> Result<Option<TrustedPeer>, atm_storage::AtmError> {
-            unreachable!("validation fixture is read-only")
-        }
-
-        fn save_trusted_peer(&self, _peer: &TrustedPeer) -> Result<(), atm_storage::AtmError> {
-            unreachable!("validation fixture is read-only")
-        }
-
-        fn remove_trusted_peer(&self, _host: &HostName) -> Result<bool, atm_storage::AtmError> {
-            unreachable!("validation fixture is read-only")
-        }
-    }
-
     fn enabled_interface() -> HttpsInterface {
         HttpsInterface {
             bind_addr: "127.0.0.1:0".parse().expect("bind address"),
@@ -431,28 +373,25 @@ mod tests {
 
     #[test]
     fn enabled_peer_configuration_accepts_complete_configuration() {
-        let store = TestPeerConfigStore {
-            interfaces: vec![enabled_interface()],
-            certificate: Some(certificate()),
-            peers: Vec::new(),
-        };
+        let store =
+            TestPeerConfigStore::new(vec![enabled_interface()], Some(certificate()), Vec::new());
         validate_enabled_peer_configuration(&store).expect("complete peer config");
     }
 
     #[test]
     fn enabled_peer_configuration_rejects_missing_certificate() {
-        let store = TestPeerConfigStore {
-            interfaces: vec![enabled_interface()],
-            certificate: None,
-            peers: Vec::new(),
-        };
+        let store = TestPeerConfigStore::new(vec![enabled_interface()], None, Vec::new());
         let error = validate_enabled_peer_configuration(&store).expect_err("missing cert");
         assert!(error.message().contains("configured local certificate"));
     }
 
     #[test]
     fn disabled_peer_configuration_requires_no_certificate() {
-        validate_enabled_peer_configuration(&TestPeerConfigStore::default())
-            .expect("disabled peer configuration");
+        validate_enabled_peer_configuration(&TestPeerConfigStore::new(
+            Vec::new(),
+            None,
+            Vec::new(),
+        ))
+        .expect("disabled peer configuration");
     }
 }
