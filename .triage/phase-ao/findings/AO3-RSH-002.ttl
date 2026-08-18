@@ -54,10 +54,10 @@
   triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
   triage:line 220 ;
   triage:snippet "let _owner = DaemonOwnerGuard::acquire_at(scope.owner_lock.clone())?;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
-  triage:headSha "4408867ef" ;
+  triage:headSha "eb6dc4b809b8a5c34b8c26a05e104e05fee938d3" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s3/4408867ef> .
 
 <urn:atm:triage:occurrence/AO3-RSH-002/pao-s4-1>
