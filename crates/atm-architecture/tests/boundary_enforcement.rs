@@ -1144,11 +1144,11 @@ fn ao1_peer_tls_is_the_only_concrete_active_io_adapter() {
         .iter()
         .flat_map(|path| {
             let source = read_source(path);
-            forbidden_runtime_tls.iter().filter_map(move |needle| {
-                source
-                    .contains(needle)
-                    .then(|| format!("{} contains {needle}", path.display()))
-            })
+            let display_path = path.display().to_string();
+            forbidden_runtime_tls
+                .iter()
+                .filter(move |needle| source.contains(**needle))
+                .map(move |needle| format!("{display_path} contains {needle}"))
         })
         .collect::<Vec<_>>();
     assert!(
