@@ -20,6 +20,7 @@ from lint_cargo_shear import annotate_sections
 from lint_cargo_shear import build_command as build_cargo_shear_command
 from lint_cargo_shear import evaluate_policy
 from lint_cargo_shear import load_policy_config
+from lint_cargo_shear import main as cargo_shear_main
 from lint_cargo_shear import parse_sections
 from lint_codespell import build_command as build_codespell_command
 
@@ -142,6 +143,33 @@ allow = ["MIT"]
                 build_cargo_shear_command(repo_root),
                 ["cargo-shear", "--format", "github"],
             )
+
+    def test_cargo_shear_allows_configured_dependency_reported_on_stderr(self) -> None:
+        diagnostic = (
+            "::error file=crates/atm-daemon/Cargo.toml,line=18,col=1,"
+            "title=shear/unused_dependency::unused dependency `chrono` "
+            "(remove this dependency)\n"
+        )
+        completed = subprocess.CompletedProcess(
+            ["cargo-shear", "--format", "github"],
+            1,
+            stdout="",
+            stderr=diagnostic,
+        )
+        policy = {
+            "allowed_empty_files": {},
+            "allowed_unlinked_files": {},
+            "allowed_unused_dependencies": {
+                "crates/atm-daemon/Cargo.toml:chrono": "path-included frozen daemon support"
+            },
+        }
+        with (
+            mock.patch("lint_cargo_shear.shutil.which", return_value="cargo-shear"),
+            mock.patch("lint_cargo_shear.workspace_crate_section_lines", return_value=[]),
+            mock.patch("lint_cargo_shear.load_policy_config", return_value=policy),
+            mock.patch("lint_cargo_shear.subprocess.run", return_value=completed),
+        ):
+            self.assertEqual(cargo_shear_main(["lint_cargo_shear.py"]), 0)
 
     def test_parse_sections_extracts_warning_files(self) -> None:
         stdout = """\
