@@ -7,8 +7,15 @@ required_variables:
   - release.version_source
   - release.tag_prefix
   - artifacts.crates
-  - artifacts.crates.name
+  - artifacts.crates.artifact
+  - artifacts.crates.package
+  - artifacts.crates.cargo_toml
+  - artifacts.crates.required
+  - artifacts.crates.publish
   - artifacts.crates.publish_order
+  - artifacts.crates.preflight_check
+  - artifacts.crates.wait_after_publish_seconds
+  - artifacts.crates.verify_install
   - artifacts.wheels
   - artifacts.wheels.package
   - artifacts.wheels.python_package
@@ -26,9 +33,16 @@ version_source = "{{ release.version_source }}"
 tag_prefix = "{{ release.tag_prefix }}"
 
 {% for crate in artifacts.crates %}
-[[artifacts.crates]]
-name = "{{ crate.name }}"
+[[crates]]
+artifact = "{{ crate.artifact }}"
+package = "{{ crate.package }}"
+cargo_toml = "{{ crate.cargo_toml }}"
+required = {{ crate.required }}
+publish = {{ crate.publish }}
 publish_order = {{ crate.publish_order }}
+preflight_check = "{{ crate.preflight_check }}"
+wait_after_publish_seconds = {{ crate.wait_after_publish_seconds }}
+verify_install = {{ crate.verify_install }}
 {% endfor %}
 
 {% for wheel in artifacts.wheels %}

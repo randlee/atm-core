@@ -135,11 +135,11 @@ Use these commands; they are the source of truth for repository-specific
 release data:
 
 ```bash
-python3 scripts/release_artifacts.py validate-manifest \
+python3 .github/scripts/release_artifacts.py validate-manifest \
   --manifest release/publish-artifacts.toml --workspace-toml Cargo.toml
-python3 scripts/release_artifacts.py preflight-secret-plan \
+python3 .github/scripts/release_artifacts.py preflight-secret-plan \
   --manifest release/publish-artifacts.toml
-python3 scripts/release_artifacts.py channel-dispatch-plan \
+python3 .github/scripts/release_artifacts.py channel-dispatch-plan \
   --manifest release/publish-artifacts.toml --tag v<VERSION>
 ```
 

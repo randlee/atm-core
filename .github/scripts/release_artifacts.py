@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import tarfile
+import tomllib
 import zipfile
 from email import message_from_bytes
 from pathlib import Path
@@ -55,7 +56,6 @@ def _channel_dispatch_config(manifest: dict, channel_name: str) -> tuple[str, di
         raise SystemExit(f"[channels.{channel_name}].dispatch_inputs must not override tag")
     return workflow, dispatch_inputs
 
-
 def _channel_credential_rehearsal(
     manifest: dict, channel_name: str
 ) -> tuple[str, dict[str, str]] | None:
@@ -79,7 +79,6 @@ def _channel_credential_rehearsal(
     workflow, _ = _channel_dispatch_config(manifest, channel_name)
     return workflow, rehearsal_inputs
 
-
 def _post_release_channel_preflight(manifest: dict, channel_name: str) -> dict[str, object]:
     """Return the non-secret readiness contract a channel worker must consume."""
     contract = _channel_contract(manifest, channel_name)
@@ -100,7 +99,6 @@ def _post_release_channel_preflight(manifest: dict, channel_name: str) -> dict[s
         "public_registry_checks": contract.get("public_registry_checks", False),
         "credential_rehearsal": rehearsal_plan,
     }
-
 
 def _root_channel_preflight(manifest: dict) -> list[dict[str, object]]:
     """Return non-secret requirements for root-workflow publish channels."""
@@ -132,8 +130,6 @@ def _root_channel_preflight(manifest: dict) -> list[dict[str, object]]:
         }
     )
     return channels
-
-
 def cmd_channel_preflight_results(args: argparse.Namespace) -> int:
     """Emit one non-secret result for every root and post-release channel."""
     try:
@@ -404,6 +400,7 @@ def cmd_validate_manifest(args: argparse.Namespace) -> int:
             raise SystemExit(f"{crate['cargo_toml']}: package mismatch: manifest={crate['package']} actual={actual}")
     python_artifacts = set()
     python_packages_by_name: dict[str, dict] = {}
+    python_distributions_by_name = {entry["name"]: entry for entry in manifest["python_distributions"]}
     for index, package in enumerate(manifest["python_packages"], start=1):
         _require_keys(package, ("artifact", "package", "manifest", "module", "publish"), f"[[python_packages]] #{index}")
         artifact = package["artifact"]
@@ -413,7 +410,14 @@ def cmd_validate_manifest(args: argparse.Namespace) -> int:
         manifest_path = Path(package["manifest"])
         if not manifest_path.is_file():
             raise SystemExit(f"{manifest_path}: missing Python package manifest")
+        distribution = python_distributions_by_name.get(package["package"], {})
+        cargo_manifest = distribution.get("cargo_manifest")
         python_package_version = _python_project_version(manifest_path)
+        if not python_package_version and cargo_manifest:
+            cargo_data = tomllib.loads((Path(args.workspace_toml).parent / cargo_manifest).read_text(encoding="utf-8"))
+            python_package_version = cargo_data.get("package", {}).get("version")
+            if isinstance(python_package_version, dict) and python_package_version.get("workspace") is True:
+                python_package_version = workspace_version(Path(args.workspace_toml))
         if not python_package_version:
             raise SystemExit(f"{manifest_path}: missing [project].version")
         actual_package_name = _python_project_name(manifest_path)
@@ -436,8 +440,8 @@ def cmd_validate_manifest(args: argparse.Namespace) -> int:
         wheels = distribution["wheels"]
         if not isinstance(wheels, list) or not all(isinstance(entry, str) for entry in wheels):
             raise SystemExit(f"[[python_distributions]] #{index}: wheels must be a list of strings")
-        cargo_manifest = Path(distribution.get("cargo_manifest", source / "Cargo.toml"))
-        if not cargo_manifest.is_file():
+        cargo_manifest = distribution.get("cargo_manifest")
+        if cargo_manifest and not (Path(cargo_manifest)).is_file():
             raise SystemExit(
                 f"[[python_distributions]] #{index}: missing Maturin Cargo manifest: {cargo_manifest}"
             )
@@ -709,15 +713,28 @@ def cmd_verify_version_lockstep(args: argparse.Namespace) -> int:
     checked_cargo_manifests: set[str] = set()
     for crate in manifest["crates"]:
         cargo_toml = crate["cargo_toml"]
-        _assert_workspace_inherited_version(workspace_toml, cargo_toml)
+        _assert_workspace_inherited_version(
+            workspace_toml,
+            cargo_toml,
+            allow_literal_base=not crate.get("publish", True),
+        )
         checked_cargo_manifests.add(cargo_toml)
     for distribution in _python_distribution_entries(manifest):
         cargo_toml = distribution["cargo_manifest"]
-        if cargo_toml not in checked_cargo_manifests:
-            _assert_workspace_inherited_version(workspace_toml, cargo_toml)
+        if cargo_toml and cargo_toml not in checked_cargo_manifests:
+            _assert_workspace_inherited_version(workspace_toml, cargo_toml, allow_literal_base=True)
             checked_cargo_manifests.add(cargo_toml)
     for package in manifest["python_packages"]:
-        _assert_python_package_version(workspace_toml, package["manifest"], version)
+        distribution = next(
+            (entry for entry in _python_distribution_entries(manifest) if entry["name"] == package["package"]),
+            None,
+        )
+        _assert_python_package_version(
+            workspace_toml,
+            package["manifest"],
+            version,
+            cargo_manifest=distribution["cargo_manifest"] if distribution else None,
+        )
     print("version lockstep verification passed")
     return 0
 

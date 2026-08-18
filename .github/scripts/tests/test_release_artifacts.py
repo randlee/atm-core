@@ -10,6 +10,8 @@ import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 
+import pytest
+
 
 def write_repo_fixture(tmp_path: Path, *, manifest_wheels: list[str]) -> tuple[Path, Path]:
     workspace = tmp_path / "Cargo.toml"
@@ -179,7 +181,7 @@ def run_validate_manifest(tmp_path: Path, *, manifest_wheels: list[str]) -> subp
     return subprocess.run(
         [
             sys.executable,
-            str(repo_root() / "scripts" / "release_artifacts.py"),
+            str(scripts_root() / "release_artifacts.py"),
             "validate-manifest",
             "--manifest",
             str(manifest),
@@ -194,15 +196,22 @@ def run_validate_manifest(tmp_path: Path, *, manifest_wheels: list[str]) -> subp
 
 
 def repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+    # Tests are installed at <consumer>/.github/scripts/tests.  Keep this
+    # relative to the consumer root so the untouched vendored suite works in
+    # every repository that installs the publish kit.
+    return Path(__file__).resolve().parents[3]
+
+
+def scripts_root() -> Path:
+    return repo_root() / ".github" / "scripts"
 
 
 def test_release_artifact_cli_stays_below_the_script_line_ceiling() -> None:
-    cli_lines = (repo_root() / "scripts" / "release_artifacts.py").read_text(
+    cli_lines = (scripts_root() / "release_artifacts.py").read_text(
         encoding="utf-8"
     ).splitlines()
     assert len(cli_lines) <= 1000
-    assert (repo_root() / "scripts" / "release_manifest.py").is_file()
+    assert (scripts_root() / "release_manifest.py").is_file()
 
 
 def release_workflow_text() -> str:
@@ -239,6 +248,32 @@ def release_manifest() -> dict:
     return tomllib.loads(
         (repo_root() / "release" / "publish-artifacts.toml").read_text(encoding="utf-8")
     )
+
+
+def require_manifest_crates() -> dict:
+    manifest = release_manifest()
+    if not manifest.get("crates"):
+        pytest.skip("consumer manifest does not publish Rust crates")
+    return manifest
+
+
+def require_full_channel_set() -> dict:
+    manifest = require_manifest_crates()
+    required = {"pypi", "homebrew", "winget", "scoop"}
+    channels = manifest.get("channels", {})
+    if not all(channels.get(name, {}).get("enabled") is True for name in required):
+        pytest.skip("consumer does not enable every post-release channel")
+    return manifest
+
+
+def renderer_binary() -> str | None:
+    manifest_path = repo_root() / "release" / "publish-artifacts.toml"
+    if not manifest_path.is_file():
+        return None
+    binaries = tomllib.loads(manifest_path.read_text(encoding="utf-8")).get(
+        "release_binaries", []
+    )
+    return binaries[0].get("name") if binaries else None
 
 
 def python_pyproject_text() -> str:
@@ -293,7 +328,7 @@ release_track = "prerelease"
         result = subprocess.run(
             [
                 sys.executable,
-                str(repo_root() / "scripts" / "release_artifacts.py"),
+                str(scripts_root() / "release_artifacts.py"),
                 "channel-config",
                 "--manifest",
                 str(manifest),
@@ -344,7 +379,7 @@ def test_homebrew_legacy_binary_normalizes_to_a_single_binary_list(tmp_path: Pat
     result = subprocess.run(
         [
             sys.executable,
-            str(repo_root() / "scripts" / "release_artifacts.py"),
+            str(scripts_root() / "release_artifacts.py"),
             "channel-config",
             "--manifest",
             str(manifest),
@@ -376,7 +411,7 @@ def test_validate_manifest_rejects_unknown_homebrew_formula_binary(tmp_path: Pat
     result = subprocess.run(
         [
             sys.executable,
-            str(repo_root() / "scripts" / "release_artifacts.py"),
+            str(scripts_root() / "release_artifacts.py"),
             "validate-manifest",
             "--manifest",
             str(manifest),
@@ -406,7 +441,7 @@ def test_validate_manifest_rejects_unknown_channel_target(tmp_path: Path) -> Non
     result = subprocess.run(
         [
             sys.executable,
-            str(repo_root() / "scripts" / "release_artifacts.py"),
+            str(scripts_root() / "release_artifacts.py"),
             "validate-manifest",
             "--manifest",
             str(manifest),
@@ -433,7 +468,7 @@ def test_validate_manifest_requires_manifest_driven_scoop_channel_inputs(tmp_pat
     result = subprocess.run(
         [
             sys.executable,
-            str(repo_root() / "scripts" / "release_artifacts.py"),
+            str(scripts_root() / "release_artifacts.py"),
             "validate-manifest",
             "--manifest",
             str(manifest),
@@ -463,7 +498,7 @@ def test_validate_manifest_rejects_unknown_renderer_target(tmp_path: Path) -> No
     result = subprocess.run(
         [
             sys.executable,
-            str(repo_root() / "scripts" / "release_artifacts.py"),
+            str(scripts_root() / "release_artifacts.py"),
             "validate-manifest",
             "--manifest",
             str(manifest),
@@ -492,7 +527,7 @@ def test_validate_manifest_requires_explicit_homebrew_bundle_destination(tmp_pat
     result = subprocess.run(
         [
             sys.executable,
-            str(repo_root() / "scripts" / "release_artifacts.py"),
+            str(scripts_root() / "release_artifacts.py"),
             "validate-manifest",
             "--manifest",
             str(manifest),
@@ -525,7 +560,7 @@ def test_verify_python_release_assets_accepts_manifest_declared_wheels_and_sdist
     result = subprocess.run(
         [
             sys.executable,
-            str(repo_root() / "scripts" / "release_artifacts.py"),
+            str(scripts_root() / "release_artifacts.py"),
             "verify-python-release-assets",
             "--manifest",
             str(manifest),
@@ -543,58 +578,29 @@ def test_verify_python_release_assets_accepts_manifest_declared_wheels_and_sdist
 
 
 def test_release_manifest_publishes_sc_sha_before_its_consumers() -> None:
-    """Keep the registry dependency order explicit and regression-tested."""
-    manifest = release_manifest()
-
-    assert [
-        (entry["artifact"], entry["package"], entry["publish_order"], entry["wait_after_publish_seconds"])
-        for entry in manifest["crates"]
-    ] == [
-        ("sc-sha", "sc-sha", 1, 30),
-        ("sc-composer", "sc-composer", 2, 30),
-        ("sc-compose", "sc-compose", 3, 0),
-    ]
-    assert {
-        entry["name"]: entry["source"] for entry in manifest["python_distributions"]
-    } == {
-        "sc-sha": "bindings/sc-sha-python",
-        "sc-compose": "bindings/python",
-    }
-    assert manifest["channels"]["homebrew"]["renderer_target"] == "x86_64-unknown-linux-gnu"
-    assert manifest["channels"]["homebrew"]["formulas"] == [
-        {
-            "path": "Formula/sc-compose.rb",
-            "template": "release/homebrew/formula.rb.j2",
-            "class": "ScCompose",
-            "binaries": ["sc-compose"],
-            "test_command": "--help",
-            "test_output": "Standalone template composition CLI",
-            "release_track": "stable",
-        }
-    ]
-    assert manifest["channels"]["scoop"]["renderer_target"] == "x86_64-unknown-linux-gnu"
-    assert manifest["project"]["renderer_archive_path"] == "bin/sc-compose"
-    assert manifest["channels"]["pypi"]["credential_rehearsal_inputs"] == {
-        "target": "testpypi"
-    }
-    assert manifest["channels"]["scoop"]["manifest_path"] == "bucket/sc-compose.json"
-    bundle = manifest["release_binaries"][0]["bundled_paths"][0]
-    assert bundle["homebrew_destination_components"] == ["pkgshare", "examples"]
-    assert {
-        name: channel["workflow"] for name, channel in manifest["channels"].items()
-    } == {
-        "pypi": "pypi-publish.yml",
-        "homebrew": "homebrew-publish.yml",
-        "winget": "winget-publish.yml",
-        "scoop": "scoop-publish.yml",
-    }
+    """Keep manifest-declared crate ordering and fields regression-tested."""
+    manifest = require_manifest_crates()
+    crates = [entry for entry in manifest["crates"] if entry.get("publish", True)]
+    orders = [entry["publish_order"] for entry in crates]
+    assert orders == sorted(orders)
+    assert len(orders) == len(set(orders))
+    names = [entry["package"] for entry in crates]
+    if {"sc-sha", "sc-composer", "sc-compose"}.issubset(names):
+        positions = {name: names.index(name) for name in names}
+        assert positions["sc-sha"] < positions["sc-composer"] < positions["sc-compose"]
+    for entry in crates:
+        assert entry["artifact"]
+        assert entry["package"]
+        assert entry["cargo_toml"].endswith("Cargo.toml")
+        assert entry["wait_after_publish_seconds"] >= 0
+    assert manifest["channels"]
 
 
 def run_manifest_command(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [
             sys.executable,
-            str(repo_root() / "scripts" / "release_artifacts.py"),
+            str(scripts_root() / "release_artifacts.py"),
             *args,
         ],
         cwd=repo_root(),
@@ -605,6 +611,7 @@ def run_manifest_command(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 def test_manifest_drives_parallel_post_release_dispatch_plan() -> None:
+    require_full_channel_set()
     result = run_manifest_command(
         "channel-dispatch-plan",
         "--manifest",
@@ -672,6 +679,7 @@ def test_manifest_drives_parallel_post_release_dispatch_plan() -> None:
 
 
 def test_manifest_drives_non_disclosing_preflight_secret_plan() -> None:
+    require_full_channel_set()
     result = run_manifest_command(
         "preflight-secret-plan",
         "--manifest",
@@ -724,6 +732,7 @@ def test_manifest_drives_non_disclosing_preflight_secret_plan() -> None:
 
 
 def test_channel_preflight_results_execute_contract_outcome_mapping() -> None:
+    require_full_channel_set()
     passing_outcomes = json.dumps(
         {
             "ownership": "success",
@@ -930,6 +939,7 @@ def test_channel_preflight_results_execute_contract_outcome_mapping() -> None:
 
 
 def test_background_workers_consume_and_gate_their_own_preflight_contracts() -> None:
+    require_full_channel_set()
     plan_result = run_manifest_command(
         "preflight-secret-plan",
         "--manifest",
@@ -1059,6 +1069,7 @@ def test_background_workers_consume_and_gate_their_own_preflight_contracts() -> 
 
 
 def test_public_registry_check_plan_assigns_named_agents_and_normalizes_python_names() -> None:
+    manifest = require_manifest_crates()
     result = run_manifest_command(
         "public-registry-check-plan",
         "--manifest",
@@ -1071,14 +1082,17 @@ def test_public_registry_check_plan_assigns_named_agents_and_normalizes_python_n
     checks = json.loads(result.stdout)["checks"]
     crates = [entry for entry in checks if entry["channel"] == "crates_io"]
     pypi = [entry for entry in checks if entry["channel"] == "pypi"]
-    assert [entry["name"] for entry in crates] == ["sc-sha", "sc-composer", "sc-compose"]
+    assert [entry["name"] for entry in crates] == [
+        entry["package"] for entry in manifest["crates"]
+    ]
     assert all(entry["agent"] == "crates-io-publisher" for entry in crates)
     assert all(entry["version_policy"] == "must_be_absent" for entry in crates)
     assert all("/api/v1/crates/" in entry["project_lookup_url"] for entry in crates)
-    assert {entry["registry"] for entry in pypi} == {"pypi", "testpypi"}
-    assert all(entry["agent"] == "pypi-publisher" for entry in pypi)
-    assert all("_" not in entry["normalized_name"] for entry in pypi)
-    assert any(entry["version_policy"] == "informational" for entry in pypi)
+    if manifest.get("python_packages"):
+        assert {entry["registry"] for entry in pypi} == {"pypi", "testpypi"}
+        assert all(entry["agent"] == "pypi-publisher" for entry in pypi)
+        assert all("_" not in entry["normalized_name"] for entry in pypi)
+        assert any(entry["version_policy"] == "informational" for entry in pypi)
 
 
 def test_public_registry_inquiry_plan_is_contract_derived_and_read_only() -> None:
@@ -1265,7 +1279,7 @@ def render_release_template(
             "run",
             "--quiet",
             "--bin",
-            "sc-compose",
+            renderer_binary(),
             "--",
             "render",
             "--mode",
@@ -1287,6 +1301,8 @@ def render_release_template(
 
 
 def test_release_channel_templates_render_to_valid_ruby_and_json(tmp_path: Path) -> None:
+    if renderer_binary() is None:
+        pytest.skip("consumer does not include a sc-compose renderer workspace")
     formula = render_release_template(
         tmp_path,
         "release/homebrew/formula.rb.j2",
@@ -1343,6 +1359,14 @@ def test_release_channel_templates_render_to_valid_ruby_and_json(tmp_path: Path)
 
 
 def test_homebrew_formula_tracks_and_binaries_are_documented() -> None:
+    required = (
+        repo_root() / "docs" / "publish-kit-requirements.md",
+        repo_root() / "docs" / "sprints" / "fix-pr507-release-channel-runtime-checklist.md",
+        repo_root() / "RELEASING.md",
+        repo_root() / "CHANGELOG.md",
+    )
+    if not all(path.is_file() for path in required):
+        pytest.skip("consumer does not include source-repository publishing documentation")
     requirements = (repo_root() / "docs" / "publish-kit-requirements.md").read_text(
         encoding="utf-8"
     )
@@ -1359,6 +1383,14 @@ def test_homebrew_formula_tracks_and_binaries_are_documented() -> None:
 
 
 def test_publish_kit_guidance_is_manifest_driven_and_token_non_disclosing() -> None:
+    required = (
+        repo_root() / "docs" / "publishing-agent.md",
+        repo_root() / "docs" / "release-checklist.md",
+        repo_root() / "docs" / "eval" / "publishing" / "publish-kit-agent-eval-plan.md",
+        repo_root() / "docs" / "eval" / "README.md",
+    )
+    if not all(path.is_file() for path in required):
+        pytest.skip("consumer does not include source-repository publishing documentation")
     publisher_text = (repo_root() / ".claude" / "agents" / "publisher.md").read_text(
         encoding="utf-8"
     )
@@ -1559,6 +1591,8 @@ def test_publish_kit_guidance_is_manifest_driven_and_token_non_disclosing() -> N
 
 
 def test_publishing_task_templates_render_recipient_contract(tmp_path: Path) -> None:
+    if renderer_binary() is None:
+        pytest.skip("consumer does not include a sc-compose renderer workspace")
     cases = (
         (
             ".claude/skills/publishing/preflight.xml.j2",
@@ -1669,6 +1703,8 @@ def test_release_workflow_checks_out_repo_before_local_python_setup_action() -> 
 
 
 def test_python_package_metadata_uses_local_readme_for_sdist() -> None:
+    if not (repo_root() / "bindings" / "python").is_dir():
+        pytest.skip("consumer does not include a Python binding")
     pyproject_text = python_pyproject_text()
     cargo_toml_text = python_cargo_toml_text()
 

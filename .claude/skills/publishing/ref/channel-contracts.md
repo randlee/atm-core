@@ -47,7 +47,7 @@ For a publisher-delegated, read-only candidate-name or candidate-version inquiry
 the contract-derived public URLs before calling `curl`:
 
 ```bash
-python3 scripts/release_artifacts.py public-registry-inquiry-plan \
+python3 .github/scripts/release_artifacts.py public-registry-inquiry-plan \
   --contracts release/publish-channel-contracts.toml \
   --channel crates_io --name atm-serde --version 0.1.0
 ```

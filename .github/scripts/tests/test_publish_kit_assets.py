@@ -39,6 +39,31 @@ class PublishingAssetTests(unittest.TestCase):
             self.assertIn("- recipient", text)
             self.assertIn("<recipient>{{ recipient }}</recipient>", text)
 
+    def test_shared_publishing_documents_use_the_packaged_release_artifacts_script(self) -> None:
+        """Prompt commands must match the path the installer copies to consumers."""
+        canonical_script = PACKAGE_ROOT / ".github" / "scripts" / "release_artifacts.py"
+        self.assertTrue(canonical_script.is_file())
+        canonical_gate = PACKAGE_ROOT / ".github" / "scripts" / "release_gate.sh"
+        self.assertTrue(canonical_gate.is_file())
+
+        shared_documents = (
+            AGENTS / "publisher.md",
+            PUBLISHING / "SKILL.md",
+            PUBLISHING / "ref" / "channel-contracts.md",
+            PACKAGE_ROOT / ".cursor" / "agents" / "publisher.md",
+            PACKAGE_ROOT / ".cursor" / "commands" / "cursor-publish.md",
+            PACKAGE_ROOT / ".cursor" / "skills" / "cursor-publish" / "SKILL.md",
+        )
+        for document in shared_documents:
+            text = document.read_text(encoding="utf-8")
+            self.assertIn(".github/scripts/release_artifacts.py", text, document)
+            self.assertNotRegex(
+                text,
+                r"(?<!\.github/)scripts/release_artifacts\.py",
+                document,
+            )
+            self.assertNotRegex(text, r"(?<!\.github/)scripts/release_gate\.sh", document)
+
 
 if __name__ == "__main__":
     unittest.main()

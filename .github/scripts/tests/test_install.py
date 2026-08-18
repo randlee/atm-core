@@ -27,8 +27,28 @@ class InstallValuesTests(unittest.TestCase):
             "release": {"version_source": "Cargo.toml", "tag_prefix": "v"},
             "artifacts": {
                 "crates": [
-                    {"name": "example-core", "publish_order": 1},
-                    {"name": "example-cli", "publish_order": 2},
+                    {
+                        "artifact": "example-core",
+                        "package": "example-core",
+                        "cargo_toml": "crates/example-core/Cargo.toml",
+                        "required": True,
+                        "publish": True,
+                        "publish_order": 1,
+                        "preflight_check": "full",
+                        "wait_after_publish_seconds": 0,
+                        "verify_install": False,
+                    },
+                    {
+                        "artifact": "example-cli",
+                        "package": "example-cli",
+                        "cargo_toml": "crates/example-cli/Cargo.toml",
+                        "required": True,
+                        "publish": True,
+                        "publish_order": 2,
+                        "preflight_check": "full",
+                        "wait_after_publish_seconds": 0,
+                        "verify_install": False,
+                    },
                 ],
                 "wheels": [{"package": "example-python", "python_package": "example_python"}],
                 "binaries": ["example"],
@@ -124,12 +144,37 @@ class InstallValuesTests(unittest.TestCase):
 
     def test_example_json_enables_only_supported_channels(self) -> None:
         with (
-            patch.object(INSTALL, "discover_crates", return_value=["example-core"]),
+            patch.object(
+                INSTALL,
+                "discover_crates",
+                return_value=[
+                    {
+                        "name": "example-core",
+                        "cargo_toml": "crates/example-core/Cargo.toml",
+                    }
+                ],
+            ),
             patch.object(INSTALL, "discover_wheels", return_value=[]),
             patch.object(INSTALL, "discover_binaries", return_value=[]),
         ):
             values = INSTALL.example_values(Path("consumer"))
         self.assertTrue(values["channels"]["crates_io"]["enabled"])
+        self.assertEqual(
+            values["artifacts"]["crates"],
+            [
+                {
+                    "artifact": "example-core",
+                    "package": "example-core",
+                    "cargo_toml": "crates/example-core/Cargo.toml",
+                    "required": True,
+                    "publish": True,
+                    "publish_order": 1,
+                    "preflight_check": "full",
+                    "wait_after_publish_seconds": 0,
+                    "verify_install": False,
+                }
+            ],
+        )
         self.assertFalse(values["channels"]["pypi"]["enabled"])
         self.assertFalse(values["channels"]["homebrew"]["enabled"])
         self.assertFalse(values["channels"]["winget"]["enabled"])
@@ -140,13 +185,7 @@ class InstallValuesTests(unittest.TestCase):
             path = Path(directory) / "input.json"
             path.write_text(json.dumps(values), encoding="utf-8")
             loaded = INSTALL.load_install_values(path)
-        self.assertEqual(
-            loaded["artifacts"]["crates"],
-            [
-                {"name": "example-core", "publish_order": 1},
-                {"name": "example-cli", "publish_order": 2},
-            ],
-        )
+        self.assertEqual(loaded["artifacts"]["crates"], values["artifacts"]["crates"])
         self.assertEqual(
             loaded["artifacts"]["wheels"],
             [{"package": "example-python", "python_package": "example_python"}],

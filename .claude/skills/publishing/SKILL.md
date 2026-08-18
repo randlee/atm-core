@@ -75,7 +75,7 @@ changing a background channel-worker contract or registry inquiry helper.
 ## Operating rules
 
 - Use the assignment's publishing manifest (normally
-  `release/publish-artifacts.toml`) and `scripts/release_artifacts.py` as the
+  `release/publish-artifacts.toml`) and `.github/scripts/release_artifacts.py` as the
   only repository-specific publish surface.
 - Use the vendorable `release/publish-channel-contracts.toml` as the single
   shared channel contract and [`ref/channel-contracts.md`](ref/channel-contracts.md)

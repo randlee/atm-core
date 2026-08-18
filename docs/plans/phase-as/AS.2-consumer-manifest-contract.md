@@ -112,7 +112,10 @@ evidence and must not silently add schema behavior.
   consumer’s supplied manifest input.
 - Installing from the ATM JSON produces every package-owned shared file and
   both rendered release manifests; byte/source parity and semantic manifest
-  equality are checked before the clean dry-run proof.
+  equality are checked before the clean dry-run proof. The terminal rendered
+  manifest equality gate remains blocked on
+  [`sc-publish` #17](https://github.com/randlee/sc-publish/issues/17); no
+  ATM-side translation or workaround is permitted.
 - PF-1, PF-2, and PF-3 use existing canonical solutions as defined above.
 - Each released Python distribution is locked to the workspace release base:
   both Maturin packages use their supported Cargo-derived path, while the pure
@@ -199,15 +202,17 @@ an unsupported dynamic-version mechanism.
 ## Current Installer Execution Record
 
 [`evidence/AS.2-consumer-input.json`](evidence/AS.2-consumer-input.json) is
-the explicit, caller-owned input accepted by the current canonical installer.
-It declares all twelve publishable crates, three Python packages, both release
-binaries, and every channel's disabled state. It is intentionally not yet the
-terminal AS.2 consumer document: the shared template currently renders wheel
-entries as `[[artifacts.wheels]]`, while ATM's canonical release validator
-consumes `[[python_packages]]` and `[[python_distributions]]`. No ATM-side
-translation is permitted. The installed-consumer proof therefore verifies the
-current installer accepts and renders the explicit input, while semantic
-manifest equality remains blocked on `sc-publish` #17.
+the explicit, caller-owned ATM input contract. It declares all twelve
+publishable crates, three Python packages, both release binaries, and every
+channel's disabled state. It is intentionally not yet the terminal AS.2
+consumer document: the shared template currently renders wheel entries as
+`[[artifacts.wheels]]`, while ATM's canonical release validator consumes
+`[[python_packages]]` and `[[python_distributions]]`. The current canonical
+installer also rejects ATM's explicit non-published bridge crates because their
+`publish_order = 0` values are not yet an accepted generic input shape. Both
+the shape and rendered-manifest parity are tracked by
+[`sc-publish` #17](https://github.com/randlee/sc-publish/issues/17). No
+ATM-side translation or workaround is permitted.
 
 `python3 .just/tests/test_as2_consumer_contract.py` prevents ATM-owned input
 drift: every declared crate must still resolve to its stated Cargo package,
