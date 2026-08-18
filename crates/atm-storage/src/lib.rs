@@ -60,8 +60,8 @@ pub use template_workflow::{
     WorkflowState, WorkflowTransition,
 };
 pub use tls::{
-    PinnedClientVerifier, TlsIdentity, certificate_fingerprint, install_tls_provider,
-    normalize_fingerprint,
+    PinnedClientVerifier, PinnedServerVerifier, TlsIdentity, certificate_fingerprint,
+    install_tls_provider, normalize_fingerprint,
 };
 pub use types::{
     AgentId, AgentIdentity, AgentName, ChatId, HostName, IsoTimestamp, ModelName, PaneId, TaskId,

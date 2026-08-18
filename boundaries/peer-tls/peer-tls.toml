@@ -1,0 +1,47 @@
+boundary_id = "BOUNDARY-PeerTls"
+owner_package = "peer-tls"
+owner_crate_path = "peer_tls"
+name = "PeerTls"
+
+[public]
+facade = "PeerTlsAdapter"
+notes = "Production Tokio-Rustls peer transport adapter. It turns a configured TcpStream into an opaque core PeerIo stream after mutual TLS authentication."
+
+[implementation]
+type = "PeerTlsAdapter"
+module = "peer_tls"
+visibility = "public"
+constructor = "public"
+
+[composition]
+roots = ["peer_tls::mtls_adapter"]
+
+[ownership]
+io_owns = ["tokio_tcp_connect", "tokio_rustls_client_handshake", "tokio_rustls_server_handshake", "deadline_bounded_tls_handshake", "opaque_authenticated_stream"]
+io_forbidden = ["http_request_encoding", "recipient_routing", "message_delivery", "storage_sql", "certificate_fingerprint_algorithm", "certificate_parser", "trust_policy_duplication", "daemon_lifecycle", "legacy_daemon_composition"]
+
+[dependencies]
+allowed_dependents = []
+allowed_dependencies = ["atm-core", "atm-storage", "tokio", "rustls", "tokio-rustls"]
+forbidden_edges = ["peer-tls -> atm-daemon", "peer-tls -> atm-http-runtime", "peer-tls -> atm-peer-tls-interop", "peer-tls -> atm-storage-rusqlite", "atm-daemon -> peer-tls"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["PeerConfigStore", "TcpStream", "HostName", "RequestDeadline"]
+response_types = ["BoxedPeerIo"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = ["crate::tests::TestPeerConfigStore"]
+forbidden_test_bypasses = ["plaintext_positive_handshake", "unbounded_tls_handshake", "fixture_interop_crate"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-PEER-TLS-DEPENDENCIES"]
+review_gates = ["storage_tls_helpers_are_canonical", "no_http_or_daemon_ownership", "all_handshakes_deadline_bounded", "all_streams_opaque"]
+
+[status]
+state = "active"
+notes = ["AO.1 owns the portable active TLS transport module. It consumes storage-neutral configuration and canonical TLS helpers; it neither configures an HTTP listener nor encodes ATM requests."]

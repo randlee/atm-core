@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -20,19 +21,42 @@ DEPRECATED_CONFIG_LINES = (
 DNS_RETRY_ATTEMPTS = 3
 DNS_RETRY_DELAY_SECONDS = 2
 DNS_RESOLUTION_FAILURE_MARKER = "could not resolve hostname"
+CARGO_DENY_ROOT_CONFIG_FROM = (0, 20, 0)
 
 
-def build_command(repo_root: Path, config_path: Path) -> list[str]:
+def build_command(
+    repo_root: Path,
+    config_path: Path,
+    cargo_deny_version: tuple[int, int, int],
+) -> list[str]:
+    """Build the command for the installed cargo-deny CLI generation."""
+    checks = ["advisories", "bans", "licenses", "sources"]
+    if cargo_deny_version >= CARGO_DENY_ROOT_CONFIG_FROM:
+        # cargo-deny 0.20 promoted graph options, including --config, to the
+        # root command. Older supported releases keep it on `check`.
+        return ["cargo-deny", "--config", str(config_path), "check", *checks]
     return [
         "cargo-deny",
         "check",
         "--config",
         str(config_path),
-        "advisories",
-        "bans",
-        "licenses",
-        "sources",
+        *checks,
     ]
+
+
+def installed_version() -> tuple[int, int, int]:
+    """Read cargo-deny's semantic version without coupling to its help text."""
+    completed = subprocess.run(
+        ["cargo-deny", "--version"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    output = "\n".join((completed.stdout or "", completed.stderr or ""))
+    match = re.search(r"cargo-deny\s+(\d+)\.(\d+)\.(\d+)", output)
+    if completed.returncode != 0 or match is None:
+        raise RuntimeError(f"could not determine cargo-deny version: {output.strip() or 'no version output'}")
+    return tuple(int(part) for part in match.groups())
 
 
 def build_runtime_config(repo_root: Path) -> Path:
@@ -100,8 +124,14 @@ def main(argv: list[str]) -> int:
     for line in workspace_crate_section_lines(repo_root):
         print(line)
 
+    try:
+        cargo_deny_version = installed_version()
+    except RuntimeError as error:
+        print(error, file=sys.stderr)
+        return 2
+
     runtime_config = build_runtime_config(repo_root)
-    completed = run_cargo_deny(build_command(repo_root, runtime_config), repo_root)
+    completed = run_cargo_deny(build_command(repo_root, runtime_config, cargo_deny_version), repo_root)
     if completed.stdout:
         emit_console_text(completed.stdout)
     if completed.stderr:

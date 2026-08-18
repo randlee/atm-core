@@ -7,7 +7,8 @@ use std::fmt;
 use std::path::Path;
 use std::sync::RwLock;
 
-use rustls::pki_types::{CertificateDer, PrivateKeyDer, UnixTime, pem::PemObject};
+use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName, UnixTime, pem::PemObject};
 use rustls::server::danger::{ClientCertVerified, ClientCertVerifier};
 use rustls::{DigitallySignedStruct, Error, ServerConnection, SignatureScheme};
 use sha2::{Digest, Sha256};
@@ -173,6 +174,85 @@ impl ClientCertVerifier for PinnedClientVerifier {
         cert: &CertificateDer<'_>,
         dss: &DigitallySignedStruct,
     ) -> Result<rustls::client::danger::HandshakeSignatureValid, Error> {
+        rustls::crypto::verify_tls13_signature(message, cert, dss, &self.algorithms)
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        self.algorithms.supported_schemes()
+    }
+}
+
+/// Canonical pinned server verifier for one configured outbound peer.
+///
+/// TLS adapters construct this from the durable peer record rather than
+/// duplicating fingerprint normalization or accepting the platform root store.
+pub struct PinnedServerVerifier {
+    host: HostName,
+    fingerprint: String,
+    algorithms: rustls::crypto::WebPkiSupportedAlgorithms,
+}
+
+impl fmt::Debug for PinnedServerVerifier {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("PinnedServerVerifier")
+            .field("host", &self.host)
+            .finish_non_exhaustive()
+    }
+}
+
+impl PinnedServerVerifier {
+    /// Create a verifier for exactly one enabled durable peer record.
+    pub fn new(peer: TrustedPeer) -> Self {
+        Self {
+            host: peer.host,
+            fingerprint: normalize_fingerprint(peer.fingerprint.as_str()),
+            algorithms: rustls::crypto::ring::default_provider().signature_verification_algorithms,
+        }
+    }
+}
+
+impl ServerCertVerifier for PinnedServerVerifier {
+    fn verify_server_cert(
+        &self,
+        end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        server_name: &ServerName<'_>,
+        _ocsp_response: &[u8],
+        _now: UnixTime,
+    ) -> Result<ServerCertVerified, Error> {
+        let ServerName::DnsName(dns_name) = server_name else {
+            return Err(rustls::CertificateError::UnknownIssuer.into());
+        };
+        if !dns_name.as_ref().eq_ignore_ascii_case(self.host.as_str()) {
+            return Err(rustls::CertificateError::UnknownIssuer.into());
+        }
+        let parsed = webpki::EndEntityCert::try_from(end_entity)
+            .map_err(|_| rustls::CertificateError::BadEncoding)?;
+        parsed
+            .verify_is_valid_for_subject_name(server_name)
+            .map_err(|_| rustls::CertificateError::NotValidForName)?;
+        if certificate_fingerprint(end_entity) != self.fingerprint {
+            return Err(rustls::CertificateError::UnknownIssuer.into());
+        }
+        Ok(ServerCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, Error> {
+        rustls::crypto::verify_tls12_signature(message, cert, dss, &self.algorithms)
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, Error> {
         rustls::crypto::verify_tls13_signature(message, cert, dss, &self.algorithms)
     }
 

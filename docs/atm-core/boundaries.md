@@ -25,6 +25,21 @@ concrete adapter in this crate.
 Test doubles planned; not yet landed. Until they exist, `allowed_test_double_paths`
 remains empty for the `atm-core` contract-owner records below.
 
+## PeerIoAdapter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/peer-io-adapter.toml](../../boundaries/atm-core/peer-io-adapter.toml)
+
+Purpose:
+- own the sealed, object-safe contract for an authenticated peer byte stream
+  and its connect/accept deadline boundary
+
+Rules:
+- `atm-core` owns only the opaque `BoxedPeerIo` contract, not Rustls types,
+  certificates, trust policy, HTTP encoding, or listener lifecycle
+- `peer-tls` is the sole production implementation; the Tokio/Axum runtime may
+  later consume only this trait, never the concrete TLS adapter
+
 ## AtmProtocol (historical through AI.5)
 
 Canonical machine-readable boundary source:
