@@ -6,7 +6,7 @@ phase: AS
 sprint: AS.4
 worktree: main immutable release assets; canonical publisher agents from AS worktree
 branch: main
-status: proposed
+status: blocked
 estimated_scope: one authorized production channel
 ```
 
@@ -95,3 +95,50 @@ python3 -m pip install --only-binary=:all: hermes-atm==1.4.3
 
 Existing target versions must be classified with PF-3 semantics; do not treat
 an already-published version as permission to rebuild or overwrite it.
+
+## Execution Receipt — 2026-08-18
+
+**Outcome: blocked before production upload.** The AS.4 forward branch is
+`feature/pas-s4-authorized-pypi-1.4.3`, stacked from AS.3 evidence commit
+`3f5f2db474dc66b34be38d60193ba259fe8e78e4`. The immutable release source is
+`main`/`v1.4.3` commit `fa6066468f8e638893bedd686244cffa2a43dbdf`.
+
+The prerequisite receipt is not acceptable: Release Preflight run
+[`32159872873`](https://github.com/randlee/atm-core/actions/runs/32159872873)
+failed because `sc-lint` 0.4.0 rejected ATM's `trait` boundary field. The
+sc-lint correction is awaiting merge in
+[randlee/sc-lint#115](https://github.com/randlee/sc-lint/pull/115), and the
+resolved-receipt workflow is awaiting merge in
+[randlee/sc-publish#25](https://github.com/randlee/sc-publish/pull/25).
+
+The immutable tag also fails ADR-049's publication-disclosure prerequisite:
+neither `crates/hermes-atm/README.md` nor the v1.4.3 GitHub release notes
+states that this is the first public release and explains the internal 1.x
+history. That cannot be corrected without a new immutable release; AS.4
+therefore must not upload these artifacts.
+
+At the time of this receipt, both public registry endpoints returned 404 for
+`hermes-atm` and `atm-graft`; no public PyPI artifacts exist. The prior
+workflow run [`32081875532`](https://github.com/randlee/atm-core/actions/runs/32081875532)
+successfully uploaded only to TestPyPI; its production-PyPI job was skipped.
+Its immutable staged artifact SHA-256 values were:
+
+- `hermes_atm-1.4.3-py3-none-any.whl` —
+  `041311b7806d43acd2326c6532076b614f6df9af930f6102d4c8485aa936b2f7`
+- `atm_graft-1.4.3.tar.gz` —
+  `c9d6f532d6606f9f1cbc90e8970e7817ce1444dc75e44906ed4ad5b688f880ab`
+- `atm_graft-1.4.3-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl` —
+  `3344cabb6c1f0b1c02e9df0174b28dd72577021e92d784fc307dae693adfc26b`
+- `atm_graft-1.4.3-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl` —
+  `11aa4d7059a94854d8acec11df2200359e660226176907397d3961464f0d7337`
+- `atm_graft-1.4.3-cp311-abi3-musllinux_1_2_x86_64.whl` —
+  `32b713a0cf4508dbffe2a865194c471e1836ec6d7a744938c1be7e7a64f9e83e`
+- `atm_graft-1.4.3-cp311-abi3-macosx_11_0_arm64.whl` —
+  `23da2aa35fef045c9899063d00495a384506d0ff995d4728d378962fb3b9aeac`
+- `atm_graft-1.4.3-cp311-abi3-win_amd64.whl` —
+  `f9963df87f5d4e04377583200e79227b8c1db9f22a507b37bff3de43c6e2112a`
+
+Required remediation: merge the two upstream fixes, create a new immutable
+release containing the ADR-049 disclosure, obtain a matching AS.3 receipt,
+and then run the PyPI-only channel against that release. No rebuild or upload
+is authorized for the blocked v1.4.3 set.
