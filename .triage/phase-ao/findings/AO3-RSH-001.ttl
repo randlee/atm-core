@@ -43,10 +43,10 @@
   triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
   triage:line 364 ;
   triage:snippet "body: Bytes," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s2-optional-runtime-activation" ;
-  triage:headSha "c606b8659" ;
+  triage:headSha "ada4020c0c3714569579a0451c8d6ce382168404" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s2/c606b8659> .
 
 <urn:atm:triage:occurrence/AO3-RSH-001/S3>
