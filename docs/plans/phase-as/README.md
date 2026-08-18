@@ -77,7 +77,7 @@ must not recreate the retired script or patch the package locally.
 
 | Sprint | Purpose | Dependency |
 | --- | --- | --- |
-| [AS.1](AS.1-overlay-contract.md) | Freeze and justify the exact upstream overlay. | Start point |
+| [AS.1](AS.1-overlay-contract.md) | Freeze and justify the exact upstream overlay. | in_progress |
 | [AS.2](AS.2-consumer-manifest-contract.md) | Justify ATM consumer data and raise upstream gaps. | must_follow AS.1 |
 | [AS.3](AS.3-worktree-preflight-proof.md) | Prove canonical preflight from the exact sync worktree. | must_follow AS.2 |
 | [AS.4](AS.4-authorized-pypi-1.4.3.md) | Publish the already-built 1.4.3 PyPI artifacts from immutable `main`. | must_follow AS.3 |

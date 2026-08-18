@@ -89,7 +89,8 @@ Keep this one-channel release separate from AS.6’s full 1.4.4 release.
 ## Required Validation
 
 ```bash
-python3 scripts/release_artifacts.py verify-atm-graft-wheel --help
+python3 .github/scripts/release_artifacts.py verify-python-release-assets \
+  --manifest release/publish-artifacts.toml --asset-dir dist
 python3 -m pip install --only-binary=:all: hermes-atm==1.4.3
 ```
 

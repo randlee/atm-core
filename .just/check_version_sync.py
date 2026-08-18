@@ -25,6 +25,7 @@ PYTHON_RELEASE_CARGO_MANIFESTS = frozenset(
 )
 PYTHON_DYNAMIC_VERSION_SOURCES = {
     Path("crates/atm-graft-python/pyproject.toml"): Path("crates/atm-graft-python/Cargo.toml"),
+    Path("crates/atm-query-python/pyproject.toml"): Path("crates/atm-query-python/Cargo.toml"),
 }
 VERSION_BASE_PATTERN = re.compile(
     r"^(?P<base>\d+\.\d+\.\d+)"
