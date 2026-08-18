@@ -154,28 +154,29 @@ enter shared files.
 
 ## Migration work
 
-### M1 — Freeze and prove the source boundary
+### S1 — Justify and freeze the exact overlay
 
-1. Adopt comp's canonical sync/copy script and its reviewed shared-path list;
-   remove any ATM-local sync scripts rather than consolidating them.
-2. Run its `--dry-run` diff before copy, then its parity verification after
-   copy; test a one-byte negative mutation through the canonical tool.
-3. CI invokes the canonical verification mode before release validation.
-4. Any required shared-file change goes to `sc-compose`, then updates the
-   recorded source revision. No ATM edit to a copied path is allowed.
+1. Review each canonical overlay path against the shared requirement and its
+   QA/proof obligation; retain the 31-row audit above as the decision record.
+2. Pin an accepted `sc-publish` source SHA and run its `--dry-run` before and
+   after synchronization. A one-byte mutation must be detected by that same
+   canonical tool.
+3. Record that all copied paths are byte-identical; any needed shared change
+   is an upstream `sc-publish` PR, never an ATM patch.
 
-### M2 — Remove known consumer collisions
+### S2 — Justify ATM manifest and activation changes
 
-1. Move ATM installed-document functions out of shared
-   `scripts/release_artifacts.py` into `scripts/atm_release_artifacts.py`.
-2. Update `scripts/validate_release.py` and
-   `scripts/verify_release_archive.py` to import the ATM module.
-3. Add focused equivalence tests and run current release-validator tests before
-   and after extraction.
+1. Compare ATM's existing artifact manifest to the canonical parser schema.
+2. For every required ATM manifest addition, record the corresponding
+   canonical workflow/helper that consumes it and the required proof.
+3. Declare only ATM artifacts, destinations, and enabled channels; do not put
+   credentials, tool versions, or workflow behavior in the manifest.
+4. Keep every undeclared channel dormant and record why it is not enabled.
 
-This is a consumer-boundary adapter, not a shared-kit modification.
+This sprint changes only ATM data after the justification record is accepted;
+it does not modify any copied shared path.
 
-### M3 — Exact adoption and obsolete-code removal
+### S3 — Exact adoption and obsolete-code removal
 
 1. Sync from the frozen source revision.
 2. Redirect every caller to the copied kit.
@@ -184,7 +185,7 @@ This is a consumer-boundary adapter, not a shared-kit modification.
 4. Use the canonical tool's source-revision and digest verification for every
    shared path; do not add a competing ATM parity implementation.
 
-### M4 — Make the manifest the sole policy input
+### S4 — Make the manifest the sole policy input
 
 1. Land `toolchain` and `extra_validations` schema/parser/runner/tests in
    `sc-compose` first.
@@ -195,7 +196,7 @@ This is a consumer-boundary adapter, not a shared-kit modification.
 4. Add static tests rejecting workflow-local tool installation and requiring
    the single bootstrap in every preflight/release job.
 
-### M5 — Prove equivalence before production
+### S5 — Prove equivalence before production
 
 1. Run shared-kit tests inside ATM after exact copy.
 2. Run `just lint` and `just test`.
