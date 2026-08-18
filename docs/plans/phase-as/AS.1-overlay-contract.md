@@ -80,6 +80,10 @@ manifest behavior change in ATM.
    source/version policy, artifacts, explicit crate order, wheels, binaries,
    channels, and channel settings. It must reject missing production input;
    discovery is allowed only for an advisory example command.
+8. Require an installation proof that runs the installer with the ATM input,
+   verifies every copied shared asset against the package source, parses the
+   generated manifests, and proves their semantic values equal the supplied
+   JSON. A second installer `--dry-run` must be clean.
 
 ## Split Recommendation
 
@@ -97,6 +101,9 @@ consumer manifest work belongs to AS.2.
   resolution; there is no ATM workaround.
 - The upstream installer has no enabled-channel defaults and no production
   source-discovery fallback.
+- One complete ATM JSON input builds every copied asset and both generated
+  manifests to specification; generated manifest semantics equal that input.
+- A second run in `--dry-run` mode is clean.
 - The upstream semantic installation test passes in CI using the same pinned
   toolchain that consumers receive.
 

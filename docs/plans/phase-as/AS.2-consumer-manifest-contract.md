@@ -94,6 +94,9 @@ evidence and must not silently add schema behavior.
 - Every dormant channel has an explicit manifest-state reason.
 - Installation cannot infer or enable an artifact/channel not present in the
   consumer’s supplied manifest input.
+- Installing from the ATM JSON produces every package-owned shared file and
+  both rendered release manifests; byte/source parity and semantic manifest
+  equality are checked before the clean dry-run proof.
 - PF-1, PF-2, and PF-3 use existing canonical solutions as defined above.
 - `atm-graft-python`, `atm-query-python`, and `hermes-atm` all resolve their
   version from Cargo; the version-lock test fails if any published Python
