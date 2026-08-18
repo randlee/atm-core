@@ -18,7 +18,7 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-17T21:45:00Z"^^xsd:dateTime ;
-  triage:foundIn triage:AO-S1 ;
+  triage:foundIn triage:AO.1 ;
   triage:foundAt "2026-08-18T05:31:13Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AO1-CLIPPY-002/AO1-S1-1> ;
   triage:triageRecordVersion "1" .
