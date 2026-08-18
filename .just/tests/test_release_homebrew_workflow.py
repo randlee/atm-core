@@ -5,39 +5,29 @@ import unittest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release.yml"
+WORKFLOW = REPO_ROOT / ".github" / "workflows" / "homebrew-publish.yml"
 
 
 class ReleaseHomebrewWorkflowTests(unittest.TestCase):
-    def test_update_homebrew_job_uses_scripted_formula_update_and_validation(self) -> None:
+    def test_homebrew_channel_reads_its_configuration_from_the_manifest(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
 
-        self.assertIn("update-homebrew:", text)
-        self.assertIn("python3 scripts/release_artifacts.py update-homebrew-formulas \\", text)
-        self.assertIn("python3 scripts/release_artifacts.py validate-homebrew-formulas \\", text)
-        self.assertIn("--release-dir release \\", text)
-        self.assertIn("--formula homebrew-tap/Formula/agent-team-mail.rb \\", text)
-        self.assertIn("--formula homebrew-tap/Formula/atm.rb", text)
+        self.assertIn("channel-config --manifest release/publish-artifacts.toml --channel homebrew", text)
+        self.assertIn('ref: ${{ inputs.tag }}', text)
 
-    def test_stable_release_selects_only_stable_formulas(self) -> None:
+    def test_homebrew_channel_renders_every_manifest_selected_formula(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
-        stable_update = text[text.index("- name: Update stable Homebrew formulas") : text.index(
-            "- name: Update opt-in Homebrew prerelease formula", text.index("- name: Update stable Homebrew formulas")
-        )]
-        self.assertIn("outputs.prerelease == 'false'", stable_update)
-        self.assertIn("--formula homebrew-tap/Formula/agent-team-mail.rb", stable_update)
-        self.assertIn("--formula homebrew-tap/Formula/atm.rb", stable_update)
-        self.assertNotIn("atm-beta.rb", stable_update)
 
-    def test_prerelease_release_selects_only_atm_beta(self) -> None:
+        self.assertIn('for index, formula in enumerate(channel["formulas"]):', text)
+        self.assertIn('output = Path("homebrew-tap") / formula["path"]', text)
+        self.assertNotIn("agent-team-mail.rb", text)
+        self.assertNotIn("atm-beta.rb", text)
+
+    def test_homebrew_channel_validates_every_rendered_formula(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
-        start = text.index("- name: Update opt-in Homebrew prerelease formula")
-        end = text.index("- name: Validate stable Homebrew formulas", start)
-        prerelease_update = text[start:end]
-        self.assertIn("outputs.prerelease == 'true'", prerelease_update)
-        self.assertIn("--formula homebrew-tap/Formula/atm-beta.rb", prerelease_update)
-        self.assertNotIn("Formula/atm.rb", prerelease_update)
-        self.assertNotIn("Formula/agent-team-mail.rb", prerelease_update)
+
+        self.assertIn('for formula in json.loads(os.environ["CHANNEL_CONFIG"])["channel"]["formulas"]:', text)
+        self.assertIn('subprocess.run(["ruby", "-c", str(Path("homebrew-tap") / formula["path"])], check=True)', text)
 
 
 if __name__ == "__main__":

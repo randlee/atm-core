@@ -1,5 +1,60 @@
 schema_version = 1
 
+[project]
+name = "agent-team-mail"
+archive_prefix = "atm"
+description = "CLI for local agent team mail workflows"
+homepage = "https://github.com/randlee/atm-core"
+license = "MIT OR Apache-2.0"
+readme_dependency_crate = "agent-team-mail-core"
+renderer_archive_path = "bin/atm"
+
+[[release_targets]]
+target = "x86_64-unknown-linux-gnu"
+os = "ubuntu-latest"
+archive = "tar.gz"
+
+[[release_targets]]
+target = "x86_64-apple-darwin"
+os = "macos-latest"
+archive = "tar.gz"
+
+[[release_targets]]
+target = "aarch64-apple-darwin"
+os = "macos-latest"
+archive = "tar.gz"
+
+[[release_targets]]
+target = "x86_64-pc-windows-msvc"
+os = "windows-latest"
+archive = "zip"
+
+[[crates]]
+# This Maturin package is published to PyPI as `atm-graft`, not to crates.io.
+# Keep it in the release inventory so validation cannot silently omit it.
+artifact = "atm-graft-python"
+package = "atm-graft-python"
+cargo_toml = "crates/atm-graft-python/Cargo.toml"
+required = true
+publish = false
+publish_order = 0
+preflight_check = "locked"
+wait_after_publish_seconds = 0
+verify_install = true
+
+[[crates]]
+# This Maturin package is published to PyPI as `atm-query`, not to crates.io.
+# Keep it in the release inventory so validation cannot silently omit it.
+artifact = "atm-query-python"
+package = "atm-query-python"
+cargo_toml = "crates/atm-query-python/Cargo.toml"
+required = true
+publish = false
+publish_order = 0
+preflight_check = "locked"
+wait_after_publish_seconds = 0
+verify_install = true
+
 [[crates]]
 artifact = "atm-error"
 package = "atm-error"
@@ -132,21 +187,9 @@ preflight_check = "locked"
 wait_after_publish_seconds = 0
 verify_install = true
 
-[[crates]]
-# This Maturin package is published to PyPI as `atm-graft`, not to crates.io.
-# Keep it in the release inventory so validation cannot silently omit it.
-artifact = "atm-graft-python"
-package = "atm-graft-python"
-cargo_toml = "crates/atm-graft-python/Cargo.toml"
-required = true
-publish = false
-publish_order = 0
-preflight_check = "locked"
-wait_after_publish_seconds = 0
-verify_install = true
-
 [[release_binaries]]
 name = "atm"
+bundled_paths = [{ source = "docs/user-documents", destination = "share/doc/atm", homebrew_destination_components = ["pkgshare"] }]
 
 [[release_binaries]]
 name = "atm-daemon"
@@ -155,3 +198,116 @@ name = "atm-daemon"
 source_root = "docs/user-documents"
 install_root = "share/doc/atm"
 entrypoint = "share/doc/atm/README.md"
+
+[[python_packages]]
+artifact = "atm-graft-wheel"
+package = "atm-graft"
+manifest = "crates/atm-graft-python/pyproject.toml"
+module = "atm_graft"
+publish = "pypi"
+
+[[python_packages]]
+artifact = "atm-query-wheel"
+package = "atm-query"
+manifest = "crates/atm-query-python/pyproject.toml"
+module = "atm_query"
+publish = "pypi"
+
+[[python_packages]]
+artifact = "hermes-atm"
+package = "hermes-atm"
+manifest = "crates/hermes-atm/pyproject.toml"
+module = "hermes_atm"
+publish = "pypi"
+
+[[python_distributions]]
+name = "atm-graft"
+source = "crates/atm-graft-python"
+cargo_manifest = "crates/atm-graft-python/Cargo.toml"
+module_path = "crates/atm-graft-python/python/atm_graft"
+sdist = true
+wheels = ["ubuntu-latest", "macos-latest", "windows-latest"]
+
+[[python_distributions]]
+name = "atm-query"
+source = "crates/atm-query-python"
+cargo_manifest = "crates/atm-query-python/Cargo.toml"
+module_path = "crates/atm-query-python"
+sdist = true
+wheels = ["ubuntu-latest", "macos-latest", "windows-latest"]
+
+[[python_distributions]]
+name = "hermes-atm"
+source = "crates/hermes-atm"
+build_system = "setuptools"
+module_path = "crates/hermes-atm/src/hermes_atm"
+sdist = true
+wheels = ["ubuntu-latest", "macos-latest", "windows-latest"]
+
+[channels.pypi]
+workflow = "pypi-publish.yml"
+dispatch_inputs = { target = "production" }
+credential_rehearsal_inputs = { target = "testpypi" }
+test_repository = "testpypi"
+production_repository = "pypi"
+
+[channels.homebrew]
+workflow = "homebrew-publish.yml"
+dispatch_inputs = {}
+tap_repository = "randlee/homebrew-tap"
+renderer_target = "x86_64-unknown-linux-gnu"
+
+[[channels.homebrew.formulas]]
+path = "Formula/agent-team-mail.rb"
+template = "release/homebrew/formula.rb.j2"
+class = "AgentTeamMail"
+binaries = ["atm", "atm-daemon"]
+test_command = "--help"
+test_output = "CLI for local agent team mail workflows"
+release_track = "stable"
+
+[[channels.homebrew.formulas]]
+path = "Formula/atm.rb"
+template = "release/homebrew/formula.rb.j2"
+class = "Atm"
+binaries = ["atm", "atm-daemon"]
+test_command = "--help"
+test_output = "CLI for local agent team mail workflows"
+release_track = "stable"
+
+[[channels.homebrew.formulas]]
+path = "Formula/atm-beta.rb"
+template = "release/homebrew/formula.rb.j2"
+class = "AtmBeta"
+binaries = ["atm", "atm-daemon"]
+test_command = "--help"
+test_output = "CLI for local agent team mail workflows"
+release_track = "prerelease"
+
+[[channels.homebrew.assets]]
+key = "macos_arm"
+target = "aarch64-apple-darwin"
+
+[[channels.homebrew.assets]]
+key = "macos_intel"
+target = "x86_64-apple-darwin"
+
+[[channels.homebrew.assets]]
+key = "linux"
+target = "x86_64-unknown-linux-gnu"
+
+[channels.winget]
+workflow = "winget-publish.yml"
+dispatch_inputs = {}
+identifier = "randlee.agent-team-mail"
+installer_target = "x86_64-pc-windows-msvc"
+
+[channels.scoop]
+workflow = "scoop-publish.yml"
+dispatch_inputs = {}
+bucket_repository = "randlee/scoop-bucket"
+manifest_path = "bucket/atm.json"
+manifest_template = "release/scoop/manifest.json.j2"
+installer_target = "x86_64-pc-windows-msvc"
+binary = "bin/atm.exe"
+renderer_target = "x86_64-unknown-linux-gnu"
