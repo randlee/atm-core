@@ -10,8 +10,10 @@ CLI environment: ``ATM_IDENTITY`` and ``ATM_TEAM``.
 from __future__ import annotations
 
 import argparse
+import base64
 from contextlib import contextmanager
 from datetime import datetime, timezone
+import hashlib
 from html import escape
 import ipaddress
 import json
@@ -34,6 +36,7 @@ from feature_smoke_report import (
     summarize_cases,
 )
 from run_inbound_peer_smoke import PANE_TEMPLATE, compose
+from smoke_evidence import collect_live_evidence_metadata
 from smoke_common import (
     SmokeError,
     advertised_host_from_value as advertised_host_from_json,
@@ -264,6 +267,34 @@ def certificate_authority(pem: Path) -> str:
     return match.group(1)
 
 
+def certificate_spki_pin(pem: Path) -> str:
+    """Return curl's SHA-256 SPKI pin for one peer leaf certificate.
+
+    ATM peer TLS deliberately uses independently pinned self-signed leaf
+    certificates, not a certificate authority hierarchy.  Curl must therefore
+    pin the peer key while ``--insecure`` disables only its unrelated Web-PKI
+    chain check; the daemon still enforces the presented client certificate.
+    """
+    with tempfile.TemporaryDirectory(prefix="atm-smoke-spki-") as temp:
+        public_key = Path(temp) / "public-key.pem"
+        public_key_der = Path(temp) / "public-key.der"
+        export = command(
+            ["openssl", "x509", "-in", str(pem), "-pubkey", "-noout", "-out", str(public_key)]
+        )
+        if export["exit_code"] != 0:
+            raise SmokeError(f"could not export certificate public key: {export['stderr'].strip()}")
+        convert = command(
+            ["openssl", "pkey", "-pubin", "-in", str(public_key), "-outform", "DER", "-out", str(public_key_der)]
+        )
+        if convert["exit_code"] != 0:
+            raise SmokeError(f"could not encode certificate public key: {convert['stderr'].strip()}")
+        try:
+            digest = hashlib.sha256(public_key_der.read_bytes()).digest()
+        except OSError as error:
+            raise SmokeError(f"could not read certificate public key: {error}") from error
+    return f"sha256//{base64.b64encode(digest).decode('ascii')}"
+
+
 def resolve_dns_addresses(host: str) -> list[str]:
     """Return every address the local resolver provides for a peer hostname."""
     try:
@@ -271,6 +302,26 @@ def resolve_dns_addresses(host: str) -> list[str]:
     except OSError as error:
         raise SmokeError(f"DNS resolution for {host} failed: {error}") from error
     return sorted({record[4][0] for record in records})
+
+
+def connect_address(advertised_host: str) -> str:
+    """Resolve one advertised endpoint to the IP required by curl --resolve.
+
+    ``curl --resolve`` keeps the certificate authority name in the URL while
+    overriding only its TCP destination. Its three fields are therefore
+    ``certificate-host:port:ip-address``; an advertised hostname is not a
+    valid replacement for the last field.
+    """
+    try:
+        return str(ipaddress.ip_address(advertised_host))
+    except ValueError:
+        addresses = resolve_dns_addresses(advertised_host)
+        if not addresses:
+            raise SmokeError(f"DNS resolution for advertised host {advertised_host} returned no addresses")
+        for address in addresses:
+            if isinstance(ipaddress.ip_address(address), ipaddress.IPv4Address):
+                return address
+        return addresses[0]
 
 
 def remote_resolve_dns_addresses(peer: str, host: str) -> list[str]:
@@ -332,12 +383,12 @@ def curl_doctor(
             if local_export["exit_code"] != 0:
                 raise SmokeError(f"could not export local public certificate: {local_export['stderr'].strip()}")
             with remote_certificate_workspace(peer) as remote_tempdir:
-                remote_local_ca = f"{remote_tempdir}/local-public.pem"
+                remote_local_public = f"{remote_tempdir}/local-public.pem"
                 remote_public_path = f"{remote_tempdir}/peer-public.pem"
                 export_remote = remote_shell(peer, f"openssl x509 -in {shlex.quote(remote_bundle)} -out {shlex.quote(remote_public_path)}")
                 if export_remote["exit_code"] != 0:
                     raise SmokeError(f"{peer} could not export public certificate: {export_remote['stderr'].strip()}")
-                copied_local = command(["scp", str(local_public), f"{peer}:{remote_local_ca}"])
+                copied_local = command(["scp", str(local_public), f"{peer}:{remote_local_public}"])
                 if copied_local["exit_code"] != 0:
                     raise SmokeError(f"could not copy local public certificate to {peer}: {copied_local['stderr'].strip()}")
                 copied_remote = command(["scp", f"{peer}:{remote_public_path}", str(remote_public)])
@@ -345,21 +396,25 @@ def curl_doctor(
                     raise SmokeError(f"could not copy {peer} public certificate: {copied_remote['stderr'].strip()}")
                 local_authority = certificate_authority(local_public)
                 remote_authority = certificate_authority(remote_public)
+                local_pin = certificate_spki_pin(local_public)
+                remote_pin = certificate_spki_pin(remote_public)
+                local_address = connect_address(advertised_host(atm))
+                remote_address = connect_address(remote_host)
                 scheme = "http" if plaintext else "https"
                 local_url = f"{scheme}://{local_authority}:43101/v1/atm/doctor"
                 remote_url = f"{scheme}://{remote_authority}:43101/v1/atm/doctor"
                 headers = ["-H", "Content-Type: application/json"]
                 remote_curl = ["curl", "--silent", "--show-error", "--fail", "--connect-timeout", "2", "--max-time", "5", "-X", "GET", *headers]
                 if not plaintext:
-                    remote_curl.extend(["--cert", remote_bundle, "--cacert", remote_local_ca])
-                remote_curl.extend(["--resolve", f"{local_authority}:43101:{advertised_host(atm)}", "--data", DOCTOR_BODY, local_url])
+                    remote_curl.extend(["--cert", remote_bundle, "--insecure", "--pinnedpubkey", local_pin])
+                remote_curl.extend(["--resolve", f"{local_authority}:43101:{local_address}", "--data", DOCTOR_BODY, local_url])
                 remote_result = remote_shell(peer, " ".join(shlex.quote(value) for value in remote_curl))
                 remote_report = parse_json(remote_result, f"{peer} curl doctor to local")
                 add_case(cases, f"{peer} curl {'plaintext' if plaintext else 'mTLS'} to local doctor", doctor_ready(remote_report, expected_version), "HTTP 200 real daemon doctor" if doctor_ready(remote_report, expected_version) else "doctor response was not healthy/ready", origin=peer, destination=platform.node())
                 local_curl = ["curl", "--silent", "--show-error", "--fail", "--connect-timeout", "2", "--max-time", "5", "-X", "GET", *headers]
                 if not plaintext:
-                    local_curl.extend(["--cert", local_bundle, "--cacert", str(remote_public)])
-                local_curl.extend(["--resolve", f"{remote_authority}:43101:{remote_host}", "--data", DOCTOR_BODY, remote_url])
+                    local_curl.extend(["--cert", local_bundle, "--insecure", "--pinnedpubkey", remote_pin])
+                local_curl.extend(["--resolve", f"{remote_authority}:43101:{remote_address}", "--data", DOCTOR_BODY, remote_url])
                 local_result = command(local_curl)
                 local_report = parse_json(local_result, f"curl doctor to {peer}")
                 add_case(cases, f"local curl {'plaintext' if plaintext else 'mTLS'} to {peer} doctor", doctor_ready(local_report, expected_version), "HTTP 200 real daemon doctor" if doctor_ready(local_report, expected_version) else "doctor response was not healthy/ready", origin=platform.node(), destination=peer)
@@ -391,7 +446,7 @@ def curl_doctor(
                 *headers,
             ]
             if not plaintext:
-                dns_curl.extend(["--cert", local_bundle, "--cacert", str(remote_public)])
+                dns_curl.extend(["--cert", local_bundle, "--insecure", "--pinnedpubkey", remote_pin])
             dns_curl.extend(["--data", DOCTOR_BODY, remote_url])
             dns_report = parse_json(command(dns_curl), f"DNS curl doctor to {peer}")
             add_case(
@@ -725,7 +780,11 @@ def crosshost_ack(
         add_case(cases, f"{peer} reverse crosshost requires-ack", False, str(error), origin=peer, destination=platform.node())
 
 
-def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
+def write_report(
+    feature: str,
+    cases: list[dict[str, Any]],
+    evidence_metadata: dict[str, Any] | None = None,
+) -> Path:
     directory, identity = smoke_report_directory(feature)
     host = identity["host"]
     directory.mkdir(parents=True, exist_ok=True)
@@ -737,6 +796,7 @@ def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
                 **identity,
                 "status": "PASS" if passed else "FAIL",
                 "cases": cases,
+                **({"evidence_metadata": evidence_metadata} if evidence_metadata is not None else {}),
             },
             indent=2,
         )
@@ -933,7 +993,28 @@ def run_live(feature: str, peers: list[str]) -> int:
         for case in attempt_cases:
             case["attempt"] = attempt
         cases.extend(attempt_cases)
-    report = write_report(feature, cases)
+    atm, _, _ = require_environment()
+    try:
+        evidence_metadata = collect_live_evidence_metadata(
+            command=command,
+            repo_root=ROOT,
+            atm=atm,
+            feature=feature,
+            version=branch_version(),
+            operating_system=operating_system_label(),
+            architecture=platform.machine(),
+            cases=cases,
+        )
+    except SmokeError as error:
+        add_case(cases, "safe evidence metadata", False, str(error))
+        evidence_metadata = {
+            "candidate": {"git_sha": None, "version": None},
+            "environment": {"os": operating_system_label(), "architecture": platform.machine()},
+            "registered_hostnames": [],
+            "public_tls_fingerprints": {"local": None, "trusted_peers": []},
+            "commands": [f"just smoke {feature}"],
+        }
+    report = write_report(feature, cases, evidence_metadata)
     passed = all(case["status"] == "PASS" for case in cases)
     print(f"{'PASS' if passed else 'FAIL'} evidence: {report}")
     return 0 if passed else 1

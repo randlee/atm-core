@@ -19,7 +19,7 @@ io_owns = ["https_interface_configuration", "certificate_reference_metadata", "t
 io_forbidden = ["socket_io", "tls_handshake", "message_delivery", "retry_queue", "process_spawn"]
 
 [dependencies]
-allowed_dependents = ["atm", "atm-core", "atm-daemon-bootstrap", "atm-peer-tls-interop", "atm-runtime", "atm-storage-rusqlite", "atm-storage-sqlserver-proof"]
+allowed_dependents = ["atm", "atm-core", "atm-daemon-bootstrap", "atm-runtime", "atm-storage-rusqlite", "atm-storage-sqlserver-proof", "peer-tls"]
 allowed_dependencies = []
 forbidden_edges = ["atm-storage -> atm-core", "atm-storage -> atm-storage-rusqlite"]
 

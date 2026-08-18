@@ -41,6 +41,13 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm-daemon", "atm-template-sc-compose"),
     ("atm-runtime", "atm-template-sc-compose"),
     ("atm-http-runtime", "atm-template-sc-compose"),
+    ("atm-core", "peer-tls"),
+    ("atm-http-runtime", "peer-tls"),
+    ("atm-daemon", "peer-tls"),
+    ("peer-tls", "atm-daemon"),
+    ("peer-tls", "atm-http-runtime"),
+    ("peer-tls", "atm-peer-tls-interop"),
+    ("peer-tls", "atm-storage-rusqlite"),
 ];
 
 const RETIRED_DAEMON_CONSTRUCT_FRAGMENTS: &[(&str, &str)] = &[
@@ -1079,14 +1086,81 @@ fn atm_daemon_must_not_depend_on_atm_peer_tls_interop() {
 }
 
 #[test]
-fn storage_tls_boundary_lists_only_current_tls_consumers() {
+fn storage_tls_boundary_lists_only_authorized_tls_consumers() {
     let boundary_path = workspace_root().join("boundaries/atm-storage/tls.toml");
     let boundary: BoundaryToml = toml::from_str(&read_source(&boundary_path))
         .expect("storage TLS boundary must be valid TOML");
     assert_eq!(
         boundary.dependencies.allowed_dependents,
-        vec!["atm-peer-tls-interop".to_string()],
-        "storage TLS helpers must name only crates that consume the TLS API"
+        vec!["atm-peer-tls-interop".to_string(), "peer-tls".to_string()],
+        "storage TLS helpers must name only the fixture and the canonical active peer transport"
+    );
+}
+
+#[test]
+fn ao1_peer_tls_is_the_only_concrete_active_io_adapter() {
+    let dependencies = direct_normal_workspace_dependencies();
+    assert_eq!(
+        dependencies.get("peer-tls"),
+        Some(&BTreeSet::from([
+            "agent-team-mail-core".to_string(),
+            "atm-storage".to_string(),
+        ])),
+        "peer-tls may depend only on core contracts and storage-neutral TLS configuration"
+    );
+    for (source, target) in [
+        ("atm-core", "peer-tls"),
+        ("atm-http-runtime", "peer-tls"),
+        ("atm-daemon", "peer-tls"),
+        ("peer-tls", "atm-daemon"),
+        ("peer-tls", "atm-http-runtime"),
+        ("peer-tls", "atm-peer-tls-interop"),
+        ("peer-tls", "atm-storage-rusqlite"),
+    ] {
+        assert_forbidden_edge_absent(source, target);
+    }
+
+    let root = workspace_root();
+    let core_adapter = read_source(&root.join("crates/atm-core/src/boundary/peer_io_adapter.rs"));
+    assert!(
+        core_adapter.contains("pub trait PeerIoAdapter: sealed::Sealed")
+            && core_adapter.contains("BoxedPeerIo"),
+        "AO.1 must keep the peer I/O port sealed and opaque at the core boundary"
+    );
+    let peer_tls = read_source(&root.join("crates/peer-tls/src/lib.rs"));
+    assert!(
+        peer_tls.contains("impl atm_core::boundary::sealed::Sealed for PeerTlsAdapter")
+            && peer_tls.contains("impl PeerIoAdapter for PeerTlsAdapter"),
+        "peer-tls must be the ADR-001-authorized production PeerIoAdapter implementation"
+    );
+
+    let mut runtime_sources = Vec::new();
+    collect_rust_files(
+        &root.join("crates/atm-http-runtime/src"),
+        &mut runtime_sources,
+    );
+    let forbidden_runtime_tls = [
+        "rustls",
+        "tokio_rustls",
+        "TlsConnector",
+        "TlsAcceptor",
+        "PeerConfigStore",
+        "atm_storage::tls",
+    ];
+    let violations = runtime_sources
+        .iter()
+        .flat_map(|path| {
+            let source = read_source(path);
+            let display_path = path.display().to_string();
+            forbidden_runtime_tls
+                .iter()
+                .filter(move |needle| source.contains(**needle))
+                .map(move |needle| format!("{display_path} contains {needle}"))
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        violations.is_empty(),
+        "the Tokio/Axum runtime may consume only opaque peer I/O, never concrete TLS configuration: {violations:?}"
     );
 }
 
@@ -2015,11 +2089,12 @@ fn al9_cli_and_graft_send_use_the_selected_runtime_client() {
 fn al5_uds_is_a_framework_adapter_over_the_one_client_and_router() {
     let root = workspace_root();
     let runtime = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
+    let lifecycle = read_source(&root.join("crates/atm-http-runtime/src/lifecycle.rs"));
     let http1_server = read_source(&root.join("crates/atm-http-runtime/src/http1_server.rs"));
     let staging = read_source(&root.join("crates/atm-http-runtime/src/private_staging.rs"));
     let unix_socket = read_source(&root.join("crates/atm-http-runtime/src/unix_socket.rs"));
     let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
-    let combined = format!("{runtime}\n{unix_socket}\n{http1_server}\n{client}");
+    let combined = format!("{runtime}\n{lifecycle}\n{unix_socket}\n{http1_server}\n{client}");
 
     assert!(
         combined.contains("UnixListener")
@@ -2074,15 +2149,16 @@ fn al5_uds_is_a_framework_adapter_over_the_one_client_and_router() {
 fn al6_loopback_tcp_is_capability_authentication_over_the_one_client_and_router() {
     let root = workspace_root();
     let runtime = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
+    let lifecycle = read_source(&root.join("crates/atm-http-runtime/src/lifecycle.rs"));
     let http1_server = read_source(&root.join("crates/atm-http-runtime/src/http1_server.rs"));
     let staging = read_source(&root.join("crates/atm-http-runtime/src/private_staging.rs"));
     let adapter = read_source(&root.join("crates/atm-http-runtime/src/loopback_tcp.rs"));
     let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
-    let combined = format!("{runtime}\n{http1_server}\n{adapter}\n{client}");
+    let combined = format!("{runtime}\n{lifecycle}\n{http1_server}\n{adapter}\n{client}");
 
     assert!(
-        runtime.contains("canonical_api_router(")
-            && runtime
+        combined.contains("canonical_api_router(")
+            && combined
                 .contains("authenticated_loopback_router(canonical_router.clone(), capability)")
             && http1_server.contains("into_make_service_with_connect_info::<SocketAddr>()")
             && http1_server.contains("Semaphore::new(max_connections)")
@@ -2544,6 +2620,8 @@ fn guarded_boundary_files() -> Vec<PathBuf> {
         root.join("boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml"),
         root.join("boundaries/atm-runtime/runtime-composition.toml"),
         root.join("boundaries/atm-storage/tls.toml"),
+        root.join("boundaries/atm-core/peer-io-adapter.toml"),
+        root.join("boundaries/peer-tls/peer-tls.toml"),
         root.join("boundaries/atm-template-sc-compose/sc-composer.toml"),
     ];
     let mut sqlite_files = fs::read_dir(root.join("boundaries/atm-storage-rusqlite"))

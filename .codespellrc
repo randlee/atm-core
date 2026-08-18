@@ -1,4 +1,4 @@
 [codespell]
-skip = ./.git,./target,./.just/logs,./Cargo.lock,./artifacts
+skip = ./.git,./target,./.just/logs,./Cargo.lock,./artifacts,./site/reports
 ignore-words = .codespellignore
 quiet-level = 2

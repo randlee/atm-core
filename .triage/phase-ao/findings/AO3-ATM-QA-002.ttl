@@ -1,0 +1,94 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO3-ATM-QA-002>
+  a triage:Finding ;
+  triage:findingId "AO3-ATM-QA-002" ;
+  triage:title "Missing dedicated test for disabled-trusted-peer rejection path" ;
+  triage:description "req-qa IMPORTANT finding from AO3-QA-1 (PR #945 @ 4408867ef): crates/peer-tls/src/lib.rs:102-111 -- no dedicated test for the disabled-trusted-peer rejection path (Deliverable 1 of the AO.3 sprint doc explicitly requires this negative-case test)." ;
+  triage:phaseId "phase-ao" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage-gap" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-18T19:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO.3 ;
+  triage:foundAt "2026-08-18T19:42:55Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO3-ATM-QA-002/S1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO3-ATM-QA-002/S2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO3-ATM-QA-002/S3-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO3-ATM-QA-002/S1-1>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 102 ;
+  triage:snippet "if !configured_peer.enabled { return Err(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "cb5d8b4ba" ;
+  triage:occursIn <urn:atm:triage:worktree/S1/cb5d8b4ba> .
+
+<urn:atm:triage:occurrence/AO3-ATM-QA-002/S2-1>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 102 ;
+  triage:snippet "if !configured_peer.enabled { return Err(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s2-optional-runtime-activation" ;
+  triage:headSha "c606b8659" ;
+  triage:occursIn <urn:atm:triage:worktree/S2/c606b8659> .
+
+<urn:atm:triage:occurrence/AO3-ATM-QA-002/S3-1>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 102 ;
+  triage:snippet "if !configured_peer.enabled { return Err(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
+  triage:headSha "4408867ef" ;
+  triage:occursIn <urn:atm:triage:worktree/S3/4408867ef> .
+
+<urn:atm:triage:worktree/S1/cb5d8b4ba>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s1" ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "cb5d8b4ba" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/S2/c606b8659>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s2" ;
+  triage:branch "feature/pao-s2-optional-runtime-activation" ;
+  triage:headSha "c606b8659" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/S3/4408867ef>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s3" ;
+  triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
+  triage:headSha "4408867ef" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/S4/ce0b37c0e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s4" ;
+  triage:branch "feature/pao-s4-tls-benchmark-modes" ;
+  triage:headSha "ce0b37c0e" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/S5/8245717e9>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s5" ;
+  triage:branch "feature/pao-s5-platform-benchmark-proof" ;
+  triage:headSha "8245717e9" ;
+  triage:orderIndex 5 .

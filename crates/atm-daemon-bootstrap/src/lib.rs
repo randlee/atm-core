@@ -179,6 +179,7 @@ pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode) -> Result<(), At
 fn build_replacement_handler(
     assembly: RuntimeAssembly,
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
+    peer_io_adapter: Option<Arc<dyn atm_core::PeerIoAdapter>>,
     selector_factory: impl FnOnce(
         atm_core::LocalServiceRuntime,
     ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
@@ -186,22 +187,25 @@ fn build_replacement_handler(
     runtime_health: RuntimeHealth,
 ) -> Result<Arc<StorageAndNudgeRouter>, AtmError> {
     let selector = selector_factory(assembly.service_runtime.clone());
-    Ok(Arc::new(
-        StorageAndNudgeRouter::new(
-            assembly.service_runtime,
-            observability,
-            selector,
-            atm_core::home::atm_home()?,
-        )
-        .with_runtime_health(runtime_health, assembly.doctor_ports)
-        .with_daemon_context(atm_core::doctor::DoctorExecutionContext {
-            team: daemon_launch_identity.team.clone(),
-            identity: daemon_launch_identity.identity.clone(),
-            version: Some(atm_core::protocol::ReleaseVersion::current()),
-            cli_schema_version: Some(atm_core::protocol::CLI_SCHEMA_VERSION),
-            http_api_version: Some(atm_core::protocol::HttpApiVersion::current()),
-        }),
-    ))
+    let router = StorageAndNudgeRouter::new(
+        assembly.service_runtime,
+        observability,
+        selector,
+        atm_core::home::atm_home()?,
+    )
+    .with_runtime_health(runtime_health, assembly.doctor_ports)
+    .with_daemon_context(atm_core::doctor::DoctorExecutionContext {
+        team: daemon_launch_identity.team.clone(),
+        identity: daemon_launch_identity.identity.clone(),
+        version: Some(atm_core::protocol::ReleaseVersion::current()),
+        cli_schema_version: Some(atm_core::protocol::CLI_SCHEMA_VERSION),
+        http_api_version: Some(atm_core::protocol::HttpApiVersion::current()),
+    });
+    let router = match peer_io_adapter {
+        Some(peer_io_adapter) => router.with_peer_io_adapter(peer_io_adapter),
+        None => router,
+    };
+    Ok(Arc::new(router))
 }
 
 async fn run_replacement_daemon_with_selector(
@@ -217,23 +221,123 @@ async fn run_replacement_daemon_with_selector(
     let runtime_health = RuntimeHealth::with_owner(std::process::id());
     let assembly = assemble_daemon_runtime()?;
     let workflow_telemetry = assembly.workflow_telemetry.clone();
+    let peer_io_adapter = optional_peer_io_adapter(&assembly);
+    let mut running = start_replacement_runtime(ReplacementStartupInputs {
+        scope: &scope,
+        owner: &_owner,
+        assembly,
+        observability,
+        peer_io_adapter,
+        selector_factory,
+        daemon_launch_identity: &daemon_launch_identity,
+        runtime_health,
+    })
+    .await?;
+    if let Err(error) = emit_ready_signal_if_requested() {
+        // The process has not advertised readiness, so it must not retain an
+        // otherwise-live listener when its supervisor handshake fails.
+        let _ = running.begin_shutdown().finish().await;
+        workflow_telemetry.shutdown().await;
+        return Err(error);
+    }
+    if let ShutdownTrigger::ServerStopped = wait_for_replacement_shutdown(&mut running).await? {
+        let result = match running.begin_shutdown().finish().await {
+            Ok(_) => Err(AtmError::daemon_unavailable(
+                "replacement HTTP runtime server stopped unexpectedly",
+            )),
+            Err(error) => Err(error),
+        };
+        workflow_telemetry.shutdown().await;
+        return result;
+    }
+    let _stopped = running.begin_shutdown().finish().await?;
+    workflow_telemetry.shutdown().await;
+    Ok(())
+}
+
+/// AO.2 composes concrete TLS only at the daemon bootstrap boundary. The
+/// runtime receives this sealed, opaque core adapter and never observes a
+/// certificate, peer store, or Rustls type.
+fn optional_peer_io_adapter(
+    assembly: &RuntimeAssembly,
+) -> Option<Arc<dyn atm_core::PeerIoAdapter>> {
+    match peer_tls::mtls_adapter(assembly.peer_config_store()) {
+        Ok(adapter) => Some(adapter),
+        Err(error) => {
+            // mTLS is optional until a valid exchange configuration exists.
+            // Disable the direct-peer listener rather than falling back to
+            // plaintext; local transports continue serving normally.
+            tracing::info!(error = %error, "direct peer mTLS is unavailable; listener remains disabled");
+            None
+        }
+    }
+}
+
+struct ReplacementStartupInputs<'a, F>
+where
+    F: FnOnce(
+        atm_core::LocalServiceRuntime,
+    ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
+{
+    scope: &'a atm_core::home::HostRuntimeScope,
+    owner: &'a DaemonOwnerGuard,
+    assembly: RuntimeAssembly,
+    observability: Arc<dyn ObservabilityPort + Send + Sync>,
+    peer_io_adapter: Option<Arc<dyn atm_core::PeerIoAdapter>>,
+    selector_factory: F,
+    daemon_launch_identity: &'a DaemonLaunchIdentity,
+    runtime_health: RuntimeHealth,
+}
+
+async fn start_replacement_runtime<F>(
+    ReplacementStartupInputs {
+        scope,
+        owner,
+        assembly,
+        observability,
+        peer_io_adapter,
+        selector_factory,
+        daemon_launch_identity,
+        runtime_health,
+    }: ReplacementStartupInputs<'_, F>,
+) -> Result<atm_http_runtime::HttpRuntime<atm_http_runtime::Running>, AtmError>
+where
+    F: FnOnce(
+        atm_core::LocalServiceRuntime,
+    ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
+{
     // The shipped daemon always keeps the injected receiver hook active.
     // Benchmark-only selection is available only from the separate binary.
     let handler = build_replacement_handler(
         assembly,
         observability,
+        peer_io_adapter.clone(),
         selector_factory,
-        &daemon_launch_identity,
+        daemon_launch_identity,
         runtime_health.clone(),
     )?;
+    let config = replacement_runtime_config(scope, owner, peer_io_adapter.is_some())?;
+    let builder = HttpRuntimeBuilder::new(config, handler).with_runtime_health(runtime_health);
+    let builder = match peer_io_adapter {
+        Some(peer_io_adapter) => builder.with_peer_io_adapter(peer_io_adapter),
+        None => builder,
+    };
+    builder.build()?.start().await
+}
+
+fn replacement_runtime_config(
+    scope: &atm_core::home::HostRuntimeScope,
+    owner: &DaemonOwnerGuard,
+    direct_peer_enabled: bool,
+) -> Result<HttpRuntimeConfig, AtmError> {
     let loopback = LoopbackTcpConfig::new(
         SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
         scope.runtime_root.as_ref().join(LOCAL_HTTP_RECORD_FILENAME),
-        _owner.instance_id(),
+        owner.instance_id(),
     );
     let config = HttpRuntimeConfig::new(
         loopback,
-        unix_socket_config(&scope)?,
+        unix_socket_config(scope)?,
         RuntimeLimits::new(
             NonZeroUsize::new(DEFAULT_MESSAGE_MAX_BYTES + CANONICAL_WRITE_ENVELOPE_OVERHEAD_BYTES)
                 .expect("non-zero body limit"),
@@ -244,40 +348,32 @@ async fn run_replacement_daemon_with_selector(
             NonZeroDuration::new(REPLACEMENT_DRAIN_DEADLINE).expect("non-zero shutdown timeout"),
         ),
     );
-    let config = config.with_direct_peer_tcp(DirectPeerTcpConfig::standard());
-    let mut running = HttpRuntimeBuilder::new(config, handler)
-        .with_runtime_health(runtime_health)
-        .build()?
-        .start()
-        .await?;
-    if let Err(error) = emit_ready_signal_if_requested() {
-        // The process has not advertised readiness, so it must not retain an
-        // otherwise-live listener when its supervisor handshake fails.
-        let _ = running.begin_shutdown().finish().await;
-        workflow_telemetry.shutdown().await;
-        return Err(error);
-    }
+    Ok(if direct_peer_enabled {
+        config.with_direct_peer_tcp(DirectPeerTcpConfig::standard())
+    } else {
+        config
+    })
+}
+
+enum ShutdownTrigger {
+    Signal,
+    ServerStopped,
+}
+
+async fn wait_for_replacement_shutdown(
+    running: &mut atm_http_runtime::HttpRuntime<atm_http_runtime::Running>,
+) -> Result<ShutdownTrigger, AtmError> {
     tokio::select! {
         signal = wait_for_shutdown_signal() => {
             let signal = signal?;
             eprintln!("replacement ATM daemon received {}; starting graceful shutdown", signal.as_str());
+            Ok(ShutdownTrigger::Signal)
         }
         _ = running.wait_for_server_stop() => {
             eprintln!("replacement ATM HTTP runtime server stopped unexpectedly; beginning cleanup");
-            let result = match running.begin_shutdown().finish().await {
-                Ok(_) => Err(AtmError::daemon_unavailable(
-                    "replacement HTTP runtime server stopped unexpectedly",
-                )),
-                Err(error) => Err(error),
-            };
-            workflow_telemetry.shutdown().await;
-            return result;
+            Ok(ShutdownTrigger::ServerStopped)
         }
     }
-    let stopped = running.begin_shutdown().finish().await;
-    workflow_telemetry.shutdown().await;
-    let _stopped = stopped?;
-    Ok(())
 }
 
 /// Emit the benchmark/supervisor marker only after every enabled replacement
@@ -452,16 +548,245 @@ pub fn with_default_peer_address_stores<T>(
 
 #[cfg(test)]
 mod replacement_runtime_tests {
+    use std::num::{NonZeroU16, NonZeroUsize};
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
+    use atm_core::api::{ApiRequest, ApiResponse, AuthenticatedIngress, RequestDeadline};
     use atm_core::boundary::TemplateSource;
+    use atm_core::error::AtmError;
+    use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
+    use atm_core::send::{SendMessageSource, SendRequest, WriteRequest};
+    use atm_core::types::{AgentName, TeamName};
+    use atm_http_runtime::{
+        CanonicalWriteHandler, DirectPeerTcpConfig, HttpRuntimeBuilder, HttpRuntimeConfig,
+        LoopbackTcpConfig, NonZeroDuration, RuntimeLimits, RuntimeTimeouts,
+        authenticated_peer_client,
+    };
+    use atm_storage::{
+        HttpsInterface, LocalCertificate, PeerConfigStore, TrustedPeer, certificate_fingerprint,
+    };
     use atm_template_sc_compose::ScComposeTemplateComposer;
+    use peer_tls::test_support::TestPeerConfigStore;
+    use rcgen::generate_simple_self_signed;
     use serde_json::Map;
+    use tempfile::TempDir;
+    use ulid::Ulid;
 
     use super::{
         REPLACEMENT_DRAIN_DEADLINE, ShutdownSignal, assemble_host_runtime_with_template_composer,
         write_ready_signal_if_requested,
     };
+
+    struct TestIdentity {
+        certificate: LocalCertificate,
+        fingerprint: String,
+    }
+
+    fn write_test_identity(directory: &TempDir, name: &str, hostname: &str) -> TestIdentity {
+        let generated = generate_simple_self_signed(vec![hostname.to_owned()])
+            .expect("generate test certificate");
+        let pem_path = directory.path().join(format!("{name}.pem"));
+        std::fs::write(
+            &pem_path,
+            format!(
+                "{}{}",
+                generated.cert.pem(),
+                generated.key_pair.serialize_pem()
+            ),
+        )
+        .expect("write test certificate bundle");
+        let fingerprint = certificate_fingerprint(generated.cert.der());
+        TestIdentity {
+            certificate: LocalCertificate {
+                fingerprint: fingerprint.parse().expect("valid certificate fingerprint"),
+                private_key_ref: pem_path
+                    .display()
+                    .to_string()
+                    .parse()
+                    .expect("valid test private-key reference"),
+            },
+            fingerprint,
+        }
+    }
+
+    fn enabled_interface() -> HttpsInterface {
+        HttpsInterface {
+            bind_addr: "127.0.0.1:43101".parse().expect("test bind address"),
+            advertise_host: "localhost".parse().expect("test advertised host"),
+            enabled: true,
+        }
+    }
+
+    fn trusted_peer(host: &str, fingerprint: &str, port: u16) -> TrustedPeer {
+        TrustedPeer {
+            host: host.parse().expect("test peer host"),
+            fingerprint: fingerprint.parse().expect("test fingerprint"),
+            enabled: true,
+            https_port: NonZeroU16::new(port).expect("non-zero test peer port"),
+        }
+    }
+
+    fn peer_store(
+        certificate: LocalCertificate,
+        trusted_peers: Vec<TrustedPeer>,
+    ) -> Arc<dyn PeerConfigStore> {
+        Arc::new(TestPeerConfigStore::new(
+            vec![enabled_interface()],
+            Some(certificate),
+            trusted_peers,
+        ))
+    }
+
+    /// First-party composition test double, explicitly listed by the
+    /// HttpRuntime boundary record. It records the post-authentication request
+    /// instead of adding an alternate production routing path.
+    #[derive(Default)]
+    struct RecordingAuthenticatedHandler {
+        calls: Mutex<Vec<(WriteRequest, AuthenticatedIngress)>>,
+    }
+
+    impl atm_core::boundary::sealed::Sealed for RecordingAuthenticatedHandler {}
+
+    impl CanonicalWriteHandler for RecordingAuthenticatedHandler {
+        fn write(
+            &self,
+            request: WriteRequest,
+            ingress: AuthenticatedIngress,
+            _deadline: RequestDeadline,
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<ApiResponse, AtmError>> + Send + '_>,
+        > {
+            self.calls
+                .lock()
+                .expect("recorded authenticated calls")
+                .push((request, ingress));
+            Box::pin(async {
+                Ok(ApiResponse::new(ResponseEnvelope::Error(
+                    AtmError::validation("authenticated test handler reached"),
+                )))
+            })
+        }
+    }
+
+    fn authenticated_test_config(directory: &TempDir) -> HttpRuntimeConfig {
+        HttpRuntimeConfig::new(
+            LoopbackTcpConfig::new(
+                "127.0.0.1:0".parse().expect("test loopback address"),
+                directory.path().join("local-http.json"),
+                Ulid::new(),
+            ),
+            None,
+            RuntimeLimits::new(
+                NonZeroUsize::new(1024 * 1024).expect("non-zero body limit"),
+                NonZeroUsize::new(8).expect("non-zero connection limit"),
+            ),
+            RuntimeTimeouts::new(
+                NonZeroDuration::new(Duration::from_secs(2)).expect("non-zero request timeout"),
+                NonZeroDuration::new(Duration::from_secs(2)).expect("non-zero shutdown timeout"),
+            ),
+        )
+        .with_direct_peer_tcp(DirectPeerTcpConfig::ephemeral_for_test())
+    }
+
+    fn authenticated_test_request() -> RequestEnvelope {
+        RequestEnvelope::Write(Box::new(
+            SendRequest::new(
+                ".".into(),
+                ".".into(),
+                AgentName::from_validated("tls-test-sender"),
+                "tls-test-recipient",
+                TeamName::from_validated("tls-test-team"),
+                SendMessageSource::Inline("authenticated composition test".to_owned()),
+                None,
+                false,
+                None,
+                false,
+            )
+            .expect("test write request"),
+        ))
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn bootstrap_composed_peer_tls_reaches_the_canonical_handler_only_after_authentication() {
+        let directory = tempfile::tempdir().expect("temporary TLS composition directory");
+        let server_identity = write_test_identity(&directory, "server", "localhost");
+        let client_identity = write_test_identity(&directory, "client", "client.test");
+        let server_adapter = peer_tls::PeerTlsAdapter::new(peer_store(
+            server_identity.certificate,
+            vec![trusted_peer(
+                "client.test",
+                &client_identity.fingerprint,
+                43_101,
+            )],
+        ))
+        .expect("bootstrap-owned peer TLS server configuration");
+        let handler = Arc::new(RecordingAuthenticatedHandler::default());
+        let running =
+            HttpRuntimeBuilder::new(authenticated_test_config(&directory), handler.clone())
+                .with_peer_io_adapter(Arc::new(server_adapter))
+                .build()
+                .expect("authenticated direct-peer configuration")
+                .start()
+                .await
+                .expect("canonical runtime starts with bootstrap-composed peer TLS");
+        let peer_port = running
+            .direct_peer_address()
+            .expect("ephemeral direct-peer listener")
+            .port();
+        let client_adapter = peer_tls::PeerTlsAdapter::new(peer_store(
+            client_identity.certificate,
+            vec![trusted_peer(
+                "localhost",
+                &server_identity.fingerprint,
+                peer_port,
+            )],
+        ))
+        .expect("client peer TLS configuration");
+        let client = authenticated_peer_client(
+            "localhost".parse().expect("server host"),
+            Arc::new(client_adapter),
+            Duration::from_secs(2),
+        )
+        .expect("authenticated canonical client");
+
+        let response = client
+            .execute(ApiRequest::new(authenticated_test_request()))
+            .await
+            .expect("authenticated request reaches the canonical route");
+        let ResponseEnvelope::Error(error) = response.into_inner() else {
+            panic!("authenticated request must preserve the canonical handler error");
+        };
+        assert_eq!(error.code().as_str(), "ATM_MESSAGE_VALIDATION_FAILED");
+        assert!(
+            error
+                .message()
+                .starts_with("authenticated test handler reached")
+        );
+        {
+            let calls = handler.calls.lock().expect("recorded authenticated calls");
+            assert_eq!(
+                calls.len(),
+                1,
+                "one TLS request reaches one canonical write"
+            );
+            assert_eq!(calls[0].1, AuthenticatedIngress::Peer);
+            assert_eq!(
+                calls[0]
+                    .0
+                    .authenticated_source_host
+                    .as_ref()
+                    .map(|host| host.as_str()),
+                Some("client.test"),
+                "canonical provenance is the peer-tls authenticated identity, not a socket value"
+            );
+        }
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("authenticated runtime shuts down cleanly");
+    }
 
     #[test]
     fn ready_signal_is_absent_unless_requested() {

@@ -1286,7 +1286,7 @@ Sprint line:
   [`sprint-AN14-sc-compose-141-checked-emission.md`](./plans/phase-an/sprint-AN14-sc-compose-141-checked-emission.md),
   and [`sprint-AN15-adversarial-fuzzing.md`](./plans/phase-an/sprint-AN15-adversarial-fuzzing.md).
 
-## 46. Phase AO — Optional mTLS for the Canonical HTTP Peer Path [PROPOSED]
+## 46. Phase AO — Optional mTLS for the Canonical HTTP Peer Path [ACTIVE — AO.1 complete; AO.2 QA fix-1 in progress]
 
 Phase AO adds opt-in mTLS to the active Tokio/Axum peer HTTP path without
 changing canonical HTTP request handling, storage, acknowledgement, or nudge

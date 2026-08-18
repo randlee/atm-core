@@ -21,8 +21,8 @@ io_owns = ["certificate_parsing", "certificate_fingerprint_normalization", "trus
 io_forbidden = ["socket_io", "message_delivery", "recipient_routing", "retry_queue", "nudge_emission", "background_work", "process_spawn", "daemon_lifecycle"]
 
 [dependencies]
-allowed_dependents = ["atm-peer-tls-interop"]
-allowed_dependencies = ["atm-error", "rustls", "sha2"]
+allowed_dependents = ["atm-peer-tls-interop", "peer-tls"]
+allowed_dependencies = ["atm-error", "rustls", "rustls-webpki", "sha2"]
 forbidden_edges = ["atm-storage -> atm-core", "atm-storage -> atm-storage-rusqlite"]
 
 [references]
@@ -31,7 +31,7 @@ forbidden = []
 
 [contracts]
 request_types = ["LocalCertificate", "TrustedPeer", "CertificateDer"]
-response_types = ["TlsIdentity", "PinnedClientVerifier", "String"]
+response_types = ["TlsIdentity", "PinnedClientVerifier", "PinnedServerVerifier", "String"]
 error_types = ["AtmError"]
 
 [testing]
@@ -40,8 +40,8 @@ forbidden_test_bypasses = ["native_tls_sender", "production_listener", "peer_tra
 
 [enforcement]
 lint_rules = ["LINT-BOUNDARY-STORAGE-TLS-HELPERS"]
-review_gates = ["no_socket_or_delivery_capability", "one_canonical_fingerprint_helper", "no_active_interop_dependent"]
+review_gates = ["no_socket_or_delivery_capability", "one_canonical_fingerprint_helper", "peer_tls_is_the_only_active_transport_consumer"]
 
 [status]
 state = "concrete_landed"
-notes = ["AK6 owns the shared TLS identity and protocol-verification surface, including TLS 1.2/1.3 signature checks; active daemon and interop callers are governed explicitly while the interop crate remains inactive for production delivery."]
+notes = ["AK6 owns the shared TLS identity and protocol-verification surface, including TLS 1.2/1.3 signature checks. AO.1 adds the canonical pinned-server verifier so peer-tls can own the active Tokio transport without duplicating certificate parsing, fingerprinting, or trust policy; the interop crate remains fixture-only."]

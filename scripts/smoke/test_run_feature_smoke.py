@@ -210,6 +210,13 @@ class FeatureSmokeTests(unittest.TestCase):
                 report = RUNNER.write_report(
                     "localhost",
                     [{"name": "doctor", "status": "PASS", "detail": "ready", "origin": "cwin", "destination": "cwin"}],
+                    {
+                        "candidate": {"git_sha": "a" * 40, "version": "1.4.3"},
+                        "environment": {"os": "windows", "architecture": "x86_64"},
+                        "registered_hostnames": ["cwin"],
+                        "public_tls_fingerprints": {"local": None, "trusted_peers": []},
+                        "commands": ["just smoke localhost"],
+                    },
                 )
             payload = json.loads(report.read_text(encoding="utf-8"))
             self.assertEqual(
@@ -221,6 +228,13 @@ class FeatureSmokeTests(unittest.TestCase):
                     "run_id": "run-1",
                     "status": "PASS",
                     "cases": [{"name": "doctor", "status": "PASS", "detail": "ready", "origin": "cwin", "destination": "cwin"}],
+                    "evidence_metadata": {
+                        "candidate": {"git_sha": "a" * 40, "version": "1.4.3"},
+                        "environment": {"os": "windows", "architecture": "x86_64"},
+                        "registered_hostnames": ["cwin"],
+                        "public_tls_fingerprints": {"local": None, "trusted_peers": []},
+                        "commands": ["just smoke localhost"],
+                    },
                 },
             )
             self.assertTrue(report.with_suffix(".html").is_file())
@@ -537,6 +551,10 @@ class FeatureSmokeTests(unittest.TestCase):
             RUNNER, "command", return_value=result
         ) as command, mock.patch.object(
             RUNNER, "certificate_authority", side_effect=["local.example.test", "remote.example.test"]
+        ), mock.patch.object(
+            RUNNER,
+            "certificate_spki_pin",
+            side_effect=["sha256//LOCALPIN", "sha256//REMOTEPIN"],
         ), mock.patch.object(RUNNER, "advertised_host", return_value="192.0.2.10"), mock.patch.object(
             RUNNER, "resolve_dns_addresses", return_value=["192.0.2.20"]
         ), mock.patch.object(RUNNER, "remote_resolve_dns_addresses", return_value=["192.0.2.10"]):
@@ -553,15 +571,33 @@ class FeatureSmokeTests(unittest.TestCase):
         curl_calls = [call.args[0] for call in command.call_args_list if call.args[0][0] == "curl"]
         self.assertEqual(len(curl_calls), 2)
         self.assertIn("--resolve", curl_calls[0])
+        self.assertEqual(
+            curl_calls[0][curl_calls[0].index("--resolve") + 1],
+            "remote.example.test:43101:192.0.2.20",
+            "curl --resolve keeps the certificate name first and overrides only its TCP address",
+        )
         self.assertNotIn("--resolve", curl_calls[1])
         self.assertIn("https://remote.example.test:43101/v1/atm/doctor", curl_calls[1])
-        local_ca_path = curl_calls[0][curl_calls[0].index("--cacert") + 1]
-        self.assertEqual(Path(local_ca_path).name, "remote-public.pem")
+        remote_curl_script = remote_shell.call_args_list[2].args[1]
+        self.assertIn("local.example.test:43101:192.0.2.10", remote_curl_script)
+        self.assertNotIn("--cacert", curl_calls[0])
+        self.assertIn("--insecure", curl_calls[0])
+        self.assertEqual(
+            curl_calls[0][curl_calls[0].index("--pinnedpubkey") + 1],
+            "sha256//REMOTEPIN",
+        )
+        self.assertIn("--pinnedpubkey", remote_curl_script)
+        self.assertIn("sha256//LOCALPIN", remote_curl_script)
         cleanup_script = remote_shell.call_args_list[-1].args[1]
         self.assertIn("rm -f", cleanup_script)
         self.assertIn("local-public.pem", cleanup_script)
         self.assertIn("peer-public.pem", cleanup_script)
         self.assertIn("rmdir", cleanup_script)
+
+    def test_connect_address_resolves_an_advertised_hostname_before_curl_override(self):
+        with mock.patch.object(RUNNER, "resolve_dns_addresses", return_value=["2001:db8::1", "192.0.2.10"]):
+            self.assertEqual(RUNNER.connect_address("rand-m4.local"), "192.0.2.10")
+        self.assertEqual(RUNNER.connect_address("192.0.2.10"), "192.0.2.10")
 
     def test_crosshost_send_requires_remote_exact_ulid_and_body(self):
         sent = {"message_id": "01SEND"}

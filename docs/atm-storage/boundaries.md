@@ -78,20 +78,19 @@ Canonical machine-readable boundary source:
 
 `atm_storage::tls` owns the canonical certificate parsing, fingerprint
 normalization, rustls provider selection, trusted-peer pinning, and TLS 1.2/1.3
-signature-verification helpers used by the live daemon adapter and the inactive
-interop fixture. This is protocol verification and certificate admission, not
+signature-verification helpers used by `peer-tls` and the inactive interop
+fixture. This is protocol verification and certificate admission, not
 just value validation: the storage crate owns no socket I/O, listener, sender,
 route, retry, or daemon lifecycle. The inactive
 `atm-peer-tls-interop` crate consumes these values for its bounded curl mTLS
 proof; its dependency is explicitly allowed by the helper boundary and it has
 no production delivery capability.
 
-Phase AO records the sole proposed second consumer: `peer-tls` may consume
-these helpers only after its AO.1 boundary-TOML, manifest, and architecture-
-guard transition is reviewed and merged. That explicit exception promotes
-neither the interop fixture nor any legacy daemon code, and it does not
-authorize a second certificate parser, pinning verifier, or transport
-implementation.
+Phase AO makes `peer-tls` the sole active transport consumer. Its adapter must
+use these helpers for both client and server pinning; this promotes neither the
+interop fixture nor any legacy daemon code, and it does not authorize a second
+certificate parser, pinning verifier, fingerprint implementation, or transport
+policy.
 
 ## PeerConfigStore
 
