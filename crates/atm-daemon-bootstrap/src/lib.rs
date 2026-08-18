@@ -222,16 +222,16 @@ async fn run_replacement_daemon_with_selector(
     let assembly = assemble_daemon_runtime()?;
     let workflow_telemetry = assembly.workflow_telemetry.clone();
     let peer_io_adapter = optional_peer_io_adapter(&assembly);
-    let mut running = start_replacement_runtime(
-        &scope,
-        &_owner,
+    let mut running = start_replacement_runtime(ReplacementStartupInputs {
+        scope: &scope,
+        owner: &_owner,
         assembly,
         observability,
         peer_io_adapter,
         selector_factory,
-        &daemon_launch_identity,
+        daemon_launch_identity: &daemon_launch_identity,
         runtime_health,
-    )
+    })
     .await?;
     if let Err(error) = emit_ready_signal_if_requested() {
         // The process has not advertised readiness, so it must not retain an
@@ -273,18 +273,39 @@ fn optional_peer_io_adapter(
     }
 }
 
-async fn start_replacement_runtime(
-    scope: &atm_core::home::HostRuntimeScope,
-    owner: &DaemonOwnerGuard,
+struct ReplacementStartupInputs<'a, F>
+where
+    F: FnOnce(
+        atm_core::LocalServiceRuntime,
+    ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
+{
+    scope: &'a atm_core::home::HostRuntimeScope,
+    owner: &'a DaemonOwnerGuard,
     assembly: RuntimeAssembly,
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
     peer_io_adapter: Option<Arc<dyn atm_core::PeerIoAdapter>>,
-    selector_factory: impl FnOnce(
+    selector_factory: F,
+    daemon_launch_identity: &'a DaemonLaunchIdentity,
+    runtime_health: RuntimeHealth,
+}
+
+async fn start_replacement_runtime<F>(
+    ReplacementStartupInputs {
+        scope,
+        owner,
+        assembly,
+        observability,
+        peer_io_adapter,
+        selector_factory,
+        daemon_launch_identity,
+        runtime_health,
+    }: ReplacementStartupInputs<'_, F>,
+) -> Result<atm_http_runtime::HttpRuntime<atm_http_runtime::Running>, AtmError>
+where
+    F: FnOnce(
         atm_core::LocalServiceRuntime,
     ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
-    daemon_launch_identity: &DaemonLaunchIdentity,
-    runtime_health: RuntimeHealth,
-) -> Result<atm_http_runtime::HttpRuntime<atm_http_runtime::Running>, AtmError> {
+{
     // The shipped daemon always keeps the injected receiver hook active.
     // Benchmark-only selection is available only from the separate binary.
     let handler = build_replacement_handler(
@@ -292,7 +313,7 @@ async fn start_replacement_runtime(
         observability,
         peer_io_adapter.clone(),
         selector_factory,
-        &daemon_launch_identity,
+        daemon_launch_identity,
         runtime_health.clone(),
     )?;
     let config = replacement_runtime_config(scope, owner, peer_io_adapter.is_some())?;
@@ -316,7 +337,7 @@ fn replacement_runtime_config(
     );
     let config = HttpRuntimeConfig::new(
         loopback,
-        unix_socket_config(&scope)?,
+        unix_socket_config(scope)?,
         RuntimeLimits::new(
             NonZeroUsize::new(DEFAULT_MESSAGE_MAX_BYTES + CANONICAL_WRITE_ENVELOPE_OVERHEAD_BYTES)
                 .expect("non-zero body limit"),

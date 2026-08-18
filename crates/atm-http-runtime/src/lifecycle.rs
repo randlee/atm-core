@@ -97,19 +97,11 @@ impl HttpRuntime<Configured> {
                 return Err(error);
             }
         };
-        let ready_detail = if self.peer_io_adapter.is_some() && direct_peer_address.is_some() {
-            Some("direct-peer transport: mTLS".to_owned())
-        } else {
-            self.config
-                .direct_peer_plaintext_diagnostic
-                .map(|diagnostic| {
-                    format!(
-                        "direct-peer transport: plaintext diagnostic override ({})",
-                        diagnostic.label()
-                    )
-                })
-        };
-        self.health.mark_ready_with_detail(ready_detail);
+        self.health.mark_ready_with_detail(runtime_ready_detail(
+            &self.config,
+            self.peer_io_adapter.is_some(),
+            direct_peer_address.is_some(),
+        ));
         Ok(HttpRuntime {
             config: self.config,
             handler: self.handler,
@@ -123,6 +115,23 @@ impl HttpRuntime<Configured> {
                 server_task,
                 endpoint_record,
             },
+        })
+    }
+}
+
+fn runtime_ready_detail(
+    config: &HttpRuntimeConfig,
+    adapter_enabled: bool,
+    direct_peer_bound: bool,
+) -> Option<String> {
+    if adapter_enabled && direct_peer_bound {
+        Some("direct-peer transport: mTLS".to_owned())
+    } else {
+        config.direct_peer_plaintext_diagnostic.map(|diagnostic| {
+            format!(
+                "direct-peer transport: plaintext diagnostic override ({})",
+                diagnostic.label()
+            )
         })
     }
 }
