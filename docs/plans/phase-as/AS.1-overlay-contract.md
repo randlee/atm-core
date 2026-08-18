@@ -63,11 +63,17 @@ manifest behavior change in ATM.
    selected, omitted, or patched locally.
 3. File upstream requirements for every shared closure gap discovered by the
    audit: relative-dependency closure, installed-archive-member validation,
-   resolved release-plan evidence, `extra_validations`, and Cargo-derived
-   dynamic PEP 621 versions.
+   resolved release-plan evidence, `extra_validations`, Cargo-derived dynamic
+   PEP 621 versions, and an explicit installer-input contract.
 4. Require an upstream closure test that fails whenever a copied shared file
    references an unvendored relative dependency not declared as a generic
    consumer interface.
+5. Require the shared installer to consume complete explicit artifact/channel
+   input. Source discovery may produce an example only; it must never infer a
+   production publish surface, publish order, or enabled destination.
+6. Require the shared bootstrap to provision the exact `sc-compose` CLI used
+   by install/render and run the semantic installer integration test in CI
+   through that bootstrap.
 
 ## Split Recommendation
 
@@ -82,6 +88,10 @@ consumer manifest work belongs to AS.2.
   path.
 - Every discovered shared closure gap has an upstream issue or accepted
   resolution; there is no ATM workaround.
+- The upstream installer has no enabled-channel defaults and no production
+  source-discovery fallback.
+- The upstream semantic installation test passes in CI using the same pinned
+  toolchain that consumers receive.
 
 ## Required Validation
 

@@ -72,9 +72,13 @@ an ATM adapter, wrapper, or workflow fork.
 5. Confirm PF-3 handles partial state: publish missing target artifacts, skip
    already-at-target artifacts, block true version conflicts. A version bump
    remains an explicit release decision.
-6. Submit any missing generic schema/support to `sc-publish`; wait for its
+6. Supply the shared installer one complete consumer JSON document containing
+   explicit artifacts, crate publish order, binaries, wheels, and per-channel
+   enablement. Reject any install request that omits that document; source
+   discovery is advisory `--example-json` output only.
+7. Submit any missing generic schema/support to `sc-publish`; wait for its
    accepted implementation and exact sync.
-7. Convert `atm-query-python` and `hermes-atm` from literal PEP 621 project
+8. Convert `atm-query-python` and `hermes-atm` from literal PEP 621 project
    versions to Cargo-derived `dynamic = ["version"]`, matching
    `atm-graft-python`. Add/extend the version-lock test so every published
    Python distribution resolves to the workspace release version.
@@ -88,6 +92,8 @@ evidence and must not silently add schema behavior.
 
 - Every enabled ATM artifact/channel maps to a canonical consumer and proof.
 - Every dormant channel has an explicit manifest-state reason.
+- Installation cannot infer or enable an artifact/channel not present in the
+  consumer’s supplied manifest input.
 - PF-1, PF-2, and PF-3 use existing canonical solutions as defined above.
 - `atm-graft-python`, `atm-query-python`, and `hermes-atm` all resolve their
   version from Cargo; the version-lock test fails if any published Python
