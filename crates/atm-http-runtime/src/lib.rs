@@ -56,6 +56,69 @@ mod storage_and_nudge_router;
 #[cfg(unix)]
 mod unix_socket;
 
+#[cfg(test)]
+mod test_support {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use atm_core::boundary::sealed;
+    use atm_core::error::AtmError;
+    use atm_core::types::HostName;
+    use atm_core::{AcceptedPeerIo, BoxedPeerIo, PeerIoAdapter, RequestDeadline};
+    use tokio::net::TcpStream;
+
+    #[derive(Default)]
+    pub(crate) struct RejectingPeerIoAdapter {
+        connect_calls: AtomicUsize,
+    }
+
+    impl RejectingPeerIoAdapter {
+        pub(crate) fn new() -> Self {
+            Self::default()
+        }
+
+        pub(crate) fn connect_calls(&self) -> usize {
+            self.connect_calls.load(Ordering::SeqCst)
+        }
+    }
+
+    impl sealed::Sealed for RejectingPeerIoAdapter {}
+
+    impl PeerIoAdapter for RejectingPeerIoAdapter {
+        fn accept<'adapter>(
+            &'adapter self,
+            _stream: TcpStream,
+            _deadline: RequestDeadline,
+        ) -> std::pin::Pin<
+            Box<
+                dyn std::future::Future<Output = Result<AcceptedPeerIo, AtmError>>
+                    + Send
+                    + 'adapter,
+            >,
+        > {
+            Box::pin(async {
+                Err(AtmError::validation(
+                    "certificate, hostname, pin, or handshake rejected by test transport",
+                ))
+            })
+        }
+
+        fn connect<'adapter>(
+            &'adapter self,
+            _peer: HostName,
+            _deadline: RequestDeadline,
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<BoxedPeerIo, AtmError>> + Send + 'adapter>,
+        > {
+            self.connect_calls.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async {
+                Err(AtmError::validation(
+                    "certificate, hostname, pin, or handshake rejected by test transport",
+                ))
+            })
+        }
+    }
+}
+
 use loopback_tcp::{LoopbackEndpointRecordGuard, validate_loopback_config};
 
 /// An aborted Tokio task should stop at its next cancellation point. Keep this
@@ -543,6 +606,7 @@ mod tests {
     use atm_core::types::{AgentName, HostName, TeamName};
     use tokio::net::{TcpListener, TcpStream};
 
+    use super::test_support::RejectingPeerIoAdapter;
     use super::{
         CanonicalWriteHandler, DirectPeerPlaintextDiagnostic, DirectPeerTcpConfig,
         HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig, NonZeroDuration, RuntimeHealth,
@@ -592,36 +656,6 @@ mod tests {
                     "passthrough peer adapter test does not implement outbound transport",
                 ))
             })
-        }
-    }
-
-    struct RejectingPeerIoAdapter;
-
-    impl atm_core::boundary::sealed::Sealed for RejectingPeerIoAdapter {}
-
-    impl PeerIoAdapter for RejectingPeerIoAdapter {
-        fn accept<'adapter>(
-            &'adapter self,
-            _stream: TcpStream,
-            _deadline: RequestDeadline,
-        ) -> std::pin::Pin<
-            Box<
-                dyn std::future::Future<Output = Result<AcceptedPeerIo, AtmError>>
-                    + Send
-                    + 'adapter,
-            >,
-        > {
-            Box::pin(async { Err(AtmError::validation("test transport rejected peer")) })
-        }
-
-        fn connect<'adapter>(
-            &'adapter self,
-            _peer: HostName,
-            _deadline: RequestDeadline,
-        ) -> std::pin::Pin<
-            Box<dyn std::future::Future<Output = Result<BoxedPeerIo, AtmError>> + Send + 'adapter>,
-        > {
-            Box::pin(async { Err(AtmError::validation("test transport rejected peer")) })
         }
     }
 
@@ -1178,7 +1212,7 @@ mod tests {
             .with_direct_peer_tcp(DirectPeerTcpConfig::ephemeral_for_test());
         let handler = Arc::new(RecordingPeerRouter::default());
         let running = HttpRuntimeBuilder::new(config, handler.clone())
-            .with_peer_io_adapter(Arc::new(RejectingPeerIoAdapter))
+            .with_peer_io_adapter(Arc::new(RejectingPeerIoAdapter::new()))
             .build()
             .expect("adapter-protected direct peer configuration")
             .start()

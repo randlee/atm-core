@@ -982,67 +982,25 @@ mod tests {
 
     use async_trait::async_trait;
     use atm_core::api::{ApiRequest, DaemonApiClient, HttpRequest, RequestDeadline};
-    use atm_core::boundary::{AcceptedPeerIo, BoxedPeerIo, PeerIoAdapter};
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendRequest};
     use atm_core::test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
-    use atm_core::types::{AgentName, CommandAction, HostName, TeamName};
+    use atm_core::types::{AgentName, CommandAction, TeamName};
     use axum::body::{Body, to_bytes};
-    use tokio::net::{TcpListener, TcpStream};
+    use tokio::net::TcpListener;
 
     use super::{
         DirectPeerTcpConnector, HttpRuntimeClient, HttpRuntimeClientFailure, HttpRuntimeConnector,
         MAX_RESPONSE_BODY_BYTES, direct_peer_adapter_write_client, direct_peer_connection_failure,
         direct_peer_tcp_client, read_bounded_reqwest_response_body, selected_write_transport,
     };
+    use crate::test_support::RejectingPeerIoAdapter;
 
     #[derive(Default)]
     struct RecordingConnector {
         requests: Mutex<Vec<HttpRequest>>,
         responses: Mutex<VecDeque<Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure>>>,
-    }
-
-    struct RejectingPeerIoAdapter {
-        connect_calls: std::sync::atomic::AtomicUsize,
-    }
-
-    impl atm_core::boundary::sealed::Sealed for RejectingPeerIoAdapter {}
-
-    impl PeerIoAdapter for RejectingPeerIoAdapter {
-        fn accept<'adapter>(
-            &'adapter self,
-            _stream: TcpStream,
-            _deadline: RequestDeadline,
-        ) -> std::pin::Pin<
-            Box<
-                dyn std::future::Future<Output = Result<AcceptedPeerIo, AtmError>>
-                    + Send
-                    + 'adapter,
-            >,
-        > {
-            Box::pin(async {
-                Err(AtmError::validation(
-                    "test transport rejects inbound stream",
-                ))
-            })
-        }
-
-        fn connect<'adapter>(
-            &'adapter self,
-            _peer: HostName,
-            _deadline: RequestDeadline,
-        ) -> std::pin::Pin<
-            Box<dyn std::future::Future<Output = Result<BoxedPeerIo, AtmError>> + Send + 'adapter>,
-        > {
-            self.connect_calls
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            Box::pin(async {
-                Err(AtmError::validation(
-                    "certificate, hostname, pin, or handshake rejected by test transport",
-                ))
-            })
-        }
     }
 
     #[async_trait]
@@ -1124,9 +1082,7 @@ mod tests {
 
     #[tokio::test]
     async fn authenticated_peer_rejection_never_downgrades_to_plain_tcp() {
-        let adapter = Arc::new(RejectingPeerIoAdapter {
-            connect_calls: std::sync::atomic::AtomicUsize::new(0),
-        });
+        let adapter = Arc::new(RejectingPeerIoAdapter::new());
         let client = direct_peer_adapter_write_client(
             "peer.example.test".parse().expect("host"),
             adapter.clone(),
@@ -1139,9 +1095,7 @@ mod tests {
             .await
             .expect_err("transport rejection must not attempt a plaintext second connection");
         assert_eq!(
-            adapter
-                .connect_calls
-                .load(std::sync::atomic::Ordering::SeqCst),
+            adapter.connect_calls(),
             1,
             "one authenticated connection attempt is the complete outbound transport path"
         );
