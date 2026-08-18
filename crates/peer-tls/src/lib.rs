@@ -58,14 +58,14 @@ impl PeerTlsAdapter {
         let interfaces = self.store.list_interfaces()?;
         let interface = exactly_one_enabled_interface(interfaces)?;
         let certificate = self.store.local_certificate()?.ok_or_else(|| {
-            AtmError::validation(
+            AtmError::peer_config_validation(
                 "peer TLS has no configured local certificate; configure a certificate before enabling mTLS",
             )
         })?;
         let identity = TlsIdentity::load(&certificate)?;
         let trusted_peers = self.store.list_trusted_peers()?;
         if !trusted_peers.iter().any(|peer| peer.enabled) {
-            return Err(AtmError::validation(
+            return Err(AtmError::peer_config_validation(
                 "peer TLS has no enabled trusted peer; configure an enabled peer before enabling mTLS",
             ));
         }
@@ -88,8 +88,10 @@ impl PeerTlsAdapter {
                 snapshot.identity.private_key().clone_key(),
             )
             .map_err(|source| {
-                AtmError::validation("configured peer TLS certificate/key pair is invalid")
-                    .with_cause(source)
+                AtmError::peer_config_validation(
+                    "configured peer TLS certificate/key pair is invalid",
+                )
+                .with_cause(source)
             })?;
         Ok((config, verifier))
     }
@@ -100,12 +102,12 @@ impl PeerTlsAdapter {
     ) -> Result<(ClientConfig, u16), AtmError> {
         let snapshot = self.local_snapshot()?;
         let configured_peer = self.store.trusted_peer(peer)?.ok_or_else(|| {
-            AtmError::validation(format!(
+            AtmError::peer_config_validation(format!(
                 "peer TLS has no configured trusted peer for host `{peer}`"
             ))
         })?;
         if !configured_peer.enabled {
-            return Err(AtmError::validation(format!(
+            return Err(AtmError::peer_config_validation(format!(
                 "peer TLS trusted peer `{peer}` is disabled; enable it before connecting"
             )));
         }
@@ -120,8 +122,10 @@ impl PeerTlsAdapter {
                 snapshot.identity.private_key().clone_key(),
             )
             .map_err(|source| {
-                AtmError::validation("configured peer TLS certificate/key pair is invalid")
-                    .with_cause(source)
+                AtmError::peer_config_validation(
+                    "configured peer TLS certificate/key pair is invalid",
+                )
+                .with_cause(source)
             })?;
         Ok((config, configured_peer.https_port.get()))
     }
@@ -171,7 +175,8 @@ impl PeerTlsAdapter {
         let addresses = resolve_peer_addresses(&peer, port, deadline).await?;
         let tcp = connect_peer_addresses(&peer, &addresses, deadline).await?;
         let server_name = ServerName::try_from(peer.as_str().to_owned()).map_err(|source| {
-            AtmError::validation("configured peer TLS hostname is invalid").with_cause(source)
+            AtmError::peer_config_validation("configured peer TLS hostname is invalid")
+                .with_cause(source)
         })?;
         let remaining = remaining_budget(deadline, "peer TLS outbound handshake")?;
         let stream = tokio::time::timeout(
@@ -229,12 +234,12 @@ fn exactly_one_enabled_interface(
 ) -> Result<HttpsInterface, AtmError> {
     let mut enabled = interfaces.into_iter().filter(|interface| interface.enabled);
     let interface = enabled.next().ok_or_else(|| {
-        AtmError::validation(
+        AtmError::peer_config_validation(
             "peer TLS has no enabled interface; configure and enable one interface before using mTLS",
         )
     })?;
     if enabled.next().is_some() {
-        return Err(AtmError::validation(
+        return Err(AtmError::peer_config_validation(
             "peer TLS has multiple enabled interfaces; configure exactly one before using mTLS",
         ));
     }
