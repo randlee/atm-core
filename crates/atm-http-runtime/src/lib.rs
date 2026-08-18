@@ -1082,7 +1082,7 @@ mod tests {
             unreachable!("fixture is a write");
         };
         write.to = Some(
-            "recipient@atm-dev.localhost"
+            format!("{TEST_RECIPIENT}@{TEST_TEAM}.localhost")
                 .parse()
                 .expect("host-qualified recipient"),
         );
