@@ -1,0 +1,68 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO2-ARCH-BOUNDARY-TESTGAP-001>
+  a triage:Finding ;
+  triage:findingId "AO2-ARCH-BOUNDARY-TESTGAP-001" ;
+  triage:title "AL5/AL6 architecture-fitness tests do not read lifecycle.rs after AO2-ARCH-001 split" ;
+  triage:description "quality-mgr's correction to AOS2-QA-1 (PR #943, feature/pao-s2-optional-runtime-activation, commit 8e082939a): the AO2-ARCH-001 fix decomposed crates/atm-http-runtime/src/lib.rs into lib.rs + lifecycle.rs to satisfy the 1000-line lint gate, moving drain_server_group/bind_runtime_listeners/spawn_supervised_server/join_server_group into lifecycle.rs. Tests al5_uds_is_a_framework_adapter_over_the_one_client_and_router and al6_loopback_tcp_is_capability_authentication_over_the_one_client_and_router in crates/atm-architecture/tests/boundary_enforcement.rs only read lib.rs, http1_server.rs, private_staging.rs, unix_socket.rs/loopback_tcp.rs, client.rs -- they never read lifecycle.rs, so they now fail to see the moved functions." ;
+  triage:phaseId "phase-ao" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage-gap" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-18T15:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO-S2 ;
+  triage:foundAt "2026-08-18T15:41:24Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO2-ARCH-BOUNDARY-TESTGAP-001/pao-s2-al5al6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO2-ARCH-BOUNDARY-TESTGAP-001/pao-s3-al5al6> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO2-ARCH-BOUNDARY-TESTGAP-001/pao-s2-al5al6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 2089 ;
+  triage:snippet "al5_uds_is_a_framework_adapter_over_the_one_client_and_router test (line 2089) and al6_loopback_tcp_is_capability_authentication_over_the_one_client_and_router test (line 2148) file-read set excludes crates/atm-http-runtime/src/lifecycle.rs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s2-optional-runtime-activation" ;
+  triage:headSha "8e082939a4e09f860fa8f92380d8b266a5119753" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s2/8e082939a4e09f860fa8f92380d8b266a5119753> .
+
+<urn:atm:triage:occurrence/AO2-ARCH-BOUNDARY-TESTGAP-001/pao-s3-al5al6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 2089 ;
+  triage:snippet "al5_uds_is_a_framework_adapter_over_the_one_client_and_router test (line 2089) and al6_loopback_tcp_is_capability_authentication_over_the_one_client_and_router test (line 2148) file-read set excludes crates/atm-http-runtime/src/lifecycle.rs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
+  triage:headSha "f3701c789" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s3/f3701c789> .
+
+<urn:atm:triage:worktree/pao-s1/c77b0f95f>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s1-tls-module-rehome" ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "c77b0f95f" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pao-s2/8e082939a4e09f860fa8f92380d8b266a5119753>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s2-optional-runtime-activation" ;
+  triage:branch "feature/pao-s2-optional-runtime-activation" ;
+  triage:headSha "8e082939a4e09f860fa8f92380d8b266a5119753" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pao-s3/f3701c789>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s3-tls-proof-and-evidence" ;
+  triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
+  triage:headSha "f3701c789" ;
+  triage:orderIndex 3 .
