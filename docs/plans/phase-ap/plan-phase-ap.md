@@ -1,8 +1,8 @@
 ---
 title: Phase AP Plan — Outbound-Only Corporate Network Peer Connectivity
-status: proposed
-branch: plan/phase-ao-tls-and-ap-outbound-connectivity
-worktree: ../atm-core-worktrees/plan/phase-ao-tls-and-ap-outbound-connectivity
+status: not-hardened
+branch: plan/phase-ap
+worktree: ../atm-core-worktrees/plan/phase-ap
 target: develop
 ---
 
