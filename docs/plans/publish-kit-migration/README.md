@@ -134,14 +134,17 @@ contract.
 | Release inventory with version, commit, artifact, required/waiver, and verification facts | Not yet represented by a canonical resolved-release-plan receipt with this retained schema. | Upstream `sc-publish` requirement; do not retain or rewrite ATM's private inventory generator. |
 | Installed user docs in release archives and installed-doc freshness proof | The overlay currently omits generic manifest support for installed archive members and the existing Phase-AE proof/finding output. | Upstream `sc-publish` requirement; do not retain an ATM workflow fork or private shared-helper replacement. |
 | Full retained release validation / `release-findings.json` | The overlay has no implemented manifest `extra_validations` runner/receipt. | Upstream `sc-publish` requirement; use the generic manifest contract once accepted. |
+| Self-contained shared overlay | The copied workflows reference `./.github/actions/setup-lint-toolchain`, `./.github/actions/setup-python-release-build`, `scripts/ci/validate_publish_order.sh`, and `docs/publishing-agent.md`; the two actions are absent from the overlay. | Upstream `sc-publish` requirement: vendor every shared relative dependency or replace it with a declared generic interface; add a closure test that fails on an unvendored relative dependency. |
+| PEP 621 dynamic Python version | The canonical manifest validator rejects ATM's valid Maturin `dynamic = ["version"]` metadata, derived from Cargo. | Upstream `sc-publish` contract decision: support the declared Cargo-derived version or explicitly reject it; do not change ATM package metadata merely to satisfy a premature shared parser. |
 | Manual release notes gate, fixed release-branch rule, and hardcoded release surface/token prose | Superseded by the manifest, shared release-state policy, generated GitHub notes, and channel contract. | Intentionally removed as overly restrictive or repository-specific. |
 
 ATM cannot declare migration complete until the three upstream gaps have landed
 in `sc-publish`: generic installed archive members, a resolved release-plan
-receipt that preserves required/waiver/verification evidence, and manifest
-`extra_validations` with structured results. Their implementations must be
-synced unchanged; ATM then supplies only manifest data and validates the
-consumer proof.
+receipt that preserves required/waiver/verification evidence, manifest
+`extra_validations` with structured results, a self-contained overlay closure
+test, and an explicit Cargo-derived PEP 621 version policy. Their
+implementations must be synced unchanged; ATM then supplies only manifest data
+and validates the consumer proof.
 
 ## Required shared-kit contract
 
@@ -196,13 +199,16 @@ enter shared files.
    canonical tool.
 3. Record that all copied paths are byte-identical; any needed shared change
    is an upstream `sc-publish` PR, never an ATM patch.
+4. Require the upstream overlay-closure test to prove that every relative
+   workflow/helper dependency is included or is an explicitly declared
+   consumer interface.
 
 ### S2 — Justify ATM manifest and activation changes
 
 1. Compare ATM's existing artifact manifest to the canonical parser schema.
 2. For every required ATM manifest addition, record the corresponding
    canonical workflow/helper that consumes it and the required proof.
-3. Submit the three identified generic gaps to `sc-publish`; wait for accepted
+3. Submit the five identified generic gaps to `sc-publish`; wait for accepted
    shared implementations rather than creating an ATM adapter or workflow fork.
 4. Declare only ATM artifacts, destinations, and enabled channels; do not put
    credentials, tool versions, or workflow behavior in the manifest.
