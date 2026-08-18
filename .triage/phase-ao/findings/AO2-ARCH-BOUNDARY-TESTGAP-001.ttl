@@ -15,10 +15,12 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-18T16:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-08-18T15:45:00Z"^^xsd:dateTime ;
-  triage:foundIn triage:AO-S2 ;
+  triage:foundIn triage:AO.2 ;
   triage:foundAt "2026-08-18T15:41:24Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AO2-ARCH-BOUNDARY-TESTGAP-001/pao-s2-al5al6> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AO2-ARCH-BOUNDARY-TESTGAP-001/pao-s3-al5al6> ;
@@ -29,10 +31,10 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 2089 ;
   triage:snippet "al5_uds_is_a_framework_adapter_over_the_one_client_and_router test (line 2089) and al6_loopback_tcp_is_capability_authentication_over_the_one_client_and_router test (line 2148) file-read set excludes crates/atm-http-runtime/src/lifecycle.rs" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s2-optional-runtime-activation" ;
-  triage:headSha "8e082939a4e09f860fa8f92380d8b266a5119753" ;
+  triage:headSha "0b6160384f5e7d896fbd2d9ea64479b79a5499db" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s2/8e082939a4e09f860fa8f92380d8b266a5119753> .
 
 <urn:atm:triage:occurrence/AO2-ARCH-BOUNDARY-TESTGAP-001/pao-s3-al5al6>
@@ -40,10 +42,10 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 2089 ;
   triage:snippet "al5_uds_is_a_framework_adapter_over_the_one_client_and_router test (line 2089) and al6_loopback_tcp_is_capability_authentication_over_the_one_client_and_router test (line 2148) file-read set excludes crates/atm-http-runtime/src/lifecycle.rs" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
-  triage:headSha "f3701c789" ;
+  triage:headSha "0b6160384f5e7d896fbd2d9ea64479b79a5499db" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s3/f3701c789> .
 
 <urn:atm:triage:worktree/pao-s1/c77b0f95f>
