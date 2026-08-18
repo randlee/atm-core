@@ -565,6 +565,56 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn plaintext_tcp_connection_is_rejected_by_mtls_adapter() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let server_identity = write_identity(&directory, "server", "localhost");
+        let trusted_client = write_identity(&directory, "client", "client.test");
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind listener");
+        let port = listener.local_addr().expect("listener address").port();
+        let server = PeerTlsAdapter::new(store(
+            server_identity.certificate,
+            vec![trusted_peer(
+                "client.test",
+                &trusted_client.fingerprint,
+                port,
+            )],
+        ))
+        .expect("mTLS server configuration");
+
+        let server_task = tokio::spawn(async move {
+            let (tcp, _) = listener.accept().await.expect("accept TCP");
+            server
+                .accept(tcp, RequestDeadline::after(Duration::from_secs(1)))
+                .await
+        });
+        let mut plaintext = TcpStream::connect(("127.0.0.1", port))
+            .await
+            .expect("open raw TCP socket");
+        plaintext
+            .write_all(b"POST /peer HTTP/1.1\r\n\r\n")
+            .await
+            .expect("write plaintext bytes");
+        plaintext.shutdown().await.expect("close raw TCP socket");
+
+        let result = server_task.await.expect("server task");
+        assert!(
+            result.is_err(),
+            "a real plaintext TCP connection must not yield an authenticated peer stream"
+        );
+        let error = match result {
+            Ok(_) => unreachable!("rejection was asserted"),
+            Err(error) => error,
+        };
+        assert!(
+            error
+                .message()
+                .contains("rejected the inbound client certificate or handshake")
+        );
+    }
+
+    #[tokio::test]
     async fn peer_tcp_connection_tries_later_resolved_address_after_first_refuses() {
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
