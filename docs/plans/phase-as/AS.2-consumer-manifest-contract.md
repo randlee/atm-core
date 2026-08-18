@@ -30,6 +30,9 @@ an ATM adapter, wrapper, or workflow fork.
   shared channel contract.
 - The one shared bootstrap resolves all tools identically for preflight and
   publish.
+- Every Python distribution derives its release version from its corresponding
+  Cargo package. Python metadata must declare `dynamic = ["version"]`; a
+  literal `[project].version` is not an alternative source of truth.
 
 ## Governing ADRs
 
@@ -71,6 +74,10 @@ an ATM adapter, wrapper, or workflow fork.
    remains an explicit release decision.
 6. Submit any missing generic schema/support to `sc-publish`; wait for its
    accepted implementation and exact sync.
+7. Convert `atm-query-python` and `hermes-atm` from literal PEP 621 project
+   versions to Cargo-derived `dynamic = ["version"]`, matching
+   `atm-graft-python`. Add/extend the version-lock test so every published
+   Python distribution resolves to the workspace release version.
 
 ## Split Recommendation
 
@@ -82,6 +89,9 @@ evidence and must not silently add schema behavior.
 - Every enabled ATM artifact/channel maps to a canonical consumer and proof.
 - Every dormant channel has an explicit manifest-state reason.
 - PF-1, PF-2, and PF-3 use existing canonical solutions as defined above.
+- `atm-graft-python`, `atm-query-python`, and `hermes-atm` all resolve their
+  version from Cargo; the version-lock test fails if any published Python
+  distribution can drift from the workspace release version.
 - No ATM-only shared-code adaptation exists.
 - Every unmet generic capability has an upstream tracking item, not a local
   workaround.
@@ -93,6 +103,7 @@ python3 scripts/release_artifacts.py validate-manifest \
   --manifest release/publish-artifacts.toml --workspace-toml Cargo.toml
 python3 scripts/release_artifacts.py preflight-secret-plan \
   --manifest release/publish-artifacts.toml
+python3 .just/check_version_sync.py
 ```
 
 ## Required Document Updates

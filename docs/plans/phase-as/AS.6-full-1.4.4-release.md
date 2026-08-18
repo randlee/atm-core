@@ -25,6 +25,8 @@ introduce new channel behavior during release execution.
 
 - Version synchronization, manifest identity, shared toolchain, and all
   validations must be locked before publication.
+- Each published Python distribution derives its version from Cargo and the
+  resolved value matches the workspace release version.
 - Readiness preflight occurs before main; final preflight occurs on exact
   immutable main.
 - Partial registry state uses PF-3 actions, never an implicit version bump.
