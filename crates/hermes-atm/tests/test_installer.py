@@ -182,6 +182,7 @@ class InstallerTests(unittest.TestCase):
             )
             profile_config = json.loads((profile_home / "config.yaml").read_text())
             self.assertEqual(profile_config["plugins"]["enabled"], ["hermes-atm-native-tools"])
+            self.assertEqual(profile_config["platform_toolsets"], {"cli": ["atm"]})
             self.assertFalse(
                 install_profile(
                     profile_home=profile_home,
@@ -217,6 +218,39 @@ class InstallerTests(unittest.TestCase):
                 ["another-plugin", "hermes-atm-native-tools"],
             )
             self.assertEqual(profile_config["other"], "value")
+
+    def test_install_enables_atm_toolset_for_each_configured_platform(self):
+        with tempfile.TemporaryDirectory() as temporary, GatewayModules():
+            profile_home = Path(temporary) / "profile"
+            profile_home.mkdir(parents=True)
+            (profile_home / "config.yaml").write_text(
+                json.dumps(
+                    {
+                        "platform_toolsets": {
+                            "cli": ["hermes-cli"],
+                            "telegram": ["hermes-telegram"],
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            install_profile(
+                profile_home=profile_home,
+                profile=TEST_PROFILE,
+                identity=TEST_IDENTITY,
+                team=TEST_TEAM,
+                chat_id=TEST_CHAT_ID,
+                atm_home="/tmp/atm",
+                workspace_root="/tmp/workspace",
+            )
+            profile_config = json.loads((profile_home / "config.yaml").read_text())
+            self.assertEqual(
+                profile_config["platform_toolsets"],
+                {
+                    "cli": ["hermes-cli", "atm"],
+                    "telegram": ["hermes-telegram", "atm"],
+                },
+            )
 
     def test_install_rejects_a_launch_agent_for_another_interpreter(self):
         with tempfile.TemporaryDirectory() as temporary, GatewayModules():

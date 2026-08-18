@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 import venv
 import zipfile
 
@@ -17,6 +18,27 @@ ROOT = Path(__file__).resolve().parents[1]
 CRATE = ROOT / "crates" / "atm-graft-python"
 TESTS = ROOT / "crates" / "hermes-atm" / "tests"
 HERMES_PACKAGE = ROOT / "crates" / "hermes-atm"
+WHEEL_OUTPUT_DIR_ENV = "ATM_WHEEL_OUTPUT_DIR"
+GRAFT_WHEEL_ENV = "ATM_GRAFT_WHEEL"
+
+
+def project_dependency_requirement(manifest_path: Path, package_name: str) -> str:
+    """Return one declared project dependency, preserving its version constraint."""
+
+    metadata = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
+    dependencies = metadata.get("project", {}).get("dependencies", [])
+    for dependency in dependencies:
+        if isinstance(dependency, str) and dependency.split("=", 1)[0].split("<", 1)[0].split(">", 1)[0] == package_name:
+            return dependency
+    raise RuntimeError(f"{manifest_path} does not declare required dependency {package_name}")
+
+
+def require_universal_python_wheel(wheel_path: Path) -> None:
+    if not wheel_path.name.endswith("-py3-none-any.whl"):
+        raise RuntimeError(
+            "expected hermes-atm to ship one universal Python wheel, found "
+            f"{wheel_path.name}"
+        )
 
 
 def bridge_test_environment(venv_dir: Path, python: Path) -> dict[str, str]:
@@ -31,33 +53,61 @@ def bridge_test_environment(venv_dir: Path, python: Path) -> dict[str, str]:
     return environment
 
 
+def wheel_output_dir(temp_dir: Path) -> Path:
+    """Return a retained CI output directory, or a temporary local one."""
+
+    configured = os.environ.get(WHEEL_OUTPUT_DIR_ENV)
+    output_dir = Path(configured).resolve() if configured else temp_dir / "wheels"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    return output_dir
+
+
+def build_or_locate_graft_wheel(
+    *, python: Path, wheel_dir: Path, environment: dict[str, str]
+) -> Path:
+    """Use a release-built graft wheel when provided, otherwise build one."""
+
+    configured = os.environ.get(GRAFT_WHEEL_ENV)
+    if configured:
+        wheel_path = Path(configured).resolve()
+        if not wheel_path.is_file() or not wheel_path.name.startswith("atm_graft"):
+            raise RuntimeError(
+                f"{GRAFT_WHEEL_ENV} must name one existing atm-graft wheel, got {wheel_path}"
+            )
+        return wheel_path
+
+    maturin = shutil.which("maturin")
+    if maturin is None:
+        raise RuntimeError("maturin is required for the Hermes graft bridge test")
+    subprocess.run(
+        [maturin, "build", "--manifest-path", str(CRATE / "Cargo.toml"), "--out", str(wheel_dir)],
+        check=True,
+        cwd=ROOT,
+        env=environment,
+    )
+    graft_wheels = sorted(wheel_dir.glob("atm_graft*.whl"))
+    if len(graft_wheels) != 1:
+        raise RuntimeError(f"expected one atm-graft wheel, found {len(graft_wheels)}")
+    return graft_wheels[0]
+
+
 def main() -> None:
     with tempfile.TemporaryDirectory(prefix="atm-graft-hermes-bridge-") as temp:
         venv_dir = Path(temp) / "venv"
         venv.EnvBuilder(with_pip=True).create(venv_dir)
         python = venv_dir / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
-        maturin = shutil.which("maturin")
-        if maturin is None:
-            raise RuntimeError("maturin is required for the Hermes graft bridge test")
         env = bridge_test_environment(venv_dir, python)
-        wheel_dir = Path(temp) / "wheels"
-        wheel_dir.mkdir()
+        wheel_dir = wheel_output_dir(Path(temp))
         subprocess.run(
             [str(python), "-m", "pip", "install", "--quiet", "wheel"],
             check=True,
             cwd=ROOT,
             env=env,
         )
-        subprocess.run(
-            [maturin, "build", "--manifest-path", str(CRATE / "Cargo.toml"), "--out", str(wheel_dir)],
-            check=True,
-            cwd=ROOT,
-            env=env,
+        graft_wheel = build_or_locate_graft_wheel(
+            python=python, wheel_dir=wheel_dir, environment=env
         )
-        graft_wheels = sorted(wheel_dir.glob("atm_graft*.whl"))
-        if len(graft_wheels) != 1:
-            raise RuntimeError(f"expected one atm-graft wheel, found {len(graft_wheels)}")
-        with zipfile.ZipFile(graft_wheels[0]) as wheel:
+        with zipfile.ZipFile(graft_wheel) as wheel:
             wheel_files = set(wheel.namelist())
         retired_sources = {
             "atm_graft_hermes_adapter/__init__.py",
@@ -88,18 +138,25 @@ def main() -> None:
         hermes_wheels = sorted(wheel_dir.glob("hermes_atm*.whl"))
         if len(hermes_wheels) != 1:
             raise RuntimeError(f"expected one hermes-atm wheel, found {len(hermes_wheels)}")
+        require_universal_python_wheel(hermes_wheels[0])
         # The generic graft wheel owns the strict Pydantic ingress models.
         # Install that declared runtime dependency explicitly because this
         # contract runner intentionally installs both project wheels with
         # ``--no-deps`` to avoid resolving an unrelated published ATM wheel.
         subprocess.run(
-            [str(python), "-m", "pip", "install", "pydantic>=2,<3"],
+            [
+                str(python),
+                "-m",
+                "pip",
+                "install",
+                project_dependency_requirement(CRATE / "pyproject.toml", "pydantic"),
+            ],
             check=True,
             cwd=ROOT,
             env=env,
         )
         subprocess.run(
-            [str(python), "-m", "pip", "install", "--no-deps", str(graft_wheels[0]), str(hermes_wheels[0])],
+            [str(python), "-m", "pip", "install", "--no-deps", str(graft_wheel), str(hermes_wheels[0])],
             check=True,
             cwd=ROOT,
             env=env,

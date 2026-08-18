@@ -20,6 +20,7 @@ pub mod read;
 pub(crate) mod retained_roster;
 pub mod search;
 pub mod send;
+pub(crate) mod sender_roster;
 pub mod teams;
 pub mod templates;
 pub(crate) mod util;

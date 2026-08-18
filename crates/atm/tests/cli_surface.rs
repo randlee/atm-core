@@ -17,10 +17,10 @@
 //! silently drift. Regenerate the baseline with:
 //!
 //! ```text
-//! UPDATE_ATM_CLI_SURFACE_BASELINE=1 cargo test -p agent-team-mail --test cli_surface
+//! ATM_CLI_SURFACE_BLESS=1 cargo test -p agent-team-mail --features cli-surface-dump --test cli_surface
 //! ```
 //!
-//! or via `cargo run -p agent-team-mail --example gen_cli_docs`, which
+//! or via `cargo run -p agent-team-mail --features cli-surface-dump --example gen_cli_docs`, which
 //! regenerates both this baseline and the version-suffixed
 //! `docs/atm/cli-reference-<version>.md` from the same live tree in one
 //! step. No established bless/regen convention exists
@@ -150,7 +150,7 @@ fn diff_args(
         if !baseline_args.iter().any(|arg| as_str(arg, "id") == id) {
             additions.push(format!(
                 "{path}: argument {id:?} is new and not yet reflected in the baseline \
-                 (regenerate with `cargo run -p agent-team-mail --example gen_cli_docs`)"
+                 (regenerate with `cargo run -p agent-team-mail --features cli-surface-dump --example gen_cli_docs`)"
             ));
         }
     }
@@ -187,7 +187,7 @@ fn diff_subcommands(
         {
             additions.push(format!(
                 "{path}: subcommand {name:?} is new and not yet reflected in the baseline \
-                 (regenerate with `cargo run -p agent-team-mail --example gen_cli_docs`)"
+                 (regenerate with `cargo run -p agent-team-mail --features cli-surface-dump --example gen_cli_docs`)"
             ));
         }
     }
@@ -200,7 +200,7 @@ fn cli_surface_matches_committed_baseline() {
     let baseline_raw = std::fs::read_to_string(baseline_path()).unwrap_or_else(|error| {
         panic!(
             "failed to read {}: {error} (generate it first with \
-             `cargo run -p agent-team-mail --example gen_cli_docs`)",
+             `cargo run -p agent-team-mail --features cli-surface-dump --example gen_cli_docs`)",
             baseline_path().display()
         )
     });
@@ -237,8 +237,8 @@ fn cli_surface_matches_committed_baseline() {
         additions.is_empty(),
         "atm CLI surface diverged from crates/atm/tests/cli_surface_baseline.json:\n{}\n\n\
          If this is an intentional, reviewed addition, regenerate the baseline in the same \
-         commit with `cargo run -p agent-team-mail --example gen_cli_docs` (or \
-         `{BLESS_ENV}=1 cargo test -p agent-team-mail --test cli_surface`).",
+         commit with `cargo run -p agent-team-mail --features cli-surface-dump --example gen_cli_docs` (or \
+         `{BLESS_ENV}=1 cargo test -p agent-team-mail --features cli-surface-dump --test cli_surface`).",
         additions.join("\n")
     );
 }

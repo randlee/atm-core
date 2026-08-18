@@ -1,5 +1,7 @@
 [package]
 name = "atm-peer-tls-interop"
+# Test/provisioning fixture only; it is not a standalone crates.io product.
+publish = false
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,8 +12,8 @@ homepage.workspace = true
 description = "Provisioning and bounded curl mTLS interoperability fixture for ATM."
 
 [dependencies]
-atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.2" }
-atm-storage = { path = "../atm-storage", version = "1.4.2" }
+atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.3" }
+atm-storage = { path = "../atm-storage", version = "1.4.3" }
 rustls.workspace = true
 
 [dev-dependencies]

@@ -1,89 +1,196 @@
 # Release Notes
 
 ## Summary
-- version: 1.3.1
-- release date: 2026-07-15
+
+- version: 1.4.3
+- release date: 2026-08-17
 - release owner: publisher (ATM release execution)
 
-This release lands Phase AE (installed-copy packaging, docs/help surfacing,
-publisher freshness gate) and Phase AF (host-wide singleton closure,
-observability/release gates, native send input-integrity hardening), plus a
-1.3.1 cross-host smoke-test validation sprint and a Homebrew tap
-platform-asset mapping fix.
+Version 1.4.3 consolidates the caller-identity and post-send simplification
+work, the Tokio/Axum HTTP runtime, deletion of the retired transport path,
+decomposed template messages and query surface, and the first public-package
+release lane for `hermes-atm` and `atm-graft`. It also records historical
+transport lines honestly: Phase AG and Phase AK are retired/superseded rather
+than features carried by this release.
+
+## Recovery Note (v1.4.2 → v1.4.3)
+
+- The `v1.4.2` release attempt published 11 of 12 crates (all but
+  `agent-team-mail`) to crates.io before failing `cargo publish`'s isolated
+  package-verification build: `crates/atm/src/commands/api.rs` embedded
+  `docs/atm-http-runtime/openapi.yaml` via `include_str!`, but that file lived
+  outside the crate's own directory and was therefore absent from the
+  packaged tarball cargo publish verifies against.
+- The fix (PR #930) packages a byte-for-byte-guarded derivative at
+  `crates/atm/openapi.yaml` so the CLI crate owns its OpenAPI contract. It
+  merged to `main` after the `v1.4.2` tag had already been created by the
+  release workflow's gate-and-tag step, so the tag could not be moved to
+  include it (tag mutation is not a permitted recovery path).
+- `v1.4.2` is abandoned as a release tag/GitHub Release: it was never
+  completed (no tag-consistent build, no GitHub Release, no Homebrew/winget
+  publish). The 11 crates already live at `1.4.2` on crates.io remain
+  published there permanently (crates.io versions are immutable); this
+  release republishes all 12 crates at `1.4.3` from a fresh `release/v1.4.3`
+  branch cut from `main`, which includes PR #930.
 
 ## Included Changes
 
-### Phase AF — reliability hardening (PR #539 integrate/phase-AF → develop)
-- Close the host-wide singleton bypass that blocked the 1.3.0 release
-  (Sprint AF.1).
-- Add observability and release-gate hardening: structured tracing fields,
-  request-ID sentinel-collision fix, release-preflight freshness checks
-  (Sprint AF.2).
-- Harden native `atm send` input-integrity handling (Sprint AF.3).
-- Remove the workflow-sidecar (superseded by daemon-native dispatch,
-  reclassified from Sprint AF.4 to Sprint AD.36).
+### Phase AD — caller identity and post-send simplification
 
-### Phase AE — installed-copy packaging & docs (PR #530 integrate/phase-AE → develop)
-- Ship an installed-copy packaging path and publisher freshness gate
-  (Sprints AE.1, AE.8).
-- Land hooks/nudge template corpus and mailbox/diagnostics corpus expansion
-  (Sprints AE.3, AE.4).
-- Surface CLI help content and verify the installed user-doc graph
-  end-to-end (Sprints AE.6, AE.7, AE.9).
+- Restore direct post-send emission and remove retired Claude/reconciliation
+  daemon paths.
+- Converge the mailbox protocol on owner-only mutation, self-send rejection,
+  and self-ack termination.
 
-### 1.3.1 cross-host smoke-test validation (PR #540)
-- Independently re-run and verify the full macOS and Windows smoke suites
-  against the 1.3.1 candidate (fast/normal/thorough/shared-host/graft-
-  same-host lanes) with evidence SHAs verified as real ancestors of the
-  reviewed commit.
-- Formally document the true cross-host (Windows↔macOS simultaneous)
-  coverage gap as deferred (AB-SMOKE-001–010, still pending) rather than
-  silently glossing over it.
+### Phase AG — retired cross-host design (historical context)
 
-### Homebrew formula fix (PR #529, issue #522)
-- Fix the update-homebrew formula generator's platform-asset mapping bug
-  that caused all three platform url/sha256 blocks to point at the same
-  aarch64-apple-darwin asset.
-- Backfill the 1.3.0 and 1.2.3 tap formulas with corrected per-platform
-  assets using the fixed generator.
+- Retain the early custom-frame/TCP cross-host design only as historical
+  context. It was explicitly rejected and retired; it is not a v1.4.3
+  transport feature.
+- Phase AI, followed by the Phase AL/AM runtime, is the accepted replacement
+  line.
 
-### Other fixes carried into this release
-- winget token wiring fix (PR #532).
-- Preflight documentation pass (PR #531).
-- atm send/SendMessage-to-atm-send audit and correction (PR #534).
+### Phase AI — HTTP daemon and minimal cross-host transport
+
+- Complete the initial HTTP transition through AI.52: HTTP over Unix-domain
+  sockets on Unix and loopback TCP on Windows, graft bindings, per-profile
+  launchd bridge deployment, peer authority/trust resolution, bounded peer
+  recovery, reconciliation, reports, and fuzz tooling.
+- The pre-AL/AM peer implementation is superseded by the Tokio runtime and
+  deletion-only cleanup below. Physical two-Mac and Mac-to-Windows live peer
+  proof remains a retained evidence gap, not a claim of completed coverage.
+
+### Phase AK — superseded direct-peer design (historical context)
+
+- The AK.1–AK.10 implementation line was superseded wholesale by the Phase
+  AL/AM Tokio migration and has no independent release behavior.
+- Its reviewed receiver-hook design was carried forward into AL.1; this is the
+  only retained AK artifact used by the current runtime.
+
+### Phase AJ — runtime observation (PR #759)
+
+- Add daemon-resident session/PID heartbeat caching for diagnostic runtime
+  observation.
+- This telemetry is diagnostic only: it is not a routing, admission, or policy
+  input.
+
+### Phase AL — minimal Tokio HTTP runtime
+
+- Ship `atm-http-runtime`, the maintained Tokio/Axum HTTP path used by the
+  CLI, `atm-graft`, Unix UDS, loopback TCP, and direct peer delivery.
+- Establish one typed request/response contract and canonical write ingress,
+  with real M4-to-M5 direct peer send and acknowledgement evidence.
+
+### Phase AM — deletion-only transport cleanup
+
+- Remove handwritten HTTP framing, legacy local and peer transport workers,
+  and redundant resend/replay machinery after proving each retired reference
+  dead or recorded in the removal ledger.
+- Preserve the explicit platform contract: Unix uses HTTP over UDS or
+  loopback TCP; Windows uses HTTP over loopback TCP; peer delivery uses the
+  same ordinary HTTP write schema.
+- Retain transport-specific benchmark evidence, including M5 one-frame medians
+  of approximately 15,012 UDS admissions/second and 12,340 loopback-TCP
+  admissions/second, and a Windows one-frame TCP result of 16,175
+  messages/second.
+- Add `hermes-atm`, the first supported Hermes-harness integration. It installs
+  in the Hermes Python environment, registers a profile-aware graft receiver,
+  and supplies native `atm_send`, `atm_read`, and `atm_list` tool directions
+  without requiring users to patch the Hermes harness source.
+
+### Phase AN — decomposed template messages and query surface
+
+- Add a durable decomposed template catalog, render-on-read, typed analyst
+  search/query surface, and generic ATM compose workflow.
+- Add optional template-declared workflow metadata, effective tags, and a
+  generic OpenTelemetry-compatible lifecycle projection without embedding a
+  specific team workflow in ATM.
+- Adopt the exact released `sc-sha`, `sc-composer`, and `sc-compose` 1.4.1
+  chain through the sealed `atm-template-sc-compose` adapter. Checked rendering
+  rejects malformed rendered JSON before send, cache, or render-on-read output.
+- Add adversarial assurance for realistic template and Tokio HTTP seams,
+  including deterministic corpus/seed evidence and retained reports.
+
+### PyPI and release packaging
+
+- Add the first public-package lane for `hermes-atm` and the Maturin
+  `atm-graft` package: CPython 3.11–3.14 compatibility, manylinux,
+  musllinux, Windows, and aarch64 native wheels plus sdists, and the PyPI /
+  TestPyPI publish workflow (PR #911).
+- Align workspace and Python package versions under the one canonical
+  `check_version_sync.py` gate, rather than the earlier duplicate checks
+  (PRs #897 and #910).
+- Complete PyPI metadata and secret-name readiness fixes (PRs #906, #907, and
+  #914), and publish the Hermes ATM user installation/configuration guide
+  (PR #916).
+- Document the first-public-package versioning policy in ADR-049 (PR #909).
 
 ## Operator / User Impact
-- No breaking CLI changes. atm continues to operate as documented in 1.3.0.
-- Installations using the daemon/plugin host benefit from the host-wide
-  singleton fix (prevents duplicate daemon instances race-starting on a
-  single host) and observability improvements.
-- Homebrew tap users on 1.3.0/1.2.3 who hit a platform-asset mismatch
-  (wrong sha256/url for non-macOS-arm64 platforms) get corrected formulas
-  as part of this release's tap backfill.
-- True cross-host (Windows↔macOS simultaneous) messaging remains
-  same-host-validated only; the cross-host matrix is tracked as pending,
-  not yet executed.
+
+- The production daemon path is now the Tokio/Axum `atm-http-runtime` path;
+  the retired synchronous/custom-framing transport is not a fallback.
+- Local Windows use is supported through loopback TCP. Windows local tests,
+  smoke coverage, and the FastPC4 TCP benchmark pass. The missing
+  Windows-to-M4 live proof is an environment/VPN-DNS reachability limitation,
+  not a claimed local transport failure.
+- Hermes users can install the documented `hermes-atm` package into the Hermes
+  Python environment and use profile-aware native tools and meaningful graft
+  nudges through the existing agent session.
+- Template-backed sends and render-on-read now have durable catalog identity,
+  typed queryability, checked output validation, and reusable sc-compose
+  integration. Installed documentation remains available at
+  `share/doc/atm/`, with its entry point at `share/doc/atm/README.md`.
 
 ## Packaging / Distribution Notes
-- crates.io: publish in dependency order per the release manifest (9
-  publishable crates): atm-storage → agent-team-mail-core →
-  atm-storage-rusqlite → atm-daemon-client → atm-runtime →
-  atm-daemon-bootstrap → atm-daemon → atm-graft → agent-team-mail.
-- GitHub Releases: tag v1.3.1 cut from main via the Release workflow.
-- Homebrew: regenerate agent-team-mail.rb and atm.rb at 1.3.1 with the
-  fixed generator; backfill 1.3.0 and 1.2.3 formulas with corrected
-  per-platform url/sha256.
-- winget: token wiring fix included (PR #532); manifest publish follows
-  standard release workflow.
+
+- crates.io: publish the 12 `publish = true` crates in the manifest's required
+  dependency order:
+  1. `atm-error`
+  2. `atm-storage`
+  3. `agent-team-mail-core`
+  4. `atm-storage-rusqlite`
+  5. `atm-http-runtime`
+  6. `atm-daemon-client`
+  7. `atm-runtime`
+  8. `atm-template-sc-compose`
+  9. `atm-daemon-bootstrap`
+  10. `atm-daemon`
+  11. `atm-graft`
+  12. `agent-team-mail`
+- `atm-error` and `atm-http-runtime` are new entries relative to the 1.3.1
+  nine-crate manifest. `atm-template-sc-compose` was added after release
+  preflight found `atm-daemon-bootstrap` depends on it at runtime (issue
+  #923, fixed in PR #924) -- it was previously `publish = false` and absent
+  from the manifest, which would have broken `cargo publish` mid-sequence.
+  The Maturin `atm-graft-python` artifact remains in the release inventory
+  but is published to PyPI as `atm-graft`, so it is not one of the 12
+  crates.io artifacts.
+- PyPI/TestPyPI: `hermes-atm` and `atm-graft` have a verified, installable
+  TestPyPI milestone. The real PyPI publication is the release execution step,
+  not a completed claim in these notes.
+- GitHub Releases, Homebrew, and winget continue to be published by the
+  release workflow after the ordered artifact gates pass.
 
 ## Known Issues / Waivers
-- True cross-host (Windows↔macOS simultaneous) smoke coverage
-  (AB-SMOKE-001–010) remains PENDING; only same-host validation was run
-  for this release.
+
+- Physical two-Mac and Mac-to-Windows peer proof remains pending. The current
+  Windows-to-M4 limitation is the available VPN/DNS topology, not an alternate
+  or unsupported local transport path.
+- Production peer TLS/mTLS is not part of v1.4.3. Quarantined TLS
+  provisioning/storage material and curl mTLS interop fixtures are retained as
+  reference material only; no TLS business logic is on the live daemon HTTP
+  path.
+- ADR-049 is merged but its own status is still **Proposed**. The release does
+  not silently treat that status as Accepted; its final disposition remains a
+  release-governance follow-up.
 
 ## Follow-Up
-- Execute the frozen cross-host smoke matrix
-  (docs/plans/phase-AB/cross-host-smoke-checklist.md) in a future
-  release window.
-- File the non-blocking flaky-test hardening follow-up for
-  mailbox_locking.rs:606-621 (tracked, not yet filed as of this release).
+
+- Execute and retain the physical two-Mac and Mac-to-Windows peer matrix when
+  the required network reachability is available.
+- Implement the planned reusable `peer-tls` boundary in Phase AO, with
+  certificate/key exchange behind a storage interface, TLS enabled after a
+  successful exchange, and an explicit diagnostic/benchmark opt-out.
+- Begin Phase AP by proving the outbound-initiated corporate-network approach
+  against the current Windows VPN/DNS constraint before broadening its
+  deployment scope.

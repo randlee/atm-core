@@ -26,6 +26,10 @@ fn document_path() -> PathBuf {
     workspace_root().join("docs/atm-http-runtime/openapi.yaml")
 }
 
+fn packaged_document_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("openapi.yaml")
+}
+
 fn baseline_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/openapi_surface_baseline.json")
 }
@@ -184,6 +188,19 @@ fn openapi_routes_match_live_router_surface() {
         "OpenAPI routes must exactly match live routing; live routes missing from OpenAPI: \
          {missing_from_openapi:?}; OpenAPI routes not registered live: \
          {undocumented_live_routes:?}"
+    );
+}
+
+#[test]
+fn packaged_openapi_copy_matches_the_canonical_documentation_contract() {
+    let canonical = std::fs::read(document_path()).expect("read canonical OpenAPI contract");
+    let packaged =
+        std::fs::read(packaged_document_path()).expect("read packaged OpenAPI contract copy");
+
+    assert_eq!(
+        packaged, canonical,
+        "crates/atm/openapi.yaml is a packaged derivative of the canonical \
+         docs/atm-http-runtime/openapi.yaml contract; update both together"
     );
 }
 

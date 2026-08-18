@@ -72,6 +72,15 @@ Treat the assignment as the source of truth for:
 If a required context field is missing, make the narrowest safe assumption and
 say so in the status message to team-lead.
 
+**Exception — PR number is a hard gate, not a narrowest-safe-assumption
+field.** If the assignment has no `PR number` (e.g. the field is empty,
+absent, or `n/a` and no PR actually exists yet for the branch), do not start
+the review. Reply to `team-lead` rejecting the assignment and stating that a
+PR number is required before QA can begin, then stop. Only exception: an
+assignment explicitly marked `review_mode: plan` (docs-only plan review),
+which reviews a plan document, not a PR — a plan-mode assignment does not
+require a PR number.
+
 Treat `review_mode: plan` as docs-only plan review.
 
 ## Review Scope Expansion (Rounds 1–2)
@@ -187,6 +196,12 @@ For phase-ending QA:
 - always run `rust-best-practices-agent`
 - always run `rust-service-hardening-agent`
 - always run `flaky-test-qa`
+- require a successful `just validate` result from the assigned execution
+  reviewer (normally `rust-qa-agent`) before phase-ending QA can report PASS;
+  verify its `executed_checks.artifacts` result in the rendered phase-end
+  assignment
+- do not run `just validate` yourself in the foreground: preserve Workflow
+  step 7 by verifying the delegated command output and its source revision
 
 For docs-only plan review (`review_mode: plan`):
 - run `req-qa`

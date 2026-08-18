@@ -143,11 +143,14 @@ Rust boundary rules:
 
 ## 2.4 Activation And Config Boundary
 
-`atm-graft` is active only inside an ATM-configured project.
+`atm-graft` receiver activation is identity-driven, not project-config-driven.
 
 Architectural rules:
-- `.atm.toml` discovery gates whether graft mode is active at all
-- if `.atm.toml` is absent, `atm-graft` remains inert
+- a valid caller-provided `ATM_IDENTITY` and `ATM_TEAM` envelope activates the
+  receiver; a clean activation return means the receiver is listening and its
+  endpoint record is published
+- `.atm.toml` is optional ATM-owned configuration. Its absence must not leave
+  a graft receiver inert or silently suppress activation
 - runtime identity comes from `ATM_IDENTITY`; graft mode does not add a second
   identity-resolution scheme
 - if graft mode is active and identity/team resolution succeeds, the standard
@@ -157,12 +160,13 @@ Architectural rules:
   not a reason to forbid daemon startup
 - optional graft-specific config remains ATM-owned config semantics rather than
   host-private settings
-- the initial graft config surface must stay small:
-  - `[atm.graft].enabled = true|false`
+- a legacy `[atm.graft].enabled` value may remain parseable for compatibility,
+  but it is not an activation gate
 
 Architectural consequence:
-- `atm-core` config loading must own the `[atm.graft]` model before
-  `atm-graft` activation logic can be implemented cleanly
+- `atm-core` config loading remains the source of optional ATM configuration;
+  malformed configuration is an activation error, while absent configuration
+  uses built-in defaults
 - the concrete `atm-graft` crate consumes the public `atm_core::load_atm_config`
   helper rather than reparsing `.atm.toml` privately
 - the standard convenience path must collect those ATM-owned inputs and pass

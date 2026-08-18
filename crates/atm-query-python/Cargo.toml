@@ -1,6 +1,8 @@
 [package]
 name = "atm-query-python"
-version = "1.4.2"
+# This local analyst binding is not part of the current public release surface.
+publish = false
+version = "1.4.3"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
@@ -18,9 +20,9 @@ extension-module = ["pyo3/extension-module"]
 
 [dependencies]
 pyo3 = "0.29"
-atm-storage = { path = "../atm-storage", version = "1.4.2" }
-atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.2" }
+atm-storage = { path = "../atm-storage", version = "1.4.3" }
+atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.3" }
 
 [dev-dependencies]
-atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.2", features = ["test-support"] }
+atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.3", features = ["test-support"] }
 tempfile = "3"

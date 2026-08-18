@@ -9,6 +9,7 @@ import tomllib
 
 BOUNDARY = Path("boundaries/atm-graft-python/hermes-graft-binding.toml")
 PACKAGE = Path("crates/atm-graft-python/pyproject.toml")
+HERMES_PACKAGE = Path("crates/hermes-atm/pyproject.toml")
 EXPECTED = {"pydantic"}
 
 @dataclass(frozen=True)
@@ -22,6 +23,7 @@ def _name(spec: str) -> str:
 def collect_violations(root: Path) -> list[Violation]:
     boundary = tomllib.loads((root / BOUNDARY).read_text(encoding="utf-8"))
     package = tomllib.loads((root / PACKAGE).read_text(encoding="utf-8"))
+    hermes_package = tomllib.loads((root / HERMES_PACKAGE).read_text(encoding="utf-8"))
     declared = set(boundary.get("dependencies", {}).get("allowed_dependencies", []))
     dependencies = {_name(value) for value in package.get("project", {}).get("dependencies", [])}
     findings: list[Violation] = []
@@ -29,6 +31,15 @@ def collect_violations(root: Path) -> list[Violation]:
         findings.append(Violation(str(PACKAGE), f"Python dependencies must be exactly {sorted(EXPECTED)}"))
     if not dependencies <= declared:
         findings.append(Violation(str(BOUNDARY), "allowed_dependencies must include every Python package dependency"))
+    graft_python_range = package.get("project", {}).get("requires-python")
+    hermes_python_range = hermes_package.get("project", {}).get("requires-python")
+    if graft_python_range != hermes_python_range:
+        findings.append(
+            Violation(
+                str(PACKAGE),
+                f"requires-python ({graft_python_range!r}) must match {HERMES_PACKAGE} ({hermes_python_range!r})",
+            )
+        )
     contracts = boundary.get("contracts", {})
     required = {"AtmSendRequest", "AtmReadRequest", "AtmListRequest", "AtmSendResult", "AtmReadResult", "AtmListResult"}
     present = set(contracts.get("request_types", [])) | set(contracts.get("response_types", []))

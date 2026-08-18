@@ -1,7 +1,35 @@
 {
-  "generatedAt": "2026-07-15T00:13:27.737799Z",
-  "branch": "smoke-test/1.3.1-cross-host",
-  "version": "1.3.1",
+  "generatedAt": "2026-08-17T17:14:42.724952Z",
+  "branch": "release/v1.4.3",
+  "version": "1.4.3",
   "status": "pass",
-  "findings": []
+  "findings": [
+    {
+      "check": "publish-version-unpublished",
+      "severity": "warning",
+      "summary": "release version publication check skipped outside explicit release-candidate mode",
+      "detail": "",
+      "command": null,
+      "exit_code": null,
+      "blocks": false
+    },
+    {
+      "check": "cargo-lock-drift",
+      "severity": "warning",
+      "summary": "Cargo.lock drift check skipped outside explicit release-candidate mode",
+      "detail": "",
+      "command": null,
+      "exit_code": null,
+      "blocks": false
+    },
+    {
+      "check": "dependency-currency",
+      "severity": "warning",
+      "summary": "dependency currency check skipped; set ATMD_CHECK_DEP_CURRENCY=1 to enable it",
+      "detail": "",
+      "command": null,
+      "exit_code": null,
+      "blocks": false
+    }
+  ]
 }

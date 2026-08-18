@@ -1227,7 +1227,7 @@ Acceptance:
   proven dead, no guard is merged early, and the minimality proof confirms
   no compatibility shim survives.
 
-## 45. Phase AN — Decomposed Template Messages And Query Surface [AN.1–AN.14 COMPLETE; AN.15 IN PROGRESS]
+## 45. Phase AN — Decomposed Template Messages And Query Surface [AN.1–AN.15 COMPLETE]
 
 - **Phase AN: Decomposed Template Messages And Query Surface [AN.1–AN.10 COMPLETE]** —
   Added a bounded `sc-composer` adapter boundary, durable template catalog and
@@ -1261,7 +1261,7 @@ Sprint line:
 - `AN.14` `feature/an14-sc-compose-141-checked-emission` — adapter-only
   checked emission that rejects malformed JSON before send or render-on-read
 
-- **AN.13–AN.15 checked-render upgrade and assurance [AN.15 IN PROGRESS]** — AN.13 establishes
+- **AN.13–AN.15 checked-render upgrade and assurance [COMPLETE]** — AN.13 establishes
   durable adapter-derived output-format identity and adopts the released
   exact `sc-sha`/`sc-composer` 1.4.1 dependency chain in its adapter; AN.14
   makes the
@@ -1269,8 +1269,8 @@ Sprint line:
   sending, caching, or render-on-read output. AN.15 then runs a bounded,
   deterministic adversarial campaign over the checked template/catalog
   lifecycle, including captured-environment and immutable-revision oracles.
-  The remaining AN.15 HTTP-seam addendum (PR #887,
-  `feature/an15-http-fuzz-campaign`) exercises the current Tokio/Axum
+  The AN.15 HTTP-seam addendum (PR #887,
+  `feature/an15-http-fuzz-campaign`) is merged and exercises the current Tokio/Axum
   `atm-http-runtime` boundary with a separately retained, commit-pinned
   four-worker campaign; it is not duplicate pre-Tokio AI.51 work against the
   removed `api::http_frame_reader` module. AN.15 does not make ATM a
@@ -1316,6 +1316,41 @@ path without SSH tunneling, localhost simulation, raw-IP substitution, or a
 third-party relay. No AP product implementation begins if that physical proof
 does not pass. The authoritative outline is
 [Phase AP plan](./plans/phase-ap/plan-phase-ap.md).
+
+## 48. Phase AS — Shared Publish-Kit Migration [PLANNING]
+
+Status summary:
+
+- Phase AS adopts the upstream-owned `sc-publish` package without local edits
+  to shared workflows, helpers, agents, or tests. ATM supplies only complete
+  consumer release data and evidence.
+- Planning branch: `plan/sc-compose-publish-kit-migration`.
+- Baseline: `sc-publish/develop @ 240fd52`.
+- Entry gate: AS.1 records exact source parity and classifies shared gaps.
+  Safety-load-bearing capabilities must be implemented and accepted upstream
+  before AS.3 can dispatch; a filed issue is not a release gate.
+- The authoritative plan is [Phase AS plan](./plans/phase-as/README.md).
+
+Sprint line:
+
+- `AS.1` `AS.1-overlay-contract.md` — exact source parity, ownership, and
+  upstream safety-capability gates
+- `AS.2` `AS.2-consumer-manifest-contract.md` — consumer manifest and unified
+  release-version contract
+- `AS.3` `AS.3-worktree-preflight-proof.md` — canonical worktree preflight
+  proof
+- `AS.4` `AS.4-authorized-pypi-1.4.3.md` — separately authorized immutable
+  main PyPI release
+- `AS.5` `AS.5-main-migration-merge.md` — verified migration promotion from
+  `develop` to `main`
+- `AS.6` `AS.6-full-1.4.4-release.md` — first full canonical release
+
+Acceptance:
+
+- Phase AS acceptance is defined by the authoritative sprint plan: byte-exact
+  shared parity, complete explicit consumer data, implemented upstream safety
+  gates, matching preflight receipts, independent QA, and explicit human
+  production authorization for AS.4–AS.6.
 
 ## Publishing Improvements
 

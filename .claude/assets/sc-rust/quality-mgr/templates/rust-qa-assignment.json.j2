@@ -45,8 +45,8 @@ defaults:
     "coverage": {% if coverage == true %}true{% elif coverage == false %}false{% elif review_mode == "phase_end" %}true{% else %}false{% endif %}
   },
   "baseline_ref": {{ baseline_ref }},
-  "artifact_regeneration_required": {% if artifact_regeneration_required %}true{% else %}false{% endif %},
-  "artifact_commands": {{ artifact_commands }},
+  "artifact_regeneration_required": {% if review_mode == "phase_end" or artifact_regeneration_required %}true{% else %}false{% endif %},
+  "artifact_commands": {% if review_mode == "phase_end" %}"just validate"{% else %}{{ artifact_commands }}{% endif %},
   "round_limit": {% if round_limit %}true{% else %}false{% endif %},
   "changed_files": [{% for file in changed_files %}{{ file }}{% if not loop.last %}, {% endif %}{% endfor %}],
   "triage_records": [{% for record in triage_records %}{{ record }}{% if not loop.last %}, {% endif %}{% endfor %}],
