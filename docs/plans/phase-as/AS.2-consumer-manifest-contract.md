@@ -83,7 +83,7 @@ an ATM adapter, wrapper, or workflow fork.
    already-at-target artifacts, block true version conflicts. A version bump
    remains an explicit release decision.
 6. Supply the shared installer one complete consumer JSON document containing
-   explicit artifacts, crate publish order, binaries, wheels, and per-channel
+   explicit artifacts, crate dependency/publish order, binaries, wheels, and per-channel
    enablement. Reject any install request that omits that document; source
    discovery is advisory `--example-json` output only.
 7. Submit any missing generic schema/support to `sc-publish`; wait for its

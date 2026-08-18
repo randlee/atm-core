@@ -25,7 +25,9 @@ release flow without reintroducing toolchain or validation drift.
   overlay patch.
 - Preflight and publish consume one resolved manifest, toolchain, and
   validation receipt. `source_commit`, `manifest_sha256`, `toolchain_sha256`,
-  and `validation_sha256` must agree; a digest mismatch fails closed.
+  and `validation_sha256` must agree; a digest mismatch blocks publication,
+  records an upstream escalation, and requires a fresh matching preflight only
+  after the upstream correction is accepted.
 - Production publishing requires explicit authorization; planning or
   preflight does not grant it.
 
@@ -41,9 +43,9 @@ policy.
 
 ## Current shared baseline
 
-`sc-publish` `develop` at `d9b4588e73845cf47fe04d42c2a02b8b30136fc1` is the
-promotion baseline. It relocates the shared surface into the package and
-replaces the retired overlay script with `plugins/sc-publish/install.py`.
+`sc-publish` `develop` at `240fd52` is the promotion baseline. It provides the
+explicit-input, pinned-bootstrap installer and replaces the retired overlay
+script with `plugins/sc-publish/install.py`.
 
 The baseline is not a claim that AS.1 is closed. Its remaining installer and
 evidence refinements are listed in AS.1 as upstream-owned deliverables; ATM

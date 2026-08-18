@@ -59,7 +59,7 @@ ATM workflow edits.
 
 | Surface | Owner | Rule |
 | --- | --- | --- |
-| Generic workflows/actions, generic release-manifest parser, generic artifact helper, generic tests | `sc-compose` | Exact import only. Any required change is an upstream PR first. |
+| Generic workflows/actions, generic release-manifest parser, generic artifact helper, generic tests | `sc-publish` | Exact import only. Any required change is an upstream PR first. |
 | ATM artifact/channel declarations and ATM validation commands | ATM | Data in `release/publish-artifacts.toml`; no workflow fork. |
 | ATM installed-document helpers | ATM | Extract to `scripts/atm_release_artifacts.py`; ATM callers import that module. |
 | Credential approval and execution | `publisher` / GitHub environment | Publisher supplies evidence; a person authorizes real publication. |
@@ -70,7 +70,7 @@ list; ATM does not maintain a second sync implementation or metadata format.
 
 ## Canonical overlay audit
 
-The canonical `sc-publish` `sync-overlay.sh --dry-run` initially found 31 ATM
+The canonical `sc-publish` installer `--dry-run` initially found 31 ATM
 differences. Each has been reviewed below. They are one atomic, byte-for-byte
 overlay: ATM must not select or edit individual files. A channel remains dormant
 until ATM declares it in its repository-specific artifact manifest.
@@ -182,7 +182,7 @@ tools).
 
 ### Manifest-defined extra validations
 
-`sc-compose` must support generic `[[extra_validations]]` entries:
+`sc-publish` must support generic `[[extra_validations]]` entries:
 
 - `id`, unique and stable;
 - argv `command`, never prompt prose;

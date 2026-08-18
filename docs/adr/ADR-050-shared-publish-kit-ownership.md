@@ -35,7 +35,7 @@ an unchanged installer run.
 ATM owns only consumer data and non-shared extension data:
 
 - its complete installer input / release manifest declarations;
-- enabled destinations, artifacts, explicit crate dependency order, and
+- enabled destinations, artifacts, explicit crate dependency/publish order, and
   release-specific validation data; and
 - explicitly namespaced ATM-only validations that the shared manifest contract
   executes without knowing ATM-specific behavior.

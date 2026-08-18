@@ -41,13 +41,16 @@ manifest behavior change in ATM.
 ## Prerequisites
 
 - `sc-publish` promotion baseline
-  `d9b4588e73845cf47fe04d42c2a02b8b30136fc1` is reachable.
+  `240fd52` is reachable.
 - The canonical package installer is available from that source.
 
 ## Hard Dependencies
 
 - `AS.2`: `must_follow`; it may only justify consumer data after AS.1 records
   the shared ownership contract.
+- `AS.3`: `must_follow`; AS.3 may not be dispatched until every
+  safety-load-bearing shared capability it relies on is implemented, accepted,
+  and synchronized unchanged from `sc-publish`.
 
 ## Non-Goals
 
@@ -72,12 +75,14 @@ manifest behavior change in ATM.
    consumer interface.
 5. Require the shared installer to consume complete explicit artifact/channel
    input. Source discovery may produce an example only; it must never infer a
-   production publish surface, publish order, or enabled destination.
+   production publish surface, crate dependency/publish order, or enabled
+   destination.
 6. Require the shared bootstrap to provision the exact `sc-compose` CLI used
    by install/render and run the semantic installer integration test in CI
    through that bootstrap.
 7. Require the installer’s sole consumer input to be complete declared data:
-   source/version policy, artifacts, explicit crate order, wheels, binaries,
+   source/version policy, artifacts, explicit crate dependency/publish order,
+   wheels, binaries,
    channels, and channel settings. It must reject missing production input;
    discovery is allowed only for an advisory example command.
 8. Require an installation proof that runs the installer with the ATM input,
@@ -87,6 +92,12 @@ manifest behavior change in ATM.
 9. Require upstream consumer CI coverage that fails on a byte difference in a
    synchronized file or any workflow-local tool installation that bypasses the
    common bootstrap. This is a shared-kit capability, not an ATM CI fork.
+10. Classify each discovered gap as either advisory or safety-load-bearing. For
+    a safety-load-bearing gap — including the resolved receipt fields
+    `source_commit`, `manifest_sha256`, `toolchain_sha256`, and
+    `validation_sha256` needed by AS.3/AS.4/AS.6 — require the capability to
+    be implemented and accepted upstream, then synchronized unchanged, before
+    dispatching the dependent sprint. An issue alone is not closure.
 
 ## Split Recommendation
 
@@ -95,13 +106,18 @@ consumer manifest work belongs to AS.2.
 
 ## Acceptance Criteria
 
-- The `d9b4588` baseline and the accepted promotion SHA are recorded.
+- The `240fd52` baseline and the accepted promotion SHA are recorded.
 - Canonical installation followed by canonical `--dry-run` reports exact
   parity from one complete declared consumer input.
 - The 31-path audit has a requirement and activation/proof reason for every
   path.
-- Every discovered shared closure gap has an upstream issue or accepted
-  resolution; there is no ATM workaround.
+- Every advisory shared gap has an upstream issue or accepted disposition;
+  every safety-load-bearing gap has an accepted upstream implementation and
+  exact synchronized proof before its dependent sprint dispatches. There is no
+  ATM workaround.
+- AS.3 dispatch is blocked until the resolved receipt/digest mechanism exists
+  upstream and its mismatch behavior blocks publication, records escalation,
+  and requires a new matching preflight after correction.
 - The upstream installer has no enabled-channel defaults and no production
   source-discovery fallback.
 - One complete ATM JSON input builds every copied asset and both generated
@@ -115,7 +131,7 @@ consumer manifest work belongs to AS.2.
 ```bash
 PUBLISH_KIT_SOURCE=/Users/randlee/Documents/github/sc-publish
 ATM_WORKTREE="$PWD"
-git -C "$PUBLISH_KIT_SOURCE" rev-parse d9b4588
+git -C "$PUBLISH_KIT_SOURCE" rev-parse 240fd52
 python3 "$PUBLISH_KIT_SOURCE/plugins/sc-publish/install.py" --help
 ```
 
@@ -127,6 +143,6 @@ python3 "$PUBLISH_KIT_SOURCE/plugins/sc-publish/install.py" --help
 
 ## Risks And Watchouts
 
-The baseline installer still needs the explicit-input and shared-toolchain
-refinements listed above. Do not represent its current unit-test pass or a
-future in-sync file diff as release readiness.
+Do not represent a filed issue, current unit-test pass, or an in-sync file
+diff as release readiness when a later sprint relies on an unimplemented
+safety capability.

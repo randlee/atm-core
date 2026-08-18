@@ -29,7 +29,8 @@ and workflow source are pinned to immutable `main`.
 
 ## Governing ADRs
 
-- No new ADR.
+- [ADR-049](../../adr/ADR-049-hermes-atm-first-public-pypi-release-versioning.md)
+  governs the first-public-release disclosure for `hermes-atm` and `atm-graft`.
 
 ## Governing Boundaries
 
@@ -41,6 +42,8 @@ and workflow source are pinned to immutable `main`.
 - AS.3 evidence accepted.
 - Exact immutable `main` commit/tag and manifest-matching 1.4.3 artifacts.
 - Human production authorization.
+- ADR-049’s first-public-release disclosure is present in the package README
+  and GitHub release notes before the PyPI action.
 
 ## Hard Dependencies
 
@@ -54,7 +57,9 @@ and workflow source are pinned to immutable `main`.
 ## Sub-Tasks
 
 1. Verify artifact checksums, version, and main commit against the approved
-   manifest and AS.3 receipt.
+   manifest and AS.3 receipt; on any receipt mismatch, block publication,
+   record escalation, and require a fresh matching preflight after upstream
+   correction.
 2. Execute only the canonical PyPI channel.
 3. Query the public package index and install/verify each supported Python
    version from published artifacts.
@@ -70,6 +75,8 @@ Keep this one-channel release separate from AS.6’s full 1.4.4 release.
 - Public PyPI exposes the approved 1.4.3 artifacts.
 - Python 3.11–3.14 verification succeeds.
 - Receipts prove immutable source/artifact identity and public availability.
+- The ADR-049 first-public-release disclosure is visible in the published
+  package README and release notes.
 
 ## Required Validation
 

@@ -65,7 +65,8 @@ introduce new channel behavior during release execution.
 1. Select and lock synchronized 1.4.4 versions in the manifest.
 2. Run readiness preflight, then final preflight on immutable main; compare all
    plan/toolchain/validation digests.
-3. Run the explicit production channel set in manifest dependency order.
+3. Run the explicit production channel set in manifest crate
+   dependency/publish order.
 4. Verify public registry/releases and every declared Python wheel on 3.11,
    3.12, 3.13, and 3.14.
 5. Store complete structured channel receipts and final release evidence.
