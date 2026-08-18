@@ -6,9 +6,9 @@ use anyhow::Result;
 use atm_core::address::AgentAddress;
 use atm_core::load_atm_config;
 use atm_core::send::{
-    MessageClassification, SendMessageSource, SendRequest, TemplateSendSource, WarningEntry, input,
+    MessageClassification, SendMessageSource, SendRequest, TemplateSendSource, input,
 };
-use atm_core::types::{AgentIdentity, AgentName, HostName, TaskId, TeamName};
+use atm_core::types::{AgentIdentity, HostName, TaskId, TeamName};
 use atm_daemon_bootstrap::with_default_peer_address_stores;
 use atm_storage::{AtmError, PeerConfigStore, RosterStore, TrustedPeer};
 use clap::Args;
@@ -17,6 +17,7 @@ use crate::commands::caller_context::{
     CallerChatIdOverride, CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride,
     resolve_cli_mutation_caller_context, resolve_cli_mutation_caller_context_with_overrides,
 };
+use crate::commands::sender_roster::unrostered_sender_warning;
 use crate::composition::{
     AtmHomePath, CliComposition, InvocationDir, resolve_command_runtime_context,
 };
@@ -414,38 +415,6 @@ impl SendCommand {
 /// or alter a completed send. The roster read is best-effort too: failure to
 /// inspect local metadata cannot turn a successful daemon result into a CLI
 /// failure.
-fn unrostered_sender_warning(sender: &AgentName, team: &TeamName) -> Option<WarningEntry> {
-    with_default_peer_address_stores(|roster_store, _peer_store| {
-        roster_store.load_roster(team).map(|snapshot| {
-            sender_roster_warning(
-                sender,
-                team,
-                snapshot.members.iter().map(|member| &member.agent_name),
-            )
-        })
-    })
-    .ok()
-    .flatten()
-}
-
-fn sender_roster_warning<'a>(
-    sender: &AgentName,
-    team: &TeamName,
-    roster_members: impl IntoIterator<Item = &'a AgentName>,
-) -> Option<WarningEntry> {
-    let rostered = roster_members.into_iter().any(|member| member == sender);
-    (!rostered).then(|| {
-        WarningEntry::new(
-            format!(
-                "declared sender {sender}@{team} is not on the ATM roster; this identity has no inbox and cannot receive replies or assignments."
-            ),
-            Some(format!(
-                "Add it with `atm teams add-member {team} {sender}` if this identity needs an inbox."
-            )),
-        )
-    })
-}
-
 fn resolve_cli_recipient(
     input: &CliRecipientInput,
     caller_team: &TeamName,
@@ -821,7 +790,7 @@ mod tests {
     use std::num::NonZeroU16;
     use std::path::{Path, PathBuf};
 
-    use super::{SendCommand, resolve_trusted_ipv4_with_lookup, sender_roster_warning};
+    use super::{SendCommand, resolve_trusted_ipv4_with_lookup};
     use atm_core::roles::ROLE_TEAM_LEAD;
     use atm_core::send::{SendMessageSource, input};
     use atm_core::test_support::{EnvGuard, TEST_SENDER};
@@ -872,38 +841,6 @@ mod tests {
             TEST_TEAM.parse().expect("caller team"),
             "other-team".parse().expect("team"),
         ]
-    }
-
-    #[test]
-    fn rostered_declared_sender_does_not_add_an_advisory() {
-        let sender = TEST_SENDER.parse().expect("sender");
-        let team = TEST_TEAM.parse().expect("team");
-
-        assert!(sender_roster_warning(&sender, &team, [&sender]).is_none());
-    }
-
-    #[test]
-    fn unrostered_declared_sender_gets_non_blocking_inbox_advisory() {
-        let sender = "unregistered-tool".parse().expect("sender");
-        let rostered_member = TEST_SENDER.parse().expect("rostered member");
-        let team = TEST_TEAM.parse().expect("team");
-
-        let warning = sender_roster_warning(&sender, &team, [&rostered_member])
-            .expect("unrostered sender warning");
-
-        assert!(warning.message.contains("unregistered-tool@test-team"));
-        assert!(warning.message.contains("has no inbox"));
-        assert!(
-            warning
-                .message
-                .contains("cannot receive replies or assignments")
-        );
-        assert_eq!(
-            warning.recovery.as_deref(),
-            Some(
-                "Add it with `atm teams add-member test-team unregistered-tool` if this identity needs an inbox."
-            )
-        );
     }
 
     #[test]

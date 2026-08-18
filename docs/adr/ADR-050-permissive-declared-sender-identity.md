@@ -30,11 +30,11 @@ fixed vocabulary, or otherwise alter delivery for an identity absent from the
 team roster. The canonical HTTP request and daemon write path remain exactly
 the same whether the sender is rostered or unrostered.
 
-After a successful `atm send`, the CLI performs a best-effort local roster
-lookup for the claimed sender and caller team. If no roster entry exists, it
-adds a non-blocking `SendOutcome` warning stating that the identity has no
-inbox and cannot receive replies or assignments. The warning includes the
-recovery command:
+After a successful CLI write (`atm send` or `atm ack`), the CLI performs a
+best-effort local roster lookup for the claimed sender and caller team. If no
+roster entry exists, it adds a non-blocking outcome warning stating that the
+identity has no inbox and cannot receive replies or assignments. The warning
+includes the recovery command:
 
 ```text
 atm teams add-member <team> <identity>
@@ -42,15 +42,15 @@ atm teams add-member <team> <identity>
 
 Human CLI output renders this advisory on stderr. JSON output retains it in
 the outcome's structured `warnings` array, leaving stdout valid JSON. A roster
-lookup failure emits no advisory and never changes the send result: local
+lookup failure emits no advisory and never changes the write result: local
 metadata inspection cannot turn a completed delivery into a CLI failure.
 
 ## Consequences
 
 - A useful unrostered identity remains visible in the message envelope rather
   than being hidden behind a misleading impersonated roster identity.
-- Senders receive an immediate reminder on every successful send that an
-  unrostered identity cannot receive a mailbox reply or assignment.
+- Senders receive an immediate reminder on every successful send or ack that
+  an unrostered identity cannot receive a mailbox reply or assignment.
 - Recipients and team leads may inspect roster membership when an unexpected
   sender appears; this is organizational diagnosis, not an authorization
   decision.
@@ -74,6 +74,8 @@ metadata inspection cannot turn a completed delivery into a CLI failure.
 
 - A rostered sender produces no advisory.
 - An unrostered sender produces the inbox/recovery advisory in the human CLI
-  path and serializes it through `SendOutcome.warnings` for JSON callers.
-- Both sends use the same successful canonical daemon request and delivery
-  path; the advisory is appended only after a successful CLI outcome.
+  path and serializes it through the relevant outcome's `warnings` array for
+  JSON callers.
+- Both CLI write commands use their existing successful canonical daemon
+  request and delivery path; the advisory is appended only after a successful
+  CLI outcome.
