@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO1-QA-001>
+  a triage:Finding ;
+  triage:findingId "AO1-QA-001" ;
+  triage:title "Flaky handshake-deadline test: fixed 5ms deadline races config-load against handshake stage" ;
+  triage:description "The AO1-RSH-001 fix commit (bede69ff6) introduced a fixed 5ms RequestDeadline that races config-load (spawn_blocking) against the handshake stage at crates/peer-tls/src/lib.rs:850. The test hardcodes an assertion on the handshake-stage error message only; under CI runner load, config-load can consume the whole budget, producing a legitimate but differently-worded deadline error that fails the assertion. Confirmed by quality-mgr as the exact root cause of the live 'Test (macos-latest)' CI failure on PR #942 via job logs; 8/8 local runs passed (CI-load-dependent, not deterministic locally). Recommend widening the margin (>=50ms) and/or accepting either deadline-stage message in the assertion." ;
+  triage:phaseId "phase-ao" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-18T06:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO-S1 ;
+  triage:foundAt "2026-08-18T06:34:12Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO1-QA-001/ao1-qa-001-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO1-QA-001/ao1-qa-001-1>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 850 ;
+  triage:snippet "const REQUEST_DEADLINE: Duration = Duration::from_millis(5);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "b87d576f925abaec5099055009f6d70da8a57848" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s1-feature/pao-s1-tls-module-rehome> .
+
+<urn:atm:triage:worktree/pao-s1-feature/pao-s1-tls-module-rehome>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pao-s1-tls-module-rehome" ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "b87d576f925abaec5099055009f6d70da8a57848" ;
+  triage:orderIndex 1 .
