@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO2-ATM-QA-002>
+  a triage:Finding ;
+  triage:findingId "AO2-ATM-QA-002" ;
+  triage:title "project-plan.md Phase AO status stale" ;
+  triage:description "docs/project-plan.md Phase AO status entry does not reflect current AO.2 QA-1 FAIL state. (req-qa, important)" ;
+  triage:phaseId "phase-ao" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "docs" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-08-18T07:50:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-08-18T07:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO.2 ;
+  triage:foundAt "2026-08-18T07:15:43Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO2-ATM-QA-002/ao2-atm-qa-002-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO2-ATM-QA-002/ao2-atm-qa-002-1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1 ;
+  triage:snippet "stale Phase AO status entry" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s2-optional-runtime-activation" ;
+  triage:headSha "8c918570614fb8b1faec096160c28f8d35de9db8" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s2-feature/pao-s2-optional-runtime-activation> .
+
+<urn:atm:triage:worktree/pao-s2-feature/pao-s2-optional-runtime-activation>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s2-optional-runtime-activation" ;
+  triage:branch "feature/pao-s2-optional-runtime-activation" ;
+  triage:headSha "99fd70563c50fa3d9992c33d7cd85ba42b4bd750" ;
+  triage:orderIndex 1 .

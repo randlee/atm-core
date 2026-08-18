@@ -1,0 +1,56 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO2-QA-004>
+  a triage:Finding ;
+  triage:findingId "AO2-QA-004" ;
+  triage:title "Function-length RULE-002 violations: run_replacement_daemon_with_selector, start" ;
+  triage:description "Two functions introduced/touched by this diff exceed the 80-line RULE-002 function-length limit: run_replacement_daemon_with_selector (94 lines) and start (112 lines). Exact enclosing file to be confirmed by arch-ctm against the PR #943 diff (crates/atm-http-runtime or crates/atm-daemon-bootstrap) — see full QA report for precise locations: https://github.com/randlee/atm-core/pull/943#issuecomment-5324878269. (rust-qa-agent, important)" ;
+  triage:phaseId "phase-ao" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "best-practice" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-08-18T07:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-08-18T07:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO.2 ;
+  triage:foundAt "2026-08-18T07:15:43Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO2-QA-004/ao2-qa-004-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO2-QA-004/ao2-qa-004-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO2-QA-004/ao2-qa-004-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 1 ;
+  triage:snippet "fn run_replacement_daemon_with_selector(...) { ... } // 94 lines, RULE-002 limit is 80" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s2-optional-runtime-activation" ;
+  triage:headSha "6ffb0a9dae51aef1d24d4eccb3f56d10121f983c" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s2-feature/pao-s2-optional-runtime-activation> .
+
+<urn:atm:triage:occurrence/AO2-QA-004/ao2-qa-004-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 1 ;
+  triage:snippet "fn start(...) { ... } // 112 lines, RULE-002 limit is 80" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s2-optional-runtime-activation" ;
+  triage:headSha "6ffb0a9dae51aef1d24d4eccb3f56d10121f983c" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s2-feature/pao-s2-optional-runtime-activation> .
+
+<urn:atm:triage:worktree/pao-s2-feature/pao-s2-optional-runtime-activation>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s2-optional-runtime-activation" ;
+  triage:branch "feature/pao-s2-optional-runtime-activation" ;
+  triage:headSha "99fd70563c50fa3d9992c33d7cd85ba42b4bd750" ;
+  triage:orderIndex 1 .

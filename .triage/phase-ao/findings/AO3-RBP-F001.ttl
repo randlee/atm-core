@@ -1,0 +1,168 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO3-RBP-F001>
+  a triage:Finding ;
+  triage:findingId "AO3-RBP-F001" ;
+  triage:title "peer-tls uses generic AtmError::validation instead of peer_config_validation constructor" ;
+  triage:description "rust-best-practices-agent IMPORTANT finding from AO3-QA-1 (PR #945 @ 4408867ef): crates/peer-tls/src/lib.rs (multiple lines) -- new TLS code uses generic AtmError::validation(...) instead of the more specific peer_config_validation constructor, misclassifying HTTP status/recovery-guidance contract." ;
+  triage:phaseId "phase-ao" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "error-classification" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-18T20:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-18T20:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO.3 ;
+  triage:foundAt "2026-08-18T19:42:55Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO3-RBP-F001/AO3RBP1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO3-RBP-F001/AO3RBP2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO3-RBP-F001/AO3RBP3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO3-RBP-F001/AO3RBP4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO3-RBP-F001/AO3RBP5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO3-RBP-F001/AO3RBP6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO3-RBP-F001/AO3RBP7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO3-RBP-F001/AO3RBP8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO3-RBP-F001/AO3RBP9> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO3-RBP-F001/AO3RBP1>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 61 ;
+  triage:snippet """AtmError::validation("no configured local certificate")""" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
+  triage:headSha "c584b38bd61adf492e9acc5fe689f93de01098da" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s3/4408867ef> .
+
+<urn:atm:triage:occurrence/AO3-RBP-F001/AO3RBP2>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 68 ;
+  triage:snippet """return Err(AtmError::validation("no enabled trusted peer"))""" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
+  triage:headSha "c584b38bd61adf492e9acc5fe689f93de01098da" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s3/4408867ef> .
+
+<urn:atm:triage:occurrence/AO3-RBP-F001/AO3RBP3>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 91 ;
+  triage:snippet """AtmError::validation("certificate/key pair is invalid")""" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
+  triage:headSha "c584b38bd61adf492e9acc5fe689f93de01098da" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s3/4408867ef> .
+
+<urn:atm:triage:occurrence/AO3-RBP-F001/AO3RBP4>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 103 ;
+  triage:snippet """AtmError::validation(format!("no configured trusted peer for host"))""" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
+  triage:headSha "c584b38bd61adf492e9acc5fe689f93de01098da" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s3/4408867ef> .
+
+<urn:atm:triage:occurrence/AO3-RBP-F001/AO3RBP5>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 108 ;
+  triage:snippet """return Err(AtmError::validation(format!("trusted peer is disabled")))""" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
+  triage:headSha "c584b38bd61adf492e9acc5fe689f93de01098da" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s3/4408867ef> .
+
+<urn:atm:triage:occurrence/AO3-RBP-F001/AO3RBP6>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 123 ;
+  triage:snippet """AtmError::validation("certificate/key pair is invalid")""" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
+  triage:headSha "c584b38bd61adf492e9acc5fe689f93de01098da" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s3/4408867ef> .
+
+<urn:atm:triage:occurrence/AO3-RBP-F001/AO3RBP7>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 174 ;
+  triage:snippet """AtmError::validation("hostname is invalid").with_cause(source)""" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
+  triage:headSha "c584b38bd61adf492e9acc5fe689f93de01098da" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s3/4408867ef> .
+
+<urn:atm:triage:occurrence/AO3-RBP-F001/AO3RBP8>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 232 ;
+  triage:snippet """AtmError::validation("no enabled interface")""" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
+  triage:headSha "c584b38bd61adf492e9acc5fe689f93de01098da" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s3/4408867ef> .
+
+<urn:atm:triage:occurrence/AO3-RBP-F001/AO3RBP9>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 237 ;
+  triage:snippet """return Err(AtmError::validation("multiple enabled interfaces"))""" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
+  triage:headSha "c584b38bd61adf492e9acc5fe689f93de01098da" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s3/4408867ef> .
+
+<urn:atm:triage:worktree/pao-s1/cb5d8b4ba>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s1" ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "cb5d8b4ba" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pao-s2/c606b8659>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s2" ;
+  triage:branch "feature/pao-s2-optional-runtime-activation" ;
+  triage:headSha "c606b8659" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pao-s3/4408867ef>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s3" ;
+  triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
+  triage:headSha "4408867ef" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pao-s4/ce0b37c0e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s4" ;
+  triage:branch "feature/pao-s4-tls-benchmark-modes" ;
+  triage:headSha "ce0b37c0e" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pao-s5/8245717e9>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s5" ;
+  triage:branch "feature/pao-s5-platform-benchmark-proof" ;
+  triage:headSha "8245717e9" ;
+  triage:orderIndex 5 .

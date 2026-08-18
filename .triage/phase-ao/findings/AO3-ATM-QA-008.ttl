@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO3-ATM-QA-008>
+  a triage:Finding ;
+  triage:findingId "AO3-ATM-QA-008" ;
+  triage:title "Stale AL.7/rustls allowlist entries in lint-config.toml" ;
+  triage:description "req-qa MINOR finding from AO3-QA-1 (PR #945 @ 4408867ef): .just/lint-config.toml:104,108 -- stale AL.7/rustls allowlist entries, pre-existing debt not introduced by AO.3." ;
+  triage:phaseId "phase-ao" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "config-hygiene" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-18T20:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-18T20:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO.3 ;
+  triage:foundAt "2026-08-18T19:42:55Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO3-ATM-QA-008/pao-s5-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO3-ATM-QA-008/pao-s5-1>
+  a triage:Occurrence ;
+  triage:file ".just/lint-config.toml" ;
+  triage:line 104 ;
+  triage:snippet "crates/atm-http-runtime/Cargo.toml:rustls AL.7 entry" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s5-platform-benchmark-proof" ;
+  triage:headSha "eff070efadc301d6bb495e0a45d895894c88fefd" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s5/8245717e9> .
+
+<urn:atm:triage:worktree/pao-s5/8245717e9>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s5" ;
+  triage:branch "feature/pao-s5-platform-benchmark-proof" ;
+  triage:headSha "8245717e9" ;
+  triage:orderIndex 5 .
