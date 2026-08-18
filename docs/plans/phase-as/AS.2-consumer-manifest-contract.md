@@ -204,3 +204,9 @@ consumes `[[python_packages]]` and `[[python_distributions]]`. No ATM-side
 translation is permitted. The installed-consumer proof therefore verifies the
 current installer accepts and renders the explicit input, while semantic
 manifest equality remains blocked on `sc-publish` #17.
+
+`python3 .just/tests/test_as2_consumer_contract.py` prevents ATM-owned input
+drift: every declared crate must still resolve to its stated Cargo package,
+publish order remains contiguous, and all Python, binary, and channel entries
+remain explicit. It intentionally does not duplicate shared rendering or
+validation logic.
