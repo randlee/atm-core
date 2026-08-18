@@ -1,0 +1,92 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO2-BOUNDARY-FALSEPOSITIVE-001>
+  a triage:Finding ;
+  triage:findingId "AO2-BOUNDARY-FALSEPOSITIVE-001" ;
+  triage:title "peer_transport_enabled field name false-positives the retired-peer-delivery-construct matcher" ;
+  triage:description "quality-mgr's correction to AOS2-QA-1 (PR #943, feature/pao-s2-optional-runtime-activation, commit 8e082939a): crates/atm-daemon-bootstrap/src/lib.rs's new peer_transport_enabled field/usage (lines 331, 351) coincidentally contains the banned RETIRED_DAEMON_CONSTRUCT_FRAGMENTS substring fragment ('peer_' + 'transport'), causing test workspace_source_must_not_reintroduce_retired_peer_delivery_constructs to fail. This is a false positive, same class as the earlier AO2-QA-007 SQL-keyword collision -- not a genuine reintroduction of the retired synchronous-daemon peer-transport construct (which is frozen legacy code per CLAUDE.md HARD RULE, not touched here). Verified genuinely NEW (not pre-existing): quality-mgr ran the full boundary_enforcement suite on develop-branch commit 2ed09a5b9 in a comparison worktree, 54/54 pass there including this same test. On PR #943's commit 8e082939a, CI Test job fails on all 3 OSes, mergeStateStatus UNSTABLE. Recommend: rename peer_transport_enabled (or refine the retired-construct matcher to be word-boundary aware) to clear the false positive. Do NOT touch or rename anything in the actual legacy synchronous daemon's peer_transport code -- this fix is scoped only to the new atm-daemon-bootstrap field name / the matcher's word-boundary logic." ;
+  triage:phaseId "phase-ao" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-18T15:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO-S2 ;
+  triage:foundAt "2026-08-18T15:41:24Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO2-BOUNDARY-FALSEPOSITIVE-001/AO2-S2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO2-BOUNDARY-FALSEPOSITIVE-001/AO2-S2-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO2-BOUNDARY-FALSEPOSITIVE-001/AO2-S3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO2-BOUNDARY-FALSEPOSITIVE-001/AO2-S3-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO2-BOUNDARY-FALSEPOSITIVE-001/AO2-S2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 331 ;
+  triage:snippet "peer_transport_enabled: bool," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s2-optional-runtime-activation" ;
+  triage:headSha "8e082939a" ;
+  triage:occursIn <urn:atm:triage:worktree/AO2/8e082939a> .
+
+<urn:atm:triage:occurrence/AO2-BOUNDARY-FALSEPOSITIVE-001/AO2-S2-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 351 ;
+  triage:snippet "if peer_transport_enabled {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s2-optional-runtime-activation" ;
+  triage:headSha "8e082939a" ;
+  triage:occursIn <urn:atm:triage:worktree/AO2/8e082939a> .
+
+<urn:atm:triage:occurrence/AO2-BOUNDARY-FALSEPOSITIVE-001/AO2-S3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 331 ;
+  triage:snippet "peer_transport_enabled: bool," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
+  triage:headSha "f3701c789" ;
+  triage:occursIn <urn:atm:triage:worktree/AO3/f3701c789> .
+
+<urn:atm:triage:occurrence/AO2-BOUNDARY-FALSEPOSITIVE-001/AO2-S3-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 351 ;
+  triage:snippet "if peer_transport_enabled {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
+  triage:headSha "f3701c789" ;
+  triage:occursIn <urn:atm:triage:worktree/AO3/f3701c789> .
+
+<urn:atm:triage:worktree/AO1/c77b0f95f>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s1-tls-module-rehome" ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "c77b0f95f" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AO2/8e082939a>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s2-optional-runtime-activation" ;
+  triage:branch "feature/pao-s2-optional-runtime-activation" ;
+  triage:headSha "8e082939a" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AO3/f3701c789>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s3-tls-proof-and-evidence" ;
+  triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
+  triage:headSha "f3701c789" ;
+  triage:orderIndex 3 .
