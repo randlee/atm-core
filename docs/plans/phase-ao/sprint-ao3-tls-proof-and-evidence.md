@@ -2,8 +2,8 @@
 title: AO.3 — Prove peer-tls on the canonical ATM path
 status: in_review
 recommended_agent: arch-ctm
-branch: feature/pao-s1-tls-module-rehome
-worktree: ../atm-core-worktrees/feature/pao-s1-tls-module-rehome
+branch: feature/pao-s3-tls-proof-and-evidence
+worktree: ../atm-core-worktrees/feature/pao-s3-tls-proof-and-evidence
 ---
 
 # AO.3 — Prove peer-tls on the canonical ATM path

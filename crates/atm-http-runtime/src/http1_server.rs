@@ -10,6 +10,8 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
+use atm_core::types::HostName;
+use atm_core::{PeerIoAdapter, RequestDeadline};
 use axum::Router;
 use axum::body::Body;
 use hyper::body::Incoming;
@@ -64,6 +66,66 @@ pub(crate) async fn serve_loopback_http1(
                         // not a listener failure. Hyper has already closed it;
                         // keep accepting healthy clients.
                         tracing::debug!(%error, peer = %peer, "HTTP/1 loopback connection ended");
+                    }
+                });
+            }
+        }
+    }
+
+    drain_connections(connections).await
+}
+
+/// Serves the direct-peer adapter after its opaque transport has authenticated
+/// every accepted stream.  The runtime receives only an opaque byte stream and
+/// the adapter-established source hostname; it owns neither TLS configuration
+/// nor certificate inspection.
+pub(crate) async fn serve_peer_http1(
+    listener: TcpListener,
+    router_for_peer: Arc<dyn Fn(HostName) -> Router + Send + Sync>,
+    peer_io_adapter: Arc<dyn PeerIoAdapter>,
+    max_connections: usize,
+    header_read_timeout: Duration,
+    mut shutdown_rx: watch::Receiver<()>,
+) -> io::Result<()> {
+    let mut connections = JoinSet::new();
+    let permits = Arc::new(Semaphore::new(max_connections));
+
+    loop {
+        let permit = tokio::select! {
+            _ = shutdown_rx.changed() => break,
+            permit = Arc::clone(&permits).acquire_owned() => permit.expect("connection semaphore remains owned by the server"),
+        };
+        tokio::select! {
+            _ = shutdown_rx.changed() => break,
+            accepted = listener.accept() => {
+                let (stream, peer) = accepted?;
+                let router_for_peer = Arc::clone(&router_for_peer);
+                let adapter = Arc::clone(&peer_io_adapter);
+                let connection_shutdown = shutdown_rx.clone();
+                connections.spawn(async move {
+                    let _permit = permit;
+                    let accepted = adapter
+                        .accept(stream, RequestDeadline::after(header_read_timeout))
+                        .await;
+                    let accepted = match accepted {
+                        Ok(accepted) => accepted,
+                        Err(error) => {
+                            tracing::debug!(%error, peer = %peer, "authenticated peer connection rejected before HTTP dispatch");
+                            return;
+                        }
+                    };
+                    let (stream, source_host) = accepted.into_parts();
+                    // The sole canonical router is composed with only the
+                    // adapter-authenticated provenance for this connection.
+                    let router = router_for_peer(source_host);
+                    if let Err(error) = serve_connection(
+                        TokioIo::new(stream),
+                        router,
+                        header_read_timeout,
+                        connection_shutdown,
+                    )
+                    .await {
+                        tracing::debug!(%error, peer = %peer, "authenticated HTTP/1 peer connection ended");
                     }
                 });
             }

@@ -22,4 +22,5 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+peer-tls = { path = "../peer-tls", version = "1.4.3", features = ["test-support"] }
 serde_json.workspace = true

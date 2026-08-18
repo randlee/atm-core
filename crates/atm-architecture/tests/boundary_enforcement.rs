@@ -2088,12 +2088,12 @@ fn al9_cli_and_graft_send_use_the_selected_runtime_client() {
 #[test]
 fn al5_uds_is_a_framework_adapter_over_the_one_client_and_router() {
     let root = workspace_root();
-    let runtime = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
+    let lifecycle = read_source(&root.join("crates/atm-http-runtime/src/lifecycle.rs"));
     let http1_server = read_source(&root.join("crates/atm-http-runtime/src/http1_server.rs"));
     let staging = read_source(&root.join("crates/atm-http-runtime/src/private_staging.rs"));
     let unix_socket = read_source(&root.join("crates/atm-http-runtime/src/unix_socket.rs"));
     let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
-    let combined = format!("{runtime}\n{unix_socket}\n{http1_server}\n{client}");
+    let combined = format!("{lifecycle}\n{unix_socket}\n{http1_server}\n{client}");
 
     assert!(
         combined.contains("UnixListener")
@@ -2147,16 +2147,16 @@ fn al5_uds_is_a_framework_adapter_over_the_one_client_and_router() {
 #[test]
 fn al6_loopback_tcp_is_capability_authentication_over_the_one_client_and_router() {
     let root = workspace_root();
-    let runtime = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
+    let lifecycle = read_source(&root.join("crates/atm-http-runtime/src/lifecycle.rs"));
     let http1_server = read_source(&root.join("crates/atm-http-runtime/src/http1_server.rs"));
     let staging = read_source(&root.join("crates/atm-http-runtime/src/private_staging.rs"));
     let adapter = read_source(&root.join("crates/atm-http-runtime/src/loopback_tcp.rs"));
     let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
-    let combined = format!("{runtime}\n{http1_server}\n{adapter}\n{client}");
+    let combined = format!("{lifecycle}\n{http1_server}\n{adapter}\n{client}");
 
     assert!(
-        runtime.contains("canonical_api_router(")
-            && runtime
+        lifecycle.contains("canonical_api_router(")
+            && lifecycle
                 .contains("authenticated_loopback_router(canonical_router.clone(), capability)")
             && http1_server.contains("into_make_service_with_connect_info::<SocketAddr>()")
             && http1_server.contains("Semaphore::new(max_connections)")

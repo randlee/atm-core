@@ -4,17 +4,19 @@
 //! routing, HTTP encoding, listener lifecycle, and retry policy remain outside
 //! the adapter boundary.
 
+use std::io;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use atm_core::{BoxedPeerIo, PeerIoAdapter, RequestDeadline};
+use atm_core::{AcceptedPeerIo, BoxedPeerIo, PeerIoAdapter, RequestDeadline};
 use atm_storage::{
     AtmError, HttpsInterface, PeerConfigStore, PinnedClientVerifier, PinnedServerVerifier,
     TlsIdentity, TrustedPeer, install_tls_provider,
 };
 use rustls::pki_types::ServerName;
 use rustls::{ClientConfig, ServerConfig};
-use tokio::net::TcpStream;
+use tokio::net::{TcpStream, lookup_host};
 use tokio_rustls::{TlsAcceptor, TlsConnector};
 
 /// The only production implementation of `atm_core::PeerIoAdapter`.
@@ -56,14 +58,14 @@ impl PeerTlsAdapter {
         let interfaces = self.store.list_interfaces()?;
         let interface = exactly_one_enabled_interface(interfaces)?;
         let certificate = self.store.local_certificate()?.ok_or_else(|| {
-            AtmError::validation(
+            AtmError::peer_config_validation(
                 "peer TLS has no configured local certificate; configure a certificate before enabling mTLS",
             )
         })?;
         let identity = TlsIdentity::load(&certificate)?;
         let trusted_peers = self.store.list_trusted_peers()?;
         if !trusted_peers.iter().any(|peer| peer.enabled) {
-            return Err(AtmError::validation(
+            return Err(AtmError::peer_config_validation(
                 "peer TLS has no enabled trusted peer; configure an enabled peer before enabling mTLS",
             ));
         }
@@ -74,19 +76,24 @@ impl PeerTlsAdapter {
         })
     }
 
-    fn server_config(&self) -> Result<ServerConfig, AtmError> {
+    fn server_config(&self) -> Result<(ServerConfig, Arc<PinnedClientVerifier>), AtmError> {
         let snapshot = self.local_snapshot()?;
         install_tls_provider();
-        ServerConfig::builder()
-            .with_client_cert_verifier(Arc::new(PinnedClientVerifier::new(snapshot.trusted_peers)))
+        let verifier = Arc::new(PinnedClientVerifier::new(snapshot.trusted_peers));
+        let config_verifier: Arc<dyn rustls::server::danger::ClientCertVerifier> = verifier.clone();
+        let config = ServerConfig::builder()
+            .with_client_cert_verifier(config_verifier)
             .with_single_cert(
                 snapshot.identity.certificates().to_vec(),
                 snapshot.identity.private_key().clone_key(),
             )
             .map_err(|source| {
-                AtmError::validation("configured peer TLS certificate/key pair is invalid")
-                    .with_cause(source)
-            })
+                AtmError::peer_config_validation(
+                    "configured peer TLS certificate/key pair is invalid",
+                )
+                .with_cause(source)
+            })?;
+        Ok((config, verifier))
     }
 
     fn client_config(
@@ -95,12 +102,12 @@ impl PeerTlsAdapter {
     ) -> Result<(ClientConfig, u16), AtmError> {
         let snapshot = self.local_snapshot()?;
         let configured_peer = self.store.trusted_peer(peer)?.ok_or_else(|| {
-            AtmError::validation(format!(
+            AtmError::peer_config_validation(format!(
                 "peer TLS has no configured trusted peer for host `{peer}`"
             ))
         })?;
         if !configured_peer.enabled {
-            return Err(AtmError::validation(format!(
+            return Err(AtmError::peer_config_validation(format!(
                 "peer TLS trusted peer `{peer}` is disabled; enable it before connecting"
             )));
         }
@@ -115,8 +122,10 @@ impl PeerTlsAdapter {
                 snapshot.identity.private_key().clone_key(),
             )
             .map_err(|source| {
-                AtmError::validation("configured peer TLS certificate/key pair is invalid")
-                    .with_cause(source)
+                AtmError::peer_config_validation(
+                    "configured peer TLS certificate/key pair is invalid",
+                )
+                .with_cause(source)
             })?;
         Ok((config, configured_peer.https_port.get()))
     }
@@ -125,9 +134,9 @@ impl PeerTlsAdapter {
         &self,
         stream: TcpStream,
         deadline: RequestDeadline,
-    ) -> Result<BoxedPeerIo, AtmError> {
+    ) -> Result<AcceptedPeerIo, AtmError> {
         let adapter = self.clone();
-        let config = load_configuration_with_deadline(
+        let (config, verifier) = load_configuration_with_deadline(
             deadline,
             "peer TLS inbound configuration",
             move || adapter.server_config(),
@@ -146,7 +155,8 @@ impl PeerTlsAdapter {
                 source,
             )
         })?;
-        Ok(Box::new(stream))
+        let source_host = verifier.authenticated_host(stream.get_ref().1)?;
+        Ok(AcceptedPeerIo::new(Box::new(stream), source_host))
     }
 
     async fn connect_inner(
@@ -162,18 +172,11 @@ impl PeerTlsAdapter {
             move || adapter.client_config(&configured_peer),
         )
         .await?;
-        let remaining = remaining_budget(deadline, "peer TLS TCP connection")?;
-        let tcp = tokio::time::timeout(remaining, TcpStream::connect((peer.as_str(), port)))
-            .await
-            .map_err(|_| deadline_error("peer TLS TCP connection"))?
-            .map_err(|source| {
-                AtmError::daemon_unavailable_with_cause(
-                    "peer TLS could not connect to the configured trusted peer",
-                    source,
-                )
-            })?;
+        let addresses = resolve_peer_addresses(&peer, port, deadline).await?;
+        let tcp = connect_peer_addresses(&peer, &addresses, deadline).await?;
         let server_name = ServerName::try_from(peer.as_str().to_owned()).map_err(|source| {
-            AtmError::validation("configured peer TLS hostname is invalid").with_cause(source)
+            AtmError::peer_config_validation("configured peer TLS hostname is invalid")
+                .with_cause(source)
         })?;
         let remaining = remaining_budget(deadline, "peer TLS outbound handshake")?;
         let stream = tokio::time::timeout(
@@ -200,7 +203,7 @@ impl PeerIoAdapter for PeerTlsAdapter {
         stream: TcpStream,
         deadline: RequestDeadline,
     ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<BoxedPeerIo, AtmError>> + Send + 'adapter>,
+        Box<dyn std::future::Future<Output = Result<AcceptedPeerIo, AtmError>> + Send + 'adapter>,
     > {
         Box::pin(self.accept_inner(stream, deadline))
     }
@@ -226,108 +229,75 @@ struct LocalTlsSnapshot {
     trusted_peers: Vec<TrustedPeer>,
 }
 
-fn exactly_one_enabled_interface(
-    interfaces: Vec<HttpsInterface>,
-) -> Result<HttpsInterface, AtmError> {
-    let mut enabled = interfaces.into_iter().filter(|interface| interface.enabled);
-    let interface = enabled.next().ok_or_else(|| {
-        AtmError::validation(
-            "peer TLS has no enabled interface; configure and enable one interface before using mTLS",
-        )
-    })?;
-    if enabled.next().is_some() {
-        return Err(AtmError::validation(
-            "peer TLS has multiple enabled interfaces; configure exactly one before using mTLS",
-        ));
-    }
-    Ok(interface)
-}
-
-fn remaining_budget(deadline: RequestDeadline, stage: &str) -> Result<Duration, AtmError> {
-    deadline.remaining().ok_or_else(|| deadline_error(stage))
-}
-
-async fn load_configuration_with_deadline<T>(
-    deadline: RequestDeadline,
-    stage: &str,
-    operation: impl FnOnce() -> Result<T, AtmError> + Send + 'static,
-) -> Result<T, AtmError>
-where
-    T: Send + 'static,
-{
-    let remaining = remaining_budget(deadline, stage)?;
-    tokio::time::timeout(remaining, tokio::task::spawn_blocking(operation))
-        .await
-        .map_err(|_| deadline_error(stage))?
-        .map_err(|source| {
-            AtmError::daemon_unavailable_with_cause("peer TLS configuration worker failed", source)
-        })?
-}
-
-fn deadline_error(stage: &str) -> AtmError {
-    AtmError::daemon_unavailable(format!("{stage} exceeded the request deadline"))
-}
-
-#[cfg(test)]
-mod tests {
+/// First-party peer configuration fixture shared by TLS adapter integration tests.
+///
+/// This is test-only API: production code must use the durable peer-config store.
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support {
     use std::net::SocketAddr;
-    use std::num::NonZeroU16;
-    use std::path::PathBuf;
-    use std::sync::{Arc, Condvar, Mutex};
-    use std::time::Duration;
+    use std::sync::{Arc, Mutex};
 
-    use atm_core::PeerIoAdapter;
     use atm_storage::contract::sealed;
-    use atm_storage::{LocalCertificate, certificate_fingerprint};
-    use rcgen::generate_simple_self_signed;
-    use tempfile::TempDir;
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    use tokio::net::TcpListener;
-
-    use super::*;
+    use atm_storage::{AtmError, HttpsInterface, LocalCertificate, PeerConfigStore, TrustedPeer};
 
     #[derive(Clone)]
-    struct TestPeerConfigStore {
+    pub struct TestPeerConfigStore {
         interfaces: Vec<HttpsInterface>,
         local_certificate: Option<LocalCertificate>,
         trusted_peers: Vec<TrustedPeer>,
-        configuration_gate: Arc<ConfigurationGate>,
+        configuration_delay: Arc<Mutex<Option<ConfigurationDelay>>>,
     }
 
-    struct ConfigurationGate {
-        released: Mutex<bool>,
-        changed: Condvar,
+    #[derive(Clone)]
+    pub struct ConfigurationDelay {
+        pub started: std::sync::mpsc::Sender<()>,
+        pub release: Arc<Mutex<std::sync::mpsc::Receiver<()>>>,
     }
 
-    impl ConfigurationGate {
-        fn new() -> Self {
-            Self {
-                released: Mutex::new(true),
-                changed: Condvar::new(),
-            }
-        }
-
-        fn hold(&self) {
-            *self.released.lock().expect("configuration gate mutex") = false;
-        }
-
-        fn wait_for_release(&self) {
-            let released = self.released.lock().expect("configuration gate mutex");
-            let _released = self
-                .changed
-                .wait_while(released, |released| !*released)
-                .expect("configuration gate wait");
-        }
-
-        fn release(&self) {
-            *self.released.lock().expect("configuration gate mutex") = true;
-            self.changed.notify_all();
+    impl ConfigurationDelay {
+        fn wait(&self) {
+            self.started
+                .send(())
+                .expect("test must wait for configuration loading to begin");
+            self.release
+                .lock()
+                .expect("configuration delay receiver lock")
+                .recv()
+                .expect("test must release configuration loading");
         }
     }
 
     impl TestPeerConfigStore {
+        pub fn new(
+            interfaces: Vec<HttpsInterface>,
+            local_certificate: Option<LocalCertificate>,
+            trusted_peers: Vec<TrustedPeer>,
+        ) -> Self {
+            Self {
+                interfaces,
+                local_certificate,
+                trusted_peers,
+                configuration_delay: Arc::new(Mutex::new(None)),
+            }
+        }
+
+        pub fn with_configuration_delay(
+            mut self,
+            delay: Arc<Mutex<Option<ConfigurationDelay>>>,
+        ) -> Self {
+            self.configuration_delay = delay;
+            self
+        }
+
         fn delay_if_requested(&self) {
-            self.configuration_gate.wait_for_release();
+            if let Some(delay) = self
+                .configuration_delay
+                .lock()
+                .expect("configuration delay lock")
+                .clone()
+            {
+                delay.wait();
+            }
         }
     }
 
@@ -381,6 +351,134 @@ mod tests {
             Ok(false)
         }
     }
+}
+
+fn exactly_one_enabled_interface(
+    interfaces: Vec<HttpsInterface>,
+) -> Result<HttpsInterface, AtmError> {
+    let mut enabled = interfaces.into_iter().filter(|interface| interface.enabled);
+    let interface = enabled.next().ok_or_else(|| {
+        AtmError::peer_config_validation(
+            "peer TLS has no enabled interface; configure and enable one interface before using mTLS",
+        )
+    })?;
+    if enabled.next().is_some() {
+        return Err(AtmError::peer_config_validation(
+            "peer TLS has multiple enabled interfaces; configure exactly one before using mTLS",
+        ));
+    }
+    Ok(interface)
+}
+
+fn remaining_budget(deadline: RequestDeadline, stage: &str) -> Result<Duration, AtmError> {
+    deadline.remaining().ok_or_else(|| deadline_error(stage))
+}
+
+async fn resolve_peer_addresses(
+    peer: &atm_core::types::HostName,
+    port: u16,
+    deadline: RequestDeadline,
+) -> Result<Vec<SocketAddr>, AtmError> {
+    let remaining = remaining_budget(deadline, "peer TLS DNS resolution")?;
+    let addresses = tokio::time::timeout(remaining, lookup_host((peer.as_str(), port)))
+        .await
+        .map_err(|_| deadline_error("peer TLS DNS resolution"))?
+        .map_err(|source| {
+            AtmError::daemon_unavailable_with_cause(
+                "peer TLS could not resolve the configured trusted peer",
+                source,
+            )
+        })?
+        .collect::<Vec<_>>();
+    if addresses.is_empty() {
+        return Err(AtmError::daemon_unavailable(
+            "peer TLS DNS resolution returned no addresses for the configured trusted peer",
+        ));
+    }
+    Ok(prefer_ipv4_peer_addresses(addresses))
+}
+
+fn prefer_ipv4_peer_addresses(mut addresses: Vec<SocketAddr>) -> Vec<SocketAddr> {
+    // The canonical direct-peer listener deliberately binds active IPv4
+    // interfaces. Prefer a matching IPv4 address when DNS/mDNS also returns
+    // loopback or link-local IPv6 entries; IPv6 remains available as a
+    // bounded fallback when no IPv4 endpoint can connect.
+    addresses.sort_by_key(|address| !address.is_ipv4());
+    addresses
+}
+
+async fn connect_peer_addresses(
+    peer: &atm_core::types::HostName,
+    addresses: &[SocketAddr],
+    deadline: RequestDeadline,
+) -> Result<TcpStream, AtmError> {
+    let mut last_error = None;
+    for (index, address) in addresses.iter().copied().enumerate() {
+        let remaining = remaining_budget(deadline, "peer TLS TCP connection")?;
+        let attempts_remaining = addresses.len() - index;
+        let attempt_budget = remaining / attempts_remaining as u32;
+        match tokio::time::timeout(attempt_budget, TcpStream::connect(address)).await {
+            Ok(Ok(stream)) => return Ok(stream),
+            Ok(Err(source)) => last_error = Some(source),
+            Err(_) => {
+                last_error = Some(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    format!("connection to {address} exceeded its bounded attempt budget"),
+                ))
+            }
+        }
+    }
+    let source = last_error.unwrap_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::AddrNotAvailable,
+            format!("no resolved socket addresses were available for {peer}"),
+        )
+    });
+    Err(AtmError::daemon_unavailable_with_cause(
+        "peer TLS could not connect to the configured trusted peer using any resolved address",
+        source,
+    ))
+}
+
+async fn load_configuration_with_deadline<T>(
+    deadline: RequestDeadline,
+    stage: &str,
+    operation: impl FnOnce() -> Result<T, AtmError> + Send + 'static,
+) -> Result<T, AtmError>
+where
+    T: Send + 'static,
+{
+    let remaining = remaining_budget(deadline, stage)?;
+    tokio::time::timeout(remaining, tokio::task::spawn_blocking(operation))
+        .await
+        .map_err(|_| deadline_error(stage))?
+        .map_err(|source| {
+            AtmError::daemon_unavailable_with_cause("peer TLS configuration worker failed", source)
+        })?
+}
+
+fn deadline_error(stage: &str) -> AtmError {
+    AtmError::daemon_unavailable(format!("{stage} exceeded the request deadline"))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::net::{IpAddr, Ipv6Addr, SocketAddr};
+    use std::num::NonZeroU16;
+    use std::path::PathBuf;
+    use std::sync::Arc;
+    use std::sync::Mutex;
+    use std::time::Duration;
+
+    use atm_core::PeerIoAdapter;
+    use atm_storage::{LocalCertificate, certificate_fingerprint};
+    use rcgen::generate_simple_self_signed;
+    use tempfile::TempDir;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+
+    use super::test_support::{ConfigurationDelay, TestPeerConfigStore};
+    use super::*;
 
     struct TestIdentity {
         certificate: LocalCertificate,
@@ -433,12 +531,11 @@ mod tests {
         certificate: LocalCertificate,
         trusted_peers: Vec<TrustedPeer>,
     ) -> Arc<dyn PeerConfigStore> {
-        Arc::new(TestPeerConfigStore {
-            interfaces: vec![enabled_interface()],
-            local_certificate: Some(certificate),
+        Arc::new(TestPeerConfigStore::new(
+            vec![enabled_interface()],
+            Some(certificate),
             trusted_peers,
-            configuration_gate: Arc::new(ConfigurationGate::new()),
-        })
+        ))
     }
 
     #[tokio::test]
@@ -472,10 +569,12 @@ mod tests {
 
         let server_task = tokio::spawn(async move {
             let (tcp, _) = listener.accept().await.expect("accept TCP");
-            let mut stream = server
+            let accepted = server
                 .accept(tcp, RequestDeadline::after(Duration::from_secs(1)))
                 .await
                 .expect("accept mTLS");
+            let (mut stream, source_host) = accepted.into_parts();
+            assert_eq!(source_host.as_str(), "client.test");
             let mut request = [0_u8; 4];
             stream
                 .read_exact(&mut request)
@@ -502,29 +601,117 @@ mod tests {
         server_task.await.expect("server task");
     }
 
+    #[tokio::test]
+    async fn plaintext_tcp_connection_is_rejected_by_mtls_adapter() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let server_identity = write_identity(&directory, "server", "localhost");
+        let trusted_client = write_identity(&directory, "client", "client.test");
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind listener");
+        let port = listener.local_addr().expect("listener address").port();
+        let server = PeerTlsAdapter::new(store(
+            server_identity.certificate,
+            vec![trusted_peer(
+                "client.test",
+                &trusted_client.fingerprint,
+                port,
+            )],
+        ))
+        .expect("mTLS server configuration");
+
+        let server_task = tokio::spawn(async move {
+            let (tcp, _) = listener.accept().await.expect("accept TCP");
+            server
+                .accept(tcp, RequestDeadline::after(Duration::from_secs(1)))
+                .await
+        });
+        let mut plaintext = TcpStream::connect(("127.0.0.1", port))
+            .await
+            .expect("open raw TCP socket");
+        plaintext
+            .write_all(b"POST /peer HTTP/1.1\r\n\r\n")
+            .await
+            .expect("write plaintext bytes");
+        plaintext.shutdown().await.expect("close raw TCP socket");
+
+        let result = server_task.await.expect("server task");
+        assert!(
+            result.is_err(),
+            "a real plaintext TCP connection must not yield an authenticated peer stream"
+        );
+        let error = match result {
+            Ok(_) => unreachable!("rejection was asserted"),
+            Err(error) => error,
+        };
+        assert!(
+            error
+                .message()
+                .contains("rejected the inbound client certificate or handshake")
+        );
+    }
+
+    #[tokio::test]
+    async fn peer_tcp_connection_tries_later_resolved_address_after_first_refuses() {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind IPv4 listener");
+        let listening_address = listener.local_addr().expect("listener address");
+        let peer = "peer.test".parse().expect("valid peer hostname");
+        let addresses = [
+            SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), listening_address.port()),
+            listening_address,
+        ];
+
+        let connector = tokio::spawn(async move {
+            connect_peer_addresses(
+                &peer,
+                &addresses,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+        });
+        let (_accepted, source) = listener.accept().await.expect("fallback IPv4 connection");
+        assert_eq!(source.ip().to_string(), "127.0.0.1");
+        connector
+            .await
+            .expect("connector task")
+            .expect("later resolved IPv4 address must be tried");
+    }
+
+    #[test]
+    fn peer_address_order_prefers_the_ipv4_listener_before_ipv6_fallbacks() {
+        let port = 43_101;
+        let ordered = prefer_ipv4_peer_addresses(vec![
+            SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), port),
+            SocketAddr::from(([192, 0, 2, 10], port)),
+        ]);
+
+        assert!(ordered[0].is_ipv4());
+        assert!(ordered[1].is_ipv6());
+    }
+
     #[test]
     fn constructor_rejects_disabled_interface_before_handshake() {
-        let store: Arc<dyn PeerConfigStore> = Arc::new(TestPeerConfigStore {
-            interfaces: vec![HttpsInterface {
+        let store: Arc<dyn PeerConfigStore> = Arc::new(TestPeerConfigStore::new(
+            vec![HttpsInterface {
                 enabled: false,
                 ..enabled_interface()
             }],
-            local_certificate: None,
-            trusted_peers: vec![],
-            configuration_gate: Arc::new(ConfigurationGate::new()),
-        });
+            None,
+            vec![],
+        ));
         let error = PeerTlsAdapter::new(store).expect_err("disabled interface must reject");
         assert!(error.message().contains("no enabled interface"));
     }
 
     #[test]
     fn constructor_rejects_multiple_enabled_interfaces_with_clear_guidance() {
-        let store: Arc<dyn PeerConfigStore> = Arc::new(TestPeerConfigStore {
-            interfaces: vec![enabled_interface(), enabled_interface()],
-            local_certificate: None,
-            trusted_peers: vec![],
-            configuration_gate: Arc::new(ConfigurationGate::new()),
-        });
+        let store: Arc<dyn PeerConfigStore> = Arc::new(TestPeerConfigStore::new(
+            vec![enabled_interface(), enabled_interface()],
+            None,
+            vec![],
+        ));
 
         let error = PeerTlsAdapter::new(store).expect_err("multiple interfaces must reject");
         assert!(
@@ -534,14 +721,49 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn connect_rejects_a_disabled_configured_trusted_peer() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let identity = write_identity(&directory, "client", "client.test");
+        let mut disabled_target = trusted_peer("localhost", &identity.fingerprint, 43101);
+        disabled_target.enabled = false;
+        let adapter = PeerTlsAdapter::new(store(
+            identity.certificate,
+            vec![
+                disabled_target,
+                trusted_peer("other.test", &identity.fingerprint, 43101),
+            ],
+        ))
+        .expect("another enabled peer keeps the local TLS configuration valid");
+
+        let result = adapter
+            .connect(
+                "localhost".parse().expect("configured peer host"),
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await;
+        assert!(
+            result.is_err(),
+            "disabled trusted peer must reject before opening a connection"
+        );
+        let error = match result {
+            Ok(_) => unreachable!("rejection was asserted"),
+            Err(error) => error,
+        };
+        assert!(
+            error
+                .message()
+                .contains("trusted peer `localhost` is disabled")
+        );
+    }
+
     #[test]
     fn constructor_rejects_missing_or_invalid_local_certificate_without_secret_output() {
-        let missing: Arc<dyn PeerConfigStore> = Arc::new(TestPeerConfigStore {
-            interfaces: vec![enabled_interface()],
-            local_certificate: None,
-            trusted_peers: vec![],
-            configuration_gate: Arc::new(ConfigurationGate::new()),
-        });
+        let missing: Arc<dyn PeerConfigStore> = Arc::new(TestPeerConfigStore::new(
+            vec![enabled_interface()],
+            None,
+            vec![],
+        ));
         let missing_error =
             PeerTlsAdapter::new(missing).expect_err("missing certificate must reject");
         assert!(
@@ -550,9 +772,9 @@ mod tests {
                 .contains("no configured local certificate")
         );
 
-        let invalid: Arc<dyn PeerConfigStore> = Arc::new(TestPeerConfigStore {
-            interfaces: vec![enabled_interface()],
-            local_certificate: Some(LocalCertificate {
+        let invalid: Arc<dyn PeerConfigStore> = Arc::new(TestPeerConfigStore::new(
+            vec![enabled_interface()],
+            Some(LocalCertificate {
                 fingerprint: "00".repeat(32).parse().expect("fingerprint"),
                 private_key_ref: PathBuf::from("/not/a/real/private-key.pem")
                     .display()
@@ -560,9 +782,8 @@ mod tests {
                     .parse()
                     .expect("private key reference"),
             }),
-            trusted_peers: vec![],
-            configuration_gate: Arc::new(ConfigurationGate::new()),
-        });
+            vec![],
+        ));
         let invalid_error =
             PeerTlsAdapter::new(invalid).expect_err("invalid certificate must reject");
         assert!(
@@ -574,15 +795,14 @@ mod tests {
 
         let directory = tempfile::tempdir().expect("temporary directory");
         let identity = write_identity(&directory, "mismatched", "localhost");
-        let mismatched: Arc<dyn PeerConfigStore> = Arc::new(TestPeerConfigStore {
-            interfaces: vec![enabled_interface()],
-            local_certificate: Some(LocalCertificate {
+        let mismatched: Arc<dyn PeerConfigStore> = Arc::new(TestPeerConfigStore::new(
+            vec![enabled_interface()],
+            Some(LocalCertificate {
                 fingerprint: "11".repeat(32).parse().expect("fingerprint"),
                 private_key_ref: identity.certificate.private_key_ref,
             }),
-            trusted_peers: vec![trusted_peer("localhost", &identity.fingerprint, 43101)],
-            configuration_gate: Arc::new(ConfigurationGate::new()),
-        });
+            vec![trusted_peer("localhost", &identity.fingerprint, 43101)],
+        ));
         let mismatch_error = PeerTlsAdapter::new(mismatched)
             .expect_err("certificate fingerprint mismatch must reject");
         assert!(
@@ -815,38 +1035,56 @@ mod tests {
             .await
             .expect("bind listener");
         let address = listener.local_addr().expect("listener address");
-        let configuration_gate = Arc::new(ConfigurationGate::new());
-        let store = Arc::new(TestPeerConfigStore {
-            interfaces: vec![enabled_interface()],
-            local_certificate: Some(server_identity.certificate),
-            trusted_peers: vec![trusted_peer(
-                "client.test",
-                &expected_client.fingerprint,
-                address.port(),
-            )],
-            configuration_gate: configuration_gate.clone(),
-        });
+        let delay = Arc::new(Mutex::new(None));
+        let store = Arc::new(
+            TestPeerConfigStore::new(
+                vec![enabled_interface()],
+                Some(server_identity.certificate),
+                vec![trusted_peer(
+                    "client.test",
+                    &expected_client.fingerprint,
+                    address.port(),
+                )],
+            )
+            .with_configuration_delay(delay.clone()),
+        );
         let server = PeerTlsAdapter::new(store).expect("server configuration");
-        configuration_gate.hold();
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        *delay.lock().expect("configuration delay lock") = Some(ConfigurationDelay {
+            started: started_tx,
+            release: Arc::new(Mutex::new(release_rx)),
+        });
 
         let raw_client = tokio::spawn(async move {
             let _stream = TcpStream::connect(address).await.expect("connect raw TCP");
-            tokio::time::sleep(Duration::from_millis(60)).await;
         });
         let (tcp, _) = listener.accept().await.expect("accept TCP");
-        let result = server
-            .accept(tcp, RequestDeadline::after(Duration::from_millis(5)))
-            .await;
+        let accept = tokio::spawn(async move {
+            server
+                .accept(tcp, RequestDeadline::after(Duration::from_millis(5)))
+                .await
+        });
+        tokio::task::spawn_blocking(move || {
+            started_rx
+                .recv_timeout(Duration::from_secs(1))
+                .expect("configuration loading must begin")
+        })
+        .await
+        .expect("wait for configuration loading task");
+        let result = accept.await.expect("accept task");
         let error = match result {
             Ok(_) => panic!("slow configuration must exhaust the deadline"),
             Err(error) => error,
         };
-        configuration_gate.release();
         assert!(
             error
                 .message()
                 .contains("inbound configuration exceeded the request deadline")
         );
+        release_tx
+            .send(())
+            .expect("release configuration loading worker");
         raw_client.await.expect("raw client task");
     }
 

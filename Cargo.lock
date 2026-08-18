@@ -177,9 +177,11 @@ dependencies = [
  "atm-storage-rusqlite",
  "atm-template-sc-compose",
  "fs4",
+ "peer-tls",
  "serde_json",
  "tempfile",
  "tokio",
+ "tracing",
  "ulid",
 ]
 
@@ -283,6 +285,7 @@ version = "1.4.3"
 dependencies = [
  "agent-team-mail-core",
  "atm-storage",
+ "peer-tls",
  "serde_json",
  "tokio",
  "tracing",

@@ -26,18 +26,42 @@ impl<T> PeerIo for T where T: AsyncRead + AsyncWrite + Send + Unpin {}
 /// Object-safe opaque peer stream used by the runtime's one HTTP path.
 pub type BoxedPeerIo = Box<dyn PeerIo>;
 
+/// An accepted peer stream together with the identity authenticated by its
+/// transport adapter.
+///
+/// The runtime deliberately receives neither certificates nor TLS session
+/// types. It needs only this already-authenticated hostname to retain the
+/// established peer provenance on the canonical HTTP request.
+pub struct AcceptedPeerIo {
+    io: BoxedPeerIo,
+    source_host: HostName,
+}
+
+impl AcceptedPeerIo {
+    #[must_use]
+    pub const fn new(io: BoxedPeerIo, source_host: HostName) -> Self {
+        Self { io, source_host }
+    }
+
+    #[must_use]
+    pub fn into_parts(self) -> (BoxedPeerIo, HostName) {
+        (self.io, self.source_host)
+    }
+}
+
 /// BOUNDARY-PeerIoAdapter — see `boundaries/atm-core/peer-io-adapter.toml`.
 ///
 /// This is an intentionally sealed, object-safe port. `peer-tls` is its only
 /// authorized production implementation under ADR-001. The trait accepts and
 /// produces transport bytes only; certificate policy stays in `atm_storage`.
 pub trait PeerIoAdapter: sealed::Sealed + Send + Sync {
-    /// Wrap an accepted TCP stream before application bytes are read.
+    /// Wrap an accepted TCP stream before application bytes are read and
+    /// return the adapter-authenticated source hostname.
     fn accept<'adapter>(
         &'adapter self,
         stream: TcpStream,
         deadline: RequestDeadline,
-    ) -> Pin<Box<dyn Future<Output = Result<BoxedPeerIo, AtmError>> + Send + 'adapter>>;
+    ) -> Pin<Box<dyn Future<Output = Result<AcceptedPeerIo, AtmError>> + Send + 'adapter>>;
 
     /// Connect to and wrap one configured peer before application bytes are written.
     fn connect<'adapter>(

@@ -1,9 +1,9 @@
 ---
 title: AO.2 — Install peer-tls below the canonical HTTP path
-status: planned
+status: in_progress
 recommended_agent: arch-ctm
-branch: plan/phase-ao-tls-and-ap-outbound-connectivity
-worktree: ../atm-core-worktrees/plan/phase-ao-tls-and-ap-outbound-connectivity
+branch: feature/pao-s2-optional-runtime-activation
+worktree: ../atm-core-worktrees/feature/pao-s2-optional-runtime-activation
 ---
 
 # AO.2 — Install peer-tls below the canonical HTTP path
