@@ -251,7 +251,7 @@ async fn resolve_peer_addresses(
     deadline: RequestDeadline,
 ) -> Result<Vec<SocketAddr>, AtmError> {
     let remaining = remaining_budget(deadline, "peer TLS DNS resolution")?;
-    let mut addresses = tokio::time::timeout(remaining, lookup_host((peer.as_str(), port)))
+    let addresses = tokio::time::timeout(remaining, lookup_host((peer.as_str(), port)))
         .await
         .map_err(|_| deadline_error("peer TLS DNS resolution"))?
         .map_err(|source| {
