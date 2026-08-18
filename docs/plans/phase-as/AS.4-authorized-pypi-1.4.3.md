@@ -111,13 +111,14 @@ an already-published version as permission to rebuild or overwrite it.
 `3f5f2db474dc66b34be38d60193ba259fe8e78e4`. The immutable release source is
 `main`/`v1.4.3` commit `fa6066468f8e638893bedd686244cffa2a43dbdf`.
 
-The prerequisite receipt is not acceptable: Release Preflight run
+Release Preflight run
 [`32159872873`](https://github.com/randlee/atm-core/actions/runs/32159872873)
-failed because `sc-lint` 0.4.0 rejected ATM's `trait` boundary field. The
-sc-lint correction is awaiting merge in
-[randlee/sc-lint#115](https://github.com/randlee/sc-lint/pull/115), and the
-resolved-receipt workflow is awaiting merge in
-[randlee/sc-publish#25](https://github.com/randlee/sc-publish/pull/25).
+failed because external `sc-lint` 0.4.0 rejected ATM's legitimate `trait`
+boundary field. This was superseded locally in AS.4: preflight now runs
+ATM's workspace-source `sc-lint-boundary` analyzer directly, and the local
+PyPI path writes a source-commit, manifest-SHA-256, version, and per-artifact
+SHA-256 receipt before upload. No upstream `sc-lint` or `sc-publish` merge is
+required for those checks.
 
 The immutable tag also fails ADR-049's publication-disclosure prerequisite:
 neither `crates/hermes-atm/README.md` nor the v1.4.3 GitHub release notes
@@ -146,7 +147,16 @@ Its immutable staged artifact SHA-256 values were:
 - `atm_graft-1.4.3-cp311-abi3-win_amd64.whl` —
   `f9963df87f5d4e04377583200e79227b8c1db9f22a507b37bff3de43c6e2112a`
 
-Required remediation: merge the two upstream fixes, create a new immutable
-release containing the ADR-049 disclosure, obtain a matching AS.3 receipt,
-and then run the PyPI-only channel against that release. No rebuild or upload
-is authorized for the blocked v1.4.3 set.
+The immutable v1.4.3 release manifest also predates the current
+`[[python_distributions]]` contract, so it cannot produce a contract-matching
+receipt through the current PyPI workflow. Required remediation is therefore
+a new immutable release containing the ADR-049 disclosure and current release
+manifest, followed by the local AS.3 validation receipt and the PyPI-only
+channel. No rebuild or upload is authorized for the blocked v1.4.3 set.
+
+### Draft v1.4.3 GitHub release note
+
+> **First public PyPI release:** `hermes-atm` and `atm-graft` begin public
+> distribution at ATM's existing 1.x workspace version. Earlier 1.x
+> development was internal, not a missing public release history; the Python
+> packages remain version-locked to the ATM workspace release.
