@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO1-BOUNDARY-003>
+  a triage:Finding ;
+  triage:findingId "AO1-BOUNDARY-003" ;
+  triage:title "Boundary TOML stale allowed_dependents" ;
+  triage:description "rust-qa-agent/ruthless-boundary-qa flagged a stale allowed_dependents entry in the boundary manifest touched by the peer-tls module rehome (feature/pao-s1-tls-module-rehome, PR #942). The entry 'atm-peer-tls-interop' in atm-storage/peer-config-store.toml is stale: atm-peer-tls-interop does not depend on PeerConfigStore, and the fixture-only interop crate should not be in allowed_dependents after the production peer-tls implementation was added." ;
+  triage:phaseId "phase-ao" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-18T05:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO-S1 ;
+  triage:foundAt "2026-08-18T05:31:13Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO1-BOUNDARY-003/AO1-S1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO1-BOUNDARY-003/AO1-S1-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage/peer-config-store.toml" ;
+  triage:line 22 ;
+  triage:snippet "allowed_dependents with atm-peer-tls-interop entry (stale)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "e41afce8aab312450d39210690601d626eb00998" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s1/e41afce8> .
+
+<urn:atm:triage:worktree/pao-s1/e41afce8>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s1-tls-module-rehome" ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "e41afce8aab312450d39210690601d626eb00998" ;
+  triage:orderIndex 1 .

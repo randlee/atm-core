@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO1-MINOR-004>
+  a triage:Finding ;
+  triage:findingId "AO1-MINOR-004" ;
+  triage:title "Dead tls_adapter PATTERNS entry in lint_boundaries.py" ;
+  triage:description "quality-mgr flagged (minor, non-blocking) a dead tls_adapter PATTERNS entry in lint_boundaries.py left over from the peer-tls module rehome (feature/pao-s1-tls-module-rehome, PR #942). The entry duplicates the existing 'tls' entry and is unused." ;
+  triage:phaseId "phase-ao" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "lint_boundaries.py PATTERNS table" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-18T05:33:26Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO-S1 ;
+  triage:foundAt "2026-08-18T05:31:13Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO1-MINOR-004/AO1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO1-MINOR-004/AO1>
+  a triage:Occurrence ;
+  triage:file ".just/lint_boundaries.py" ;
+  triage:line 225 ;
+  triage:snippet "tls_adapter PATTERNS entry with duplicate tls definition" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "e41afce8aab312450d39210690601d626eb00998" ;
+  triage:occursIn <urn:atm:triage:worktree/AO1/e41afce8aab312450d39210690601d626eb00998> .
+
+<urn:atm:triage:worktree/AO1/e41afce8aab312450d39210690601d626eb00998>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-pao-s1" ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "e41afce8aab312450d39210690601d626eb00998" ;
+  triage:orderIndex 1 .
