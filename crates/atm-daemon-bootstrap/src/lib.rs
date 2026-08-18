@@ -213,12 +213,7 @@ async fn run_replacement_daemon_with_selector(
 ) -> Result<(), AtmError> {
     install_sqlite_retained_runtime_factory();
     let scope = current_host_runtime_scope()?;
-    let owner_lock = scope.owner_lock.clone();
-    let _owner = tokio::task::spawn_blocking(move || DaemonOwnerGuard::acquire_at(owner_lock))
-        .await
-        .map_err(|source| {
-            AtmError::daemon_unavailable("daemon owner-lock worker failed").with_cause(source)
-        })??;
+    let _owner = acquire_daemon_owner(scope.owner_lock.clone()).await?;
     let runtime_health = RuntimeHealth::with_owner(std::process::id());
     let assembly = assemble_daemon_runtime()?;
     let workflow_telemetry = assembly.workflow_telemetry.clone();
@@ -283,6 +278,14 @@ async fn run_replacement_daemon_with_selector(
     workflow_telemetry.shutdown().await;
     let _stopped = stopped?;
     Ok(())
+}
+
+async fn acquire_daemon_owner(lock_path: PathBuf) -> Result<DaemonOwnerGuard, AtmError> {
+    tokio::task::spawn_blocking(move || DaemonOwnerGuard::acquire_at(lock_path))
+        .await
+        .map_err(|source| {
+            AtmError::daemon_unavailable("daemon owner-lock worker failed").with_cause(source)
+        })?
 }
 
 /// Emit the benchmark/supervisor marker only after every enabled replacement
