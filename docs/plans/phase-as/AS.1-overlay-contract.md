@@ -24,7 +24,8 @@ manifest behavior change in ATM.
 ## Governing Requirements
 
 - `sc-publish/docs/publish-kit-requirements.md` is normative.
-- The canonical sync script is the only copier and parity checker.
+- The canonical `plugins/sc-publish/install.py` package installer is the only
+  copier and parity checker. The prior standalone overlay script is retired.
 - No copied path may be locally edited.
 
 ## Governing ADRs
@@ -39,8 +40,9 @@ manifest behavior change in ATM.
 
 ## Prerequisites
 
-- Accepted `sc-publish` source SHA is reachable.
-- Canonical `sync-overlay.sh --dry-run` is available from that source.
+- `sc-publish` promotion baseline
+  `d9b4588e73845cf47fe04d42c2a02b8b30136fc1` is reachable.
+- The canonical package installer is available from that source.
 
 ## Hard Dependencies
 
@@ -55,9 +57,9 @@ manifest behavior change in ATM.
 
 ## Sub-Tasks
 
-1. Record the accepted source SHA and execute the canonical sync tool twice:
-   once to synchronize and once in `--dry-run` mode to prove no remaining
-   byte difference.
+1. Record the accepted source SHA and execute the canonical package installer
+   twice: once to synchronize and once in `--dry-run` mode to prove no
+   remaining byte difference.
 2. Retain the 31-path audit in the supporting migration design as the
    complete decision record. The overlay is atomic: no individual path is
    selected, omitted, or patched locally.
@@ -74,6 +76,10 @@ manifest behavior change in ATM.
 6. Require the shared bootstrap to provision the exact `sc-compose` CLI used
    by install/render and run the semantic installer integration test in CI
    through that bootstrap.
+7. Require the installer’s sole consumer input to be complete declared data:
+   source/version policy, artifacts, explicit crate order, wheels, binaries,
+   channels, and channel settings. It must reject missing production input;
+   discovery is allowed only for an advisory example command.
 
 ## Split Recommendation
 
@@ -82,8 +88,9 @@ consumer manifest work belongs to AS.2.
 
 ## Acceptance Criteria
 
-- One accepted `sc-publish` SHA is recorded.
-- Canonical sync followed by canonical `--dry-run` reports exact parity.
+- The `d9b4588` baseline and the accepted promotion SHA are recorded.
+- Canonical installation followed by canonical `--dry-run` reports exact
+  parity from one complete declared consumer input.
 - The 31-path audit has a requirement and activation/proof reason for every
   path.
 - Every discovered shared closure gap has an upstream issue or accepted
@@ -98,7 +105,8 @@ consumer manifest work belongs to AS.2.
 ```bash
 PUBLISH_KIT_SOURCE=/Users/randlee/Documents/github/sc-publish
 ATM_WORKTREE="$PWD"
-bash "$PUBLISH_KIT_SOURCE/docs/publish-kit/sync-overlay.sh" --dry-run "$ATM_WORKTREE"
+git -C "$PUBLISH_KIT_SOURCE" rev-parse d9b4588
+python3 "$PUBLISH_KIT_SOURCE/plugins/sc-publish/install.py" --help
 ```
 
 ## Required Document Updates
@@ -109,5 +117,6 @@ bash "$PUBLISH_KIT_SOURCE/docs/publish-kit/sync-overlay.sh" --dry-run "$ATM_WORK
 
 ## Risks And Watchouts
 
-An in-sync file diff is source parity, not a runtime proof. Do not represent
-it as release readiness.
+The baseline installer still needs the explicit-input and shared-toolchain
+refinements listed above. Do not represent its current unit-test pass or a
+future in-sync file diff as release readiness.

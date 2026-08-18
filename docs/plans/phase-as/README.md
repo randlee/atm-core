@@ -17,8 +17,8 @@ release flow without reintroducing toolchain or validation drift.
 ## Governing boundaries
 
 - `sc-publish` is the sole source of shared workflows, actions, scripts,
-  agent prompts, and tests. ATM copies them only through its canonical sync
-  script, byte-for-byte.
+  agent prompts, and tests. ATM installs them only through the canonical
+  package installer, byte-for-byte.
 - ATM owns only repository data in its release manifest and explicitly
   namespaced, non-shared validation data.
 - A shared-file defect is an upstream `sc-publish` issue/PR, never an ATM
@@ -27,6 +27,16 @@ release flow without reintroducing toolchain or validation drift.
   validation receipt. A digest mismatch fails closed.
 - Production publishing requires explicit authorization; planning or
   preflight does not grant it.
+
+## Current shared baseline
+
+`sc-publish` `develop` at `d9b4588e73845cf47fe04d42c2a02b8b30136fc1` is the
+promotion baseline. It relocates the shared surface into the package and
+replaces the retired overlay script with `plugins/sc-publish/install.py`.
+
+The baseline is not a claim that AS.1 is closed. Its remaining installer and
+evidence refinements are listed in AS.1 as upstream-owned deliverables; ATM
+must not recreate the retired script or patch the package locally.
 
 ## Sprint sequence
 

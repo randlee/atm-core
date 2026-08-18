@@ -82,7 +82,8 @@ different closure type and executes against immutable `main` artifacts.
 just lint
 just test
 PUBLISH_KIT_SOURCE=/Users/randlee/Documents/github/sc-publish
-bash "$PUBLISH_KIT_SOURCE/docs/publish-kit/sync-overlay.sh" --dry-run "$PWD"
+python3 "$PUBLISH_KIT_SOURCE/plugins/sc-publish/install.py" \
+  --consumer-input release/sc-publish-consumer-input.json --dry-run "$PWD"
 gh workflow run release-preflight.yml --ref "$(git rev-parse HEAD)"
 ```
 
@@ -93,4 +94,5 @@ gh workflow run release-preflight.yml --ref "$(git rev-parse HEAD)"
 ## Risks And Watchouts
 
 A green local check is insufficient; the GitHub preflight must prove the same
-toolchain path used by publication.
+toolchain path used by publication. `--consumer-input` is the required
+upstream installer contract; do not substitute its current inference behavior.

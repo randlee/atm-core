@@ -75,7 +75,8 @@ Keep deletion review isolated from the next release to preserve rollback.
 
 ```bash
 PUBLISH_KIT_SOURCE=/Users/randlee/Documents/github/sc-publish
-bash "$PUBLISH_KIT_SOURCE/docs/publish-kit/sync-overlay.sh" --dry-run "$PWD"
+python3 "$PUBLISH_KIT_SOURCE/plugins/sc-publish/install.py" \
+  --consumer-input release/sc-publish-consumer-input.json --dry-run "$PWD"
 just lint
 just test
 ```
