@@ -15,7 +15,9 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-18T20:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-18T20:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO.3 ;
@@ -28,10 +30,10 @@
   triage:file ".just/lint-config.toml" ;
   triage:line 104 ;
   triage:snippet "crates/atm-http-runtime/Cargo.toml:rustls AL.7 entry" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s5-platform-benchmark-proof" ;
-  triage:headSha "8245717e9" ;
+  triage:headSha "eff070efadc301d6bb495e0a45d895894c88fefd" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s5/8245717e9> .
 
 <urn:atm:triage:worktree/pao-s5/8245717e9>
