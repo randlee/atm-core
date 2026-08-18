@@ -37,9 +37,9 @@ def build_command(
         return ["cargo-deny", "--config", str(config_path), "check", *checks]
     return [
         "cargo-deny",
+        "check",
         "--config",
         str(config_path),
-        "check",
         *checks,
     ]
 
