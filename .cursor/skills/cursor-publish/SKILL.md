@@ -22,7 +22,7 @@ After install, the consumer should have:
 
 - `release/publish-artifacts.toml`, `release/publish-channel-contracts.toml`
 - `.github/workflows/release-preflight.yml`, `release.yml`, channel workflows
-- `scripts/release_artifacts.py`, `scripts/release_gate.sh`
+- `.github/scripts/release_artifacts.py`, `.github/scripts/release_gate.sh`
 - `.claude/agents/publisher.md` + channel agents
 - `.cursor/agents/publisher.md` (this kit)
 
@@ -38,10 +38,10 @@ After install, the consumer should have:
 ### Manifest validation
 
 ```bash
-python3 scripts/release_artifacts.py validate-manifest \
+python3 .github/scripts/release_artifacts.py validate-manifest \
   --manifest release/publish-artifacts.toml \
   --workspace-toml Cargo.toml
-python3 scripts/release_artifacts.py preflight-secret-plan \
+python3 .github/scripts/release_artifacts.py preflight-secret-plan \
   --manifest release/publish-artifacts.toml
 ```
 
@@ -58,7 +58,7 @@ Adjust `--ref` to the branch/commit under release per release-state strategy.
 ### Channel inquiry (inline — replaces background worker)
 
 ```bash
-python3 scripts/release_artifacts.py public-registry-inquiry-plan \
+python3 .github/scripts/release_artifacts.py public-registry-inquiry-plan \
   --contracts release/publish-channel-contracts.toml \
   --channel crates_io --name "${CRATE}" --version "${VERSION}"
 # curl each URL from plan output; classify per channel-contracts.md
@@ -67,7 +67,7 @@ python3 scripts/release_artifacts.py public-registry-inquiry-plan \
 ### Post-release dispatch plan
 
 ```bash
-python3 scripts/release_artifacts.py channel-dispatch-plan \
+python3 .github/scripts/release_artifacts.py channel-dispatch-plan \
   --manifest release/publish-artifacts.toml --tag "v${VERSION}"
 # For each entry: gh workflow run ... ; gh run watch
 ```

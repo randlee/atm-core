@@ -208,7 +208,7 @@ enabled = true
 file = ".github/workflows/release.yml"
 required_fragments = [
   "Verify requested version matches workspace",
-  "python3 scripts/release_artifacts.py verify-version \\",
+  "python3 .github/scripts/release_artifacts.py verify-version \\",
   "Verify release version lockstep",
-  "python3 scripts/release_artifacts.py verify-version-lockstep \\",
+  "python3 .github/scripts/release_artifacts.py verify-version-lockstep \\",
 ]

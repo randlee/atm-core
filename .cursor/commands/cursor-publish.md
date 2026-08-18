@@ -21,7 +21,7 @@ Run **sc-publish** release preflight or publish in this Cursor session.
 ## Quick flow
 
 ```bash
-python3 scripts/release_artifacts.py validate-manifest \
+python3 .github/scripts/release_artifacts.py validate-manifest \
   --manifest release/publish-artifacts.toml --workspace-toml Cargo.toml
 gh workflow run release-preflight.yml --ref main \
   -f version="${VERSION}" -f run_by_agent=publisher

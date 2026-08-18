@@ -126,9 +126,9 @@ evidence and must not silently add schema behavior.
 ## Required Validation
 
 ```bash
-python3 scripts/release_artifacts.py validate-manifest \
+python3 .github/scripts/release_artifacts.py validate-manifest \
   --manifest release/publish-artifacts.toml --workspace-toml Cargo.toml
-python3 scripts/release_artifacts.py preflight-secret-plan \
+python3 .github/scripts/release_artifacts.py preflight-secret-plan \
   --manifest release/publish-artifacts.toml
 python3 .just/check_version_sync.py
 ```

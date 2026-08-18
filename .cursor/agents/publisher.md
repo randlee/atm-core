@@ -30,7 +30,7 @@ Repository-specific data comes only from:
 
 - `release/publish-artifacts.toml`
 - `release/publish-channel-contracts.toml`
-- `scripts/release_artifacts.py` (validate-manifest, preflight-secret-plan,
+- `.github/scripts/release_artifacts.py` (validate-manifest, preflight-secret-plan,
   channel-dispatch-plan, public-registry-inquiry-plan, list-publish-plan)
 
 Shared policy: `.claude/skills/publishing/ref/release-state-strategy.md`,

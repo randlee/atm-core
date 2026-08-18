@@ -32,7 +32,7 @@ class ReleasePreflightWorkflowTests(unittest.TestCase):
         text = WORKFLOW.read_text(encoding="utf-8")
 
         self.assertIn("validate-manifest", text)
-        self.assertIn("validate_publish_order.sh", text)
+        self.assertIn("validate-publish-order", text)
         self.assertIn("cargo package -p", text)
 
 
