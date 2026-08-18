@@ -19,3 +19,7 @@ triage:a3 a triage:Assignment ;
     triage:ofSprint triage:AO.1 ;
     triage:assignedTo "arch-ctm" ;
     triage:assignedAt "2026-08-18T17:00:32Z"^^xsd:dateTime .
+
+triage:c2 a triage:Completion ;
+    triage:ofSprint triage:AO.1 ;
+    triage:at "2026-08-18T15:50:06Z"^^xsd:dateTime .
