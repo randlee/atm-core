@@ -93,11 +93,24 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\bcompatibility_jsonl_append\b",
         r"\bcompatibility[^\n]*\.jsonl\b",
     ),
+    "concrete_rustls_types": (
+        r"\b(?:ClientConfig|ServerConfig|TlsConnector|TlsAcceptor)\b",
+        r"\brustls::",
+    ),
     "cursor": (r"\bcursor\b", r"\bCursor\b"),
     "catalog_persistence": (
         r"\b(?:TemplateCatalogStore|TemplateCatalogRecord|CatalogPersistence)\b",
         r"\b(?:persist|store|load)_[A-Za-z0-9_]*catalog[A-Za-z0-9_]*\s*\(",
         r"\bcatalog_persistence\b",
+    ),
+    "certificate_fingerprint_algorithm": (r"\b(?:Sha256|Sha512)::digest\s*\(",),
+    "certificate_parser": (
+        r"\bCertificateDer::(?:pem_slice_iter|from_pem_slice)\b",
+        r"\bPrivateKeyDer::from_pem_slice\b",
+    ),
+    "certificate_parsing": (
+        r"\bCertificateDer::(?:pem_slice_iter|from_pem_slice)\b",
+        r"\bPrivateKeyDer::from_pem_slice\b",
     ),
     "cli_surface": (
         r"\bclap::",
@@ -127,6 +140,8 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
     "graft_crate_dependency": (r"\batm[_-]graft\b",),
     "graft_session_runtime": (r"\bgraft_session_runtime\b", r"\bGraftSession\b"),
     "inbox_jsonl": (r"\binbox[^\n]*\.jsonl\b", r"\b(?:append|write)_[A-Za-z0-9_]*inbox[A-Za-z0-9_]*\s*\("),
+    "legacy_daemon_composition": (r"\b(?:LegacyDaemon|run_legacy_daemon)\b",),
+    "listener_lifecycle": (r"\b(?:run|start)_(?:listener|server)\s*\(",),
     "mailbox_storage_selection": (r"\bmailbox_storage_selection\b", r"\b(?:select|choose)_[A-Za-z0-9_]*mailbox[A-Za-z0-9_]*\s*\("),
     "message_delivery": (r"\bmessage_delivery\b", r"\b(?:deliver|send)_message\s*\(", r"\bMessageDelivery\b"),
     "production_delivery": (
@@ -156,13 +171,22 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\b(?:HttpRuntime|ApiRouter)\b",
         r"\bhttp_runtime\b",
     ),
+    "http_request_encoding": (
+        r"\b(?:encode|decode)_(?:http|request|response)\s*\(",
+        r"\b(?:HttpRequestEncoder|HttpResponseEncoder)\b",
+    ),
     "process_spawn": (r"\bstd::process::Command\b", r"\bCommand::new\s*\(", r"\)\.spawn\s*\("),
     "process_spawn_for_notifications": (r"\bstd::process::Command\b", r"\bCommand::new\s*\(", r"\)\.spawn\s*\("),
     "process_spawn_outside_owned_runtime_path": (r"\bstd::process::Command\b", r"\bCommand::new\s*\(", r"\)\.spawn\s*\("),
+    "peer_config_store": (r"\bPeerConfigStore\b",),
     "raw_http_framing": (
         r"\bHttpFrameReader\b",
         r"\b(?:read|write)_http_(?:request|response)\s*\(",
         r"\bwrite_http_request_with_headers\s*\(",
+    ),
+    "rustls_configuration": (
+        r"\b(?:ClientConfig|ServerConfig)::builder\s*\(",
+        r"\bwith_(?:client_auth_cert|single_cert|custom_certificate_verifier)\s*\(",
     ),
     "replay_or_resend": (
         r"\b(?:Peer)?(?:Replay|Resend)[A-Za-z0-9_]*\b",
@@ -187,6 +211,11 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\b(?:schema_json|migration(?:s)?)\b",
         r"\bstorage_schema\b",
     ),
+    "storage_configuration": (
+        r"\b(?:save|remove)_(?:interface|local_certificate|trusted_peer)\s*\(",
+    ),
+    "storage_sql": (r"\b(?:rusqlite|sqlx|diesel)::", r"\b(?:SELECT|INSERT|UPDATE|DELETE)\b"),
+    "storage_tls_helpers": (r"\batm_storage::tls\b",),
     "socket_io": (
         r"\b(?:std|tokio)::net::",
         r"\b(?:Tcp|Udp|Unix)(?:Stream|Listener|Socket)\b",
@@ -212,6 +241,8 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
     "task_changed_notifications": (r"\btask_changed_notifications\b", r"\bTaskChanged(?:Notification|Event)?\b", r"\btask_changed\b"),
     "template_rendering": (r"\btemplate_rendering\b", r"\b(?:render|render_template)\s*\(", r"\bTemplateRenderer\b"),
     "tls_handshake": (r"\b(?:rustls|native_tls)::", r"\b(?:Client|Server)Connection\b", r"\b(?:tls|TLS)[^\n]*handshake\b"),
+    "tls_policy": (r"\b(?:struct|enum)\s+\w*(?:Verifier|Policy)\b",),
+    "tokio_rustls_handshake": (r"\btokio_rustls::",),
     "tmux_nudge_delivery": (r"\btmux_nudge_delivery\b", r"\btmux[^\n]*nudge\b", r"\b(?:send|emit)_tmux_nudge\s*\("),
     "transport_dispatch": (r"\btransport_dispatch\b", r"\bdispatch_transport\s*\(", r"\bTransportDispatcher\b"),
     "transport": (
@@ -219,6 +250,7 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\b(?:reqwest|hyper)::",
         r"\btransport\b",
     ),
+    "trust_policy_duplication": (r"\b(?:struct|enum)\s+\w*(?:Verifier|TrustPolicy)\b",),
 }
 
 # The runtime composition crate performs a deliberately short-lived listener

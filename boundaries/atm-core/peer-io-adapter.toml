@@ -1,0 +1,45 @@
+boundary_id = "BOUNDARY-PeerIoAdapter"
+owner_package = "atm-core"
+owner_crate_path = "agent_team_mail_core"
+name = "PeerIoAdapter"
+
+[public]
+trait = "PeerIoAdapter"
+notes = "Sealed, object-safe port for an opaque authenticated peer byte stream. Core owns the contract; peer-tls is its sole production implementation."
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = ["peer_tls::PeerTlsAdapter"]
+
+[ownership]
+io_owns = ["opaque_peer_io_contract", "deadline_contract"]
+io_forbidden = ["rustls_configuration", "tls_handshake", "certificate_parsing", "storage_configuration", "http_request_encoding", "listener_lifecycle"]
+
+[dependencies]
+allowed_dependents = ["peer-tls"]
+allowed_dependencies = ["tokio"]
+forbidden_edges = ["atm-core -> peer-tls", "atm-http-runtime -> peer-tls", "atm-daemon -> peer-tls"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["TcpStream", "HostName", "RequestDeadline"]
+response_types = ["BoxedPeerIo"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["plaintext_peer_io_adapter", "unsealed_peer_io_adapter"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-PEER-IO-ADAPTER"]
+review_gates = ["sealed_object_safe_port", "peer_tls_sole_implementation", "opaque_stream_only"]
+
+[status]
+state = "active"
+notes = ["AO.1 establishes the contract only. AO.2 composes the adapter into the Tokio/Axum runtime without moving concrete TLS types out of peer-tls."]
