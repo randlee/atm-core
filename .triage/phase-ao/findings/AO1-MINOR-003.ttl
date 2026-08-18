@@ -15,8 +15,10 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-18T06:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-08-17T22:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO-S1 ;
   triage:foundAt "2026-08-18T05:31:13Z"^^xsd:dateTime ;

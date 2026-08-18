@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO2-ATM-QA-004>
+  a triage:Finding ;
+  triage:findingId "AO2-ATM-QA-004" ;
+  triage:title "Acceptance-criteria test-coverage gap (2 of 2)" ;
+  triage:description "A second AO.2 acceptance criterion lacks direct test coverage. See full QA report for the specific criterion: https://github.com/randlee/atm-core/pull/943#issuecomment-5324878269. (req-qa, minor)" ;
+  triage:phaseId "phase-ao" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-18T07:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO-S2 ;
+  triage:foundAt "2026-08-18T07:15:43Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO2-ATM-QA-004/ao2-atm-qa-004-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO2-ATM-QA-004/ao2-atm-qa-004-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ao/sprint-ao2-optional-runtime-activation.md" ;
+  triage:line 1 ;
+  triage:snippet "acceptance criterion without direct test coverage" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s2-optional-runtime-activation" ;
+  triage:headSha "99fd70563c50fa3d9992c33d7cd85ba42b4bd750" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s2-feature/pao-s2-optional-runtime-activation> .
+
+<urn:atm:triage:worktree/pao-s2-feature/pao-s2-optional-runtime-activation>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s2-optional-runtime-activation" ;
+  triage:branch "feature/pao-s2-optional-runtime-activation" ;
+  triage:headSha "99fd70563c50fa3d9992c33d7cd85ba42b4bd750" ;
+  triage:orderIndex 1 .

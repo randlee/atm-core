@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO1-SLEEP-001>
+  a triage:Finding ;
+  triage:findingId "AO1-SLEEP-001" ;
+  triage:title "New fixed-duration sleep in TestPeerConfigStore test helper fails fixed-sleep lint" ;
+  triage:description "The AO1-RSH-001 fix commit (bede69ff6) added std::thread::sleep(Duration::from_millis(40)) at crates/peer-tls/src/lib.rs:301, inside test-only helper TestPeerConfigStore::delay_if_requested(). just lint fixed-sleep forbids any fixed-duration sleep, including test-only code, and fails on both ubuntu and windows CI for PR #942. Replace the fixed sleep with the repo existing async/condvar/notify-based test synchronization primitive so the delay is event-driven rather than time-based." ;
+  triage:phaseId "phase-ao" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-18T06:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO-S1 ;
+  triage:foundAt "2026-08-18T06:04:40Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO1-SLEEP-001/ao1-sleep-001-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO1-SLEEP-001/ao1-sleep-001-1>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 301 ;
+  triage:snippet "std::thread::sleep(Duration::from_millis(40));" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "b87d576f925abaec5099055009f6d70da8a57848" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s1-feature/pao-s1-tls-module-rehome> .
+
+<urn:atm:triage:worktree/pao-s1-feature/pao-s1-tls-module-rehome>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pao-s1-tls-module-rehome" ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "b87d576f925abaec5099055009f6d70da8a57848" ;
+  triage:orderIndex 1 .
