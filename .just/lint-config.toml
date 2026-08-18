@@ -150,7 +150,8 @@ allowed_dependencies = ["async-trait", "atm-core", "atm-runtime-test-support", "
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-runtime/Cargo.toml"
-allowed_dependencies = ["atm-core", "atm-storage", "serde_json", "tokio", "tracing"]
+allowed_dependencies = ["atm-core", "atm-storage", "tokio", "tracing"]
+allowed_dev_dependencies = ["peer-tls", "serde_json"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-storage/Cargo.toml"
