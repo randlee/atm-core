@@ -1302,7 +1302,7 @@ Status summary:
 
 Sprint line:
 
-- `AS.1` `AS.1-overlay-contract.md` — exact source parity, ownership, and
+- `AS.1 [COMPLETE]` `AS.1-overlay-contract.md` — exact source parity, ownership, and
   upstream safety-capability gates
 - `AS.2` `AS.2-consumer-manifest-contract.md` — consumer manifest and unified
   release-version contract

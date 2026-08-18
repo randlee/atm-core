@@ -4,9 +4,9 @@
 plan_type: sprint_plan
 phase: AS
 sprint: AS.1
-worktree: sc-compose-publish-kit-migration
-branch: plan/sc-compose-publish-kit-migration
-status: proposed
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pas-s1-overlay-contract
+branch: feature/pas-s1-overlay-contract
+status: complete
 estimated_scope: documentation and upstream-contract closure
 ```
 
@@ -137,6 +137,42 @@ python3 "$PUBLISH_KIT_SOURCE/plugins/sc-publish/install.py" --help
 - Record the accepted source SHA and upstream issue/PR identifiers here.
 - Update the 31-path supporting audit only when the upstream owned-path list
   changes.
+
+## AS.1 Evidence And Upstream Closure Ledger
+
+- Accepted source: `sc-publish/develop@240fd525784d967a993f04eab4ffcc0993933f7b`
+  (the `240fd52` baseline); installer input/manifest proof:
+  [`AS.1-consumer-input.json`](./evidence/AS.1-consumer-input.json).
+- Accepted installer contract: `sc-publish` PR #7, merged at `240fd52`.
+  It requires explicit `--input` for installation; `--example-json` can only
+  create a reviewable draft and cannot install or infer a production surface.
+- The 31-path atomic audit and legacy-value coverage remain in the supporting
+  [migration design record](../publish-kit-migration/README.md). No individual
+  shared path was selected, omitted, or edited locally.
+
+| Upstream item | Classification | AS.1 disposition / dispatch effect |
+| --- | --- | --- |
+| `sc-publish` #6 — unified bootstrap and tool receipt | safety-load-bearing | Must be accepted, synchronized, and evidenced before AS.3. |
+| `sc-publish` #9 — relative-dependency closure | safety-load-bearing | Must be accepted and synchronized before AS.3. |
+| `sc-publish` #10 — installed archive-member validation | safety-load-bearing | Must be accepted and synchronized before AS.3. |
+| `sc-publish` #11 — resolved fail-closed receipt | safety-load-bearing | Blocks AS.3 until implemented, accepted, synchronized, and proven. Required fields are `source_commit`, `manifest_sha256`, `toolchain_sha256`, and `validation_sha256`. |
+| `sc-publish` #12 — `extra_validations` runner/evidence | safety-load-bearing | Must be accepted and synchronized before AS.3. |
+| `sc-publish` #13 — Cargo-derived dynamic PEP 621 validation | safety-load-bearing | Must be accepted and synchronized before AS.3. |
+| `sc-publish` #14 — generic release-version wiring | safety-load-bearing | Atomic sync revealed that ATM's legacy version check inspects an ATM-only workflow job. The generic manifest/workflow contract must replace that assertion before AS.3. |
+| Explicit installer input / generated-manifest parity | closed | Implemented by `sc-publish` PR #7 at `240fd52`; AS.1 verifies it below. |
+
+The safety items are intentionally **not** represented as closed by their
+issue creation. AS.3 remains blocked until the stated upstream implementation
+and exact consumer sync proof exist. For any receipt mismatch, publication is
+blocked; record escalation upstream and obtain a new matching preflight after
+the correction is accepted.
+
+AS.1 canonical-install result: the installer and clean second `--dry-run`
+passed at `240fd52`, and rendered manifest semantics matched the input JSON.
+The ATM version-sync gate then failed only because it asserts the retired
+ATM-specific `update-homebrew` workflow job. That is recorded as shared
+consumer-contract issue #14; it is not repaired by editing the synchronized
+workflow or by weakening the evidence gate locally.
 
 ## Risks And Watchouts
 

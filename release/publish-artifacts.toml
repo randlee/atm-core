@@ -1,157 +1,71 @@
-schema_version = 1
+[release]
+version_source = "workspace.package.version"
+tag_prefix = "v"
 
-[[crates]]
-artifact = "atm-error"
-package = "atm-error"
-cargo_toml = "crates/atm-error/Cargo.toml"
-required = true
-publish = true
+[[artifacts.crates]]
+name = "atm-error"
 publish_order = 1
-preflight_check = "locked"
-wait_after_publish_seconds = 30
-verify_install = false
-
-[[crates]]
-artifact = "atm-storage"
-package = "atm-storage"
-cargo_toml = "crates/atm-storage/Cargo.toml"
-required = true
-publish = true
+[[artifacts.crates]]
+name = "atm-storage"
 publish_order = 2
-preflight_check = "locked"
-wait_after_publish_seconds = 30
-verify_install = false
-
-[[crates]]
-artifact = "agent-team-mail-core"
-package = "agent-team-mail-core"
-cargo_toml = "crates/atm-core/Cargo.toml"
-required = true
-publish = true
+[[artifacts.crates]]
+name = "agent-team-mail-core"
 publish_order = 3
-preflight_check = "locked"
-wait_after_publish_seconds = 30
-verify_install = false
-
-[[crates]]
-artifact = "atm-storage-rusqlite"
-package = "atm-storage-rusqlite"
-cargo_toml = "crates/atm-storage-rusqlite/Cargo.toml"
-required = true
-publish = true
+[[artifacts.crates]]
+name = "atm-storage-rusqlite"
 publish_order = 4
-preflight_check = "locked"
-wait_after_publish_seconds = 30
-verify_install = false
-
-[[crates]]
-artifact = "atm-http-runtime"
-package = "atm-http-runtime"
-cargo_toml = "crates/atm-http-runtime/Cargo.toml"
-required = true
-publish = true
+[[artifacts.crates]]
+name = "atm-http-runtime"
 publish_order = 5
-preflight_check = "locked"
-wait_after_publish_seconds = 30
-verify_install = false
-
-[[crates]]
-artifact = "atm-daemon-client"
-package = "atm-daemon-client"
-cargo_toml = "crates/atm-daemon-client/Cargo.toml"
-required = true
-publish = true
+[[artifacts.crates]]
+name = "atm-daemon-client"
 publish_order = 6
-preflight_check = "locked"
-wait_after_publish_seconds = 30
-verify_install = false
-
-[[crates]]
-artifact = "atm-runtime"
-package = "atm-runtime"
-cargo_toml = "crates/atm-runtime/Cargo.toml"
-required = true
-publish = true
+[[artifacts.crates]]
+name = "atm-runtime"
 publish_order = 7
-preflight_check = "locked"
-wait_after_publish_seconds = 30
-verify_install = false
-
-[[crates]]
-artifact = "atm-template-sc-compose"
-package = "atm-template-sc-compose"
-cargo_toml = "crates/atm-template-sc-compose/Cargo.toml"
-required = true
-publish = true
+[[artifacts.crates]]
+name = "atm-template-sc-compose"
 publish_order = 8
-preflight_check = "locked"
-wait_after_publish_seconds = 30
-verify_install = false
-
-[[crates]]
-artifact = "atm-daemon-bootstrap"
-package = "atm-daemon-bootstrap"
-cargo_toml = "crates/atm-daemon-bootstrap/Cargo.toml"
-required = true
-publish = true
+[[artifacts.crates]]
+name = "atm-daemon-bootstrap"
 publish_order = 9
-preflight_check = "locked"
-wait_after_publish_seconds = 30
-verify_install = false
-
-[[crates]]
-artifact = "atm-daemon"
-package = "atm-daemon"
-cargo_toml = "crates/atm-daemon/Cargo.toml"
-required = true
-publish = true
+[[artifacts.crates]]
+name = "atm-daemon"
 publish_order = 10
-preflight_check = "locked"
-wait_after_publish_seconds = 30
-verify_install = false
-
-[[crates]]
-artifact = "atm-graft"
-package = "atm-graft"
-cargo_toml = "crates/atm-graft/Cargo.toml"
-required = false
-publish = true
+[[artifacts.crates]]
+name = "atm-graft"
 publish_order = 11
-preflight_check = "locked"
-wait_after_publish_seconds = 30
-verify_install = false
-
-[[crates]]
-artifact = "agent-team-mail"
-package = "agent-team-mail"
-cargo_toml = "crates/atm/Cargo.toml"
-required = true
-publish = true
+[[artifacts.crates]]
+name = "agent-team-mail"
 publish_order = 12
-preflight_check = "locked"
-wait_after_publish_seconds = 0
-verify_install = true
 
-[[crates]]
-# This Maturin package is published to PyPI as `atm-graft`, not to crates.io.
-# Keep it in the release inventory so validation cannot silently omit it.
-artifact = "atm-graft-python"
-package = "atm-graft-python"
-cargo_toml = "crates/atm-graft-python/Cargo.toml"
-required = true
-publish = false
-publish_order = 0
-preflight_check = "locked"
-wait_after_publish_seconds = 0
-verify_install = true
+[[artifacts.wheels]]
+package = "atm-graft"
+python_package = "atm_graft"
+[[artifacts.wheels]]
+package = "hermes-atm"
+python_package = "hermes_atm"
 
 [[release_binaries]]
 name = "atm"
-
 [[release_binaries]]
 name = "atm-daemon"
 
-[installed_docs]
-source_root = "docs/user-documents"
-install_root = "share/doc/atm"
-entrypoint = "share/doc/atm/README.md"
+[channels.github_release]
+enabled = false
+
+[channels.crates_io]
+enabled = false
+
+[channels.pypi]
+enabled = false
+workflow = "pypi-publish.yml"
+
+[channels.homebrew]
+enabled = false
+
+[channels.scoop]
+enabled = false
+
+[channels.winget]
+enabled = false

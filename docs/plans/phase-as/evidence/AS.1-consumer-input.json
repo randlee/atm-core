@@ -1,0 +1,35 @@
+{
+  "release": {
+    "version_source": "workspace.package.version",
+    "tag_prefix": "v"
+  },
+  "artifacts": {
+    "crates": [
+      {"name": "atm-error", "publish_order": 1},
+      {"name": "atm-storage", "publish_order": 2},
+      {"name": "agent-team-mail-core", "publish_order": 3},
+      {"name": "atm-storage-rusqlite", "publish_order": 4},
+      {"name": "atm-http-runtime", "publish_order": 5},
+      {"name": "atm-daemon-client", "publish_order": 6},
+      {"name": "atm-runtime", "publish_order": 7},
+      {"name": "atm-template-sc-compose", "publish_order": 8},
+      {"name": "atm-daemon-bootstrap", "publish_order": 9},
+      {"name": "atm-daemon", "publish_order": 10},
+      {"name": "atm-graft", "publish_order": 11},
+      {"name": "agent-team-mail", "publish_order": 12}
+    ],
+    "wheels": [
+      {"package": "atm-graft", "python_package": "atm_graft"},
+      {"package": "hermes-atm", "python_package": "hermes_atm"}
+    ],
+    "binaries": ["atm", "atm-daemon"]
+  },
+  "channels": {
+    "github_release": {"enabled": false},
+    "crates_io": {"enabled": false},
+    "pypi": {"enabled": false, "workflow": "pypi-publish.yml"},
+    "homebrew": {"enabled": false},
+    "scoop": {"enabled": false},
+    "winget": {"enabled": false}
+  }
+}
