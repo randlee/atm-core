@@ -14,6 +14,7 @@ if str(JUST_DIR) not in sys.path:
 
 from lint_cargo_deny import build_command as build_cargo_deny_command
 from lint_cargo_deny import build_runtime_config
+from lint_cargo_deny import installed_version as installed_cargo_deny_version
 from lint_cargo_deny import run_cargo_deny
 from lint_cargo_shear import annotate_sections
 from lint_cargo_shear import build_command as build_cargo_shear_command
@@ -24,12 +25,12 @@ from lint_codespell import build_command as build_codespell_command
 
 
 class ExternalLintToolTests(unittest.TestCase):
-    def test_build_cargo_deny_command_targets_workspace_manifest(self) -> None:
+    def test_build_cargo_deny_command_uses_check_scoped_config_before_020(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
             config_path = repo_root / "deny.runtime.toml"
             self.assertEqual(
-                build_cargo_deny_command(repo_root, config_path),
+                build_cargo_deny_command(repo_root, config_path, (0, 19, 4)),
                 [
                     "cargo-deny",
                     "check",
@@ -41,6 +42,45 @@ class ExternalLintToolTests(unittest.TestCase):
                     "sources",
                 ],
             )
+
+    def test_build_cargo_deny_command_uses_root_config_at_020(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            config_path = repo_root / "deny.runtime.toml"
+            self.assertEqual(
+                build_cargo_deny_command(repo_root, config_path, (0, 20, 2)),
+                [
+                    "cargo-deny",
+                    "--config",
+                    str(config_path),
+                    "check",
+                    "advisories",
+                    "bans",
+                    "licenses",
+                    "sources",
+                ],
+            )
+
+    def test_installed_cargo_deny_version_parses_semver(self) -> None:
+        completed = subprocess.CompletedProcess(
+            ["cargo-deny", "--version"],
+            0,
+            stdout="cargo-deny 0.20.2\n",
+            stderr="",
+        )
+        with mock.patch("lint_cargo_deny.subprocess.run", return_value=completed):
+            self.assertEqual(installed_cargo_deny_version(), (0, 20, 2))
+
+    def test_installed_cargo_deny_version_rejects_unparseable_output(self) -> None:
+        completed = subprocess.CompletedProcess(
+            ["cargo-deny", "--version"],
+            0,
+            stdout="unexpected output\n",
+            stderr="",
+        )
+        with mock.patch("lint_cargo_deny.subprocess.run", return_value=completed):
+            with self.assertRaisesRegex(RuntimeError, "could not determine cargo-deny version"):
+                installed_cargo_deny_version()
 
     def test_build_runtime_config_strips_deprecated_keys(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
