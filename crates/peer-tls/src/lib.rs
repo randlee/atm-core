@@ -278,7 +278,7 @@ mod tests {
     use std::num::NonZeroU16;
     use std::path::PathBuf;
     use std::sync::Arc;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Mutex;
     use std::time::Duration;
 
     use atm_core::PeerIoAdapter;
@@ -296,13 +296,37 @@ mod tests {
         interfaces: Vec<HttpsInterface>,
         local_certificate: Option<LocalCertificate>,
         trusted_peers: Vec<TrustedPeer>,
-        configuration_delay: Arc<AtomicBool>,
+        configuration_delay: Arc<Mutex<Option<ConfigurationDelay>>>,
+    }
+
+    #[derive(Clone)]
+    struct ConfigurationDelay {
+        started: std::sync::mpsc::Sender<()>,
+        release: Arc<Mutex<std::sync::mpsc::Receiver<()>>>,
+    }
+
+    impl ConfigurationDelay {
+        fn wait(&self) {
+            self.started
+                .send(())
+                .expect("test must wait for configuration loading to begin");
+            self.release
+                .lock()
+                .expect("configuration delay receiver lock")
+                .recv()
+                .expect("test must release configuration loading");
+        }
     }
 
     impl TestPeerConfigStore {
         fn delay_if_requested(&self) {
-            if self.configuration_delay.load(Ordering::SeqCst) {
-                std::thread::sleep(Duration::from_millis(40));
+            if let Some(delay) = self
+                .configuration_delay
+                .lock()
+                .expect("configuration delay lock")
+                .clone()
+            {
+                delay.wait();
             }
         }
     }
@@ -413,7 +437,7 @@ mod tests {
             interfaces: vec![enabled_interface()],
             local_certificate: Some(certificate),
             trusted_peers,
-            configuration_delay: Arc::new(AtomicBool::new(false)),
+            configuration_delay: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -489,7 +513,7 @@ mod tests {
             }],
             local_certificate: None,
             trusted_peers: vec![],
-            configuration_delay: Arc::new(AtomicBool::new(false)),
+            configuration_delay: Arc::new(Mutex::new(None)),
         });
         let error = PeerTlsAdapter::new(store).expect_err("disabled interface must reject");
         assert!(error.message().contains("no enabled interface"));
@@ -501,12 +525,15 @@ mod tests {
             interfaces: vec![enabled_interface(), enabled_interface()],
             local_certificate: None,
             trusted_peers: vec![],
-            configuration_delay: Arc::new(AtomicBool::new(false)),
+            configuration_delay: Arc::new(Mutex::new(None)),
         });
 
         let error = PeerTlsAdapter::new(store).expect_err("multiple interfaces must reject");
-        assert!(error.message().contains("configure exactly one"));
-        assert!(!error.message().contains("select"));
+        assert!(
+            error
+                .message()
+                .starts_with("peer TLS has multiple enabled interfaces; configure exactly one")
+        );
     }
 
     #[test]
@@ -515,7 +542,7 @@ mod tests {
             interfaces: vec![enabled_interface()],
             local_certificate: None,
             trusted_peers: vec![],
-            configuration_delay: Arc::new(AtomicBool::new(false)),
+            configuration_delay: Arc::new(Mutex::new(None)),
         });
         let missing_error =
             PeerTlsAdapter::new(missing).expect_err("missing certificate must reject");
@@ -536,7 +563,7 @@ mod tests {
                     .expect("private key reference"),
             }),
             trusted_peers: vec![],
-            configuration_delay: Arc::new(AtomicBool::new(false)),
+            configuration_delay: Arc::new(Mutex::new(None)),
         });
         let invalid_error =
             PeerTlsAdapter::new(invalid).expect_err("invalid certificate must reject");
@@ -556,7 +583,7 @@ mod tests {
                 private_key_ref: identity.certificate.private_key_ref,
             }),
             trusted_peers: vec![trusted_peer("localhost", &identity.fingerprint, 43101)],
-            configuration_delay: Arc::new(AtomicBool::new(false)),
+            configuration_delay: Arc::new(Mutex::new(None)),
         });
         let mismatch_error = PeerTlsAdapter::new(mismatched)
             .expect_err("certificate fingerprint mismatch must reject");
@@ -790,7 +817,7 @@ mod tests {
             .await
             .expect("bind listener");
         let address = listener.local_addr().expect("listener address");
-        let delay = Arc::new(AtomicBool::new(false));
+        let delay = Arc::new(Mutex::new(None));
         let store = Arc::new(TestPeerConfigStore {
             interfaces: vec![enabled_interface()],
             local_certificate: Some(server_identity.certificate),
@@ -802,16 +829,30 @@ mod tests {
             configuration_delay: delay.clone(),
         });
         let server = PeerTlsAdapter::new(store).expect("server configuration");
-        delay.store(true, Ordering::SeqCst);
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        *delay.lock().expect("configuration delay lock") = Some(ConfigurationDelay {
+            started: started_tx,
+            release: Arc::new(Mutex::new(release_rx)),
+        });
 
         let raw_client = tokio::spawn(async move {
             let _stream = TcpStream::connect(address).await.expect("connect raw TCP");
-            tokio::time::sleep(Duration::from_millis(60)).await;
         });
         let (tcp, _) = listener.accept().await.expect("accept TCP");
-        let result = server
-            .accept(tcp, RequestDeadline::after(Duration::from_millis(5)))
-            .await;
+        let accept = tokio::spawn(async move {
+            server
+                .accept(tcp, RequestDeadline::after(Duration::from_millis(5)))
+                .await
+        });
+        tokio::task::spawn_blocking(move || {
+            started_rx
+                .recv_timeout(Duration::from_secs(1))
+                .expect("configuration loading must begin")
+        })
+        .await
+        .expect("wait for configuration loading task");
+        let result = accept.await.expect("accept task");
         let error = match result {
             Ok(_) => panic!("slow configuration must exhaust the deadline"),
             Err(error) => error,
@@ -821,6 +862,9 @@ mod tests {
                 .message()
                 .contains("inbound configuration exceeded the request deadline")
         );
+        release_tx
+            .send(())
+            .expect("release configuration loading worker");
         raw_client.await.expect("raw client task");
     }
 
