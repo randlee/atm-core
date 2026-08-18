@@ -217,7 +217,12 @@ async fn run_replacement_daemon_with_selector(
 ) -> Result<(), AtmError> {
     install_sqlite_retained_runtime_factory();
     let scope = current_host_runtime_scope()?;
-    let _owner = DaemonOwnerGuard::acquire_at(scope.owner_lock.clone())?;
+    let owner_lock = scope.owner_lock.clone();
+    let _owner = tokio::task::spawn_blocking(move || DaemonOwnerGuard::acquire_at(owner_lock))
+        .await
+        .map_err(|source| {
+            AtmError::daemon_unavailable("daemon owner-lock worker failed").with_cause(source)
+        })??;
     let runtime_health = RuntimeHealth::with_owner(std::process::id());
     let assembly = assemble_daemon_runtime()?;
     let workflow_telemetry = assembly.workflow_telemetry.clone();
