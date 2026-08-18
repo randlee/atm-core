@@ -15,8 +15,10 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-18T08:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-08-18T07:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO-S2 ;
   triage:foundAt "2026-08-18T07:15:43Z"^^xsd:dateTime ;
@@ -28,10 +30,10 @@
   triage:file "crates/atm-http-runtime/src/client.rs" ;
   triage:line 458 ;
   triage:snippet "unbounded response body read" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s2-optional-runtime-activation" ;
-  triage:headSha "99fd70563c50fa3d9992c33d7cd85ba42b4bd750" ;
+  triage:headSha "a7a65ba3326eaca36196252340f9b703f28874e6" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s2-feature/pao-s2-optional-runtime-activation> .
 
 <urn:atm:triage:worktree/pao-s2-feature/pao-s2-optional-runtime-activation>
