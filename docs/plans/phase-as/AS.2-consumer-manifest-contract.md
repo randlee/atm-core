@@ -72,8 +72,9 @@ an ATM adapter, wrapper, or workflow fork.
 
 1. Map every ATM artifact and enabled channel to one canonical manifest field,
    canonical consumer, and proof command/receipt.
-2. Keep undeclared Homebrew, Scoop, winget, and other channels dormant with a
-   recorded reason; do not activate from workflow presence alone.
+2. Keep inactive Homebrew, Scoop, winget, and other channels dormant with a
+   recorded authorization reason; do not activate declared channel data from
+   workflow presence alone.
 3. Confirm PF-1 uses the existing non-disclosing GitHub
    variable/credential-verification workflow.
 4. Confirm PF-2 consumes the existing crates.io fenced JSON receipt for every
@@ -171,8 +172,8 @@ complete schema is available.
 | crates.io | dormant until AS.6 authorization | The twelve declared crates need PF-2/PF-3 classification and an authorized full release; workflow presence is not authorization. |
 | GitHub Release | dormant until AS.6 authorization | The binary archives are an AS.6 deliverable and require the matched AS.3 receipt. |
 | PyPI | dormant except for AS.4’s separately authorized immutable `1.4.3` operation | AS.4 authorizes only the declared Python artifacts after matched AS.3 evidence; AS.6 controls the next full release. |
-| Homebrew | dormant | No ATM formula/tap data is declared in the consumer manifest. |
-| Scoop | dormant | No ATM bucket/manifest data is declared in the consumer manifest. |
+| Homebrew | dormant | The consumer manifest declares the tap, formulas, assets, and workflow; dispatch remains gated until an authorized release receipt permits this channel. |
+| Scoop | dormant | The consumer manifest declares the bucket, manifest template, binary, and workflow; dispatch remains gated until an authorized release receipt permits this channel. |
 | winget | dormant | Existing package metadata is version-locked, but no channel authorization is declared. |
 
 ### PF And Shared-Capability Record
@@ -183,8 +184,11 @@ complete schema is available.
 | PF-2 registry state | `public-registry-check-plan` provides the fenced crates.io JSON inquiry plan for every declared crate. | Use unchanged; retain each artifact’s version, last-publish timestamp, classification, and planned action in the receipt. |
 | PF-3 partial state | Existing registry classification distinguishes missing, already-at-target, and true-conflict artifacts. | Publish missing targets, skip already-at-target targets, and block conflicts; a version bump is an explicit release decision. |
 | Full installer schema and render/validate parity | [`sc-publish` #17](https://github.com/randlee/sc-publish/issues/17) | Blocked upstream: installer input must render `[project]`, channel configuration, and Python package/distribution fields before ATM creates the final consumer JSON or synchronizes the generated outputs. |
-| Dynamic Maturin PEP 621 validation | [`sc-publish` #13](https://github.com/randlee/sc-publish/issues/13) | ATM now declares both Maturin packages as dynamic and locally checks their explicit Cargo source. Generic canonical validation remains upstream-owned. |
+| Generic Maturin/Python version-model contract | [`sc-publish` #13](https://github.com/randlee/sc-publish/issues/13) | The broader contract is Maturin `dynamic = ["version"]` from an explicit Cargo source, alongside literal-version pure setuptools packages. ATM declares both shapes; the two concrete validator paths below remain separately tracked. |
+| `validate-manifest` dynamic-version resolution | [`sc-publish` #20](https://github.com/randlee/sc-publish/issues/20) | Blocked upstream until the canonical `[[python_packages]]` validation resolves a Maturin dynamic version from its declared Cargo source. This is distinct from #13's broader contract and from #21's Cargo lockstep path. |
+| `verify-version-lockstep` literal bridge-version allowance | [`sc-publish` #21](https://github.com/randlee/sc-publish/issues/21) | Blocked upstream until canonical lockstep accepts an intentionally literal Maturin bridge version when it equals the documented workspace release base. This is distinct from #20's PEP 621 validation path. |
 | Fail-closed version receipt | [`sc-publish` #11](https://github.com/randlee/sc-publish/issues/11) | Blocked upstream: AS.3 cannot dispatch until the shared receipt enumerates and binds all deliverables with source, manifest, toolchain, and validation digests. |
+| Legacy local release validation split path | AS.5 retirement target | `just validate` invokes `scripts/validate_release.py`, which calls the narrower legacy `scripts/release_artifacts.py`; it can pass while CI's canonical `.github/scripts/release_artifacts.py` fails. Do not treat local `just validate` success as canonical release validation evidence; AS.5 owns retirement, not an ATM-side adapter. |
 
 ## Risks And Watchouts
 
