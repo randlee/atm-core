@@ -12,9 +12,9 @@ estimated_scope: source-parity merge and legacy retirement review
 
 ## Goal
 
-Merge only the source-parity migration whose preflight and one-channel
-publication evidence is accepted, then retire legacy release assets only where
-the canonical replacement is proven equivalent.
+Promote only the source-parity migration whose preflight and one-channel
+publication evidence is accepted from `develop` to `main`, then retire legacy
+release assets only where the canonical replacement is proven equivalent.
 
 ## Scope Summary
 
@@ -26,6 +26,9 @@ broaden channel activation.
 - Exact upstream parity persists through merge.
 - A legacy item may be removed only after its canonical replacement has a
   verified acceptance result.
+- A human must separately authorize the release PR from `develop` to `main`;
+  plan acceptance, CI, and QA are necessary evidence but are not production
+  authorization.
 
 ## Governing ADRs
 
@@ -56,9 +59,12 @@ broaden channel activation.
 2. Review every legacy workflow/helper proposed for deletion against the
    legacy-value coverage record; preserve it if no verified canonical
    replacement exists.
-3. Merge the migration PR only after independent QA confirms parity and
-   no regression in the release design.
-4. Re-run the minimum canonical checks on merged `main`.
+3. Merge approved implementation sprints through `integrate/phase-AS` into
+   `develop`, then open the release PR from `develop` to `main`.
+4. Merge the release PR only after independent QA confirms parity/no
+   release-design regression and a human explicitly authorizes production
+   promotion.
+5. Re-run the minimum canonical checks on merged `main`.
 
 ## Split Recommendation
 
@@ -67,6 +73,8 @@ Keep deletion review isolated from the next release to preserve rollback.
 ## Acceptance Criteria
 
 - Merged `main` reports exact canonical parity.
+- No direct feature/phase branch promotion to `main` occurred; the recorded
+  release PR originated from `develop` and has explicit human authorization.
 - Every removed legacy asset has a named canonical replacement and proof.
 - No copied shared file differs from its accepted upstream source.
 - QA approves no release-design regression.
@@ -76,7 +84,7 @@ Keep deletion review isolated from the next release to preserve rollback.
 ```bash
 PUBLISH_KIT_SOURCE=/Users/randlee/Documents/github/sc-publish
 python3 "$PUBLISH_KIT_SOURCE/plugins/sc-publish/install.py" \
-  --consumer-input release/sc-publish-consumer-input.json --dry-run "$PWD"
+  --input release/sc-publish-consumer-input.json --dry-run "$PWD"
 just lint
 just test
 ```

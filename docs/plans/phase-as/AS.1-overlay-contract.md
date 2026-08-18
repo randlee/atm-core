@@ -30,8 +30,8 @@ manifest behavior change in ATM.
 
 ## Governing ADRs
 
-- No new ADR. This sprint preserves the existing repository ownership
-  boundary rather than changing an architecture decision.
+- [ADR-050](../../adr/ADR-050-shared-publish-kit-ownership.md) establishes the
+  shared implementation / consumer-data ownership boundary.
 
 ## Governing Boundaries
 
@@ -84,6 +84,9 @@ manifest behavior change in ATM.
    verifies every copied shared asset against the package source, parses the
    generated manifests, and proves their semantic values equal the supplied
    JSON. A second installer `--dry-run` must be clean.
+9. Require upstream consumer CI coverage that fails on a byte difference in a
+   synchronized file or any workflow-local tool installation that bypasses the
+   common bootstrap. This is a shared-kit capability, not an ATM CI fork.
 
 ## Split Recommendation
 

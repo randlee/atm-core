@@ -1286,6 +1286,15 @@ Sprint line:
   [`sprint-AN14-sc-compose-141-checked-emission.md`](./plans/phase-an/sprint-AN14-sc-compose-141-checked-emission.md),
   and [`sprint-AN15-adversarial-fuzzing.md`](./plans/phase-an/sprint-AN15-adversarial-fuzzing.md).
 
+## Phase AS — Shared Publish-Kit Migration [PLANNING]
+
+Phase AS adopts the upstream-owned `sc-publish` package without local edits to
+shared workflows, helpers, agents, or tests. ATM supplies only complete
+consumer release data and evidence. AS.1–AS.3 establish source parity,
+manifest/version contract, and worktree preflight; AS.4–AS.6 are separately
+authorized release operations. The authoritative sprint plans are in
+[`docs/plans/phase-as`](./plans/phase-as/README.md).
+
 ## Publishing Improvements
 
 Implementation Branches:

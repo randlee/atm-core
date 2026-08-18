@@ -30,9 +30,12 @@ an ATM adapter, wrapper, or workflow fork.
   shared channel contract.
 - The one shared bootstrap resolves all tools identically for preflight and
   publish.
-- Every Python distribution derives its release version from its corresponding
-  Cargo package. Python metadata must declare `dynamic = ["version"]`; a
-  literal `[project].version` is not an alternative source of truth.
+- Maturin Python distributions derive their release version from their
+  corresponding Cargo package through PEP 621 `dynamic = ["version"]`.
+  `hermes-atm` is a pure setuptools package with no Cargo package, so its
+  literal `[project].version` must equal the workspace numeric release base
+  and be checked by the shared version-lock validator; a dummy Cargo package
+  is prohibited.
 - One release-version contract governs every crate, wheel, binary, generated
   manifest, archive, and channel declaration. Stable releases use the exact
   same `X.Y.Z` everywhere. For a prerelease Cargo version such as
@@ -42,7 +45,8 @@ an ATM adapter, wrapper, or workflow fork.
 
 ## Governing ADRs
 
-- No new ADR; this is a consumer-data migration constrained by AS.1.
+- [ADR-049](../../adr/ADR-049-hermes-atm-first-public-pypi-release-versioning.md)
+  and [ADR-050](../../adr/ADR-050-shared-publish-kit-ownership.md).
 
 ## Governing Boundaries
 
@@ -84,10 +88,12 @@ an ATM adapter, wrapper, or workflow fork.
    discovery is advisory `--example-json` output only.
 7. Submit any missing generic schema/support to `sc-publish`; wait for its
    accepted implementation and exact sync.
-8. Convert `atm-query-python` and `hermes-atm` from literal PEP 621 project
-   versions to Cargo-derived `dynamic = ["version"]`, matching
-   `atm-graft-python`. Add/extend the version-lock test so every published
-   Python distribution resolves to the workspace release version.
+8. Preserve `atm-graft-python`'s Maturin/Cargo-derived PEP 621 metadata and
+   convert `atm-query-python` to the same supported dynamic path. Extend
+   `.just/check_version_sync.py` to recognize that declared Cargo source. Keep
+   the pure setuptools `hermes-atm` literal version locked to the workspace
+   numeric release base; do not invent a Cargo package solely to manufacture
+   dynamic metadata.
 9. Extend the shared release-version receipt and ATM version-lock test to
    enumerate every deliverable. It must reject any mismatch except the
    declared prerelease-to-wheel base-version projection above.
@@ -107,9 +113,9 @@ evidence and must not silently add schema behavior.
   both rendered release manifests; byte/source parity and semantic manifest
   equality are checked before the clean dry-run proof.
 - PF-1, PF-2, and PF-3 use existing canonical solutions as defined above.
-- `atm-graft-python`, `atm-query-python`, and `hermes-atm` all resolve their
-  version from Cargo; the version-lock test fails if any published Python
-  distribution can drift from the workspace release version.
+- Each released Python distribution is locked to the workspace release base:
+  both Maturin packages use their supported Cargo-derived path, while the pure
+  setuptools `hermes-atm` literal is checked by the same version-lock test.
 - The release receipt enumerates every crate, wheel, binary, archive, and
   manifest version. Stable releases are exactly equal; prerelease wheels may
   differ only by the declared removal of the `-beta…` suffix.
@@ -134,5 +140,6 @@ python3 .just/check_version_sync.py
 
 ## Risks And Watchouts
 
-The current canonical validator rejecting ATM’s Cargo-derived PEP 621 dynamic
-version is an upstream policy gap, not a reason to make ATM metadata static.
+Do not apply a one-shape PEP 621 policy to a package that has no Cargo
+metadata. The invariant is one locked release version, not a dummy package or
+an unsupported dynamic-version mechanism.

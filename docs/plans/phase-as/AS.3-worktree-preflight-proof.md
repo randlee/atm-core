@@ -60,7 +60,8 @@ modify shared files during this sprint.
 2. Dispatch the canonical `release-preflight.yml` using the exact worktree’s
    source and manifest.
 3. Retain resolved-plan, toolchain, validation, channel, and crates-state
-   receipts; verify source, manifest, toolchain, and validation digests agree.
+   receipts; verify `source_commit`, `manifest_sha256`, `toolchain_sha256`,
+   and `validation_sha256` agree.
 4. Verify every preflight/release job uses the shared bootstrap with exact
    resolved versions; reject any workflow-local tool installation drift.
 
@@ -83,7 +84,7 @@ just lint
 just test
 PUBLISH_KIT_SOURCE=/Users/randlee/Documents/github/sc-publish
 python3 "$PUBLISH_KIT_SOURCE/plugins/sc-publish/install.py" \
-  --consumer-input release/sc-publish-consumer-input.json --dry-run "$PWD"
+  --input release/sc-publish-consumer-input.json --dry-run "$PWD"
 gh workflow run release-preflight.yml --ref "$(git rev-parse HEAD)"
 ```
 
@@ -94,5 +95,5 @@ gh workflow run release-preflight.yml --ref "$(git rev-parse HEAD)"
 ## Risks And Watchouts
 
 A green local check is insufficient; the GitHub preflight must prove the same
-toolchain path used by publication. `--consumer-input` is the required
-upstream installer contract; do not substitute its current inference behavior.
+toolchain path used by publication. `--input` is the required upstream
+installer contract; do not substitute discovery or inferred production input.

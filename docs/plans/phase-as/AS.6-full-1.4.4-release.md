@@ -25,8 +25,10 @@ introduce new channel behavior during release execution.
 
 - Version synchronization, manifest identity, shared toolchain, and all
   validations must be locked before publication.
-- Each published Python distribution derives its version from Cargo and the
-  resolved value matches the workspace release version.
+- Every published Python distribution matches the workspace release base;
+  Maturin packages use their supported Cargo-derived metadata path and the
+  pure setuptools `hermes-atm` literal is validated by the shared version-lock
+  check.
 - The release receipt proves every deliverable shares the requested release
   version. The only allowed exception is a prerelease wheel’s declared
   `X.Y.Z-beta…` to `X.Y.Z` projection.
