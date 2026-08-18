@@ -15,8 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "single-occurrence" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-18T06:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-08-17T22:20:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO.1 ;
   triage:foundAt "2026-08-18T05:31:13Z"^^xsd:dateTime ;
@@ -28,8 +30,8 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 1147 ;
   triage:snippet "forbidden_runtime_tls.iter().filter_map(move |needle| { source.contains(needle).then(|| format!(\"{} contains {needle}\", path.display())) })" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s1-tls-module-rehome" ;
   triage:headSha "e41afce8aab312450d39210690601d626eb00998" ;
   triage:occursIn <urn:atm:triage:worktree/AO1/e41afce8> .
