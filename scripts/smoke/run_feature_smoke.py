@@ -13,9 +13,9 @@ import argparse
 import base64
 from contextlib import contextmanager
 from datetime import datetime, timezone
+import hashlib
 from html import escape
 import ipaddress
-import hashlib
 import json
 import os
 from pathlib import Path
