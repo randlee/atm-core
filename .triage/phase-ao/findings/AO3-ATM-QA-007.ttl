@@ -15,7 +15,9 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "fixed_partial" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-18T20:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-18T20:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO.3 ;
@@ -30,10 +32,10 @@
   triage:file "docs/project-plan.md" ;
   triage:line 1289 ;
   triage:snippet "## 46. Phase AO - Optional mTLS for the Canonical HTTP Peer Path [PROPOSED]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
-  triage:headSha "4408867ef" ;
+  triage:headSha "2acf38317523ed43d9dd38843335d4e336124e19" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s3/4408867ef> .
 
 <urn:atm:triage:occurrence/AO3-ATM-QA-007/pao-s4-1>
@@ -41,10 +43,10 @@
   triage:file "docs/project-plan.md" ;
   triage:line 1289 ;
   triage:snippet "## 46. Phase AO - Optional mTLS for the Canonical HTTP Peer Path [PROPOSED]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s4-tls-benchmark-modes" ;
-  triage:headSha "ce0b37c0e" ;
+  triage:headSha "2acf38317523ed43d9dd38843335d4e336124e19" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s4/ce0b37c0e> .
 
 <urn:atm:triage:occurrence/AO3-ATM-QA-007/pao-s5-1>
@@ -52,10 +54,10 @@
   triage:file "docs/project-plan.md" ;
   triage:line 1289 ;
   triage:snippet "## 46. Phase AO - Optional mTLS for the Canonical HTTP Peer Path [PROPOSED]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s5-platform-benchmark-proof" ;
-  triage:headSha "8245717e9" ;
+  triage:headSha "2acf38317523ed43d9dd38843335d4e336124e19" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s5/8245717e9> .
 
 <urn:atm:triage:worktree/pao-s1/cb5d8b4ba>
