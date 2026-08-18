@@ -1,0 +1,70 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO3-ATM-QA-004>
+  a triage:Finding ;
+  triage:findingId "AO3-ATM-QA-004" ;
+  triage:title "REQ-CORE-TRANSPORT-002B1 CLI wiring not confirmed on canonical Tokio+Axum path" ;
+  triage:description "req-qa IMPORTANT finding from AO3-QA-1 (PR #945 @ 4408867ef): REQ-CORE-TRANSPORT-002B1 -- the --peer-wire-security plaintext-test CLI mechanism is not confirmed wired into the canonical atm-daemon-bootstrap/atm-http-runtime (Tokio+Axum) path; it was only found historically on the legacy sync daemon. Per standing architecture policy, wiring belongs on the atm-http-runtime cutover path -- never patch the frozen legacy sync daemon to satisfy this." ;
+  triage:phaseId "phase-ao" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirement-gap" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-18T20:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO.3 ;
+  triage:foundAt "2026-08-18T19:42:55Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO3-ATM-QA-004/pao-s5-cli-wiring> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO3-ATM-QA-004/pao-s5-cli-wiring>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 0 ;
+  triage:snippet "--peer-wire-security plaintext-test CLI flag not wired in replacement_runtime_config" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s5-platform-benchmark-proof" ;
+  triage:headSha "8245717e9" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s5/8245717e9> .
+
+<urn:atm:triage:worktree/pao-s1/cb5d8b4ba>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s1" ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "cb5d8b4ba" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pao-s2/c606b8659>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s2" ;
+  triage:branch "feature/pao-s2-optional-runtime-activation" ;
+  triage:headSha "c606b8659" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pao-s3/4408867ef>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s3" ;
+  triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
+  triage:headSha "4408867ef" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pao-s4/ce0b37c0e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s4" ;
+  triage:branch "feature/pao-s4-tls-benchmark-modes" ;
+  triage:headSha "ce0b37c0e" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pao-s5/8245717e9>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s5" ;
+  triage:branch "feature/pao-s5-platform-benchmark-proof" ;
+  triage:headSha "8245717e9" ;
+  triage:orderIndex 5 .
