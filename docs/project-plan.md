@@ -1308,8 +1308,8 @@ Sprint line:
   release-version contract
 - `AS.3` `AS.3-worktree-preflight-proof.md` — canonical worktree preflight
   proof
-- `AS.4` `AS.4-authorized-pypi-1.4.3.md` — separately authorized immutable
-  main PyPI release
+- `AS.4` `AS.4-authorized-pypi-1.4.3.md` — separately authorized, fresh
+  `1.4.4` PyPI-only release
 - `AS.5` `AS.5-main-migration-merge.md` — verified migration promotion from
   `develop` to `main`
 - `AS.6` `AS.6-full-1.4.4-release.md` — first full canonical release
