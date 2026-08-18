@@ -5,6 +5,8 @@
   },
   "artifacts": {
     "crates": [
+      {"artifact": "atm-graft-python", "package": "atm-graft-python", "cargo_toml": "crates/atm-graft-python/Cargo.toml", "required": true, "publish": false, "publish_order": 0, "preflight_check": "locked", "wait_after_publish_seconds": 0, "verify_install": true},
+      {"artifact": "atm-query-python", "package": "atm-query-python", "cargo_toml": "crates/atm-query-python/Cargo.toml", "required": true, "publish": false, "publish_order": 0, "preflight_check": "locked", "wait_after_publish_seconds": 0, "verify_install": true},
       {"artifact": "atm-error", "package": "atm-error", "cargo_toml": "crates/atm-error/Cargo.toml", "required": true, "publish": true, "publish_order": 1, "preflight_check": "locked", "wait_after_publish_seconds": 30, "verify_install": false},
       {"artifact": "atm-storage", "package": "atm-storage", "cargo_toml": "crates/atm-storage/Cargo.toml", "required": true, "publish": true, "publish_order": 2, "preflight_check": "locked", "wait_after_publish_seconds": 30, "verify_install": false},
       {"artifact": "agent-team-mail-core", "package": "agent-team-mail-core", "cargo_toml": "crates/atm-core/Cargo.toml", "required": true, "publish": true, "publish_order": 3, "preflight_check": "locked", "wait_after_publish_seconds": 30, "verify_install": false},

@@ -43,6 +43,19 @@ wait_after_publish_seconds = 0
 verify_install = true
 
 [[crates]]
+# This Maturin package is published to PyPI as `atm-query`, not to crates.io.
+# Keep it in the release inventory so validation cannot silently omit it.
+artifact = "atm-query-python"
+package = "atm-query-python"
+cargo_toml = "crates/atm-query-python/Cargo.toml"
+required = true
+publish = false
+publish_order = 0
+preflight_check = "locked"
+wait_after_publish_seconds = 0
+verify_install = true
+
+[[crates]]
 artifact = "atm-error"
 package = "atm-error"
 cargo_toml = "crates/atm-error/Cargo.toml"

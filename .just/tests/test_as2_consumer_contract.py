@@ -26,6 +26,8 @@ EXPECTED_CRATES = (
     "agent-team-mail",
 )
 
+EXPECTED_NON_CRATES_IO_INVENTORY = ("atm-graft-python", "atm-query-python")
+
 
 class As2ConsumerContractTests(unittest.TestCase):
     @staticmethod
@@ -34,8 +36,13 @@ class As2ConsumerContractTests(unittest.TestCase):
 
     def test_declares_the_complete_publishable_crate_surface(self) -> None:
         crates = self.values()["artifacts"]["crates"]
-        self.assertEqual(tuple(crate["package"] for crate in crates), EXPECTED_CRATES)
-        self.assertEqual([crate["publish_order"] for crate in crates], list(range(1, 13)))
+        self.assertEqual(
+            tuple(crate["package"] for crate in crates),
+            EXPECTED_NON_CRATES_IO_INVENTORY + EXPECTED_CRATES,
+        )
+        self.assertEqual(
+            [crate["publish_order"] for crate in crates if crate["publish"]], list(range(1, 13))
+        )
 
         for crate in crates:
             cargo_toml = ROOT / crate["cargo_toml"]
@@ -44,11 +51,15 @@ class As2ConsumerContractTests(unittest.TestCase):
                 cargo = tomllib.load(file)
             self.assertEqual(cargo["package"]["name"], crate["package"])
             self.assertIsInstance(crate["required"], bool)
-            self.assertTrue(crate["publish"])
             self.assertEqual(crate["preflight_check"], "locked")
             self.assertIsInstance(crate["wait_after_publish_seconds"], int)
             self.assertGreaterEqual(crate["wait_after_publish_seconds"], 0)
             self.assertIsInstance(crate["verify_install"], bool)
+
+        self.assertEqual(
+            [crate["package"] for crate in crates if not crate["publish"]],
+            list(EXPECTED_NON_CRATES_IO_INVENTORY),
+        )
 
     def test_declares_python_binaries_and_all_channel_states_explicitly(self) -> None:
         values = self.values()
@@ -77,6 +88,10 @@ class As2ConsumerContractTests(unittest.TestCase):
         self.assertEqual(
             [crate["package"] for crate in manifest["crates"] if crate["publish"]],
             list(EXPECTED_CRATES),
+        )
+        self.assertEqual(
+            [crate["package"] for crate in manifest["crates"] if not crate["publish"]],
+            list(EXPECTED_NON_CRATES_IO_INVENTORY),
         )
         self.assertEqual(
             [package["package"] for package in manifest["python_packages"]],
