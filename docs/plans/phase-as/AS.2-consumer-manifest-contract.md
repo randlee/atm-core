@@ -191,3 +191,16 @@ complete schema is available.
 Do not apply a one-shape PEP 621 policy to a package that has no Cargo
 metadata. The invariant is one locked release version, not a dummy package or
 an unsupported dynamic-version mechanism.
+
+## Current Installer Execution Record
+
+[`evidence/AS.2-consumer-input.json`](evidence/AS.2-consumer-input.json) is
+the explicit, caller-owned input accepted by the current canonical installer.
+It declares all twelve publishable crates, three Python packages, both release
+binaries, and every channel's disabled state. It is intentionally not yet the
+terminal AS.2 consumer document: the shared template currently renders wheel
+entries as `[[artifacts.wheels]]`, while ATM's canonical release validator
+consumes `[[python_packages]]` and `[[python_distributions]]`. No ATM-side
+translation is permitted. The installed-consumer proof therefore verifies the
+current installer accepts and renders the explicit input, while semantic
+manifest equality remains blocked on `sc-publish` #17.
