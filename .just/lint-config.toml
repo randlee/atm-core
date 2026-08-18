@@ -207,11 +207,8 @@ installer_url_field = "InstallerUrl"
 enabled = true
 file = ".github/workflows/release.yml"
 required_fragments = [
-  "update-homebrew:",
-  "repository: randlee/homebrew-tap",
-  "python3 scripts/release_artifacts.py update-homebrew-formulas \\",
-  "python3 scripts/release_artifacts.py validate-homebrew-formulas \\",
-  "--release-dir release \\",
-  "--formula homebrew-tap/Formula/agent-team-mail.rb \\",
-  "--formula homebrew-tap/Formula/atm.rb",
+  "Verify requested version matches workspace",
+  "python3 scripts/release_artifacts.py verify-version \\",
+  "Verify release version lockstep",
+  "python3 scripts/release_artifacts.py verify-version-lockstep \\",
 ]

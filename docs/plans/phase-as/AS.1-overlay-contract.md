@@ -6,7 +6,7 @@ phase: AS
 sprint: AS.1
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pas-s1-overlay-contract
 branch: feature/pas-s1-overlay-contract
-status: complete
+status: in_progress
 estimated_scope: documentation and upstream-contract closure
 ```
 
@@ -169,10 +169,21 @@ the correction is accepted.
 
 AS.1 canonical-install result: the installer and clean second `--dry-run`
 passed at `240fd52`, and rendered manifest semantics matched the input JSON.
-The ATM version-sync gate then failed only because it asserts the retired
-ATM-specific `update-homebrew` workflow job. That is recorded as shared
-consumer-contract issue #14; it is not repaired by editing the synchronized
-workflow or by weakening the evidence gate locally.
+AS.1 QA-1 corrected the ATM-owned version-sync assertion: it now requires the
+canonical requested-version and lockstep checks rather than the retired
+ATM-specific `update-homebrew` inline job. The assertion continues to check
+release wiring; it is not disabled or weakened.
+
+AS.1 QA-1 also identified a **critical upstream installer layout defect**:
+the canonical source at `240fd52` copies its new helper implementations to
+`.github/scripts/`, but the same canonical workflows invoke `scripts/`. The
+consumer's existing `scripts/` helpers are legacy and lack the invoked
+subcommands; its legacy `release_gate.sh` also has a three-argument interface
+while canonical `release.yml` passes four arguments. This cannot be repaired
+in ATM without locally editing a synchronized workflow or helper, which is
+prohibited by AS.1. AS.1 remains in progress until `sc-publish` accepts an
+atomic source-layout correction and ATM synchronizes it unchanged, followed by
+an execution-level path-and-argument proof.
 
 ## Risks And Watchouts
 
