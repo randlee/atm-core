@@ -74,6 +74,24 @@ jobs:
             --manifest release/publish-artifacts.toml \
             --asset-dir release-assets \
             --copy-to dist
+      - name: Record source-bound Python artifact receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ inputs.tag }}"
+          version="${version#v}"
+          python3 .github/scripts/release_python_receipt.py \
+            --manifest release/publish-artifacts.toml \
+            --asset-dir dist \
+            --version "${version}" \
+            --source-commit "$(git rev-parse HEAD)" \
+            --output pypi-release-receipt.json
+      - name: Store Python artifact receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: pypi-release-receipt-${{ inputs.tag }}
+          path: pypi-release-receipt.json
+          if-no-files-found: error
       - name: Select configured Python repository
         shell: bash
         env:

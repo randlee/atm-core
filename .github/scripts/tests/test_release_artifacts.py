@@ -1171,6 +1171,8 @@ def test_release_workflow_enforces_python_release_invariants() -> None:
     assert "release_tag: ${{ inputs.tag }}" in pypi_text
     assert "gh release download" in pypi_text
     assert "verify-python-release-assets" in pypi_text
+    assert "release_python_receipt.py" in pypi_text
+    assert "pypi-release-receipt-${{ inputs.tag }}" in pypi_text
     assert "maturin build" not in pypi_text
     assert "maturin sdist" not in pypi_text
     assert "name: Publish manifest-declared wheels and sdists to TestPyPI" in pypi_text
