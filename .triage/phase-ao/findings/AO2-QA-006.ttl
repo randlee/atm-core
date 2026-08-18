@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO2-QA-006>
+  a triage:Finding ;
+  triage:findingId "AO2-QA-006" ;
+  triage:title "Fixed-duration sleep in test double" ;
+  triage:description "A test double uses a fixed-duration sleep rather than a deterministic synchronization primitive, risking flakiness under CI load. Exact location: see full QA report https://github.com/randlee/atm-core/pull/943#issuecomment-5324878269. (rust-qa-agent, minor)" ;
+  triage:phaseId "phase-ao" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-quality" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-18T07:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO-S2 ;
+  triage:foundAt "2026-08-18T07:15:43Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO2-QA-006/ao2-qa-006-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO2-QA-006/ao2-qa-006-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests" ;
+  triage:line 1 ;
+  triage:snippet "fixed-duration sleep in test double" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s2-optional-runtime-activation" ;
+  triage:headSha "99fd70563c50fa3d9992c33d7cd85ba42b4bd750" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s2-feature/pao-s2-optional-runtime-activation> .
+
+<urn:atm:triage:worktree/pao-s2-feature/pao-s2-optional-runtime-activation>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s2-optional-runtime-activation" ;
+  triage:branch "feature/pao-s2-optional-runtime-activation" ;
+  triage:headSha "99fd70563c50fa3d9992c33d7cd85ba42b4bd750" ;
+  triage:orderIndex 1 .
