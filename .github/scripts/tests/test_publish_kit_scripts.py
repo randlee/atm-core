@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 
 
-PACKAGE_ROOT = Path(__file__).resolve().parents[3]
+PACKAGE_ROOT = next(path for path in Path(__file__).resolve().parents if (path / "install.py").is_file())
 SCRIPTS = PACKAGE_ROOT / ".github" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 import release_manifest  # noqa: E402

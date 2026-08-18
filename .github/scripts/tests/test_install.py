@@ -13,7 +13,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 
-INSTALLER = Path(__file__).resolve().parents[3] / "install.py"
+INSTALLER = next(path / "install.py" for path in Path(__file__).resolve().parents if (path / "install.py").is_file())
 SPEC = importlib.util.spec_from_file_location("sc_publish_install", INSTALLER)
 assert SPEC is not None and SPEC.loader is not None
 INSTALL = importlib.util.module_from_spec(SPEC)
@@ -24,42 +24,129 @@ class InstallValuesTests(unittest.TestCase):
     @staticmethod
     def valid_values() -> dict[str, object]:
         return {
-            "release": {"version_source": "Cargo.toml", "tag_prefix": "v"},
-            "artifacts": {
-                "crates": [
-                    {
-                        "artifact": "example-core",
-                        "package": "example-core",
-                        "cargo_toml": "crates/example-core/Cargo.toml",
-                        "required": True,
-                        "publish": True,
-                        "publish_order": 1,
-                        "preflight_check": "full",
-                        "wait_after_publish_seconds": 0,
-                        "verify_install": False,
-                    },
-                    {
-                        "artifact": "example-cli",
-                        "package": "example-cli",
-                        "cargo_toml": "crates/example-cli/Cargo.toml",
-                        "required": True,
-                        "publish": True,
-                        "publish_order": 2,
-                        "preflight_check": "full",
-                        "wait_after_publish_seconds": 0,
-                        "verify_install": False,
-                    },
-                ],
-                "wheels": [{"package": "example-python", "python_package": "example_python"}],
-                "binaries": ["example"],
+            "schema_version": 1,
+            "project": {
+                "name": "example",
+                "archive_prefix": "example",
+                "description": "Example release package",
+                "homepage": "https://example.test/example",
+                "license": "MIT",
+                "readme_dependency_crate": "example-core",
+                "renderer_archive_path": "bin/example",
             },
+            "release_targets": [
+                {"target": "x86_64-unknown-linux-gnu", "os": "ubuntu-latest", "archive": "tar.gz"}
+            ],
+            "crates": [
+                {
+                    "artifact": "example-core",
+                    "package": "example-core",
+                    "cargo_toml": "crates/example-core/Cargo.toml",
+                    "required": True,
+                    "publish": True,
+                    "publish_order": 1,
+                    "preflight_check": "locked",
+                    "wait_after_publish_seconds": 0,
+                    "verify_install": False,
+                },
+                {
+                    "artifact": "example-python",
+                    "package": "example-python",
+                    "cargo_toml": "crates/example-python/Cargo.toml",
+                    "required": True,
+                    "publish": False,
+                    "publish_order": 0,
+                    "preflight_check": "locked",
+                    "wait_after_publish_seconds": 0,
+                    "verify_install": True,
+                },
+            ],
+            "release_binaries": [
+                {
+                    "name": "example",
+                    "bundled_paths": [
+                        {
+                            "source": "docs",
+                            "destination": "share/doc/example",
+                            "homebrew_destination_components": ["pkgshare"],
+                        }
+                    ],
+                }
+            ],
+            "installed_docs": {
+                "source_root": "docs",
+                "install_root": "share/doc/example",
+                "entrypoint": "share/doc/example/README.md",
+            },
+            "python_packages": [
+                {
+                    "artifact": "example-wheel",
+                    "package": "example",
+                    "manifest": "python/pyproject.toml",
+                    "module": "example",
+                    "publish": "pypi",
+                }
+            ],
+            "python_distributions": [
+                {
+                    "name": "example",
+                    "source": "python",
+                    "cargo_manifest": "crates/example-python/Cargo.toml",
+                    "module_path": "python/example",
+                    "sdist": True,
+                    "wheels": ["ubuntu-latest", "macos-latest", "windows-latest"],
+                },
+                {
+                    "name": "example-plugin",
+                    "source": "plugin",
+                    "build_system": "setuptools",
+                    "module_path": "plugin/src/example_plugin",
+                    "sdist": True,
+                    "wheels": ["ubuntu-latest"],
+                },
+            ],
             "channels": {
-                "github_release": {"enabled": True},
-                "crates_io": {"enabled": True},
-                "pypi": {"enabled": False, "workflow": "pypi-publish.yml"},
-                "homebrew": {"enabled": False},
-                "scoop": {"enabled": False},
-                "winget": {"enabled": False},
+                "pypi": {
+                    "workflow": "pypi-publish.yml",
+                    "dispatch_inputs": {"target": "production"},
+                    "credential_rehearsal_inputs": {"target": "testpypi"},
+                    "test_repository": "testpypi",
+                    "production_repository": "pypi",
+                },
+                "homebrew": {
+                    "workflow": "homebrew-publish.yml",
+                    "dispatch_inputs": {},
+                    "tap_repository": "example/tap",
+                    "renderer_target": "x86_64-unknown-linux-gnu",
+                    "formulas": [
+                        {
+                            "path": "Formula/example.rb",
+                            "template": "release/homebrew/formula.rb.j2",
+                            "class": "Example",
+                            "binaries": ["example"],
+                            "test_command": "--help",
+                            "test_output": "Example release package",
+                            "release_track": "stable",
+                        }
+                    ],
+                    "assets": [{"key": "linux", "target": "x86_64-unknown-linux-gnu"}],
+                },
+                "winget": {
+                    "workflow": "winget-publish.yml",
+                    "dispatch_inputs": {},
+                    "identifier": "example.example",
+                    "installer_target": "x86_64-pc-windows-msvc",
+                },
+                "scoop": {
+                    "workflow": "scoop-publish.yml",
+                    "dispatch_inputs": {},
+                    "bucket_repository": "example/scoop-bucket",
+                    "manifest_path": "bucket/example.json",
+                    "manifest_template": "release/scoop/manifest.json.j2",
+                    "installer_target": "x86_64-pc-windows-msvc",
+                    "binary": "bin/example.exe",
+                    "renderer_target": "x86_64-unknown-linux-gnu",
+                },
             },
         }
 
@@ -71,150 +158,59 @@ class InstallValuesTests(unittest.TestCase):
             text=True,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("--example-json [INSTALL.json]", result.stdout)
+        self.assertIn("--input INSTALL.json", result.stdout)
         self.assertIn("workflow:", result.stdout)
-        self.assertIn("caller-owned JSON input", result.stdout)
+        self.assertIn("caller-owned complete JSON input", result.stdout)
 
-    def test_example_json_writes_a_complete_reviewable_contract(self) -> None:
+    def test_load_install_values_accepts_the_complete_manifest_contract(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            destination = root / "install.json"
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    "-S",
-                    str(INSTALLER),
-                    "--example-json",
-                    str(destination),
-                    str(root),
-                ],
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-            self.assertEqual(result.returncode, 0, result.stderr)
-            contract = json.loads(destination.read_text(encoding="utf-8"))
-        self.assertEqual(set(contract["channels"]), set(INSTALL.CHANNEL_NAMES))
-        self.assertEqual(contract["artifacts"], {"crates": [], "wheels": [], "binaries": []})
-        self.assertIn("wrote reviewable install input", result.stdout)
-
-    def test_example_json_refuses_to_overwrite_a_reviewed_contract(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            destination = root / "install.json"
-            destination.write_text('{"reviewed": true}\n', encoding="utf-8")
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    "-S",
-                    str(INSTALLER),
-                    "--example-json",
-                    str(destination),
-                    str(root),
-                ],
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-            self.assertNotEqual(result.returncode, 0)
-            self.assertEqual(destination.read_text(encoding="utf-8"), '{"reviewed": true}\n')
-        self.assertIn("refusing to overwrite", result.stderr)
-
-    def test_input_and_example_modes_are_mutually_exclusive(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            input_path = root / "input.json"
-            input_path.write_text("{}", encoding="utf-8")
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    "-S",
-                    str(INSTALLER),
-                    "--input",
-                    str(input_path),
-                    "--example-json",
-                    str(root),
-                ],
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("not allowed with argument", result.stderr)
-
-    def test_example_json_enables_only_supported_channels(self) -> None:
-        with (
-            patch.object(
-                INSTALL,
-                "discover_crates",
-                return_value=[
-                    {
-                        "name": "example-core",
-                        "cargo_toml": "crates/example-core/Cargo.toml",
-                    }
-                ],
-            ),
-            patch.object(INSTALL, "discover_wheels", return_value=[]),
-            patch.object(INSTALL, "discover_binaries", return_value=[]),
-        ):
-            values = INSTALL.example_values(Path("consumer"))
-        self.assertTrue(values["channels"]["crates_io"]["enabled"])
-        self.assertEqual(
-            values["artifacts"]["crates"],
-            [
-                {
-                    "artifact": "example-core",
-                    "package": "example-core",
-                    "cargo_toml": "crates/example-core/Cargo.toml",
-                    "required": True,
-                    "publish": True,
-                    "publish_order": 1,
-                    "preflight_check": "full",
-                    "wait_after_publish_seconds": 0,
-                    "verify_install": False,
-                }
-            ],
-        )
-        self.assertFalse(values["channels"]["pypi"]["enabled"])
-        self.assertFalse(values["channels"]["homebrew"]["enabled"])
-        self.assertFalse(values["channels"]["winget"]["enabled"])
-
-    def test_load_install_values_requires_explicit_artifacts_and_channels(self) -> None:
-        values = self.valid_values()
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "input.json"
+            path = root / "input.json"
+            values = self.valid_values()
             path.write_text(json.dumps(values), encoding="utf-8")
             loaded = INSTALL.load_install_values(path)
-        self.assertEqual(loaded["artifacts"]["crates"], values["artifacts"]["crates"])
-        self.assertEqual(
-            loaded["artifacts"]["wheels"],
-            [{"package": "example-python", "python_package": "example_python"}],
-        )
-        self.assertEqual(loaded["artifacts"]["binaries"], ["example"])
-        self.assertTrue(loaded["channels"]["crates_io"]["enabled"])
-        self.assertFalse(loaded["channels"]["scoop"]["enabled"])
+        self.assertEqual(loaded, values)
+        self.assertEqual(set(loaded["channels"]), set(INSTALL.CHANNEL_NAMES))
+        self.assertEqual(loaded["python_distributions"][1]["build_system"], "setuptools")
 
     def test_load_install_values_rejects_invalid_publish_orders(self) -> None:
         cases = {
-            "boolean": (True, "positive integer"),
-            "zero": (0, "positive integer"),
-            "negative": (-1, "positive integer"),
-            "duplicate": (1, "unique"),
+            "boolean": (True, "integer"),
+            "zero": (0, "positive when publish is true"),
+            "negative": (-1, "non-negative integer"),
         }
         for name, (publish_order, message) in cases.items():
             with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
                 values = self.valid_values()
-                values["artifacts"]["crates"][1]["publish_order"] = publish_order
+                values["crates"][0]["publish_order"] = publish_order
                 path = Path(directory) / "input.json"
                 path.write_text(json.dumps(values), encoding="utf-8")
                 with self.assertRaisesRegex(Exception, message):
                     INSTALL.load_install_values(path)
+        with tempfile.TemporaryDirectory() as directory:
+            values = self.valid_values()
+            values["crates"][1].update(publish=True, publish_order=1)
+            path = Path(directory) / "input.json"
+            path.write_text(json.dumps(values), encoding="utf-8")
+            with self.assertRaisesRegex(Exception, "unique"):
+                INSTALL.load_install_values(path)
 
-    def test_load_install_values_rejects_missing_channel_activation(self) -> None:
+    def test_load_install_values_rejects_missing_complete_contract_fields(self) -> None:
+        values = self.valid_values()
+        del values["project"]["license"]
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "input.json"
-            path.write_text("{}", encoding="utf-8")
-            with self.assertRaisesRegex(Exception, "release must be an object"):
+            path.write_text(json.dumps(values), encoding="utf-8")
+            with self.assertRaisesRegex(Exception, "project.license"):
+                INSTALL.load_install_values(path)
+
+    def test_load_install_values_rejects_ambiguous_python_distribution(self) -> None:
+        values = self.valid_values()
+        values["python_distributions"][0]["build_system"] = "setuptools"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "input.json"
+            path.write_text(json.dumps(values), encoding="utf-8")
+            with self.assertRaisesRegex(Exception, "must not set both"):
                 INSTALL.load_install_values(path)
 
     def test_install_places_executable_release_helpers_at_every_workflow_path(self) -> None:
@@ -224,6 +220,9 @@ class InstallValuesTests(unittest.TestCase):
         parity-only check from accepting workflows that still call an obsolete
         consumer-local scripts/ path.
         """
+
+        if not (INSTALLER.parent / ".sc-publish-source-root").is_file():
+            self.skipTest("installed consumers do not re-run the package source installer")
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

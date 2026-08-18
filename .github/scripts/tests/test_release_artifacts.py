@@ -199,7 +199,7 @@ def repo_root() -> Path:
     # Tests are installed at <consumer>/.github/scripts/tests.  Keep this
     # relative to the consumer root so the untouched vendored suite works in
     # every repository that installs the publish kit.
-    return Path(__file__).resolve().parents[3]
+    return next(path for path in Path(__file__).resolve().parents if (path / "install.py").is_file())
 
 
 def scripts_root() -> Path:
