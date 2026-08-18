@@ -4,7 +4,9 @@ build-backend = "maturin"
 
 [project]
 name = "atm-query"
-version = "1.4.3"
+# Maturin derives this wheel version from the bridge Cargo package, matching
+# the supported release path used by atm-graft.
+dynamic = ["version"]
 requires-python = ">=3.9"
 
 [tool.maturin]
