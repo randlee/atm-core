@@ -11,9 +11,9 @@ publish. A release is not eligible until this plan's proof gates pass.
 
 ## Invariants
 
-1. Shared-kit files are copied by one ATM sync script from an immutable,
-   recorded `sc-compose` commit. `--check` compares bytes. No copied file is
-   patched locally.
+1. Shared-kit files are copied only by the canonical `sc-compose` sync tool
+   from an immutable, recorded source commit. Its `--dry-run` diff and
+   verification mode establish exact parity. No copied file is patched locally.
 2. ATM-specific policy lives only in ATM manifest data or ATM-namespaced
    extension scripts; it never forks a shared workflow, action, or helper.
 3. Preflight and publish use the same source commit, manifest digest,
@@ -61,7 +61,8 @@ ATM workflow edits.
 | Credential approval and execution | `publisher` / GitHub environment | Publisher supplies evidence; a person authorizes real publication. |
 
 The frozen source revision is selected after its `sc-compose` PR is accepted.
-ATM's sync metadata records that SHA and the complete owned-path list.
+The canonical sync tool's manifest records that SHA and the complete owned-path
+list; ATM does not maintain a second sync implementation or metadata format.
 
 ## Required shared-kit contract
 
@@ -109,12 +110,13 @@ enter shared files.
 
 ### M1 — Freeze and prove the source boundary
 
-1. Add `scripts/sync_sc_compose_publish_kit.py` with a reviewed hardcoded list
-   of shared paths, recorded source SHA, copy mode, and byte-for-byte `--check`.
-2. Test copy-then-check and a one-byte negative mutation.
-3. CI runs `--check` before release validation.
+1. Adopt comp's canonical sync/copy script and its reviewed shared-path list;
+   remove any ATM-local sync scripts rather than consolidating them.
+2. Run its `--dry-run` diff before copy, then its parity verification after
+   copy; test a one-byte negative mutation through the canonical tool.
+3. CI invokes the canonical verification mode before release validation.
 4. Any required shared-file change goes to `sc-compose`, then updates the
-   recorded SHA. No ATM edit to a copied path is allowed.
+   recorded source revision. No ATM edit to a copied path is allowed.
 
 ### M2 — Remove known consumer collisions
 
@@ -133,7 +135,8 @@ This is a consumer-boundary adapter, not a shared-kit modification.
 2. Redirect every caller to the copied kit.
 3. Delete superseded ATM workflow/action/helper copies only after callers and
    parity tests pass.
-4. Add a digest test for every shared path listed in sync metadata.
+4. Use the canonical tool's source-revision and digest verification for every
+   shared path; do not add a competing ATM parity implementation.
 
 ### M4 — Make the manifest the sole policy input
 
@@ -164,7 +167,8 @@ This is a consumer-boundary adapter, not a shared-kit modification.
 ## Completion gate
 
 - [ ] Accepted `sc-compose` SHA is recorded and reachable.
-- [ ] Exact sync and `--check` pass; shared-path digests all match.
+- [ ] The canonical sync tool's dry-run and parity verification pass; all
+      shared-path digests match.
 - [ ] ATM extensions are outside the copied path set and independently tested.
 - [ ] Shared `toolchain` and `extra_validations` contracts are accepted upstream.
 - [ ] Every preflight/release job calls one bootstrap; no local tool install.
@@ -179,5 +183,5 @@ This plan does not authorize editing copied shared files, production publishing
 without evidence, or embedding repository/personal data in the shared kit.
 Before production, reverting the adoption commit restores the current release
 path. Afterwards, correct a regression by reverting the recorded source SHA or
-adopting a later accepted source SHA through the sync script—never by patching
+adopting a later accepted source SHA through the canonical sync tool—never by patching
 a copied file in place.
