@@ -56,6 +56,20 @@ authorized by AM.1. AM.1 records the current TLS physical-adapter candidates
 and their retain/remove disposition in its removal ledger; AM does not create
 a production route through any historical reference material.
 
+### Explicit Phase AO TLS exception record
+
+Phase AO is the named later decision for one limited second production consumer
+of `atm_storage::tls`: its proposed `peer-tls` adapter may consume the existing
+identity, pinning, and verification helpers only after AO.1 lands the reviewed
+boundary-TOML, manifest, and architecture-guard transition. The one-shot
+`atm-peer-tls-interop` crate remains fixture-only. This exception does not
+authorize legacy-daemon code, duplicate TLS helpers, a new key-exchange
+protocol, or any other AM retention/change.
+
+This record is not an AO entry gate: AO's only implementation entry condition
+is the accepted active Tokio/Axum runtime baseline. AM deletion work preserves
+the named helper boundary until the AO decision is accepted or withdrawn.
+
 ## Sprints
 
 ### AM.1 — Removal ledger and negative boundary guards

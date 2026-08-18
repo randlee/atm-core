@@ -1286,7 +1286,38 @@ Sprint line:
   [`sprint-AN14-sc-compose-141-checked-emission.md`](./plans/phase-an/sprint-AN14-sc-compose-141-checked-emission.md),
   and [`sprint-AN15-adversarial-fuzzing.md`](./plans/phase-an/sprint-AN15-adversarial-fuzzing.md).
 
-## 46. Phase AS — Shared Publish-Kit Migration [PLANNING]
+## 46. Phase AO — Optional mTLS for the Canonical HTTP Peer Path [PROPOSED]
+
+Phase AO adds opt-in mTLS to the active Tokio/Axum peer HTTP path without
+changing canonical HTTP request handling, storage, acknowledgement, or nudge
+semantics. The existing TLS interop crate remains quarantined fixture/reference
+material; production runtime code must not depend on it. AO is explicitly
+fail-closed: exact hostname/SNI, certificate pin, trusted client certificate,
+and enabled interface configuration are required, and an mTLS-selected peer
+never falls back to plaintext.
+
+Implementation begins only after the accepted Tokio/Axum runtime line is
+active. Phase AM's explicit AO TLS exception preserves the existing TLS helper
+boundary while AO is decided; it is not an additional AO entry gate. The
+authoritative plan is [Phase AO plan](./plans/phase-ao/plan-phase-ao.md).
+
+## 47. Phase AP — Outbound-Only Corporate Network Peer Connectivity [PROPOSED]
+
+Phase AP investigates support for a firewalled daemon that may initiate an
+outbound connection but cannot accept unsolicited peer TCP. The preferred
+direction is an mTLS-authenticated HTTP/1.1 SSE session from the restricted
+host to a reachable peer plus ordinary authenticated POST for correlated
+responses. It remains online-only: no outbox, retry/replay, or durable relay
+is introduced.
+
+AP.1 is mandatory and must execute first on the actual CWin, M4, and M5
+machines. It proves—or records a block for—the real outbound DNS/TLS/SSE/POST
+path without SSH tunneling, localhost simulation, raw-IP substitution, or a
+third-party relay. No AP product implementation begins if that physical proof
+does not pass. The authoritative outline is
+[Phase AP plan](./plans/phase-ap/plan-phase-ap.md).
+
+## 48. Phase AS — Shared Publish-Kit Migration [PLANNING]
 
 Status summary:
 
