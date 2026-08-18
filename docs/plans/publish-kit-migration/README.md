@@ -211,44 +211,48 @@ enter shared files.
 This sprint changes only ATM data after the justification record is accepted;
 it does not modify any copied shared path.
 
-### S3 — Exact adoption and obsolete-code removal
+### S3 — Worktree preflight proof
 
-1. Sync from the frozen source revision.
-2. Redirect every caller to the copied kit.
-3. Delete superseded ATM workflow/action/helper copies only after callers and
-   parity tests pass.
-4. Use the canonical tool's source-revision and digest verification for every
-   shared path; do not add a competing ATM parity implementation.
+1. In the exact-sync ATM worktree, run the canonical shared-kit tests plus
+   `just lint` and `just test`.
+2. Dispatch the real canonical `release-preflight.yml` from that worktree;
+   retain the resolved-plan, toolchain, validation, and channel receipts.
+3. Verify identical source, manifest, toolchain, and validation digests across
+   every receipt. This sprint does not publish.
 
-### S4 — Make the manifest the sole policy input
+### S4 — Authorized PyPI 1.4.3 publication from `main`
 
-1. Land `toolchain` and `extra_validations` schema/parser/runner/tests in
-   `sc-compose` first.
-2. Declare every ATM tool, channel, and ATM-only validation in
-   `release/publish-artifacts.toml`.
-3. Have both preflight and release consume the same resolved plan and upload
-   their receipts.
-4. Add static tests rejecting workflow-local tool installation and requiring
-   the single bootstrap in every preflight/release job.
+1. Require the immutable `main` commit/tag and its attached, manifest-matching
+   1.4.3 Python artifacts.
+2. Launch the canonical named publisher/channel agents from the synchronized
+   branch, but execute only the authorized PyPI production channel against
+   those immutable `main` assets.
+3. Record its structured channel receipt and public-package verification. Do
+   not recreate a tag, republish crates, or rebuild artifacts.
 
-### S5 — Prove equivalence before production
+### S5 — Merge the verified migration to `main`
 
-1. Run shared-kit tests inside ATM after exact copy.
-2. Run `just lint` and `just test`.
-3. Dispatch the real `release-preflight.yml` on the migration branch; retain
-   plan, tool-receipt, and validation-result artifacts.
-4. Verify every receipt has identical source, manifest, and toolchain digests
-   and that every required validation ran.
-5. Run an explicitly authorized TestPyPI/dry-run release. Release must reject
-   mismatched preflight evidence.
-6. Install/smoke-test generated `hermes-atm` and `atm-graft` artifacts on
-   Python 3.11, 3.12, 3.13, and 3.14.
-7. Run each enabled channel verification from manifest data; disabled channels
-   require an explicit recorded waiver, never silent omission.
+1. Open and complete the source-parity/migration PRs only after S3 and S4
+   evidence is accepted.
+2. Preserve exact source parity in the merge; any shared fix is merged in
+   `sc-publish` first and then synchronized unchanged.
+3. Remove obsolete local publishing workflows/helpers only when the canonical
+   equivalent is verified in the merged tree.
+
+### S6 — Full 1.4.4 release
+
+1. Select an explicit synchronized 1.4.4 version and declare its ATM
+   artifacts and enabled channels in the manifest.
+2. Run readiness preflight before `main`, then final preflight on the exact
+   immutable `main` commit.
+3. After explicit production authorization, let the canonical publisher run
+   the full manifest-derived release and retain all channel receipts.
+4. Verify generated `hermes-atm` and `atm-graft` artifacts on Python 3.11,
+   3.12, 3.13, and 3.14, plus every enabled channel's public verification.
 
 ## Completion gate
 
-- [ ] Accepted `sc-compose` SHA is recorded and reachable.
+- [ ] Accepted `sc-publish` SHA is recorded and reachable.
 - [ ] The canonical sync tool's dry-run and parity verification pass; all
       shared-path digests match.
 - [ ] ATM extensions are outside the copied path set and independently tested.
