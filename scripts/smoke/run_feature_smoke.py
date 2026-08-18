@@ -10,10 +10,12 @@ CLI environment: ``ATM_IDENTITY`` and ``ATM_TEAM``.
 from __future__ import annotations
 
 import argparse
+import base64
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from html import escape
 import ipaddress
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -265,6 +267,34 @@ def certificate_authority(pem: Path) -> str:
     return match.group(1)
 
 
+def certificate_spki_pin(pem: Path) -> str:
+    """Return curl's SHA-256 SPKI pin for one peer leaf certificate.
+
+    ATM peer TLS deliberately uses independently pinned self-signed leaf
+    certificates, not a certificate authority hierarchy.  Curl must therefore
+    pin the peer key while ``--insecure`` disables only its unrelated Web-PKI
+    chain check; the daemon still enforces the presented client certificate.
+    """
+    with tempfile.TemporaryDirectory(prefix="atm-smoke-spki-") as temp:
+        public_key = Path(temp) / "public-key.pem"
+        public_key_der = Path(temp) / "public-key.der"
+        export = command(
+            ["openssl", "x509", "-in", str(pem), "-pubkey", "-noout", "-out", str(public_key)]
+        )
+        if export["exit_code"] != 0:
+            raise SmokeError(f"could not export certificate public key: {export['stderr'].strip()}")
+        convert = command(
+            ["openssl", "pkey", "-pubin", "-in", str(public_key), "-outform", "DER", "-out", str(public_key_der)]
+        )
+        if convert["exit_code"] != 0:
+            raise SmokeError(f"could not encode certificate public key: {convert['stderr'].strip()}")
+        try:
+            digest = hashlib.sha256(public_key_der.read_bytes()).digest()
+        except OSError as error:
+            raise SmokeError(f"could not read certificate public key: {error}") from error
+    return f"sha256//{base64.b64encode(digest).decode('ascii')}"
+
+
 def resolve_dns_addresses(host: str) -> list[str]:
     """Return every address the local resolver provides for a peer hostname."""
     try:
@@ -353,12 +383,12 @@ def curl_doctor(
             if local_export["exit_code"] != 0:
                 raise SmokeError(f"could not export local public certificate: {local_export['stderr'].strip()}")
             with remote_certificate_workspace(peer) as remote_tempdir:
-                remote_local_ca = f"{remote_tempdir}/local-public.pem"
+                remote_local_public = f"{remote_tempdir}/local-public.pem"
                 remote_public_path = f"{remote_tempdir}/peer-public.pem"
                 export_remote = remote_shell(peer, f"openssl x509 -in {shlex.quote(remote_bundle)} -out {shlex.quote(remote_public_path)}")
                 if export_remote["exit_code"] != 0:
                     raise SmokeError(f"{peer} could not export public certificate: {export_remote['stderr'].strip()}")
-                copied_local = command(["scp", str(local_public), f"{peer}:{remote_local_ca}"])
+                copied_local = command(["scp", str(local_public), f"{peer}:{remote_local_public}"])
                 if copied_local["exit_code"] != 0:
                     raise SmokeError(f"could not copy local public certificate to {peer}: {copied_local['stderr'].strip()}")
                 copied_remote = command(["scp", f"{peer}:{remote_public_path}", str(remote_public)])
@@ -366,6 +396,8 @@ def curl_doctor(
                     raise SmokeError(f"could not copy {peer} public certificate: {copied_remote['stderr'].strip()}")
                 local_authority = certificate_authority(local_public)
                 remote_authority = certificate_authority(remote_public)
+                local_pin = certificate_spki_pin(local_public)
+                remote_pin = certificate_spki_pin(remote_public)
                 local_address = connect_address(advertised_host(atm))
                 remote_address = connect_address(remote_host)
                 scheme = "http" if plaintext else "https"
@@ -374,14 +406,14 @@ def curl_doctor(
                 headers = ["-H", "Content-Type: application/json"]
                 remote_curl = ["curl", "--silent", "--show-error", "--fail", "--connect-timeout", "2", "--max-time", "5", "-X", "GET", *headers]
                 if not plaintext:
-                    remote_curl.extend(["--cert", remote_bundle, "--cacert", remote_local_ca])
+                    remote_curl.extend(["--cert", remote_bundle, "--insecure", "--pinnedpubkey", local_pin])
                 remote_curl.extend(["--resolve", f"{local_authority}:43101:{local_address}", "--data", DOCTOR_BODY, local_url])
                 remote_result = remote_shell(peer, " ".join(shlex.quote(value) for value in remote_curl))
                 remote_report = parse_json(remote_result, f"{peer} curl doctor to local")
                 add_case(cases, f"{peer} curl {'plaintext' if plaintext else 'mTLS'} to local doctor", doctor_ready(remote_report, expected_version), "HTTP 200 real daemon doctor" if doctor_ready(remote_report, expected_version) else "doctor response was not healthy/ready", origin=peer, destination=platform.node())
                 local_curl = ["curl", "--silent", "--show-error", "--fail", "--connect-timeout", "2", "--max-time", "5", "-X", "GET", *headers]
                 if not plaintext:
-                    local_curl.extend(["--cert", local_bundle, "--cacert", str(remote_public)])
+                    local_curl.extend(["--cert", local_bundle, "--insecure", "--pinnedpubkey", remote_pin])
                 local_curl.extend(["--resolve", f"{remote_authority}:43101:{remote_address}", "--data", DOCTOR_BODY, remote_url])
                 local_result = command(local_curl)
                 local_report = parse_json(local_result, f"curl doctor to {peer}")
@@ -414,7 +446,7 @@ def curl_doctor(
                 *headers,
             ]
             if not plaintext:
-                dns_curl.extend(["--cert", local_bundle, "--cacert", str(remote_public)])
+                dns_curl.extend(["--cert", local_bundle, "--insecure", "--pinnedpubkey", remote_pin])
             dns_curl.extend(["--data", DOCTOR_BODY, remote_url])
             dns_report = parse_json(command(dns_curl), f"DNS curl doctor to {peer}")
             add_case(

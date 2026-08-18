@@ -551,6 +551,10 @@ class FeatureSmokeTests(unittest.TestCase):
             RUNNER, "command", return_value=result
         ) as command, mock.patch.object(
             RUNNER, "certificate_authority", side_effect=["local.example.test", "remote.example.test"]
+        ), mock.patch.object(
+            RUNNER,
+            "certificate_spki_pin",
+            side_effect=["sha256//LOCALPIN", "sha256//REMOTEPIN"],
         ), mock.patch.object(RUNNER, "advertised_host", return_value="192.0.2.10"), mock.patch.object(
             RUNNER, "resolve_dns_addresses", return_value=["192.0.2.20"]
         ), mock.patch.object(RUNNER, "remote_resolve_dns_addresses", return_value=["192.0.2.10"]):
@@ -576,8 +580,14 @@ class FeatureSmokeTests(unittest.TestCase):
         self.assertIn("https://remote.example.test:43101/v1/atm/doctor", curl_calls[1])
         remote_curl_script = remote_shell.call_args_list[2].args[1]
         self.assertIn("local.example.test:43101:192.0.2.10", remote_curl_script)
-        local_ca_path = curl_calls[0][curl_calls[0].index("--cacert") + 1]
-        self.assertEqual(Path(local_ca_path).name, "remote-public.pem")
+        self.assertNotIn("--cacert", curl_calls[0])
+        self.assertIn("--insecure", curl_calls[0])
+        self.assertEqual(
+            curl_calls[0][curl_calls[0].index("--pinnedpubkey") + 1],
+            "sha256//REMOTEPIN",
+        )
+        self.assertIn("--pinnedpubkey", remote_curl_script)
+        self.assertIn("sha256//LOCALPIN", remote_curl_script)
         cleanup_script = remote_shell.call_args_list[-1].args[1]
         self.assertIn("rm -f", cleanup_script)
         self.assertIn("local-public.pem", cleanup_script)

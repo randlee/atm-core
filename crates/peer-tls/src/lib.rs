@@ -4,6 +4,8 @@
 //! routing, HTTP encoding, listener lifecycle, and retry policy remain outside
 //! the adapter boundary.
 
+use std::io;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -14,7 +16,7 @@ use atm_storage::{
 };
 use rustls::pki_types::ServerName;
 use rustls::{ClientConfig, ServerConfig};
-use tokio::net::TcpStream;
+use tokio::net::{TcpStream, lookup_host};
 use tokio_rustls::{TlsAcceptor, TlsConnector};
 
 /// The only production implementation of `atm_core::PeerIoAdapter`.
@@ -166,16 +168,8 @@ impl PeerTlsAdapter {
             move || adapter.client_config(&configured_peer),
         )
         .await?;
-        let remaining = remaining_budget(deadline, "peer TLS TCP connection")?;
-        let tcp = tokio::time::timeout(remaining, TcpStream::connect((peer.as_str(), port)))
-            .await
-            .map_err(|_| deadline_error("peer TLS TCP connection"))?
-            .map_err(|source| {
-                AtmError::daemon_unavailable_with_cause(
-                    "peer TLS could not connect to the configured trusted peer",
-                    source,
-                )
-            })?;
+        let addresses = resolve_peer_addresses(&peer, port, deadline).await?;
+        let tcp = connect_peer_addresses(&peer, &addresses, deadline).await?;
         let server_name = ServerName::try_from(peer.as_str().to_owned()).map_err(|source| {
             AtmError::validation("configured peer TLS hostname is invalid").with_cause(source)
         })?;
@@ -251,6 +245,63 @@ fn remaining_budget(deadline: RequestDeadline, stage: &str) -> Result<Duration, 
     deadline.remaining().ok_or_else(|| deadline_error(stage))
 }
 
+async fn resolve_peer_addresses(
+    peer: &atm_core::types::HostName,
+    port: u16,
+    deadline: RequestDeadline,
+) -> Result<Vec<SocketAddr>, AtmError> {
+    let remaining = remaining_budget(deadline, "peer TLS DNS resolution")?;
+    let addresses = tokio::time::timeout(remaining, lookup_host((peer.as_str(), port)))
+        .await
+        .map_err(|_| deadline_error("peer TLS DNS resolution"))?
+        .map_err(|source| {
+            AtmError::daemon_unavailable_with_cause(
+                "peer TLS could not resolve the configured trusted peer",
+                source,
+            )
+        })?
+        .collect::<Vec<_>>();
+    if addresses.is_empty() {
+        return Err(AtmError::daemon_unavailable(
+            "peer TLS DNS resolution returned no addresses for the configured trusted peer",
+        ));
+    }
+    Ok(addresses)
+}
+
+async fn connect_peer_addresses(
+    peer: &atm_core::types::HostName,
+    addresses: &[SocketAddr],
+    deadline: RequestDeadline,
+) -> Result<TcpStream, AtmError> {
+    let mut last_error = None;
+    for (index, address) in addresses.iter().copied().enumerate() {
+        let remaining = remaining_budget(deadline, "peer TLS TCP connection")?;
+        let attempts_remaining = addresses.len() - index;
+        let attempt_budget = remaining / attempts_remaining as u32;
+        match tokio::time::timeout(attempt_budget, TcpStream::connect(address)).await {
+            Ok(Ok(stream)) => return Ok(stream),
+            Ok(Err(source)) => last_error = Some(source),
+            Err(_) => {
+                last_error = Some(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    format!("connection to {address} exceeded its bounded attempt budget"),
+                ))
+            }
+        }
+    }
+    let source = last_error.unwrap_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::AddrNotAvailable,
+            format!("no resolved socket addresses were available for {peer}"),
+        )
+    });
+    Err(AtmError::daemon_unavailable_with_cause(
+        "peer TLS could not connect to the configured trusted peer using any resolved address",
+        source,
+    ))
+}
+
 async fn load_configuration_with_deadline<T>(
     deadline: RequestDeadline,
     stage: &str,
@@ -274,7 +325,7 @@ fn deadline_error(stage: &str) -> AtmError {
 
 #[cfg(test)]
 mod tests {
-    use std::net::SocketAddr;
+    use std::net::{IpAddr, Ipv6Addr, SocketAddr};
     use std::num::NonZeroU16;
     use std::path::PathBuf;
     use std::sync::Arc;
@@ -502,6 +553,34 @@ mod tests {
             .expect("read opaque bytes");
         assert_eq!(&response, b"pong");
         server_task.await.expect("server task");
+    }
+
+    #[tokio::test]
+    async fn peer_tcp_connection_tries_later_resolved_address_after_first_refuses() {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind IPv4 listener");
+        let listening_address = listener.local_addr().expect("listener address");
+        let peer = "peer.test".parse().expect("valid peer hostname");
+        let addresses = [
+            SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), listening_address.port()),
+            listening_address,
+        ];
+
+        let connector = tokio::spawn(async move {
+            connect_peer_addresses(
+                &peer,
+                &addresses,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+        });
+        let (_accepted, source) = listener.accept().await.expect("fallback IPv4 connection");
+        assert_eq!(source.ip().to_string(), "127.0.0.1");
+        connector
+            .await
+            .expect("connector task")
+            .expect("later resolved IPv4 address must be tried");
     }
 
     #[test]
