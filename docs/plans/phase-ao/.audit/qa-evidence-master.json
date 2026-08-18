@@ -11,7 +11,7 @@
   "runs": [
     {
       "run_id": "AO1-QA1",
-      "aich_sprint": "AO-S1",
+      "aich_sprint": "AO.1",
       "phase_sprint": "AO.1",
       "pass": "QA-1",
       "run_type": "qa",
@@ -36,7 +36,7 @@
     },
     {
       "run_id": "AO1-QA2",
-      "aich_sprint": "AO-S1",
+      "aich_sprint": "AO.1",
       "phase_sprint": "AO.1",
       "pass": "QA-2",
       "run_type": "qa",
@@ -61,7 +61,7 @@
     },
     {
       "run_id": "AOS1-QA001-VERIFY-1",
-      "aich_sprint": "AO-S1",
+      "aich_sprint": "AO.1",
       "phase_sprint": "AO.1",
       "pass": "QA-1 narrow re-verify (AO1-QA-001)",
       "run_type": "qa",
@@ -86,7 +86,7 @@
     },
     {
       "run_id": "AOS2-QA1",
-      "aich_sprint": "AO-S2",
+      "aich_sprint": "AO.2",
       "phase_sprint": "AO.2",
       "pass": "QA-1",
       "run_type": "qa",
@@ -111,7 +111,7 @@
     },
     {
       "run_id": "AOS2-QA1-VERIFY-1",
-      "aich_sprint": "AO-S2",
+      "aich_sprint": "AO.2",
       "phase_sprint": "AO.2",
       "pass": "QA-1 fix-round verify (informal, round 1)",
       "run_type": "qa",
@@ -136,7 +136,7 @@
     },
     {
       "run_id": "AOS2-QA1-VERIFY-2-3",
-      "aich_sprint": "AO-S2",
+      "aich_sprint": "AO.2",
       "phase_sprint": "AO.2",
       "pass": "QA-1 fix-round verify (rounds 2-3)",
       "run_type": "qa",
@@ -161,7 +161,7 @@
     },
     {
       "run_id": "AOS2-QA1-FIX1-STATUS-A",
-      "aich_sprint": "AO-S2",
+      "aich_sprint": "AO.2",
       "phase_sprint": "AO.2",
       "pass": "QA-1 fix-round status update (a2ee164b/a7a65ba33)",
       "run_type": "qa",
@@ -186,7 +186,7 @@
     },
     {
       "run_id": "AOS2-QA1-FIX1-STATUS-B",
-      "aich_sprint": "AO-S2",
+      "aich_sprint": "AO.2",
       "phase_sprint": "AO.2",
       "pass": "QA-1 fix-round status update (a7a65ba33)",
       "run_type": "qa",
@@ -211,7 +211,7 @@
     },
     {
       "run_id": "AOS2-QA1-FIX1-STATUS-C",
-      "aich_sprint": "AO-S2",
+      "aich_sprint": "AO.2",
       "phase_sprint": "AO.2",
       "pass": "QA-1 fix-round status update (f09799abe)",
       "run_type": "qa",
@@ -236,7 +236,7 @@
     },
     {
       "run_id": "AOS2-QA1-FINAL",
-      "aich_sprint": "AO-S2",
+      "aich_sprint": "AO.2",
       "phase_sprint": "AO.2",
       "pass": "QA-1 fix-round final closure",
       "run_type": "qa",
