@@ -818,23 +818,24 @@ mod replacement_runtime_tests {
                 .message()
                 .starts_with("authenticated test handler reached")
         );
-        let calls = handler.calls.lock().expect("recorded authenticated calls");
-        assert_eq!(
-            calls.len(),
-            1,
-            "one TLS request reaches one canonical write"
-        );
-        assert_eq!(calls[0].1, AuthenticatedIngress::Peer);
-        assert_eq!(
-            calls[0]
-                .0
-                .authenticated_source_host
-                .as_ref()
-                .map(|host| host.as_str()),
-            Some("client.test"),
-            "canonical provenance is the peer-tls authenticated identity, not a socket value"
-        );
-        drop(calls);
+        {
+            let calls = handler.calls.lock().expect("recorded authenticated calls");
+            assert_eq!(
+                calls.len(),
+                1,
+                "one TLS request reaches one canonical write"
+            );
+            assert_eq!(calls[0].1, AuthenticatedIngress::Peer);
+            assert_eq!(
+                calls[0]
+                    .0
+                    .authenticated_source_host
+                    .as_ref()
+                    .map(|host| host.as_str()),
+                Some("client.test"),
+                "canonical provenance is the peer-tls authenticated identity, not a socket value"
+            );
+        }
         running
             .begin_shutdown()
             .finish()
