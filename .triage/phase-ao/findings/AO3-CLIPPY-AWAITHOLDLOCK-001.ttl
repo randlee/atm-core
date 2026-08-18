@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO3-CLIPPY-AWAITHOLDLOCK-001>
+  a triage:Finding ;
+  triage:findingId "AO3-CLIPPY-AWAITHOLDLOCK-001" ;
+  triage:title "MutexGuard held across .await in RecordingPeerRouter test helper" ;
+  triage:description "quality-mgr CI report on PR #945 (feature/pao-s3-tls-proof-and-evidence, head f8b31280): clippy::await_holding_lock in crates/atm-daemon-bootstrap/src/lib.rs:821 -- handler.calls.lock() MutexGuard held across the .await at line 841, inside RecordingPeerRouter test helper (added by earlier AO2-ATM-QA-003 fix). Confirmed via two independent CI job logs (dedicated 'Clippy' job AND 'Just lint (ubuntu-latest)' job -- same single root cause): 'error: this MutexGuard is held across an await point' / 'could not compile atm-daemon-bootstrap (lib test) due to 1 previous error'. Fix: drop the guard before the await (e.g. clone/collect calls then drop lock)." ;
+  triage:phaseId "phase-ao" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "lint-blocker" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-18T17:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO.3 ;
+  triage:foundAt "2026-08-18T16:37:04Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO3-CLIPPY-AWAITHOLDLOCK-001/pao-s3-lib821> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO3-CLIPPY-AWAITHOLDLOCK-001/pao-s3-lib821>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 821 ;
+  triage:snippet "handler.calls.lock() MutexGuard held across .await at line 841 in RecordingPeerRouter test helper" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
+  triage:headSha "f8b312802" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s3> .
+
+<urn:atm:triage:worktree/pao-s3>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s3-tls-proof-and-evidence" ;
+  triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
+  triage:headSha "f8b312802" ;
+  triage:orderIndex 3 .
