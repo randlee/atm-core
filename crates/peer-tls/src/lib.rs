@@ -251,7 +251,7 @@ async fn resolve_peer_addresses(
     deadline: RequestDeadline,
 ) -> Result<Vec<SocketAddr>, AtmError> {
     let remaining = remaining_budget(deadline, "peer TLS DNS resolution")?;
-    let addresses = tokio::time::timeout(remaining, lookup_host((peer.as_str(), port)))
+    let mut addresses = tokio::time::timeout(remaining, lookup_host((peer.as_str(), port)))
         .await
         .map_err(|_| deadline_error("peer TLS DNS resolution"))?
         .map_err(|source| {
@@ -266,7 +266,16 @@ async fn resolve_peer_addresses(
             "peer TLS DNS resolution returned no addresses for the configured trusted peer",
         ));
     }
-    Ok(addresses)
+    Ok(prefer_ipv4_peer_addresses(addresses))
+}
+
+fn prefer_ipv4_peer_addresses(mut addresses: Vec<SocketAddr>) -> Vec<SocketAddr> {
+    // The canonical direct-peer listener deliberately binds active IPv4
+    // interfaces. Prefer a matching IPv4 address when DNS/mDNS also returns
+    // loopback or link-local IPv6 entries; IPv6 remains available as a
+    // bounded fallback when no IPv4 endpoint can connect.
+    addresses.sort_by_key(|address| !address.is_ipv4());
+    addresses
 }
 
 async fn connect_peer_addresses(
@@ -581,6 +590,18 @@ mod tests {
             .await
             .expect("connector task")
             .expect("later resolved IPv4 address must be tried");
+    }
+
+    #[test]
+    fn peer_address_order_prefers_the_ipv4_listener_before_ipv6_fallbacks() {
+        let port = 43_101;
+        let ordered = prefer_ipv4_peer_addresses(vec![
+            SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), port),
+            SocketAddr::from(([192, 0, 2, 10], port)),
+        ]);
+
+        assert!(ordered[0].is_ipv4());
+        assert!(ordered[1].is_ipv6());
     }
 
     #[test]
