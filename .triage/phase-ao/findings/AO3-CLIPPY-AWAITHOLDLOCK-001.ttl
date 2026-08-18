@@ -15,8 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-18T18:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-08-18T17:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO.3 ;
   triage:foundAt "2026-08-18T16:37:04Z"^^xsd:dateTime ;
@@ -28,15 +30,15 @@
   triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
   triage:line 821 ;
   triage:snippet "handler.calls.lock() MutexGuard held across .await at line 841 in RecordingPeerRouter test helper" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
-  triage:headSha "f8b312802" ;
+  triage:headSha "ce99441602a46e1fd083406afc5a020fdd10ad01" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s3> .
 
 <urn:atm:triage:worktree/pao-s3>
   a triage:WorktreeSnapshot ;
   triage:path "feature/pao-s3-tls-proof-and-evidence" ;
   triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
-  triage:headSha "f8b312802" ;
+  triage:headSha "ce99441602a46e1fd083406afc5a020fdd10ad01" ;
   triage:orderIndex 3 .
