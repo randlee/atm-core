@@ -71,9 +71,15 @@ impl RuntimeHealth {
     }
 
     pub fn mark_ready(&self) {
+        self.mark_ready_with_detail(None);
+    }
+
+    /// Marks the runtime ready while retaining an operator-visible transport
+    /// detail in the ordinary status/doctor projection.
+    pub fn mark_ready_with_detail(&self, detail: Option<String>) {
         let mut state = self.lock();
         state.lifecycle = Lifecycle::Ready;
-        state.detail = None;
+        state.detail = detail;
     }
 
     pub fn mark_not_ready(&self, detail: impl Into<String>) {

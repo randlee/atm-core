@@ -1,26 +1,26 @@
 [package]
-name = "atm-runtime"
+name = "peer-tls"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
-description = "ATM concrete runtime composition crate."
 repository.workspace = true
 homepage.workspace = true
-
-[lib]
-name = "atm_runtime"
+description = "Bounded Tokio-Rustls peer stream adapter for ATM's canonical HTTP path."
 
 [features]
-test-utils = []
+# First-party fixture for cross-crate TLS composition tests. It never enables
+# or changes production transport behavior.
+test-support = []
 
 [dependencies]
 atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.3" }
 atm-storage = { path = "../atm-storage", version = "1.4.3" }
+rustls.workspace = true
 tokio.workspace = true
-tracing.workspace = true
+tokio-rustls.workspace = true
 
 [dev-dependencies]
-peer-tls = { path = "../peer-tls", version = "1.4.3", features = ["test-support"] }
-serde_json.workspace = true
+rcgen = "0.13"
+tempfile = "3"

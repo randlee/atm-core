@@ -5,13 +5,13 @@
 //! hook. The enclosing HTTP route remains async and awaits both operations.
 
 use std::future::Future;
-use std::num::NonZeroU16;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 
 use atm_core::LocalServiceRuntime;
+use atm_core::PeerIoAdapter;
 use atm_core::api::{ApiRequest, ApiResponse, AuthenticatedIngress, RequestDeadline};
 use atm_core::boundary::MessageReceivedHookSelector;
 use atm_core::clear::ClearQuery;
@@ -98,7 +98,7 @@ pub struct StorageAndNudgeRouter {
     runtime_health: RuntimeHealth,
     doctor_ports: Option<atm_core::doctor::RuntimeDoctorPorts>,
     daemon_context: Option<atm_core::doctor::DoctorExecutionContext>,
-    direct_peer_port: NonZeroU16,
+    peer_io_adapter: Option<Arc<dyn PeerIoAdapter>>,
 }
 
 impl StorageAndNudgeRouter {
@@ -120,14 +120,8 @@ impl StorageAndNudgeRouter {
             runtime_health: RuntimeHealth::default(),
             doctor_ports: None,
             daemon_context: None,
-            direct_peer_port: crate::direct_peer_port(),
+            peer_io_adapter: None,
         }
-    }
-
-    #[cfg(test)]
-    fn with_direct_peer_port(mut self, direct_peer_port: NonZeroU16) -> Self {
-        self.direct_peer_port = direct_peer_port;
-        self
     }
 
     /// Adds the existing core doctor ports and the process-owned lifecycle
@@ -153,6 +147,16 @@ impl StorageAndNudgeRouter {
         daemon_context: atm_core::doctor::DoctorExecutionContext,
     ) -> Self {
         self.daemon_context = Some(daemon_context);
+        self
+    }
+
+    /// Installs the opaque direct-peer adapter composed by the daemon
+    /// bootstrap. The router uses it for all host-qualified peer writes,
+    /// including acknowledgement delivery; it receives no concrete TLS or
+    /// storage configuration.
+    #[must_use]
+    pub fn with_peer_io_adapter(mut self, peer_io_adapter: Arc<dyn PeerIoAdapter>) -> Self {
+        self.peer_io_adapter = Some(peer_io_adapter);
         self
     }
 
@@ -200,32 +204,54 @@ impl StorageAndNudgeRouter {
         deadline: RequestDeadline,
         request_id: RequestId,
     ) -> Result<(), AtmError> {
-        let Some(host) = request.to.as_ref().and_then(|recipient| recipient.host()) else {
-            return Ok(());
-        };
+        let request = request.clone().with_origin_metadata(message_id, timestamp);
+        self.dispatch_host_qualified_write(request, deadline, request_id)
+            .await
+            .map(|_| ())
+    }
+
+    /// Sends a host-qualified write through the daemon-owned opaque adapter.
+    ///
+    /// CLI and graft reach this method through the local, capability-authenticated
+    /// HTTP route. The daemon therefore remains the only composition root with
+    /// authority to select a peer transport, and a failed adapter exchange has
+    /// no raw-TCP fallback.
+    async fn dispatch_host_qualified_write(
+        &self,
+        request: atm_core::send::WriteRequest,
+        deadline: RequestDeadline,
+        request_id: RequestId,
+    ) -> Result<ApiResponse, AtmError> {
+        let host = request
+            .to
+            .as_ref()
+            .and_then(|recipient| recipient.host())
+            .cloned()
+            .ok_or_else(|| {
+                AtmError::validation("daemon peer dispatch requires a host-qualified recipient")
+            })?;
         let remaining = deadline.remaining().ok_or_else(|| {
-            AtmError::daemon_unavailable(
-                "request deadline expired before cross-host acknowledgement delivery",
+            AtmError::remote_delivery_unconfirmed(
+                "request deadline expired before authenticated peer delivery",
             )
         })?;
-        let client = crate::client::direct_peer_write_client(
-            host.clone(),
-            self.direct_peer_port,
-            remaining,
-        )?;
-        let request = request.clone().with_origin_metadata(message_id, timestamp);
-        match client
-            .execute_with_request_id(
-                ApiRequest::new(RequestEnvelope::Write(Box::new(request))),
-                request_id,
+        let adapter = self.peer_io_adapter.as_ref().ok_or_else(|| {
+            AtmError::remote_delivery_unconfirmed(
+                "host-qualified delivery requires the daemon's configured peer I/O adapter",
             )
-            .await?
-            .into_inner()
-        {
-            ResponseEnvelope::Send(SendResponseEnvelope::Sent(_)) => Ok(()),
+        })?;
+        let request = ApiRequest::new(RequestEnvelope::Write(Box::new(request)));
+        let response =
+            crate::client::direct_peer_adapter_write_client(host, Arc::clone(adapter), remaining)?
+                .execute_with_request_id(request, request_id)
+                .await?;
+        match response.into_inner() {
+            ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => Ok(ApiResponse::new(
+                ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)),
+            )),
             response => Err(AtmError::new(
                 atm_core::error_codes::AtmErrorCode::InternalError,
-                "cross-host acknowledgement delivery returned a non-write response",
+                "authenticated peer delivery returned a non-write response",
             )
             .with_cause(format!("received response: {response:?}"))),
         }
@@ -514,6 +540,23 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
                     "request deadline expired before replacement storage-writer ingress",
                 ));
             }
+            // A host-qualified ordinary send is a remote write, not a local
+            // persistence followed by a second transmission. Keep the caller
+            // on the local authenticated API and let this daemon-owned path
+            // select the one opaque peer adapter. Acknowledgements retain the
+            // existing local commit-then-reply transition below.
+            if ingress == AuthenticatedIngress::Local
+                && request.acknowledges_message_id.is_none()
+                && request.origin_message_id.is_none()
+                && request
+                    .to
+                    .as_ref()
+                    .is_some_and(|recipient| recipient.host().is_some())
+            {
+                return self
+                    .dispatch_host_qualified_write(request, deadline, request_id)
+                    .await;
+            }
             // HTTP payload paths are caller metadata, never daemon filesystem
             // authority. The replacement normalizes both roots before the
             // shared writer uses them for its state and file-policy paths.
@@ -652,13 +695,14 @@ mod tests {
     use std::pin::Pin;
     use std::sync::Arc;
     use std::sync::Mutex;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicU16, AtomicUsize, Ordering};
     use std::time::Duration;
 
     use atm_core::boundary::{
-        AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, GraftNudgeTarget,
-        LocalTmuxNudgeTarget, MessageReceivedHookSelector, PostSendBuiltInTarget,
-        PostSendEmissionPath, PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
+        AcceptedPeerIo, AsyncMessageReceivedHookEmitter, BoxedPeerIo, BuiltInPostSendDispatch,
+        GraftNudgeTarget, LocalTmuxNudgeTarget, MessageReceivedHookSelector, PeerIoAdapter,
+        PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEvent, RosterEntry, RosterHarness,
+        RosterMemberKind,
     };
     use atm_core::observability::NullObservability;
     use atm_core::protocol::{
@@ -669,7 +713,7 @@ mod tests {
     use atm_core::send::{
         MessageClassification, SendMessageSource, TemplateSendSource, WriteRequest,
     };
-    use atm_core::types::{AgentName, ModelName, PaneId, TeamName};
+    use atm_core::types::{AgentName, HostName, ModelName, PaneId, TeamName};
     use atm_core::{AuthenticatedIngress, RequestDeadline, api::ApiRequest, error::AtmError};
     use atm_runtime_test_support::{
         inspect_template_admission_for_test, install_sqlite_message_write_failure,
@@ -682,6 +726,7 @@ mod tests {
     use axum::http::header::{CONTENT_TYPE, LOCATION};
     use axum::http::{Request, StatusCode};
     use tempfile::TempDir;
+    use tokio::net::TcpStream;
     use tower::ServiceExt;
 
     use super::{BlockingCoreBridge, StorageAndNudgeRouter};
@@ -700,6 +745,61 @@ mod tests {
         saw_durable_record: AtomicBool,
         failure: Option<AtmError>,
         cancelled_on_drop: Option<Arc<AtomicBool>>,
+    }
+
+    /// Test-only direct-peer adapter. Production ACK delivery cannot use a
+    /// raw connector; this fixture keeps its ephemeral peer port behind the
+    /// same opaque adapter contract.
+    struct TestPeerIoAdapter {
+        port: AtomicU16,
+        connect_calls: AtomicUsize,
+    }
+
+    impl TestPeerIoAdapter {
+        fn new(port: u16) -> Self {
+            Self {
+                port: AtomicU16::new(port),
+                connect_calls: AtomicUsize::new(0),
+            }
+        }
+    }
+
+    impl atm_core::boundary::sealed::Sealed for TestPeerIoAdapter {}
+
+    impl PeerIoAdapter for TestPeerIoAdapter {
+        fn accept<'adapter>(
+            &'adapter self,
+            stream: TcpStream,
+            _deadline: RequestDeadline,
+        ) -> Pin<Box<dyn Future<Output = Result<AcceptedPeerIo, AtmError>> + Send + 'adapter>>
+        {
+            Box::pin(async {
+                Ok(AcceptedPeerIo::new(
+                    Box::new(stream),
+                    "test-peer.local".parse().expect("valid test host"),
+                ))
+            })
+        }
+
+        fn connect<'adapter>(
+            &'adapter self,
+            _peer: HostName,
+            _deadline: RequestDeadline,
+        ) -> Pin<Box<dyn Future<Output = Result<BoxedPeerIo, AtmError>> + Send + 'adapter>>
+        {
+            self.connect_calls.fetch_add(1, Ordering::SeqCst);
+            let port = self.port.load(Ordering::SeqCst);
+            Box::pin(async move {
+                let stream = TcpStream::connect(("127.0.0.1", port))
+                    .await
+                    .map_err(|source| {
+                        AtmError::daemon_unavailable("test peer adapter could not connect")
+                            .with_cause(source)
+                    })?;
+                let io: BoxedPeerIo = Box::new(stream);
+                Ok(io)
+            })
+        }
     }
 
     struct CancellationMarker(Arc<AtomicBool>);
@@ -1068,6 +1168,7 @@ mod tests {
             ),
         )
         .with_direct_peer_tcp(direct_peer)
+        .with_plaintext_direct_peer_diagnostic(crate::DirectPeerPlaintextDiagnostic::Test)
     }
 
     #[tokio::test]
@@ -1567,20 +1668,12 @@ mod tests {
             foreign_team_local,
             foreign_team_cross_host,
         ] {
-            let response = fixture
+            let committed = fixture
                 .router
-                .dispatch(
-                    ApiRequest::new(RequestEnvelope::Write(Box::new(request))),
-                    AuthenticatedIngress::Local,
-                    RequestDeadline::after(Duration::from_secs(1)),
-                )
+                .commit_write(request)
                 .await
                 .expect("template routing request");
-            let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response.into_inner()
-            else {
-                panic!("template routing request must send")
-            };
-            message_keys.push(format!("atm:{}", outcome.message_id));
+            message_keys.push(format!("atm:{}", committed.outcome.persisted_message_id()));
         }
 
         let snapshot = inspect_template_admission_for_test(&fixture.database_path, &message_keys)
@@ -2086,6 +2179,136 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn local_host_qualified_write_uses_the_daemon_adapter_without_local_persistence() {
+        let remote = fixture(true, None, None);
+        let remote_runtime = HttpRuntimeBuilder::new(
+            direct_peer_runtime_config(&remote, crate::DirectPeerTcpConfig::ephemeral_for_test()),
+            Arc::new(remote.router.clone()),
+        )
+        .build()
+        .expect("valid remote direct peer runtime configuration")
+        .start()
+        .await
+        .expect("remote direct peer runtime starts");
+        let remote_port = remote_runtime
+            .direct_peer_address()
+            .expect("ephemeral remote direct peer listener is bound")
+            .port();
+
+        let mut local = fixture(true, None, None);
+        let adapter = Arc::new(TestPeerIoAdapter::new(remote_port));
+        local.router = local
+            .router
+            .clone()
+            .with_peer_io_adapter(Arc::clone(&adapter) as Arc<dyn PeerIoAdapter>);
+        let mut request = write_request(local.home_dir.clone(), local.current_dir.clone());
+        request.to = Some(
+            "recipient@test-team.peer.example.test"
+                .parse()
+                .expect("host-qualified recipient"),
+        );
+
+        let response = local
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(request))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("daemon-owned peer dispatch succeeds");
+        assert!(matches!(
+            response.into_inner(),
+            ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
+        ));
+        assert_eq!(
+            adapter.connect_calls.load(Ordering::SeqCst),
+            1,
+            "the host-qualified write performs exactly one adapter connection"
+        );
+        assert!(
+            local
+                .message_store
+                .list_messages(&MessageQuery {
+                    team: "test-team".parse().expect("team"),
+                    agent: "recipient".parse().expect("agent"),
+                    sender: None,
+                    task_id: None,
+                    limit: None,
+                })
+                .expect("inspect local mailbox")
+                .is_empty(),
+            "the origin daemon must not persist a second local mailbox row"
+        );
+        assert_eq!(
+            remote
+                .message_store
+                .list_messages(&MessageQuery {
+                    team: "test-team".parse().expect("team"),
+                    agent: "recipient".parse().expect("agent"),
+                    sender: None,
+                    task_id: None,
+                    limit: None,
+                })
+                .expect("inspect remote mailbox")
+                .len(),
+            1,
+            "the authenticated peer endpoint owns the sole durable write"
+        );
+
+        remote_runtime
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("remote direct peer runtime drains");
+    }
+
+    #[tokio::test]
+    async fn host_qualified_local_write_without_adapter_fails_before_local_admission() {
+        let local = fixture(true, None, None);
+        let mut request = write_request(local.home_dir.clone(), local.current_dir.clone());
+        request.to = Some(
+            "recipient@test-team.peer.example.test"
+                .parse()
+                .expect("host-qualified recipient"),
+        );
+
+        let error = local
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(request))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect_err("missing mTLS adapter must not fall back to raw TCP or local persistence");
+        assert_eq!(error.code().as_str(), "REMOTE_DELIVERY_UNCONFIRMED");
+        assert!(
+            local
+                .message_store
+                .list_messages(&MessageQuery {
+                    team: "test-team".parse().expect("team"),
+                    agent: "recipient".parse().expect("agent"),
+                    sender: None,
+                    task_id: None,
+                    limit: None,
+                })
+                .expect("inspect local mailbox")
+                .is_empty(),
+            "failed remote selection must not create a local mailbox record"
+        );
+        assert!(
+            local
+                .received_hook
+                .emitted_ids
+                .lock()
+                .expect("inspect local hooks")
+                .is_empty(),
+            "failed remote selection must not emit a received-message hook"
+        );
+    }
+
+    #[tokio::test]
     async fn local_ack_routes_to_the_received_peer_and_peer_receipt_does_not_reacknowledge() {
         let remote = fixture(true, None, None);
         let remote_runtime = HttpRuntimeBuilder::new(
@@ -2106,7 +2329,7 @@ mod tests {
         local.router = local
             .router
             .clone()
-            .with_direct_peer_port(std::num::NonZeroU16::new(remote_port).expect("non-zero port"));
+            .with_peer_io_adapter(Arc::new(TestPeerIoAdapter::new(remote_port)));
         let local_runtime = HttpRuntimeBuilder::new(
             direct_peer_runtime_config(&local, crate::DirectPeerTcpConfig::ephemeral_for_test()),
             Arc::new(local.router.clone()),

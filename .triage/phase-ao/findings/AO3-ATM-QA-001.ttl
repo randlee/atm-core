@@ -15,7 +15,9 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "fixed_partial" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-18T21:58:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-18T19:42:55Z"^^xsd:dateTime ;
   triage:foundIn triage:AO.3 ;
@@ -32,10 +34,10 @@
   triage:file "docs/plans/phase-ao/sprint-ao3-tls-proof-and-evidence.md" ;
   triage:line 2 ;
   triage:snippet "title: AO.3 — Prove peer-tls on the canonical ATM path" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s1-tls-module-rehome" ;
-  triage:headSha "cb5d8b4ba" ;
+  triage:headSha "978667a21" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s1/cb5d8b4ba> .
 
 <urn:atm:triage:occurrence/AO3-ATM-QA-001/pao-s2>
@@ -43,10 +45,10 @@
   triage:file "docs/plans/phase-ao/sprint-ao3-tls-proof-and-evidence.md" ;
   triage:line 2 ;
   triage:snippet "title: AO.3 — Prove peer-tls on the canonical ATM path" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s2-optional-runtime-activation" ;
-  triage:headSha "c606b8659" ;
+  triage:headSha "f3732a0877a891c32ce86b3a006685d13c6709bd" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s2/c606b8659> .
 
 <urn:atm:triage:occurrence/AO3-ATM-QA-001/pao-s3>
@@ -65,10 +67,10 @@
   triage:file "docs/plans/phase-ao/sprint-ao3-tls-proof-and-evidence.md" ;
   triage:line 2 ;
   triage:snippet "title: AO.3 — Prove peer-tls on the canonical ATM path" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s4-tls-benchmark-modes" ;
-  triage:headSha "ce0b37c0e" ;
+  triage:headSha "b17521ae780829b2a8c00d950ab93dd45adb8133" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s4/ce0b37c0e> .
 
 <urn:atm:triage:occurrence/AO3-ATM-QA-001/pao-s5>

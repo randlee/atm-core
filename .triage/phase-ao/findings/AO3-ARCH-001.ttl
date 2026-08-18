@@ -15,7 +15,9 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "fixed_partial" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-18T21:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-18T20:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO.3 ;
@@ -65,10 +67,10 @@
   triage:file "crates/atm-http-runtime/src/lib.rs" ;
   triage:line 1373 ;
   triage:snippet "recipient@atm-dev.localhost" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s4-tls-benchmark-modes" ;
-  triage:headSha "ce0b37c0e" ;
+  triage:headSha "b17521ae780829b2a8c00d950ab93dd45adb8133" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s4/ce0b37c0e> .
 
 <urn:atm:triage:occurrence/AO3-ARCH-001/pao-s5>
