@@ -1,0 +1,118 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO3-RSH-001>
+  a triage:Finding ;
+  triage:findingId "AO3-RSH-001" ;
+  triage:title "No timeout on HTTP body-read phase in message_handler.rs" ;
+  triage:description "rust-service-hardening-agent IMPORTANT finding from AO3-QA-1 (PR #945 @ 4408867ef): crates/atm-http-runtime/src/message_handler.rs:364 -- no timeout bounds the HTTP request body-read phase; a slow-drip body can hold a connection/permit indefinitely despite the byte-size cap. Note: this is the Tokio+Axum atm-http-runtime path (the target architecture), not the frozen legacy sync daemon -- fully in scope to fix." ;
+  triage:phaseId "phase-ao" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "runtime-hardening" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-18T19:42:55Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO.3 ;
+  triage:foundAt "2026-08-18T19:42:55Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO3-RSH-001/S1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO3-RSH-001/S2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO3-RSH-001/S3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO3-RSH-001/S4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO3-RSH-001/S5> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO3-RSH-001/S1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 364 ;
+  triage:snippet "body: Bytes," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "cb5d8b4ba" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s1/cb5d8b4ba> .
+
+<urn:atm:triage:occurrence/AO3-RSH-001/S2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 364 ;
+  triage:snippet "body: Bytes," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s2-optional-runtime-activation" ;
+  triage:headSha "c606b8659" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s2/c606b8659> .
+
+<urn:atm:triage:occurrence/AO3-RSH-001/S3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 364 ;
+  triage:snippet "body: Bytes," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
+  triage:headSha "4408867ef" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s3/4408867ef> .
+
+<urn:atm:triage:occurrence/AO3-RSH-001/S4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 364 ;
+  triage:snippet "body: Bytes," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s4-tls-benchmark-modes" ;
+  triage:headSha "ce0b37c0e" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s4/ce0b37c0e> .
+
+<urn:atm:triage:occurrence/AO3-RSH-001/S5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 364 ;
+  triage:snippet "body: Bytes," ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s5-platform-benchmark-proof" ;
+  triage:headSha "56f5bc9ead24d0080acb640eb96d09fd4fdb2ff8" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s5/8245717e9> .
+
+<urn:atm:triage:worktree/pao-s1/cb5d8b4ba>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s1" ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "cb5d8b4ba" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pao-s2/c606b8659>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s2" ;
+  triage:branch "feature/pao-s2-optional-runtime-activation" ;
+  triage:headSha "c606b8659" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pao-s3/4408867ef>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s3" ;
+  triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
+  triage:headSha "4408867ef" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pao-s4/ce0b37c0e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s4" ;
+  triage:branch "feature/pao-s4-tls-benchmark-modes" ;
+  triage:headSha "ce0b37c0e" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pao-s5/8245717e9>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s5" ;
+  triage:branch "feature/pao-s5-platform-benchmark-proof" ;
+  triage:headSha "8245717e9" ;
+  triage:orderIndex 5 .
