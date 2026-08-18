@@ -15,7 +15,7 @@
   triage:severity "minor" ;
   triage:repeatable true ;
   triage:sweepScope "repo_wide_for_pattern" ;
-  triage:status "open" ;
+  triage:status "fixed_partial" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-18T20:44:07Z"^^xsd:dateTime ;
   triage:foundIn triage:AO.3 ;
@@ -76,10 +76,10 @@
   triage:file "crates/atm-runtime/src/composition.rs" ;
   triage:line 358 ;
   triage:snippet "struct TestPeerConfigStore { interfaces: Vec<HttpsInterface>, certificate: Option<LocalCertificate>, peers: Vec<TrustedPeer> }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s5-platform-benchmark-proof" ;
-  triage:headSha "56f5bc9ea" ;
+  triage:headSha "e73b20460" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s5/56f5bc9ea> .
 
 <urn:atm:triage:worktree/pao-s1/cb5d8b4ba>
