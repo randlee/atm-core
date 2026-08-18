@@ -101,6 +101,8 @@ docs/
   atm-message-schema.md
   legacy-atm-message-schema.md
   sc-observability-schema.md
+  canonical-naming-conventions.md
+  canonical-naming-migration-inventory.md
   project-plan.md
   read-behavior.md
   archive/
