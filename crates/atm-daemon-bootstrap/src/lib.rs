@@ -328,7 +328,7 @@ where
 fn replacement_runtime_config(
     scope: &atm_core::home::HostRuntimeScope,
     owner: &DaemonOwnerGuard,
-    peer_transport_enabled: bool,
+    direct_peer_enabled: bool,
 ) -> Result<HttpRuntimeConfig, AtmError> {
     let loopback = LoopbackTcpConfig::new(
         SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
@@ -348,7 +348,7 @@ fn replacement_runtime_config(
             NonZeroDuration::new(REPLACEMENT_DRAIN_DEADLINE).expect("non-zero shutdown timeout"),
         ),
     );
-    Ok(if peer_transport_enabled {
+    Ok(if direct_peer_enabled {
         config.with_direct_peer_tcp(DirectPeerTcpConfig::standard())
     } else {
         config
