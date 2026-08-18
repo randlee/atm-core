@@ -9,13 +9,16 @@
   triage:findingId "AO3-ATM-QA-006" ;
   triage:title "Deliverable 4 (indexed safe site/reports/) partially-present, entangled with Deliverable 2's M5 gap" ;
   triage:description "req-qa IMPORTANT finding from AO3-QA-1 (PR #945 @ 4408867ef): Deliverable 4 (indexed safe site/reports/) is partially-present, silently entangled with Deliverable 2's M5 host-availability blockage. Confirmed per req-qa's explicit check. Mark dispatch_ready accordingly if this is downstream of the same known external-dependency block as AO3-ATM-QA-005, not a distinct code defect." ;
+  triage:correctionNote "quality-mgr AO3-QA-2: re-scoped out of AO.3 by commit ea0b6e908 on feature/pao-s3-tls-proof-and-evidence (docs(ao3): re-scope two-host mTLS proof to AO.5 per Rand's direction, authored by Rand Lee, 2026-08-18), which also removes the master-reports-index linkage requirement for the two-host mTLS smoke/benchmark artifacts (owned by AO.5). Previously reopened by quality-mgr on 2026-08-18 after req-qa/rust-qa-agent showed index-freshness checks did not prove deliverable completeness -- that correction stands; this closure is on distinct grounds (the deliverable itself no longer applies to AO.3), not a retraction of that finding." ;
   triage:phaseId "phase-ao" ;
   triage:triageMode "initial_pass" ;
   triage:category "deliverable-gap" ;
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-18T23:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-08-18T19:45:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO.3 ;
@@ -28,11 +31,13 @@
   triage:file "site/reports" ;
   triage:line 0 ;
   triage:snippet "Deliverable 4 (indexed safe site/reports/) - incomplete due to M5 host-availability blockage" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
   triage:headSha "d8bcd0ed04aafa62d8810237f9fb1075aa7c2082" ;
-  triage:occursIn <urn:atm:triage:worktree/pao-s3/4408867ef> .
+  triage:occursIn <urn:atm:triage:worktree/pao-s3/4408867ef> ;
+  triage:closedAt "2026-08-18T23:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" .
 
 <urn:atm:triage:worktree/pao-s1/cb5d8b4ba>
   a triage:WorktreeSnapshot ;
