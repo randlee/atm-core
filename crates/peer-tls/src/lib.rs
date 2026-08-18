@@ -325,7 +325,7 @@ mod tests {
         );
         let pem_path = directory.path().join(format!("{file_name}.pem"));
         std::fs::write(&pem_path, bundle).expect("write test certificate bundle");
-        let fingerprint = certificate_fingerprint(&generated.cert.der());
+        let fingerprint = certificate_fingerprint(generated.cert.der());
         let certificate = LocalCertificate {
             fingerprint: fingerprint.parse().expect("valid fingerprint"),
             private_key_ref: pem_path
