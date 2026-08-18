@@ -74,7 +74,8 @@ Keep deletion review isolated from the next release to preserve rollback.
 ## Required Validation
 
 ```bash
-bash ../sc-publish/docs/publish-kit/sync-overlay.sh --dry-run .
+PUBLISH_KIT_SOURCE=/Users/randlee/Documents/github/sc-publish
+bash "$PUBLISH_KIT_SOURCE/docs/publish-kit/sync-overlay.sh" --dry-run "$PWD"
 just lint
 just test
 ```

@@ -86,8 +86,9 @@ consumer manifest work belongs to AS.2.
 ## Required Validation
 
 ```bash
-bash ../sc-publish/docs/publish-kit/sync-overlay.sh --dry-run <atm-worktree>
-git -C <atm-worktree> diff --exit-code -- <canonical-owned-paths>
+PUBLISH_KIT_SOURCE=/Users/randlee/Documents/github/sc-publish
+ATM_WORKTREE="$PWD"
+bash "$PUBLISH_KIT_SOURCE/docs/publish-kit/sync-overlay.sh" --dry-run "$ATM_WORKTREE"
 ```
 
 ## Required Document Updates

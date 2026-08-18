@@ -81,8 +81,9 @@ different closure type and executes against immutable `main` artifacts.
 ```bash
 just lint
 just test
-bash ../sc-publish/docs/publish-kit/sync-overlay.sh --dry-run .
-gh workflow run release-preflight.yml --ref <exact-commit>
+PUBLISH_KIT_SOURCE=/Users/randlee/Documents/github/sc-publish
+bash "$PUBLISH_KIT_SOURCE/docs/publish-kit/sync-overlay.sh" --dry-run "$PWD"
+gh workflow run release-preflight.yml --ref "$(git rev-parse HEAD)"
 ```
 
 ## Required Document Updates
