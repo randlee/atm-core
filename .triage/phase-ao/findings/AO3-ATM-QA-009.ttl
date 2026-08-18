@@ -54,10 +54,10 @@
   triage:file "crates/atm-runtime/src/composition.rs" ;
   triage:line 358 ;
   triage:snippet "struct TestPeerConfigStore { interfaces: Vec<HttpsInterface>, certificate: Option<LocalCertificate>, peers: Vec<TrustedPeer> }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
-  triage:headSha "a576a7b39" ;
+  triage:headSha "d8bcd0ed04aafa62d8810237f9fb1075aa7c2082" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s3/a576a7b39> .
 
 <urn:atm:triage:occurrence/AO3-ATM-QA-009/pao-s4-occ1>
