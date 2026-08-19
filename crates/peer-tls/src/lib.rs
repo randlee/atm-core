@@ -243,6 +243,15 @@ pub mod benchmark_support {
     pub struct DisposableLocalhostIdentity {
         _directory: tempfile::TempDir,
         private_key_path: PathBuf,
+        identity_record_path: PathBuf,
+    }
+
+    impl Drop for DisposableLocalhostIdentity {
+        fn drop(&mut self) {
+            // This record holds only the short-lived key path. Removing it
+            // prevents later benchmark runs from resolving a stale identity.
+            let _ = std::fs::remove_file(&self.identity_record_path);
+        }
     }
 
     impl DisposableLocalhostIdentity {
@@ -260,12 +269,18 @@ pub mod benchmark_support {
     /// avoiding inherited ACL assumptions from caller-provided directories.
     pub async fn configure_disposable_localhost_identity(
         store: Arc<dyn PeerConfigStore>,
+        identity_record_root: PathBuf,
         hostname: &str,
         port: u16,
     ) -> Result<DisposableLocalhostIdentity, AtmError> {
         let hostname = hostname.to_owned();
         tokio::task::spawn_blocking(move || {
-            configure_disposable_localhost_identity_blocking(store, hostname, port)
+            configure_disposable_localhost_identity_blocking(
+                store,
+                identity_record_root,
+                hostname,
+                port,
+            )
         })
         .await
         .map_err(|source| {
@@ -276,6 +291,7 @@ pub mod benchmark_support {
 
     fn configure_disposable_localhost_identity_blocking(
         store: Arc<dyn PeerConfigStore>,
+        identity_record_root: PathBuf,
         hostname: String,
         port: u16,
     ) -> Result<DisposableLocalhostIdentity, AtmError> {
@@ -312,6 +328,15 @@ pub mod benchmark_support {
         let (_file, private_key_path) = pem_file.keep().map_err(|source| {
             AtmError::certificate_operation("could not retain benchmark peer TLS identity bundle")
                 .with_cause(source.error)
+        })?;
+        let identity_record_path = identity_record_root.join("benchmark-peer-tls.path");
+        std::fs::write(
+            &identity_record_path,
+            private_key_path.display().to_string(),
+        )
+        .map_err(|source| {
+            AtmError::certificate_operation("could not publish benchmark peer TLS identity record")
+                .with_cause(source)
         })?;
         let fingerprint: CertificateFingerprint = certificate_fingerprint(generated.cert.der())
             .parse()
@@ -354,6 +379,7 @@ pub mod benchmark_support {
         Ok(DisposableLocalhostIdentity {
             _directory: directory,
             private_key_path,
+            identity_record_path,
         })
     }
 }

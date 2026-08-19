@@ -95,10 +95,12 @@ class AdmissionCapacityTests(unittest.TestCase):
     def test_tcp_tls_endpoint_requires_only_the_disposable_identity_bundle(self):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
-            identity = home / "benchmark-peer-tls.pem"
-            with self.assertRaisesRegex(RUNNER.SmokeError, "identity bundle"):
+            record = home / "benchmark-peer-tls.path"
+            with self.assertRaisesRegex(RUNNER.SmokeError, "identity record"):
                 RUNNER.local_endpoint("tcp", "mutual_tls", home)
+            identity = home / "private-bundle.pem"
             identity.write_text("disposable test identity", encoding="utf-8")
+            record.write_text(str(identity), encoding="utf-8")
             endpoint = RUNNER.local_endpoint("tcp", "mutual_tls", home)
         self.assertEqual(endpoint.address, ("127.0.0.1", 43_101))
         self.assertEqual(endpoint.peer_wire_security, "mutual_tls")

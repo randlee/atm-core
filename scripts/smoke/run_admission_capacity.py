@@ -794,9 +794,15 @@ def local_endpoint(
         if peer_wire_security == "mutual_tls":
             if home is None:
                 raise SmokeError("mTLS benchmark endpoint requires a disposable ATM_HOME")
-            identity = home / "benchmark-peer-tls.pem"
+            identity_record = home / "benchmark-peer-tls.path"
+            if not identity_record.is_file():
+                raise SmokeError("benchmark mTLS identity record was not created by the daemon")
+            try:
+                identity = Path(identity_record.read_text(encoding="utf-8").strip())
+            except OSError as error:
+                raise SmokeError(f"could not read benchmark mTLS identity record: {error}") from error
             if not identity.is_file():
-                raise SmokeError("benchmark mTLS identity bundle was not created by the daemon")
+                raise SmokeError("benchmark mTLS identity record does not reference a private bundle")
         return LocalEndpoint(
             "tcp", ("127.0.0.1", 43_101), None, peer_wire_security, identity,
         )

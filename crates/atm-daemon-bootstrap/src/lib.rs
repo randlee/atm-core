@@ -304,9 +304,11 @@ async fn run_replacement_daemon_with_selector(
     #[cfg(feature = "benchmark-harness")]
     let _benchmark_tls_identity =
         if direct_peer_requested && peer_wire_security == DirectPeerWireSecurity::MutualTls {
+            let identity_record_root = atm_core::home::atm_home()?;
             Some(
                 peer_tls::benchmark_support::configure_disposable_localhost_identity(
                     assembly.peer_config_store(),
+                    identity_record_root,
                     BENCHMARK_PEER_HOST,
                     BENCHMARK_PEER_PORT,
                 )
@@ -798,6 +800,7 @@ mod benchmark_peer_tls_tests {
 
         let identity = peer_tls::benchmark_support::configure_disposable_localhost_identity(
             store.clone(),
+            directory.path().to_path_buf(),
             BENCHMARK_PEER_HOST,
             BENCHMARK_PEER_PORT,
         )
@@ -839,6 +842,10 @@ mod benchmark_peer_tls_tests {
         assert!(
             !private_key_path.exists(),
             "the benchmark identity guard removes the private-key bundle after shutdown"
+        );
+        assert!(
+            !directory.path().join("benchmark-peer-tls.path").exists(),
+            "the benchmark identity guard removes its non-secret discovery record after shutdown"
         );
     }
 }
