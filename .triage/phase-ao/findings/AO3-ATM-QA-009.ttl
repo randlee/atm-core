@@ -67,11 +67,13 @@
   triage:file "crates/atm-runtime/src/composition.rs" ;
   triage:line 358 ;
   triage:snippet "struct TestPeerConfigStore { interfaces: Vec<HttpsInterface>, certificate: Option<LocalCertificate>, peers: Vec<TrustedPeer> }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s4-tls-benchmark-modes" ;
-  triage:headSha "ce0b37c0e" ;
-  triage:occursIn <urn:atm:triage:worktree/pao-s4/ce0b37c0e> .
+  triage:headSha "137eff0fc7c5ad32a80f345af5feef1cb9d781db" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s4/ce0b37c0e> ;
+  triage:closedAt "2026-08-18T23:55:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" .
 
 <urn:atm:triage:occurrence/AO3-ATM-QA-009/pao-s5-occ1>
   a triage:Occurrence ;
