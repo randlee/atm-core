@@ -85,6 +85,10 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(RUNNER.target_selection("uds", None), ("uds", "not_applicable"))
         self.assertEqual(RUNNER.target_selection("tcp", None), ("tcp", "plaintext_test"))
         self.assertEqual(RUNNER.target_selection("tcp-tls", None), ("tcp", "mutual_tls"))
+        with mock.patch.object(RUNNER.os, "name", "nt"):
+            self.assertEqual(RUNNER.target_selection("default", None), ("tcp", "plaintext_test"))
+            self.assertEqual(RUNNER.target_selection("tcp", None), ("tcp", "plaintext_test"))
+            self.assertEqual(RUNNER.target_selection("tcp-tls", None), ("tcp", "mutual_tls"))
         with self.assertRaisesRegex(RUNNER.SmokeError, "either a benchmark target"):
             RUNNER.target_selection("tcp", "tcp")
 
@@ -114,15 +118,15 @@ class AdmissionCapacityTests(unittest.TestCase):
             with self.assertRaisesRegex(RUNNER.SmokeError, "peer_wire_security"):
                 RUNNER.load_baseline_median(path, "tcp", "mutual_tls", 1)
 
-    def test_host_runtime_doctor_environment_ignores_disposable_atm_home(self):
+    def test_child_runtime_doctor_environment_keeps_disposable_atm_home(self):
         environment = {
             "ATM_HOME": "/tmp/atm-capacity-1",
             "ATM_IDENTITY": "capacity-agent",
             "ATM_TEAM": "capacity-team",
         }
         self.assertEqual(
-            RUNNER.host_runtime_client_environment(environment),
-            {"ATM_IDENTITY": "capacity-agent", "ATM_TEAM": "capacity-team"},
+            RUNNER.benchmark_client_environment(environment),
+            environment,
         )
         self.assertIn("ATM_HOME", environment)
 

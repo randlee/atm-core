@@ -552,11 +552,16 @@ def runtime_environment(
     return environment
 
 
-def host_runtime_client_environment(environment: dict[str, str]) -> dict[str, str]:
-    """Use the OS-user runtime record, never the disposable config root, for doctor."""
-    result = dict(environment)
-    result.pop("ATM_HOME", None)
-    return result
+def benchmark_client_environment(environment: dict[str, str]) -> dict[str, str]:
+    """Point child-process diagnostics at the same disposable runtime they exercise.
+
+    The benchmark child writes its endpoint record under its fresh ``ATM_HOME``.
+    Removing that setting would make ``atm doctor`` consult the unrelated ambient
+    daemon and either fail after it was intentionally quiesced or validate the
+    wrong process. Managed-service runs obtain their doctor proof through
+    daemon-switch instead.
+    """
+    return dict(environment)
 
 
 def benchmark_doctor_payload(result: dict[str, object]) -> dict[str, object]:
@@ -1430,7 +1435,7 @@ def run_capacity(
             doctor = command_result(
                 [str(atm), "doctor", "--json"],
                 timeout=10.0,
-                env=host_runtime_client_environment(env),
+                env=benchmark_client_environment(env),
             )
             doctor_payload = benchmark_doctor_payload(doctor)
             evidence["daemon_pid"] = process.pid
@@ -1497,7 +1502,7 @@ def run_capacity(
             restart_doctor = command_result(
                 [str(atm), "doctor", "--json"],
                 timeout=10.0,
-                env=host_runtime_client_environment(env),
+                env=benchmark_client_environment(env),
             )
             benchmark_doctor_payload(restart_doctor)
         # The full doctor payload is host-private diagnostics; publication only
