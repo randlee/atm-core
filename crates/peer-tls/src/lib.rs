@@ -219,6 +219,145 @@ impl PeerIoAdapter for PeerTlsAdapter {
     }
 }
 
+/// Feature-gated support for the isolated benchmark daemon's disposable mTLS
+/// identity.  The active transport crate owns certificate generation,
+/// fingerprinting, and durable peer configuration so composition roots never
+/// reach into the storage TLS-helper facade.
+#[cfg(feature = "benchmark-support")]
+pub mod benchmark_support {
+    use std::io::Write;
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    use std::num::NonZeroU16;
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    use atm_storage::{
+        AtmError, CertificateFingerprint, HostName, HttpsInterface, LocalCertificate,
+        PeerConfigStore, PrivateKeyRef, TrustedPeer, certificate_fingerprint,
+    };
+
+    /// Keeps the owner-only temporary directory alive while the benchmark
+    /// listener reads its configured private-key path. Dropping it removes the
+    /// complete certificate bundle after shutdown on every supported platform.
+    #[derive(Debug)]
+    pub struct DisposableLocalhostIdentity {
+        _directory: tempfile::TempDir,
+        private_key_path: PathBuf,
+    }
+
+    impl DisposableLocalhostIdentity {
+        /// The ephemeral PEM location, exposed only for focused verification.
+        pub fn private_key_path(&self) -> &std::path::Path {
+            &self.private_key_path
+        }
+    }
+
+    /// Generate, persist, and register a disposable localhost mTLS identity.
+    ///
+    /// Certificate generation and private-key filesystem work are isolated in
+    /// `spawn_blocking`; the caller remains on the Tokio executor. `TempDir`
+    /// creates a current-user-only temporary directory on supported platforms,
+    /// avoiding inherited ACL assumptions from caller-provided directories.
+    pub async fn configure_disposable_localhost_identity(
+        store: Arc<dyn PeerConfigStore>,
+        hostname: &str,
+        port: u16,
+    ) -> Result<DisposableLocalhostIdentity, AtmError> {
+        let hostname = hostname.to_owned();
+        tokio::task::spawn_blocking(move || {
+            configure_disposable_localhost_identity_blocking(store, hostname, port)
+        })
+        .await
+        .map_err(|source| {
+            AtmError::certificate_operation("benchmark TLS identity worker failed")
+                .with_cause(source)
+        })?
+    }
+
+    fn configure_disposable_localhost_identity_blocking(
+        store: Arc<dyn PeerConfigStore>,
+        hostname: String,
+        port: u16,
+    ) -> Result<DisposableLocalhostIdentity, AtmError> {
+        let directory = tempfile::Builder::new()
+            .prefix("atm-benchmark-peer-tls-")
+            .tempdir()
+            .map_err(|source| {
+                AtmError::certificate_operation(
+                    "could not create private temporary directory for benchmark peer TLS identity",
+                )
+                .with_cause(source)
+            })?;
+        let generated =
+            rcgen::generate_simple_self_signed(vec![hostname.clone()]).map_err(|source| {
+                AtmError::certificate_operation(
+                    "could not generate disposable benchmark peer TLS certificate",
+                )
+                .with_cause(source)
+            })?;
+        let mut pem_file = tempfile::NamedTempFile::new_in(directory.path()).map_err(|source| {
+            AtmError::certificate_operation("could not create benchmark peer TLS identity bundle")
+                .with_cause(source)
+        })?;
+        write!(
+            pem_file,
+            "{}{}",
+            generated.cert.pem(),
+            generated.key_pair.serialize_pem()
+        )
+        .map_err(|source| {
+            AtmError::certificate_operation("could not write benchmark peer TLS identity bundle")
+                .with_cause(source)
+        })?;
+        let (_file, private_key_path) = pem_file.keep().map_err(|source| {
+            AtmError::certificate_operation("could not retain benchmark peer TLS identity bundle")
+                .with_cause(source.error)
+        })?;
+        let fingerprint: CertificateFingerprint = certificate_fingerprint(generated.cert.der())
+            .parse()
+            .map_err(|source| {
+                AtmError::certificate_operation(
+                    "generated benchmark peer TLS certificate has an invalid fingerprint",
+                )
+                .with_cause(source)
+            })?;
+        let host: HostName = hostname.parse().map_err(|source| {
+            AtmError::certificate_operation("benchmark peer hostname is invalid").with_cause(source)
+        })?;
+        let https_port = NonZeroU16::new(port).ok_or_else(|| {
+            AtmError::certificate_operation("benchmark peer TLS port must be non-zero")
+        })?;
+        store.save_interface(&HttpsInterface {
+            bind_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port),
+            advertise_host: host.clone(),
+            enabled: true,
+        })?;
+        store.save_local_certificate(&LocalCertificate {
+            fingerprint: fingerprint.clone(),
+            private_key_ref: private_key_path
+                .display()
+                .to_string()
+                .parse::<PrivateKeyRef>()
+                .map_err(|source| {
+                    AtmError::certificate_operation(
+                        "benchmark peer TLS identity path is not a valid private-key reference",
+                    )
+                    .with_cause(source)
+                })?,
+        })?;
+        store.save_trusted_peer(&TrustedPeer {
+            host,
+            fingerprint,
+            enabled: true,
+            https_port,
+        })?;
+        Ok(DisposableLocalhostIdentity {
+            _directory: directory,
+            private_key_path,
+        })
+    }
+}
+
 struct LocalTlsSnapshot {
     #[allow(
         dead_code,
@@ -648,6 +787,58 @@ mod tests {
             error
                 .message()
                 .contains("rejected the inbound client certificate or handshake")
+        );
+    }
+
+    #[tokio::test]
+    async fn untrusted_mtls_peer_is_rejected_before_an_http_body_can_be_dispatched() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let server_identity = write_identity(&directory, "server", "localhost");
+        let configured_peer = write_identity(&directory, "configured-client", "client.test");
+        let untrusted_peer = write_identity(&directory, "untrusted-client", "client.test");
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind listener");
+        let port = listener.local_addr().expect("listener address").port();
+        let server = PeerTlsAdapter::new(store(
+            server_identity.certificate.clone(),
+            vec![trusted_peer(
+                "client.test",
+                &configured_peer.fingerprint,
+                port,
+            )],
+        ))
+        .expect("server mTLS configuration");
+        let client = PeerTlsAdapter::new(store(
+            untrusted_peer.certificate,
+            vec![trusted_peer(
+                "localhost",
+                &server_identity.fingerprint,
+                port,
+            )],
+        ))
+        .expect("untrusted client can validate the server certificate");
+
+        let server_task = tokio::spawn(async move {
+            let (tcp, _) = listener.accept().await.expect("accept TCP");
+            server
+                .accept(tcp, RequestDeadline::after(Duration::from_secs(1)))
+                .await
+        });
+        let client_stream = client
+            .connect(
+                "localhost".parse().expect("peer host"),
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect(
+                "the client may complete its local handshake before the server's rejection arrives",
+            );
+        drop(client_stream);
+        let server_result = server_task.await.expect("server task");
+        assert!(
+            server_result.is_err(),
+            "the server must reject the unpinned client before yielding an opaque stream to HTTP"
         );
     }
 

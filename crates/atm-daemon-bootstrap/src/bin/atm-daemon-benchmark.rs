@@ -5,6 +5,7 @@
 //! an explicit subcommand on its command line.
 
 use std::num::NonZeroUsize;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
@@ -283,14 +284,14 @@ async fn run_direct_core_write(
     let runtime = atm_daemon_bootstrap::assemble_default_runtime()?
         .for_daemon()
         .service_runtime;
-    let home = atm_core::home::atm_home()?;
+    let request_config = DirectCoreWriteConfig::from_environment(atm_core::home::atm_home()?);
     let next = Arc::new(AtomicUsize::new(0));
     let started = Instant::now();
     let mut tasks = JoinSet::new();
 
     for _ in 0..workers.get() {
         let runtime = runtime.clone();
-        let home = home.clone();
+        let request_config = request_config.clone();
         let next = Arc::clone(&next);
         tasks.spawn(async move {
             let mut accepted = 0_usize;
@@ -300,7 +301,7 @@ async fn run_direct_core_write(
                     return Ok::<usize, AtmError>(accepted);
                 }
                 prepare_write_with_async_runtime(
-                    direct_core_write_request(&home, sequence)?,
+                    direct_core_write_request(&request_config, sequence)?,
                     &NullObservability,
                     &runtime,
                 )
@@ -339,21 +340,44 @@ async fn run_direct_core_write(
     Ok(())
 }
 
+/// Environment-derived benchmark identities captured once before concurrent
+/// workers start. The hot admission loop must not repeatedly read mutable
+/// process state or re-allocate its target address per message.
+#[derive(Clone)]
+struct DirectCoreWriteConfig {
+    home: PathBuf,
+    sender: AgentName,
+    recipient_address: String,
+    team: TeamName,
+}
+
+impl DirectCoreWriteConfig {
+    fn from_environment(home: PathBuf) -> Self {
+        let team =
+            env::var("ATM_CAPACITY_CORE_TEAM").unwrap_or_else(|_| CORE_WRITE_TEAM.to_owned());
+        let sender =
+            env::var("ATM_CAPACITY_CORE_AGENT").unwrap_or_else(|_| CORE_WRITE_SENDER.to_owned());
+        let recipient = env::var("ATM_CAPACITY_CORE_RECIPIENT")
+            .unwrap_or_else(|_| CORE_WRITE_RECIPIENT.to_owned());
+        Self {
+            home,
+            sender: AgentName::from_validated(&sender),
+            recipient_address: format!("{recipient}@{team}"),
+            team: TeamName::from_validated(&team),
+        }
+    }
+}
+
 fn direct_core_write_request(
-    home: &std::path::Path,
+    config: &DirectCoreWriteConfig,
     sequence: usize,
 ) -> Result<WriteRequest, AtmError> {
-    let team = env::var("ATM_CAPACITY_CORE_TEAM").unwrap_or_else(|_| CORE_WRITE_TEAM.to_owned());
-    let sender =
-        env::var("ATM_CAPACITY_CORE_AGENT").unwrap_or_else(|_| CORE_WRITE_SENDER.to_owned());
-    let recipient =
-        env::var("ATM_CAPACITY_CORE_RECIPIENT").unwrap_or_else(|_| CORE_WRITE_RECIPIENT.to_owned());
     WriteRequest::new(
-        home.to_path_buf(),
-        home.to_path_buf(),
-        AgentName::from_validated(&sender),
-        &format!("{recipient}@{team}"),
-        TeamName::from_validated(&team),
+        config.home.clone(),
+        config.home.clone(),
+        config.sender.clone(),
+        &config.recipient_address,
+        config.team.clone(),
         SendMessageSource::Inline(format!("capacity-core-{sequence}")),
         None,
         false,
@@ -372,10 +396,12 @@ fn replacement_exit_code(error: &AtmError) -> i32 {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use super::{
         BenchmarkDirectPeerListener, BenchmarkHookMode, BenchmarkInvocation,
-        BenchmarkPeerWireSecurity, direct_core_write_request, direct_storage_message,
-        parse_benchmark_invocation, parse_nonzero_argument,
+        BenchmarkPeerWireSecurity, DirectCoreWriteConfig, direct_core_write_request,
+        direct_storage_message, parse_benchmark_invocation, parse_nonzero_argument,
     };
 
     #[test]
@@ -397,8 +423,9 @@ mod tests {
 
     #[test]
     fn direct_core_writes_use_the_canonical_capacity_address() {
-        let home = std::path::Path::new("/tmp/atm-capacity");
-        let request = direct_core_write_request(home, 7).expect("core request");
+        let home = Path::new("/tmp/atm-capacity");
+        let config = DirectCoreWriteConfig::from_environment(home.to_path_buf());
+        let request = direct_core_write_request(&config, 7).expect("core request");
         assert_eq!(request.caller_identity.as_str(), "capacity-core-agent");
         assert_eq!(request.caller_team.as_str(), "capacity-core-team");
         assert_eq!(

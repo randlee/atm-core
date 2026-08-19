@@ -126,7 +126,7 @@ allowed_dependencies = ["async-trait", "atm-error", "atm-runtime-test-support", 
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-daemon-bootstrap/Cargo.toml"
-allowed_dependencies = ["atm-core", "atm-http-runtime", "atm-runtime", "atm-storage", "atm-storage-rusqlite", "atm-template-sc-compose", "fs4", "peer-tls", "rcgen", "serde_json", "tempfile", "tokio", "tracing", "ulid"]
+allowed_dependencies = ["atm-core", "atm-http-runtime", "atm-runtime", "atm-storage", "atm-storage-rusqlite", "atm-template-sc-compose", "fs4", "peer-tls", "serde_json", "tempfile", "tokio", "tracing", "ulid"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-daemon-client/Cargo.toml"
@@ -164,7 +164,7 @@ allowed_dependencies = ["async-trait", "atm-storage", "chrono", "rusqlite", "ser
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/peer-tls/Cargo.toml"
 boundary_record_path = "boundaries/peer-tls/peer-tls.toml"
-allowed_dependencies = ["atm-core", "atm-storage", "rustls", "tokio", "tokio-rustls"]
+allowed_dependencies = ["atm-core", "atm-storage", "rcgen", "rustls", "tempfile", "tokio", "tokio-rustls"]
 allowed_dev_dependencies = ["rcgen", "tempfile"]
 
 [[boundaries.manifest_dependency_allowlists]]
