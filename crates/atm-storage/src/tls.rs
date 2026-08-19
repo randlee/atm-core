@@ -53,19 +53,21 @@ impl TlsIdentity {
         let certificates = CertificateDer::pem_slice_iter(&pem)
             .collect::<Result<Vec<_>, _>>()
             .map_err(|source| {
-                AtmError::validation("configured TLS certificate PEM is invalid").with_cause(source)
+                AtmError::certificate_operation("configured TLS certificate PEM is invalid")
+                    .with_cause(source)
             })?;
-        let first = certificates
-            .first()
-            .ok_or_else(|| AtmError::validation("configured TLS PEM bundle has no certificate"))?;
+        let first = certificates.first().ok_or_else(|| {
+            AtmError::certificate_operation("configured TLS PEM bundle has no certificate")
+        })?;
         let fingerprint = certificate_fingerprint(first);
         if normalize_fingerprint(certificate.fingerprint.as_str()) != fingerprint {
-            return Err(AtmError::validation(
+            return Err(AtmError::certificate_operation(
                 "configured TLS certificate fingerprint does not match the PEM bundle",
             ));
         }
         let private_key = PrivateKeyDer::from_pem_slice(&pem).map_err(|source| {
-            AtmError::validation("configured TLS private key PEM is invalid").with_cause(source)
+            AtmError::certificate_operation("configured TLS private key PEM is invalid")
+                .with_cause(source)
         })?;
         Ok(Self {
             certificates,

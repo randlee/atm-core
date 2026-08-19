@@ -1,6 +1,6 @@
 ---
 title: AO.2 — Install peer-tls below the canonical HTTP path
-status: in_progress
+status: complete
 recommended_agent: arch-ctm
 branch: feature/pao-s2-optional-runtime-activation
 worktree: ../atm-core-worktrees/feature/pao-s2-optional-runtime-activation

@@ -56,6 +56,69 @@ mod storage_and_nudge_router;
 #[cfg(unix)]
 mod unix_socket;
 
+#[cfg(test)]
+mod test_support {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use atm_core::boundary::sealed;
+    use atm_core::error::AtmError;
+    use atm_core::types::HostName;
+    use atm_core::{AcceptedPeerIo, BoxedPeerIo, PeerIoAdapter, RequestDeadline};
+    use tokio::net::TcpStream;
+
+    #[derive(Default)]
+    pub(crate) struct RejectingPeerIoAdapter {
+        connect_calls: AtomicUsize,
+    }
+
+    impl RejectingPeerIoAdapter {
+        pub(crate) fn new() -> Self {
+            Self::default()
+        }
+
+        pub(crate) fn connect_calls(&self) -> usize {
+            self.connect_calls.load(Ordering::SeqCst)
+        }
+    }
+
+    impl sealed::Sealed for RejectingPeerIoAdapter {}
+
+    impl PeerIoAdapter for RejectingPeerIoAdapter {
+        fn accept<'adapter>(
+            &'adapter self,
+            _stream: TcpStream,
+            _deadline: RequestDeadline,
+        ) -> std::pin::Pin<
+            Box<
+                dyn std::future::Future<Output = Result<AcceptedPeerIo, AtmError>>
+                    + Send
+                    + 'adapter,
+            >,
+        > {
+            Box::pin(async {
+                Err(AtmError::validation(
+                    "certificate, hostname, pin, or handshake rejected by test transport",
+                ))
+            })
+        }
+
+        fn connect<'adapter>(
+            &'adapter self,
+            _peer: HostName,
+            _deadline: RequestDeadline,
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<BoxedPeerIo, AtmError>> + Send + 'adapter>,
+        > {
+            self.connect_calls.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async {
+                Err(AtmError::validation(
+                    "certificate, hostname, pin, or handshake rejected by test transport",
+                ))
+            })
+        }
+    }
+}
+
 use loopback_tcp::{LoopbackEndpointRecordGuard, validate_loopback_config};
 
 /// An aborted Tokio task should stop at its next cancellation point. Keep this
@@ -63,14 +126,14 @@ use loopback_tcp::{LoopbackEndpointRecordGuard, validate_loopback_config};
 /// configured shutdown deadline without bound.
 const ABORT_JOIN_GRACE: Duration = Duration::from_millis(100);
 
-#[cfg(test)]
-pub(crate) use client::direct_peer_tcp_client;
 #[cfg(unix)]
 pub use client::unix_socket_client;
 pub use client::{
     DIRECT_PEER_TCP_PORT, SAME_HOST_REQUEST_DEADLINE, loopback_tcp_client, preferred_local_client,
     selected_write_transport,
 };
+#[cfg(any(test, feature = "test-support"))]
+pub use client::{authenticated_peer_client, direct_peer_tcp_client};
 pub use loopback_tcp::LoopbackTcpConfig;
 pub use message_handler::{
     AuthenticatedConnector, CanonicalWriteHandler, canonical_api_router, canonical_message_router,
@@ -183,7 +246,7 @@ impl DirectPeerTcpConfig {
         Self::new(DIRECT_PEER_TCP_PORT)
     }
 
-    /// Crate-private port selection keeps isolated runtime tests possible.
+    /// Fixed-port production composition remains the only normal constructor.
     /// Production composition can construct only [`Self::standard`].
     #[must_use]
     pub(crate) fn new(port: u16) -> Self {
@@ -194,9 +257,12 @@ impl DirectPeerTcpConfig {
     }
 
     /// Test-only isolated listener selection without a probe/rebind race.
-    #[cfg(test)]
+    ///
+    /// This is available to first-party integration tests only through the
+    /// `test-support` feature; it never changes the production constructor.
+    #[cfg(any(test, feature = "test-support"))]
     #[must_use]
-    pub(crate) fn ephemeral_for_test() -> Self {
+    pub fn ephemeral_for_test() -> Self {
         Self {
             port: 0,
             allow_ephemeral_test_port: true,
@@ -540,6 +606,7 @@ mod tests {
     use atm_core::types::{AgentName, HostName, TeamName};
     use tokio::net::{TcpListener, TcpStream};
 
+    use super::test_support::RejectingPeerIoAdapter;
     use super::{
         CanonicalWriteHandler, DirectPeerPlaintextDiagnostic, DirectPeerTcpConfig,
         HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig, NonZeroDuration, RuntimeHealth,
@@ -589,36 +656,6 @@ mod tests {
                     "passthrough peer adapter test does not implement outbound transport",
                 ))
             })
-        }
-    }
-
-    struct RejectingPeerIoAdapter;
-
-    impl atm_core::boundary::sealed::Sealed for RejectingPeerIoAdapter {}
-
-    impl PeerIoAdapter for RejectingPeerIoAdapter {
-        fn accept<'adapter>(
-            &'adapter self,
-            _stream: TcpStream,
-            _deadline: RequestDeadline,
-        ) -> std::pin::Pin<
-            Box<
-                dyn std::future::Future<Output = Result<AcceptedPeerIo, AtmError>>
-                    + Send
-                    + 'adapter,
-            >,
-        > {
-            Box::pin(async { Err(AtmError::validation("test transport rejected peer")) })
-        }
-
-        fn connect<'adapter>(
-            &'adapter self,
-            _peer: HostName,
-            _deadline: RequestDeadline,
-        ) -> std::pin::Pin<
-            Box<dyn std::future::Future<Output = Result<BoxedPeerIo, AtmError>> + Send + 'adapter>,
-        > {
-            Box::pin(async { Err(AtmError::validation("test transport rejected peer")) })
         }
     }
 
@@ -1045,7 +1082,7 @@ mod tests {
             unreachable!("fixture is a write");
         };
         write.to = Some(
-            "recipient@atm-dev.localhost"
+            format!("{TEST_RECIPIENT}@{TEST_TEAM}.localhost")
                 .parse()
                 .expect("host-qualified recipient"),
         );
@@ -1175,7 +1212,7 @@ mod tests {
             .with_direct_peer_tcp(DirectPeerTcpConfig::ephemeral_for_test());
         let handler = Arc::new(RecordingPeerRouter::default());
         let running = HttpRuntimeBuilder::new(config, handler.clone())
-            .with_peer_io_adapter(Arc::new(RejectingPeerIoAdapter))
+            .with_peer_io_adapter(Arc::new(RejectingPeerIoAdapter::new()))
             .build()
             .expect("adapter-protected direct peer configuration")
             .start()
@@ -2296,12 +2333,13 @@ mod tests {
 
     #[cfg(unix)]
     #[tokio::test(flavor = "current_thread")]
-    async fn loopback_and_uds_return_identical_canonical_json() {
+    async fn plaintext_diagnostic_mode_leaves_uds_and_loopback_on_canonical_paths() {
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let socket_path = temporary_directory.path().join("atm-http-runtime.sock");
         let record_path = temporary_directory.path().join("local-http.json");
         let instance_id = Ulid::new();
         write_owner_record(&record_path, instance_id);
+        let health = RuntimeHealth::with_owner(42);
         let configured = HttpRuntimeBuilder::new(
             loopback_runtime_config(
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
@@ -2313,12 +2351,21 @@ mod tests {
                     UnixSocketMode::new(NonZeroU32::new(0o600).expect("owner-only mode")),
                 )),
                 1024,
-            ),
+            )
+            .with_direct_peer_tcp(DirectPeerTcpConfig::ephemeral_for_test())
+            .with_plaintext_direct_peer_diagnostic(DirectPeerPlaintextDiagnostic::Test),
             Arc::new(CanonicalUdsRouter),
         )
+        .with_runtime_health(health.clone())
         .build()
         .expect("valid additive runtime configuration");
         let running = configured.start().await.expect("runtime starts");
+        assert!(running.direct_peer_address().is_some());
+        assert_eq!(
+            health.snapshot().detail.as_deref(),
+            Some("direct-peer transport: plaintext diagnostic override (test)"),
+            "the local diagnostics report the explicit override instead of silently falling back"
+        );
         let request = ApiRequest::new(write_request());
         let uds_response = super::unix_socket_client(&socket_path, Duration::from_secs(1))
             .expect("shared UDS client")
@@ -2334,7 +2381,7 @@ mod tests {
             serde_json::to_value(uds_response.into_inner()).expect("serialize UDS response"),
             serde_json::to_value(loopback_response.into_inner())
                 .expect("serialize loopback response"),
-            "the typed UDS and loopback clients preserve one response contract"
+            "the typed UDS and loopback clients preserve one response contract while a separate diagnostic listener is explicit"
         );
         running
             .begin_shutdown()

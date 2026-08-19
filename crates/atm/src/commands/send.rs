@@ -621,13 +621,23 @@ fn resolve_trusted_ipv4_with_lookup(
     }
 
     let mut matches = Vec::new();
+    let mut failed_lookups = 0_usize;
+    let enabled_peer_count = enabled_peers.len();
     for peer in enabled_peers {
-        if lookup(peer)?.contains(&IpAddr::V4(target_ip)) {
-            matches.push(peer);
+        match lookup(peer) {
+            Ok(addresses) if addresses.contains(&IpAddr::V4(target_ip)) => matches.push(peer),
+            Ok(_) => {}
+            Err(_) => failed_lookups += 1,
         }
     }
     match matches.as_slice() {
         [peer] => Ok(peer.host.clone()),
+        [] if failed_lookups == enabled_peer_count => Err(peer_resolution_error(
+            format!(
+                "no enabled trusted peer could be resolved while matching literal IP '{target_ip}'"
+            ),
+            "Verify the registered DNS/mDNS authorities, or use the intended registered hostname directly.",
+        )),
         [] => Err(peer_resolution_error(
             format!("no enabled trusted peer resolves to literal IP '{target_ip}'"),
             "Use a registered hostname, or add/enable the exact trusted peer before retrying.",
@@ -788,7 +798,7 @@ mod tests {
     use atm_core::send::{SendMessageSource, input};
     use atm_core::test_support::{EnvGuard, TEST_SENDER};
     use atm_core::types::TeamName;
-    use atm_storage::{HostName, TrustedPeer};
+    use atm_storage::{AtmError, HostName, TrustedPeer};
     use clap::Parser;
     use serial_test::serial;
     use tempfile::TempDir;
@@ -994,6 +1004,24 @@ mod tests {
                 Ok(vec![IpAddr::V4(Ipv4Addr::new(192, 168, 1, 63))])
             })
             .expect("single trusted authority");
+
+        assert_eq!(canonical.as_str(), "rand-m5.local");
+    }
+
+    #[test]
+    fn literal_ip_ignores_an_unrelated_stale_trusted_hostname() {
+        let peers = [
+            trusted_peer("retired-m5.local"),
+            trusted_peer("rand-m5.local"),
+        ];
+        let canonical =
+            resolve_trusted_ipv4_with_lookup(Ipv4Addr::new(192, 168, 1, 63), &peers, |peer| {
+                if peer.host.as_str() == "retired-m5.local" {
+                    return Err(AtmError::daemon_unavailable("stale DNS record"));
+                }
+                Ok(vec![IpAddr::V4(Ipv4Addr::new(192, 168, 1, 63))])
+            })
+            .expect("a stale unrelated peer must not block the matching authority");
 
         assert_eq!(canonical.as_str(), "rand-m5.local");
     }
