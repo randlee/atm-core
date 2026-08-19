@@ -1682,6 +1682,13 @@ def test_release_preflight_installs_the_pinned_sc_compose_cli_before_workspace_t
     assert "sc_compose_dependency" in installer_text
 
 
+def test_release_preflight_denies_a_failed_sc_compose_cli_install() -> None:
+    preflight_text = release_preflight_workflow_text()
+
+    assert "SC_COMPOSE_CLI: ${{ steps.sc_compose_cli.outcome }}" in preflight_text
+    assert 'record sc-compose-cli "${SC_COMPOSE_CLI}"' in preflight_text
+
+
 def test_release_workflow_collects_wheels_without_redundant_zip_sweep() -> None:
     text = release_workflow_text()
 

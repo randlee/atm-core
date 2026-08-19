@@ -189,6 +189,19 @@ a new immutable release containing the ADR-049 disclosure and current release
 manifest, followed by the local AS.3 validation receipt and the PyPI-only
 channel. No rebuild or upload is authorized for the blocked v1.4.3 set.
 
+### 1.4.4 preflight re-runs
+
+The fresh `1.4.4` cut was prepared in `a22168eec` and the preflight workspace
+test bootstrap was added in `df54f34f7`. Release-preflight run
+[`32169019885`](https://github.com/randlee/atm-core/actions/runs/32169019885)
+was the first `1.4.4` attempt and exposed that `compose_passthrough` needs the
+`sc-compose` executable, not only Python bindings. Run
+[`32169985864`](https://github.com/randlee/atm-core/actions/runs/32169985864)
+re-ran after that pinned CLI bootstrap and passed the workspace checks; its
+remaining channel-only failure was the rejected `CARGO_REGISTRY_TOKEN` for
+crates.io. That credential decision remains pending Rand and does not
+authorize a PyPI upload.
+
 ### Draft v1.4.3 GitHub release note
 
 > **First public PyPI release:** `hermes-atm` and `atm-graft` begin public

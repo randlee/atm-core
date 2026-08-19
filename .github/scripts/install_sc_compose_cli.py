@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install the repository-pinned sc-compose CLI for parity tests."""
+"""Install the repository-pinned sc-compose CLI for release-preflight tests."""
 
 from __future__ import annotations
 

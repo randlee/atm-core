@@ -393,6 +393,7 @@ jobs:
           BOUNDARY_LINT: ${{ steps.boundary_lint.outcome }}
           FORMATTING: ${{ steps.formatting.outcome }}
           CLIPPY: ${{ steps.clippy.outcome }}
+          SC_COMPOSE_CLI: ${{ steps.sc_compose_cli.outcome }}
           WORKSPACE_TESTS: ${{ steps.workspace_tests.outcome }}
           MANIFEST: ${{ steps.manifest.outcome }}
           PUBLISH_ORDER: ${{ steps.publish_order.outcome }}
@@ -425,6 +426,7 @@ jobs:
           record boundary-lint "${BOUNDARY_LINT}"
           record formatting "${FORMATTING}"
           record clippy "${CLIPPY}"
+          record sc-compose-cli "${SC_COMPOSE_CLI}"
           record workspace-tests "${WORKSPACE_TESTS}"
           record manifest "${MANIFEST}"
           record publish-order "${PUBLISH_ORDER}"
