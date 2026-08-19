@@ -89,12 +89,15 @@ class SignDaemonDevTests(unittest.TestCase):
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
         self.assertIn(
             "benchmark target='default' *args:\n"
-            "    cargo build --release -p agent-team-mail -p atm-daemon\n"
             "    # The isolated capacity runner launches this feature-gated bootstrap binary.\n"
-            "    cargo build --release -p atm-daemon-bootstrap --features benchmark-harness --bin atm-daemon-benchmark\n"
-            "    {{python_cmd}} .just/sign_daemon_dev.py",
+            "    cargo build --release -p atm-daemon-bootstrap --features benchmark-harness --bin atm-daemon-benchmark",
             justfile,
         )
+        benchmark = justfile.split("benchmark target='default' *args:\n", 1)[1].split(
+            "\n# Persist AI.40 benchmark JSON", 1
+        )[0]
+        self.assertNotIn(" -p atm-daemon\n", benchmark)
+        self.assertNotIn("sign_daemon_dev.py", benchmark)
 
     def test_benchmark_recipe_publishes_the_canonical_report(self) -> None:
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
