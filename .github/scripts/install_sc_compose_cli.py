@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install the repository-pinned sc-compose CLI for release-preflight tests."""
+"""Install the repository-pinned sc-compose CLI for passthrough parity tests."""
 
 from __future__ import annotations
 
@@ -12,11 +12,11 @@ from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPOSITORY_ROOT / ".claude"))
 
-from lib.sc_compose_dependency import SC_COMPOSE_INSTALL  # noqa: E402
+from lib.sc_compose_dependency import SC_COMPOSE_PARITY_INSTALL  # noqa: E402
 
 
 def main() -> int:
-    return subprocess.run(shlex.split(SC_COMPOSE_INSTALL), check=False).returncode
+    return subprocess.run(shlex.split(SC_COMPOSE_PARITY_INSTALL), check=False).returncode
 
 
 if __name__ == "__main__":

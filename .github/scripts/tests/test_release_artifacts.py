@@ -1678,7 +1678,7 @@ def test_release_preflight_installs_the_pinned_sc_compose_cli_before_workspace_t
     workspace_tests = "run: cargo test --workspace"
     assert install_step in preflight_text
     assert preflight_text.index(install_step) < preflight_text.index(workspace_tests)
-    assert "SC_COMPOSE_INSTALL" in installer_text
+    assert "SC_COMPOSE_PARITY_INSTALL" in installer_text
     assert "sc_compose_dependency" in installer_text
 
 
