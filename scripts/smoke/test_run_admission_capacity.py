@@ -1130,6 +1130,15 @@ class AdmissionCapacityTests(unittest.TestCase):
             body["to"], {"agent": roster.recipient, "team": roster.team}
         )
 
+    def test_direct_peer_request_carries_immutable_origin_provenance(self):
+        body = json.loads(
+            RUNNER.http_request_body(
+                Path("/tmp/atm-capacity-test"), 42, authenticated_peer=True,
+            )
+        )
+        self.assertRegex(body["origin_message_id"], r"^0[0-9A-F]{25}$")
+        self.assertTrue(body["origin_timestamp"].endswith("Z"))
+
     def test_cached_roster_heartbeat_body_targets_the_warmed_capacity_member(self):
         body = json.loads(RUNNER.cached_roster_heartbeat_body(17))
         self.assertEqual(body["team"], "capacity-team")

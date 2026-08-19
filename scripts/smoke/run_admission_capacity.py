@@ -691,6 +691,8 @@ def http_request_body(
     home: Path,
     sequence: int,
     roster: CapacityRoster = DEFAULT_CAPACITY_ROSTER,
+    *,
+    authenticated_peer: bool = False,
 ) -> bytes:
     """Build the documented /v1/atm/messages request; no dispatcher shortcut."""
     payload = {
@@ -708,6 +710,15 @@ def http_request_body(
         "expires_at": None,
         "dry_run": False,
     }
+    if authenticated_peer:
+        # Direct-peer ingress supplies the authenticated source host from the
+        # accepted socket.  It still requires the immutable origin pair that
+        # a normal peer sender carries, so benchmark requests remain genuine
+        # canonical peer writes rather than rejected local-write shapes.
+        payload["origin_message_id"] = ("0" + uuid.uuid4().hex.upper())[:26]
+        payload["origin_timestamp"] = (
+            datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        )
     return json.dumps(payload, separators=(",", ":")).encode("utf-8")
 
 
@@ -1019,7 +1030,14 @@ def run_profile(
             requests = [
                 HttpRequest(
                     "/v1/atm/messages",
-                    http_request_body(home, sequence + offset, roster),
+                    http_request_body(
+                        home,
+                        sequence + offset,
+                        roster,
+                        authenticated_peer=endpoint.peer_wire_security in {
+                            "plaintext_test", "mutual_tls",
+                        },
+                    ),
                     201,
                 )
                 for offset in range(message_count)
