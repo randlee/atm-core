@@ -1679,6 +1679,7 @@ def test_release_preflight_installs_the_pinned_sc_compose_cli_before_workspace_t
     assert install_step in preflight_text
     assert preflight_text.index(install_step) < preflight_text.index(workspace_tests)
     assert "SC_COMPOSE_PARITY_INSTALL" in installer_text
+    assert "SC_COMPOSE_INSTALL" in installer_text
     assert "sc_compose_dependency" in installer_text
 
 
@@ -1687,6 +1688,16 @@ def test_release_preflight_denies_a_failed_sc_compose_cli_install() -> None:
 
     assert "SC_COMPOSE_CLI: ${{ steps.sc_compose_cli.outcome }}" in preflight_text
     assert 'record sc-compose-cli "${SC_COMPOSE_CLI}"' in preflight_text
+
+
+def test_ci_derives_both_sc_compose_installs_from_the_canonical_installer() -> None:
+    ci_text = (repo_root() / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    installer = "python3 .github/scripts/install_sc_compose_cli.py"
+
+    assert f"{installer} --purpose default" in ci_text
+    assert f"{installer} --purpose parity" in ci_text
+    assert "6a8af1ff46ccd64ae9cc40d7d5c815aa9b0a4661" not in ci_text
+    assert "113729e60e3409ad8c651a74956ffa5c167dd1b6" not in ci_text
 
 
 def test_release_workflow_collects_wheels_without_redundant_zip_sweep() -> None:
