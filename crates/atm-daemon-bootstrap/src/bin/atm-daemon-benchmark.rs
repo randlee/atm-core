@@ -14,7 +14,7 @@ use atm_core::error::AtmError;
 use atm_core::observability::NullObservability;
 use atm_core::send::{SendMessageSource, WriteRequest, prepare_write_with_async_runtime};
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
-use atm_daemon_bootstrap::BenchmarkHookMode;
+use atm_daemon_bootstrap::{BenchmarkHookMode, PeerWireSecurity};
 use atm_storage::{Message, MessageEnvelope, MessageKey};
 use tokio::task::JoinSet;
 
@@ -27,7 +27,10 @@ const CORE_WRITE_SENDER: &str = "capacity-core-agent";
 
 #[derive(Debug)]
 enum BenchmarkInvocation {
-    Daemon(BenchmarkHookMode),
+    Daemon {
+        hook_mode: BenchmarkHookMode,
+        peer_wire_security: PeerWireSecurity,
+    },
     DirectStorageAdmission {
         messages: NonZeroUsize,
         workers: NonZeroUsize,
@@ -41,9 +44,10 @@ enum BenchmarkInvocation {
 #[tokio::main]
 async fn main() {
     let result = match benchmark_invocation_from_args() {
-        Ok(BenchmarkInvocation::Daemon(mode)) => {
-            atm_daemon_bootstrap::run_benchmark_daemon(mode).await
-        }
+        Ok(BenchmarkInvocation::Daemon {
+            hook_mode,
+            peer_wire_security,
+        }) => atm_daemon_bootstrap::run_benchmark_daemon(hook_mode, peer_wire_security).await,
         Ok(BenchmarkInvocation::DirectStorageAdmission { messages, workers }) => {
             run_direct_storage_admission(messages, workers).await
         }
@@ -73,14 +77,35 @@ fn parse_benchmark_invocation(
     match args.next().as_deref() {
         Some("--hook-mode") => {
             let mode = args.next().ok_or_else(|| {
-                AtmError::config("usage: atm-daemon-benchmark --hook-mode <active|disabled>")
+                AtmError::config(
+                    "usage: atm-daemon-benchmark --hook-mode <active|disabled> [--peer-wire-security <mtls|plaintext-test>]",
+                )
             })?;
+            let peer_wire_security = match args.next().as_deref() {
+                None => PeerWireSecurity::Mtls,
+                Some("--peer-wire-security") => {
+                    let value = args.next().ok_or_else(|| {
+                        AtmError::config(
+                            "usage: atm-daemon-benchmark --hook-mode <active|disabled> [--peer-wire-security <mtls|plaintext-test>]",
+                        )
+                    })?;
+                    PeerWireSecurity::parse(&value)?
+                }
+                Some(_) => {
+                    return Err(AtmError::config(
+                        "usage: atm-daemon-benchmark --hook-mode <active|disabled> [--peer-wire-security <mtls|plaintext-test>]",
+                    ));
+                }
+            };
             if args.next().is_some() {
                 return Err(AtmError::config(
-                    "usage: atm-daemon-benchmark --hook-mode <active|disabled>",
+                    "usage: atm-daemon-benchmark --hook-mode <active|disabled> [--peer-wire-security <mtls|plaintext-test>]",
                 ));
             }
-            BenchmarkHookMode::parse(&mode).map(BenchmarkInvocation::Daemon)
+            BenchmarkHookMode::parse(&mode).map(|hook_mode| BenchmarkInvocation::Daemon {
+                hook_mode,
+                peer_wire_security,
+            })
         }
         Some("--direct-storage-admission") => {
             let (messages, workers) = parse_concurrent_arguments(
@@ -332,8 +357,8 @@ fn replacement_exit_code(error: &AtmError) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        BenchmarkHookMode, BenchmarkInvocation, direct_core_write_request, direct_storage_message,
-        parse_benchmark_invocation, parse_nonzero_argument,
+        BenchmarkHookMode, BenchmarkInvocation, PeerWireSecurity, direct_core_write_request,
+        direct_storage_message, parse_benchmark_invocation, parse_nonzero_argument,
     };
 
     #[test]
@@ -379,7 +404,25 @@ mod tests {
             .expect("hook-mode invocation parses");
         assert!(matches!(
             daemon,
-            BenchmarkInvocation::Daemon(BenchmarkHookMode::Disabled)
+            BenchmarkInvocation::Daemon {
+                hook_mode: BenchmarkHookMode::Disabled,
+                peer_wire_security: PeerWireSecurity::Mtls,
+            }
+        ));
+
+        let plaintext = parse_benchmark_invocation([
+            "--hook-mode".to_owned(),
+            "disabled".to_owned(),
+            "--peer-wire-security".to_owned(),
+            "plaintext-test".to_owned(),
+        ])
+        .expect("explicit plaintext diagnostic invocation parses");
+        assert!(matches!(
+            plaintext,
+            BenchmarkInvocation::Daemon {
+                hook_mode: BenchmarkHookMode::Disabled,
+                peer_wire_security: PeerWireSecurity::PlaintextTest,
+            }
         ));
 
         let direct = parse_benchmark_invocation([

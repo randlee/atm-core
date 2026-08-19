@@ -101,11 +101,9 @@ max_scoped_code_lines = 0
 "crates/atm-http-runtime/Cargo.toml:axum" = "AL.2 owns the canonical handler; AL.1 intentionally pins the framework dependency without a listener."
 "crates/atm-http-runtime/Cargo.toml:hyper" = "AL.2 owns the canonical handler; AL.1 intentionally pins the framework dependency without a listener."
 "crates/atm-http-runtime/Cargo.toml:reqwest" = "AL.4 owns the shared standard client; AL.1 intentionally pins the client dependency."
-"crates/atm-http-runtime/Cargo.toml:rustls" = "AL.7 owns authenticated peer TLS; AL.1 intentionally pins the TLS dependency."
 "Cargo.toml:axum" = "Consumed only by the AL.1 runtime placeholder pending AL.2 canonical handler work."
 "Cargo.toml:hyper" = "Consumed only by the AL.1 runtime placeholder pending AL.2 canonical handler work."
 "Cargo.toml:reqwest" = "Consumed only by the AL.1 runtime placeholder pending AL.4 shared client work."
-"Cargo.toml:rustls" = "Consumed only by the AL.1 runtime placeholder pending AL.7 peer TLS work."
 
 [boundaries]
 doc_glob = "docs/*/boundaries.md"
