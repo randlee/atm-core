@@ -246,6 +246,12 @@ pub mod benchmark_support {
         identity_record_path: PathBuf,
     }
 
+    struct GeneratedDisposableIdentity {
+        directory: tempfile::TempDir,
+        private_key_path: PathBuf,
+        certificate_der: rustls::pki_types::CertificateDer<'static>,
+    }
+
     impl Drop for DisposableLocalhostIdentity {
         fn drop(&mut self) {
             // This record holds only the short-lived key path. Removing it
@@ -295,6 +301,26 @@ pub mod benchmark_support {
         hostname: String,
         port: u16,
     ) -> Result<DisposableLocalhostIdentity, AtmError> {
+        let generated = generate_disposable_identity_bundle(&hostname)?;
+        register_disposable_identity(
+            store.as_ref(),
+            &hostname,
+            port,
+            &generated.certificate_der,
+            &generated.private_key_path,
+        )?;
+        let identity_record_path =
+            publish_identity_record(&identity_record_root, &generated.private_key_path)?;
+        Ok(DisposableLocalhostIdentity {
+            _directory: generated.directory,
+            private_key_path: generated.private_key_path,
+            identity_record_path,
+        })
+    }
+
+    fn generate_disposable_identity_bundle(
+        hostname: &str,
+    ) -> Result<GeneratedDisposableIdentity, AtmError> {
         let directory = tempfile::Builder::new()
             .prefix("atm-benchmark-peer-tls-")
             .tempdir()
@@ -305,7 +331,7 @@ pub mod benchmark_support {
                 .with_cause(source)
             })?;
         let generated =
-            rcgen::generate_simple_self_signed(vec![hostname.clone()]).map_err(|source| {
+            rcgen::generate_simple_self_signed(vec![hostname.to_owned()]).map_err(|source| {
                 AtmError::certificate_operation(
                     "could not generate disposable benchmark peer TLS certificate",
                 )
@@ -329,16 +355,21 @@ pub mod benchmark_support {
             AtmError::certificate_operation("could not retain benchmark peer TLS identity bundle")
                 .with_cause(source.error)
         })?;
-        let identity_record_path = identity_record_root.join("benchmark-peer-tls.path");
-        std::fs::write(
-            &identity_record_path,
-            private_key_path.display().to_string(),
-        )
-        .map_err(|source| {
-            AtmError::certificate_operation("could not publish benchmark peer TLS identity record")
-                .with_cause(source)
-        })?;
-        let fingerprint: CertificateFingerprint = certificate_fingerprint(generated.cert.der())
+        Ok(GeneratedDisposableIdentity {
+            directory,
+            private_key_path,
+            certificate_der: generated.cert.der().clone(),
+        })
+    }
+
+    fn register_disposable_identity(
+        store: &dyn PeerConfigStore,
+        hostname: &str,
+        port: u16,
+        certificate_der: &rustls::pki_types::CertificateDer<'_>,
+        private_key_path: &std::path::Path,
+    ) -> Result<(), AtmError> {
+        let fingerprint: CertificateFingerprint = certificate_fingerprint(certificate_der)
             .parse()
             .map_err(|source| {
                 AtmError::certificate_operation(
@@ -376,11 +407,23 @@ pub mod benchmark_support {
             enabled: true,
             https_port,
         })?;
-        Ok(DisposableLocalhostIdentity {
-            _directory: directory,
-            private_key_path,
-            identity_record_path,
-        })
+        Ok(())
+    }
+
+    fn publish_identity_record(
+        identity_record_root: &std::path::Path,
+        private_key_path: &std::path::Path,
+    ) -> Result<PathBuf, AtmError> {
+        let identity_record_path = identity_record_root.join("benchmark-peer-tls.path");
+        std::fs::write(
+            &identity_record_path,
+            private_key_path.display().to_string(),
+        )
+        .map_err(|source| {
+            AtmError::certificate_operation("could not publish benchmark peer TLS identity record")
+                .with_cause(source)
+        })?;
+        Ok(identity_record_path)
     }
 }
 
