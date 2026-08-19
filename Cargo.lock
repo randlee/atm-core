@@ -178,6 +178,7 @@ dependencies = [
  "atm-template-sc-compose",
  "fs4",
  "peer-tls",
+ "rcgen",
  "serde_json",
  "tempfile",
  "tokio",

@@ -29,6 +29,11 @@ use atm_http_runtime::{
     RuntimeHealth, RuntimeLimits, RuntimeTimeouts, StorageAndNudgeRouter,
 };
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime};
+#[cfg(feature = "benchmark-harness")]
+use atm_storage::{
+    CertificateFingerprint, HostName, HttpsInterface, LocalCertificate, PrivateKeyRef, TrustedPeer,
+    certificate_fingerprint,
+};
 use atm_storage_rusqlite::SqliteStorageFactory;
 
 mod owner_gate;
@@ -49,6 +54,12 @@ pub const REPLACEMENT_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
 /// remaining a bounded admission limit. The wire request's `max_message_bytes`
 /// can only lower the body policy; it cannot raise this server ceiling.
 const CANONICAL_WRITE_ENVELOPE_OVERHEAD_BYTES: usize = 64 * 1024;
+#[cfg(feature = "benchmark-harness")]
+const BENCHMARK_PEER_HOST: &str = "localhost";
+#[cfg(feature = "benchmark-harness")]
+const BENCHMARK_PEER_PORT: u16 = 43_101;
+#[cfg(feature = "benchmark-harness")]
+const BENCHMARK_PEER_IDENTITY_FILE: &str = "benchmark-peer-tls.pem";
 
 /// The explicit wire-security selection accepted only by the feature-gated
 /// benchmark child.  Normal daemon startup remains mTLS-only.
@@ -268,8 +279,14 @@ async fn run_replacement_daemon_with_selector(
     let _owner = acquire_daemon_owner(scope.owner_lock.clone()).await?;
     let runtime_health = RuntimeHealth::with_owner(std::process::id());
     let assembly = assemble_daemon_runtime()?;
+    #[cfg(feature = "benchmark-harness")]
+    if peer_wire_security == DirectPeerWireSecurity::MutualTls {
+        let identity_root = atm_core::home::atm_home()?;
+        let store = assembly.peer_config_store();
+        configure_disposable_benchmark_peer_tls(store.as_ref(), &identity_root)?;
+    }
     let workflow_telemetry = assembly.workflow_telemetry.clone();
-    let peer_io_adapter = optional_peer_io_adapter(&assembly, peer_wire_security);
+    let peer_io_adapter = optional_peer_io_adapter(&assembly, peer_wire_security)?;
     let mut running = start_replacement_runtime(ReplacementStartupInputs {
         scope: &scope,
         owner: &_owner,
@@ -304,27 +321,142 @@ async fn run_replacement_daemon_with_selector(
     Ok(())
 }
 
+/// Install the benchmark process's disposable, localhost-only mTLS identity.
+///
+/// The capacity runner supplies a fresh `ATM_HOME` and restores the complete
+/// OS-user durable state after each run.  The certificate bundle therefore
+/// stays outside durable SQLite state, while the ordinary durable peer-config
+/// boundary holds only its fingerprint and path reference.  This intentionally
+/// uses the same peer-tls adapter configuration the normal daemon consumes;
+/// it is not an alternate HTTP or Rustls path.
+#[cfg(feature = "benchmark-harness")]
+fn configure_disposable_benchmark_peer_tls(
+    store: &(dyn atm_storage::PeerConfigStore + Send + Sync),
+    identity_root: &std::path::Path,
+) -> Result<(), AtmError> {
+    let generated = rcgen::generate_simple_self_signed(vec![BENCHMARK_PEER_HOST.to_owned()])
+        .map_err(|source| {
+            AtmError::certificate_operation(
+                "could not generate disposable benchmark peer TLS certificate",
+            )
+            .with_cause(source)
+        })?;
+    let identity_path = identity_root.join(BENCHMARK_PEER_IDENTITY_FILE);
+    write_disposable_benchmark_identity(
+        &identity_path,
+        &format!(
+            "{}{}",
+            generated.cert.pem(),
+            generated.key_pair.serialize_pem()
+        ),
+    )?;
+    let fingerprint = certificate_fingerprint(generated.cert.der());
+    let fingerprint: CertificateFingerprint = fingerprint.parse().map_err(|source| {
+        AtmError::certificate_operation(
+            "generated benchmark peer TLS certificate has an invalid fingerprint",
+        )
+        .with_cause(source)
+    })?;
+    let host: HostName = BENCHMARK_PEER_HOST.parse().map_err(|source| {
+        AtmError::certificate_operation("benchmark peer hostname is invalid").with_cause(source)
+    })?;
+    store.save_interface(&HttpsInterface {
+        bind_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), BENCHMARK_PEER_PORT),
+        advertise_host: host.clone(),
+        enabled: true,
+    })?;
+    store.save_local_certificate(&LocalCertificate {
+        fingerprint: fingerprint.clone(),
+        private_key_ref: identity_path
+            .display()
+            .to_string()
+            .parse::<PrivateKeyRef>()
+            .map_err(|source| {
+                AtmError::certificate_operation(
+                    "benchmark peer TLS identity path is not a valid private-key reference",
+                )
+                .with_cause(source)
+            })?,
+    })?;
+    store.save_trusted_peer(&TrustedPeer {
+        host,
+        fingerprint,
+        enabled: true,
+        https_port: std::num::NonZeroU16::new(BENCHMARK_PEER_PORT)
+            .expect("benchmark peer TLS port is non-zero"),
+    })?;
+    Ok(())
+}
+
+/// Write the short-lived certificate bundle without widening normal daemon
+/// secret handling. Unix stores receive owner-only permissions; Windows relies
+/// on its per-user temporary directory ACLs used by the benchmark harness.
+#[cfg(feature = "benchmark-harness")]
+fn write_disposable_benchmark_identity(path: &std::path::Path, pem: &str) -> Result<(), AtmError> {
+    std::fs::create_dir_all(path.parent().ok_or_else(|| {
+        AtmError::certificate_operation("benchmark peer TLS identity has no parent directory")
+    })?)
+    .map_err(|source| {
+        AtmError::certificate_operation("could not create benchmark peer TLS identity directory")
+            .with_cause(source)
+    })?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(path)
+            .map_err(|source| {
+                AtmError::certificate_operation(
+                    "could not create benchmark peer TLS identity bundle",
+                )
+                .with_cause(source)
+            })?;
+        file.write_all(pem.as_bytes()).map_err(|source| {
+            AtmError::certificate_operation("could not write benchmark peer TLS identity bundle")
+                .with_cause(source)
+        })?;
+    }
+    #[cfg(not(unix))]
+    std::fs::write(path, pem).map_err(|source| {
+        AtmError::certificate_operation("could not write benchmark peer TLS identity bundle")
+            .with_cause(source)
+    })?;
+    Ok(())
+}
+
 /// AO.2 composes concrete TLS only at the daemon bootstrap boundary. The
 /// runtime receives this sealed, opaque core adapter and never observes a
 /// certificate, peer store, or Rustls type.
 fn optional_peer_io_adapter(
     assembly: &RuntimeAssembly,
     peer_wire_security: DirectPeerWireSecurity,
-) -> Option<Arc<dyn atm_core::PeerIoAdapter>> {
+) -> Result<Option<Arc<dyn atm_core::PeerIoAdapter>>, AtmError> {
     #[cfg(not(feature = "benchmark-harness"))]
     let _ = peer_wire_security;
     #[cfg(feature = "benchmark-harness")]
     if peer_wire_security == DirectPeerWireSecurity::PlaintextBenchmark {
-        return None;
+        return Ok(None);
+    }
+    #[cfg(feature = "benchmark-harness")]
+    if peer_wire_security == DirectPeerWireSecurity::MutualTls {
+        // Benchmark mTLS is explicit: a generated identity/configuration
+        // failure terminates the run rather than disabling the listener or
+        // selecting the named plaintext diagnostic.
+        return peer_tls::mtls_adapter(assembly.peer_config_store()).map(Some);
     }
     match peer_tls::mtls_adapter(assembly.peer_config_store()) {
-        Ok(adapter) => Some(adapter),
+        Ok(adapter) => Ok(Some(adapter)),
         Err(error) => {
             // mTLS is optional until a valid exchange configuration exists.
             // Disable the direct-peer listener rather than falling back to
             // plaintext; local transports continue serving normally.
             tracing::info!(error = %error, "direct peer mTLS is unavailable; listener remains disabled");
-            None
+            Ok(None)
         }
     }
 }
@@ -715,5 +847,66 @@ mod replacement_runtime_tests {
     #[test]
     fn root_uses_authenticated_loopback_without_making_uds_startup_mandatory() {
         assert!(super::unix_socket_config_for_uid(std::path::Path::new("/tmp"), 0).is_none());
+    }
+}
+
+#[cfg(all(test, feature = "benchmark-harness"))]
+mod benchmark_peer_tls_tests {
+    use std::num::NonZeroU16;
+
+    use atm_storage_rusqlite::SqliteStorageBackend;
+
+    use super::{
+        BENCHMARK_PEER_HOST, BENCHMARK_PEER_IDENTITY_FILE, BENCHMARK_PEER_PORT,
+        configure_disposable_benchmark_peer_tls,
+    };
+
+    #[test]
+    fn disposable_benchmark_configuration_is_valid_for_the_canonical_mtls_adapter() {
+        let directory = tempfile::tempdir().expect("temporary benchmark identity directory");
+        let backend = SqliteStorageBackend::new(directory.path().join("mail.db"))
+            .expect("open disposable benchmark database");
+        let store = backend.peer_config_store();
+
+        configure_disposable_benchmark_peer_tls(store.as_ref(), directory.path())
+            .expect("configure disposable benchmark mTLS");
+
+        let certificate = store
+            .local_certificate()
+            .expect("load disposable benchmark certificate")
+            .expect("benchmark certificate is durable");
+        assert_eq!(
+            certificate.private_key_ref.as_str(),
+            directory
+                .path()
+                .join(BENCHMARK_PEER_IDENTITY_FILE)
+                .display()
+                .to_string(),
+            "durable configuration references only the disposable identity path"
+        );
+        assert!(
+            directory
+                .path()
+                .join(BENCHMARK_PEER_IDENTITY_FILE)
+                .is_file(),
+            "benchmark identity bundle is created under the disposable ATM_HOME"
+        );
+        let interfaces = store.list_interfaces().expect("load benchmark interface");
+        assert_eq!(interfaces.len(), 1);
+        assert_eq!(interfaces[0].advertise_host.as_str(), BENCHMARK_PEER_HOST);
+        assert_eq!(interfaces[0].bind_addr.port(), BENCHMARK_PEER_PORT);
+        assert!(interfaces[0].enabled);
+        let peer = store
+            .trusted_peer(&BENCHMARK_PEER_HOST.parse().expect("benchmark peer host"))
+            .expect("load benchmark trusted peer")
+            .expect("benchmark peer is durable");
+        assert_eq!(peer.fingerprint, certificate.fingerprint);
+        assert_eq!(
+            peer.https_port,
+            NonZeroU16::new(BENCHMARK_PEER_PORT).expect("non-zero port")
+        );
+        assert!(peer.enabled);
+        peer_tls::mtls_adapter(store)
+            .expect("configured benchmark peer starts canonical mTLS adapter");
     }
 }
