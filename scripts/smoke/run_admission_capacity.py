@@ -22,6 +22,7 @@ import re
 import shutil
 import socket
 import sqlite3
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -71,6 +72,13 @@ SUSTAINED_MESSAGE_COUNTS = (10_000, 100_000)
 DAEMON_OUTPUT_TAIL_LINES = 200
 GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
 HOOK_MODES = ("active", "disabled")
+BENCHMARK_TARGETS = ("default", "uds", "tcp", "tcp-tls")
+PEER_WIRE_SECURITIES = ("not_applicable", "plaintext_test", "mutual_tls")
+BENCHMARK_DAEMON_WIRE_SECURITY = {
+    "plaintext_test": "plaintext-test",
+    "mutual_tls": "mtls",
+    "not_applicable": "mtls",
+}
 DAEMON_SWITCH = ROOT / ".claude" / "skills" / "daemon-switch" / "scripts" / "daemon-switch.py"
 # The daemon-switch control plane can legitimately wait through its documented
 # launchctl unload/owner-repair windows (up to 20s + two 20x2s polls).  Its
@@ -109,6 +117,8 @@ class LocalEndpoint:
     kind: str
     address: str | tuple[str, int]
     capability: str | None = None
+    peer_wire_security: str = "not_applicable"
+    tls_identity: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -621,11 +631,19 @@ def await_daemon_ready(process: subprocess.Popen[str], output: DaemonOutputCaptu
 
 def start_capacity_daemon(
     daemon: Path, home: Path, env: dict[str, str], hook_mode: str,
+    peer_wire_security: str = "plaintext_test",
 ) -> tuple[subprocess.Popen[str], DaemonOutputCapture]:
-    """Start and await the feature-gated benchmark daemon with one hook mode."""
+    """Start the benchmark daemon with explicit hook and peer-wire selections."""
     hook_mode = validate_hook_mode(hook_mode)
+    if peer_wire_security not in PEER_WIRE_SECURITIES:
+        raise SmokeError(f"unsupported benchmark peer wire security {peer_wire_security!r}")
+    direct_peer_listener = "enabled" if peer_wire_security != "not_applicable" else "disabled"
     process = subprocess.Popen(
-        [str(daemon), "--hook-mode", hook_mode], cwd=home, env=env,
+        [
+            str(daemon), "--hook-mode", hook_mode,
+            "--peer-wire-security", BENCHMARK_DAEMON_WIRE_SECURITY[peer_wire_security],
+            "--direct-peer-listener", direct_peer_listener,
+        ], cwd=home, env=env,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
     )
     output = DaemonOutputCapture.start(process)
@@ -718,11 +736,54 @@ def validate_transport(transport: str) -> str:
     return transport
 
 
-def local_endpoint(transport: str) -> LocalEndpoint:
-    """Resolve the documented UDS/TCP public API without a dispatcher seam."""
+def target_selection(target: str | None, legacy_transport: str | None) -> tuple[str, str]:
+    """Map a public benchmark target to immutable transport/security labels."""
+    if target is not None and legacy_transport is not None:
+        raise SmokeError("use either a benchmark target or --transport, not both")
+    if target is None:
+        target = legacy_transport or "default"
+    if target not in BENCHMARK_TARGETS and target not in {"uds", "tcp"}:
+        raise SmokeError(
+            "capacity transport must be `uds` or `tcp`; benchmark target may also be `default` or `tcp-tls`"
+        )
+    if target == "default":
+        return ("tcp", "plaintext_test") if os.name == "nt" else ("uds", "not_applicable")
+    if target == "uds":
+        return "uds", "not_applicable"
+    if target == "tcp":
+        return "tcp", "plaintext_test"
+    return "tcp", "mutual_tls"
+
+
+def validate_peer_wire_security(transport: str, peer_wire_security: str) -> str:
+    """Reject impossible transport/security combinations before a child starts."""
+    if peer_wire_security not in PEER_WIRE_SECURITIES:
+        raise SmokeError("benchmark peer wire security is invalid")
+    if transport == "uds" and peer_wire_security != "not_applicable":
+        raise SmokeError("UDS benchmark transport requires peer_wire_security `not_applicable`")
+    if transport == "tcp" and peer_wire_security == "not_applicable":
+        raise SmokeError("TCP benchmark transport requires explicit peer wire security")
+    return peer_wire_security
+
+
+def local_endpoint(
+    transport: str, peer_wire_security: str = "not_applicable", home: Path | None = None,
+) -> LocalEndpoint:
+    """Resolve a local API or direct-peer benchmark endpoint without a shortcut."""
     runtime = os_account_home() / ".atm" / "daemon"
     if transport == "uds":
         return LocalEndpoint("uds", str(runtime / "atm-daemon.sock"))
+    if peer_wire_security in {"plaintext_test", "mutual_tls"}:
+        identity = None
+        if peer_wire_security == "mutual_tls":
+            if home is None:
+                raise SmokeError("mTLS benchmark endpoint requires a disposable ATM_HOME")
+            identity = home / "benchmark-peer-tls.pem"
+            if not identity.is_file():
+                raise SmokeError("benchmark mTLS identity bundle was not created by the daemon")
+        return LocalEndpoint(
+            "tcp", ("127.0.0.1", 43_101), None, peer_wire_security, identity,
+        )
     try:
         record = json.loads((runtime / "local-http.json").read_text(encoding="utf-8"))
         address = record["ipv4_loopback"]
@@ -772,8 +833,20 @@ def read_http_response(
     return status, header_end + content_length, summary
 
 
+def tls_client_context(identity: Path) -> ssl.SSLContext:
+    """Build a pinned localhost mTLS client from the disposable identity bundle."""
+    context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+    context.check_hostname = True
+    try:
+        context.load_verify_locations(cafile=str(identity))
+        context.load_cert_chain(certfile=str(identity), keyfile=str(identity))
+    except (OSError, ssl.SSLError) as error:
+        raise SmokeError(f"could not load disposable benchmark mTLS identity: {error}") from error
+    return context
+
+
 def submit_connection(endpoint: LocalEndpoint, requests: list[HttpRequest]) -> list[AdmissionResult]:
-    """Submit consecutive real requests over one public local connection."""
+    """Submit consecutive canonical requests over one selected benchmark connection."""
     started = time.perf_counter()
     capability = (
         f"X-ATM-Local-Capability: {endpoint.capability}\r\n".encode("ascii")
@@ -783,41 +856,50 @@ def submit_connection(endpoint: LocalEndpoint, requests: list[HttpRequest]) -> l
     results: list[AdmissionResult] = []
     try:
         family = socket.AF_UNIX if endpoint.kind == "uds" else socket.AF_INET
-        with socket.socket(family, socket.SOCK_STREAM) as stream:
-            stream.settimeout(3.5)
+        with socket.socket(family, socket.SOCK_STREAM) as raw_stream:
+            raw_stream.settimeout(3.5)
             if endpoint.kind == "tcp":
-                stream.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-            stream.connect(endpoint.address)
-            frames = []
-            for index, request in enumerate(requests):
-                connection = "close" if index + 1 == len(requests) else "keep-alive"
-                frames.append(
-                    f"POST {request.path} HTTP/1.1\r\n".encode("ascii")
-                    + b"Content-Type: application/json\r\n"
-                    + capability
-                    + f"Content-Length: {len(request.body)}\r\nConnection: {connection}\r\n\r\n".encode("ascii")
-                    + request.body
-                )
+                raw_stream.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            raw_stream.connect(endpoint.address)
+            if endpoint.peer_wire_security == "mutual_tls":
+                if endpoint.tls_identity is None:
+                    raise SmokeError("mTLS endpoint omitted its disposable identity")
+                stream: socket.socket | ssl.SSLSocket = tls_client_context(
+                    endpoint.tls_identity,
+                ).wrap_socket(raw_stream, server_hostname="localhost")
+            else:
+                stream = raw_stream
+            with stream:
+                frames = []
+                for index, request in enumerate(requests):
+                    connection = "close" if index + 1 == len(requests) else "keep-alive"
+                    frames.append(
+                        f"POST {request.path} HTTP/1.1\r\n".encode("ascii")
+                        + b"Content-Type: application/json\r\n"
+                        + capability
+                        + f"Content-Length: {len(request.body)}\r\nConnection: {connection}\r\n\r\n".encode("ascii")
+                        + request.body
+                    )
 
-            response_buffer = bytearray()
-            for start in range(0, len(frames), MAX_IN_FLIGHT_REQUESTS):
-                batch = frames[start:start + MAX_IN_FLIGHT_REQUESTS]
-                request_started = time.perf_counter()
-                stream.sendall(b"".join(batch))
-                for request, frame in zip(requests[start:start + MAX_IN_FLIGHT_REQUESTS], batch):
-                    status, response_bytes, response_summary = read_http_response(stream, response_buffer)
-                    results.append(AdmissionResult(
-                        status=status,
-                        elapsed_ms=(time.perf_counter() - request_started) * 1_000,
-                        failure=(
-                            None
-                            if status == request.expected_status
-                            else f"HTTP {status}: {response_summary or 'no response body'}"
-                        ),
-                        request_bytes=len(frame),
-                        response_bytes=response_bytes,
-                        response_summary=response_summary,
-                    ))
+                response_buffer = bytearray()
+                for start in range(0, len(frames), MAX_IN_FLIGHT_REQUESTS):
+                    batch = frames[start:start + MAX_IN_FLIGHT_REQUESTS]
+                    request_started = time.perf_counter()
+                    stream.sendall(b"".join(batch))
+                    for request, frame in zip(requests[start:start + MAX_IN_FLIGHT_REQUESTS], batch):
+                        status, response_bytes, response_summary = read_http_response(stream, response_buffer)
+                        results.append(AdmissionResult(
+                            status=status,
+                            elapsed_ms=(time.perf_counter() - request_started) * 1_000,
+                            failure=(
+                                None
+                                if status == request.expected_status
+                                else f"HTTP {status}: {response_summary or 'no response body'}"
+                            ),
+                            request_bytes=len(frame),
+                            response_bytes=response_bytes,
+                            response_summary=response_summary,
+                        ))
         return results
     except (OSError, SmokeError) as error:
         return results + [AdmissionResult(
@@ -1094,6 +1176,7 @@ def evidence_filename(directory: Path, evidence: dict[str, Any]) -> Path:
     timestamp = generated_at.replace("-", "").replace(":", "").replace("T", "-").replace("Z", "")
     return directory / (
         f"{timestamp}-{host_label}-{evidence['transport']}-"
+        f"{evidence.get('peer_wire_security', 'not_applicable')}-"
         f"f{evidence['frames_per_connection']}.json"
     )
 
@@ -1168,6 +1251,7 @@ def matching_profile_reference(
     directory: Path,
     host_label: str,
     transport: str,
+    peer_wire_security: str,
     frames_per_connection: int,
     revision: str,
 ) -> tuple[float, str]:
@@ -1181,6 +1265,7 @@ def matching_profile_reference(
             if (
                 payload.get("host_label") == host_label
                 and payload.get("transport") == transport
+                and payload.get("peer_wire_security") == peer_wire_security
                 and candidate_frame in TCP_COMPARISON_FRAMES
                 and isinstance(candidate_revision, str)
                 and GIT_REVISION.fullmatch(candidate_revision)
@@ -1199,8 +1284,9 @@ def matching_profile_reference(
     }
     if not complete:
         raise SmokeError(
-            "missing a complete passed UDS comparison set for host "
-            f"{host_label} at or before source revision {revision}"
+            "missing a complete passed comparison set for host "
+            f"{host_label}, transport {transport}, peer_wire_security {peer_wire_security}, "
+            f"at or before source revision {revision}"
         )
     selected_revision, profiles = max(
         complete.items(),
@@ -1239,9 +1325,15 @@ def run_capacity(
     raw_evidence_directory: Path = DEFAULT_RAW_EVIDENCE_DIR,
     hook_mode: str = "active",
     managed_daemon: ManagedDaemonOptions | None = None,
+    peer_wire_security: str | None = None,
 ) -> tuple[int, Path]:
     """Start one branch daemon, exercise public UDS API, retain evidence, then clean up."""
     transport = validate_transport(transport)
+    if peer_wire_security is None:
+        # Compatibility for direct Python callers. The public Just/CLI target
+        # always supplies a mode through target_selection before this point.
+        peer_wire_security = "not_applicable" if transport == "uds" else "plaintext_test"
+    peer_wire_security = validate_peer_wire_security(transport, peer_wire_security)
     hook_mode = validate_hook_mode(hook_mode)
     if frames_per_connection not in SPARSE_FRAMES_PER_CONNECTION:
         raise SmokeError(f"frames per connection must be one of {SPARSE_FRAMES_PER_CONNECTION}")
@@ -1271,6 +1363,7 @@ def run_capacity(
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "host_label": os.environ.get("ATM_CAPACITY_HOST_LABEL", "local"),
         "transport": transport,
+        "peer_wire_security": peer_wire_security,
         "hook_mode": hook_mode,
         "frames_per_connection": frames_per_connection,
         "run_duration_s": None,
@@ -1331,7 +1424,9 @@ def run_capacity(
             doctor_payload = managed_status["doctor"]
             evidence["managed_daemon"] = selected_pair(managed_status)
         else:
-            process, daemon_output = start_capacity_daemon(daemon, home, env, hook_mode)
+            process, daemon_output = start_capacity_daemon(
+                daemon, home, env, hook_mode, peer_wire_security,
+            )
             doctor = command_result(
                 [str(atm), "doctor", "--json"],
                 timeout=10.0,
@@ -1341,7 +1436,7 @@ def run_capacity(
             evidence["daemon_pid"] = process.pid
         evidence["doctor"] = doctor_payload
         evidence["doctor_status"] = "passed"
-        endpoint = local_endpoint(transport)
+        endpoint = local_endpoint(transport, peer_wire_security, home)
         evidence["endpoint"] = {
             "transport": endpoint.kind,
             "address": endpoint.address,
@@ -1374,7 +1469,7 @@ def run_capacity(
         # fail closed, but it must not erase the measurements that explain
         # that failure from the compact evidence.
         baseline_median = load_baseline_median(
-            baseline_path, transport, frames_per_connection,
+            baseline_path, transport, peer_wire_security, frames_per_connection,
         )
         evidence["baseline"] = baseline_reference(baseline_path)
         evidence["thresholds"] = evaluate_profile_thresholds(
@@ -1396,7 +1491,9 @@ def run_capacity(
             evidence["pre_restart_daemon_output"] = daemon_output.evidence()
             process = None
             daemon_output = None
-            process, daemon_output = start_capacity_daemon(daemon, home, env, hook_mode)
+            process, daemon_output = start_capacity_daemon(
+                daemon, home, env, hook_mode, peer_wire_security,
+            )
             restart_doctor = command_result(
                 [str(atm), "doctor", "--json"],
                 timeout=10.0,
@@ -1466,6 +1563,10 @@ def run_capacity(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "target", nargs="?", choices=BENCHMARK_TARGETS,
+        help="benchmark target: uds, tcp (plaintext diagnostic), or tcp-tls (mutual TLS)",
+    )
     parser.add_argument("--atm-home", type=Path)
     parser.add_argument(
         "--evidence-dir", type=Path,
@@ -1477,7 +1578,10 @@ def main() -> int:
         default=DEFAULT_RAW_EVIDENCE_DIR,
         help="ignored local interval-trace directory (default: artifacts/benchmark/send-message-benchmark)",
     )
-    parser.add_argument("--transport", default="uds" if os.name != "nt" else "tcp")
+    parser.add_argument(
+        "--transport",
+        help="legacy spelling for the uds/tcp plaintext targets; prefer the positional target",
+    )
     parser.add_argument(
         "--hook-mode",
         default="active",
@@ -1532,7 +1636,8 @@ def main() -> int:
         help="allow daemon-switch's narrow verified-orphan repair during controlled lifecycle recovery",
     )
     args = parser.parse_args()
-    transport = validate_transport(args.transport)
+    transport, peer_wire_security = target_selection(args.target, args.transport)
+    transport = validate_transport(transport)
     hook_mode = validate_hook_mode(args.hook_mode)
     sparse_profiles = tuple(args.frames_per_connection or SPARSE_FRAMES_PER_CONNECTION)
     sustained_profiles = tuple(args.sustained or ())
@@ -1584,18 +1689,21 @@ def main() -> int:
             comparison_required = os.name != "nt"
             try:
                 comparison_median, comparison_source_revision = matching_profile_reference(
-                    args.evidence_dir, comparison_host_label, "uds", frames_per_connection,
-                    current_revision,
+                    args.evidence_dir, comparison_host_label, transport, peer_wire_security,
+                    frames_per_connection, current_revision,
                 )
             except SmokeError:
-                if comparison_required:
-                    raise
+                # AO.4 creates the first distinct plaintext/mTLS series, so
+                # absent same-mode history is informative but not a false
+                # failure. The 1k/s admission gate still applies.
+                comparison_required = False
         if args.atm_home is None:
             with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temp:
                 home = Path(temp) / f"{CAPACITY_ROOT_PREFIX}{position}"
                 code, evidence = run_capacity(
-                    home, args.evidence_dir, args.transport,
+                    home, args.evidence_dir, transport,
                     frames_per_connection, requested_messages, workers=args.workers,
+                    peer_wire_security=peer_wire_security,
                     baseline_path=profile_baseline,
                     comparison_median=comparison_median,
                     comparison_source_revision=comparison_source_revision,
@@ -1610,8 +1718,9 @@ def main() -> int:
         else:
             home = args.atm_home / f"{CAPACITY_ROOT_PREFIX}{position}"
             code, evidence = run_capacity(
-                    home, args.evidence_dir, args.transport,
+                    home, args.evidence_dir, transport,
                     frames_per_connection, requested_messages, workers=args.workers,
+                    peer_wire_security=peer_wire_security,
                     baseline_path=profile_baseline,
                     comparison_median=comparison_median,
                     comparison_source_revision=comparison_source_revision,

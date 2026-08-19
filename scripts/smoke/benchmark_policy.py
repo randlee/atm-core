@@ -50,7 +50,7 @@ def evaluate_profile_thresholds(
 
 
 def load_baseline_median(
-    path: Path | None, transport: str, frames_per_connection: int,
+    path: Path | None, transport: str, peer_wire_security: str, frames_per_connection: int,
 ) -> float | None:
     """Read a prior compatible one-profile evidence artifact when requested."""
     if path is None:
@@ -60,6 +60,10 @@ def load_baseline_median(
         if baseline["transport"] != transport:
             raise SmokeError(
                 f"capacity baseline transport {baseline['transport']!r} does not match {transport!r}"
+            )
+        if baseline.get("peer_wire_security") != peer_wire_security:
+            raise SmokeError(
+                "capacity baseline peer_wire_security does not match the selected profile"
             )
         if baseline["frames_per_connection"] != frames_per_connection:
             raise SmokeError(
@@ -84,7 +88,7 @@ def validated_profile_median(payload: dict[str, Any], label: str) -> float:
 def recorded_profile_median(payload: dict[str, Any], label: str) -> float:
     """Read the recorded median without treating a failed run as a baseline."""
     try:
-        if payload.get("schema_version") == 3:
+        if payload.get("schema_version") in {3, 4}:
             return float(payload["metrics"]["admissions_per_second"]["p50"])
         return profile_median_admissions_per_second(payload["runs"][0])
     except (KeyError, TypeError, ValueError, IndexError) as error:
