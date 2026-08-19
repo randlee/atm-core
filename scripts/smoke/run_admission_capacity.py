@@ -789,6 +789,12 @@ def local_endpoint(
         return LocalEndpoint(
             "tcp", ("127.0.0.1", 43_101), None, peer_wire_security, identity,
         )
+    return authenticated_loopback_endpoint()
+
+
+def authenticated_loopback_endpoint() -> LocalEndpoint:
+    """Resolve the child daemon's authenticated local control endpoint."""
+    runtime = os_account_home() / ".atm" / "daemon"
     try:
         record = json.loads((runtime / "local-http.json").read_text(encoding="utf-8"))
         address = record["ipv4_loopback"]
@@ -1380,11 +1386,7 @@ def run_capacity(
         "worker_limit": workers,
         "source_revision": source_revision(),
         "release": {"atm": str(atm), "atm_daemon_benchmark": str(daemon)},
-        "execution_daemon": (
-            "selected_managed_service"
-            if isolation_mode == "backup_restore"
-            else "feature_gated_benchmark_child"
-        ),
+        "execution_daemon": "feature_gated_benchmark_child",
         "atm_home": str(home),
         "host_state_isolation": isolation_mode,
         "runs": [],
@@ -1412,7 +1414,6 @@ def run_capacity(
         else:
             before = count_atm_daemon_processes()
         home.mkdir(parents=True, exist_ok=False)
-        prepare_capacity_roster(atm, env, home, roster)
         evidence["decomposition"]["async_storage_admission"] = run_direct_storage_probe(
             daemon,
             env,
@@ -1423,22 +1424,27 @@ def run_capacity(
             env,
             workers,
         )
-        if managed_lifecycle is not None:
-            managed_lifecycle.start_isolated_service()
-            managed_status = daemon_switch_result("status", managed_daemon, doctor=True)
-            doctor_payload = managed_status["doctor"]
-            evidence["managed_daemon"] = selected_pair(managed_status)
-        else:
-            process, daemon_output = start_capacity_daemon(
-                daemon, home, env, hook_mode, peer_wire_security,
-            )
-            doctor = command_result(
-                [str(atm), "doctor", "--json"],
-                timeout=10.0,
-                env=benchmark_client_environment(env),
-            )
-            doctor_payload = benchmark_doctor_payload(doctor)
-            evidence["daemon_pid"] = process.pid
+        # The release-built benchmark child is the only process that can
+        # select the explicit plaintext diagnostic or disposable mTLS mode.
+        # Backup/restore isolates the host-owned database and singleton before
+        # this child starts; it must not restart the ordinary selected daemon
+        # until restoration in ``finally``.
+        process, daemon_output = start_capacity_daemon(
+            daemon, home, env, hook_mode, peer_wire_security,
+        )
+        doctor = command_result(
+            [str(atm), "doctor", "--json"],
+            timeout=10.0,
+            env=benchmark_client_environment(env),
+        )
+        doctor_payload = benchmark_doctor_payload(doctor)
+        evidence["daemon_pid"] = process.pid
+        # `teams add-member` publishes a runtime-view reload through the
+        # daemon's authenticated local control plane.  The isolated database
+        # starts empty, so start the owned child before enrolling its unique
+        # benchmark roster; otherwise the CLI correctly refuses to pretend a
+        # reload reached a daemon that is not running.
+        prepare_capacity_roster(atm, env, home, roster)
         evidence["doctor"] = doctor_payload
         evidence["doctor_status"] = "passed"
         endpoint = local_endpoint(transport, peer_wire_security, home)
@@ -1448,8 +1454,11 @@ def run_capacity(
         }
         if endpoint.kind == "uds" and not Path(str(endpoint.address)).exists():
             raise SmokeError(f"daemon did not publish public local socket {endpoint.address}")
+        heartbeat_endpoint = (
+            endpoint if endpoint.kind == "uds" else authenticated_loopback_endpoint()
+        )
         evidence["decomposition"]["cached_roster_heartbeat"] = run_cached_roster_heartbeat_probe(
-            endpoint,
+            heartbeat_endpoint,
             home,
             frames_per_connection,
             workers,
@@ -1487,24 +1496,20 @@ def run_capacity(
         # Restart the actual execution daemon. A transport success alone is
         # not durable evidence, so prove every committed row survived using an
         # exact read-only count of its disposable store.
-        if managed_lifecycle is not None:
-            managed_lifecycle.restart_isolated_service()
-            daemon_switch_result("status", managed_daemon, doctor=True)
-        else:
-            reap_owned_daemon(process)
-            daemon_output.join()
-            evidence["pre_restart_daemon_output"] = daemon_output.evidence()
-            process = None
-            daemon_output = None
-            process, daemon_output = start_capacity_daemon(
-                daemon, home, env, hook_mode, peer_wire_security,
-            )
-            restart_doctor = command_result(
-                [str(atm), "doctor", "--json"],
-                timeout=10.0,
-                env=benchmark_client_environment(env),
-            )
-            benchmark_doctor_payload(restart_doctor)
+        reap_owned_daemon(process)
+        daemon_output.join()
+        evidence["pre_restart_daemon_output"] = daemon_output.evidence()
+        process = None
+        daemon_output = None
+        process, daemon_output = start_capacity_daemon(
+            daemon, home, env, hook_mode, peer_wire_security,
+        )
+        restart_doctor = command_result(
+            [str(atm), "doctor", "--json"],
+            timeout=10.0,
+            env=benchmark_client_environment(env),
+        )
+        benchmark_doctor_payload(restart_doctor)
         # The full doctor payload is host-private diagnostics; publication only
         # needs the asserted healthy result after the restart.
         evidence["doctor_after_restart"] = {"status": "passed"}

@@ -509,6 +509,13 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
                 mock.patch.object(RUNNER, "run_direct_storage_probe"),
                 mock.patch.object(RUNNER, "run_direct_core_write_probe"),
+                mock.patch.object(
+                    RUNNER,
+                    "start_capacity_daemon",
+                    return_value=(mock.Mock(pid=123), mock.Mock()),
+                ),
+                mock.patch.object(RUNNER, "benchmark_doctor_payload", return_value={}),
+                mock.patch.object(RUNNER, "reap_owned_daemon"),
                 mock.patch.object(RUNNER, "local_endpoint", side_effect=RUNNER.SmokeError("benchmark failed")),
                 mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"),
                 mock.patch.object(
@@ -529,7 +536,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(captured["managed_daemon_recovery"], "doctor-verified")
         self.assertEqual(
             calls,
-            ["status", "quiesce", "restart", "status", "status", "quiesce", "restart", "status"],
+            ["status", "quiesce", "restart", "status"],
         )
 
     def test_transport_is_platform_explicit(self):
