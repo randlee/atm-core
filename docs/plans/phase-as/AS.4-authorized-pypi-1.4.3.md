@@ -202,7 +202,7 @@ remaining channel-only failure was the rejected `CARGO_REGISTRY_TOKEN` for
 crates.io. That credential decision remains pending Rand and does not
 authorize a PyPI upload.
 
-### Draft v1.4.3 GitHub release note
+### Draft v1.4.4 GitHub release note
 
 > **First public PyPI release:** `hermes-atm` and `atm-graft` begin public
 > distribution at ATM's existing 1.x workspace version. Earlier 1.x
