@@ -1414,16 +1414,6 @@ def run_capacity(
         else:
             before = count_atm_daemon_processes()
         home.mkdir(parents=True, exist_ok=False)
-        evidence["decomposition"]["async_storage_admission"] = run_direct_storage_probe(
-            daemon,
-            env,
-            workers,
-        )
-        evidence["decomposition"]["canonical_core_write"] = run_direct_core_write_probe(
-            daemon,
-            env,
-            workers,
-        )
         # The release-built benchmark child is the only process that can
         # select the explicit plaintext diagnostic or disposable mTLS mode.
         # Backup/restore isolates the host-owned database and singleton before
@@ -1445,6 +1435,21 @@ def run_capacity(
         # benchmark roster; otherwise the CLI correctly refuses to pretend a
         # reload reached a daemon that is not running.
         prepare_capacity_roster(atm, env, home, roster)
+        # The decomposition-only probe uses a separate roster from the public
+        # HTTP profile, so it can run after roster admission without changing
+        # the public durability count.  Starting the child first is required:
+        # roster administration must prove its runtime-view reload was
+        # accepted before either probe relies on those members.
+        evidence["decomposition"]["async_storage_admission"] = run_direct_storage_probe(
+            daemon,
+            env,
+            workers,
+        )
+        evidence["decomposition"]["canonical_core_write"] = run_direct_core_write_probe(
+            daemon,
+            env,
+            workers,
+        )
         evidence["doctor"] = doctor_payload
         evidence["doctor_status"] = "passed"
         endpoint = local_endpoint(transport, peer_wire_security, home)
