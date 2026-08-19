@@ -1171,6 +1171,8 @@ def test_release_workflow_enforces_python_release_invariants() -> None:
     assert "release_tag: ${{ inputs.tag }}" in pypi_text
     assert "gh release download" in pypi_text
     assert "verify-python-release-assets" in pypi_text
+    assert "release_python_receipt.py" in pypi_text
+    assert "pypi-release-receipt-${{ inputs.tag }}" in pypi_text
     assert "maturin build" not in pypi_text
     assert "maturin sdist" not in pypi_text
     assert "name: Publish manifest-declared wheels and sdists to TestPyPI" in pypi_text
@@ -1649,6 +1651,42 @@ def test_release_preflight_collects_independent_failures_before_denial() -> None
     assert "Verify registry versions and new names" in preflight_text
     assert "public-registry-check-plan" in preflight_text
     assert "REGISTRY_STATE" in preflight_text
+
+
+def test_release_preflight_uses_atm_workspace_boundary_analyzer() -> None:
+    preflight_text = release_preflight_workflow_text()
+    toolchain_text = (
+        repo_root() / ".github" / "actions" / "setup-lint-toolchain" / "action.yml"
+    ).read_text(encoding="utf-8")
+
+    assert 'include-sc-lint: "false"' in preflight_text
+    assert "cargo run -p sc-lint-boundary --release -- analyze --root . --format json" in preflight_text
+    assert "> boundary-lint.json" in preflight_text
+    assert "python3 .github/scripts/check_boundary_lint_status.py boundary-lint.json" in preflight_text
+    assert "BOUNDARY_LINT" in preflight_text
+    assert "include-sc-lint:" in toolchain_text
+    assert "if: inputs.include-sc-lint == 'true'" in toolchain_text
+
+
+def test_release_preflight_installs_the_pinned_sc_compose_cli_before_workspace_tests() -> None:
+    preflight_text = release_preflight_workflow_text()
+    installer_text = (
+        repo_root() / ".github" / "scripts" / "install_sc_compose_cli.py"
+    ).read_text(encoding="utf-8")
+
+    install_step = "python3 .github/scripts/install_sc_compose_cli.py"
+    workspace_tests = "run: cargo test --workspace"
+    assert install_step in preflight_text
+    assert preflight_text.index(install_step) < preflight_text.index(workspace_tests)
+    assert "SC_COMPOSE_PARITY_INSTALL" in installer_text
+    assert "sc_compose_dependency" in installer_text
+
+
+def test_release_preflight_denies_a_failed_sc_compose_cli_install() -> None:
+    preflight_text = release_preflight_workflow_text()
+
+    assert "SC_COMPOSE_CLI: ${{ steps.sc_compose_cli.outcome }}" in preflight_text
+    assert 'record sc-compose-cli "${SC_COMPOSE_CLI}"' in preflight_text
 
 
 def test_release_workflow_collects_wheels_without_redundant_zip_sweep() -> None:
