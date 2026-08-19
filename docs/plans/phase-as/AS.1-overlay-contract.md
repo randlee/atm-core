@@ -162,7 +162,12 @@ python3 "$PUBLISH_KIT_SOURCE/plugins/sc-publish/install.py" --help
 | `sc-publish` #12 — `extra_validations` runner/evidence | safety-load-bearing | Must be accepted and synchronized before AS.3. |
 | `sc-publish` #13 — Cargo-derived dynamic PEP 621 validation | safety-load-bearing | Must be accepted and synchronized before AS.3. |
 | `sc-publish` #14 — generic release-version wiring | safety-load-bearing | Atomic sync revealed that ATM's legacy version check inspects an ATM-only workflow job. The generic manifest/workflow contract must replace that assertion before AS.3. |
-| Explicit installer input / generated-manifest parity | blocked | PR #7 at `240fd52` supplies explicit input and PR #15 at `5e49b6ac` closes the source-layout defect. PR #16 fixes the `[[crates]]` entry shape. The remaining complete-schema gap — rendered `[project]`, channel, and Python-distribution fields required by the canonical validators — is tracked by [`sc-publish` #17](https://github.com/randlee/sc-publish/issues/17) and the consolidated report to its maintainer. AS.2 owns ATM's complete declared input; no local adapter is permitted. |
+| Explicit installer input / generated-manifest parity | accepted upstream; execution proof pending | PR #7 at `240fd52` supplies explicit input, PR #15 at `5e49b6ac` closes the source-layout defect, and PR #24 at `68c06f97` closes [`sc-publish` #17](https://github.com/randlee/sc-publish/issues/17) (closed 2026-08-18T16:30:53Z). AS.3 still owns ATM's unchanged-sync execution proof; no local adapter is permitted. |
+
+Verified against `randlee/sc-publish` on 2026-08-18: #6, #9, #10, #11,
+#12, #13, and #14 remain open safety-load-bearing items. #17 is closed by
+PR #24 at `68c06f97a98f845f0b61f940b4616e0c214bece3`; it must not remain
+represented as an open upstream blocker.
 
 The safety items are intentionally **not** represented as closed by their
 issue creation. AS.3 remains blocked until the stated upstream implementation

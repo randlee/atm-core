@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 
-PACKAGE_ROOT = Path(__file__).resolve().parents[3]
+PACKAGE_ROOT = next(path for path in Path(__file__).resolve().parents if (path / "install.py").is_file())
 AGENTS = PACKAGE_ROOT / ".claude" / "agents"
 PUBLISHING = PACKAGE_ROOT / ".claude" / "skills" / "publishing"
 

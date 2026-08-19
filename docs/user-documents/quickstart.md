@@ -1,7 +1,7 @@
 ---
 title: Quickstart
 audience: end-user
-reviewed_for_release: 1.4.3
+reviewed_for_release: 1.4.4
 ---
 
 # Quickstart
@@ -57,11 +57,11 @@ not rely on direct database access or private files under `~/.atm/`.
 
 If the installed ATM binary is at:
 
-- `~/.local/atm/1.4.3/bin/atm`
+- `~/.local/atm/1.4.4/bin/atm`
 
 then the installed long-form doc entrypoint is:
 
-- `~/.local/atm/1.4.3/share/doc/atm/README.md`
+- `~/.local/atm/1.4.4/share/doc/atm/README.md`
 
 ## Next Documents
 

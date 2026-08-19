@@ -112,10 +112,11 @@ evidence and must not silently add schema behavior.
   consumer’s supplied manifest input.
 - Installing from the ATM JSON produces every package-owned shared file and
   both rendered release manifests; byte/source parity and semantic manifest
-  equality are checked before the clean dry-run proof. The terminal rendered
-  manifest equality gate remains blocked on
-  [`sc-publish` #17](https://github.com/randlee/sc-publish/issues/17); no
-  ATM-side translation or workaround is permitted.
+  equality are checked before the clean dry-run proof. The source-layout and
+  complete-schema item formerly tracked by
+  [`sc-publish` #17](https://github.com/randlee/sc-publish/issues/17) closed
+  through PR #24 at `68c06f97`; AS.3 owns the resulting unchanged-sync
+  execution proof. No ATM-side translation or workaround is permitted.
 - PF-1, PF-2, and PF-3 use existing canonical solutions as defined above.
 - Each released Python distribution is locked to the workspace release base:
   both Maturin packages use their supported Cargo-derived path, while the pure
@@ -186,7 +187,7 @@ complete schema is available.
 | PF-1 credential/configuration preflight | `release-preflight.yml` invokes the shared non-disclosing `preflight-secret-plan`; channel contracts carry names and liveness kinds, never values. | Use unchanged. |
 | PF-2 registry state | `public-registry-check-plan` provides the fenced crates.io JSON inquiry plan for every declared crate. | Use unchanged; retain each artifact’s version, last-publish timestamp, classification, and planned action in the receipt. |
 | PF-3 partial state | Existing registry classification distinguishes missing, already-at-target, and true-conflict artifacts. | Publish missing targets, skip already-at-target targets, and block conflicts; a version bump is an explicit release decision. |
-| Full installer schema and render/validate parity | [`sc-publish` #17](https://github.com/randlee/sc-publish/issues/17) | Blocked upstream: installer input must render `[project]`, channel configuration, and Python package/distribution fields before ATM creates the final consumer JSON or synchronizes the generated outputs. |
+| Full installer schema and render/validate parity | [`sc-publish` #17](https://github.com/randlee/sc-publish/issues/17), closed by PR #24 `68c06f97` | Accepted upstream; AS.3 must prove the unchanged installer renders `[project]`, channel configuration, and Python package/distribution fields before release dispatch. |
 | Generic Maturin/Python version-model contract | [`sc-publish` #13](https://github.com/randlee/sc-publish/issues/13) | The broader contract is Maturin `dynamic = ["version"]` from an explicit Cargo source, alongside literal-version pure setuptools packages. ATM declares both shapes; the two concrete validator paths below remain separately tracked. |
 | `validate-manifest` dynamic-version resolution | [`sc-publish` #20](https://github.com/randlee/sc-publish/issues/20) | Blocked upstream until the canonical `[[python_packages]]` validation resolves a Maturin dynamic version from its declared Cargo source. This is distinct from #13's broader contract and from #21's Cargo lockstep path. |
 | `verify-version-lockstep` literal bridge-version allowance | [`sc-publish` #21](https://github.com/randlee/sc-publish/issues/21) | Blocked upstream until canonical lockstep accepts an intentionally literal Maturin bridge version when it equals the documented workspace release base. This is distinct from #20's PEP 621 validation path. |
@@ -210,9 +211,10 @@ consumer document: the shared template currently renders wheel entries as
 `[[python_packages]]` and `[[python_distributions]]`. The current canonical
 installer also rejects ATM's explicit non-published bridge crates because their
 `publish_order = 0` values are not yet an accepted generic input shape. Both
-the shape and rendered-manifest parity are tracked by
-[`sc-publish` #17](https://github.com/randlee/sc-publish/issues/17). No
-ATM-side translation or workaround is permitted.
+the shape and rendered-manifest parity were closed by
+[`sc-publish` #17](https://github.com/randlee/sc-publish/issues/17) through
+PR #24 at `68c06f97`. AS.3 owns unchanged-sync execution proof; no ATM-side
+translation or workaround is permitted.
 
 `python3 .just/tests/test_as2_consumer_contract.py` prevents ATM-owned input
 drift: every declared crate must still resolve to its stated Cargo package,

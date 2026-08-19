@@ -5,6 +5,10 @@ inputs:
     description: Released sc-lint version to install
     required: false
     default: "0.4.0"
+  include-sc-lint:
+    description: Install the externally released sc-lint bundle
+    required: false
+    default: "true"
   cargo-deny-version:
     description: Pinned cargo-deny version
     required: false
@@ -21,6 +25,7 @@ runs:
   using: composite
   steps:
     - name: Set up sc-lint
+      if: inputs.include-sc-lint == 'true'
       uses: ./.github/actions/setup-sc-lint
       with:
         version: ${{ inputs.sc-lint-version }}
