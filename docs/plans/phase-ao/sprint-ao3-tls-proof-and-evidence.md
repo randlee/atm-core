@@ -10,9 +10,11 @@ worktree: ../atm-core-worktrees/feature/pao-s3-tls-proof-and-evidence
 
 ## Scope
 
-Certify the merged AO.2 artifact with automated negative coverage and a
-controlled two-host run. The proof verifies that mTLS supplies an authenticated
-stream to the existing path; it adds no message or daemon behavior.
+Certify the merged AO.2 artifact with automated negative coverage on a single
+host. The proof verifies that mTLS supplies an authenticated stream to the
+existing path; it adds no message or daemon behavior. AO.5 is sole owner of
+the M4↔M5 two-host mTLS proof and the TLS/non-TLS benchmark comparison
+(re-scoped by Rand 2026-08-18); AO.3 does not require M5 host access.
 
 ## Dependencies
 
@@ -24,8 +26,9 @@ stream to the existing path; it adds no message or daemon behavior.
 
 1. Automated evidence for valid mTLS and rejected wrong certificate, wrong
    hostname, wrong pin, disabled peer, and plaintext-to-mTLS cases.
-2. A two-host mTLS smoke run proving bidirectional send/read/requires-ack/reply
-   through the unchanged canonical handler.
+2. (Deferred to AO.5 — re-scoped 2026-08-18) The two-host mTLS smoke run
+   proving bidirectional send/read/requires-ack/reply through the unchanged
+   canonical handler is owned by AO.5 (M4↔M5), not AO.3.
 3. Explicit plaintext diagnostic-mode regression evidence for local UDS and
    loopback TCP, showing the override rather than an automatic fallback.
 4. Indexed safe reports under `site/reports/` containing candidate SHA,
@@ -42,18 +45,19 @@ stream to the existing path; it adds no message or daemon behavior.
   plaintext.
 - The run proves mTLS is default after exchange; plaintext is accepted only
   under the explicit diagnostic override.
-- The master reports index links the smoke and benchmark artifacts without
-  leaking private material.
+- The master reports index links the single-host negative-matrix artifacts
+  without leaking private material.
 
 ## Required validation
 
 - AO.1/AO.2 focused tests, `just lint`, and `just test` at the candidate SHA.
 - Deterministic positive/negative mTLS integration matrix.
-- Two-host `/smoke-test` run, XHTML panel, and report-index check.
 - Boundary checks for the sole adapter implementation, no fixture/legacy edge,
   and no concrete TLS/storage dependency in `atm-http-runtime`.
 
 ## Non-closure
 
 AO.3 does not prove corporate-firewall reachability. Phase AP owns the
-separate real-host outbound-connectivity proof.
+separate real-host outbound-connectivity proof. AO.3 does not prove the
+two-host M4↔M5 mTLS run or TLS/non-TLS benchmark comparison; AO.5 is sole
+owner of both (re-scoped by Rand 2026-08-18).

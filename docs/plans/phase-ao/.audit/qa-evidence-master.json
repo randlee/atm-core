@@ -5,7 +5,7 @@
     "start": "2026-08-18T05:31:13Z",
     "end": "2026-08-18T08:06:23Z"
   },
-  "scope": "phase-ao sprints AO.1-AO.3 (AO.1 QA-1 FAIL through QA-2 fix-verify plus a narrow AO1-QA-001 re-verify, all closed PASS; AO.2 QA-1 FAIL through a multi-round fix-verify sequence to ALL FINDINGS CLOSED/PASS on PR #943; AO.3 dev just started, no QA activity yet)",
+  "scope": "phase-ao sprints AO.1-AO.3 (AO.1 QA-1 FAIL through QA-2 fix-verify plus a narrow AO1-QA-001 re-verify, all closed PASS; AO.2 QA-1 FAIL through a multi-round fix-verify sequence to ALL FINDINGS CLOSED/PASS on PR #943; AO.3 QA-1 FAIL on PR #945 @ 4408867ef, findings independently closed across feature/pao-s1..s5 per .triage/phase-ao/findings/AO3-*.ttl)",
   "count_basis": "headline/reviewer",
   "path_notes": "Built from ATM mailbox history against team atm-dev using `atm search \"<term>\" --team atm-dev --limit 100` (this CLI build exposes `atm search`, not the `atm list --contains` form cited by the phase-an precedent file) followed by `atm read --message-id <id>` for each candidate. Every run_id below cites a real ATM message_id and verdict text read verbatim (or, where noted in evidence, closely paraphrased from a verbatim-read multi-finding status update) from the mailbox. blockers/important/minor counts are derived by reading each message's own severity labels (BLOCKING/CRITICAL/IMPORTANT/MINOR or open/closed finding-ID lists) and mapping BLOCKING+CRITICAL into the schema's blockers/important buckets where the source message used a finer-grained scheme than this file's three buckets; this mapping is called out per-entry in evidence where it applies. No run_id, message_id, or verdict was fabricated. AOS1-CIREGRESSION-FIX-1 (arch-ctm's AO1-BOUNDARY-004/AO1-SLEEP-001 fix, dispatched but with no QA verdict message found in the mailbox as of this audit) is intentionally omitted as a runs[] entry rather than invented; see coverage_gaps. Optional fields with no corresponding real ATM record are left null, consistent with the phase-an/phase-ai precedent files.",
   "runs": [
@@ -258,11 +258,36 @@
       "minor": 0,
       "count_basis": "headline/reviewer",
       "evidence": "AOS2-QA-1: ALL FINDINGS CLOSED. PR #943 ready for merge-gate cycle. Final closure: AO2-ATM-QA-003 and AO2-ATM-QA-004 confirmed fixed at commit 8f27912ba; cargo test -p atm-http-runtime -> 114 passed, 0 failed. Complete AOS2-QA-1 tally, all independently verified: AO2-ARCH-001, AO2-QA-001..009, AO2-RSH-001/002/003, AO2-ATM-QA-001..004 = 17/17 closed. Live gates green: just lint 28/28, just validate exit 0, cargo test -p atm-http-runtime 114/114, -p peer-tls 10/10. Overall verdict: PASS."
+    },
+    {
+      "run_id": "AOS3-QA1",
+      "aich_sprint": "AO.3",
+      "phase_sprint": "AO.3",
+      "pass": "QA-1",
+      "run_type": "qa",
+      "assignment_time_utc": "2026-08-18T19:25:44.205150Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": "01M0B5CDWD47P593HXQCJZ0AP1",
+      "assignment_from": "team-lead",
+      "assignment_shared_path": null,
+      "assignment_summary": null,
+      "result_time_utc": "2026-08-18T19:42:55.072160Z",
+      "result_time_pst": null,
+      "result_message_id": "01M0B6BWK0KPP3RBCTKWMJ4C4Q",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "FAIL",
+      "blockers": 2,
+      "important": 9,
+      "minor": 4,
+      "count_basis": "headline/reviewer",
+      "evidence": "AO3-QA-1 FINAL VERDICT: FAIL. PR #945 @ 4408867ef. Deliverable completion 2/5 (40%): D1 partially-present (missing disabled-peer + plaintext-to-mTLS negative tests), D2 absent (M5-blocked, known), D3 present, D4 partially-present (entangled with D2's M5 gap), D5 present. arch-qa FAIL(1 BLOCKING: ARCH-001 hardcoded 'atm-dev' literal in atm-http-runtime/src/lib.rs:1051); req-qa FAIL(1 BLOCKING: ATM-QA-001 sprint-doc frontmatter unreconciled; 6 IMPORTANT incl. missing REQ-CORE-TRANSPORT-002B1 CLI wiring, project-plan.md Phase AO still [PROPOSED]; 1 MINOR stale lint-config AL.7 entries); rust-best-practices-agent 2 IMPORTANT (peer-tls/atm-storage tls.rs generic AtmError::validation instead of typed constructors); rust-service-hardening-agent 1 IMPORTANT (no timeout on HTTP body-read phase, message_handler.rs:364), 1 MINOR (blocking fsync w/o spawn_blocking, daemon-bootstrap/lib.rs:220); ruthless-boundary-qa 2 MINOR (duplicate TestPeerConfigStore + divergent RejectingPeerIoAdapter doubles). 2 BLOCKING (arch-qa + req-qa) mapped to 'blockers'; 6+2+1=9 IMPORTANT mapped to 'important'; 1+1+2=4 MINOR mapped to 'minor'. Per triage-routing policy none of these findings were dispatched directly to arch-ctm; routed to team-lead for triage first (D2/D4's M5-blocked gap subsequently re-scoped out of AO.3 to AO.5 per commit ea0b6e908, and D1's negative-test findings + the RSH/RBQA findings were independently closed by quality-mgr across feature/pao-s1..s5 branches per .triage/phase-ao/findings/AO3-*.ttl, all triage:status \"fixed\")."
     }
   ],
   "coverage_gaps": [
-    "AO.3 (sprint-ao3-tls-proof-and-evidence) has zero QA runs recorded \u2014 dev work just started per team-lead's dispatch to arch-ctm (01M09YH4FX3MDZC2V6E4DPB347), no PR/branch QA activity found in the ATM mailbox as of this audit.",
     "AOS1-CIREGRESSION-FIX-1 (arch-ctm fixing AO1-BOUNDARY-004/AO1-SLEEP-001, dispatched 01M09R2VFGD0ZX3VHV5H0YV6MZ at 2026-08-18T06:14:04Z) has no QA verdict message in the mailbox as of this audit \u2014 intentionally omitted as a runs[] entry rather than fabricated; tracked separately as in-progress in the team-lead task list.",
-    "assignment_message_id/assignment_time_utc are populated only where a distinct dispatch/ACK message was found in the ATM mailbox separate from the verdict message itself; left null elsewhere rather than inferred."
+    "assignment_message_id/assignment_time_utc are populated only where a distinct dispatch/ACK message was found in the ATM mailbox separate from the verdict message itself; left null elsewhere rather than inferred.",
+    "AO.3's QA-1 fix-round closures (AO3-RSH-001, AO3-RSH-002, AO3-ATM-QA-005, AO3-ATM-QA-006, AO3-ATM-QA-009) and AO.4's own QA-1 run are recorded as fixed/closed in .triage/phase-ao/findings/*.ttl but not yet added as discrete runs[] entries here; added on the next audit pass rather than backfilled speculatively in this repair."
   ]
 }

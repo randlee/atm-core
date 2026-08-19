@@ -15,7 +15,9 @@
   triage:severity "minor" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-18T20:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-18T19:57:32Z"^^xsd:dateTime ;
   triage:foundIn triage:AO.3 ;
@@ -31,10 +33,10 @@
   triage:file "crates/atm-http-runtime/src/lib.rs" ;
   triage:line 595 ;
   triage:snippet "struct RejectingPeerIoAdapter;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s2-optional-runtime-activation" ;
-  triage:headSha "c606b8659" ;
+  triage:headSha "a576a7b395216b4161a5c7bc74efd773fb530e00" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s2/c606b8659> .
 
 <urn:atm:triage:occurrence/AO3-RBQA-F002/S2-cli-987>
@@ -42,10 +44,10 @@
   triage:file "crates/atm-http-runtime/src/client.rs" ;
   triage:line 987 ;
   triage:snippet "struct RejectingPeerIoAdapter { connect_calls: std::sync::atomic::AtomicUsize }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s2-optional-runtime-activation" ;
-  triage:headSha "c606b8659" ;
+  triage:headSha "a576a7b395216b4161a5c7bc74efd773fb530e00" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s2/c606b8659> .
 
 <urn:atm:triage:occurrence/AO3-RBQA-F002/S3-lib-598>
@@ -53,10 +55,10 @@
   triage:file "crates/atm-http-runtime/src/lib.rs" ;
   triage:line 598 ;
   triage:snippet "struct RejectingPeerIoAdapter;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
-  triage:headSha "4408867ef" ;
+  triage:headSha "a576a7b395216b4161a5c7bc74efd773fb530e00" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s3/4408867ef> .
 
 <urn:atm:triage:occurrence/AO3-RBQA-F002/S3-cli-1006>
@@ -64,10 +66,10 @@
   triage:file "crates/atm-http-runtime/src/client.rs" ;
   triage:line 1006 ;
   triage:snippet "struct RejectingPeerIoAdapter { connect_calls: std::sync::atomic::AtomicUsize }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
-  triage:headSha "4408867ef" ;
+  triage:headSha "a576a7b395216b4161a5c7bc74efd773fb530e00" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s3/4408867ef> .
 
 <urn:atm:triage:worktree/pao-s1/cb5d8b4ba>

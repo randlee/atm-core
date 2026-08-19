@@ -1,0 +1,127 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO3-ATM-QA-009>
+  a triage:Finding ;
+  triage:findingId "AO3-ATM-QA-009" ;
+  triage:title "Third duplicate TestPeerConfigStore test double in atm-runtime/composition.rs" ;
+  triage:description "quality-mgr AO3-QA-2 follow-up: a third copy of the TestPeerConfigStore test double exists at crates/atm-runtime/src/composition.rs:358, in addition to the two already found and consolidated (crates/peer-tls/src/lib.rs and crates/atm-daemon-bootstrap/src/lib.rs, closed under AO3-RBQA-F001). This copy was missed by the original sweep scope. Determine which currently-open sprint branch(es) contain this duplicate and whether it should be consolidated into the same shared definition used for the other two, or is a legitimately distinct local test double (different crate, different trait impl needs)." ;
+  triage:correctionNote "quality-mgr: S1's own branch (feature/pao-s1-tls-module-rehome) never independently received the consolidation, but its PR (#942) already merged and closed 2026-08-18, prior to this finding's discovery -- it is dead history, not a live dispatch target. Closing the S1 occurrence on the basis that integrate/phase-ao HEAD b2c9eddbf (which supersedes S1's contribution) verifiably has only the single canonical TestPeerConfigStore definition in crates/peer-tls/src/lib.rs, confirmed directly against source." ;
+  triage:phaseId "phase-ao" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-hygiene" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "repo_wide_for_pattern" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-19T00:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-18T20:44:07Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO.3 ;
+  triage:foundAt "2026-08-18T20:44:07Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO3-ATM-QA-009/pao-s1-occ1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO3-ATM-QA-009/pao-s2-occ1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO3-ATM-QA-009/pao-s3-occ1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO3-ATM-QA-009/pao-s4-occ1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO3-ATM-QA-009/pao-s5-occ1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO3-ATM-QA-009/pao-s1-occ1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/composition.rs" ;
+  triage:line 358 ;
+  triage:snippet "struct TestPeerConfigStore { interfaces: Vec<HttpsInterface>, certificate: Option<LocalCertificate>, peers: Vec<TrustedPeer> }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-19T00:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "cb5d8b4ba" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s1/cb5d8b4ba> .
+
+<urn:atm:triage:occurrence/AO3-ATM-QA-009/pao-s2-occ1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/composition.rs" ;
+  triage:line 358 ;
+  triage:snippet "struct TestPeerConfigStore { interfaces: Vec<HttpsInterface>, certificate: Option<LocalCertificate>, peers: Vec<TrustedPeer> }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s2-optional-runtime-activation" ;
+  triage:headSha "cc91735a1af00982a112e967864971b4ba969048" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s2/c606b8659> .
+
+<urn:atm:triage:occurrence/AO3-ATM-QA-009/pao-s3-occ1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/composition.rs" ;
+  triage:line 358 ;
+  triage:snippet "struct TestPeerConfigStore { interfaces: Vec<HttpsInterface>, certificate: Option<LocalCertificate>, peers: Vec<TrustedPeer> }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
+  triage:headSha "d8bcd0ed04aafa62d8810237f9fb1075aa7c2082" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s3/a576a7b39> ;
+  triage:closedAt "2026-08-18T23:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" .
+
+<urn:atm:triage:occurrence/AO3-ATM-QA-009/pao-s4-occ1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/composition.rs" ;
+  triage:line 358 ;
+  triage:snippet "struct TestPeerConfigStore { interfaces: Vec<HttpsInterface>, certificate: Option<LocalCertificate>, peers: Vec<TrustedPeer> }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s4-tls-benchmark-modes" ;
+  triage:headSha "137eff0fc7c5ad32a80f345af5feef1cb9d781db" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s4/ce0b37c0e> ;
+  triage:closedAt "2026-08-18T23:55:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" .
+
+<urn:atm:triage:occurrence/AO3-ATM-QA-009/pao-s5-occ1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/composition.rs" ;
+  triage:line 358 ;
+  triage:snippet "struct TestPeerConfigStore { interfaces: Vec<HttpsInterface>, certificate: Option<LocalCertificate>, peers: Vec<TrustedPeer> }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s5-platform-benchmark-proof" ;
+  triage:headSha "5cb4034cfd183dc309d7020ad6bbbb763f69d7ae" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s5/56f5bc9ea> .
+
+<urn:atm:triage:worktree/pao-s1/cb5d8b4ba>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s1" ;
+  triage:branch "feature/pao-s1-tls-module-rehome" ;
+  triage:headSha "cb5d8b4ba" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pao-s2/c606b8659>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s2" ;
+  triage:branch "feature/pao-s2-optional-runtime-activation" ;
+  triage:headSha "c606b8659" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pao-s3/a576a7b39>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s3" ;
+  triage:branch "feature/pao-s3-tls-proof-and-evidence" ;
+  triage:headSha "a576a7b39" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pao-s4/ce0b37c0e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s4" ;
+  triage:branch "feature/pao-s4-tls-benchmark-modes" ;
+  triage:headSha "ce0b37c0e" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pao-s5/56f5bc9ea>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s5" ;
+  triage:branch "feature/pao-s5-platform-benchmark-proof" ;
+  triage:headSha "56f5bc9ea" ;
+  triage:orderIndex 5 .
