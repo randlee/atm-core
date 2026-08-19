@@ -22,6 +22,8 @@ use atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME;
 use atm_core::observability::{NullObservability, ObservabilityPort};
 use atm_core::send::input::DEFAULT_MESSAGE_MAX_BYTES;
 use atm_core::types::{AgentName, TeamName};
+#[cfg(feature = "benchmark-harness")]
+use atm_http_runtime::DirectPeerPlaintextDiagnostic;
 use atm_http_runtime::{
     DirectPeerTcpConfig, HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig, NonZeroDuration,
     RuntimeHealth, RuntimeLimits, RuntimeTimeouts, StorageAndNudgeRouter,
@@ -47,6 +49,46 @@ pub const REPLACEMENT_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
 /// remaining a bounded admission limit. The wire request's `max_message_bytes`
 /// can only lower the body policy; it cannot raise this server ceiling.
 const CANONICAL_WRITE_ENVELOPE_OVERHEAD_BYTES: usize = 64 * 1024;
+
+/// The explicit wire-security selection accepted only by the feature-gated
+/// benchmark child.  Normal daemon startup remains mTLS-only.
+#[cfg(feature = "benchmark-harness")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BenchmarkPeerWireSecurity {
+    PlaintextTest,
+    MutualTls,
+}
+
+#[cfg(feature = "benchmark-harness")]
+impl BenchmarkPeerWireSecurity {
+    /// Parse the benchmark child's required launch selection.
+    pub fn parse(value: &str) -> Result<Self, AtmError> {
+        match value {
+            "plaintext-test" => Ok(Self::PlaintextTest),
+            "mtls" => Ok(Self::MutualTls),
+            _ => Err(AtmError::config(
+                "--peer-wire-security must be `plaintext-test` or `mtls`",
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DirectPeerWireSecurity {
+    MutualTls,
+    #[cfg(feature = "benchmark-harness")]
+    PlaintextBenchmark,
+}
+
+#[cfg(feature = "benchmark-harness")]
+impl From<BenchmarkPeerWireSecurity> for DirectPeerWireSecurity {
+    fn from(value: BenchmarkPeerWireSecurity) -> Self {
+        match value {
+            BenchmarkPeerWireSecurity::PlaintextTest => Self::PlaintextBenchmark,
+            BenchmarkPeerWireSecurity::MutualTls => Self::MutualTls,
+        }
+    }
+}
 
 /// Identity values captured once at the daemon bootstrap boundary.
 ///
@@ -158,6 +200,7 @@ pub async fn run_replacement_daemon_with_observability(
         observability,
         active_received_hook_selector,
         resolve_daemon_launch_identity(),
+        DirectPeerWireSecurity::MutualTls,
     )
     .await
 }
@@ -167,11 +210,15 @@ pub async fn run_replacement_daemon_with_observability(
 /// This symbol is unavailable to the shipped `atm-daemon` binary because it
 /// exists only behind the `benchmark-harness` feature.
 #[cfg(feature = "benchmark-harness")]
-pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode) -> Result<(), AtmError> {
+pub async fn run_benchmark_daemon(
+    hook_mode: BenchmarkHookMode,
+    peer_wire_security: BenchmarkPeerWireSecurity,
+) -> Result<(), AtmError> {
     run_replacement_daemon_with_selector(
         Arc::new(NullObservability),
         move |service_runtime| benchmark_received_hook_selector(service_runtime, hook_mode),
         resolve_daemon_launch_identity(),
+        peer_wire_security.into(),
     )
     .await
 }
@@ -214,6 +261,7 @@ async fn run_replacement_daemon_with_selector(
         atm_core::LocalServiceRuntime,
     ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     daemon_launch_identity: DaemonLaunchIdentity,
+    peer_wire_security: DirectPeerWireSecurity,
 ) -> Result<(), AtmError> {
     install_sqlite_retained_runtime_factory();
     let scope = current_host_runtime_scope()?;
@@ -221,7 +269,7 @@ async fn run_replacement_daemon_with_selector(
     let runtime_health = RuntimeHealth::with_owner(std::process::id());
     let assembly = assemble_daemon_runtime()?;
     let workflow_telemetry = assembly.workflow_telemetry.clone();
-    let peer_io_adapter = optional_peer_io_adapter(&assembly);
+    let peer_io_adapter = optional_peer_io_adapter(&assembly, peer_wire_security);
     let mut running = start_replacement_runtime(ReplacementStartupInputs {
         scope: &scope,
         owner: &_owner,
@@ -231,6 +279,7 @@ async fn run_replacement_daemon_with_selector(
         selector_factory,
         daemon_launch_identity: &daemon_launch_identity,
         runtime_health,
+        peer_wire_security,
     })
     .await?;
     if let Err(error) = emit_ready_signal_if_requested() {
@@ -260,7 +309,14 @@ async fn run_replacement_daemon_with_selector(
 /// certificate, peer store, or Rustls type.
 fn optional_peer_io_adapter(
     assembly: &RuntimeAssembly,
+    peer_wire_security: DirectPeerWireSecurity,
 ) -> Option<Arc<dyn atm_core::PeerIoAdapter>> {
+    #[cfg(not(feature = "benchmark-harness"))]
+    let _ = peer_wire_security;
+    #[cfg(feature = "benchmark-harness")]
+    if peer_wire_security == DirectPeerWireSecurity::PlaintextBenchmark {
+        return None;
+    }
     match peer_tls::mtls_adapter(assembly.peer_config_store()) {
         Ok(adapter) => Some(adapter),
         Err(error) => {
@@ -287,6 +343,7 @@ where
     selector_factory: F,
     daemon_launch_identity: &'a DaemonLaunchIdentity,
     runtime_health: RuntimeHealth,
+    peer_wire_security: DirectPeerWireSecurity,
 }
 
 async fn start_replacement_runtime<F>(
@@ -299,6 +356,7 @@ async fn start_replacement_runtime<F>(
         selector_factory,
         daemon_launch_identity,
         runtime_health,
+        peer_wire_security,
     }: ReplacementStartupInputs<'_, F>,
 ) -> Result<atm_http_runtime::HttpRuntime<atm_http_runtime::Running>, AtmError>
 where
@@ -316,7 +374,17 @@ where
         daemon_launch_identity,
         runtime_health.clone(),
     )?;
-    let config = replacement_runtime_config(scope, owner, peer_io_adapter.is_some())?;
+    let direct_peer_enabled = peer_io_adapter.is_some() || {
+        #[cfg(feature = "benchmark-harness")]
+        {
+            peer_wire_security == DirectPeerWireSecurity::PlaintextBenchmark
+        }
+        #[cfg(not(feature = "benchmark-harness"))]
+        {
+            false
+        }
+    };
+    let config = replacement_runtime_config(scope, owner, direct_peer_enabled, peer_wire_security)?;
     let builder = HttpRuntimeBuilder::new(config, handler).with_runtime_health(runtime_health);
     let builder = match peer_io_adapter {
         Some(peer_io_adapter) => builder.with_peer_io_adapter(peer_io_adapter),
@@ -329,7 +397,10 @@ fn replacement_runtime_config(
     scope: &atm_core::home::HostRuntimeScope,
     owner: &DaemonOwnerGuard,
     direct_peer_enabled: bool,
+    peer_wire_security: DirectPeerWireSecurity,
 ) -> Result<HttpRuntimeConfig, AtmError> {
+    #[cfg(not(feature = "benchmark-harness"))]
+    let _ = peer_wire_security;
     let loopback = LoopbackTcpConfig::new(
         SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
         scope.runtime_root.as_ref().join(LOCAL_HTTP_RECORD_FILENAME),
@@ -349,7 +420,14 @@ fn replacement_runtime_config(
         ),
     );
     Ok(if direct_peer_enabled {
-        config.with_direct_peer_tcp(DirectPeerTcpConfig::standard())
+        let config = config.with_direct_peer_tcp(DirectPeerTcpConfig::standard());
+        #[cfg(feature = "benchmark-harness")]
+        let config = if peer_wire_security == DirectPeerWireSecurity::PlaintextBenchmark {
+            config.with_plaintext_direct_peer_diagnostic(DirectPeerPlaintextDiagnostic::Benchmark)
+        } else {
+            config
+        };
+        config
     } else {
         config
     })
