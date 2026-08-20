@@ -32,5 +32,7 @@ serde_json = { workspace = true, optional = true }
 ulid.workspace = true
 
 [dev-dependencies]
+atm-http-runtime = { path = "../atm-http-runtime", version = "1.4.4", features = ["test-support"] }
+atm-runtime-test-support = { path = "../atm-runtime-test-support", version = "1.4.4" }
 serde_json.workspace = true
 tempfile = "3"

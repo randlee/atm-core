@@ -9,6 +9,11 @@ description = "Tokio HTTP runtime contract for ATM daemon composition."
 repository.workspace = true
 homepage.workspace = true
 
+[features]
+# Exposes isolated listener construction only to workspace integration tests.
+# It is never enabled by the shipped daemon dependency.
+test-support = []
+
 [dependencies]
 atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.4" }
 base64.workspace = true
