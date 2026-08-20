@@ -1,157 +1,342 @@
 ---
-title: Phase AO Plan — Optional mTLS Peer Adapter
-status: approved
-branch: plan/phase-ao-tls-and-ap-outbound-connectivity
-worktree: ../atm-core-worktrees/plan/phase-ao-tls-and-ap-outbound-connectivity
+title: Phase AO Plan — TLS Transport Replan and Plain-Pipeline Preservation
+status: draft
+branch: feature/pao-tls-replan
+worktree: ../atm-core-worktrees/feature/pao-tls-replan
 target: develop
+integration_branch: integrate/phase-ao2
+supersedes_for_planning: phase-ao
+archived_predecessor: docs/archive/phase-ao
 ---
 
-# Phase AO — Optional mTLS Peer Adapter
+# Phase AO — TLS Transport Replan
 
-## Plan approval
+## Decision Context
 
-Approved by quality-mgr after a two-round plan-hardening QA cycle on PR #829.
+The prior Phase AO plan is retained at `docs/archive/phase-ao/` as an audit
+reference only.  It must not be merged, reverted, repaired, or used as an
+implementation base.  Its central design
+mistake was routing normal daemon startup through a new TLS-selection and
+adapter-availability path.  That changed the working direct-peer pipeline even
+when an operator did not want TLS.
 
-- **PLAN-AO/AP-QA-2** (re-verify fix round at `8705b1fbd`) confirmed fixed:
-  PLAN-CRIT-002 (Blocking — AM quarantine explicit-decision gap),
-  PLAN-CRIT-007/CONTRA (undefined gating phrase mismatch between
-  `project-plan.md` and `plan-phase-am.md`), PLAN-CRIT-008 (SSE
-  session/`PeerIoAdapter` tie-in), RBQA-F001 (missing dedicated boundary
-  TOML for the sealed `PeerIoAdapter` plus specificity gaps in
-  `http-runtime.toml`/`atm-daemon-bootstrap`), PLAN-SCOPE-006 (missing
-  branch/worktree frontmatter on 5 sprint docs), PLAN-SCOPE-007 (fictitious
-  symbol names in `sprint-ap4-canonical-bridge.md`). PASS verdict sent to
-  team-lead.
-- **PLAN-AO/AP-QA-3** (re-verify at `e81e9f426`) confirmed a residual
-  namespace-consistency fix: all `PeerIoAdapter` references unified to
-  `atm_core::PeerIoAdapter`, eliminating a stray
-  `atm_http_runtime::PeerIoAdapter` reference. PASS verdict sent to
-  team-lead.
-- **RBQA-F006** (unstrengthened `.just/lint_boundaries.py` `tls_adapter`
-  regex, line 171) was waived as known lint debt rather than treated as
-  blocking; closing this gap is committed to AO.1/AO.2 code delivery (see
-  line below).
+This replan starts from `develop` commit `2ed09a5b99eff11b7f64e2270cc1842e71a2f603`.
+At that revision the working direct-peer pipeline is:
+
+```text
+host-qualified CLI/graft write
+  -> atm-http-runtime::selected_write_transport
+  -> direct_peer_tcp_client / DirectPeerTcpConnector
+  -> existing direct-peer TCP listener
+  -> existing canonical Axum router
+  -> existing WriteRequest, persistence, post-write hook, and response
+```
+
+The normal bootstrap always enables `DirectPeerTcpConfig::standard()` and the
+normal direct-peer listener and client have no TLS configuration, storage
+lookup, trait object, or alternate startup path.  That is the compatibility
+baseline.
+
+Planning is based on `develop`; implementation merges through the new
+`integrate/phase-ao2` branch.  The existing `integrate/phase-ao` branch is
+reserved for the archived predecessor and is not an implementation target.
 
 ## Goal
 
-Restore optional mTLS to the canonical Tokio/Hyper direct-peer path with one
-production adapter crate, `peer-tls`. This is standard Tokio-Rustls stream
-wrapping, not a daemon rewrite, new key-exchange protocol, or generic
-framework project.
+Add mutually authenticated TLS as an explicit runtime-selected outer stream
+adapter while leaving the preceding pipeline behaviorally unchanged whenever
+TLS is disabled.  Selecting either transport must require only normal daemon
+configuration/restart, never a different build, Cargo feature, benchmark-only
+binary, source edit, or environment-only escape hatch.
 
-The already-landed TLS boundary is authoritative:
+## Non-Negotiable Invariants
 
-```text
-PeerConfigStore (sealed durable configuration)
-  + atm_storage::tls (identity, pinning, Rustls verification)
-  -> peer-tls (Tokio mTLS adapter)
-  -> existing atm-http-runtime HTTP handler/client
-```
+1. **Plain is the compatibility mode.** A normal daemon invocation without an
+   explicit TLS selection uses the pre-TLS direct TCP listener and
+   `DirectPeerTcpConnector` unchanged.  It must not construct a TLS adapter,
+   read a certificate/trust store, branch on adapter availability, change
+   listener readiness, or change route/request/response handling.
+2. **TLS is opt-in at one I/O seam.** Explicit TLS selection wraps only the
+   accepted/connected byte stream before the existing Hyper/Axum HTTP
+   processing.  It does not create a second endpoint, request DTO, canonical
+   write handler, acknowledgement path, nudge path, persistence path, or
+   retry/replay system.
+3. **No downgrade.** When TLS is selected, a DNS, configuration, handshake,
+   hostname, pin, or peer-certificate failure is reported as TLS delivery
+   failure.  It never retries the plain client.  When TLS is not selected,
+   no TLS configuration failure is relevant or observable.
+4. **Runtime selection, not compilation.** The shipped daemon exposes one
+   explicit, documented peer-wire selection with `plaintext` as the default
+   and `mtls` as the opt-in value.  Daemon-switch/LaunchAgent arguments are
+   the operational control surface.  A restart with another value changes the
+   mode; neither mode is a Cargo feature or a special benchmark executable.
+5. **Opaque transport ownership.** `peer-tls` is the sole Rustls/Tokio-Rustls,
+   certificate, hostname, pin, and `PeerConfigStore` transport consumer.
+   `atm-http-runtime` retains the HTTP router/client and sees only an opaque
+   selected stream.  `atm-daemon-bootstrap` selects/composes the mode but
+   performs no TLS handshake or certificate policy.
+6. **Production evidence must use the shipped mode.** Benchmark and smoke
+   runs select plain or mTLS by the same normal daemon argument that users use;
+   disposable test identities are setup data, never a different runtime path.
 
-`peer-tls` consumes those existing values; it does not recreate certificate
-parsing, fingerprint matching, trust policy, or key exchange. The old
-`atm-peer-tls-interop` remains a one-shot curl fixture and is not renamed,
-promoted, or used by production delivery.
+## Requirement And ADR Reconciliation Gate
 
-## Required ownership and boundary transition
+Implementation is blocked until a documentation-only review accepts the
+following correction:
 
-`peer-tls` owns all TLS-specific work: reading the sealed `PeerConfigStore`,
-building/refreshing client and server configuration from `atm_storage::tls`,
-Tokio-Rustls handshakes, hostname/pin/client-certificate validation, and typed
-TLS errors. It contains no mailbox, nudge, retry, replay, CLI, MCP, or graft
-logic.
+- `REQ-CORE-TRANSPORT-002B1` and `REQ-DAEMON-TRANSPORT-002B1` currently say
+  normal startup is mTLS and plain is benchmark/debug-only.  That contradicts
+  the approved compatibility decision above and must be replaced with explicit
+  runtime selection: default `plaintext`, opt-in `mtls`, visible in doctor and
+  retained events.
+- ADR-034 and ADR-035 continue to require one canonical HTTP application path
+  and no plaintext downgrade.  Their transport-mode wording must be amended,
+  not silently overridden: `plaintext` is an intentionally selected
+  compatibility mode, while `mtls` is the authenticated production mode.
+- `docs/adr/INDEX.md` names a missing ADR-047.  The reconciliation sprint must
+  either restore the referenced ADR or remove/correct the stale supersession
+  claims; it may not cite a nonexistent authority.
 
-`atm-http-runtime` remains the single HTTP router, encoder/decoder, and
-lifecycle owner. It sees only an opaque, sealed `PeerIoAdapter` and calls its
-`accept`/`connect` operations; it must not import Rustls/Tokio-Rustls,
-`PeerConfigStore`, or `atm_storage::tls`, and it must not parse certificates
-or make TLS policy decisions. This is the intended equivalent of “if mTLS,
-call the adapter”; it is not a second HTTP path.
+The accepted ADR must also state the compatibility invariant and explicitly
+reject “optional adapter unavailable => alter the normal listener/client
+pipeline” as a design pattern.
 
-`PeerIoAdapter` is defined once by `atm-core` (the trait owner and its sealed
-boundary record). `peer-tls` is its sole authorized implementation and
-`atm-http-runtime` consumes only `Arc<dyn atm_core::PeerIoAdapter>`; the
-runtime must not define, re-export, or shadow a second adapter trait.
+## Boundary Enforcement Contract
 
-The implementation must make the following boundary changes in the same
-reviewed AO.1/AO.2 series; no code may rely on the current lint pattern gap.
+TLR.1 establishes these records and architecture guards before TLS code is
+allowed to land.  They are production boundaries, not review suggestions.
 
-| Boundary record | Explicit change |
-| --- | --- |
-| `boundaries/atm-storage/peer-config-store.toml` | Add `peer-tls` as the sole new allowed dependent. It may read configuration only. |
-| `boundaries/atm-storage/tls.toml` | Add `peer-tls` as the sole new allowed dependent; it consumes existing helpers rather than duplicating them. |
-| `boundaries/atm-core/peer-io-adapter.toml` | New trait-owner record for sealed `PeerIoAdapter`: `implementation.visibility = trait_only`, one authorized `peer-tls` implementation under ADR-001, and no message/roster/nudge/CLI capability. |
-| `boundaries/atm-http-runtime/http-runtime.toml` | In `[ownership]`, add only `opaque_peer_io_adapter_dispatch` to `io_owns`; replace the ambiguous `tls_adapter` prohibition with explicit concrete-TLS/storage prohibitions. In `[dependencies]`, retain no `peer-tls` edge. Add a source guard rejecting `rustls`, `tokio_rustls`, `TlsConnector`, `TlsAcceptor`, `PeerConfigStore`, and `atm_storage::tls` imports. |
-| `boundaries/atm-daemon-bootstrap/*` | In `[dependencies].allowed_dependencies`, add `peer-tls`; in `[ownership]`, allow only `opaque_peer_io_adapter_composition` and continue forbidding concrete TLS/socket work. Bootstrap constructs the adapter from `RuntimeAssembly::peer_config_store()` and owns no handshake, certificate, or transport policy. |
-| `boundaries/peer-tls/peer-tls.toml` | New active production boundary: permit only `atm-core`, `atm-storage`, `atm-http-runtime`, Tokio/Hyper/Rustls dependencies; forbid legacy daemon and `atm-peer-tls-interop` dependency edges. |
-| architecture tests | Add expected allowed edges and explicit forbidden-edge/source checks for all rows above, including the sole authorized `PeerIoAdapter` implementation. |
-
-The adapter port is sealed under ADR-001 and has one authorized implementer:
-`peer-tls`. Its shape is equivalent to:
-
-```rust
-pub trait PeerIoAdapter: atm_core::boundary::sealed::Sealed + Send + Sync {
-    async fn accept(&self, tcp: TcpStream, deadline: RequestDeadline)
-        -> Result<BoxedPeerIo, AtmError>;
-    async fn connect(&self, peer: &HostName, deadline: RequestDeadline)
-        -> Result<BoxedPeerIo, AtmError>;
-}
-
-pub fn mtls_adapter(
-    store: Arc<dyn PeerConfigStore + Send + Sync>,
-) -> Result<Arc<dyn PeerIoAdapter>, AtmError>;
-```
-
-Exact module names may vary. `PeerIoAdapter` is transport-only; it may expose
-neither a message DTO nor a generic extension point. `peer-tls` is deliberately
-ATM-integrated through the existing sealed storage types for this phase. A
-future app-agnostic TLS-storage extraction requires a second real consumer and
-is explicitly out of scope.
-
-## Runtime rule
-
-After key exchange has produced a valid enabled interface and trusted-peer
-record, peer traffic uses mTLS. Plaintext is available only through an
-explicit, observable test/benchmark/debug override. TLS configuration, DNS,
-handshake, hostname, or pin failure never retries as plaintext.
-
-The frozen `crates/atm-daemon` tree is reference-only and must not be edited,
-started, tested, restored, or made a dependency.
-
-## Authoritative sprint sequence
-
-| Sprint | Closure | must_follow |
+| Owner | Allowed responsibility | Prohibited responsibility and mechanically enforced source/dependency guard |
 | --- | --- | --- |
-| [AO.1](sprint-ao1-tls-module-rehome.md) | `peer-tls`, its explicit boundary records, and focused TLS configuration/stream tests exist without activating ATM traffic. | Accepted Tokio/Axum baseline. |
-| [AO.2](sprint-ao2-optional-runtime-activation.md) | The runtime uses the opaque adapter for inbound and outbound peer traffic while retaining one HTTP handler/client path. | AO.1 development pushed; merge AO.1 before every AO.2 dev/fix round. |
-| [AO.3](sprint-ao3-tls-proof-and-evidence.md) | Automated and two-host evidence proves canonical mTLS delivery, rejection before application dispatch, and no plaintext downgrade. | AO.2 PR merged. |
+| `peer-tls` | The sole owner of Rustls/Tokio-Rustls, identity loading, pin/hostname/client-certificate verification, and inbound/outbound stream wrapping. | No `WriteRequest`, router, mailbox, roster, ACK, hook, nudge, replay, retry, CLI, or daemon-lifecycle dependency. |
+| `atm-http-runtime` | The existing plain direct-peer client/listener plus the one HTTP router, encoder/decoder, deadline, canonical write, and lifecycle path.  The mTLS path may consume only an opaque authenticated stream. | No Rustls/Tokio-Rustls, `PeerConfigStore`, certificate/pin policy, or second HTTP endpoint/router/request DTO.  The pre-existing plain connector/listener remains a separately guarded source path. |
+| `atm-daemon-bootstrap` | Parse one explicit wire-security mode and compose the already-built TLS adapter only in the `mtls` arm. | No handshake, certificate parsing, peer configuration read, pin/hostname decision, automatic mode inference, or TLS-to-plain fallback. |
+| `atm` / `atm-graft` | Submit the ordinary daemon request and render the typed result. | No private TLS client, certificate read, mode-specific request schema, alternate host routing, or direct SQLite fallback. |
+| benchmark/smoke runner | Create disposable test configuration through public controls and start the shipped daemon with the normal mode argument. | No feature-gated benchmark daemon, test-only HTTP resource, test-only request DTO, or unverifiable absolute-rate-only pass. |
 
-## Invariants
+Required structural checks:
 
-1. TLS changes only the stream below the existing HTTP handler and encoder;
-   there is one canonical request and result path.
-2. `peer-tls` is the only production owner of Rustls/Tokio-Rustls and of
-   `PeerConfigStore` reads for transport configuration.
-3. `atm_storage::tls` remains the one canonical owner of identity loading,
-   fingerprint normalization, pinning, and verification helpers.
-4. TLS failures occur before HTTP body decoding and application dispatch and
-   never fall back to plaintext.
-5. Private key bytes never appear in doctor output, errors, logs, or reports.
-6. The fixture and frozen daemon have no production dependency edge.
+1. The `plaintext` launch arm may reference only the existing
+   `DirectPeerTcpConfig::standard`, `DirectPeerTcpConnector`, direct-peer
+   listener, and ordinary router path.  A reference to `peer_tls`,
+   `PeerIoAdapter`, `PeerConfigStore`, Rustls, or adapter availability in that
+   arm fails lint.
+2. The `mtls` launch arm may compose the opaque adapter, but its error branches
+   cannot call the plain connector/listener or change the selected mode.
+3. `atm-http-runtime` has exactly one HTTP route/resource and exactly one
+   `WriteRequest`/response encoding path for plain and mTLS traffic.  A second
+   route, endpoint, DTO, ACK sender, persistence branch, hook branch, or
+   benchmark-only daemon process fails architecture tests.
+4. Dependency guards allow concrete TLS APIs and `PeerConfigStore` transport
+   reads only in `peer-tls`; bootstrap's composition dependency remains opaque
+   and is explicitly enumerated.
 
-## Out of scope
+## Proposed Delivery Sprints
 
-- Generic TLS framework, reusable daemon/CLI/MCP framework, certificate
-  issuance/rotation/discovery, or a new key-exchange protocol.
-- ATM message, roster, acknowledgement, nudge, graft, retry, replay, or
-  mailbox behavior.
-- Corporate-network reachability; Phase AP starts with a separate real-host
-  feasibility proof.
+| Sprint | Closure | Dependencies | Must not do |
+| --- | --- | --- | --- |
+| TLR.1 — Contract and baseline oracle | Accepted ADR/requirements, explicit daemon mode syntax, and a pre-TLS plain-pipeline characterization suite. | None. | Add TLS crate, listener, or client code. |
+| TLR.2 — Isolated TLS stream adapter | `peer-tls` provides inbound/outbound mTLS stream wrapping with focused positive/negative tests and boundary records. | TLR.1 PR merged. | Change normal bootstrap, direct TCP connector, router, or benchmark harness. |
+| TLR.3 — Runtime mode seam | One daemon runtime argument selects `plaintext` (existing path) or `mtls` (adapter path); same router/client protocol in both modes. | TLR.2 PR merged. | Infer mode from adapter/config availability or fall back from TLS to plain. |
+| TLR.4 — Operational proof and performance | Same shipped binary is benchmarked in both modes on M4, M5, and FastPC4; existing plaintext baseline is compared before TLS is accepted. | TLR.3 PR merged. | Treat functional pass or an absent Windows host as performance success. |
 
-## Phase exit
+Each child branch must merge its parent before every development or fix round;
+parallel work is limited to documentation review that does not modify the same
+requirements, ADR, boundary, runtime, or evidence artifacts.
 
-AO is complete when the active Tokio runtime proves bidirectional mTLS
-send/read/requires-ack/reply through the unchanged HTTP handler, all required
-certificate/pin/hostname negatives fail before application dispatch, plaintext
-works only under its explicit override, and indexed reports under
-`site/reports/` retain the evidence.
+## TLR.1 — Contract And Plain-Pipeline Oracle
+
+### Deliverables
+
+1. An ADR and requirements correction that define the public daemon argument:
+   `--peer-wire-security plaintext|mtls`; omitted means `plaintext`.
+2. A documented daemon-switch invocation that changes this argument without
+   rebuilding either `atm` or `atm-daemon`.
+3. A characterization suite for the existing plain pipeline.  It must cover:
+   listener bind/port behavior; host-qualified outbound selection; canonical
+   `WriteRequest` encoding; router provenance; durable write; hook warning;
+   acknowledgement; duplicate behavior; typed direct-connection failure; and
+   shutdown/readiness behavior.
+4. Structural tests proving that plain-mode startup calls the existing
+   `DirectPeerTcpConfig::standard`, `DirectPeerTcpConnector`, and direct-peer
+   listener code.  They must fail if plain mode constructs `PeerIoAdapter`,
+   calls `peer-tls`, reads `PeerConfigStore`, or introduces a TLS branch below
+   the normal startup entrypoint.
+5. Boundary-TOML and architecture tests for the complete table above,
+   including the one-router/one-DTO/no-private-client guards and the
+   prohibition on a feature-gated benchmark daemon.
+
+### Acceptance Criteria
+
+- The requirements/ADR contradiction is resolved and quality-reviewed before
+  TLS code begins.
+- The current `develop` plain direct-peer test corpus remains green unchanged;
+  new tests add coverage rather than replacing it.
+- Starting plain mode with absent, invalid, or conflicting TLS configuration
+  produces the same direct-peer readiness and result as no TLS configuration.
+- The boundary suite rejects cross-crate TLS policy leakage, a second
+  application path, or any plain-mode reference to mTLS composition.
+
+### Required Validation
+
+```sh
+cargo test -p atm-http-runtime -p atm-daemon-bootstrap
+just lint
+just test
+```
+
+## TLR.2 — Isolated mTLS Stream Adapter
+
+### Deliverables
+
+1. A narrow `peer-tls` implementation that loads existing certificate/trust
+   records only after explicit mTLS selection and wraps `TcpStream` inbound and
+   outbound.  It owns concrete Rustls/Tokio-Rustls values and typed,
+   non-secret failures.
+2. A sealed transport-only port or equivalent existing I/O seam, with one
+   authorized implementation.  The port accepts/returns byte streams only;
+   it exposes no message, roster, acknowledgement, nudge, retry, or storage
+   DTO.
+3. Boundary records and architecture tests that permit the exact
+   `peer-tls -> atm-storage/atm-core` dependencies and forbid Rustls,
+   `PeerConfigStore`, and certificate-policy imports in `atm-http-runtime`.
+4. Positive mutual-auth stream tests and negatives for missing/disabled
+   interface, missing identity, bad key, expired/untrusted client certificate,
+   hostname mismatch, pin mismatch, deadline, and handshake failure.
+
+### Acceptance Criteria
+
+- A valid configured pair exchanges opaque bytes over mTLS.
+- Every negative fails before a Hyper connection, HTTP decode, router,
+  persistence, or receiver hook.
+- No code in this sprint is called by the default/plain daemon startup path.
+
+### Required Validation
+
+```sh
+cargo test -p peer-tls
+just lint
+just test
+```
+
+## TLR.3 — Runtime Mode Seam
+
+### Deliverables
+
+1. Parse the mode once at daemon launch.  Missing/`plaintext` uses the old
+   direct listener and direct client literally; `mtls` composes the adapter at
+   bootstrap and wraps only socket accept/connect.
+2. Keep the existing HTTP method/path, request encoder/decoder,
+   `WriteRequest`, `ApiRouter`, `DaemonRequestDispatcher`, persistence,
+   `PostWriteRouter`, response envelope, deadlines, and lifecycle ownership
+   common to both modes.
+3. Extend doctor and retained observability with the selected mode, never key
+   bytes or certificate contents.  Plain mode reports `plaintext`; mTLS
+   reports `mtls` and configuration readiness.
+4. Tests that invoke the same release daemon interface in both modes.  The
+   plain tests run with intentionally invalid TLS state to prove no accidental
+   adapter/config dependency; mTLS tests prove no plaintext fallback.
+5. Extend TLR.1's structural plain-pipeline guard at this wiring point.  It
+   must fail if the `plaintext` launch selection constructs `PeerIoAdapter`,
+   calls `peer-tls`, reads `PeerConfigStore`, replaces `DirectPeerTcpConnector`,
+   or routes plain traffic through an mTLS/adapter-availability branch.  The
+   guard must permit TLS composition only inside the explicit `mtls` arm.
+6. Extend the TLR.1 one-router/one-DTO guard over the completed mode seam:
+   mTLS may change only stream establishment; it may not add an endpoint,
+   request/response type, ACK sender, persistence branch, hook branch, or
+   benchmark process.
+
+### Acceptance Criteria
+
+- `atm-daemon` built once can be restarted between plain and mTLS modes with
+  only its launch argument changed.
+- Plain mode retains the TLR.1 behavior oracle exactly.
+- The TLR.3 source/architecture guard proves the plain launch arm still
+  invokes the original direct-peer listener and client without any TLS
+  construction or configuration access.
+- mTLS accepts only configured/pinned peers and reaches the same canonical
+  write result as plain after authentication.
+- A mTLS setup failure leaves local UDS/loopback service available but does
+  not silently expose or use plain direct-peer transport.
+
+### Required Validation
+
+```sh
+cargo test -p atm-http-runtime -p atm-daemon-bootstrap -p peer-tls
+just lint
+just test
+```
+
+## TLR.4 — Operational And Performance Proof
+
+### Deliverables
+
+1. `just benchmark` runs its existing `tcp` (plaintext) and `tcp-tls` (mTLS)
+   targets using the same shipped
+   daemon binary and normal `--peer-wire-security` argument.  It records mode,
+   binary revision, frames-per-connection, hook mode, platform, hostname, and
+   exact baseline provenance.
+2. Plain benchmark comparison is mandatory against a compatible pre-TLS
+   baseline before TLS is accepted.  No absolute low floor may substitute for
+   this comparison.  A material plain regression blocks closure.
+3. mTLS measurements are a separate mode and are never compared to plain as a
+   functional gate; they still require a same-mode baseline after the first
+   accepted campaign.
+4. M4, M5, and FastPC4 each run plain and mTLS.  An unavailable platform is an
+   explicit blocked artifact, not a pass.  Any temporarily unavailable
+   physical-host proof is scoped to TLR.4 rather than blocking TLR.1–TLR.3.
+5. Bidirectional M4↔M5 plain and mTLS smoke proves send, read,
+   `--requires-ack`, and reply through the ordinary daemon/CLI pair.
+
+### Acceptance Criteria
+
+- Plain throughput is at or above the agreed compatible baseline on the same
+  host/mode/profile, or the regression is root-caused and fixed before TLS
+  closure.
+- mTLS proof includes positive delivery and pre-router negative proof.
+- No benchmark uses a feature-gated daemon, a benchmark-only request path, or
+  a compile-time transport selection.
+
+### Required Validation
+
+```sh
+just benchmark --target tcp
+just benchmark --target tcp-tls
+just benchmark-report --rebuild
+just reports-index --check
+just smoke crosshost-send
+just test
+```
+
+## Explicit Non-Goals
+
+- Reusing, repairing, merging, deleting, or reverting Phase AO.
+- Editing the frozen synchronous `crates/atm-daemon` tree.
+- A generic TLS framework, new key exchange, certificate rotation/discovery,
+  an outbox, replay, retry loop, relay, new controller, or second router.
+- Persisting IP aliases or using raw-IP identity in place of hostname plus pin.
+- Treating TLS configuration presence as an implicit mode selection.
+
+## Risks And Review Questions
+
+1. The present requirements say default mTLS, while the compatibility decision
+   requires default plain.  TLR.1 must resolve this intentionally and make the
+   release migration visible; implementation may not choose by implication.
+2. Existing direct-peer code couples the outbound client to
+   `StorageAndNudgeRouter` for acknowledgement delivery.  TLR.3 must prove
+   both ordinary send and ACK use the selected outer transport without moving
+   any canonical-write responsibility.
+3. The current historical benchmark corpus mixes hardware, transport, hook
+   mode, and connection-frame profiles.  TLR.4 must select only exact profile
+   matches and make incomparable evidence visible rather than averaging it.
+
+## Review Checklist
+
+- [ ] Requirements and ADR wording name one mode-selection authority and a
+      default.
+- [ ] The plain-mode source path retains the pre-TLS listener and client.
+- [ ] TLS is unreachable from default/plain startup and required for mTLS.
+- [ ] Both modes use one HTTP application pipeline.
+- [ ] mTLS cannot downgrade to plain.
+- [ ] Benchmarks exercise the shipped daemon, compare compatible plaintext
+      evidence, and record blocked hosts honestly.
