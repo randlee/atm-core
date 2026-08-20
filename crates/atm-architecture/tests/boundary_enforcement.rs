@@ -78,6 +78,24 @@ const AI11_RETIRED_WINDOWS_TRANSPORT_DEPENDENCIES: &[&str] = &[
     "windows-named-pipe",
 ];
 
+fn contains_adapter_availability_inference(source: &str) -> bool {
+    const ADAPTER_TERMS: &[&str] = &["adapter", "peer-wire", "peer_wire", "transport"];
+    const AVAILABILITY_TERMS: &[&str] = &[
+        "availability",
+        "available",
+        "enabled",
+        "present",
+        "supported",
+        "configured",
+    ];
+
+    source.lines().any(|line| {
+        let line = line.to_ascii_lowercase();
+        ADAPTER_TERMS.iter().any(|term| line.contains(term))
+            && AVAILABILITY_TERMS.iter().any(|term| line.contains(term))
+    })
+}
+
 #[test]
 fn daemon_must_not_read_caller_workspace_config() {
     let root = workspace_root();
@@ -177,18 +195,16 @@ fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
         ("direct-peer listener", direct_listener),
         ("direct-peer connector", direct_connector),
     ] {
-        for forbidden in [
-            "peer_tls",
-            "rustls",
-            "PeerConfigStore",
-            "certificate",
-            "adapter availability",
-        ] {
+        for forbidden in ["peer_tls", "rustls", "PeerConfigStore", "certificate"] {
             assert!(
                 !source.contains(forbidden),
                 "AO2 plaintext {scope} must not inspect TLS/configuration/adapter state `{forbidden}`"
             );
         }
+        assert!(
+            !contains_adapter_availability_inference(source),
+            "AO2 plaintext {scope} must not infer its mode from adapter availability or synonyms"
+        );
     }
     for forbidden in [
         "std::env",
