@@ -8,6 +8,14 @@ required_variables:
   - generated_at
   - host_label
   - transport
+  - peer_wire_security
+  - benchmark_target
+  - hook_mode
+  - daemon_version
+  - host_os
+  - host_arch
+  - command
+  - execution_daemon
   - frames_per_connection
   - run_duration_s
   - passed
@@ -24,6 +32,13 @@ required_variables:
     <dt>Generated</dt><dd>{{ generated_at | e }}</dd>
     <dt>Host label</dt><dd>{{ host_label | e }}</dd>
     <dt>Transport</dt><dd>{{ transport | e }}</dd>
+    <dt>Peer-wire security</dt><dd>{{ peer_wire_security | e }}</dd>
+    <dt>Benchmark target</dt><dd>{{ benchmark_target | e }}</dd>
+    <dt>Hook mode</dt><dd>{{ hook_mode | e }}</dd>
+    <dt>Daemon/client version</dt><dd>{{ daemon_version | e }}</dd>
+    <dt>Host profile</dt><dd>{{ host_os | e }} / {{ host_arch | e }}</dd>
+    <dt>Command</dt><dd>{{ command | e }}</dd>
+    <dt>Execution daemon</dt><dd>{{ execution_daemon | e }}</dd>
     <dt>Frames per connection</dt><dd>{{ frames_per_connection }}</dd>
     <dt>Run duration (seconds)</dt><dd>{{ run_duration_s }}</dd>
     <dt>Artifact</dt><dd>{{ artifact_id | e }}.json</dd>

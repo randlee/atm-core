@@ -89,7 +89,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         )
         self.assertIn("ATM_HOME", environment)
 
-    def test_benchmark_doctor_accepts_ready_null_observability_runtime(self):
+    def test_benchmark_doctor_rejects_a_ready_runtime_with_unhealthy_observability(self):
         result = {
             "exit_code": 1,
             "stderr": "",
@@ -99,10 +99,8 @@ class AdmissionCapacityTests(unittest.TestCase):
                 "runtime_status": {"liveness": "running", "readiness": "ready"},
             }),
         }
-        self.assertEqual(
-            RUNNER.benchmark_doctor_payload(result)["runtime_status"],
-            {"liveness": "running", "readiness": "ready"},
-        )
+        with self.assertRaisesRegex(RUNNER.SmokeError, "capacity doctor"):
+            RUNNER.benchmark_doctor_payload(result)
 
     def test_benchmark_doctor_rejects_other_or_not_ready_failure(self):
         for payload in (
@@ -454,7 +452,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             (state / "mail.db").write_text("managed-state", encoding="utf-8")
             home = root / "atm-capacity-benchmark"
             atm = root / "atm"
-            daemon = root / "atm-daemon-benchmark"
+            daemon = root / "atm-daemon"
             atm.touch()
             daemon.touch()
             with (
@@ -466,8 +464,6 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
-                mock.patch.object(RUNNER, "run_direct_storage_probe"),
-                mock.patch.object(RUNNER, "run_direct_core_write_probe"),
                 mock.patch.object(RUNNER, "local_endpoint", side_effect=RUNNER.SmokeError("benchmark failed")),
                 mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"),
                 mock.patch.object(
@@ -501,12 +497,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             with self.assertRaisesRegex(RUNNER.SmokeError, "Windows"):
                 RUNNER.validate_transport("uds")
 
-    def test_hook_mode_is_explicit_and_environment_cannot_disable_the_hook(self):
-        self.assertEqual(RUNNER.validate_hook_mode("active"), "active")
-        self.assertEqual(RUNNER.validate_hook_mode("disabled"), "disabled")
-        with self.assertRaisesRegex(RUNNER.SmokeError, "hook mode"):
-            RUNNER.validate_hook_mode("unexpected")
-
+    def test_runtime_environment_cannot_disable_the_hook(self):
         environment = RUNNER.runtime_environment(Path("/tmp/atm-capacity-unit"))
         self.assertNotIn("ATM_HTTP_RECEIVED_HOOK_MODE", environment)
         self.assertNotIn("ATM_HTTP_BENCHMARK_MODE", environment)
@@ -537,11 +528,11 @@ class AdmissionCapacityTests(unittest.TestCase):
             ):
                 _code, evidence_path = RUNNER.run_capacity(
                     home, Path(directory), "tcp", 1, sample_count=1,
-                    raw_evidence_directory=Path(directory), hook_mode="disabled",
+                    raw_evidence_directory=Path(directory),
                 )
         self.assertEqual(evidence_path.name, "evidence.json")
-        self.assertEqual(captured["hook_mode"], "disabled")
-        self.assertIn("disabled", captured["stages"]["post_commit_received_hook"])
+        self.assertEqual(captured["hook_mode"], "active")
+        self.assertIn("active", captured["stages"]["post_commit_received_hook"])
 
     def test_failed_setup_records_a_schema_valid_duration(self):
         captured: dict[str, object] = {}
@@ -559,19 +550,6 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
-                mock.patch.object(
-                    RUNNER,
-                    "run_direct_storage_probe",
-                    return_value={
-                        "kind": "async_storage_admission",
-                        "requested_count": 1,
-                        "accepted_count": 1,
-                        "worker_count": 1,
-                        "elapsed_seconds": 1.0,
-                        "admissions_per_second": 1.0,
-                    },
-                ),
-                mock.patch.object(RUNNER, "run_direct_core_write_probe", return_value={}),
                 mock.patch.object(
                     RUNNER, "start_capacity_daemon", side_effect=RUNNER.SmokeError("setup failed"),
                 ),
@@ -752,6 +730,8 @@ class AdmissionCapacityTests(unittest.TestCase):
                 payload = {
                     "host_label": "mac-arm64-01",
                     "transport": "uds",
+                    "peer_wire_security": "plaintext-test",
+                    "execution_daemon": "shipped_atm_daemon",
                     "frames_per_connection": frame,
                     "source_revision": "b" * 40,
                     "generated_at": f"2026-08-01T00:00:{frame:02d}Z",
@@ -915,6 +895,34 @@ class AdmissionCapacityTests(unittest.TestCase):
             with self.assertRaisesRegex(RUNNER.SmokeError, "did not pass"):
                 RUNNER.load_baseline_median(path, "uds", 1)
 
+    def test_public_tcp_targets_select_only_the_ordinary_daemon_mode(self):
+        self.assertEqual(
+            RUNNER.resolve_benchmark_target("tcp", None),
+            ("tcp", "plaintext-test", "tcp"),
+        )
+        self.assertEqual(
+            RUNNER.resolve_benchmark_target("tcp-tls", "tcp"),
+            ("tcp", "mutual-tls", "tcp-tls"),
+        )
+        with self.assertRaisesRegex(RUNNER.SmokeError, "requires transport"):
+            RUNNER.resolve_benchmark_target("tcp-tls", "uds")
+
+    def test_mode_aware_baseline_rejects_cross_security_comparison(self):
+        payload = complete_evidence(
+            transport="tcp",
+            peer_wire_security="plaintext-test",
+            execution_daemon="shipped_atm_daemon",
+            frames_per_connection=8,
+        )
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "baseline.json"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            self.assertEqual(
+                RUNNER.load_baseline_median(path, "tcp", 8, "plaintext-test"), 1_000,
+            )
+            with self.assertRaisesRegex(RUNNER.SmokeError, "peer-wire baseline"):
+                RUNNER.load_baseline_median(path, "tcp", 8, "mutual-tls")
+
     def test_durability_verification_counts_every_isolated_sqlite_row_after_restart(self):
         with tempfile.TemporaryDirectory() as temp:
             database = Path(temp) / "mail.db"
@@ -1031,15 +1039,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             ],
         )
         self.assertEqual(command.call_args_list[1].args[0][4], "capacity-recipient")
-        self.assertEqual(len(command.call_args_list), 4)
-        self.assertEqual(
-            command.call_args_list[2].args[0],
-            [
-                str(atm), "teams", "add-member", "capacity-core-team", "capacity-core-agent",
-                "--home-dir", str(capacity_home), "--json",
-            ],
-        )
-        self.assertEqual(command.call_args_list[3].args[0][4], "capacity-core-recipient")
+        self.assertEqual(len(command.call_args_list), 2)
 
     def test_capacity_roster_is_unique_per_profile(self):
         first = RUNNER.CapacityRoster.unique()
@@ -1048,9 +1048,6 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertNotEqual(first.team, second.team)
         self.assertNotEqual(first.agent, second.agent)
         self.assertNotEqual(first.recipient, second.recipient)
-        self.assertNotEqual(first.core_team, second.core_team)
-        self.assertNotEqual(first.core_agent, second.core_agent)
-        self.assertNotEqual(first.core_recipient, second.core_recipient)
 
     def test_custom_capacity_roster_flows_to_public_request(self):
         roster = RUNNER.CapacityRoster.unique()
@@ -1089,67 +1086,6 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(request.expected_status, 200)
         self.assertEqual(run_profile.call_args.kwargs["operation"], "cached_roster_heartbeat")
         self.assertEqual(run_profile.call_args.kwargs["minimum_admissions_per_second"], 0)
-
-    def test_direct_storage_probe_requires_a_complete_json_result(self):
-        daemon = Path("/tmp/atm-daemon-benchmark")
-        payload = {
-            "kind": "async_storage_admission",
-            "requested_count": RUNNER.DIRECT_STORAGE_DIAGNOSTIC_WRITES,
-            "accepted_count": RUNNER.DIRECT_STORAGE_DIAGNOSTIC_WRITES,
-            "worker_count": 8,
-            "elapsed_seconds": 0.2,
-            "admissions_per_second": 50_000.0,
-        }
-        with mock.patch.object(
-            RUNNER,
-            "command_result",
-            return_value={"exit_code": 0, "stdout": json.dumps(payload) + "\n", "stderr": ""},
-        ) as command:
-            result = RUNNER.run_direct_storage_probe(daemon, {"ATM_HOME": "/tmp/home"}, 8)
-
-        self.assertEqual(result, payload)
-        self.assertEqual(
-            command.call_args.args[0],
-            [
-                str(daemon), "--direct-storage-admission",
-                str(RUNNER.DIRECT_STORAGE_DIAGNOSTIC_WRITES), "--workers", "8",
-            ],
-        )
-
-    def test_direct_storage_probe_rejects_a_partial_or_non_json_result(self):
-        with mock.patch.object(
-            RUNNER,
-            "command_result",
-            return_value={"exit_code": 0, "stdout": "not-json\n", "stderr": ""},
-        ):
-            with self.assertRaisesRegex(RUNNER.SmokeError, "no JSON result"):
-                RUNNER.run_direct_storage_probe(Path("/tmp/daemon"), {}, 1)
-
-    def test_direct_core_write_probe_uses_the_canonical_write_mode(self):
-        daemon = Path("/tmp/atm-daemon-benchmark")
-        payload = {
-            "kind": "canonical_core_write",
-            "requested_count": RUNNER.DIRECT_STORAGE_DIAGNOSTIC_WRITES,
-            "accepted_count": RUNNER.DIRECT_STORAGE_DIAGNOSTIC_WRITES,
-            "worker_count": 8,
-            "elapsed_seconds": 0.5,
-            "admissions_per_second": 20_000.0,
-        }
-        with mock.patch.object(
-            RUNNER,
-            "command_result",
-            return_value={"exit_code": 0, "stdout": json.dumps(payload) + "\n", "stderr": ""},
-        ) as command:
-            result = RUNNER.run_direct_core_write_probe(daemon, {"ATM_HOME": "/tmp/home"}, 8)
-
-        self.assertEqual(result, payload)
-        self.assertEqual(
-            command.call_args.args[0],
-            [
-                str(daemon), "--direct-core-write",
-                str(RUNNER.DIRECT_STORAGE_DIAGNOSTIC_WRITES), "--workers", "8",
-            ],
-        )
 
     def test_interval_preserves_the_first_failure_and_requires_all_1000_responses(self):
         calls = 0
@@ -1335,9 +1271,57 @@ class AdmissionCapacityTests(unittest.TestCase):
             mock.patch.object(RUNNER, "reap_owned_daemon") as reap,
         ):
             with self.assertRaisesRegex(RUNNER.SmokeError, "not ready"):
-                RUNNER.start_capacity_daemon(Path("/tmp/daemon"), Path("/tmp"), {}, "active")
+                RUNNER.start_capacity_daemon(
+                    Path("/tmp/daemon"), Path("/tmp"), {}, "mutual-tls"
+                )
         reap.assert_called_once_with(process)
         output.join.assert_called_once_with()
+
+    def test_capacity_daemon_launches_the_shipped_binary_with_only_peer_wire_mode(self):
+        process = mock.Mock()
+        process.stdout = mock.Mock()
+        process.stderr = mock.Mock()
+        output = mock.Mock()
+        with (
+            mock.patch.object(RUNNER.subprocess, "Popen", return_value=process) as popen,
+            mock.patch.object(RUNNER.DaemonOutputCapture, "start", return_value=output),
+            mock.patch.object(RUNNER, "await_daemon_ready"),
+        ):
+            RUNNER.start_capacity_daemon(
+                Path("/release/atm-daemon"), Path("/tmp/atm-capacity-proof"), {},
+                "plaintext-test",
+            )
+        self.assertEqual(
+            popen.call_args.args[0],
+            ["/release/atm-daemon", "--peer-wire-security", "plaintext-test"],
+        )
+
+    def test_managed_target_run_fails_closed_when_launch_mode_cannot_be_selected(self):
+        captured: dict[str, object] = {}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            home = root / "atm-capacity-proof"
+            atm = root / "atm"
+            daemon = root / "atm-daemon"
+            atm.touch()
+            daemon.touch()
+            with (
+                mock.patch.object(RUNNER, "select_host_state_isolation", return_value="backup_restore"),
+                mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
+                mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"),
+                mock.patch.object(
+                    RUNNER, "write_evidence",
+                    side_effect=lambda _path, value: (captured.update(value), root / "evidence.json")[1],
+                ),
+            ):
+                code, _path = RUNNER.run_capacity(
+                    home, root, "tcp", 1, sample_count=1,
+                    benchmark_target="tcp", managed_daemon=RUNNER.ManagedDaemonOptions("com.example.atm"),
+                    raw_evidence_directory=root,
+                )
+        self.assertEqual(code, 1)
+        self.assertIn("cannot prove a selected peer-wire mode", str(captured["failure"]))
 
     def test_daemon_output_capture_retains_bounded_stdout_and_stderr_tails(self):
         capture = RUNNER.DaemonOutputCapture()

@@ -124,6 +124,18 @@ merge first.
 - M4, M5, and FastPC4 proof is required only in AO.4. An unavailable host is a
   retained blocked artifact, never a pass for physical-host evidence.
 
+## AO.4 Physical-Host Evidence Ledger
+
+| Campaign | Status | Evidence boundary | Recovery |
+| --- | --- | --- | --- |
+| M4 local `tcp` / `tcp-tls` | pending | The public target selectors and shipped-daemon launch contract are covered by AO.4 unit validation; no physical throughput result is claimed until an isolated campaign completes. | Run both target commands in the approved isolated-host procedure and retain the compact reports. |
+| M5 bidirectional `tcp` / `tcp-tls` | blocked | M5 was unavailable during the AO.4 implementation window; no send/read/ack/reply or benchmark result is claimed. | Restore M5 availability, run both directions/modes, and attach the retained evidence. |
+| FastPC4 `tcp` / `tcp-tls` | blocked | FastPC4 was not available to this AO.4 session; no Windows benchmark result is claimed. | Restore approved remote access, run the Windows pair of campaigns, and attach the retained evidence. |
+
+These entries are intentionally not performance outcomes. They prevent an
+unavailable physical host from being mistaken for a successful proof while
+leaving the functional and performance acceptance gates intact.
+
 ## Phase Non-Goals
 
 - Repairing, merging, deleting, or reverting the archived predecessor.

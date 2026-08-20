@@ -278,23 +278,23 @@ fn ao2_peer_wire_policy_keeps_one_error_registry_and_one_http_pipeline() {
 }
 
 #[test]
-fn ao2_benchmark_harness_cannot_introduce_a_second_daemon_pipeline() {
+fn ao4_benchmark_targets_cannot_introduce_an_alternate_daemon_pipeline() {
     let root = workspace_root();
     let bootstrap = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
-    let benchmark_entrypoint =
-        read_source(&root.join("crates/atm-daemon-bootstrap/src/bin/atm-daemon-benchmark.rs"));
+    let justfile = read_source(&root.join("Justfile"));
+    let benchmark_entrypoint = root.join("crates/atm-daemon-bootstrap/src/bin/atm-daemon-benchmark.rs");
 
     assert!(
-        bootstrap.contains("#[cfg(feature = \"benchmark-harness\")]")
-            && bootstrap.contains("pub async fn run_benchmark_daemon")
-            && bootstrap.contains("run_replacement_daemon_with_selector("),
-        "the retained benchmark harness must stay feature-gated and reuse the replacement daemon"
+        !benchmark_entrypoint.exists()
+            && !bootstrap.contains("benchmark-harness")
+            && !bootstrap.contains("run_benchmark_daemon"),
+        "AO.4 must not retain a benchmark-only daemon executable or bootstrap feature"
     );
     assert!(
-        benchmark_entrypoint.contains("atm_daemon_bootstrap::run_benchmark_daemon(mode).await")
-            && !benchmark_entrypoint.contains("canonical_api_router(")
-            && !benchmark_entrypoint.contains("TcpListener::bind"),
-        "the benchmark entrypoint must not create a second HTTP route or listener pipeline"
+        justfile.contains("cargo build --release -p agent-team-mail -p atm-daemon")
+            && !justfile.contains("atm-daemon-benchmark")
+            && !justfile.contains("benchmark-harness"),
+        "the public benchmark recipe must build only the shipped Tokio/Axum daemon"
     );
 }
 

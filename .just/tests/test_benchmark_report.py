@@ -124,7 +124,10 @@ class BenchmarkReportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             output = REPORT.render_aggregate([failed, recovered], Path(directory))
             text = output.read_text(encoding="utf-8")
-        self.assertIn("Current candidate campaign: mac-arm64-01 / tcp / unversioned", text)
+        self.assertIn(
+            "Current candidate campaign: mac-arm64-01 / tcp / legacy-unverified / unversioned",
+            text,
+        )
         self.assertIn("1/6 profiles, 1 passed, 0 failed; missing frames: 1, 2, 4, 16, 64.", text)
         self.assertIn("2 immutable historical runs retained.", text)
 
@@ -145,6 +148,23 @@ class BenchmarkReportTests(unittest.TestCase):
         self.assertEqual(REPORT.campaign_status(campaign), "PASS")
         self.assertEqual(REPORT.campaign_status(campaign[:-1]), "INFO")
         self.assertEqual(REPORT.campaign_status([{**campaign[0], "passed": False}]), "FAIL")
+
+    def test_peer_wire_mode_is_rendered_and_separates_campaigns(self) -> None:
+        plain = REPORT.load_result(self.fixture("failed-tcp-f8.json"))
+        mutual_tls = {
+            **plain,
+            "generated_at": "2026-08-01T03:00:00Z",
+            "peer_wire_security": "mutual-tls",
+            "benchmark_target": "tcp-tls",
+            "hook_mode": "active",
+            "passed": True,
+        }
+        self.assertEqual(REPORT.current_campaign_results([plain, mutual_tls]), [mutual_tls])
+        with tempfile.TemporaryDirectory() as directory:
+            output = REPORT.render_aggregate([plain, mutual_tls], Path(directory))
+            text = output.read_text(encoding="utf-8")
+        self.assertIn("mutual-tls", text)
+        self.assertIn("tcp-tls", text)
 
 
 if __name__ == "__main__":

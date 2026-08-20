@@ -41,8 +41,6 @@ mod received_hook_selector;
 
 pub use owner_gate::DaemonOwnerGuard;
 pub use received_hook_selector::active_received_hook_selector;
-#[cfg(feature = "benchmark-harness")]
-pub use received_hook_selector::{BenchmarkHookMode, benchmark_received_hook_selector};
 
 static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
 /// Architecture §21.6.4's single replacement-daemon drain deadline.
@@ -247,22 +245,6 @@ pub async fn run_replacement_daemon_with_observability(
     run_replacement_daemon_with_selector(
         observability,
         active_received_hook_selector,
-        resolve_daemon_launch_identity(),
-        peer_wire_mode,
-    )
-    .await
-}
-
-/// Starts the separately compiled benchmark daemon with an explicit hook mode.
-///
-/// This symbol is unavailable to the shipped `atm-daemon` binary because it
-/// exists only behind the `benchmark-harness` feature.
-#[cfg(feature = "benchmark-harness")]
-pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode) -> Result<(), AtmError> {
-    let peer_wire_mode = parse_peer_wire_mode(std::env::args_os())?;
-    run_replacement_daemon_with_selector(
-        Arc::new(NullObservability),
-        move |service_runtime| benchmark_received_hook_selector(service_runtime, hook_mode),
         resolve_daemon_launch_identity(),
         peer_wire_mode,
     )
