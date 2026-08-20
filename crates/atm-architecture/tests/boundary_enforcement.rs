@@ -79,21 +79,53 @@ const AI11_RETIRED_WINDOWS_TRANSPORT_DEPENDENCIES: &[&str] = &[
 ];
 
 fn contains_adapter_availability_inference(source: &str) -> bool {
-    const ADAPTER_TERMS: &[&str] = &["adapter", "peer-wire", "peer_wire", "transport"];
-    const AVAILABILITY_TERMS: &[&str] = &[
-        "availability",
-        "available",
-        "enabled",
-        "present",
-        "supported",
-        "configured",
-    ];
+    const WRAPPER_TERMS: &[&str] = &["adapter", "wrapper", "transport"];
+    const OPTION_BRANCH_TERMS: &[&str] = &["is_some", "is_none", "some", "none", "match"];
 
-    source.lines().any(|line| {
-        let line = line.to_ascii_lowercase();
-        ADAPTER_TERMS.iter().any(|term| line.contains(term))
-            && AVAILABILITY_TERMS.iter().any(|term| line.contains(term))
+    // Scan code tokens rather than comments or one explanatory phrase. This
+    // catches the actual forbidden construct: choosing the direct-peer path
+    // from an optional TLS/stream wrapper's presence. A comment rewrite cannot
+    // evade this guard, and a branch spread across several Rust tokens remains
+    // visible inside the short token window.
+    let tokens: Vec<_> = source
+        .lines()
+        .map(|line| line.split("//").next().unwrap_or_default())
+        .flat_map(|line| {
+            line.split(|character: char| !(character.is_ascii_alphanumeric() || character == '_'))
+        })
+        .filter(|token| !token.is_empty())
+        .map(str::to_ascii_lowercase)
+        .collect();
+
+    tokens.iter().enumerate().any(|(index, token)| {
+        let is_wrapper = WRAPPER_TERMS.iter().any(|term| token.contains(term));
+        let window_start = index.saturating_sub(3);
+        let window_end = (index + 5).min(tokens.len());
+        is_wrapper
+            && tokens[window_start..window_end]
+                .iter()
+                .any(|nearby| OPTION_BRANCH_TERMS.contains(&nearby.as_str()))
     })
+}
+
+#[test]
+fn adapter_availability_guard_scans_code_branches_not_comment_wording() {
+    assert!(
+        !contains_adapter_availability_inference(
+            "// adapter availability must never select plaintext\nlet route = direct;"
+        ),
+        "comments are documentation, not an executable adapter-availability branch"
+    );
+    for source in [
+        "if config.peer_stream_adapter.is_some() { return authenticated(); }",
+        "match transport_wrapper { Some(wrapper) => wrapper.connect(), None => direct() }",
+        "let direct = tls_adapter.is_none();",
+    ] {
+        assert!(
+            contains_adapter_availability_inference(source),
+            "the architecture guard must reject adapter availability selection: {source}"
+        );
+    }
 }
 
 #[test]
@@ -298,16 +330,30 @@ fn ao2_peer_wire_policy_keeps_one_error_registry_and_one_http_pipeline() {
 fn ao4_benchmark_targets_cannot_introduce_an_alternate_daemon_pipeline() {
     let root = workspace_root();
     let bootstrap = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
+    let bootstrap_manifest = read_source(&root.join("crates/atm-daemon-bootstrap/Cargo.toml"));
     let justfile = read_source(&root.join("Justfile"));
     let benchmark_entrypoint =
         root.join("crates/atm-daemon-bootstrap/src/bin/atm-daemon-benchmark.rs");
+    let benchmark_source = read_source(&benchmark_entrypoint);
+    let benchmark_daemon = bootstrap
+        .split("pub async fn run_benchmark_daemon")
+        .nth(1)
+        .and_then(|source| source.split("fn build_replacement_handler").next())
+        .expect("feature-gated benchmark daemon must delegate through bootstrap");
 
     assert!(
-        !benchmark_entrypoint.exists()
-            && !bootstrap.contains("benchmark-harness")
-            && !bootstrap.contains("run_benchmark_daemon"),
-        "AO.4 must not retain a benchmark-only daemon executable or bootstrap feature"
+        bootstrap_manifest.contains("benchmark-harness = []")
+            && bootstrap_manifest.contains("name = \"atm-daemon-benchmark\"")
+            && benchmark_daemon.contains("run_replacement_daemon_with_selector")
+            && benchmark_daemon.contains("parse_peer_wire_mode"),
+        "the feature-gated benchmark daemon must select the ordinary AO2 peer-wire mode and delegate into the shared bootstrap"
     );
+    for forbidden in ["HttpRuntimeBuilder", "StorageAndNudgeRouter", "TcpListener"] {
+        assert!(
+            !benchmark_source.contains(forbidden),
+            "the benchmark entrypoint must not construct a second HTTP daemon pipeline through `{forbidden}`"
+        );
+    }
     assert!(
         justfile.contains("cargo build --release -p agent-team-mail -p atm-daemon")
             && !justfile.contains("atm-daemon-benchmark")
