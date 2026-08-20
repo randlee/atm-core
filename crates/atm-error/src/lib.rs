@@ -45,7 +45,7 @@ mod tests {
     }
 
     #[test]
-    fn peer_transport_error_codes_keep_their_stable_wire_spellings() {
+    fn timeout_and_protocol_error_codes_keep_their_stable_wire_spellings() {
         for (code, wire) in [
             (AtmErrorCode::TransportTimeout, "ATM_TRANSPORT_TIMEOUT"),
             (
