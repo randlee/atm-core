@@ -806,27 +806,13 @@ async fn drain_server_group(inputs: ServerGroupInputs) -> std::io::Result<()> {
         shutdown_rx.clone(),
     ));
     if let Some(direct_peer) = direct_peer {
-        match direct_peer {
-            DirectPeerServer::Plaintext(listener, router) => {
-                servers.spawn(serve_loopback_http1(
-                    listener,
-                    router,
-                    max_connections,
-                    header_read_timeout,
-                    shutdown_rx.clone(),
-                ));
-            }
-            DirectPeerServer::Authenticated(listener, adapter, handler, limits, timeouts) => {
-                servers.spawn(serve_authenticated_peer_http1(
-                    listener,
-                    adapter,
-                    handler,
-                    limits,
-                    timeouts,
-                    shutdown_rx.clone(),
-                ));
-            }
-        }
+        spawn_direct_peer_server(
+            &mut servers,
+            direct_peer,
+            max_connections,
+            header_read_timeout,
+            shutdown_rx.clone(),
+        );
     }
     #[cfg(unix)]
     if let Some((listener, cleanup, router)) = unix_socket {
@@ -867,6 +853,36 @@ async fn drain_server_group(inputs: ServerGroupInputs) -> std::io::Result<()> {
         }
     }
     first
+}
+
+fn spawn_direct_peer_server(
+    servers: &mut tokio::task::JoinSet<std::io::Result<()>>,
+    direct_peer: DirectPeerServer,
+    max_connections: usize,
+    header_read_timeout: Duration,
+    shutdown_rx: watch::Receiver<()>,
+) {
+    match direct_peer {
+        DirectPeerServer::Plaintext(listener, router) => {
+            servers.spawn(serve_loopback_http1(
+                listener,
+                router,
+                max_connections,
+                header_read_timeout,
+                shutdown_rx,
+            ));
+        }
+        DirectPeerServer::Authenticated(listener, adapter, handler, limits, timeouts) => {
+            servers.spawn(serve_authenticated_peer_http1(
+                listener,
+                adapter,
+                handler,
+                limits,
+                timeouts,
+                shutdown_rx,
+            ));
+        }
+    }
 }
 
 impl HttpRuntime<Running> {
