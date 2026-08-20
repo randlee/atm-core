@@ -17,12 +17,12 @@
   triage:sweepScope "file_only" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-08-20T20:38:55Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-08-20T21:42:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.3 ;
   triage:foundAt "2026-08-20T20:36:55Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AO23/AO2_s3_1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AO23/AO2_s4_1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/RBP-F001-AO23/AO2_s3_1>
   a triage:Occurrence ;
@@ -43,8 +43,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pao-s4-peer-wire-proof" ;
-  triage:headSha "49154a38f20a3f723dc8bd6d305dfc79bb241d30" ;
-  triage:occursIn <urn:atm:triage:worktree/AO2_s4/49154a3> .
+  triage:headSha "d9fb74917a804d2068684db40a28bc4ce636f283" ;
+  triage:occursIn <urn:atm:triage:worktree/AO2_s4/d9fb749> .
 
 <urn:atm:triage:worktree/AO2_s3/e6a4283>
   a triage:WorktreeSnapshot ;
@@ -53,9 +53,9 @@
   triage:headSha "e6a428355253de23a428bac2f047180ec95dfc7c" ;
   triage:orderIndex 3 .
 
-<urn:atm:triage:worktree/AO2_s4/49154a3>
+<urn:atm:triage:worktree/AO2_s4/d9fb749>
   a triage:WorktreeSnapshot ;
   triage:path "feature/pao-s4-peer-wire-proof" ;
   triage:branch "feature/pao-s4-peer-wire-proof" ;
-  triage:headSha "49154a38f20a3f723dc8bd6d305dfc79bb241d30" ;
+  triage:headSha "d9fb74917a804d2068684db40a28bc4ce636f283" ;
   triage:orderIndex 4 .
