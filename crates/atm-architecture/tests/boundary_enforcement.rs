@@ -147,6 +147,8 @@ fn daemon_must_not_read_caller_workspace_config() {
 }
 
 #[test]
+/// AO.3 extends this AO.2 baseline guard with the bootstrap-selected
+/// `PlaintextTest` arm and its invalid-TLS-state independence.
 fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
     let root = workspace_root();
     let bootstrap = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
@@ -155,13 +157,9 @@ fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
     let policy = read_source(&root.join("crates/atm-core/src/peer_wire.rs"));
 
     let bootstrap_direct_setup = bootstrap
-        .split("async fn run_replacement_daemon_with_selector")
+        .split("fn replacement_runtime_config")
         .nth(1)
-        .and_then(|source| {
-            source
-                .split("/// Emit the benchmark/supervisor marker")
-                .next()
-        })
+        .and_then(|source| source.split("fn record_peer_wire_mode_selection").next())
         .expect("replacement bootstrap direct-peer setup");
     let direct_listener = runtime
         .split("async fn bind_configured_direct_peer_listener")
@@ -173,15 +171,13 @@ fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
         .nth(1)
         .and_then(|source| source.split("impl LoopbackTcpConnector").next())
         .expect("direct-peer connector implementation");
-    let plaintext_mode_arm = bootstrap
-        .split("PeerWireSecurity::PlaintextTest => None")
-        .nth(1)
-        .and_then(|source| source.split("};").next())
-        .expect("explicit plaintext mode arm");
-
     assert!(
         bootstrap_direct_setup.contains("DirectPeerTcpConfig::standard()"),
         "AO2 plaintext characterization must retain the existing standard direct-peer configuration"
+    );
+    assert!(
+        bootstrap.contains("PeerWireSecurity::PlaintextTest => Ok(None),"),
+        "AO2 plaintext mode must bypass all TLS configuration and return no stream wrapper"
     );
     assert!(
         client.contains("struct DirectPeerTcpConnector")
@@ -196,7 +192,6 @@ fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
         "AO2 plaintext listener must enter the ordinary canonical router"
     );
     for (scope, source) in [
-        ("plaintext mode arm", plaintext_mode_arm),
         ("direct-peer listener", direct_listener),
         ("direct-peer connector", direct_connector),
     ] {
@@ -234,6 +229,8 @@ fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
 }
 
 #[test]
+/// AO.3 extends this AO.2 policy guard over the daemon launch seam while
+/// preserving the single canonical HTTP application pipeline.
 fn ao2_peer_wire_policy_keeps_one_error_registry_and_one_http_pipeline() {
     let root = workspace_root();
     let error_registry = read_source(&root.join("crates/atm-error/src/error_codes.rs"));
@@ -282,7 +279,8 @@ fn ao4_benchmark_targets_cannot_introduce_an_alternate_daemon_pipeline() {
     let root = workspace_root();
     let bootstrap = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
     let justfile = read_source(&root.join("Justfile"));
-    let benchmark_entrypoint = root.join("crates/atm-daemon-bootstrap/src/bin/atm-daemon-benchmark.rs");
+    let benchmark_entrypoint =
+        root.join("crates/atm-daemon-bootstrap/src/bin/atm-daemon-benchmark.rs");
 
     assert!(
         !benchmark_entrypoint.exists()
@@ -1352,6 +1350,8 @@ fn is_zeroizing_constructor(call: &syn::ExprCall) -> bool {
 }
 
 #[test]
+/// AO.3 extends this AO.2 ownership guard: bootstrap consumes the opaque mTLS
+/// stream seam, while every other production crate stays adapter-neutral.
 fn ao2_mtls_stream_adapter_is_the_only_authorized_production_tls_consumer() {
     let root = workspace_root();
     for (source, target) in [

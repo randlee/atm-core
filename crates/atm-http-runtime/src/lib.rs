@@ -467,27 +467,11 @@ impl HttpRuntime<Configured> {
             self.config.timeouts,
         );
         let loopback_router = authenticated_loopback_router(canonical_router.clone(), capability);
-        let direct_peer = match direct_peer_listener {
-            Some(listener) => match self.config.peer_stream_adapter.as_ref() {
-                Some(adapter) => Some(DirectPeerServer::Authenticated(
-                    listener,
-                    Arc::clone(adapter),
-                    Arc::clone(&self.handler),
-                    self.config.limits,
-                    self.config.timeouts,
-                )),
-                None => Some(DirectPeerServer::Plaintext(
-                    listener,
-                    canonical_api_router(
-                        Arc::clone(&self.handler),
-                        AuthenticatedConnector::peer_socket(),
-                        self.config.limits,
-                        self.config.timeouts,
-                    ),
-                )),
-            },
-            None => None,
-        };
+        let direct_peer = build_direct_peer_server(
+            direct_peer_listener,
+            &self.config,
+            Arc::clone(&self.handler),
+        );
         let server_task = match start_server_task(ServerTaskInputs {
             listener,
             loopback_router,
@@ -527,6 +511,32 @@ impl HttpRuntime<Configured> {
             },
         })
     }
+}
+
+fn build_direct_peer_server(
+    listener: Option<TcpListener>,
+    config: &HttpRuntimeConfig,
+    handler: Arc<dyn CanonicalWriteHandler>,
+) -> Option<DirectPeerServer> {
+    let listener = listener?;
+    Some(match config.peer_stream_adapter.as_ref() {
+        Some(adapter) => DirectPeerServer::Authenticated(
+            listener,
+            Arc::clone(adapter),
+            handler,
+            config.limits,
+            config.timeouts,
+        ),
+        None => DirectPeerServer::Plaintext(
+            listener,
+            canonical_api_router(
+                handler,
+                AuthenticatedConnector::peer_socket(),
+                config.limits,
+                config.timeouts,
+            ),
+        ),
+    })
 }
 
 async fn bind_configured_direct_peer_listener(
@@ -796,27 +806,13 @@ async fn drain_server_group(inputs: ServerGroupInputs) -> std::io::Result<()> {
         shutdown_rx.clone(),
     ));
     if let Some(direct_peer) = direct_peer {
-        match direct_peer {
-            DirectPeerServer::Plaintext(listener, router) => {
-                servers.spawn(serve_loopback_http1(
-                    listener,
-                    router,
-                    max_connections,
-                    header_read_timeout,
-                    shutdown_rx.clone(),
-                ));
-            }
-            DirectPeerServer::Authenticated(listener, adapter, handler, limits, timeouts) => {
-                servers.spawn(serve_authenticated_peer_http1(
-                    listener,
-                    adapter,
-                    handler,
-                    limits,
-                    timeouts,
-                    shutdown_rx.clone(),
-                ));
-            }
-        }
+        spawn_direct_peer_server(
+            &mut servers,
+            direct_peer,
+            max_connections,
+            header_read_timeout,
+            shutdown_rx.clone(),
+        );
     }
     #[cfg(unix)]
     if let Some((listener, cleanup, router)) = unix_socket {
@@ -857,6 +853,36 @@ async fn drain_server_group(inputs: ServerGroupInputs) -> std::io::Result<()> {
         }
     }
     first
+}
+
+fn spawn_direct_peer_server(
+    servers: &mut tokio::task::JoinSet<std::io::Result<()>>,
+    direct_peer: DirectPeerServer,
+    max_connections: usize,
+    header_read_timeout: Duration,
+    shutdown_rx: watch::Receiver<()>,
+) {
+    match direct_peer {
+        DirectPeerServer::Plaintext(listener, router) => {
+            servers.spawn(serve_loopback_http1(
+                listener,
+                router,
+                max_connections,
+                header_read_timeout,
+                shutdown_rx,
+            ));
+        }
+        DirectPeerServer::Authenticated(listener, adapter, handler, limits, timeouts) => {
+            servers.spawn(serve_authenticated_peer_http1(
+                listener,
+                adapter,
+                handler,
+                limits,
+                timeouts,
+                shutdown_rx,
+            ));
+        }
+    }
 }
 
 impl HttpRuntime<Running> {

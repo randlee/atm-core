@@ -27,11 +27,11 @@ forbidden. Plaintext mode uses the preserved `DirectPeerTcpConfig::standard`,
 `DirectPeerTcpConnector`, direct-peer listener, and ordinary router pipeline.
 The mTLS adapter wraps that same pipeline at the stream boundary only.
 
-AO2.2 implements that outer adapter in `peer-tls`: the crate consumes the
+AO.2 implements that outer adapter in `peer-tls`: the crate consumes the
 storage-neutral `PeerConfigStore` and yields authenticated TCP byte streams.
 It owns certificate validity, durable-hostname, and exact-pin checks, but it
 does not compose a daemon, HTTP route, or message pipeline. Runtime wiring is
-explicitly deferred to AO2.3, so compiling the adapter cannot alter either
+explicitly deferred to AO.3, so compiling the adapter cannot alter either
 the normal daemon default or the preserved plaintext benchmark path.
 
 No environment variable, durable setting, TLS adapter availability check, or
@@ -60,9 +60,9 @@ Doctor, retained diagnostics, smoke JSON/XHTML, and benchmark evidence must
 record the active peer-wire mode. Plaintext-test evidence cannot satisfy any
 mTLS or peer-allowlist acceptance criterion.
 
-## AO2.3 implementation evidence
+## AO.3 implementation evidence
 
-AO2.3 implements the launch seam in `atm-daemon-bootstrap`. It parses
+AO.3 implements the launch seam in `atm-daemon-bootstrap`. It parses
 `--peer-wire-security` once, defaults to `mutual-tls`, rejects duplicate or
 unknown values, and rejects `ATM_PEER_WIRE_SECURITY` rather than treating the
 environment as an alternate selector. Bootstrap constructs `peer-tls` only in

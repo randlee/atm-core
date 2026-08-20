@@ -276,7 +276,7 @@ fn build_replacement_handler(
         version: Some(atm_core::protocol::ReleaseVersion::current()),
         cli_schema_version: Some(atm_core::protocol::CLI_SCHEMA_VERSION),
         http_api_version: Some(atm_core::protocol::HttpApiVersion::current()),
-        peer_wire_security: Some(peer_wire_mode.security().as_launch_value().to_owned()),
+        peer_wire_security: Some(peer_wire_mode.security().into()),
     });
     let handler = match peer_stream_adapter {
         Some(adapter) => handler.with_peer_stream_adapter(adapter),
@@ -285,47 +285,33 @@ fn build_replacement_handler(
     Ok(Arc::new(handler))
 }
 
-async fn run_replacement_daemon_with_selector(
-    observability: Arc<dyn ObservabilityPort + Send + Sync>,
-    selector_factory: impl FnOnce(
-        atm_core::LocalServiceRuntime,
-    ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
-    daemon_launch_identity: DaemonLaunchIdentity,
+/// Selects the optional mTLS stream adapter from the immutable daemon launch
+/// mode.  Plaintext-test mode must not inspect, validate, or depend on the
+/// TLS control-plane state: it keeps the existing direct-peer HTTP pipeline
+/// intact without a stream wrapper.
+fn peer_stream_adapter_for_mode(
     peer_wire_mode: PeerWireMode,
-) -> Result<(), AtmError> {
-    install_sqlite_retained_runtime_factory();
-    let scope = current_host_runtime_scope()?;
-    let _owner = DaemonOwnerGuard::acquire_at(scope.owner_lock.clone())?;
-    let runtime_health = RuntimeHealth::with_owner(std::process::id());
-    let assembly = assemble_daemon_runtime()?;
-    let workflow_telemetry = assembly.workflow_telemetry.clone();
-    let peer_stream_adapter = match peer_wire_mode.security() {
-        PeerWireSecurity::Mtls => Some(Arc::new(BootstrapMtlsStreamAdapter {
-            adapter: Arc::new(MtlsPeerStreamAdapter::from_peer_config(
-                assembly.peer_config_store.as_ref(),
-            )?),
-        }) as Arc<dyn PeerStreamAdapter>),
-        PeerWireSecurity::PlaintextTest => None,
-    };
-    // The shipped daemon always keeps the injected receiver hook active.
-    // Benchmark-only selection is available only from the separate binary.
-    let handler = build_replacement_handler(
-        assembly,
-        Arc::clone(&observability),
-        selector_factory,
-        &daemon_launch_identity,
-        peer_wire_mode,
-        peer_stream_adapter.clone(),
-        runtime_health.clone(),
-    )?;
+    build_mtls_adapter: impl FnOnce() -> Result<Arc<dyn PeerStreamAdapter>, AtmError>,
+) -> Result<Option<Arc<dyn PeerStreamAdapter>>, AtmError> {
+    match peer_wire_mode.security() {
+        PeerWireSecurity::Mtls => build_mtls_adapter().map(Some),
+        PeerWireSecurity::PlaintextTest => Ok(None),
+    }
+}
+
+fn replacement_runtime_config(
+    scope: &atm_core::home::HostRuntimeScope,
+    owner: &DaemonOwnerGuard,
+    peer_stream_adapter: &Option<Arc<dyn PeerStreamAdapter>>,
+) -> Result<HttpRuntimeConfig, AtmError> {
     let loopback = LoopbackTcpConfig::new(
         SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
         scope.runtime_root.as_ref().join(LOCAL_HTTP_RECORD_FILENAME),
-        _owner.instance_id(),
+        owner.instance_id(),
     );
     let config = HttpRuntimeConfig::new(
         loopback,
-        unix_socket_config(&scope)?,
+        unix_socket_config(scope)?,
         RuntimeLimits::new(
             NonZeroUsize::new(DEFAULT_MESSAGE_MAX_BYTES + CANONICAL_WRITE_ENVELOPE_OVERHEAD_BYTES)
                 .expect("non-zero body limit"),
@@ -335,12 +321,20 @@ async fn run_replacement_daemon_with_selector(
             NonZeroDuration::new(Duration::from_secs(3)).expect("non-zero request timeout"),
             NonZeroDuration::new(REPLACEMENT_DRAIN_DEADLINE).expect("non-zero shutdown timeout"),
         ),
-    );
-    let config = config.with_direct_peer_tcp(DirectPeerTcpConfig::standard());
-    let config = match peer_stream_adapter.as_ref() {
+    )
+    .with_direct_peer_tcp(DirectPeerTcpConfig::standard());
+    Ok(match peer_stream_adapter {
         Some(adapter) => config.with_peer_stream_adapter(Arc::clone(adapter)),
         None => config,
-    };
+    })
+}
+
+fn record_peer_wire_mode_selection(
+    observability: &dyn ObservabilityPort,
+    daemon_launch_identity: &DaemonLaunchIdentity,
+    peer_wire_mode: PeerWireMode,
+    peer_stream_adapter: &Option<Arc<dyn PeerStreamAdapter>>,
+) {
     tracing::info!(
         peer_wire_security = peer_wire_mode.security().as_launch_value(),
         mtls_ready = peer_stream_adapter.is_some(),
@@ -368,6 +362,47 @@ async fn run_replacement_daemon_with_selector(
     }) {
         tracing::warn!(%error, "failed to retain peer-wire mode startup observability event");
     }
+}
+
+async fn run_replacement_daemon_with_selector(
+    observability: Arc<dyn ObservabilityPort + Send + Sync>,
+    selector_factory: impl FnOnce(
+        atm_core::LocalServiceRuntime,
+    ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
+    daemon_launch_identity: DaemonLaunchIdentity,
+    peer_wire_mode: PeerWireMode,
+) -> Result<(), AtmError> {
+    install_sqlite_retained_runtime_factory();
+    let scope = current_host_runtime_scope()?;
+    let _owner = DaemonOwnerGuard::acquire_at(scope.owner_lock.clone())?;
+    let runtime_health = RuntimeHealth::with_owner(std::process::id());
+    let assembly = assemble_daemon_runtime()?;
+    let workflow_telemetry = assembly.workflow_telemetry.clone();
+    let peer_stream_adapter = peer_stream_adapter_for_mode(peer_wire_mode, || {
+        Ok(Arc::new(BootstrapMtlsStreamAdapter {
+            adapter: Arc::new(MtlsPeerStreamAdapter::from_peer_config(
+                assembly.peer_config_store.as_ref(),
+            )?),
+        }) as Arc<dyn PeerStreamAdapter>)
+    })?;
+    // The shipped daemon always keeps the injected receiver hook active.
+    // Benchmark-only selection is available only from the separate binary.
+    let handler = build_replacement_handler(
+        assembly,
+        Arc::clone(&observability),
+        selector_factory,
+        &daemon_launch_identity,
+        peer_wire_mode,
+        peer_stream_adapter.clone(),
+        runtime_health.clone(),
+    )?;
+    let config = replacement_runtime_config(&scope, &_owner, &peer_stream_adapter)?;
+    record_peer_wire_mode_selection(
+        observability.as_ref(),
+        &daemon_launch_identity,
+        peer_wire_mode,
+        &peer_stream_adapter,
+    );
     let mut running = HttpRuntimeBuilder::new(config, handler)
         .with_runtime_health(runtime_health)
         .build()?
@@ -584,7 +619,7 @@ mod replacement_runtime_tests {
 
     use super::{
         REPLACEMENT_DRAIN_DEADLINE, ShutdownSignal, assemble_host_runtime_with_template_composer,
-        parse_peer_wire_mode, write_ready_signal_if_requested,
+        parse_peer_wire_mode, peer_stream_adapter_for_mode, write_ready_signal_if_requested,
     };
 
     #[test]
@@ -638,6 +673,19 @@ mod replacement_runtime_tests {
         ])
         .expect_err("one launch mode must select the whole runtime");
         assert!(error.message().contains("only once"));
+    }
+
+    #[test]
+    fn plaintext_test_release_mode_never_reads_invalid_tls_configuration() {
+        let adapter = peer_stream_adapter_for_mode(
+            atm_core::peer_wire::PeerWireMode::plaintext_test(),
+            || -> Result<_, atm_core::error::AtmError> {
+                panic!("plaintext-test must not inspect TLS peer configuration")
+            },
+        )
+        .expect("plaintext-test directly preserves the peer HTTP pipeline");
+
+        assert!(adapter.is_none());
     }
 
     #[test]
