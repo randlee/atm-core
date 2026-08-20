@@ -70,7 +70,7 @@ can introduce an mTLS dependency.
    pub enum PeerWireSecurity { Mtls, PlaintextTest }
 
    pub struct PeerWireMode {
-       pub security: PeerWireSecurity,
+       security: PeerWireSecurity,
    }
    ```
 

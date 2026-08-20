@@ -36,7 +36,7 @@ impl PeerWireSecurity {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct PeerWireMode {
     /// The selected wire-security policy.
-    pub security: PeerWireSecurity,
+    security: PeerWireSecurity,
 }
 
 impl PeerWireMode {
@@ -55,6 +55,13 @@ impl PeerWireMode {
         Self {
             security: PeerWireSecurity::PlaintextTest,
         }
+    }
+
+    /// Returns the selected wire-security policy without permitting callers
+    /// to construct an arbitrary mode.
+    #[must_use]
+    pub const fn security(self) -> PeerWireSecurity {
+        self.security
     }
 }
 
@@ -80,5 +87,9 @@ mod tests {
     #[test]
     fn plaintext_test_remains_an_explicit_distinct_mode() {
         assert_ne!(PeerWireMode::plaintext_test(), PeerWireMode::mtls());
+        assert_eq!(
+            PeerWireMode::plaintext_test().security(),
+            PeerWireSecurity::PlaintextTest
+        );
     }
 }
