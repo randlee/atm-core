@@ -257,6 +257,27 @@ fn ao2_peer_wire_policy_keeps_one_error_registry_and_one_http_pipeline() {
 }
 
 #[test]
+fn ao2_benchmark_harness_cannot_introduce_a_second_daemon_pipeline() {
+    let root = workspace_root();
+    let bootstrap = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
+    let benchmark_entrypoint =
+        read_source(&root.join("crates/atm-daemon-bootstrap/src/bin/atm-daemon-benchmark.rs"));
+
+    assert!(
+        bootstrap.contains("#[cfg(feature = \"benchmark-harness\")]")
+            && bootstrap.contains("pub async fn run_benchmark_daemon")
+            && bootstrap.contains("run_replacement_daemon_with_selector("),
+        "the retained benchmark harness must stay feature-gated and reuse the replacement daemon"
+    );
+    assert!(
+        benchmark_entrypoint.contains("atm_daemon_bootstrap::run_benchmark_daemon(mode).await")
+            && !benchmark_entrypoint.contains("canonical_api_router(")
+            && !benchmark_entrypoint.contains("TcpListener::bind"),
+        "the benchmark entrypoint must not create a second HTTP route or listener pipeline"
+    );
+}
+
+#[test]
 fn acknowledgement_cannot_restore_a_second_write_pipeline() {
     let root = workspace_root();
     let send = fs::read_to_string(root.join("crates/atm-core/src/send/mod.rs"))

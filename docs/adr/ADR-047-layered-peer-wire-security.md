@@ -18,8 +18,10 @@ It is untrusted test provenance, never authentication or authorization.
 
 The mode is an outer stream-adapter decision. It does not select an HTTP
 resource, request DTO, canonical write handler, persistence operation,
-acknowledgement sender, post-write hook, or benchmark-only daemon. Plaintext
-mode uses the preserved `DirectPeerTcpConfig::standard`,
+acknowledgement sender, or post-write hook. The retained, feature-gated
+`atm-daemon-benchmark` harness invokes the same replacement daemon with an
+explicit benchmark hook selector; it is guarded against creating a second
+listener or HTTP pipeline. Plaintext mode uses the preserved `DirectPeerTcpConfig::standard`,
 `DirectPeerTcpConnector`, direct-peer listener, and ordinary router pipeline.
 The mTLS adapter wraps that same pipeline at the stream boundary only.
 
