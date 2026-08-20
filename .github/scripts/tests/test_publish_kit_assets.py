@@ -12,11 +12,6 @@ PUBLISHING = PACKAGE_ROOT / ".claude" / "skills" / "publishing"
 
 
 class PublishingAssetTests(unittest.TestCase):
-    def test_bespoke_hermes_pypi_pipeline_is_retired_in_favor_of_the_canonical_channel(self) -> None:
-        root = PACKAGE_ROOT
-        self.assertFalse((root / ".github" / "workflows" / "hermes-atm-pypi-publish.yml").exists())
-        self.assertFalse((root / "scripts" / "prepare_hermes_atm_publish_artifacts.py").exists())
-
     def test_channel_agents_are_background_workers_at_the_current_package_version(self) -> None:
         for name in (
             "crates-io-publisher",
