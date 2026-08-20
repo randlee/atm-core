@@ -117,9 +117,10 @@ merge first.
   handshake failure before HTTP decode or router entry.
 - Both modes use the same release daemon, route, request/response codec,
   canonical write, hook, acknowledgement, and persistence behavior.
-- Plain benchmark performance is compared to a compatible same-host/profile
-  pre-AO baseline; a material regression blocks phase closure. mTLS has its
-  own recorded same-mode baseline after acceptance.
+- Selected `plaintext-test` throughput and latency match the compatible
+  same-host/profile pre-AO baseline **regardless of mTLS code being present in
+  the same shipped binary**; a material regression blocks phase closure. mTLS
+  has its own recorded same-mode baseline after acceptance.
 - M4, M5, and FastPC4 proof is required only in AO.4. An unavailable host is a
   retained blocked artifact, never a pass for physical-host evidence.
 

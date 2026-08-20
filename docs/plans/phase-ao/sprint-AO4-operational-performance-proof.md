@@ -75,8 +75,10 @@ it is a hard dependency for each claimed physical-host proof.
 
 ## Acceptance Criteria
 
-- Plaintext throughput meets its compatible pre-AO baseline or a demonstrated
-  material regression is root-caused and fixed before phase closure.
+- Selected `plaintext-test` throughput and latency match the compatible pre-AO
+  baseline on the same host/profile **regardless of mTLS code being present in
+  the shipped binary**. A demonstrated material regression is root-caused and
+  fixed before phase closure.
 - mTLS results have an independent same-mode baseline after the first accepted
   campaign; they are not used to disguise plaintext regression.
 - Every report identifies the exact daemon binary/mode and does not rely on a
