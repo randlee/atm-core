@@ -197,10 +197,12 @@ test bootstrap was added in `df54f34f7`. Release-preflight run
 was the first `1.4.4` attempt and exposed that `compose_passthrough` needs the
 `sc-compose` executable, not only Python bindings. Run
 [`32169985864`](https://github.com/randlee/atm-core/actions/runs/32169985864)
-re-ran after that pinned CLI bootstrap and passed the workspace checks; its
-remaining channel-only failure was the rejected `CARGO_REGISTRY_TOKEN` for
-crates.io. That credential decision remains pending Rand and does not
-authorize a PyPI upload.
+re-ran after that pinned CLI bootstrap and passed the workspace checks. Its
+only remaining failure was `crates_io` channel credential liveness — a
+different, unrelated channel this sprint does not activate. Credential
+existence/validity is not an agent-assessed concern: it is out of scope for
+this sprint, is not evidence for or against this workflow's qualification,
+and is not tracked here as a pending decision.
 
 ### Draft v1.4.4 GitHub release note
 
