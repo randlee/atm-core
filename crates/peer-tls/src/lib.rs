@@ -88,14 +88,9 @@ impl MtlsPeerStreamAdapter {
         let connector = TlsConnector::from(Arc::new(self.client_config(configured)?));
         timeout(self.handshake_timeout, connector.connect(server_name, tcp))
             .await
-            .map_err(|_| AtmError::peer_authentication("mTLS peer handshake deadline expired"))?
+            .map_err(|_| AtmError::transport_timeout("mTLS peer handshake deadline expired"))?
             .map(TlsStream::Client)
-            .map_err(|source| {
-                AtmError::peer_authentication(
-                    "mTLS peer handshake failed before application processing",
-                )
-                .with_cause(source)
-            })
+            .map_err(outbound_handshake_error)
     }
 
     /// Authenticate an inbound TCP byte stream against the configured client pins.
@@ -106,14 +101,9 @@ impl MtlsPeerStreamAdapter {
         let acceptor = TlsAcceptor::from(Arc::new(self.server_config()?));
         timeout(self.handshake_timeout, acceptor.accept(tcp))
             .await
-            .map_err(|_| AtmError::peer_authentication("mTLS peer handshake deadline expired"))?
+            .map_err(|_| AtmError::transport_timeout("mTLS peer handshake deadline expired"))?
             .map(TlsStream::Server)
-            .map_err(|source| {
-                AtmError::peer_authentication(
-                    "mTLS client certificate was rejected before application processing",
-                )
-                .with_cause(source)
-            })
+            .map_err(inbound_handshake_error)
     }
 
     fn trusted_peer(&self, peer: &HostName) -> Result<&TrustedPeer, AtmError> {
@@ -161,6 +151,35 @@ impl MtlsPeerStreamAdapter {
                 .with_cause(source)
             })
     }
+}
+
+fn outbound_handshake_error(source: std::io::Error) -> AtmError {
+    if is_certificate_authentication_error(&source) {
+        AtmError::peer_authentication(
+            "mTLS peer certificate did not satisfy the configured hostname or pin",
+        )
+    } else {
+        AtmError::transport_protocol("mTLS peer handshake failed before application processing")
+            .with_cause(source)
+    }
+}
+
+fn inbound_handshake_error(source: std::io::Error) -> AtmError {
+    if is_certificate_authentication_error(&source) {
+        AtmError::peer_authentication(
+            "mTLS client certificate did not satisfy the configured trust record",
+        )
+    } else {
+        AtmError::transport_protocol("mTLS client handshake failed before application processing")
+            .with_cause(source)
+    }
+}
+
+fn is_certificate_authentication_error(source: &std::io::Error) -> bool {
+    source
+        .get_ref()
+        .and_then(|cause| cause.downcast_ref::<Error>())
+        .is_some_and(|cause| matches!(cause, Error::InvalidCertificate(_)))
 }
 
 /// Exact fingerprint verifier for the selected outbound peer. The registered
@@ -559,7 +578,37 @@ mod tests {
             Err(error) => error,
             Ok(_) => panic!("handshake deadline must fail"),
         };
-        assert_eq!(error.code().as_str(), "ATM_PEER_AUTHENTICATION_FAILED");
+        assert_eq!(error.code().as_str(), "ATM_TRANSPORT_TIMEOUT");
+        raw_client.await.expect("raw client");
+    }
+
+    #[tokio::test]
+    async fn malformed_handshake_fails_with_a_transport_protocol_code() {
+        let directory = tempfile::tempdir().expect("directory");
+        let server_identity = identity(&directory, "server");
+        let client_identity = identity(&directory, "client");
+        let server = MtlsPeerStreamAdapter::from_peer_config(&TestStore {
+            interfaces: vec![interface()],
+            certificate: Some(server_identity),
+            peers: vec![peer(&client_identity, true)],
+        })
+        .expect("server adapter");
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind");
+        let address = listener.local_addr().expect("address");
+        let raw_client = tokio::spawn(async move {
+            let mut tcp = TcpStream::connect(address).await.expect("connect tcp");
+            tcp.write_all(b"not a TLS client hello")
+                .await
+                .expect("write junk");
+        });
+        let (tcp, _) = listener.accept().await.expect("accept tcp");
+        let error = match server.accept(tcp).await {
+            Err(error) => error,
+            Ok(_) => panic!("malformed handshake must fail"),
+        };
+        assert_eq!(error.code().as_str(), "ATM_TRANSPORT_PROTOCOL_FAILED");
         raw_client.await.expect("raw client");
     }
 }
