@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO22-RSH-002>
+  a triage:Finding ;
+  triage:findingId "AO22-RSH-002" ;
+  triage:title "private-key PEM bytes not zeroized after use" ;
+  triage:description "Private-key PEM bytes (atm-storage/src/tls.rs:46, TlsIdentity::load) are read into a plain Vec<u8> and dropped without zeroization; combined with the TLS-config-caching finding (AO22-RSH-001), this multiplies transient unscrubbed copies of key material in process memory. Remediation: wrap the PEM buffer (or key slice) in a zeroizing container (e.g. zeroize::Zeroizing<Vec<u8>>)." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "security-hardening" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage/src/tls.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-20T16:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.2 ;
+  triage:foundAt "2026-08-20T16:45:46Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO22-RSH-002/AO22-RSH-002-S2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO22-RSH-002/AO22-RSH-002-S2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/tls.rs" ;
+  triage:line 46 ;
+  triage:snippet "let pem = std::fs::read(path)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s2-isolated-mtls-stream-adapter" ;
+  triage:headSha "c30d24442e177b9b63ef245abdffd6aa6fd8f911" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s2/c30d24442e177b9b63ef245abdffd6aa6fd8f911> .
+
+<urn:atm:triage:worktree/pao-s2/c30d24442e177b9b63ef245abdffd6aa6fd8f911>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s2-isolated-mtls-stream-adapter" ;
+  triage:branch "feature/pao-s2-isolated-mtls-stream-adapter" ;
+  triage:headSha "c30d24442e177b9b63ef245abdffd6aa6fd8f911" ;
+  triage:orderIndex 2 .
