@@ -1343,10 +1343,9 @@ class AdmissionCapacityTests(unittest.TestCase):
                 Path("/release/atm-daemon"), Path("/tmp/atm-capacity-proof"), {},
                 "plaintext-test",
             )
-        self.assertEqual(
-            popen.call_args.args[0],
-            ["/release/atm-daemon", "--peer-wire-security", "plaintext-test"],
-        )
+        launched = popen.call_args.args[0]
+        self.assertEqual(Path(launched[0]), Path("/release/atm-daemon"))
+        self.assertEqual(launched[1:], ["--peer-wire-security", "plaintext-test"])
 
     def test_managed_target_run_fails_closed_when_launch_mode_cannot_be_selected(self):
         captured: dict[str, object] = {}
