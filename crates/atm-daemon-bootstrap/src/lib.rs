@@ -294,7 +294,7 @@ fn build_replacement_handler(
         version: Some(atm_core::protocol::ReleaseVersion::current()),
         cli_schema_version: Some(atm_core::protocol::CLI_SCHEMA_VERSION),
         http_api_version: Some(atm_core::protocol::HttpApiVersion::current()),
-        peer_wire_security: Some(peer_wire_mode.security().as_launch_value().to_owned()),
+        peer_wire_security: Some(peer_wire_mode.security().into()),
     });
     let handler = match peer_stream_adapter {
         Some(adapter) => handler.with_peer_stream_adapter(adapter),

@@ -3,10 +3,10 @@
 Owns local diagnostics, config/path/inbox checks, observability readiness
 checks, and the finding model used by the CLI renderer.
 
-For the Tokio/Axum daemon, `DoctorExecutionContext.peer_wire_security` is the
-bootstrap-injected public launch value (`mutual-tls` or `plaintext-test`). It
-is absent for client-only doctor execution and must never expose certificate,
-pin, key, or peer-record data.
+For the Tokio/Axum daemon, `DoctorExecutionContext.peer_wire_security` is a
+typed bootstrap-injected diagnostic status that serializes as the public launch
+value (`mutual-tls` or `plaintext-test`). It is absent for client-only doctor
+execution and must never expose certificate, pin, key, or peer-record data.
 
 It must not own:
 

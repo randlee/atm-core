@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::boundary::{ConfigDoctorReport, MailStoreDoctorReport, RosterStoreDoctorReport};
 use crate::error_codes::AtmErrorCode;
 use crate::observability::AtmObservabilityHealth;
+use crate::peer_wire::PeerWireSecurity;
 use crate::protocol::{ReleaseVersion, RuntimeStatusSnapshot};
 use crate::team_admin::MembersList;
 use crate::types::{AgentName, TeamName};
@@ -65,7 +66,27 @@ pub struct DoctorExecutionContext {
     /// The immutable peer-wire launch policy selected by this daemon process.
     /// It is diagnostic-only and never includes a certificate, pin, or key.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub peer_wire_security: Option<String>,
+    pub peer_wire_security: Option<PeerWireSecurityStatus>,
+}
+
+/// Typed, public diagnostic projection of the daemon's peer-wire policy.
+///
+/// This preserves the established JSON launch spellings while preventing a
+/// doctor caller from treating an arbitrary string as a valid security mode.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum PeerWireSecurityStatus {
+    MutualTls,
+    PlaintextTest,
+}
+
+impl From<PeerWireSecurity> for PeerWireSecurityStatus {
+    fn from(value: PeerWireSecurity) -> Self {
+        match value {
+            PeerWireSecurity::Mtls => Self::MutualTls,
+            PeerWireSecurity::PlaintextTest => Self::PlaintextTest,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -204,5 +225,24 @@ pub struct DoctorReport {
 impl DoctorReport {
     pub fn has_errors(&self) -> bool {
         self.summary.status == DoctorStatus::Error
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PeerWireSecurityStatus;
+    use crate::peer_wire::PeerWireSecurity;
+
+    #[test]
+    fn peer_wire_security_status_is_typed_and_preserves_public_json_values() {
+        assert_eq!(
+            PeerWireSecurityStatus::from(PeerWireSecurity::Mtls),
+            PeerWireSecurityStatus::MutualTls
+        );
+        assert_eq!(
+            serde_json::to_string(&PeerWireSecurityStatus::PlaintextTest)
+                .expect("diagnostic status serializes"),
+            "\"plaintext-test\""
+        );
     }
 }
