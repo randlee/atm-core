@@ -15,24 +15,36 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-08-20T09:00:24Z"^^xsd:dateTime ;
+  triage:status "resolved" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-20T21:55:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.1 ;
   triage:foundAt "2026-08-20T09:00:24Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pao-s1-1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pao-s3-close> ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/RBP-F001/pao-s1-1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/peer_wire.rs" ;
   triage:line 39 ;
   triage:snippet "pub security: PeerWireSecurity," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s1-peer-wire-policy" ;
   triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s1/d137ab8d> .
+
+<urn:atm:triage:occurrence/RBP-F001/pao-s3-close>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/peer_wire.rs" ;
+  triage:line 39 ;
+  triage:snippet "security: PeerWireSecurity, (field now private, accessed only via const method)" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:headSha "ae3232d340f003b0ab2521006c7a82e20ad1e92d" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s3/ae3232d3> .
 
 <urn:atm:triage:worktree/pao-s1/d137ab8d>
   a triage:WorktreeSnapshot ;
@@ -40,3 +52,10 @@
   triage:branch "feature/pao-s1-peer-wire-policy" ;
   triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pao-s3/ae3232d3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:branch "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:headSha "ae3232d340f003b0ab2521006c7a82e20ad1e92d" ;
+  triage:orderIndex 3 .
