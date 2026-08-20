@@ -84,7 +84,7 @@ AO.1 development pushed; AO.1 PR merged before AO.2 PR completion.
    `atm-http-runtime` receives the result only through private generic
    HTTP-over-stream helpers (`S: AsyncRead + AsyncWrite + Send + Unpin`), so it
    neither names a Rustls type nor owns a dynamic extension point. This avoids
-   a non-object-safe `async` transport trait and keeps the implementor set
+   a non-object-safe `async` transport trait and keeps the implementer set
    concrete and finite.
 3. Amend the `TlsHelpers` and `PeerConfigStore` boundary records, manifests,
    and architecture tests to authorize exactly this dependency direction. No
