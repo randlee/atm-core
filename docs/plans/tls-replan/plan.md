@@ -194,12 +194,20 @@ just test
 4. Tests that invoke the same release daemon interface in both modes.  The
    plain tests run with intentionally invalid TLS state to prove no accidental
    adapter/config dependency; mTLS tests prove no plaintext fallback.
+5. Extend TLR.1's structural plain-pipeline guard at this wiring point.  It
+   must fail if the `plaintext` launch selection constructs `PeerIoAdapter`,
+   calls `peer-tls`, reads `PeerConfigStore`, replaces `DirectPeerTcpConnector`,
+   or routes plain traffic through an mTLS/adapter-availability branch.  The
+   guard must permit TLS composition only inside the explicit `mtls` arm.
 
 ### Acceptance Criteria
 
 - `atm-daemon` built once can be restarted between plain and mTLS modes with
   only its launch argument changed.
 - Plain mode retains the TLR.1 behavior oracle exactly.
+- The TLR.3 source/architecture guard proves the plain launch arm still
+  invokes the original direct-peer listener and client without any TLS
+  construction or configuration access.
 - mTLS accepts only configured/pinned peers and reaches the same canonical
   write result as plain after authentication.
 - A mTLS setup failure leaves local UDS/loopback service available but does
