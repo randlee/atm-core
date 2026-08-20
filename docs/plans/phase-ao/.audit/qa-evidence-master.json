@@ -1,0 +1,68 @@
+{
+  "format": "qa-evidence-master/v1",
+  "timezone": "UTC (result_time_pst/assignment_time_pst omitted where source ATM message did not carry a distinct PST-rendered timestamp)",
+  "audit_window": {
+    "start": "2026-08-20T09:00:24Z",
+    "end": "2026-08-20T09:30:08Z"
+  },
+  "scope": "phase-ao2 sprint AO2.1 only (AO2.2-AO2.4 not yet dispatched; no Assignment event exists for them in .sprints/AO2/events.ttl). AO2.1 QA-1 FAIL through QA-2 PASS on PR #961, all 8 findings closed.",
+  "count_basis": "headline/reviewer",
+  "path_notes": "Built directly from the two ATM QA verdict messages read this session via `atm peek --message-id <id> --team atm-dev --as team-lead --json`. Every run_id below cites a real ATM message_id and verdict text read verbatim from the mailbox. No run_id, message_id, or verdict was fabricated. The QA-1 dispatch/assignment message_id for AO2.1 was not independently re-located in this pass, so assignment_message_id/assignment_time_utc are left null for AO1-QA1 rather than guessed; the fix-dispatch message_id recorded in scratchpad state (01M0F6XAFRYKGFEKWZGDDM4FVR) did not resolve via `atm peek` in this repair session (likely aged out of the actionable/history window queried), so it is omitted rather than asserted.",
+  "runs": [
+    {
+      "run_id": "AO2S1-QA1",
+      "aich_sprint": "AO2.1",
+      "phase_sprint": "AO.1",
+      "pass": "QA-1",
+      "run_type": "qa",
+      "assignment_time_utc": null,
+      "assignment_time_pst": null,
+      "assignment_message_id": null,
+      "assignment_from": null,
+      "assignment_shared_path": null,
+      "assignment_summary": null,
+      "result_time_utc": "2026-08-20T09:00:24.547945Z",
+      "result_time_pst": null,
+      "result_message_id": "01M0F6CVK3SH3WKSTND521KE13",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "FAIL",
+      "blockers": 2,
+      "important": 4,
+      "minor": 2,
+      "count_basis": "headline/reviewer",
+      "evidence": "Sprint AO.1 QA-1: FAIL, deliverables 1/4 (25%), PR #961, worktree feature/pao-s1-peer-wire-policy. req-qa=FAIL, arch-qa=FAIL, ruthless-boundary-qa=FAIL, rust-qa=FAIL, rust-best-practices=FAIL, rust-service-hardening=SKIPPED(no service indicators). Blocking (2): ARCH-001 (benchmark-daemon guard gap + ADR-047 contradiction), QA-001 (just lint fails, missing manifest_dependency_allowlists entry). Important (4): ARCH-002, RBP-F001, RBQA-F001, ATM-QA-001. Minor (2): ATM-QA-003, QA-002. Full report: https://github.com/randlee/atm-core/pull/961#issuecomment-5353713471. All 8 findings triaged and recorded as .triage/phase-ao2/findings/{ARCH-001,QA-001,ARCH-002,RBP-F001,RBQA-F001,ATM-QA-001,ATM-QA-003,QA-002}.ttl, committed 51a82194e."
+    },
+    {
+      "run_id": "AO2S1-QA2",
+      "aich_sprint": "AO2.1",
+      "phase_sprint": "AO.1",
+      "pass": "QA-2",
+      "run_type": "qa",
+      "assignment_time_utc": null,
+      "assignment_time_pst": null,
+      "assignment_message_id": null,
+      "assignment_from": "team-lead",
+      "assignment_shared_path": null,
+      "assignment_summary": null,
+      "result_time_utc": "2026-08-20T09:30:08.186448Z",
+      "result_time_pst": null,
+      "result_message_id": "01M0F839DTVYYSWQK3SRHD30D3",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "PASS",
+      "blockers": 0,
+      "important": 0,
+      "minor": 0,
+      "count_basis": "headline/reviewer",
+      "evidence": "Sprint AO.1 QA-2: PASS, deliverables 4/4 (100%), PR #961, worktree feature/pao-s1-peer-wire-policy, commit 57c53349ef. req-qa=PASS, arch-qa=PASS, ruthless-boundary-qa=PASS, rust-qa=PASS, rust-best-practices=PASS, rust-service-hardening=SKIPPED(no service indicators). All 8 QA-1 findings (ARCH-001, QA-001, ARCH-002, RBP-F001, RBQA-F001, ATM-QA-001, ATM-QA-003, QA-002) independently re-verified against real source/tests. Full report: https://github.com/randlee/atm-core/pull/961#issuecomment-5354040838. Open item noted by quality-mgr at result time: PR #961 CI was still re-running on 57c53349ef; merge to integrate/phase-ao2 recommended once CI clears."
+    }
+  ],
+  "coverage_gaps": [
+    "AO2.2, AO2.3, AO2.4 have no runs[] entries: no Assignment event exists yet in .sprints/AO2/events.ttl for any of them (AO2.2's must_follow requires AO2.1 pushed and merged forward first, which had not completed as of this audit — PR #961 CI still pending). This is the correct, expected state, not a gap to backfill.",
+    "AO2.1's QA-1 assignment_message_id/assignment_time_utc could not be re-located via atm peek in this repair session and are left null rather than guessed, consistent with the phase-ao precedent file's convention.",
+    "The fix-assignment dispatch to arch-ctm for AO2.1's 8 QA-1 findings (scratchpad-recorded message_id 01M0F6XAFRYKGFEKWZGDDM4FVR) did not resolve via `atm peek --message-id` in this session and is omitted as a discrete run rather than asserted without re-verification."
+  ]
+}
