@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-103>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-103" ;
+  triage:title "Structural guard functions retain ao2_ prefix despite AO.3 extension" ;
+  triage:description "The structural guard functions relevant to AO.3's wiring (ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline, ao2_peer_wire_policy_keeps_one_error_registry_and_one_http_pipeline, ao2_benchmark_harness_cannot_introduce_a_second_daemon_pipeline, ao2_mtls_stream_adapter_is_the_only_authorized_production_tls_consumer) all retain ao2_ prefixes even though this branch genuinely extended several of them to assert against AO.3-owned symbols directly. Weakens sprint-to-guard traceability for future audits. Remediation: rename or add doc-comments marking which assertions were extended in AO.3." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-20T20:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.3 ;
+  triage:foundAt "2026-08-20T20:36:55Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:worktree/S3/e6a4283>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:branch "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:headSha "e6a428355253de23a428bac2f047180ec95dfc7c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/S4/49154a3>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s4-peer-wire-proof" ;
+  triage:branch "feature/pao-s4-peer-wire-proof" ;
+  triage:headSha "49154a38f20a3f723dc8bd6d305dfc79bb241d30" ;
+  triage:orderIndex 4 .

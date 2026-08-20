@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-AO23-F003>
+  a triage:Finding ;
+  triage:findingId "RBQA-AO23-F003" ;
+  triage:title "atm-daemon-bootstrap boundary manifest missing atm-storage allowed dependency" ;
+  triage:description "crates/atm-daemon-bootstrap consumes atm-storage (PEM-scrubbing/TLS identity path) but boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml's allowed_dependencies (line 25) only lists atm-storage-rusqlite, not atm-storage. .just/lint-config.toml's atm-daemon-bootstrap entry (~line 133) has no boundary_record_path set (unlike atm-error's entry), so .just/lint_boundaries.py cannot catch this drift automatically. Remediation: add atm-storage to the boundary TOML's allowed_dependencies and set boundary_record_path for this crate's lint-config entry." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture-boundary" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-20T20:36:55Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.3 ;
+  triage:foundAt "2026-08-20T20:36:55Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AO23-F003/AO23-W1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AO23-F003/AO23-W2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-AO23-F003/AO23-W1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml" ;
+  triage:line 25 ;
+  triage:snippet "allowed_dependencies = [\"atm-core\", \"atm-runtime\", \"atm-storage-rusqlite\", ...]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:headSha "e6a428355253de23a428bac2f047180ec95dfc7c" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s3/e6a428355253de23a428bac2f047180ec95dfc7c> .
+
+<urn:atm:triage:occurrence/RBQA-AO23-F003/AO23-W2>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml" ;
+  triage:line 25 ;
+  triage:snippet "allowed_dependencies = [\"atm-core\", \"atm-runtime\", \"atm-storage-rusqlite\", ...]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s4-peer-wire-proof" ;
+  triage:headSha "49154a38f20a3f723dc8bd6d305dfc79bb241d30" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s4/49154a38f20a3f723dc8bd6d305dfc79bb241d30> .
+
+<urn:atm:triage:worktree/pao-s3/e6a428355253de23a428bac2f047180ec95dfc7c>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:branch "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:headSha "e6a428355253de23a428bac2f047180ec95dfc7c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pao-s4/49154a38f20a3f723dc8bd6d305dfc79bb241d30>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s4-peer-wire-proof" ;
+  triage:branch "feature/pao-s4-peer-wire-proof" ;
+  triage:headSha "49154a38f20a3f723dc8bd6d305dfc79bb241d30" ;
+  triage:orderIndex 4 .

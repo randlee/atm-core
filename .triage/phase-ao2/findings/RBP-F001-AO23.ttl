@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F001-AO23>
+  a triage:Finding ;
+  triage:findingId "RBP-F001-AO23" ;
+  triage:title "DoctorExecutionContext.peer_wire_security is untyped Option<String>" ;
+  triage:description "atm_core::doctor::report::DoctorExecutionContext.peer_wire_security is a raw Option<String>, hand-matched at consumption sites, reintroducing the anti-pattern already fixed once on the (now-superseded) legacy path via .triage/phase-AI/findings/AI21-IMPORTANT-002.ttl (fixed 2026-07-24 with a PeerWireSecurityStatus enum). This is new code in the AL/AM replacement path, in scope for this sprint. Remediation: replace the raw string field with a typed status (enum or newtype over the existing PeerWireSecurity/mode types) consistent with the AI21 fix pattern." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-best-practices" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-20T20:38:55Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.3 ;
+  triage:foundAt "2026-08-20T20:36:55Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AO23/AO2_s3_1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AO23/AO2_s4_1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBP-F001-AO23/AO2_s3_1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/report.rs" ;
+  triage:line 68 ;
+  triage:snippet "pub peer_wire_security: Option<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:headSha "e6a428355253de23a428bac2f047180ec95dfc7c" ;
+  triage:occursIn <urn:atm:triage:worktree/AO2_s3/e6a4283> .
+
+<urn:atm:triage:occurrence/RBP-F001-AO23/AO2_s4_1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/report.rs" ;
+  triage:line 68 ;
+  triage:snippet "pub peer_wire_security: Option<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s4-peer-wire-proof" ;
+  triage:headSha "49154a38f20a3f723dc8bd6d305dfc79bb241d30" ;
+  triage:occursIn <urn:atm:triage:worktree/AO2_s4/49154a3> .
+
+<urn:atm:triage:worktree/AO2_s3/e6a4283>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:branch "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:headSha "e6a428355253de23a428bac2f047180ec95dfc7c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AO2_s4/49154a3>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s4-peer-wire-proof" ;
+  triage:branch "feature/pao-s4-peer-wire-proof" ;
+  triage:headSha "49154a38f20a3f723dc8bd6d305dfc79bb241d30" ;
+  triage:orderIndex 4 .
