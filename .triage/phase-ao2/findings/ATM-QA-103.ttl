@@ -15,12 +15,13 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-20T20:45:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.3 ;
   triage:foundAt "2026-08-20T20:36:55Z"^^xsd:dateTime ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" ;
+  triage:closedNote "Confirmed fixed by quality-mgr QA-2 for PR #967 (commits baa48d7bd/ea25d03e1/03b820d76/d505ab633/87bab74b3/aa548a329); code-verified fix on feature/pao-s3-runtime-peer-wire-mode @ae3232d34." .
 
 <urn:atm:triage:worktree/S3/e6a4283>
   a triage:WorktreeSnapshot ;

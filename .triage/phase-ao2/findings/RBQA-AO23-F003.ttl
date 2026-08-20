@@ -15,23 +15,24 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-20T20:36:55Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.3 ;
   triage:foundAt "2026-08-20T20:36:55Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AO23-F003/AO23-W1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AO23-F003/AO23-W2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AO23-F003/AO23-W3> ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" ;
+  triage:closedNote "Confirmed fixed by quality-mgr QA-2 for PR #967 (commit b2ce7a267/ae3232d34); code-verified fix on feature/pao-s3-runtime-peer-wire-mode @ae3232d34." .
 
 <urn:atm:triage:occurrence/RBQA-AO23-F003/AO23-W1>
   a triage:Occurrence ;
   triage:file "boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml" ;
   triage:line 25 ;
   triage:snippet "allowed_dependencies = [\"atm-core\", \"atm-runtime\", \"atm-storage-rusqlite\", ...]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s3-runtime-peer-wire-mode" ;
   triage:headSha "e6a428355253de23a428bac2f047180ec95dfc7c" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s3/e6a428355253de23a428bac2f047180ec95dfc7c> .
@@ -41,8 +42,8 @@
   triage:file "boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml" ;
   triage:line 25 ;
   triage:snippet "allowed_dependencies = [\"atm-core\", \"atm-runtime\", \"atm-storage-rusqlite\", ...]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s4-peer-wire-proof" ;
   triage:headSha "49154a38f20a3f723dc8bd6d305dfc79bb241d30" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s4/49154a38f20a3f723dc8bd6d305dfc79bb241d30> .
@@ -52,8 +53,8 @@
   triage:file "boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml" ;
   triage:line 25 ;
   triage:snippet "allowed_dependencies = [\"atm-core\", \"atm-runtime\", \"atm-storage-rusqlite\", ...]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s4-peer-wire-proof" ;
   triage:headSha "d9fb74917a804d2068684db40a28bc4ce636f283" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s4/d9fb74917a804d2068684db40a28bc4ce636f283> .
