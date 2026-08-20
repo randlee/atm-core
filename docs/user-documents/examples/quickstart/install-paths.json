@@ -1,8 +1,8 @@
 {
-  "install_root": "~/.local/atm/1.4.4",
-  "binary_path": "~/.local/atm/1.4.4/bin/atm",
-  "daemon_binary_path": "~/.local/atm/1.4.4/bin/atm-daemon",
-  "doc_root": "~/.local/atm/1.4.4/share/doc/atm",
-  "doc_entrypoint": "~/.local/atm/1.4.4/share/doc/atm/README.md",
+  "install_root": "~/.local/atm/1.4.3",
+  "binary_path": "~/.local/atm/1.4.3/bin/atm",
+  "daemon_binary_path": "~/.local/atm/1.4.3/bin/atm-daemon",
+  "doc_root": "~/.local/atm/1.4.3/share/doc/atm",
+  "doc_entrypoint": "~/.local/atm/1.4.3/share/doc/atm/README.md",
   "runtime_state_root": "~/.atm"
 }

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Publishing"
-  short_description: "Coordinate manifest-driven releases safely."
-  default_prompt: "Use $publishing to run a manifest-driven release with named publisher preflight."
