@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.4.4
+
+- prepare the first authorized production-PyPI cut for `hermes-atm` and
+  `atm-graft`, with the ADR-049 first-public-release disclosure and the
+  manifest-driven Python distribution contract; publication remains pending
+  explicit authorization
+- make release preflight install and gate the repository-pinned `sc-compose`
+  CLI before workspace parity tests, preventing a missing local executable
+  from being mistaken for a successful release check
+
 ## 1.4.3
 
 - recovery release: `v1.4.2` was abandoned as a release tag/GitHub Release
