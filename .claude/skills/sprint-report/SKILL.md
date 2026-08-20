@@ -65,7 +65,7 @@ The template path is relative - must run from the **main repo root** (not a work
 
 ```bash
 cd "${CLAUDE_PROJECT_DIR:-$(git worktree list | head -1 | awk '{print $1}')}"
-sc-compose render .claude/skills/sprint-report/report.md.j2 --var-file /tmp/sprint-report.json
+sc-compose render --file .claude/skills/sprint-report/report.md.j2 --var-file /tmp/sprint-report.json
 ```
 
 ## --table (default)

@@ -139,6 +139,58 @@ def test_missing_qa_snapshot_does_not_hide_live_sprint_counts(tmp_path):
     assert "QA evidence master not found" in report["data_gaps"][0]
 
 
+def test_in_progress_sprint_with_no_pr_yet_is_not_a_data_gap(tmp_path, monkeypatch):
+    """An assigned-but-not-completed sprint has no QA run or PR/CI state to
+    observe yet -- that is the normal in-flight state, not lost evidence, and
+    must not block the report or invent GitHub data to fill it in."""
+    root, qa = _inputs(tmp_path)
+    structure_path = root / ".sprints" / "AICH" / "structure.ttl"
+    structure_path.write_text(
+        structure_path.read_text()
+        + "triage:AICH-S3 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 3 ; triage:criteria \"docs/plans/phase-ai/sprint-ai-23.md\" ; triage:branch \"feature/s3\" .\n"
+    )
+    events_path = root / ".sprints" / "AICH" / "events.ttl"
+    events_path.write_text(
+        events_path.read_text()
+        + "triage:a3 a triage:Assignment ; triage:ofSprint triage:AICH-S3 ; triage:assignedAt \"2026-07-25T06:00:00Z\"^^xsd:dateTime .\n"
+    )
+
+    def _sparse_github_state(_root, sprints):
+        state = {}
+        for sprint in sprints:
+            if sprint["id"] == "AICH-S3":
+                state[sprint["id"]] = {
+                    "branch": sprint["branch"],
+                    "head_sha": None,
+                    "target_branch": None,
+                    "pr_number": None,
+                    "pr_url": None,
+                    "ci_status": None,
+                    "merged": None,
+                    "delivery_attempts": [],
+                }
+            else:
+                state[sprint["id"]] = {
+                    "branch": sprint["branch"],
+                    "head_sha": f"{sprint['id']}-sha",
+                    "target_branch": "integrate/phase-ai",
+                    "pr_number": sprint["order"],
+                    "pr_url": f"https://example.test/pr/{sprint['order']}",
+                    "ci_status": "pass",
+                    "merged": sprint["order"] == 1,
+                    "delivery_attempts": [],
+                }
+        return state, "example/test"
+
+    monkeypatch.setattr(triage_report, "_github_state", _sparse_github_state)
+    report = triage_report.build_report(root, "AICH", qa)
+    third = report["rows"][2]
+    assert third["dev_status"] == "in_progress"
+    assert third["qa"]["run_id"] is None
+    assert third["pr_number"] is None
+    assert not any(gap.startswith("AICH-S3:") for gap in report["data_gaps"])
+
+
 def test_report_ignores_unrelated_project_phase_findings(tmp_path):
     """A historical malformed phase cannot block the current phase report."""
     root, qa = _inputs(tmp_path)
