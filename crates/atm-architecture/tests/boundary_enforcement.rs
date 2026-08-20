@@ -457,27 +457,73 @@ fn ak2_peer_worker_symbols_are_absent_from_production() {
         "crates/atm-storage/src/contract.rs",
         "crates/atm-storage-rusqlite/src/peer_config_store.rs",
     ];
-    let retired_symbols = [
-        "PeerDeliveryCoordinator",
-        "PeerDrainCoordinator",
-        "PeerPostCommitWorkQueue",
-        "PostCommitWorkKey::PeerDelivery",
-        "PeerSyncPolicy",
-        "PeerSyncRequest",
-        "PeerSyncOutcome",
-        "PeerLinkStatus",
-        "PeerWireSecurity",
-        "HttpsTransport",
-    ];
     for source in production_sources {
         let contents = read_source(&root.join(source));
-        for symbol in retired_symbols {
-            assert!(
-                !contents.contains(symbol),
-                "AK.2 production source `{source}` must not retain `{symbol}`"
-            );
-        }
+        let retired = retired_peer_worker_symbols_in_source(&contents);
+        assert!(
+            retired.is_empty(),
+            "AK.2 production source `{source}` must not retain retired symbols {retired:?}"
+        );
     }
+}
+
+fn retired_peer_worker_symbols_in_source(source: &str) -> BTreeSet<String> {
+    let syntax = syn::parse_file(source).expect("production source must parse for AK.2 guard");
+    let mut visitor = RetiredPeerWorkerSymbolVisitor::default();
+    visitor.visit_file(&syntax);
+    visitor.found
+}
+
+#[derive(Default)]
+struct RetiredPeerWorkerSymbolVisitor {
+    found: BTreeSet<String>,
+}
+
+impl<'ast> Visit<'ast> for RetiredPeerWorkerSymbolVisitor {
+    fn visit_path(&mut self, path: &'ast syn::Path) {
+        const RETIRED_TERMINALS: &[&str] = &[
+            "PeerDeliveryCoordinator",
+            "PeerDrainCoordinator",
+            "PeerPostCommitWorkQueue",
+            "PeerSyncPolicy",
+            "PeerSyncRequest",
+            "PeerSyncOutcome",
+            "PeerLinkStatus",
+            "HttpsTransport",
+        ];
+
+        let segments: Vec<_> = path
+            .segments
+            .iter()
+            .map(|segment| segment.ident.to_string())
+            .collect();
+        if let Some(terminal) = segments.last()
+            && RETIRED_TERMINALS.contains(&terminal.as_str())
+        {
+            self.found.insert(terminal.clone());
+        }
+        if segments
+            .windows(2)
+            .any(|pair| matches!(pair, [first, second] if first == "PostCommitWorkKey" && second == "PeerDelivery"))
+        {
+            self.found
+                .insert("PostCommitWorkKey::PeerDelivery".to_owned());
+        }
+        syn::visit::visit_path(self, path);
+    }
+}
+
+#[test]
+fn ak2_retirement_guard_matches_symbols_not_substrings() {
+    assert!(
+        retired_peer_worker_symbols_in_source("pub struct PeerWireSecurity;").is_empty(),
+        "AO2's PeerWireSecurity vocabulary must not collide with retired AK.2 identifiers"
+    );
+    assert_eq!(
+        retired_peer_worker_symbols_in_source("fn f(_: PeerSyncPolicy) {}"),
+        BTreeSet::from(["PeerSyncPolicy".to_owned()]),
+        "the AK.2 guard must still reject an exact retired symbol"
+    );
 }
 
 #[test]
