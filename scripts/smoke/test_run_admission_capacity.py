@@ -27,6 +27,9 @@ def load_runner():
 
 
 RUNNER = load_runner()
+TEMP_ROOT = Path(tempfile.gettempdir())
+TEST_HOME = TEMP_ROOT / "atm-capacity-test"
+TEST_SOCKET = str(TEMP_ROOT / "atm-capacity.sock")
 
 
 def complete_evidence(**overrides):
@@ -34,6 +37,9 @@ def complete_evidence(**overrides):
         "schema_version": 2,
         "generated_at": "2026-08-01T05:00:00.123456Z",
         "host_label": "test-host",
+        "platform": "test-platform",
+        "hook_mode": "active",
+        "evidence_scope": "physical_host",
         "transport": "tcp",
         "frames_per_connection": 1,
         "messages_per_connection": 1,
@@ -122,7 +128,7 @@ class AdmissionCapacityTests(unittest.TestCase):
 
     def test_child_runtime_doctor_environment_keeps_disposable_atm_home(self):
         environment = {
-            "ATM_HOME": "/tmp/atm-capacity-1",
+            "ATM_HOME": str(TEMP_ROOT / "atm-capacity-1"),
             "ATM_IDENTITY": "capacity-agent",
             "ATM_TEAM": "capacity-team",
         }
@@ -260,7 +266,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             mock.patch.object(RUNNER, "daemon_switch_result") as daemon_switch,
         ):
             with self.assertRaisesRegex(RUNNER.SmokeError, "ATM_CAPACITY_ISOLATED_OS_USER"):
-                RUNNER.run_capacity(Path("/tmp/atm-capacity-unit"), Path("/tmp"), "tcp", 1)
+                RUNNER.run_capacity(TEMP_ROOT / "atm-capacity-unit", TEMP_ROOT, "tcp", 1)
 
         backup.assert_not_called()
         daemon_switch.assert_not_called()
@@ -557,7 +563,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         with self.assertRaisesRegex(RUNNER.SmokeError, "hook mode"):
             RUNNER.validate_hook_mode("unexpected")
 
-        environment = RUNNER.runtime_environment(Path("/tmp/atm-capacity-unit"))
+        environment = RUNNER.runtime_environment(TEMP_ROOT / "atm-capacity-unit")
         self.assertNotIn("ATM_HTTP_RECEIVED_HOOK_MODE", environment)
         self.assertNotIn("ATM_HTTP_BENCHMARK_MODE", environment)
         self.assertEqual(environment["ATM_DAEMON_READY_STDOUT"], "1")
@@ -694,9 +700,12 @@ class AdmissionCapacityTests(unittest.TestCase):
             path = RUNNER.write_evidence(Path(temp), evidence)
             recorded = __import__("json").loads(path.read_text(encoding="utf-8"))
 
-        self.assertEqual(recorded["schema_version"], 4)
+        self.assertEqual(recorded["schema_version"], 5)
         self.assertEqual(recorded["transport"], "tcp")
         self.assertEqual(recorded["peer_wire_security"], "plaintext_test")
+        self.assertEqual(recorded["platform"], "test-platform")
+        self.assertEqual(recorded["hook_mode"], "active")
+        self.assertEqual(recorded["evidence_scope"], "physical_host")
         self.assertEqual(recorded["frames_per_connection"], 16)
         self.assertEqual(
             recorded["direct_sqlite_message_write"]["admissions_per_second"],
@@ -707,8 +716,8 @@ class AdmissionCapacityTests(unittest.TestCase):
         interval = {"passed": True, "elapsed_seconds": 0.6}
         with mock.patch.object(RUNNER, "run_interval", return_value=interval):
             profile = RUNNER.run_profile(
-                RUNNER.LocalEndpoint("uds", "/tmp/socket"),
-                Path("/tmp/atm-capacity-test"), 1, 1_000, 2, 2,
+                RUNNER.LocalEndpoint("uds", TEST_SOCKET),
+                TEST_HOME, 1, 1_000, 2, 2,
                 target_duration_seconds=1.0,
             )
         self.assertEqual(profile["minimum_sample_count"], 2)
@@ -723,6 +732,25 @@ class AdmissionCapacityTests(unittest.TestCase):
             path.name,
             "20260801-050000.123456-mac-arm64-01-tcp-plaintext_test-f16.json",
         )
+
+    def test_blocked_target_evidence_is_explicit_and_has_no_fabricated_metrics(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with mock.patch.object(RUNNER, "source_revision", return_value="a" * 40):
+                path = RUNNER.record_blocked_target(
+                    root,
+                    root / "raw",
+                    "rand-m5",
+                    "host is offline for scheduled maintenance",
+                    "tcp",
+                    "mutual_tls",
+                    "active",
+                )
+            recorded = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(recorded["availability"], "blocked")
+        self.assertEqual(recorded["blocked_reason"], "host is offline for scheduled maintenance")
+        self.assertFalse(recorded["passed"])
+        self.assertIsNone(recorded["metrics"])
 
     def test_evidence_filename_is_the_report_renderer_artifact_id(self):
         import benchmark_report
@@ -807,6 +835,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                     "host_label": "mac-arm64-01",
                     "transport": "uds",
                     "peer_wire_security": "not_applicable",
+                    "hook_mode": "active",
                     "frames_per_connection": frame,
                     "source_revision": "b" * 40,
                     "generated_at": f"2026-08-01T00:00:{frame:02d}Z",
@@ -820,7 +849,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 (root / f"f{frame}.json").write_text(json.dumps(payload), encoding="utf-8")
             with mock.patch.object(RUNNER, "is_ancestor_revision", return_value=True):
                 median, reference = RUNNER.matching_profile_reference(
-                    root, "mac-arm64-01", "uds", "not_applicable", 4, "c" * 40,
+                    root, "mac-arm64-01", "uds", "not_applicable", "active", 4, "c" * 40,
                 )
         self.assertEqual(median, 4_000)
         self.assertEqual(reference, "b" * 40)
@@ -1078,7 +1107,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(buffered, b"")
 
     def test_public_request_targets_a_distinct_local_recipient(self):
-        body = __import__("json").loads(RUNNER.http_request_body(Path("/tmp/atm-capacity-test"), 42))
+        body = __import__("json").loads(RUNNER.http_request_body(TEST_HOME, 42))
         self.assertEqual(body["to"], {"agent": "capacity-recipient", "team": "capacity-team"})
         self.assertEqual(body["message_source"], {"Inline": "capacity-42"})
         self.assertNotIn("RequestEnvelope", body)
@@ -1123,7 +1152,7 @@ class AdmissionCapacityTests(unittest.TestCase):
     def test_custom_capacity_roster_flows_to_public_request(self):
         roster = RUNNER.CapacityRoster.unique()
         body = json.loads(
-            RUNNER.http_request_body(Path("/tmp/atm-capacity-test"), 42, roster)
+            RUNNER.http_request_body(TEST_HOME, 42, roster)
         )
 
         self.assertEqual(body["caller_identity"], roster.agent)
@@ -1135,7 +1164,7 @@ class AdmissionCapacityTests(unittest.TestCase):
     def test_direct_peer_request_carries_immutable_origin_provenance(self):
         body = json.loads(
             RUNNER.http_request_body(
-                Path("/tmp/atm-capacity-test"), 42, authenticated_peer=True,
+                TEST_HOME, 42, authenticated_peer=True,
             )
         )
         self.assertRegex(body["origin_message_id"], r"^0[0-9A-F]{25}$")
@@ -1152,12 +1181,12 @@ class AdmissionCapacityTests(unittest.TestCase):
     def test_cached_roster_probe_warms_once_then_records_a_no_sqlite_profile(self):
         warmup = RUNNER.AdmissionResult(status=200, elapsed_ms=0.1)
         profile = {"passed": True, "operation": "cached_roster_heartbeat"}
-        endpoint = RUNNER.LocalEndpoint("uds", "/tmp/atm.sock")
+        endpoint = RUNNER.LocalEndpoint("uds", TEST_SOCKET)
         with (
             mock.patch.object(RUNNER, "submit_connection", return_value=[warmup]) as submit,
             mock.patch.object(RUNNER, "run_profile", return_value=profile) as run_profile,
         ):
-            result = RUNNER.run_cached_roster_heartbeat_probe(endpoint, Path("/tmp/home"), 1, 8)
+            result = RUNNER.run_cached_roster_heartbeat_probe(endpoint, TEMP_ROOT / "home", 1, 8)
 
         self.assertEqual(result["warmup"], {"status": 200, "passed": True})
         self.assertIn("no SQLite reads", result["storage"])
@@ -1168,7 +1197,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(run_profile.call_args.kwargs["minimum_admissions_per_second"], 0)
 
     def test_direct_storage_probe_requires_a_complete_json_result(self):
-        daemon = Path("/tmp/atm-daemon-benchmark")
+        daemon = TEMP_ROOT / "atm-daemon-benchmark"
         payload = {
             "kind": "async_storage_admission",
             "requested_count": RUNNER.DIRECT_STORAGE_DIAGNOSTIC_WRITES,
@@ -1182,7 +1211,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             "command_result",
             return_value={"exit_code": 0, "stdout": json.dumps(payload) + "\n", "stderr": ""},
         ) as command:
-            result = RUNNER.run_direct_storage_probe(daemon, {"ATM_HOME": "/tmp/home"}, 8)
+            result = RUNNER.run_direct_storage_probe(daemon, {"ATM_HOME": str(TEMP_ROOT / "home")}, 8)
 
         self.assertEqual(result, payload)
         self.assertEqual(
@@ -1200,10 +1229,10 @@ class AdmissionCapacityTests(unittest.TestCase):
             return_value={"exit_code": 0, "stdout": "not-json\n", "stderr": ""},
         ):
             with self.assertRaisesRegex(RUNNER.SmokeError, "no JSON result"):
-                RUNNER.run_direct_storage_probe(Path("/tmp/daemon"), {}, 1)
+                RUNNER.run_direct_storage_probe(TEMP_ROOT / "daemon", {}, 1)
 
     def test_direct_core_write_probe_uses_the_canonical_write_mode(self):
-        daemon = Path("/tmp/atm-daemon-benchmark")
+        daemon = TEMP_ROOT / "atm-daemon-benchmark"
         payload = {
             "kind": "canonical_core_write",
             "requested_count": RUNNER.DIRECT_STORAGE_DIAGNOSTIC_WRITES,
@@ -1217,7 +1246,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             "command_result",
             return_value={"exit_code": 0, "stdout": json.dumps(payload) + "\n", "stderr": ""},
         ) as command:
-            result = RUNNER.run_direct_core_write_probe(daemon, {"ATM_HOME": "/tmp/home"}, 8)
+            result = RUNNER.run_direct_core_write_probe(daemon, {"ATM_HOME": str(TEMP_ROOT / "home")}, 8)
 
         self.assertEqual(result, payload)
         self.assertEqual(
@@ -1330,8 +1359,8 @@ class AdmissionCapacityTests(unittest.TestCase):
             RUNNER, "run_interval", return_value={"passed": True, "elapsed_seconds": 1.0}
         ) as interval:
             result = RUNNER.run_profile(
-                RUNNER.LocalEndpoint("uds", "/tmp/socket"),
-                Path("/tmp/atm-capacity-test"),
+                RUNNER.LocalEndpoint("uds", TEST_SOCKET),
+                TEST_HOME,
                 2,
                 10_000,
                 3,
@@ -1347,8 +1376,8 @@ class AdmissionCapacityTests(unittest.TestCase):
         interval = {"passed": True, "elapsed_seconds": 0.4}
         with mock.patch.object(RUNNER, "run_interval", return_value=interval) as run_interval:
             result = RUNNER.run_profile(
-                RUNNER.LocalEndpoint("uds", "/tmp/socket"),
-                Path("/tmp/atm-capacity-test"), 1, 1_000, 10, 2,
+                RUNNER.LocalEndpoint("uds", TEST_SOCKET),
+                TEST_HOME, 1, 1_000, 10, 2,
                 target_duration_seconds=1.0,
             )
         self.assertEqual(result["minimum_sample_count"], 10)
@@ -1360,8 +1389,8 @@ class AdmissionCapacityTests(unittest.TestCase):
         interval = {"passed": True, "elapsed_seconds": 0.4}
         with mock.patch.object(RUNNER, "run_interval", return_value=interval) as run_interval:
             result = RUNNER.run_profile(
-                RUNNER.LocalEndpoint("uds", "/tmp/socket"),
-                Path("/tmp/atm-capacity-test"), 1, 1_000, 2, 2,
+                RUNNER.LocalEndpoint("uds", TEST_SOCKET),
+                TEST_HOME, 1, 1_000, 2, 2,
                 target_duration_seconds=1.0,
             )
         self.assertEqual(result["sample_count"], 3)
@@ -1372,8 +1401,8 @@ class AdmissionCapacityTests(unittest.TestCase):
         interval = {"passed": False, "elapsed_seconds": 0.1}
         with mock.patch.object(RUNNER, "run_interval", return_value=interval) as run_interval:
             result = RUNNER.run_profile(
-                RUNNER.LocalEndpoint("uds", "/tmp/socket"),
-                Path("/tmp/atm-capacity-test"), 1, 1_000, 10, 2,
+                RUNNER.LocalEndpoint("uds", TEST_SOCKET),
+                TEST_HOME, 1, 1_000, 10, 2,
             )
         self.assertFalse(result["passed"])
         self.assertEqual(result["sample_count"], 1)
@@ -1383,8 +1412,8 @@ class AdmissionCapacityTests(unittest.TestCase):
         interval = {"passed": False, "error_free": True, "elapsed_seconds": 0.4}
         with mock.patch.object(RUNNER, "run_interval", return_value=interval) as run_interval:
             result = RUNNER.run_profile(
-                RUNNER.LocalEndpoint("uds", "/tmp/atm-capacity-test"),
-                Path("/tmp/atm-capacity-test"), 64, 1_000, 2, 2,
+                RUNNER.LocalEndpoint("uds", str(TEST_HOME)),
+                TEST_HOME, 64, 1_000, 2, 2,
                 target_duration_seconds=1.0,
             )
         self.assertFalse(result["passed"])
@@ -1412,7 +1441,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             mock.patch.object(RUNNER, "reap_owned_daemon") as reap,
         ):
             with self.assertRaisesRegex(RUNNER.SmokeError, "not ready"):
-                RUNNER.start_capacity_daemon(Path("/tmp/daemon"), Path("/tmp"), {}, "active")
+                RUNNER.start_capacity_daemon(TEMP_ROOT / "daemon", TEMP_ROOT, {}, "active")
         reap.assert_called_once_with(process)
         output.join.assert_called_once_with()
 

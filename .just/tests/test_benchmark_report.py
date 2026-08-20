@@ -22,7 +22,7 @@ class BenchmarkReportTests(unittest.TestCase):
     def test_migrates_v1_and_strips_private_fields(self) -> None:
         result = REPORT.load_result(self.fixture("legacy-v1.json"))
         self.assertEqual(result["migration"], {"from_schema_version": 1})
-        self.assertEqual(result["schema_version"], 4)
+        self.assertEqual(result["schema_version"], 5)
         self.assertEqual(result["metrics"]["accepted_count"], 1_000)
         encoded = json.dumps(REPORT.load_result(self.fixture("success-uds-f1.json")))
         self.assertNotIn("/Users/", encoded)
@@ -125,7 +125,7 @@ class BenchmarkReportTests(unittest.TestCase):
             output = REPORT.render_aggregate([failed, recovered], Path(directory))
             text = output.read_text(encoding="utf-8")
         self.assertIn(
-            "Current candidate campaign: mac-arm64-01 / tcp / plaintext_test / unversioned",
+            "Current candidate campaign: mac-arm64-01 / tcp / plaintext_test / hook=unknown / unversioned",
             text,
         )
         self.assertIn("1/6 profiles, 1 passed, 0 failed; missing frames: 1, 2, 4, 16, 64.", text)

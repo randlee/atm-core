@@ -225,16 +225,21 @@ impl PeerIoAdapter for PeerTlsAdapter {
 /// reach into the storage TLS-helper facade.
 #[cfg(feature = "benchmark-support")]
 pub mod benchmark_support {
+    use std::fs;
     use std::io::Write;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::num::NonZeroU16;
     use std::path::PathBuf;
     use std::sync::Arc;
+    use std::time::{Duration, SystemTime};
 
     use atm_storage::{
         AtmError, CertificateFingerprint, HostName, HttpsInterface, LocalCertificate,
         PeerConfigStore, PrivateKeyRef, TrustedPeer, certificate_fingerprint,
     };
+
+    const DISPOSABLE_IDENTITY_PREFIX: &str = "atm-benchmark-peer-tls-";
+    const STALE_DISPOSABLE_IDENTITY_AGE: Duration = Duration::from_secs(60 * 60);
 
     /// Keeps the owner-only temporary directory alive while the benchmark
     /// listener reads its configured private-key path. Dropping it removes the
@@ -301,16 +306,24 @@ pub mod benchmark_support {
         hostname: String,
         port: u16,
     ) -> Result<DisposableLocalhostIdentity, AtmError> {
+        // A forced process termination skips TempDir's Drop. Clean only our
+        // own aged directories before creating another private key bundle.
+        reap_stale_disposable_identity_directories();
         let generated = generate_disposable_identity_bundle(&hostname)?;
-        register_disposable_identity(
+        // Publish first: if record publication fails, no durable peer-store
+        // mutation refers to a private key that the daemon cannot discover.
+        let identity_record_path =
+            publish_identity_record(&identity_record_root, &generated.private_key_path)?;
+        if let Err(error) = register_disposable_identity(
             store.as_ref(),
             &hostname,
             port,
             &generated.certificate_der,
             &generated.private_key_path,
-        )?;
-        let identity_record_path =
-            publish_identity_record(&identity_record_root, &generated.private_key_path)?;
+        ) {
+            let _ = fs::remove_file(&identity_record_path);
+            return Err(error);
+        }
         Ok(DisposableLocalhostIdentity {
             _directory: generated.directory,
             private_key_path: generated.private_key_path,
@@ -322,7 +335,7 @@ pub mod benchmark_support {
         hostname: &str,
     ) -> Result<GeneratedDisposableIdentity, AtmError> {
         let directory = tempfile::Builder::new()
-            .prefix("atm-benchmark-peer-tls-")
+            .prefix(DISPOSABLE_IDENTITY_PREFIX)
             .tempdir()
             .map_err(|source| {
                 AtmError::certificate_operation(
@@ -424,6 +437,61 @@ pub mod benchmark_support {
                 .with_cause(source)
         })?;
         Ok(identity_record_path)
+    }
+
+    fn reap_stale_disposable_identity_directories() {
+        reap_disposable_identity_directories_in(
+            &std::env::temp_dir(),
+            STALE_DISPOSABLE_IDENTITY_AGE,
+        );
+    }
+
+    fn reap_disposable_identity_directories_in(root: &std::path::Path, minimum_age: Duration) {
+        let now = SystemTime::now();
+        let Ok(entries) = fs::read_dir(root) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let is_owned_directory = entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false)
+                && entry
+                    .file_name()
+                    .to_str()
+                    .is_some_and(|name| name.starts_with(DISPOSABLE_IDENTITY_PREFIX));
+            if !is_owned_directory {
+                continue;
+            }
+            let old_enough = entry
+                .metadata()
+                .and_then(|metadata| metadata.modified())
+                .ok()
+                .and_then(|modified| now.duration_since(modified).ok())
+                .is_some_and(|age| age >= minimum_age);
+            if old_enough {
+                let _ = fs::remove_dir_all(path);
+            }
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::{DISPOSABLE_IDENTITY_PREFIX, reap_disposable_identity_directories_in};
+
+        #[test]
+        fn reaper_removes_only_its_aged_disposable_identity_directories() {
+            let root = tempfile::tempdir().expect("temporary root");
+            let owned = root
+                .path()
+                .join(format!("{DISPOSABLE_IDENTITY_PREFIX}orphan"));
+            let unrelated = root.path().join("unrelated-temporary-directory");
+            std::fs::create_dir(&owned).expect("owned directory");
+            std::fs::create_dir(&unrelated).expect("unrelated directory");
+
+            reap_disposable_identity_directories_in(root.path(), std::time::Duration::ZERO);
+
+            assert!(!owned.exists());
+            assert!(unrelated.exists());
+        }
     }
 }
 

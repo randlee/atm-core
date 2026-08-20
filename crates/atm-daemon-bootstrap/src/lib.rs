@@ -848,4 +848,40 @@ mod benchmark_peer_tls_tests {
             "the benchmark identity guard removes its non-secret discovery record after shutdown"
         );
     }
+
+    #[tokio::test]
+    async fn failed_identity_record_publication_does_not_mutate_peer_configuration() {
+        let directory = tempfile::tempdir().expect("temporary benchmark identity directory");
+        let backend = SqliteStorageBackend::new(directory.path().join("mail.db"))
+            .expect("open disposable benchmark database");
+        let store = backend.peer_config_store();
+
+        let result = peer_tls::benchmark_support::configure_disposable_localhost_identity(
+            store.clone(),
+            directory.path().join("missing-record-parent"),
+            BENCHMARK_PEER_HOST,
+            BENCHMARK_PEER_PORT,
+        )
+        .await;
+
+        assert!(
+            result.is_err(),
+            "record publication must fail for a missing parent"
+        );
+        assert!(
+            store.list_interfaces().expect("load interfaces").is_empty(),
+            "a failed record publication must not leave an interface configuration"
+        );
+        assert!(
+            store
+                .local_certificate()
+                .expect("load certificate")
+                .is_none(),
+            "a failed record publication must not leave a local certificate path"
+        );
+        assert!(
+            store.list_trusted_peers().expect("load peers").is_empty(),
+            "a failed record publication must not leave a trusted peer"
+        );
+    }
 }

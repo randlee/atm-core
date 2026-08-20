@@ -78,17 +78,24 @@ def migrate_result(payload: dict[str, Any], source: Path) -> dict[str, Any]:
     version = payload.get("schema_version")
     if version == AI40_SCHEMA_VERSION:
         return payload
-    if version == 3:
+    if version in {3, 4}:
         migrated = dict(payload)
         migrated["schema_version"] = AI40_SCHEMA_VERSION
         migrated["peer_wire_security"] = (
             "not_applicable" if migrated.get("transport") == "uds" else "plaintext_test"
         )
+        migrated["platform"] = "unknown"
+        migrated["hook_mode"] = "unknown"
+        migrated["evidence_scope"] = (
+            "synthetic_validation"
+            if str(migrated.get("host_label", "")).startswith("ao4-")
+            else "unknown"
+        )
         migrated["migration"] = {"from_schema_version": version}
         return migrated
     if version not in {1, 2} or isinstance(version, bool):
         raise BenchmarkReportError(
-            f"{source}: expected benchmark schema version 1, 2, 3, or {AI40_SCHEMA_VERSION}"
+            f"{source}: expected benchmark schema version 1, 2, 3, 4, or {AI40_SCHEMA_VERSION}"
         )
     samples = payload.get("samples", payload.get("runs", []))
     if not isinstance(samples, list):
@@ -101,6 +108,12 @@ def migrate_result(payload: dict[str, Any], source: Path) -> dict[str, Any]:
         "minimum_sample_count": payload.get("minimum_sample_count", len(samples)),
         "sample_count": payload.get("sample_count", len(samples)),
         "target_duration_s": payload.get("target_duration_s", payload.get("run_duration_s", payload.get("duration_seconds", 0))),
+        "platform": payload.get("platform", "unknown"),
+        "hook_mode": payload.get("hook_mode", "unknown"),
+        "evidence_scope": payload.get(
+            "evidence_scope",
+            "synthetic_validation" if str(payload.get("host_label", "")).startswith("ao4-") else "unknown",
+        ),
     }
     try:
         result = compact_evidence(legacy).model_dump(mode="json")
@@ -181,7 +194,7 @@ def evidence_records(report_dir: Path = REPORT_DIR) -> list[dict[str, Any]]:
             continue
     return sorted(records, key=lambda item: (
         item["generated_at"], item["host_label"], item["transport"],
-        item["peer_wire_security"], item["frames_per_connection"],
+        item["peer_wire_security"], item["hook_mode"], item["frames_per_connection"],
     ))
 
 
@@ -223,8 +236,13 @@ def render_run(result: dict[str, Any], artifact_id: str, report_dir: Path = REPO
             "artifact_id": artifact_id,
             "generated_at": result["generated_at"],
             "host_label": result["host_label"],
+            "platform": result["platform"],
             "transport": result["transport"],
             "peer_wire_security": result["peer_wire_security"],
+            "hook_mode": result["hook_mode"],
+            "evidence_scope": result["evidence_scope"],
+            "availability": result["availability"],
+            "blocked_reason": result.get("blocked_reason", ""),
             "frames_per_connection": result["frames_per_connection"],
             "run_duration_s": result["run_duration_s"],
             "passed": result["passed"],
@@ -240,10 +258,10 @@ def render_run(result: dict[str, Any], artifact_id: str, report_dir: Path = REPO
 
 def latest_profile_results(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     """Return the newest evidence for each host/transport/frame profile."""
-    latest: dict[tuple[str, str, str, int], dict[str, Any]] = {}
+    latest: dict[tuple[str, str, str, str, int], dict[str, Any]] = {}
     for result in records:
         key = (
-            result["host_label"], result["transport"], result["peer_wire_security"],
+            result["host_label"], result["transport"], result["peer_wire_security"], result["hook_mode"],
             result["frames_per_connection"],
         )
         previous = latest.get(key)
@@ -272,15 +290,16 @@ def current_campaign_results(records: Iterable[dict[str, Any]]) -> list[dict[str
         return [
             result
             for result in latest_profile_results(records)
-            if (result["host_label"], result["transport"], result["peer_wire_security"])
-            == (newest["host_label"], newest["transport"], newest["peer_wire_security"])
+            if (result["host_label"], result["transport"], result["peer_wire_security"], result["hook_mode"])
+            == (newest["host_label"], newest["transport"], newest["peer_wire_security"], newest["hook_mode"])
         ]
-    key = (newest["host_label"], newest["transport"], newest["peer_wire_security"], revision)
+    key = (newest["host_label"], newest["transport"], newest["peer_wire_security"], newest["hook_mode"], revision)
     return [
         result
         for result in records
         if (
             result["host_label"], result["transport"], result["peer_wire_security"],
+            result["hook_mode"],
             result.get("source_revision"),
         ) == key
     ]
@@ -308,6 +327,8 @@ def render_aggregate(records: Iterable[dict[str, Any]], report_root: Path = REPO
             "host_label": result["host_label"],
             "transport": result["transport"],
             "peer_wire_security": result["peer_wire_security"],
+            "hook_mode": result["hook_mode"],
+            "evidence_scope": result["evidence_scope"],
             "frames_per_connection": result["frames_per_connection"],
             "passed": result["passed"],
             "direct_sqlite_admissions_per_second": (
@@ -331,6 +352,7 @@ def render_aggregate(records: Iterable[dict[str, Any]], report_root: Path = REPO
         "campaign_host_label": campaign_reference["host_label"] if campaign_reference else "none",
         "campaign_transport": campaign_reference["transport"] if campaign_reference else "none",
         "campaign_peer_wire_security": campaign_reference["peer_wire_security"] if campaign_reference else "none",
+        "campaign_hook_mode": campaign_reference["hook_mode"] if campaign_reference else "none",
         "campaign_source_revision": campaign_reference.get("source_revision") if campaign_reference else None,
         "campaign_profile_count": len(campaign),
         "campaign_passed_count": sum(result["passed"] for result in campaign),

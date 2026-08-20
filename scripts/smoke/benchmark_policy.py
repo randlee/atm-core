@@ -88,7 +88,7 @@ def validated_profile_median(payload: dict[str, Any], label: str) -> float:
 def recorded_profile_median(payload: dict[str, Any], label: str) -> float:
     """Read the recorded median without treating a failed run as a baseline."""
     try:
-        if payload.get("schema_version") in {3, 4}:
+        if payload.get("schema_version") in {3, 4, 5}:
             return float(payload["metrics"]["admissions_per_second"]["p50"])
         return profile_median_admissions_per_second(payload["runs"][0])
     except (KeyError, TypeError, ValueError, IndexError) as error:

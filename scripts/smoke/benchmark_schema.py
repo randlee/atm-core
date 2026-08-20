@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from scripts.public_redaction import public_string
 
 
-SUMMARY_SCHEMA_VERSION = 4
+SUMMARY_SCHEMA_VERSION = 5
 SUPPORTED_TRANSPORTS = frozenset({"uds", "tcp"})
 SUPPORTED_FRAMES = frozenset({1, 2, 4, 8, 16, 64})
 
@@ -145,6 +145,15 @@ class BenchmarkSummary(BaseModel):
     artifact_kind: Literal["send_message_benchmark_summary"] = "send_message_benchmark_summary"
     generated_at: str = Field(min_length=1)
     host_label: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+    # `platform` and `hook_mode` make a physical-host result comparable without
+    # exposing host-private diagnostics.  `unknown` is retained solely for
+    # migration of immutable v1-v4 artifacts; current runners always emit a
+    # concrete platform and `active` or `disabled` hook mode.
+    platform: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+    hook_mode: Literal["active", "disabled", "unknown"]
+    evidence_scope: Literal["physical_host", "synthetic_validation", "unknown"] = "unknown"
+    availability: Literal["completed", "blocked"] = "completed"
+    blocked_reason: Optional[str] = None
     transport: Literal["uds", "tcp"]
     peer_wire_security: Literal["not_applicable", "plaintext_test", "mutual_tls"]
     frames_per_connection: Literal[1, 2, 4, 8, 16, 64]
@@ -184,6 +193,12 @@ class BenchmarkSummary(BaseModel):
             raise ValueError("UDS summaries require peer_wire_security `not_applicable`")
         if self.transport == "tcp" and self.peer_wire_security == "not_applicable":
             raise ValueError("TCP summaries require an explicit peer_wire_security")
+        if self.availability == "blocked":
+            if self.passed or self.metrics is not None or self.blocked_reason is None:
+                raise ValueError("a blocked target requires a reason and cannot include benchmark metrics")
+            return self
+        if self.blocked_reason is not None:
+            raise ValueError("a completed benchmark cannot include blocked_reason")
         if self.metrics is None:
             if self.passed or self.failure is None:
                 raise ValueError("a result without samples must be a failed run with a failure")
@@ -265,6 +280,18 @@ def compact_evidence(evidence: dict[str, Any]) -> BenchmarkSummary:
     summary = {
         "generated_at": evidence["generated_at"],
         "host_label": evidence["host_label"],
+        "platform": evidence.get("platform", "unknown"),
+        "hook_mode": evidence.get("hook_mode", "unknown"),
+        "evidence_scope": evidence.get(
+            "evidence_scope",
+            "synthetic_validation" if str(evidence.get("host_label", "")).startswith("ao4-") else "unknown",
+        ),
+        "availability": evidence.get("availability", "completed"),
+        "blocked_reason": (
+            public_string(str(evidence["blocked_reason"]))
+            if evidence.get("blocked_reason")
+            else None
+        ),
         "transport": evidence["transport"],
         "peer_wire_security": evidence.get(
             "peer_wire_security",
@@ -325,6 +352,18 @@ def failed_summary(evidence: dict[str, Any]) -> BenchmarkSummary:
         summary = {
             "generated_at": evidence["generated_at"],
             "host_label": evidence["host_label"],
+            "platform": evidence.get("platform", "unknown"),
+            "hook_mode": evidence.get("hook_mode", "unknown"),
+            "evidence_scope": evidence.get(
+                "evidence_scope",
+                "synthetic_validation" if str(evidence.get("host_label", "")).startswith("ao4-") else "unknown",
+            ),
+            "availability": evidence.get("availability", "completed"),
+            "blocked_reason": (
+                public_string(str(evidence["blocked_reason"]))
+                if evidence.get("blocked_reason")
+                else None
+            ),
             "transport": evidence["transport"],
             "peer_wire_security": evidence.get(
                 "peer_wire_security",

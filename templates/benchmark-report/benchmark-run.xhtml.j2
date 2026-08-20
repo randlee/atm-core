@@ -7,8 +7,13 @@ required_variables:
   - artifact_id
   - generated_at
   - host_label
+  - platform
   - transport
   - peer_wire_security
+  - hook_mode
+  - evidence_scope
+  - availability
+  - blocked_reason
   - frames_per_connection
   - run_duration_s
   - passed
@@ -24,8 +29,12 @@ required_variables:
   <dl>
     <dt>Generated</dt><dd>{{ generated_at | e }}</dd>
     <dt>Host label</dt><dd>{{ host_label | e }}</dd>
+    <dt>Platform</dt><dd>{{ platform | e }}</dd>
     <dt>Transport</dt><dd>{{ transport | e }}</dd>
     <dt>Peer wire security</dt><dd>{{ peer_wire_security | e }}</dd>
+    <dt>Received hook mode</dt><dd>{{ hook_mode | e }}</dd>
+    <dt>Evidence scope</dt><dd>{{ evidence_scope | e }}</dd>
+    <dt>Target availability</dt><dd>{{ availability | e }}</dd>
     <dt>Frames per connection</dt><dd>{{ frames_per_connection }}</dd>
     <dt>Run duration (seconds)</dt><dd>{{ run_duration_s }}</dd>
     <dt>Artifact</dt><dd>{{ artifact_id | e }}.json</dd>
@@ -35,6 +44,9 @@ required_variables:
 {% endif %}
 {% if cleanup_failure %}
   <h2>Cleanup diagnostics</h2><pre>{{ cleanup_failure | e }}</pre>
+{% endif %}
+{% if blocked_reason %}
+  <h2>Blocked target</h2><pre>{{ blocked_reason | e }}</pre>
 {% endif %}
   <h2>Samples</h2>
 {{ sample_html | safe }}

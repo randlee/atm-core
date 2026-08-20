@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import platform
 from queue import Empty, Queue
 import re
 import shutil
@@ -531,6 +532,13 @@ def validate_hook_mode(value: str) -> str:
     if value not in HOOK_MODES:
         raise SmokeError(f"benchmark hook mode must be one of {HOOK_MODES}")
     return value
+
+
+def benchmark_platform_label() -> str:
+    """Return the public platform/architecture label for a benchmark artifact."""
+    system = re.sub(r"[^A-Za-z0-9._-]+", "-", platform.system().lower()).strip("-")
+    machine = re.sub(r"[^A-Za-z0-9._-]+", "-", platform.machine().lower()).strip("-")
+    return "-".join(part for part in (system, machine) if part) or "unknown"
 
 
 def runtime_environment(
@@ -1287,6 +1295,7 @@ def matching_profile_reference(
     host_label: str,
     transport: str,
     peer_wire_security: str,
+    hook_mode: str,
     frames_per_connection: int,
     revision: str,
 ) -> tuple[float, str]:
@@ -1301,6 +1310,7 @@ def matching_profile_reference(
                 payload.get("host_label") == host_label
                 and payload.get("transport") == transport
                 and payload.get("peer_wire_security") == peer_wire_security
+                and payload.get("hook_mode") == hook_mode
                 and candidate_frame in TCP_COMPARISON_FRAMES
                 and isinstance(candidate_revision, str)
                 and GIT_REVISION.fullmatch(candidate_revision)
@@ -1320,7 +1330,7 @@ def matching_profile_reference(
     if not complete:
         raise SmokeError(
             "missing a complete passed comparison set for host "
-            f"{host_label}, transport {transport}, peer_wire_security {peer_wire_security}, "
+            f"{host_label}, transport {transport}, peer_wire_security {peer_wire_security}, hook_mode {hook_mode}, "
             f"at or before source revision {revision}"
         )
     selected_revision, profiles = max(
@@ -1397,6 +1407,8 @@ def run_capacity(
         "schema_version": 2,
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "host_label": os.environ.get("ATM_CAPACITY_HOST_LABEL", "local"),
+        "platform": benchmark_platform_label(),
+        "evidence_scope": "physical_host",
         "transport": transport,
         "peer_wire_security": peer_wire_security,
         "hook_mode": hook_mode,
@@ -1600,6 +1612,50 @@ def run_capacity(
     return (0 if evidence.get("passed") else 1), evidence_path
 
 
+def record_blocked_target(
+    evidence_directory: Path,
+    raw_evidence_directory: Path,
+    target_host_label: str,
+    blocked_reason: str,
+    transport: str,
+    peer_wire_security: str,
+    hook_mode: str,
+) -> Path:
+    """Publish explicit non-performance evidence for an unavailable physical target."""
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", target_host_label):
+        raise SmokeError("blocked target host label must be a safe hostname label")
+    if not blocked_reason.strip():
+        raise SmokeError("blocked target evidence requires a non-empty reason")
+    evidence = {
+        "schema_version": 2,
+        "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "host_label": target_host_label,
+        "platform": benchmark_platform_label(),
+        "evidence_scope": "physical_host",
+        "transport": transport,
+        "peer_wire_security": peer_wire_security,
+        "hook_mode": hook_mode,
+        "availability": "blocked",
+        "blocked_reason": blocked_reason,
+        "frames_per_connection": 1,
+        "messages_per_connection": 1,
+        "requested_messages_per_sample": ADMISSIONS_PER_INTERVAL,
+        "minimum_sample_count": 1,
+        "sample_count": 0,
+        "target_duration_s": TARGET_PROFILE_DURATION_SECONDS,
+        "run_duration_s": 0.0,
+        "source_revision": source_revision(),
+        "runs": [],
+        "passed": False,
+        "failure": f"benchmark target unavailable: {blocked_reason}",
+    }
+    raw_path = write_raw_evidence(raw_evidence_directory, evidence)
+    public_path = write_evidence(evidence_directory, evidence)
+    print(f"local blocked-target trace: {raw_path}")
+    print(f"BLOCKED admission-capacity evidence: {public_path}")
+    return public_path
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -1626,6 +1682,15 @@ def main() -> int:
         default="active",
         choices=HOOK_MODES,
         help="measure the replacement received hook as active or benchmark-authorized disabled",
+    )
+    parser.add_argument(
+        "--record-blocked-target",
+        metavar="HOST_LABEL",
+        help="write unavailable-target evidence instead of running this host's benchmark",
+    )
+    parser.add_argument(
+        "--blocked-reason",
+        help="reason required with --record-blocked-target and retained in the public summary",
     )
     parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
     parser.add_argument(
@@ -1678,6 +1743,19 @@ def main() -> int:
     transport, peer_wire_security = target_selection(args.target, args.transport)
     transport = validate_transport(transport)
     hook_mode = validate_hook_mode(args.hook_mode)
+    if (args.record_blocked_target is None) != (args.blocked_reason is None):
+        parser.error("--record-blocked-target and --blocked-reason must be provided together")
+    if args.record_blocked_target is not None:
+        record_blocked_target(
+            args.evidence_dir,
+            args.raw_evidence_dir,
+            args.record_blocked_target,
+            args.blocked_reason,
+            transport,
+            peer_wire_security,
+            hook_mode,
+        )
+        return 0
     sparse_profiles = tuple(args.frames_per_connection or SPARSE_FRAMES_PER_CONNECTION)
     sustained_profiles = tuple(args.sustained or ())
     profiles = selected_profiles(sparse_profiles, sustained_profiles)
@@ -1729,7 +1807,7 @@ def main() -> int:
             try:
                 comparison_median, comparison_source_revision = matching_profile_reference(
                     args.evidence_dir, comparison_host_label, transport, peer_wire_security,
-                    frames_per_connection, current_revision,
+                    hook_mode, frames_per_connection, current_revision,
                 )
             except SmokeError:
                 # AO.4 creates the first distinct plaintext/mTLS series, so

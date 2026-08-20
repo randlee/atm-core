@@ -8,7 +8,7 @@ use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use std::{env, process};
 
 use atm_core::error::AtmError;
@@ -27,6 +27,7 @@ const DIRECT_STORAGE_SENDER: &str = "capacity-direct-agent";
 const CORE_WRITE_TEAM: &str = "capacity-core-team";
 const CORE_WRITE_RECIPIENT: &str = "capacity-core-recipient";
 const CORE_WRITE_SENDER: &str = "capacity-core-agent";
+const DIRECT_PROBE_WRITE_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug)]
 enum BenchmarkInvocation {
@@ -188,6 +189,7 @@ async fn run_direct_storage_admission(
         .for_daemon()
         .service_runtime;
     let run_id = env::var("ATM_CAPACITY_RUN_ID").unwrap_or_else(|_| process::id().to_string());
+    let write_config = DirectStorageWriteConfig::new(run_id);
     let next = Arc::new(AtomicUsize::new(0));
     let started = Instant::now();
     let mut tasks = JoinSet::new();
@@ -195,20 +197,30 @@ async fn run_direct_storage_admission(
     for _ in 0..workers.get() {
         let runtime = runtime.clone();
         let next = Arc::clone(&next);
-        let run_id = run_id.clone();
+        let write_config = write_config.clone();
         tasks.spawn(async move {
             let mut accepted = 0_usize;
             loop {
                 let sequence = next.fetch_add(1, Ordering::Relaxed);
                 if sequence >= messages.get() {
-                    return Ok::<usize, AtmError>(accepted);
+                    return Ok::<usize, DirectProbeWorkerFailure>(accepted);
                 }
-                let duplicate = runtime
-                    .save_message_if_absent_async(direct_storage_message(&run_id, sequence))
-                    .await?;
+                let duplicate = tokio::time::timeout(
+                    DIRECT_PROBE_WRITE_TIMEOUT,
+                    runtime.save_message_if_absent_async(direct_storage_message(
+                        &write_config,
+                        sequence,
+                    )),
+                )
+                .await
+                .map_err(|_| DirectProbeWorkerFailure::timeout(accepted, "direct storage"))?
+                .map_err(|error| DirectProbeWorkerFailure::new(accepted, error))?;
                 if duplicate.is_some() {
-                    return Err(AtmError::daemon_unavailable(
-                        "direct storage benchmark generated a duplicate message key",
+                    return Err(DirectProbeWorkerFailure::new(
+                        accepted,
+                        AtmError::daemon_unavailable(
+                            "direct storage benchmark generated a duplicate message key",
+                        ),
                     ));
                 }
                 accepted += 1;
@@ -216,12 +228,7 @@ async fn run_direct_storage_admission(
         });
     }
 
-    let mut accepted = 0_usize;
-    while let Some(result) = tasks.join_next().await {
-        accepted += result.map_err(|error| {
-            AtmError::daemon_unavailable(format!("direct storage benchmark task failed: {error}"))
-        })??;
-    }
+    let accepted = collect_direct_probe_workers(tasks, "direct storage").await?;
     let elapsed_seconds = started.elapsed().as_secs_f64();
     if accepted != messages.get() {
         return Err(AtmError::daemon_unavailable(format!(
@@ -243,17 +250,37 @@ async fn run_direct_storage_admission(
     Ok(())
 }
 
-fn direct_storage_message(run_id: &str, sequence: usize) -> Message {
-    let team = TeamName::from_validated(DIRECT_STORAGE_TEAM);
+/// Immutable direct-storage message inputs, built once before worker launch.
+#[derive(Clone)]
+struct DirectStorageWriteConfig {
+    run_id: String,
+    team: TeamName,
+    recipient: AgentName,
+    sender: AgentName,
+}
+
+impl DirectStorageWriteConfig {
+    fn new(run_id: String) -> Self {
+        Self {
+            run_id,
+            team: TeamName::from_validated(DIRECT_STORAGE_TEAM),
+            recipient: AgentName::from_validated(DIRECT_STORAGE_RECIPIENT),
+            sender: AgentName::from_validated(DIRECT_STORAGE_SENDER),
+        }
+    }
+}
+
+fn direct_storage_message(config: &DirectStorageWriteConfig, sequence: usize) -> Message {
+    let team = config.team.clone();
     Message {
         team: team.clone(),
-        agent: AgentName::from_validated(DIRECT_STORAGE_RECIPIENT),
-        message_key: MessageKey::new(format!("atm:capacity-direct-{run_id}-{sequence}"))
+        agent: config.recipient.clone(),
+        message_key: MessageKey::new(format!("atm:capacity-direct-{}-{sequence}", config.run_id))
             .expect("nonempty key"),
         envelope: MessageEnvelope {
-            from: AgentName::from_validated(DIRECT_STORAGE_SENDER),
+            from: config.sender.clone(),
             source_chat_id: None,
-            text: format!("capacity-direct-{run_id}-{sequence}"),
+            text: format!("capacity-direct-{}-{sequence}", config.run_id),
             timestamp: IsoTimestamp::now(),
             read: false,
             source_team: Some(team),
@@ -298,27 +325,23 @@ async fn run_direct_core_write(
             loop {
                 let sequence = next.fetch_add(1, Ordering::Relaxed);
                 if sequence >= messages.get() {
-                    return Ok::<usize, AtmError>(accepted);
+                    return Ok::<usize, DirectProbeWorkerFailure>(accepted);
                 }
-                prepare_write_with_async_runtime(
-                    direct_core_write_request(&request_config, sequence)?,
-                    &NullObservability,
-                    &runtime,
+                let request = direct_core_write_request(&request_config, sequence)
+                    .map_err(|error| DirectProbeWorkerFailure::new(accepted, error))?;
+                tokio::time::timeout(
+                    DIRECT_PROBE_WRITE_TIMEOUT,
+                    prepare_write_with_async_runtime(request, &NullObservability, &runtime),
                 )
-                .await?;
+                .await
+                .map_err(|_| DirectProbeWorkerFailure::timeout(accepted, "direct core-write"))?
+                .map_err(|error| DirectProbeWorkerFailure::new(accepted, error))?;
                 accepted += 1;
             }
         });
     }
 
-    let mut accepted = 0_usize;
-    while let Some(result) = tasks.join_next().await {
-        accepted += result.map_err(|error| {
-            AtmError::daemon_unavailable(format!(
-                "direct core-write benchmark task failed: {error}"
-            ))
-        })??;
-    }
+    let accepted = collect_direct_probe_workers(tasks, "direct core-write").await?;
     let elapsed_seconds = started.elapsed().as_secs_f64();
     if accepted != messages.get() {
         return Err(AtmError::daemon_unavailable(format!(
@@ -338,6 +361,61 @@ async fn run_direct_core_write(
         })
     );
     Ok(())
+}
+
+#[derive(Debug)]
+struct DirectProbeWorkerFailure {
+    accepted: usize,
+    error: AtmError,
+}
+
+impl DirectProbeWorkerFailure {
+    fn new(accepted: usize, error: AtmError) -> Self {
+        Self { accepted, error }
+    }
+
+    fn timeout(accepted: usize, kind: &str) -> Self {
+        Self::new(
+            accepted,
+            AtmError::daemon_unavailable(format!(
+                "{kind} benchmark write exceeded the {}s per-write deadline",
+                DIRECT_PROBE_WRITE_TIMEOUT.as_secs(),
+            )),
+        )
+    }
+}
+
+/// Drain every worker after the first error so the emitted error contains the
+/// exact number of writes each completed/failed worker durably admitted.
+async fn collect_direct_probe_workers(
+    mut tasks: JoinSet<Result<usize, DirectProbeWorkerFailure>>,
+    kind: &str,
+) -> Result<usize, AtmError> {
+    let mut accepted = 0_usize;
+    let mut first_error = None;
+    while let Some(result) = tasks.join_next().await {
+        match result {
+            Ok(Ok(count)) => accepted += count,
+            Ok(Err(error)) => {
+                accepted += error.accepted;
+                if first_error.is_none() {
+                    first_error = Some(error.error);
+                }
+            }
+            Err(error) if first_error.is_none() => {
+                first_error = Some(AtmError::daemon_unavailable(format!(
+                    "{kind} benchmark task failed: {error}"
+                )));
+            }
+            Err(_) => {}
+        }
+    }
+    if let Some(error) = first_error {
+        return Err(AtmError::daemon_unavailable(format!(
+            "{kind} benchmark failed after durably admitting {accepted} messages: {error}"
+        )));
+    }
+    Ok(accepted)
 }
 
 /// Environment-derived benchmark identities captured once before concurrent
@@ -400,14 +478,16 @@ mod tests {
 
     use super::{
         BenchmarkDirectPeerListener, BenchmarkHookMode, BenchmarkInvocation,
-        BenchmarkPeerWireSecurity, DirectCoreWriteConfig, direct_core_write_request,
-        direct_storage_message, parse_benchmark_invocation, parse_nonzero_argument,
+        BenchmarkPeerWireSecurity, DirectCoreWriteConfig, DirectStorageWriteConfig,
+        direct_core_write_request, direct_storage_message, parse_benchmark_invocation,
+        parse_nonzero_argument,
     };
 
     #[test]
     fn direct_storage_messages_are_unique_and_target_the_capacity_recipient() {
-        let first = direct_storage_message("test-run", 1);
-        let second = direct_storage_message("test-run", 2);
+        let config = DirectStorageWriteConfig::new("test-run".to_owned());
+        let first = direct_storage_message(&config, 1);
+        let second = direct_storage_message(&config, 2);
         assert_ne!(first.message_key, second.message_key);
         assert_eq!(first.team.as_str(), "capacity-direct-team");
         assert_eq!(first.agent.as_str(), "capacity-direct-recipient");
