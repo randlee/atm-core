@@ -4,9 +4,9 @@
 plan_type: sprint_plan
 phase: AS
 sprint: AS.1
-worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pas-s1-overlay-contract
-branch: feature/pas-s1-overlay-contract
-status: in_progress
+worktree: sc-compose-publish-kit-migration
+branch: plan/sc-compose-publish-kit-migration
+status: proposed
 estimated_scope: documentation and upstream-contract closure
 ```
 
@@ -43,9 +43,6 @@ manifest behavior change in ATM.
 - `sc-publish` promotion baseline
   `240fd52` is reachable.
 - The canonical package installer is available from that source.
-- The current synchronization candidate is `sc-publish/develop@5e49b6ac` (PR
-  #15). It is not accepted for activation until its generated artifact manifest
-  passes the copied validator.
 
 ## Hard Dependencies
 
@@ -76,23 +73,26 @@ manifest behavior change in ATM.
 4. Require an upstream closure test that fails whenever a copied shared file
    references an unvendored relative dependency not declared as a generic
    consumer interface.
-5. Require the shared installer's sole consumer input to be complete declared
-   data: source/version policy, artifacts, explicit crate dependency/publish
-   order, wheels, binaries, channels, and channel settings. It must reject
-   missing production input. Source discovery may produce an advisory example
-   only; it must never infer a production publish surface, crate
-   dependency/publish order, or enabled destination.
+5. Require the shared installer to consume complete explicit artifact/channel
+   input. Source discovery may produce an example only; it must never infer a
+   production publish surface, crate dependency/publish order, or enabled
+   destination.
 6. Require the shared bootstrap to provision the exact `sc-compose` CLI used
    by install/render and run the semantic installer integration test in CI
    through that bootstrap.
-7. Require an installation proof that runs the installer with the ATM input,
+7. Require the installer’s sole consumer input to be complete declared data:
+   source/version policy, artifacts, explicit crate dependency/publish order,
+   wheels, binaries,
+   channels, and channel settings. It must reject missing production input;
+   discovery is allowed only for an advisory example command.
+8. Require an installation proof that runs the installer with the ATM input,
    verifies every copied shared asset against the package source, parses the
    generated manifests, and proves their semantic values equal the supplied
    JSON. A second installer `--dry-run` must be clean.
-8. Require upstream consumer CI coverage that fails on a byte difference in a
+9. Require upstream consumer CI coverage that fails on a byte difference in a
    synchronized file or any workflow-local tool installation that bypasses the
    common bootstrap. This is a shared-kit capability, not an ATM CI fork.
-9. Classify each discovered gap as either advisory or safety-load-bearing. For
+10. Classify each discovered gap as either advisory or safety-load-bearing. For
     a safety-load-bearing gap — including the resolved receipt fields
     `source_commit`, `manifest_sha256`, `toolchain_sha256`, and
     `validation_sha256` needed by AS.3/AS.4/AS.6 — require the capability to
@@ -140,79 +140,6 @@ python3 "$PUBLISH_KIT_SOURCE/plugins/sc-publish/install.py" --help
 - Record the accepted source SHA and upstream issue/PR identifiers here.
 - Update the 31-path supporting audit only when the upstream owned-path list
   changes.
-
-## AS.1 Evidence And Upstream Closure Ledger
-
-- Accepted source: `sc-publish/develop@240fd525784d967a993f04eab4ffcc0993933f7b`
-  (the `240fd52` baseline); installer input/manifest proof:
-  [`AS.1-consumer-input.json`](./evidence/AS.1-consumer-input.json).
-- Accepted installer contract: `sc-publish` PR #7, merged at `240fd52`.
-  It requires explicit `--input` for installation; `--example-json` can only
-  create a reviewable draft and cannot install or infer a production surface.
-- The 31-path atomic audit and legacy-value coverage remain in the supporting
-  [migration design record](../publish-kit-migration/README.md). No individual
-  shared path was selected, omitted, or edited locally.
-
-| Upstream item | Classification | AS.1 disposition / dispatch effect |
-| --- | --- | --- |
-| `sc-publish` #6 — unified bootstrap and tool receipt | safety-load-bearing | Must be accepted, synchronized, and evidenced before AS.3. |
-| `sc-publish` #9 — relative-dependency closure | safety-load-bearing | Must be accepted and synchronized before AS.3. |
-| `sc-publish` #10 — installed archive-member validation | safety-load-bearing | Must be accepted and synchronized before AS.3. |
-| `sc-publish` #11 — resolved fail-closed receipt | safety-load-bearing | Blocks AS.3 until implemented, accepted, synchronized, and proven. Required fields are `source_commit`, `manifest_sha256`, `toolchain_sha256`, and `validation_sha256`. |
-| `sc-publish` #12 — `extra_validations` runner/evidence | safety-load-bearing | Must be accepted and synchronized before AS.3. |
-| `sc-publish` #13 — Cargo-derived dynamic PEP 621 validation | safety-load-bearing | Must be accepted and synchronized before AS.3. |
-| `sc-publish` #14 — generic release-version wiring | safety-load-bearing | Atomic sync revealed that ATM's legacy version check inspects an ATM-only workflow job. The generic manifest/workflow contract must replace that assertion before AS.3. |
-| Explicit installer input / generated-manifest parity | accepted upstream; execution proof pending | PR #7 at `240fd52` supplies explicit input, PR #15 at `5e49b6ac` closes the source-layout defect, and PR #24 at `68c06f97` closes [`sc-publish` #17](https://github.com/randlee/sc-publish/issues/17) (closed 2026-08-18T16:30:53Z). AS.3 still owns ATM's unchanged-sync execution proof; no local adapter is permitted. |
-
-Verified against `randlee/sc-publish` on 2026-08-18: #6, #9, #10, #11,
-#12, #13, and #14 remain open safety-load-bearing items. #17 is closed by
-PR #24 at `68c06f97a98f845f0b61f940b4616e0c214bece3`; it must not remain
-represented as an open upstream blocker.
-
-The safety items are intentionally **not** represented as closed by their
-issue creation. AS.3 remains blocked until the stated upstream implementation
-and exact consumer sync proof exist. For any receipt mismatch, publication is
-blocked; record escalation upstream and obtain a new matching preflight after
-the correction is accepted.
-
-Historical AS.1 canonical-install result: the installer and clean second
-`--dry-run` passed at `240fd52`. This was byte parity, not the required
-execution-level validation.
-AS.1 QA-1 corrected the ATM-owned version-sync assertion: it now requires the
-canonical requested-version and lockstep checks rather than the retired
-ATM-specific `update-homebrew` inline job. The assertion continues to check
-release wiring; it is not disabled or weakened.
-
-AS.1 QA-1 also identified a **critical upstream installer layout defect**:
-the canonical source at `240fd52` copies its new helper implementations to
-`.github/scripts/`, but the same canonical workflows invoke `scripts/`. The
-consumer's existing `scripts/` helpers are legacy and lack the invoked
-subcommands; its legacy `release_gate.sh` also has a three-argument interface
-while canonical `release.yml` passes four arguments. This cannot be repaired
-in ATM without locally editing a synchronized workflow or helper, which is
-prohibited by AS.1. `sc-publish` PR #15 closed that source-layout defect at
-`5e49b6ac`; ATM synchronized it unchanged and the second canonical `--dry-run`
-reported `Publish-kit assets are in sync.`
-
-The resulting execution proof exposed a second critical upstream contract
-defect: the installer rendered `[[artifacts.crates]]` in
-`release/publish-artifacts.toml`, but the copied
-`.github/scripts/release_artifacts.py` requires top-level `[[crates]]`.
-Consequently, both of the following canonical consumer commands fail with
-`manifest must define [[crates]]`:
-
-```bash
-python3 .github/scripts/release_artifacts.py validate-manifest \
-  --manifest release/publish-artifacts.toml --workspace-toml Cargo.toml
-python3 .github/scripts/release_artifacts.py validate-publish-order \
-  --manifest release/publish-artifacts.toml --workspace-toml Cargo.toml
-```
-
-The upstream installer suite passed while missing this cross-asset invariant.
-AS.1 remains in progress until `sc-publish` fixes schema parity, adds a test
-which renders a complete input and then runs both validators, and ATM performs
-another unchanged canonical synchronization plus the path, argument, and
-semantic proof.
 
 ## Risks And Watchouts
 

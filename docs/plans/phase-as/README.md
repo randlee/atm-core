@@ -16,42 +16,20 @@ release flow without reintroducing toolchain or validation drift.
 
 ## Governing boundaries
 
-- **Amended 2026-08-18 (Rand, relayed via quality-mgr):** the boundaries below
-  as originally written pushed atm-core-specific publish correctness into
-  `sc-publish`'s generic schema, turning every atm-core release nuance
-  (dynamic Maturin versioning, non-crates.io-published bridge crates,
-  publish-order, fail-closed receipts) into an upstream schema-growth request
-  and a blocking wait. That is reversed as of AS.4 onward:
-  - Pre-publish validation — version consistency, manifest correctness
-    (including `publish_order` and non-published bridge crates), and
-    release-receipt correctness — is atm-core DATA and atm-core's own concern.
-    It is implemented and run directly in atm-core, by atm-core-owned
-    scripts/workflows, and is never gated on a `sc-publish` schema change
-    landing upstream first.
-  - `sc-publish`'s installer/generator may still render a thin starter/scaffold
-    manifest shape, but it does not validate or gate atm-core-specific
-    correctness — that overreach (e.g. rejecting `publish_order = 0` for
-    non-published bridge crates) is what made AS.2/AS.3 block on upstream in
-    the first place.
-  - `sc-publish` remains the right place only for mechanics that are actually
-    generic across its 30+ consumers (e.g. how to talk to a registry given
-    credentials, credential-rehearsal patterns). "Is atm-core's release
-    correct" is never `sc-publish`'s business.
-  - A finding that atm-core's own validation/workflow logic is wrong is an
-    atm-core fix, fixed directly here, same-day — not an upstream ticket that
-    blocks the sprint.
-- `sc-publish` is the source of genuinely shared, generic release mechanics
-  installed through the canonical package installer, byte-for-byte — scoped
-  per the amendment above, not as the sole source of atm-core's publish
-  correctness.
-- Preflight and publish still consume one resolved manifest and toolchain, but
-  the validation receipt proving atm-core's release is correct is produced by
-  atm-core's own validation, not contingent on an external `sc-publish`
-  receipt-mechanism PR merging first.
+- `sc-publish` is the sole source of shared workflows, actions, scripts,
+  agent prompts, and tests. ATM installs them only through the canonical
+  package installer, byte-for-byte.
+- ATM owns only repository data in its release manifest and explicitly
+  namespaced, non-shared validation data.
+- A shared-file defect is an upstream `sc-publish` issue/PR, never an ATM
+  overlay patch.
+- Preflight and publish consume one resolved manifest, toolchain, and
+  validation receipt. `source_commit`, `manifest_sha256`, `toolchain_sha256`,
+  and `validation_sha256` must agree; a digest mismatch blocks publication,
+  records an upstream escalation, and requires a fresh matching preflight only
+  after the upstream correction is accepted.
 - Production publishing requires explicit authorization; planning or
   preflight does not grant it.
-- A blocking finding on one work item halts only that item; independent work
-  continues in parallel rather than idling the whole sprint.
 
 ## Phase delivery flow
 
@@ -77,10 +55,10 @@ must not recreate the retired script or patch the package locally.
 
 | Sprint | Purpose | Dependency |
 | --- | --- | --- |
-| [AS.1](AS.1-overlay-contract.md) | Freeze and justify the exact upstream overlay. | in_progress |
+| [AS.1](AS.1-overlay-contract.md) | Freeze and justify the exact upstream overlay. | Start point |
 | [AS.2](AS.2-consumer-manifest-contract.md) | Justify ATM consumer data and raise upstream gaps. | must_follow AS.1 |
 | [AS.3](AS.3-worktree-preflight-proof.md) | Prove canonical preflight from the exact sync worktree. | must_follow AS.2 |
-| [AS.4](AS.4-authorized-pypi-1.4.3.md) | Cut and publish a fresh `1.4.4` PyPI-only release (ADR-049 disclosure + current manifest baked in; the already-built `1.4.3` artifacts predate both and cannot be republished as-is). | must_follow AS.3 |
+| [AS.4](AS.4-authorized-pypi-1.4.3.md) | Publish the already-built 1.4.3 PyPI artifacts from immutable `main`. | must_follow AS.3 |
 | [AS.5](AS.5-main-migration-merge.md) | Promote the verified migration from `develop` to `main`. | must_follow AS.3 and AS.4 |
 | [AS.6](AS.6-full-1.4.4-release.md) | Execute and verify the first full canonical release. | must_follow AS.5 |
 
