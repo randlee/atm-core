@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-105>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-105" ;
+  triage:title "Stale AI21-IMPORTANT-002.ttl triage debris cites nonexistent code" ;
+  triage:description ".triage/phase-AI/findings/AI21-IMPORTANT-002.ttl present in the feature/pao-s3-runtime-peer-wire-mode worktree cites code (PeerWireSecurityStatus enum, specific line numbers in atm/src/commands/doctor.rs and runtime_health.rs) that does not exist in the current codebase — stale triage debris or cross-branch contamination." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "process-hygiene" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-20T21:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.3 ;
+  triage:foundAt "2026-08-20T20:36:55Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-105/pao-s3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-105/pao-s4-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-105/pao-s3-1>
+  a triage:Occurrence ;
+  triage:file ".triage/phase-AI/findings/AI21-IMPORTANT-002.ttl" ;
+  triage:line 1 ;
+  triage:snippet "stale phase-AI finding" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:headSha "e6a428355253de23a428bac2f047180ec95dfc7c" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s3/e6a428355253de23a428bac2f047180ec95dfc7c> .
+
+<urn:atm:triage:occurrence/ATM-QA-105/pao-s4-1>
+  a triage:Occurrence ;
+  triage:file ".triage/phase-AI/findings/AI21-IMPORTANT-002.ttl" ;
+  triage:line 1 ;
+  triage:snippet "stale phase-AI finding" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s4-peer-wire-proof" ;
+  triage:headSha "49154a38f20a3f723dc8bd6d305dfc79bb241d30" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s4/49154a38f20a3f723dc8bd6d305dfc79bb241d30> .
+
+<urn:atm:triage:worktree/pao-s3/e6a428355253de23a428bac2f047180ec95dfc7c>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s3" ;
+  triage:branch "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:headSha "e6a428355253de23a428bac2f047180ec95dfc7c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pao-s4/49154a38f20a3f723dc8bd6d305dfc79bb241d30>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s4" ;
+  triage:branch "feature/pao-s4-peer-wire-proof" ;
+  triage:headSha "49154a38f20a3f723dc8bd6d305dfc79bb241d30" ;
+  triage:orderIndex 4 .
