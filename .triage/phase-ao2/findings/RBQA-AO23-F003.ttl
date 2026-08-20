@@ -8,29 +8,31 @@
   a triage:Finding ;
   triage:findingId "RBQA-AO23-F003" ;
   triage:title "atm-daemon-bootstrap boundary manifest missing atm-storage allowed dependency" ;
-  triage:description "crates/atm-daemon-bootstrap consumes atm-storage (PEM-scrubbing/TLS identity path) but boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml's allowed_dependencies (line 25) only lists atm-storage-rusqlite, not atm-storage. .just/lint-config.toml's atm-daemon-bootstrap entry (~line 133) has no boundary_record_path set (unlike atm-error's entry), so .just/lint_boundaries.py cannot catch this drift automatically. Remediation: add atm-storage to the boundary TOML's allowed_dependencies and set boundary_record_path for this crate's lint-config entry." ;
+  triage:description "crates/atm-daemon-bootstrap declares three dependencies in Cargo.toml that are present in .just/lint-config.toml's enforced allowlist but missing from boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml's allowed_dependencies (line 25): (1) atm-storage for PEM-scrubbing/TLS identity path, (2) serde_json for message serialization, and (3) tempfile for temporary test fixtures. The boundary record incorrectly lists atm-storage-rusqlite, not atm-storage. .just/lint-config.toml's atm-daemon-bootstrap entry (~line 132) has no boundary_record_path set (unlike atm-error's entry), so .just/lint_boundaries.py cannot catch this drift automatically. Remediation: add atm-storage, serde_json, and tempfile to the boundary TOML's allowed_dependencies and set boundary_record_path for this crate's lint-config entry." ;
   triage:phaseId "phase-ao2" ;
   triage:triageMode "initial_pass" ;
   triage:category "architecture-boundary" ;
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-20T20:36:55Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.3 ;
   triage:foundAt "2026-08-20T20:36:55Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AO23-F003/AO23-W1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AO23-F003/AO23-W2> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AO23-F003/AO23-W3> ;
+  triage:triageRecordVersion "3" ;
+  triage:closedNote "Confirmed fixed by quality-mgr QA-2 for PR #967 (commit b2ce7a267/ae3232d34); code-verified fix on feature/pao-s3-runtime-peer-wire-mode @ae3232d34." .
 
 <urn:atm:triage:occurrence/RBQA-AO23-F003/AO23-W1>
   a triage:Occurrence ;
   triage:file "boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml" ;
   triage:line 25 ;
   triage:snippet "allowed_dependencies = [\"atm-core\", \"atm-runtime\", \"atm-storage-rusqlite\", ...]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s3-runtime-peer-wire-mode" ;
   triage:headSha "e6a428355253de23a428bac2f047180ec95dfc7c" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s3/e6a428355253de23a428bac2f047180ec95dfc7c> .
@@ -40,11 +42,22 @@
   triage:file "boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml" ;
   triage:line 25 ;
   triage:snippet "allowed_dependencies = [\"atm-core\", \"atm-runtime\", \"atm-storage-rusqlite\", ...]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s4-peer-wire-proof" ;
   triage:headSha "49154a38f20a3f723dc8bd6d305dfc79bb241d30" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s4/49154a38f20a3f723dc8bd6d305dfc79bb241d30> .
+
+<urn:atm:triage:occurrence/RBQA-AO23-F003/AO23-W3>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml" ;
+  triage:line 25 ;
+  triage:snippet "allowed_dependencies = [\"atm-core\", \"atm-runtime\", \"atm-storage-rusqlite\", ...]" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s4-peer-wire-proof" ;
+  triage:headSha "d9fb74917a804d2068684db40a28bc4ce636f283" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s4/d9fb74917a804d2068684db40a28bc4ce636f283> .
 
 <urn:atm:triage:worktree/pao-s3/e6a428355253de23a428bac2f047180ec95dfc7c>
   a triage:WorktreeSnapshot ;
@@ -58,4 +71,11 @@
   triage:path "feature/pao-s4-peer-wire-proof" ;
   triage:branch "feature/pao-s4-peer-wire-proof" ;
   triage:headSha "49154a38f20a3f723dc8bd6d305dfc79bb241d30" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pao-s4/d9fb74917a804d2068684db40a28bc4ce636f283>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s4-peer-wire-proof" ;
+  triage:branch "feature/pao-s4-peer-wire-proof" ;
+  triage:headSha "d9fb74917a804d2068684db40a28bc4ce636f283" ;
   triage:orderIndex 4 .
