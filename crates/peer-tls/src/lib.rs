@@ -423,7 +423,7 @@ mod tests {
     }
 
     #[test]
-    fn disabled_or_hostname_mismatched_peer_fails_before_tcp_or_http_work() {
+    fn disabled_peer_fails_before_tcp_or_http_work() {
         let directory = tempfile::tempdir().expect("directory");
         let identity = identity(&directory, "local");
         let target = peer(&identity, false);
@@ -435,6 +435,23 @@ mod tests {
         .expect("adapter");
         let host: HostName = "localhost".parse().expect("host");
         let error = adapter.trusted_peer(&host).expect_err("disabled peer");
+        assert_eq!(error.code().as_str(), "ATM_PEER_AUTHENTICATION_FAILED");
+    }
+
+    #[test]
+    fn hostname_mismatch_fails_before_tcp_or_http_work() {
+        let directory = tempfile::tempdir().expect("directory");
+        let identity = identity(&directory, "local");
+        let adapter = MtlsPeerStreamAdapter::from_peer_config(&TestStore {
+            interfaces: vec![interface()],
+            certificate: Some(identity.clone()),
+            peers: vec![peer(&identity, true)],
+        })
+        .expect("adapter");
+        let mismatched_host: HostName = "other-peer.example".parse().expect("host");
+        let error = adapter
+            .trusted_peer(&mismatched_host)
+            .expect_err("mismatched hostname");
         assert_eq!(error.code().as_str(), "ATM_PEER_AUTHENTICATION_FAILED");
     }
 
