@@ -15,14 +15,17 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "sprint" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-08-20T09:00:24Z"^^xsd:dateTime ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-20T09:00:24+00:00"^^xsd:dateTime ;
   triage:foundIn triage:AO2.1 ;
-  triage:foundAt "2026-08-20T09:00:24Z"^^xsd:dateTime ;
+  triage:foundAt "2026-08-20T09:00:24+00:00"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/AO2.1-plaintext-baseline> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/AO2.1-peer-wire-policy> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-20T22:53:43Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/ATM-QA-001/AO2.1-plaintext-baseline>
   a triage:Occurrence ;
@@ -46,9 +49,27 @@
   triage:headSha "d137ab8d" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s1-peer-wire-policy/d137ab8d> .
 
+<urn:atm:triage:occurrence/ATM-QA-001/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 132 ;
+  triage:snippet "quality-mgr independent re-verification confirmed fixed" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s1-peer-wire-policy" ;
+  triage:headSha "d137ab8d" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pao-s1-peer-wire-policy/d137ab8d> .
+
 <urn:atm:triage:worktree/pao-s1-peer-wire-policy/d137ab8d>
   a triage:WorktreeSnapshot ;
   triage:path ".worktrees/pao-s1-peer-wire-policy" ;
   triage:branch "feature/pao-s1-peer-wire-policy" ;
   triage:headSha "d137ab8d" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/feature-pao-s1-peer-wire-policy/d137ab8d>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s1-peer-wire-policy" ;
+  triage:branch "feature/pao-s1-peer-wire-policy" ;
+  triage:headSha "d137ab8d" ;
+  triage:orderIndex 2 .

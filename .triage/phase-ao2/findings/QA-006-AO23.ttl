@@ -15,13 +15,16 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
-  triage:status "fixed_partial" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
-  triage:triagedAt "2026-08-20T22:15:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-08-20T22:15:00+00:00"^^xsd:dateTime ;
   triage:foundIn triage:AO2.3 ;
-  triage:foundAt "2026-08-20T22:12:00Z"^^xsd:dateTime ;
+  triage:foundAt "2026-08-20T22:12:00+00:00"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/QA-006-AO23/QA006-S4-1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-006-AO23/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-20T22:53:43Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/QA-006-AO23/QA006-S4-1>
   a triage:Occurrence ;
@@ -33,6 +36,17 @@
   triage:branch "feature/pao-s4-peer-wire-proof" ;
   triage:headSha "f40440d7bd370168ce41bf76ae486210df14b18d" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s4/f40440d7bd370168ce41bf76ae486210df14b18d> .
+
+<urn:atm:triage:occurrence/QA-006-AO23/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml" ;
+  triage:line 25 ;
+  triage:snippet "quality-mgr independent re-verification confirmed fixed" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s4-peer-wire-proof" ;
+  triage:headSha "aedd04beabaa555343a8d32bc8870c79390a4deb" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pao-s4-peer-wire-proof/aedd04beabaa555343a8d32bc8870c79390a4deb> .
 
 <urn:atm:triage:worktree/pao-s3/46ebe74e057347a7fb140baf84b26bd632cc82aa>
   a triage:WorktreeSnapshot ;
@@ -47,3 +61,10 @@
   triage:branch "feature/pao-s4-peer-wire-proof" ;
   triage:headSha "f40440d7bd370168ce41bf76ae486210df14b18d" ;
   triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/feature-pao-s4-peer-wire-proof/aedd04beabaa555343a8d32bc8870c79390a4deb>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s4-peer-wire-proof" ;
+  triage:branch "feature/pao-s4-peer-wire-proof" ;
+  triage:headSha "aedd04beabaa555343a8d32bc8870c79390a4deb" ;
+  triage:orderIndex 5 .
