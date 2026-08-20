@@ -63,3 +63,7 @@ triage:r8 a triage:Resolution ;
 triage:r9 a triage:Resolution ;
     triage:resolves <urn:atm:triage:finding/AO22-RSH-002> ;
     triage:resolvedAt "2026-08-20T18:29:30Z"^^xsd:dateTime .
+triage:a4 a triage:Assignment ;
+    triage:ofSprint triage:AO2.3 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-20T19:18:28Z"^^xsd:dateTime .
