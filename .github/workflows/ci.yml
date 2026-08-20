@@ -62,7 +62,7 @@ jobs:
       - name: Install sc-compose CLI
         # Template JSON escaping requires the released sc-compose 1.4.0 API.
         # Keep this pin aligned with .claude/lib/sc_compose_dependency.py.
-        run: cargo install --git https://github.com/randlee/sc-compose.git --rev 6a8af1ff46ccd64ae9cc40d7d5c815aa9b0a4661 --locked --bin sc-compose
+        run: python3 .github/scripts/install_sc_compose_cli.py --purpose default
 
       - name: Expose Cargo binaries on PATH
         run: python -c "import os; cargo_bin = os.path.expanduser('~/.cargo/bin'); open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8').write(cargo_bin + os.linesep)"
@@ -199,10 +199,9 @@ jobs:
 
       - name: Install sc-compose CLI for passthrough parity tests
         # The AN.7 process-level tests compare the ATM command with the
-        # pinned upstream CLI on every platform, so the test lane needs the
-        # same source revision already used by just-lint.
+        # pinned upstream CLI on every platform.
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
-        run: cargo install --git https://github.com/randlee/sc-compose.git --rev 113729e60e3409ad8c651a74956ffa5c167dd1b6 --locked --bin sc-compose
+        run: python3 .github/scripts/install_sc_compose_cli.py --purpose parity
 
       - name: Cache cargo registry
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}

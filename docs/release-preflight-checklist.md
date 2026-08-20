@@ -71,7 +71,7 @@ The validator currently accepts these targets:
 | Assert workflow dispatcher ownership (`run_by_agent=publisher`) | CI-only | `.github/workflows/release-preflight.yml` |
 | Normalize workflow version input to `vX.Y.Z` / `X.Y.Z` | CI-only | `.github/workflows/release-preflight.yml` |
 | Install toolchain / `just` / cargo helpers / `codespell` | CI-only | `.github/workflows/release-preflight.yml` |
-| Stage installed docs into deterministic root before validation | CI-only | `.github/workflows/release-preflight.yml` + `scripts/release_artifacts.py stage-install-docs` |
+| Stage installed docs into deterministic root before validation | legacy local preflight | `scripts/validate_release.py`; migration to the shared manifest contract is an AS.2 prerequisite |
 | Upload `release-findings.json` as workflow artifact | CI-only | `.github/workflows/release-preflight.yml` |
 | Confirm completed release notes were provided by `team-lead` | agent-specific, not script-covered | `.claude/agents/publisher.md` |
 | Download and inspect the workflow `release-findings` artifact after preflight | agent-specific, not script-covered | `.claude/agents/publisher.md` |

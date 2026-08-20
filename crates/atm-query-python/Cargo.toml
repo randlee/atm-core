@@ -2,7 +2,7 @@
 name = "atm-query-python"
 # This local analyst binding is not part of the current public release surface.
 publish = false
-version = "1.4.3"
+version = "1.4.4"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
@@ -16,13 +16,17 @@ name = "atm_query"
 crate-type = ["cdylib", "rlib"]
 
 [features]
+default = ["abi3"]
+# The published query wheel uses CPython's stable ABI from 3.11 onward, so
+# one wheel per operating-system/architecture target serves CPython 3.11+.
+abi3 = ["pyo3/abi3-py311"]
 extension-module = ["pyo3/extension-module"]
 
 [dependencies]
 pyo3 = "0.29"
-atm-storage = { path = "../atm-storage", version = "1.4.3" }
-atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.3" }
+atm-storage = { path = "../atm-storage", version = "1.4.4" }
+atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.4" }
 
 [dev-dependencies]
-atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.3", features = ["test-support"] }
+atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.4", features = ["test-support"] }
 tempfile = "3"
