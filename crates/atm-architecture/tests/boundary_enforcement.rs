@@ -1317,22 +1317,61 @@ fn ao2_mtls_stream_adapter_is_the_only_authorized_production_tls_consumer() {
         .expect("mTLS stream adapter boundary must be valid TOML");
     assert!(boundary.dependencies.allowed_dependents.is_empty());
     let source = read_source(&root.join("crates/peer-tls/src/lib.rs"));
-    for forbidden in [
-        "RequestEnvelope",
-        "canonical_api_router",
-        "MessageStore",
-        "PeerWireMode",
-    ] {
-        assert!(
-            !source.contains(forbidden),
-            "peer-tls must remain an mTLS byte-stream-only adapter and reject `{forbidden}`"
-        );
-    }
+    let syntax = syn::parse_file(&source).expect("peer-tls source must parse");
+    let mut visitor = PeerTlsSurfaceVisitor::default();
+    visitor.visit_file(&syntax);
     assert!(
-        source.contains("tokio_rustls")
-            && source.contains("MtlsPeerStreamAdapter")
-            && source.contains("PeerConfigStore"),
+        visitor.forbidden.is_empty(),
+        "peer-tls must remain an mTLS byte-stream-only adapter and reject {:?}",
+        visitor.forbidden
+    );
+    assert!(
+        visitor.required.contains("tokio_rustls")
+            && visitor.required.contains("MtlsPeerStreamAdapter")
+            && visitor.required.contains("PeerConfigStore"),
         "AO2 must retain one concrete Rustls/Tokio-Rustls adapter over configuration and byte streams"
+    );
+}
+
+#[derive(Default)]
+struct PeerTlsSurfaceVisitor {
+    forbidden: BTreeSet<String>,
+    required: BTreeSet<String>,
+}
+
+impl<'ast> Visit<'ast> for PeerTlsSurfaceVisitor {
+    fn visit_ident(&mut self, ident: &'ast syn::Ident) {
+        let name = ident.to_string();
+        if matches!(
+            name.as_str(),
+            "RequestEnvelope" | "canonical_api_router" | "MessageStore" | "PeerWireMode"
+        ) {
+            self.forbidden.insert(name.clone());
+        }
+        if matches!(
+            name.as_str(),
+            "tokio_rustls" | "MtlsPeerStreamAdapter" | "PeerConfigStore"
+        ) {
+            self.required.insert(name);
+        }
+        syn::visit::visit_ident(self, ident);
+    }
+}
+
+#[test]
+fn ao2_mtls_surface_guard_matches_ast_identifiers_not_comments_or_strings() {
+    let comment_only = syn::parse_file("// PeerWireMode\nconst NOTE: &str = \"MessageStore\";")
+        .expect("fixture must parse");
+    let mut comment_visitor = PeerTlsSurfaceVisitor::default();
+    comment_visitor.visit_file(&comment_only);
+    assert!(comment_visitor.forbidden.is_empty());
+
+    let forbidden_use = syn::parse_file("use crate::PeerWireMode;").expect("fixture must parse");
+    let mut forbidden_visitor = PeerTlsSurfaceVisitor::default();
+    forbidden_visitor.visit_file(&forbidden_use);
+    assert_eq!(
+        forbidden_visitor.forbidden,
+        BTreeSet::from(["PeerWireMode".to_owned()])
     );
 }
 
