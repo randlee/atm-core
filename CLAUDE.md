@@ -111,6 +111,12 @@ Every sprint follows this pattern:
 5. **Commit/Push/PR** to phase integration branch
 6. **Agent-teams review** documenting what worked/didn't
 
+**PR/QA is immediate, CI is a merge gate only — never a dispatch gate:**
+- Open the PR and dispatch `quality-mgr` for review the instant dev pushes. Do NOT hold off sending a task to `quality-mgr` to wait for CI to run or finish.
+- Never poll or watch CI runs yourself. CI checks a completely different thing than `quality-mgr` reviews (build/lint/test infra vs. architecture/requirements/boundary/best-practices) — a CI run in progress or even red is not a reason to delay QA.
+- The only thing to check for on a PR before/independent of QA is `mergeable == false` (a real merge conflict) — that needs action (rebase/resolve). A pending or failing CI check on its own needs no action and blocks nothing except the final merge.
+- CI green is required only at actual merge time, never as a precondition for opening a PR or dispatching QA.
+
 ### Phase Integration Branch Strategy
 
 Each phase gets a dedicated integration branch off `develop`:
