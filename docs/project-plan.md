@@ -1333,14 +1333,14 @@ Status summary:
 
 Sprint line:
 
-- `AS.1` `AS.1-overlay-contract.md` — exact source parity, ownership, and
+- `AS.1 [IN PROGRESS]` `AS.1-overlay-contract.md` — exact source parity, ownership, and
   upstream safety-capability gates
 - `AS.2` `AS.2-consumer-manifest-contract.md` — consumer manifest and unified
   release-version contract
 - `AS.3` `AS.3-worktree-preflight-proof.md` — canonical worktree preflight
   proof
-- `AS.4` `AS.4-authorized-pypi-1.4.3.md` — separately authorized immutable
-  main PyPI release
+- `AS.4` `AS.4-authorized-pypi-1.4.3.md` — separately authorized, fresh
+  `1.4.4` PyPI-only release
 - `AS.5` `AS.5-main-migration-merge.md` — verified migration promotion from
   `develop` to `main`
 - `AS.6` `AS.6-full-1.4.4-release.md` — first full canonical release

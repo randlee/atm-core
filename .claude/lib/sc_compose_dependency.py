@@ -6,6 +6,7 @@ import re
 
 
 SC_COMPOSE_SOURCE_REV = "6a8af1ff46ccd64ae9cc40d7d5c815aa9b0a4661"
+SC_COMPOSE_PARITY_SOURCE_REV = "113729e60e3409ad8c651a74956ffa5c167dd1b6"
 MIN_SC_COMPOSE = (1, 4, 0)
 MIN_SC_COMPOSE_TEXT = (
     ">= 1.4.0 (released v1.4.0 source revision "
@@ -16,6 +17,10 @@ MIN_SC_COMPOSE_BINDING_TEXT = ">= 1.2.0"
 SC_COMPOSE_INSTALL = (
     "cargo install --git https://github.com/randlee/sc-compose.git "
     f"--rev {SC_COMPOSE_SOURCE_REV} --locked --bin sc-compose"
+)
+SC_COMPOSE_PARITY_INSTALL = (
+    "cargo install --git https://github.com/randlee/sc-compose.git "
+    f"--rev {SC_COMPOSE_PARITY_SOURCE_REV} --locked --bin sc-compose"
 )
 SC_COMPOSE_BINDING_INSTALL = (
     "python3 -m pip install --user --break-system-packages "
