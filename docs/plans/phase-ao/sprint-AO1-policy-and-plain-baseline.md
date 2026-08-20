@@ -88,6 +88,26 @@ can introduce an mTLS dependency.
    The same guards must reject a second HTTP route, DTO, ACK sender,
    persistence path, hook path, or benchmark-only daemon.
 
+### Existing plaintext characterization matrix
+
+AO.1 does not duplicate the pre-existing, live direct-peer characterization
+suite. The following tests are the retained oracle that the AO.1 policy and
+guard work must continue to pass; together they cover every behavior named in
+Deliverable 3.
+
+| Behavior | Existing test evidence |
+| --- | --- |
+| Bind and readiness | `crates/atm-http-runtime/src/lib.rs` — `runtime_health_becomes_ready_only_after_all_enabled_binds_and_not_ready_during_drain` |
+| Host-qualified outbound selection | `crates/atm-http-runtime/src/lib.rs` — `direct_peer_listener_uses_the_canonical_router_and_normalizes_provenance` (host-qualified recipient over the direct peer client) |
+| Canonical `WriteRequest` encoding | `crates/atm-http-runtime/src/lib.rs` — `direct_peer_listener_uses_the_canonical_router_and_normalizes_provenance` (a `RequestEnvelope::Write` is carried by the real direct peer client) |
+| Router provenance | `crates/atm-http-runtime/src/lib.rs` — `direct_peer_listener_uses_the_canonical_router_and_normalizes_provenance` |
+| Durable write | `crates/atm-http-runtime/src/storage_and_nudge_router.rs` — `direct_peer_runtime_reaches_storage_once_and_skips_duplicate_hook` |
+| Hook warning | `crates/atm-http-runtime/src/storage_and_nudge_router.rs` — `direct_peer_hook_failure_keeps_the_write_successful_with_a_warning` |
+| Acknowledgement | `crates/atm-http-runtime/src/storage_and_nudge_router.rs` — `local_ack_routes_to_the_received_peer_and_peer_receipt_does_not_reacknowledge` |
+| Duplicate behavior | `crates/atm-http-runtime/src/storage_and_nudge_router.rs` — `direct_peer_runtime_reaches_storage_once_and_skips_duplicate_hook` |
+| Typed connection failure | `crates/atm-http-runtime/src/client.rs` — `direct_peer_connection_failure_names_the_remote_authority` |
+| Shutdown/readiness behavior | `crates/atm-http-runtime/src/lib.rs` — `loopback_shutdown_drains_an_in_flight_canonical_request_before_record_cleanup` and `runtime_health_becomes_ready_only_after_all_enabled_binds_and_not_ready_during_drain` |
+
 ## Acceptance Criteria
 
 - The accepted records consistently distinguish normal mTLS from explicitly
