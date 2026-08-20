@@ -107,7 +107,7 @@ AO.1 development pushed; AO.1 PR merged before AO.2 PR completion.
 
 ## Required Validation
 
-- `cargo test -p peer-tls -p atm-core -p atm-storage`
+- `cargo test -p peer-tls -p agent-team-mail-core -p atm-storage`
 - `cargo test -p atm-architecture --test boundary_enforcement`
 - `just lint`
 - `just test`

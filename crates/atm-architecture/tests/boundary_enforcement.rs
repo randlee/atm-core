@@ -78,6 +78,24 @@ const AI11_RETIRED_WINDOWS_TRANSPORT_DEPENDENCIES: &[&str] = &[
     "windows-named-pipe",
 ];
 
+fn contains_adapter_availability_inference(source: &str) -> bool {
+    const ADAPTER_TERMS: &[&str] = &["adapter", "peer-wire", "peer_wire", "transport"];
+    const AVAILABILITY_TERMS: &[&str] = &[
+        "availability",
+        "available",
+        "enabled",
+        "present",
+        "supported",
+        "configured",
+    ];
+
+    source.lines().any(|line| {
+        let line = line.to_ascii_lowercase();
+        ADAPTER_TERMS.iter().any(|term| line.contains(term))
+            && AVAILABILITY_TERMS.iter().any(|term| line.contains(term))
+    })
+}
+
 #[test]
 fn daemon_must_not_read_caller_workspace_config() {
     let root = workspace_root();
@@ -125,6 +143,153 @@ fn daemon_must_not_read_caller_workspace_config() {
     assert!(
         findings.is_empty(),
         "daemon source must not restore caller workspace config access: {findings:?}"
+    );
+}
+
+#[test]
+fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
+    let root = workspace_root();
+    let bootstrap = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
+    let runtime = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
+    let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
+    let policy = read_source(&root.join("crates/atm-core/src/peer_wire.rs"));
+
+    let bootstrap_direct_setup = bootstrap
+        .split("async fn run_replacement_daemon_with_selector")
+        .nth(1)
+        .and_then(|source| {
+            source
+                .split("/// Emit the benchmark/supervisor marker")
+                .next()
+        })
+        .expect("replacement bootstrap direct-peer setup");
+    let direct_listener = runtime
+        .split("async fn bind_configured_direct_peer_listener")
+        .nth(1)
+        .and_then(|source| source.split("async fn bind_loopback_listener").next())
+        .expect("direct-peer listener implementation");
+    let direct_connector = client
+        .split("impl DirectPeerTcpConnector")
+        .nth(1)
+        .and_then(|source| source.split("impl LoopbackTcpConnector").next())
+        .expect("direct-peer connector implementation");
+
+    assert!(
+        bootstrap_direct_setup.contains("DirectPeerTcpConfig::standard()"),
+        "AO2 plaintext characterization must retain the existing standard direct-peer configuration"
+    );
+    assert!(
+        client.contains("struct DirectPeerTcpConnector")
+            && client.contains("pub fn direct_peer_tcp_client")
+            && direct_connector.contains("execute_reqwest_request"),
+        "AO2 plaintext characterization must retain the shared direct-peer connector and HTTP exchange"
+    );
+    assert!(
+        direct_listener.contains("TcpListener::bind")
+            && runtime.contains("canonical_api_router(")
+            && runtime.contains("AuthenticatedConnector::peer_socket()"),
+        "AO2 plaintext listener must enter the ordinary canonical router"
+    );
+    for (scope, source) in [
+        ("bootstrap direct-peer setup", bootstrap_direct_setup),
+        ("direct-peer listener", direct_listener),
+        ("direct-peer connector", direct_connector),
+    ] {
+        for forbidden in ["peer_tls", "rustls", "PeerConfigStore", "certificate"] {
+            assert!(
+                !source.contains(forbidden),
+                "AO2 plaintext {scope} must not inspect TLS/configuration/adapter state `{forbidden}`"
+            );
+        }
+        assert!(
+            !contains_adapter_availability_inference(source),
+            "AO2 plaintext {scope} must not infer its mode from adapter availability or synonyms"
+        );
+    }
+    for forbidden in [
+        "std::env",
+        "rustls",
+        "PeerConfigStore",
+        "TlsConnector",
+        "TlsAcceptor",
+    ] {
+        assert!(
+            !policy.contains(forbidden),
+            "AO2 peer-wire policy must remain transport-neutral and reject `{forbidden}`"
+        );
+    }
+    assert!(
+        policy.contains("pub enum PeerWireSecurity")
+            && policy.contains("Mtls")
+            && policy.contains("PlaintextTest")
+            && policy.contains("pub struct PeerWireMode")
+            && policy.contains("pub const fn mtls()"),
+        "AO2 needs a typed mode vocabulary whose normal policy is mTLS"
+    );
+}
+
+#[test]
+fn ao2_peer_wire_policy_keeps_one_error_registry_and_one_http_pipeline() {
+    let root = workspace_root();
+    let error_registry = read_source(&root.join("crates/atm-error/src/error_codes.rs"));
+    let error_catalog = read_source(&root.join("crates/atm-storage/src/error_catalog.rs"));
+    let adr = read_source(&root.join("docs/adr/ADR-047-layered-peer-wire-security.md"));
+    let requirements = read_source(&root.join("docs/requirements.md"));
+    let daemon_requirements = read_source(&root.join("docs/atm-daemon/requirements.md"));
+
+    for (code, variant) in [
+        ("ATM_PEER_WIRE_MODE_INVALID", "PeerWireModeInvalid"),
+        (
+            "ATM_PEER_WIRE_MODE_SOURCE_FORBIDDEN",
+            "PeerWireModeSourceForbidden",
+        ),
+        (
+            "ATM_PEER_WIRE_PLAINTEXT_AUTHENTICATION_REQUIRED",
+            "PeerWirePlaintextAuthenticationRequired",
+        ),
+    ] {
+        assert!(
+            error_registry.contains(code) && error_catalog.contains(variant),
+            "AO2 peer-wire failure `{code}` must use the central registry and catalog recovery"
+        );
+    }
+    for required in [
+        "PeerWireMode` launch policy",
+        "It does not select an HTTP",
+        "never falls back to plaintext",
+        "Plaintext-test evidence cannot satisfy",
+    ] {
+        assert!(
+            adr.contains(required),
+            "ADR-047 must retain the AO2 policy guarantee `{required}`"
+        );
+    }
+    assert!(
+        requirements
+            .contains("Mode ownership and the layered-stream constraint are defined by ADR-047.")
+            && daemon_requirements.contains("ADR-047 owns the typed launch-mode selection"),
+        "both core and daemon requirements must cite the accepted ADR-047 policy"
+    );
+}
+
+#[test]
+fn ao2_benchmark_harness_cannot_introduce_a_second_daemon_pipeline() {
+    let root = workspace_root();
+    let bootstrap = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
+    let benchmark_entrypoint =
+        read_source(&root.join("crates/atm-daemon-bootstrap/src/bin/atm-daemon-benchmark.rs"));
+
+    assert!(
+        bootstrap.contains("#[cfg(feature = \"benchmark-harness\")]")
+            && bootstrap.contains("pub async fn run_benchmark_daemon")
+            && bootstrap.contains("run_replacement_daemon_with_selector("),
+        "the retained benchmark harness must stay feature-gated and reuse the replacement daemon"
+    );
+    assert!(
+        benchmark_entrypoint.contains("atm_daemon_bootstrap::run_benchmark_daemon(mode).await")
+            && !benchmark_entrypoint.contains("canonical_api_router(")
+            && !benchmark_entrypoint.contains("TcpListener::bind"),
+        "the benchmark entrypoint must not create a second HTTP route or listener pipeline"
     );
 }
 
@@ -292,27 +457,73 @@ fn ak2_peer_worker_symbols_are_absent_from_production() {
         "crates/atm-storage/src/contract.rs",
         "crates/atm-storage-rusqlite/src/peer_config_store.rs",
     ];
-    let retired_symbols = [
-        "PeerDeliveryCoordinator",
-        "PeerDrainCoordinator",
-        "PeerPostCommitWorkQueue",
-        "PostCommitWorkKey::PeerDelivery",
-        "PeerSyncPolicy",
-        "PeerSyncRequest",
-        "PeerSyncOutcome",
-        "PeerLinkStatus",
-        "PeerWireSecurity",
-        "HttpsTransport",
-    ];
     for source in production_sources {
         let contents = read_source(&root.join(source));
-        for symbol in retired_symbols {
-            assert!(
-                !contents.contains(symbol),
-                "AK.2 production source `{source}` must not retain `{symbol}`"
-            );
-        }
+        let retired = retired_peer_worker_symbols_in_source(&contents);
+        assert!(
+            retired.is_empty(),
+            "AK.2 production source `{source}` must not retain retired symbols {retired:?}"
+        );
     }
+}
+
+fn retired_peer_worker_symbols_in_source(source: &str) -> BTreeSet<String> {
+    let syntax = syn::parse_file(source).expect("production source must parse for AK.2 guard");
+    let mut visitor = RetiredPeerWorkerSymbolVisitor::default();
+    visitor.visit_file(&syntax);
+    visitor.found
+}
+
+#[derive(Default)]
+struct RetiredPeerWorkerSymbolVisitor {
+    found: BTreeSet<String>,
+}
+
+impl<'ast> Visit<'ast> for RetiredPeerWorkerSymbolVisitor {
+    fn visit_path(&mut self, path: &'ast syn::Path) {
+        const RETIRED_TERMINALS: &[&str] = &[
+            "PeerDeliveryCoordinator",
+            "PeerDrainCoordinator",
+            "PeerPostCommitWorkQueue",
+            "PeerSyncPolicy",
+            "PeerSyncRequest",
+            "PeerSyncOutcome",
+            "PeerLinkStatus",
+            "HttpsTransport",
+        ];
+
+        let segments: Vec<_> = path
+            .segments
+            .iter()
+            .map(|segment| segment.ident.to_string())
+            .collect();
+        if let Some(terminal) = segments.last()
+            && RETIRED_TERMINALS.contains(&terminal.as_str())
+        {
+            self.found.insert(terminal.clone());
+        }
+        if segments
+            .windows(2)
+            .any(|pair| matches!(pair, [first, second] if first == "PostCommitWorkKey" && second == "PeerDelivery"))
+        {
+            self.found
+                .insert("PostCommitWorkKey::PeerDelivery".to_owned());
+        }
+        syn::visit::visit_path(self, path);
+    }
+}
+
+#[test]
+fn ak2_retirement_guard_matches_symbols_not_substrings() {
+    assert!(
+        retired_peer_worker_symbols_in_source("pub struct PeerWireSecurity;").is_empty(),
+        "AO2's PeerWireSecurity vocabulary must not collide with retired AK.2 identifiers"
+    );
+    assert_eq!(
+        retired_peer_worker_symbols_in_source("fn f(_: PeerSyncPolicy) {}"),
+        BTreeSet::from(["PeerSyncPolicy".to_owned()]),
+        "the AK.2 guard must still reject an exact retired symbol"
+    );
 }
 
 #[test]

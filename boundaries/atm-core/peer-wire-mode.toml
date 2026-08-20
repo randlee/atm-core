@@ -1,0 +1,47 @@
+boundary_id = "BOUNDARY-PeerWireMode"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "PeerWireMode"
+
+[public]
+facade = "PeerWireMode"
+notes = "Transport-neutral daemon peer-wire policy types; no TLS implementation, configuration, or runtime selection."
+
+[implementation]
+type = "PeerWireMode"
+module = "atm_core::peer_wire"
+visibility = "public"
+constructor = "public"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["peer_wire_policy_vocabulary"]
+io_forbidden = ["socket_io", "tls_adapter", "sqlite", "daemon_lifecycle", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon-bootstrap", "atm-http-runtime", "atm-peer-tls-interop"]
+allowed_dependencies = []
+forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["PeerWireSecurity"]
+response_types = ["PeerWireMode"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["environment_mode_selection", "adapter_availability_inference"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-PEER-WIRE-MODE"]
+review_gates = ["mode_selected_once_at_daemon_launch", "no_tls_types_in_policy", "no_environment_or_durable_mode_source"]
+
+[status]
+state = "concrete_landed"
+notes = ["AO2.1 owns the typed policy contract; AO2.3 owns daemon argument parsing and runtime mode wiring."]

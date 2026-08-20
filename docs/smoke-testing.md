@@ -27,6 +27,9 @@ replacement for functional smoke coverage. Each successful run writes its
 immutable JSON, its XHTML panel, and the aggregate report beneath
 `site/reports/`; the recipe rebuilds the report automatically. Use
 `just benchmark-report` only to rebuild or inspect already-published evidence.
+Peer-wire evidence must record the active ADR-047 security mode. Normal
+benchmark and release evidence is mutual TLS; `plaintext-test` is explicit
+diagnostic evidence only and cannot satisfy mTLS or peer-allowlist criteria.
 
 The routed smoke implementations are deliberately not independent public
 commands:

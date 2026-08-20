@@ -3957,6 +3957,8 @@ mail correctness.
 - `REQ-CORE-TRANSPORT-002B1` A daemon may run an explicit, process-local
   plaintext peer-wire profile only for debug/smoke diagnosis.
 
+  Mode ownership and the layered-stream constraint are defined by ADR-047.
+
   Required behavior:
   - default and every normal release invocation use mTLS plus the exact peer
     allowlist; no TLS, certificate, or allowlist failure may fall back to

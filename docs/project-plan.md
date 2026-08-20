@@ -1306,6 +1306,19 @@ integrates through `integrate/phase-ao2`; the earlier AO plan is retained only
 as [archived reference](./archive/phase-ao/).  The authoritative plan is
 [Phase AO plan](./plans/phase-ao/plan-phase-ao.md).
 
+Sprint line:
+- `AO.1` `feature/pao-s1-peer-wire-policy` [COMPLETE] — ADR-047, typed
+  `PeerWireMode` (mTLS default), peer-wire error/recovery contracts, boundary
+  records, and executable guards proving the plaintext arm stays on the
+  existing direct-peer canonical HTTP pipeline
+- `AO.2` `feature/pao-s2-isolated-mtls-stream-adapter` — bounded `peer-tls`
+  adapter with positive and negative stream evidence
+- `AO.3` `feature/pao-s3-runtime-peer-wire-mode` — one daemon build selects
+  the original plaintext or mTLS stream establishment without application
+  drift
+- `AO.4` `feature/pao-s4-peer-wire-proof` — shipped-daemon plaintext/mTLS
+  proof and compatible-baseline performance evidence
+
 ## 47. Phase AP — Outbound-Only Corporate Network Peer Connectivity [PROPOSED]
 
 Phase AP investigates support for a firewalled daemon that may initiate an
