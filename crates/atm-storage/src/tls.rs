@@ -12,6 +12,7 @@ use rustls::server::danger::{ClientCertVerified, ClientCertVerifier};
 use rustls::{CertificateError, DigitallySignedStruct, Error, ServerConnection, SignatureScheme};
 use sha2::{Digest, Sha256};
 use x509_parser::prelude::parse_x509_certificate;
+use zeroize::Zeroizing;
 
 use crate::contract::{LocalCertificate, TrustedPeer};
 use crate::error::AtmError;
@@ -44,12 +45,15 @@ impl TlsIdentity {
     /// Parse and validate a durable certificate/key bundle.
     pub fn load(certificate: &LocalCertificate) -> Result<Self, AtmError> {
         let path = Path::new(certificate.private_key_ref.as_str());
-        let pem = std::fs::read(path).map_err(|source| {
+        // The certificate chain is copied into rustls-owned DER values and the
+        // private key into `PrivateKeyDer`; the source PEM must not remain in
+        // process memory after this parser scope exits.
+        let pem = Zeroizing::new(std::fs::read(path).map_err(|source| {
             AtmError::daemon_unavailable_with_cause(
                 "failed to open the configured TLS certificate/key PEM bundle",
                 source,
             )
-        })?;
+        })?);
         let certificates = CertificateDer::pem_slice_iter(&pem)
             .collect::<Result<Vec<_>, _>>()
             .map_err(|source| {

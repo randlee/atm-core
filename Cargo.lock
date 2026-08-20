@@ -349,6 +349,7 @@ dependencies = [
  "toml",
  "ulid",
  "x509-parser",
+ "zeroize",
 ]
 
 [[package]]

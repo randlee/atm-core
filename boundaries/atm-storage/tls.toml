@@ -22,7 +22,7 @@ io_forbidden = ["socket_io", "message_delivery", "recipient_routing", "retry_que
 
 [dependencies]
 allowed_dependents = ["atm-peer-tls-interop", "peer-tls"]
-allowed_dependencies = ["atm-error", "rustls", "sha2", "x509-parser"]
+allowed_dependencies = ["atm-error", "rustls", "sha2", "x509-parser", "zeroize"]
 forbidden_edges = ["atm-storage -> atm-core", "atm-storage -> atm-storage-rusqlite"]
 
 [references]

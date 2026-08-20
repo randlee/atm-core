@@ -1302,6 +1302,51 @@ fn storage_tls_boundary_lists_only_current_tls_consumers() {
 }
 
 #[test]
+fn tls_identity_scrubs_the_source_pem_buffer_after_parsing() {
+    let source = read_source(&workspace_root().join("crates/atm-storage/src/tls.rs"));
+    let syntax = syn::parse_file(&source).expect("storage TLS source must parse");
+    let mut visitor = PemScrubbingVisitor::default();
+    visitor.visit_file(&syntax);
+    assert!(
+        visitor.wraps_pem_in_zeroizing,
+        "TlsIdentity::load must retain its source PEM in Zeroizing so private-key bytes are scrubbed after parsing"
+    );
+}
+
+#[derive(Default)]
+struct PemScrubbingVisitor {
+    wraps_pem_in_zeroizing: bool,
+}
+
+impl<'ast> Visit<'ast> for PemScrubbingVisitor {
+    fn visit_local(&mut self, local: &'ast syn::Local) {
+        if let syn::Pat::Ident(binding) = &local.pat
+            && binding.ident == "pem"
+            && local.init.as_ref().is_some_and(|init| {
+                matches!(
+                    init.expr.as_ref(),
+                    syn::Expr::Call(call) if is_zeroizing_constructor(call)
+                )
+            })
+        {
+            self.wraps_pem_in_zeroizing = true;
+        }
+        syn::visit::visit_local(self, local);
+    }
+}
+
+fn is_zeroizing_constructor(call: &syn::ExprCall) -> bool {
+    let syn::Expr::Path(path) = call.func.as_ref() else {
+        return false;
+    };
+    path.path
+        .segments
+        .iter()
+        .map(|segment| segment.ident.to_string())
+        .eq(["Zeroizing".to_owned(), "new".to_owned()])
+}
+
+#[test]
 fn ao2_mtls_stream_adapter_is_the_only_authorized_production_tls_consumer() {
     let root = workspace_root();
     for (source, target) in [
