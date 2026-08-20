@@ -68,6 +68,18 @@ Error codes should describe the failure class, not a specific prose message.
 - `ATM_TEAM_NOT_FOUND`
 - `ATM_AGENT_NOT_FOUND`
 
+### 5.2.1 Peer-Wire Policy
+
+- `ATM_PEER_WIRE_MODE_INVALID` — `--peer-wire-security` did not name
+  `mutual-tls` or `plaintext-test`; correct the daemon launch argument and
+  restart.
+- `ATM_PEER_WIRE_MODE_SOURCE_FORBIDDEN` — an environment variable or durable
+  setting attempted to select peer-wire mode; remove it and use the one daemon
+  launch argument.
+- `ATM_PEER_WIRE_PLAINTEXT_AUTHENTICATION_REQUIRED` — untrusted
+  `plaintext-test` was asked to satisfy authenticated peer work; restart in
+  normal mutual-TLS mode and verify peer configuration.
+
 ### 5.3 Mailbox And Message Validation
 
 - `ATM_MAILBOX_READ_FAILED`

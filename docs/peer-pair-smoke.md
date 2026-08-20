@@ -139,6 +139,8 @@ interface only to the private test overlay address used by the participating
 hosts. The profile disables TLS, certificate pinning, and the peer allowlist;
 it is never safe to bind it to a public or shared network interface. Restart
 without `--peer-wire-security plaintext-test` before any non-diagnostic use.
+It remains the ordinary direct-peer HTTP pipeline; its evidence must be labeled
+`plaintext-test` and never used to claim mTLS or peer-allowlist coverage (ADR-047).
 
 The runner prints one `PASS` or `FAIL` line for local doctor, each peer doctor,
 each peer send/read pair, and the evidence path. It exits zero only when every

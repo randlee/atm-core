@@ -42,6 +42,12 @@ pub enum AtmErrorCode {
     DaemonAutoStartFailed,
     DaemonConnectionSaturated,
     RemoteDeliveryUnconfirmed,
+    /// The daemon launch argument did not name a supported peer-wire mode.
+    PeerWireModeInvalid,
+    /// A non-launch source attempted to select the daemon peer-wire mode.
+    PeerWireModeSourceForbidden,
+    /// Plaintext diagnostic mode was asked to satisfy authenticated peer work.
+    PeerWirePlaintextAuthenticationRequired,
     PeerConfigValidationFailed,
     CertificateOperationFailed,
     BindPreflightFailed,
@@ -180,6 +186,11 @@ impl AtmErrorCode {
             Self::DaemonAutoStartFailed => "ATM_DAEMON_AUTO_START_FAILED",
             Self::DaemonConnectionSaturated => "ATM_DAEMON_CONNECTION_SATURATED",
             Self::RemoteDeliveryUnconfirmed => "REMOTE_DELIVERY_UNCONFIRMED",
+            Self::PeerWireModeInvalid => "ATM_PEER_WIRE_MODE_INVALID",
+            Self::PeerWireModeSourceForbidden => "ATM_PEER_WIRE_MODE_SOURCE_FORBIDDEN",
+            Self::PeerWirePlaintextAuthenticationRequired => {
+                "ATM_PEER_WIRE_PLAINTEXT_AUTHENTICATION_REQUIRED"
+            }
             Self::PeerConfigValidationFailed => "ATM_PEER_CONFIG_VALIDATION_FAILED",
             Self::CertificateOperationFailed => "ATM_CERTIFICATE_OPERATION_FAILED",
             Self::BindPreflightFailed => "ATM_BIND_PREFLIGHT_FAILED",
@@ -338,6 +349,11 @@ fn parse_daemon_or_address_code(value: &str) -> Option<AtmErrorCode> {
         "ATM_DAEMON_AUTO_START_FAILED" => AtmErrorCode::DaemonAutoStartFailed,
         "ATM_DAEMON_CONNECTION_SATURATED" => AtmErrorCode::DaemonConnectionSaturated,
         "REMOTE_DELIVERY_UNCONFIRMED" => AtmErrorCode::RemoteDeliveryUnconfirmed,
+        "ATM_PEER_WIRE_MODE_INVALID" => AtmErrorCode::PeerWireModeInvalid,
+        "ATM_PEER_WIRE_MODE_SOURCE_FORBIDDEN" => AtmErrorCode::PeerWireModeSourceForbidden,
+        "ATM_PEER_WIRE_PLAINTEXT_AUTHENTICATION_REQUIRED" => {
+            AtmErrorCode::PeerWirePlaintextAuthenticationRequired
+        }
         "ATM_PEER_CONFIG_VALIDATION_FAILED" => AtmErrorCode::PeerConfigValidationFailed,
         "ATM_CERTIFICATE_OPERATION_FAILED" => AtmErrorCode::CertificateOperationFailed,
         "ATM_BIND_PREFLIGHT_FAILED" => AtmErrorCode::BindPreflightFailed,

@@ -129,6 +129,134 @@ fn daemon_must_not_read_caller_workspace_config() {
 }
 
 #[test]
+fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
+    let root = workspace_root();
+    let bootstrap = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
+    let runtime = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
+    let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
+    let policy = read_source(&root.join("crates/atm-core/src/peer_wire.rs"));
+
+    let bootstrap_direct_setup = bootstrap
+        .split("async fn run_replacement_daemon_with_selector")
+        .nth(1)
+        .and_then(|source| {
+            source
+                .split("/// Emit the benchmark/supervisor marker")
+                .next()
+        })
+        .expect("replacement bootstrap direct-peer setup");
+    let direct_listener = runtime
+        .split("async fn bind_configured_direct_peer_listener")
+        .nth(1)
+        .and_then(|source| source.split("async fn bind_loopback_listener").next())
+        .expect("direct-peer listener implementation");
+    let direct_connector = client
+        .split("impl DirectPeerTcpConnector")
+        .nth(1)
+        .and_then(|source| source.split("impl LoopbackTcpConnector").next())
+        .expect("direct-peer connector implementation");
+
+    assert!(
+        bootstrap_direct_setup.contains("DirectPeerTcpConfig::standard()"),
+        "AO2 plaintext characterization must retain the existing standard direct-peer configuration"
+    );
+    assert!(
+        client.contains("struct DirectPeerTcpConnector")
+            && client.contains("pub fn direct_peer_tcp_client")
+            && direct_connector.contains("execute_reqwest_request"),
+        "AO2 plaintext characterization must retain the shared direct-peer connector and HTTP exchange"
+    );
+    assert!(
+        direct_listener.contains("TcpListener::bind")
+            && runtime.contains("canonical_api_router(")
+            && runtime.contains("AuthenticatedConnector::peer_socket()"),
+        "AO2 plaintext listener must enter the ordinary canonical router"
+    );
+    for (scope, source) in [
+        ("bootstrap direct-peer setup", bootstrap_direct_setup),
+        ("direct-peer listener", direct_listener),
+        ("direct-peer connector", direct_connector),
+    ] {
+        for forbidden in [
+            "peer_tls",
+            "rustls",
+            "PeerConfigStore",
+            "certificate",
+            "adapter availability",
+        ] {
+            assert!(
+                !source.contains(forbidden),
+                "AO2 plaintext {scope} must not inspect TLS/configuration/adapter state `{forbidden}`"
+            );
+        }
+    }
+    for forbidden in [
+        "std::env",
+        "rustls",
+        "PeerConfigStore",
+        "TlsConnector",
+        "TlsAcceptor",
+    ] {
+        assert!(
+            !policy.contains(forbidden),
+            "AO2 peer-wire policy must remain transport-neutral and reject `{forbidden}`"
+        );
+    }
+    assert!(
+        policy.contains("pub enum PeerWireSecurity")
+            && policy.contains("Mtls")
+            && policy.contains("PlaintextTest")
+            && policy.contains("pub struct PeerWireMode")
+            && policy.contains("pub const fn mtls()"),
+        "AO2 needs a typed mode vocabulary whose normal policy is mTLS"
+    );
+}
+
+#[test]
+fn ao2_peer_wire_policy_keeps_one_error_registry_and_one_http_pipeline() {
+    let root = workspace_root();
+    let error_registry = read_source(&root.join("crates/atm-error/src/error_codes.rs"));
+    let error_catalog = read_source(&root.join("crates/atm-storage/src/error_catalog.rs"));
+    let adr = read_source(&root.join("docs/adr/ADR-047-layered-peer-wire-security.md"));
+    let requirements = read_source(&root.join("docs/requirements.md"));
+    let daemon_requirements = read_source(&root.join("docs/atm-daemon/requirements.md"));
+
+    for (code, variant) in [
+        ("ATM_PEER_WIRE_MODE_INVALID", "PeerWireModeInvalid"),
+        (
+            "ATM_PEER_WIRE_MODE_SOURCE_FORBIDDEN",
+            "PeerWireModeSourceForbidden",
+        ),
+        (
+            "ATM_PEER_WIRE_PLAINTEXT_AUTHENTICATION_REQUIRED",
+            "PeerWirePlaintextAuthenticationRequired",
+        ),
+    ] {
+        assert!(
+            error_registry.contains(code) && error_catalog.contains(variant),
+            "AO2 peer-wire failure `{code}` must use the central registry and catalog recovery"
+        );
+    }
+    for required in [
+        "PeerWireMode` launch policy",
+        "It does not select an HTTP",
+        "never falls back to plaintext",
+        "Plaintext-test evidence cannot satisfy",
+    ] {
+        assert!(
+            adr.contains(required),
+            "ADR-047 must retain the AO2 policy guarantee `{required}`"
+        );
+    }
+    assert!(
+        requirements
+            .contains("Mode ownership and the layered-stream constraint are defined by ADR-047.")
+            && daemon_requirements.contains("ADR-047 owns the typed launch-mode selection"),
+        "both core and daemon requirements must cite the accepted ADR-047 policy"
+    );
+}
+
+#[test]
 fn acknowledgement_cannot_restore_a_second_write_pipeline() {
     let root = workspace_root();
     let send = fs::read_to_string(root.join("crates/atm-core/src/send/mod.rs"))

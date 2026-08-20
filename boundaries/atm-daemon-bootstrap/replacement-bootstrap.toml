@@ -17,7 +17,7 @@ constructor = "public"
 roots = ["atm_daemon_bootstrap::run_replacement_daemon"]
 
 [ownership]
-io_owns = ["singleton_owner_lock", "concrete_backend_selection", "receiver_hook_harness_selection", "shutdown_signal_wait"]
+io_owns = ["singleton_owner_lock", "concrete_backend_selection", "receiver_hook_harness_selection", "shutdown_signal_wait", "daemon_launch_peer_wire_mode_selection"]
 io_forbidden = ["http_server", "raw_http_framing", "direct_rusqlite_calls", "graft_crate_dependency", "replay_or_resend", "tls_adapter"]
 
 [dependencies]
@@ -33,7 +33,7 @@ forbidden = []
 request_types = ["core RuntimeAssembly inputs", "core sealed MessageReceivedHookSelector"]
 response_types = ["typed runtime lifecycle outcome"]
 error_types = ["AtmError"]
-notes = ["The concrete storage factory is legal only at this composition boundary; atm-daemon and atm-http-runtime remain backend-neutral."]
+notes = ["The concrete storage factory is legal only at this composition boundary; atm-daemon and atm-http-runtime remain backend-neutral.", "AO2.3 parses the one explicit daemon launch argument into the core PeerWireMode; environment, durable settings, and TLS availability never select it."]
 
 [testing]
 allowed_test_double_paths = []

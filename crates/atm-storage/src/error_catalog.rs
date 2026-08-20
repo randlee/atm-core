@@ -116,6 +116,15 @@ const fn daemon_guidance(code: AtmErrorCode) -> Option<&'static str> {
         AtmErrorCode::DaemonConnectionSaturated => {
             Some("Wait for the daemon to finish an in-flight request, then retry.")
         }
+        AtmErrorCode::PeerWireModeInvalid => Some(
+            "Use `mutual-tls` or `plaintext-test` with --peer-wire-security, then restart the daemon.",
+        ),
+        AtmErrorCode::PeerWireModeSourceForbidden => Some(
+            "Remove the environment or durable peer-wire setting and use the documented daemon launch argument.",
+        ),
+        AtmErrorCode::PeerWirePlaintextAuthenticationRequired => Some(
+            "Restart in mutual-TLS mode and verify the enabled peer identity, certificate, and exact trust record.",
+        ),
         _ => None,
     }
 }
