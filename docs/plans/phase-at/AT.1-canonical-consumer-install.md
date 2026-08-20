@@ -18,11 +18,10 @@ paths use identical shared assets and tool bootstrap.
 
 ## Deliverables
 
-1. Record the selected immutable `sc-publish` commit and package digest in the
-   ATM consumer input/evidence. The pin must resolve upstream issues #39–#41
-   (see phase README); `ce85b4d` is the floor, not the pin. Run the packaged
-   installer; do not copy, modify, or regenerate individual shared files by
-   hand.
+1. Record the pinned immutable `sc-publish` commit
+   (`0fa5b05e44a655ec76ada8a6c2b24714d47acca1`, see phase README) and package
+   digest in the ATM consumer input/evidence. Run the packaged installer; do
+   not copy, modify, or regenerate individual shared files by hand.
 2. Author the complete ATM-owned `release/sc-publish-consumer-input.json` for
    all release crates, Python distributions, binaries, channels, publish
    order, and version source. Rendered manifests must name every declared

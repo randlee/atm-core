@@ -7,7 +7,7 @@ status: proposed
 branch: plan/phase-at-publish-recovery
 worktree: plan/phase-at-publish-recovery
 upstream_package: sc-publish
-upstream_revision: pin-pending (first revision resolving sc-publish #39-#41; ce85b4d is the floor)
+upstream_revision: 0fa5b05e44a655ec76ada8a6c2b24714d47acca1
 ```
 
 ## Goal
@@ -49,15 +49,13 @@ Per **ADR-050 (Shared Publish-Kit Ownership)** and **REQ-P-RELEASE-004
 
 ## Authoritative Upstream Contract
 
-The pin floor is `sc-publish` `develop` @
-`ce85b4d284e563bce8be5bf632a97f200a90c0d2` (merge of sc-publish PR #38,
-resolving upstream issues #30–#37). **The executable pin is the first
-revision that additionally resolves upstream issues #39–#41** (fail-open
-GH Release/winget idempotency probes; missing setuptools publish path).
-Issue #39 is a hard ATM prerequisite: `hermes-atm` builds with
-`setuptools.build_meta`, which the kit cannot publish until #39 lands. AT.1
-records the final commit hash in its receipt and this document is updated to
-it before the plan PR merges.
+Pinned revision: `sc-publish` `develop` @
+`0fa5b05e44a655ec76ada8a6c2b24714d47acca1` (merge of sc-publish PR #45,
+resolving upstream issues #39–#41 on top of PR #38's #30–#37 fixes). This
+revision satisfies ATM's hard prerequisite from issue #39: `hermes-atm`
+builds with `setuptools.build_meta`, which the kit publishes via the
+manifest-declared build system. AT.1 records this commit hash and the package
+digest in its receipt; adopting any newer revision restarts AT.1's proof.
 
 Installer contract at the pinned revision:
 
