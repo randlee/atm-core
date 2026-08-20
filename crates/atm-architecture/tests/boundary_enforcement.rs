@@ -1296,8 +1296,127 @@ fn storage_tls_boundary_lists_only_current_tls_consumers() {
         .expect("storage TLS boundary must be valid TOML");
     assert_eq!(
         boundary.dependencies.allowed_dependents,
-        vec!["atm-peer-tls-interop".to_string()],
+        vec!["atm-peer-tls-interop".to_string(), "peer-tls".to_string(),],
         "storage TLS helpers must name only crates that consume the TLS API"
+    );
+}
+
+#[test]
+fn tls_identity_scrubs_the_source_pem_buffer_after_parsing() {
+    let source = read_source(&workspace_root().join("crates/atm-storage/src/tls.rs"));
+    let syntax = syn::parse_file(&source).expect("storage TLS source must parse");
+    let mut visitor = PemScrubbingVisitor::default();
+    visitor.visit_file(&syntax);
+    assert!(
+        visitor.wraps_pem_in_zeroizing,
+        "TlsIdentity::load must retain its source PEM in Zeroizing so private-key bytes are scrubbed after parsing"
+    );
+}
+
+#[derive(Default)]
+struct PemScrubbingVisitor {
+    wraps_pem_in_zeroizing: bool,
+}
+
+impl<'ast> Visit<'ast> for PemScrubbingVisitor {
+    fn visit_local(&mut self, local: &'ast syn::Local) {
+        if let syn::Pat::Ident(binding) = &local.pat
+            && binding.ident == "pem"
+            && local.init.as_ref().is_some_and(|init| {
+                matches!(
+                    init.expr.as_ref(),
+                    syn::Expr::Call(call) if is_zeroizing_constructor(call)
+                )
+            })
+        {
+            self.wraps_pem_in_zeroizing = true;
+        }
+        syn::visit::visit_local(self, local);
+    }
+}
+
+fn is_zeroizing_constructor(call: &syn::ExprCall) -> bool {
+    let syn::Expr::Path(path) = call.func.as_ref() else {
+        return false;
+    };
+    path.path
+        .segments
+        .iter()
+        .map(|segment| segment.ident.to_string())
+        .eq(["Zeroizing".to_owned(), "new".to_owned()])
+}
+
+#[test]
+fn ao2_mtls_stream_adapter_is_the_only_authorized_production_tls_consumer() {
+    let root = workspace_root();
+    for (source, target) in [
+        ("atm-http-runtime", "peer-tls"),
+        ("atm", "peer-tls"),
+        ("atm-graft", "peer-tls"),
+        ("atm-daemon", "peer-tls"),
+    ] {
+        assert_forbidden_edge_absent(source, target);
+    }
+    let boundary_path = root.join("boundaries/peer-tls/mtls-peer-stream-adapter.toml");
+    let boundary: BoundaryToml = toml::from_str(&read_source(&boundary_path))
+        .expect("mTLS stream adapter boundary must be valid TOML");
+    assert!(boundary.dependencies.allowed_dependents.is_empty());
+    let source = read_source(&root.join("crates/peer-tls/src/lib.rs"));
+    let syntax = syn::parse_file(&source).expect("peer-tls source must parse");
+    let mut visitor = PeerTlsSurfaceVisitor::default();
+    visitor.visit_file(&syntax);
+    assert!(
+        visitor.forbidden.is_empty(),
+        "peer-tls must remain an mTLS byte-stream-only adapter and reject {:?}",
+        visitor.forbidden
+    );
+    assert!(
+        visitor.required.contains("tokio_rustls")
+            && visitor.required.contains("MtlsPeerStreamAdapter")
+            && visitor.required.contains("PeerConfigStore"),
+        "AO2 must retain one concrete Rustls/Tokio-Rustls adapter over configuration and byte streams"
+    );
+}
+
+#[derive(Default)]
+struct PeerTlsSurfaceVisitor {
+    forbidden: BTreeSet<String>,
+    required: BTreeSet<String>,
+}
+
+impl<'ast> Visit<'ast> for PeerTlsSurfaceVisitor {
+    fn visit_ident(&mut self, ident: &'ast syn::Ident) {
+        let name = ident.to_string();
+        if matches!(
+            name.as_str(),
+            "RequestEnvelope" | "canonical_api_router" | "MessageStore" | "PeerWireMode"
+        ) {
+            self.forbidden.insert(name.clone());
+        }
+        if matches!(
+            name.as_str(),
+            "tokio_rustls" | "MtlsPeerStreamAdapter" | "PeerConfigStore"
+        ) {
+            self.required.insert(name);
+        }
+        syn::visit::visit_ident(self, ident);
+    }
+}
+
+#[test]
+fn ao2_mtls_surface_guard_matches_ast_identifiers_not_comments_or_strings() {
+    let comment_only = syn::parse_file("// PeerWireMode\nconst NOTE: &str = \"MessageStore\";")
+        .expect("fixture must parse");
+    let mut comment_visitor = PeerTlsSurfaceVisitor::default();
+    comment_visitor.visit_file(&comment_only);
+    assert!(comment_visitor.forbidden.is_empty());
+
+    let forbidden_use = syn::parse_file("use crate::PeerWireMode;").expect("fixture must parse");
+    let mut forbidden_visitor = PeerTlsSurfaceVisitor::default();
+    forbidden_visitor.visit_file(&forbidden_use);
+    assert_eq!(
+        forbidden_visitor.forbidden,
+        BTreeSet::from(["PeerWireMode".to_owned()])
     );
 }
 

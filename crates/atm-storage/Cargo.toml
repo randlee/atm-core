@@ -14,6 +14,8 @@ atm-error = { path = "../atm-error", version = "1.4.4" }
 serde.workspace = true
 serde_json.workspace = true
 rustls.workspace = true
+x509-parser.workspace = true
+zeroize.workspace = true
 sha2.workspace = true
 chrono = { version = "0.4", features = ["serde"] }
 toml = "0.8"

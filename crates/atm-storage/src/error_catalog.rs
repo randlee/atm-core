@@ -125,6 +125,15 @@ const fn daemon_guidance(code: AtmErrorCode) -> Option<&'static str> {
         AtmErrorCode::PeerWirePlaintextAuthenticationRequired => Some(
             "Restart in mutual-TLS mode and verify the enabled peer identity, certificate, and exact trust record.",
         ),
+        AtmErrorCode::PeerAuthenticationFailed => Some(
+            "Correct the registered peer hostname and certificate pin; do not use plaintext-test as a recovery.",
+        ),
+        AtmErrorCode::TransportTimeout => Some(
+            "Check peer reachability and retry the bounded transport operation when the peer is available.",
+        ),
+        AtmErrorCode::TransportProtocolFailed => {
+            Some("Inspect the peer TLS protocol configuration and correct it before retrying.")
+        }
         _ => None,
     }
 }

@@ -194,6 +194,22 @@ impl AtmError {
         Self::new(AtmErrorCode::CertificateOperationFailed, message)
     }
 
+    /// Reports a fail-closed mismatch between a configured peer authority and
+    /// the certificate presented during mutual TLS.
+    pub fn peer_authentication(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::PeerAuthenticationFailed, message)
+    }
+
+    /// Reports a bounded peer transport operation that exceeded its deadline.
+    pub fn transport_timeout(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::TransportTimeout, message)
+    }
+
+    /// Reports a non-authentication peer transport handshake failure.
+    pub fn transport_protocol(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::TransportProtocolFailed, message)
+    }
+
     pub fn bind_preflight(message: impl Into<String>) -> Self {
         Self::new(AtmErrorCode::BindPreflightFailed, message)
     }
