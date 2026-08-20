@@ -1,7 +1,7 @@
 ---
 title: Hermes Gateway Integration
 audience: end-user
-reviewed_for_release: 1.4.4
+reviewed_for_release: 1.4.3
 ---
 
 # Hermes Gateway Integration
@@ -13,10 +13,9 @@ access, source edits, or a hand-written hook.
 
 ## Release Status
 
-Version `1.4.4` is prepared but is not yet published to PyPI or TestPyPI.
-Production publication remains pending this sprint's authorization. Do not
-install an earlier TestPyPI candidate as a substitute; wait for the published
-`1.4.4` release announcement.
+Version `1.4.2` is currently available on TestPyPI. Production PyPI publication
+is pending. Use the TestPyPI command below until the production release is
+announced; then use the ordinary PyPI command instead.
 
 `hermes-atm` supports CPython 3.11 through 3.14. It installs the matching
 typed `atm-graft` client as a dependency.
@@ -49,10 +48,19 @@ the receiver correctly fails closed instead of injecting the nudge.
 
 ## Install
 
-After production PyPI publication, install the announced release with:
+For the current TestPyPI release, run this with the gateway's Python:
 
 ```bash
-python -m pip install --upgrade "hermes-atm==1.4.4"
+python -m pip install --upgrade \
+  --index-url https://test.pypi.org/simple \
+  --extra-index-url https://pypi.org/simple \
+  "hermes-atm==1.4.2"
+```
+
+After production PyPI publication, install the current release with:
+
+```bash
+python -m pip install --upgrade hermes-atm
 ```
 
 Register the profile with ATM before installing the receiver. Use the profile's
