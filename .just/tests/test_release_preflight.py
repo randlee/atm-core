@@ -9,31 +9,27 @@ WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release-preflight.yml"
 
 
 class ReleasePreflightWorkflowTests(unittest.TestCase):
-    def test_release_preflight_derives_channel_checks_from_the_manifest(self) -> None:
+    def test_release_preflight_stages_installed_docs_before_validation(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
 
-        self.assertIn("preflight-secret-plan --manifest", text)
-        self.assertIn("public-registry-check-plan", text)
-        self.assertIn("channel-preflight-results", text)
-        self.assertNotIn("stage-install-docs", text)
-        self.assertNotIn("validate_release.py", text)
+        self.assertIn("python3 scripts/release_artifacts.py stage-install-docs", text)
+        self.assertIn("--output-root \"${STAGED_INSTALL_ROOT}\"", text)
 
-    def test_release_preflight_uses_the_shared_lint_toolchain_setup(self) -> None:
+    def test_release_preflight_passes_staged_install_root_to_validator(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
 
-        setup_python = text.index("- name: Set up Python\n")
-        setup_lint_toolchain = text.index("- name: Set up lint toolchain")
-        formatting = text.index("- id: formatting")
-        self.assertLess(setup_python, setup_lint_toolchain)
-        self.assertLess(setup_lint_toolchain, formatting)
-        self.assertIn("uses: ./.github/actions/setup-lint-toolchain", text)
+        self.assertIn("python3 scripts/validate_release.py all \\", text)
+        self.assertIn("--staged-install-root \"${STAGED_INSTALL_ROOT}\"", text)
 
-    def test_release_preflight_runs_manifest_and_package_checks(self) -> None:
+    def test_release_preflight_installs_validation_python_dependencies_before_validation(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
 
-        self.assertIn("validate-manifest", text)
-        self.assertIn("validate-publish-order", text)
-        self.assertIn("cargo package -p", text)
+        install_python = text.index("- name: Install Python\n")
+        install_dependencies = text.index("- name: Install Python validation dependencies")
+        validate = text.index("- name: Run canonical retained release validation suite")
+        self.assertLess(install_python, install_dependencies)
+        self.assertLess(install_dependencies, validate)
+        self.assertIn("python -m pip install codespell 'pydantic>=2.12,<3'", text)
 
 
 if __name__ == "__main__":

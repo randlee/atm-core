@@ -6,11 +6,6 @@ through the public `GatewayRunner.inject_internal_message(..., mode="queue")`
 API. It does not open an ATM database, select a Hermes adapter, or require any
 post-install source edits.
 
-> **First public PyPI release.** `hermes-atm` and its `atm-graft` dependency
-> begin public distribution at the project's existing 1.x workspace version.
-> Earlier 1.x development was internal rather than a missing public release
-> history; both packages remain version-locked to ATM's workspace release.
-
 ## Required settings
 
 Collect these values before installation. Keep the chat identifier in local
