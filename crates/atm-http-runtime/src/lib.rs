@@ -467,27 +467,11 @@ impl HttpRuntime<Configured> {
             self.config.timeouts,
         );
         let loopback_router = authenticated_loopback_router(canonical_router.clone(), capability);
-        let direct_peer = match direct_peer_listener {
-            Some(listener) => match self.config.peer_stream_adapter.as_ref() {
-                Some(adapter) => Some(DirectPeerServer::Authenticated(
-                    listener,
-                    Arc::clone(adapter),
-                    Arc::clone(&self.handler),
-                    self.config.limits,
-                    self.config.timeouts,
-                )),
-                None => Some(DirectPeerServer::Plaintext(
-                    listener,
-                    canonical_api_router(
-                        Arc::clone(&self.handler),
-                        AuthenticatedConnector::peer_socket(),
-                        self.config.limits,
-                        self.config.timeouts,
-                    ),
-                )),
-            },
-            None => None,
-        };
+        let direct_peer = build_direct_peer_server(
+            direct_peer_listener,
+            &self.config,
+            Arc::clone(&self.handler),
+        );
         let server_task = match start_server_task(ServerTaskInputs {
             listener,
             loopback_router,
@@ -527,6 +511,32 @@ impl HttpRuntime<Configured> {
             },
         })
     }
+}
+
+fn build_direct_peer_server(
+    listener: Option<TcpListener>,
+    config: &HttpRuntimeConfig,
+    handler: Arc<dyn CanonicalWriteHandler>,
+) -> Option<DirectPeerServer> {
+    let listener = listener?;
+    Some(match config.peer_stream_adapter.as_ref() {
+        Some(adapter) => DirectPeerServer::Authenticated(
+            listener,
+            Arc::clone(adapter),
+            handler,
+            config.limits,
+            config.timeouts,
+        ),
+        None => DirectPeerServer::Plaintext(
+            listener,
+            canonical_api_router(
+                handler,
+                AuthenticatedConnector::peer_socket(),
+                config.limits,
+                config.timeouts,
+            ),
+        ),
+    })
 }
 
 async fn bind_configured_direct_peer_listener(
