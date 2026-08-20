@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ARCH-001>
+  a triage:Finding ;
+  triage:findingId "ARCH-001" ;
+  triage:title "Deliverable-4 architecture guard does not reject the existing benchmark-only daemon" ;
+  triage:description "crates/atm-daemon-bootstrap/tests/boundary_enforcement.rs's deliverable-4 guard does not reject the existing benchmark-only daemon (atm-daemon-bootstrap/src/lib.rs:165-177 run_benchmark_daemon + src/bin/atm-daemon-benchmark.rs). This also contradicts ADR-047's no benchmark-only daemon claim (docs/adr/ADR-047-layered-peer-wire-security.md:19-21). Fix requires extending the guard and correcting the ADR-047 text." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "arch-qa" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-20T09:00:24Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.1 ;
+  triage:foundAt "2026-08-20T09:00:24Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001/F1-lib> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001/F1-bin> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ARCH-001/F1-lib>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 170 ;
+  triage:snippet "pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s1-peer-wire-policy" ;
+  triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
+  triage:occursIn <urn:atm:triage:worktree/PAO1/d137ab8d> .
+
+<urn:atm:triage:occurrence/ARCH-001/F1-bin>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/bin/atm-daemon-benchmark.rs" ;
+  triage:line 45 ;
+  triage:snippet "atm_daemon_bootstrap::run_benchmark_daemon(mode).await" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s1-peer-wire-policy" ;
+  triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
+  triage:occursIn <urn:atm:triage:worktree/PAO1/d137ab8d> .
+
+<urn:atm:triage:worktree/PAO1/d137ab8d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pao-s1-peer-wire-policy" ;
+  triage:branch "feature/pao-s1-peer-wire-policy" ;
+  triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
+  triage:orderIndex 1 .

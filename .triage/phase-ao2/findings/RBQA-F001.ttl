@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F001>
+  a triage:Finding ;
+  triage:findingId "RBQA-F001" ;
+  triage:title "New PeerWireSecurity name collides via substring with the AK.2 retirement guard" ;
+  triage:description "The new PeerWireSecurity type name collides via substring match with the pre-existing AK.2 retirement guard `ak2_peer_worker_symbols_are_absent_from_production` in crates/atm-architecture/tests/boundary_enforcement.rs:413-443. This will false-positive-block AO.2/AO.3 wiring unless the guard's substring matching is narrowed now, before those sprints begin." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ruthless-boundary-qa" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-20T09:00:24Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.1 ;
+  triage:foundAt "2026-08-20T09:00:24Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/AO2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F001/AO2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/peer_wire.rs" ;
+  triage:line 13 ;
+  triage:snippet "pub enum PeerWireSecurity" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s1-peer-wire-policy" ;
+  triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
+  triage:occursIn <urn:atm:triage:worktree/AO2.1/d137ab8> .
+
+<urn:atm:triage:worktree/AO2.1/d137ab8>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pao-s1-peer-wire-policy" ;
+  triage:branch "feature/pao-s1-peer-wire-policy" ;
+  triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QA-002>
+  a triage:Finding ;
+  triage:findingId "QA-002" ;
+  triage:title "Sprint doc's Required Validation command uses wrong package name" ;
+  triage:description "docs/plans/phase-ao/sprint-AO1-policy-and-plain-baseline.md's Required Validation section lists `cargo test -p atm-core ...` but the actual package name in this workspace is `agent-team-mail-core`. This is a documentation defect, not a code defect." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "req-qa" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "sprint" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-20T09:00:24Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.1 ;
+  triage:foundAt "2026-08-20T09:00:24Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-002/QA-002-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-002/QA-002-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QA-002/QA-002-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ao/sprint-AO1-policy-and-plain-baseline.md" ;
+  triage:line 105 ;
+  triage:snippet "cargo test -p atm-core -p atm-http-runtime -p atm-daemon-bootstrap" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s1-peer-wire-policy" ;
+  triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s1/d137ab8d980e09365628c7454df1e0531698cfd3> .
+
+<urn:atm:triage:occurrence/QA-002/QA-002-2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ao/sprint-AO2-isolated-mtls-stream-adapter.md" ;
+  triage:line 110 ;
+  triage:snippet "cargo test -p peer-tls -p atm-core -p atm-storage" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s1-peer-wire-policy" ;
+  triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s1/d137ab8d980e09365628c7454df1e0531698cfd3> .
+
+<urn:atm:triage:worktree/pao-s1/d137ab8d980e09365628c7454df1e0531698cfd3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pao-s1" ;
+  triage:branch "feature/pao-s1-peer-wire-policy" ;
+  triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
+  triage:orderIndex 1 .

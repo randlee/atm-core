@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QA-001>
+  a triage:Finding ;
+  triage:findingId "QA-001" ;
+  triage:title "just lint fails — .just/lint-config.toml missing manifest_dependency_allowlists entry for crates/atm-error" ;
+  triage:description "just lint fails because .just/lint-config.toml is missing a manifest_dependency_allowlists entry for crates/atm-error/Cargo.toml, which became a newly-active boundary owner this sprint. Independently confirmed failing in PR #961 CI on both ubuntu-latest and windows-latest." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-qa" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-20T09:00:24Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.1 ;
+  triage:foundAt "2026-08-20T09:00:24Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-001/S1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QA-001/S1-1>
+  a triage:Occurrence ;
+  triage:file ".just/lint-config.toml" ;
+  triage:line 158 ;
+  triage:snippet "missing [[boundaries.manifest_dependency_allowlists]] entry for crates/atm-error/Cargo.toml" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s1-peer-wire-policy" ;
+  triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s1/d137ab8d980e09365628c7454df1e0531698cfd3> .
+
+<urn:atm:triage:worktree/pao-s1/d137ab8d980e09365628c7454df1e0531698cfd3>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s1-peer-wire-policy" ;
+  triage:branch "feature/pao-s1-peer-wire-policy" ;
+  triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
+  triage:orderIndex 1 .
