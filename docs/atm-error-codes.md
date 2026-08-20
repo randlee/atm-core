@@ -79,6 +79,9 @@ Error codes should describe the failure class, not a specific prose message.
 - `ATM_PEER_WIRE_PLAINTEXT_AUTHENTICATION_REQUIRED` — untrusted
   `plaintext-test` was asked to satisfy authenticated peer work; restart in
   normal mutual-TLS mode and verify peer configuration.
+- `ATM_PEER_AUTHENTICATION_FAILED` — the selected mTLS peer did not satisfy
+  its exact configured hostname or certificate pin. Correct the durable peer
+  record; never use `plaintext-test` as recovery.
 
 ### 5.3 Mailbox And Message Validation
 
@@ -569,6 +572,7 @@ Classification rules:
 | `REMOTE_DELIVERY_UNCONFIRMED` | `retryable` |
 | `ATM_PEER_CONFIG_VALIDATION_FAILED` | `operator_actionable` |
 | `ATM_CERTIFICATE_OPERATION_FAILED` | `operator_actionable` |
+| `ATM_PEER_AUTHENTICATION_FAILED` | `fail_closed` |
 | `ATM_BIND_PREFLIGHT_FAILED` | `operator_actionable` |
 | `ATM_CLIENT_DAEMON_VERSION_INCOMPATIBLE` | `operator_actionable` |
 | `ATM_TEAM_INVALID` | `operator_actionable` |

@@ -50,6 +50,8 @@ pub enum AtmErrorCode {
     PeerWirePlaintextAuthenticationRequired,
     PeerConfigValidationFailed,
     CertificateOperationFailed,
+    /// A configured peer did not satisfy exact mTLS hostname or pin authentication.
+    PeerAuthenticationFailed,
     BindPreflightFailed,
     ClientDaemonVersionIncompatible,
     DaemonAdvisorySessionAlreadyRegistered,
@@ -193,6 +195,7 @@ impl AtmErrorCode {
             }
             Self::PeerConfigValidationFailed => "ATM_PEER_CONFIG_VALIDATION_FAILED",
             Self::CertificateOperationFailed => "ATM_CERTIFICATE_OPERATION_FAILED",
+            Self::PeerAuthenticationFailed => "ATM_PEER_AUTHENTICATION_FAILED",
             Self::BindPreflightFailed => "ATM_BIND_PREFLIGHT_FAILED",
             Self::ClientDaemonVersionIncompatible => "ATM_CLIENT_DAEMON_VERSION_INCOMPATIBLE",
             Self::DaemonAdvisorySessionAlreadyRegistered => {
@@ -356,6 +359,7 @@ fn parse_daemon_or_address_code(value: &str) -> Option<AtmErrorCode> {
         }
         "ATM_PEER_CONFIG_VALIDATION_FAILED" => AtmErrorCode::PeerConfigValidationFailed,
         "ATM_CERTIFICATE_OPERATION_FAILED" => AtmErrorCode::CertificateOperationFailed,
+        "ATM_PEER_AUTHENTICATION_FAILED" => AtmErrorCode::PeerAuthenticationFailed,
         "ATM_BIND_PREFLIGHT_FAILED" => AtmErrorCode::BindPreflightFailed,
         "ATM_CLIENT_DAEMON_VERSION_INCOMPATIBLE" => AtmErrorCode::ClientDaemonVersionIncompatible,
         "ATM_DAEMON_ADVISORY_SESSION_ALREADY_REGISTERED" => {

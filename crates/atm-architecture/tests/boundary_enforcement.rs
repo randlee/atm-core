@@ -1296,8 +1296,43 @@ fn storage_tls_boundary_lists_only_current_tls_consumers() {
         .expect("storage TLS boundary must be valid TOML");
     assert_eq!(
         boundary.dependencies.allowed_dependents,
-        vec!["atm-peer-tls-interop".to_string()],
+        vec!["atm-peer-tls-interop".to_string(), "peer-tls".to_string(),],
         "storage TLS helpers must name only crates that consume the TLS API"
+    );
+}
+
+#[test]
+fn ao2_mtls_stream_adapter_is_the_only_authorized_production_tls_consumer() {
+    let root = workspace_root();
+    for (source, target) in [
+        ("atm-http-runtime", "peer-tls"),
+        ("atm", "peer-tls"),
+        ("atm-graft", "peer-tls"),
+        ("atm-daemon", "peer-tls"),
+    ] {
+        assert_forbidden_edge_absent(source, target);
+    }
+    let boundary_path = root.join("boundaries/peer-tls/mtls-peer-stream-adapter.toml");
+    let boundary: BoundaryToml = toml::from_str(&read_source(&boundary_path))
+        .expect("mTLS stream adapter boundary must be valid TOML");
+    assert!(boundary.dependencies.allowed_dependents.is_empty());
+    let source = read_source(&root.join("crates/peer-tls/src/lib.rs"));
+    for forbidden in [
+        "RequestEnvelope",
+        "canonical_api_router",
+        "MessageStore",
+        "PeerWireMode",
+    ] {
+        assert!(
+            !source.contains(forbidden),
+            "peer-tls must remain an mTLS byte-stream-only adapter and reject `{forbidden}`"
+        );
+    }
+    assert!(
+        source.contains("tokio_rustls")
+            && source.contains("MtlsPeerStreamAdapter")
+            && source.contains("PeerConfigStore"),
+        "AO2 must retain one concrete Rustls/Tokio-Rustls adapter over configuration and byte streams"
     );
 }
 

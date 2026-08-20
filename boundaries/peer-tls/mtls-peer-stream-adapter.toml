@@ -1,0 +1,47 @@
+boundary_id = "BOUNDARY-MtlsPeerStreamAdapter"
+owner_package = "peer-tls"
+owner_crate_path = "peer_tls"
+name = "MtlsPeerStreamAdapter"
+
+[public]
+facade = "MtlsPeerStreamAdapter"
+notes = "Concrete finite mTLS byte-stream wrapper; no public transport trait or HTTP contract."
+
+[implementation]
+type = "MtlsPeerStreamAdapter"
+module = "peer_tls"
+visibility = "public"
+constructor = "public"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["tokio_rustls_stream_wrapping", "peer_certificate_pin_verification", "mutual_tls_handshake"]
+io_forbidden = ["http_runtime", "message_delivery", "message_persistence", "receipt", "nudge_emission", "retry_queue", "daemon_lifecycle"]
+
+[dependencies]
+allowed_dependents = []
+allowed_dependencies = ["atm-storage", "rcgen", "rustls", "tempfile", "tokio", "tokio-rustls"]
+forbidden_edges = ["atm-http-runtime -> peer-tls", "atm -> peer-tls", "atm-graft -> peer-tls", "atm-daemon -> peer-tls"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["TcpStream", "HostName"]
+response_types = ["AsyncRead+AsyncWrite byte stream"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = ["peer_tls::tests::TestStore"]
+forbidden_test_bypasses = ["plaintext_fallback", "http_router", "native_tls_sender"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-MTLS-PEER-STREAM-ADAPTER"]
+review_gates = ["one_concrete_tls_owner", "no_http_or_durable_message_types", "no_plaintext_fallback"]
+
+[status]
+state = "concrete_landed"
+notes = ["AO2.2 owns the only production Rustls/Tokio-Rustls byte-stream adapter."]

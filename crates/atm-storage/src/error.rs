@@ -194,6 +194,12 @@ impl AtmError {
         Self::new(AtmErrorCode::CertificateOperationFailed, message)
     }
 
+    /// Reports a fail-closed mismatch between a configured peer authority and
+    /// the certificate presented during mutual TLS.
+    pub fn peer_authentication(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::PeerAuthenticationFailed, message)
+    }
+
     pub fn bind_preflight(message: impl Into<String>) -> Self {
         Self::new(AtmErrorCode::BindPreflightFailed, message)
     }
