@@ -15,21 +15,22 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-20T21:40:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.4 ;
   triage:foundAt "2026-08-20T21:33:56Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-AO24/AO24-missing-neg-auth> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" ;
+  triage:closedNote "Code mechanism confirmed fixed by quality-mgr independent re-verify for PR #968 (commits 934586917/fb118909a on feature/pao-s4-peer-wire-proof): new bidirectional mtls_rejected_before_http negative-auth cases in scripts/smoke/run_feature_smoke.py, 41/41 targeted pytest pass, reports-index --check clean, just lint clean. CAVEAT (unresolved, flagged for req-qa/arch-ctm QA-2 re-review, not silently dropped): the live M4 invocation of this mechanism never actually exercised the negative-auth assertion -- it failed an earlier doctor-version preflight (expected 1.4.4, active 1.4.3) before reaching the new mTLS-negative case, honestly recorded as blocked/FAIL, not fabricated as pass. No live cross-host evidence yet that this mechanism fires against a real M4/M5 daemon pair. Whether this satisfies Deliverable 4 without a live-fire run is an open call, not decided here." .
 
 <urn:atm:triage:occurrence/ATM-QA-002-AO24/AO24-missing-neg-auth>
   a triage:Occurrence ;
   triage:file "scripts/smoke/run_feature_smoke.py" ;
   triage:line 0 ;
   triage:snippet "Missing negative-auth smoke test (deliverable gap, not code bug)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s4-peer-wire-proof" ;
   triage:headSha "d9fb74917a804d2068684db40a28bc4ce636f283" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s4/d9fb749> .

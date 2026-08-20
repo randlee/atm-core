@@ -15,12 +15,13 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-20T20:38:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.3 ;
   triage:foundAt "2026-08-20T20:36:55Z"^^xsd:dateTime ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" ;
+  triage:closedNote "Confirmed genuinely fixed by quality-mgr QA-3 for PR #967 @46ebe74e0: plaintext_test_bootstrap_runs_direct_peer_write_without_tls_configuration launches the real composition root under PeerWireMode::plaintext_test(), proves a genuine typed write lands in durable storage; 13/13 atm-daemon-bootstrap tests pass." .
 
 <urn:atm:triage:worktree/feature/pao-s3-runtime-peer-wire-mode/e6a428355>
   a triage:WorktreeSnapshot ;

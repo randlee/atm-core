@@ -15,14 +15,17 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-08-20T09:00:24Z"^^xsd:dateTime ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-20T09:00:24+00:00"^^xsd:dateTime ;
   triage:foundIn triage:AO2.1 ;
-  triage:foundAt "2026-08-20T09:00:24Z"^^xsd:dateTime ;
+  triage:foundAt "2026-08-20T09:00:24+00:00"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001/F1-lib> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001/F1-bin> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-20T22:53:43Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/ARCH-001/F1-lib>
   a triage:Occurrence ;
@@ -46,9 +49,27 @@
   triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
   triage:occursIn <urn:atm:triage:worktree/PAO1/d137ab8d> .
 
+<urn:atm:triage:occurrence/ARCH-001/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 170 ;
+  triage:snippet "quality-mgr independent re-verification confirmed fixed" ;
+  triage:status "absent" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:headSha "ae3232d340f003b0ab2521006c7a82e20ad1e92d" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pao-s3-runtime-peer-wire-mode/ae3232d340f003b0ab2521006c7a82e20ad1e92d> .
+
 <urn:atm:triage:worktree/PAO1/d137ab8d>
   a triage:WorktreeSnapshot ;
   triage:path ".worktrees/feature/pao-s1-peer-wire-policy" ;
   triage:branch "feature/pao-s1-peer-wire-policy" ;
   triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/feature-pao-s3-runtime-peer-wire-mode/ae3232d340f003b0ab2521006c7a82e20ad1e92d>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:branch "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:headSha "ae3232d340f003b0ab2521006c7a82e20ad1e92d" ;
+  triage:orderIndex 2 .
