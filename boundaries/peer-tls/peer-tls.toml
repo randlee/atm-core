@@ -5,7 +5,7 @@ name = "PeerTls"
 
 [public]
 facade = "PeerTlsAdapter"
-notes = "Production Tokio-Rustls peer transport adapter. It turns a configured TcpStream into an opaque core PeerIo stream after mutual TLS authentication."
+notes = "Production Tokio-Rustls peer transport adapter. It turns a configured TcpStream into an opaque core PeerIo stream after mutual TLS authentication. Its feature-gated benchmark-support helper is the sole owner of disposable localhost certificate generation and owner-cleaned private-key storage for the isolated benchmark child."
 
 [implementation]
 type = "PeerTlsAdapter"
@@ -17,12 +17,12 @@ constructor = "public"
 roots = ["peer_tls::mtls_adapter"]
 
 [ownership]
-io_owns = ["tokio_tcp_connect", "tokio_rustls_client_handshake", "tokio_rustls_server_handshake", "deadline_bounded_tls_handshake", "opaque_authenticated_stream"]
+io_owns = ["tokio_tcp_connect", "tokio_rustls_client_handshake", "tokio_rustls_server_handshake", "deadline_bounded_tls_handshake", "opaque_authenticated_stream", "benchmark_disposable_certificate_generation", "benchmark_owner_cleaned_private_key_storage"]
 io_forbidden = ["http_request_encoding", "recipient_routing", "message_delivery", "storage_sql", "certificate_fingerprint_algorithm", "certificate_parser", "trust_policy_duplication", "daemon_lifecycle", "legacy_daemon_composition"]
 
 [dependencies]
 allowed_dependents = ["atm-daemon-bootstrap"]
-allowed_dependencies = ["atm-core", "atm-storage", "tokio", "rustls", "tokio-rustls"]
+allowed_dependencies = ["atm-core", "atm-storage", "tokio", "rustls", "tokio-rustls", "rcgen", "tempfile"]
 forbidden_edges = ["peer-tls -> atm-daemon", "peer-tls -> atm-http-runtime", "peer-tls -> atm-peer-tls-interop", "peer-tls -> atm-storage-rusqlite", "atm-daemon -> peer-tls"]
 
 [references]
@@ -30,8 +30,8 @@ scope = "outside_owner_crate"
 forbidden = []
 
 [contracts]
-request_types = ["PeerConfigStore", "TcpStream", "HostName", "RequestDeadline"]
-response_types = ["BoxedPeerIo"]
+request_types = ["PeerConfigStore", "TcpStream", "HostName", "RequestDeadline", "benchmark hostname", "benchmark port"]
+response_types = ["BoxedPeerIo", "DisposableLocalhostIdentity"]
 error_types = ["AtmError"]
 
 [testing]
@@ -44,4 +44,4 @@ review_gates = ["storage_tls_helpers_are_canonical", "no_http_or_daemon_ownershi
 
 [status]
 state = "active"
-notes = ["AO.1 owns the portable active TLS transport module. It consumes storage-neutral configuration and canonical TLS helpers; it neither configures an HTTP listener nor encodes ATM requests."]
+notes = ["AO.1 owns the portable active TLS transport module. It consumes storage-neutral configuration and canonical TLS helpers; it neither configures an HTTP listener nor encodes ATM requests. AO.4's isolated benchmark identity is generated and cleaned here under benchmark-support, so the bootstrap remains an opaque adapter composition root."]

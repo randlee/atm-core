@@ -78,8 +78,18 @@ def migrate_result(payload: dict[str, Any], source: Path) -> dict[str, Any]:
     version = payload.get("schema_version")
     if version == AI40_SCHEMA_VERSION:
         return payload
+    if version == 3:
+        migrated = dict(payload)
+        migrated["schema_version"] = AI40_SCHEMA_VERSION
+        migrated["peer_wire_security"] = (
+            "not_applicable" if migrated.get("transport") == "uds" else "plaintext_test"
+        )
+        migrated["migration"] = {"from_schema_version": version}
+        return migrated
     if version not in {1, 2} or isinstance(version, bool):
-        raise BenchmarkReportError(f"{source}: expected benchmark schema version 1, 2, or {AI40_SCHEMA_VERSION}")
+        raise BenchmarkReportError(
+            f"{source}: expected benchmark schema version 1, 2, 3, or {AI40_SCHEMA_VERSION}"
+        )
     samples = payload.get("samples", payload.get("runs", []))
     if not isinstance(samples, list):
         raise BenchmarkReportError(f"{source}: legacy samples must be a list")
@@ -135,7 +145,10 @@ def immutable_write(path: Path, content: str) -> bool:
 
 def result_id(result: dict[str, Any], _source: Path | None = None) -> str:
     stamp = result["generated_at"].replace("-", "").replace(":", "").replace("T", "-").replace("Z", "")
-    return safe_artifact_id(f"{stamp}-{result['host_label']}-{result['transport']}-f{result['frames_per_connection']}")
+    return safe_artifact_id(
+        f"{stamp}-{result['host_label']}-{result['transport']}-"
+        f"{result['peer_wire_security']}-f{result['frames_per_connection']}"
+    )
 
 
 def compose(template: Path, variables: dict[str, Any], output: Path) -> None:
@@ -166,7 +179,10 @@ def evidence_records(report_dir: Path = REPORT_DIR) -> list[dict[str, Any]]:
             records.append(load_result(path))
         except BenchmarkReportError:
             continue
-    return sorted(records, key=lambda item: (item["generated_at"], item["host_label"], item["transport"], item["frames_per_connection"]))
+    return sorted(records, key=lambda item: (
+        item["generated_at"], item["host_label"], item["transport"],
+        item["peer_wire_security"], item["frames_per_connection"],
+    ))
 
 
 def render_run(result: dict[str, Any], artifact_id: str, report_dir: Path = REPORT_DIR) -> Path:
@@ -208,6 +224,7 @@ def render_run(result: dict[str, Any], artifact_id: str, report_dir: Path = REPO
             "generated_at": result["generated_at"],
             "host_label": result["host_label"],
             "transport": result["transport"],
+            "peer_wire_security": result["peer_wire_security"],
             "frames_per_connection": result["frames_per_connection"],
             "run_duration_s": result["run_duration_s"],
             "passed": result["passed"],
@@ -223,9 +240,12 @@ def render_run(result: dict[str, Any], artifact_id: str, report_dir: Path = REPO
 
 def latest_profile_results(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     """Return the newest evidence for each host/transport/frame profile."""
-    latest: dict[tuple[str, str, int], dict[str, Any]] = {}
+    latest: dict[tuple[str, str, str, int], dict[str, Any]] = {}
     for result in records:
-        key = (result["host_label"], result["transport"], result["frames_per_connection"])
+        key = (
+            result["host_label"], result["transport"], result["peer_wire_security"],
+            result["frames_per_connection"],
+        )
         previous = latest.get(key)
         if previous is None or result["generated_at"] > previous["generated_at"]:
             latest[key] = result
@@ -252,14 +272,17 @@ def current_campaign_results(records: Iterable[dict[str, Any]]) -> list[dict[str
         return [
             result
             for result in latest_profile_results(records)
-            if (result["host_label"], result["transport"])
-            == (newest["host_label"], newest["transport"])
+            if (result["host_label"], result["transport"], result["peer_wire_security"])
+            == (newest["host_label"], newest["transport"], newest["peer_wire_security"])
         ]
-    key = (newest["host_label"], newest["transport"], revision)
+    key = (newest["host_label"], newest["transport"], newest["peer_wire_security"], revision)
     return [
         result
         for result in records
-        if (result["host_label"], result["transport"], result.get("source_revision")) == key
+        if (
+            result["host_label"], result["transport"], result["peer_wire_security"],
+            result.get("source_revision"),
+        ) == key
     ]
 
 
@@ -284,6 +307,7 @@ def render_aggregate(records: Iterable[dict[str, Any]], report_root: Path = REPO
             "generated_at": result["generated_at"],
             "host_label": result["host_label"],
             "transport": result["transport"],
+            "peer_wire_security": result["peer_wire_security"],
             "frames_per_connection": result["frames_per_connection"],
             "passed": result["passed"],
             "direct_sqlite_admissions_per_second": (
@@ -306,6 +330,7 @@ def render_aggregate(records: Iterable[dict[str, Any]], report_root: Path = REPO
         "rows": rows,
         "campaign_host_label": campaign_reference["host_label"] if campaign_reference else "none",
         "campaign_transport": campaign_reference["transport"] if campaign_reference else "none",
+        "campaign_peer_wire_security": campaign_reference["peer_wire_security"] if campaign_reference else "none",
         "campaign_source_revision": campaign_reference.get("source_revision") if campaign_reference else None,
         "campaign_profile_count": len(campaign),
         "campaign_passed_count": sum(result["passed"] for result in campaign),

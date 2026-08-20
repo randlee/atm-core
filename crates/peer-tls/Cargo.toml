@@ -13,6 +13,9 @@ description = "Bounded Tokio-Rustls peer stream adapter for ATM's canonical HTTP
 # First-party fixture for cross-crate TLS composition tests. It never enables
 # or changes production transport behavior.
 test-support = []
+# Feature-gated owner of the disposable localhost identity used only by the
+# isolated AO.4 benchmark child. It never changes the shipped mTLS transport.
+benchmark-support = ["dep:rcgen", "dep:tempfile"]
 
 [dependencies]
 atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.3" }
@@ -20,6 +23,8 @@ atm-storage = { path = "../atm-storage", version = "1.4.3" }
 rustls.workspace = true
 tokio.workspace = true
 tokio-rustls.workspace = true
+rcgen = { version = "0.13", optional = true }
+tempfile = { version = "3", optional = true }
 
 [dev-dependencies]
 rcgen = "0.13"

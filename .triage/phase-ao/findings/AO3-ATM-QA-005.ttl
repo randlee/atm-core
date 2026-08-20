@@ -9,13 +9,16 @@
   triage:findingId "AO3-ATM-QA-005" ;
   triage:title "Deliverable 2 (two-host mTLS smoke run) absent, known-blocked on M5 host availability" ;
   triage:description "req-qa IMPORTANT finding from AO3-QA-1 (PR #945 @ 4408867ef): Deliverable 2 (two-host mTLS smoke run) has not been executed/indexed under site/reports/. Explicitly known-blocked on M5 host availability per the AO.3 assignment notes -- not itself the sole FAIL basis. Mark dispatch_ready accordingly if this is a known external-dependency block, not a code defect." ;
+  triage:correctionNote "quality-mgr AO3-QA-2: re-scoped out of AO.3 by commit ea0b6e908 on feature/pao-s3-tls-proof-and-evidence (docs(ao3): re-scope two-host mTLS proof to AO.5 per Rand's direction, authored by Rand Lee, 2026-08-18). The sprint doc now states AO.5 is sole owner of the M4<->M5 two-host mTLS proof; AO.3 does not require M5 host access. Closed as descoped, not as a resolved code defect -- no fix was made or required." ;
   triage:phaseId "phase-ao" ;
   triage:triageMode "initial_pass" ;
   triage:category "deliverable-gap" ;
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-18T23:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-08-18T19:57:59Z"^^xsd:dateTime ;
   triage:foundIn triage:AO.3 ;
