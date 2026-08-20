@@ -317,6 +317,71 @@ fn peer_stream_adapter_for_mode(
     }
 }
 
+fn replacement_runtime_config(
+    scope: &atm_core::home::HostRuntimeScope,
+    owner: &DaemonOwnerGuard,
+    peer_stream_adapter: &Option<Arc<dyn PeerStreamAdapter>>,
+) -> Result<HttpRuntimeConfig, AtmError> {
+    let loopback = LoopbackTcpConfig::new(
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+        scope.runtime_root.as_ref().join(LOCAL_HTTP_RECORD_FILENAME),
+        owner.instance_id(),
+    );
+    let config = HttpRuntimeConfig::new(
+        loopback,
+        unix_socket_config(scope)?,
+        RuntimeLimits::new(
+            NonZeroUsize::new(DEFAULT_MESSAGE_MAX_BYTES + CANONICAL_WRITE_ENVELOPE_OVERHEAD_BYTES)
+                .expect("non-zero body limit"),
+            NonZeroUsize::new(128).expect("non-zero connection limit"),
+        ),
+        RuntimeTimeouts::new(
+            NonZeroDuration::new(Duration::from_secs(3)).expect("non-zero request timeout"),
+            NonZeroDuration::new(REPLACEMENT_DRAIN_DEADLINE).expect("non-zero shutdown timeout"),
+        ),
+    )
+    .with_direct_peer_tcp(DirectPeerTcpConfig::standard());
+    Ok(match peer_stream_adapter {
+        Some(adapter) => config.with_peer_stream_adapter(Arc::clone(adapter)),
+        None => config,
+    })
+}
+
+fn record_peer_wire_mode_selection(
+    observability: &dyn ObservabilityPort,
+    daemon_launch_identity: &DaemonLaunchIdentity,
+    peer_wire_mode: PeerWireMode,
+    peer_stream_adapter: &Option<Arc<dyn PeerStreamAdapter>>,
+) {
+    tracing::info!(
+        peer_wire_security = peer_wire_mode.security().as_launch_value(),
+        mtls_ready = peer_stream_adapter.is_some(),
+        "replacement daemon selected peer-wire mode"
+    );
+    // A retained startup record carries only the selected public mode. The
+    // concrete adapter remains opaque; never emit certificates, pins, keys,
+    // or trust records from this composition boundary.
+    if let (Some(team), Some(identity)) = (
+        daemon_launch_identity.team.clone(),
+        daemon_launch_identity.identity.clone(),
+    ) && let Err(error) = observability.emit(CommandEvent {
+        command: "atm-daemon",
+        action: action_name("peer_wire_mode_selected"),
+        outcome: outcome_label(peer_wire_mode.security().as_launch_value()),
+        team,
+        agent: identity.clone(),
+        sender: identity,
+        message_id: None,
+        requires_ack: false,
+        dry_run: false,
+        task_id: None,
+        error_code: None,
+        error_message: None,
+    }) {
+        tracing::warn!(%error, "failed to retain peer-wire mode startup observability event");
+    }
+}
+
 async fn run_replacement_daemon_with_selector(
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
     selector_factory: impl FnOnce(
@@ -349,56 +414,13 @@ async fn run_replacement_daemon_with_selector(
         peer_stream_adapter.clone(),
         runtime_health.clone(),
     )?;
-    let loopback = LoopbackTcpConfig::new(
-        SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
-        scope.runtime_root.as_ref().join(LOCAL_HTTP_RECORD_FILENAME),
-        _owner.instance_id(),
+    let config = replacement_runtime_config(&scope, &_owner, &peer_stream_adapter)?;
+    record_peer_wire_mode_selection(
+        observability.as_ref(),
+        &daemon_launch_identity,
+        peer_wire_mode,
+        &peer_stream_adapter,
     );
-    let config = HttpRuntimeConfig::new(
-        loopback,
-        unix_socket_config(&scope)?,
-        RuntimeLimits::new(
-            NonZeroUsize::new(DEFAULT_MESSAGE_MAX_BYTES + CANONICAL_WRITE_ENVELOPE_OVERHEAD_BYTES)
-                .expect("non-zero body limit"),
-            NonZeroUsize::new(128).expect("non-zero connection limit"),
-        ),
-        RuntimeTimeouts::new(
-            NonZeroDuration::new(Duration::from_secs(3)).expect("non-zero request timeout"),
-            NonZeroDuration::new(REPLACEMENT_DRAIN_DEADLINE).expect("non-zero shutdown timeout"),
-        ),
-    );
-    let config = config.with_direct_peer_tcp(DirectPeerTcpConfig::standard());
-    let config = match peer_stream_adapter.as_ref() {
-        Some(adapter) => config.with_peer_stream_adapter(Arc::clone(adapter)),
-        None => config,
-    };
-    tracing::info!(
-        peer_wire_security = peer_wire_mode.security().as_launch_value(),
-        mtls_ready = peer_stream_adapter.is_some(),
-        "replacement daemon selected peer-wire mode"
-    );
-    // A retained startup record carries only the selected public mode. The
-    // concrete adapter remains opaque; never emit certificates, pins, keys,
-    // or trust records from this composition boundary.
-    if let (Some(team), Some(identity)) = (
-        daemon_launch_identity.team.clone(),
-        daemon_launch_identity.identity.clone(),
-    ) && let Err(error) = observability.emit(CommandEvent {
-        command: "atm-daemon",
-        action: action_name("peer_wire_mode_selected"),
-        outcome: outcome_label(peer_wire_mode.security().as_launch_value()),
-        team,
-        agent: identity.clone(),
-        sender: identity,
-        message_id: None,
-        requires_ack: false,
-        dry_run: false,
-        task_id: None,
-        error_code: None,
-        error_message: None,
-    }) {
-        tracing::warn!(%error, "failed to retain peer-wire mode startup observability event");
-    }
     let mut running = HttpRuntimeBuilder::new(config, handler)
         .with_runtime_health(runtime_health)
         .build()?
