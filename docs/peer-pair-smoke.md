@@ -21,6 +21,7 @@ just smoke local-ip
 just smoke peer-preflight m5 fastpc4
 just smoke crosshost-send m5 fastpc4
 just smoke crosshost-ack m5 fastpc4
+just smoke crosshost-curl-tls m5 fastpc4
 ```
 
 `localhost` proves host-qualified localhost send/read and requires-ack/ack.
@@ -31,6 +32,11 @@ enabled advertised host; it never starts, stops, or retries a remote daemon.
 read` return the exact same ULID and body. `crosshost-ack` repeats that proof
 with `--requires-ack`, has the remote peer acknowledge it, and proves the
 reply reaches the local inbox with the original acknowledged-message ID.
+The crosshost-curl-tls lane proves the public mTLS doctor route in both
+directions, then repeats each direction without a client certificate. The
+negative rows pass only when curl exits nonzero with HTTP status 000, proving
+the TLS handshake rejected the caller before Hyper or the ATM router received
+HTTP.
 
 The legacy `just smoke crosshost <host...>` spelling remains an alias for
 `crosshost-send`. A cross-host recovery smoke is intentionally not claimed
