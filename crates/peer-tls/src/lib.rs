@@ -29,9 +29,14 @@ const DEFAULT_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 /// The adapter snapshots durable interface, local identity, and trust data at
 /// composition time. It cannot infer or select a peer-wire mode itself.
 pub struct MtlsPeerStreamAdapter {
-    identity: TlsIdentity,
-    trusted_peers: Vec<TrustedPeer>,
+    client_configs: Vec<PeerClientConfig>,
+    server_config: Arc<ServerConfig>,
     handshake_timeout: Duration,
+}
+
+struct PeerClientConfig {
+    authority: HostName,
+    config: Arc<ClientConfig>,
 }
 
 impl fmt::Debug for MtlsPeerStreamAdapter {
@@ -61,9 +66,22 @@ impl MtlsPeerStreamAdapter {
             AtmError::certificate_operation("configured mTLS identity is invalid")
                 .with_cause(error.detail())
         })?;
+        let trusted_peers = store.list_trusted_peers()?;
+        install_tls_provider();
+        let client_configs = trusted_peers
+            .iter()
+            .filter(|peer| peer.enabled)
+            .map(|peer| {
+                Ok(PeerClientConfig {
+                    authority: peer.host.clone(),
+                    config: Arc::new(Self::build_client_config(&identity, peer)?),
+                })
+            })
+            .collect::<Result<Vec<_>, AtmError>>()?;
+        let server_config = Arc::new(Self::build_server_config(&identity, trusted_peers)?);
         Ok(Self {
-            identity,
-            trusted_peers: store.list_trusted_peers()?,
+            client_configs,
+            server_config,
             handshake_timeout: DEFAULT_HANDSHAKE_TIMEOUT,
         })
     }
@@ -81,11 +99,11 @@ impl MtlsPeerStreamAdapter {
         tcp: TcpStream,
         peer: &HostName,
     ) -> Result<impl AsyncRead + AsyncWrite + Send + Unpin + use<>, AtmError> {
-        let configured = self.trusted_peer(peer)?;
+        let config = self.client_config_for(peer)?;
         let server_name = ServerName::try_from(peer.as_str().to_owned()).map_err(|_| {
             AtmError::peer_authentication("configured peer hostname is not valid for mTLS")
         })?;
-        let connector = TlsConnector::from(Arc::new(self.client_config(configured)?));
+        let connector = TlsConnector::from(Arc::clone(config));
         timeout(self.handshake_timeout, connector.connect(server_name, tcp))
             .await
             .map_err(|_| AtmError::transport_timeout("mTLS peer handshake deadline expired"))?
@@ -98,7 +116,7 @@ impl MtlsPeerStreamAdapter {
         &self,
         tcp: TcpStream,
     ) -> Result<impl AsyncRead + AsyncWrite + Send + Unpin + use<>, AtmError> {
-        let acceptor = TlsAcceptor::from(Arc::new(self.server_config()?));
+        let acceptor = TlsAcceptor::from(Arc::clone(&self.server_config));
         timeout(self.handshake_timeout, acceptor.accept(tcp))
             .await
             .map_err(|_| AtmError::transport_timeout("mTLS peer handshake deadline expired"))?
@@ -106,10 +124,11 @@ impl MtlsPeerStreamAdapter {
             .map_err(inbound_handshake_error)
     }
 
-    fn trusted_peer(&self, peer: &HostName) -> Result<&TrustedPeer, AtmError> {
-        self.trusted_peers
+    fn client_config_for(&self, peer: &HostName) -> Result<&Arc<ClientConfig>, AtmError> {
+        self.client_configs
             .iter()
-            .find(|candidate| candidate.enabled && candidate.host == *peer)
+            .find(|candidate| candidate.authority == *peer)
+            .map(|candidate| &candidate.config)
             .ok_or_else(|| {
                 AtmError::peer_authentication(
                     "peer is not an enabled exact mTLS authority; plaintext fallback is forbidden",
@@ -117,14 +136,16 @@ impl MtlsPeerStreamAdapter {
             })
     }
 
-    fn client_config(&self, peer: &TrustedPeer) -> Result<ClientConfig, AtmError> {
-        install_tls_provider();
+    fn build_client_config(
+        identity: &TlsIdentity,
+        peer: &TrustedPeer,
+    ) -> Result<ClientConfig, AtmError> {
         ClientConfig::builder()
             .dangerous()
             .with_custom_certificate_verifier(Arc::new(PinnedServerVerifier::new(peer)?))
             .with_client_auth_cert(
-                self.identity.certificates().to_vec(),
-                self.identity.private_key().clone_key(),
+                identity.certificates().to_vec(),
+                identity.private_key().clone_key(),
             )
             .map_err(|source| {
                 AtmError::certificate_operation(
@@ -134,15 +155,15 @@ impl MtlsPeerStreamAdapter {
             })
     }
 
-    fn server_config(&self) -> Result<ServerConfig, AtmError> {
-        install_tls_provider();
+    fn build_server_config(
+        identity: &TlsIdentity,
+        trusted_peers: Vec<TrustedPeer>,
+    ) -> Result<ServerConfig, AtmError> {
         ServerConfig::builder()
-            .with_client_cert_verifier(Arc::new(PinnedClientVerifier::new(
-                self.trusted_peers.clone(),
-            )))
+            .with_client_cert_verifier(Arc::new(PinnedClientVerifier::new(trusted_peers)))
             .with_single_cert(
-                self.identity.certificates().to_vec(),
-                self.identity.private_key().clone_key(),
+                identity.certificates().to_vec(),
+                identity.private_key().clone_key(),
             )
             .map_err(|source| {
                 AtmError::certificate_operation(
@@ -434,7 +455,7 @@ mod tests {
         })
         .expect("adapter");
         let host: HostName = "localhost".parse().expect("host");
-        let error = adapter.trusted_peer(&host).expect_err("disabled peer");
+        let error = adapter.client_config_for(&host).expect_err("disabled peer");
         assert_eq!(error.code().as_str(), "ATM_PEER_AUTHENTICATION_FAILED");
     }
 
@@ -450,9 +471,27 @@ mod tests {
         .expect("adapter");
         let mismatched_host: HostName = "other-peer.example".parse().expect("host");
         let error = adapter
-            .trusted_peer(&mismatched_host)
+            .client_config_for(&mismatched_host)
             .expect_err("mismatched hostname");
         assert_eq!(error.code().as_str(), "ATM_PEER_AUTHENTICATION_FAILED");
+    }
+
+    #[test]
+    fn configured_tls_configs_are_cached_at_adapter_composition() {
+        let directory = tempfile::tempdir().expect("directory");
+        let local = identity(&directory, "local");
+        let peer_identity = identity(&directory, "peer");
+        let adapter = MtlsPeerStreamAdapter::from_peer_config(&TestStore {
+            interfaces: vec![interface()],
+            certificate: Some(local),
+            peers: vec![peer(&peer_identity, true)],
+        })
+        .expect("adapter");
+        let host: HostName = "localhost".parse().expect("host");
+        let first = adapter.client_config_for(&host).expect("cached config");
+        let second = adapter.client_config_for(&host).expect("cached config");
+        assert!(Arc::ptr_eq(first, second));
+        assert_eq!(adapter.client_configs.len(), 1);
     }
 
     #[test]
