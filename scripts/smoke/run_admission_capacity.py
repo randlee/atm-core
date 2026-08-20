@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import platform
 from queue import Empty, Queue
 import re
 import shutil
@@ -70,7 +71,12 @@ TCP_COMPARISON_FRAMES = (1, 2, 4, 8, 16, 64)
 SUSTAINED_MESSAGE_COUNTS = (10_000, 100_000)
 DAEMON_OUTPUT_TAIL_LINES = 200
 GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
-HOOK_MODES = ("active", "disabled")
+PEER_WIRE_SECURITY_MODES = ("mutual-tls", "plaintext-test")
+BENCHMARK_TARGETS = {
+    "tcp": ("tcp", "plaintext-test"),
+    "tcp-tls": ("tcp", "mutual-tls"),
+}
+MISSING_PLAINTEXT_BASELINE = "missing_compatible_plaintext_baseline"
 DAEMON_SWITCH = ROOT / ".claude" / "skills" / "daemon-switch" / "scripts" / "daemon-switch.py"
 # The daemon-switch control plane can legitimately wait through its documented
 # launchctl unload/owner-repair windows (up to 20s + two 20x2s polls).  Its
@@ -80,7 +86,6 @@ DAEMON_SWITCH = ROOT / ".claude" / "skills" / "daemon-switch" / "scripts" / "dae
 MANAGED_DAEMON_TIMEOUT_SECONDS = 120.0
 DIAGNOSTIC_SAMPLE_COUNT = 3
 DIAGNOSTIC_DURATION_SECONDS = 3.0
-DIRECT_STORAGE_DIAGNOSTIC_WRITES = 10_000
 
 
 @dataclass(frozen=True)
@@ -119,9 +124,6 @@ class CapacityRoster:
     team: str
     agent: str
     recipient: str
-    core_team: str
-    core_agent: str
-    core_recipient: str
 
     @classmethod
     def unique(cls) -> "CapacityRoster":
@@ -131,9 +133,6 @@ class CapacityRoster:
             team=f"capacity-team-{suffix}",
             agent=f"capacity-agent-{suffix}",
             recipient=f"capacity-recipient-{suffix}",
-            core_team=f"capacity-core-team-{suffix}",
-            core_agent=f"capacity-core-agent-{suffix}",
-            core_recipient=f"capacity-core-recipient-{suffix}",
         )
 
 
@@ -142,9 +141,6 @@ DEFAULT_CAPACITY_ROSTER = CapacityRoster(
     team="capacity-team",
     agent="capacity-agent",
     recipient="capacity-recipient",
-    core_team="capacity-core-team",
-    core_agent="capacity-core-agent",
-    core_recipient="capacity-core-recipient",
 )
 
 
@@ -323,8 +319,9 @@ class ManagedDaemonLifecycle:
         """Start the already-selected candidate against the disposable state.
 
         Managed-host benchmarking must measure the same launch-managed daemon
-        that will remain installed for dogfooding.  The feature-gated child is
-        reserved for the clean OS-user mode, where no managed service exists.
+        that will remain installed for dogfooding.  Daemon-switch deliberately
+        does not mutate launch arguments, so target-specific peer-wire mode
+        proof uses the owned clean-OS-user launch path below.
         """
         if self.backup is None or not self.quiesced:
             raise SmokeError("managed benchmark cannot start before state isolation")
@@ -505,6 +502,16 @@ def source_revision() -> str:
     return revision
 
 
+def release_version(binary: Path) -> str:
+    """Capture the selected release binary version for public provenance."""
+    result = command_result([str(binary), "--version"], timeout=10.0)
+    version = result["stdout"].strip()
+    if result["exit_code"] != 0 or not version:
+        detail = result["stderr"].strip() or version or "no version output"
+        raise SmokeError(f"could not read benchmark client version: {detail}")
+    return version
+
+
 def is_ancestor_revision(candidate: str, current: str) -> bool:
     """Return whether an accepted evidence revision is in this checkout's history."""
     result = subprocess.run(
@@ -517,12 +524,6 @@ def is_ancestor_revision(candidate: str, current: str) -> bool:
     return result.returncode == 0
 
 
-def validate_hook_mode(value: str) -> str:
-    if value not in HOOK_MODES:
-        raise SmokeError(f"benchmark hook mode must be one of {HOOK_MODES}")
-    return value
-
-
 def runtime_environment(
     atm_home: Path, roster: CapacityRoster = DEFAULT_CAPACITY_ROSTER,
 ) -> dict[str, str]:
@@ -533,9 +534,6 @@ def runtime_environment(
             "ATM_IDENTITY": roster.agent,
             "ATM_TEAM": roster.team,
             "ATM_CAPACITY_RUN_ID": roster.run_id,
-            "ATM_CAPACITY_CORE_TEAM": roster.core_team,
-            "ATM_CAPACITY_CORE_AGENT": roster.core_agent,
-            "ATM_CAPACITY_CORE_RECIPIENT": roster.core_recipient,
             "ATM_DAEMON_READY_STDOUT": "1",
         }
     )
@@ -552,12 +550,10 @@ def host_runtime_client_environment(environment: dict[str, str]) -> dict[str, st
 def benchmark_doctor_payload(result: dict[str, object]) -> dict[str, object]:
     """Validate the benchmark daemon's ready state from its public doctor response.
 
-    The dedicated benchmark binary deliberately installs ``NullObservability``
-    so a throughput run cannot create external hook/logging work.  Doctor
-    consequently returns its one documented observability finding with a
-    non-zero exit status even though the Tokio runtime is live and ready.  Do
-    not turn that intentional harness configuration into a false capacity
-    failure, but reject every other unhealthy response.
+    Capacity runs exercise the same shipped Tokio/Axum daemon used by normal
+    traffic.  Its observability and received-message hook therefore remain
+    active and doctor must be completely healthy; a harness-only exception
+    would conceal a real deployment defect.
     """
     stdout = result.get("stdout")
     if not isinstance(stdout, str):
@@ -579,17 +575,6 @@ def benchmark_doctor_payload(result: dict[str, object]) -> dict[str, object]:
     if not isinstance(summary, dict):
         raise SmokeError("capacity doctor did not report a summary")
     if summary.get("status") == "healthy" and result.get("exit_code") == 0:
-        return payload
-
-    findings = payload.get("findings")
-    if (
-        result.get("exit_code") == 1
-        and summary.get("status") == "error"
-        and isinstance(findings, list)
-        and len(findings) == 1
-        and isinstance(findings[0], dict)
-        and findings[0].get("code") == "ATM_OBSERVABILITY_HEALTH_FAILED"
-    ):
         return payload
 
     detail = result.get("stderr")
@@ -620,12 +605,20 @@ def await_daemon_ready(process: subprocess.Popen[str], output: DaemonOutputCaptu
 
 
 def start_capacity_daemon(
-    daemon: Path, home: Path, env: dict[str, str], hook_mode: str,
+    daemon: Path,
+    home: Path,
+    env: dict[str, str],
+    peer_wire_security: str = "mutual-tls",
 ) -> tuple[subprocess.Popen[str], DaemonOutputCapture]:
-    """Start and await the feature-gated benchmark daemon with one hook mode."""
-    hook_mode = validate_hook_mode(hook_mode)
+    """Start the shipped daemon with its ordinary explicit peer-wire mode."""
+    peer_wire_security = validate_peer_wire_security(peer_wire_security)
     process = subprocess.Popen(
-        [str(daemon), "--hook-mode", hook_mode], cwd=home, env=env,
+        [
+            str(daemon),
+            "--peer-wire-security", peer_wire_security,
+        ],
+        cwd=home,
+        env=env,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
     )
     output = DaemonOutputCapture.start(process)
@@ -644,14 +637,10 @@ def prepare_capacity_roster(
     home: Path,
     roster: CapacityRoster = DEFAULT_CAPACITY_ROSTER,
 ) -> None:
-    """Create separate public-write and decomposition-only benchmark rosters."""
+    """Create the disposable roster used exclusively by public benchmark writes."""
     for team, member in (
         (roster.team, roster.agent),
         (roster.team, roster.recipient),
-        # The direct canonical-core probe must never add rows to the public
-        # write profile's durability-count mailbox.
-        (roster.core_team, roster.core_agent),
-        (roster.core_team, roster.core_recipient),
     ):
         result = command_result(
             [str(atm), "teams", "add-member", team, member, "--home-dir", str(home), "--json"],
@@ -716,6 +705,36 @@ def validate_transport(transport: str) -> str:
     if os.name == "nt" and transport != "tcp":
         raise SmokeError("Windows capacity benchmarking supports only `tcp`")
     return transport
+
+
+def validate_peer_wire_security(value: str) -> str:
+    """Accept only the daemon's public, launch-owned peer-wire values."""
+    if value not in PEER_WIRE_SECURITY_MODES:
+        raise SmokeError(
+            "capacity peer-wire security must be `mutual-tls` or `plaintext-test`"
+        )
+    return value
+
+
+def resolve_benchmark_target(
+    target: str | None,
+    transport: str | None,
+) -> tuple[str, str, str | None]:
+    """Resolve public targets without inventing a benchmark-only transport.
+
+    `tcp` deliberately selects the existing direct plaintext pipeline and
+    `tcp-tls` selects the same daemon with its ordinary mutual-TLS launch
+    argument.  Legacy `--transport` remains available for historical UDS
+    evidence, but it defaults to the secure daemon mode.
+    """
+    if target is not None:
+        selected_transport, peer_wire_security = BENCHMARK_TARGETS[target]
+        if transport is not None and transport != selected_transport:
+            raise SmokeError(
+                f"benchmark target {target!r} requires transport {selected_transport!r}"
+            )
+        return selected_transport, peer_wire_security, target
+    return validate_transport(transport or ("uds" if os.name != "nt" else "tcp")), "mutual-tls", None
 
 
 def local_endpoint(transport: str) -> LocalEndpoint:
@@ -1014,75 +1033,6 @@ def run_cached_roster_heartbeat_probe(
     }
 
 
-def run_direct_probe(
-    benchmark_daemon: Path,
-    environment: dict[str, str],
-    workers: int,
-    flag: str,
-    kind: str,
-) -> dict[str, Any]:
-    """Run one isolated benchmark-binary decomposition mode."""
-    result = command_result(
-        [
-            str(benchmark_daemon),
-            flag,
-            str(DIRECT_STORAGE_DIAGNOSTIC_WRITES),
-            "--workers",
-            str(workers),
-        ],
-        timeout=MANAGED_DAEMON_TIMEOUT_SECONDS,
-        env=environment,
-    )
-    if result["exit_code"] != 0:
-        detail = result["stderr"].strip() or result["stdout"].strip()
-        raise SmokeError(f"direct {kind} probe failed: {detail}")
-    lines = [line for line in result["stdout"].splitlines() if line.strip()]
-    try:
-        payload = json.loads(lines[-1])
-    except (IndexError, json.JSONDecodeError) as error:
-        raise SmokeError(f"direct {kind} probe returned no JSON result") from error
-    if (
-        not isinstance(payload, dict)
-        or payload.get("kind") != kind
-        or payload.get("requested_count") != DIRECT_STORAGE_DIAGNOSTIC_WRITES
-        or payload.get("accepted_count") != DIRECT_STORAGE_DIAGNOSTIC_WRITES
-        or not isinstance(payload.get("admissions_per_second"), (int, float))
-        or payload["admissions_per_second"] <= 0
-    ):
-        raise SmokeError(f"direct {kind} probe returned an invalid result")
-    return payload
-
-
-def run_direct_storage_probe(
-    benchmark_daemon: Path,
-    environment: dict[str, str],
-    workers: int,
-) -> dict[str, Any]:
-    """Measure only the Tokio async admission queue and its one SQLite writer."""
-    return run_direct_probe(
-        benchmark_daemon,
-        environment,
-        workers,
-        "--direct-storage-admission",
-        "async_storage_admission",
-    )
-
-
-def run_direct_core_write_probe(
-    benchmark_daemon: Path,
-    environment: dict[str, str],
-    workers: int,
-) -> dict[str, Any]:
-    """Measure canonical write preparation through the async admission seam."""
-    return run_direct_probe(
-        benchmark_daemon,
-        environment,
-        workers,
-        "--direct-core-write",
-        "canonical_core_write",
-    )
-
-
 def evidence_filename(directory: Path, evidence: dict[str, Any]) -> Path:
     """Return the stable path used by both raw and public run artifacts."""
     directory.mkdir(parents=True, exist_ok=True)
@@ -1170,8 +1120,9 @@ def matching_profile_reference(
     transport: str,
     frames_per_connection: int,
     revision: str,
+    peer_wire_security: str = "plaintext-test",
 ) -> tuple[float, str]:
-    """Use one complete accepted UDS revision when confirming Windows TCP."""
+    """Use only one complete accepted same-mode revision for comparison."""
     by_revision: dict[str, dict[int, tuple[str, float]]] = {}
     for path in directory.glob("*.json"):
         try:
@@ -1181,6 +1132,8 @@ def matching_profile_reference(
             if (
                 payload.get("host_label") == host_label
                 and payload.get("transport") == transport
+                and payload.get("peer_wire_security") == peer_wire_security
+                and payload.get("execution_daemon") == "shipped_atm_daemon"
                 and candidate_frame in TCP_COMPARISON_FRAMES
                 and isinstance(candidate_revision, str)
                 and GIT_REVISION.fullmatch(candidate_revision)
@@ -1199,8 +1152,8 @@ def matching_profile_reference(
     }
     if not complete:
         raise SmokeError(
-            "missing a complete passed UDS comparison set for host "
-            f"{host_label} at or before source revision {revision}"
+            "missing a complete passed comparison set for host "
+            f"{host_label}, mode {peer_wire_security}, at or before source revision {revision}"
         )
     selected_revision, profiles = max(
         complete.items(),
@@ -1210,11 +1163,25 @@ def matching_profile_reference(
     return median, selected_revision
 
 
-def baseline_comparison_reference(path: Path | None) -> tuple[float | None, str | None]:
+def baseline_comparison_reference(
+    path: Path | None,
+    peer_wire_security: str | None = None,
+) -> tuple[float | None, str | None]:
     """Return a durable baseline's median and source revision for public evidence."""
     reference = baseline_reference(path)
     if reference is None:
         return None, None
+    if (
+        peer_wire_security is not None
+        and (
+            reference.get("peer_wire_security") != peer_wire_security
+            or reference.get("execution_daemon") != "shipped_atm_daemon"
+        )
+    ):
+        raise SmokeError(
+            "capacity peer-wire baseline must record the matching explicit mode "
+            "and execution_daemon=shipped_atm_daemon"
+        )
     revision = reference.get("source_revision")
     if not isinstance(revision, str) or not GIT_REVISION.fullmatch(revision):
         raise SmokeError("capacity baseline must record a full source_revision for comparison")
@@ -1237,12 +1204,15 @@ def run_capacity(
     comparison_strict: bool = False,
     comparison_required: bool = True,
     raw_evidence_directory: Path = DEFAULT_RAW_EVIDENCE_DIR,
-    hook_mode: str = "active",
+    peer_wire_security: str = "mutual-tls",
+    benchmark_target: str | None = None,
     managed_daemon: ManagedDaemonOptions | None = None,
+    preflight_failure_code: str | None = None,
+    preflight_failure: str | None = None,
 ) -> tuple[int, Path]:
     """Start one branch daemon, exercise public UDS API, retain evidence, then clean up."""
     transport = validate_transport(transport)
-    hook_mode = validate_hook_mode(hook_mode)
+    peer_wire_security = validate_peer_wire_security(peer_wire_security)
     if frames_per_connection not in SPARSE_FRAMES_PER_CONNECTION:
         raise SmokeError(f"frames per connection must be one of {SPARSE_FRAMES_PER_CONNECTION}")
     if requested_messages <= 0:
@@ -1251,17 +1221,15 @@ def run_capacity(
         raise SmokeError("capacity worker limit must be positive")
     isolation_mode = select_host_state_isolation()
     home = validate_capacity_home(atm_home)
-    if isolation_mode == "isolated_os_user":
-        require_clean_host_daemon_state(smoke_label="admission-capacity smoke")
-    elif managed_daemon is None:
-        raise SmokeError(
-            "ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE=1 requires the managed daemon "
-            "service details; pass --managed-service and the platform-specific daemon-switch options"
-        )
     atm = release_binary("atm")
-    daemon = release_binary("atm-daemon-benchmark")
+    daemon = release_binary("atm-daemon")
     roster = CapacityRoster.unique()
     env = runtime_environment(home, roster)
+    target_command = (
+        f"just benchmark --target {benchmark_target}"
+        if benchmark_target is not None
+        else f"just benchmark --transport {transport}"
+    )
     process: subprocess.Popen[str] | None = None
     daemon_output: DaemonOutputCapture | None = None
     managed_lifecycle: ManagedDaemonLifecycle | None = None
@@ -1271,7 +1239,9 @@ def run_capacity(
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "host_label": os.environ.get("ATM_CAPACITY_HOST_LABEL", "local"),
         "transport": transport,
-        "hook_mode": hook_mode,
+        "peer_wire_security": peer_wire_security,
+        "benchmark_target": benchmark_target,
+        "hook_mode": "active",
         "frames_per_connection": frames_per_connection,
         "run_duration_s": None,
         "messages_per_connection": frames_per_connection,
@@ -1281,32 +1251,44 @@ def run_capacity(
         "target_duration_s": TARGET_PROFILE_DURATION_SECONDS,
         "worker_limit": workers,
         "source_revision": source_revision(),
-        "release": {"atm": str(atm), "atm_daemon_benchmark": str(daemon)},
-        "execution_daemon": (
-            "selected_managed_service"
-            if isolation_mode == "backup_restore"
-            else "feature_gated_benchmark_child"
-        ),
+        "daemon_version": None,
+        "host_os": platform.system().lower(),
+        "host_arch": platform.machine().lower(),
+        "command": target_command,
+        "release": {"atm": str(atm), "atm_daemon": str(daemon)},
+        "execution_daemon": "shipped_atm_daemon",
         "atm_home": str(home),
         "host_state_isolation": isolation_mode,
         "runs": [],
         "thresholds": None,
         "comparison_source_revision": comparison_source_revision,
         "comparison_host_label": comparison_host_label,
+        "benchmark_evidence_failure_code": preflight_failure_code,
         "stages": {
             "runtime_view_validation": "daemon-owned; no peer/store/network work is requested by this client before response",
             "sqlite_transaction": "measured by each public admission response latency",
-            "post_commit_received_hook": (
-                "disabled by the feature-gated benchmark-only hook selector"
-                if hook_mode == "disabled"
-                else "awaited after durable write; any hook failure is returned as a successful write warning"
-            ),
+            "post_commit_received_hook": "active in the shipped daemon; any hook failure is returned as a successful write warning",
             "response_write": "included in each public admission response latency",
         },
-        "decomposition": {},
+        "operational_checks": {},
     }
     started_at = time.monotonic()
     try:
+        if preflight_failure is not None:
+            raise SmokeError(preflight_failure)
+        if isolation_mode == "isolated_os_user":
+            require_clean_host_daemon_state(smoke_label="admission-capacity smoke")
+        elif managed_daemon is None:
+            raise SmokeError(
+                "ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE=1 requires the managed daemon "
+                "service details; pass --managed-service and the platform-specific daemon-switch options"
+            )
+        if managed_daemon is not None and benchmark_target is not None:
+            raise SmokeError(
+                "managed daemon benchmark cannot prove a selected peer-wire mode: "
+                "daemon-switch preserves the installed launch arguments; run the target "
+                "from a clean OS-user campaign instead"
+            )
         if isolation_mode == "backup_restore":
             assert managed_daemon is not None
             managed_lifecycle = ManagedDaemonLifecycle(managed_daemon)
@@ -1315,23 +1297,13 @@ def run_capacity(
             before = count_atm_daemon_processes()
         home.mkdir(parents=True, exist_ok=False)
         prepare_capacity_roster(atm, env, home, roster)
-        evidence["decomposition"]["async_storage_admission"] = run_direct_storage_probe(
-            daemon,
-            env,
-            workers,
-        )
-        evidence["decomposition"]["canonical_core_write"] = run_direct_core_write_probe(
-            daemon,
-            env,
-            workers,
-        )
         if managed_lifecycle is not None:
             managed_lifecycle.start_isolated_service()
             managed_status = daemon_switch_result("status", managed_daemon, doctor=True)
             doctor_payload = managed_status["doctor"]
             evidence["managed_daemon"] = selected_pair(managed_status)
         else:
-            process, daemon_output = start_capacity_daemon(daemon, home, env, hook_mode)
+            process, daemon_output = start_capacity_daemon(daemon, home, env, peer_wire_security)
             doctor = command_result(
                 [str(atm), "doctor", "--json"],
                 timeout=10.0,
@@ -1348,7 +1320,7 @@ def run_capacity(
         }
         if endpoint.kind == "uds" and not Path(str(endpoint.address)).exists():
             raise SmokeError(f"daemon did not publish public local socket {endpoint.address}")
-        evidence["decomposition"]["cached_roster_heartbeat"] = run_cached_roster_heartbeat_probe(
+        evidence["operational_checks"]["cached_roster_heartbeat"] = run_cached_roster_heartbeat_probe(
             endpoint,
             home,
             frames_per_connection,
@@ -1368,13 +1340,14 @@ def run_capacity(
         evidence["sample_count"] = profile["sample_count"]
         evidence["target_duration_s"] = profile["target_duration_s"]
         evidence["run_duration_s"] = profile["run_duration_s"]
+        evidence["daemon_version"] = release_version(atm)
 
         # Preserve the completed public profile before validating its
         # comparison reference. A stale or failed baseline must make the run
         # fail closed, but it must not erase the measurements that explain
         # that failure from the compact evidence.
         baseline_median = load_baseline_median(
-            baseline_path, transport, frames_per_connection,
+            baseline_path, transport, frames_per_connection, peer_wire_security,
         )
         evidence["baseline"] = baseline_reference(baseline_path)
         evidence["thresholds"] = evaluate_profile_thresholds(
@@ -1396,7 +1369,7 @@ def run_capacity(
             evidence["pre_restart_daemon_output"] = daemon_output.evidence()
             process = None
             daemon_output = None
-            process, daemon_output = start_capacity_daemon(daemon, home, env, hook_mode)
+            process, daemon_output = start_capacity_daemon(daemon, home, env, peer_wire_security)
             restart_doctor = command_result(
                 [str(atm), "doctor", "--json"],
                 timeout=10.0,
@@ -1411,7 +1384,7 @@ def run_capacity(
             expected_accepted_count,
             roster,
         )
-    except (OSError, ValueError, SmokeError) as error:
+    except (OSError, RuntimeError, ValueError, SmokeError) as error:
         evidence["passed"] = False
         evidence["failure"] = str(error)
     finally:
@@ -1477,13 +1450,15 @@ def main() -> int:
         default=DEFAULT_RAW_EVIDENCE_DIR,
         help="ignored local interval-trace directory (default: artifacts/benchmark/send-message-benchmark)",
     )
-    parser.add_argument("--transport", default="uds" if os.name != "nt" else "tcp")
     parser.add_argument(
-        "--hook-mode",
-        default="active",
-        choices=HOOK_MODES,
-        help="measure the replacement received hook as active or benchmark-authorized disabled",
+        "--target",
+        choices=tuple(BENCHMARK_TARGETS),
+        help=(
+            "public peer-wire benchmark target: `tcp` selects plaintext-test; "
+            "`tcp-tls` selects mutual TLS"
+        ),
     )
+    parser.add_argument("--transport")
     parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
     parser.add_argument(
         "--baseline",
@@ -1532,8 +1507,9 @@ def main() -> int:
         help="allow daemon-switch's narrow verified-orphan repair during controlled lifecycle recovery",
     )
     args = parser.parse_args()
-    transport = validate_transport(args.transport)
-    hook_mode = validate_hook_mode(args.hook_mode)
+    transport, peer_wire_security, benchmark_target = resolve_benchmark_target(
+        args.target, args.transport,
+    )
     sparse_profiles = tuple(args.frames_per_connection or SPARSE_FRAMES_PER_CONNECTION)
     sustained_profiles = tuple(args.sustained or ())
     profiles = selected_profiles(sparse_profiles, sustained_profiles)
@@ -1562,6 +1538,8 @@ def main() -> int:
         comparison_ratio = 1.0
         comparison_strict = False
         comparison_required = True
+        preflight_failure_code: str | None = None
+        preflight_failure: str | None = None
         profile_baseline = None
         if transport == "uds":
             if frames_per_connection == 1:
@@ -1584,17 +1562,31 @@ def main() -> int:
             comparison_required = os.name != "nt"
             try:
                 comparison_median, comparison_source_revision = matching_profile_reference(
-                    args.evidence_dir, comparison_host_label, "uds", frames_per_connection,
+                    args.evidence_dir,
+                    comparison_host_label,
+                    transport,
+                    frames_per_connection,
                     current_revision,
+                    peer_wire_security,
                 )
             except SmokeError:
-                if comparison_required:
-                    raise
+                # The first accepted mutual-TLS campaign establishes its own
+                # same-mode baseline. Plaintext cannot use that exception:
+                # its pre-AO direct-TCP baseline is the regression gate.
+                if peer_wire_security == "mutual-tls":
+                    comparison_required = False
+                else:
+                    preflight_failure_code = MISSING_PLAINTEXT_BASELINE
+                    preflight_failure = (
+                        "missing a complete passed same-host plaintext baseline; "
+                        "this run is retained as bounded benchmark evidence rather than "
+                        "being discarded before publication"
+                    )
         if args.atm_home is None:
             with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temp:
                 home = Path(temp) / f"{CAPACITY_ROOT_PREFIX}{position}"
                 code, evidence = run_capacity(
-                    home, args.evidence_dir, args.transport,
+                    home, args.evidence_dir, transport,
                     frames_per_connection, requested_messages, workers=args.workers,
                     baseline_path=profile_baseline,
                     comparison_median=comparison_median,
@@ -1604,13 +1596,16 @@ def main() -> int:
                     comparison_strict=comparison_strict,
                     comparison_required=comparison_required,
                     raw_evidence_directory=args.raw_evidence_dir,
-                    hook_mode=hook_mode,
+                    peer_wire_security=peer_wire_security,
+                    benchmark_target=benchmark_target,
                     managed_daemon=managed_daemon,
+                    preflight_failure_code=preflight_failure_code,
+                    preflight_failure=preflight_failure,
                 )
         else:
             home = args.atm_home / f"{CAPACITY_ROOT_PREFIX}{position}"
             code, evidence = run_capacity(
-                    home, args.evidence_dir, args.transport,
+                    home, args.evidence_dir, transport,
                     frames_per_connection, requested_messages, workers=args.workers,
                     baseline_path=profile_baseline,
                     comparison_median=comparison_median,
@@ -1620,8 +1615,11 @@ def main() -> int:
                     comparison_strict=comparison_strict,
                     comparison_required=comparison_required,
                     raw_evidence_directory=args.raw_evidence_dir,
-                    hook_mode=hook_mode,
+                    peer_wire_security=peer_wire_security,
+                    benchmark_target=benchmark_target,
                     managed_daemon=managed_daemon,
+                    preflight_failure_code=preflight_failure_code,
+                    preflight_failure=preflight_failure,
                 )
         codes.append(code)
         if transport == "uds" and frames_per_connection == 1 and code == 0:

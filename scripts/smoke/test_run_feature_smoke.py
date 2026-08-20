@@ -515,7 +515,22 @@ class FeatureSmokeTests(unittest.TestCase):
             "daemon_context": {"version": "1.4.0-beta-ai"},
         }
         result = {"exit_code": 0, "stdout": __import__("json").dumps(doctor), "stderr": ""}
+        rejected = {"exit_code": 35, "stdout": "000", "stderr": "tls alert"}
         cases = []
+        def local_command(argv, timeout=15.0):
+            if argv[0] == "curl" and "--cert" not in argv:
+                return rejected
+            return result
+
+        def remote_command_result(script, timeout=20.0):
+            if script == "mktemp -d":
+                return {"exit_code": 0, "stdout": "/private/var/folders/atm-smoke-certs-123\n", "stderr": ""}
+            if script.startswith("rm -f"):
+                return {"exit_code": 0, "stdout": "", "stderr": ""}
+            if "curl" in script and "--cert" not in script:
+                return rejected
+            return result
+
         with mock.patch.object(RUNNER, "certificate_bundle", return_value="/tmp/local-bundle.pem"), mock.patch.object(
             RUNNER,
             "remote_command",
@@ -527,14 +542,9 @@ class FeatureSmokeTests(unittest.TestCase):
         ), mock.patch.object(
             RUNNER,
             "remote_shell",
-            side_effect=[
-                {"exit_code": 0, "stdout": "/private/var/folders/atm-smoke-certs-123\n", "stderr": ""},
-                result,
-                result,
-                {"exit_code": 0, "stdout": "", "stderr": ""},
-            ],
+            side_effect=lambda _peer, script, timeout=20.0: remote_command_result(script, timeout),
         ) as remote_shell, mock.patch.object(
-            RUNNER, "command", return_value=result
+            RUNNER, "command", side_effect=local_command
         ) as command, mock.patch.object(
             RUNNER, "certificate_authority", side_effect=["local.example.test", "remote.example.test"]
         ), mock.patch.object(RUNNER, "advertised_host", return_value="192.0.2.10"), mock.patch.object(
@@ -549,19 +559,28 @@ class FeatureSmokeTests(unittest.TestCase):
                 "1.4.0-beta-ai",
                 plaintext=False,
             )
-        self.assertEqual([case["status"] for case in cases], ["PASS", "PASS", "PASS", "PASS", "PASS"])
+        self.assertEqual([case["status"] for case in cases], ["PASS"] * 7)
         curl_calls = [call.args[0] for call in command.call_args_list if call.args[0][0] == "curl"]
-        self.assertEqual(len(curl_calls), 2)
+        self.assertEqual(len(curl_calls), 3)
         self.assertIn("--resolve", curl_calls[0])
-        self.assertNotIn("--resolve", curl_calls[1])
-        self.assertIn("https://remote.example.test:43101/v1/atm/doctor", curl_calls[1])
+        self.assertIn("--cert", curl_calls[0])
+        self.assertNotIn("--cert", curl_calls[1])
+        self.assertIn("--write-out", curl_calls[1])
+        self.assertNotIn("--resolve", curl_calls[2])
+        self.assertIn("https://remote.example.test:43101/v1/atm/doctor", curl_calls[2])
         local_ca_path = curl_calls[0][curl_calls[0].index("--cacert") + 1]
         self.assertEqual(Path(local_ca_path).name, "remote-public.pem")
+        self.assertTrue(any("unauthenticated mTLS" in case["name"] for case in cases))
         cleanup_script = remote_shell.call_args_list[-1].args[1]
         self.assertIn("rm -f", cleanup_script)
         self.assertIn("local-public.pem", cleanup_script)
         self.assertIn("peer-public.pem", cleanup_script)
         self.assertIn("rmdir", cleanup_script)
+
+    def test_mtls_rejection_requires_nonzero_curl_exit_and_no_http_status(self):
+        self.assertTrue(RUNNER.mtls_rejected_before_http({"exit_code": 35, "stdout": "000", "stderr": ""}))
+        self.assertFalse(RUNNER.mtls_rejected_before_http({"exit_code": 0, "stdout": "000", "stderr": ""}))
+        self.assertFalse(RUNNER.mtls_rejected_before_http({"exit_code": 22, "stdout": "401", "stderr": ""}))
 
     def test_crosshost_send_requires_remote_exact_ulid_and_body(self):
         sent = {"message_id": "01SEND"}

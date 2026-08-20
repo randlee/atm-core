@@ -68,21 +68,15 @@ a physical M5 or Windows result. The runner still correctly refuses to attach
 to or replace an ambient daemon and requires an isolated OS user (or explicit
 idle-host backup/restore authority).
 
-The runner selects its mode only by launching the separately compiled
-`atm-daemon-benchmark --hook-mode <active|disabled>` binary. That binary is
-available only with `atm-daemon-bootstrap`'s `benchmark-harness` feature; the
-shipped `atm-daemon` composition always injects the active received-hook
-selector and does not read a hook-mode environment variable. Build the
-harness with:
-
-```sh
-cargo build --release -p atm-daemon-bootstrap \
-  --features benchmark-harness --bin atm-daemon-benchmark
-```
-
-The production daemon remains unable to select `disabled`. Current-runtime
-rows not enumerated above, including hook-active and Windows, are still
-**pending** until an authorized operator executes the isolated benchmark gate.
+Historical note: this AL.9 harness design was superseded by AO.4 because an
+alternate benchmark executable cannot prove the shipped daemon's performance.
+Current public commands are `just benchmark --target tcp` and
+`just benchmark --target tcp-tls`; each launches the shipped Tokio/Axum
+`atm-daemon` with its explicit peer-wire mode and retains the active hook.
+The historical rows above are not AO.4-compatible baseline evidence without
+new shipped-daemon provenance. Current-runtime rows not enumerated above,
+including hook-active and Windows, remain **pending** until an authorized
+operator executes the isolated benchmark gate.
 
 ### Explicit managed-host backup/restore mode
 
