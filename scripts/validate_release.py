@@ -16,11 +16,6 @@ from datetime import datetime
 from datetime import timezone
 from pathlib import Path
 
-# This retained local validator is deliberately separate from the canonical
-# publish workflow. It still verifies ATM-only installed-document and inventory
-# behavior through the legacy helper surface, whose commands are not yet all
-# implemented by the shared `.github/scripts` package. AS.2 and sc-publish #17
-# own the schema/capability convergence; do not create a local adapter here.
 from release_artifacts import installed_doc_members
 from release_artifacts import installed_doc_source_files
 from release_artifacts import installed_docs_source_root

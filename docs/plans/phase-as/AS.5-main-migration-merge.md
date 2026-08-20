@@ -98,22 +98,3 @@ just test
 
 Do not remove legacy behavior merely because a similarly named generic
 workflow exists; activation and evidence must be real.
-
-## Legacy Retirement Review — 2026-08-20
-
-Removed the bespoke `.github/workflows/hermes-atm-pypi-publish.yml` and its
-private `scripts/prepare_hermes_atm_publish_artifacts.py` staging helper,
-together with their tests. Their verified canonical replacement is the merged
-manifest-driven `.github/workflows/pypi-publish.yml`: it verifies immutable
-release assets with `verify-published-release`, selects only the manifest's
-Python distributions, writes a source-bound receipt, and uses the declared
-PyPI/TestPyPI channel configuration. AS.1–AS.4 accepted the canonical
-consumer contract and PyPI preflight/publication path, so retaining the
-bespoke `twine` workflow would leave two competing release paths.
-
-Retained `scripts/validate_release.py`, `scripts/release_artifacts.py`,
-`scripts/release_gate.sh`, and `scripts/verify_release_archive.py`. The
-migration record still identifies installed-document archive verification and
-the retained release-inventory schema as capabilities without a verified
-canonical replacement. They remain local supporting validation only and are
-not evidence for canonical publication eligibility.

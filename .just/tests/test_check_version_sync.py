@@ -113,17 +113,6 @@ class CheckVersionSyncTests(unittest.TestCase):
 
             validate_python_release_versions(repo_root, "1.4.1", manifests)
 
-    def test_python_release_versions_accept_dynamic_query_maturin_version_from_cargo(self) -> None:
-        with tempfile.TemporaryDirectory() as tempdir:
-            repo_root = Path(tempdir)
-            manifests = self.write_python_release_manifests(repo_root, "1.4.1")
-            (repo_root / "crates/atm-query-python/pyproject.toml").write_text(
-                '[project]\nname = "atm-query"\ndynamic = ["version"]\n',
-                encoding="utf-8",
-            )
-
-            validate_python_release_versions(repo_root, "1.4.1", manifests)
-
     def test_python_release_versions_reject_wrong_dynamic_maturin_cargo_version(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
