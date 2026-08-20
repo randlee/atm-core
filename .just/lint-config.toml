@@ -131,6 +131,7 @@ allowed_dependencies = ["serde", "serde_json"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-daemon-bootstrap/Cargo.toml"
+boundary_record_path = "boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml"
 allowed_dependencies = ["atm-core", "atm-http-runtime", "atm-runtime", "atm-storage", "atm-storage-rusqlite", "atm-template-sc-compose", "fs4", "peer-tls", "serde_json", "tempfile", "tokio", "tracing", "ulid"]
 
 [[boundaries.manifest_dependency_allowlists]]
