@@ -122,7 +122,7 @@ Deliverable 3.
 
 ## Required Validation
 
-- `cargo test -p atm-core -p atm-http-runtime -p atm-daemon-bootstrap`
+- `cargo test -p agent-team-mail-core -p atm-http-runtime -p atm-daemon-bootstrap`
 - `cargo test -p atm-architecture --test boundary_enforcement`
 - `just lint`
 - `just test`
