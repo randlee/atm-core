@@ -5,6 +5,7 @@
 //! an explicit subcommand on its command line.
 
 use std::num::NonZeroUsize;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
@@ -14,7 +15,9 @@ use atm_core::error::AtmError;
 use atm_core::observability::NullObservability;
 use atm_core::send::{SendMessageSource, WriteRequest, prepare_write_with_async_runtime};
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
-use atm_daemon_bootstrap::{BenchmarkHookMode, PeerWireSecurity};
+use atm_daemon_bootstrap::{
+    BenchmarkDirectPeerListener, BenchmarkHookMode, BenchmarkPeerWireSecurity,
+};
 use atm_storage::{Message, MessageEnvelope, MessageKey};
 use tokio::task::JoinSet;
 
@@ -29,7 +32,8 @@ const CORE_WRITE_SENDER: &str = "capacity-core-agent";
 enum BenchmarkInvocation {
     Daemon {
         hook_mode: BenchmarkHookMode,
-        peer_wire_security: PeerWireSecurity,
+        peer_wire_security: BenchmarkPeerWireSecurity,
+        direct_peer_listener: BenchmarkDirectPeerListener,
     },
     DirectStorageAdmission {
         messages: NonZeroUsize,
@@ -47,7 +51,15 @@ async fn main() {
         Ok(BenchmarkInvocation::Daemon {
             hook_mode,
             peer_wire_security,
-        }) => atm_daemon_bootstrap::run_benchmark_daemon(hook_mode, peer_wire_security).await,
+            direct_peer_listener,
+        }) => {
+            atm_daemon_bootstrap::run_benchmark_daemon(
+                hook_mode,
+                peer_wire_security,
+                direct_peer_listener,
+            )
+            .await
+        }
         Ok(BenchmarkInvocation::DirectStorageAdmission { messages, workers }) => {
             run_direct_storage_admission(messages, workers).await
         }
@@ -78,33 +90,38 @@ fn parse_benchmark_invocation(
         Some("--hook-mode") => {
             let mode = args.next().ok_or_else(|| {
                 AtmError::config(
-                    "usage: atm-daemon-benchmark --hook-mode <active|disabled> [--peer-wire-security <mtls|plaintext-test>]",
+                    "usage: atm-daemon-benchmark --hook-mode <active|disabled> --peer-wire-security <plaintext-test|mtls> --direct-peer-listener <disabled|enabled>",
                 )
             })?;
-            let peer_wire_security = match args.next().as_deref() {
-                None => PeerWireSecurity::Mtls,
-                Some("--peer-wire-security") => {
-                    let value = args.next().ok_or_else(|| {
-                        AtmError::config(
-                            "usage: atm-daemon-benchmark --hook-mode <active|disabled> [--peer-wire-security <mtls|plaintext-test>]",
-                        )
-                    })?;
-                    PeerWireSecurity::parse(&value)?
-                }
-                Some(_) => {
-                    return Err(AtmError::config(
-                        "usage: atm-daemon-benchmark --hook-mode <active|disabled> [--peer-wire-security <mtls|plaintext-test>]",
-                    ));
-                }
-            };
-            if args.next().is_some() {
+            if args.next().as_deref() != Some("--peer-wire-security") {
                 return Err(AtmError::config(
-                    "usage: atm-daemon-benchmark --hook-mode <active|disabled> [--peer-wire-security <mtls|plaintext-test>]",
+                    "usage: atm-daemon-benchmark --hook-mode <active|disabled> --peer-wire-security <plaintext-test|mtls> --direct-peer-listener <disabled|enabled>",
                 ));
             }
-            BenchmarkHookMode::parse(&mode).map(|hook_mode| BenchmarkInvocation::Daemon {
-                hook_mode,
-                peer_wire_security,
+            let peer_wire_security = args.next().ok_or_else(|| {
+                AtmError::config(
+                    "usage: atm-daemon-benchmark --hook-mode <active|disabled> --peer-wire-security <plaintext-test|mtls> --direct-peer-listener <disabled|enabled>",
+                )
+            })?;
+            if args.next().as_deref() != Some("--direct-peer-listener") {
+                return Err(AtmError::config(
+                    "usage: atm-daemon-benchmark --hook-mode <active|disabled> --peer-wire-security <plaintext-test|mtls> --direct-peer-listener <disabled|enabled>",
+                ));
+            }
+            let direct_peer_listener = args.next().ok_or_else(|| {
+                AtmError::config(
+                    "usage: atm-daemon-benchmark --hook-mode <active|disabled> --peer-wire-security <plaintext-test|mtls> --direct-peer-listener <disabled|enabled>",
+                )
+            })?;
+            if args.next().is_some() {
+                return Err(AtmError::config(
+                    "usage: atm-daemon-benchmark --hook-mode <active|disabled> --peer-wire-security <plaintext-test|mtls> --direct-peer-listener <disabled|enabled>",
+                ));
+            }
+            Ok(BenchmarkInvocation::Daemon {
+                hook_mode: BenchmarkHookMode::parse(&mode)?,
+                peer_wire_security: BenchmarkPeerWireSecurity::parse(&peer_wire_security)?,
+                direct_peer_listener: BenchmarkDirectPeerListener::parse(&direct_peer_listener)?,
             })
         }
         Some("--direct-storage-admission") => {
@@ -124,7 +141,7 @@ fn parse_benchmark_invocation(
             Ok(BenchmarkInvocation::DirectCoreWrite { messages, workers })
         }
         _ => Err(AtmError::config(
-            "usage: atm-daemon-benchmark --hook-mode <active|disabled> | --direct-storage-admission <count> --workers <count> | --direct-core-write <count> --workers <count>",
+            "usage: atm-daemon-benchmark --hook-mode <active|disabled> --peer-wire-security <plaintext-test|mtls> --direct-peer-listener <disabled|enabled> | --direct-storage-admission <count> --workers <count> | --direct-core-write <count> --workers <count>",
         )),
     }
 }
@@ -267,14 +284,14 @@ async fn run_direct_core_write(
     let runtime = atm_daemon_bootstrap::assemble_default_runtime()?
         .for_daemon()
         .service_runtime;
-    let home = atm_core::home::atm_home()?;
+    let request_config = DirectCoreWriteConfig::from_environment(atm_core::home::atm_home()?);
     let next = Arc::new(AtomicUsize::new(0));
     let started = Instant::now();
     let mut tasks = JoinSet::new();
 
     for _ in 0..workers.get() {
         let runtime = runtime.clone();
-        let home = home.clone();
+        let request_config = request_config.clone();
         let next = Arc::clone(&next);
         tasks.spawn(async move {
             let mut accepted = 0_usize;
@@ -284,7 +301,7 @@ async fn run_direct_core_write(
                     return Ok::<usize, AtmError>(accepted);
                 }
                 prepare_write_with_async_runtime(
-                    direct_core_write_request(&home, sequence)?,
+                    direct_core_write_request(&request_config, sequence)?,
                     &NullObservability,
                     &runtime,
                 )
@@ -323,21 +340,44 @@ async fn run_direct_core_write(
     Ok(())
 }
 
+/// Environment-derived benchmark identities captured once before concurrent
+/// workers start. The hot admission loop must not repeatedly read mutable
+/// process state or re-allocate its target address per message.
+#[derive(Clone)]
+struct DirectCoreWriteConfig {
+    home: PathBuf,
+    sender: AgentName,
+    recipient_address: String,
+    team: TeamName,
+}
+
+impl DirectCoreWriteConfig {
+    fn from_environment(home: PathBuf) -> Self {
+        let team =
+            env::var("ATM_CAPACITY_CORE_TEAM").unwrap_or_else(|_| CORE_WRITE_TEAM.to_owned());
+        let sender =
+            env::var("ATM_CAPACITY_CORE_AGENT").unwrap_or_else(|_| CORE_WRITE_SENDER.to_owned());
+        let recipient = env::var("ATM_CAPACITY_CORE_RECIPIENT")
+            .unwrap_or_else(|_| CORE_WRITE_RECIPIENT.to_owned());
+        Self {
+            home,
+            sender: AgentName::from_validated(&sender),
+            recipient_address: format!("{recipient}@{team}"),
+            team: TeamName::from_validated(&team),
+        }
+    }
+}
+
 fn direct_core_write_request(
-    home: &std::path::Path,
+    config: &DirectCoreWriteConfig,
     sequence: usize,
 ) -> Result<WriteRequest, AtmError> {
-    let team = env::var("ATM_CAPACITY_CORE_TEAM").unwrap_or_else(|_| CORE_WRITE_TEAM.to_owned());
-    let sender =
-        env::var("ATM_CAPACITY_CORE_AGENT").unwrap_or_else(|_| CORE_WRITE_SENDER.to_owned());
-    let recipient =
-        env::var("ATM_CAPACITY_CORE_RECIPIENT").unwrap_or_else(|_| CORE_WRITE_RECIPIENT.to_owned());
     WriteRequest::new(
-        home.to_path_buf(),
-        home.to_path_buf(),
-        AgentName::from_validated(&sender),
-        &format!("{recipient}@{team}"),
-        TeamName::from_validated(&team),
+        config.home.clone(),
+        config.home.clone(),
+        config.sender.clone(),
+        &config.recipient_address,
+        config.team.clone(),
         SendMessageSource::Inline(format!("capacity-core-{sequence}")),
         None,
         false,
@@ -356,8 +396,11 @@ fn replacement_exit_code(error: &AtmError) -> i32 {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use super::{
-        BenchmarkHookMode, BenchmarkInvocation, PeerWireSecurity, direct_core_write_request,
+        BenchmarkDirectPeerListener, BenchmarkHookMode, BenchmarkInvocation,
+        BenchmarkPeerWireSecurity, DirectCoreWriteConfig, direct_core_write_request,
         direct_storage_message, parse_benchmark_invocation, parse_nonzero_argument,
     };
 
@@ -380,8 +423,9 @@ mod tests {
 
     #[test]
     fn direct_core_writes_use_the_canonical_capacity_address() {
-        let home = std::path::Path::new("/tmp/atm-capacity");
-        let request = direct_core_write_request(home, 7).expect("core request");
+        let home = Path::new("/tmp/atm-capacity");
+        let config = DirectCoreWriteConfig::from_environment(home.to_path_buf());
+        let request = direct_core_write_request(&config, 7).expect("core request");
         assert_eq!(request.caller_identity.as_str(), "capacity-core-agent");
         assert_eq!(request.caller_team.as_str(), "capacity-core-team");
         assert_eq!(
@@ -400,13 +444,21 @@ mod tests {
 
     #[test]
     fn parser_accepts_the_two_explicit_benchmark_modes() {
-        let daemon = parse_benchmark_invocation(["--hook-mode".to_owned(), "disabled".to_owned()])
-            .expect("hook-mode invocation parses");
+        let daemon = parse_benchmark_invocation([
+            "--hook-mode".to_owned(),
+            "disabled".to_owned(),
+            "--peer-wire-security".to_owned(),
+            "mtls".to_owned(),
+            "--direct-peer-listener".to_owned(),
+            "enabled".to_owned(),
+        ])
+        .expect("hook-mode invocation parses");
         assert!(matches!(
             daemon,
             BenchmarkInvocation::Daemon {
                 hook_mode: BenchmarkHookMode::Disabled,
-                peer_wire_security: PeerWireSecurity::Mtls,
+                peer_wire_security: BenchmarkPeerWireSecurity::MutualTls,
+                direct_peer_listener: BenchmarkDirectPeerListener::Enabled,
             }
         ));
 
@@ -415,15 +467,44 @@ mod tests {
             "disabled".to_owned(),
             "--peer-wire-security".to_owned(),
             "plaintext-test".to_owned(),
+            "--direct-peer-listener".to_owned(),
+            "enabled".to_owned(),
         ])
-        .expect("explicit plaintext diagnostic invocation parses");
+        .expect("explicit plaintext benchmark invocation parses");
         assert!(matches!(
             plaintext,
             BenchmarkInvocation::Daemon {
                 hook_mode: BenchmarkHookMode::Disabled,
-                peer_wire_security: PeerWireSecurity::PlaintextTest,
+                peer_wire_security: BenchmarkPeerWireSecurity::PlaintextTest,
+                direct_peer_listener: BenchmarkDirectPeerListener::Enabled,
             }
         ));
+
+        for arguments in [
+            vec!["--hook-mode", "disabled"],
+            vec![
+                "--hook-mode",
+                "disabled",
+                "--peer-wire-security",
+                "plaintext",
+            ],
+            vec![
+                "--hook-mode",
+                "disabled",
+                "--peer-wire-security",
+                "mtls",
+                "--direct-peer-listener",
+                "implicit",
+            ],
+        ] {
+            let error = parse_benchmark_invocation(arguments.into_iter().map(str::to_owned))
+                .expect_err("implicit or invalid benchmark wire security must be rejected");
+            assert!(
+                error.message().contains("peer-wire-security")
+                    || error.message().contains("direct-peer-listener"),
+                "unexpected error: {error}"
+            );
+        }
 
         let direct = parse_benchmark_invocation([
             "--direct-storage-admission".to_owned(),

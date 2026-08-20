@@ -185,12 +185,10 @@ smoke feature='normal' *args:
 # Run one isolated, release-built local admission benchmark. On Unix choose
 # UDS or loopback TCP; Windows accepts TCP only. The runner rejects ambient
 # daemon/database state and writes one report-compatible JSON artifact per run.
-benchmark *args:
-    cargo build --release -p agent-team-mail -p atm-daemon
+benchmark target='default' *args:
     # The isolated capacity runner launches this feature-gated bootstrap binary.
     cargo build --release -p atm-daemon-bootstrap --features benchmark-harness --bin atm-daemon-benchmark
-    {{python_cmd}} .just/sign_daemon_dev.py
-    {{python_cmd}} scripts/smoke/run_admission_capacity.py {{args}}
+    {{python_cmd}} scripts/smoke/run_admission_capacity.py {{target}} {{args}}
     # Publish all captured variants into the canonical report site.
     {{python_cmd}} scripts/smoke/benchmark_report.py --rebuild
 

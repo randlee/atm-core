@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from scripts.public_redaction import public_string
 
 
-SUMMARY_SCHEMA_VERSION = 3
+SUMMARY_SCHEMA_VERSION = 4
 SUPPORTED_TRANSPORTS = frozenset({"uds", "tcp"})
 SUPPORTED_FRAMES = frozenset({1, 2, 4, 8, 16, 64})
 
@@ -146,6 +146,7 @@ class BenchmarkSummary(BaseModel):
     generated_at: str = Field(min_length=1)
     host_label: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
     transport: Literal["uds", "tcp"]
+    peer_wire_security: Literal["not_applicable", "plaintext_test", "mutual_tls"]
     frames_per_connection: Literal[1, 2, 4, 8, 16, 64]
     messages_per_connection: int = Field(gt=0)
     requested_messages_per_sample: int = Field(gt=0)
@@ -179,6 +180,10 @@ class BenchmarkSummary(BaseModel):
 
     @model_validator(mode="after")
     def run_matches_metrics(self) -> "BenchmarkSummary":
+        if self.transport == "uds" and self.peer_wire_security != "not_applicable":
+            raise ValueError("UDS summaries require peer_wire_security `not_applicable`")
+        if self.transport == "tcp" and self.peer_wire_security == "not_applicable":
+            raise ValueError("TCP summaries require an explicit peer_wire_security")
         if self.metrics is None:
             if self.passed or self.failure is None:
                 raise ValueError("a result without samples must be a failed run with a failure")
@@ -226,7 +231,7 @@ def distribution(values: list[float]) -> dict[str, float]:
 
 
 def compact_evidence(evidence: dict[str, Any]) -> BenchmarkSummary:
-    """Convert one v2 verbose runner record into its v3 public summary."""
+    """Convert one verbose runner record into the current public summary."""
     try:
         profile = evidence["runs"][0]
         intervals = profile["intervals"]
@@ -261,6 +266,10 @@ def compact_evidence(evidence: dict[str, Any]) -> BenchmarkSummary:
         "generated_at": evidence["generated_at"],
         "host_label": evidence["host_label"],
         "transport": evidence["transport"],
+        "peer_wire_security": evidence.get(
+            "peer_wire_security",
+            "not_applicable" if evidence["transport"] == "uds" else "plaintext_test",
+        ),
         "frames_per_connection": evidence["frames_per_connection"],
         "messages_per_connection": evidence.get("messages_per_connection", evidence["frames_per_connection"]),
         "requested_messages_per_sample": evidence.get("requested_messages_per_sample", intervals[0].get("requested_count", 1_000)),
@@ -317,6 +326,10 @@ def failed_summary(evidence: dict[str, Any]) -> BenchmarkSummary:
             "generated_at": evidence["generated_at"],
             "host_label": evidence["host_label"],
             "transport": evidence["transport"],
+            "peer_wire_security": evidence.get(
+                "peer_wire_security",
+                "not_applicable" if evidence["transport"] == "uds" else "plaintext_test",
+            ),
             "frames_per_connection": evidence["frames_per_connection"],
             "messages_per_connection": evidence.get("messages_per_connection", evidence["frames_per_connection"]),
             "requested_messages_per_sample": evidence.get("requested_messages_per_sample", 1_000),

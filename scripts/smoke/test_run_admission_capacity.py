@@ -55,6 +55,10 @@ def complete_evidence(**overrides):
         "passed": True,
     }
     evidence.update(overrides)
+    if "peer_wire_security" not in overrides:
+        evidence["peer_wire_security"] = (
+            "not_applicable" if evidence["transport"] == "uds" else "plaintext_test"
+        )
     return evidence
 
 
@@ -77,15 +81,54 @@ def healthy_managed_status() -> dict[str, object]:
 
 
 class AdmissionCapacityTests(unittest.TestCase):
-    def test_host_runtime_doctor_environment_ignores_disposable_atm_home(self):
+    def test_public_target_names_select_explicit_transport_and_wire_security(self):
+        self.assertEqual(RUNNER.target_selection("uds", None), ("uds", "not_applicable"))
+        self.assertEqual(RUNNER.target_selection("tcp", None), ("tcp", "plaintext_test"))
+        self.assertEqual(RUNNER.target_selection("tcp-tls", None), ("tcp", "mutual_tls"))
+        with mock.patch.object(RUNNER.os, "name", "nt"):
+            self.assertEqual(RUNNER.target_selection("default", None), ("tcp", "plaintext_test"))
+            self.assertEqual(RUNNER.target_selection("tcp", None), ("tcp", "plaintext_test"))
+            self.assertEqual(RUNNER.target_selection("tcp-tls", None), ("tcp", "mutual_tls"))
+        with self.assertRaisesRegex(RUNNER.SmokeError, "either a benchmark target"):
+            RUNNER.target_selection("tcp", "tcp")
+
+    def test_tcp_tls_endpoint_requires_only_the_disposable_identity_bundle(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            record = home / "benchmark-peer-tls.path"
+            with self.assertRaisesRegex(RUNNER.SmokeError, "identity record"):
+                RUNNER.local_endpoint("tcp", "mutual_tls", home)
+            identity = home / "private-bundle.pem"
+            identity.write_text("disposable test identity", encoding="utf-8")
+            record.write_text(str(identity), encoding="utf-8")
+            endpoint = RUNNER.local_endpoint("tcp", "mutual_tls", home)
+        self.assertEqual(endpoint.address, ("127.0.0.1", 43_101))
+        self.assertEqual(endpoint.peer_wire_security, "mutual_tls")
+        self.assertEqual(endpoint.tls_identity, identity)
+
+    def test_baseline_rejects_cross_mode_tcp_artifact(self):
+        payload = {
+            "transport": "tcp", "peer_wire_security": "plaintext_test",
+            "frames_per_connection": 1, "passed": True,
+            "sample_count": 10, "minimum_sample_count": 10,
+            "run_duration_s": 20.0, "target_duration_s": 20.0,
+            "runs": [{"intervals": [{"admissions_per_second": 1_000}]}],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "plaintext.json"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaisesRegex(RUNNER.SmokeError, "peer_wire_security"):
+                RUNNER.load_baseline_median(path, "tcp", "mutual_tls", 1)
+
+    def test_child_runtime_doctor_environment_keeps_disposable_atm_home(self):
         environment = {
             "ATM_HOME": "/tmp/atm-capacity-1",
             "ATM_IDENTITY": "capacity-agent",
             "ATM_TEAM": "capacity-team",
         }
         self.assertEqual(
-            RUNNER.host_runtime_client_environment(environment),
-            {"ATM_IDENTITY": "capacity-agent", "ATM_TEAM": "capacity-team"},
+            RUNNER.benchmark_client_environment(environment),
+            environment,
         )
         self.assertIn("ATM_HOME", environment)
 
@@ -468,6 +511,13 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
                 mock.patch.object(RUNNER, "run_direct_storage_probe"),
                 mock.patch.object(RUNNER, "run_direct_core_write_probe"),
+                mock.patch.object(
+                    RUNNER,
+                    "start_capacity_daemon",
+                    return_value=(mock.Mock(pid=123), mock.Mock()),
+                ),
+                mock.patch.object(RUNNER, "benchmark_doctor_payload", return_value={}),
+                mock.patch.object(RUNNER, "reap_owned_daemon"),
                 mock.patch.object(RUNNER, "local_endpoint", side_effect=RUNNER.SmokeError("benchmark failed")),
                 mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"),
                 mock.patch.object(
@@ -488,7 +538,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(captured["managed_daemon_recovery"], "doctor-verified")
         self.assertEqual(
             calls,
-            ["status", "quiesce", "restart", "status", "status", "quiesce", "restart", "status"],
+            ["status", "quiesce", "restart", "status"],
         )
 
     def test_transport_is_platform_explicit(self):
@@ -644,8 +694,9 @@ class AdmissionCapacityTests(unittest.TestCase):
             path = RUNNER.write_evidence(Path(temp), evidence)
             recorded = __import__("json").loads(path.read_text(encoding="utf-8"))
 
-        self.assertEqual(recorded["schema_version"], 3)
+        self.assertEqual(recorded["schema_version"], 4)
         self.assertEqual(recorded["transport"], "tcp")
+        self.assertEqual(recorded["peer_wire_security"], "plaintext_test")
         self.assertEqual(recorded["frames_per_connection"], 16)
         self.assertEqual(
             recorded["direct_sqlite_message_write"]["admissions_per_second"],
@@ -668,7 +719,10 @@ class AdmissionCapacityTests(unittest.TestCase):
         evidence = complete_evidence(host_label="mac-arm64-01", frames_per_connection=16)
         with tempfile.TemporaryDirectory() as temp:
             path = RUNNER.evidence_filename(Path(temp), evidence)
-        self.assertEqual(path.name, "20260801-050000.123456-mac-arm64-01-tcp-f16.json")
+        self.assertEqual(
+            path.name,
+            "20260801-050000.123456-mac-arm64-01-tcp-plaintext_test-f16.json",
+        )
 
     def test_evidence_filename_is_the_report_renderer_artifact_id(self):
         import benchmark_report
@@ -752,6 +806,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 payload = {
                     "host_label": "mac-arm64-01",
                     "transport": "uds",
+                    "peer_wire_security": "not_applicable",
                     "frames_per_connection": frame,
                     "source_revision": "b" * 40,
                     "generated_at": f"2026-08-01T00:00:{frame:02d}Z",
@@ -765,7 +820,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 (root / f"f{frame}.json").write_text(json.dumps(payload), encoding="utf-8")
             with mock.patch.object(RUNNER, "is_ancestor_revision", return_value=True):
                 median, reference = RUNNER.matching_profile_reference(
-                    root, "mac-arm64-01", "uds", 4, "c" * 40,
+                    root, "mac-arm64-01", "uds", "not_applicable", 4, "c" * 40,
                 )
         self.assertEqual(median, 4_000)
         self.assertEqual(reference, "b" * 40)
@@ -872,6 +927,7 @@ class AdmissionCapacityTests(unittest.TestCase):
     def test_baseline_requires_matching_transport_and_frame_profile(self):
         payload = {
             "transport": "tcp",
+            "peer_wire_security": "plaintext_test",
             "frames_per_connection": 8,
             "passed": True,
             "sample_count": 10,
@@ -883,11 +939,22 @@ class AdmissionCapacityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "baseline.json"
             path.write_text(__import__("json").dumps(payload), encoding="utf-8")
-            self.assertEqual(RUNNER.load_baseline_median(path, "tcp", 8), 1_000)
+            self.assertEqual(
+                RUNNER.load_baseline_median(path, "tcp", "plaintext_test", 8), 1_000,
+            )
             with self.assertRaisesRegex(RUNNER.SmokeError, "transport"):
-                RUNNER.load_baseline_median(path, "uds", 8)
+                RUNNER.load_baseline_median(path, "uds", "not_applicable", 8)
             with self.assertRaisesRegex(RUNNER.SmokeError, "frames_per_connection"):
-                RUNNER.load_baseline_median(path, "tcp", 16)
+                RUNNER.load_baseline_median(path, "tcp", "plaintext_test", 16)
+
+    def test_baseline_reads_current_compact_schema(self):
+        summary = RUNNER.compact_evidence(complete_evidence()).model_dump(mode="json")
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "baseline.json"
+            path.write_text(json.dumps(summary), encoding="utf-8")
+            self.assertEqual(
+                RUNNER.load_baseline_median(path, "tcp", "plaintext_test", 1), 1_000,
+            )
 
     def test_baseline_reference_retains_source_revision_and_observed_result(self):
         payload = {
@@ -906,14 +973,15 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(reference["median_admissions_per_second"], 180.0)
 
     def test_invalid_baseline_is_rejected_before_its_median_is_used(self):
-        payload = {"transport": "uds", "frames_per_connection": 1, "passed": False,
+        payload = {"transport": "uds", "peer_wire_security": "not_applicable",
+                   "frames_per_connection": 1, "passed": False,
                    "sample_count": 1, "minimum_sample_count": 10, "run_duration_s": 0.1,
                    "target_duration_s": 20.0, "runs": [{"intervals": [{"admissions_per_second": 180.0}]}]}
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "baseline.json"
             path.write_text(json.dumps(payload), encoding="utf-8")
             with self.assertRaisesRegex(RUNNER.SmokeError, "did not pass"):
-                RUNNER.load_baseline_median(path, "uds", 1)
+                RUNNER.load_baseline_median(path, "uds", "not_applicable", 1)
 
     def test_durability_verification_counts_every_isolated_sqlite_row_after_restart(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -1063,6 +1131,15 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(
             body["to"], {"agent": roster.recipient, "team": roster.team}
         )
+
+    def test_direct_peer_request_carries_immutable_origin_provenance(self):
+        body = json.loads(
+            RUNNER.http_request_body(
+                Path("/tmp/atm-capacity-test"), 42, authenticated_peer=True,
+            )
+        )
+        self.assertRegex(body["origin_message_id"], r"^0[0-9A-F]{25}$")
+        self.assertTrue(body["origin_timestamp"].endswith("Z"))
 
     def test_cached_roster_heartbeat_body_targets_the_warmed_capacity_member(self):
         body = json.loads(RUNNER.cached_roster_heartbeat_body(17))

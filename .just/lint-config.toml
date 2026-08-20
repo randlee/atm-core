@@ -162,7 +162,7 @@ allowed_dependencies = ["async-trait", "atm-storage", "chrono", "rusqlite", "ser
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/peer-tls/Cargo.toml"
 boundary_record_path = "boundaries/peer-tls/peer-tls.toml"
-allowed_dependencies = ["atm-core", "atm-storage", "rustls", "tokio", "tokio-rustls"]
+allowed_dependencies = ["atm-core", "atm-storage", "rcgen", "rustls", "tempfile", "tokio", "tokio-rustls"]
 allowed_dev_dependencies = ["rcgen", "tempfile"]
 
 [[boundaries.manifest_dependency_allowlists]]
