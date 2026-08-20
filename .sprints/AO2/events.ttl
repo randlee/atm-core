@@ -27,3 +27,39 @@ triage:a3 a triage:Assignment ;
 triage:c3 a triage:Completion ;
     triage:ofSprint triage:AO2.2 ;
     triage:at "2026-08-20T16:37:10Z"^^xsd:dateTime .
+
+triage:r1 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AO22-ATM-QA-001> ;
+    triage:resolvedAt "2026-08-20T18:29:30Z"^^xsd:dateTime .
+
+triage:r2 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AO22-ATM-QA-002> ;
+    triage:resolvedAt "2026-08-20T18:29:30Z"^^xsd:dateTime .
+
+triage:r3 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AO22-ATM-QA-003> ;
+    triage:resolvedAt "2026-08-20T18:29:30Z"^^xsd:dateTime .
+
+triage:r4 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AO22-ATM-QA-004> ;
+    triage:resolvedAt "2026-08-20T18:29:30Z"^^xsd:dateTime .
+
+triage:r5 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AO22-ATM-QA-005> ;
+    triage:resolvedAt "2026-08-20T18:29:30Z"^^xsd:dateTime .
+
+triage:r6 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AO22-RBQA-F001> ;
+    triage:resolvedAt "2026-08-20T18:29:30Z"^^xsd:dateTime .
+
+triage:r7 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AO22-RBQA-F003> ;
+    triage:resolvedAt "2026-08-20T18:29:30Z"^^xsd:dateTime .
+
+triage:r8 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AO22-RSH-001> ;
+    triage:resolvedAt "2026-08-20T18:29:30Z"^^xsd:dateTime .
+
+triage:r9 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AO22-RSH-002> ;
+    triage:resolvedAt "2026-08-20T18:29:30Z"^^xsd:dateTime .
