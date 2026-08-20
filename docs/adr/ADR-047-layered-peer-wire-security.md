@@ -25,6 +25,13 @@ listener or HTTP pipeline. Plaintext mode uses the preserved `DirectPeerTcpConfi
 `DirectPeerTcpConnector`, direct-peer listener, and ordinary router pipeline.
 The mTLS adapter wraps that same pipeline at the stream boundary only.
 
+AO2.2 implements that outer adapter in `peer-tls`: the crate consumes the
+storage-neutral `PeerConfigStore` and yields authenticated TCP byte streams.
+It owns certificate validity, durable-hostname, and exact-pin checks, but it
+does not compose a daemon, HTTP route, or message pipeline. Runtime wiring is
+explicitly deferred to AO2.3, so compiling the adapter cannot alter either
+the normal daemon default or the preserved plaintext benchmark path.
+
 No environment variable, durable setting, TLS adapter availability check, or
 TLS/certificate/allowlist failure may choose or change the selected mode. A
 normal restart selects mTLS; mTLS never falls back to plaintext. In particular,

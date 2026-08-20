@@ -481,6 +481,53 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn untrusted_client_certificate_fails_before_opaque_bytes_can_flow() {
+        let directory = tempfile::tempdir().expect("directory");
+        let server_identity = identity(&directory, "server");
+        let client_identity = identity(&directory, "client");
+        let untrusted_identity = identity(&directory, "untrusted");
+        let server = MtlsPeerStreamAdapter::from_peer_config(&TestStore {
+            interfaces: vec![interface()],
+            certificate: Some(server_identity.clone()),
+            peers: vec![peer(&untrusted_identity, true)],
+        })
+        .expect("server adapter");
+        let client = MtlsPeerStreamAdapter::from_peer_config(&TestStore {
+            interfaces: vec![interface()],
+            certificate: Some(client_identity),
+            peers: vec![peer(&server_identity, true)],
+        })
+        .expect("client adapter");
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind");
+        let address = listener.local_addr().expect("address");
+        let server_task = tokio::spawn(async move {
+            let (tcp, _) = listener.accept().await.expect("accept tcp");
+            server.accept(tcp).await
+        });
+        let host: HostName = "localhost".parse().expect("host");
+        let _client_result = client
+            .connect(
+                TcpStream::connect(address).await.expect("connect tcp"),
+                &host,
+            )
+            .await;
+        let server_error = server_task
+            .await
+            .expect("server task")
+            .expect_err("untrusted client must not complete mTLS");
+        assert_eq!(
+            server_error.code().as_str(),
+            "ATM_PEER_AUTHENTICATION_FAILED"
+        );
+        // TLS 1.3 can let the client receive the server Finished before the
+        // server observes and rejects its certificate. The authoritative
+        // inbound decision above nevertheless fails before any stream is
+        // handed to application protocol code, so no opaque bytes can flow.
+    }
+
+    #[tokio::test]
     async fn handshake_deadline_fails_before_any_application_protocol_can_start() {
         let directory = tempfile::tempdir().expect("directory");
         let server_identity = identity(&directory, "server");
