@@ -303,6 +303,20 @@ fn build_replacement_handler(
     Ok(Arc::new(handler))
 }
 
+/// Selects the optional mTLS stream adapter from the immutable daemon launch
+/// mode.  Plaintext-test mode must not inspect, validate, or depend on the
+/// TLS control-plane state: it keeps the existing direct-peer HTTP pipeline
+/// intact without a stream wrapper.
+fn peer_stream_adapter_for_mode(
+    peer_wire_mode: PeerWireMode,
+    build_mtls_adapter: impl FnOnce() -> Result<Arc<dyn PeerStreamAdapter>, AtmError>,
+) -> Result<Option<Arc<dyn PeerStreamAdapter>>, AtmError> {
+    match peer_wire_mode.security() {
+        PeerWireSecurity::Mtls => build_mtls_adapter().map(Some),
+        PeerWireSecurity::PlaintextTest => Ok(None),
+    }
+}
+
 async fn run_replacement_daemon_with_selector(
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
     selector_factory: impl FnOnce(
@@ -317,14 +331,13 @@ async fn run_replacement_daemon_with_selector(
     let runtime_health = RuntimeHealth::with_owner(std::process::id());
     let assembly = assemble_daemon_runtime()?;
     let workflow_telemetry = assembly.workflow_telemetry.clone();
-    let peer_stream_adapter = match peer_wire_mode.security() {
-        PeerWireSecurity::Mtls => Some(Arc::new(BootstrapMtlsStreamAdapter {
+    let peer_stream_adapter = peer_stream_adapter_for_mode(peer_wire_mode, || {
+        Ok(Arc::new(BootstrapMtlsStreamAdapter {
             adapter: Arc::new(MtlsPeerStreamAdapter::from_peer_config(
                 assembly.peer_config_store.as_ref(),
             )?),
-        }) as Arc<dyn PeerStreamAdapter>),
-        PeerWireSecurity::PlaintextTest => None,
-    };
+        }) as Arc<dyn PeerStreamAdapter>)
+    })?;
     // The shipped daemon always keeps the injected receiver hook active.
     // Benchmark-only selection is available only from the separate binary.
     let handler = build_replacement_handler(
@@ -602,7 +615,7 @@ mod replacement_runtime_tests {
 
     use super::{
         REPLACEMENT_DRAIN_DEADLINE, ShutdownSignal, assemble_host_runtime_with_template_composer,
-        parse_peer_wire_mode, write_ready_signal_if_requested,
+        parse_peer_wire_mode, peer_stream_adapter_for_mode, write_ready_signal_if_requested,
     };
 
     #[test]
@@ -656,6 +669,19 @@ mod replacement_runtime_tests {
         ])
         .expect_err("one launch mode must select the whole runtime");
         assert!(error.message().contains("only once"));
+    }
+
+    #[test]
+    fn plaintext_test_release_mode_never_reads_invalid_tls_configuration() {
+        let adapter = peer_stream_adapter_for_mode(
+            atm_core::peer_wire::PeerWireMode::plaintext_test(),
+            || -> Result<_, atm_core::error::AtmError> {
+                panic!("plaintext-test must not inspect TLS peer configuration")
+            },
+        )
+        .expect("plaintext-test directly preserves the peer HTTP pipeline");
+
+        assert!(adapter.is_none());
     }
 
     #[test]
