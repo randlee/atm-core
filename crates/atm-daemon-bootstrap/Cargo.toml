@@ -10,7 +10,7 @@ repository.workspace = true
 homepage.workspace = true
 
 [features]
-benchmark-harness = []
+benchmark-harness = ["dep:serde_json"]
 
 [[bin]]
 name = "atm-daemon-benchmark"
@@ -28,8 +28,9 @@ peer-tls = { path = "../peer-tls", version = "1.4.4" }
 tokio.workspace = true
 tracing.workspace = true
 fs4 = "0.13"
-serde_json.workspace = true
+serde_json = { workspace = true, optional = true }
 ulid.workspace = true
 
 [dev-dependencies]
+serde_json.workspace = true
 tempfile = "3"
