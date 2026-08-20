@@ -147,6 +147,8 @@ fn daemon_must_not_read_caller_workspace_config() {
 }
 
 #[test]
+/// AO.3 extends this AO.2 baseline guard with the bootstrap-selected
+/// `PlaintextTest` arm and its invalid-TLS-state independence.
 fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
     let root = workspace_root();
     let bootstrap = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
@@ -234,6 +236,8 @@ fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
 }
 
 #[test]
+/// AO.3 extends this AO.2 policy guard over the daemon launch seam while
+/// preserving the single canonical HTTP application pipeline.
 fn ao2_peer_wire_policy_keeps_one_error_registry_and_one_http_pipeline() {
     let root = workspace_root();
     let error_registry = read_source(&root.join("crates/atm-error/src/error_codes.rs"));
@@ -278,6 +282,8 @@ fn ao2_peer_wire_policy_keeps_one_error_registry_and_one_http_pipeline() {
 }
 
 #[test]
+/// AO.3 extends this AO.2 guard to require the benchmark entrypoint to reuse
+/// the launch-selected replacement runtime rather than add a pipeline.
 fn ao2_benchmark_harness_cannot_introduce_a_second_daemon_pipeline() {
     let root = workspace_root();
     let bootstrap = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
@@ -1352,6 +1358,8 @@ fn is_zeroizing_constructor(call: &syn::ExprCall) -> bool {
 }
 
 #[test]
+/// AO.3 extends this AO.2 ownership guard: bootstrap consumes the opaque mTLS
+/// stream seam, while every other production crate stays adapter-neutral.
 fn ao2_mtls_stream_adapter_is_the_only_authorized_production_tls_consumer() {
     let root = workspace_root();
     for (source, target) in [
