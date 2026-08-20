@@ -1,6 +1,6 @@
 ---
 title: AO.1 — Peer-Wire Policy and Plain-Pipeline Baseline
-status: planned
+status: complete
 branch: feature/pao-s1-peer-wire-policy
 target: integrate/phase-ao2
 worktree: ../atm-core-worktrees/feature/pao-s1-peer-wire-policy
