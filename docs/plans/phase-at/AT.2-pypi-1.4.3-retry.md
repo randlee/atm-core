@@ -4,8 +4,9 @@
 plan_type: sprint_plan
 phase: AT
 sprint: AT.2
-worktree: main immutable release assets
-branch: main
+worktree: feature/pat-s2-pypi-143-retry
+branch: feature/pat-s2-pypi-143-retry
+execution_target: immutable main release assets (workflow dispatch by tag)
 status: proposed
 estimated_scope: one Python release rehearsal followed by one authorized production retry
 ```
@@ -17,6 +18,14 @@ Python distribution for immutable ATM `main` version `1.4.3` to TestPyPI and,
 after explicit authorization, PyPI. This is a retry of release assets that
 were not published by the earlier workflow, not a source change or version
 bump.
+
+## Branch And Review Mechanics
+
+Workflow dispatches run against the immutable `main` tag and its release
+assets and change no source. All sprint artifacts — receipts and doc-status
+updates — land on `feature/pat-s2-pypi-143-retry` and merge through a normal
+PR under the quality-mgr gate (phase README Branch Strategy). The sprint
+never commits to `main`.
 
 ## Deliverables
 
@@ -45,13 +54,25 @@ bump.
   tool bootstrap may be substituted after its proof.
 - Channel actions are ordered: TestPyPI public verification must pass before
   any PyPI dispatch.
-- `AT.3`: this sprint's successful run is the coverage evidence AT.3 requires
-  before deleting legacy paths.
+- `AT.3`: this sprint's receipts are the coverage evidence AT.3 requires
+  before deleting legacy paths. The TestPyPI receipt is AT.3's minimum gate;
+  the hermes legacy-workflow deletion row additionally requires the
+  production PyPI receipt (see TestPyPI Checkpoint below).
+
+## TestPyPI Checkpoint
+
+TestPyPI success plus its receipt section is an independently mergeable,
+QA-checkable checkpoint. If production authorization is delayed, the sprint
+PR may merge with the TestPyPI receipt and an explicit
+`production: pending-authorization` marker; the PyPI dispatch then lands as
+a follow-up commit/PR on the same receipt file
+(`docs/plans/phase-at/receipts/AT.2-receipt.md`) without reopening AT.1.
 
 ## Non-Goals
 
-- No source changes, version bump, crate publication, GitHub Release rebuild,
-  Homebrew, Scoop, Winget, or Hermes installation.
+- No product-source changes (sprint artifacts on the feature branch are
+  receipts and doc-status updates only), no version bump, crate publication,
+  GitHub Release rebuild, Homebrew, Scoop, Winget, or Hermes installation.
 - No token rotation, token-value logging, credential workaround, or claim that
   a GitHub-environment credential exists without workflow evidence.
 
@@ -87,9 +108,10 @@ for every manifest-declared Python package.
 
 ## Required Document Updates
 
-Append one immutable release receipt containing the TestPyPI/PyPI URLs,
-workflow run IDs, source and asset identities, index-install matrix, and any
-channel-scoped fail-closed credential result.
+Append the sprint receipt at `docs/plans/phase-at/receipts/AT.2-receipt.md`
+(shape per the phase README's Receipt Convention) containing the
+TestPyPI/PyPI URLs, workflow run IDs, source and asset identities,
+index-install matrix, and any channel-scoped fail-closed credential result.
 
 ## Risks And Watchouts
 
@@ -97,3 +119,5 @@ channel-scoped fail-closed credential result.
   stop; do not overwrite or rebuild under the same version.
 - A retry only reuses the same verified immutable assets. Any changed asset or
   manifest starts a new release decision.
+- Classify every non-passing result against the phase README's Non-Blocking
+  Outcomes table before reacting; only its GENUINE STOP row halts work.

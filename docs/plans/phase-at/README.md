@@ -77,4 +77,57 @@ to hand-edit generated or copied assets.
 | [AT.2](AT.2-pypi-1.4.3-retry.md) | Authorized TestPyPI then PyPI 1.4.3 retry from immutable `main` assets. | must_follow AT.1 |
 | [AT.3](AT.3-legacy-deletion.md) | Verify coverage, then delete the deprecated legacy publish surface. | must_follow AT.2 |
 
+Each sprint doc's frontmatter `status:` flips to `in-progress` when its
+worktree is created and to `complete` in the same PR that merges the sprint's
+final commit; this README's sprint table is updated in that same PR.
+
 No AS work, files, acceptance criteria, or release receipts carry forward.
+
+## Branch Strategy
+
+Per repo convention, phase AT uses a dedicated integration branch:
+
+- `integrate/phase-at` is created off `develop` at phase start.
+- Sprint PRs target `integrate/phase-at`, never `develop` directly:
+  `feature/pat-s1-canonical-consumer-install`,
+  `feature/pat-s2-pypi-143-retry`, and
+  `feature/pat-s3-legacy-publish-deletion`.
+- Each later sprint merges the latest `integrate/phase-at` into its feature
+  branch before opening its PR.
+- After AT.3 merges, one final PR merges `integrate/phase-at` → `develop`.
+- All merges are merge commits (`gh pr merge --merge`); never squash.
+- `quality-mgr` gates every PR.
+
+## Receipt Convention
+
+Each sprint appends its receipt at
+`docs/plans/phase-at/receipts/AT.<n>-receipt.md` with a fixed shape:
+
+- the pinned `sc-publish` revision and package digest;
+- the consumer-input sha256 (`release/sc-publish-consumer-input.json`);
+- the rendered-manifest sha256s;
+- every executed command with its exit code;
+- workflow run IDs/URLs where applicable;
+- a findings list, including fail-closed results recorded as evidence (see
+  Non-Blocking Outcomes below).
+
+## Non-Blocking Outcomes
+
+Phase AT's chief churn risk is not a broken workflow — it is a team treating
+an expected fail-closed result as an emergency (a team once stopped work for
+eight hours over an unverified stale-token fear). Classify every non-passing
+result with this table before reacting to it:
+
+| Result | Classification | Action |
+| --- | --- | --- |
+| Credential missing, expired, or rejected, named by channel | SUCCESS EVIDENCE — the fail-closed design working | Record the receipt; continue all other channels and work. Credential state is user-owned and asynchronous — never rotate, diagnose, or wait on tokens mid-sprint. |
+| 404 for a not-yet-published version on a public registry | Expected | Proceed. |
+| A probe returning indeterminate and hard-failing its leg | SUCCESS EVIDENCE — fail-closed per sc-publish #40/#41 | Retry the leg; escalate only if deterministic. |
+| `install.py --dry-run` drift | Work item | Fix the consumer input or file an upstream `sc-publish` issue; never a stop, never a hand-edit. |
+| Legacy `.just` tests failing after install, before AT.3 | Expected classification work | Route to AT.3's data-vs-behavior split. |
+| Immutable-asset hash mismatch, or a wrong version visible on a public index | GENUINE STOP | Halt that channel; escalate to team-lead. |
+
+Only the last row stops work. An explicitly identified fail-closed outcome is
+the workflow succeeding at its job; treating it as an emergency is the
+failure mode this section exists to prevent. Sprint dispatch assignments must
+include this table.

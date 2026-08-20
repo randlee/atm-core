@@ -26,10 +26,12 @@ paths use identical shared assets and tool bootstrap.
    all release crates, Python distributions, binaries, channels, publish
    order, and version source. Rendered manifests must name every declared
    distribution and support Maturin and setuptools builds through their
-   declared build system. A schema-validated draft exists from the 2026-08-20
-   reconciliation spike (the AS-era input needed one addition — `test_binary`
-   on each Homebrew formula — to satisfy the `ce85b4d` schema); the sprint
-   re-derives and reviews the full document rather than trusting the draft.
+   declared build system. Rehearsal evidence exists on branch
+   `smoke/phase-at-at1-rehearsal` (a consumer input plus its receipt at
+   `docs/plans/phase-at/AT.1-rehearsal-receipt.md` on that branch); it is
+   evidence and reference only, not authority — the sprint re-derives and
+   reviews the full document against the Publish Surface Ground Truth below
+   rather than trusting the rehearsal draft.
 3. Use the package's single tool bootstrap in both preflight and release.
    Remove no legacy workflow until AT.3's coverage gate; where the installer
    overwrites a same-named legacy file (`release.yml`,
@@ -68,6 +70,32 @@ the setuptools form with its declared Python build backend. A missing or
 unsupported `build_system` is a manifest validation failure. `hermes-atm`
 (setuptools) and the Maturin-built native bindings must both be declared and
 both build through this contract.
+
+## Publish Surface Ground Truth
+
+Deliverable 2's authored JSON must be diffed against this enumeration,
+derived from the workspace via `cargo metadata --no-deps --format-version 1`
+(package names, `publish` flags, and bin targets) plus the three
+`pyproject.toml` files. This table is the authoring checklist; `cargo
+metadata` at sprint time is authoritative if the workspace has changed.
+
+| Surface | Members |
+| --- | --- |
+| Publishable crates (crates.io), dependency order | 12 crates, one valid topological order: `atm-error` → `atm-storage` → `agent-team-mail-core` → `atm-storage-rusqlite` → `atm-http-runtime` → `atm-runtime` → `atm-template-sc-compose` → `atm-daemon-bootstrap` → `atm-daemon-client` → `agent-team-mail` → `atm-daemon` → `atm-graft`. Any order satisfying the workspace dependency graph is acceptable. |
+| Internal `publish = false` crates | 9 crates, never published: `atm-architecture`, `atm-storage-sqlserver-proof`, `atm-runtime-test-support`, `atm-peer-tls-interop`, `atm-graft-python`, `atm-query-python`, `sc-lint-attributes`, `sc-lint-directives`, `sc-lint-boundary`. |
+| Python distributions | `atm-graft` (maturin, `crates/atm-graft-python`, version dynamic from Cargo.toml), `atm-query` (maturin, `crates/atm-query-python`), `hermes-atm` (setuptools, `crates/hermes-atm` — a pure-Python package, not a workspace crate). |
+| Released binaries | `atm` (crate `agent-team-mail`) and `atm-daemon` (crate `atm-daemon`), both confirmed cargo bin targets. `atm_post_send_hook_fixture` and `atm-daemon-benchmark` are internal bins and are not released. |
+
+Expected channel enablement (all six):
+
+| Channel | Expected enablement |
+| --- | --- |
+| crates.io | Enabled — the 12 publishable crates above, in dependency order. |
+| GitHub Releases | Enabled — both binaries across the declared release targets. |
+| PyPI | Enabled — all three Python distributions; TestPyPI as the rehearsal target. |
+| Homebrew | Enabled — tap `randlee/homebrew-tap` formulas. |
+| Winget | Enabled — identifier `randlee.agent-team-mail`. |
+| Scoop | Enabled — bucket `randlee/scoop-bucket`; kit-new channel with no legacy workflow. |
 
 ## Prerequisites
 
@@ -126,8 +154,9 @@ fixture. ATM does not duplicate that shared test suite.
 ## Required Document Updates
 
 - Record the immutable `sc-publish` revision, package digest, complete
-  consumer-input digest, and generated-manifest digests in the AT.1 receipt,
-  and update the phase README pin.
+  consumer-input digest, and generated-manifest digests in the AT.1 receipt
+  at `docs/plans/phase-at/receipts/AT.1-receipt.md` (shape per the phase
+  README's Receipt Convention), and update the phase README pin.
 - Record any shared-package defect as an upstream `sc-publish` issue/PR with
   the failing fixture and command; do not patch its copied ATM files
   (ADR-050).
@@ -140,3 +169,5 @@ fixture. ATM does not duplicate that shared test suite.
   never a reason to hand-merge changes.
 - A credential result is not a package-install failure and is not grounds for
   inventing a local credential workaround.
+- Classify every non-passing result against the phase README's Non-Blocking
+  Outcomes table before reacting; only its GENUINE STOP row halts work.

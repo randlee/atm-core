@@ -17,6 +17,17 @@ covers, so the kit files plus the ATM-owned consumer input are the entire
 publish surface. Deletion is gated on AT.2's successful run as coverage
 evidence (ADR-050: ATM owns no local copies of generic release behavior).
 
+## Deliverables
+
+1. A resolved disposition for every Deletion Candidates row, with the
+   reference-scan output and coverage statement recorded in the receipt.
+2. The deletions themselves, plus removal of now-dead references (Justfile
+   recipes, test registrations, doc links).
+3. Retained-file rationales recorded in module docstrings and in the PR
+   description.
+4. The AT.3 receipt at `docs/plans/phase-at/receipts/AT.3-receipt.md`
+   (shape per the phase README's Receipt Convention).
+
 ## Method
 
 Every candidate follows the same verify-then-delete loop; no candidate is
@@ -63,6 +74,11 @@ rows. This sprint owns what the installer does **not** replace by name:
 Any additional legacy file discovered during the sprint joins the table with
 the same loop; none is deleted without its row.
 
+Ambiguous-coverage rows ("decision required") are resolved by a written
+rationale in the sprint PR description; the quality-mgr gate blocks merge
+until it confirms the rationale. No separate architecture sign-off is
+required.
+
 ## Test Ownership Rule
 
 The split for `.just` release tests: a test that re-verifies **shared kit
@@ -73,8 +89,13 @@ retained test records that rationale in its module docstring.
 
 ## Prerequisites
 
-- AT.2 receipts exist (the shared path demonstrably published a real channel
-  end-to-end, including the setuptools `hermes-atm` distribution).
+- At minimum, the AT.2 TestPyPI receipt
+  (`docs/plans/phase-at/receipts/AT.2-receipt.md`) proving the kit built and
+  published every declared distribution — including the setuptools
+  `hermes-atm` — end-to-end. The
+  `.github/workflows/hermes-atm-pypi-publish.yml` deletion row additionally
+  requires the production PyPI receipt (the receipt's production section
+  complete, not `production: pending-authorization`).
 - `install.py --dry-run` clean on the sprint branch before starting.
 
 ## Dependencies
@@ -96,8 +117,23 @@ retained test records that rationale in its module docstring.
 - `install.py --dry-run` still reports no drift after all deletions.
 - Full repo lint and test gates pass; no dangling references to deleted paths
   (`grep` scans return empty).
-- The phase receipt lists every deleted path and every retained-with-rationale
-  path.
+- The AT.3 receipt (`docs/plans/phase-at/receipts/AT.3-receipt.md`) lists
+  every deleted path and every retained-with-rationale path, with a coverage
+  statement for each.
+
+## Required Validation
+
+```bash
+# Reference scan, run per candidate path (must return empty after deletion)
+grep -rn "<path>" .github/ .just/ Justfile scripts/ docs/ --include="*.yml" --include="*.py" --include="Justfile" --include="*.md"
+# Kit dry-run via the pinned package (must stay clean)
+<bootstrap-python> plugins/sc-publish/install.py --dry-run --input release/sc-publish-consumer-input.json <worktree>
+# Repo gates (Justfile: `lint` runs .just/run_lint.py, `test` runs .just/run_tests.py)
+just lint
+just test
+# YAML-parse every remaining workflow
+python3 -c "import pathlib, yaml; [yaml.safe_load(p.read_text()) for p in pathlib.Path('.github/workflows').glob('*.yml')]"
+```
 
 ## Risks And Watchouts
 
@@ -107,6 +143,11 @@ retained test records that rationale in its module docstring.
 - `scripts/validate_release.py` drives a live Justfile recipe; deleting it
   without replacing the recipe breaks `just` targets. Resolve the decision
   first, then delete.
-- The hermes-atm legacy workflow must not be deleted before AT.2 proves the
-  kit publishes the setuptools distribution — that proof depends on the
-  upstream #39 fix being in the pinned revision.
+- The hermes-atm legacy workflow must not be deleted before AT.2's production
+  PyPI receipt proves the kit publishes the setuptools distribution — the
+  TestPyPI receipt alone does not clear that row, and the proof depends on
+  the upstream #39 fix being in the pinned revision.
+- Classify every non-passing result against the phase README's Non-Blocking
+  Outcomes table before reacting; only its GENUINE STOP row halts work.
+  Legacy `.just` test failures after install are that table's expected
+  classification work, resolved through this sprint's data-vs-behavior split.
