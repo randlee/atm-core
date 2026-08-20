@@ -817,6 +817,16 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertTrue(thresholds["comparison_passed"])
         self.assertTrue(thresholds["passed"])
 
+    def test_mutual_tls_has_no_plaintext_absolute_rate_gate(self):
+        profile = {"intervals": [{"admissions_per_second": 74, "passed": True}]}
+        threshold = RUNNER.admission_rate_floor("mutual_tls")
+        thresholds = RUNNER.evaluate_profile_thresholds(
+            profile, None, admissions_per_second_minimum=threshold,
+        )
+        self.assertEqual(threshold, 0.0)
+        self.assertEqual(thresholds["admissions_per_second_minimum"], 0.0)
+        self.assertTrue(thresholds["passed"])
+
     def test_windows_comparison_is_reported_without_gating_windows_acceptance(self):
         profile = {"intervals": [{"admissions_per_second": 800, "passed": True}]}
         thresholds = RUNNER.evaluate_profile_thresholds(

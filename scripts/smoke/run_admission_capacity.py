@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prove the public local ATM admission boundary accepts 1,000 writes/second.
+"""Measure the public local ATM admission boundary with retained evidence.
 
 This runner is deliberately a *clean-user* smoke gate. ADR-026 makes the
 daemon and its SQLite store OS-user-owned, not ``ATM_HOME``-owned. It therefore
@@ -80,6 +80,7 @@ BENCHMARK_DAEMON_WIRE_SECURITY = {
     "mutual_tls": "mtls",
     "not_applicable": "mtls",
 }
+PLAINTEXT_ADMISSIONS_PER_SECOND_MINIMUM = 1_000.0
 DAEMON_SWITCH = ROOT / ".claude" / "skills" / "daemon-switch" / "scripts" / "daemon-switch.py"
 # The daemon-switch control plane can legitimately wait through its documented
 # launchctl unload/owner-repair windows (up to 20s + two 20x2s polls).  Its
@@ -790,6 +791,17 @@ def validate_peer_wire_security(transport: str, peer_wire_security: str) -> str:
     return peer_wire_security
 
 
+def admission_rate_floor(peer_wire_security: str) -> float:
+    """Apply the legacy fixed floor only to the plaintext diagnostic profile.
+
+    mTLS is a distinct benchmark mode.  Its first campaign has no compatible
+    baseline, so a plaintext absolute floor would turn expected TLS setup cost
+    into a false functional failure.  Later mTLS campaigns are guarded by the
+    same-mode comparison evidence selected by ``matching_profile_reference``.
+    """
+    return 0.0 if peer_wire_security == "mutual_tls" else PLAINTEXT_ADMISSIONS_PER_SECOND_MINIMUM
+
+
 def local_endpoint(
     transport: str, peer_wire_security: str = "not_applicable", home: Path | None = None,
 ) -> LocalEndpoint:
@@ -1379,6 +1391,7 @@ def run_capacity(
         # always supplies a mode through target_selection before this point.
         peer_wire_security = "not_applicable" if transport == "uds" else "plaintext_test"
     peer_wire_security = validate_peer_wire_security(transport, peer_wire_security)
+    admissions_per_second_minimum = admission_rate_floor(peer_wire_security)
     hook_mode = validate_hook_mode(hook_mode)
     if frames_per_connection not in SPARSE_FRAMES_PER_CONNECTION:
         raise SmokeError(f"frames per connection must be one of {SPARSE_FRAMES_PER_CONNECTION}")
@@ -1420,6 +1433,7 @@ def run_capacity(
         "sample_count": None,
         "target_duration_s": TARGET_PROFILE_DURATION_SECONDS,
         "worker_limit": workers,
+        "admissions_per_second_minimum": admissions_per_second_minimum,
         "source_revision": source_revision(),
         "release": {"atm": str(atm), "atm_daemon_benchmark": str(daemon)},
         "execution_daemon": "feature_gated_benchmark_child",
@@ -1512,6 +1526,7 @@ def run_capacity(
             requested_messages,
             sample_count,
             workers,
+            minimum_admissions_per_second=admissions_per_second_minimum,
             roster=roster,
         )
         evidence["runs"] = [profile]
@@ -1528,7 +1543,8 @@ def run_capacity(
         )
         evidence["baseline"] = baseline_reference(baseline_path)
         evidence["thresholds"] = evaluate_profile_thresholds(
-            profile, baseline_median, comparison_median, comparison_ratio,
+            profile, baseline_median, admissions_per_second_minimum,
+            comparison_median, comparison_ratio,
             comparison_strict, comparison_required,
         )
         evidence["passed"] = evidence["thresholds"]["passed"]

@@ -17,12 +17,15 @@ def profile_median_admissions_per_second(profile: dict[str, Any]) -> float:
 
 def evaluate_profile_thresholds(
     profile: dict[str, Any], baseline_median: float | None,
+    admissions_per_second_minimum: float = 1_000.0,
     comparison_median: float | None = None,
     comparison_ratio: float = 1.0,
     comparison_strict: bool = False,
     comparison_required: bool = True,
 ) -> dict[str, Any]:
     """Make admission, baseline, and transport-comparison gates explicit."""
+    if admissions_per_second_minimum < 0:
+        raise ValueError("admissions_per_second_minimum must be non-negative")
     median = profile_median_admissions_per_second(profile)
     admission_passed = all(item["passed"] for item in profile["intervals"])
     baseline_passed = baseline_median is None or median >= baseline_median
@@ -32,7 +35,7 @@ def evaluate_profile_thresholds(
         or (median > comparison_target if comparison_strict else median >= comparison_target)
     )
     return {
-        "admissions_per_second_minimum": 1_000,
+        "admissions_per_second_minimum": admissions_per_second_minimum,
         "median_admissions_per_second": median,
         "baseline_median_admissions_per_second": baseline_median,
         "admission_passed": admission_passed,
