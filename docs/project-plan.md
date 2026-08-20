@@ -1288,18 +1288,23 @@ Sprint line:
 
 ## 46. Phase AO — Optional mTLS for the Canonical HTTP Peer Path [PROPOSED]
 
-Phase AO adds opt-in mTLS to the active Tokio/Axum peer HTTP path without
-changing canonical HTTP request handling, storage, acknowledgement, or nudge
-semantics. The existing TLS interop crate remains quarantined fixture/reference
-material; production runtime code must not depend on it. AO is explicitly
-fail-closed: exact hostname/SNI, certificate pin, trusted client certificate,
-and enabled interface configuration are required, and an mTLS-selected peer
-never falls back to plaintext.
+Phase AO replans opt-in mTLS for the active Tokio/Axum peer HTTP path.  The
+normal plaintext direct-peer listener and client remain the compatibility
+pipeline and must be structurally unchanged when TLS is not selected.  An
+explicit runtime mode selects plaintext or mTLS in one shipped daemon build;
+mTLS is fail-closed, requiring exact hostname/SNI, certificate pin, trusted
+client certificate, and enabled interface configuration, and it never falls
+back to plaintext.  Both modes retain one canonical HTTP request, storage,
+acknowledgement, and nudge path.  The existing TLS interop crate remains
+quarantined fixture/reference material; production runtime code must not
+depend on it.
 
 Implementation begins only after the accepted Tokio/Axum runtime line is
 active. Phase AM's explicit AO TLS exception preserves the existing TLS helper
-boundary while AO is decided; it is not an additional AO entry gate. The
-authoritative plan is [Phase AO plan](./plans/phase-ao/plan-phase-ao.md).
+boundary while AO is decided; it is not an additional AO entry gate.  AO work
+integrates through `integrate/phase-ao2`; the earlier AO plan is retained only
+as [archived reference](./archive/phase-ao/).  The authoritative plan is
+[Phase AO plan](./plans/phase-ao/plan-phase-ao.md).
 
 ## 47. Phase AP — Outbound-Only Corporate Network Peer Connectivity [PROPOSED]
 
