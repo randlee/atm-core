@@ -22,7 +22,7 @@ io_forbidden = ["socket_io", "tls_adapter", "sqlite", "process_spawn", "daemon_l
 
 [dependencies]
 allowed_dependents = ["atm-storage", "atm-core"]
-allowed_dependencies = ["serde"]
+allowed_dependencies = ["serde", "serde_json"]
 forbidden_edges = ["atm-error -> atm-core", "atm-error -> atm-storage-rusqlite"]
 
 [references]
