@@ -5,7 +5,7 @@ name = "MtlsPeerStreamAdapter"
 
 [public]
 facade = "MtlsPeerStreamAdapter"
-notes = "Concrete finite mTLS byte-stream wrapper; no public transport trait or HTTP contract."
+notes = "Concrete finite mTLS byte-stream wrapper; bootstrap adapts it to the runtime's opaque stream seam, with no HTTP contract."
 
 [implementation]
 type = "MtlsPeerStreamAdapter"
@@ -21,7 +21,7 @@ io_owns = ["tokio_rustls_stream_wrapping", "peer_certificate_pin_verification", 
 io_forbidden = ["http_runtime", "message_delivery", "message_persistence", "receipt", "nudge_emission", "retry_queue", "daemon_lifecycle"]
 
 [dependencies]
-allowed_dependents = []
+allowed_dependents = ["atm-daemon-bootstrap"]
 allowed_dependencies = ["atm-storage", "rcgen", "rustls", "tempfile", "tokio", "tokio-rustls"]
 forbidden_edges = ["atm-http-runtime -> peer-tls", "atm -> peer-tls", "atm-graft -> peer-tls", "atm-daemon -> peer-tls"]
 
@@ -44,4 +44,4 @@ review_gates = ["one_concrete_tls_owner", "no_http_or_durable_message_types", "n
 
 [status]
 state = "concrete_landed"
-notes = ["AO2.2 owns the only production Rustls/Tokio-Rustls byte-stream adapter."]
+notes = ["AO2.2 owns the only production Rustls/Tokio-Rustls byte-stream adapter; AO2.3 permits only daemon bootstrap to compose it into the opaque runtime seam."]

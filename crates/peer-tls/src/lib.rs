@@ -30,6 +30,7 @@ const DEFAULT_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 /// composition time. It cannot infer or select a peer-wire mode itself.
 pub struct MtlsPeerStreamAdapter {
     client_configs: Vec<PeerClientConfig>,
+    client_verifier: Arc<PinnedClientVerifier>,
     server_config: Arc<ServerConfig>,
     handshake_timeout: Duration,
 }
@@ -78,9 +79,14 @@ impl MtlsPeerStreamAdapter {
                 })
             })
             .collect::<Result<Vec<_>, AtmError>>()?;
-        let server_config = Arc::new(Self::build_server_config(&identity, trusted_peers)?);
+        let client_verifier = Arc::new(PinnedClientVerifier::new(trusted_peers));
+        let server_config = Arc::new(Self::build_server_config(
+            &identity,
+            Arc::clone(&client_verifier),
+        )?);
         Ok(Self {
             client_configs,
+            client_verifier,
             server_config,
             handshake_timeout: DEFAULT_HANDSHAKE_TIMEOUT,
         })
@@ -116,12 +122,32 @@ impl MtlsPeerStreamAdapter {
         &self,
         tcp: TcpStream,
     ) -> Result<impl AsyncRead + AsyncWrite + Send + Unpin + use<>, AtmError> {
+        self.accept_server(tcp).await.map(TlsStream::Server)
+    }
+
+    async fn accept_server(
+        &self,
+        tcp: TcpStream,
+    ) -> Result<tokio_rustls::server::TlsStream<TcpStream>, AtmError> {
         let acceptor = TlsAcceptor::from(Arc::clone(&self.server_config));
         timeout(self.handshake_timeout, acceptor.accept(tcp))
             .await
             .map_err(|_| AtmError::transport_timeout("mTLS peer handshake deadline expired"))?
-            .map(TlsStream::Server)
             .map_err(inbound_handshake_error)
+    }
+
+    /// Authenticate an inbound TCP stream and return the configured identity
+    /// proven by its client certificate.  The caller receives no certificate
+    /// bytes, trust record, or Rustls connection state.
+    pub async fn accept_with_peer(
+        &self,
+        tcp: TcpStream,
+    ) -> Result<(impl AsyncRead + AsyncWrite + Send + Unpin + use<>, HostName), AtmError> {
+        let stream = self.accept_server(tcp).await?;
+        let source_host = self
+            .client_verifier
+            .authenticated_host(stream.get_ref().1)?;
+        Ok((TlsStream::Server(stream), source_host))
     }
 
     fn client_config_for(&self, peer: &HostName) -> Result<&Arc<ClientConfig>, AtmError> {
@@ -157,10 +183,10 @@ impl MtlsPeerStreamAdapter {
 
     fn build_server_config(
         identity: &TlsIdentity,
-        trusted_peers: Vec<TrustedPeer>,
+        client_verifier: Arc<PinnedClientVerifier>,
     ) -> Result<ServerConfig, AtmError> {
         ServerConfig::builder()
-            .with_client_cert_verifier(Arc::new(PinnedClientVerifier::new(trusted_peers)))
+            .with_client_cert_verifier(client_verifier)
             .with_single_cert(
                 identity.certificates().to_vec(),
                 identity.private_key().clone_key(),
@@ -381,7 +407,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn configured_pair_exchanges_opaque_bytes_over_mutual_tls() {
+    async fn configured_pair_exchanges_opaque_bytes_over_mutual_tls_and_returns_pinned_identity() {
         let directory = tempfile::tempdir().expect("directory");
         let server_identity = identity(&directory, "server");
         let client_identity = identity(&directory, "client");
@@ -403,7 +429,12 @@ mod tests {
         let address = listener.local_addr().expect("address");
         let server_task = tokio::spawn(async move {
             let (tcp, _) = listener.accept().await.expect("accept tcp");
-            let mut tls = server.accept(tcp).await.expect("accept tls");
+            let (mut tls, peer) = server.accept_with_peer(tcp).await.expect("accept tls");
+            assert_eq!(
+                peer.as_str(),
+                "localhost",
+                "server reports the configured pinned peer"
+            );
             let mut received = [0_u8; 5];
             tls.read_exact(&mut received).await.expect("read bytes");
             assert_eq!(&received, b"bytes");

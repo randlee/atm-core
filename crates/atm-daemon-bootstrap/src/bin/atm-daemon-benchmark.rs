@@ -69,8 +69,28 @@ fn benchmark_invocation_from_args() -> Result<BenchmarkInvocation, AtmError> {
 fn parse_benchmark_invocation(
     args: impl IntoIterator<Item = String>,
 ) -> Result<BenchmarkInvocation, AtmError> {
+    let mut peer_wire_arguments = vec![std::ffi::OsString::from("atm-daemon-benchmark")];
+    let mut primary_arguments = Vec::new();
     let mut args = args.into_iter();
-    match args.next().as_deref() {
+    let mut peer_wire_argument_seen = false;
+    while let Some(argument) = args.next() {
+        if argument == "--peer-wire-security" {
+            peer_wire_argument_seen = true;
+            peer_wire_arguments.push(argument.into());
+            peer_wire_arguments.push(args.next().map(Into::into).unwrap_or_default());
+        } else if argument.starts_with("--peer-wire-security=") {
+            peer_wire_argument_seen = true;
+            peer_wire_arguments.push(argument.into());
+        } else {
+            primary_arguments.push(argument);
+        }
+    }
+    // Reuse bootstrap's grammar. `run_benchmark_daemon` parses the original
+    // argv again immediately before composition, so this wrapper adds no
+    // second durable or environment-derived mode source.
+    atm_daemon_bootstrap::parse_peer_wire_mode(peer_wire_arguments)?;
+    let mut args = primary_arguments.into_iter();
+    let invocation = match args.next().as_deref() {
         Some("--hook-mode") => {
             let mode = args.next().ok_or_else(|| {
                 AtmError::config("usage: atm-daemon-benchmark --hook-mode <active|disabled>")
@@ -101,7 +121,13 @@ fn parse_benchmark_invocation(
         _ => Err(AtmError::config(
             "usage: atm-daemon-benchmark --hook-mode <active|disabled> | --direct-storage-admission <count> --workers <count> | --direct-core-write <count> --workers <count>",
         )),
+    }?;
+    if peer_wire_argument_seen && !matches!(invocation, BenchmarkInvocation::Daemon(_)) {
+        return Err(AtmError::config(
+            "--peer-wire-security is valid only with atm-daemon-benchmark --hook-mode",
+        ));
     }
+    Ok(invocation)
 }
 
 fn parse_concurrent_arguments(
@@ -382,6 +408,18 @@ mod tests {
             BenchmarkInvocation::Daemon(BenchmarkHookMode::Disabled)
         ));
 
+        let daemon_with_peer_wire_mode = parse_benchmark_invocation([
+            "--peer-wire-security".to_owned(),
+            "plaintext-test".to_owned(),
+            "--hook-mode".to_owned(),
+            "disabled".to_owned(),
+        ])
+        .expect("benchmark daemon accepts the bootstrap-owned mode argument");
+        assert!(matches!(
+            daemon_with_peer_wire_mode,
+            BenchmarkInvocation::Daemon(BenchmarkHookMode::Disabled)
+        ));
+
         let direct = parse_benchmark_invocation([
             "--direct-storage-admission".to_owned(),
             "10000".to_owned(),
@@ -428,5 +466,18 @@ mod tests {
                 error.message().contains("usage") || error.message().contains("positive integer")
             );
         }
+    }
+
+    #[test]
+    fn parser_rejects_peer_wire_mode_for_non_daemon_benchmarks() {
+        let error = parse_benchmark_invocation([
+            "--peer-wire-security=plaintext-test".to_owned(),
+            "--direct-storage-admission".to_owned(),
+            "100".to_owned(),
+            "--workers".to_owned(),
+            "2".to_owned(),
+        ])
+        .expect_err("direct storage does not launch a daemon wire mode");
+        assert!(error.message().contains("only with"));
     }
 }

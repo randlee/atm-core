@@ -22,7 +22,7 @@ io_forbidden = ["http_server", "raw_http_framing", "direct_rusqlite_calls", "gra
 
 [dependencies]
 allowed_dependents = ["atm", "atm-daemon"]
-allowed_dependencies = ["atm-core", "atm-runtime", "atm-storage-rusqlite", "atm-template-sc-compose", "atm-http-runtime", "tokio", "fs4", "ulid"]
+allowed_dependencies = ["atm-core", "atm-runtime", "atm-runtime-test-support", "atm-storage", "atm-storage-rusqlite", "atm-template-sc-compose", "atm-http-runtime", "peer-tls", "tokio", "fs4", "serde_json", "tempfile", "tracing", "ulid"]
 forbidden_edges = ["atm-daemon -> atm-storage-rusqlite", "atm-daemon -> atm-runtime", "atm-http-runtime -> atm-daemon-bootstrap", "atm-daemon-bootstrap -> atm-graft"]
 
 [references]
@@ -33,7 +33,7 @@ forbidden = []
 request_types = ["core RuntimeAssembly inputs", "core sealed MessageReceivedHookSelector"]
 response_types = ["typed runtime lifecycle outcome"]
 error_types = ["AtmError"]
-notes = ["The concrete storage factory is legal only at this composition boundary; atm-daemon and atm-http-runtime remain backend-neutral.", "AO2.3 parses the one explicit daemon launch argument into the core PeerWireMode; environment, durable settings, and TLS availability never select it."]
+notes = ["The concrete storage factory is legal only at this composition boundary; atm-daemon and atm-http-runtime remain backend-neutral.", "AO2.3 parses the one explicit daemon launch argument into the core PeerWireMode; environment, durable settings, and TLS availability never select it.", "The bootstrap may compose peer-tls only in the explicit mTLS arm and passes only its opaque stream seam to atm-http-runtime."]
 
 [testing]
 allowed_test_double_paths = []

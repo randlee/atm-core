@@ -10,7 +10,8 @@ use std::sync::Arc;
 
 use atm_core::api::{
     ApiRequest, ApiResponse, AuthenticatedIngress, CLEAR_OUTCOME_HEADER, HttpRequest,
-    HttpRouteKind, MessageCollectionRequest, RequestDeadline, http_route_kind, http_route_surface,
+    HttpRouteKind, MessageCollectionRequest, RequestDeadline, UntrustedSmokeProvenance,
+    http_route_kind, http_route_surface,
 };
 use atm_core::clear::ClearQuery;
 use atm_core::doctor::DoctorQuery;
@@ -182,17 +183,25 @@ impl AuthenticatedConnector {
                         "direct peer HTTP request did not carry an accepted socket address",
                     )
                 })?;
-                let source_host = peer_address.ip().to_string().parse().map_err(|source| {
-                    AtmError::validation(
-                        "accepted direct peer address cannot be represented as a host identity",
-                    )
-                    .with_cause(source)
-                })?;
-                request.authenticated_source_host = Some(source_host);
+                let source_host: HostName =
+                    peer_address.ip().to_string().parse().map_err(|source| {
+                        AtmError::validation(
+                            "accepted direct peer address cannot be represented as a host identity",
+                        )
+                        .with_cause(source)
+                    })?;
+                // A TCP source address is adapter-derived diagnostic
+                // provenance, never peer authentication. The ingress below
+                // remains `UntrustedSmoke`; retaining the address lets an
+                // explicit plaintext test reply to the actual socket peer
+                // without accepting a JSON-forged value.
+                request.authenticated_source_host = Some(source_host.clone());
                 if let Some(destination) = request.to.take() {
                     request.to = Some(destination.without_host());
                 }
-                Ok(AuthenticatedIngress::Peer)
+                Ok(AuthenticatedIngress::UntrustedSmoke(
+                    UntrustedSmokeProvenance::new(source_host),
+                ))
             }
         }
     }
@@ -206,7 +215,8 @@ impl AuthenticatedConnector {
             ApiRequest::Write(write) => self.normalize_write(write, peer_address),
             _ => match self {
                 Self::Local => Ok(AuthenticatedIngress::Local),
-                Self::Peer { .. } | Self::PeerSocket => Ok(AuthenticatedIngress::Peer),
+                Self::Peer { .. } => Ok(AuthenticatedIngress::Peer),
+                Self::PeerSocket => Ok(AuthenticatedIngress::AnonymousSmoke),
             },
         }
     }

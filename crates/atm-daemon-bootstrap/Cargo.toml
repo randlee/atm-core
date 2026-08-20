@@ -10,7 +10,7 @@ repository.workspace = true
 homepage.workspace = true
 
 [features]
-benchmark-harness = []
+benchmark-harness = ["dep:serde_json"]
 
 [[bin]]
 name = "atm-daemon-benchmark"
@@ -24,10 +24,15 @@ atm-runtime = { path = "../atm-runtime", version = "1.4.4" }
 atm-storage = { path = "../atm-storage", version = "1.4.4" }
 atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.4" }
 atm-template-sc-compose = { path = "../atm-template-sc-compose", version = "1.4.4" }
+peer-tls = { path = "../peer-tls", version = "1.4.4" }
 tokio.workspace = true
+tracing.workspace = true
 fs4 = "0.13"
-serde_json.workspace = true
+serde_json = { workspace = true, optional = true }
 ulid.workspace = true
 
 [dev-dependencies]
+atm-http-runtime = { path = "../atm-http-runtime", version = "1.4.4", features = ["test-support"] }
+atm-runtime-test-support = { path = "../atm-runtime-test-support", version = "1.4.4" }
+serde_json.workspace = true
 tempfile = "3"

@@ -25,11 +25,11 @@ listener or HTTP pipeline. Plaintext mode uses the preserved `DirectPeerTcpConfi
 `DirectPeerTcpConnector`, direct-peer listener, and ordinary router pipeline.
 The mTLS adapter wraps that same pipeline at the stream boundary only.
 
-AO2.2 implements that outer adapter in `peer-tls`: the crate consumes the
+AO.2 implements that outer adapter in `peer-tls`: the crate consumes the
 storage-neutral `PeerConfigStore` and yields authenticated TCP byte streams.
 It owns certificate validity, durable-hostname, and exact-pin checks, but it
 does not compose a daemon, HTTP route, or message pipeline. Runtime wiring is
-explicitly deferred to AO2.3, so compiling the adapter cannot alter either
+explicitly deferred to AO.3, so compiling the adapter cannot alter either
 the normal daemon default or the preserved plaintext benchmark path.
 
 No environment variable, durable setting, TLS adapter availability check, or
@@ -57,3 +57,24 @@ wording. ADR-033's one-router contract remains unchanged.
 Doctor, retained diagnostics, smoke JSON/XHTML, and benchmark evidence must
 record the active peer-wire mode. Plaintext-test evidence cannot satisfy any
 mTLS or peer-allowlist acceptance criterion.
+
+## AO.3 implementation evidence
+
+AO.3 implements the launch seam in `atm-daemon-bootstrap`. It parses
+`--peer-wire-security` once, defaults to `mutual-tls`, rejects duplicate or
+unknown values, and rejects `ATM_PEER_WIRE_SECURITY` rather than treating the
+environment as an alternate selector. Bootstrap constructs `peer-tls` only in
+the mTLS arm and passes its opaque established-stream seam to
+`atm-http-runtime`; the runtime has no Rustls, certificate, pin, or
+`PeerConfigStore` dependency.
+
+The CLI and graft submit every `WriteRequest` to their selected local daemon.
+For a host-qualified request the daemon performs the durable admission and
+then uses the selected stream establishment mode for the one outbound HTTP
+request. Plaintext therefore retains the existing direct TCP connector and
+listener; mTLS changes only the outer byte stream. Inbound plaintext is
+explicit `UntrustedSmoke` provenance, while mTLS supplies the exact configured
+host only after the client certificate/pin verification completes before HTTP
+decode. Startup writes the selected public mode to the retained observability
+port and daemon doctor context; neither includes key material, certificate
+contents, pins, or raw trust records.
