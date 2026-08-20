@@ -223,6 +223,7 @@ def render_run(result: dict[str, Any], artifact_id: str, report_dir: Path = REPO
             "frames_per_connection": result["frames_per_connection"],
             "run_duration_s": result["run_duration_s"],
             "passed": result["passed"],
+            "benchmark_evidence_failure_code": result.get("benchmark_evidence_failure_code", ""),
             "failure": result.get("failure", ""),
             "cleanup_failure": result.get("cleanup_failure", ""),
             "sample_html": sample_html,

@@ -19,6 +19,7 @@ required_variables:
   - frames_per_connection
   - run_duration_s
   - passed
+  - benchmark_evidence_failure_code
   - failure
   - cleanup_failure
   - sample_html
@@ -42,6 +43,9 @@ required_variables:
     <dt>Frames per connection</dt><dd>{{ frames_per_connection }}</dd>
     <dt>Run duration (seconds)</dt><dd>{{ run_duration_s }}</dd>
     <dt>Artifact</dt><dd>{{ artifact_id | e }}.json</dd>
+{% if benchmark_evidence_failure_code %}
+    <dt>Evidence failure code</dt><dd>{{ benchmark_evidence_failure_code | e }}</dd>
+{% endif %}
   </dl>
 {% if failure %}
   <h2>Failure diagnostics</h2><pre>{{ failure | e }}</pre>

@@ -175,6 +175,9 @@ class BenchmarkSummary(BaseModel):
     thresholds: Optional[BenchmarkThresholds] = None
     metrics: Optional[BenchmarkMetrics] = None
     passed: bool
+    benchmark_evidence_failure_code: Optional[
+        Literal["missing_compatible_plaintext_baseline"]
+    ] = None
     failure: Optional[str] = None
     cleanup_failure: Optional[str] = None
 
@@ -325,6 +328,7 @@ def compact_evidence(evidence: dict[str, Any]) -> BenchmarkSummary:
             "first_failure": first_failure,
         },
         "passed": bool(evidence.get("passed", False)),
+        "benchmark_evidence_failure_code": evidence.get("benchmark_evidence_failure_code"),
         "failure": public_string(str(evidence["failure"])) if evidence.get("failure") else None,
         "cleanup_failure": public_string(str(evidence["cleanup_failure"])) if evidence.get("cleanup_failure") else None,
     }
@@ -371,6 +375,7 @@ def failed_summary(evidence: dict[str, Any]) -> BenchmarkSummary:
                 else None
             ),
             "passed": False,
+            "benchmark_evidence_failure_code": evidence.get("benchmark_evidence_failure_code"),
             "failure": public_string(str(evidence.get("failure") or "benchmark did not reach an interval")),
             "cleanup_failure": public_string(str(evidence["cleanup_failure"])) if evidence.get("cleanup_failure") else None,
         }

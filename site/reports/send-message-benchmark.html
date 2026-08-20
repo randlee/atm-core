@@ -16,8 +16,8 @@
 </head>
 <body>
   <h1>ATM local transport benchmark</h1>
-  <p class="meta">Generated 2026-08-20T21:17:45.825189Z · <span class="status INFO">INFO</span></p>
-  <p>Current candidate campaign: m5-arm64-01 / uds / legacy-unverified / 6a7e0e0399ef782176e0d20d7d593942154e0598 — 1/6 profiles, 1 passed, 0 failed; missing frames: 2, 4, 8, 16, 64. 81 immutable historical runs retained.</p>
+  <p class="meta">Generated 2026-08-20T22:08:30.700441Z · <span class="status FAIL">FAIL</span></p>
+  <p>Current candidate campaign: local / tcp / mutual-tls / f40440d7bd370168ce41bf76ae486210df14b18d — 6/6 profiles, 0 passed, 6 failed; missing frames: none. 93 immutable historical runs retained.</p>
   <h2>UTC benchmark history</h2>
   <table>
     <thead><tr><th>UTC timestamp</th><th>Host</th><th>Transport</th><th>Peer-wire mode</th><th>Target</th><th>Frames/connection</th><th>Direct SQLite msg/s</th><th>Status</th><th>Evidence</th></tr></thead>
@@ -912,6 +912,138 @@
         <td>40584.14</td>
         <td class="pass">PASS</td>
         <td><a href="send-message-benchmark/20260811-001638.942602-m5-arm64-01-uds-f1.json">JSON</a> · <a href="send-message-benchmark/20260811-001638.942602-m5-arm64-01-uds-f1.xhtml">XHTML panel</a></td>
+      </tr>
+      <tr>
+        <td><time datetime="2026-08-20T22:02:33.418717Z">2026-08-20T22:02:33.418717Z</time></td>
+        <td>local</td>
+        <td>tcp</td>
+        <td>plaintext-test</td>
+        <td>tcp</td>
+        <td>1</td>
+        <td>n/a</td>
+        <td class="fail">FAIL</td>
+        <td><a href="send-message-benchmark/20260820-220233.418717-local-tcp-plaintext-test-f1.json">JSON</a> · <a href="send-message-benchmark/20260820-220233.418717-local-tcp-plaintext-test-f1.xhtml">XHTML panel</a></td>
+      </tr>
+      <tr>
+        <td><time datetime="2026-08-20T22:02:33.498735Z">2026-08-20T22:02:33.498735Z</time></td>
+        <td>local</td>
+        <td>tcp</td>
+        <td>plaintext-test</td>
+        <td>tcp</td>
+        <td>2</td>
+        <td>n/a</td>
+        <td class="fail">FAIL</td>
+        <td><a href="send-message-benchmark/20260820-220233.498735-local-tcp-plaintext-test-f2.json">JSON</a> · <a href="send-message-benchmark/20260820-220233.498735-local-tcp-plaintext-test-f2.xhtml">XHTML panel</a></td>
+      </tr>
+      <tr>
+        <td><time datetime="2026-08-20T22:02:33.588746Z">2026-08-20T22:02:33.588746Z</time></td>
+        <td>local</td>
+        <td>tcp</td>
+        <td>plaintext-test</td>
+        <td>tcp</td>
+        <td>4</td>
+        <td>n/a</td>
+        <td class="fail">FAIL</td>
+        <td><a href="send-message-benchmark/20260820-220233.588746-local-tcp-plaintext-test-f4.json">JSON</a> · <a href="send-message-benchmark/20260820-220233.588746-local-tcp-plaintext-test-f4.xhtml">XHTML panel</a></td>
+      </tr>
+      <tr>
+        <td><time datetime="2026-08-20T22:02:33.686591Z">2026-08-20T22:02:33.686591Z</time></td>
+        <td>local</td>
+        <td>tcp</td>
+        <td>plaintext-test</td>
+        <td>tcp</td>
+        <td>8</td>
+        <td>n/a</td>
+        <td class="fail">FAIL</td>
+        <td><a href="send-message-benchmark/20260820-220233.686591-local-tcp-plaintext-test-f8.json">JSON</a> · <a href="send-message-benchmark/20260820-220233.686591-local-tcp-plaintext-test-f8.xhtml">XHTML panel</a></td>
+      </tr>
+      <tr>
+        <td><time datetime="2026-08-20T22:02:33.799437Z">2026-08-20T22:02:33.799437Z</time></td>
+        <td>local</td>
+        <td>tcp</td>
+        <td>plaintext-test</td>
+        <td>tcp</td>
+        <td>16</td>
+        <td>n/a</td>
+        <td class="fail">FAIL</td>
+        <td><a href="send-message-benchmark/20260820-220233.799437-local-tcp-plaintext-test-f16.json">JSON</a> · <a href="send-message-benchmark/20260820-220233.799437-local-tcp-plaintext-test-f16.xhtml">XHTML panel</a></td>
+      </tr>
+      <tr>
+        <td><time datetime="2026-08-20T22:02:33.913218Z">2026-08-20T22:02:33.913218Z</time></td>
+        <td>local</td>
+        <td>tcp</td>
+        <td>plaintext-test</td>
+        <td>tcp</td>
+        <td>64</td>
+        <td>n/a</td>
+        <td class="fail">FAIL</td>
+        <td><a href="send-message-benchmark/20260820-220233.913218-local-tcp-plaintext-test-f64.json">JSON</a> · <a href="send-message-benchmark/20260820-220233.913218-local-tcp-plaintext-test-f64.xhtml">XHTML panel</a></td>
+      </tr>
+      <tr>
+        <td><time datetime="2026-08-20T22:02:52.796116Z">2026-08-20T22:02:52.796116Z</time></td>
+        <td>local</td>
+        <td>tcp</td>
+        <td>mutual-tls</td>
+        <td>tcp-tls</td>
+        <td>1</td>
+        <td>n/a</td>
+        <td class="fail">FAIL</td>
+        <td><a href="send-message-benchmark/20260820-220252.796116-local-tcp-mutual-tls-f1.json">JSON</a> · <a href="send-message-benchmark/20260820-220252.796116-local-tcp-mutual-tls-f1.xhtml">XHTML panel</a></td>
+      </tr>
+      <tr>
+        <td><time datetime="2026-08-20T22:02:52.918587Z">2026-08-20T22:02:52.918587Z</time></td>
+        <td>local</td>
+        <td>tcp</td>
+        <td>mutual-tls</td>
+        <td>tcp-tls</td>
+        <td>2</td>
+        <td>n/a</td>
+        <td class="fail">FAIL</td>
+        <td><a href="send-message-benchmark/20260820-220252.918587-local-tcp-mutual-tls-f2.json">JSON</a> · <a href="send-message-benchmark/20260820-220252.918587-local-tcp-mutual-tls-f2.xhtml">XHTML panel</a></td>
+      </tr>
+      <tr>
+        <td><time datetime="2026-08-20T22:02:53.031577Z">2026-08-20T22:02:53.031577Z</time></td>
+        <td>local</td>
+        <td>tcp</td>
+        <td>mutual-tls</td>
+        <td>tcp-tls</td>
+        <td>4</td>
+        <td>n/a</td>
+        <td class="fail">FAIL</td>
+        <td><a href="send-message-benchmark/20260820-220253.031577-local-tcp-mutual-tls-f4.json">JSON</a> · <a href="send-message-benchmark/20260820-220253.031577-local-tcp-mutual-tls-f4.xhtml">XHTML panel</a></td>
+      </tr>
+      <tr>
+        <td><time datetime="2026-08-20T22:02:53.149527Z">2026-08-20T22:02:53.149527Z</time></td>
+        <td>local</td>
+        <td>tcp</td>
+        <td>mutual-tls</td>
+        <td>tcp-tls</td>
+        <td>8</td>
+        <td>n/a</td>
+        <td class="fail">FAIL</td>
+        <td><a href="send-message-benchmark/20260820-220253.149527-local-tcp-mutual-tls-f8.json">JSON</a> · <a href="send-message-benchmark/20260820-220253.149527-local-tcp-mutual-tls-f8.xhtml">XHTML panel</a></td>
+      </tr>
+      <tr>
+        <td><time datetime="2026-08-20T22:02:53.273812Z">2026-08-20T22:02:53.273812Z</time></td>
+        <td>local</td>
+        <td>tcp</td>
+        <td>mutual-tls</td>
+        <td>tcp-tls</td>
+        <td>16</td>
+        <td>n/a</td>
+        <td class="fail">FAIL</td>
+        <td><a href="send-message-benchmark/20260820-220253.273812-local-tcp-mutual-tls-f16.json">JSON</a> · <a href="send-message-benchmark/20260820-220253.273812-local-tcp-mutual-tls-f16.xhtml">XHTML panel</a></td>
+      </tr>
+      <tr>
+        <td><time datetime="2026-08-20T22:02:53.421361Z">2026-08-20T22:02:53.421361Z</time></td>
+        <td>local</td>
+        <td>tcp</td>
+        <td>mutual-tls</td>
+        <td>tcp-tls</td>
+        <td>64</td>
+        <td>n/a</td>
+        <td class="fail">FAIL</td>
+        <td><a href="send-message-benchmark/20260820-220253.421361-local-tcp-mutual-tls-f64.json">JSON</a> · <a href="send-message-benchmark/20260820-220253.421361-local-tcp-mutual-tls-f64.xhtml">XHTML panel</a></td>
       </tr>
     </tbody>
   </table>

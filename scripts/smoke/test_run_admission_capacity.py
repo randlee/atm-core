@@ -799,6 +799,58 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertIsNone(captured["comparison_median"])
         self.assertFalse(captured["comparison_required"])
 
+    def test_main_publishes_plaintext_baseline_gap_as_failure_evidence(self):
+        captured: dict[str, object] = {}
+
+        def run_capacity(*_args, **kwargs):
+            captured.update(kwargs)
+            return 1, mock.sentinel.evidence
+
+        with tempfile.TemporaryDirectory() as directory:
+            with (
+                mock.patch.object(
+                    sys,
+                    "argv",
+                    [
+                        "run_admission_capacity.py",
+                        "--target",
+                        "tcp",
+                        "--atm-home",
+                        directory,
+                        "--frames-per-connection",
+                        "1",
+                    ],
+                ),
+                mock.patch.object(RUNNER, "source_revision", return_value="a" * 40),
+                mock.patch.object(
+                    RUNNER,
+                    "matching_profile_reference",
+                    side_effect=RUNNER.SmokeError("missing comparison reference"),
+                ),
+                mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity),
+            ):
+                self.assertEqual(RUNNER.main(), 1)
+
+        self.assertEqual(
+            captured["preflight_failure_code"],
+            RUNNER.MISSING_PLAINTEXT_BASELINE,
+        )
+        self.assertIn("missing a complete passed same-host plaintext baseline", captured["preflight_failure"])
+
+    def test_failed_summary_retains_the_plaintext_baseline_failure_code(self):
+        summary = compact_evidence(complete_evidence(
+            runs=[],
+            passed=False,
+            peer_wire_security="plaintext-test",
+            benchmark_target="tcp",
+            failure="no compatible baseline",
+            benchmark_evidence_failure_code=RUNNER.MISSING_PLAINTEXT_BASELINE,
+        ))
+        self.assertEqual(
+            summary.benchmark_evidence_failure_code,
+            RUNNER.MISSING_PLAINTEXT_BASELINE,
+        )
+
     def test_main_records_uds_baseline_source_as_a_diffable_comparison(self):
         captured: dict[str, object] = {}
 

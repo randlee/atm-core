@@ -76,6 +76,7 @@ BENCHMARK_TARGETS = {
     "tcp": ("tcp", "plaintext-test"),
     "tcp-tls": ("tcp", "mutual-tls"),
 }
+MISSING_PLAINTEXT_BASELINE = "missing_compatible_plaintext_baseline"
 DAEMON_SWITCH = ROOT / ".claude" / "skills" / "daemon-switch" / "scripts" / "daemon-switch.py"
 # The daemon-switch control plane can legitimately wait through its documented
 # launchctl unload/owner-repair windows (up to 20s + two 20x2s polls).  Its
@@ -1206,6 +1207,8 @@ def run_capacity(
     peer_wire_security: str = "mutual-tls",
     benchmark_target: str | None = None,
     managed_daemon: ManagedDaemonOptions | None = None,
+    preflight_failure_code: str | None = None,
+    preflight_failure: str | None = None,
 ) -> tuple[int, Path]:
     """Start one branch daemon, exercise public UDS API, retain evidence, then clean up."""
     transport = validate_transport(transport)
@@ -1218,13 +1221,6 @@ def run_capacity(
         raise SmokeError("capacity worker limit must be positive")
     isolation_mode = select_host_state_isolation()
     home = validate_capacity_home(atm_home)
-    if isolation_mode == "isolated_os_user":
-        require_clean_host_daemon_state(smoke_label="admission-capacity smoke")
-    elif managed_daemon is None:
-        raise SmokeError(
-            "ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE=1 requires the managed daemon "
-            "service details; pass --managed-service and the platform-specific daemon-switch options"
-        )
     atm = release_binary("atm")
     daemon = release_binary("atm-daemon")
     roster = CapacityRoster.unique()
@@ -1267,6 +1263,7 @@ def run_capacity(
         "thresholds": None,
         "comparison_source_revision": comparison_source_revision,
         "comparison_host_label": comparison_host_label,
+        "benchmark_evidence_failure_code": preflight_failure_code,
         "stages": {
             "runtime_view_validation": "daemon-owned; no peer/store/network work is requested by this client before response",
             "sqlite_transaction": "measured by each public admission response latency",
@@ -1277,6 +1274,15 @@ def run_capacity(
     }
     started_at = time.monotonic()
     try:
+        if preflight_failure is not None:
+            raise SmokeError(preflight_failure)
+        if isolation_mode == "isolated_os_user":
+            require_clean_host_daemon_state(smoke_label="admission-capacity smoke")
+        elif managed_daemon is None:
+            raise SmokeError(
+                "ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE=1 requires the managed daemon "
+                "service details; pass --managed-service and the platform-specific daemon-switch options"
+            )
         if managed_daemon is not None and benchmark_target is not None:
             raise SmokeError(
                 "managed daemon benchmark cannot prove a selected peer-wire mode: "
@@ -1378,7 +1384,7 @@ def run_capacity(
             expected_accepted_count,
             roster,
         )
-    except (OSError, ValueError, SmokeError) as error:
+    except (OSError, RuntimeError, ValueError, SmokeError) as error:
         evidence["passed"] = False
         evidence["failure"] = str(error)
     finally:
@@ -1532,6 +1538,8 @@ def main() -> int:
         comparison_ratio = 1.0
         comparison_strict = False
         comparison_required = True
+        preflight_failure_code: str | None = None
+        preflight_failure: str | None = None
         profile_baseline = None
         if transport == "uds":
             if frames_per_connection == 1:
@@ -1568,7 +1576,12 @@ def main() -> int:
                 if peer_wire_security == "mutual-tls":
                     comparison_required = False
                 else:
-                    raise
+                    preflight_failure_code = MISSING_PLAINTEXT_BASELINE
+                    preflight_failure = (
+                        "missing a complete passed same-host plaintext baseline; "
+                        "this run is retained as bounded benchmark evidence rather than "
+                        "being discarded before publication"
+                    )
         if args.atm_home is None:
             with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temp:
                 home = Path(temp) / f"{CAPACITY_ROOT_PREFIX}{position}"
@@ -1586,6 +1599,8 @@ def main() -> int:
                     peer_wire_security=peer_wire_security,
                     benchmark_target=benchmark_target,
                     managed_daemon=managed_daemon,
+                    preflight_failure_code=preflight_failure_code,
+                    preflight_failure=preflight_failure,
                 )
         else:
             home = args.atm_home / f"{CAPACITY_ROOT_PREFIX}{position}"
@@ -1603,6 +1618,8 @@ def main() -> int:
                     peer_wire_security=peer_wire_security,
                     benchmark_target=benchmark_target,
                     managed_daemon=managed_daemon,
+                    preflight_failure_code=preflight_failure_code,
+                    preflight_failure=preflight_failure,
                 )
         codes.append(code)
         if transport == "uds" and frames_per_connection == 1 and code == 0:

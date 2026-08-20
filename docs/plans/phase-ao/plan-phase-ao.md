@@ -128,7 +128,7 @@ merge first.
 
 | Campaign | Status | Evidence boundary | Recovery |
 | --- | --- | --- | --- |
-| M4 local `tcp` / `tcp-tls` | pending | The public target selectors and shipped-daemon launch contract are covered by AO.4 unit validation; no physical throughput result is claimed until an isolated campaign completes. | Run both target commands in the approved isolated-host procedure and retain the compact reports. |
+| M4 local `tcp` / `tcp-tls` | blocked | Both public target commands were invoked at `f40440d7bd370168ce41bf76ae486210df14b18d` and retained compact failure artifacts. `tcp` reports the stable `missing_compatible_plaintext_baseline` code (for example `20260820-220233.418717-local-tcp-plaintext-test-f1.json`); `tcp-tls` records that this active OS user already owns an ambient daemon, so it is not an isolated host. No throughput or mTLS delivery result is claimed. | Establish a complete, provenance-qualified pre-AO plaintext baseline and run the targets from a dedicated clean OS user; retain the resulting comparison artifacts. |
 | M5 bidirectional `tcp` / `tcp-tls` | blocked | M5 was unavailable during the AO.4 implementation window; no send/read/ack/reply or benchmark result is claimed. | Restore M5 availability, run both directions/modes, and attach the retained evidence. |
 | FastPC4 `tcp` / `tcp-tls` | blocked | FastPC4 was not available to this AO.4 session; no Windows benchmark result is claimed. | Restore approved remote access, run the Windows pair of campaigns, and attach the retained evidence. |
 

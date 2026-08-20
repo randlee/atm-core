@@ -166,6 +166,17 @@ class BenchmarkReportTests(unittest.TestCase):
         self.assertIn("mutual-tls", text)
         self.assertIn("tcp-tls", text)
 
+    def test_bounded_benchmark_failure_code_is_rendered(self) -> None:
+        failed = {
+            **REPORT.load_result(self.fixture("failed-tcp-f8.json")),
+            "benchmark_evidence_failure_code": "missing_compatible_plaintext_baseline",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            output = REPORT.render_run(failed, "bounded-failure", Path(directory))
+            text = output.read_text(encoding="utf-8")
+        self.assertIn("Evidence failure code", text)
+        self.assertIn("missing_compatible_plaintext_baseline", text)
+
 
 if __name__ == "__main__":
     unittest.main()
