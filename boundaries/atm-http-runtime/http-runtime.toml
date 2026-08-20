@@ -27,7 +27,7 @@ io_forbidden = ["direct_sqlite_io", "daemon_request_dispatch", "raw_http_framing
 
 [dependencies]
 allowed_dependents = ["atm-daemon-bootstrap", "atm", "atm-daemon-client", "atm-graft"]
-allowed_dependencies = ["atm-core", "tokio", "axum", "hyper", "hyper-util", "reqwest", "tower", "ulid", "windows-sys"]
+allowed_dependencies = ["atm-core", "tokio", "axum", "http-body-util", "hyper", "hyper-util", "reqwest", "tower", "ulid", "windows-sys"]
 forbidden_edges = ["atm-http-runtime -> atm-storage-rusqlite", "atm-http-runtime -> atm-graft", "atm-http-runtime -> atm", "atm-http-runtime -> atm-daemon-bootstrap"]
 
 [references]
@@ -41,7 +41,7 @@ error_types = ["AtmError"]
 notes = ["No runtime-private request, response, error, or persistence type is authorized.", "Received-message hooks cross only the sealed core selector/emitter boundary after a newly durable write; their failure is a response warning, never a write failure."]
 
 [testing]
-allowed_test_double_paths = ["crate::tests::TestRouter"]
+allowed_test_double_paths = ["crate::tests::TestRouter", "crate::tests::PassthroughPeerAdapter"]
 forbidden_test_bypasses = ["listener_bind", "endpoint_publication"]
 
 [enforcement]

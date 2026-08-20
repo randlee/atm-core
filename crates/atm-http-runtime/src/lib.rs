@@ -53,15 +53,16 @@ mod client;
 mod http1_server;
 mod loopback_tcp;
 mod message_handler;
+mod peer_stream;
 mod private_staging;
 mod runtime_health;
 mod storage_and_nudge_router;
 #[cfg(unix)]
 mod unix_socket;
 
-use http1_server::serve_loopback_http1;
 #[cfg(unix)]
 use http1_server::serve_unix_http1;
+use http1_server::{serve_authenticated_peer_http1, serve_loopback_http1};
 use loopback_tcp::{
     LoopbackEndpointRecordGuard, authenticated_loopback_router, cleanup_loopback_endpoint_record,
     publish_loopback_endpoint_record, validate_loopback_config,
@@ -86,6 +87,10 @@ pub use loopback_tcp::LoopbackTcpConfig;
 pub use message_handler::{
     AuthenticatedConnector, CanonicalWriteHandler, canonical_api_router, canonical_message_router,
 };
+pub use peer_stream::{
+    AcceptedPeerStream, AuthenticatedPeerStream, EstablishedPeerStream, PeerStreamAdapter,
+    PeerStreamFuture,
+};
 pub use runtime_health::RuntimeHealth;
 pub use storage_and_nudge_router::StorageAndNudgeRouter;
 
@@ -93,13 +98,31 @@ pub use storage_and_nudge_router::StorageAndNudgeRouter;
 ///
 /// The fields remain private so composition cannot bypass validation before a
 /// listener is introduced in a later AL sprint.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct HttpRuntimeConfig {
     loopback_tcp: LoopbackTcpConfig,
     unix_socket: Option<UnixSocketConfig>,
     direct_peer_tcp: Option<DirectPeerTcpConfig>,
+    peer_stream_adapter: Option<Arc<dyn PeerStreamAdapter>>,
     limits: RuntimeLimits,
     timeouts: RuntimeTimeouts,
+}
+
+impl std::fmt::Debug for HttpRuntimeConfig {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("HttpRuntimeConfig")
+            .field("loopback_tcp", &self.loopback_tcp)
+            .field("unix_socket", &self.unix_socket)
+            .field("direct_peer_tcp", &self.direct_peer_tcp)
+            .field(
+                "peer_stream_adapter",
+                &self.peer_stream_adapter.as_ref().map(|_| "configured"),
+            )
+            .field("limits", &self.limits)
+            .field("timeouts", &self.timeouts)
+            .finish()
+    }
 }
 
 impl HttpRuntimeConfig {
@@ -116,6 +139,7 @@ impl HttpRuntimeConfig {
             loopback_tcp,
             unix_socket,
             direct_peer_tcp: None,
+            peer_stream_adapter: None,
             limits,
             timeouts,
         }
@@ -130,6 +154,15 @@ impl HttpRuntimeConfig {
     #[must_use]
     pub fn with_direct_peer_tcp(mut self, direct_peer_tcp: DirectPeerTcpConfig) -> Self {
         self.direct_peer_tcp = Some(direct_peer_tcp);
+        self
+    }
+
+    /// Composes an already-selected authenticated stream adapter around the
+    /// direct peer listener. The runtime receives only opaque streams; TLS
+    /// construction and peer configuration remain bootstrap-owned.
+    #[must_use]
+    pub fn with_peer_stream_adapter(mut self, adapter: Arc<dyn PeerStreamAdapter>) -> Self {
+        self.peer_stream_adapter = Some(adapter);
         self
     }
 }
@@ -434,19 +467,31 @@ impl HttpRuntime<Configured> {
             self.config.timeouts,
         );
         let loopback_router = authenticated_loopback_router(canonical_router.clone(), capability);
-        let direct_peer_router = direct_peer_listener.as_ref().map(|_| {
-            canonical_api_router(
-                Arc::clone(&self.handler),
-                AuthenticatedConnector::peer_socket(),
-                self.config.limits,
-                self.config.timeouts,
-            )
-        });
+        let direct_peer = match direct_peer_listener {
+            Some(listener) => match self.config.peer_stream_adapter.as_ref() {
+                Some(adapter) => Some(DirectPeerServer::Authenticated(
+                    listener,
+                    Arc::clone(adapter),
+                    Arc::clone(&self.handler),
+                    self.config.limits,
+                    self.config.timeouts,
+                )),
+                None => Some(DirectPeerServer::Plaintext(
+                    listener,
+                    canonical_api_router(
+                        Arc::clone(&self.handler),
+                        AuthenticatedConnector::peer_socket(),
+                        self.config.limits,
+                        self.config.timeouts,
+                    ),
+                )),
+            },
+            None => None,
+        };
         let server_task = match start_server_task(ServerTaskInputs {
             listener,
             loopback_router,
-            direct_peer_listener,
-            direct_peer_router,
+            direct_peer,
             #[cfg(unix)]
             canonical_router,
             #[cfg(unix)]
@@ -619,8 +664,7 @@ async fn publish_loopback_endpoint(
 struct ServerTaskInputs {
     listener: TcpListener,
     loopback_router: axum::Router,
-    direct_peer_listener: Option<TcpListener>,
-    direct_peer_router: Option<axum::Router>,
+    direct_peer: Option<DirectPeerServer>,
     #[cfg(unix)]
     canonical_router: axum::Router,
     #[cfg(unix)]
@@ -631,6 +675,17 @@ struct ServerTaskInputs {
     shutdown_rx: watch::Receiver<()>,
     server_stopped_tx: watch::Sender<bool>,
     health: RuntimeHealth,
+}
+
+enum DirectPeerServer {
+    Plaintext(TcpListener, axum::Router),
+    Authenticated(
+        TcpListener,
+        Arc<dyn PeerStreamAdapter>,
+        Arc<dyn CanonicalWriteHandler>,
+        RuntimeLimits,
+        RuntimeTimeouts,
+    ),
 }
 
 /// Marks the process-owned status projection when the one managed server task
@@ -675,8 +730,7 @@ async fn start_server_task(
     let ServerTaskInputs {
         listener,
         loopback_router,
-        direct_peer_listener,
-        direct_peer_router,
+        direct_peer,
         #[cfg(unix)]
         canonical_router,
         #[cfg(unix)]
@@ -694,7 +748,7 @@ async fn start_server_task(
         async move {
             drain_server_group(ServerGroupInputs {
                 loopback: (listener, loopback_router),
-                direct_peer: direct_peer_listener.zip(direct_peer_router),
+                direct_peer,
                 #[cfg(unix)]
                 unix_socket: unix_listener
                     .map(|(listener, cleanup)| (listener, cleanup, canonical_router)),
@@ -710,7 +764,7 @@ async fn start_server_task(
 
 struct ServerGroupInputs {
     loopback: (TcpListener, axum::Router),
-    direct_peer: Option<(TcpListener, axum::Router)>,
+    direct_peer: Option<DirectPeerServer>,
     #[cfg(unix)]
     unix_socket: Option<(UnixListener, UnixSocketPathGuard, axum::Router)>,
     max_connections: usize,
@@ -741,14 +795,28 @@ async fn drain_server_group(inputs: ServerGroupInputs) -> std::io::Result<()> {
         header_read_timeout,
         shutdown_rx.clone(),
     ));
-    if let Some((listener, router)) = direct_peer {
-        servers.spawn(serve_loopback_http1(
-            listener,
-            router,
-            max_connections,
-            header_read_timeout,
-            shutdown_rx.clone(),
-        ));
+    if let Some(direct_peer) = direct_peer {
+        match direct_peer {
+            DirectPeerServer::Plaintext(listener, router) => {
+                servers.spawn(serve_loopback_http1(
+                    listener,
+                    router,
+                    max_connections,
+                    header_read_timeout,
+                    shutdown_rx.clone(),
+                ));
+            }
+            DirectPeerServer::Authenticated(listener, adapter, handler, limits, timeouts) => {
+                servers.spawn(serve_authenticated_peer_http1(
+                    listener,
+                    adapter,
+                    handler,
+                    limits,
+                    timeouts,
+                    shutdown_rx.clone(),
+                ));
+            }
+        }
     }
     #[cfg(unix)]
     if let Some((listener, cleanup, router)) = unix_socket {
@@ -905,6 +973,12 @@ fn validate_config(config: &HttpRuntimeConfig) -> Result<(), AtmError> {
             "must use a non-zero port",
         ));
     }
+    if config.peer_stream_adapter.is_some() && config.direct_peer_tcp.is_none() {
+        return Err(preflight(
+            "peer_stream_adapter",
+            "requires an enabled direct peer listener",
+        ));
+    }
     #[cfg(not(unix))]
     if config.unix_socket.is_some() {
         return Err(preflight(
@@ -951,8 +1025,10 @@ fn preflight(field: &str, cause: impl std::fmt::Display) -> AtmError {
 
 #[cfg(test)]
 mod tests {
+    use std::future::Future;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::num::{NonZeroU32, NonZeroUsize};
+    use std::pin::Pin;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
@@ -966,16 +1042,52 @@ mod tests {
     use atm_core::send::{SendMessageSource, SendRequest};
     use atm_core::test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
     use atm_core::types::{AgentName, TeamName};
-    use tokio::net::TcpListener;
+    use tokio::net::{TcpListener, TcpStream};
 
     use super::{
-        CanonicalWriteHandler, DirectPeerTcpConfig, HttpRuntimeBuilder, HttpRuntimeConfig,
-        LoopbackTcpConfig, NonZeroDuration, RuntimeHealth, RuntimeLimits, RuntimeTimeouts,
-        UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid, direct_peer_tcp_client,
+        AcceptedPeerStream, AuthenticatedPeerStream, CanonicalWriteHandler, DirectPeerTcpConfig,
+        HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig, NonZeroDuration,
+        PeerStreamAdapter, RuntimeHealth, RuntimeLimits, RuntimeTimeouts, UnixSocketConfig,
+        UnixSocketMode, UnixSocketOwnerUid, direct_peer_tcp_client,
     };
     use ulid::Ulid;
 
     struct TestRouter;
+
+    /// Test-only adapter proving the runtime treats an already-authenticated
+    /// stream as opaque. Real certificate and pin verification remains tested
+    /// in `peer-tls`; this double deliberately contains no security policy.
+    struct PassthroughPeerAdapter;
+
+    impl PeerStreamAdapter for PassthroughPeerAdapter {
+        fn connect<'a>(
+            &'a self,
+            stream: TcpStream,
+            _peer: &'a atm_core::types::HostName,
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Result<Box<dyn AuthenticatedPeerStream>, AtmError>> + Send + 'a,
+            >,
+        > {
+            Box::pin(async move {
+                let stream: Box<dyn AuthenticatedPeerStream> = Box::new(stream);
+                Ok(stream)
+            })
+        }
+
+        fn accept<'a>(
+            &'a self,
+            stream: TcpStream,
+        ) -> Pin<Box<dyn Future<Output = Result<AcceptedPeerStream, AtmError>> + Send + 'a>>
+        {
+            Box::pin(async move {
+                Ok(AcceptedPeerStream {
+                    source_host: "trusted.example.test".parse().expect("test host"),
+                    stream: Box::new(stream),
+                })
+            })
+        }
+    }
 
     #[derive(Default)]
     struct RecordingPeerRouter {
@@ -1389,7 +1501,10 @@ mod tests {
             let calls = handler.calls.lock().expect("recorded peer calls");
             assert_eq!(calls.len(), 1, "one request reaches one canonical write");
             let (request, ingress) = &calls[0];
-            assert_eq!(*ingress, AuthenticatedIngress::Peer);
+            assert!(
+                matches!(ingress, AuthenticatedIngress::UntrustedSmoke(provenance)
+                if provenance.declared_source_host().as_str() == "127.0.0.1")
+            );
             assert_eq!(
                 request
                     .authenticated_source_host
@@ -1409,6 +1524,74 @@ mod tests {
             .finish()
             .await
             .expect("runtime shuts down cleanly");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn authenticated_peer_stream_uses_the_same_canonical_router_after_the_adapter() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let config = config_with_record(0, temporary_directory.path().join("local-http.json"))
+            .with_direct_peer_tcp(DirectPeerTcpConfig::ephemeral_for_test())
+            .with_peer_stream_adapter(Arc::new(PassthroughPeerAdapter));
+        let handler = Arc::new(RecordingPeerRouter::default());
+        let runtime_handler: Arc<dyn CanonicalWriteHandler> = handler.clone();
+        let running = HttpRuntimeBuilder::new(config, runtime_handler)
+            .build()
+            .expect("valid opaque stream configuration")
+            .start()
+            .await
+            .expect("runtime starts the authenticated stream listener");
+        let peer_port = running
+            .direct_peer_address()
+            .expect("ephemeral direct peer listener is bound")
+            .port();
+        let client = direct_peer_tcp_client(
+            "localhost".parse().expect("direct host"),
+            std::num::NonZeroU16::new(peer_port).expect("non-zero port"),
+            Duration::from_secs(1),
+        )
+        .expect("typed test client");
+
+        let _ = client
+            .execute(ApiRequest::new(write_request()))
+            .await
+            .expect("the opaque stream reaches the shared HTTP route");
+        let (call_count, ingress, authenticated_source_host) = {
+            let calls = handler.calls.lock().expect("recorded peer calls");
+            (
+                calls.len(),
+                calls[0].1.clone(),
+                calls[0]
+                    .0
+                    .authenticated_source_host
+                    .as_ref()
+                    .map(atm_core::types::HostName::as_str)
+                    .map(str::to_owned),
+            )
+        };
+        assert_eq!(call_count, 1, "one opaque peer stream has one dispatch");
+        assert_eq!(ingress, AuthenticatedIngress::Peer);
+        assert_eq!(
+            authenticated_source_host.as_deref(),
+            Some("trusted.example.test"),
+            "only the adapter supplies peer authentication provenance"
+        );
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("runtime shuts down cleanly");
+    }
+
+    #[test]
+    fn authenticated_peer_stream_adapter_requires_the_single_peer_listener() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let config = config_with_record(0, temporary_directory.path().join("local-http.json"))
+            .with_peer_stream_adapter(Arc::new(PassthroughPeerAdapter));
+        let error = match HttpRuntimeBuilder::new(config, Arc::new(TestRouter)).build() {
+            Ok(_) => panic!("an opaque peer stream has no standalone listener"),
+            Err(error) => error,
+        };
+        assert!(error.message().contains("peer_stream_adapter"));
     }
 
     #[test]

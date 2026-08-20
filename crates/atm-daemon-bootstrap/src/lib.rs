@@ -19,15 +19,22 @@ use atm_core::error::AtmError;
 use atm_core::home::HOST_RUNTIME_SOCKET_FILE;
 use atm_core::home::current_host_runtime_scope;
 use atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME;
-use atm_core::observability::{NullObservability, ObservabilityPort};
+use atm_core::observability::{
+    CommandEvent, NullObservability, ObservabilityPort, action_name, outcome_label,
+};
+use atm_core::peer_wire::{PeerWireMode, PeerWireSecurity};
 use atm_core::send::input::DEFAULT_MESSAGE_MAX_BYTES;
+use atm_core::types::HostName;
 use atm_core::types::{AgentName, TeamName};
 use atm_http_runtime::{
-    DirectPeerTcpConfig, HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig, NonZeroDuration,
+    AcceptedPeerStream, DirectPeerTcpConfig, EstablishedPeerStream, HttpRuntimeBuilder,
+    HttpRuntimeConfig, LoopbackTcpConfig, NonZeroDuration, PeerStreamAdapter, PeerStreamFuture,
     RuntimeHealth, RuntimeLimits, RuntimeTimeouts, StorageAndNudgeRouter,
 };
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime};
 use atm_storage_rusqlite::SqliteStorageFactory;
+use peer_tls::MtlsPeerStreamAdapter;
+use tokio::net::TcpStream;
 
 mod owner_gate;
 mod received_hook_selector;
@@ -69,6 +76,88 @@ pub fn resolve_daemon_launch_identity() -> DaemonLaunchIdentity {
         identity: atm_core::caller_context::read_cli_identity_from_env_or_warn(
             "atm_daemon_bootstrap::resolve_daemon_launch_identity",
         ),
+    }
+}
+
+/// Parse the sole non-durable peer-wire launch policy before composition.
+///
+/// The process mode deliberately has no environment, database, or adapter
+/// availability source: those inputs can cause a startup error but cannot
+/// select plaintext.
+pub fn parse_peer_wire_mode(
+    arguments: impl IntoIterator<Item = std::ffi::OsString>,
+) -> Result<PeerWireMode, AtmError> {
+    if std::env::var_os("ATM_PEER_WIRE_SECURITY").is_some() {
+        return Err(AtmError::peer_wire_mode_source_forbidden(
+            "ATM_PEER_WIRE_SECURITY is forbidden; use --peer-wire-security at daemon launch",
+        ));
+    }
+    let mut arguments = arguments.into_iter();
+    let _program = arguments.next();
+    let mut mode = None;
+    while let Some(argument) = arguments.next() {
+        let argument = argument.into_string().map_err(|_| {
+            AtmError::peer_wire_mode_invalid("daemon launch arguments must be valid UTF-8")
+        })?;
+        let value = if argument == "--peer-wire-security" {
+            Some(arguments.next().ok_or_else(|| {
+                AtmError::peer_wire_mode_invalid(
+                    "--peer-wire-security requires `mutual-tls` or `plaintext-test`",
+                )
+            })?)
+        } else {
+            argument
+                .strip_prefix("--peer-wire-security=")
+                .map(std::ffi::OsString::from)
+        };
+        let Some(value) = value else {
+            continue;
+        };
+        let value = value.into_string().map_err(|_| {
+            AtmError::peer_wire_mode_invalid("peer-wire launch mode must be valid UTF-8")
+        })?;
+        let parsed = match value.as_str() {
+            "mutual-tls" => PeerWireMode::mtls(),
+            "plaintext-test" => PeerWireMode::plaintext_test(),
+            _ => {
+                return Err(AtmError::peer_wire_mode_invalid(
+                    "--peer-wire-security accepts only `mutual-tls` or `plaintext-test`",
+                ));
+            }
+        };
+        if mode.replace(parsed).is_some() {
+            return Err(AtmError::peer_wire_mode_invalid(
+                "--peer-wire-security may be supplied only once",
+            ));
+        }
+    }
+    Ok(mode.unwrap_or_default())
+}
+
+struct BootstrapMtlsStreamAdapter {
+    adapter: Arc<MtlsPeerStreamAdapter>,
+}
+
+impl PeerStreamAdapter for BootstrapMtlsStreamAdapter {
+    fn connect<'a>(
+        &'a self,
+        stream: TcpStream,
+        peer: &'a HostName,
+    ) -> PeerStreamFuture<'a, EstablishedPeerStream> {
+        Box::pin(async move {
+            let stream: EstablishedPeerStream = Box::new(self.adapter.connect(stream, peer).await?);
+            Ok(stream)
+        })
+    }
+
+    fn accept<'a>(&'a self, stream: TcpStream) -> PeerStreamFuture<'a, AcceptedPeerStream> {
+        Box::pin(async move {
+            let (stream, source_host) = self.adapter.accept_with_peer(stream).await?;
+            Ok(AcceptedPeerStream {
+                source_host,
+                stream: Box::new(stream),
+            })
+        })
     }
 }
 
@@ -154,10 +243,12 @@ pub async fn run_replacement_daemon() -> Result<(), AtmError> {
 pub async fn run_replacement_daemon_with_observability(
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
 ) -> Result<(), AtmError> {
+    let peer_wire_mode = parse_peer_wire_mode(std::env::args_os())?;
     run_replacement_daemon_with_selector(
         observability,
         active_received_hook_selector,
         resolve_daemon_launch_identity(),
+        peer_wire_mode,
     )
     .await
 }
@@ -168,10 +259,12 @@ pub async fn run_replacement_daemon_with_observability(
 /// exists only behind the `benchmark-harness` feature.
 #[cfg(feature = "benchmark-harness")]
 pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode) -> Result<(), AtmError> {
+    let peer_wire_mode = parse_peer_wire_mode(std::env::args_os())?;
     run_replacement_daemon_with_selector(
         Arc::new(NullObservability),
         move |service_runtime| benchmark_received_hook_selector(service_runtime, hook_mode),
         resolve_daemon_launch_identity(),
+        peer_wire_mode,
     )
     .await
 }
@@ -183,25 +276,31 @@ fn build_replacement_handler(
         atm_core::LocalServiceRuntime,
     ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     daemon_launch_identity: &DaemonLaunchIdentity,
+    peer_wire_mode: PeerWireMode,
+    peer_stream_adapter: Option<Arc<dyn PeerStreamAdapter>>,
     runtime_health: RuntimeHealth,
 ) -> Result<Arc<StorageAndNudgeRouter>, AtmError> {
     let selector = selector_factory(assembly.service_runtime.clone());
-    Ok(Arc::new(
-        StorageAndNudgeRouter::new(
-            assembly.service_runtime,
-            observability,
-            selector,
-            atm_core::home::atm_home()?,
-        )
-        .with_runtime_health(runtime_health, assembly.doctor_ports)
-        .with_daemon_context(atm_core::doctor::DoctorExecutionContext {
-            team: daemon_launch_identity.team.clone(),
-            identity: daemon_launch_identity.identity.clone(),
-            version: Some(atm_core::protocol::ReleaseVersion::current()),
-            cli_schema_version: Some(atm_core::protocol::CLI_SCHEMA_VERSION),
-            http_api_version: Some(atm_core::protocol::HttpApiVersion::current()),
-        }),
-    ))
+    let handler = StorageAndNudgeRouter::new(
+        assembly.service_runtime,
+        observability,
+        selector,
+        atm_core::home::atm_home()?,
+    )
+    .with_runtime_health(runtime_health, assembly.doctor_ports)
+    .with_daemon_context(atm_core::doctor::DoctorExecutionContext {
+        team: daemon_launch_identity.team.clone(),
+        identity: daemon_launch_identity.identity.clone(),
+        version: Some(atm_core::protocol::ReleaseVersion::current()),
+        cli_schema_version: Some(atm_core::protocol::CLI_SCHEMA_VERSION),
+        http_api_version: Some(atm_core::protocol::HttpApiVersion::current()),
+        peer_wire_security: Some(peer_wire_mode.security().as_launch_value().to_owned()),
+    });
+    let handler = match peer_stream_adapter {
+        Some(adapter) => handler.with_peer_stream_adapter(adapter),
+        None => handler,
+    };
+    Ok(Arc::new(handler))
 }
 
 async fn run_replacement_daemon_with_selector(
@@ -210,6 +309,7 @@ async fn run_replacement_daemon_with_selector(
         atm_core::LocalServiceRuntime,
     ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     daemon_launch_identity: DaemonLaunchIdentity,
+    peer_wire_mode: PeerWireMode,
 ) -> Result<(), AtmError> {
     install_sqlite_retained_runtime_factory();
     let scope = current_host_runtime_scope()?;
@@ -217,13 +317,23 @@ async fn run_replacement_daemon_with_selector(
     let runtime_health = RuntimeHealth::with_owner(std::process::id());
     let assembly = assemble_daemon_runtime()?;
     let workflow_telemetry = assembly.workflow_telemetry.clone();
+    let peer_stream_adapter = match peer_wire_mode.security() {
+        PeerWireSecurity::Mtls => Some(Arc::new(BootstrapMtlsStreamAdapter {
+            adapter: Arc::new(MtlsPeerStreamAdapter::from_peer_config(
+                assembly.peer_config_store.as_ref(),
+            )?),
+        }) as Arc<dyn PeerStreamAdapter>),
+        PeerWireSecurity::PlaintextTest => None,
+    };
     // The shipped daemon always keeps the injected receiver hook active.
     // Benchmark-only selection is available only from the separate binary.
     let handler = build_replacement_handler(
         assembly,
-        observability,
+        Arc::clone(&observability),
         selector_factory,
         &daemon_launch_identity,
+        peer_wire_mode,
+        peer_stream_adapter.clone(),
         runtime_health.clone(),
     )?;
     let loopback = LoopbackTcpConfig::new(
@@ -245,6 +355,37 @@ async fn run_replacement_daemon_with_selector(
         ),
     );
     let config = config.with_direct_peer_tcp(DirectPeerTcpConfig::standard());
+    let config = match peer_stream_adapter.as_ref() {
+        Some(adapter) => config.with_peer_stream_adapter(Arc::clone(adapter)),
+        None => config,
+    };
+    tracing::info!(
+        peer_wire_security = peer_wire_mode.security().as_launch_value(),
+        mtls_ready = peer_stream_adapter.is_some(),
+        "replacement daemon selected peer-wire mode"
+    );
+    // A retained startup record carries only the selected public mode. The
+    // concrete adapter remains opaque; never emit certificates, pins, keys,
+    // or trust records from this composition boundary.
+    if let (Some(team), Some(identity)) = (
+        daemon_launch_identity.team.clone(),
+        daemon_launch_identity.identity.clone(),
+    ) && let Err(error) = observability.emit(CommandEvent {
+        command: "atm-daemon",
+        action: action_name("peer_wire_mode_selected"),
+        outcome: outcome_label(peer_wire_mode.security().as_launch_value()),
+        team,
+        agent: identity.clone(),
+        sender: identity,
+        message_id: None,
+        requires_ack: false,
+        dry_run: false,
+        task_id: None,
+        error_code: None,
+        error_message: None,
+    }) {
+        tracing::warn!(%error, "failed to retain peer-wire mode startup observability event");
+    }
     let mut running = HttpRuntimeBuilder::new(config, handler)
         .with_runtime_health(runtime_health)
         .build()?
@@ -452,6 +593,7 @@ pub fn with_default_peer_address_stores<T>(
 
 #[cfg(test)]
 mod replacement_runtime_tests {
+    use std::ffi::OsString;
     use std::time::Duration;
 
     use atm_core::boundary::TemplateSource;
@@ -460,7 +602,7 @@ mod replacement_runtime_tests {
 
     use super::{
         REPLACEMENT_DRAIN_DEADLINE, ShutdownSignal, assemble_host_runtime_with_template_composer,
-        write_ready_signal_if_requested,
+        parse_peer_wire_mode, write_ready_signal_if_requested,
     };
 
     #[test]
@@ -480,6 +622,40 @@ mod replacement_runtime_tests {
     #[test]
     fn replacement_runtime_uses_the_architecture_drain_deadline() {
         assert_eq!(REPLACEMENT_DRAIN_DEADLINE, Duration::from_secs(5));
+    }
+
+    #[test]
+    fn peer_wire_mode_defaults_to_mutual_tls_and_accepts_only_launch_values() {
+        let mutual_tls = parse_peer_wire_mode([OsString::from("atm-daemon")])
+            .expect("mTLS is the secure default");
+        assert_eq!(mutual_tls.security().as_launch_value(), "mutual-tls");
+
+        let plaintext = parse_peer_wire_mode([
+            OsString::from("atm-daemon"),
+            OsString::from("--peer-wire-security=plaintext-test"),
+        ])
+        .expect("explicit plaintext test mode");
+        assert_eq!(plaintext.security().as_launch_value(), "plaintext-test");
+
+        let invalid = parse_peer_wire_mode([
+            OsString::from("atm-daemon"),
+            OsString::from("--peer-wire-security"),
+            OsString::from("opportunistic"),
+        ])
+        .expect_err("no opportunistic or fallback mode exists");
+        assert!(invalid.message().contains("mutual-tls"));
+    }
+
+    #[test]
+    fn peer_wire_mode_rejects_duplicate_launch_values() {
+        let error = parse_peer_wire_mode([
+            OsString::from("atm-daemon"),
+            OsString::from("--peer-wire-security"),
+            OsString::from("mutual-tls"),
+            OsString::from("--peer-wire-security=plaintext-test"),
+        ])
+        .expect_err("one launch mode must select the whole runtime");
+        assert!(error.message().contains("only once"));
     }
 
     #[test]

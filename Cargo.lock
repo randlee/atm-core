@@ -215,9 +215,11 @@ dependencies = [
  "atm-storage-rusqlite",
  "atm-template-sc-compose",
  "fs4",
+ "peer-tls",
  "serde_json",
  "tempfile",
  "tokio",
+ "tracing",
  "ulid",
 ]
 
@@ -280,6 +282,7 @@ dependencies = [
  "axum",
  "base64",
  "fs4",
+ "http-body-util",
  "hyper",
  "hyper-util",
  "reqwest",

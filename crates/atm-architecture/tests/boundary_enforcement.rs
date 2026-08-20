@@ -173,6 +173,11 @@ fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
         .nth(1)
         .and_then(|source| source.split("impl LoopbackTcpConnector").next())
         .expect("direct-peer connector implementation");
+    let plaintext_mode_arm = bootstrap
+        .split("PeerWireSecurity::PlaintextTest => None")
+        .nth(1)
+        .and_then(|source| source.split("};").next())
+        .expect("explicit plaintext mode arm");
 
     assert!(
         bootstrap_direct_setup.contains("DirectPeerTcpConfig::standard()"),
@@ -191,7 +196,7 @@ fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
         "AO2 plaintext listener must enter the ordinary canonical router"
     );
     for (scope, source) in [
-        ("bootstrap direct-peer setup", bootstrap_direct_setup),
+        ("plaintext mode arm", plaintext_mode_arm),
         ("direct-peer listener", direct_listener),
         ("direct-peer connector", direct_connector),
     ] {
@@ -410,10 +415,10 @@ fn ai23_peer_adapter_never_matches_localhost_or_own_ip() {
     let root = workspace_root();
     let router = read_source(&root.join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"));
     assert!(
-        router.contains("dispatch_resolved_peer_ack")
+        router.contains("dispatch_resolved_peer_write")
             && !router.contains("PeerDelivery")
             && !router.contains("signal_after_persist"),
-        "the typed router may deliver only resolved acknowledgements and has no peer worker signal"
+        "the typed router may deliver one admitted remote write and has no peer worker signal"
     );
     for forbidden in ["is_loopback", "is_loopback()"] {
         assert!(
@@ -1360,7 +1365,11 @@ fn ao2_mtls_stream_adapter_is_the_only_authorized_production_tls_consumer() {
     let boundary_path = root.join("boundaries/peer-tls/mtls-peer-stream-adapter.toml");
     let boundary: BoundaryToml = toml::from_str(&read_source(&boundary_path))
         .expect("mTLS stream adapter boundary must be valid TOML");
-    assert!(boundary.dependencies.allowed_dependents.is_empty());
+    assert_eq!(
+        boundary.dependencies.allowed_dependents,
+        vec!["atm-daemon-bootstrap".to_owned()],
+        "only bootstrap may compose the concrete mTLS byte-stream adapter"
+    );
     let source = read_source(&root.join("crates/peer-tls/src/lib.rs"));
     let syntax = syn::parse_file(&source).expect("peer-tls source must parse");
     let mut visitor = PeerTlsSurfaceVisitor::default();

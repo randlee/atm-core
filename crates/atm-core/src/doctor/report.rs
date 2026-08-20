@@ -62,6 +62,10 @@ pub struct DoctorExecutionContext {
     pub cli_schema_version: Option<u16>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub http_api_version: Option<crate::protocol::HttpApiVersion>,
+    /// The immutable peer-wire launch policy selected by this daemon process.
+    /// It is diagnostic-only and never includes a certificate, pin, or key.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub peer_wire_security: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

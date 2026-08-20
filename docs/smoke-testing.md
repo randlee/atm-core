@@ -31,6 +31,13 @@ Peer-wire evidence must record the active ADR-047 security mode. Normal
 benchmark and release evidence is mutual TLS; `plaintext-test` is explicit
 diagnostic evidence only and cannot satisfy mTLS or peer-allowlist criteria.
 
+The daemon selects this mode only at process launch. Verify the selected value
+with `atm doctor --json` before a peer-wire smoke. A disposable
+`--peer-wire-security plaintext-test` daemon uses the preserved direct TCP
+pipeline for connectivity diagnostics; a normal restart without that argument
+returns to the mTLS default. A failed mTLS configuration or handshake is a
+failure to repair, never a reason to retry the same run in plaintext.
+
 The routed smoke implementations are deliberately not independent public
 commands:
 
