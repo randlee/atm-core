@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO22-ATM-QA-005>
+  a triage:Finding ;
+  triage:findingId "AO22-ATM-QA-005" ;
+  triage:title "documented PeerAuthority parameter type drifted to &HostName in shipped code" ;
+  triage:description "Documented facade signature uses PeerAuthority type; shipped code uses &HostName (no PeerAuthority type exists in codebase). Sprint doc frames signature as illustrative; remediation needed via alias or explicit notation." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-20T16:49:16Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.2 ;
+  triage:foundAt "2026-08-20T16:45:46Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO22-ATM-QA-005/AO22-2-drift> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO22-ATM-QA-005/AO22-2-drift>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 78 ;
+  triage:snippet "peer: &HostName" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s2-isolated-mtls-stream-adapter" ;
+  triage:headSha "c30d24442e177b9b63ef245abdffd6aa6fd8f911" ;
+  triage:occursIn <urn:atm:triage:worktree/2/c30d24442e177b9b63ef245abdffd6aa6fd8f911> .
+
+<urn:atm:triage:worktree/2/c30d24442e177b9b63ef245abdffd6aa6fd8f911>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s2-isolated-mtls-stream-adapter" ;
+  triage:branch "feature/pao-s2-isolated-mtls-stream-adapter" ;
+  triage:headSha "c30d24442e177b9b63ef245abdffd6aa6fd8f911" ;
+  triage:orderIndex 2 .
