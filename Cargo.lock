@@ -211,6 +211,7 @@ dependencies = [
  "agent-team-mail-core",
  "atm-http-runtime",
  "atm-runtime",
+ "atm-runtime-test-support",
  "atm-storage",
  "atm-storage-rusqlite",
  "atm-template-sc-compose",

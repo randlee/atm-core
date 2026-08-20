@@ -309,9 +309,27 @@ fn replacement_runtime_config(
         scope.runtime_root.as_ref().join(LOCAL_HTTP_RECORD_FILENAME),
         owner.instance_id(),
     );
-    let config = HttpRuntimeConfig::new(
+    Ok(replacement_runtime_config_with_direct_peer(
         loopback,
         unix_socket_config(scope)?,
+        DirectPeerTcpConfig::standard(),
+        peer_stream_adapter,
+    ))
+}
+
+/// Builds the maintained runtime configuration after bootstrap has selected
+/// its one wire mode. Production supplies the fixed direct-peer port; tests
+/// may supply an isolated ephemeral listener while exercising this exact
+/// composition path.
+fn replacement_runtime_config_with_direct_peer(
+    loopback: LoopbackTcpConfig,
+    unix_socket: Option<atm_http_runtime::UnixSocketConfig>,
+    direct_peer_tcp: DirectPeerTcpConfig,
+    peer_stream_adapter: &Option<Arc<dyn PeerStreamAdapter>>,
+) -> HttpRuntimeConfig {
+    let config = HttpRuntimeConfig::new(
+        loopback,
+        unix_socket,
         RuntimeLimits::new(
             NonZeroUsize::new(DEFAULT_MESSAGE_MAX_BYTES + CANONICAL_WRITE_ENVELOPE_OVERHEAD_BYTES)
                 .expect("non-zero body limit"),
@@ -322,11 +340,11 @@ fn replacement_runtime_config(
             NonZeroDuration::new(REPLACEMENT_DRAIN_DEADLINE).expect("non-zero shutdown timeout"),
         ),
     )
-    .with_direct_peer_tcp(DirectPeerTcpConfig::standard());
-    Ok(match peer_stream_adapter {
+    .with_direct_peer_tcp(direct_peer_tcp);
+    match peer_stream_adapter {
         Some(adapter) => config.with_peer_stream_adapter(Arc::clone(adapter)),
         None => config,
-    })
+    }
 }
 
 fn record_peer_wire_mode_selection(
@@ -611,16 +629,50 @@ pub fn with_default_peer_address_stores<T>(
 #[cfg(test)]
 mod replacement_runtime_tests {
     use std::ffi::OsString;
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    use std::num::NonZeroU16;
+    use std::sync::Arc;
     use std::time::Duration;
 
-    use atm_core::boundary::TemplateSource;
+    use atm_core::api::ApiRequest;
+    use atm_core::boundary::{
+        BuiltInPostSendDispatch, MessageReceivedHookSelector, RosterEntry, TemplateSource,
+    };
+    use atm_core::observability::NullObservability;
+    use atm_core::peer_wire::PeerWireMode;
+    use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
+    use atm_core::send::{SendMessageSource, WriteRequest};
+    use atm_core::types::{AgentName, ModelName, TeamName};
+    use atm_http_runtime::{
+        DirectPeerTcpConfig, HttpRuntimeBuilder, LoopbackTcpConfig, RuntimeHealth,
+        direct_peer_tcp_client,
+    };
+    use atm_runtime_test_support::open_isolated_sqlite_boundary;
+    use atm_storage::{MessageKey, RosterHarness, RosterMemberKind, RosterSnapshot};
     use atm_template_sc_compose::ScComposeTemplateComposer;
     use serde_json::Map;
 
     use super::{
-        REPLACEMENT_DRAIN_DEADLINE, ShutdownSignal, assemble_host_runtime_with_template_composer,
-        parse_peer_wire_mode, peer_stream_adapter_for_mode, write_ready_signal_if_requested,
+        DaemonLaunchIdentity, REPLACEMENT_DRAIN_DEADLINE, ShutdownSignal,
+        assemble_host_runtime_with_template_composer, build_replacement_handler,
+        parse_peer_wire_mode, peer_stream_adapter_for_mode,
+        replacement_runtime_config_with_direct_peer, write_ready_signal_if_requested,
     };
+
+    /// Test-owned receiver selection prevents an external tmux/graft action
+    /// from obscuring the bootstrap's direct-peer persistence proof.
+    struct NoReceivedHookSelector;
+
+    impl atm_core::boundary::sealed::Sealed for NoReceivedHookSelector {}
+
+    impl MessageReceivedHookSelector for NoReceivedHookSelector {
+        fn select_emitter(
+            &self,
+            _dispatch: &BuiltInPostSendDispatch,
+        ) -> Option<&dyn atm_core::boundary::AsyncMessageReceivedHookEmitter> {
+            None
+        }
+    }
 
     #[test]
     fn ready_signal_is_absent_unless_requested() {
@@ -686,6 +738,112 @@ mod replacement_runtime_tests {
         .expect("plaintext-test directly preserves the peer HTTP pipeline");
 
         assert!(adapter.is_none());
+    }
+
+    #[tokio::test]
+    async fn plaintext_test_bootstrap_runs_direct_peer_write_without_tls_configuration() {
+        let temporary_root = tempfile::tempdir().expect("temporary bootstrap runtime root");
+        let assembly = open_isolated_sqlite_boundary(temporary_root.path())
+            .expect("assemble isolated daemon runtime")
+            .for_daemon();
+        let team: TeamName = "test-team".parse().expect("team");
+        assembly
+            .shared_roster_store_arc()
+            .save_roster(&RosterSnapshot {
+                team_name: team.clone(),
+                members: ["recipient", "sender"]
+                    .into_iter()
+                    .map(|agent_name| RosterEntry {
+                        team_name: team.clone(),
+                        agent_name: agent_name.parse().expect("agent"),
+                        member_kind: RosterMemberKind::Permanent,
+                        harness: RosterHarness::PythonGraft,
+                        agent_type: atm_core::schema::AgentType::default(),
+                        model: ModelName::default(),
+                        recipient_pane_id: None,
+                        metadata_json: Map::new(),
+                    })
+                    .collect(),
+                refreshed_at: None,
+            })
+            .expect("seed direct-peer recipient roster");
+        let message_store = assembly.message_store_arc();
+        let peer_stream_adapter =
+            peer_stream_adapter_for_mode(PeerWireMode::plaintext_test(), || {
+                panic!("plaintext bootstrap must not inspect invalid TLS peer configuration")
+            })
+            .expect("plaintext bootstrap selects no TLS stream adapter");
+        let runtime_health = RuntimeHealth::with_owner(std::process::id());
+        let handler = build_replacement_handler(
+            assembly,
+            Arc::new(NullObservability),
+            |_| Arc::new(NoReceivedHookSelector),
+            &DaemonLaunchIdentity::default(),
+            PeerWireMode::plaintext_test(),
+            peer_stream_adapter.clone(),
+            runtime_health.clone(),
+        )
+        .expect("compose the replacement daemon handler");
+        let config = replacement_runtime_config_with_direct_peer(
+            LoopbackTcpConfig::new(
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                temporary_root.path().join("local-http.json"),
+                ulid::Ulid::new(),
+            ),
+            None,
+            DirectPeerTcpConfig::ephemeral_for_test(),
+            &peer_stream_adapter,
+        );
+        let running = HttpRuntimeBuilder::new(config, handler)
+            .with_runtime_health(runtime_health)
+            .build()
+            .expect("validate plaintext bootstrap runtime")
+            .start()
+            .await
+            .expect("start plaintext direct-peer listener");
+        let peer_port = running
+            .direct_peer_address()
+            .expect("ephemeral direct peer listener bound")
+            .port();
+        let client = direct_peer_tcp_client(
+            "127.0.0.1".parse().expect("direct peer host"),
+            NonZeroU16::new(peer_port).expect("non-zero direct peer port"),
+            Duration::from_secs(3),
+        )
+        .expect("direct peer client");
+        let request = WriteRequest::new(
+            temporary_root.path().join("home"),
+            temporary_root.path().join("workspace"),
+            "sender".parse::<AgentName>().expect("sender"),
+            "recipient@test-team",
+            team,
+            SendMessageSource::Inline("bootstrap plaintext direct-peer proof".to_owned()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("direct peer write request");
+        let response = client
+            .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request))))
+            .await
+            .expect("plaintext direct peer write response")
+            .into_inner();
+        let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response else {
+            panic!("plaintext direct peer write must return the canonical send response");
+        };
+        assert!(
+            message_store
+                .load_message(&MessageKey::from(outcome.message_id))
+                .expect("inspect durable direct peer message")
+                .is_some(),
+            "plaintext mode reaches the same durable storage pipeline without TLS configuration"
+        );
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("plaintext bootstrap runtime drains");
     }
 
     #[test]

@@ -195,10 +195,13 @@ impl DirectPeerTcpConfig {
         }
     }
 
-    /// Test-only isolated listener selection without a probe/rebind race.
-    #[cfg(test)]
+    /// Test-support-only isolated listener selection without a probe/rebind race.
+    ///
+    /// This is available to workspace composition tests through the explicit
+    /// `test-support` feature, never to the production bootstrap dependency.
+    #[cfg(any(test, feature = "test-support"))]
     #[must_use]
-    pub(crate) fn ephemeral_for_test() -> Self {
+    pub fn ephemeral_for_test() -> Self {
         Self {
             port: 0,
             allow_ephemeral_test_port: true,

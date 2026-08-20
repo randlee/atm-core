@@ -175,10 +175,30 @@ fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
         bootstrap_direct_setup.contains("DirectPeerTcpConfig::standard()"),
         "AO2 plaintext characterization must retain the existing standard direct-peer configuration"
     );
+    let plaintext_adapter_arm = bootstrap
+        .split("fn peer_stream_adapter_for_mode")
+        .nth(1)
+        .and_then(|source| source.split("fn replacement_runtime_config").next())
+        .and_then(|source| source.split("PeerWireSecurity::PlaintextTest =>").nth(1))
+        .and_then(|source| source.split("\n    }").next())
+        .expect("bootstrap plaintext adapter-selection arm");
     assert!(
-        bootstrap.contains("PeerWireSecurity::PlaintextTest => Ok(None),"),
+        plaintext_adapter_arm.contains("Ok(None),"),
         "AO2 plaintext mode must bypass all TLS configuration and return no stream wrapper"
     );
+    for forbidden in [
+        "build_mtls_adapter",
+        "PeerConfigStore",
+        "MtlsPeerStreamAdapter",
+        "peer_tls",
+        "rustls",
+        "certificate",
+    ] {
+        assert!(
+            !plaintext_adapter_arm.contains(forbidden),
+            "AO2 plaintext bootstrap arm must not inspect TLS/configuration/adapter state `{forbidden}`"
+        );
+    }
     assert!(
         client.contains("struct DirectPeerTcpConnector")
             && client.contains("pub fn direct_peer_tcp_client")
