@@ -8,7 +8,7 @@ use std::{fmt, sync::Arc, time::Duration};
 
 use atm_storage::{
     AtmError, HostName, PeerConfigStore, PinnedClientVerifier, TlsIdentity, TrustedPeer,
-    certificate_fingerprint, certificate_valid_now, install_tls_provider,
+    certificate_fingerprint, certificate_valid_now, install_tls_provider, normalize_fingerprint,
 };
 use rustls::{
     CertificateError, ClientConfig, DigitallySignedStruct, Error, ServerConfig, SignatureScheme,
@@ -201,7 +201,7 @@ impl PinnedServerVerifier {
         }
         Ok(Self {
             hostname: peer.host.as_str().to_owned(),
-            fingerprint: peer.fingerprint.as_str().to_ascii_lowercase(),
+            fingerprint: normalize_fingerprint(peer.fingerprint.as_str()),
             algorithms: rustls::crypto::ring::default_provider().signature_verification_algorithms,
         })
     }
@@ -480,6 +480,30 @@ mod tests {
         })
         .expect_err("expired certificate");
         assert_eq!(error.code().as_str(), "ATM_CERTIFICATE_OPERATION_FAILED");
+    }
+
+    #[test]
+    fn server_verifier_uses_canonical_fingerprint_normalization() {
+        let directory = tempfile::tempdir().expect("directory");
+        let identity = identity(&directory, "peer");
+        let mut configured = peer(&identity, true);
+        configured.fingerprint = CertificateFingerprint::try_from(
+            identity
+                .fingerprint
+                .as_str()
+                .as_bytes()
+                .chunks(2)
+                .map(|chunk| {
+                    std::str::from_utf8(chunk)
+                        .expect("hex")
+                        .to_ascii_uppercase()
+                })
+                .collect::<Vec<_>>()
+                .join(":"),
+        )
+        .expect("fingerprint");
+        let verifier = PinnedServerVerifier::new(&configured).expect("verifier");
+        assert_eq!(verifier.fingerprint, identity.fingerprint.as_str());
     }
 
     #[tokio::test]
