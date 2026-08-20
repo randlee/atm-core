@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QA-006-AO23>
+  a triage:Finding ;
+  triage:findingId "QA-006-AO23" ;
+  triage:title "atm-runtime-test-support missing from replacement-bootstrap.toml allowed_dependencies" ;
+  triage:description "quality-mgr's QA-3 pass on PR #967 (feature/pao-s3-runtime-peer-wire-mode @46ebe74e0) found that crates/atm-daemon-bootstrap consumes atm-runtime-test-support in dev-dependencies but boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml's allowed_dependencies does not list it, the same divergence class already fixed once for atm-storage/atm-storage-rusqlite under RBQA-AO23-F003. quality-mgr already sent the one-line remediation detail directly to arch-ctm as an informal fix notice (accepted per standing 'act on informal fix notices' policy); this record exists for canonical audit/tracking only." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ruthless-boundary-qa" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-20T22:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.3 ;
+  triage:foundAt "2026-08-20T22:12:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-006-AO23/QA006-S4-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QA-006-AO23/QA006-S4-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml" ;
+  triage:line 25 ;
+  triage:snippet "allowed_dependencies = [...missing atm-runtime-test-support...]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s4-peer-wire-proof" ;
+  triage:headSha "f40440d7bd370168ce41bf76ae486210df14b18d" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s4/f40440d7bd370168ce41bf76ae486210df14b18d> .
+
+<urn:atm:triage:worktree/pao-s3/46ebe74e057347a7fb140baf84b26bd632cc82aa>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:branch "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:headSha "46ebe74e057347a7fb140baf84b26bd632cc82aa" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pao-s4/f40440d7bd370168ce41bf76ae486210df14b18d>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s4-peer-wire-proof" ;
+  triage:branch "feature/pao-s4-peer-wire-proof" ;
+  triage:headSha "f40440d7bd370168ce41bf76ae486210df14b18d" ;
+  triage:orderIndex 4 .
