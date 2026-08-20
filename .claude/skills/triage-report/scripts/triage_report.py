@@ -966,7 +966,12 @@ def build_report(
                 "diagnostics": row_diagnostics,
             }
         )
-        if run is None and qa_data is not None:
+        if run is None and qa_data is not None and dev_done:
+            # QA only ever runs after dev sends a Completion. A sprint that
+            # is merely assigned (in progress, not yet completed) has no QA
+            # run to be missing -- that is the normal "in flight" state, not
+            # lost evidence. Only a completed sprint with no recorded
+            # verdict is a real gap.
             problem = f"{sid}: no authoritative QA run"
             data_gaps.append(problem)
             remediations.append(
@@ -996,7 +1001,13 @@ def build_report(
                     sprint_id=sid,
                 )
             )
-        elif github_repo is not None:
+        elif github_repo is not None and dev_done:
+            # Same rationale as the QA-run carve-out above: a sprint that is
+            # merely assigned (dev in progress, not yet pushed/completed)
+            # has no PR/CI state to observe yet. Fabricating one would
+            # violate the no-invented-GitHub-state rule in
+            # docs/triage/ttl-repair.md, so only demand real GitHub state
+            # once dev work has actually completed (dev_done).
             for field in ("head_sha", "target_branch", "pr_number", "pr_url", "ci_status", "merged"):
                 if item.get(field) is None:
                     problem = f"{sid}: GitHub {field} is missing or unknown"
