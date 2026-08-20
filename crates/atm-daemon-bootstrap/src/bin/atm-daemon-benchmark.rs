@@ -474,8 +474,6 @@ fn replacement_exit_code(error: &AtmError) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
-
     use super::{
         BenchmarkDirectPeerListener, BenchmarkHookMode, BenchmarkInvocation,
         BenchmarkPeerWireSecurity, DirectCoreWriteConfig, DirectStorageWriteConfig,
@@ -503,8 +501,8 @@ mod tests {
 
     #[test]
     fn direct_core_writes_use_the_canonical_capacity_address() {
-        let home = Path::new("/tmp/atm-capacity");
-        let config = DirectCoreWriteConfig::from_environment(home.to_path_buf());
+        let home = std::env::temp_dir().join("atm-capacity");
+        let config = DirectCoreWriteConfig::from_environment(home.clone());
         let request = direct_core_write_request(&config, 7).expect("core request");
         assert_eq!(request.caller_identity.as_str(), "capacity-core-agent");
         assert_eq!(request.caller_team.as_str(), "capacity-core-team");

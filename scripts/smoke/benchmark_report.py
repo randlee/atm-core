@@ -158,9 +158,14 @@ def immutable_write(path: Path, content: str) -> bool:
 
 def result_id(result: dict[str, Any], _source: Path | None = None) -> str:
     stamp = result["generated_at"].replace("-", "").replace(":", "").replace("T", "-").replace("Z", "")
+    migration_suffix = (
+        f"-migrated-v{AI40_SCHEMA_VERSION}"
+        if result.get("migration") is not None
+        else ""
+    )
     return safe_artifact_id(
         f"{stamp}-{result['host_label']}-{result['transport']}-"
-        f"{result['peer_wire_security']}-f{result['frames_per_connection']}"
+        f"{result['peer_wire_security']}-f{result['frames_per_connection']}{migration_suffix}"
     )
 
 
@@ -181,24 +186,38 @@ def compose(template: Path, variables: dict[str, Any], output: Path) -> None:
             variables_path.unlink(missing_ok=True)
 
 
-def evidence_records(report_dir: Path = REPORT_DIR) -> list[dict[str, Any]]:
-    records: list[dict[str, Any]] = []
+def evidence_sources(report_dir: Path | None = None) -> list[Path]:
+    """Return public benchmark summaries and legacy sources, never envelopes."""
+    report_dir = REPORT_DIR if report_dir is None else report_dir
     if not report_dir.is_dir():
-        return records
-    for path in sorted(report_dir.glob("*.json")):
-        if path.name.endswith(".envelope.json"):
-            continue
+        return []
+    return [
+        path for path in sorted(report_dir.glob("*.json"))
+        if not path.name.endswith(".envelope.json")
+    ]
+
+
+def evidence_records(report_dir: Path | None = None) -> list[dict[str, Any]]:
+    """Load one result per immutable ID, preferring a persisted current-schema copy."""
+    report_dir = REPORT_DIR if report_dir is None else report_dir
+    records: list[dict[str, Any]] = []
+    for path in evidence_sources(report_dir):
         try:
-            records.append(load_result(path))
+            result = load_result(path)
         except BenchmarkReportError:
             continue
+        canonical_path = report_dir / f"{result_id(result)}.json"
+        if canonical_path.is_file() and path != canonical_path:
+            continue
+        records.append(result)
     return sorted(records, key=lambda item: (
         item["generated_at"], item["host_label"], item["transport"],
         item["peer_wire_security"], item["hook_mode"], item["frames_per_connection"],
     ))
 
 
-def render_run(result: dict[str, Any], artifact_id: str, report_dir: Path = REPORT_DIR) -> Path:
+def render_run(result: dict[str, Any], artifact_id: str, report_dir: Path | None = None) -> Path:
+    report_dir = REPORT_DIR if report_dir is None else report_dir
     output = report_dir / f"{artifact_id}.xhtml"
     template = ROOT / "templates" / "benchmark-report" / "benchmark-run.xhtml.j2"
     metrics = result.get("metrics")
@@ -316,7 +335,8 @@ def campaign_status(results: Iterable[dict[str, Any]]) -> str:
     return "PASS" if frames == SUPPORTED_FRAMES else "INFO"
 
 
-def render_aggregate(records: Iterable[dict[str, Any]], report_root: Path = REPORTS_ROOT) -> Path:
+def render_aggregate(records: Iterable[dict[str, Any]], report_root: Path | None = None) -> Path:
+    report_root = REPORTS_ROOT if report_root is None else report_root
     records = list(records)
     rows = []
     for result in records:
@@ -391,6 +411,11 @@ def process(inputs: list[Path]) -> int:
     errors: list[str] = []
     if not inputs:
         try:
+            # A rebuild is the one-way schema-migration boundary. Legacy
+            # summaries stay immutable historical inputs; their validated
+            # current-schema copies are the report's canonical artifacts.
+            for source in evidence_sources():
+                persist(source)
             records = evidence_records()
             for result in records:
                 artifact_id = result_id(result)

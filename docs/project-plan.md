@@ -1307,7 +1307,7 @@ authoritative plan is [Phase AO plan](./plans/phase-ao/plan-phase-ao.md).
 | AO.2 | Complete | Optional adapter activation on the canonical runtime path |
 | AO.3 | Complete | TLS proof, negative coverage, and retained evidence |
 | AO.4 | Complete | Benchmark TLS/plaintext mode selection |
-| AO.5 | Planned | Physical-host benchmark and proof campaign |
+| AO.5 | In progress | Physical-host benchmark and proof campaign |
 
 ## 47. Phase AP — Outbound-Only Corporate Network Peer Connectivity [PROPOSED]
 

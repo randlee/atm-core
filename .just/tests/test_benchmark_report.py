@@ -94,6 +94,30 @@ class BenchmarkReportTests(unittest.TestCase):
             self.assertEqual(set(envelope), {"schema_version", "report_type", "generated_at", "host_label", "report_html"})
             self.assertEqual(envelope["report_type"], "benchmark")
 
+    def test_rebuild_persists_current_schema_copy_for_legacy_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report_dir = Path(directory) / "report"
+            report_dir.mkdir()
+            legacy = report_dir / "legacy.json"
+            legacy.write_text(
+                self.fixture("success-uds-f1.json").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            with (
+                mock.patch.object(REPORT, "REPORT_DIR", report_dir),
+                mock.patch.object(REPORT, "REPORTS_ROOT", Path(directory)),
+                mock.patch.object(REPORT, "regenerate_index"),
+            ):
+                self.assertEqual(REPORT.process([]), 0)
+                migrated = REPORT.evidence_records(report_dir)
+            self.assertEqual(len(migrated), 1)
+            artifact_id = REPORT.result_id(migrated[0])
+            persisted = json.loads(
+                (report_dir / f"{artifact_id}.json").read_text(encoding="utf-8")
+            )
+        self.assertEqual(persisted["schema_version"], 5)
+        self.assertEqual(persisted["migration"], {"from_schema_version": 2})
+
     def test_envelope_for_uses_the_validated_result_identity(self) -> None:
         result = REPORT.load_result(self.fixture("success-uds-f1.json"))
         envelope = json.loads(REPORT.envelope_for(result))
