@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F001>
+  a triage:Finding ;
+  triage:findingId "RBP-F001" ;
+  triage:title "PeerWireMode.security field is public, bypassing named constructors" ;
+  triage:description "crates/atm-core/src/peer_wire.rs (~lines 36-40) exposes PeerWireMode.security as a public field, allowing callers to bypass the intended named mtls()/plaintext_test() constructors and construct invalid/unvalidated mode values directly." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-best-practices" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-20T09:00:24Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.1 ;
+  triage:foundAt "2026-08-20T09:00:24Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pao-s1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBP-F001/pao-s1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/peer_wire.rs" ;
+  triage:line 39 ;
+  triage:snippet "pub security: PeerWireSecurity," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s1-peer-wire-policy" ;
+  triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s1/d137ab8d> .
+
+<urn:atm:triage:worktree/pao-s1/d137ab8d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pao-s1-peer-wire-policy" ;
+  triage:branch "feature/pao-s1-peer-wire-policy" ;
+  triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
+  triage:orderIndex 1 .
