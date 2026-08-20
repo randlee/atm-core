@@ -15,7 +15,11 @@ use rustls::{
     client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier},
     pki_types::{CertificateDer, ServerName, UnixTime},
 };
-use tokio::{net::TcpStream, time::timeout};
+use tokio::{
+    io::{AsyncRead, AsyncWrite},
+    net::TcpStream,
+    time::timeout,
+};
 use tokio_rustls::{TlsAcceptor, TlsConnector, TlsStream};
 
 const DEFAULT_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -76,7 +80,7 @@ impl MtlsPeerStreamAdapter {
         &self,
         tcp: TcpStream,
         peer: &HostName,
-    ) -> Result<TlsStream<TcpStream>, AtmError> {
+    ) -> Result<impl AsyncRead + AsyncWrite + Send + Unpin + use<>, AtmError> {
         let configured = self.trusted_peer(peer)?;
         let server_name = ServerName::try_from(peer.as_str().to_owned()).map_err(|_| {
             AtmError::peer_authentication("configured peer hostname is not valid for mTLS")
@@ -85,7 +89,7 @@ impl MtlsPeerStreamAdapter {
         timeout(self.handshake_timeout, connector.connect(server_name, tcp))
             .await
             .map_err(|_| AtmError::peer_authentication("mTLS peer handshake deadline expired"))?
-            .map(|stream| stream.into())
+            .map(TlsStream::Client)
             .map_err(|source| {
                 AtmError::peer_authentication(
                     "mTLS peer handshake failed before application processing",
@@ -95,12 +99,15 @@ impl MtlsPeerStreamAdapter {
     }
 
     /// Authenticate an inbound TCP byte stream against the configured client pins.
-    pub async fn accept(&self, tcp: TcpStream) -> Result<TlsStream<TcpStream>, AtmError> {
+    pub async fn accept(
+        &self,
+        tcp: TcpStream,
+    ) -> Result<impl AsyncRead + AsyncWrite + Send + Unpin + use<>, AtmError> {
         let acceptor = TlsAcceptor::from(Arc::new(self.server_config()?));
         timeout(self.handshake_timeout, acceptor.accept(tcp))
             .await
             .map_err(|_| AtmError::peer_authentication("mTLS peer handshake deadline expired"))?
-            .map(|stream| stream.into())
+            .map(TlsStream::Server)
             .map_err(|source| {
                 AtmError::peer_authentication(
                     "mTLS client certificate was rejected before application processing",
@@ -513,10 +520,10 @@ mod tests {
                 &host,
             )
             .await;
-        let server_error = server_task
-            .await
-            .expect("server task")
-            .expect_err("untrusted client must not complete mTLS");
+        let server_error = match server_task.await.expect("server task") {
+            Err(error) => error,
+            Ok(_) => panic!("untrusted client must not complete mTLS"),
+        };
         assert_eq!(
             server_error.code().as_str(),
             "ATM_PEER_AUTHENTICATION_FAILED"
@@ -548,7 +555,10 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(50)).await;
         });
         let (tcp, _) = listener.accept().await.expect("accept tcp");
-        let error = server.accept(tcp).await.expect_err("deadline");
+        let error = match server.accept(tcp).await {
+            Err(error) => error,
+            Ok(_) => panic!("handshake deadline must fail"),
+        };
         assert_eq!(error.code().as_str(), "ATM_PEER_AUTHENTICATION_FAILED");
         raw_client.await.expect("raw client");
     }
