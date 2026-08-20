@@ -157,13 +157,9 @@ fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
     let policy = read_source(&root.join("crates/atm-core/src/peer_wire.rs"));
 
     let bootstrap_direct_setup = bootstrap
-        .split("async fn run_replacement_daemon_with_selector")
+        .split("fn replacement_runtime_config")
         .nth(1)
-        .and_then(|source| {
-            source
-                .split("/// Emit the benchmark/supervisor marker")
-                .next()
-        })
+        .and_then(|source| source.split("fn record_peer_wire_mode_selection").next())
         .expect("replacement bootstrap direct-peer setup");
     let direct_listener = runtime
         .split("async fn bind_configured_direct_peer_listener")
@@ -175,15 +171,13 @@ fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
         .nth(1)
         .and_then(|source| source.split("impl LoopbackTcpConnector").next())
         .expect("direct-peer connector implementation");
-    let plaintext_mode_arm = bootstrap
-        .split("PeerWireSecurity::PlaintextTest => None")
-        .nth(1)
-        .and_then(|source| source.split("};").next())
-        .expect("explicit plaintext mode arm");
-
     assert!(
         bootstrap_direct_setup.contains("DirectPeerTcpConfig::standard()"),
         "AO2 plaintext characterization must retain the existing standard direct-peer configuration"
+    );
+    assert!(
+        bootstrap.contains("PeerWireSecurity::PlaintextTest => Ok(None),"),
+        "AO2 plaintext mode must bypass all TLS configuration and return no stream wrapper"
     );
     assert!(
         client.contains("struct DirectPeerTcpConnector")
@@ -198,7 +192,6 @@ fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
         "AO2 plaintext listener must enter the ordinary canonical router"
     );
     for (scope, source) in [
-        ("plaintext mode arm", plaintext_mode_arm),
         ("direct-peer listener", direct_listener),
         ("direct-peer connector", direct_connector),
     ] {
