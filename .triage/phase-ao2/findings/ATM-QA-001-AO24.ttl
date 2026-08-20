@@ -15,21 +15,22 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-20T21:36:56Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.4 ;
   triage:foundAt "2026-08-20T21:33:56Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-AO24/S4-ledger> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" ;
+  triage:closedNote "Confirmed fixed by quality-mgr independent re-verify for PR #968 (commit 402415b78 on feature/pao-s4-peer-wire-proof) -- plan-phase-ao.md:131 M4 row now blocked with structured evidence, not bare pending; just reports-index --check clean, 90/90 tests pass." .
 
 <urn:atm:triage:occurrence/ATM-QA-001-AO24/S4-ledger>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-ao/plan-phase-ao.md" ;
   triage:line 131 ;
   triage:snippet "M4 local `tcp` / `tcp-tls` | pending" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s4-peer-wire-proof" ;
   triage:headSha "d9fb74917a804d2068684db40a28bc4ce636f283" ;
   triage:occursIn <urn:atm:triage:worktree/S4/d9fb749> .
