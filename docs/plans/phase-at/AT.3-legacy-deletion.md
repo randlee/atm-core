@@ -48,31 +48,52 @@ deleted on assumption:
 
 ## Deletion Candidates (baseline `develop` @ `d610b4c07`, post-PR #960)
 
-Files the installer overwrites in place (`release.yml`,
-`release-preflight.yml`, `.claude/agents/publisher.md` and channel agents,
-`release/publish-artifacts.toml`) are adopted in AT.1 and are not deletion
-rows. This sprint owns what the installer does **not** replace by name:
+Files the installer overwrites in place — the complete rehearsal-proven list:
+`.github/workflows/release.yml`, `.github/workflows/release-preflight.yml`,
+`.claude/agents/publisher.md`, and `release/publish-artifacts.toml` — are
+adopted in AT.1 and are not deletion rows (the kit's channel-agent prompts
+are installed as new files, not overwrites). AT.1's receipt lists every file
+the installer created or overwrote (48 files at the pin), including the
+installed agent files. This sprint owns what the installer does **not**
+replace by name.
 
-| Path | Observed state | Expected coverage |
-| --- | --- | --- |
-| `.github/workflows/hermes-atm-pypi-publish.yml` | Legacy bespoke PyPI workflow for `hermes-atm` | Kit `pypi-publish.yml` building the declared setuptools distribution (upstream #39) |
-| `scripts/prepare_hermes_atm_publish_artifacts.py` | Feeds the legacy hermes workflow | Same kit leg; manifest-declared distribution |
-| `.just/tests/test_hermes_atm_pypi_publish_workflow.py` | Tests the legacy hermes workflow | Kit upstream tests at the pinned revision |
-| `.just/tests/test_prepare_hermes_atm_publish_artifacts.py` | Tests the legacy prepare script | Same |
-| `scripts/release_artifacts.py` | Legacy copy at root; kit installs `.github/scripts/release_artifacts.py` | Kit script |
-| `scripts/release_gate.sh` | Legacy copy at root | Kit `.github/scripts/release_gate.sh` via `release.yml` |
-| `scripts/verify_release_archive.py` | Legacy archive verifier | Kit `verify-published-release` action + `verify-*-release-assets` subcommands; retain only if it checks ATM-owned data the kit does not |
-| `scripts/validate_release.py` | **Live** — invoked by the Justfile validate recipe | Decision required: replace the recipe with kit `validate-manifest`/preflight equivalents, or declare the script ATM-owned consumer validation and record that explicitly |
-| `.just/tests/test_release_artifacts.py` | Exercises legacy release-asset behavior | Kit upstream test suite |
-| `.just/tests/test_release_gate.py` | Exercises legacy `release_gate.sh` | Kit upstream test suite |
-| `.just/tests/test_release_homebrew_workflow.py` | Asserts homebrew channel-config against the workflow | Kit upstream tests; keep only if asserting ATM-owned manifest *data* |
-| `.just/tests/test_release_preflight.py` | Asserts against `release-preflight.yml` + `validate_release.py` | Kit upstream tests; same data-vs-behavior split |
-| `.just/tests/test_validate_release.py` | Tests `scripts/validate_release.py` | Follows the `validate_release.py` decision |
-| `.winget/randlee.agent-team-mail.yaml` | Local winget manifest | Kit `winget-publish.yml` generates manifests; delete if fully replaced, else record an ATM-owned rationale |
-| `docs/plans/publish-kit-migration/` | AS-era migration plan directory | Phase AT plan documents |
+The `Gate` column names the specific receipt that must exist before that
+row may be deleted:
+
+- **AT.2 production receipt** = `docs/plans/phase-at/receipts/AT.2-receipt.md`
+  with its production PyPI section complete (not
+  `production: pending-authorization`).
+- **First kit-release receipt** = the receipt of the first kit-driven
+  release proving the crates.io + GitHub Release legs end-to-end.
+- **Homebrew / winget channel receipt** = that same first kit-driven
+  release's homebrew / winget channel receipt sections.
+
+| Path | Observed state | Expected coverage | Gate |
+| --- | --- | --- | --- |
+| `.github/workflows/hermes-atm-pypi-publish.yml` | Legacy bespoke PyPI workflow for `hermes-atm` | Kit `pypi-publish.yml` building the declared setuptools distribution (upstream #39) | AT.2 production receipt |
+| `scripts/prepare_hermes_atm_publish_artifacts.py` | Feeds the legacy hermes workflow | Same kit leg; manifest-declared distribution | AT.2 production receipt (deleted with the workflow it feeds) |
+| `.just/tests/test_hermes_atm_pypi_publish_workflow.py` | Tests the legacy hermes workflow | Kit upstream tests at the pinned revision | AT.2 production receipt (same gate as its subject) |
+| `.just/tests/test_prepare_hermes_atm_publish_artifacts.py` | Tests the legacy prepare script | Same | AT.2 production receipt (same gate as its subject) |
+| `scripts/release_artifacts.py` | Legacy copy at root; kit installs `.github/scripts/release_artifacts.py` | Kit script | First kit-release receipt |
+| `scripts/release_gate.sh` | Legacy copy at root | Kit `.github/scripts/release_gate.sh` via `release.yml` | First kit-release receipt |
+| `scripts/verify_release_archive.py` | Legacy archive verifier | Kit `verify-published-release` action + `verify-*-release-assets` subcommands; retain only if it checks ATM-owned data the kit does not | First kit-release receipt |
+| `scripts/validate_release.py` | **Live** — invoked by the Justfile validate recipe | Decision required: replace the recipe with kit `validate-manifest`/preflight equivalents, or declare the script ATM-owned consumer validation and record that explicitly | First kit-release receipt (in addition to the recorded decision) |
+| `.just/tests/test_release_artifacts.py` | Exercises legacy release-asset behavior | Kit upstream test suite | First kit-release receipt |
+| `.just/tests/test_release_gate.py` | Exercises legacy `release_gate.sh` | Kit upstream test suite | First kit-release receipt |
+| `.just/tests/test_release_homebrew_workflow.py` | Asserts homebrew channel-config against the workflow (expectations retargeted in AT.1 Deliverable 7) | Kit upstream tests; keep only if asserting ATM-owned manifest *data* | Homebrew channel receipt |
+| `.just/tests/test_release_preflight.py` | Asserts against `release-preflight.yml` + `validate_release.py` (expectations retargeted in AT.1 Deliverable 7) | Kit upstream tests; same data-vs-behavior split | First kit-release receipt |
+| `.just/tests/test_validate_release.py` | Tests `scripts/validate_release.py` | Follows the `validate_release.py` decision | First kit-release receipt (follows its subject's gate) |
+| `.winget/randlee.agent-team-mail.yaml` | Local winget manifest | Kit `winget-publish.yml` generates manifests; delete if fully replaced, else record an ATM-owned rationale | Winget channel receipt |
 
 Any additional legacy file discovered during the sprint joins the table with
-the same loop; none is deleted without its row.
+the same loop and an explicit gate; none is deleted without its row.
+
+Rows whose gate receipt does not yet exist when AT.3 executes are RETAINED
+with status `deferred-until-<gate>` recorded in the AT.3 receipt (e.g.
+`deferred-until-first-kit-release-receipt`). AT.3 completes with these
+explicit deferrals rather than waiting on future releases; a follow-up
+deletion pass runs after the first full kit-driven release produces the
+outstanding gate receipts.
 
 Ambiguous-coverage rows ("decision required") are resolved by a written
 rationale in the sprint PR description; the quality-mgr gate blocks merge
@@ -92,11 +113,19 @@ retained test records that rationale in its module docstring.
 - At minimum, the AT.2 TestPyPI receipt
   (`docs/plans/phase-at/receipts/AT.2-receipt.md`) proving the kit built and
   published every declared distribution — including the setuptools
-  `hermes-atm` — end-to-end. The
-  `.github/workflows/hermes-atm-pypi-publish.yml` deletion row additionally
-  requires the production PyPI receipt (the receipt's production section
-  complete, not `production: pending-authorization`).
-- `install.py --dry-run` clean on the sprint branch before starting.
+  `hermes-atm` — end-to-end. The hermes rows (the
+  `.github/workflows/hermes-atm-pypi-publish.yml` workflow, its feeder
+  script, and their tests) additionally require the production PyPI receipt
+  (the receipt's production section complete, not
+  `production: pending-authorization`), per the `Gate` column.
+- A channel-scoped credential-unavailable (fail-closed) result in AT.2 is
+  valid evidence the workflow fails closed, and per the phase README
+  Non-Blocking Outcomes table it is never an emergency — but it does NOT
+  constitute publication and does not satisfy this coverage-evidence
+  prerequisite. AT.3 proceeds only on receipts showing the public indexes
+  actually contain the 1.4.3 distributions.
+- `install.py --dry-run` (run from the pinned checkout, per the phase README
+  installer contract) clean on the sprint branch before starting.
 
 ## Dependencies
 
@@ -112,22 +141,26 @@ retained test records that rationale in its module docstring.
 
 ## Acceptance Criteria
 
-- Every table row resolved: deleted with its reference scan and coverage
-  statement recorded, or explicitly retained with an ATM-ownership rationale.
+- Every table row resolved: deleted with its gate receipt, reference scan,
+  and coverage statement recorded; explicitly retained with an ATM-ownership
+  rationale; or retained as `deferred-until-<gate>` where the row's gate
+  receipt does not yet exist. No row is deleted before its gate receipt.
 - `install.py --dry-run` still reports no drift after all deletions.
 - Full repo lint and test gates pass; no dangling references to deleted paths
   (`grep` scans return empty).
 - The AT.3 receipt (`docs/plans/phase-at/receipts/AT.3-receipt.md`) lists
-  every deleted path and every retained-with-rationale path, with a coverage
-  statement for each.
+  every deleted path, every retained-with-rationale path, and every
+  `deferred-until-<gate>` path, with a coverage statement (or named pending
+  gate) for each.
 
 ## Required Validation
 
 ```bash
 # Reference scan, run per candidate path (must return empty after deletion)
 grep -rn "<path>" .github/ .just/ Justfile scripts/ docs/ --include="*.yml" --include="*.py" --include="Justfile" --include="*.md"
-# Kit dry-run via the pinned package (must stay clean)
-<bootstrap-python> plugins/sc-publish/install.py --dry-run --input release/sc-publish-consumer-input.json <worktree>
+# Kit dry-run via the pinned package checkout (must stay clean; never the
+# vendored consumer-root install.py — sc-publish#46)
+<venv>/bin/python <sc-publish-checkout>/plugins/sc-publish/install.py --dry-run --input release/sc-publish-consumer-input.json <worktree>
 # Repo gates (Justfile: `lint` runs .just/run_lint.py, `test` runs .just/run_tests.py)
 just lint
 just test
@@ -149,5 +182,7 @@ python3 -c "import pathlib, yaml; [yaml.safe_load(p.read_text()) for p in pathli
   the upstream #39 fix being in the pinned revision.
 - Classify every non-passing result against the phase README's Non-Blocking
   Outcomes table before reacting; only its GENUINE STOP row halts work.
-  Legacy `.just` test failures after install are that table's expected
-  classification work, resolved through this sprint's data-vs-behavior split.
+  Legacy `.just` test failures after install are that table's expected,
+  split-by-kind row: expectation updates for overwritten workflows were
+  AT.1's work item (Deliverable 7); retention-vs-deletion of those test
+  files is resolved here through this sprint's data-vs-behavior split.

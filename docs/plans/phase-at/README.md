@@ -35,17 +35,29 @@ Per **ADR-050 (Shared Publish-Kit Ownership)** and **REQ-P-RELEASE-004
 
 - `sc-publish` owns shared workflows, composite actions, scripts, agent
   prompts, tool bootstrap, and their tests. ATM copies those package files
-  byte-for-byte through `plugins/sc-publish/install.py`; ATM never patches a
-  copied file. A shared-file correction is an `sc-publish` issue/PR, adopted
-  here through an unchanged installer run.
+  byte-for-byte through the pinned checkout's
+  `plugins/sc-publish/install.py` (see Authoritative Upstream Contract); ATM
+  never patches a copied file. A shared-file correction is an `sc-publish`
+  issue/PR, adopted here through an unchanged installer run.
 - ATM owns only the complete consumer JSON input and the manifests rendered
   from it. The input explicitly names every crate, Python distribution,
   binary, channel, publish order, and version source. Nothing is inferred.
+- The consumer input must also preserve ATM's release-identity requirements:
+  crate identity continuity under the legacy names `agent-team-mail` and
+  `agent-team-mail-core` with the installed binary name `atm`
+  (REQ-P-RELEASE-001/REQ-P-RELEASE-003), parity with the historical channels
+  crates.io / GitHub Releases / Homebrew (REQ-P-RELEASE-002), and `winget` as
+  a required additional channel (REQ-P-RELEASE-005). AT.1's acceptance
+  criteria enforce these against the rendered manifests.
 - GitHub environments own publishing tokens. A missing, expired, or rejected
   credential is a fail-closed, channel-scoped workflow result; it never blocks
   planning, asset verification, or other channels.
-- Production upload remains explicitly user-authorized. This plan grants no
-  publication authority.
+- Production upload remains explicitly authorized by the **release
+  authorizer**: the human repository owner (Rand), acting outside any agent
+  role. Wherever this plan says "operator", it means exactly this person; no
+  agent, coordinator, or teammate can grant publication authority, and each
+  authorization is quoted verbatim in the sprint receipt (see AT.2). This
+  plan grants no publication authority.
 
 ## Authoritative Upstream Contract
 
@@ -57,13 +69,24 @@ builds with `setuptools.build_meta`, which the kit publishes via the
 manifest-declared build system. AT.1 records this commit hash and the package
 digest in its receipt; adopting any newer revision restarts AT.1's proof.
 
-Installer contract at the pinned revision:
+Installer contract at the pinned revision. Every command runs FROM the
+pinned, read-only `sc-publish` checkout (`<sc-publish-checkout>` below, at
+`0fa5b05e44a655ec76ada8a6c2b24714d47acca1`), with the ATM worktree as the
+install target:
 
 ```bash
-python plugins/sc-publish/.github/scripts/bootstrap_sc_compose.py --venv <venv>
-<venv>/bin/python plugins/sc-publish/install.py --input release/sc-publish-consumer-input.json <atm-core-worktree>
-<venv>/bin/python plugins/sc-publish/install.py --dry-run --input release/sc-publish-consumer-input.json <atm-core-worktree>
+python <sc-publish-checkout>/plugins/sc-publish/.github/scripts/bootstrap_sc_compose.py --venv <venv>
+<venv>/bin/python <sc-publish-checkout>/plugins/sc-publish/install.py --input release/sc-publish-consumer-input.json <atm-core-worktree>
+<venv>/bin/python <sc-publish-checkout>/plugins/sc-publish/install.py --dry-run --input release/sc-publish-consumer-input.json <atm-core-worktree>
 ```
+
+**Watchout (upstream issue sc-publish#46):** the installer copies a vendored
+`install.py` to the consumer repo root; that vendored copy resolves its
+`PACKAGE_ROOT` to the consumer repo itself and must **never** be run — it
+would treat the whole ATM repo (including `.git`) as the package. At first
+install the consumer also does not yet contain any kit files (chicken-and-egg),
+so the checkout-hosted commands above are the only valid form, before and
+after install.
 
 The final dry-run must print no drift. A nonzero dry-run that lists changes is
 evidence to fix the consumer input or the upstream package, never permission
@@ -103,7 +126,12 @@ Per repo convention, phase AT uses a dedicated integration branch:
 Each sprint appends its receipt at
 `docs/plans/phase-at/receipts/AT.<n>-receipt.md` with a fixed shape:
 
-- the pinned `sc-publish` revision and package digest;
+- the pinned `sc-publish` revision and package digest. **Package digest
+  algorithm (fixed for all AT receipts):** sha256 over the newline-joined,
+  path-sorted list of `"<sha256(file)>  <relative-path>"` lines for all
+  copied installable package files (excluding `.sc-publish-source-root`,
+  `__pycache__`, `*.pyc`, and any pre-rendered `release/publish-*.toml`),
+  matching the AT.1 rehearsal receipt;
 - the consumer-input sha256 (`release/sc-publish-consumer-input.json`);
 - the rendered-manifest sha256s;
 - every executed command with its exit code;
@@ -124,10 +152,16 @@ result with this table before reacting to it:
 | 404 for a not-yet-published version on a public registry | Expected | Proceed. |
 | A probe returning indeterminate and hard-failing its leg | SUCCESS EVIDENCE — fail-closed per sc-publish #40/#41 | Retry the leg; escalate only if deterministic. |
 | `install.py --dry-run` drift | Work item | Fix the consumer input or file an upstream `sc-publish` issue; never a stop, never a hand-edit. |
-| Legacy `.just` tests failing after install, before AT.3 | Expected classification work | Route to AT.3's data-vs-behavior split. |
+| Legacy `.just` tests failing after install, before AT.3 | Expected, split by kind | Expectation updates for installer-overwritten workflows (`.just/lint-config.toml` release-wiring fragments; assertions in `.just/tests/test_release_preflight.py` and `test_release_homebrew_workflow.py`) are an **AT.1 work item** — consumer-owned validation data per ADR-050, updated so the AT.1 branch CI passes. Retention-vs-deletion of those test files remains **AT.3's** data-vs-behavior split. |
 | Immutable-asset hash mismatch, or a wrong version visible on a public index | GENUINE STOP | Halt that channel; escalate to team-lead. |
 
 Only the last row stops work. An explicitly identified fail-closed outcome is
 the workflow succeeding at its job; treating it as an emergency is the
 failure mode this section exists to prevent. Sprint dispatch assignments must
 include this table.
+
+SUCCESS EVIDENCE here means evidence of correct fail-closed behavior — never
+evidence of publication. A fail-closed credential result does not close
+AT.2's publication acceptance criteria and does not open any AT.3 deletion
+gate; those require receipts showing the public indexes actually contain the
+released distributions (see AT.2 Acceptance Criteria and AT.3 Prerequisites).
