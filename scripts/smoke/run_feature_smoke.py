@@ -148,26 +148,18 @@ def advertised_host(atm: str) -> str:
     return advertised_host_from_json(interfaces)
 
 
-def local_non_loopback_ipv4() -> str:
-    """Discover one current non-loopback IPv4 address for the same-host lane.
+def local_advertised_ipv4(host: str) -> str:
+    """Resolve the enabled peer authority to a usable same-host IPv4 address.
 
-    This is deliberately runtime discovery, not peer-interface configuration:
-    the direct listener binds every local IPv4 interface and the smoke only
-    needs to prove that a real current interface can reach it.  UDP ``connect``
-    selects the kernel's current source route without transmitting a packet.
+    The local-IP lane must use an address that the daemon has explicitly
+    advertised and the CLI can canonicalize through trusted-peer records. A
+    default-route UDP probe can instead select a VPN/tunnel address unrelated
+    to that authority, producing a false smoke failure.
     """
-    candidates: list[str] = []
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
-            probe.connect(("192.0.2.1", 9))
-            candidates.append(probe.getsockname()[0])
-    except OSError:
-        pass
-
-    try:
-        candidates.extend(record[4][0] for record in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET))
-    except OSError:
-        pass
+        candidates = [record[4][0] for record in socket.getaddrinfo(host, None, socket.AF_INET)]
+    except OSError as error:
+        raise SmokeError(f"enabled advertised host '{host}' could not be resolved: {error}") from error
 
     for candidate in candidates:
         address = ipaddress.ip_address(candidate)
@@ -175,7 +167,7 @@ def local_non_loopback_ipv4() -> str:
             address.is_loopback or address.is_unspecified or address.is_multicast or address.is_link_local
         ):
             return str(address)
-    raise SmokeError("could not discover a current non-loopback IPv4 address for local-IP smoke")
+    raise SmokeError(f"enabled advertised host '{host}' has no usable non-loopback IPv4 address for local-IP smoke")
 
 
 def doctor_ready(report: Any, expected_version: str) -> bool:
@@ -919,8 +911,8 @@ def run_live_attempt(feature: str, peers: list[str]) -> list[dict[str, Any]]:
         send_read_ack(cases, atm, identity, team, "localhost", stage="localhost")
     elif feature == LOCAL_IP:
         try:
-            local_ip_host = local_non_loopback_ipv4()
-            add_case(cases, "current local IPv4", True, local_ip_host)
+            local_ip_host = local_advertised_ipv4(advertised_host(atm))
+            add_case(cases, "advertised local IPv4", True, local_ip_host)
             send_read_ack(cases, atm, identity, team, local_ip_host, stage="local-IP")
         except SmokeError as error:
             add_case(cases, "local-IP", False, str(error))

@@ -400,7 +400,7 @@ class FeatureSmokeTests(unittest.TestCase):
             mock.ANY, "atm", TEST_SENDER, TEST_TEAM, "localhost", stage="localhost"
         )
 
-    def test_local_ip_live_attempt_uses_current_non_loopback_address(self):
+    def test_local_ip_live_attempt_uses_enabled_advertised_address(self):
         doctor = {
             "summary": {"status": "healthy"},
             "runtime_status": {"readiness": "ready"},
@@ -410,33 +410,24 @@ class FeatureSmokeTests(unittest.TestCase):
         with mock.patch.object(RUNNER, "require_environment", return_value=("atm", TEST_SENDER, TEST_TEAM)), mock.patch.object(
             RUNNER, "command", return_value={"exit_code": 0, "stdout": __import__("json").dumps(doctor), "stderr": ""}
         ), mock.patch.object(RUNNER, "branch_version", return_value="1.4.1-beta-ai-1"), mock.patch.object(
-            RUNNER, "local_non_loopback_ipv4", return_value="192.0.2.10"
-        ) as local_non_loopback_ipv4, mock.patch.object(RUNNER, "send_read_ack") as send_read_ack:
+            RUNNER, "advertised_host", return_value="rand-m4.local"
+        ) as advertised_host, mock.patch.object(
+            RUNNER, "local_advertised_ipv4", return_value="192.0.2.10"
+        ) as local_advertised_ipv4, mock.patch.object(RUNNER, "send_read_ack") as send_read_ack:
             RUNNER.run_live_attempt(RUNNER.LOCAL_IP, [])
-        local_non_loopback_ipv4.assert_called_once_with()
+        advertised_host.assert_called_once_with("atm")
+        local_advertised_ipv4.assert_called_once_with("rand-m4.local")
         send_read_ack.assert_called_once_with(
             mock.ANY, "atm", TEST_SENDER, TEST_TEAM, "192.0.2.10", stage="local-IP"
         )
 
-    def test_local_non_loopback_ipv4_uses_kernel_selected_source_address(self):
-        probe = mock.MagicMock()
-        probe.getsockname.return_value = ("198.51.100.24", 12345)
-        probe.__enter__.return_value = probe
-        with mock.patch.object(RUNNER.socket, "socket", return_value=probe), mock.patch.object(
-            RUNNER.socket, "getaddrinfo", return_value=[]
-        ):
-            self.assertEqual(RUNNER.local_non_loopback_ipv4(), "198.51.100.24")
-
-    def test_local_non_loopback_ipv4_rejects_loopback_and_link_local_candidates(self):
-        probe = mock.MagicMock()
-        probe.getsockname.return_value = ("127.0.0.1", 12345)
-        probe.__enter__.return_value = probe
-        with mock.patch.object(RUNNER.socket, "socket", return_value=probe), mock.patch.object(
+    def test_local_advertised_ipv4_rejects_loopback_and_link_local_candidates(self):
+        with mock.patch.object(
             RUNNER.socket,
             "getaddrinfo",
             return_value=[(None, None, None, None, ("169.254.1.1", 0)), (None, None, None, None, ("10.0.0.7", 0))],
         ):
-            self.assertEqual(RUNNER.local_non_loopback_ipv4(), "10.0.0.7")
+            self.assertEqual(RUNNER.local_advertised_ipv4("rand-m4.local"), "10.0.0.7")
 
     def test_doctor_ready_requires_health_readiness_and_matching_pair(self):
         report = {
