@@ -239,6 +239,30 @@ class AdmissionCapacityTests(unittest.TestCase):
             override.cleanup()
             self.assertFalse(override.override_path.exists())
 
+    def test_launch_agent_override_can_change_only_its_temporary_log_level(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "com.example.atm.plist"
+            payload = {
+                "Label": "com.example.atm",
+                "ProgramArguments": ["/selected/atm-daemon"],
+                "EnvironmentVariables": {"ATM_LOG": "debug", "HOME": "/example"},
+            }
+            with source.open("wb") as handle:
+                plistlib.dump(payload, handle)
+            source_bytes = source.read_bytes()
+
+            override = RUNNER.LaunchAgentPeerWireOverride.create(
+                source, "plaintext-test", "off",
+            )
+            with override.override_path.open("rb") as handle:
+                override_payload = plistlib.load(handle)
+
+            self.assertEqual(source.read_bytes(), source_bytes)
+            self.assertEqual(
+                override_payload["EnvironmentVariables"], {"ATM_LOG": "off", "HOME": "/example"},
+            )
+            override.cleanup()
+
     def test_managed_mode_requires_the_explicit_launch_agent_plist(self):
         lifecycle = RUNNER.ManagedDaemonLifecycle(
             RUNNER.ManagedDaemonOptions(service="com.example.atm"),

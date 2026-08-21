@@ -220,7 +220,12 @@ class LaunchAgentPeerWireOverride:
     override_path: Path
 
     @classmethod
-    def create(cls, source_path: Path, peer_wire_security: str) -> "LaunchAgentPeerWireOverride":
+    def create(
+        cls,
+        source_path: Path,
+        peer_wire_security: str,
+        managed_log_level: str | None = None,
+    ) -> "LaunchAgentPeerWireOverride":
         source = source_path.expanduser()
         try:
             source_bytes = source.read_bytes()
@@ -250,6 +255,16 @@ class LaunchAgentPeerWireOverride:
             position += 2
         adjusted_arguments.extend(("--peer-wire-security", peer_wire_security))
         payload["ProgramArguments"] = adjusted_arguments
+        if managed_log_level is not None:
+            environment = payload.get("EnvironmentVariables", {})
+            if not isinstance(environment, dict) or not all(
+                isinstance(key, str) and isinstance(value, str)
+                for key, value in environment.items()
+            ):
+                raise SmokeError(
+                    f"managed LaunchAgent plist {source} must contain string EnvironmentVariables"
+                )
+            payload["EnvironmentVariables"] = {**environment, "ATM_LOG": managed_log_level}
 
         temporary_directory = tempfile.TemporaryDirectory(prefix="atm-capacity-launch-")
         override = Path(temporary_directory.name) / source.name
@@ -395,6 +410,7 @@ class ManagedDaemonLifecycle:
 
     options: ManagedDaemonOptions
     peer_wire_security: str | None = None
+    managed_log_level: str | None = None
     backup: HostStateBackup | None = None
     pre_pair: dict[str, str | None] | None = None
     quiesced: bool = False
@@ -411,7 +427,7 @@ class ManagedDaemonLifecycle:
             )
         if self.launch_override is None:
             self.launch_override = LaunchAgentPeerWireOverride.create(
-                self.options.launch_agent_plist, self.peer_wire_security,
+                self.options.launch_agent_plist, self.peer_wire_security, self.managed_log_level,
             )
         return replace(self.options, launch_agent_plist=self.launch_override.override_path)
 
@@ -1337,6 +1353,7 @@ def run_capacity(
     comparison_required: bool = True,
     raw_evidence_directory: Path = DEFAULT_RAW_EVIDENCE_DIR,
     peer_wire_security: str = "mutual-tls",
+    managed_log_level: str | None = None,
     benchmark_target: str | None = None,
     managed_daemon: ManagedDaemonOptions | None = None,
     preflight_failure_code: str | None = None,
@@ -1391,6 +1408,7 @@ def run_capacity(
         "execution_daemon": "shipped_atm_daemon",
         "atm_home": str(home),
         "host_state_isolation": isolation_mode,
+        "managed_log_level": managed_log_level,
         "runs": [],
         "thresholds": None,
         "comparison_source_revision": comparison_source_revision,
@@ -1418,6 +1436,7 @@ def run_capacity(
             managed_lifecycle = ManagedDaemonLifecycle(
                 managed_daemon,
                 peer_wire_security=peer_wire_security if benchmark_target is not None else None,
+                managed_log_level=managed_log_level,
             )
             managed_lifecycle.begin()
         else:
@@ -1646,6 +1665,14 @@ def main() -> int:
         action="store_true",
         help="allow daemon-switch's narrow verified-orphan repair during controlled lifecycle recovery",
     )
+    parser.add_argument(
+        "--managed-log-level",
+        choices=("debug", "info", "warn", "error", "off"),
+        help=(
+            "temporary ATM_LOG filter for the copied managed LaunchAgent during a benchmark; "
+            "the source plist is preserved and restored"
+        ),
+    )
     args = parser.parse_args()
     transport, peer_wire_security, benchmark_target = resolve_benchmark_target(
         args.target, args.transport,
@@ -1739,6 +1766,7 @@ def main() -> int:
                     peer_wire_security=peer_wire_security,
                     benchmark_target=benchmark_target,
                     managed_daemon=managed_daemon,
+                    managed_log_level=args.managed_log_level,
                     preflight_failure_code=preflight_failure_code,
                     preflight_failure=preflight_failure,
                 )
@@ -1758,6 +1786,7 @@ def main() -> int:
                     peer_wire_security=peer_wire_security,
                     benchmark_target=benchmark_target,
                     managed_daemon=managed_daemon,
+                    managed_log_level=args.managed_log_level,
                     preflight_failure_code=preflight_failure_code,
                     preflight_failure=preflight_failure,
                 )
