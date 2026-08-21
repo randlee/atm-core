@@ -263,7 +263,7 @@ dependencies = [
 
 [[package]]
 name = "atm-graft-python"
-version = "1.4.3"
+version = "1.4.4"
 dependencies = [
  "agent-team-mail-core",
  "atm-graft",
@@ -311,7 +311,7 @@ dependencies = [
 
 [[package]]
 name = "atm-query-python"
-version = "1.4.3"
+version = "1.4.4"
 dependencies = [
  "atm-storage",
  "atm-storage-rusqlite",
