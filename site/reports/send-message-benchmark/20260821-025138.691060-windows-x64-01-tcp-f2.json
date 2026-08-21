@@ -1,0 +1,110 @@
+{
+  "artifact_kind": "send_message_benchmark_summary",
+  "benchmark_evidence_failure_code": "missing_compatible_plaintext_baseline",
+  "benchmark_target": "tcp",
+  "cleanup_failure": null,
+  "command": "just benchmark --target tcp",
+  "comparison_host_label": "mac-arm64-01",
+  "comparison_source_revision": null,
+  "daemon_version": "atm 1.4.4",
+  "direct_sqlite_message_write": null,
+  "doctor_after_restart_status": "passed",
+  "doctor_status": "passed",
+  "durability_after_restart": {
+    "expected_accepted_count": 115000,
+    "method": "isolated_sqlite_exact_count_after_restart",
+    "observed_mailbox_count": 115000,
+    "passed": true
+  },
+  "execution_daemon": "shipped_atm_daemon",
+  "failure": "missing a complete passed same-host plaintext baseline; this run is retained as bounded benchmark evidence rather than being discarded before publication",
+  "frames_per_connection": 2,
+  "generated_at": "2026-08-21T02:51:38.691060Z",
+  "hook_mode": "active",
+  "host_arch": "amd64",
+  "host_label": "windows-x64-01",
+  "host_os": "windows",
+  "host_state_isolation": "isolated_os_user",
+  "messages_per_connection": 2,
+  "metrics": {
+    "accepted_count": 115000,
+    "admissions_per_second": {
+      "max": 6466.77854210977,
+      "min": 2699.307411788379,
+      "p50": 5997.771228696261,
+      "p95": 6334.036834009074,
+      "p99": 6443.572987527717
+    },
+    "application_wire_bytes": {
+      "request": 85391390,
+      "response": 48131390,
+      "total": 133522780
+    },
+    "application_wire_bytes_per_second": {
+      "max": 7520863.444473662,
+      "min": 3133895.905086308,
+      "p50": 6963412.3965163585,
+      "p95": 7353816.764284534,
+      "p99": 7480988.23851968
+    },
+    "connection_count": 57500,
+    "connections_per_second": {
+      "max": 3233.389271054885,
+      "min": 1349.6537058941894,
+      "p50": 2998.8856143481303,
+      "p95": 3167.018417004537,
+      "p99": 3221.7864937638583
+    },
+    "first_failure": null,
+    "interval_count": 115,
+    "interval_latency_ms": {
+      "max": 210.99260001210496,
+      "min": 0.7994000043254346,
+      "p50": 13.2698499946855,
+      "p95": 30.654000001959503,
+      "p99": 54.08050000551157
+    },
+    "passed_interval_count": 115,
+    "request_frames_per_second": {
+      "max": 6466.77854210977,
+      "min": 2699.307411788379,
+      "p50": 5997.771228696261,
+      "p95": 6334.036834009074,
+      "p99": 6443.572987527717
+    },
+    "requested_count": 115000,
+    "response_count": 115000,
+    "time_to_send_1k_s": {
+      "max": 0.3704653999884613,
+      "min": 0.1546364999958314,
+      "p50": 0.16672859998652712,
+      "p95": 0.2056449999799952,
+      "p99": 0.2254106999898795
+    }
+  },
+  "minimum_sample_count": 10,
+  "passed": false,
+  "peer_wire_security": "plaintext-test",
+  "requested_messages_per_sample": 1000,
+  "run_duration_s": 20.155194699880667,
+  "sample_count": 115,
+  "schema_version": 3,
+  "source_revision": "78ec6008c03d98b955367c31df87fda4e8254f6c",
+  "target_duration_s": 20.0,
+  "thresholds": {
+    "admission_passed": true,
+    "admissions_per_second_minimum": 1000.0,
+    "baseline_median_admissions_per_second": null,
+    "baseline_passed": true,
+    "comparison_median_admissions_per_second": null,
+    "comparison_passed": true,
+    "comparison_ratio": null,
+    "comparison_required": null,
+    "comparison_strict": null,
+    "comparison_target_admissions_per_second": null,
+    "median_admissions_per_second": 5997.771228696261,
+    "passed": true
+  },
+  "transport": "tcp",
+  "worker_limit": 64
+}
