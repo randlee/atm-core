@@ -234,8 +234,9 @@ fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
     assert!(
         client.contains("struct DirectPeerTcpConnector")
             && client.contains("pub fn direct_peer_tcp_client")
-            && direct_connector.contains("execute_reqwest_request"),
-        "AO2 plaintext characterization must retain the shared direct-peer connector and HTTP exchange"
+            && direct_connector.contains("connect_resolved_peer_socket")
+            && direct_connector.contains("execute_opaque_peer_request"),
+        "AO2 plaintext characterization must retain the shared direct-peer connector and its canonical HTTP exchange"
     );
     assert!(
         direct_listener.contains("TcpListener::bind")
