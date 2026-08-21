@@ -50,7 +50,42 @@ class DaemonSwitchTests(unittest.TestCase):
             run_service=mock.DEFAULT,
             live_pair_matches=mock.DEFAULT,
             require_stopped_daemon=mock.DEFAULT,
+            require_macos_development_signature=mock.DEFAULT,
         )
+
+    def test_switch_rejects_unsigned_target_before_touching_selectors_or_service(self) -> None:
+        with self.patch_switch_inputs() as patched:
+            patched["selected_links"].return_value = (self.cli_link, self.daemon_link)
+            patched["require_executable"].side_effect = [
+                self.old_cli,
+                self.old_daemon,
+                self.new_cli,
+                self.new_daemon,
+            ]
+            patched["require_macos_development_signature"].side_effect = self.module.SwitchError(
+                "unsigned daemon"
+            )
+            with self.assertRaisesRegex(self.module.SwitchError, "unsigned daemon"):
+                self.module.switch_pair(self.args, self.new_cli, self.new_daemon)
+
+        patched["run_service"].assert_not_called()
+        patched["replace_link"].assert_not_called()
+
+    def test_restart_rejects_unsigned_selected_daemon_before_stopping_service(self) -> None:
+        args = argparse.Namespace(yes=True)
+        with (
+            mock.patch.object(self.module, "selected_links", return_value=(self.old_cli, self.old_daemon)),
+            mock.patch.object(self.module, "require_executable", return_value=self.old_daemon),
+            mock.patch.object(
+                self.module,
+                "require_macos_development_signature",
+                side_effect=self.module.SwitchError("unsigned daemon"),
+            ),
+            mock.patch.object(self.module, "run_service") as service,
+        ):
+            with self.assertRaisesRegex(self.module.SwitchError, "unsigned daemon"):
+                self.module.restart(args)
+        service.assert_not_called()
 
     def test_switch_pair_stops_then_replaces_both_selectors_then_starts(self) -> None:
         with self.patch_switch_inputs() as patched:
@@ -186,6 +221,8 @@ class DaemonSwitchTests(unittest.TestCase):
         args = argparse.Namespace(yes=True)
         with (
             mock.patch.object(self.module, "selected_links", return_value=(self.old_cli, self.old_daemon)),
+            mock.patch.object(self.module, "require_executable", return_value=self.old_daemon),
+            mock.patch.object(self.module, "require_macos_development_signature"),
             mock.patch.object(self.module, "run_service") as run_service,
             mock.patch.object(self.module, "require_stopped_daemon") as stopped,
             mock.patch.object(self.module, "live_pair_matches", return_value=(True, "matched")),
