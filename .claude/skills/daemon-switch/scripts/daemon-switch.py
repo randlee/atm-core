@@ -18,9 +18,19 @@ import time
 from typing import Sequence
 
 
+REPO_ROOT = Path(__file__).resolve().parents[4]
+SCRIPTS_DIRECTORY = REPO_ROOT / "scripts"
+if str(SCRIPTS_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIRECTORY))
+
+from macos_development_signing import (  # noqa: E402
+    DEVELOPMENT_SIGNING_IDENTITY,
+    find_identity_output_has_development_identity,
+)
+
+
 WINDOWS_SERVICE_NOT_FOUND = 1060
 LIVE_PAIR_READINESS_ATTEMPTS = 200
-MACOS_DEVELOPMENT_SIGNING_IDENTITY = "atm-daemon-dev"
 # [cass: helpful starter-rust-logging] - retains the bounded readiness state
 # as one named operational contract rather than an unexplained retry literal.
 """Bounded 20-second readiness window for a managed replacement daemon.
@@ -92,39 +102,39 @@ def macos_development_signing_identity_available() -> bool:
         result = run([security, "find-identity", "-v", "-p", "codesigning"], timeout=10.0)
     except (OSError, subprocess.TimeoutExpired):
         return False
-    quoted_identity = f'"{MACOS_DEVELOPMENT_SIGNING_IDENTITY}"'
-    return result.returncode == 0 and any(
-        quoted_identity in line for line in result.stdout.splitlines()
-    )
+    return result.returncode == 0 and find_identity_output_has_development_identity(result.stdout)
 
 
-def macos_daemon_has_development_signature(daemon: Path) -> bool:
-    """Prove one daemon binary carries the exact configured development authority."""
+def macos_binary_has_development_signature(binary: Path) -> bool:
+    """Prove one managed binary strictly verifies with the configured authority."""
     codesign = shutil.which("codesign")
     if codesign is None:
         return False
     try:
-        result = run([codesign, "-dv", "--verbose=4", str(daemon)], timeout=10.0)
+        verification = run([codesign, "--verify", "--strict", str(binary)], timeout=10.0)
+        if verification.returncode != 0:
+            return False
+        result = run([codesign, "-dv", "--verbose=4", str(binary)], timeout=10.0)
     except (OSError, subprocess.TimeoutExpired):
         return False
     if result.returncode != 0:
         return False
-    authority = f"Authority={MACOS_DEVELOPMENT_SIGNING_IDENTITY}"
+    authority = f"Authority={DEVELOPMENT_SIGNING_IDENTITY}"
     output = f"{result.stdout}\n{result.stderr}"
     return any(line.strip() == authority for line in output.splitlines())
 
 
-def require_macos_development_signature(daemon: Path) -> None:
-    """Fail closed before a macOS daemon selection or restart can prompt again."""
+def require_macos_development_signatures(cli: Path, daemon: Path) -> None:
+    """Fail closed before any managed-pair lifecycle mutation on macOS."""
     if not macos_development_signing_identity_available():
         return
-    if macos_daemon_has_development_signature(daemon):
-        return
-    raise SwitchError(
-        f"macOS development signing identity `{MACOS_DEVELOPMENT_SIGNING_IDENTITY}` is installed, "
-        f"but daemon target is not signed by it: {daemon}. "
-        "Build with `just build` or run `python3 .just/sign_daemon_dev.py` before daemon-switch."
-    )
+    for label, binary in (("CLI", cli), ("daemon", daemon)):
+        if not macos_binary_has_development_signature(binary):
+            raise SwitchError(
+                f"macOS development signing identity `{DEVELOPMENT_SIGNING_IDENTITY}` is installed, "
+                f"but {label} target is not strictly signed by it: {binary}. "
+                "Build with `just build` or run `python3 .just/sign_daemon_dev.py` before daemon-switch."
+            )
 
 
 def homebrew_pair() -> tuple[Path, Path] | None:
@@ -417,7 +427,7 @@ def switch_pair(args: argparse.Namespace, cli_target: Path, daemon_target: Path)
         raise SwitchError(
             "refusing targets from different release directories; build or install the matched pair together"
         )
-    require_macos_development_signature(daemon_target)
+    require_macos_development_signatures(cli_target, daemon_target)
     if cli_link.resolve() == cli_target and daemon_link.resolve() == daemon_target:
         print("already selected; service left running")
         return
@@ -479,7 +489,9 @@ def restart(args: argparse.Namespace) -> None:
     if not args.yes:
         raise SwitchError("restart changes the singleton daemon; re-run with --yes")
     cli, daemon = selected_links(args)
-    require_macos_development_signature(require_executable(daemon, "selected atm daemon"))
+    cli = require_executable(cli, "selected atm CLI")
+    daemon = require_executable(daemon, "selected atm daemon")
+    require_macos_development_signatures(cli, daemon)
     run_service(args, "stop", allow_absent=True)
     require_stopped_daemon(args, cli)
     run_service(args, "start")
