@@ -360,6 +360,22 @@ def selected_pair(status: dict[str, Any]) -> dict[str, str | None]:
     return result
 
 
+def resolved_managed_selector_links(
+    options: ManagedDaemonOptions, status: dict[str, Any],
+) -> ManagedDaemonOptions:
+    """Pass discovered selector paths to daemon-switch under the scrubbed harness environment.
+
+    The benchmark deliberately does not inherit the user's shell environment.
+    Capture its already-proven selectors from ``daemon-switch status`` before
+    quiescing the singleton, rather than depending on a Homebrew directory
+    being present in the benchmark process's PATH.
+    """
+    pair = selected_pair(status)
+    cli_link = options.cli_link or Path(str(pair["atm.selector"]))
+    daemon_link = options.daemon_link or Path(str(pair["atm_daemon.selector"]))
+    return replace(options, cli_link=cli_link, daemon_link=daemon_link)
+
+
 @dataclass
 class ManagedDaemonLifecycle:
     """Quiesce, isolate, and recover one explicitly authorized daemon pair.
@@ -403,6 +419,7 @@ class ManagedDaemonLifecycle:
         # after restoration below.
         before = daemon_switch_result("status", self.options)
         self.pre_pair = selected_pair(before)
+        self.options = resolved_managed_selector_links(self.options, before)
         daemon_switch_result("quiesce", self.options)
         self.quiesced = True
         try:

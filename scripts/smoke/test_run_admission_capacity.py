@@ -243,6 +243,13 @@ class AdmissionCapacityTests(unittest.TestCase):
         with self.assertRaisesRegex(RUNNER.SmokeError, "managed-launch-agent-plist"):
             lifecycle.isolated_options()
 
+    def test_managed_mode_derives_selector_links_from_pre_quiesce_status(self):
+        options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
+        resolved = RUNNER.resolved_managed_selector_links(options, healthy_managed_status())
+
+        self.assertEqual(resolved.cli_link, Path("/active/atm"))
+        self.assertEqual(resolved.daemon_link, Path("/active/atm-daemon"))
+
     def test_managed_mode_uses_temporary_plist_then_restarts_original_pair(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
