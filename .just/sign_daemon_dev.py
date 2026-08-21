@@ -1,23 +1,31 @@
 #!/usr/bin/env python3
-"""Best-effort signing of local ATM daemon binaries for macOS development."""
+"""Strictly sign managed local ATM binaries when the development key is available."""
 
 from __future__ import annotations
 
 from pathlib import Path
-import re
 import subprocess
 import sys
 
 
-IDENTITY = "atm-daemon-dev"
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DAEMON_TARGETS = (
+SCRIPTS_DIRECTORY = REPO_ROOT / "scripts"
+if str(SCRIPTS_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIRECTORY))
+
+from macos_development_signing import (  # noqa: E402
+    DEVELOPMENT_SIGNING_IDENTITY,
+    find_identity_output_has_development_identity,
+)
+
+
+IDENTITY = DEVELOPMENT_SIGNING_IDENTITY
+MANAGED_TARGETS = (
+    REPO_ROOT / "target" / "debug" / "atm",
     REPO_ROOT / "target" / "debug" / "atm-daemon",
+    REPO_ROOT / "target" / "release" / "atm",
     REPO_ROOT / "target" / "release" / "atm-daemon",
 )
-IDENTITY_PATTERN = re.compile(rf'"{re.escape(IDENTITY)}"')
-
-
 def has_development_identity() -> bool:
     """Return whether the local keychain exposes the exact development identity."""
     try:
@@ -30,36 +38,42 @@ def has_development_identity() -> bool:
         )
     except (OSError, subprocess.SubprocessError):
         return False
-    return result.returncode == 0 and any(
-        IDENTITY_PATTERN.search(line) for line in result.stdout.splitlines()
+    return result.returncode == 0 and find_identity_output_has_development_identity(result.stdout)
+
+
+def sign_and_verify_binary(binary: Path) -> None:
+    """Sign and strictly verify one managed binary or raise on any failure."""
+    subprocess.run(
+        ["codesign", "--force", "--sign", IDENTITY, str(binary)],
+        cwd=REPO_ROOT,
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    subprocess.run(
+        ["codesign", "--verify", "--strict", str(binary)],
+        cwd=REPO_ROOT,
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
 
 
-def sign_binary(binary: Path) -> None:
-    """Sign one binary, swallowing unavailable-identity/tool failures."""
-    try:
-        subprocess.run(
-            ["codesign", "-s", IDENTITY, "--force", str(binary)],
-            cwd=REPO_ROOT,
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return
-
-
 def main() -> int:
-    """Sign existing debug/release binaries on macOS; otherwise do nothing."""
+    """Sign and verify existing managed binaries on macOS; otherwise do nothing."""
     if sys.platform != "darwin" or not has_development_identity():
         return 0
-    for binary in DAEMON_TARGETS:
+    for binary in MANAGED_TARGETS:
         try:
             exists = binary.is_file()
         except OSError:
             exists = False
         if exists:
-            sign_binary(binary)
+            try:
+                sign_and_verify_binary(binary)
+            except (OSError, subprocess.SubprocessError) as error:
+                print(f"error: unable to sign and verify {binary}: {error}", file=sys.stderr)
+                return 1
     return 0
 
 

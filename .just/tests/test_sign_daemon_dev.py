@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 from pathlib import Path
 import importlib.util
 from unittest import mock
@@ -35,15 +36,17 @@ class SignDaemonDevTests(unittest.TestCase):
         self.assertEqual(run.call_count, 1)
         self.assertEqual(run.call_args.args[0], ["security", "find-identity", "-v", "-p", "codesigning"])
 
-    def test_exact_identity_signs_each_existing_daemon_binary(self) -> None:
+    def test_exact_identity_signs_and_strictly_verifies_each_existing_managed_binary(self) -> None:
         security = subprocess.CompletedProcess(
             ["security"], 0, stdout='  1) ABCD "atm-daemon-dev"\n', stderr=""
         )
         codesign = subprocess.CompletedProcess(["codesign"], 0, stdout="", stderr="")
         with mock.patch.object(sign_daemon_dev.sys, "platform", "darwin"), mock.patch.object(
-            sign_daemon_dev.subprocess, "run", side_effect=[security, codesign, codesign]
+            sign_daemon_dev.subprocess,
+            "run",
+            side_effect=[security, *([codesign] * (len(sign_daemon_dev.MANAGED_TARGETS) * 2))],
         ) as run, mock.patch.object(
-            sign_daemon_dev.Path, "is_file", side_effect=[True, True]
+            sign_daemon_dev.Path, "is_file", side_effect=[True] * len(sign_daemon_dev.MANAGED_TARGETS)
         ):
             self.assertEqual(sign_daemon_dev.main(), 0)
 
@@ -52,8 +55,12 @@ class SignDaemonDevTests(unittest.TestCase):
         self.assertEqual(
             commands[1:],
             [
-                ["codesign", "-s", "atm-daemon-dev", "--force", str(sign_daemon_dev.DAEMON_TARGETS[0])],
-                ["codesign", "-s", "atm-daemon-dev", "--force", str(sign_daemon_dev.DAEMON_TARGETS[1])],
+                command
+                for binary in sign_daemon_dev.MANAGED_TARGETS
+                for command in (
+                    ["codesign", "--force", "--sign", "atm-daemon-dev", str(binary)],
+                    ["codesign", "--verify", "--strict", str(binary)],
+                )
             ],
         )
 
@@ -67,19 +74,21 @@ class SignDaemonDevTests(unittest.TestCase):
             self.assertEqual(sign_daemon_dev.main(), 0)
         self.assertEqual(run.call_count, 1)
 
-    def test_security_and_codesign_failures_are_swallowed(self) -> None:
+    def test_security_failure_is_treated_as_an_unavailable_identity(self) -> None:
         with mock.patch.object(sign_daemon_dev.sys, "platform", "darwin"), mock.patch.object(
             sign_daemon_dev.subprocess, "run", side_effect=OSError("security unavailable")
         ):
             self.assertEqual(sign_daemon_dev.main(), 0)
 
+    def test_signing_failure_fails_closed_when_identity_is_available(self) -> None:
         security = subprocess.CompletedProcess(
             ["security"], 0, stdout='  1) ABCD "atm-daemon-dev"\n', stderr=""
         )
         with mock.patch.object(sign_daemon_dev.sys, "platform", "darwin"), mock.patch.object(
             sign_daemon_dev.subprocess, "run", side_effect=[security, subprocess.CalledProcessError(1, "codesign")]
-        ), mock.patch.object(sign_daemon_dev.Path, "is_file", side_effect=[True, False]):
-            self.assertEqual(sign_daemon_dev.main(), 0)
+        ), mock.patch.object(sign_daemon_dev.Path, "is_file", side_effect=[True] * len(sign_daemon_dev.MANAGED_TARGETS)):
+            with mock.patch.object(sign_daemon_dev.sys, "stderr", new=io.StringIO()):
+                self.assertEqual(sign_daemon_dev.main(), 1)
 
     def test_build_recipe_runs_signing_hook_after_cargo(self) -> None:
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
