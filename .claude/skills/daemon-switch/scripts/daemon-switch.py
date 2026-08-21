@@ -24,8 +24,11 @@ if str(SCRIPTS_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIRECTORY))
 
 from macos_development_signing import (  # noqa: E402
-    DEVELOPMENT_SIGNING_IDENTITY,
-    find_identity_output_has_development_identity,
+    CLI_IDENTIFIER,
+    DAEMON_IDENTIFIER,
+    SigningIdentityError,
+    resolve_apple_development_identity,
+    verify_apple_signature,
 )
 
 
@@ -87,52 +90,46 @@ def require_executable(path: Path, label: str) -> Path:
 
 
 def macos_development_signing_identity_available() -> bool:
-    """Return whether the exact local development signing identity is usable.
-
-    The switcher only adds this precondition when the host is configured to
-    sign development daemons.  Hosts without that identity retain the normal
-    cross-platform switching path.
-    """
+    """Return whether the required Apple Development identity is usable."""
     if platform.system() != "Darwin":
         return False
-    security = shutil.which("security")
-    if security is None:
-        return False
     try:
-        result = run([security, "find-identity", "-v", "-p", "codesigning"], timeout=10.0)
-    except (OSError, subprocess.TimeoutExpired):
+        resolve_apple_development_identity()
+    except (OSError, subprocess.SubprocessError, SigningIdentityError):
         return False
-    return result.returncode == 0 and find_identity_output_has_development_identity(result.stdout)
+    return True
 
 
-def macos_binary_has_development_signature(binary: Path) -> bool:
-    """Prove one managed binary strictly verifies with the configured authority."""
-    codesign = shutil.which("codesign")
-    if codesign is None:
-        return False
+def macos_binary_has_development_signature(
+    binary: Path, identifier: str, team_identifier: str
+) -> bool:
+    """Prove one managed binary carries its stable Apple Development signature."""
     try:
-        verification = run([codesign, "--verify", "--strict", str(binary)], timeout=10.0)
-        if verification.returncode != 0:
-            return False
-        result = run([codesign, "-dv", "--verbose=4", str(binary)], timeout=10.0)
-    except (OSError, subprocess.TimeoutExpired):
+        return verify_apple_signature(str(binary), identifier, team_identifier)
+    except (OSError, subprocess.SubprocessError):
         return False
-    if result.returncode != 0:
-        return False
-    authority = f"Authority={DEVELOPMENT_SIGNING_IDENTITY}"
-    output = f"{result.stdout}\n{result.stderr}"
-    return any(line.strip() == authority for line in output.splitlines())
 
 
 def require_macos_development_signatures(cli: Path, daemon: Path) -> None:
     """Fail closed before any managed-pair lifecycle mutation on macOS."""
-    if not macos_development_signing_identity_available():
+    system = platform.system()
+    if system == "Windows":
+        print("warning: Windows signing not yet implemented; skipping ATM signature gate.", file=sys.stderr)
         return
-    for label, binary in (("CLI", cli), ("daemon", daemon)):
-        if not macos_binary_has_development_signature(binary):
+    if system != "Darwin":
+        return
+    try:
+        identity = resolve_apple_development_identity()
+    except (OSError, subprocess.SubprocessError, SigningIdentityError) as error:
+        raise SwitchError(f"Apple Development signing preflight failed: {error}") from error
+    for label, binary, identifier in (
+        ("CLI", cli, CLI_IDENTIFIER),
+        ("daemon", daemon, DAEMON_IDENTIFIER),
+    ):
+        if not macos_binary_has_development_signature(binary, identifier, identity.team_identifier):
             raise SwitchError(
-                f"macOS development signing identity `{DEVELOPMENT_SIGNING_IDENTITY}` is installed, "
-                f"but {label} target is not strictly signed by it: {binary}. "
+                f"{label} target is not strictly signed by the required Apple Development identity: "
+                f"{binary}. "
                 "Build with `just build` or run `python3 .just/sign_daemon_dev.py` before daemon-switch."
             )
 

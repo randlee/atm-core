@@ -102,6 +102,22 @@ cd atm-core
 cargo install --path crates/atm --bin atm
 ```
 
+### macOS development signing
+
+On a Mac that builds or switches the local daemon, configure the Apple Development
+certificate once: in Xcode open **Settings → Accounts**, add `apple@randlee.com`,
+choose **Manage Certificates**, then create **Apple Development**. Install the
+[Apple WWDR G3 intermediate](https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer)
+and verify the identity is valid:
+
+```bash
+security find-identity -v -p codesigning
+```
+
+`just build` signs both `atm` and `atm-daemon` using that identity. The signer
+selects the Apple Development certificate by its certificate team identifier,
+not by any Mac hostname.
+
 ## Quick Start
 
 ATM runs against the accepted ATM home/runtime layout and persists retained
