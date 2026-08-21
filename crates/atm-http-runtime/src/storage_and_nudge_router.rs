@@ -2090,13 +2090,13 @@ mod tests {
                     .sender_host
                     .as_ref()
                     .map(|host| host.as_str()),
-                Some("127.0.0.1"),
-                "direct ingress provenance comes from the accepted peer socket"
+                None,
+                "plaintext ingress never claims an authenticated peer host"
             );
             assert_eq!(
                 dispatches[0].event.source_address().to_string(),
-                "sender@test-team.127.0.0.1",
-                "the nudge source preserves the authenticated socket host"
+                "sender@test-team",
+                "the nudge source does not claim a socket IP as a peer identity"
             );
             assert!(
                 matches!(&dispatches[0].target, PostSendBuiltInTarget::Graft(_)),

@@ -176,7 +176,7 @@ pub(crate) fn direct_peer_write_client(
             "direct peer HTTP client request timeout must be greater than zero",
         ));
     }
-    let connector = DirectPeerTcpConnector::new(host, port)?;
+    let connector = DirectPeerTcpConnector::new(host, port);
     let client = Arc::new(HttpRuntimeClient::new(Arc::new(connector), request_timeout));
     Ok(DirectPeerWriteClient { client })
 }
@@ -248,12 +248,15 @@ struct LoopbackTcpConnector {
     endpoint_record_path: PathBuf,
 }
 
-/// Reqwest owns DNS, connection and HTTP. This adapter owns only the
-/// configured peer authority; it does not duplicate ATM request processing.
+/// Direct peer transport owns its socket and HTTP/1 connection so it neither
+/// inherits generic HTTP proxy policy nor changes address-selection behaviour
+/// between plaintext and mTLS peer modes. The shared client still owns ATM
+/// request encoding, response decoding, and deadline enforcement.
 #[derive(Debug)]
 struct DirectPeerTcpConnector {
-    client: reqwest::Client,
     authority: String,
+    host: HostName,
+    port: NonZeroU16,
 }
 
 /// Transport-neutral outbound connector over an authenticated opaque stream.
@@ -369,21 +372,17 @@ impl DirectPeerWriteClient {
 }
 
 impl DirectPeerTcpConnector {
-    fn new(host: HostName, port: NonZeroU16) -> Result<Self, AtmError> {
-        let client = reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .map_err(|source| {
-                AtmError::config("failed to build direct peer HTTP client").with_cause(source)
-            })?;
-        Ok(Self {
-            authority: if host.as_str().contains(':') {
-                format!("[{}]:{}", host.as_str(), port)
-            } else {
-                format!("{}:{}", host.as_str(), port)
-            },
-            client,
-        })
+    fn new(host: HostName, port: NonZeroU16) -> Self {
+        let authority = if host.as_str().contains(':') {
+            format!("[{}]:{}", host.as_str(), port)
+        } else {
+            format!("{}:{}", host.as_str(), port)
+        };
+        Self {
+            authority,
+            host,
+            port,
+        }
     }
 }
 
@@ -424,14 +423,13 @@ impl HttpRuntimeConnector for DirectPeerTcpConnector {
         request: HttpRequest,
         deadline: RequestDeadline,
     ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
-        let url = reqwest::Url::parse(&format!("http://{}{}", self.authority, request.path))
-            .map_err(|source| {
-                HttpRuntimeClientFailure::RequestWrite(format!(
-                    "shared HTTP request has an invalid direct peer route `{}`: {source}",
-                    request.path
-                ))
+        let stream = TcpStream::connect((self.host.as_str(), self.port.get()))
+            .await
+            .map_err(|source| HttpRuntimeClientFailure::PeerConnect {
+                target: self.authority.clone(),
+                cause: source.to_string(),
             })?;
-        execute_reqwest_request(&self.client, url, request, deadline, None)
+        execute_opaque_peer_request(Box::new(stream), request, deadline)
             .await
             .map_err(|failure| direct_peer_connection_failure(&self.authority, failure))
     }
@@ -1336,8 +1334,7 @@ mod tests {
         let connector = DirectPeerTcpConnector::new(
             "unresolvable.example".parse().expect("valid host syntax"),
             NonZeroU16::new(43_101).expect("non-zero port"),
-        )
-        .expect("direct peer connector");
+        );
         let error = connector.deadline_elapsed().into_atm_error();
 
         assert_eq!(error.code(), AtmErrorCode::RemoteDeliveryUnconfirmed);

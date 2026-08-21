@@ -1539,7 +1539,8 @@ mod tests {
                     .authenticated_source_host
                     .as_ref()
                     .map(|host| host.as_str()),
-                Some("127.0.0.1")
+                None,
+                "plaintext socket provenance never becomes authenticated peer identity"
             );
             assert!(request.origin_message_id.is_some());
             assert!(request.origin_timestamp.is_some());

@@ -136,8 +136,8 @@ pub enum AuthenticatedConnector {
     Local,
     /// A peer connection normalized by its configured transport adapter.
     Peer { source_host: HostName },
-    /// A direct plain-TCP peer connection. The adapter takes provenance from
-    /// the accepted socket rather than any process configuration or payload.
+    /// A direct plain-TCP peer connection. The accepted socket is diagnostic
+    /// context only; it cannot establish a peer identity.
     PeerSocket,
 }
 
@@ -154,7 +154,7 @@ impl AuthenticatedConnector {
         Self::Peer { source_host }
     }
 
-    /// Returns direct peer provenance from the accepted connection.
+    /// Returns explicit untrusted plaintext-peer provenance.
     #[must_use]
     pub const fn peer_socket() -> Self {
         Self::PeerSocket
@@ -190,12 +190,12 @@ impl AuthenticatedConnector {
                         )
                         .with_cause(source)
                     })?;
-                // A TCP source address is adapter-derived diagnostic
-                // provenance, never peer authentication. The ingress below
-                // remains `UntrustedSmoke`; retaining the address lets an
-                // explicit plaintext test reply to the actual socket peer
-                // without accepting a JSON-forged value.
-                request.authenticated_source_host = Some(source_host.clone());
+                // A TCP source address is diagnostic context, never peer
+                // authentication. In particular, do not let it populate
+                // `authenticated_source_host`: that field is reserved for
+                // mTLS' configured hostname/pin proof. The untrusted ingress
+                // below retains the observed address separately.
+                request.authenticated_source_host = None;
                 if let Some(destination) = request.to.take() {
                     request.to = Some(destination.without_host());
                 }
