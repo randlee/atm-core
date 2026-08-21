@@ -1296,7 +1296,6 @@ def run_capacity(
         else:
             before = count_atm_daemon_processes()
         home.mkdir(parents=True, exist_ok=False)
-        prepare_capacity_roster(atm, env, home, roster)
         if managed_lifecycle is not None:
             managed_lifecycle.start_isolated_service()
             managed_status = daemon_switch_result("status", managed_daemon, doctor=True)
@@ -1311,6 +1310,9 @@ def run_capacity(
             )
             doctor_payload = benchmark_doctor_payload(doctor)
             evidence["daemon_pid"] = process.pid
+        # The roster commands use the public daemon boundary. Start the
+        # selected daemon before creating the disposable team members.
+        prepare_capacity_roster(atm, env, home, roster)
         evidence["doctor"] = doctor_payload
         evidence["doctor_status"] = "passed"
         endpoint = local_endpoint(transport)
