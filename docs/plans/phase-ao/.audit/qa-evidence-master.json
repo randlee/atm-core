@@ -5,7 +5,7 @@
     "start": "2026-08-20T09:00:24Z",
     "end": "2026-08-20T22:48:22Z"
   },
-  "scope": "phase-ao2 sprints AO2.1-AO2.3. AO2.1 QA-1 FAIL through QA-2 PASS on PR #961 (all 8 findings closed). AO2.2 QA-1 FAIL through QA-2 PASS on PR #965 (all 9 findings closed, final commit 03bf9e4742763fd40667e19cfdf3381ec58a006c). AO2.3 QA-1 FAIL through QA-4 PASS on PR #967 (all findings closed across 4 QA rounds including one same-round correction, final commit 1d4d5c979e0ec895ae339677a3c4f0ee358e768e). AO2.4 not yet covered by this file as of this audit pass.",
+  "scope": "phase-ao2 sprints AO2.1-AO2.4, all closed. AO2.1 QA-1 FAIL through QA-2 PASS on PR #961 (all 8 findings closed). AO2.2 QA-1 FAIL through QA-2 PASS on PR #965 (all 9 findings closed, final commit 03bf9e4742763fd40667e19cfdf3381ec58a006c). AO2.3 QA-1 FAIL through QA-4 PASS on PR #967 (all findings closed across 4 QA rounds including one same-round correction, final commit 1d4d5c979e0ec895ae339677a3c4f0ee358e768e). AO2.4 QA-1 FAIL through final re-verify PASS on PR #968 (2 blocking + 4 important + 3 minor findings closed, final commit aedd04beabaa555343a8d32bc8870c79390a4deb).",
   "count_basis": "headline/reviewer",
   "path_notes": "Built directly from ATM QA verdict messages read this session via `atm read --message-id <id> --team atm-dev`. Every run_id below cites a real ATM message_id and verdict text read verbatim from the mailbox. No run_id, message_id, or verdict was fabricated. The QA-1 dispatch/assignment message_id for AO2.1 was not independently re-located in this pass, so assignment_message_id/assignment_time_utc are left null for AO1-QA1 rather than guessed; the fix-dispatch message_id recorded in scratchpad state (01M0F6XAFRYKGFEKWZGDDM4FVR) did not resolve via `atm peek` in this repair session (likely aged out of the actionable/history window queried), so it is omitted rather than asserted. AO2.2 and AO2.3 entries were added in a later repair pass (2026-08-20/21) to close a `/sprint-report` data_gap; their assignment_message_id/assignment_time_utc fields are likewise left null where not independently re-located, rather than guessed.",
   "runs": [
@@ -207,14 +207,64 @@
       "important": 0,
       "minor": 0,
       "count_basis": "headline/reviewer",
-      "evidence": "QA-4 verdict for PR #967 (AO2.3 @1d4d5c979): PASS. Independently re-ran full 'just lint' (28/28 incl. boundaries), lint_boundaries.py, cargo fmt --check, the bootstrap composition-root test, and the scoped architecture guard test -- all pass. The atm-runtime-test-support boundary gap (QA-006-AO23) is genuinely fixed. No open findings remain on feature/pao-s3-runtime-peer-wire-mode. Ready for merge-forward to integrate/phase-ao2. (Same message also carried a re-verify PASS for PR #968/AO2.4 @aedd04bea, not recorded here -- out of this run's scope.)"
+      "evidence": "QA-4 verdict for PR #967 (AO2.3 @1d4d5c979): PASS. Independently re-ran full 'just lint' (28/28 incl. boundaries), lint_boundaries.py, cargo fmt --check, the bootstrap composition-root test, and the scoped architecture guard test -- all pass. The atm-runtime-test-support boundary gap (QA-006-AO23) is genuinely fixed. No open findings remain on feature/pao-s3-runtime-peer-wire-mode. Ready for merge-forward to integrate/phase-ao2. (Same message also carried a re-verify PASS for PR #968/AO2.4 @aedd04bea, recorded separately below as AO2S4-QA-REVERIFY.)"
+    },
+    {
+      "run_id": "AO2S4-QA1",
+      "aich_sprint": "AO2.4",
+      "phase_sprint": "AO.4",
+      "pass": "QA-1",
+      "run_type": "qa",
+      "assignment_time_utc": "2026-08-20T21:20:18.006325Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": "01M0GGQMJPKA7J1QA6CT5N19E5",
+      "assignment_from": "team-lead",
+      "assignment_shared_path": null,
+      "assignment_summary": "QA-1 requested: AO2.4 (Operational Performance Proof), PR #968, feature/pao-s4-peer-wire-proof.",
+      "result_time_utc": "2026-08-20T21:33:56.797425Z",
+      "result_time_pst": null,
+      "result_message_id": "01M0GHGM5XKZGA1Z0GYR3M6DEC",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "FAIL",
+      "blockers": 2,
+      "important": 4,
+      "minor": 3,
+      "count_basis": "headline/reviewer",
+      "evidence": "QA-1 verdict for PR #968 (AO2.4 Operational Performance Proof): FAIL. 2 Blocking + 4 Important + 3 Minor. Deliverables 1/5 (20%). Blocking: ATM-QA-001 (no completed local/M4 plaintext-vs-baseline comparison, recorded 'pending' though M4 locally available); ATM-QA-002 (Deliverable 4's negative pre-router mTLS-auth-rejection evidence entirely unimplemented in scripts/smoke/, independent of M5 availability). Important: RBQA-F001 (boundary manifest missing atm-storage/serde_json/tempfile), QA-001 (fmt drift), RBP-F001 (peer_wire_security still untyped Option<String>, same regression as PR #967), ATM-QA-003 (checklist under-discloses M4-local gap). Reviewer verdicts: req-qa FAIL, ruthless-boundary-qa FAIL(1 Important), rust-qa-agent FAIL(fmt only), rust-best-practices-agent FAIL(1 Important), arch-qa PASS(1 Minor), rust-service-hardening-agent PASS(0). Full report: https://github.com/randlee/atm-core/pull/968#issuecomment-5362022656."
+    },
+    {
+      "run_id": "AO2S4-QA-REVERIFY",
+      "aich_sprint": "AO2.4",
+      "phase_sprint": "AO.4",
+      "pass": "QA-2 re-verify (final closure)",
+      "run_type": "qa",
+      "assignment_time_utc": "2026-08-20T22:44:12.036602Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": "01M0GNH8M4PTTY6NR2JX2YVD7V",
+      "assignment_from": "team-lead",
+      "assignment_shared_path": null,
+      "assignment_summary": "Re-verify requested for PR #968 (AO2.4, feature/pao-s4-peer-wire-proof @aedd04beabaa555343a8d32bc8870c79390a4deb).",
+      "result_time_utc": "2026-08-20T22:48:22.195058Z",
+      "result_time_pst": null,
+      "result_message_id": "01M0GNRWXK9J0MGXPB8CSDMSQF",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "PASS",
+      "blockers": 0,
+      "important": 0,
+      "minor": 0,
+      "count_basis": "headline/reviewer",
+      "evidence": "Re-verify result for PR #968 (AO2.4 @aedd04bea): PASS on all items checked. (1) Confirmed 2ac9dc406 merge-forwards 1d4d5c979's fix into S4 -- independently re-ran full 'just lint' 28/28 incl. boundaries on this branch, clean (a stale 'boundaries failed' string in arch-ctm's own pasted log was leftover output from before the fix landed, not a live defect). (2) ATM-QA-004-AO24 doc fix (docs/peer-pair-smoke.md) confirmed sound. (3) QA-001/002-AO24 fmt drift: cargo fmt --all --check clean. (4) ATM-QA-003-AO24 checklist accuracy confirmed. (5) ARCH-101-AO24 confirmed correctly deferred, informational only. PR #968 has no open blocking/important items as of aedd04bea. Note: this closes ATM-QA-001/ATM-QA-002 (blocking) and RBQA-F001/QA-001/RBP-F001/ATM-QA-003 (important) from AO2S4-QA1 -- no intermediate per-finding QA round message was independently re-located between QA-1 and this re-verify pass; the fix commits themselves (2fc172b36a3f CI repair, aedd04bea closure) are visible in the ATM history cited above."
     }
   ],
   "coverage_gaps": [
-    "AO2.4 has no runs[] entries in this file as of this audit pass -- out of scope for the data_gap this repair pass closed (AO2.2, AO2.3 only). AO2.4's own QA history exists in the ATM mailbox (e.g. re-verify PASS carried in message 01M0GNRWXK9J0MGXPB8CSDMSQF) but was not transcribed here.",
     "AO2.1's QA-1 assignment_message_id/assignment_time_utc could not be re-located via atm peek in this repair session and are left null rather than guessed, consistent with the phase-ao precedent file's convention.",
     "The fix-assignment dispatch to arch-ctm for AO2.1's 8 QA-1 findings (scratchpad-recorded message_id 01M0F6XAFRYKGFEKWZGDDM4FVR) did not resolve via `atm peek --message-id` in this session and is omitted as a discrete run rather than asserted without re-verification.",
     "AO2.2 and AO2.3 QA-round assignment_message_id/assignment_time_utc fields are null except where an explicit team-lead dispatch message was independently located (AO2.3 QA-3 only) -- most rounds were self-initiated arch-ctm fix/report cycles without a distinct formal ATM assignment message, so no value was guessed for the others.",
-    "AO2S3-QA2 is recorded as a real but corrected round (arch-ctm's self-report), not a quality-mgr verdict -- included for evidentiary completeness of the multi-round history, not as an independent QA pass verdict."
+    "AO2S3-QA2 is recorded as a real but corrected round (arch-ctm's self-report), not a quality-mgr verdict -- included for evidentiary completeness of the multi-round history, not as an independent QA pass verdict.",
+    "AO2.4 has no discrete intermediate finding-by-finding QA round recorded between QA-1 FAIL and the final re-verify PASS -- only those two endpoints were independently re-located in the ATM mailbox; the fix work in between is evidenced by commit references (2fc172b36a3f, aedd04bea) cited in the re-verify run's evidence field rather than a separate run entry."
   ]
 }
