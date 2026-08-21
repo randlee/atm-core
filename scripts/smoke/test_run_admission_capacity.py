@@ -196,12 +196,16 @@ class AdmissionCapacityTests(unittest.TestCase):
     def test_backup_restore_returns_the_complete_prior_host_state(self):
         with tempfile.TemporaryDirectory() as temp:
             os_home = Path(temp)
-            original = os_home / ".atm"
-            original.mkdir()
+            original = os_home / ".atm" / "db"
+            original.mkdir(parents=True)
             (original / "mail.db").write_text("prior state", encoding="utf-8")
+            release = os_home / ".atm" / "releases" / "candidate" / "atm"
+            release.parent.mkdir(parents=True)
+            release.write_text("selected binary", encoding="utf-8")
             with mock.patch.object(RUNNER, "os_account_home", return_value=os_home):
                 backup = RUNNER.HostStateBackup.begin()
-                (os_home / ".atm" / "mail.db").write_text("benchmark state", encoding="utf-8")
+                (os_home / ".atm" / "db" / "mail.db").write_text("benchmark state", encoding="utf-8")
+                self.assertEqual(release.read_text(encoding="utf-8"), "selected binary")
                 backup.restore()
             self.assertEqual((original / "mail.db").read_text(encoding="utf-8"), "prior state")
 
@@ -331,8 +335,8 @@ class AdmissionCapacityTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp:
             os_home = Path(temp)
-            state = os_home / ".atm"
-            state.mkdir()
+            state = os_home / ".atm" / "db"
+            state.mkdir(parents=True)
             (state / "mail.db").write_text("managed-state", encoding="utf-8")
             with (
                 mock.patch.object(RUNNER, "os_account_home", return_value=os_home),

@@ -147,17 +147,21 @@ DEFAULT_CAPACITY_ROSTER = CapacityRoster(
 
 @dataclass
 class HostStateBackup:
-    """Temporarily replace one idle host's complete ATM state with an empty root."""
+    """Temporarily replace one idle host's ATM database with an empty database.
+
+    A managed pair may be selected from ``~/.atm/releases``.  Benchmark
+    isolation must therefore snapshot only the mutable database, not the
+    entire ATM home: moving the root would make the selected CLI and daemon
+    dangling exactly while daemon-switch is required to keep them paired.
+    """
 
     state_root: Path
     backup_root: Path | None
 
     @classmethod
     def begin(cls) -> "HostStateBackup":
-        state_root = os_account_home() / ".atm"
-        backup_root = state_root.with_name(
-            f".atm-capacity-backup-{os.getpid()}-{time.monotonic_ns()}"
-        )
+        state_root = os_account_home() / ".atm" / "db"
+        backup_root = state_root.with_name(f"db-capacity-backup-{os.getpid()}-{time.monotonic_ns()}")
         try:
             if state_root.exists():
                 state_root.rename(backup_root)
