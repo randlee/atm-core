@@ -97,6 +97,74 @@ class QuiesceTests(unittest.TestCase):
             DAEMON_SWITCH.run_service(args, "stop", allow_absent=True)
 
 
+class MacosDevelopmentSigningTests(unittest.TestCase):
+    def test_identity_discovery_requires_the_exact_quoted_identity(self) -> None:
+        partial = subprocess.CompletedProcess(
+            ["security"], 0, stdout='1) HASH "not-atm-daemon-dev"\n', stderr=""
+        )
+        exact = subprocess.CompletedProcess(
+            ["security"], 0, stdout='1) HASH "atm-daemon-dev"\n', stderr=""
+        )
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Darwin"),
+            mock.patch.object(DAEMON_SWITCH.shutil, "which", return_value="/usr/bin/security"),
+            mock.patch.object(DAEMON_SWITCH, "run", side_effect=[partial, exact]),
+        ):
+            self.assertFalse(DAEMON_SWITCH.macos_development_signing_identity_available())
+            self.assertTrue(DAEMON_SWITCH.macos_development_signing_identity_available())
+
+    def test_no_signing_gate_when_identity_is_not_installed(self) -> None:
+        daemon = Path("/candidate/atm-daemon")
+        with (
+            mock.patch.object(DAEMON_SWITCH, "macos_development_signing_identity_available", return_value=False),
+            mock.patch.object(DAEMON_SWITCH, "macos_daemon_has_development_signature") as signed,
+        ):
+            DAEMON_SWITCH.require_macos_development_signature(daemon)
+        signed.assert_not_called()
+
+    def test_rejects_unsigned_daemon_when_development_identity_is_installed(self) -> None:
+        daemon = Path("/candidate/atm-daemon")
+        with (
+            mock.patch.object(DAEMON_SWITCH, "macos_development_signing_identity_available", return_value=True),
+            mock.patch.object(DAEMON_SWITCH, "macos_daemon_has_development_signature", return_value=False),
+        ):
+            with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "just build"):
+                DAEMON_SWITCH.require_macos_development_signature(daemon)
+
+    def test_accepts_daemon_with_exact_development_authority(self) -> None:
+        daemon = Path("/candidate/atm-daemon")
+        with (
+            mock.patch.object(DAEMON_SWITCH, "macos_development_signing_identity_available", return_value=True),
+            mock.patch.object(DAEMON_SWITCH, "macos_daemon_has_development_signature", return_value=True),
+        ):
+            DAEMON_SWITCH.require_macos_development_signature(daemon)
+
+    def test_signature_check_requires_exact_authority_line(self) -> None:
+        daemon = Path("/candidate/atm-daemon")
+        result = subprocess.CompletedProcess(
+            ["codesign"],
+            0,
+            stdout="Authority=another-atm-daemon-dev\n",
+            stderr="Authority=atm-daemon-dev-extra\n",
+        )
+        with (
+            mock.patch.object(DAEMON_SWITCH.shutil, "which", return_value="/usr/bin/codesign"),
+            mock.patch.object(DAEMON_SWITCH, "run", return_value=result),
+        ):
+            self.assertFalse(DAEMON_SWITCH.macos_daemon_has_development_signature(daemon))
+
+    def test_signature_check_accepts_exact_authority_line_from_codesign_stderr(self) -> None:
+        daemon = Path("/candidate/atm-daemon")
+        result = subprocess.CompletedProcess(
+            ["codesign"], 0, stdout="", stderr="Authority=atm-daemon-dev\n"
+        )
+        with (
+            mock.patch.object(DAEMON_SWITCH.shutil, "which", return_value="/usr/bin/codesign"),
+            mock.patch.object(DAEMON_SWITCH, "run", return_value=result),
+        ):
+            self.assertTrue(DAEMON_SWITCH.macos_daemon_has_development_signature(daemon))
+
+
 class HttpRuntimeOwnerLockTests(unittest.TestCase):
     def test_owner_lock_identifies_http_runtime_without_legacy_socket(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -201,6 +269,7 @@ class ReadinessAndRollbackTests(unittest.TestCase):
             ),
             mock.patch.object(DAEMON_SWITCH, "validate_selectors"),
             mock.patch.object(DAEMON_SWITCH, "save_default_pair"),
+            mock.patch.object(DAEMON_SWITCH, "require_macos_development_signature"),
             mock.patch.object(DAEMON_SWITCH, "run_service") as service,
             mock.patch.object(DAEMON_SWITCH, "require_stopped_daemon") as stopped,
             mock.patch.object(DAEMON_SWITCH, "replace_link") as replace,
