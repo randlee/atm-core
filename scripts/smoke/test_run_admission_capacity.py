@@ -6,6 +6,7 @@ import json
 import os
 from contextlib import closing
 from pathlib import Path, PureWindowsPath
+import plistlib
 import sys
 import tempfile
 import threading
@@ -203,6 +204,98 @@ class AdmissionCapacityTests(unittest.TestCase):
                 (os_home / ".atm" / "mail.db").write_text("benchmark state", encoding="utf-8")
                 backup.restore()
             self.assertEqual((original / "mail.db").read_text(encoding="utf-8"), "prior state")
+
+    def test_launch_agent_override_preserves_source_and_replaces_only_wire_mode(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "com.example.atm.plist"
+            original_payload = {
+                "Label": "com.example.atm",
+                "ProgramArguments": [
+                    "/usr/bin/env", "-u", "ATM_TEAM", "/selected/atm-daemon",
+                    "--peer-wire-security", "mutual-tls", "--other-option", "value",
+                ],
+            }
+            with source.open("wb") as handle:
+                plistlib.dump(original_payload, handle)
+            source_bytes = source.read_bytes()
+
+            override = RUNNER.LaunchAgentPeerWireOverride.create(source, "plaintext-test")
+            with override.override_path.open("rb") as handle:
+                override_payload = plistlib.load(handle)
+
+            self.assertEqual(source.read_bytes(), source_bytes)
+            self.assertEqual(
+                override_payload["ProgramArguments"],
+                [
+                    "/usr/bin/env", "-u", "ATM_TEAM", "/selected/atm-daemon",
+                    "--other-option", "value", "--peer-wire-security", "plaintext-test",
+                ],
+            )
+            override.assert_source_unchanged()
+            override.cleanup()
+            self.assertFalse(override.override_path.exists())
+
+    def test_managed_mode_requires_the_explicit_launch_agent_plist(self):
+        lifecycle = RUNNER.ManagedDaemonLifecycle(
+            RUNNER.ManagedDaemonOptions(service="com.example.atm"),
+            peer_wire_security="plaintext-test",
+        )
+        with self.assertRaisesRegex(RUNNER.SmokeError, "managed-launch-agent-plist"):
+            lifecycle.isolated_options()
+
+    def test_managed_mode_uses_temporary_plist_then_restarts_original_pair(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "com.example.atm.plist"
+            source_payload = {
+                "Label": "com.example.atm",
+                "ProgramArguments": ["/selected/atm-daemon"],
+            }
+            with source.open("wb") as handle:
+                plistlib.dump(source_payload, handle)
+            source_bytes = source.read_bytes()
+            options = RUNNER.ManagedDaemonOptions(
+                service="com.example.atm", launch_agent_plist=source,
+            )
+            status = healthy_managed_status()
+            status["doctor"]["daemon_context"]["peer_wire_security"] = "plaintext-test"
+            calls: list[tuple[str, Path, bool]] = []
+
+            def daemon_switch(action, passed_options, *, doctor=False):
+                assert passed_options.launch_agent_plist is not None
+                calls.append((action, passed_options.launch_agent_plist, doctor))
+                return status
+
+            os_home = root / "os-home"
+            state = os_home / ".atm"
+            state.mkdir(parents=True)
+            (state / "mail.db").write_text("managed-state", encoding="utf-8")
+            with (
+                mock.patch.object(RUNNER, "os_account_home", return_value=os_home),
+                mock.patch.object(RUNNER, "daemon_switch_result", side_effect=daemon_switch),
+                mock.patch.object(RUNNER, "require_clean_host_daemon_state"),
+            ):
+                lifecycle = RUNNER.ManagedDaemonLifecycle(
+                    options, peer_wire_security="plaintext-test",
+                )
+                lifecycle.begin()
+                lifecycle.start_isolated_service()
+                override_path = lifecycle.launch_override.override_path
+                lifecycle.restart_isolated_service()
+                lifecycle.restore()
+
+            self.assertEqual(source.read_bytes(), source_bytes)
+            self.assertEqual((state / "mail.db").read_text(encoding="utf-8"), "managed-state")
+            self.assertFalse(override_path.exists())
+            self.assertEqual(
+                [(action, path == source, doctor) for action, path, doctor in calls],
+                [
+                    ("status", True, False), ("quiesce", True, False),
+                    ("restart", False, False), ("status", False, True),
+                    ("quiesce", False, False), ("restart", False, False), ("status", False, True),
+                    ("quiesce", False, False), ("restart", True, False), ("status", True, True),
+                ],
+            )
 
     def test_undeclared_host_state_refuses_before_backup_or_daemon_quiesce(self):
         with (
@@ -1402,32 +1495,11 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(Path(launched[0]), Path("/release/atm-daemon"))
         self.assertEqual(launched[1:], ["--peer-wire-security", "plaintext-test"])
 
-    def test_managed_target_run_fails_closed_when_launch_mode_cannot_be_selected(self):
-        captured: dict[str, object] = {}
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            home = root / "atm-capacity-proof"
-            atm = root / "atm"
-            daemon = root / "atm-daemon"
-            atm.touch()
-            daemon.touch()
-            with (
-                mock.patch.object(RUNNER, "select_host_state_isolation", return_value="backup_restore"),
-                mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
-                mock.patch.object(RUNNER, "runtime_environment", return_value={}),
-                mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"),
-                mock.patch.object(
-                    RUNNER, "write_evidence",
-                    side_effect=lambda _path, value: (captured.update(value), root / "evidence.json")[1],
-                ),
-            ):
-                code, _path = RUNNER.run_capacity(
-                    home, root, "tcp", 1, sample_count=1,
-                    benchmark_target="tcp", managed_daemon=RUNNER.ManagedDaemonOptions("com.example.atm"),
-                    raw_evidence_directory=root,
-                )
-        self.assertEqual(code, 1)
-        self.assertIn("cannot prove a selected peer-wire mode", str(captured["failure"]))
+    def test_managed_mode_rejects_a_doctor_that_reports_the_wrong_wire_mode(self):
+        status = healthy_managed_status()
+        status["doctor"]["daemon_context"]["peer_wire_security"] = "mutual-tls"
+        with self.assertRaisesRegex(RUNNER.SmokeError, "expected plaintext-test"):
+            RUNNER.require_managed_peer_wire_security(status, "plaintext-test")
 
     def test_daemon_output_capture_retains_bounded_stdout_and_stderr_tails(self):
         capture = RUNNER.DaemonOutputCapture()
