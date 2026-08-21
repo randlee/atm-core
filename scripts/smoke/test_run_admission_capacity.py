@@ -455,6 +455,16 @@ class AdmissionCapacityTests(unittest.TestCase):
             daemon = root / "atm-daemon"
             atm.touch()
             daemon.touch()
+            process = mock.Mock(pid=123)
+            output = mock.Mock()
+            healthy_doctor = {
+                "exit_code": 0,
+                "stdout": json.dumps({
+                    "summary": {"status": "healthy"},
+                    "runtime_status": {"liveness": "running", "readiness": "ready"},
+                }),
+                "stderr": "",
+            }
             with (
                 mock.patch.object(RUNNER, "select_host_state_isolation", return_value="backup_restore"),
                 mock.patch.object(RUNNER, "os_account_home", return_value=os_home),
@@ -464,6 +474,9 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
+                mock.patch.object(RUNNER, "start_capacity_daemon", return_value=(process, output)),
+                mock.patch.object(RUNNER, "command_result", return_value=healthy_doctor),
+                mock.patch.object(RUNNER, "reap_owned_daemon"),
                 mock.patch.object(RUNNER, "local_endpoint", side_effect=RUNNER.SmokeError("benchmark failed")),
                 mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"),
                 mock.patch.object(
@@ -475,6 +488,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 code, _evidence = RUNNER.run_capacity(
                     home, root, "tcp", 1, sample_count=1,
                     raw_evidence_directory=root, managed_daemon=options,
+                    peer_wire_security="plaintext-test",
                 )
 
             self.assertEqual((state / "mail.db").read_text(encoding="utf-8"), "managed-state")
@@ -482,10 +496,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual(captured["failure"], "benchmark failed")
         self.assertEqual(captured["managed_daemon_recovery"], "doctor-verified")
-        self.assertEqual(
-            calls,
-            ["status", "quiesce", "restart", "status", "status", "quiesce", "restart", "status"],
-        )
+        self.assertEqual(calls, ["status", "quiesce", "restart", "status"])
 
     def test_transport_is_platform_explicit(self):
         self.assertEqual(RUNNER.validate_transport("tcp"), "tcp")
@@ -1347,7 +1358,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(Path(launched[0]), Path("/release/atm-daemon"))
         self.assertEqual(launched[1:], ["--peer-wire-security", "plaintext-test"])
 
-    def test_managed_target_run_fails_closed_when_launch_mode_cannot_be_selected(self):
+    def test_managed_target_run_owns_the_explicit_candidate_mode(self):
         captured: dict[str, object] = {}
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -1360,6 +1371,12 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "select_host_state_isolation", return_value="backup_restore"),
                 mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "capture_managed_mtls_identity"),
+                mock.patch.object(RUNNER.ManagedDaemonLifecycle, "begin"),
+                mock.patch.object(RUNNER.ManagedDaemonLifecycle, "restore"),
+                mock.patch.object(
+                    RUNNER, "start_capacity_daemon", side_effect=RUNNER.SmokeError("owned candidate"),
+                ) as start,
                 mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"),
                 mock.patch.object(
                     RUNNER, "write_evidence",
@@ -1369,10 +1386,29 @@ class AdmissionCapacityTests(unittest.TestCase):
                 code, _path = RUNNER.run_capacity(
                     home, root, "tcp", 1, sample_count=1,
                     benchmark_target="tcp", managed_daemon=RUNNER.ManagedDaemonOptions("com.example.atm"),
+                    peer_wire_security="plaintext-test",
                     raw_evidence_directory=root,
                 )
         self.assertEqual(code, 1)
-        self.assertIn("cannot prove a selected peer-wire mode", str(captured["failure"]))
+        self.assertEqual(captured["failure"], "owned candidate")
+        start.assert_called_once_with(daemon, home.resolve(), {}, "plaintext-test")
+
+    def test_disposable_mtls_provisioning_uses_a_private_temp_bundle_and_localhost_interface(self):
+        identity = RUNNER.DisposableMtlsIdentity("ABC123", b"private test bundle")
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            with mock.patch.object(
+                RUNNER, "command_result", return_value={"exit_code": 0, "stdout": "", "stderr": ""},
+            ) as command:
+                RUNNER.provision_disposable_mtls_identity(
+                    Path("/release/atm"), home, {"ATM_HOME": "/discard"}, identity,
+                )
+            bundle = home / "capacity-mtls-identity.pem"
+            self.assertEqual(bundle.read_bytes(), identity.bundle)
+            self.assertEqual(bundle.stat().st_mode & 0o777, 0o600)
+        commands = [call.args[0] for call in command.call_args_list]
+        self.assertEqual(commands[0][1:4], ["peer", "certificate", "init"])
+        self.assertEqual(commands[1][1:4], ["peer", "interface", "set"])
 
     def test_daemon_output_capture_retains_bounded_stdout_and_stderr_tails(self):
         capture = RUNNER.DaemonOutputCapture()

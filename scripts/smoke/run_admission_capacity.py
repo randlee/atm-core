@@ -175,6 +175,19 @@ class HostStateBackup:
 
 
 @dataclass(frozen=True)
+class DisposableMtlsIdentity:
+    """A short-lived copy of the managed host's already-authorized key pair.
+
+    The capacity runner never generates, publishes, or retains key material.
+    It copies the existing local bundle into the disposable benchmark home only
+    long enough to configure the otherwise-empty, backed-up host state.
+    """
+
+    fingerprint: str
+    bundle: bytes
+
+
+@dataclass(frozen=True)
 class ManagedDaemonOptions:
     """The existing singleton daemon selected by the daemon-switch skill."""
 
@@ -545,6 +558,74 @@ def host_runtime_client_environment(environment: dict[str, str]) -> dict[str, st
     result = dict(environment)
     result.pop("ATM_HOME", None)
     return result
+
+
+def capture_managed_mtls_identity(atm: Path) -> DisposableMtlsIdentity:
+    """Read the current host's public certificate record before state backup.
+
+    The key bundle is copied into memory before ``HostStateBackup`` moves
+    ``~/.atm``.  The only subsequent copy is created under the runner's
+    disposable directory and is removed with that directory in ``finally``.
+    """
+    result = command_result(
+        [str(atm), "peer", "certificate", "show", "--json"],
+        timeout=10.0,
+        env=host_runtime_client_environment(dict(os.environ)),
+    )
+    if result["exit_code"] != 0:
+        detail = result["stderr"].strip() or result["stdout"].strip()
+        raise SmokeError(f"could not read the managed mTLS certificate: {detail}")
+    try:
+        payload = json.loads(result["stdout"])
+        fingerprint = payload["fingerprint"]
+        private_key_ref = payload["private_key_ref"]
+    except (KeyError, TypeError, json.JSONDecodeError) as error:
+        raise SmokeError(f"managed mTLS certificate record is invalid: {error}") from error
+    if not isinstance(fingerprint, str) or not fingerprint:
+        raise SmokeError("managed mTLS certificate record omitted its fingerprint")
+    if not isinstance(private_key_ref, str) or not private_key_ref:
+        raise SmokeError("managed mTLS certificate record omitted its private-key reference")
+    bundle_path = Path(private_key_ref)
+    if not bundle_path.is_absolute() or not bundle_path.is_file():
+        raise SmokeError("managed mTLS private-key reference must be an existing absolute file")
+    try:
+        bundle = bundle_path.read_bytes()
+    except OSError as error:
+        raise SmokeError(f"could not read the managed mTLS key bundle: {error}") from error
+    if not bundle:
+        raise SmokeError("managed mTLS key bundle is empty")
+    return DisposableMtlsIdentity(fingerprint=fingerprint, bundle=bundle)
+
+
+def provision_disposable_mtls_identity(
+    atm: Path,
+    home: Path,
+    environment: dict[str, str],
+    identity: DisposableMtlsIdentity,
+) -> None:
+    """Configure the clean benchmark state with a localhost mTLS interface."""
+    bundle_path = home / "capacity-mtls-identity.pem"
+    descriptor = os.open(bundle_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(descriptor, "wb") as stream:
+        stream.write(identity.bundle)
+    client_environment = host_runtime_client_environment(environment)
+    commands = (
+        [
+            str(atm), "peer", "certificate", "init",
+            "--fingerprint", identity.fingerprint,
+            "--private-key-ref", str(bundle_path), "--yes",
+        ],
+        [
+            str(atm), "peer", "interface", "set",
+            "--bind", "127.0.0.1:43101",
+            "--advertise-host", "localhost", "--enabled",
+        ],
+    )
+    for command in commands:
+        result = command_result(command, timeout=10.0, env=client_environment)
+        if result["exit_code"] != 0:
+            detail = result["stderr"].strip() or result["stdout"].strip()
+            raise SmokeError(f"could not provision disposable mTLS benchmark state: {detail}")
 
 
 def benchmark_doctor_payload(result: dict[str, object]) -> dict[str, object]:
@@ -1210,7 +1291,7 @@ def run_capacity(
     preflight_failure_code: str | None = None,
     preflight_failure: str | None = None,
 ) -> tuple[int, Path]:
-    """Start one branch daemon, exercise public UDS API, retain evidence, then clean up."""
+    """Run one explicit candidate daemon through a public local API profile."""
     transport = validate_transport(transport)
     peer_wire_security = validate_peer_wire_security(peer_wire_security)
     if frames_per_connection not in SPARSE_FRAMES_PER_CONNECTION:
@@ -1233,6 +1314,7 @@ def run_capacity(
     process: subprocess.Popen[str] | None = None
     daemon_output: DaemonOutputCapture | None = None
     managed_lifecycle: ManagedDaemonLifecycle | None = None
+    disposable_mtls_identity: DisposableMtlsIdentity | None = None
     before: list[int] | None = None
     evidence: dict[str, Any] = {
         "schema_version": 2,
@@ -1283,12 +1365,10 @@ def run_capacity(
                 "ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE=1 requires the managed daemon "
                 "service details; pass --managed-service and the platform-specific daemon-switch options"
             )
-        if managed_daemon is not None and benchmark_target is not None:
-            raise SmokeError(
-                "managed daemon benchmark cannot prove a selected peer-wire mode: "
-                "daemon-switch preserves the installed launch arguments; run the target "
-                "from a clean OS-user campaign instead"
-            )
+        if isolation_mode == "backup_restore" and peer_wire_security == "mutual-tls":
+            # Capture before HostStateBackup moves the only permitted source
+            # bundle.  The live daemon remains untouched until this succeeds.
+            disposable_mtls_identity = capture_managed_mtls_identity(atm)
         if isolation_mode == "backup_restore":
             assert managed_daemon is not None
             managed_lifecycle = ManagedDaemonLifecycle(managed_daemon)
@@ -1296,20 +1376,22 @@ def run_capacity(
         else:
             before = count_atm_daemon_processes()
         home.mkdir(parents=True, exist_ok=False)
+        if disposable_mtls_identity is not None:
+            provision_disposable_mtls_identity(atm, home, env, disposable_mtls_identity)
+        # Backup/restore isolates the host's ordinary state; it does not turn
+        # the installed daemon into the execution target.  Always own the
+        # candidate child so --target tcp and --target tcp-tls prove the exact
+        # requested peer-wire mode without changing the dogfood selectors.
+        process, daemon_output = start_capacity_daemon(daemon, home, env, peer_wire_security)
+        doctor = command_result(
+            [str(atm), "doctor", "--json"],
+            timeout=10.0,
+            env=host_runtime_client_environment(env),
+        )
+        doctor_payload = benchmark_doctor_payload(doctor)
+        evidence["daemon_pid"] = process.pid
         if managed_lifecycle is not None:
-            managed_lifecycle.start_isolated_service()
-            managed_status = daemon_switch_result("status", managed_daemon, doctor=True)
-            doctor_payload = managed_status["doctor"]
-            evidence["managed_daemon"] = selected_pair(managed_status)
-        else:
-            process, daemon_output = start_capacity_daemon(daemon, home, env, peer_wire_security)
-            doctor = command_result(
-                [str(atm), "doctor", "--json"],
-                timeout=10.0,
-                env=host_runtime_client_environment(env),
-            )
-            doctor_payload = benchmark_doctor_payload(doctor)
-            evidence["daemon_pid"] = process.pid
+            evidence["managed_daemon"] = managed_lifecycle.pre_pair
         # The roster commands use the public daemon boundary. Start the
         # selected daemon before creating the disposable team members.
         prepare_capacity_roster(atm, env, home, roster)
@@ -1362,22 +1444,18 @@ def run_capacity(
         # Restart the actual execution daemon. A transport success alone is
         # not durable evidence, so prove every committed row survived using an
         # exact read-only count of its disposable store.
-        if managed_lifecycle is not None:
-            managed_lifecycle.restart_isolated_service()
-            daemon_switch_result("status", managed_daemon, doctor=True)
-        else:
-            reap_owned_daemon(process)
-            daemon_output.join()
-            evidence["pre_restart_daemon_output"] = daemon_output.evidence()
-            process = None
-            daemon_output = None
-            process, daemon_output = start_capacity_daemon(daemon, home, env, peer_wire_security)
-            restart_doctor = command_result(
-                [str(atm), "doctor", "--json"],
-                timeout=10.0,
-                env=host_runtime_client_environment(env),
-            )
-            benchmark_doctor_payload(restart_doctor)
+        reap_owned_daemon(process)
+        daemon_output.join()
+        evidence["pre_restart_daemon_output"] = daemon_output.evidence()
+        process = None
+        daemon_output = None
+        process, daemon_output = start_capacity_daemon(daemon, home, env, peer_wire_security)
+        restart_doctor = command_result(
+            [str(atm), "doctor", "--json"],
+            timeout=10.0,
+            env=host_runtime_client_environment(env),
+        )
+        benchmark_doctor_payload(restart_doctor)
         # The full doctor payload is host-private diagnostics; publication only
         # needs the asserted healthy result after the restart.
         evidence["doctor_after_restart"] = {"status": "passed"}
