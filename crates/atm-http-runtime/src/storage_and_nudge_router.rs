@@ -235,18 +235,34 @@ impl StorageAndNudgeRouter {
             )?,
         };
         let request = request.clone().with_origin_metadata(message_id, timestamp);
-        match client
-            .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request))))
-            .await?
-            .into_inner()
+        peer_write_response(
+            client
+                .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request))))
+                .await?
+                .into_inner(),
+        )
+    }
+
+    fn reject_unauthenticated_required_ack(
+        &self,
+        request: &atm_core::send::WriteRequest,
+        ingress: &AuthenticatedIngress,
+    ) -> Result<(), AtmError> {
+        let is_host_qualified_local_write = ingress == &AuthenticatedIngress::Local
+            && request
+                .to
+                .as_ref()
+                .and_then(|recipient| recipient.host())
+                .is_some();
+        if is_host_qualified_local_write
+            && request.requires_ack
+            && self.peer_stream_adapter.is_none()
         {
-            ResponseEnvelope::Send(SendResponseEnvelope::Sent(_)) => Ok(()),
-            response => Err(AtmError::new(
-                atm_core::error_codes::AtmErrorCode::InternalError,
-                "cross-host daemon-owned delivery returned a non-write response",
-            )
-            .with_cause(format!("received response: {response:?}"))),
+            return Err(AtmError::peer_wire_plaintext_authentication_required(
+                "plaintext-test peer writes cannot require acknowledgement because the selected peer wire has no authenticated durable reply host; restart the daemon in mutual-TLS mode",
+            ));
         }
+        Ok(())
     }
 
     async fn emit_received_hook(
@@ -537,6 +553,7 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
             // shared writer uses them for its state and file-policy paths.
             request.home_dir = self.daemon_home.clone();
             request.current_dir = self.daemon_home.clone();
+            self.reject_unauthenticated_required_ack(&request, &ingress)?;
             let mut committed = self.commit_write(request, &ingress).await?;
             if ingress == AuthenticatedIngress::Local
                 && committed.newly_persisted
@@ -597,6 +614,18 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
                 request => self.dispatch_non_write(request, ingress, deadline).await,
             }
         })
+    }
+}
+
+fn peer_write_response(response: ResponseEnvelope) -> Result<(), AtmError> {
+    match response {
+        ResponseEnvelope::Send(SendResponseEnvelope::Sent(_)) => Ok(()),
+        ResponseEnvelope::Error(error) => Err(error),
+        response => Err(AtmError::new(
+            atm_core::error_codes::AtmErrorCode::InternalError,
+            "cross-host daemon-owned delivery returned a non-write response",
+        )
+        .with_cause(format!("received response: {response:?}"))),
     }
 }
 
@@ -727,7 +756,7 @@ mod tests {
     use tempfile::TempDir;
     use tower::ServiceExt;
 
-    use super::{BlockingCoreBridge, StorageAndNudgeRouter};
+    use super::{BlockingCoreBridge, StorageAndNudgeRouter, peer_write_response};
     use crate::{
         AuthenticatedConnector, CanonicalWriteHandler, NonZeroDuration, RuntimeHealth,
         RuntimeLimits, RuntimeTimeouts, canonical_message_router,
@@ -2375,6 +2404,54 @@ mod tests {
             .finish()
             .await
             .expect("direct peer runtime drains");
+    }
+
+    #[tokio::test]
+    async fn plaintext_locally_admitted_peer_write_rejects_required_ack_before_persistence() {
+        let fixture = fixture(true, None, None);
+        let mut outbound = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
+        outbound.to = Some(
+            "recipient@test-team.localhost"
+                .parse()
+                .expect("host-qualified recipient"),
+        );
+        outbound.requires_ack = true;
+
+        let error = fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(outbound))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect_err("plaintext local host-qualified required ACK must fail before persistence");
+        assert_eq!(
+            error.code().as_str(),
+            "ATM_PEER_WIRE_PLAINTEXT_AUTHENTICATION_REQUIRED"
+        );
+        assert!(
+            fixture
+                .message_store
+                .list_messages(&MessageQuery {
+                    team: "test-team".parse().expect("team"),
+                    agent: "recipient".parse().expect("recipient"),
+                    sender: None,
+                    task_id: None,
+                    limit: None,
+                })
+                .expect("inspect refused local plaintext ACK")
+                .is_empty(),
+            "the locally admitted plaintext ACK source must not persist before peer dispatch"
+        );
+    }
+
+    #[test]
+    fn peer_write_response_preserves_typed_peer_refusal() {
+        let expected = AtmError::peer_wire_plaintext_authentication_required("mTLS required");
+        let error = peer_write_response(ResponseEnvelope::Error(expected.clone()))
+            .expect_err("typed peer error must reach the caller unchanged");
+        assert_eq!(error, expected);
     }
 
     #[tokio::test]
