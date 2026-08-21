@@ -137,6 +137,7 @@ build:
 # Run the full workspace test suite or explicit coverage reporting.
 test mode='default':
     {{python_cmd}} .just/run_tests.py {{mode}}
+    {{python_cmd}} .just/sign_daemon_dev.py
 
 # Validate and plan a bounded adversarial-fuzz campaign (no real execution).
 fuzz *args:
