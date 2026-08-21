@@ -160,13 +160,18 @@ def local_advertised_ipv4(host: str) -> str:
     except OSError as error:
         raise SmokeError(f"enabled advertised host '{host}' could not be resolved: {error}") from error
 
+    return usable_ipv4(candidates, f"enabled advertised host '{host}'")
+
+
+def usable_ipv4(candidates: list[str], subject: str) -> str:
+    """Select one routable IPv4 from a resolver result for an explicit curl route."""
     for candidate in candidates:
         address = ipaddress.ip_address(candidate)
         if isinstance(address, ipaddress.IPv4Address) and not (
             address.is_loopback or address.is_unspecified or address.is_multicast or address.is_link_local
         ):
             return str(address)
-    raise SmokeError(f"enabled advertised host '{host}' has no usable non-loopback IPv4 address for local-IP smoke")
+    raise SmokeError(f"{subject} has no usable non-loopback IPv4 address")
 
 
 def doctor_ready(report: Any, expected_version: str) -> bool:
@@ -334,6 +339,12 @@ def curl_doctor(
     runner never changes that daemon state itself.
     """
     try:
+        local_host = advertised_host(atm)
+        local_ip = local_advertised_ipv4(local_host)
+        remote_ip = usable_ipv4(resolve_dns_addresses(remote_host), f"remote advertised host '{remote_host}'")
+        remote_local_ip = usable_ipv4(
+            remote_resolve_dns_addresses(peer, local_host), f"{peer} resolution for local advertised host '{local_host}'"
+        )
         local_bundle = certificate_bundle(atm)
         remote_certificate = parse_json(
             remote_command(peer, remote_atm, ["peer", "certificate", "show", "--json"]),
@@ -370,14 +381,14 @@ def curl_doctor(
                 remote_curl = ["curl", "--silent", "--show-error", "--fail", "--connect-timeout", "2", "--max-time", "5", "-X", "GET", *headers]
                 if not plaintext:
                     remote_curl.extend(["--cert", remote_bundle, "--cacert", remote_local_ca])
-                remote_curl.extend(["--resolve", f"{local_authority}:43101:{advertised_host(atm)}", "--data", DOCTOR_BODY, local_url])
+                remote_curl.extend(["--resolve", f"{local_authority}:43101:{remote_local_ip}", "--data", DOCTOR_BODY, local_url])
                 remote_result = remote_shell(peer, " ".join(shlex.quote(value) for value in remote_curl))
                 remote_report = parse_json(remote_result, f"{peer} curl doctor to local")
                 add_case(cases, f"{peer} curl {'plaintext' if plaintext else 'mTLS'} to local doctor", doctor_ready(remote_report, expected_version), "HTTP 200 real daemon doctor" if doctor_ready(remote_report, expected_version) else "doctor response was not healthy/ready", origin=peer, destination=platform.node())
                 local_curl = ["curl", "--silent", "--show-error", "--fail", "--connect-timeout", "2", "--max-time", "5", "-X", "GET", *headers]
                 if not plaintext:
                     local_curl.extend(["--cert", local_bundle, "--cacert", str(remote_public)])
-                local_curl.extend(["--resolve", f"{remote_authority}:43101:{remote_host}", "--data", DOCTOR_BODY, remote_url])
+                local_curl.extend(["--resolve", f"{remote_authority}:43101:{remote_ip}", "--data", DOCTOR_BODY, remote_url])
                 local_result = command(local_curl)
                 local_report = parse_json(local_result, f"curl doctor to {peer}")
                 add_case(cases, f"local curl {'plaintext' if plaintext else 'mTLS'} to {peer} doctor", doctor_ready(local_report, expected_version), "HTTP 200 real daemon doctor" if doctor_ready(local_report, expected_version) else "doctor response was not healthy/ready", origin=platform.node(), destination=peer)
@@ -389,7 +400,7 @@ def curl_doctor(
                     remote_negative = [
                         "curl", "--silent", "--show-error", "--connect-timeout", "2", "--max-time", "5",
                         "--write-out", "%{http_code}", "-X", "GET", *headers, "--cacert", remote_local_ca,
-                        "--resolve", f"{local_authority}:43101:{advertised_host(atm)}", "--data", DOCTOR_BODY, local_url,
+                        "--resolve", f"{local_authority}:43101:{remote_local_ip}", "--data", DOCTOR_BODY, local_url,
                     ]
                     remote_negative_result = remote_shell(
                         peer, " ".join(shlex.quote(value) for value in remote_negative)
@@ -404,7 +415,7 @@ def curl_doctor(
                     local_negative = [
                         "curl", "--silent", "--show-error", "--connect-timeout", "2", "--max-time", "5",
                         "--write-out", "%{http_code}", "-X", "GET", *headers, "--cacert", str(remote_public),
-                        "--resolve", f"{remote_authority}:43101:{remote_host}", "--data", DOCTOR_BODY, remote_url,
+                        "--resolve", f"{remote_authority}:43101:{remote_ip}", "--data", DOCTOR_BODY, remote_url,
                     ]
                     local_negative_result = command(local_negative)
                     add_mtls_rejection_case(
@@ -426,15 +437,13 @@ def curl_doctor(
                 remote_host,
                 resolve_dns_addresses,
             )
-            local_hostname = platform.node()
-            local_advertised_ip = advertised_host(atm)
             add_dns_case(
                 cases,
                 f"{peer} DNS resolves local peer",
                 peer,
                 platform.node(),
-                local_hostname,
-                local_advertised_ip,
+                local_host,
+                local_ip,
                 lambda hostname: remote_resolve_dns_addresses(peer, hostname),
             )
             dns_curl = [
@@ -916,17 +925,20 @@ def run_live_attempt(feature: str, peers: list[str]) -> list[dict[str, Any]]:
         except SmokeError as error:
             add_case(cases, "local-IP", False, str(error))
     else:
+        curl_only = feature in {CROSSHOST_CURL_PLAINTEXT, CROSSHOST_CURL_MTLS}
         try:
             physical_host = advertised_host(atm)
             add_case(cases, "advertised host", True, physical_host)
-            send_read_ack(cases, atm, identity, team, physical_host, stage="local-IP")
+            if not curl_only:
+                send_read_ack(cases, atm, identity, team, physical_host, stage="local-IP")
         except SmokeError as error:
             add_case(cases, "local-IP", False, str(error))
             physical_host = ""
         # A bare loopback IP may legitimately resolve to several trusted test
         # peers.  That ambiguity must remain a fail-closed CLI contract; the
         # preflight needs the canonical loopback route instead.
-        send_read_ack(cases, atm, identity, team, "localhost", stage="canonical-localhost")
+        if not curl_only:
+            send_read_ack(cases, atm, identity, team, "localhost", stage="canonical-localhost")
         remote_atm = os.environ.get("ATM_SMOKE_REMOTE_ATM", "atm")
         expected_version = branch_version()
         try:

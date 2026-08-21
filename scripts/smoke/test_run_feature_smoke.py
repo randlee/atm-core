@@ -444,6 +444,26 @@ class FeatureSmokeTests(unittest.TestCase):
             ],
         )
 
+    def test_crosshost_plaintext_curl_is_receiver_only(self):
+        doctor = {
+            "summary": {"status": "healthy"},
+            "runtime_status": {"readiness": "ready"},
+            "client_context": {"version": "1.4.1-beta-ai-1"},
+            "daemon_context": {"version": "1.4.1-beta-ai-1"},
+        }
+        with mock.patch.object(RUNNER, "require_environment", return_value=("atm", TEST_SENDER, TEST_TEAM)), mock.patch.object(
+            RUNNER, "command", return_value={"exit_code": 0, "stdout": __import__("json").dumps(doctor), "stderr": ""}
+        ), mock.patch.object(RUNNER, "branch_version", return_value="1.4.1-beta-ai-1"), mock.patch.object(
+            RUNNER, "advertised_host", return_value="rand-m4.local"
+        ), mock.patch.object(RUNNER, "remote_context", return_value=("arch-ctm", "atm-dev")), mock.patch.object(
+            RUNNER, "remote_preflight", return_value="rand-m5.local"
+        ), mock.patch.object(RUNNER, "send_read_ack") as send_read_ack, mock.patch.object(RUNNER, "curl_doctor") as curl_doctor:
+            RUNNER.run_live_attempt(RUNNER.CROSSHOST_CURL_PLAINTEXT, ["rand-m5.local"])
+        send_read_ack.assert_not_called()
+        curl_doctor.assert_called_once_with(
+            mock.ANY, "rand-m5.local", "atm", mock.ANY, "rand-m5.local", "1.4.1-beta-ai-1", plaintext=True
+        )
+
     def test_local_advertised_ipv4_rejects_loopback_and_link_local_candidates(self):
         with mock.patch.object(
             RUNNER.socket,
@@ -561,7 +581,9 @@ class FeatureSmokeTests(unittest.TestCase):
             RUNNER, "command", side_effect=local_command
         ) as command, mock.patch.object(
             RUNNER, "certificate_authority", side_effect=["local.example.test", "remote.example.test"]
-        ), mock.patch.object(RUNNER, "advertised_host", return_value="192.0.2.10"), mock.patch.object(
+        ), mock.patch.object(RUNNER, "advertised_host", return_value="local.example.test"), mock.patch.object(
+            RUNNER, "local_advertised_ipv4", return_value="192.0.2.10"
+        ), mock.patch.object(
             RUNNER, "resolve_dns_addresses", return_value=["192.0.2.20"]
         ), mock.patch.object(RUNNER, "remote_resolve_dns_addresses", return_value=["192.0.2.10"]):
             RUNNER.curl_doctor(
@@ -577,6 +599,7 @@ class FeatureSmokeTests(unittest.TestCase):
         curl_calls = [call.args[0] for call in command.call_args_list if call.args[0][0] == "curl"]
         self.assertEqual(len(curl_calls), 3)
         self.assertIn("--resolve", curl_calls[0])
+        self.assertIn("remote.example.test:43101:192.0.2.20", curl_calls[0])
         self.assertIn("--cert", curl_calls[0])
         self.assertNotIn("--cert", curl_calls[1])
         self.assertIn("--write-out", curl_calls[1])
