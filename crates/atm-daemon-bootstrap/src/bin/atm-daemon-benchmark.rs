@@ -12,6 +12,7 @@ use std::{env, process};
 
 use atm_core::error::AtmError;
 use atm_core::observability::NullObservability;
+use atm_core::provenance::WriteIngress;
 use atm_core::send::{SendMessageSource, WriteRequest, prepare_write_with_async_runtime};
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_daemon_bootstrap::BenchmarkHookMode;
@@ -260,6 +261,7 @@ async fn run_direct_core_write(
                 }
                 prepare_write_with_async_runtime(
                     direct_core_write_request(&home, sequence)?,
+                    WriteIngress::Canonical,
                     &NullObservability,
                     &runtime,
                 )

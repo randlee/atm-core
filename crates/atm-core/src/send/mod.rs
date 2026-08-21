@@ -509,11 +509,12 @@ pub fn prepare_write_with_runtime(
 /// result without a blocking task in the HTTP runtime.
 pub async fn prepare_write_with_async_runtime(
     request: WriteRequest,
+    ingress: WriteIngress,
     observability: &(dyn ObservabilityPort + Send + Sync),
     runtime: &LocalServiceRuntime,
 ) -> Result<PreparedWrite, AtmError> {
     validate_write_provenance(
-        WriteIngress::Canonical,
+        ingress,
         WriteProvenance {
             target_host: request.to.as_ref().and_then(|address| address.host()),
             authenticated_source_host: request.authenticated_source_host.as_ref(),
@@ -521,16 +522,21 @@ pub async fn prepare_write_with_async_runtime(
             origin_timestamp: request.origin_timestamp.is_some(),
         },
     )?;
+    if ingress == WriteIngress::UntrustedSmoke && request.requires_ack {
+        return Err(AtmError::peer_wire_plaintext_authentication_required(
+            "plaintext-test peer writes cannot require acknowledgement because the ingress has no authenticated durable reply host; restart the daemon in mutual-TLS mode",
+        ));
+    }
     if request.acknowledges_message_id.is_none() {
         if request.to.is_none() {
             return Err(AtmError::validation(
                 "message write is missing a destination",
             ));
         }
-        return prepare_persisted_write_async(request, observability, runtime, None).await;
+        return prepare_persisted_write_async(request, ingress, observability, runtime, None).await;
     }
     if has_authenticated_peer_provenance(&request) {
-        return prepare_persisted_write_async(request, observability, runtime, None).await;
+        return prepare_persisted_write_async(request, ingress, observability, runtime, None).await;
     }
     let acknowledgement = crate::ack::admit_acknowledgement_write_async(request, runtime).await?;
     prepare_atomic_acknowledgement_write(acknowledgement, observability, runtime)
@@ -670,7 +676,7 @@ fn prepare_persisted_write<
     acknowledgement: Option<crate::ack::ResolvedAcknowledgement>,
     delivery_mode: DeliveryExecutionMode,
 ) -> Result<PreparedWrite, AtmError> {
-    let mut context = prepare_send_context(runtime, &request)?;
+    let mut context = prepare_send_context(runtime, &request, WriteIngress::Canonical)?;
     let task_id = request.task_id.clone();
     let requires_ack = request_requires_ack(&request, &task_id);
     let body = resolve_message_body(

@@ -16,11 +16,12 @@ type TemplateAdmissionParts = (
 /// Prepares the canonical write after its one asynchronous durable admission.
 pub(super) async fn prepare_persisted_write_async(
     mut request: SendRequest,
+    ingress: WriteIngress,
     observability: &(dyn ObservabilityPort + Send + Sync),
     runtime: &LocalServiceRuntime,
     acknowledgement: Option<crate::ack::ResolvedAcknowledgement>,
 ) -> Result<PreparedWrite, AtmError> {
-    let mut context = prepare_send_context(runtime, &request)?;
+    let mut context = prepare_send_context(runtime, &request, ingress)?;
     let task_id = request.task_id.clone();
     let requires_ack = request_requires_ack(&request, &task_id);
     let verified_template = verify_template_request(runtime, &request)?;

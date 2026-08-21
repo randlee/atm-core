@@ -9,6 +9,7 @@ use crate::delivery_policy::{
     DeliveryEventFamily, DeliveryPolicyCoordinator, DeliveryRecipientSnapshot,
 };
 use crate::error::AtmError;
+use crate::provenance::WriteIngress;
 use crate::schema::AtmMessageId;
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::service_runtime_store::RetainedMailboxRuntime;
@@ -88,6 +89,7 @@ pub(super) fn prepare_send_context<
 >(
     runtime: &R,
     request: &SendRequest,
+    ingress: WriteIngress,
 ) -> Result<SendExecutionContext, AtmError> {
     // This is the durable-admission half of the pipeline. A daemon must not
     // inspect caller workspace or hook configuration before a durable reply.
@@ -97,7 +99,7 @@ pub(super) fn prepare_send_context<
         AtmError::validation("write request destination must be resolved before persistence")
     })?;
     let provenance = crate::provenance::validate_write_provenance(
-        crate::provenance::WriteIngress::Canonical,
+        ingress,
         crate::provenance::WriteProvenance {
             target_host: target.host(),
             authenticated_source_host: request.authenticated_source_host.as_ref(),

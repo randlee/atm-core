@@ -23,6 +23,7 @@ use atm_core::protocol::{
     CompatibilityVerdict, ReleaseVersion, RequestEnvelope, RequestId, ResponseEnvelope,
     SendResponseEnvelope,
 };
+use atm_core::provenance::WriteIngress;
 use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::{WarningEntry, WriteOutcome, prepare_write_with_async_runtime};
 
@@ -171,9 +172,11 @@ impl StorageAndNudgeRouter {
     async fn commit_write(
         &self,
         request: atm_core::send::WriteRequest,
+        ingress: &AuthenticatedIngress,
     ) -> Result<CommittedWrite, AtmError> {
         let mut prepared = prepare_write_with_async_runtime(
             request,
+            write_ingress(ingress),
             self.observability.as_ref(),
             &self.service_runtime,
         )
@@ -534,7 +537,7 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
             // shared writer uses them for its state and file-policy paths.
             request.home_dir = self.daemon_home.clone();
             request.current_dir = self.daemon_home.clone();
-            let mut committed = self.commit_write(request).await?;
+            let mut committed = self.commit_write(request, &ingress).await?;
             if ingress == AuthenticatedIngress::Local
                 && committed.newly_persisted
                 && committed
@@ -653,6 +656,25 @@ fn write_response(outcome: WriteOutcome) -> ResponseEnvelope {
         WriteOutcome::Acknowledged(outcome) => {
             ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
         }
+    }
+}
+
+/// Preserve the one ingress decision made by the HTTP boundary while core
+/// admission evaluates the normalized write.  In particular, plaintext smoke
+/// remains explicitly unauthenticated; its socket address never becomes a
+/// durable peer host.
+fn write_ingress(ingress: &AuthenticatedIngress) -> WriteIngress {
+    match ingress {
+        // Local and mTLS adapters already prove their distinct contracts before
+        // core admission: local rejects caller-supplied peer metadata, while
+        // mTLS writes carry their authenticated source field. Preserve their
+        // established canonical admission behavior. Only plaintext smoke loses
+        // identity during normalization and therefore needs its classification
+        // retained here.
+        AuthenticatedIngress::Local => WriteIngress::Canonical,
+        AuthenticatedIngress::Peer => WriteIngress::Canonical,
+        AuthenticatedIngress::UntrustedSmoke(_) => WriteIngress::UntrustedSmoke,
+        AuthenticatedIngress::AnonymousSmoke => WriteIngress::AnonymousSmoke,
     }
 }
 
@@ -2174,27 +2196,82 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn local_ack_routes_to_the_received_peer_and_peer_receipt_does_not_reacknowledge() {
-        let remote = fixture(true, None, None);
-        let remote_runtime = HttpRuntimeBuilder::new(
-            direct_peer_runtime_config(&remote, crate::DirectPeerTcpConfig::ephemeral_for_test()),
-            Arc::new(remote.router.clone()),
+    async fn plaintext_same_identity_peer_receipt_is_admitted_without_a_durable_peer_host() {
+        let fixture = fixture(true, None, None);
+        let running = HttpRuntimeBuilder::new(
+            direct_peer_runtime_config(&fixture, crate::DirectPeerTcpConfig::ephemeral_for_test()),
+            Arc::new(fixture.router.clone()),
         )
         .build()
-        .expect("valid remote direct peer configuration")
+        .expect("valid direct peer runtime configuration")
         .start()
         .await
-        .expect("remote direct peer runtime starts");
-        let remote_port = remote_runtime
+        .expect("direct peer runtime starts");
+        let peer_port = running
             .direct_peer_address()
-            .expect("ephemeral remote direct peer listener is bound")
+            .expect("ephemeral direct peer listener is bound")
             .port();
+        let message_id = AtmMessageId::new();
+        let mut incoming = write_request(fixture.home_dir.clone(), fixture.current_dir.clone())
+            .with_origin_metadata(message_id, atm_core::types::IsoTimestamp::now());
+        incoming.to = Some(
+            "sender@test-team.localhost"
+                .parse()
+                .expect("host-qualified same-identity recipient"),
+        );
+        let client = direct_peer_tcp_client(
+            "localhost".parse().expect("direct peer host"),
+            NonZeroU16::new(peer_port).expect("non-zero peer port"),
+            Duration::from_secs(1),
+        )
+        .expect("direct peer client");
 
-        let mut local = fixture(true, None, None);
-        local.router = local
-            .router
-            .clone()
-            .with_direct_peer_port(std::num::NonZeroU16::new(remote_port).expect("non-zero port"));
+        let response = client
+            .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(incoming))))
+            .await
+            .expect("plaintext transport reaches canonical admission");
+        assert!(matches!(
+            response.into_inner(),
+            ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
+        ));
+        assert!(
+            fixture
+                .message_store
+                .load_message(&MessageKey::from(message_id))
+                .expect("read admitted plaintext receipt")
+                .is_some(),
+            "the normalized same-identity receipt persists exactly once"
+        );
+        let dispatches = fixture
+            .received_hook
+            .dispatches
+            .lock()
+            .expect("inspect received-hook dispatches");
+        assert_eq!(dispatches.len(), 1, "one admitted receipt emits one nudge");
+        assert_eq!(
+            dispatches[0]
+                .event
+                .sender_host
+                .as_ref()
+                .map(|host| host.as_str()),
+            None,
+            "plaintext socket provenance never becomes a durable peer host"
+        );
+        assert_eq!(
+            dispatches[0].event.source_address().to_string(),
+            "sender@test-team",
+            "the source remains unqualified without peer authentication"
+        );
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("direct peer runtime drains");
+    }
+
+    #[tokio::test]
+    async fn plaintext_peer_receipt_rejects_required_ack_before_persistence() {
+        let local = fixture(true, None, None);
         let local_runtime = HttpRuntimeBuilder::new(
             direct_peer_runtime_config(&local, crate::DirectPeerTcpConfig::ephemeral_for_test()),
             Arc::new(local.router.clone()),
@@ -2210,7 +2287,7 @@ mod tests {
             .port();
 
         let received_id = AtmMessageId::new();
-        let mut incoming = write_request(remote.home_dir.clone(), remote.current_dir.clone())
+        let mut incoming = write_request(local.home_dir.clone(), local.current_dir.clone())
             .with_origin_metadata(received_id, atm_core::types::IsoTimestamp::now());
         incoming.requires_ack = true;
         let local_peer_client = direct_peer_tcp_client(
@@ -2219,124 +2296,28 @@ mod tests {
             Duration::from_secs(1),
         )
         .expect("local direct peer client");
-        assert!(matches!(
-            local_peer_client
-                .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(incoming))))
-                .await
-                .expect("incoming required message reaches local daemon")
-                .into_inner(),
-            ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
-        ));
-        {
-            let local_dispatches = local
-                .received_hook
-                .dispatches
-                .lock()
-                .expect("inspect two-runtime nudge dispatches");
-            assert_eq!(local_dispatches.len(), 1, "direct ingress emits one nudge");
-            assert_eq!(
-                local_dispatches[0]
-                    .event
-                    .sender_host
-                    .as_ref()
-                    .map(|host| host.as_str()),
-                Some("127.0.0.1"),
-                "the receiver records the accepted socket as the sender host"
-            );
-            assert_eq!(
-                local_dispatches[0].event.source_address().to_string(),
-                "sender@test-team.127.0.0.1",
-                "the cross-runtime nudge retains direct-peer provenance"
-            );
-            assert!(matches!(
-                &local_dispatches[0].target,
-                PostSendBuiltInTarget::Graft(_)
-            ));
-        }
-
-        let acknowledgement = atm_core::ack::AckRequest {
-            home_dir: local.home_dir.clone(),
-            current_dir: local.current_dir.clone(),
-            caller_identity: "recipient".parse().expect("recipient"),
-            caller_chat_id: None,
-            caller_team: "test-team".parse().expect("team"),
-            activity_observation: None,
-            message_id: received_id,
-            reply_body: "received".to_owned(),
-        }
-        .into_write_request();
-        let response = local
-            .router
-            .dispatch(
-                ApiRequest::new(RequestEnvelope::Write(Box::new(acknowledgement))),
-                atm_core::AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
-            )
+        let response = local_peer_client
+            .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(incoming))))
             .await
-            .expect("local acknowledgement is delivered to the stored peer host");
-        let ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) =
-            response.into_inner()
-        else {
-            panic!("local ACK must retain its acknowledgement response")
-        };
-        let reply_id = match outcome.reply_disposition {
-            atm_core::ack::AckReplyDisposition::Sent {
-                reply_message_id, ..
-            } => reply_message_id,
-        };
+            .expect("plaintext transport returns its typed refusal");
+        assert!(
+            matches!(response.into_inner(), ResponseEnvelope::Error(error)
+                if error.code().as_str() == "ATM_PEER_WIRE_PLAINTEXT_AUTHENTICATION_REQUIRED"),
+            "plaintext must fail closed rather than persist an ACK source without a durable reply host"
+        );
         assert!(
             local
                 .message_store
                 .load_message(&MessageKey::from(received_id))
-                .expect("read acknowledged local source")
-                .expect("received source remains durable")
-                .envelope
-                .acknowledged_at
-                .is_some(),
-            "the local source is transitioned only as part of the acknowledged reply"
+                .expect("read refused plaintext ACK source")
+                .is_none(),
+            "the refused plaintext ACK source must not persist"
         );
-
-        let reply = remote
-            .message_store
-            .load_message(&MessageKey::from(reply_id))
-            .expect("read peer ACK receipt")
-            .expect("ACK reply persists at original sender");
-        assert_eq!(reply.team.as_str(), "test-team");
-        assert_eq!(reply.agent.as_str(), "sender");
-        assert_eq!(reply.envelope.from.as_str(), "recipient");
-        assert_eq!(reply.envelope.acknowledges_message_id, Some(received_id));
-        assert!(
-            reply.envelope.pending_ack_at.is_none(),
-            "an ACK receipt is not an acknowledgement source and never starts an ACK loop"
-        );
-        assert_eq!(
-            remote
-                .message_store
-                .list_messages(&MessageQuery {
-                    team: "test-team".parse().expect("team"),
-                    agent: "sender".parse().expect("sender"),
-                    sender: Some("recipient".parse().expect("recipient")),
-                    task_id: None,
-                    limit: None,
-                })
-                .expect("read remote messages")
-                .iter()
-                .filter(|message| message.envelope.acknowledges_message_id == Some(received_id))
-                .count(),
-            1,
-            "the canonical ACK reply crosses the shared direct-peer path exactly once"
-        );
-
         local_runtime
             .begin_shutdown()
             .finish()
             .await
             .expect("local direct peer runtime drains");
-        remote_runtime
-            .begin_shutdown()
-            .finish()
-            .await
-            .expect("remote direct peer runtime drains");
     }
 
     #[tokio::test]

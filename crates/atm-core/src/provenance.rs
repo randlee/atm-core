@@ -33,6 +33,7 @@ pub struct WriteProvenance<'a> {
 pub struct ValidatedWriteProvenance {
     target_host_qualified: bool,
     authenticated_peer: bool,
+    peer_receipt: bool,
     origin_metadata: bool,
 }
 
@@ -45,6 +46,14 @@ impl ValidatedWriteProvenance {
     #[must_use]
     pub const fn is_authenticated_peer(self) -> bool {
         self.authenticated_peer
+    }
+
+    /// Whether this write was admitted through a peer transport, including the
+    /// explicitly untrusted plaintext smoke adapter.  This is transport
+    /// provenance, not a claim that plaintext supplied a durable peer identity.
+    #[must_use]
+    pub const fn is_peer_receipt(self) -> bool {
+        self.peer_receipt
     }
 
     #[must_use]
@@ -110,6 +119,7 @@ pub fn validate_write_provenance(
     Ok(ValidatedWriteProvenance {
         target_host_qualified: provenance.target_host.is_some(),
         authenticated_peer,
+        peer_receipt: authenticated_peer || matches!(ingress, WriteIngress::UntrustedSmoke),
         origin_metadata: has_complete_origin_metadata,
     })
 }

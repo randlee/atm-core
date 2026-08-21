@@ -23,7 +23,7 @@ pub(crate) fn validate_non_self_recipient(
         && sender_team
             .as_str()
             .eq_ignore_ascii_case(recipient.team.as_str());
-    if same_identity && target.host().is_none() && !provenance.is_authenticated_peer() {
+    if same_identity && target.host().is_none() && !provenance.is_peer_receipt() {
         return Err(AtmError::self_addressed_send_invalid(format!(
             "self-addressed messages are invalid ATM input: '{sender}@{sender_team}' may not send to itself"
         )));
