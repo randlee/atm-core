@@ -347,13 +347,13 @@ class FeatureSmokeTests(unittest.TestCase):
                 {"message_id": "01REQUIRED", "text": mock.ANY, "requires_ack": True},
             ],
         ), mock.patch.object(RUNNER, "message_has_text", return_value=True):
-            RUNNER.send_read_ack(cases, "atm", TEST_SENDER, TEST_TEAM, "127.0.0.1", stage="loopback-IP")
+            RUNNER.send_read_ack(cases, "atm", TEST_SENDER, TEST_TEAM, "localhost", stage="canonical-localhost")
         self.assertEqual(
             [(case["name"], case["status"]) for case in cases],
             [
-                ("loopback-IP send/read/content", "PASS"),
-                ("loopback-IP requires-ack delivery/content", "PASS"),
-                ("loopback-IP acknowledgement reply delivery/content", "FAIL"),
+                ("canonical-localhost send/read/content", "PASS"),
+                ("canonical-localhost requires-ack delivery/content", "PASS"),
+                ("canonical-localhost acknowledgement reply delivery/content", "FAIL"),
             ],
         )
 
@@ -419,6 +419,29 @@ class FeatureSmokeTests(unittest.TestCase):
         local_advertised_ipv4.assert_called_once_with("rand-m4.local")
         send_read_ack.assert_called_once_with(
             mock.ANY, "atm", TEST_SENDER, TEST_TEAM, "192.0.2.10", stage="local-IP"
+        )
+
+    def test_peer_preflight_rechecks_canonical_localhost_not_bare_loopback_ip(self):
+        doctor = {
+            "summary": {"status": "healthy"},
+            "runtime_status": {"readiness": "ready"},
+            "client_context": {"version": "1.4.1-beta-ai-1"},
+            "daemon_context": {"version": "1.4.1-beta-ai-1"},
+        }
+        with mock.patch.object(RUNNER, "require_environment", return_value=("atm", TEST_SENDER, TEST_TEAM)), mock.patch.object(
+            RUNNER, "command", return_value={"exit_code": 0, "stdout": __import__("json").dumps(doctor), "stderr": ""}
+        ), mock.patch.object(RUNNER, "branch_version", return_value="1.4.1-beta-ai-1"), mock.patch.object(
+            RUNNER, "advertised_host", return_value="rand-m4.local"
+        ), mock.patch.object(RUNNER, "remote_context", return_value=("arch-ctm", "atm-dev")), mock.patch.object(
+            RUNNER, "send_read_ack"
+        ) as send_read_ack:
+            RUNNER.run_live_attempt(RUNNER.PEER_PREFLIGHT, [])
+        self.assertEqual(
+            send_read_ack.call_args_list,
+            [
+                mock.call(mock.ANY, "atm", TEST_SENDER, TEST_TEAM, "rand-m4.local", stage="local-IP"),
+                mock.call(mock.ANY, "atm", TEST_SENDER, TEST_TEAM, "localhost", stage="canonical-localhost"),
+            ],
         )
 
     def test_local_advertised_ipv4_rejects_loopback_and_link_local_candidates(self):

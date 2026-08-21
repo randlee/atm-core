@@ -47,7 +47,6 @@ FIXTURE_FEATURES = frozenset({"fast", "normal", "thorough"})
 LOCALHOST = "localhost"
 LOCAL_IP = "local-ip"
 LOCAL_IP_ALIAS = "local-up"
-LOOPBACK_IP = "127.0.0.1"
 CROSSHOST = "crosshost"
 PEER_PREFLIGHT = "peer-preflight"
 CROSSHOST_SEND = "crosshost-send"
@@ -924,7 +923,10 @@ def run_live_attempt(feature: str, peers: list[str]) -> list[dict[str, Any]]:
         except SmokeError as error:
             add_case(cases, "local-IP", False, str(error))
             physical_host = ""
-        send_read_ack(cases, atm, identity, team, LOOPBACK_IP, stage="loopback-IP")
+        # A bare loopback IP may legitimately resolve to several trusted test
+        # peers.  That ambiguity must remain a fail-closed CLI contract; the
+        # preflight needs the canonical loopback route instead.
+        send_read_ack(cases, atm, identity, team, "localhost", stage="canonical-localhost")
         remote_atm = os.environ.get("ATM_SMOKE_REMOTE_ATM", "atm")
         expected_version = branch_version()
         try:
