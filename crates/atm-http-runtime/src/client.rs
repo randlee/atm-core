@@ -423,12 +423,8 @@ impl HttpRuntimeConnector for DirectPeerTcpConnector {
         request: HttpRequest,
         deadline: RequestDeadline,
     ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
-        let stream = TcpStream::connect((self.host.as_str(), self.port.get()))
-            .await
-            .map_err(|source| HttpRuntimeClientFailure::PeerConnect {
-                target: self.authority.clone(),
-                cause: source.to_string(),
-            })?;
+        let stream =
+            connect_resolved_peer_socket(&self.host, self.port, &self.authority, deadline).await?;
         execute_opaque_peer_request(Box::new(stream), request, deadline)
             .await
             .map_err(|failure| direct_peer_connection_failure(&self.authority, failure))
@@ -456,12 +452,8 @@ impl HttpRuntimeConnector for PeerStreamConnector {
         request: HttpRequest,
         deadline: RequestDeadline,
     ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
-        let stream = TcpStream::connect((self.host.as_str(), self.port.get()))
-            .await
-            .map_err(|source| HttpRuntimeClientFailure::PeerConnect {
-                target: self.authority.clone(),
-                cause: source.to_string(),
-            })?;
+        let stream =
+            connect_resolved_peer_socket(&self.host, self.port, &self.authority, deadline).await?;
         let stream = self
             .adapter
             .connect(stream, &self.host)
@@ -474,6 +466,62 @@ impl HttpRuntimeConnector for PeerStreamConnector {
             .await
             .map_err(|failure| direct_peer_connection_failure(&self.authority, failure))
     }
+}
+
+/// Connect to one durable peer hostname without treating the first DNS answer
+/// as the only routable address.  mDNS routinely returns IPv6 before IPv4;
+/// one unavailable family must not make an otherwise reachable peer look
+/// offline.  Every attempt shares the caller's one absolute deadline.
+async fn connect_resolved_peer_socket(
+    host: &HostName,
+    port: NonZeroU16,
+    authority: &str,
+    deadline: RequestDeadline,
+) -> Result<TcpStream, HttpRuntimeClientFailure> {
+    let addresses = tokio::net::lookup_host((host.as_str(), port.get()))
+        .await
+        .map_err(|source| HttpRuntimeClientFailure::PeerConnect {
+            target: authority.to_owned(),
+            cause: format!("failed to resolve peer hostname `{host}`: {source}"),
+        })?;
+    connect_peer_addresses(addresses, authority, deadline).await
+}
+
+async fn connect_peer_addresses(
+    addresses: impl IntoIterator<Item = std::net::SocketAddr>,
+    authority: &str,
+    deadline: RequestDeadline,
+) -> Result<TcpStream, HttpRuntimeClientFailure> {
+    let addresses = addresses.into_iter().collect::<Vec<_>>();
+    let mut attempted = Vec::new();
+    for (index, address) in addresses.iter().copied().enumerate() {
+        let Some(remaining) = deadline.remaining() else {
+            return Err(HttpRuntimeClientFailure::PeerConnectTimeout {
+                target: authority.to_owned(),
+                cause: format!(
+                    "resolved peer addresses exhausted the request budget after attempts: {}",
+                    attempted.join(", ")
+                ),
+            });
+        };
+        let attempts_left =
+            u32::try_from(addresses.len() - index).expect("peer address count fits in u32");
+        let attempt_budget = remaining / attempts_left;
+        match tokio::time::timeout(attempt_budget, TcpStream::connect(address)).await {
+            Ok(Ok(stream)) => return Ok(stream),
+            Ok(Err(source)) => attempted.push(format!("{address} ({source})")),
+            Err(_) => attempted.push(format!(
+                "{address} (did not connect within {attempt_budget:?})"
+            )),
+        }
+    }
+    Err(HttpRuntimeClientFailure::PeerConnect {
+        target: authority.to_owned(),
+        cause: format!(
+            "peer hostname resolved, but no address connected: {}",
+            attempted.join(", ")
+        ),
+    })
 }
 
 async fn execute_opaque_peer_request(
@@ -950,7 +998,8 @@ mod tests {
 
     use super::{
         DirectPeerTcpConnector, HttpRuntimeClient, HttpRuntimeClientFailure, HttpRuntimeConnector,
-        direct_peer_connection_failure, direct_peer_tcp_client, selected_write_transport,
+        connect_peer_addresses, direct_peer_connection_failure, direct_peer_tcp_client,
+        selected_write_transport,
     };
 
     struct LocalOnlyClient;
@@ -1023,6 +1072,35 @@ mod tests {
         .err()
         .expect("zero budget must fail before a peer request is attempted");
         assert!(error.message().contains("timeout"));
+    }
+
+    #[tokio::test]
+    async fn peer_socket_connection_tries_later_resolved_addresses() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind reachable IPv4 peer fixture");
+        let reachable = listener.local_addr().expect("fixture address");
+        let unreachable = std::net::SocketAddr::new(
+            "127.0.0.2".parse().expect("loopback address"),
+            reachable.port(),
+        );
+
+        let connected = connect_peer_addresses(
+            [unreachable, reachable],
+            "peer.example.test:43101",
+            RequestDeadline::after(Duration::from_secs(1)),
+        )
+        .await
+        .expect("the later reachable address is attempted");
+        assert_eq!(
+            connected.peer_addr().expect("connected peer address"),
+            reachable,
+            "the connector falls back from an unavailable first address"
+        );
+        let _accepted = listener
+            .accept()
+            .await
+            .expect("fixture accepts fallback socket");
     }
 
     #[test]
