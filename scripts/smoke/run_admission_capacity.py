@@ -1356,8 +1356,6 @@ def run_capacity(
     }
     started_at = time.monotonic()
     try:
-        if preflight_failure is not None:
-            raise SmokeError(preflight_failure)
         if isolation_mode == "isolated_os_user":
             require_clean_host_daemon_state(smoke_label="admission-capacity smoke")
         elif managed_daemon is None:
@@ -1439,6 +1437,13 @@ def run_capacity(
             comparison_strict, comparison_required,
         )
         evidence["passed"] = evidence["thresholds"]["passed"]
+        if preflight_failure is not None:
+            # A missing comparable plaintext baseline is a release gate, not
+            # permission to omit the actual measurement.  Retain an honest
+            # full profile (and durability proof) while recording the gap as
+            # the failed acceptance condition for follow-up.
+            evidence["passed"] = False
+            evidence["failure"] = preflight_failure
         expected_accepted_count = sum(item["accepted_count"] for item in profile["intervals"])
 
         # Restart the actual execution daemon. A transport success alone is
