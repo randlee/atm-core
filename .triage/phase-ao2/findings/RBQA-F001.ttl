@@ -7,55 +7,48 @@
 <urn:atm:triage:finding/RBQA-F001>
   a triage:Finding ;
   triage:findingId "RBQA-F001" ;
-  triage:title "New PeerWireSecurity name collides via substring with the AK.2 retirement guard" ;
-  triage:description "The new PeerWireSecurity type name collides via substring match with the pre-existing AK.2 retirement guard `ak2_peer_worker_symbols_are_absent_from_production` in crates/atm-architecture/tests/boundary_enforcement.rs:413-443. This will false-positive-block AO.2/AO.3 wiring unless the guard's substring matching is narrowed now, before those sprints begin." ;
+  triage:title "Duplicated atm-daemon-dev identity-detection logic risks silent drift" ;
+  triage:description "The \"is atm-daemon-dev in keychain\" identity-detection logic is implemented twice independently -- once as a substring match, once as a regex -- each with its own hardcoded constant, across .just/sign_daemon_dev.py and .claude/skills/daemon-switch/scripts/daemon-switch.py. If one copy is updated without the other, the signing gate could silently drift out of sync and stop enforcing correctly. Recommends extracting one shared helper both scripts call." ;
   triage:phaseId "phase-ao2" ;
   triage:triageMode "initial_pass" ;
-  triage:category "ruthless-boundary-qa" ;
+  triage:category "rust-qa" ;
   triage:severity "important" ;
-  triage:repeatable true ;
-  triage:sweepScope "workspace" ;
-  triage:status "resolved" ;
-  triage:dispatchReady false ;
-  triage:triagedAt "2026-08-20T21:55:00Z"^^xsd:dateTime ;
-  triage:foundIn triage:AO2.1 ;
-  triage:foundAt "2026-08-20T09:00:24Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/AO2-1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/pao-s3-close> ;
-  triage:triageRecordVersion "2" .
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-21T16:51:10Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.4 ;
+  triage:foundAt "2026-08-21T16:51:10Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/sign-daemon-dev-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/daemon-switch-1> ;
+  triage:triageRecordVersion "1" .
 
-<urn:atm:triage:occurrence/RBQA-F001/AO2-1>
+<urn:atm:triage:occurrence/RBQA-F001/sign-daemon-dev-1>
   a triage:Occurrence ;
-  triage:file "crates/atm-core/src/peer_wire.rs" ;
-  triage:line 13 ;
-  triage:snippet "pub enum PeerWireSecurity" ;
-  triage:status "closed" ;
-  triage:closed true ;
-  triage:branch "feature/pao-s1-peer-wire-policy" ;
-  triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
-  triage:occursIn <urn:atm:triage:worktree/AO2.1/d137ab8> .
+  triage:file ".just/sign_daemon_dev.py" ;
+  triage:line 20 ;
+  triage:snippet "IDENTITY_PATTERN = re.compile(rf'{\"re.escape(IDENTITY)\"}')" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/daemon-switch-signing-gate" ;
+  triage:headSha "bafe79d1f" ;
+  triage:occursIn <urn:atm:triage:worktree/daemon-switch-1/bafe79d1f> .
 
-<urn:atm:triage:occurrence/RBQA-F001/pao-s3-close>
+<urn:atm:triage:occurrence/RBQA-F001/daemon-switch-1>
   a triage:Occurrence ;
-  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
-  triage:line 521 ;
-  triage:snippet "ak2_retirement_guard_matches_symbols_not_substrings() -- verified passing, exact-symbol match narrowed" ;
-  triage:status "closed" ;
-  triage:closed true ;
-  triage:branch "feature/pao-s3-runtime-peer-wire-mode" ;
-  triage:headSha "ae3232d340f003b0ab2521006c7a82e20ad1e92d" ;
-  triage:occursIn <urn:atm:triage:worktree/pao-s3/ae3232d3> .
+  triage:file ".claude/skills/daemon-switch/scripts/daemon-switch.py" ;
+  triage:line 23 ;
+  triage:snippet "MACOS_DEVELOPMENT_SIGNING_IDENTITY = \"atm-daemon-dev\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/daemon-switch-signing-gate" ;
+  triage:headSha "bafe79d1f" ;
+  triage:occursIn <urn:atm:triage:worktree/daemon-switch-2/bafe79d1f> .
 
-<urn:atm:triage:worktree/AO2.1/d137ab8>
+<urn:atm:triage:worktree/daemon-switch-1/bafe79d1f>
   a triage:WorktreeSnapshot ;
-  triage:path ".worktrees/feature/pao-s1-peer-wire-policy" ;
-  triage:branch "feature/pao-s1-peer-wire-policy" ;
-  triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
+  triage:path "fix/daemon-switch-signing-gate" ;
+  triage:branch "fix/daemon-switch-signing-gate" ;
+  triage:headSha "bafe79d1f" ;
   triage:orderIndex 1 .
-
-<urn:atm:triage:worktree/pao-s3/ae3232d3>
-  a triage:WorktreeSnapshot ;
-  triage:path ".worktrees/feature/pao-s3-runtime-peer-wire-mode" ;
-  triage:branch "feature/pao-s3-runtime-peer-wire-mode" ;
-  triage:headSha "ae3232d340f003b0ab2521006c7a82e20ad1e92d" ;
-  triage:orderIndex 3 .
