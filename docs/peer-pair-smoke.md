@@ -10,27 +10,12 @@ a raw TCP connection is not evidence of success.
 
 ## Progressive live-daemon commands
 
-Use the matched branch CLI and daemon selected by `daemon-switch`; these
-commands never start or stop a daemon themselves. Each command includes the
-rows from the preceding command and writes JSON plus an XHTML evidence pane
-under `reports/smoke/<feature>/`.
-
-```bash
-just smoke localhost
-just smoke local-ip
-just smoke peer-preflight m5 fastpc4
-just smoke crosshost-send m5 fastpc4
-just smoke crosshost-ack m5 fastpc4
-```
-
-`localhost` proves host-qualified localhost send/read and requires-ack/ack.
-`local-ip` adds the daemon's advertised-IP route. `peer-preflight` confirms
-that each named SSH host already has a healthy, version-matched daemon and an
-enabled advertised host; it never starts, stops, or retries a remote daemon.
-`crosshost-send` then proves local public `atm send` and remote public `atm
-read` return the exact same ULID and body. `crosshost-ack` repeats that proof
-with `--requires-ack`, has the remote peer acknowledge it, and proves the
-reply reaches the local inbox with the original acknowledged-message ID.
+Complete the [staged live-daemon validation ladder](./smoke-testing.md#staged-live-daemon-validation-ladder)
+before using this two-role release procedure. That ladder is the single source
+of truth for curl baseline, localhost, local-IP, peer preflight, cross-host
+send, ACK proof, retained-log review, and architecture/boundary promotion
+gates. This document defines only the two-role evidence configuration that
+follows the completed ladder.
 
 The legacy `just smoke crosshost <host...>` spelling remains an alias for
 `crosshost-send`. A cross-host recovery smoke is intentionally not claimed
