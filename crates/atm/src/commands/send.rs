@@ -622,7 +622,15 @@ fn resolve_trusted_ipv4_with_lookup(
 
     let mut matches = Vec::new();
     for peer in enabled_peers {
-        if lookup(peer)?.contains(&IpAddr::V4(target_ip)) {
+        // A literal IP is a diagnostic convenience: an unrelated, stale
+        // trusted hostname must not prevent the currently reachable exact
+        // authority from being identified. Only successfully resolved peers
+        // can match this concrete address; ambiguity among those matches still
+        // fails closed below.
+        let Ok(addresses) = lookup(peer) else {
+            continue;
+        };
+        if addresses.contains(&IpAddr::V4(target_ip)) {
             matches.push(peer);
         }
     }
@@ -788,7 +796,7 @@ mod tests {
     use atm_core::send::{SendMessageSource, input};
     use atm_core::test_support::{EnvGuard, TEST_SENDER};
     use atm_core::types::TeamName;
-    use atm_storage::{HostName, TrustedPeer};
+    use atm_storage::{AtmError, HostName, TrustedPeer};
     use clap::Parser;
     use serial_test::serial;
     use tempfile::TempDir;
@@ -1011,6 +1019,24 @@ mod tests {
             .expect_err("shared IP must not choose a peer");
 
         assert!(error.to_string().contains("multiple enabled trusted peers"));
+    }
+
+    #[test]
+    fn literal_ip_ignores_an_unresolvable_unrelated_trusted_peer() {
+        let peers = [
+            trusted_peer("stale-m5.local"),
+            trusted_peer("rand-m4.local"),
+        ];
+        let canonical =
+            resolve_trusted_ipv4_with_lookup(Ipv4Addr::new(192, 168, 1, 144), &peers, |peer| {
+                if peer.host.as_str() == "stale-m5.local" {
+                    return Err(AtmError::validation("fixture stale authority"));
+                }
+                Ok(vec![IpAddr::V4(Ipv4Addr::new(192, 168, 1, 144))])
+            })
+            .expect("an unrelated stale peer must not block the exact IP authority");
+
+        assert_eq!(canonical.as_str(), "rand-m4.local");
     }
 
     #[test]
