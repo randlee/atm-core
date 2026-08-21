@@ -72,7 +72,7 @@ final retained run must be noninteractive and free of that interference.
 
    ```sh
    cargo build --release -p agent-team-mail -p atm-daemon
-   python3 .just/sign_daemon_dev.py
+   python3 .just/sign_daemon_dev.py  # Apple Development signing hook
    ```
 
 4. Each host records the selected CLI and daemon versions. They must be equal
