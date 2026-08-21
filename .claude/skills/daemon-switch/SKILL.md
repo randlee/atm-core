@@ -21,11 +21,11 @@ worktree binary directly.
 6. When peer-interface or trust configuration changes, use `restart` to reload
    the one selected daemon; never launch an extra process.
 7. On macOS, when the local keychain contains `atm-daemon-dev`, `switch` and
-   `restart` fail closed unless the selected `atm-daemon` carries that exact
-   signing authority. Build with `just build` (or explicitly run
-   `python3 .just/sign_daemon_dev.py`) before switching. This is enforced by
-   the switcher so an unsigned development binary cannot create repeated
-   privacy-approval dialogs.
+   `restart` fail closed unless both selected `atm` and `atm-daemon` strictly
+   verify and carry that exact signing authority. Build with `just build` (or
+   explicitly run `python3 .just/sign_daemon_dev.py`) before switching. This
+   enforces a matched, signed local build; it is separate from macOS Local
+   Network Privacy authorization.
 
 ## Commands
 
