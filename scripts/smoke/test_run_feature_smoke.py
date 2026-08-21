@@ -591,7 +591,7 @@ class FeatureSmokeTests(unittest.TestCase):
                 "m5",
                 "atm",
                 "/opt/homebrew/bin/atm",
-                "192.0.2.20",
+                "remote.example.test",
                 "1.4.0-beta-ai",
                 plaintext=False,
             )

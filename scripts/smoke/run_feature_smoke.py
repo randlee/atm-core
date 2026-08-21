@@ -434,7 +434,7 @@ def curl_doctor(
                 platform.node(),
                 peer,
                 remote_authority,
-                remote_host,
+                remote_ip,
                 resolve_dns_addresses,
             )
             add_dns_case(
