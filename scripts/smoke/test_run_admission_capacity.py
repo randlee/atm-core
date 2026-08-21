@@ -571,6 +571,61 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertIsInstance(captured["run_duration_s"], float)
         self.assertGreaterEqual(captured["run_duration_s"], 0.0)
 
+    def test_missing_plaintext_baseline_retains_measured_profile_before_failing(self):
+        captured: dict[str, object] = {}
+        profile = {
+            "sample_count": 1,
+            "target_duration_s": 1.0,
+            "run_duration_s": 1.0,
+            "intervals": complete_evidence()["runs"][0]["intervals"],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            home = root / "atm-capacity-proof"
+            daemon = root / "atm-daemon"
+            atm = root / "atm"
+            daemon.touch()
+            atm.touch()
+            process = mock.Mock(pid=123)
+            daemon_output = mock.Mock()
+            daemon_output.evidence.return_value = {}
+            with (
+                mock.patch.object(RUNNER, "select_host_state_isolation", return_value="isolated_os_user"),
+                mock.patch.object(RUNNER, "require_clean_host_daemon_state"),
+                mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
+                mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
+                mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "start_capacity_daemon", return_value=(process, daemon_output)) as start,
+                mock.patch.object(RUNNER, "command_result", return_value={}),
+                mock.patch.object(RUNNER, "benchmark_doctor_payload", return_value={}),
+                mock.patch.object(RUNNER, "prepare_capacity_roster"),
+                mock.patch.object(RUNNER, "local_endpoint", return_value=RUNNER.LocalEndpoint("tcp", "127.0.0.1:1")),
+                mock.patch.object(RUNNER, "run_cached_roster_heartbeat_probe", return_value={}),
+                mock.patch.object(RUNNER, "run_profile", return_value=profile),
+                mock.patch.object(RUNNER, "release_version", return_value="atm test"),
+                mock.patch.object(RUNNER, "reap_owned_daemon"),
+                mock.patch.object(RUNNER, "verify_durable_admissions", return_value={"passed": True}),
+                mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"),
+                mock.patch.object(
+                    RUNNER,
+                    "write_evidence",
+                    side_effect=lambda _path, value: (captured.update(value), root / "evidence.json")[1],
+                ),
+            ):
+                code, _evidence = RUNNER.run_capacity(
+                    home, root, "tcp", 1, sample_count=1,
+                    raw_evidence_directory=root,
+                    preflight_failure_code=RUNNER.MISSING_PLAINTEXT_BASELINE,
+                    preflight_failure="missing a complete passed same-host plaintext baseline",
+                )
+
+        self.assertEqual(code, 1)
+        self.assertEqual(start.call_count, 2)
+        self.assertEqual(captured["runs"], [profile])
+        self.assertEqual(captured["durability_after_restart"], {"passed": True})
+        self.assertEqual(captured["failure"], "missing a complete passed same-host plaintext baseline")
+        self.assertFalse(captured["passed"])
+
     def test_sparse_profiles_and_schema_fields_are_declared(self):
         self.assertEqual(RUNNER.SPARSE_FRAMES_PER_CONNECTION, (1, 2, 4, 8, 16, 64))
 

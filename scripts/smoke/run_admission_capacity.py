@@ -1274,8 +1274,6 @@ def run_capacity(
     }
     started_at = time.monotonic()
     try:
-        if preflight_failure is not None:
-            raise SmokeError(preflight_failure)
         if isolation_mode == "isolated_os_user":
             require_clean_host_daemon_state(smoke_label="admission-capacity smoke")
         elif managed_daemon is None:
@@ -1386,6 +1384,12 @@ def run_capacity(
             expected_accepted_count,
             roster,
         )
+        # A missing plaintext comparison baseline blocks acceptance, but it
+        # must not prevent collection of the bounded profile that explains the
+        # gap. Preserve the measured run and durability proof, then fail closed.
+        if preflight_failure is not None:
+            evidence["passed"] = False
+            evidence["failure"] = preflight_failure
     except (OSError, RuntimeError, ValueError, SmokeError) as error:
         evidence["passed"] = False
         evidence["failure"] = str(error)
