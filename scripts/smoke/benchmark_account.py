@@ -64,6 +64,11 @@ def current_account_id() -> str:
     """Return a stable UID/SID-shaped identifier for the executing OS account."""
     if os.name != "nt":
         return f"uid:{os.geteuid()}"
+    return _windows_current_sid()
+
+
+def _windows_current_sid() -> str:
+    """Return the executing Windows account SID without relying on localized names."""
     result = subprocess.run(
         ["whoami", "/user", "/fo", "csv", "/nh"], capture_output=True, text=True, check=False,
     )
@@ -76,34 +81,59 @@ def current_account_id() -> str:
 
 
 def _windows_current_principal() -> str:
-    result = subprocess.run(["whoami"], capture_output=True, text=True, check=False)
-    principal = result.stdout.strip()
-    if result.returncode != 0 or not principal:
-        raise BenchmarkAccountError("could not resolve the Windows benchmark-account owner")
-    return principal.casefold()
+    return _windows_current_sid().casefold()
 
 
 def _windows_file_owner(path: Path) -> str:
-    literal_path = str(path).replace("'", "''")
-    result = subprocess.run(
-        [
-            "powershell",
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            f"(Get-Acl -LiteralPath '{literal_path}').Owner",
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
+    """Return the owner SID using Win32 security APIs, not PowerShell modules."""
+    import ctypes
+    from ctypes import wintypes
+
+    owner = wintypes.LPVOID()
+    descriptor = wintypes.LPVOID()
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    get_named_security_info = advapi32.GetNamedSecurityInfoW
+    get_named_security_info.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.LPVOID),
+        ctypes.POINTER(wintypes.LPVOID),
+        ctypes.POINTER(wintypes.LPVOID),
+        ctypes.POINTER(wintypes.LPVOID),
+        ctypes.POINTER(wintypes.LPVOID),
+    ]
+    get_named_security_info.restype = wintypes.DWORD
+    error = get_named_security_info(
+        str(path),
+        1,  # SE_FILE_OBJECT
+        1,  # OWNER_SECURITY_INFORMATION
+        ctypes.byref(owner),
+        None,
+        None,
+        None,
+        ctypes.byref(descriptor),
     )
-    owner = result.stdout.strip()
-    if result.returncode != 0 or not owner:
-        detail = result.stderr.strip() or "no output"
+    if error:
+        detail = ctypes.FormatError(error).strip()
         raise BenchmarkAccountError(
-            f"could not verify Windows manifest owner for {path} (exit {result.returncode}: {detail})"
+            f"could not verify Windows manifest owner for {path} (error {error}: {detail})"
         )
-    return owner.casefold()
+    try:
+        sid_text = wintypes.LPVOID()
+        convert_sid = advapi32.ConvertSidToStringSidW
+        convert_sid.argtypes = [wintypes.LPVOID, ctypes.POINTER(wintypes.LPVOID)]
+        convert_sid.restype = wintypes.BOOL
+        if not convert_sid(owner, ctypes.byref(sid_text)):
+            raise BenchmarkAccountError(
+                f"could not convert Windows manifest owner SID for {path}: {ctypes.FormatError()}"
+            )
+        try:
+            return f"sid:{ctypes.wstring_at(sid_text)}".casefold()
+        finally:
+            ctypes.WinDLL("kernel32", use_last_error=True).LocalFree(sid_text)
+    finally:
+        ctypes.WinDLL("kernel32", use_last_error=True).LocalFree(descriptor)
 
 
 def _verify_manifest_owner(path: Path, metadata: os.stat_result) -> None:

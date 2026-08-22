@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -90,6 +91,13 @@ class BenchmarkAccountTests(unittest.TestCase):
             ):
                 with self.assertRaisesRegex(ACCOUNT.BenchmarkAccountError, "owner mismatch"):
                     self._require(home)
+
+    @unittest.skipUnless(os.name == "nt", "Windows owner verification uses Win32 APIs")
+    def test_windows_owner_lookup_matches_executing_account_sid(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest = Path(temporary) / ACCOUNT.MANIFEST_NAME
+            manifest.write_text("{}", encoding="utf-8")
+            self.assertEqual(ACCOUNT._windows_file_owner(manifest), ACCOUNT._windows_current_principal())
 
     def test_bootstrap_is_never_an_implicit_runner_side_effect(self):
         with tempfile.TemporaryDirectory() as temporary:
