@@ -45,6 +45,7 @@ from temporary_launch import (  # noqa: E402
     account_identifier,
     sha256_file,
 )
+from temporary_launch_macos import MacosLaunchAgentAdapter  # noqa: E402
 
 
 WINDOWS_SERVICE_NOT_FOUND = 1060
@@ -100,7 +101,11 @@ def temporary_launch_journal() -> TemporaryLaunchJournal:
 
 
 def temporary_launch_adapter(_args: argparse.Namespace) -> TemporaryLaunchAdapter:
-    """Resolve one future narrow platform adapter; never provide a fallback."""
+    """Resolve one reviewed native adapter; never provide a process fallback."""
+    if platform.system() == "Darwin":
+        return MacosLaunchAgentAdapter(
+            temporary_launch_journal().path.parent / "temporary-launch-overlays"
+        )
     raise SwitchError(
         "temporary-launch requires a reviewed platform adapter; no direct-process fallback is available"
     )
@@ -603,7 +608,10 @@ def begin_temporary_launch(args: argparse.Namespace) -> None:
         raise SwitchError("--service is required for a temporary managed-service launch")
     cli, daemon = selected_matched_pair(args)
     adapter = temporary_launch_adapter(args)
-    captured = adapter.capture(args, cli, daemon, args.peer_wire_security)
+    try:
+        captured = adapter.capture(args, cli, daemon, args.peer_wire_security)
+    except TemporaryLaunchError as error:
+        raise SwitchError(str(error)) from error
     session = TemporaryLaunchSession.captured(
         peer_wire_security=args.peer_wire_security,
         platform=platform.system(),
@@ -626,7 +634,11 @@ def begin_temporary_launch(args: argparse.Namespace) -> None:
         raise SwitchError(str(error)) from error
     save_temporary_session(journal, session)
     session = transition_temporary_session(journal, session, TemporaryLaunchPhase.OVERLAY_STARTED)
-    run_service(adapter.start_args(args, session), "start")
+    try:
+        overlay_args = adapter.start_args(args, session)
+    except TemporaryLaunchError as error:
+        raise SwitchError(str(error)) from error
+    run_service(overlay_args, "start")
     matched, detail = wait_for_temporary_launch(cli, daemon, session.peer_wire_security)
     if not matched:
         raise SwitchError(f"temporary overlay start did not pass doctor proof: {detail}")
@@ -657,7 +669,11 @@ def restart_temporary_launch(args: argparse.Namespace) -> None:
     cli, daemon = selected_matched_pair(args)
     adapter = temporary_launch_adapter(args)
     session = transition_temporary_session(journal, session, TemporaryLaunchPhase.OVERLAY_STARTED)
-    run_service(adapter.start_args(args, session), "start")
+    try:
+        overlay_args = adapter.start_args(args, session)
+    except TemporaryLaunchError as error:
+        raise SwitchError(str(error)) from error
+    run_service(overlay_args, "start")
     matched, detail = wait_for_temporary_launch(cli, daemon, session.peer_wire_security)
     if not matched:
         raise SwitchError(f"temporary overlay restart did not pass doctor proof: {detail}")
@@ -680,7 +696,10 @@ def restore_temporary_launch(args: argparse.Namespace, *, recovery: bool) -> Non
         session = transition_temporary_session(journal, session, TemporaryLaunchPhase.RESTORING)
     run_service(args, "stop", allow_absent=True)
     require_stopped_daemon(args, cli)
-    adapter.restore_exact(args, session)
+    try:
+        adapter.restore_exact(args, session)
+    except TemporaryLaunchError as error:
+        raise SwitchError(str(error)) from error
     run_service(args, "start")
     matched, detail = wait_for_temporary_launch(cli, daemon, PeerWireSecurity.MUTUAL_TLS)
     if not matched:

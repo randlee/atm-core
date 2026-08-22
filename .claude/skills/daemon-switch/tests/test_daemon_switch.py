@@ -7,6 +7,7 @@ import io
 import argparse
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+import plistlib
 import socket
 import subprocess
 import tempfile
@@ -503,6 +504,7 @@ class TemporaryLaunchControlPlaneTests(unittest.TestCase):
         with (
             mock.patch.object(DAEMON_SWITCH, "temporary_launch_journal", return_value=self.journal),
             mock.patch.object(DAEMON_SWITCH, "selected_matched_pair", return_value=(self.cli, self.daemon)),
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Linux"),
             mock.patch.object(DAEMON_SWITCH, "run_service") as service,
         ):
             with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "no direct-process fallback"):
@@ -597,6 +599,129 @@ class TemporaryLaunchControlPlaneTests(unittest.TestCase):
             daemon_digest=DAEMON_SWITCH.sha256_file(self.daemon),
             launch_spec=DAEMON_SWITCH.CapturedLaunchSpec("/original.plist", "original-sha"),
         )
+
+
+class MacosTemporaryLaunchAdapterTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.cli = self.root / "atm"
+        self.daemon = self.root / "atm-daemon"
+        for binary in (self.cli, self.daemon):
+            binary.write_bytes(binary.name.encode("utf-8"))
+            binary.chmod(0o700)
+        self.source = self.root / "com.atm.daemon.test.plist"
+        self.args = argparse.Namespace(
+            yes=True,
+            service="com.atm.daemon.test",
+            launch_agent_plist=str(self.source),
+            peer_wire_security=DAEMON_SWITCH.PeerWireSecurity.PLAINTEXT_TEST,
+            repair_orphan=False,
+        )
+        self.adapter = DAEMON_SWITCH.MacosLaunchAgentAdapter(self.root / "state" / "overlays")
+        self.write_source()
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def write_source(self) -> None:
+        payload = {
+            "Label": self.args.service,
+            "ProgramArguments": [str(self.daemon), "--log-format", "json"],
+            "KeepAlive": True,
+        }
+        self.source.write_bytes(plistlib.dumps(payload, fmt=plistlib.FMT_XML, sort_keys=False))
+        self.source.chmod(0o600)
+
+    def captured_session(self) -> object:
+        captured = self.adapter.capture(
+            self.args,
+            self.cli,
+            self.daemon,
+            self.args.peer_wire_security,
+        )
+        return DAEMON_SWITCH.TemporaryLaunchSession.captured(
+            peer_wire_security=self.args.peer_wire_security,
+            platform="Darwin",
+            account_id="uid:501",
+            service=self.args.service,
+            cli_path=self.cli,
+            cli_digest=DAEMON_SWITCH.sha256_file(self.cli),
+            daemon_path=self.daemon,
+            daemon_digest=DAEMON_SWITCH.sha256_file(self.daemon),
+            launch_spec=captured,
+        )
+
+    def test_overlay_preserves_source_and_adds_only_typed_mode(self) -> None:
+        original = self.source.read_bytes()
+        session = self.captured_session().transition(DAEMON_SWITCH.TemporaryLaunchPhase.STOPPED)
+        overlay_spec = self.adapter.apply_overlay(self.args, session)
+        session = session.with_overlay(overlay_spec)
+
+        self.assertEqual(self.source.read_bytes(), original)
+        overlay = Path(overlay_spec.overlay_reference)
+        payload = plistlib.loads(overlay.read_bytes())
+        self.assertEqual(payload["KeepAlive"], True)
+        self.assertEqual(
+            payload["ProgramArguments"],
+            [str(self.daemon), "--log-format", "json", "--peer-wire-security", "plaintext-test"],
+        )
+        self.assertEqual(self.adapter.start_args(self.args, session).launch_agent_plist, str(overlay))
+
+        self.adapter.restore_exact(self.args, session)
+
+        self.assertFalse(overlay.exists())
+        self.assertEqual(self.source.read_bytes(), original)
+
+    def test_capture_rejects_a_source_that_already_selects_peer_wire_security(self) -> None:
+        payload = plistlib.loads(self.source.read_bytes())
+        payload["ProgramArguments"].extend(("--peer-wire-security", "mutual-tls"))
+        self.source.write_bytes(plistlib.dumps(payload, fmt=plistlib.FMT_XML, sort_keys=False))
+
+        with self.assertRaisesRegex(DAEMON_SWITCH.TemporaryLaunchError, "already selects"):
+            self.adapter.capture(self.args, self.cli, self.daemon, self.args.peer_wire_security)
+
+    def test_restore_refuses_an_operator_changed_source_and_retains_overlay(self) -> None:
+        session = self.captured_session().transition(DAEMON_SWITCH.TemporaryLaunchPhase.STOPPED)
+        overlay_spec = self.adapter.apply_overlay(self.args, session)
+        session = session.with_overlay(overlay_spec)
+        payload = plistlib.loads(self.source.read_bytes())
+        payload["KeepAlive"] = False
+        self.source.write_bytes(plistlib.dumps(payload, fmt=plistlib.FMT_XML, sort_keys=False))
+
+        with self.assertRaisesRegex(DAEMON_SWITCH.TemporaryLaunchError, "source LaunchAgent changed"):
+            self.adapter.restore_exact(self.args, session)
+
+        self.assertTrue(Path(overlay_spec.overlay_reference).exists())
+
+    def test_begin_then_restore_uses_only_the_owned_overlay_at_fake_service_boundary(self) -> None:
+        journal = DAEMON_SWITCH.TemporaryLaunchJournal(self.root / "state" / "temporary-launch.json")
+        original = self.source.read_bytes()
+        with (
+            mock.patch.object(DAEMON_SWITCH, "temporary_launch_journal", return_value=journal),
+            mock.patch.object(DAEMON_SWITCH, "selected_matched_pair", return_value=(self.cli, self.daemon)),
+            mock.patch.object(DAEMON_SWITCH, "temporary_launch_adapter", return_value=self.adapter),
+            mock.patch.object(DAEMON_SWITCH, "account_identifier", return_value="uid:501"),
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Darwin"),
+            mock.patch.object(DAEMON_SWITCH, "run_service") as service,
+            mock.patch.object(DAEMON_SWITCH, "require_stopped_daemon"),
+            mock.patch.object(DAEMON_SWITCH, "wait_for_temporary_launch", return_value=(True, "ready")),
+            redirect_stdout(io.StringIO()),
+        ):
+            DAEMON_SWITCH.begin_temporary_launch(self.args)
+            active = journal.load()
+            assert active is not None
+            self.args.session = active.session_id
+            DAEMON_SWITCH.restore_temporary_launch(self.args, recovery=False)
+
+        self.assertEqual(self.source.read_bytes(), original)
+        self.assertIsNone(journal.load())
+        self.assertEqual(service.call_args_list[0], mock.call(self.args, "stop", allow_absent=True))
+        overlay_start = service.call_args_list[1]
+        self.assertEqual(overlay_start.args[1], "start")
+        self.assertNotEqual(overlay_start.args[0].launch_agent_plist, str(self.source))
+        self.assertEqual(service.call_args_list[2], mock.call(self.args, "stop", allow_absent=True))
+        self.assertEqual(service.call_args_list[3], mock.call(self.args, "start"))
 
 
 if __name__ == "__main__":
