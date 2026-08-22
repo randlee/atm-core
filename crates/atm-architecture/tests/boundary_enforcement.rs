@@ -1526,6 +1526,46 @@ fn atm_runtime_must_not_depend_on_atm_storage_rusqlite() {
 }
 
 #[test]
+fn sqlite_writer_batch_window_is_private_to_storage() {
+    let root = workspace_root();
+    let writer_path = root.join("crates/atm-storage-rusqlite/src/writer/mod.rs");
+    let writer = read_source(&writer_path);
+    let syntax = syn::parse_file(&writer).expect("sqlite writer source must parse");
+    let batch_window = syntax
+        .items
+        .iter()
+        .find_map(|item| match item {
+            syn::Item::Const(item) if item.ident == "BATCH_TIME_BUDGET" => Some(item),
+            _ => None,
+        })
+        .expect("sqlite writer must declare its fixed batch window");
+    assert!(
+        matches!(batch_window.vis, syn::Visibility::Inherited),
+        "the writer batch window must not have any visibility modifier"
+    );
+
+    let smoke_sources = writer_batch_window_smoke_sources(&root);
+    assert!(
+        smoke_sources.contains(&root.join("scripts/smoke/run_admission_capacity.py")),
+        "the admission benchmark harness must remain covered by the writer batch-window guard"
+    );
+
+    for source in ai11_guarded_workspace_sources(&root)
+        .into_iter()
+        .chain(smoke_sources)
+    {
+        if source == writer_path {
+            continue;
+        }
+        assert!(
+            !read_source(&source).contains("BATCH_TIME_BUDGET"),
+            "the writer batch window must not become {} configuration",
+            source.display(),
+        );
+    }
+}
+
+#[test]
 fn atm_storage_rusqlite_must_not_depend_on_atm_runtime() {
     assert_forbidden_edge_absent("atm-storage-rusqlite", "atm-runtime");
 }
@@ -1947,6 +1987,28 @@ fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) {
             files.push(path);
         }
     }
+}
+
+fn collect_python_files(directory: &Path, files: &mut Vec<PathBuf>) {
+    for entry in fs::read_dir(directory)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", directory.display()))
+    {
+        let path = entry
+            .unwrap_or_else(|error| panic!("failed to read directory entry: {error}"))
+            .path();
+        if path.is_dir() {
+            collect_python_files(&path, files);
+        } else if path.extension().and_then(|extension| extension.to_str()) == Some("py") {
+            files.push(path);
+        }
+    }
+}
+
+fn writer_batch_window_smoke_sources(root: &Path) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    collect_python_files(&root.join("scripts/smoke"), &mut files);
+    files.sort();
+    files
 }
 
 fn ai11_guarded_workspace_sources(root: &Path) -> Vec<PathBuf> {
