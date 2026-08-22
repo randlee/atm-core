@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import closing
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -49,6 +50,13 @@ from scripts.smoke.benchmark_account import (
     BenchmarkAccountError,
     bootstrap_benchmark_account,
     require_benchmark_account,
+)
+from scripts.smoke.benchmark_snapshot import (
+    BenchmarkSnapshotError,
+    VerifiedSnapshot,
+    create_verified_snapshot,
+    restore_verified_snapshot,
+    verify_completed_snapshot,
 )
 
 if os.name != "nt":
@@ -506,6 +514,66 @@ def reap_owned_daemon(process: subprocess.Popen[str]) -> None:
     """Terminate and reap the benchmark-owned child without mistaking a zombie for a leak."""
     terminate_process(process.pid)
     process.wait(timeout=10.0)
+
+
+LIFECYCLE_RECOVERY = {
+    "preflight": "correct the disposable benchmark-account manifest before retrying",
+    "snapshot": "keep the benchmark daemon stopped and inspect retained snapshot staging material",
+    "profile": "the runner will stop its owned daemon and restore the published clean snapshot",
+    "stop": "keep the benchmark daemon stopped; do not restore while SQLite sidecars may be active",
+    "restore": "keep the benchmark daemon stopped and inspect retained restore staging material",
+    "post_restore_verify": "keep the benchmark daemon stopped and inspect the restored benchmark account",
+    "cleanup": "remove only the per-run temporary ATM_HOME after inspecting the retained evidence",
+}
+
+
+def snapshot_evidence(snapshot: VerifiedSnapshot) -> dict[str, Any]:
+    """Return non-sensitive facts from a verified account-local snapshot."""
+    return {
+        "snapshot_id": snapshot.snapshot_id,
+        "account_identity": f"sha256:{hashlib.sha256(str(snapshot.account_id).encode()).hexdigest()[:16]}",
+        "user_version": snapshot.user_version,
+        "page_count": snapshot.page_count,
+        "byte_count": snapshot.byte_count,
+        "sha256": snapshot.sha256,
+    }
+
+
+def run_lifecycle_phase(
+    evidence: dict[str, Any], phase: str, action: Callable[[], Any],
+) -> Any:
+    """Run one non-timed lifecycle action with durable diagnostic evidence."""
+    if phase not in LIFECYCLE_RECOVERY:
+        raise ValueError(f"unsupported benchmark lifecycle phase {phase!r}")
+    started_wall = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    started = time.monotonic()
+    try:
+        result = action()
+    except (BenchmarkSnapshotError, OSError, RuntimeError, ValueError, SmokeError, subprocess.TimeoutExpired) as error:
+        finished_wall = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        evidence.setdefault("lifecycle", {}).setdefault(phase, []).append(
+            {
+                "status": "failed",
+                "started_at": started_wall,
+                "finished_at": finished_wall,
+                "duration_s": time.monotonic() - started,
+                "cause": str(error),
+                "recovery": LIFECYCLE_RECOVERY[phase],
+            }
+        )
+        raise SmokeError(
+            f"benchmark {phase} phase failed: {error}; recovery: {LIFECYCLE_RECOVERY[phase]}"
+        ) from error
+    finished_wall = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    evidence.setdefault("lifecycle", {}).setdefault(phase, []).append(
+        {
+            "status": "passed",
+            "started_at": started_wall,
+            "finished_at": finished_wall,
+            "duration_s": time.monotonic() - started,
+        }
+    )
+    return result
 
 
 def os_account_home() -> Path:
@@ -1294,6 +1362,7 @@ def run_capacity(
     process: subprocess.Popen[str] | None = None
     daemon_output: DaemonOutputCapture | None = None
     before: list[int] | None = None
+    snapshot: VerifiedSnapshot | None = None
     evidence: dict[str, Any] = {
         "schema_version": 2,
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -1320,6 +1389,12 @@ def run_capacity(
         "atm_home": str(home),
         "host_state_isolation": isolation_mode,
         "managed_log_level": managed_log_level,
+        "benchmark_account": {
+            "account_identity": (
+                f"sha256:{hashlib.sha256(str(benchmark_account.account_id).encode()).hexdigest()[:16]}"
+            ),
+        },
+        "lifecycle": {},
         "runs": [],
         "thresholds": None,
         "comparison_source_revision": comparison_source_revision,
@@ -1334,23 +1409,57 @@ def run_capacity(
         "operational_checks": {},
     }
     started_at = time.monotonic()
-    try:
-        require_clean_host_daemon_state(smoke_label="admission-capacity smoke")
-        before = count_atm_daemon_processes()
-        home.mkdir(parents=True, exist_ok=False)
+
+    def stop_owned_daemon(*, output_key: str | None = None) -> None:
+        """Stop only the runner-owned daemon and retain its bounded diagnostics."""
+        nonlocal process, daemon_output
+        if process is None:
+            return
+        reap_owned_daemon(process)
+        if daemon_output is not None:
+            daemon_output.join()
+            if output_key is not None:
+                evidence[output_key] = daemon_output.evidence()
+        process = None
+        daemon_output = None
+
+    def start_and_doctor() -> None:
+        """Start the exact released daemon and require its public ready response."""
+        nonlocal process, daemon_output
         process, daemon_output = start_capacity_daemon(daemon, home, env, peer_wire_security)
         doctor = command_result(
             [str(atm), "doctor", "--json"],
             timeout=10.0,
             env=host_runtime_client_environment(env),
         )
-        doctor_payload = benchmark_doctor_payload(doctor)
-        evidence["daemon_pid"] = process.pid
-        # The roster commands use the public daemon boundary. Start the
-        # selected daemon before creating the disposable team members.
-        prepare_capacity_roster(atm, env, home, roster)
-        evidence["doctor"] = doctor_payload
+        evidence["doctor"] = benchmark_doctor_payload(doctor)
         evidence["doctor_status"] = "passed"
+        evidence["daemon_pid"] = process.pid
+
+    try:
+        run_lifecycle_phase(
+            evidence,
+            "snapshot",
+            lambda: require_clean_host_daemon_state(smoke_label="admission-capacity smoke"),
+        )
+        before = count_atm_daemon_processes()
+        home.mkdir(parents=True, exist_ok=False)
+        # The pre-roster daemon is deliberately short-lived: it initializes
+        # the account database, then is quiesced before the public snapshot
+        # owner copies the clean baseline.
+        run_lifecycle_phase(evidence, "snapshot", start_and_doctor)
+        run_lifecycle_phase(
+            evidence, "stop", lambda: stop_owned_daemon(output_key="pre_snapshot_daemon_output"),
+        )
+        snapshot = run_lifecycle_phase(evidence, "snapshot", create_verified_snapshot)
+        evidence["clean_baseline_snapshot"] = snapshot_evidence(snapshot)
+        evidence["clean_baseline_snapshot"]["sidecars_absent"] = True
+
+        # Roster creation belongs strictly after clean-baseline publication.
+        run_lifecycle_phase(evidence, "profile", start_and_doctor)
+        run_lifecycle_phase(
+            evidence, "profile", lambda: prepare_capacity_roster(atm, env, home, roster),
+        )
         endpoint = local_endpoint(transport)
         evidence["endpoint"] = {
             "transport": endpoint.kind,
@@ -1358,21 +1467,20 @@ def run_capacity(
         }
         if endpoint.kind == "uds" and not Path(str(endpoint.address)).exists():
             raise SmokeError(f"daemon did not publish public local socket {endpoint.address}")
-        evidence["operational_checks"]["cached_roster_heartbeat"] = run_cached_roster_heartbeat_probe(
-            endpoint,
-            home,
-            frames_per_connection,
-            workers,
-            roster,
+        evidence["operational_checks"]["cached_roster_heartbeat"] = run_lifecycle_phase(
+            evidence,
+            "profile",
+            lambda: run_cached_roster_heartbeat_probe(
+                endpoint, home, frames_per_connection, workers, roster,
+            ),
         )
-        profile = run_profile(
-            endpoint,
-            home,
-            frames_per_connection,
-            requested_messages,
-            sample_count,
-            workers,
-            roster=roster,
+        profile = run_lifecycle_phase(
+            evidence,
+            "profile",
+            lambda: run_profile(
+                endpoint, home, frames_per_connection, requested_messages,
+                sample_count, workers, roster=roster,
+            ),
         )
         evidence["runs"] = [profile]
         evidence["sample_count"] = profile["sample_count"]
@@ -1393,29 +1501,6 @@ def run_capacity(
             comparison_strict, comparison_required,
         )
         evidence["passed"] = evidence["thresholds"]["passed"]
-        expected_accepted_count = sum(item["accepted_count"] for item in profile["intervals"])
-
-        # Restart the actual execution daemon. A transport success alone is
-        # not durable evidence, so prove every committed row survived using an
-        # exact read-only count of its disposable store.
-        reap_owned_daemon(process)
-        daemon_output.join()
-        evidence["pre_restart_daemon_output"] = daemon_output.evidence()
-        process = None
-        daemon_output = None
-        process, daemon_output = start_capacity_daemon(daemon, home, env, peer_wire_security)
-        restart_doctor = command_result(
-            [str(atm), "doctor", "--json"],
-            timeout=10.0,
-            env=host_runtime_client_environment(env),
-        )
-        benchmark_doctor_payload(restart_doctor)
-        # The full doctor payload is host-private diagnostics; publication only
-        # needs the asserted healthy result after the restart.
-        evidence["doctor_after_restart"] = {"status": "passed"}
-        evidence["durability_after_restart"] = verify_durable_admissions(
-            benchmark_account.durable_state_root / "mail.db", expected_accepted_count, roster,
-        )
         # A missing plaintext comparison baseline blocks acceptance, but it
         # must not prevent collection of the bounded profile that explains the
         # gap. Preserve the measured run and durability proof, then fail closed.
@@ -1434,12 +1519,34 @@ def run_capacity(
             evidence["run_duration_s"] = time.monotonic() - started_at
         if process is not None:
             try:
-                reap_owned_daemon(process)
-            except subprocess.TimeoutExpired:
+                run_lifecycle_phase(evidence, "stop", stop_owned_daemon)
+            except SmokeError as error:
                 evidence["passed"] = False
-                evidence["cleanup_failure"] = (
-                    f"admission-capacity daemon pid {process.pid} did not exit within 10.0s"
+                evidence["failure"] = str(error)
+        if snapshot is not None and process is None:
+            try:
+                restored = run_lifecycle_phase(
+                    evidence, "restore", lambda: restore_verified_snapshot(snapshot.snapshot_id),
                 )
+                evidence["restored_clean_baseline"] = snapshot_evidence(restored)
+
+                def verify_clean_baseline() -> None:
+                    start_and_doctor()
+                    verified = verify_completed_snapshot(snapshot.snapshot_id)
+                    evidence["post_restore_snapshot"] = snapshot_evidence(verified)
+                    evidence["doctor_after_restore"] = {"status": "passed"}
+
+                run_lifecycle_phase(evidence, "post_restore_verify", verify_clean_baseline)
+                run_lifecycle_phase(evidence, "cleanup", stop_owned_daemon)
+            except SmokeError as error:
+                evidence["passed"] = False
+                evidence["failure"] = str(error)
+        elif snapshot is not None:
+            evidence["passed"] = False
+            evidence["failure"] = (
+                "benchmark stop phase failed; recovery: keep the benchmark daemon stopped and do not restore "
+                "while SQLite sidecars may be active"
+            )
         if daemon_output is not None:
             daemon_output.join()
             evidence["daemon_output"] = daemon_output.evidence()
@@ -1451,10 +1558,7 @@ def run_capacity(
             except RuntimeError as error:
                 evidence["passed"] = False
                 evidence["cleanup_failure"] = str(error)
-        raw_evidence_path = write_raw_evidence(raw_evidence_directory, evidence)
-        evidence_path = write_evidence(evidence_directory, evidence)
-        print(f"local benchmark trace: {raw_evidence_path}")
-        try:
+        def remove_temporary_runtime() -> None:
             if home.exists():
                 for child in sorted(home.rglob("*"), reverse=True):
                     if child.is_file() or child.is_symlink():
@@ -1462,8 +1566,15 @@ def run_capacity(
                     elif child.is_dir():
                         child.rmdir()
                 home.rmdir()
-        except OSError as error:
-            raise SmokeError(f"could not remove temporary capacity ATM_HOME {home}: {error}") from error
+
+        try:
+            run_lifecycle_phase(evidence, "cleanup", remove_temporary_runtime)
+        except SmokeError as error:
+            evidence["passed"] = False
+            evidence["failure"] = str(error)
+        raw_evidence_path = write_raw_evidence(raw_evidence_directory, evidence)
+        evidence_path = write_evidence(evidence_directory, evidence)
+        print(f"local benchmark trace: {raw_evidence_path}")
     return (0 if evidence.get("passed") else 1), evidence_path
 
 

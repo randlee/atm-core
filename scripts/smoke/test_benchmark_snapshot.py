@@ -123,6 +123,20 @@ class BenchmarkSnapshotTests(unittest.TestCase):
                     SNAPSHOT.restore_verified_snapshot(snapshot.snapshot_id)
             self.assertEqual(sidecar.read_text(encoding="utf-8"), "active sidecar")
 
+    def test_snapshot_refuses_active_sidecars_before_creating_a_candidate(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            account = self._account(Path(temporary))
+            database = self._database(account, 1)
+            sidecar = database.with_name(f"{database.name}-wal")
+            sidecar.write_text("active sidecar", encoding="utf-8")
+
+            with self.assertRaisesRegex(SNAPSHOT.BenchmarkSnapshotError, "daemon to be stopped"):
+                self._snapshot(account)
+
+            self.assertEqual(sidecar.read_text(encoding="utf-8"), "active sidecar")
+            root = account.home / ".atm" / SNAPSHOT.SNAPSHOT_ROOT_NAME
+            self.assertFalse(root.exists())
+
     def test_source_in_wal_mode_is_snapshotted_by_the_sqlite_backup_api(self):
         with tempfile.TemporaryDirectory() as temporary:
             account = self._account(Path(temporary))
