@@ -1544,7 +1544,16 @@ fn sqlite_writer_batch_window_is_private_to_storage() {
         "the writer batch window must not have any visibility modifier"
     );
 
-    for source in ai11_guarded_workspace_sources(&root) {
+    let smoke_sources = writer_batch_window_smoke_sources(&root);
+    assert!(
+        smoke_sources.contains(&root.join("scripts/smoke/run_admission_capacity.py")),
+        "the admission benchmark harness must remain covered by the writer batch-window guard"
+    );
+
+    for source in ai11_guarded_workspace_sources(&root)
+        .into_iter()
+        .chain(smoke_sources)
+    {
         if source == writer_path {
             continue;
         }
@@ -1978,6 +1987,28 @@ fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) {
             files.push(path);
         }
     }
+}
+
+fn collect_python_files(directory: &Path, files: &mut Vec<PathBuf>) {
+    for entry in fs::read_dir(directory)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", directory.display()))
+    {
+        let path = entry
+            .unwrap_or_else(|error| panic!("failed to read directory entry: {error}"))
+            .path();
+        if path.is_dir() {
+            collect_python_files(&path, files);
+        } else if path.extension().and_then(|extension| extension.to_str()) == Some("py") {
+            files.push(path);
+        }
+    }
+}
+
+fn writer_batch_window_smoke_sources(root: &Path) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    collect_python_files(&root.join("scripts/smoke"), &mut files);
+    files.sort();
+    files
 }
 
 fn ai11_guarded_workspace_sources(root: &Path) -> Vec<PathBuf> {
