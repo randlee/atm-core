@@ -188,7 +188,7 @@ impl GraftNudgeSink {
             if error.code() == AtmErrorCode::PostSendGraftUnavailable {
                 error
             } else {
-                AtmError::for_code(AtmErrorCode::PostSendGraftUnavailable)
+                AtmError::for_code(AtmErrorCode::PostSendGraftUnavailable).with_cause(error)
             }
         })?;
         match response {
@@ -208,9 +208,9 @@ fn tmux_command() -> Command {
 
 fn run_tmux_command(mut command: Command, action: &'static str) -> Result<()> {
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
-    let child = command
-        .spawn()
-        .map_err(|_source| AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed))?;
+    let child = command.spawn().map_err(|source| {
+        AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed).with_cause(source)
+    })?;
     let output = wait_for_tmux_output(child, action)?;
     ensure_tmux_success(output, action).map_err(Into::into)
 }
@@ -220,8 +220,10 @@ fn wait_for_tmux_output(mut child: Child, _action: &'static str) -> Result<Outpu
     loop {
         match child.try_wait() {
             Ok(Some(_)) => {
-                return child.wait_with_output().map_err(|_source| {
-                    AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed).into()
+                return child.wait_with_output().map_err(|source| {
+                    AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed)
+                        .with_cause(source)
+                        .into()
                 });
             }
             Ok(None) if started_at.elapsed() < TMUX_SEND_TIMEOUT => {
@@ -232,10 +234,12 @@ fn wait_for_tmux_output(mut child: Child, _action: &'static str) -> Result<Outpu
                 let _ = child.wait();
                 return Err(AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed).into());
             }
-            Err(_source) => {
+            Err(source) => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err(AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed).into());
+                return Err(AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed)
+                    .with_cause(source)
+                    .into());
             }
         }
     }
@@ -246,12 +250,12 @@ fn ensure_tmux_success(output: Output, action: &'static str) -> Result<(), AtmEr
         return Ok(());
     }
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    let _detail = if stderr.is_empty() {
+    let detail = if stderr.is_empty() {
         format!("tmux exited unsuccessfully while trying to {action}")
     } else {
         format!("tmux exited unsuccessfully while trying to {action}: {stderr}")
     };
-    Err(AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed))
+    Err(AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed).with_cause(detail))
 }
 
 #[cfg(test)]
