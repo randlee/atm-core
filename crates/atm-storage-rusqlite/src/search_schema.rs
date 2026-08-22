@@ -204,46 +204,37 @@ pub(crate) fn sync_template_projection(
     Ok(())
 }
 
-pub(crate) fn sync_message_projection(
+/// Synchronize the searchable projection for an ordinary message that was
+/// just inserted through the writer lane.  Its canonical fields are already
+/// present in the admitted request, so avoid a redundant row read on every
+/// successful durable write.
+pub(crate) fn sync_inserted_message_projection(
     connection: &SqliteConnection,
     target: &SharedDbTarget,
     team: &str,
     agent: &str,
     message_key: &str,
+    message_id: Option<&str>,
+    message_at: &str,
+    message_text: &str,
+    summary: Option<&str>,
+    tags_json: &str,
+    from_agent: &str,
 ) -> Result<(), atm_storage::AtmError> {
-    let row = connection
-        .query_row(
-            "SELECT team, agent, message_key, message_id, message_at, message_text,
-                summary, tags_json, vars_json, from_agent
-         FROM mail_messages WHERE team = ?1 AND agent = ?2 AND message_key = ?3",
-            rusqlite::params![team, agent, message_key],
-            |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, Option<String>>(3)?,
-                    row.get::<_, Option<String>>(4)?,
-                    row.get::<_, Option<String>>(5)?,
-                    row.get::<_, Option<String>>(6)?,
-                    row.get::<_, Option<String>>(7)?,
-                    row.get::<_, Option<String>>(8)?,
-                    row.get::<_, Option<String>>(9)?,
-                ))
-            },
-        )
-        .optional()
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                "failed to load message for search synchronization",
-                error,
-            )
-        })?;
-    if let Some(row) = row {
-        sync_message_projection_values(connection, target, row)?;
-    }
-    Ok(())
+    sync_message_projection_fields(
+        connection,
+        target,
+        team,
+        agent,
+        message_key,
+        message_id,
+        message_at,
+        message_text,
+        summary,
+        Some(tags_json),
+        None,
+        Some(from_agent),
+    )
 }
 
 pub(crate) fn sync_message_projection_by_key(
@@ -315,13 +306,42 @@ fn sync_message_projection_values(
         from_agent,
     ): MessageProjectionRow,
 ) -> Result<(), atm_storage::AtmError> {
+    sync_message_projection_fields(
+        connection,
+        target,
+        &team,
+        &agent,
+        &message_key,
+        message_id.as_deref(),
+        message_at.as_deref().unwrap_or_default(),
+        message_text.as_deref().unwrap_or_default(),
+        summary.as_deref(),
+        tags_json.as_deref(),
+        vars_json.as_deref(),
+        from_agent.as_deref(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn sync_message_projection_fields(
+    connection: &SqliteConnection,
+    target: &SharedDbTarget,
+    team: &str,
+    agent: &str,
+    message_key: &str,
+    message_id: Option<&str>,
+    message_at: &str,
+    message_text: &str,
+    summary: Option<&str>,
+    tags_json: Option<&str>,
+    vars_json: Option<&str>,
+    from_agent: Option<&str>,
+) -> Result<(), atm_storage::AtmError> {
     let tags = tags_json
-        .as_deref()
         .map(flatten_json_text)
         .transpose()?
         .unwrap_or_default();
     let var_values = vars_json
-        .as_deref()
         .map(flatten_json_text)
         .transpose()?
         .unwrap_or_default();
@@ -340,8 +360,8 @@ fn sync_message_projection_values(
             agent,
             message_key,
             message_id,
-            message_at.unwrap_or_default(),
-            message_text.unwrap_or_default(),
+            message_at,
+            message_text,
             summary.unwrap_or_default(),
             tags,
             var_values,
