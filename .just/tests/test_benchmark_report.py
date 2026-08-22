@@ -44,6 +44,7 @@ class BenchmarkReportTests(unittest.TestCase):
             "elapsed_seconds": 0.2,
             "admissions_per_second": 50_000.0,
         }
+        payload["campaign_id"] = "20260822T200000Z-aaaaaaaaaaaa"
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "result.json"
             source.write_text(json.dumps(payload), encoding="utf-8")
@@ -51,11 +52,14 @@ class BenchmarkReportTests(unittest.TestCase):
             with mock.patch.object(REPORT, "ROOT", ROOT):
                 panel = REPORT.render_run(result, "sqlite-probe", Path(directory))
                 aggregate = REPORT.render_aggregate([result], Path(directory))
+                campaign = REPORT.render_campaign(result["campaign_id"], [result], Path(directory) / "send-message-benchmark")
             panel_text = panel.read_text(encoding="utf-8")
             aggregate_text = aggregate.read_text(encoding="utf-8")
+            campaign_text = campaign.read_text(encoding="utf-8")
         self.assertEqual(result["direct_sqlite_message_write"]["accepted_count"], 10_000)
         self.assertIn("50000.00", panel_text)
-        self.assertIn("Direct SQLite msg/s", aggregate_text)
+        self.assertIn("20260822T200000Z-aaaaaaaaaaaa", aggregate_text)
+        self.assertIn("Result msg/sec", campaign_text)
 
     def test_source_revision_is_retained_only_when_it_is_a_git_revision(self) -> None:
         payload = json.loads(self.fixture("success-uds-f1.json").read_text(encoding="utf-8"))
@@ -103,33 +107,31 @@ class BenchmarkReportTests(unittest.TestCase):
 
     def test_aggregate_orders_utc_history_and_separates_transports(self) -> None:
         records = [
-            REPORT.load_result(self.fixture("success-uds-f1.json")),
-            REPORT.load_result(self.fixture("failed-tcp-f8.json")),
+            {**REPORT.load_result(self.fixture("success-uds-f1.json")), "campaign_id": "20260822T010000Z-aaaaaaaaaaaa"},
+            {**REPORT.load_result(self.fixture("failed-tcp-f8.json")), "campaign_id": "20260822T020000Z-bbbbbbbbbbbb"},
         ]
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             with mock.patch.object(REPORT, "ROOT", ROOT):
                 output = REPORT.render_aggregate(records, root)
             text = output.read_text(encoding="utf-8")
-            self.assertIn("mac-arm64-01", text)
-            self.assertIn("uds", text)
-            self.assertIn("tcp", text)
-            self.assertLess(text.index("2026-08-01T01:00:00Z"), text.index("2026-08-01T01:01:00Z"))
+        self.assertIn("mac-arm64-01", text)
+        self.assertIn("20260822T010000Z-aaaaaaaaaaaa", text)
+        self.assertIn("20260822T020000Z-bbbbbbbbbbbb", text)
 
     def test_latest_profile_state_supersedes_older_failed_history(self) -> None:
         failed = REPORT.load_result(self.fixture("failed-tcp-f8.json"))
-        recovered = {**failed, "generated_at": "2026-08-01T02:00:00Z", "passed": True}
+        recovered = {
+            **failed, "generated_at": "2026-08-01T02:00:00Z", "passed": True,
+            "campaign_id": "20260801T020000Z-aaaaaaaaaaaa",
+        }
         latest = REPORT.latest_profile_results([failed, recovered])
         self.assertEqual(latest, [recovered])
         with tempfile.TemporaryDirectory() as directory:
             output = REPORT.render_aggregate([failed, recovered], Path(directory))
             text = output.read_text(encoding="utf-8")
-        self.assertIn(
-            "Current candidate campaign: mac-arm64-01 / tcp / legacy-unverified / unversioned",
-            text,
-        )
-        self.assertIn("1/6 profiles, 1 passed, 0 failed; missing frames: 1, 2, 4, 16, 64.", text)
-        self.assertIn("2 immutable historical runs retained.", text)
+        self.assertIn("20260801T020000Z-aaaaaaaaaaaa", text)
+        self.assertIn("1 pre-campaign artifacts", text)
 
     def test_current_campaign_is_complete_only_for_all_six_frames_of_one_candidate(self) -> None:
         base = REPORT.load_result(self.fixture("success-uds-f1.json"))
@@ -158,12 +160,31 @@ class BenchmarkReportTests(unittest.TestCase):
             "benchmark_target": "tcp-tls",
             "hook_mode": "active",
             "passed": True,
+            "campaign_id": "20260801T030000Z-aaaaaaaaaaaa",
         }
-        self.assertEqual(REPORT.current_campaign_results([plain, mutual_tls]), [mutual_tls])
+        self.assertEqual(REPORT.campaign_groups([plain, mutual_tls]), {
+            "20260801T030000Z-aaaaaaaaaaaa": [mutual_tls],
+        })
         with tempfile.TemporaryDirectory() as directory:
             output = REPORT.render_aggregate([plain, mutual_tls], Path(directory))
             text = output.read_text(encoding="utf-8")
-        self.assertIn("mutual-tls", text)
+        self.assertIn("20260801T030000Z-aaaaaaaaaaaa", text)
+        self.assertIn("1 pre-campaign artifacts", text)
+
+    def test_campaign_xhtml_has_the_required_four_target_table(self) -> None:
+        base = REPORT.load_result(self.fixture("success-uds-f1.json"))
+        campaign_id = "20260822T200000Z-aaaaaaaaaaaa"
+        targets = [
+            {**base, "campaign_id": campaign_id, "benchmark_target": "sqlite", "transport": "sqlite", "peer_wire_security": "plaintext-test"},
+            {**base, "campaign_id": campaign_id, "benchmark_target": "uds", "transport": "uds", "peer_wire_security": "plaintext-test"},
+            {**base, "campaign_id": campaign_id, "benchmark_target": "tcp", "transport": "tcp", "peer_wire_security": "plaintext-test"},
+            {**base, "campaign_id": campaign_id, "benchmark_target": "tcp-tls", "transport": "tcp", "peer_wire_security": "mutual-tls"},
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            output = REPORT.render_campaign(campaign_id, targets, Path(directory))
+            text = output.read_text(encoding="utf-8")
+        self.assertIn("Result msg/sec", text)
+        self.assertIn("Baseline msg/sec", text)
         self.assertIn("tcp-tls", text)
 
     def test_bounded_benchmark_failure_code_is_rendered(self) -> None:

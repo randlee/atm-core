@@ -1717,6 +1717,7 @@ def run_capacity(
     managed_daemon: ManagedDaemonOptions | None = None,
     preflight_failure_code: str | None = None,
     preflight_failure: str | None = None,
+    campaign_id: str | None = None,
 ) -> CapacityRunResult:
     """Start one branch daemon, exercise public UDS API, retain evidence, then clean up."""
     if managed_daemon is not None:
@@ -1761,6 +1762,7 @@ def run_capacity(
     evidence: dict[str, Any] = {
         "schema_version": 2,
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "campaign_id": campaign_id,
         "host_label": os.environ.get("ATM_CAPACITY_HOST_LABEL", "local"),
         "transport": transport,
         "peer_wire_security": peer_wire_security,
@@ -2033,6 +2035,14 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
     """
     if any((args.target, args.transport, args.frames_per_connection, args.sustained, args.baseline)):
         raise SmokeError("the required f8 suite does not permit target, transport, profile, or baseline selection")
+    source = source_revision()
+    supplied_campaign = os.environ.get("ATM_BENCHMARK_CAMPAIGN_ID")
+    if supplied_campaign is not None and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", supplied_campaign):
+        raise SmokeError("ATM_BENCHMARK_CAMPAIGN_ID must be a safe opaque campaign label")
+    campaign_id = supplied_campaign or (
+        f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{source[:12]}"
+    )
+    print(f"benchmark campaign: {campaign_id}")
     codes: list[int] = []
     for position, target in enumerate(BENCHMARK_TARGETS, start=1):
         transport, peer_wire_security = BENCHMARK_TARGETS[target]
@@ -2050,6 +2060,7 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
                     peer_wire_security=peer_wire_security,
                     benchmark_target=target,
                     comparison_required=False,
+                    campaign_id=campaign_id,
                 )
         else:
             run = run_capacity(
@@ -2064,6 +2075,7 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
                 peer_wire_security=peer_wire_security,
                 benchmark_target=target,
                 comparison_required=False,
+                campaign_id=campaign_id,
             )
         codes.append(run.code)
         try:

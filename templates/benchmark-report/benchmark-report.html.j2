@@ -5,17 +5,8 @@ metadata:
 required_variables:
   - title
   - generated_at
-  - status
-  - rows
-  - campaign_host_label
-  - campaign_transport
-  - campaign_peer_wire_security
-  - campaign_source_revision
-  - campaign_profile_count
-  - campaign_passed_count
-  - campaign_failed_count
-  - campaign_missing_frames
-  - history_count
+  - campaigns
+  - legacy_count
 ---
 <!DOCTYPE html>
 <html lang="en">
@@ -35,26 +26,23 @@ required_variables:
 </head>
 <body>
   <h1>{{ title | e }}</h1>
-  <p class="meta">Generated {{ generated_at | e }} · <span class="status {{ status | e }}">{{ status | e }}</span></p>
-  <p>Current candidate campaign: {{ campaign_host_label | e }} / {{ campaign_transport | e }} / {{ campaign_peer_wire_security | e }} / {{ campaign_source_revision | default('unversioned', true) | e }} — {{ campaign_profile_count }}/{{ 6 }} profiles, {{ campaign_passed_count }} passed, {{ campaign_failed_count }} failed; missing frames: {{ campaign_missing_frames | e }}. {{ history_count }} immutable historical runs retained.</p>
-  <h2>UTC benchmark history</h2>
+  <p class="meta">Generated {{ generated_at | e }}</p>
+  <p>Each campaign is an immutable date/version report. Open it to see one four-target table for every benchmarked host.</p>
+  <h2>Benchmark campaigns</h2>
   <table>
-    <thead><tr><th>UTC timestamp</th><th>Host</th><th>Transport</th><th>Peer-wire mode</th><th>Target</th><th>Frames/connection</th><th>Direct SQLite msg/s</th><th>Status</th><th>Evidence</th></tr></thead>
+    <thead><tr><th>Campaign</th><th>UTC timestamp</th><th>Source revision</th><th>Hosts</th><th>Report</th></tr></thead>
     <tbody>
-{% for row in rows %}
+{% for campaign in campaigns %}
       <tr>
-        <td><time datetime="{{ row.generated_at | e }}">{{ row.generated_at | e }}</time></td>
-        <td>{{ row.host_label | e }}</td>
-        <td>{{ row.transport | e }}</td>
-        <td>{{ row.peer_wire_security | e }}</td>
-        <td>{{ row.benchmark_target | e }}</td>
-        <td>{{ row.frames_per_connection }}</td>
-        <td>{{ 'n/a' if row.direct_sqlite_admissions_per_second is none else '%.2f' | format(row.direct_sqlite_admissions_per_second) }}</td>
-        <td class="{{ 'pass' if row.passed else 'fail' }}">{{ 'PASS' if row.passed else 'FAIL' }}</td>
-        <td><a href="{{ row.json_href | e }}">JSON</a> · <a href="{{ row.xhtml_href | e }}">XHTML panel</a></td>
+        <td>{{ campaign.campaign_id | e }}</td>
+        <td><time datetime="{{ campaign.generated_at | e }}">{{ campaign.generated_at | e }}</time></td>
+        <td>{{ campaign.source_revision | e }}</td>
+        <td>{{ campaign.host_labels | e }}</td>
+        <td><a href="{{ campaign.xhtml_href | e }}">XHTML report</a></td>
       </tr>
 {% endfor %}
     </tbody>
   </table>
+  <p class="meta">{{ legacy_count }} pre-campaign artifacts remain in the immutable evidence directory but are not used as campaign results.</p>
 </body>
 </html>
