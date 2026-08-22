@@ -1528,7 +1528,8 @@ fn atm_runtime_must_not_depend_on_atm_storage_rusqlite() {
 #[test]
 fn sqlite_writer_batch_window_is_private_to_storage() {
     let root = workspace_root();
-    let writer = read_source(&root.join("crates/atm-storage-rusqlite/src/writer/mod.rs"));
+    let writer_path = root.join("crates/atm-storage-rusqlite/src/writer/mod.rs");
+    let writer = read_source(&writer_path);
     let syntax = syn::parse_file(&writer).expect("sqlite writer source must parse");
     let batch_window = syntax
         .items
@@ -1543,14 +1544,14 @@ fn sqlite_writer_batch_window_is_private_to_storage() {
         "the writer batch window must not have any visibility modifier"
     );
 
-    for source in [
-        "crates/atm-http-runtime/src/http1_server.rs",
-        "crates/atm-http-runtime/src/client.rs",
-        "scripts/smoke/run_admission_capacity.py",
-    ] {
+    for source in ai11_guarded_workspace_sources(&root) {
+        if source == writer_path {
+            continue;
+        }
         assert!(
-            !read_source(&root.join(source)).contains("BATCH_TIME_BUDGET"),
-            "the writer batch window must not become {source} configuration"
+            !read_source(&source).contains("BATCH_TIME_BUDGET"),
+            "the writer batch window must not become {} configuration",
+            source.display(),
         );
     }
 }
