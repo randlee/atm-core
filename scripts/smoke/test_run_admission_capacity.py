@@ -1608,6 +1608,13 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(endpoint.tls_server_name, "benchmark.example.test")
         self.assertEqual(endpoint.tls_certificate_bundle, Path("/tmp/identity.pem"))
 
+    def test_disposable_peer_authority_is_unique_per_benchmark_run(self):
+        first = RUNNER.CapacityRoster("first", "team", "agent", "recipient")
+        second = RUNNER.CapacityRoster("second", "team", "agent", "recipient")
+        with mock.patch.dict(os.environ, {"ATM_CAPACITY_PEER_HOST": "m5.local"}, clear=False):
+            self.assertEqual(RUNNER.disposable_peer_host(first), "capacity-first.m5.local")
+            self.assertEqual(RUNNER.disposable_peer_host(second), "capacity-second.m5.local")
+
     def test_main_records_uds_baseline_source_as_a_diffable_comparison(self):
         captured: dict[str, object] = {}
 
