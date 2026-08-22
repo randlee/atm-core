@@ -293,10 +293,11 @@ def campaign_target_rows(records: Iterable[dict[str, Any]]) -> list[dict[str, An
     for target in TARGET_ORDER:
         result = newest.get(target)
         baseline = TARGET_BASELINES[target]
-        metric = result.get("metrics", {}).get("admissions_per_second", {}) if result else {}
+        metrics = result.get("metrics") if result else None
+        metric = metrics.get("admissions_per_second", {}) if isinstance(metrics, dict) else {}
         value = metric.get("p50") if isinstance(metric, dict) else None
-        accepted = result.get("metrics", {}).get("accepted_count") if result else None
-        requested = result.get("metrics", {}).get("requested_count") if result else None
+        accepted = metrics.get("accepted_count") if isinstance(metrics, dict) else None
+        requested = metrics.get("requested_count") if isinstance(metrics, dict) else None
         passed = (
             isinstance(value, (int, float))
             and isinstance(accepted, int)
