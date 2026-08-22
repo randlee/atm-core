@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-AO26-F006>
+  a triage:Finding ;
+  triage:findingId "RBQA-AO26-F006" ;
+  triage:title "No dedicated test for the new runtime-build failure path (AtmError::daemon_unavailable)" ;
+  triage:description "The new runtime-build failure path (writer/mod.rs:107-121, AtmError::daemon_unavailable) has no dedicated test exercising the failure branch. Low-likelihood in practice; quality-mgr called it optional, but standing policy is to fix all non-blocking findings this round rather than silently drop them." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "single-occurrence" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-22T05:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.6 ;
+  triage:foundAt "2026-08-22T04:57:52Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AO26-F006/F006-missing-test> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-AO26-F006/F006-missing-test>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/writer/mod.rs" ;
+  triage:line 107 ;
+  triage:snippet "AtmError::daemon_unavailable (untested error path)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/admission-writer-batching-regression" ;
+  triage:headSha "58061405073b4e57bffb0050ca954b6778c82719" ;
+  triage:occursIn <urn:atm:triage:worktree/AO26/58061405073b4e57bffb0050ca954b6778c82719> .
+
+<urn:atm:triage:worktree/AO26/58061405073b4e57bffb0050ca954b6778c82719>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/admission-writer-batching-regression" ;
+  triage:branch "fix/admission-writer-batching-regression" ;
+  triage:headSha "58061405073b4e57bffb0050ca954b6778c82719" ;
+  triage:orderIndex 7 .
