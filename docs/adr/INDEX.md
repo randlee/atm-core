@@ -58,6 +58,7 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-049 — hermes-atm/atm-graft First Public PyPI Release Versioning](./ADR-049-hermes-atm-first-public-pypi-release-versioning.md)
 - [ADR-051 — Permissive Declared Sender Identity and Roster Advisory](./ADR-051-permissive-declared-sender-identity.md)
 - [ADR-052 — Benchmark Account Isolation and Snapshot Policy](./ADR-052-benchmark-account-isolation-and-snapshot-policy.md)
+- [ADR-053 — Typed Temporary Daemon-Service Launch Overlay](./ADR-053-typed-temporary-daemon-service-launch-overlay.md)
 
 ## Extracted Crate-Local ADRs
 
