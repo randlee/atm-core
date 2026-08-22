@@ -325,7 +325,7 @@ fn sync_message_projection_values(
         .map(flatten_json_text)
         .transpose()?
         .unwrap_or_default();
-    connection.execute(
+    let mut statement = connection.prepare_cached(
         "INSERT INTO mail_message_search_documents(
              team, agent, message_key, message_id, message_at, body_text, summary, tags, var_values, from_agent
          ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
@@ -333,12 +333,27 @@ fn sync_message_projection_values(
              message_id = excluded.message_id, message_at = excluded.message_at,
              body_text = excluded.body_text, summary = excluded.summary, tags = excluded.tags,
              var_values = excluded.var_values, from_agent = excluded.from_agent",
-        rusqlite::params![
-            team, agent, message_key, message_id, message_at.unwrap_or_default(),
-            message_text.unwrap_or_default(), summary.unwrap_or_default(), tags, var_values,
+    ).map_err(|error| sqlite_error(target, "failed to cache message search projection", error))?;
+    statement
+        .execute(rusqlite::params![
+            team,
+            agent,
+            message_key,
+            message_id,
+            message_at.unwrap_or_default(),
+            message_text.unwrap_or_default(),
+            summary.unwrap_or_default(),
+            tags,
+            var_values,
             from_agent.unwrap_or_default(),
-        ],
-    ).map_err(|error| sqlite_error(target, "failed to synchronize message search projection", error))?;
+        ])
+        .map_err(|error| {
+            sqlite_error(
+                target,
+                "failed to synchronize message search projection",
+                error,
+            )
+        })?;
     Ok(())
 }
 
