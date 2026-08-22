@@ -1,7 +1,9 @@
 """Focused unit tests for the AI.33 public admission-capacity runner."""
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import json
 import os
 from contextlib import closing
@@ -183,16 +185,16 @@ class AdmissionCapacityTests(unittest.TestCase):
         path = Path(tempfile.gettempdir()) / "atm-capacity-unit-home"
         self.assertEqual(RUNNER.validate_capacity_home(path), path.resolve())
 
-    def test_isolation_accepts_only_a_dedicated_clean_user(self):
+    def test_isolation_requires_a_valid_manifest_not_environment_assertion(self):
         with mock.patch.dict(os.environ, {"ATM_CAPACITY_ISOLATED_OS_USER": "1"}, clear=False):
-            self.assertEqual(RUNNER.select_host_state_isolation(), "isolated_os_user")
-        with mock.patch.dict(
-            os.environ,
-            {"ATM_CAPACITY_ISOLATED_OS_USER": "", "ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE": "1"},
-            clear=False,
-        ):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "environment assertion"):
+                RUNNER.require_capacity_benchmark_account()
+        with mock.patch.dict(os.environ, {"ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE": "1"}, clear=False):
             with self.assertRaisesRegex(RUNNER.SmokeError, "is retired"):
-                RUNNER.select_host_state_isolation()
+                RUNNER.require_capacity_benchmark_account()
+        account = mock.Mock(durable_state_root=Path("/benchmark/.atm/db"))
+        with mock.patch.object(RUNNER, "require_benchmark_account", return_value=account):
+            self.assertEqual(RUNNER.require_capacity_benchmark_account(), account)
 
     def test_host_state_backup_refuses_without_changing_the_primary_database(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -338,12 +340,19 @@ class AdmissionCapacityTests(unittest.TestCase):
             ),
             mock.patch.object(RUNNER.HostStateBackup, "begin") as backup,
             mock.patch.object(RUNNER, "daemon_switch_result") as daemon_switch,
+            mock.patch.object(
+                RUNNER,
+                "require_benchmark_account",
+                side_effect=RUNNER.BenchmarkAccountError("manifest is missing"),
+            ),
+            mock.patch.object(RUNNER, "release_binary") as release_binary,
         ):
-            with self.assertRaisesRegex(RUNNER.SmokeError, "ATM_CAPACITY_ISOLATED_OS_USER"):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "benchmark-account preflight failed"):
                 RUNNER.run_capacity(Path("/tmp/atm-capacity-unit"), Path("/tmp"), "tcp", 1)
 
         backup.assert_not_called()
         daemon_switch.assert_not_called()
+        release_binary.assert_not_called()
 
     def test_managed_lifecycle_refuses_before_any_daemon_switch(self):
         options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
@@ -384,6 +393,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         with (
             mock.patch.object(sys, "argv", ["run_admission_capacity.py", "--managed-service", "x"]),
             mock.patch.object(RUNNER, "run_capacity") as run_capacity,
+            contextlib.redirect_stderr(io.StringIO()),
         ):
             with self.assertRaises(SystemExit) as exit_error:
                 RUNNER.main()
@@ -690,7 +700,11 @@ class AdmissionCapacityTests(unittest.TestCase):
             daemon.touch()
             atm.touch()
             with (
-                mock.patch.object(RUNNER, "select_host_state_isolation", return_value="isolated_os_user"),
+                mock.patch.object(
+                    RUNNER,
+                    "require_capacity_benchmark_account",
+                    return_value=mock.Mock(durable_state_root=Path(directory) / ".atm" / "db"),
+                ),
                 mock.patch.object(RUNNER, "require_clean_host_daemon_state"),
                 mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
                 mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
@@ -722,7 +736,11 @@ class AdmissionCapacityTests(unittest.TestCase):
             daemon.touch()
             atm.touch()
             with (
-                mock.patch.object(RUNNER, "select_host_state_isolation", return_value="isolated_os_user"),
+                mock.patch.object(
+                    RUNNER,
+                    "require_capacity_benchmark_account",
+                    return_value=mock.Mock(durable_state_root=root / ".atm" / "db"),
+                ),
                 mock.patch.object(RUNNER, "require_clean_host_daemon_state"),
                 mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
                 mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
@@ -768,7 +786,11 @@ class AdmissionCapacityTests(unittest.TestCase):
             daemon_output = mock.Mock()
             daemon_output.evidence.return_value = {}
             with (
-                mock.patch.object(RUNNER, "select_host_state_isolation", return_value="isolated_os_user"),
+                mock.patch.object(
+                    RUNNER,
+                    "require_capacity_benchmark_account",
+                    return_value=mock.Mock(durable_state_root=root / ".atm" / "db"),
+                ),
                 mock.patch.object(RUNNER, "require_clean_host_daemon_state"),
                 mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
                 mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),

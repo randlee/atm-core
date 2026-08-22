@@ -286,6 +286,48 @@ Satisfied by:
   - if cleanup cannot complete safely, fail closed rather than publishing an
     ambiguous ownership state
 
+- `REQ-P-DAEMON-SWITCH-001` The `daemon-switch` control plane must provide a
+  typed, temporary managed-service launch overlay for the selected matched ATM
+  CLI/daemon pair.
+
+  Required behavior:
+  - it may select only `mutual-tls` or `plaintext-test` peer-wire security;
+    raw daemon arguments, environment selection, durable plaintext settings,
+    alternate endpoints/roots, and generic service-editing interfaces are
+    forbidden
+  - before any service/configuration mutation it must validate the explicitly
+    selected CLI/daemon pair and named managed service, capture the accepted
+    original launch specification, and atomically persist owner-only recovery
+    state with service/pair identity, requested mode, original and overlay
+    digests, and transaction phase
+  - it must follow the bounded transaction `capture -> stop proof -> typed
+    overlay -> paired start/doctor proof -> exact restore -> paired normal
+    start/doctor proof`; a crash or failure must preserve enough state for an
+    explicit recovery command rather than guessing or silently repairing
+  - an incomplete overlay session blocks normal pair switching/restart and a
+    second overlay session until explicit recovery validates and restores the
+    captured original configuration; ambiguous, missing, changed, or
+    unsupported service configuration fails closed before an unsafe mutation
+  - adapters must preserve platform-native ownership: an owned macOS
+    LaunchAgent plist copy, exact Windows SCM `BINARY_PATH_NAME` round trip,
+    or an owned systemd `--user` drop-in.  They must not rewrite an unknown
+    source configuration or start a direct child daemon as fallback
+  - after successful restoration, the same selected pair starts through the
+    ordinary managed service without the temporary argument and doctor proves
+    normal mTLS/default state; selected-pair and applicable signing gates
+    remain mandatory for every lifecycle-changing operation
+  - evidence may expose redacted service metadata, pair identity, mode,
+    digests, phase durations, and recovery outcome, but never private keys,
+    certificate contents, raw trust records, or primary-database state
+  - implementation is outside `atm-http-runtime`, the canonical HTTP/router/
+    persistence path, direct-peer connector, and benchmark timed profile;
+    it must launch only the Tokio/Axum daemon target and must not modify the
+    frozen synchronous legacy daemon
+
+  This requirement is governed by ADR-053 and composes with ADR-026,
+  ADR-047, ADR-052, `REQ-P-BENCHMARK-001`, and
+  `REQ-CORE-TRANSPORT-002B1`.
+
 - `REQ-P-DAEMON-DISPATCHER-001` Request work accepted by the daemon must remain
   tracked by runtime-owned drain accounting until it finishes or is cancelled.
   Detached untracked request execution is forbidden even when the transport
