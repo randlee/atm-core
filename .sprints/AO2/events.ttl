@@ -97,3 +97,7 @@ triage:r12 a triage:Resolution ;
 triage:r13 a triage:Resolution ;
     triage:resolves <urn:atm:triage:finding/ATM-QA-105> ;
     triage:resolvedAt "2026-08-22T04:35:20Z"^^xsd:dateTime .
+triage:a8 a triage:Assignment ;
+    triage:ofSprint triage:AO2.6 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-22T04:36:00Z"^^xsd:dateTime .
