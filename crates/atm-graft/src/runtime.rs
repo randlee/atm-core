@@ -945,7 +945,7 @@ mod tests {
         let snapshot = Arc::new(RwLock::new(SessionSnapshot {
             team: TeamName::from_validated(TEST_TEAM),
             agent: AgentName::from_validated(TEST_QA),
-            state: GraftSessionState::Degraded,
+            state: GraftSessionState::Listening,
         }));
         let ctx = GraftReceiverLoopContext {
             endpoint_path,
@@ -1146,7 +1146,7 @@ mod tests {
         let snapshot = Arc::new(RwLock::new(SessionSnapshot {
             team: TeamName::from_validated(TEST_TEAM),
             agent: AgentName::from_validated(TEST_QA),
-            state: GraftSessionState::Listening,
+            state: GraftSessionState::Degraded,
         }));
         let ctx = GraftReceiverLoopContext {
             endpoint_path: endpoint_path.clone(),
