@@ -152,7 +152,11 @@ def _sha256(path: Path) -> tuple[int, str]:
 def _database_facts(path: Path, label: str) -> tuple[int, int]:
     _require_regular_file(path, label)
     try:
-        uri = f"{path.resolve().as_uri()}?mode=ro"
+        # This function verifies files that are already hash/manifest bound
+        # snapshot candidates or sidecar-free staging copies.  Immutable mode
+        # prevents SQLite from trying to open a neighbouring WAL/SHM file when
+        # macOS still has a harmless historical sidecar lock.
+        uri = f"{path.resolve().as_uri()}?mode=ro&immutable=1"
         with closing(sqlite3.connect(uri, uri=True)) as connection:
             quick_check = connection.execute("PRAGMA quick_check;").fetchone()
             user_version = connection.execute("PRAGMA user_version;").fetchone()
@@ -364,7 +368,9 @@ def restore_verified_snapshot(snapshot_id: str) -> VerifiedSnapshot:
     _assert_restore_sidecars_absent(live_database)
     staging = account.durable_state_root / f".{MAIL_DATABASE_NAME}.restore-staging-{secrets.token_hex(8)}"
     try:
-        with closing(sqlite3.connect(f"file:{snapshot.database.resolve()}?mode=ro", uri=True)) as reader:
+        with closing(sqlite3.connect(
+            f"file:{snapshot.database.resolve()}?mode=ro&immutable=1", uri=True,
+        )) as reader:
             with closing(sqlite3.connect(staging)) as writer:
                 reader.backup(writer)
                 writer.commit()
