@@ -159,10 +159,23 @@ if it does, the result is invalid rather than a performance result.
    Depends on 1 and 2.
 4. **AO2.5.4 — Harness integration and evidence schema:** make `just benchmark`
    use the account workflow and retain phase evidence outside timed samples.
-   Depends on 2 and 3.
+   Depends on 2, 3, and AO2.5.3b's reviewed `daemon-switch` typed temporary
+   launch-overlay capability.
 5. **AO2.5.5 — Physical proof and rollback drill:** run plaintext and mTLS on
    M4, M5, and Windows when available; restore the benchmark account after an
    injected failure. Depends on 4.
+
+### AO2.5.4 daemon-switch dependency
+
+The cross-platform managed-service launch overlay is intentionally owned by
+[AO2.5.3b](./sprint-AO2-5-3b-daemon-switch-launch-overlay.md), not by the
+benchmark harness.  AO2.5.4 may consume only its reviewed typed session API
+and returned evidence.  It must not start a child daemon, alter a platform
+service file, set an environment selector, choose an alternate endpoint/root,
+or pass arbitrary daemon arguments.  Snapshot, roster setup, daemon
+transitions, and restore remain timed phases with monotonic start/end
+timestamps; `run_profile` starts only after the post-snapshot doctor proof and
+ends before quiesce/restore.
 
 ## Acceptance criteria and test matrix
 
