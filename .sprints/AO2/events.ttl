@@ -84,3 +84,16 @@ triage:a6 a triage:Assignment ;
     triage:ofSprint triage:AO2.5 ;
     triage:assignedTo "arch-ctm" ;
     triage:assignedAt "2026-08-22T00:43:00Z"^^xsd:dateTime .
+triage:a7 a triage:Assignment ;
+    triage:ofSprint triage:AO2.3 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-20T20:40:00Z"^^xsd:dateTime .
+triage:c5 a triage:Completion ;
+    triage:ofSprint triage:AO2.3 ;
+    triage:at "2026-08-20T22:36:00Z"^^xsd:dateTime .
+triage:r12 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/ATM-QA-104> ;
+    triage:resolvedAt "2026-08-22T04:35:20Z"^^xsd:dateTime .
+triage:r13 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/ATM-QA-105> ;
+    triage:resolvedAt "2026-08-22T04:35:20Z"^^xsd:dateTime .
