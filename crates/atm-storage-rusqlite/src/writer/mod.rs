@@ -100,25 +100,47 @@ impl SqliteWriter {
         write_op_deadline: Duration,
         shutdown_join_deadline: Duration,
     ) -> Result<Self, AtmError> {
+        Self::start_with_runtime_builder(
+            target,
+            observability,
+            channel_capacity,
+            write_op_deadline,
+            shutdown_join_deadline,
+            || {
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_time()
+                    .build()
+            },
+        )
+    }
+
+    fn start_with_runtime_builder<BuildRuntime>(
+        target: Arc<SharedDbTarget>,
+        observability: Arc<dyn SqliteObservability>,
+        channel_capacity: usize,
+        write_op_deadline: Duration,
+        shutdown_join_deadline: Duration,
+        build_runtime: BuildRuntime,
+    ) -> Result<Self, AtmError>
+    where
+        BuildRuntime: FnOnce() -> std::io::Result<tokio::runtime::Runtime>,
+    {
         let mut connection = open_writer_connection_for_target(target.as_ref())?;
         ensure_schema(&mut connection, target.as_ref())?;
 
         let (sender, receiver) = tokio::sync::mpsc::channel(channel_capacity);
-        let worker_runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_time()
-            .build()
-            .map_err(|error| {
-                let error = AtmError::daemon_unavailable(format!(
-                    "failed to initialize sqlite writer timer: {error}"
-                ));
-                observability.emit_or_warn(SqliteObservabilityEvent::new(
-                    "writer_start",
-                    SqliteObservabilityOutcome::Failed,
-                    error.message().to_owned(),
-                    Some(error.code()),
-                ));
-                error
-            })?;
+        let worker_runtime = build_runtime().map_err(|error| {
+            let error = AtmError::daemon_unavailable(format!(
+                "failed to initialize sqlite writer timer: {error}"
+            ));
+            observability.emit_or_warn(SqliteObservabilityEvent::new(
+                "writer_start",
+                SqliteObservabilityOutcome::Failed,
+                error.message().to_owned(),
+                Some(error.code()),
+            ));
+            error
+        })?;
         let worker_observability = Arc::clone(&observability);
         let worker = thread::Builder::new()
             .name("atm-sqlite-writer".to_string())
@@ -675,6 +697,30 @@ fn copy_error(target: &SharedDbTarget, error: &AtmError) -> AtmError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::observability::NullSqliteObservability;
+
+    #[test]
+    fn writer_runtime_builder_failure_returns_daemon_unavailable() {
+        let target = Arc::new(SharedDbTarget::InMemory {
+            uri: "file:writer-runtime-build-failure?mode=memory&cache=shared".to_owned(),
+        });
+        let error = SqliteWriter::start_with_runtime_builder(
+            target,
+            Arc::new(NullSqliteObservability),
+            CHANNEL_CAPACITY,
+            WRITE_OP_DEADLINE,
+            WRITER_SHUTDOWN_JOIN_DEADLINE,
+            || Err(std::io::Error::other("injected runtime build failure")),
+        )
+        .expect_err("injected writer runtime failure must be surfaced");
+
+        assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+        assert!(
+            error.message().contains(
+                "failed to initialize sqlite writer timer: injected runtime build failure"
+            )
+        );
+    }
 
     fn queued_write() -> WriterMessage {
         let (reply, _receiver) = mpsc::sync_channel(1);
