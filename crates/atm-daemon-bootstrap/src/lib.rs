@@ -7,7 +7,7 @@ use std::io::Write;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 #[cfg(unix)]
 use std::num::NonZeroU32;
-use std::num::NonZeroUsize;
+use std::num::{NonZeroU16, NonZeroUsize};
 use std::path::PathBuf;
 use std::sync::{Arc, Once};
 use std::time::Duration;
@@ -134,6 +134,53 @@ pub fn parse_peer_wire_mode(
     Ok(mode.unwrap_or_default())
 }
 
+/// Selects the direct-peer listener port from the immutable daemon launch.
+///
+/// The fixed protocol port remains the service default. An explicit value is
+/// useful for a dedicated physical benchmark account that shares a host with
+/// another account's live daemon; it is not peer identity or wire policy.
+pub fn parse_direct_peer_port(
+    arguments: impl IntoIterator<Item = std::ffi::OsString>,
+) -> Result<NonZeroU16, AtmError> {
+    let mut arguments = arguments.into_iter();
+    let _program = arguments.next();
+    let mut port = None;
+    while let Some(argument) = arguments.next() {
+        let argument = argument
+            .into_string()
+            .map_err(|_| AtmError::config("direct-peer launch arguments must be valid UTF-8"))?;
+        let value = if argument == "--direct-peer-port" {
+            Some(arguments.next().ok_or_else(|| {
+                AtmError::config("--direct-peer-port requires a non-zero TCP port")
+            })?)
+        } else {
+            argument
+                .strip_prefix("--direct-peer-port=")
+                .map(std::ffi::OsString::from)
+        };
+        let Some(value) = value else {
+            continue;
+        };
+        let value = value
+            .into_string()
+            .map_err(|_| AtmError::config("direct-peer launch port must be valid UTF-8"))?;
+        let parsed = value
+            .parse::<u16>()
+            .ok()
+            .and_then(NonZeroU16::new)
+            .ok_or_else(|| AtmError::config("--direct-peer-port requires a non-zero TCP port"))?;
+        if port.replace(parsed).is_some() {
+            return Err(AtmError::config(
+                "--direct-peer-port may be supplied only once",
+            ));
+        }
+    }
+    Ok(port.unwrap_or_else(|| {
+        NonZeroU16::new(atm_http_runtime::DIRECT_PEER_TCP_PORT)
+            .expect("the protocol direct-peer port is non-zero")
+    }))
+}
+
 struct BootstrapMtlsStreamAdapter {
     adapter: Arc<MtlsPeerStreamAdapter>,
 }
@@ -244,11 +291,13 @@ pub async fn run_replacement_daemon_with_observability(
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
 ) -> Result<(), AtmError> {
     let peer_wire_mode = parse_peer_wire_mode(std::env::args_os())?;
+    let direct_peer_port = parse_direct_peer_port(std::env::args_os())?;
     run_replacement_daemon_with_selector(
         observability,
         active_received_hook_selector,
         resolve_daemon_launch_identity(),
         peer_wire_mode,
+        DirectPeerTcpConfig::configured(direct_peer_port),
     )
     .await
 }
@@ -261,11 +310,13 @@ pub async fn run_replacement_daemon_with_observability(
 #[cfg(feature = "benchmark-harness")]
 pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode) -> Result<(), AtmError> {
     let peer_wire_mode = parse_peer_wire_mode(std::env::args_os())?;
+    let direct_peer_port = parse_direct_peer_port(std::env::args_os())?;
     run_replacement_daemon_with_selector(
         Arc::new(NullObservability),
         move |service_runtime| benchmark_received_hook_selector(service_runtime, hook_mode),
         resolve_daemon_launch_identity(),
         peer_wire_mode,
+        DirectPeerTcpConfig::configured(direct_peer_port),
     )
     .await
 }
@@ -321,6 +372,7 @@ fn peer_stream_adapter_for_mode(
 fn replacement_runtime_config(
     scope: &atm_core::home::HostRuntimeScope,
     owner: &DaemonOwnerGuard,
+    direct_peer_tcp: DirectPeerTcpConfig,
     peer_stream_adapter: &Option<Arc<dyn PeerStreamAdapter>>,
 ) -> Result<HttpRuntimeConfig, AtmError> {
     let loopback = LoopbackTcpConfig::new(
@@ -331,7 +383,7 @@ fn replacement_runtime_config(
     Ok(replacement_runtime_config_with_direct_peer(
         loopback,
         unix_socket_config(scope)?,
-        DirectPeerTcpConfig::standard(),
+        direct_peer_tcp,
         peer_stream_adapter,
     ))
 }
@@ -408,6 +460,7 @@ async fn run_replacement_daemon_with_selector(
     ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     daemon_launch_identity: DaemonLaunchIdentity,
     peer_wire_mode: PeerWireMode,
+    direct_peer_tcp: DirectPeerTcpConfig,
 ) -> Result<(), AtmError> {
     install_sqlite_retained_runtime_factory();
     let scope = current_host_runtime_scope()?;
@@ -433,7 +486,8 @@ async fn run_replacement_daemon_with_selector(
         peer_stream_adapter.clone(),
         runtime_health.clone(),
     )?;
-    let config = replacement_runtime_config(&scope, &_owner, &peer_stream_adapter)?;
+    let config =
+        replacement_runtime_config(&scope, &_owner, direct_peer_tcp, &peer_stream_adapter)?;
     record_peer_wire_mode_selection(
         observability.as_ref(),
         &daemon_launch_identity,
@@ -674,7 +728,7 @@ mod replacement_runtime_tests {
     use super::{
         DaemonLaunchIdentity, REPLACEMENT_DRAIN_DEADLINE, ShutdownSignal,
         assemble_host_runtime_with_template_composer, build_replacement_handler,
-        parse_peer_wire_mode, peer_stream_adapter_for_mode,
+        parse_direct_peer_port, parse_peer_wire_mode, peer_stream_adapter_for_mode,
         replacement_runtime_config_with_direct_peer, write_ready_signal_if_requested,
     };
 
@@ -744,6 +798,41 @@ mod replacement_runtime_tests {
         ])
         .expect_err("one launch mode must select the whole runtime");
         assert!(error.message().contains("only once"));
+    }
+
+    #[test]
+    fn direct_peer_port_defaults_and_accepts_one_explicit_nonzero_value() {
+        assert_eq!(
+            parse_direct_peer_port([OsString::from("atm-daemon")]).expect("standard port"),
+            NonZeroU16::new(atm_http_runtime::DIRECT_PEER_TCP_PORT).expect("non-zero"),
+        );
+        assert_eq!(
+            parse_direct_peer_port([
+                OsString::from("atm-daemon"),
+                OsString::from("--direct-peer-port=43102"),
+            ])
+            .expect("explicit benchmark port"),
+            NonZeroU16::new(43102).expect("non-zero"),
+        );
+    }
+
+    #[test]
+    fn direct_peer_port_rejects_zero_and_duplicates() {
+        let zero = parse_direct_peer_port([
+            OsString::from("atm-daemon"),
+            OsString::from("--direct-peer-port"),
+            OsString::from("0"),
+        ])
+        .expect_err("zero cannot bind a durable launch port");
+        assert!(zero.message().contains("non-zero"));
+
+        let duplicate = parse_direct_peer_port([
+            OsString::from("atm-daemon"),
+            OsString::from("--direct-peer-port=43102"),
+            OsString::from("--direct-peer-port=43103"),
+        ])
+        .expect_err("one daemon has one direct-peer listener");
+        assert!(duplicate.message().contains("only once"));
     }
 
     #[test]
