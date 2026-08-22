@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import argparse
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 import socket
 import subprocess
@@ -358,6 +360,208 @@ class ReadinessAndRollbackTests(unittest.TestCase):
                 mock.call(cli_link, old_cli),
                 mock.call(daemon_link, old_daemon),
             ],
+        )
+
+
+class TemporaryLaunchJournalTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.cli = self.root / "atm"
+        self.daemon = self.root / "atm-daemon"
+        for binary in (self.cli, self.daemon):
+            binary.write_bytes(binary.name.encode("utf-8"))
+            binary.chmod(0o700)
+        self.journal = DAEMON_SWITCH.TemporaryLaunchJournal(self.root / "state" / "temporary-launch.json")
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def captured_session(self) -> object:
+        return DAEMON_SWITCH.TemporaryLaunchSession.captured(
+            peer_wire_security=DAEMON_SWITCH.PeerWireSecurity.PLAINTEXT_TEST,
+            platform="Darwin",
+            account_id="uid:501",
+            service="com.atm.daemon.test",
+            cli_path=self.cli,
+            cli_digest=DAEMON_SWITCH.sha256_file(self.cli),
+            daemon_path=self.daemon,
+            daemon_digest=DAEMON_SWITCH.sha256_file(self.daemon),
+            launch_spec=DAEMON_SWITCH.CapturedLaunchSpec("/original.plist", "original-sha"),
+        )
+
+    def test_journal_round_trip_is_private_and_blocks_another_session(self) -> None:
+        session = self.captured_session()
+        self.journal.create(session)
+
+        self.assertEqual(self.journal.load(), session)
+        self.assertEqual(self.journal.path.stat().st_mode & 0o777, 0o600)
+        with self.assertRaisesRegex(DAEMON_SWITCH.TemporaryLaunchError, "recovery is pending"):
+            self.journal.require_no_active_session()
+
+    def test_journal_creation_refuses_to_overwrite_an_active_session(self) -> None:
+        session = self.captured_session()
+        self.journal.create(session)
+
+        with self.assertRaisesRegex(DAEMON_SWITCH.TemporaryLaunchError, "refuse to overwrite"):
+            self.journal.create(session)
+
+    def test_transition_requires_overlay_before_overlay_start(self) -> None:
+        session = self.captured_session()
+        stopped = session.transition(DAEMON_SWITCH.TemporaryLaunchPhase.STOPPED)
+        with self.assertRaisesRegex(DAEMON_SWITCH.TemporaryLaunchError, "cannot transition"):
+            stopped.transition(DAEMON_SWITCH.TemporaryLaunchPhase.OVERLAY_STARTED)
+
+        overlay = stopped.with_overlay(DAEMON_SWITCH.OverlayLaunchSpec("/overlay.plist", "overlay-sha"))
+        self.assertEqual(overlay.phase, DAEMON_SWITCH.TemporaryLaunchPhase.OVERLAY_APPLIED)
+        self.assertEqual(
+            overlay.transition(DAEMON_SWITCH.TemporaryLaunchPhase.OVERLAY_STARTED).phase,
+            DAEMON_SWITCH.TemporaryLaunchPhase.OVERLAY_STARTED,
+        )
+
+    def test_completion_requires_durable_completed_state_before_removal(self) -> None:
+        session = self.captured_session()
+        restoring = session.transition(DAEMON_SWITCH.TemporaryLaunchPhase.RESTORING)
+        completed = restoring.transition(DAEMON_SWITCH.TemporaryLaunchPhase.COMPLETED)
+        self.journal.create(session)
+        self.journal.save(completed)
+
+        self.journal.remove_after_completion(completed)
+
+        self.assertFalse(self.journal.path.exists())
+
+    def test_non_private_existing_journal_fails_closed(self) -> None:
+        self.journal.path.parent.mkdir(mode=0o700)
+        self.journal.path.write_text("{}", encoding="utf-8")
+        self.journal.path.chmod(0o644)
+
+        with self.assertRaisesRegex(DAEMON_SWITCH.TemporaryLaunchError, "accessible"):
+            self.journal.load()
+
+
+class TemporaryLaunchControlPlaneTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.cli = self.root / "atm"
+        self.daemon = self.root / "atm-daemon"
+        for binary in (self.cli, self.daemon):
+            binary.write_bytes(binary.name.encode("utf-8"))
+            binary.chmod(0o700)
+        self.journal = DAEMON_SWITCH.TemporaryLaunchJournal(self.root / "state" / "temporary-launch.json")
+        self.args = argparse.Namespace(
+            yes=True,
+            service="com.atm.daemon.test",
+            peer_wire_security=DAEMON_SWITCH.PeerWireSecurity.PLAINTEXT_TEST,
+            repair_orphan=False,
+        )
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def test_parser_exposes_only_typed_peer_wire_modes(self) -> None:
+        parser = DAEMON_SWITCH.parser()
+        args = parser.parse_args(
+            [
+                "temporary-launch",
+                "--service",
+                "com.atm.daemon.test",
+                "begin",
+                "--peer-wire-security",
+                "plaintext-test",
+                "--yes",
+            ]
+        )
+
+        self.assertEqual(args.peer_wire_security, DAEMON_SWITCH.PeerWireSecurity.PLAINTEXT_TEST)
+        with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            parser.parse_args(
+                [
+                    "temporary-launch",
+                    "begin",
+                    "--peer-wire-security",
+                    "plaintext-test",
+                    "--daemon-arg",
+                    "--anything",
+                ]
+            )
+
+    def test_active_session_blocks_ordinary_restart_before_service_call(self) -> None:
+        session = self.create_active_session()
+        self.journal.create(session)
+        with mock.patch.object(DAEMON_SWITCH, "temporary_launch_journal", return_value=self.journal):
+            with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "recovery is pending"):
+                DAEMON_SWITCH.restart(self.args)
+
+    def test_active_session_blocks_ordinary_pair_switch_before_selector_lookup(self) -> None:
+        self.journal.create(self.create_active_session())
+        with mock.patch.object(DAEMON_SWITCH, "temporary_launch_journal", return_value=self.journal):
+            with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "recovery is pending"):
+                DAEMON_SWITCH.switch_pair(self.args, self.cli, self.daemon)
+
+    def test_no_platform_adapter_refuses_before_journal_or_service_mutation(self) -> None:
+        with (
+            mock.patch.object(DAEMON_SWITCH, "temporary_launch_journal", return_value=self.journal),
+            mock.patch.object(DAEMON_SWITCH, "selected_matched_pair", return_value=(self.cli, self.daemon)),
+            mock.patch.object(DAEMON_SWITCH, "run_service") as service,
+        ):
+            with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "no direct-process fallback"):
+                DAEMON_SWITCH.begin_temporary_launch(self.args)
+
+        self.assertIsNone(self.journal.load())
+        service.assert_not_called()
+
+    def test_begin_writes_captured_intent_before_service_stop(self) -> None:
+        class FakeAdapter:
+            def capture(self, _args: object, _cli: Path, _daemon: Path, _mode: object) -> object:
+                return DAEMON_SWITCH.CapturedLaunchSpec("/original.plist", "original-sha")
+
+            def apply_overlay(self, _args: object, _session: object) -> object:
+                return DAEMON_SWITCH.OverlayLaunchSpec("/overlay.plist", "overlay-sha")
+
+            def start_args(self, arguments: object, _session: object) -> object:
+                return arguments
+
+            def restore_exact(self, _args: object, _session: object) -> None:
+                raise AssertionError("restore is not part of begin")
+
+        with (
+            mock.patch.object(DAEMON_SWITCH, "temporary_launch_journal", return_value=self.journal),
+            mock.patch.object(DAEMON_SWITCH, "selected_matched_pair", return_value=(self.cli, self.daemon)),
+            mock.patch.object(DAEMON_SWITCH, "temporary_launch_adapter", return_value=FakeAdapter()),
+            mock.patch.object(DAEMON_SWITCH, "account_identifier", return_value="uid:501"),
+            mock.patch.object(DAEMON_SWITCH, "run_service") as service,
+            mock.patch.object(DAEMON_SWITCH, "require_stopped_daemon") as stopped,
+            mock.patch.object(DAEMON_SWITCH, "wait_for_temporary_launch", return_value=(True, "ready")),
+            redirect_stdout(io.StringIO()),
+        ):
+            DAEMON_SWITCH.begin_temporary_launch(self.args)
+
+        active = self.journal.load()
+        self.assertIsNotNone(active)
+        assert active is not None
+        self.assertEqual(active.phase, DAEMON_SWITCH.TemporaryLaunchPhase.OVERLAY_STARTED)
+        self.assertEqual(active.overlay_digest, "overlay-sha")
+        self.assertEqual(
+            service.call_args_list,
+            [
+                mock.call(self.args, "stop", allow_absent=True),
+                mock.call(self.args, "start"),
+            ],
+        )
+        stopped.assert_called_once_with(self.args, self.cli)
+
+    def create_active_session(self) -> object:
+        return DAEMON_SWITCH.TemporaryLaunchSession.captured(
+            peer_wire_security=DAEMON_SWITCH.PeerWireSecurity.PLAINTEXT_TEST,
+            platform="Darwin",
+            account_id="uid:501",
+            service=self.args.service,
+            cli_path=self.cli,
+            cli_digest=DAEMON_SWITCH.sha256_file(self.cli),
+            daemon_path=self.daemon,
+            daemon_digest=DAEMON_SWITCH.sha256_file(self.daemon),
+            launch_spec=DAEMON_SWITCH.CapturedLaunchSpec("/original.plist", "original-sha"),
         )
 
 

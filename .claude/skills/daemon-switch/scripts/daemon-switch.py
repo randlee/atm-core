@@ -16,13 +16,16 @@ import subprocess
 import sys
 import tempfile
 import time
-from typing import Sequence
+from typing import Protocol, Sequence
 
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 SCRIPTS_DIRECTORY = REPO_ROOT / "scripts"
 if str(SCRIPTS_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIRECTORY))
+DAEMON_SWITCH_SCRIPTS_DIRECTORY = Path(__file__).resolve().parent
+if str(DAEMON_SWITCH_SCRIPTS_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(DAEMON_SWITCH_SCRIPTS_DIRECTORY))
 
 from macos_development_signing import (  # noqa: E402
     CLI_IDENTIFIER,
@@ -30,6 +33,17 @@ from macos_development_signing import (  # noqa: E402
     SigningIdentityError,
     resolve_apple_development_identity,
     verify_apple_signature,
+)
+from temporary_launch import (  # noqa: E402
+    CapturedLaunchSpec,
+    OverlayLaunchSpec,
+    PeerWireSecurity,
+    TemporaryLaunchError,
+    TemporaryLaunchJournal,
+    TemporaryLaunchPhase,
+    TemporaryLaunchSession,
+    account_identifier,
+    sha256_file,
 )
 
 
@@ -48,6 +62,63 @@ rolling selectors back while the new daemon is still becoming ready.
 
 class SwitchError(RuntimeError):
     """A precondition that protects the singleton daemon was not met."""
+
+
+class TemporaryLaunchAdapter(Protocol):
+    """Platform-owned service configuration seam for a typed overlay session."""
+
+    def capture(
+        self,
+        args: argparse.Namespace,
+        cli: Path,
+        daemon: Path,
+        mode: PeerWireSecurity,
+    ) -> CapturedLaunchSpec:
+        """Read/validate original service configuration without mutating it."""
+
+    def apply_overlay(
+        self,
+        args: argparse.Namespace,
+        session: TemporaryLaunchSession,
+    ) -> OverlayLaunchSpec:
+        """Apply one owned typed overlay after the singleton has stopped."""
+
+    def start_args(
+        self,
+        args: argparse.Namespace,
+        session: TemporaryLaunchSession,
+    ) -> argparse.Namespace:
+        """Return the controlled service selector for the active overlay."""
+
+    def restore_exact(self, args: argparse.Namespace, session: TemporaryLaunchSession) -> None:
+        """Restore only the captured original service configuration."""
+
+
+def temporary_launch_journal() -> TemporaryLaunchJournal:
+    """Keep an active overlay journal separate from ordinary default-pair state."""
+    return TemporaryLaunchJournal(state_path().with_name("temporary-launch.json"))
+
+
+def temporary_launch_adapter(_args: argparse.Namespace) -> TemporaryLaunchAdapter:
+    """Resolve one future narrow platform adapter; never provide a fallback."""
+    raise SwitchError(
+        "temporary-launch requires a reviewed platform adapter; no direct-process fallback is available"
+    )
+
+
+def parse_peer_wire_security(value: str) -> PeerWireSecurity:
+    """Make the CLI accept only the public typed launch spellings."""
+    try:
+        return PeerWireSecurity.parse(value)
+    except TemporaryLaunchError as error:
+        raise argparse.ArgumentTypeError(str(error)) from error
+
+
+def require_no_active_temporary_launch_session() -> None:
+    try:
+        temporary_launch_journal().require_no_active_session()
+    except TemporaryLaunchError as error:
+        raise SwitchError(str(error)) from error
 
 
 def executable_name(name: str) -> str:
@@ -422,7 +493,221 @@ def validate_selectors(cli_link: Path, daemon_link: Path) -> None:
             raise SwitchError(f"refusing to replace non-symlink {label} selector: {link}")
 
 
+def selected_matched_pair(args: argparse.Namespace) -> tuple[Path, Path]:
+    """Validate the selected pair before an overlay can stop its service."""
+    cli_link, daemon_link = selected_links(args)
+    cli = require_executable(cli_link, "selected atm CLI")
+    daemon = require_executable(daemon_link, "selected atm daemon")
+    if cli.parent != daemon.parent:
+        raise SwitchError(
+            "refusing a temporary launch for CLI/daemon selectors from different release directories"
+        )
+    require_macos_development_signatures(cli, daemon)
+    return cli, daemon
+
+
+def require_active_session_pair(
+    args: argparse.Namespace,
+    session: TemporaryLaunchSession,
+) -> tuple[Path, Path]:
+    """Refuse a resumed session if its selected release/service changed."""
+    cli, daemon = selected_matched_pair(args)
+    if not args.service or args.service != session.service:
+        raise SwitchError("temporary-launch service does not match the active recovery journal")
+    if platform.system() != session.platform:
+        raise SwitchError("temporary-launch platform does not match the active recovery journal")
+    if account_identifier() != session.account_id:
+        raise SwitchError("temporary-launch account does not match the active recovery journal")
+    if str(cli) != session.cli_path or sha256_file(cli) != session.cli_digest:
+        raise SwitchError("temporary-launch selected CLI does not match the active recovery journal")
+    if str(daemon) != session.daemon_path or sha256_file(daemon) != session.daemon_digest:
+        raise SwitchError("temporary-launch selected daemon does not match the active recovery journal")
+    return cli, daemon
+
+
+def require_temporary_session(args: argparse.Namespace) -> tuple[TemporaryLaunchJournal, TemporaryLaunchSession]:
+    """Load one caller-selected active session and prove its release identity."""
+    try:
+        journal = temporary_launch_journal()
+        session = journal.require_session(args.session)
+    except TemporaryLaunchError as error:
+        raise SwitchError(str(error)) from error
+    require_active_session_pair(args, session)
+    return journal, session
+
+
+def save_temporary_session(journal: TemporaryLaunchJournal, session: TemporaryLaunchSession) -> None:
+    """Convert journal integrity errors into the daemon-switch public error type."""
+    try:
+        journal.save(session)
+    except TemporaryLaunchError as error:
+        raise SwitchError(str(error)) from error
+
+
+def create_temporary_session(journal: TemporaryLaunchJournal, session: TemporaryLaunchSession) -> None:
+    """Create the first journal with exclusive publication before a service stop."""
+    try:
+        journal.create(session)
+    except TemporaryLaunchError as error:
+        raise SwitchError(str(error)) from error
+
+
+def transition_temporary_session(
+    journal: TemporaryLaunchJournal,
+    session: TemporaryLaunchSession,
+    phase: TemporaryLaunchPhase,
+) -> TemporaryLaunchSession:
+    """Persist the next intent before its corresponding external mutation."""
+    try:
+        next_session = session.transition(phase)
+    except TemporaryLaunchError as error:
+        raise SwitchError(str(error)) from error
+    save_temporary_session(journal, next_session)
+    return next_session
+
+
+def doctor_peer_wire_security(payload: dict[str, object]) -> str | None:
+    """Read only the daemon's typed public diagnostic wire-mode projection."""
+    daemon_context = payload.get("daemon_context")
+    if not isinstance(daemon_context, dict):
+        return None
+    value = daemon_context.get("peer_wire_security")
+    return value if isinstance(value, str) else None
+
+
+def wait_for_temporary_launch(
+    cli: Path,
+    daemon: Path,
+    mode: PeerWireSecurity,
+) -> tuple[bool, str]:
+    """Require both the existing matched-pair proof and selected wire-mode proof."""
+    detail = "daemon did not report the requested temporary peer-wire mode"
+    for _ in range(LIVE_PAIR_READINESS_ATTEMPTS):
+        matched, detail = live_pair_matches(cli, daemon)
+        payload = doctor(cli)
+        if matched and doctor_peer_wire_security(payload) == mode.value:
+            return True, f"{detail}; peer-wire security={mode.value}"
+        if matched:
+            observed = doctor_peer_wire_security(payload) or "<missing>"
+            detail = f"matched pair reports peer-wire security={observed}, expected {mode.value}"
+        time.sleep(0.1)
+    return False, detail
+
+
+def begin_temporary_launch(args: argparse.Namespace) -> None:
+    """Run the generic journal-first overlay transition through one adapter."""
+    if not args.yes:
+        raise SwitchError("temporary-launch begin changes the singleton daemon; re-run with --yes")
+    require_no_active_temporary_launch_session()
+    if not args.service:
+        raise SwitchError("--service is required for a temporary managed-service launch")
+    cli, daemon = selected_matched_pair(args)
+    adapter = temporary_launch_adapter(args)
+    captured = adapter.capture(args, cli, daemon, args.peer_wire_security)
+    session = TemporaryLaunchSession.captured(
+        peer_wire_security=args.peer_wire_security,
+        platform=platform.system(),
+        account_id=account_identifier(),
+        service=args.service,
+        cli_path=cli,
+        cli_digest=sha256_file(cli),
+        daemon_path=daemon,
+        daemon_digest=sha256_file(daemon),
+        launch_spec=captured,
+    )
+    journal = temporary_launch_journal()
+    create_temporary_session(journal, session)
+    run_service(args, "stop", allow_absent=True)
+    require_stopped_daemon(args, cli)
+    session = transition_temporary_session(journal, session, TemporaryLaunchPhase.STOPPED)
+    try:
+        session = session.with_overlay(adapter.apply_overlay(args, session))
+    except TemporaryLaunchError as error:
+        raise SwitchError(str(error)) from error
+    save_temporary_session(journal, session)
+    session = transition_temporary_session(journal, session, TemporaryLaunchPhase.OVERLAY_STARTED)
+    run_service(adapter.start_args(args, session), "start")
+    matched, detail = wait_for_temporary_launch(cli, daemon, session.peer_wire_security)
+    if not matched:
+        raise SwitchError(f"temporary overlay start did not pass doctor proof: {detail}")
+    print(json.dumps(temporary_launch_evidence(session, "overlay_started"), indent=2, sort_keys=True))
+
+
+def quiesce_temporary_launch(args: argparse.Namespace) -> None:
+    """Stop only the known active overlay daemon without changing selectors."""
+    if not args.yes:
+        raise SwitchError("temporary-launch quiesce changes the singleton daemon; re-run with --yes")
+    journal, session = require_temporary_session(args)
+    if session.phase is not TemporaryLaunchPhase.OVERLAY_STARTED:
+        raise SwitchError("temporary-launch quiesce requires an overlay-started session")
+    cli, _daemon = selected_matched_pair(args)
+    run_service(args, "stop", allow_absent=True)
+    require_stopped_daemon(args, cli)
+    session = transition_temporary_session(journal, session, TemporaryLaunchPhase.QUIESCED)
+    print(json.dumps(temporary_launch_evidence(session, "quiesced"), indent=2, sort_keys=True))
+
+
+def restart_temporary_launch(args: argparse.Namespace) -> None:
+    """Restart a known quiesced overlay using the same selected pair and mode."""
+    if not args.yes:
+        raise SwitchError("temporary-launch restart changes the singleton daemon; re-run with --yes")
+    journal, session = require_temporary_session(args)
+    if session.phase is not TemporaryLaunchPhase.QUIESCED:
+        raise SwitchError("temporary-launch restart requires a quiesced session")
+    cli, daemon = selected_matched_pair(args)
+    adapter = temporary_launch_adapter(args)
+    session = transition_temporary_session(journal, session, TemporaryLaunchPhase.OVERLAY_STARTED)
+    run_service(adapter.start_args(args, session), "start")
+    matched, detail = wait_for_temporary_launch(cli, daemon, session.peer_wire_security)
+    if not matched:
+        raise SwitchError(f"temporary overlay restart did not pass doctor proof: {detail}")
+    print(json.dumps(temporary_launch_evidence(session, "overlay_restarted"), indent=2, sort_keys=True))
+
+
+def restore_temporary_launch(args: argparse.Namespace, *, recovery: bool) -> None:
+    """Restore exactly one captured service specification through its adapter."""
+    if not args.yes:
+        raise SwitchError("temporary-launch restore changes the singleton daemon; re-run with --yes")
+    journal, session = require_temporary_session(args)
+    if session.phase is TemporaryLaunchPhase.COMPLETED:
+        raise SwitchError("temporary-launch session is already completed")
+    cli, daemon = selected_matched_pair(args)
+    adapter = temporary_launch_adapter(args)
+    session = transition_temporary_session(journal, session, TemporaryLaunchPhase.RESTORING)
+    run_service(args, "stop", allow_absent=True)
+    require_stopped_daemon(args, cli)
+    adapter.restore_exact(args, session)
+    run_service(args, "start")
+    matched, detail = wait_for_temporary_launch(cli, daemon, PeerWireSecurity.MUTUAL_TLS)
+    if not matched:
+        action = "recovery" if recovery else "restore"
+        raise SwitchError(f"temporary overlay {action} did not pass normal-mode doctor proof: {detail}")
+    session = transition_temporary_session(journal, session, TemporaryLaunchPhase.COMPLETED)
+    try:
+        journal.remove_after_completion(session)
+    except TemporaryLaunchError as error:
+        raise SwitchError(str(error)) from error
+    print(json.dumps(temporary_launch_evidence(session, "recovered" if recovery else "restored"), indent=2, sort_keys=True))
+
+
+def temporary_launch_evidence(session: TemporaryLaunchSession, outcome: str) -> dict[str, object]:
+    """Expose redacted session state; references remain owner-only journal material."""
+    return {
+        "session_id": session.session_id,
+        "outcome": outcome,
+        "phase": session.phase.value,
+        "platform": session.platform,
+        "service": session.service,
+        "peer_wire_security": session.peer_wire_security.value,
+        "cli": {"path": session.cli_path, "sha256": session.cli_digest},
+        "daemon": {"path": session.daemon_path, "sha256": session.daemon_digest},
+        "original_launch_digest": session.original_digest,
+        "overlay_launch_digest": session.overlay_digest,
+    }
+
+
 def switch_pair(args: argparse.Namespace, cli_target: Path, daemon_target: Path) -> None:
+    require_no_active_temporary_launch_session()
     cli_link, daemon_link = selected_links(args)
     validate_selectors(cli_link, daemon_link)
     old_pair: tuple[Path, Path] | None
@@ -505,6 +790,7 @@ def restore_pair(args: argparse.Namespace) -> tuple[Path, Path]:
 def restart(args: argparse.Namespace) -> None:
     if not args.yes:
         raise SwitchError("restart changes the singleton daemon; re-run with --yes")
+    require_no_active_temporary_launch_session()
     cli, daemon = selected_links(args)
     cli = require_executable(cli, "selected atm CLI")
     daemon = require_executable(daemon, "selected atm daemon")
@@ -700,6 +986,20 @@ def parser() -> argparse.ArgumentParser:
     restart_parser.add_argument("--yes", action="store_true")
     quiesce_parser = sub.add_parser("quiesce", parents=[selectors])
     quiesce_parser.add_argument("--yes", action="store_true")
+    temporary = sub.add_parser("temporary-launch", parents=[selectors])
+    temporary_sub = temporary.add_subparsers(dest="temporary_command", required=True)
+    temporary_begin = temporary_sub.add_parser("begin")
+    temporary_begin.add_argument(
+        "--peer-wire-security",
+        required=True,
+        type=parse_peer_wire_security,
+        metavar="{mutual-tls,plaintext-test}",
+    )
+    temporary_begin.add_argument("--yes", action="store_true")
+    for name in ("quiesce", "restart", "restore", "recover"):
+        command = temporary_sub.add_parser(name)
+        command.add_argument("--session", required=True)
+        command.add_argument("--yes", action="store_true")
     return result
 
 
@@ -715,6 +1015,15 @@ def main() -> int:
             switch_pair(args, cli, daemon)
         elif args.command == "restart":
             restart(args)
+        elif args.command == "temporary-launch":
+            if args.temporary_command == "begin":
+                begin_temporary_launch(args)
+            elif args.temporary_command == "quiesce":
+                quiesce_temporary_launch(args)
+            elif args.temporary_command == "restart":
+                restart_temporary_launch(args)
+            else:
+                restore_temporary_launch(args, recovery=args.temporary_command == "recover")
         else:
             quiesce(args)
     except SwitchError as error:
