@@ -84,14 +84,14 @@ def _windows_current_principal() -> str:
 
 
 def _windows_file_owner(path: Path) -> str:
+    literal_path = str(path).replace("'", "''")
     result = subprocess.run(
         [
             "powershell",
             "-NoProfile",
             "-NonInteractive",
             "-Command",
-            "(Get-Acl -LiteralPath $args[0]).Owner",
-            str(path),
+            f"(Get-Acl -LiteralPath '{literal_path}').Owner",
         ],
         capture_output=True,
         text=True,
