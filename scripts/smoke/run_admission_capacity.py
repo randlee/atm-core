@@ -1258,6 +1258,11 @@ def run_capacity(
     preflight_failure: str | None = None,
 ) -> tuple[int, Path]:
     """Start one branch daemon, exercise public UDS API, retain evidence, then clean up."""
+    if managed_daemon is not None:
+        raise SmokeError(
+            "managed-daemon benchmarking is retired because it would touch the primary "
+            "OS-user-owned database; use a dedicated clean OS user instead"
+        )
     transport = validate_transport(transport)
     peer_wire_security = validate_peer_wire_security(peer_wire_security)
     if frames_per_connection not in SPARSE_FRAMES_PER_CONNECTION:
@@ -1321,11 +1326,6 @@ def run_capacity(
     }
     started_at = time.monotonic()
     try:
-        if managed_daemon is not None:
-            raise SmokeError(
-                "managed-daemon benchmarking is retired because it would touch the primary "
-                "OS-user-owned database; use a dedicated clean OS user instead"
-            )
         require_clean_host_daemon_state(smoke_label="admission-capacity smoke")
         before = count_atm_daemon_processes()
         home.mkdir(parents=True, exist_ok=False)

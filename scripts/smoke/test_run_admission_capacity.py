@@ -355,7 +355,6 @@ class AdmissionCapacityTests(unittest.TestCase):
 
     def test_run_capacity_refuses_managed_daemon_before_any_host_mutation(self):
         options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
-        captured: dict[str, object] = {}
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             home = root / "atm-capacity-benchmark"
@@ -364,28 +363,22 @@ class AdmissionCapacityTests(unittest.TestCase):
             mail_db = primary / "mail.db"
             mail_db.write_text("primary-state", encoding="utf-8")
             with (
-                mock.patch.object(RUNNER, "select_host_state_isolation", return_value="isolated_os_user"),
+                mock.patch.object(RUNNER, "release_binary") as release_binary,
                 mock.patch.object(RUNNER, "daemon_switch_result") as daemon_switch,
                 mock.patch.object(RUNNER, "require_clean_host_daemon_state") as clean,
-                mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"),
-                mock.patch.object(
-                    RUNNER,
-                    "write_evidence",
-                    side_effect=lambda _path, value: (captured.update(value), root / "evidence.json")[1],
-                ),
             ):
-                code, _evidence = RUNNER.run_capacity(
-                    home, root, "tcp", 1, sample_count=1,
-                    raw_evidence_directory=root, managed_daemon=options,
-                )
+                with self.assertRaisesRegex(RUNNER.SmokeError, "managed-daemon benchmarking is retired"):
+                    RUNNER.run_capacity(
+                        home, root, "tcp", 1, sample_count=1,
+                        raw_evidence_directory=root, managed_daemon=options,
+                    )
 
-            self.assertEqual(code, 1)
-            self.assertIn("managed-daemon benchmarking is retired", str(captured["failure"]))
             self.assertEqual(mail_db.read_text(encoding="utf-8"), "primary-state")
             self.assertFalse(home.exists())
 
         clean.assert_not_called()
         daemon_switch.assert_not_called()
+        release_binary.assert_not_called()
 
     def test_main_rejects_retired_managed_host_arguments_before_running_a_benchmark(self):
         with (
