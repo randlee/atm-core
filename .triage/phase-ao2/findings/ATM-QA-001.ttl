@@ -7,69 +7,36 @@
 <urn:atm:triage:finding/ATM-QA-001>
   a triage:Finding ;
   triage:findingId "ATM-QA-001" ;
-  triage:title "Deliverable-3 characterization suite not evidenced as new coverage" ;
-  triage:description "The AO.1 deliverable-3 plaintext characterization suite is not evidenced as new test coverage versus pre-existing tests — no clear proof was provided that these are genuinely new characterization tests rather than restating existing coverage." ;
+  triage:title "Orphaned dead code and stale comment after snapshot/restore lifecycle rewrite" ;
+  triage:description "In run_admission_capacity.py, verify_durable_admissions() (around line 1191) is now orphaned dead code -- never called from run_capacity's actual lifecycle after the AO2.5.4 snapshot/restore rewrite. The adjacent comment at lines 1505-1506 ('Preserve the measured run and durability proof, then fail closed') is now factually stale/misleading: no durability-of-writes proof exists anymore, since the new snapshot/restore flow only proves the pre-roster clean-baseline snapshot's own internal integrity, not that the profiled run's accepted writes persisted. This is NOT a regression against the AO2.5.4 sprint doc's acceptance criteria (which explicitly scopes post-restore proof to baseline-cleanliness, not write durability) -- it is a cleanliness/clarity issue: a future reader could be misled. Fix: delete verify_durable_admissions() and its 3 orphaned unit tests, and correct the stale comment." ;
   triage:phaseId "phase-ao2" ;
   triage:triageMode "initial_pass" ;
-  triage:category "req-qa" ;
+  triage:category "dead-code" ;
   triage:severity "important" ;
   triage:repeatable false ;
-  triage:sweepScope "sprint" ;
-  triage:status "fixed" ;
-  triage:dispatchReady false ;
-  triage:triagedAt "2026-08-20T09:00:24+00:00"^^xsd:dateTime ;
-  triage:foundIn triage:AO2.1 ;
-  triage:foundAt "2026-08-20T09:00:24+00:00"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/AO2.1-plaintext-baseline> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/AO2.1-peer-wire-policy> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/QMGR-CLOSE-1> ;
-  triage:closedAt "2026-08-20T22:53:43Z"^^xsd:dateTime ;
-  triage:closedBy "quality-mgr" ;
-  triage:triageRecordVersion "2" .
+  triage:sweepScope "scripts/smoke/run_admission_capacity.py" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-22T05:25:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.5.4 ;
+  triage:foundAt "2026-08-22T05:22:27Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/AO2.5.4-orphaned-verify> ;
+  triage:triageRecordVersion "1" .
 
-<urn:atm:triage:occurrence/ATM-QA-001/AO2.1-plaintext-baseline>
+<urn:atm:triage:occurrence/ATM-QA-001/AO2.5.4-orphaned-verify>
   a triage:Occurrence ;
-  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
-  triage:line 132 ;
-  triage:snippet "#[test] fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline()" ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 1191 ;
+  triage:snippet "def verify_durable_admissions(...): orphaned function; stale comment at lines 1505-1506" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pao-s1-peer-wire-policy" ;
-  triage:headSha "d137ab8d" ;
-  triage:occursIn <urn:atm:triage:worktree/pao-s1-peer-wire-policy/d137ab8d> .
+  triage:branch "fix/benchmark-snapshot-restore-mandatory" ;
+  triage:headSha "56b1166a" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-benchmark-snapshot-restore-mandatory/56b1166a> .
 
-<urn:atm:triage:occurrence/ATM-QA-001/AO2.1-peer-wire-policy>
-  a triage:Occurrence ;
-  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
-  triage:line 216 ;
-  triage:snippet "#[test] fn ao2_peer_wire_policy_keeps_one_error_registry_and_one_http_pipeline()" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pao-s1-peer-wire-policy" ;
-  triage:headSha "d137ab8d" ;
-  triage:occursIn <urn:atm:triage:worktree/pao-s1-peer-wire-policy/d137ab8d> .
-
-<urn:atm:triage:occurrence/ATM-QA-001/QMGR-CLOSE-1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
-  triage:line 132 ;
-  triage:snippet "quality-mgr independent re-verification confirmed fixed" ;
-  triage:status "fixed" ;
-  triage:closed true ;
-  triage:branch "feature/pao-s1-peer-wire-policy" ;
-  triage:headSha "d137ab8d" ;
-  triage:occursIn <urn:atm:triage:worktree/feature-pao-s1-peer-wire-policy/d137ab8d> .
-
-<urn:atm:triage:worktree/pao-s1-peer-wire-policy/d137ab8d>
+<urn:atm:triage:worktree/fix-benchmark-snapshot-restore-mandatory/56b1166a>
   a triage:WorktreeSnapshot ;
-  triage:path ".worktrees/pao-s1-peer-wire-policy" ;
-  triage:branch "feature/pao-s1-peer-wire-policy" ;
-  triage:headSha "d137ab8d" ;
-  triage:orderIndex 1 .
-
-<urn:atm:triage:worktree/feature-pao-s1-peer-wire-policy/d137ab8d>
-  a triage:WorktreeSnapshot ;
-  triage:path "feature/pao-s1-peer-wire-policy" ;
-  triage:branch "feature/pao-s1-peer-wire-policy" ;
-  triage:headSha "d137ab8d" ;
-  triage:orderIndex 2 .
+  triage:path ".worktrees/fix-benchmark-snapshot-restore-mandatory" ;
+  triage:branch "fix/benchmark-snapshot-restore-mandatory" ;
+  triage:headSha "56b1166a" ;
+  triage:orderIndex 6 .
