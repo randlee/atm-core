@@ -1,0 +1,50 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-001-AO24>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-001-AO24" ;
+  triage:title "No completed local (M4) plaintext-vs-baseline comparison recorded for AO.4" ;
+  triage:description "No compatible plaintext baseline artifact carrying the required peer_wire_security/execution_daemon provenance exists anywhere in the repo (grep across site/reports/send-message-benchmark/*.json returns zero matches). The AO.4 Physical-Host Evidence Ledger (docs/plans/phase-ao/plan-phase-ao.md:127-137) records the local/M4 tcp/tcp-tls campaign as pending rather than a completed comparison or a valid blocked-host record. M4 is the local development host, not physically unavailable, so pending satisfies neither branch of Acceptance Criterion 4. M5/FastPC4 are correctly recorded blocked -- this finding is specifically about the M4 row. Remediation: execute just benchmark --target tcp and --target tcp-tls locally under the approved isolated-host procedure, commit the resulting baseline artifact with full provenance fields, and update the ledger row from pending to either a passing comparison or a documented benchmark-evidence failure code." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "req-qa" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-20T21:36:56Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.4 ;
+  triage:foundAt "2026-08-20T21:33:56Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-AO24/S4-ledger> ;
+  triage:triageRecordVersion "2" ;
+  triage:closedNote "Confirmed fixed by quality-mgr independent re-verify for PR #968 (commit 402415b78 on feature/pao-s4-peer-wire-proof) -- plan-phase-ao.md:131 M4 row now blocked with structured evidence, not bare pending; just reports-index --check clean, 90/90 tests pass." .
+
+<urn:atm:triage:occurrence/ATM-QA-001-AO24/S4-ledger>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ao/plan-phase-ao.md" ;
+  triage:line 131 ;
+  triage:snippet "M4 local `tcp` / `tcp-tls` | pending" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s4-peer-wire-proof" ;
+  triage:headSha "d9fb74917a804d2068684db40a28bc4ce636f283" ;
+  triage:occursIn <urn:atm:triage:worktree/S4/d9fb749> .
+
+<urn:atm:triage:worktree/S4/d9fb749>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pao-s4-peer-wire-proof" ;
+  triage:branch "feature/pao-s4-peer-wire-proof" ;
+  triage:headSha "d9fb74917a804d2068684db40a28bc4ce636f283" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/S3/e6a4285>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:branch "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:headSha "e6a4285325" ;
+  triage:orderIndex 3 .

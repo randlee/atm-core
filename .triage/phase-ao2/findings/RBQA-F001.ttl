@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F001>
+  a triage:Finding ;
+  triage:findingId "RBQA-F001" ;
+  triage:title "Duplicated atm-daemon-dev identity-detection logic risks silent drift" ;
+  triage:description "The \"is atm-daemon-dev in keychain\" identity-detection logic is implemented twice independently -- once as a substring match, once as a regex -- each with its own hardcoded constant, across .just/sign_daemon_dev.py and .claude/skills/daemon-switch/scripts/daemon-switch.py. If one copy is updated without the other, the signing gate could silently drift out of sync and stop enforcing correctly. Recommends extracting one shared helper both scripts call." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-qa" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-21T16:51:10Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.4 ;
+  triage:foundAt "2026-08-21T16:51:10Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/sign-daemon-dev-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/daemon-switch-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F001/sign-daemon-dev-1>
+  a triage:Occurrence ;
+  triage:file ".just/sign_daemon_dev.py" ;
+  triage:line 20 ;
+  triage:snippet "IDENTITY_PATTERN = re.compile(rf'{\"re.escape(IDENTITY)\"}')" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/daemon-switch-signing-gate" ;
+  triage:headSha "bafe79d1f" ;
+  triage:occursIn <urn:atm:triage:worktree/daemon-switch-1/bafe79d1f> .
+
+<urn:atm:triage:occurrence/RBQA-F001/daemon-switch-1>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/daemon-switch/scripts/daemon-switch.py" ;
+  triage:line 23 ;
+  triage:snippet "MACOS_DEVELOPMENT_SIGNING_IDENTITY = \"atm-daemon-dev\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/daemon-switch-signing-gate" ;
+  triage:headSha "bafe79d1f" ;
+  triage:occursIn <urn:atm:triage:worktree/daemon-switch-2/bafe79d1f> .
+
+<urn:atm:triage:worktree/daemon-switch-1/bafe79d1f>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/daemon-switch-signing-gate" ;
+  triage:branch "fix/daemon-switch-signing-gate" ;
+  triage:headSha "bafe79d1f" ;
+  triage:orderIndex 1 .

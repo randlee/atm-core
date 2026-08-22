@@ -315,6 +315,7 @@ class DaemonSwitchTests(unittest.TestCase):
             subprocess.CompletedProcess([], 5, "", "Bootstrap failed: 5"),
             subprocess.CompletedProcess([], 1, "", "not loaded"),
             subprocess.CompletedProcess([], 0, "", ""),
+            subprocess.CompletedProcess([], 0, "path = /tmp/atm-daemon.plist\n", ""),
         ]
         with (
             mock.patch.object(self.module.platform, "system", return_value="Darwin"),

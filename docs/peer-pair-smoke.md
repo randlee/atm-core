@@ -21,6 +21,7 @@ just smoke local-ip
 just smoke peer-preflight m5 fastpc4
 just smoke crosshost-send m5 fastpc4
 just smoke crosshost-ack m5 fastpc4
+just smoke crosshost-curl-tls m5 fastpc4
 ```
 
 `localhost` proves host-qualified localhost send/read and requires-ack/ack.
@@ -31,6 +32,16 @@ enabled advertised host; it never starts, stops, or retries a remote daemon.
 read` return the exact same ULID and body. `crosshost-ack` repeats that proof
 with `--requires-ack`, has the remote peer acknowledge it, and proves the
 reply reaches the local inbox with the original acknowledged-message ID.
+The crosshost-curl-tls lane proves the public mTLS doctor route in both
+directions, then repeats each direction without a client certificate. The
+negative rows pass only when curl exits nonzero with HTTP status 000, proving
+the TLS handshake rejected the caller before Hyper or the ATM router received
+HTTP.
+
+Historical cross-host artifacts that predate AO.4 and do not record
+`peer_wire_security` are not mode-specific evidence. They may remain useful
+for their original transport proof, but never establish AO.4 plaintext or
+mTLS behavior, performance, or authentication coverage.
 
 The legacy `just smoke crosshost <host...>` spelling remains an alias for
 `crosshost-send`. A cross-host recovery smoke is intentionally not claimed
@@ -139,6 +150,8 @@ interface only to the private test overlay address used by the participating
 hosts. The profile disables TLS, certificate pinning, and the peer allowlist;
 it is never safe to bind it to a public or shared network interface. Restart
 without `--peer-wire-security plaintext-test` before any non-diagnostic use.
+It remains the ordinary direct-peer HTTP pipeline; its evidence must be labeled
+`plaintext-test` and never used to claim mTLS or peer-allowlist coverage (ADR-047).
 
 The runner prints one `PASS` or `FAIL` line for local doctor, each peer doctor,
 each peer send/read pair, and the evidence path. It exits zero only when every

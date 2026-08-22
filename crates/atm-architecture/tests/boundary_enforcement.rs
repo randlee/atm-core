@@ -78,6 +78,56 @@ const AI11_RETIRED_WINDOWS_TRANSPORT_DEPENDENCIES: &[&str] = &[
     "windows-named-pipe",
 ];
 
+fn contains_adapter_availability_inference(source: &str) -> bool {
+    const WRAPPER_TERMS: &[&str] = &["adapter", "wrapper", "transport"];
+    const OPTION_BRANCH_TERMS: &[&str] = &["is_some", "is_none", "some", "none", "match"];
+
+    // Scan code tokens rather than comments or one explanatory phrase. This
+    // catches the actual forbidden construct: choosing the direct-peer path
+    // from an optional TLS/stream wrapper's presence. A comment rewrite cannot
+    // evade this guard, and a branch spread across several Rust tokens remains
+    // visible inside the short token window.
+    let tokens: Vec<_> = source
+        .lines()
+        .map(|line| line.split("//").next().unwrap_or_default())
+        .flat_map(|line| {
+            line.split(|character: char| !(character.is_ascii_alphanumeric() || character == '_'))
+        })
+        .filter(|token| !token.is_empty())
+        .map(str::to_ascii_lowercase)
+        .collect();
+
+    tokens.iter().enumerate().any(|(index, token)| {
+        let is_wrapper = WRAPPER_TERMS.iter().any(|term| token.contains(term));
+        let window_start = index.saturating_sub(3);
+        let window_end = (index + 5).min(tokens.len());
+        is_wrapper
+            && tokens[window_start..window_end]
+                .iter()
+                .any(|nearby| OPTION_BRANCH_TERMS.contains(&nearby.as_str()))
+    })
+}
+
+#[test]
+fn adapter_availability_guard_scans_code_branches_not_comment_wording() {
+    assert!(
+        !contains_adapter_availability_inference(
+            "// adapter availability must never select plaintext\nlet route = direct;"
+        ),
+        "comments are documentation, not an executable adapter-availability branch"
+    );
+    for source in [
+        "if config.peer_stream_adapter.is_some() { return authenticated(); }",
+        "match transport_wrapper { Some(wrapper) => wrapper.connect(), None => direct() }",
+        "let direct = tls_adapter.is_none();",
+    ] {
+        assert!(
+            contains_adapter_availability_inference(source),
+            "the architecture guard must reject adapter availability selection: {source}"
+        );
+    }
+}
+
 #[test]
 fn daemon_must_not_read_caller_workspace_config() {
     let root = workspace_root();
@@ -125,6 +175,190 @@ fn daemon_must_not_read_caller_workspace_config() {
     assert!(
         findings.is_empty(),
         "daemon source must not restore caller workspace config access: {findings:?}"
+    );
+}
+
+#[test]
+/// AO.3 extends this AO.2 baseline guard with the bootstrap-selected
+/// `PlaintextTest` arm and its invalid-TLS-state independence.
+fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
+    let root = workspace_root();
+    let bootstrap = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
+    let runtime = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
+    let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
+    let policy = read_source(&root.join("crates/atm-core/src/peer_wire.rs"));
+
+    let bootstrap_direct_setup = bootstrap
+        .split("fn replacement_runtime_config")
+        .nth(1)
+        .and_then(|source| source.split("fn record_peer_wire_mode_selection").next())
+        .expect("replacement bootstrap direct-peer setup");
+    let direct_listener = runtime
+        .split("async fn bind_configured_direct_peer_listener")
+        .nth(1)
+        .and_then(|source| source.split("async fn bind_loopback_listener").next())
+        .expect("direct-peer listener implementation");
+    let direct_connector = client
+        .split("impl DirectPeerTcpConnector")
+        .nth(1)
+        .and_then(|source| source.split("impl LoopbackTcpConnector").next())
+        .expect("direct-peer connector implementation");
+    assert!(
+        bootstrap_direct_setup.contains("DirectPeerTcpConfig::standard()"),
+        "AO2 plaintext characterization must retain the existing standard direct-peer configuration"
+    );
+    let plaintext_adapter_arm = bootstrap
+        .split("fn peer_stream_adapter_for_mode")
+        .nth(1)
+        .and_then(|source| source.split("fn replacement_runtime_config").next())
+        .and_then(|source| source.split("PeerWireSecurity::PlaintextTest =>").nth(1))
+        .and_then(|source| source.split("\n    }").next())
+        .expect("bootstrap plaintext adapter-selection arm");
+    assert!(
+        plaintext_adapter_arm.contains("Ok(None),"),
+        "AO2 plaintext mode must bypass all TLS configuration and return no stream wrapper"
+    );
+    for forbidden in [
+        "build_mtls_adapter",
+        "PeerConfigStore",
+        "MtlsPeerStreamAdapter",
+        "peer_tls",
+        "rustls",
+        "certificate",
+    ] {
+        assert!(
+            !plaintext_adapter_arm.contains(forbidden),
+            "AO2 plaintext bootstrap arm must not inspect TLS/configuration/adapter state `{forbidden}`"
+        );
+    }
+    assert!(
+        client.contains("struct DirectPeerTcpConnector")
+            && client.contains("pub fn direct_peer_tcp_client")
+            && direct_connector.contains("execute_reqwest_request"),
+        "AO2 plaintext characterization must retain the shared direct-peer connector and HTTP exchange"
+    );
+    assert!(
+        direct_listener.contains("TcpListener::bind")
+            && runtime.contains("canonical_api_router(")
+            && runtime.contains("AuthenticatedConnector::peer_socket()"),
+        "AO2 plaintext listener must enter the ordinary canonical router"
+    );
+    for (scope, source) in [
+        ("direct-peer listener", direct_listener),
+        ("direct-peer connector", direct_connector),
+    ] {
+        for forbidden in ["peer_tls", "rustls", "PeerConfigStore", "certificate"] {
+            assert!(
+                !source.contains(forbidden),
+                "AO2 plaintext {scope} must not inspect TLS/configuration/adapter state `{forbidden}`"
+            );
+        }
+        assert!(
+            !contains_adapter_availability_inference(source),
+            "AO2 plaintext {scope} must not infer its mode from adapter availability or synonyms"
+        );
+    }
+    for forbidden in [
+        "std::env",
+        "rustls",
+        "PeerConfigStore",
+        "TlsConnector",
+        "TlsAcceptor",
+    ] {
+        assert!(
+            !policy.contains(forbidden),
+            "AO2 peer-wire policy must remain transport-neutral and reject `{forbidden}`"
+        );
+    }
+    assert!(
+        policy.contains("pub enum PeerWireSecurity")
+            && policy.contains("Mtls")
+            && policy.contains("PlaintextTest")
+            && policy.contains("pub struct PeerWireMode")
+            && policy.contains("pub const fn mtls()"),
+        "AO2 needs a typed mode vocabulary whose normal policy is mTLS"
+    );
+}
+
+#[test]
+/// AO.3 extends this AO.2 policy guard over the daemon launch seam while
+/// preserving the single canonical HTTP application pipeline.
+fn ao2_peer_wire_policy_keeps_one_error_registry_and_one_http_pipeline() {
+    let root = workspace_root();
+    let error_registry = read_source(&root.join("crates/atm-error/src/error_codes.rs"));
+    let error_catalog = read_source(&root.join("crates/atm-storage/src/error_catalog.rs"));
+    let adr = read_source(&root.join("docs/adr/ADR-047-layered-peer-wire-security.md"));
+    let requirements = read_source(&root.join("docs/requirements.md"));
+    let daemon_requirements = read_source(&root.join("docs/atm-daemon/requirements.md"));
+
+    for (code, variant) in [
+        ("ATM_PEER_WIRE_MODE_INVALID", "PeerWireModeInvalid"),
+        (
+            "ATM_PEER_WIRE_MODE_SOURCE_FORBIDDEN",
+            "PeerWireModeSourceForbidden",
+        ),
+        (
+            "ATM_PEER_WIRE_PLAINTEXT_AUTHENTICATION_REQUIRED",
+            "PeerWirePlaintextAuthenticationRequired",
+        ),
+    ] {
+        assert!(
+            error_registry.contains(code) && error_catalog.contains(variant),
+            "AO2 peer-wire failure `{code}` must use the central registry and catalog recovery"
+        );
+    }
+    for required in [
+        "PeerWireMode` launch policy",
+        "It does not select an HTTP",
+        "never falls back to plaintext",
+        "Plaintext-test evidence cannot satisfy",
+    ] {
+        assert!(
+            adr.contains(required),
+            "ADR-047 must retain the AO2 policy guarantee `{required}`"
+        );
+    }
+    assert!(
+        requirements
+            .contains("Mode ownership and the layered-stream constraint are defined by ADR-047.")
+            && daemon_requirements.contains("ADR-047 owns the typed launch-mode selection"),
+        "both core and daemon requirements must cite the accepted ADR-047 policy"
+    );
+}
+
+#[test]
+fn ao4_benchmark_targets_cannot_introduce_an_alternate_daemon_pipeline() {
+    let root = workspace_root();
+    let bootstrap = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
+    let bootstrap_manifest = read_source(&root.join("crates/atm-daemon-bootstrap/Cargo.toml"));
+    let justfile = read_source(&root.join("Justfile"));
+    let benchmark_entrypoint =
+        root.join("crates/atm-daemon-bootstrap/src/bin/atm-daemon-benchmark.rs");
+    let benchmark_source = read_source(&benchmark_entrypoint);
+    let benchmark_daemon = bootstrap
+        .split("pub async fn run_benchmark_daemon")
+        .nth(1)
+        .and_then(|source| source.split("fn build_replacement_handler").next())
+        .expect("feature-gated benchmark daemon must delegate through bootstrap");
+
+    assert!(
+        bootstrap_manifest.contains("benchmark-harness = []")
+            && bootstrap_manifest.contains("name = \"atm-daemon-benchmark\"")
+            && benchmark_daemon.contains("run_replacement_daemon_with_selector")
+            && benchmark_daemon.contains("parse_peer_wire_mode"),
+        "the feature-gated benchmark daemon must select the ordinary AO2 peer-wire mode and delegate into the shared bootstrap"
+    );
+    for forbidden in ["HttpRuntimeBuilder", "StorageAndNudgeRouter", "TcpListener"] {
+        assert!(
+            !benchmark_source.contains(forbidden),
+            "the benchmark entrypoint must not construct a second HTTP daemon pipeline through `{forbidden}`"
+        );
+    }
+    assert!(
+        justfile.contains("cargo build --release -p agent-team-mail -p atm-daemon")
+            && !justfile.contains("atm-daemon-benchmark")
+            && !justfile.contains("benchmark-harness"),
+        "the public benchmark recipe must build only the shipped Tokio/Axum daemon"
     );
 }
 
@@ -245,10 +479,10 @@ fn ai23_peer_adapter_never_matches_localhost_or_own_ip() {
     let root = workspace_root();
     let router = read_source(&root.join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"));
     assert!(
-        router.contains("dispatch_resolved_peer_ack")
+        router.contains("dispatch_resolved_peer_write")
             && !router.contains("PeerDelivery")
             && !router.contains("signal_after_persist"),
-        "the typed router may deliver only resolved acknowledgements and has no peer worker signal"
+        "the typed router may deliver one admitted remote write and has no peer worker signal"
     );
     for forbidden in ["is_loopback", "is_loopback()"] {
         assert!(
@@ -292,27 +526,73 @@ fn ak2_peer_worker_symbols_are_absent_from_production() {
         "crates/atm-storage/src/contract.rs",
         "crates/atm-storage-rusqlite/src/peer_config_store.rs",
     ];
-    let retired_symbols = [
-        "PeerDeliveryCoordinator",
-        "PeerDrainCoordinator",
-        "PeerPostCommitWorkQueue",
-        "PostCommitWorkKey::PeerDelivery",
-        "PeerSyncPolicy",
-        "PeerSyncRequest",
-        "PeerSyncOutcome",
-        "PeerLinkStatus",
-        "PeerWireSecurity",
-        "HttpsTransport",
-    ];
     for source in production_sources {
         let contents = read_source(&root.join(source));
-        for symbol in retired_symbols {
-            assert!(
-                !contents.contains(symbol),
-                "AK.2 production source `{source}` must not retain `{symbol}`"
-            );
-        }
+        let retired = retired_peer_worker_symbols_in_source(&contents);
+        assert!(
+            retired.is_empty(),
+            "AK.2 production source `{source}` must not retain retired symbols {retired:?}"
+        );
     }
+}
+
+fn retired_peer_worker_symbols_in_source(source: &str) -> BTreeSet<String> {
+    let syntax = syn::parse_file(source).expect("production source must parse for AK.2 guard");
+    let mut visitor = RetiredPeerWorkerSymbolVisitor::default();
+    visitor.visit_file(&syntax);
+    visitor.found
+}
+
+#[derive(Default)]
+struct RetiredPeerWorkerSymbolVisitor {
+    found: BTreeSet<String>,
+}
+
+impl<'ast> Visit<'ast> for RetiredPeerWorkerSymbolVisitor {
+    fn visit_path(&mut self, path: &'ast syn::Path) {
+        const RETIRED_TERMINALS: &[&str] = &[
+            "PeerDeliveryCoordinator",
+            "PeerDrainCoordinator",
+            "PeerPostCommitWorkQueue",
+            "PeerSyncPolicy",
+            "PeerSyncRequest",
+            "PeerSyncOutcome",
+            "PeerLinkStatus",
+            "HttpsTransport",
+        ];
+
+        let segments: Vec<_> = path
+            .segments
+            .iter()
+            .map(|segment| segment.ident.to_string())
+            .collect();
+        if let Some(terminal) = segments.last()
+            && RETIRED_TERMINALS.contains(&terminal.as_str())
+        {
+            self.found.insert(terminal.clone());
+        }
+        if segments
+            .windows(2)
+            .any(|pair| matches!(pair, [first, second] if first == "PostCommitWorkKey" && second == "PeerDelivery"))
+        {
+            self.found
+                .insert("PostCommitWorkKey::PeerDelivery".to_owned());
+        }
+        syn::visit::visit_path(self, path);
+    }
+}
+
+#[test]
+fn ak2_retirement_guard_matches_symbols_not_substrings() {
+    assert!(
+        retired_peer_worker_symbols_in_source("pub struct PeerWireSecurity;").is_empty(),
+        "AO2's PeerWireSecurity vocabulary must not collide with retired AK.2 identifiers"
+    );
+    assert_eq!(
+        retired_peer_worker_symbols_in_source("fn f(_: PeerSyncPolicy) {}"),
+        BTreeSet::from(["PeerSyncPolicy".to_owned()]),
+        "the AK.2 guard must still reject an exact retired symbol"
+    );
 }
 
 #[test]
@@ -1085,8 +1365,133 @@ fn storage_tls_boundary_lists_only_current_tls_consumers() {
         .expect("storage TLS boundary must be valid TOML");
     assert_eq!(
         boundary.dependencies.allowed_dependents,
-        vec!["atm-peer-tls-interop".to_string()],
+        vec!["atm-peer-tls-interop".to_string(), "peer-tls".to_string(),],
         "storage TLS helpers must name only crates that consume the TLS API"
+    );
+}
+
+#[test]
+fn tls_identity_scrubs_the_source_pem_buffer_after_parsing() {
+    let source = read_source(&workspace_root().join("crates/atm-storage/src/tls.rs"));
+    let syntax = syn::parse_file(&source).expect("storage TLS source must parse");
+    let mut visitor = PemScrubbingVisitor::default();
+    visitor.visit_file(&syntax);
+    assert!(
+        visitor.wraps_pem_in_zeroizing,
+        "TlsIdentity::load must retain its source PEM in Zeroizing so private-key bytes are scrubbed after parsing"
+    );
+}
+
+#[derive(Default)]
+struct PemScrubbingVisitor {
+    wraps_pem_in_zeroizing: bool,
+}
+
+impl<'ast> Visit<'ast> for PemScrubbingVisitor {
+    fn visit_local(&mut self, local: &'ast syn::Local) {
+        if let syn::Pat::Ident(binding) = &local.pat
+            && binding.ident == "pem"
+            && local.init.as_ref().is_some_and(|init| {
+                matches!(
+                    init.expr.as_ref(),
+                    syn::Expr::Call(call) if is_zeroizing_constructor(call)
+                )
+            })
+        {
+            self.wraps_pem_in_zeroizing = true;
+        }
+        syn::visit::visit_local(self, local);
+    }
+}
+
+fn is_zeroizing_constructor(call: &syn::ExprCall) -> bool {
+    let syn::Expr::Path(path) = call.func.as_ref() else {
+        return false;
+    };
+    path.path
+        .segments
+        .iter()
+        .map(|segment| segment.ident.to_string())
+        .eq(["Zeroizing".to_owned(), "new".to_owned()])
+}
+
+#[test]
+/// AO.3 extends this AO.2 ownership guard: bootstrap consumes the opaque mTLS
+/// stream seam, while every other production crate stays adapter-neutral.
+fn ao2_mtls_stream_adapter_is_the_only_authorized_production_tls_consumer() {
+    let root = workspace_root();
+    for (source, target) in [
+        ("atm-http-runtime", "peer-tls"),
+        ("atm", "peer-tls"),
+        ("atm-graft", "peer-tls"),
+        ("atm-daemon", "peer-tls"),
+    ] {
+        assert_forbidden_edge_absent(source, target);
+    }
+    let boundary_path = root.join("boundaries/peer-tls/mtls-peer-stream-adapter.toml");
+    let boundary: BoundaryToml = toml::from_str(&read_source(&boundary_path))
+        .expect("mTLS stream adapter boundary must be valid TOML");
+    assert_eq!(
+        boundary.dependencies.allowed_dependents,
+        vec!["atm-daemon-bootstrap".to_owned()],
+        "only bootstrap may compose the concrete mTLS byte-stream adapter"
+    );
+    let source = read_source(&root.join("crates/peer-tls/src/lib.rs"));
+    let syntax = syn::parse_file(&source).expect("peer-tls source must parse");
+    let mut visitor = PeerTlsSurfaceVisitor::default();
+    visitor.visit_file(&syntax);
+    assert!(
+        visitor.forbidden.is_empty(),
+        "peer-tls must remain an mTLS byte-stream-only adapter and reject {:?}",
+        visitor.forbidden
+    );
+    assert!(
+        visitor.required.contains("tokio_rustls")
+            && visitor.required.contains("MtlsPeerStreamAdapter")
+            && visitor.required.contains("PeerConfigStore"),
+        "AO2 must retain one concrete Rustls/Tokio-Rustls adapter over configuration and byte streams"
+    );
+}
+
+#[derive(Default)]
+struct PeerTlsSurfaceVisitor {
+    forbidden: BTreeSet<String>,
+    required: BTreeSet<String>,
+}
+
+impl<'ast> Visit<'ast> for PeerTlsSurfaceVisitor {
+    fn visit_ident(&mut self, ident: &'ast syn::Ident) {
+        let name = ident.to_string();
+        if matches!(
+            name.as_str(),
+            "RequestEnvelope" | "canonical_api_router" | "MessageStore" | "PeerWireMode"
+        ) {
+            self.forbidden.insert(name.clone());
+        }
+        if matches!(
+            name.as_str(),
+            "tokio_rustls" | "MtlsPeerStreamAdapter" | "PeerConfigStore"
+        ) {
+            self.required.insert(name);
+        }
+        syn::visit::visit_ident(self, ident);
+    }
+}
+
+#[test]
+fn ao2_mtls_surface_guard_matches_ast_identifiers_not_comments_or_strings() {
+    let comment_only = syn::parse_file("// PeerWireMode\nconst NOTE: &str = \"MessageStore\";")
+        .expect("fixture must parse");
+    let mut comment_visitor = PeerTlsSurfaceVisitor::default();
+    comment_visitor.visit_file(&comment_only);
+    assert!(comment_visitor.forbidden.is_empty());
+
+    let forbidden_use = syn::parse_file("use crate::PeerWireMode;").expect("fixture must parse");
+    let mut forbidden_visitor = PeerTlsSurfaceVisitor::default();
+    forbidden_visitor.visit_file(&forbidden_use);
+    assert_eq!(
+        forbidden_visitor.forbidden,
+        BTreeSet::from(["PeerWireMode".to_owned()])
     );
 }
 

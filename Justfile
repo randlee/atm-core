@@ -188,8 +188,6 @@ smoke feature='normal' *args:
 # daemon/database state and writes one report-compatible JSON artifact per run.
 benchmark *args:
     cargo build --release -p agent-team-mail -p atm-daemon
-    # The isolated capacity runner launches this feature-gated bootstrap binary.
-    cargo build --release -p atm-daemon-bootstrap --features benchmark-harness --bin atm-daemon-benchmark
     {{python_cmd}} .just/sign_daemon_dev.py
     {{python_cmd}} scripts/smoke/run_admission_capacity.py {{args}}
     # Publish all captured variants into the canonical report site.

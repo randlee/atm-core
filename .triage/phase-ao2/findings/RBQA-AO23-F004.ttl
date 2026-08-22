@@ -1,0 +1,62 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-AO23-F004>
+  a triage:Finding ;
+  triage:findingId "RBQA-AO23-F004" ;
+  triage:title "serde_json declared as production dependency but test-only in atm-daemon-bootstrap" ;
+  triage:description "serde_json is listed under [dependencies] in crates/atm-daemon-bootstrap/Cargo.toml but is only used by test code and benchmarking utilities; should be [dev-dependencies]. Remediation: move the dependency declaration from [dependencies] to [dev-dependencies]." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "hygiene" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-20T20:43:59Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.3 ;
+  triage:foundAt "2026-08-20T20:36:55Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AO23-F004/s3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AO23-F004/s4-1> ;
+  triage:triageRecordVersion "2" ;
+  triage:closedNote "Confirmed fixed by quality-mgr QA-2 for PR #967 (commits baa48d7bd/ea25d03e1/03b820d76/d505ab633/87bab74b3/aa548a329); code-verified fix on feature/pao-s3-runtime-peer-wire-mode @ae3232d34." .
+
+<urn:atm:triage:occurrence/RBQA-AO23-F004/s3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/Cargo.toml" ;
+  triage:line 31 ;
+  triage:snippet "serde_json.workspace = true" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:headSha "e6a428355253de23a428bac2f047180ec95dfc7c" ;
+  triage:occursIn <urn:atm:triage:worktree/s3/e6a428355253de23a428bac2f047180ec95dfc7c> .
+
+<urn:atm:triage:occurrence/RBQA-AO23-F004/s4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/Cargo.toml" ;
+  triage:line 23 ;
+  triage:snippet "serde_json.workspace = true" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s4-peer-wire-proof" ;
+  triage:headSha "49154a38f20a3f723dc8bd6d305dfc79bb241d30" ;
+  triage:occursIn <urn:atm:triage:worktree/s4/49154a38f20a3f723dc8bd6d305dfc79bb241d30> .
+
+<urn:atm:triage:worktree/s3/e6a428355253de23a428bac2f047180ec95dfc7c>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:branch "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:headSha "e6a428355253de23a428bac2f047180ec95dfc7c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s4/49154a38f20a3f723dc8bd6d305dfc79bb241d30>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s4-peer-wire-proof" ;
+  triage:branch "feature/pao-s4-peer-wire-proof" ;
+  triage:headSha "49154a38f20a3f723dc8bd6d305dfc79bb241d30" ;
+  triage:orderIndex 4 .

@@ -1,203 +1,137 @@
 ---
 phase: AO2
 sprint: AO2.6
-title: Restore async admission writer batching parity
-branch: fix/admission-writer-batching-regression
+title: Restore bounded admission-writer transaction coalescing
+branch: future-dev-worktree
 integration_branch: integrate/phase-ao2
 status: draft_for_review
 depends_on:
-  - PR-977-scoped-live-database-guard
-  - AO2.5-benchmark-primary-database-safety
-blocks: []
+  - AO2.5.4-mandatory-benchmark-snapshot-restore
+blocks:
+  - AO2.7-m5-tcp-benchmark-parity
+  - AO2.8-windows-tcp-benchmark-parity
 ---
 
-# AO2.6 — Restore async admission writer batching parity
+# AO2.6 — Restore bounded admission-writer transaction coalescing
 
-## Decision summary
+## Decision
 
-Restore the pre-`e9afc2e19093700f4424873ed8effb1bb38ead35` one-millisecond
-collection window at the single SQLite writer-thread ingress. Preserve the
-Tokio/Axum HTTP daemon, the public HTTP admission resource, the outer TLS
-transport wrapper, and the single SQLite writer ownership model. Do not add a
-TLS branch, controller, retry queue, second persistence path, or a post-HTTP
-batching layer.
+Restore the fixed one-millisecond transaction-coalescing window in the sole
+`atm-storage-rusqlite` writer thread. It was present before the Tokio/Axum
+async-admission migration and was removed mechanically when the writer channel
+changed from `std::sync::mpsc` to `tokio::sync::mpsc` in commit `e9afc2e19`.
+That migration retained a drain of items already queued but removed the prior
+bounded wait for arrivals immediately after the first write. The result turns
+closely concurrent HTTP admissions into more SQLite commits/fsyncs than the
+pre-migration path.
 
-The proposed mechanism is a bounded `std::sync::mpsc::SyncSender`/
-`Receiver` at the already-existing writer ingress, with the existing async
-caller reply path retained through `tokio::sync::oneshot`. `submit_async` uses
-nonblocking `try_send` with its existing bounded deadline/yield policy; the
-writer thread receives the first operation, then calls
-`recv_timeout(BATCH_TIME_BUDGET)` for at most one millisecond and drains all
-already-admitted operations before one SQLite transaction. This returns the
-coalescing primitive to exactly the layer that owned it before e9, without an
-extra daemon, dispatcher, HTTP hop, or TLS-aware storage behavior.
+The repair is a storage-writer implementation correction, not a change to the
+public HTTP protocol or a benchmark-specific optimization. It must retain the
+Tokio/Axum daemon architecture and preserve one durable response per write
+only after the enclosing SQLite transaction commits.
 
-## Problem statement and root cause
+## Grounded historical evidence
 
-The historical M4 TCP/f64 artifact at
-`site/reports/send-message-benchmark/20260801-072846.375494-mac-arm64-01-tcp-f64.json`
-records 24,958.69 msg/s at source
-`3ec7ce1ff7269d8f43a65658c712778abbf2de14`. The later approximately 17k
-same-harness target and the current approximately 5–6k results demonstrate a
-material regression that predates TLS.
+- Commit `c02bb5801` changed `BATCH_TIME_BUDGET` in
+  `crates/atm-storage-rusqlite/src/writer/mod.rs` to `Duration::from_millis(1)`
+  specifically to coalesce concurrent SQLite writes.
+- Commit `e9afc2e19` migrated the writer to `tokio::sync::mpsc`; its diff
+  removed `BATCH_TIME_BUDGET`, `recv_timeout`, and the test that named the
+  coalescing window. Its replacement exits collection as soon as the new
+  channel is momentarily empty.
+- The current writer still owns one transaction for each collected batch and
+  preserves per-operation savepoints/replies. AO2.6 must restore collection
+  timing only; it must not alter operation ordering, savepoint isolation, or
+  commit/reply semantics.
 
-Commit `e9afc2e19093700f4424873ed8effb1bb38ead35`
-(`perf(AL13): route Tokio writes through async storage admission`) changed the
-writer ingress from `std::sync::mpsc::Receiver::recv_timeout` to
-`tokio::sync::mpsc::Receiver`. Its `collect_batch` now drains only
-`try_recv()` entries already queued when the first item is observed. A pipelined
-f64 benchmark can therefore execute many one-message SQLite transactions
-instead of coalescing arrivals over the historical 1 ms window. TLS did not
-cause this change and must not be used to solve it.
+## Non-negotiable invariants
 
-## Invariants and non-goals
+1. The only changed production seam is the dedicated SQLite writer's batch
+   collection behavior in `atm-storage-rusqlite`.
+2. The maximum deliberate wait after receiving the first queued write is one
+   millisecond. A lone request may therefore pay at most that bounded
+   coalescing delay before its transaction is opened.
+3. Every operation remains in submission order within one writer transaction;
+   each keeps its savepoint and receives its result only after the outer commit
+   succeeds. A commit failure fails all previously successful operations in
+   that transaction exactly as today.
+4. Shutdown/disconnect behavior remains bounded and drains/replies according
+   to the existing writer contract; it must not strand async oneshots or sync
+   callers.
+5. No polling loop, unbounded sleep, busy wait, new runtime thread, global
+   configuration knob, feature flag, or benchmark-only mode is permitted.
 
-Required invariants:
+## Design constraints
 
-- one writer thread remains the sole SQLite write owner;
-- every caller receives the result for its own operation only after the
-  transaction outcome is known;
-- bounded channel capacity, 10-second submit/reply deadlines, shutdown drain,
-  observability outcomes, and error codes remain explicit;
-- the public request remains one canonical HTTP POST per message; there is no
-  `message[]` endpoint;
-- plaintext-test and mutual-TLS use the same admission/storage pipeline;
-- the default daemon remains mTLS; plaintext-test remains runtime-selected and
-  is never a compile-time alternative;
-- no synchronous legacy daemon code is modified or reintroduced.
+The current Tokio channel does not provide the old `recv_timeout` primitive.
+Implementation begins with a narrow characterization test around the writer's
+existing collection seam. It may introduce the smallest timeout-capable wait
+there, but must not redesign the channel ownership, async admission API,
+Axum router, request deadline model, connection framing, TLS adapters, or
+benchmark harness merely to recover this one millisecond.
 
-Out of scope:
+The implementation must use an explicit deadline (`Instant + 1ms` or an
+equivalent single bounded timer) rather than repeating sleeps. It must drain
+all messages already available before waiting and stop waiting once the fixed
+deadline expires. The selected mechanism must be deterministic under unit
+test control; wall-clock race tests are not acceptance evidence.
 
-- changes to the TLS handshake, certificates, peer discovery, HTTP resource,
-  wire payload, or remote delivery/replay;
-- raising batch time above 1 ms, adding an unbounded queue, or moving durable
-  acknowledgement after the response;
-- benchmark-account backup implementation (AO2.5 owns that);
-- optimizing an unmeasured path before controlled parent/e9 comparison proof.
+### Rust structural review constraints
 
-## Detailed design
+- `RBP-001`: preserve the existing typed `AtmError` causes and recovery
+  behavior for queue, transaction-open, commit, and shutdown failures; do not
+  replace them with opaque batching strings.
+- `RBP-002`: the writer's queue/shutdown state is dynamic and already owned by
+  one private loop, so a public typestate API would add surface without making
+  a new invalid state impossible. No new public state machine is allowed.
+- `RBP-004`: the one-millisecond interval remains a private named duration
+  with one semantic owner. If implementation needs to pass it across helpers,
+  introduce a private validated wrapper rather than raw duplicated numbers.
+- `RBP-006`/`RBP-009`: no new shared mutable primitive or eager clone may be
+  introduced on the writer's hot path without an explicit benchmarked reason.
 
-### Writer ingress and batching
+## Work items
 
-1. Retain `ReplyTx::Async(tokio::sync::oneshot::Sender<...>)` so Tokio request
-   handlers await a reply without blocking an executor thread.
-2. Replace only the writer ingress receiver with bounded
-   `std::sync::mpsc::SyncSender/Receiver`, the same boundary used before e9.
-   Synchronous callers retain their current bounded `try_send` retry behavior.
-3. For async callers, make submission nonblocking: attempt `try_send`; when
-   full, retain the returned message and await a bounded Tokio yield/sleep until
-   the existing deadline. This is backpressure at the writer boundary, not a
-   second queue or `spawn_blocking` hop.
-4. After the writer receives its first `Submit`, record a monotonic deadline
-   `first_received_at + BATCH_TIME_BUDGET` (one millisecond). Repeatedly call
-   `recv_timeout(remaining)` until the deadline; submit operations join the
-   batch, a `Shutdown` sets drain mode, disconnect initiates drain, and timeout
-   closes the collection window.
-5. Drain immediately available submits after a timeout/shutdown observation,
-   then execute one immediate SQLite transaction and reply individually.
-   The window begins after the first accepted operation, never before it, and
-   cannot exceed one millisecond plus scheduler granularity.
+1. **Characterize before editing.** Add tests that distinguish: a currently
+   queued burst, a write arriving within the one-millisecond window, a write
+   arriving after the window, shutdown during the window, and receiver
+   disconnection. Capture transaction/reply ordering in the existing writer
+   test seam.
+2. **Restore bounded collection.** Reintroduce the fixed one-millisecond
+   deadline only in `collect_batch` (or its smallest necessary helper), while
+   retaining the existing bounded Tokio submission and reply paths.
+3. **Prove persistence semantics.** Extend tests for one outer transaction,
+   savepoint isolation, commit failure fan-out, and no reply before commit.
+4. **Guard scope.** Add or update an architecture guard/static assertion that
+   the batching interval belongs only to the SQLite writer and is not exposed
+   as HTTP, TLS, CLI, environment, or benchmark configuration.
+5. **Regression evidence.** Run crate tests and the safe benchmark workflow
+   only after AO2.5.4 has merged; benchmark data is evidence for AO2.7, not an
+   AO2.6 development fixture.
 
-This is deliberately a replacement of the changed ingress primitive, not an
-adapter between Tokio and a second writer. The async-facing API remains async;
-the dedicated writer remains synchronous because SQLite ownership already
-requires that thread.
+## Acceptance criteria
 
-### Evidence and instrumentation
-
-Add test-only batch/transaction observation at the writer seam, not on the
-production HTTP hot path. It must prove that an operation arriving within the
-one-millisecond window joins the first transaction and that an operation after
-the window forms a later transaction. Production observability remains
-aggregate/error-oriented and must not log a record per successful admission.
-
-## Performance-regression prevention
-
-The primary risk is solving an async submission concern by adding an extra
-queue, runtime hop, lock, timer task, per-message allocation, or TLS decision
-inside the admission path. Any of these can preserve correctness while losing
-the throughput that batching was intended to protect.
-
-Mitigation:
-
-- the only new wait is the historical bounded 1 ms collection wait at the
-  existing writer receiver;
-- no TLS or peer configuration type may enter `atm-storage-rusqlite` writer
-  code; static architecture coverage enforces this;
-- async queue-full handling uses the existing deadline and avoids blocking a
-  Tokio worker;
-- transaction, reply, and shutdown semantics are characterized before the
-  change and compared afterward;
-- a parent/e9/current controlled benchmark series establishes causality before
-  the implementation is declared a fix.
-
-Measurement is mandatory after AO2.5 supplies the safe physical harness. On
-the same host, released binaries, data profile, and account, retain raw and
-compact evidence for `tcp` plaintext-test and `tcp-tls` mutual TLS, f1/f8/f64,
-and sustained workloads. Compare p50 throughput, p95/p99 latency, accepted
-count, error count, transaction count, and batch-size distribution against the
-approved approximately 17k msg/s plaintext f64 baseline. Plaintext f64 must
-meet the approved parity threshold; mTLS is measured separately and cannot
-relax plaintext acceptance. If the parent/e9 experiment does not demonstrate
-the predicted batching/transaction relationship, stop and revise this plan
-before changing code.
-
-## Work breakdown and dependencies
-
-1. **AO2.6.1 — Causality baseline:** use AO2.5's isolated physical harness to
-   run parent-of-e9, e9, and current release binaries with the same TCP f64
-   profile. Record transaction/batch evidence. Blocks implementation.
-2. **AO2.6.2 — Requirements/ADR review:** confirm that the writer seam change
-   does not change durable acknowledgement, storage ownership, or TLS layering;
-   update requirements/ADR only if the existing contracts do not state the
-   one-ms bounded window and public-response behavior. Depends on 1.
-3. **AO2.6.3 — Writer implementation:** restore the bounded ingress/window as
-   specified above, preserving the async reply contract. Depends on 2.
-4. **AO2.6.4 — Characterization and boundary tests:** cover within-window and
-   after-window operation placement, queue-full deadline, shutdown drain,
-   duplicate admission, and no TLS types/branches in storage. Depends on 3.
-5. **AO2.6.5 — Physical parity proof:** run plaintext and mTLS matrix on M4,
-   M5, and fastpc4/Windows when available; analyze logs and retain artifacts.
-   Depends on 3 and 4.
-6. **AO2.6.6 — Rollback drill:** prove a revert restores pre-change behavior
-   without database migration or queued-message loss. Depends on 5.
-
-## Acceptance criteria and test matrix
-
-| Case | Required proof |
+| Property | Required proof |
 | --- | --- |
-| One write | Completes after at most the bounded admission timeout and is durable before response. |
-| Two writes inside 1 ms | One writer transaction, two correct replies, no response cross-talk. |
-| Write after 1 ms | Separate transaction; no unbounded batching delay. |
-| Channel full | Async handler stays nonblocking and returns the existing bounded timeout/error contract. |
-| Shutdown | Queued operations receive explicit unavailable errors; writer checkpoint behavior remains bounded. |
-| Plaintext vs mTLS | Same storage/writer code path; security selection occurs outside storage. |
-| Static boundary | No `PeerWireMode`, TLS certificate, connector, or HTTP controller dependency in writer modules. |
-| Live matrix | Safe-account `tcp` and `tcp-tls` artifacts meet the approved plaintext parity bar and retain all diagnostics. |
+| Window | A controlled second admission inside 1 ms joins the first transaction. |
+| Bound | A controlled arrival after 1 ms begins the next transaction. |
+| Lone write | It receives a durable result after no more than the bounded coalescing delay. |
+| Ordering | Submitted writes execute in order; no duplicate or dropped write is possible. |
+| Durability | Responses occur only after the outer transaction commits. |
+| Failure | Commit/open/shutdown/disconnect behavior preserves existing typed errors and reply completion. |
+| Scope | No production changes outside the storage writer and its required tests/guards. |
+| Error contract | Existing typed queue/SQLite errors retain cause and recovery context. |
 
-Required gates: focused Rust tests, architecture/boundary tests, `just lint`,
-`just test`, then live isolated-account plaintext and mTLS proof before QA.
-Any result below parity is a failure requiring code-path analysis, not a claim
-that a lower minimum throughput floor passes.
+Required gates: targeted writer tests, `cargo test -p atm-storage-rusqlite`,
+architecture tests, `just lint`, and `just test`. A clean diff review must
+show no change to `atm-http-runtime` routing, client/framing, peer transport,
+TLS, daemon lifecycle, or benchmark timed-profile code.
 
-## Rollback and recovery
+## Performance and rollback
 
-The change has no schema or wire migration. Revert the writer-ingress commit,
-rebuild the paired CLI/daemon, run the safe-account smoke, and compare the same
-artifact matrix. Do not revert by disabling TLS, reducing logging, changing
-the workload, or bypassing the public HTTP endpoint; those invalidate the
-comparison rather than recover the writer behavior.
+AO2.6 does not claim a throughput number. It restores the previously intended
+coalescing behavior and supplies deterministic correctness proof. AO2.7 alone
+decides whether the physical M5 TCP result meets the requested threshold.
 
-## Boundary and ADR impact review
-
-- **`atm-storage-rusqlite`:** owns the only implementation change. The writer
-  remains a sealed persistence adapter with one SQLite owner.
-- **`atm-http-runtime`:** no handler, route, controller, or daemon topology
-  change. It continues to call the async store API and await durable results.
-- **TLS/peer-wire:** remains an outer transport wrapper. No TLS type or mode
-  may cross into writer code.
-- **CLI/graft/cross-host:** unchanged; canonical HTTP POST remains the write
-  boundary.
-- **ADR/requirements:** review required before code. Amend only if necessary
-  to make batching latency, durable response, and isolation evidence normative;
-  do not weaken ADR-026's one-root rule.
+Rollback is a normal revert of the writer-only commit. No database migration,
+schema change, persisted configuration, or data repair is involved.

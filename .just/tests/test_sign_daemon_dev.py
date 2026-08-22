@@ -92,11 +92,11 @@ class SignDaemonDevTests(unittest.TestCase):
         self.assertIn(
             "benchmark *args:\n"
             "    cargo build --release -p agent-team-mail -p atm-daemon\n"
-            "    # The isolated capacity runner launches this feature-gated bootstrap binary.\n"
-            "    cargo build --release -p atm-daemon-bootstrap --features benchmark-harness --bin atm-daemon-benchmark\n"
             "    {{python_cmd}} .just/sign_daemon_dev.py",
             justfile,
         )
+        self.assertNotIn("benchmark-harness", justfile)
+        self.assertNotIn("atm-daemon-benchmark", justfile)
 
     def test_benchmark_recipe_publishes_the_canonical_report(self) -> None:
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
