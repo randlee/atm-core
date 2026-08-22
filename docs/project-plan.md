@@ -1025,7 +1025,7 @@ Implementation Branches:
 | `AI.50` | `complete` | `feature/pAI-s50-fuzz-report` | sc-compose-template fuzz report renderer |
 | `AI.51` | `complete` | `feature/pAI-s51-local-http-framing-adversarial-campaign` | bounded local HTTP framing campaign |
 | `AI.52` | `complete` | `feature/pAI-s52-windows-transport-benchmark` | cwin Windows TCP confirmation after accepted M5 performance evidence |
-| `AI3152-TOOLING` | `complete` | `feature/daemon-devcert-signing` | silent macOS `atm-daemon-dev` signing hook for local daemon builds |
+| `AI3152-TOOLING` | `complete` | `feature/daemon-devcert-signing` | retired self-signed macOS development-signing hook for local daemon builds |
 
 Authoritative plan: [Phase AI plan](./plans/phase-ai/plan-phase-ai.md).
 
@@ -1306,6 +1306,19 @@ integrates through `integrate/phase-ao2`; the earlier AO plan is retained only
 as [archived reference](./archive/phase-ao/).  The authoritative plan is
 [Phase AO plan](./plans/phase-ao/plan-phase-ao.md).
 
+Sprint line:
+- `AO.1` `feature/pao-s1-peer-wire-policy` [COMPLETE] — ADR-047, typed
+  `PeerWireMode` (mTLS default), peer-wire error/recovery contracts, boundary
+  records, and executable guards proving the plaintext arm stays on the
+  existing direct-peer canonical HTTP pipeline
+- `AO.2` `feature/pao-s2-isolated-mtls-stream-adapter` — bounded `peer-tls`
+  adapter with positive and negative stream evidence
+- `AO.3` `feature/pao-s3-runtime-peer-wire-mode` — one daemon build selects
+  the original plaintext or mTLS stream establishment without application
+  drift
+- `AO.4` `feature/pao-s4-peer-wire-proof` — shipped-daemon plaintext/mTLS
+  proof and compatible-baseline performance evidence
+
 ## 47. Phase AP — Outbound-Only Corporate Network Peer Connectivity [PROPOSED]
 
 Phase AP investigates support for a firewalled daemon that may initiate an
@@ -1321,42 +1334,6 @@ path without SSH tunneling, localhost simulation, raw-IP substitution, or a
 third-party relay. No AP product implementation begins if that physical proof
 does not pass. The authoritative outline is
 [Phase AP plan](./plans/phase-ap/plan-phase-ap.md).
-
-## 48. Phase AS — Shared Publish-Kit Migration [PLANNING]
-
-Status summary:
-
-- Phase AS adopts the upstream-owned `sc-publish` package without local edits
-  to shared workflows, helpers, agents, or tests. ATM supplies only complete
-  consumer release data and evidence.
-- Planning branch: `plan/sc-compose-publish-kit-migration`.
-- Baseline: `sc-publish/develop @ 240fd52`.
-- Entry gate: AS.1 records exact source parity and classifies shared gaps.
-  Safety-load-bearing capabilities must be implemented and accepted upstream
-  before AS.3 can dispatch; a filed issue is not a release gate.
-- The authoritative plan is [Phase AS plan](./plans/phase-as/README.md).
-
-Sprint line:
-
-- `AS.1 [IN PROGRESS]` `AS.1-overlay-contract.md` — exact source parity, ownership, and
-  upstream safety-capability gates
-- `AS.2` `AS.2-consumer-manifest-contract.md` — consumer manifest and unified
-  release-version contract
-- `AS.3` `AS.3-worktree-preflight-proof.md` — canonical worktree preflight
-  proof
-- `AS.4` `AS.4-authorized-pypi-1.4.3.md` — separately authorized, fresh
-  `1.4.4` PyPI-only release
-- `AS.5` `AS.5-main-migration-merge.md` — verified migration promotion from
-  `develop` to `main`
-- `AS.6` `AS.6-full-1.4.4-release.md` — first full canonical release
-
-Acceptance:
-
-- Phase AS acceptance is defined by the authoritative sprint plan: byte-exact
-  shared parity, complete explicit consumer data, implemented upstream safety
-  gates, matching preflight receipts, independent QA, and explicit human
-  production authorization for AS.4–AS.6.
-
 ## Publishing Improvements
 
 Implementation Branches:

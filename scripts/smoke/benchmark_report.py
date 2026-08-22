@@ -135,7 +135,11 @@ def immutable_write(path: Path, content: str) -> bool:
 
 def result_id(result: dict[str, Any], _source: Path | None = None) -> str:
     stamp = result["generated_at"].replace("-", "").replace(":", "").replace("T", "-").replace("Z", "")
-    return safe_artifact_id(f"{stamp}-{result['host_label']}-{result['transport']}-f{result['frames_per_connection']}")
+    mode = result.get("peer_wire_security")
+    mode_suffix = f"-{mode}" if mode is not None else ""
+    return safe_artifact_id(
+        f"{stamp}-{result['host_label']}-{result['transport']}{mode_suffix}-f{result['frames_per_connection']}"
+    )
 
 
 def compose(template: Path, variables: dict[str, Any], output: Path) -> None:
@@ -208,9 +212,18 @@ def render_run(result: dict[str, Any], artifact_id: str, report_dir: Path = REPO
             "generated_at": result["generated_at"],
             "host_label": result["host_label"],
             "transport": result["transport"],
+            "peer_wire_security": result.get("peer_wire_security") or "legacy-unverified",
+            "benchmark_target": result.get("benchmark_target") or "legacy",
+            "hook_mode": result.get("hook_mode") or "unknown",
+            "daemon_version": result.get("daemon_version") or "unknown",
+            "host_os": result.get("host_os") or "unknown",
+            "host_arch": result.get("host_arch") or "unknown",
+            "command": result.get("command") or "legacy",
+            "execution_daemon": result.get("execution_daemon") or "legacy-unverified",
             "frames_per_connection": result["frames_per_connection"],
             "run_duration_s": result["run_duration_s"],
             "passed": result["passed"],
+            "benchmark_evidence_failure_code": result.get("benchmark_evidence_failure_code", ""),
             "failure": result.get("failure", ""),
             "cleanup_failure": result.get("cleanup_failure", ""),
             "sample_html": sample_html,
@@ -223,9 +236,14 @@ def render_run(result: dict[str, Any], artifact_id: str, report_dir: Path = REPO
 
 def latest_profile_results(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     """Return the newest evidence for each host/transport/frame profile."""
-    latest: dict[tuple[str, str, int], dict[str, Any]] = {}
+    latest: dict[tuple[str, str, str, int], dict[str, Any]] = {}
     for result in records:
-        key = (result["host_label"], result["transport"], result["frames_per_connection"])
+        key = (
+            result["host_label"],
+            result["transport"],
+            result.get("peer_wire_security") or "legacy-unverified",
+            result["frames_per_connection"],
+        )
         previous = latest.get(key)
         if previous is None or result["generated_at"] > previous["generated_at"]:
             latest[key] = result
@@ -252,14 +270,31 @@ def current_campaign_results(records: Iterable[dict[str, Any]]) -> list[dict[str
         return [
             result
             for result in latest_profile_results(records)
-            if (result["host_label"], result["transport"])
-            == (newest["host_label"], newest["transport"])
+            if (
+                result["host_label"],
+                result["transport"],
+                result.get("peer_wire_security") or "legacy-unverified",
+            ) == (
+                newest["host_label"],
+                newest["transport"],
+                newest.get("peer_wire_security") or "legacy-unverified",
+            )
         ]
-    key = (newest["host_label"], newest["transport"], revision)
+    key = (
+        newest["host_label"],
+        newest["transport"],
+        newest.get("peer_wire_security") or "legacy-unverified",
+        revision,
+    )
     return [
         result
         for result in records
-        if (result["host_label"], result["transport"], result.get("source_revision")) == key
+        if (
+            result["host_label"],
+            result["transport"],
+            result.get("peer_wire_security") or "legacy-unverified",
+            result.get("source_revision"),
+        ) == key
     ]
 
 
@@ -284,6 +319,8 @@ def render_aggregate(records: Iterable[dict[str, Any]], report_root: Path = REPO
             "generated_at": result["generated_at"],
             "host_label": result["host_label"],
             "transport": result["transport"],
+            "peer_wire_security": result.get("peer_wire_security") or "legacy-unverified",
+            "benchmark_target": result.get("benchmark_target") or "legacy",
             "frames_per_connection": result["frames_per_connection"],
             "passed": result["passed"],
             "direct_sqlite_admissions_per_second": (
@@ -306,6 +343,10 @@ def render_aggregate(records: Iterable[dict[str, Any]], report_root: Path = REPO
         "rows": rows,
         "campaign_host_label": campaign_reference["host_label"] if campaign_reference else "none",
         "campaign_transport": campaign_reference["transport"] if campaign_reference else "none",
+        "campaign_peer_wire_security": (
+            campaign_reference.get("peer_wire_security") or "legacy-unverified"
+            if campaign_reference else "none"
+        ),
         "campaign_source_revision": campaign_reference.get("source_revision") if campaign_reference else None,
         "campaign_profile_count": len(campaign),
         "campaign_passed_count": sum(result["passed"] for result in campaign),

@@ -146,6 +146,9 @@ class BenchmarkSummary(BaseModel):
     generated_at: str = Field(min_length=1)
     host_label: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
     transport: Literal["uds", "tcp"]
+    peer_wire_security: Optional[Literal["mutual-tls", "plaintext-test"]] = None
+    benchmark_target: Optional[Literal["tcp", "tcp-tls"]] = None
+    hook_mode: Optional[Literal["active"]] = None
     frames_per_connection: Literal[1, 2, 4, 8, 16, 64]
     messages_per_connection: int = Field(gt=0)
     requested_messages_per_sample: int = Field(gt=0)
@@ -154,6 +157,11 @@ class BenchmarkSummary(BaseModel):
     target_duration_s: float = Field(gt=0)
     run_duration_s: float = Field(ge=0)
     source_revision: Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    daemon_version: Optional[str] = None
+    host_os: Optional[str] = None
+    host_arch: Optional[str] = None
+    command: Optional[str] = None
+    execution_daemon: Optional[Literal["shipped_atm_daemon"]] = None
     comparison_source_revision: Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     comparison_host_label: Optional[str] = Field(
         default=None, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
@@ -167,6 +175,9 @@ class BenchmarkSummary(BaseModel):
     thresholds: Optional[BenchmarkThresholds] = None
     metrics: Optional[BenchmarkMetrics] = None
     passed: bool
+    benchmark_evidence_failure_code: Optional[
+        Literal["missing_compatible_plaintext_baseline"]
+    ] = None
     failure: Optional[str] = None
     cleanup_failure: Optional[str] = None
 
@@ -179,6 +190,14 @@ class BenchmarkSummary(BaseModel):
 
     @model_validator(mode="after")
     def run_matches_metrics(self) -> "BenchmarkSummary":
+        if self.benchmark_target == "tcp" and (
+            self.transport != "tcp" or self.peer_wire_security != "plaintext-test"
+        ):
+            raise ValueError("tcp target must use the tcp plaintext-test profile")
+        if self.benchmark_target == "tcp-tls" and (
+            self.transport != "tcp" or self.peer_wire_security != "mutual-tls"
+        ):
+            raise ValueError("tcp-tls target must use the tcp mutual-TLS profile")
         if self.metrics is None:
             if self.passed or self.failure is None:
                 raise ValueError("a result without samples must be a failed run with a failure")
@@ -261,6 +280,9 @@ def compact_evidence(evidence: dict[str, Any]) -> BenchmarkSummary:
         "generated_at": evidence["generated_at"],
         "host_label": evidence["host_label"],
         "transport": evidence["transport"],
+        "peer_wire_security": evidence.get("peer_wire_security"),
+        "benchmark_target": evidence.get("benchmark_target"),
+        "hook_mode": evidence.get("hook_mode"),
         "frames_per_connection": evidence["frames_per_connection"],
         "messages_per_connection": evidence.get("messages_per_connection", evidence["frames_per_connection"]),
         "requested_messages_per_sample": evidence.get("requested_messages_per_sample", intervals[0].get("requested_count", 1_000)),
@@ -269,6 +291,11 @@ def compact_evidence(evidence: dict[str, Any]) -> BenchmarkSummary:
         "target_duration_s": evidence.get("target_duration_s", evidence["run_duration_s"]),
         "run_duration_s": evidence["run_duration_s"],
         "source_revision": evidence.get("source_revision"),
+        "daemon_version": evidence.get("daemon_version"),
+        "host_os": evidence.get("host_os"),
+        "host_arch": evidence.get("host_arch"),
+        "command": evidence.get("command"),
+        "execution_daemon": evidence.get("execution_daemon"),
         "comparison_source_revision": evidence.get("comparison_source_revision"),
         "comparison_host_label": evidence.get("comparison_host_label"),
         "worker_limit": evidence.get("worker_limit"),
@@ -301,6 +328,7 @@ def compact_evidence(evidence: dict[str, Any]) -> BenchmarkSummary:
             "first_failure": first_failure,
         },
         "passed": bool(evidence.get("passed", False)),
+        "benchmark_evidence_failure_code": evidence.get("benchmark_evidence_failure_code"),
         "failure": public_string(str(evidence["failure"])) if evidence.get("failure") else None,
         "cleanup_failure": public_string(str(evidence["cleanup_failure"])) if evidence.get("cleanup_failure") else None,
     }
@@ -317,6 +345,9 @@ def failed_summary(evidence: dict[str, Any]) -> BenchmarkSummary:
             "generated_at": evidence["generated_at"],
             "host_label": evidence["host_label"],
             "transport": evidence["transport"],
+            "peer_wire_security": evidence.get("peer_wire_security"),
+            "benchmark_target": evidence.get("benchmark_target"),
+            "hook_mode": evidence.get("hook_mode"),
             "frames_per_connection": evidence["frames_per_connection"],
             "messages_per_connection": evidence.get("messages_per_connection", evidence["frames_per_connection"]),
             "requested_messages_per_sample": evidence.get("requested_messages_per_sample", 1_000),
@@ -325,6 +356,11 @@ def failed_summary(evidence: dict[str, Any]) -> BenchmarkSummary:
             "target_duration_s": evidence.get("target_duration_s", 20.0),
             "run_duration_s": 0.0,
             "source_revision": evidence.get("source_revision"),
+            "daemon_version": evidence.get("daemon_version"),
+            "host_os": evidence.get("host_os"),
+            "host_arch": evidence.get("host_arch"),
+            "command": evidence.get("command"),
+            "execution_daemon": evidence.get("execution_daemon"),
             "comparison_source_revision": evidence.get("comparison_source_revision"),
             "comparison_host_label": evidence.get("comparison_host_label"),
             "worker_limit": evidence.get("worker_limit"),
@@ -339,6 +375,7 @@ def failed_summary(evidence: dict[str, Any]) -> BenchmarkSummary:
                 else None
             ),
             "passed": False,
+            "benchmark_evidence_failure_code": evidence.get("benchmark_evidence_failure_code"),
             "failure": public_string(str(evidence.get("failure") or "benchmark did not reach an interval")),
             "cleanup_failure": public_string(str(evidence["cleanup_failure"])) if evidence.get("cleanup_failure") else None,
         }

@@ -1,0 +1,9 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:PhaseAO2 a triage:Phase .
+
+triage:AO2.1 a triage:Sprint ; triage:inPhase triage:PhaseAO2 ; triage:order 1 ; triage:branch "feature/pao-s1-peer-wire-policy" ; triage:criteria "docs/plans/phase-ao/sprint-AO1-policy-and-plain-baseline.md" .
+triage:AO2.2 a triage:Sprint ; triage:inPhase triage:PhaseAO2 ; triage:order 2 ; triage:branch "feature/pao-s2-isolated-mtls-stream-adapter" ; triage:criteria "docs/plans/phase-ao/sprint-AO2-isolated-mtls-stream-adapter.md" .
+triage:AO2.3 a triage:Sprint ; triage:inPhase triage:PhaseAO2 ; triage:order 3 ; triage:branch "feature/pao-s3-runtime-peer-wire-mode" ; triage:criteria "docs/plans/phase-ao/sprint-AO3-runtime-mode-seam.md" .
+triage:AO2.4 a triage:Sprint ; triage:inPhase triage:PhaseAO2 ; triage:order 4 ; triage:branch "feature/pao-s4-peer-wire-proof" ; triage:criteria "docs/plans/phase-ao/sprint-AO4-operational-performance-proof.md" .

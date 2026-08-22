@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 from pathlib import Path
 import socket
 import subprocess
@@ -95,6 +96,132 @@ class QuiesceTests(unittest.TestCase):
             mock.patch.object(DAEMON_SWITCH, "run", side_effect=[bootout_missing, print_absent]),
         ):
             DAEMON_SWITCH.run_service(args, "stop", allow_absent=True)
+
+    def test_macos_start_rejects_a_different_loaded_plist(self) -> None:
+        args = mock.Mock(service="com.atm.daemon", launch_agent_plist="/wanted/atm.plist")
+        bootstrap = subprocess.CompletedProcess(
+            ["launchctl", "bootstrap"], 5, stdout="", stderr="service already loaded"
+        )
+        loaded = subprocess.CompletedProcess(
+            ["launchctl", "print"], 0, stdout="\tpath = /temporary/atm.plist\n", stderr=""
+        )
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Darwin"),
+            mock.patch.object(DAEMON_SWITCH.os, "getuid", return_value=501),
+            mock.patch.object(DAEMON_SWITCH, "run", side_effect=[bootstrap, loaded]),
+        ):
+            with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "retained"):
+                DAEMON_SWITCH.run_service(args, "start")
+
+
+class MacosDevelopmentSigningTests(unittest.TestCase):
+    def test_identity_discovery_uses_the_shared_apple_resolver(self) -> None:
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Darwin"),
+            mock.patch.object(DAEMON_SWITCH, "resolve_apple_development_identity"),
+        ):
+            self.assertTrue(DAEMON_SWITCH.macos_development_signing_identity_available())
+
+    def test_signer_and_switcher_share_the_apple_identity_resolver(self) -> None:
+        signing_module = SCRIPT.parents[4] / ".just" / "sign_daemon_dev.py"
+        spec = importlib.util.spec_from_file_location("sign_daemon_dev_for_gate_test", signing_module)
+        assert spec is not None and spec.loader is not None
+        signer = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(signer)
+
+        self.assertIs(
+            DAEMON_SWITCH.resolve_apple_development_identity,
+            signer.resolve_apple_development_identity,
+        )
+        self.assertEqual(
+            DAEMON_SWITCH.CLI_IDENTIFIER,
+            signer.CLI_IDENTIFIER,
+        )
+
+    def test_non_macos_has_no_signing_gate(self) -> None:
+        daemon = Path("/candidate/atm-daemon")
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Linux"),
+            mock.patch.object(DAEMON_SWITCH, "macos_binary_has_development_signature") as signed,
+        ):
+            DAEMON_SWITCH.require_macos_development_signatures(Path("/candidate/atm"), daemon)
+        signed.assert_not_called()
+
+    def test_rejects_unsigned_cli_before_daemon_when_apple_identity_is_available(self) -> None:
+        cli = Path("/candidate/atm")
+        daemon = Path("/candidate/atm-daemon")
+        identity = mock.Mock(team_identifier="4869P2ZYC6")
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Darwin"),
+            mock.patch.object(DAEMON_SWITCH, "resolve_apple_development_identity", return_value=identity),
+            mock.patch.object(DAEMON_SWITCH, "macos_binary_has_development_signature", return_value=False),
+        ):
+            with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "just build"):
+                DAEMON_SWITCH.require_macos_development_signatures(cli, daemon)
+
+    def test_rejects_unsigned_daemon_after_accepting_signed_cli(self) -> None:
+        cli = Path("/candidate/atm")
+        daemon = Path("/candidate/atm-daemon")
+        identity = mock.Mock(team_identifier="4869P2ZYC6")
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Darwin"),
+            mock.patch.object(DAEMON_SWITCH, "resolve_apple_development_identity", return_value=identity),
+            mock.patch.object(
+                DAEMON_SWITCH,
+                "macos_binary_has_development_signature",
+                side_effect=[True, False],
+            ) as signed,
+        ):
+            with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "daemon target"):
+                DAEMON_SWITCH.require_macos_development_signatures(cli, daemon)
+        self.assertEqual(
+            signed.call_args_list,
+            [
+                mock.call(cli, DAEMON_SWITCH.CLI_IDENTIFIER, identity.team_identifier),
+                mock.call(daemon, DAEMON_SWITCH.DAEMON_IDENTIFIER, identity.team_identifier),
+            ],
+        )
+
+    def test_accepts_cli_and_daemon_with_exact_development_authority(self) -> None:
+        cli = Path("/candidate/atm")
+        daemon = Path("/candidate/atm-daemon")
+        identity = mock.Mock(team_identifier="4869P2ZYC6")
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Darwin"),
+            mock.patch.object(DAEMON_SWITCH, "resolve_apple_development_identity", return_value=identity),
+            mock.patch.object(DAEMON_SWITCH, "macos_binary_has_development_signature", return_value=True) as signed,
+        ):
+            DAEMON_SWITCH.require_macos_development_signatures(cli, daemon)
+        self.assertEqual(
+            signed.call_args_list,
+            [
+                mock.call(cli, DAEMON_SWITCH.CLI_IDENTIFIER, identity.team_identifier),
+                mock.call(daemon, DAEMON_SWITCH.DAEMON_IDENTIFIER, identity.team_identifier),
+            ],
+        )
+
+    def test_signature_check_uses_shared_stable_identifier_verifier(self) -> None:
+        daemon = Path("/candidate/atm-daemon")
+        with (
+            mock.patch.object(DAEMON_SWITCH, "verify_apple_signature", return_value=True) as verify,
+        ):
+            self.assertTrue(
+                DAEMON_SWITCH.macos_binary_has_development_signature(
+                    daemon, DAEMON_SWITCH.DAEMON_IDENTIFIER, "4869P2ZYC6"
+                )
+            )
+        verify.assert_called_once_with(str(daemon), DAEMON_SWITCH.DAEMON_IDENTIFIER, "4869P2ZYC6")
+
+    def test_windows_warns_and_skips_the_unimplemented_signature_gate(self) -> None:
+        stderr = io.StringIO()
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Windows"),
+            mock.patch.object(DAEMON_SWITCH, "macos_binary_has_development_signature") as signed,
+            mock.patch.object(DAEMON_SWITCH.sys, "stderr", stderr),
+        ):
+            DAEMON_SWITCH.require_macos_development_signatures(Path("/candidate/atm"), Path("/candidate/atm-daemon"))
+        signed.assert_not_called()
+        self.assertIn("Windows signing not yet implemented", stderr.getvalue())
 
 
 class HttpRuntimeOwnerLockTests(unittest.TestCase):
@@ -201,6 +328,7 @@ class ReadinessAndRollbackTests(unittest.TestCase):
             ),
             mock.patch.object(DAEMON_SWITCH, "validate_selectors"),
             mock.patch.object(DAEMON_SWITCH, "save_default_pair"),
+            mock.patch.object(DAEMON_SWITCH, "require_macos_development_signatures"),
             mock.patch.object(DAEMON_SWITCH, "run_service") as service,
             mock.patch.object(DAEMON_SWITCH, "require_stopped_daemon") as stopped,
             mock.patch.object(DAEMON_SWITCH, "replace_link") as replace,

@@ -54,8 +54,8 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-044 — Public Verification Report Classification](./ADR-044-public-verification-report-classification.md)
 - [ADR-045 — Runtime Observation Attribution](./ADR-045-runtime-observation-attribution.md)
 - [ADR-046 — Template-Declared Workflow Metadata And Admission Snapshots](./ADR-046-template-declared-workflow-metadata.md)
+- [ADR-047 — Layered Peer-Wire Security](./ADR-047-layered-peer-wire-security.md)
 - [ADR-049 — hermes-atm/atm-graft First Public PyPI Release Versioning](./ADR-049-hermes-atm-first-public-pypi-release-versioning.md)
-- [ADR-050 — Shared Publish-Kit Ownership](./ADR-050-shared-publish-kit-ownership.md)
 - [ADR-051 — Permissive Declared Sender Identity and Roster Advisory](./ADR-051-permissive-declared-sender-identity.md)
 - [ADR-052 — Benchmark Account Isolation and Snapshot Policy](./ADR-052-benchmark-account-isolation-and-snapshot-policy.md)
 

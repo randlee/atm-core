@@ -391,13 +391,10 @@ Product requirement ID:
   `agent-team-mail` and `agent-team-mail-core` while keeping the installed CLI
   binary name `atm`.
 
-- `REQ-P-RELEASE-004` **Superseded in part by ADR-050.** ATM owns its release
-  manifest, declared artifacts and destinations, and release evidence. The
-  shared release-process implementation — workflows, actions, helpers,
-  publisher/channel-agent prompts, bootstrap, and tests — is owned only by
-  `sc-publish` and installed into ATM byte-for-byte through its canonical
-  installer. ATM must repair a shared defect upstream rather than locally
-  modifying a synchronized shared file.
+- `REQ-P-RELEASE-004` This repo must own the release-process control surface
+  needed to ship and verify the replacement release, including the release
+  workflows, artifact manifest, supporting scripts, and `publisher` agent
+  instructions.
 
 - `REQ-P-RELEASE-005` Windows installation must be first-class for `1.0`
   without requiring Rust tooling or manual archive extraction; `winget` is
@@ -3985,6 +3982,8 @@ mail correctness.
 
 - `REQ-CORE-TRANSPORT-002B1` A daemon may run an explicit, process-local
   plaintext peer-wire profile only for debug/smoke diagnosis.
+
+  Mode ownership and the layered-stream constraint are defined by ADR-047.
 
   Required behavior:
   - default and every normal release invocation use mTLS plus the exact peer

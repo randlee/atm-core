@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import shutil
 import signal
 import stat
@@ -18,8 +19,23 @@ import time
 from typing import Sequence
 
 
+REPO_ROOT = Path(__file__).resolve().parents[4]
+SCRIPTS_DIRECTORY = REPO_ROOT / "scripts"
+if str(SCRIPTS_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIRECTORY))
+
+from macos_development_signing import (  # noqa: E402
+    CLI_IDENTIFIER,
+    DAEMON_IDENTIFIER,
+    SigningIdentityError,
+    resolve_apple_development_identity,
+    verify_apple_signature,
+)
+
+
 WINDOWS_SERVICE_NOT_FOUND = 1060
 LIVE_PAIR_READINESS_ATTEMPTS = 200
+MACOS_LAUNCH_AGENT_PATH = re.compile(r"^path = (.+)$")
 # [cass: helpful starter-rust-logging] - retains the bounded readiness state
 # as one named operational contract rather than an unexplained retry literal.
 """Bounded 20-second readiness window for a managed replacement daemon.
@@ -73,6 +89,51 @@ def require_executable(path: Path, label: str) -> Path:
     if not os.access(resolved, os.X_OK):
         raise SwitchError(f"{label} is not executable: {resolved}")
     return resolved
+
+
+def macos_development_signing_identity_available() -> bool:
+    """Return whether the required Apple Development identity is usable."""
+    if platform.system() != "Darwin":
+        return False
+    try:
+        resolve_apple_development_identity()
+    except (OSError, subprocess.SubprocessError, SigningIdentityError):
+        return False
+    return True
+
+
+def macos_binary_has_development_signature(
+    binary: Path, identifier: str, team_identifier: str
+) -> bool:
+    """Prove one managed binary carries its stable Apple Development signature."""
+    try:
+        return verify_apple_signature(str(binary), identifier, team_identifier)
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def require_macos_development_signatures(cli: Path, daemon: Path) -> None:
+    """Fail closed before any managed-pair lifecycle mutation on macOS."""
+    system = platform.system()
+    if system == "Windows":
+        print("warning: Windows signing not yet implemented; skipping ATM signature gate.", file=sys.stderr)
+        return
+    if system != "Darwin":
+        return
+    try:
+        identity = resolve_apple_development_identity()
+    except (OSError, subprocess.SubprocessError, SigningIdentityError) as error:
+        raise SwitchError(f"Apple Development signing preflight failed: {error}") from error
+    for label, binary, identifier in (
+        ("CLI", cli, CLI_IDENTIFIER),
+        ("daemon", daemon, DAEMON_IDENTIFIER),
+    ):
+        if not macos_binary_has_development_signature(binary, identifier, identity.team_identifier):
+            raise SwitchError(
+                f"{label} target is not strictly signed by the required Apple Development identity: "
+                f"{binary}. "
+                "Build with `just build` or run `python3 .just/sign_daemon_dev.py` before daemon-switch."
+            )
 
 
 def homebrew_pair() -> tuple[Path, Path] | None:
@@ -183,14 +244,32 @@ def run_service(args: argparse.Namespace, action: str, *, allow_absent: bool = F
                 time.sleep(0.1)
         raise SwitchError("LaunchAgent remained loaded after controlled stop")
 
+    expected_plist = Path(args.launch_agent_plist).expanduser().resolve()
     last_detail = ""
     for _ in range(10):
         result = run(command, timeout=20.0)
-        if result.returncode == 0 or run(["launchctl", "print", service], timeout=2.0).returncode == 0:
+        loaded_plist = macos_loaded_launch_agent_plist(service)
+        if loaded_plist == expected_plist:
             return
+        if loaded_plist is not None:
+            raise SwitchError(
+                f"service start retained {loaded_plist} instead of requested {expected_plist}"
+            )
         last_detail = (result.stderr or result.stdout).strip()
         time.sleep(0.2)
     raise SwitchError(f"service start failed: {' '.join(command)}: {last_detail}")
+
+
+def macos_loaded_launch_agent_plist(service: str) -> Path | None:
+    """Return the exact plist launchd has loaded for one user LaunchAgent."""
+    result = run(["launchctl", "print", service], timeout=2.0)
+    if result.returncode != 0:
+        return None
+    for line in result.stdout.splitlines():
+        match = MACOS_LAUNCH_AGENT_PATH.match(line.strip())
+        if match is not None:
+            return Path(match.group(1)).expanduser().resolve()
+    return None
 
 
 def macos_path_owner_pids(path: Path) -> list[int]:
@@ -365,6 +444,7 @@ def switch_pair(args: argparse.Namespace, cli_target: Path, daemon_target: Path)
         raise SwitchError(
             "refusing targets from different release directories; build or install the matched pair together"
         )
+    require_macos_development_signatures(cli_target, daemon_target)
     if cli_link.resolve() == cli_target and daemon_link.resolve() == daemon_target:
         print("already selected; service left running")
         return
@@ -426,6 +506,9 @@ def restart(args: argparse.Namespace) -> None:
     if not args.yes:
         raise SwitchError("restart changes the singleton daemon; re-run with --yes")
     cli, daemon = selected_links(args)
+    cli = require_executable(cli, "selected atm CLI")
+    daemon = require_executable(daemon, "selected atm daemon")
+    require_macos_development_signatures(cli, daemon)
     run_service(args, "stop", allow_absent=True)
     require_stopped_daemon(args, cli)
     run_service(args, "start")

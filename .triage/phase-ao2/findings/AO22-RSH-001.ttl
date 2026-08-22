@@ -1,0 +1,63 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO22-RSH-001>
+  a triage:Finding ;
+  triage:findingId "AO22-RSH-001" ;
+  triage:title "TLS ClientConfig/ServerConfig rebuilt from scratch on every connect()/accept() call -- DoS-relevant resource exhaustion" ;
+  triage:description "ClientConfig/ServerConfig (including the identity's private key and full trusted-peer list) is rebuilt from scratch on every connect()/accept() call (crates/peer-tls/src/lib.rs:84,99,123-156) instead of being built once and cached/shared via Arc. A flood of connection attempts that never complete the handshake forces repeated private-key clones and trust-list clones -- resource cost proportional to connection attempts, not validated handshakes. Independently flagged convergently by rust-service-hardening (as RSH-001, severity-controlling since security-relevant) and rust-best-practices (as RBP-F001) -- record as one finding, note the dual-reviewer convergence. Remediation: build and cache ClientConfig/ServerConfig once (e.g. in from_peer_config/with_handshake_timeout, behind OnceCell/Arc), rebuilding only on trust-store change." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "security-hardening" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-20T16:46:00+00:00"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.2 ;
+  triage:foundAt "2026-08-20T16:45:46+00:00"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO22-RSH-001/AO2-pao-s2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO22-RSH-001/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-20T22:53:43Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AO22-RSH-001/AO2-pao-s2-1>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line "84, 99, 123-156" ;
+  triage:snippet "ClientConfig/ServerConfig rebuilt on every connect()/accept() call" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s2-isolated-mtls-stream-adapter" ;
+  triage:headSha "c30d24442e177b9b63ef245abdffd6aa6fd8f911" ;
+  triage:occursIn <urn:atm:triage:worktree/AO2-pao-s2/c30d24442e177b9b63ef245abdffd6aa6fd8f911> .
+
+<urn:atm:triage:occurrence/AO22-RSH-001/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line "84, 99, 123-156" ;
+  triage:snippet "quality-mgr independent re-verification confirmed fixed" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s2" ;
+  triage:headSha "03bf9e4742763fd40667e19cfdf3381ec58a006c" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pao-s2/03bf9e4742763fd40667e19cfdf3381ec58a006c> .
+
+<urn:atm:triage:worktree/AO2-pao-s2/c30d24442e177b9b63ef245abdffd6aa6fd8f911>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s2-isolated-mtls-stream-adapter" ;
+  triage:branch "feature/pao-s2-isolated-mtls-stream-adapter" ;
+  triage:headSha "c30d24442e177b9b63ef245abdffd6aa6fd8f911" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/feature-pao-s2/03bf9e4742763fd40667e19cfdf3381ec58a006c>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s2" ;
+  triage:branch "feature/pao-s2" ;
+  triage:headSha "03bf9e4742763fd40667e19cfdf3381ec58a006c" ;
+  triage:orderIndex 3 .

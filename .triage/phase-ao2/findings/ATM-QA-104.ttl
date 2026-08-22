@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-104>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-104" ;
+  triage:title "Prior-sprint triage records RBP-F001/RBQA-F001 (AO.1-era) appear resolved but remain marked open" ;
+  triage:description "Prior-sprint triage records RBP-F001 and RBQA-F001 (AO.1-era) appear resolved in the current code but remain marked open in the triage store (.triage/phase-ao2/findings/). Evidence: RBP-F001 (PeerWireMode.security field access control) is fixed — the field is now private on crates/atm-core/src/peer_wire.rs:39, accessible only via a const method. RBQA-F001 (PeerWireSecurity substring collision) is fixed — the AK.2 retirement guard now matches exact symbols, not substrings, verified by test ak2_retirement_guard_matches_symbols_not_substrings() passing on PeerWireSecurity. Remediation: formally close them (via Resolution event, team-lead action) with reference to current-commit evidence in feature/pao-s3-runtime-peer-wire-mode branch (head_sha e6a428355253de23a428bac2f047180ec95dfc7c). This is a team-lead closure action, not a code-fix task for arch-ctm." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "process-hygiene" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "resolved" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-20T20:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.3 ;
+  triage:foundAt "2026-08-20T20:36:55Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:worktree/pao-s3-runtime/e6a42835>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:branch "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:headSha "e6a428355253de23a428bac2f047180ec95dfc7c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pao-s4-proof/49154a38>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pao-s4-peer-wire-proof" ;
+  triage:branch "feature/pao-s4-peer-wire-proof" ;
+  triage:headSha "49154a38f20a3f723dc8bd6d305dfc79bb241d30" ;
+  triage:orderIndex 4 .

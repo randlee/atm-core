@@ -49,8 +49,27 @@ def evaluate_profile_thresholds(
     }
 
 
+def recorded_peer_wire_security(payload: dict[str, Any]) -> str | None:
+    """Return explicit mode without guessing legacy benchmark provenance.
+
+    Legacy reports have neither an explicit peer-wire mode nor an execution
+    daemon identity. They remain historical panels but cannot establish an
+    AO.4 comparison baseline, because a former alternate-harness result must
+    never be treated as shipped-daemon plaintext proof.
+    """
+    value = payload.get("peer_wire_security")
+    if value is None:
+        return None
+    if value not in {"mutual-tls", "plaintext-test"}:
+        raise SmokeError(f"capacity baseline has invalid peer-wire security {value!r}")
+    return value
+
+
 def load_baseline_median(
-    path: Path | None, transport: str, frames_per_connection: int,
+    path: Path | None,
+    transport: str,
+    frames_per_connection: int,
+    peer_wire_security: str | None = None,
 ) -> float | None:
     """Read a prior compatible one-profile evidence artifact when requested."""
     if path is None:
@@ -64,6 +83,17 @@ def load_baseline_median(
         if baseline["frames_per_connection"] != frames_per_connection:
             raise SmokeError(
                 "capacity baseline frames_per_connection does not match the selected profile"
+            )
+        if (
+            peer_wire_security is not None
+            and (
+                recorded_peer_wire_security(baseline) != peer_wire_security
+                or baseline.get("execution_daemon") != "shipped_atm_daemon"
+            )
+        ):
+            raise SmokeError(
+                "capacity peer-wire baseline must record the matching explicit mode "
+                "and execution_daemon=shipped_atm_daemon"
             )
         return validated_profile_median(baseline, "capacity baseline")
     except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
@@ -103,6 +133,8 @@ def baseline_reference(path: Path | None) -> dict[str, Any] | None:
             "run_duration_s": baseline.get("run_duration_s"),
             "passed": bool(baseline.get("passed", False)),
             "median_admissions_per_second": recorded_profile_median(baseline, "capacity baseline"),
+            "peer_wire_security": recorded_peer_wire_security(baseline),
+            "execution_daemon": baseline.get("execution_daemon"),
         }
     except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
         raise SmokeError(f"could not describe admission-capacity baseline {path}: {error}") from error

@@ -24,6 +24,41 @@ mod tests {
     }
 
     #[test]
+    fn peer_wire_policy_error_codes_keep_their_stable_wire_spellings() {
+        for (code, wire) in [
+            (
+                AtmErrorCode::PeerWireModeInvalid,
+                "ATM_PEER_WIRE_MODE_INVALID",
+            ),
+            (
+                AtmErrorCode::PeerWireModeSourceForbidden,
+                "ATM_PEER_WIRE_MODE_SOURCE_FORBIDDEN",
+            ),
+            (
+                AtmErrorCode::PeerWirePlaintextAuthenticationRequired,
+                "ATM_PEER_WIRE_PLAINTEXT_AUTHENTICATION_REQUIRED",
+            ),
+        ] {
+            assert_eq!(code.as_str(), wire);
+            assert_eq!(wire.parse::<AtmErrorCode>(), Ok(code));
+        }
+    }
+
+    #[test]
+    fn timeout_and_protocol_error_codes_keep_their_stable_wire_spellings() {
+        for (code, wire) in [
+            (AtmErrorCode::TransportTimeout, "ATM_TRANSPORT_TIMEOUT"),
+            (
+                AtmErrorCode::TransportProtocolFailed,
+                "ATM_TRANSPORT_PROTOCOL_FAILED",
+            ),
+        ] {
+            assert_eq!(code.as_str(), wire);
+            assert_eq!(wire.parse::<AtmErrorCode>(), Ok(code));
+        }
+    }
+
+    #[test]
     fn error_codes_round_trip_through_json() {
         let code = AtmErrorCode::MessageValidationFailed;
         let encoded = serde_json::to_string(&code).expect("serialize error code");
