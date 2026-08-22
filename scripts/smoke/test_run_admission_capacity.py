@@ -5,9 +5,10 @@ import importlib.util
 import inspect
 import json
 import os
-from contextlib import ExitStack
+from contextlib import ExitStack, closing
 from pathlib import Path, PureWindowsPath
 import plistlib
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -16,6 +17,7 @@ import unittest
 from unittest import mock
 
 from scripts.smoke.benchmark_schema import compact_evidence, distribution, percentile
+from scripts.smoke import benchmark_snapshot as SNAPSHOT
 
 
 def load_runner():
@@ -201,6 +203,135 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(captured["clean_baseline_snapshot"]["snapshot_id"], "snapshot-20260822T000000Z-0123456789abcdef")
         self.assertEqual(captured["post_restore_snapshot"]["snapshot_id"], "snapshot-20260822T000000Z-0123456789abcdef")
         self.assertTrue(all(item["duration_s"] >= 0 for entries in captured["lifecycle"].values() for item in entries))
+
+    def test_real_snapshot_lifecycle_never_touches_interactive_root(self):
+        """Exercise the real account-bound snapshot APIs through ``run_capacity``.
+
+        The daemon, roster, and public profile are deliberately stubbed: this
+        test proves the filesystem boundary, not the network benchmark.  The
+        snapshot module itself is not mocked, so create, restore, and verify
+        operate on a real disposable SQLite database.
+        """
+        profile = {
+            "sample_count": 1,
+            "target_duration_s": 1.0,
+            "run_duration_s": 1.0,
+            "intervals": complete_evidence()["runs"][0]["intervals"],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            interactive_root = root / "interactive" / ".atm"
+            interactive_database = interactive_root / "db" / "mail.db"
+            interactive_database.parent.mkdir(parents=True)
+            interactive_database.write_bytes(b"interactive account must remain unchanged")
+            (interactive_root / "identity.json").write_text('{"interactive":true}\n', encoding="utf-8")
+            interactive_before = {
+                path.relative_to(interactive_root): path.read_bytes()
+                for path in interactive_root.rglob("*")
+                if path.is_file()
+            }
+
+            benchmark_home = root / "benchmark"
+            benchmark_state = benchmark_home / ".atm" / "db"
+            benchmark_state.mkdir(parents=True)
+            benchmark_database = benchmark_state / SNAPSHOT.MAIL_DATABASE_NAME
+            with closing(sqlite3.connect(benchmark_database)) as connection:
+                connection.execute("CREATE TABLE benchmark_rows(value INTEGER NOT NULL)")
+                connection.execute("INSERT INTO benchmark_rows(value) VALUES (1)")
+                connection.execute("PRAGMA user_version = 54")
+                connection.commit()
+            account = RUNNER.BenchmarkAccount(
+                account_id="uid:benchmark-test",
+                home=benchmark_home,
+                durable_state_root=benchmark_state,
+                manifest_path=benchmark_home / ".atm" / "benchmark-account.json",
+            )
+            home = root / "atm-capacity-real-snapshot"
+            atm = root / "atm"
+            daemon = root / "atm-daemon"
+            atm.touch()
+            daemon.touch()
+            process = mock.Mock(pid=123)
+            output = mock.Mock()
+            output.evidence.return_value = {}
+            captured: dict[str, object] = {}
+
+            with ExitStack() as stack:
+                stack.enter_context(mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]))
+                stack.enter_context(
+                    mock.patch.object(RUNNER, "require_capacity_benchmark_account", return_value=account),
+                )
+                # The real snapshot functions resolve their account through
+                # this account-local seam; no snapshot API is replaced.
+                stack.enter_context(
+                    mock.patch.object(SNAPSHOT, "require_benchmark_account", return_value=account),
+                )
+                stack.enter_context(mock.patch.object(RUNNER, "require_clean_host_daemon_state"))
+                stack.enter_context(mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]))
+                stack.enter_context(mock.patch.object(RUNNER, "runtime_environment", return_value={}))
+                stack.enter_context(
+                    mock.patch.object(RUNNER, "start_capacity_daemon", return_value=(process, output)),
+                )
+                stack.enter_context(mock.patch.object(RUNNER, "reap_owned_daemon"))
+                stack.enter_context(
+                    mock.patch.object(
+                        RUNNER,
+                        "command_result",
+                        return_value={
+                            "exit_code": 0,
+                            "stderr": "",
+                            "stdout": json.dumps({
+                                "summary": {"status": "healthy"},
+                                "runtime_status": {"liveness": "running", "readiness": "ready"},
+                            }),
+                        },
+                    ),
+                )
+                stack.enter_context(mock.patch.object(RUNNER, "prepare_capacity_roster"))
+                stack.enter_context(
+                    mock.patch.object(
+                        RUNNER,
+                        "local_endpoint",
+                        return_value=RUNNER.LocalEndpoint("tcp", ("127.0.0.1", 1)),
+                    ),
+                )
+                stack.enter_context(mock.patch.object(RUNNER, "run_cached_roster_heartbeat_probe", return_value={}))
+                stack.enter_context(mock.patch.object(RUNNER, "run_profile", return_value=profile))
+                stack.enter_context(mock.patch.object(RUNNER, "release_version", return_value="atm test"))
+                stack.enter_context(mock.patch.object(RUNNER, "load_baseline_median", return_value=None))
+                stack.enter_context(mock.patch.object(RUNNER, "baseline_reference", return_value=None))
+                stack.enter_context(
+                    mock.patch.object(RUNNER, "evaluate_profile_thresholds", return_value={"passed": True}),
+                )
+                stack.enter_context(mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"))
+                stack.enter_context(
+                    mock.patch.object(
+                        RUNNER,
+                        "write_evidence",
+                        side_effect=lambda _path, evidence: (captured.update(evidence), root / "evidence.json")[1],
+                    ),
+                )
+                code, _evidence_path = RUNNER.run_capacity(
+                    home, root, "tcp", 1, sample_count=1, raw_evidence_directory=root,
+                )
+
+            self.assertEqual(code, 0)
+            self.assertEqual(
+                {
+                    path.relative_to(interactive_root): path.read_bytes()
+                    for path in interactive_root.rglob("*")
+                    if path.is_file()
+                },
+                interactive_before,
+            )
+            self.assertFalse((interactive_root / SNAPSHOT.SNAPSHOT_ROOT_NAME).exists())
+            self.assertIn("clean_baseline_snapshot", captured)
+            self.assertIn("restored_clean_baseline", captured)
+            self.assertIn("post_restore_snapshot", captured)
+            self.assertEqual(
+                captured["clean_baseline_snapshot"]["snapshot_id"],
+                captured["post_restore_snapshot"]["snapshot_id"],
+            )
 
     def test_runner_reaches_only_account_bound_snapshot_apis_not_primary_state_mutation(self):
         source = inspect.getsource(RUNNER.run_capacity)
