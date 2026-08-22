@@ -165,6 +165,10 @@ reports-index *args:
 test-graft-python:
     {{python_cmd}} scripts/test_atm_graft_python.py
 
+# Run the benchmark-runner unit tests with the repository bootstrap Python.
+test-admission-capacity:
+    {{python_cmd}} -m unittest scripts/smoke/test_run_admission_capacity.py
+
 # Build the PyO3 extension and run the Hermes graft reference-adapter tests.
 test-hermes-graft-bridge:
     {{python_cmd}} .just/run_hermes_graft_bridge_tests.py

@@ -110,6 +110,18 @@ class BootstrapTests(unittest.TestCase):
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
         self.assertIn("$PWD/.bootstrap-venv/bin:$PATH", justfile)
         self.assertIn("PYO3_PYTHON", justfile)
+        self.assertIn(
+            "test-admission-capacity:\n"
+            "    {{python_cmd}} -m unittest scripts/smoke/test_run_admission_capacity.py",
+            justfile,
+        )
+
+    def test_ci_uses_bootstrap_python_and_requirements_for_all_pydantic_consumers(self) -> None:
+        workflow = (SCRIPT.parents[1] / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        self.assertIn("run: just test-admission-capacity", workflow)
+        self.assertNotIn("run: python -m unittest scripts/smoke/test_run_admission_capacity.py", workflow)
+        self.assertNotIn("pydantic>=2,<3", workflow)
+        self.assertEqual(workflow.count("tools/bootstrap-requirements.txt"), 3)
 
     def test_seed_python_preserves_ci_python_precedence(self) -> None:
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
