@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RUTHLESS-AO26-F001>
+  a triage:Finding ;
+  triage:findingId "RUTHLESS-AO26-F001" ;
+  triage:title "Architecture guard test uses substring match that a future pub (not just pub(crate)) leak would still pass" ;
+  triage:description """Architecture guard test uses substring match that a future `pub` (not just `pub(crate)`) leak would still pass. Test: crates/atm-architecture/tests/boundary_enforcement.rs:1532-1533 (sqlite_writer_batch_window_is_private_to_storage). Issue: Positive assertion checks for substring "const BATCH_TIME_BUDGET: Duration = Duration::from_millis(1);", which also matches "pub const BATCH_TIME_BUDGET: Duration = Duration::from_millis(1);". Negative assertion only excludes pub(crate), not bare pub. Result: A future edit making constant fully pub would pass both assertions silently, defeating guard's purpose (private to sole writer ingress). Current code is correctly private. Fix: Replace substring checks with exact-line match requiring no visibility modifier, or parse with syn and assert Visibility::Inherited, consistent with existing AST-based guards.""" ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture-guard-correctness" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "single-occurrence" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-21T22:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.6 ;
+  triage:foundAt "2026-08-22T04:57:52Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RUTHLESS-AO26-F001/AO2-F001-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RUTHLESS-AO26-F001/AO2-F001-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 1532 ;
+  triage:snippet "assert!(writer.contains(const BATCH_TIME_BUDGET));" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/admission-writer-batching-regression" ;
+  triage:headSha "580614050" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-admission-writer-batching-regression/580614050> .
+
+<urn:atm:triage:worktree/fix-admission-writer-batching-regression/580614050>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/admission-writer-batching-regression" ;
+  triage:branch "fix/admission-writer-batching-regression" ;
+  triage:headSha "580614050" ;
+  triage:orderIndex 7 .
