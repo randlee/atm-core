@@ -56,6 +56,7 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-046 — Template-Declared Workflow Metadata And Admission Snapshots](./ADR-046-template-declared-workflow-metadata.md)
 - [ADR-049 — hermes-atm/atm-graft First Public PyPI Release Versioning](./ADR-049-hermes-atm-first-public-pypi-release-versioning.md)
 - [ADR-051 — Permissive Declared Sender Identity and Roster Advisory](./ADR-051-permissive-declared-sender-identity.md)
+- [ADR-052 — Benchmark Account Isolation and Snapshot Policy](./ADR-052-benchmark-account-isolation-and-snapshot-policy.md)
 
 ## Extracted Crate-Local ADRs
 

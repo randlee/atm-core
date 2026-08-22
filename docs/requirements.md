@@ -2857,6 +2857,35 @@ Required testing architecture:
   - ordinary runtime logging must remain quiet enough that routine send/read/
     ack success does not clutter normal operator logs
 
+- `REQ-P-BENCHMARK-001` Physical performance benchmarks must preserve the
+  interactive OS user's canonical ATM state.
+
+  Required behavior:
+  - a physical benchmark runs only as a dedicated, disposable benchmark OS
+    account whose `HostRuntimeScope` is independently derived for that account;
+    it must not select an alternate root, endpoint, lock, or daemon through
+    `ATM_HOME`, environment variables, symlinks, a workspace path, or a
+    second daemon for the interactive account
+  - the benchmark runner must refuse before daemon-switch, SQLite open,
+    destructive filesystem work, or daemon start unless the executing account
+    proves its benchmark-account contract and canonical state policy
+  - the current interactive OS user's `~/.atm/db` tree must never be renamed,
+    replaced, deleted, restored, or used as a physical benchmark fixture
+  - destructive benchmark-account reset or restore requires a completed,
+    verified SQLite-consistent snapshot made with the SQLite backup API; the
+    snapshot manifest records integrity evidence and incomplete snapshots are
+    never restore candidates
+  - setup, snapshot verification, reset, daemon lifecycle, and post-run
+    restoration occur outside the timed benchmark interval; evidence records
+    their durations separately and invalidates a result if they contaminate a
+    timed sample
+  - `atm teams backup` is selected-team recovery material, not a whole-host
+    database backup and not authorization for a benchmark to mutate the
+    interactive user's durable SQLite state
+
+  This requirement is governed by ADR-052 and composes with ADR-026's one
+  `HostRuntimeScope` per OS user.
+
 - `REQ-P-COVERAGE-001` Coverage reporting must remain separate from ordinary
   test execution.
 
@@ -4164,9 +4193,11 @@ mail correctness.
     immutable SQLite records and enabled peer policy
   - the throughput requirement applies while the destination peer is
     unavailable as well as healthy. Release evidence runs ten consecutive
-    one-second admission intervals against one release-built daemon using a
-    disposable isolated `ATM_HOME` and SQLite database; it must never run
-    against a shared or production ATM store. Each interval has at least 1,000
+    one-second admission intervals against one release-built daemon under the
+    dedicated disposable benchmark OS account required by
+    `REQ-P-BENCHMARK-001`; `ATM_HOME` and any other path/config setting must
+    not select its SQLite root. It must never run against a shared or
+    interactive-production ATM store. Each interval has at least 1,000
     accepted requests and responses. Mock routers, direct dispatcher calls,
     and disabled peer delivery do not satisfy this evidence
   - Unix release evidence records HTTP/UDS and loopback-TCP results separately;
