@@ -1529,8 +1529,19 @@ fn atm_runtime_must_not_depend_on_atm_storage_rusqlite() {
 fn sqlite_writer_batch_window_is_private_to_storage() {
     let root = workspace_root();
     let writer = read_source(&root.join("crates/atm-storage-rusqlite/src/writer/mod.rs"));
-    assert!(writer.contains("const BATCH_TIME_BUDGET: Duration = Duration::from_millis(1);"));
-    assert!(!writer.contains("pub(crate) const BATCH_TIME_BUDGET"));
+    let syntax = syn::parse_file(&writer).expect("sqlite writer source must parse");
+    let batch_window = syntax
+        .items
+        .iter()
+        .find_map(|item| match item {
+            syn::Item::Const(item) if item.ident == "BATCH_TIME_BUDGET" => Some(item),
+            _ => None,
+        })
+        .expect("sqlite writer must declare its fixed batch window");
+    assert!(
+        matches!(batch_window.vis, syn::Visibility::Inherited),
+        "the writer batch window must not have any visibility modifier"
+    );
 
     for source in [
         "crates/atm-http-runtime/src/http1_server.rs",
