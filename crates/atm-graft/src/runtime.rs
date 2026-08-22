@@ -49,6 +49,12 @@ const GRAFT_RECEIVER_RECOVERY_MAX_DURATION: Duration = Duration::from_secs(30);
 /// Give a persistently unavailable endpoint time to recover before a new
 /// bounded recovery burst begins after the circuit opens.
 const GRAFT_RECEIVER_RECOVERY_CIRCUIT_DELAY: Duration = Duration::from_secs(5);
+/// Repeated receiver failures are initially reported after this delay, then
+/// exponentially backed off to retain useful diagnostics without log storms.
+const GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY: Duration = Duration::from_secs(1);
+/// Cap the warning backoff so a long-lived outage still leaves a periodic,
+/// actionable diagnostic trail.
+const GRAFT_RECEIVER_RECOVERY_WARN_MAX_DELAY: Duration = Duration::from_secs(30);
 const MAX_HOST_NUDGE_HELPERS: usize = 8;
 
 type ReceiveLoopJoinHelper = (
@@ -60,11 +66,29 @@ type ReceiveLoopJoinHelper = (
 #[derive(Debug)]
 struct ReceiverRecoveryCircuit {
     began_at: Instant,
+    next_warning_at: Instant,
+    warning_delay: Duration,
 }
 
 impl ReceiverRecoveryCircuit {
     fn new(now: Instant) -> Self {
-        Self { began_at: now }
+        Self {
+            began_at: now,
+            next_warning_at: now + GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY,
+            warning_delay: GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY,
+        }
+    }
+
+    fn warning_due(&mut self, now: Instant) -> bool {
+        if now < self.next_warning_at {
+            return false;
+        }
+        self.next_warning_at = now + self.warning_delay;
+        self.warning_delay = self
+            .warning_delay
+            .saturating_mul(2)
+            .min(GRAFT_RECEIVER_RECOVERY_WARN_MAX_DELAY);
+        true
     }
 
     fn is_exhausted(&self, now: Instant) -> bool {
@@ -620,6 +644,9 @@ fn recover_graft_receiver(
             Err(error) => {
                 let now = Instant::now();
                 let snapshot = read_snapshot(&ctx.snapshot)?;
+                if recovery_circuit.warning_due(now) {
+                    warn_runtime_error("rearm_graft_receiver", Some(&ctx.endpoint_path), &error);
+                }
                 if recovery_circuit.is_exhausted(now) {
                     ctx.observability.receiver_ownership(
                         &snapshot,
@@ -641,7 +668,6 @@ fn recover_graft_receiver(
                     }
                     recovery_circuit.reset(Instant::now());
                 } else {
-                    warn_runtime_error("rearm_graft_receiver", Some(&ctx.endpoint_path), &error);
                     ctx.observability.receiver_ownership(
                         &snapshot,
                         "rebind_receiver_owner",
@@ -669,7 +695,6 @@ fn rebind_graft_receiver(
                 return Ok(Some(listener));
             }
             Err(error) => {
-                warn_runtime_error("rebind_graft_receiver", Some(&ctx.endpoint_path), &error);
                 last_error = Some(error);
                 if attempt < GRAFT_RECEIVER_REBIND_MAX_ATTEMPTS {
                     let delay = GRAFT_RECEIVER_REBIND_INITIAL_DELAY.saturating_mul(attempt as u32);
@@ -756,7 +781,8 @@ mod tests {
     use crate::{GraftObservability, HostNudge, HostNudgeInjector};
 
     use super::{
-        BoundedHostNudgeInjector, GRAFT_RECEIVER_RECOVERY_MAX_DURATION, GraftReceiverLoopContext,
+        BoundedHostNudgeInjector, GRAFT_RECEIVER_RECOVERY_MAX_DURATION,
+        GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY, GraftReceiverLoopContext,
         MAX_HOST_NUDGE_HELPERS, RECEIVE_LOOP_READY_DEADLINE, ReceiverReadyLatch,
         ReceiverRecoveryCircuit, handle_graft_receiver_connection, join_receive_loop_with_deadline,
         load_graft_config, read_snapshot, recover_after_poll_accept_error, recover_graft_receiver,
@@ -1231,10 +1257,24 @@ mod tests {
         let mut circuit = ReceiverRecoveryCircuit::new(started);
 
         assert!(!circuit.is_exhausted(started));
+        assert!(!circuit.warning_due(started));
+        assert!(circuit.warning_due(started + GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY));
+        assert!(!circuit.warning_due(
+            started
+                + GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY
+                + GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY
+                - Duration::from_millis(1)
+        ));
+        assert!(circuit.warning_due(
+            started
+                + GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY
+                + GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY
+        ));
         assert!(circuit.is_exhausted(started + GRAFT_RECEIVER_RECOVERY_MAX_DURATION));
 
         circuit.reset(started + GRAFT_RECEIVER_RECOVERY_MAX_DURATION);
         assert!(!circuit.is_exhausted(started + GRAFT_RECEIVER_RECOVERY_MAX_DURATION));
+        assert!(!circuit.warning_due(started + GRAFT_RECEIVER_RECOVERY_MAX_DURATION));
     }
 
     #[test]
