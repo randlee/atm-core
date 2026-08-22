@@ -145,7 +145,7 @@ def _parse_manifest(path: Path) -> BenchmarkAccount:
     metadata = _verify_no_symlink(path, "manifest")
     if not stat.S_ISREG(metadata.st_mode):
         raise BenchmarkAccountError(f"benchmark-account manifest is not a regular file: {path}")
-    if metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+    if os.name != "nt" and metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
         raise BenchmarkAccountError("benchmark-account manifest must not be group- or world-writable")
     _verify_manifest_owner(path, metadata)
     try:
