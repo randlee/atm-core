@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-AO26-F003>
+  a triage:Finding ;
+  triage:findingId "RBP-AO26-F003" ;
+  triage:title "collect_batch always returns Some(()); the is_none() break check in writer_loop is dead code" ;
+  triage:description "collect_batch always returns Some(()), no code path returns None. The '.is_none() { break; }' check in writer_loop (writer/mod.rs:470-475) is dead/unreachable. Not a correctness bug -- writer_loop's real exit is driven by receive_first_message returning None on shutdown/disconnect -- but misleading. Recommend simplifying collect_batch's return type to ()." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "code-clarity" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "single-occurrence" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-21T23:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.6 ;
+  triage:foundAt "2026-08-22T04:57:52Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-AO26-F003/AO26-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBP-AO26-F003/AO26-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/mod.rs" ;
+  triage:line 472 ;
+  triage:snippet ".is_none() { break; }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/admission-writer-batching-regression" ;
+  triage:headSha "58061405073b4e57bffb0050ca954b6778c82719" ;
+  triage:occursIn <urn:atm:triage:worktree/AO26/58061405> .
+
+<urn:atm:triage:worktree/AO26/58061405>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/admission-writer-batching-regression" ;
+  triage:branch "fix/admission-writer-batching-regression" ;
+  triage:headSha "58061405073b4e57bffb0050ca954b6778c82719" ;
+  triage:orderIndex 7 .
