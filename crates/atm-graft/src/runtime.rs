@@ -445,95 +445,7 @@ pub(crate) struct GraftReceiverLoopContext {
 
 pub(crate) fn run_graft_receiver_loop(ctx: GraftReceiverLoopContext) -> Result<(), AtmError> {
     let injector = BoundedHostNudgeInjector::spawn(Arc::clone(&ctx.injector));
-    let result = (|| {
-        let mut listener =
-            match GraftReceiverListener::bind(&ctx.endpoint_path, ctx.owner_chat_id.clone()) {
-                Ok(listener) => {
-                    let snapshot = read_snapshot(&ctx.snapshot)?;
-                    ctx.observability.receiver_ownership(
-                        &snapshot,
-                        "activate_receiver_owner",
-                        "ok",
-                    );
-                    listener
-                }
-                Err(error) => {
-                    let snapshot = read_snapshot(&ctx.snapshot)?;
-                    let outcome = if error.code() == AtmErrorCode::GraftReceiverAlreadyActive {
-                        "conflict"
-                    } else {
-                        "error"
-                    };
-                    ctx.observability.receiver_ownership(
-                        &snapshot,
-                        "activate_receiver_owner",
-                        outcome,
-                    );
-                    return Err(error);
-                }
-            };
-        if let Some(ready_tx) = ctx.ready_tx.as_ref() {
-            signal_ready_sender(ready_tx)?;
-        }
-        // Non-blocking accept + poll: the loop re-checks its stop signal every
-        // ACCEPT_POLL_INTERVAL instead of parking in a blocking accept, so no
-        // wake-by-connect machinery is needed to unblock shutdown.
-        let mut last_record_recheck = Instant::now();
-        loop {
-            if stop_requested(&ctx.stop_rx) {
-                return Ok(());
-            }
-            match listener.poll_accept() {
-                Ok(Some(mut stream)) => {
-                    if stop_requested(&ctx.stop_rx) {
-                        return Ok(());
-                    }
-                    if let Err(error) =
-                        handle_graft_receiver_connection(&ctx, &injector, &listener, &mut stream)
-                    {
-                        warn_runtime_error(
-                            "handle_graft_receiver_connection",
-                            Some(&ctx.endpoint_path),
-                            &error,
-                        );
-                    }
-                }
-                Ok(None) => {
-                    if last_record_recheck.elapsed() >= GRAFT_RECEIVER_RECORD_RECHECK_INTERVAL {
-                        last_record_recheck = Instant::now();
-                        match listener.republish_if_missing() {
-                            Ok(true) => {
-                                let snapshot = read_snapshot(&ctx.snapshot)?;
-                                ctx.observability.receiver_ownership(
-                                    &snapshot,
-                                    "restore_receiver_record",
-                                    "ok",
-                                );
-                            }
-                            Ok(false) => {}
-                            Err(error) => {
-                                let snapshot = read_snapshot(&ctx.snapshot)?;
-                                ctx.observability.receiver_ownership(
-                                    &snapshot,
-                                    "restore_receiver_record",
-                                    "error",
-                                );
-                                return Err(error);
-                            }
-                        }
-                    }
-                    thread::sleep(GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL);
-                }
-                Err(error) => {
-                    match recover_after_poll_accept_error(&ctx, listener, &error)? {
-                        Some(rebound_listener) => listener = rebound_listener,
-                        None => return Ok(()),
-                    }
-                    last_record_recheck = Instant::now();
-                }
-            }
-        }
-    })();
+    let result = listen_for_graft_nudges(&ctx, &injector);
     let terminal_state = if result.is_ok() {
         GraftSessionState::Closed
     } else {
@@ -548,6 +460,99 @@ pub(crate) fn run_graft_receiver_loop(ctx: GraftReceiverLoopContext) -> Result<(
         warn_runtime_error("set_session_state", Some(&ctx.endpoint_path), &state_error);
     }
     result
+}
+
+fn listen_for_graft_nudges(
+    ctx: &GraftReceiverLoopContext,
+    injector: &BoundedHostNudgeInjector,
+) -> Result<(), AtmError> {
+    let mut listener = activate_graft_receiver(ctx)?;
+    if let Some(ready_tx) = ctx.ready_tx.as_ref() {
+        signal_ready_sender(ready_tx)?;
+    }
+    // Non-blocking accept + poll: the loop re-checks its stop signal every
+    // ACCEPT_POLL_INTERVAL instead of parking in a blocking accept, so no
+    // wake-by-connect machinery is needed to unblock shutdown.
+    let mut last_record_recheck = Instant::now();
+    loop {
+        if stop_requested(&ctx.stop_rx) {
+            return Ok(());
+        }
+        match listener.poll_accept() {
+            Ok(Some(mut stream)) => {
+                if stop_requested(&ctx.stop_rx) {
+                    return Ok(());
+                }
+                if let Err(error) =
+                    handle_graft_receiver_connection(ctx, injector, &listener, &mut stream)
+                {
+                    warn_runtime_error(
+                        "handle_graft_receiver_connection",
+                        Some(&ctx.endpoint_path),
+                        &error,
+                    );
+                }
+            }
+            Ok(None) => handle_idle_graft_receiver(ctx, &listener, &mut last_record_recheck)?,
+            Err(error) => {
+                match recover_after_poll_accept_error(ctx, listener, &error)? {
+                    Some(rebound_listener) => listener = rebound_listener,
+                    None => return Ok(()),
+                }
+                last_record_recheck = Instant::now();
+            }
+        }
+    }
+}
+
+fn activate_graft_receiver(
+    ctx: &GraftReceiverLoopContext,
+) -> Result<GraftReceiverListener, AtmError> {
+    match GraftReceiverListener::bind(&ctx.endpoint_path, ctx.owner_chat_id.clone()) {
+        Ok(listener) => {
+            let snapshot = read_snapshot(&ctx.snapshot)?;
+            ctx.observability
+                .receiver_ownership(&snapshot, "activate_receiver_owner", "ok");
+            Ok(listener)
+        }
+        Err(error) => {
+            let snapshot = read_snapshot(&ctx.snapshot)?;
+            let outcome = if error.code() == AtmErrorCode::GraftReceiverAlreadyActive {
+                "conflict"
+            } else {
+                "error"
+            };
+            ctx.observability
+                .receiver_ownership(&snapshot, "activate_receiver_owner", outcome);
+            Err(error)
+        }
+    }
+}
+
+fn handle_idle_graft_receiver(
+    ctx: &GraftReceiverLoopContext,
+    listener: &GraftReceiverListener,
+    last_record_recheck: &mut Instant,
+) -> Result<(), AtmError> {
+    if last_record_recheck.elapsed() >= GRAFT_RECEIVER_RECORD_RECHECK_INTERVAL {
+        *last_record_recheck = Instant::now();
+        match listener.republish_if_missing() {
+            Ok(true) => {
+                let snapshot = read_snapshot(&ctx.snapshot)?;
+                ctx.observability
+                    .receiver_ownership(&snapshot, "restore_receiver_record", "ok");
+            }
+            Ok(false) => {}
+            Err(error) => {
+                let snapshot = read_snapshot(&ctx.snapshot)?;
+                ctx.observability
+                    .receiver_ownership(&snapshot, "restore_receiver_record", "error");
+                return Err(error);
+            }
+        }
+    }
+    thread::sleep(GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL);
+    Ok(())
 }
 
 fn recover_after_poll_accept_error(
