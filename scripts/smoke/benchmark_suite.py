@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 import re
 import tempfile
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -253,10 +253,10 @@ class M5AttemptLedger(BaseModel):
     host: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
     f8: F8Profile
     thresholds: list[TargetThreshold] = Field(min_length=4, max_length=4)
-    lineage: CandidateLineage | None = None
+    lineage: Optional[CandidateLineage] = None
     intents: list[SuiteIntent]
     attempts: list[CompleteSuiteAttempt]
-    same_revision_rerun_checkpoint: SameRevisionRerunCheckpoint | None = None
+    same_revision_rerun_checkpoint: Optional[SameRevisionRerunCheckpoint] = None
     accepted_m5: bool
 
     @model_validator(mode="after")
