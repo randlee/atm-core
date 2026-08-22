@@ -19,11 +19,6 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 pub(crate) const CHANNEL_CAPACITY: usize = 256;
-// Coalesce writes that arrive immediately after the first admission so one
-// SQLite commit can durably acknowledge the concurrent burst. This is private
-// to the sole writer ingress: callers, HTTP, TLS, and benchmark modes cannot
-// tune or bypass it.
-const BATCH_TIME_BUDGET: Duration = Duration::from_millis(1);
 // Bound one write request long enough for a short lock wait + flush cycle while
 // still surfacing wedged durable-state work as an actionable timeout.
 const WRITE_OP_DEADLINE: Duration = Duration::from_secs(10);
@@ -100,59 +95,14 @@ impl SqliteWriter {
         write_op_deadline: Duration,
         shutdown_join_deadline: Duration,
     ) -> Result<Self, AtmError> {
-        Self::start_with_runtime_builder(
-            target,
-            observability,
-            channel_capacity,
-            write_op_deadline,
-            shutdown_join_deadline,
-            || {
-                tokio::runtime::Builder::new_current_thread()
-                    .enable_time()
-                    .build()
-            },
-        )
-    }
-
-    fn start_with_runtime_builder<BuildRuntime>(
-        target: Arc<SharedDbTarget>,
-        observability: Arc<dyn SqliteObservability>,
-        channel_capacity: usize,
-        write_op_deadline: Duration,
-        shutdown_join_deadline: Duration,
-        build_runtime: BuildRuntime,
-    ) -> Result<Self, AtmError>
-    where
-        BuildRuntime: FnOnce() -> std::io::Result<tokio::runtime::Runtime>,
-    {
         let mut connection = open_writer_connection_for_target(target.as_ref())?;
         ensure_schema(&mut connection, target.as_ref())?;
 
         let (sender, receiver) = tokio::sync::mpsc::channel(channel_capacity);
-        let worker_runtime = build_runtime().map_err(|error| {
-            let error = AtmError::daemon_unavailable(format!(
-                "failed to initialize sqlite writer timer: {error}"
-            ));
-            observability.emit_or_warn(SqliteObservabilityEvent::new(
-                "writer_start",
-                SqliteObservabilityOutcome::Failed,
-                error.message().to_owned(),
-                Some(error.code()),
-            ));
-            error
-        })?;
         let worker_observability = Arc::clone(&observability);
         let worker = thread::Builder::new()
             .name("atm-sqlite-writer".to_string())
-            .spawn(move || {
-                writer_loop(
-                    target,
-                    connection,
-                    receiver,
-                    worker_observability,
-                    worker_runtime,
-                )
-            })
+            .spawn(move || writer_loop(target, connection, receiver, worker_observability))
             .map_err(|error| {
                 let error = AtmError::daemon_unavailable(format!(
                     "failed to start sqlite writer thread: {error}"
@@ -479,23 +429,21 @@ fn writer_loop(
     mut connection: SqliteConnection,
     mut receiver: tokio::sync::mpsc::Receiver<WriterMessage>,
     observability: Arc<dyn SqliteObservability>,
-    runtime: tokio::runtime::Runtime,
 ) {
     let mut cache = stmt_cache::WriterStatementCache;
     let mut shutting_down = false;
     loop {
-        let Some(first) = runtime.block_on(receive_first_message(&mut receiver, shutting_down))
-        else {
+        let Some(first) = receive_first_message(&mut receiver, shutting_down) else {
             break;
         };
         let mut batch = vec![first];
-        runtime.block_on(collect_batch(&mut receiver, &mut batch, &mut shutting_down));
+        collect_batch(&mut receiver, &mut batch, &mut shutting_down);
         process_batch(&target, &mut connection, &mut cache, batch);
     }
     checkpoint_writer_connection(target.as_ref(), &mut connection, observability.as_ref());
 }
 
-async fn receive_first_message(
+fn receive_first_message(
     receiver: &mut tokio::sync::mpsc::Receiver<WriterMessage>,
     shutting_down: bool,
 ) -> Option<QueuedWrite> {
@@ -512,7 +460,7 @@ async fn receive_first_message(
             ) => None,
         }
     } else {
-        match receiver.recv().await {
+        match receiver.blocking_recv() {
             Some(WriterMessage::Submit { op, reply }) => Some(QueuedWrite { op, reply }),
             Some(WriterMessage::Shutdown) => {
                 drain_submit_replies(receiver);
@@ -523,16 +471,16 @@ async fn receive_first_message(
     }
 }
 
-async fn collect_batch(
+fn collect_batch(
     receiver: &mut tokio::sync::mpsc::Receiver<WriterMessage>,
     batch: &mut Vec<QueuedWrite>,
     shutting_down: &mut bool,
 ) {
-    let deadline = tokio::time::Instant::now() + BATCH_TIME_BUDGET;
-    // Drain an already-queued bounded burst without delay. Once the queue is
-    // momentarily empty, wait only until this fixed deadline for a new arrival
-    // to join the commit. A saturated producer is bounded by channel capacity,
-    // rather than this idle-arrival deadline.
+    // The bounded async ingress already provides backpressure. The dedicated
+    // writer drains the admitted burst before opening one ordered durable
+    // transaction, but never creates an extra Tokio timer runtime or adds a
+    // scheduler-dependent delay to every commit. Later arrivals join the next
+    // transaction in the same sole-writer sequence.
     loop {
         match receiver.try_recv() {
             Ok(WriterMessage::Submit { op, reply }) => {
@@ -548,22 +496,7 @@ async fn collect_batch(
                 return;
             }
             Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {
-                if *shutting_down {
-                    return;
-                }
-                match tokio::time::timeout_at(deadline, receiver.recv()).await {
-                    Ok(Some(WriterMessage::Submit { op, reply })) => {
-                        batch.push(QueuedWrite { op, reply });
-                    }
-                    Ok(Some(WriterMessage::Shutdown)) => {
-                        *shutting_down = true;
-                    }
-                    Ok(None) => {
-                        *shutting_down = true;
-                        return;
-                    }
-                    Err(_) => return,
-                }
+                return;
             }
         }
     }
@@ -697,30 +630,6 @@ fn copy_error(target: &SharedDbTarget, error: &AtmError) -> AtmError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::observability::NullSqliteObservability;
-
-    #[test]
-    fn writer_runtime_builder_failure_returns_daemon_unavailable() {
-        let target = Arc::new(SharedDbTarget::InMemory {
-            uri: "file:writer-runtime-build-failure?mode=memory&cache=shared".to_owned(),
-        });
-        let error = SqliteWriter::start_with_runtime_builder(
-            target,
-            Arc::new(NullSqliteObservability),
-            CHANNEL_CAPACITY,
-            WRITE_OP_DEADLINE,
-            WRITER_SHUTDOWN_JOIN_DEADLINE,
-            || Err(std::io::Error::other("injected runtime build failure")),
-        )
-        .expect_err("injected writer runtime failure must be surfaced");
-
-        assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
-        assert!(
-            error.message().contains(
-                "failed to initialize sqlite writer timer: injected runtime build failure"
-            )
-        );
-    }
 
     fn queued_write() -> WriterMessage {
         let (reply, _receiver) = mpsc::sync_channel(1);
@@ -739,105 +648,59 @@ mod tests {
         QueuedWrite { op, reply }
     }
 
-    #[tokio::test(start_paused = true)]
-    async fn batch_collection_drains_all_currently_queued_writes() {
+    #[test]
+    fn batch_collection_drains_all_already_queued_writes() {
         let (sender, mut receiver) = tokio::sync::mpsc::channel(128);
         sender.try_send(queued_write()).expect("first queued write");
         for _ in 0..96 {
             sender.try_send(queued_write()).expect("queued write");
         }
         let first = first_queued_write(&mut receiver);
-        let collection = tokio::spawn(async move {
-            let mut batch = vec![first];
-            let mut shutting_down = false;
-            collect_batch(&mut receiver, &mut batch, &mut shutting_down).await;
-            (batch, shutting_down)
-        });
-
-        tokio::task::yield_now().await;
-        tokio::time::advance(BATCH_TIME_BUDGET).await;
-        let (batch, shutting_down) = collection.await.expect("collection task");
+        let mut batch = vec![first];
+        let mut shutting_down = false;
+        collect_batch(&mut receiver, &mut batch, &mut shutting_down);
 
         assert_eq!(batch.len(), 97);
         assert!(!shutting_down);
     }
 
-    #[tokio::test(start_paused = true)]
-    async fn batch_collection_includes_write_received_before_deadline() {
+    #[test]
+    fn batch_collection_returns_when_the_admitted_burst_is_drained() {
         let (sender, mut receiver) = tokio::sync::mpsc::channel(8);
         sender.try_send(queued_write()).expect("first queued write");
         let first = first_queued_write(&mut receiver);
-        let collection = tokio::spawn(async move {
-            let mut batch = vec![first];
-            let mut shutting_down = false;
-            collect_batch(&mut receiver, &mut batch, &mut shutting_down).await;
-            (batch, shutting_down)
-        });
-
-        tokio::task::yield_now().await;
-        sender
-            .try_send(queued_write())
-            .expect("write within window");
-        tokio::task::yield_now().await;
-        tokio::time::advance(BATCH_TIME_BUDGET).await;
-        let (batch, shutting_down) = collection.await.expect("collection task");
-
-        assert_eq!(batch.len(), 2);
-        assert!(!shutting_down);
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn batch_collection_leaves_write_received_after_deadline_for_next_transaction() {
-        let (sender, mut receiver) = tokio::sync::mpsc::channel(8);
-        sender.try_send(queued_write()).expect("first queued write");
-        let first = first_queued_write(&mut receiver);
-        let collection = tokio::spawn(async move {
-            let mut batch = vec![first];
-            let mut shutting_down = false;
-            collect_batch(&mut receiver, &mut batch, &mut shutting_down).await;
-            (batch, shutting_down, receiver)
-        });
-
-        tokio::task::yield_now().await;
-        tokio::time::advance(BATCH_TIME_BUDGET).await;
-        let (batch, shutting_down, mut receiver) = collection.await.expect("collection task");
-        sender.try_send(queued_write()).expect("write after window");
+        let mut batch = vec![first];
+        let mut shutting_down = false;
+        collect_batch(&mut receiver, &mut batch, &mut shutting_down);
 
         assert_eq!(batch.len(), 1);
         assert!(!shutting_down);
+        sender.try_send(queued_write()).expect("later queued write");
         assert!(matches!(
             receiver.try_recv(),
             Ok(WriterMessage::Submit { .. })
         ));
     }
 
-    #[tokio::test(start_paused = true)]
-    async fn batch_collection_stops_waiting_when_shutdown_arrives() {
+    #[test]
+    fn batch_collection_drains_an_already_queued_shutdown() {
         let (sender, mut receiver) = tokio::sync::mpsc::channel(8);
         sender.try_send(queued_write()).expect("first queued write");
-        let first = first_queued_write(&mut receiver);
-        let collection = tokio::spawn(async move {
-            let mut batch = vec![first];
-            let mut shutting_down = false;
-            collect_batch(&mut receiver, &mut batch, &mut shutting_down).await;
-            (batch, shutting_down)
-        });
-
-        tokio::task::yield_now().await;
-        sender
-            .try_send(queued_write())
-            .expect("queued write before shutdown");
+        sender.try_send(queued_write()).expect("queued write");
         sender
             .try_send(WriterMessage::Shutdown)
-            .expect("shutdown signal");
-        let (batch, shutting_down) = collection.await.expect("collection task");
+            .expect("queued shutdown");
+        let first = first_queued_write(&mut receiver);
+        let mut batch = vec![first];
+        let mut shutting_down = false;
+        collect_batch(&mut receiver, &mut batch, &mut shutting_down);
 
         assert_eq!(batch.len(), 2);
         assert!(shutting_down);
     }
 
-    #[tokio::test(start_paused = true)]
-    async fn batch_collection_marks_disconnected_receiver_for_shutdown() {
+    #[test]
+    fn batch_collection_marks_disconnected_receiver_for_shutdown() {
         let (sender, mut receiver) = tokio::sync::mpsc::channel(8);
         sender.try_send(queued_write()).expect("first queued write");
         let first = first_queued_write(&mut receiver);
@@ -845,27 +708,7 @@ mod tests {
         let mut batch = vec![first];
         let mut shutting_down = false;
 
-        collect_batch(&mut receiver, &mut batch, &mut shutting_down).await;
-
-        assert_eq!(batch.len(), 1);
-        assert!(shutting_down);
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn batch_collection_marks_shutdown_when_sender_disconnects_while_waiting() {
-        let (sender, mut receiver) = tokio::sync::mpsc::channel(8);
-        sender.try_send(queued_write()).expect("first queued write");
-        let first = first_queued_write(&mut receiver);
-        let collection = tokio::spawn(async move {
-            let mut batch = vec![first];
-            let mut shutting_down = false;
-            collect_batch(&mut receiver, &mut batch, &mut shutting_down).await;
-            (batch, shutting_down)
-        });
-
-        tokio::task::yield_now().await;
-        drop(sender);
-        let (batch, shutting_down) = collection.await.expect("collection task");
+        collect_batch(&mut receiver, &mut batch, &mut shutting_down);
 
         assert_eq!(batch.len(), 1);
         assert!(shutting_down);
