@@ -1,0 +1,22 @@
+# One reproducible developer/CI/bootstrap tool contract.  Do not replace an
+# exact value with a range, a major-only selector, or "latest".
+[toolchain]
+rust = "1.94.1"
+python = "3.14.7"
+just = "1.58.0"
+
+[cargo]
+cargo-deny = "0.20.2"
+cargo-audit = "0.22.2"
+cargo-shear = "1.12.0"
+cargo-modules = "0.26.0"
+sc-compose-rev = "6a8af1ff46ccd64ae9cc40d7d5c815aa9b0a4661"
+
+[python]
+codespell = "2.4.3"
+maturin = "1.14.1"
+pydantic = "2.13.4"
+annotated-types = "0.8.0"
+pydantic-core = "2.46.4"
+typing-extensions = "4.16.0"
+typing-inspection = "0.4.4"
