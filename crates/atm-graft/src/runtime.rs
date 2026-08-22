@@ -42,6 +42,13 @@ const GRAFT_RECEIVER_REBIND_CYCLE_DELAY: Duration = Duration::from_millis(100);
 /// Wait between exhausted rebind cycles. The receiver remains armed and never
 /// starts a daemon; it only retries its own loopback listener publication.
 const GRAFT_RECEIVER_REARM_DELAY: Duration = Duration::from_secs(1);
+/// Stop a failed recovery burst after this interval, emit a distinct degraded
+/// signal, then enter a slower half-open retry cycle instead of retrying
+/// indefinitely without escalation.
+const GRAFT_RECEIVER_RECOVERY_MAX_DURATION: Duration = Duration::from_secs(30);
+/// Give a persistently unavailable endpoint time to recover before a new
+/// bounded recovery burst begins after the circuit opens.
+const GRAFT_RECEIVER_RECOVERY_CIRCUIT_DELAY: Duration = Duration::from_secs(5);
 const MAX_HOST_NUDGE_HELPERS: usize = 8;
 
 type ReceiveLoopJoinHelper = (
@@ -49,6 +56,25 @@ type ReceiveLoopJoinHelper = (
     JoinHandle<()>,
     std::thread::ThreadId,
 );
+
+#[derive(Debug)]
+struct ReceiverRecoveryCircuit {
+    began_at: Instant,
+}
+
+impl ReceiverRecoveryCircuit {
+    fn new(now: Instant) -> Self {
+        Self { began_at: now }
+    }
+
+    fn is_exhausted(&self, now: Instant) -> bool {
+        now.duration_since(self.began_at) >= GRAFT_RECEIVER_RECOVERY_MAX_DURATION
+    }
+
+    fn reset(&mut self, now: Instant) {
+        *self = Self::new(now);
+    }
+}
 
 #[derive(Debug)]
 struct HelperThreadBudget {
@@ -573,6 +599,7 @@ fn recover_graft_receiver(
         GraftSessionState::Degraded,
         ctx.observability.as_ref(),
     )?;
+    let mut recovery_circuit = ReceiverRecoveryCircuit::new(Instant::now());
     loop {
         if stop_requested(&ctx.stop_rx) {
             return Ok(None);
@@ -591,12 +618,38 @@ fn recover_graft_receiver(
             }
             Ok(None) => return Ok(None),
             Err(error) => {
-                warn_runtime_error("rearm_graft_receiver", Some(&ctx.endpoint_path), &error);
+                let now = Instant::now();
                 let snapshot = read_snapshot(&ctx.snapshot)?;
-                ctx.observability
-                    .receiver_ownership(&snapshot, "rebind_receiver_owner", "retry");
-                if wait_for_stop_or_delay(&ctx.stop_rx, GRAFT_RECEIVER_REARM_DELAY) {
-                    return Ok(None);
+                if recovery_circuit.is_exhausted(now) {
+                    ctx.observability.receiver_ownership(
+                        &snapshot,
+                        "rebind_receiver_owner",
+                        "circuit_open",
+                    );
+                    ctx.observability.session_error(
+                        &snapshot,
+                        "graft_receiver_recovery_circuit_open",
+                        &error,
+                    );
+                    warn_runtime_error(
+                        "graft_receiver_recovery_circuit_open",
+                        Some(&ctx.endpoint_path),
+                        &error,
+                    );
+                    if wait_for_stop_or_delay(&ctx.stop_rx, GRAFT_RECEIVER_RECOVERY_CIRCUIT_DELAY) {
+                        return Ok(None);
+                    }
+                    recovery_circuit.reset(Instant::now());
+                } else {
+                    warn_runtime_error("rearm_graft_receiver", Some(&ctx.endpoint_path), &error);
+                    ctx.observability.receiver_ownership(
+                        &snapshot,
+                        "rebind_receiver_owner",
+                        "retry",
+                    );
+                    if wait_for_stop_or_delay(&ctx.stop_rx, GRAFT_RECEIVER_REARM_DELAY) {
+                        return Ok(None);
+                    }
                 }
             }
         }
@@ -697,17 +750,17 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc;
     use std::sync::{Arc, Mutex, RwLock};
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
     use tempfile::TempDir;
 
     use crate::{GraftObservability, HostNudge, HostNudgeInjector};
 
     use super::{
-        BoundedHostNudgeInjector, GraftReceiverLoopContext, MAX_HOST_NUDGE_HELPERS,
-        RECEIVE_LOOP_READY_DEADLINE, ReceiverReadyLatch, handle_graft_receiver_connection,
-        join_receive_loop_with_deadline, load_graft_config, read_snapshot,
-        recover_after_poll_accept_error, recover_graft_receiver, run_graft_receiver_loop,
-        wait_for_stop_or_delay,
+        BoundedHostNudgeInjector, GRAFT_RECEIVER_RECOVERY_MAX_DURATION, GraftReceiverLoopContext,
+        MAX_HOST_NUDGE_HELPERS, RECEIVE_LOOP_READY_DEADLINE, ReceiverReadyLatch,
+        ReceiverRecoveryCircuit, handle_graft_receiver_connection, join_receive_loop_with_deadline,
+        load_graft_config, read_snapshot, recover_after_poll_accept_error, recover_graft_receiver,
+        run_graft_receiver_loop, wait_for_stop_or_delay,
     };
     use crate::{GraftSessionState, SessionSnapshot};
 
@@ -1170,6 +1223,18 @@ mod tests {
             "stop must end the rebind loop without a false Listening state"
         );
         drop(blocker);
+    }
+
+    #[test]
+    fn receiver_recovery_circuit_escalates_after_a_bounded_recovery_window() {
+        let started = Instant::now();
+        let mut circuit = ReceiverRecoveryCircuit::new(started);
+
+        assert!(!circuit.is_exhausted(started));
+        assert!(circuit.is_exhausted(started + GRAFT_RECEIVER_RECOVERY_MAX_DURATION));
+
+        circuit.reset(started + GRAFT_RECEIVER_RECOVERY_MAX_DURATION);
+        assert!(!circuit.is_exhausted(started + GRAFT_RECEIVER_RECOVERY_MAX_DURATION));
     }
 
     #[test]
