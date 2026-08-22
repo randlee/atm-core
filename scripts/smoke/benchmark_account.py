@@ -75,12 +75,31 @@ def current_account_id() -> str:
     return f"sid:{rows[0][1].strip()}"
 
 
-def _windows_current_principal() -> str:
-    result = subprocess.run(["whoami"], capture_output=True, text=True, check=False)
-    principal = result.stdout.strip()
-    if result.returncode != 0 or not principal:
-        raise BenchmarkAccountError("could not resolve the Windows benchmark-account owner")
-    return principal.casefold()
+def _windows_current_owner_sids() -> set[str]:
+    """Return the account and group SIDs carried by the executing token."""
+    result = subprocess.run(
+        [
+            "powershell",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            """
+            $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+            $identity.User.Value
+            $identity.Groups | ForEach-Object { $_.Value }
+            """,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    values = {f"sid:{line.strip()}".casefold() for line in result.stdout.splitlines() if line.strip()}
+    if result.returncode != 0 or not values:
+        detail = result.stderr.strip() or "no output"
+        raise BenchmarkAccountError(
+            f"could not resolve Windows benchmark-account owner principals (exit {result.returncode}: {detail})"
+        )
+    return values
 
 
 def _windows_file_owner(path: Path) -> str:
@@ -91,7 +110,8 @@ def _windows_file_owner(path: Path) -> str:
             "-NoProfile",
             "-NonInteractive",
             "-Command",
-            f"(Get-Acl -LiteralPath '{literal_path}').Owner",
+            "(Get-Acl -LiteralPath "
+            f"'{literal_path}').GetOwner([System.Security.Principal.SecurityIdentifier]).Value",
         ],
         capture_output=True,
         text=True,
@@ -103,7 +123,7 @@ def _windows_file_owner(path: Path) -> str:
         raise BenchmarkAccountError(
             f"could not verify Windows manifest owner for {path} (exit {result.returncode}: {detail})"
         )
-    return owner.casefold()
+    return f"sid:{owner}".casefold()
 
 
 def _verify_manifest_owner(path: Path, metadata: os.stat_result) -> None:
@@ -111,7 +131,7 @@ def _verify_manifest_owner(path: Path, metadata: os.stat_result) -> None:
         if metadata.st_uid != os.geteuid():
             raise BenchmarkAccountError("benchmark-account manifest is not owned by the executing account")
         return
-    if _windows_file_owner(path) != _windows_current_principal():
+    if _windows_file_owner(path) not in _windows_current_owner_sids():
         raise BenchmarkAccountError("benchmark-account manifest is not owned by the executing account")
 
 
