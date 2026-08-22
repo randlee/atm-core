@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ARCH-AO26-F007>
+  a triage:Finding ;
+  triage:findingId "ARCH-AO26-F007" ;
+  triage:title "AST guard sweep silently drops non-Rust consumer file after ARCH-AO26-F002 fix" ;
+  triage:description "PR #982 commit b484ebb48c2d2881b399273ab756be83e70ae3ab fixed ARCH-AO26-F002 by broadening the sqlite_writer_batch_window_is_private_to_storage guard's consumer sweep from 3 hardcoded files to ai11_guarded_workspace_sources() (all Rust files under crates/, excluding the test file). This is a regression relative to the original 3-file list, which included scripts/smoke/run_admission_capacity.py -- a Python file outside crates/ that collect_rust_files does not walk, so it is now silently dropped from the sweep entirely. quality-mgr independently confirmed the Python file currently contains zero references to BATCH_TIME_BUDGET (no live leak today), so this is non-blocking, but the guard's own regression-prevention purpose no longer covers this benchmark-harness path. Recommended fix: re-add an explicit non-Rust check for scripts/smoke/run_admission_capacity.py (and any other benchmark/smoke scripts outside crates/) alongside the new crate-wide Rust sweep, rather than relying solely on collect_rust_files." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture-boundary" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-22T05:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.6 ;
+  triage:foundAt "2026-08-22T05:14:11Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AO26-F007/AO2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ARCH-AO26-F007/AO2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 1529 ;
+  triage:snippet "ai11_guarded_workspace_sources() sweep excludes scripts/smoke/run_admission_capacity.py" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/admission-writer-batching-regression" ;
+  triage:headSha "b484ebb48c2d2881b399273ab756be83e70ae3ab" ;
+  triage:occursIn <urn:atm:triage:worktree/AO2-7> .
+
+<urn:atm:triage:worktree/AO2-7>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-batching-regression" ;
+  triage:branch "fix/admission-writer-batching-regression" ;
+  triage:headSha "b484ebb48c2d2881b399273ab756be83e70ae3ab" ;
+  triage:orderIndex 7 .
