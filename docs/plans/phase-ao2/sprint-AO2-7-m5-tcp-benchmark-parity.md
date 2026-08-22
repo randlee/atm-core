@@ -5,9 +5,12 @@ title: M5 TCP benchmark parity evidence after writer batching restoration
 branch: future-evidence-worktree
 integration_branch: integrate/phase-ao2
 status: draft_for_review
+must_follow: AO2.9-benchmark-report-template-and-procedure merged to integrate/phase-ao2
+parallel_safe: false
 depends_on:
   - AO2.5.4-mandatory-benchmark-snapshot-restore
   - AO2.6-admission-writer-batching-regression
+  - AO2.9-benchmark-report-template-and-procedure
 blocks:
   - AO2.8-windows-tcp-benchmark-parity
 ---
@@ -83,6 +86,7 @@ evidence-only.
 | Throughput | TCP f8 p50 >15,000 messages/second. |
 | Integrity | Accepted count, durable restart check, no unexpected errors, and clean baseline after restore. |
 | Diagnostics | TCP f1/f2 results retained but not confused with the f8 batching threshold. |
+| Publication | Published via the AO2.9 finalizer on `evidence/ao2-benchmark-reports`, reachable through its reviewed Pages PR, with intent/result/index commits retained. |
 
 Required gates are no code changes, successful existing test suite at the
 tested SHA, the physical raw artifact, and independent review of the exact

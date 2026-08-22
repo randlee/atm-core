@@ -5,10 +5,13 @@ title: Windows TCP benchmark parity evidence against accepted M5 result
 branch: future-evidence-worktree
 integration_branch: integrate/phase-ao2
 status: draft_for_review
+must_follow: AO2.9 and AO2.7 merged to integrate/phase-ao2
+parallel_safe: false
 depends_on:
   - AO2.5.4-mandatory-benchmark-snapshot-restore
   - AO2.6-admission-writer-batching-regression
   - AO2.7-m5-tcp-benchmark-parity
+  - AO2.9-benchmark-report-template-and-procedure
 ---
 
 # AO2.8 — Windows TCP benchmark parity evidence against accepted M5 result
@@ -80,6 +83,7 @@ AO2.8.
 | Threshold | Windows TCP f8 p50 ≥ `0.80 × AO2.7 M5 TCP f8 p50`. |
 | Integrity | All timed samples retained; accepted/durable counts and cleanup/restore pass. |
 | Traceability | Raw evidence names both host labels, both exact SHAs, M5 p50, and computed floor. |
+| Publication | Published via the AO2.9 finalizer on `evidence/ao2-benchmark-reports`, reachable through its reviewed Pages PR, with intent/result/index commits retained. |
 
 Required gates are the existing validation suite at the tested SHA, the raw
 physical Windows evidence, independent artifact review, and an explicit
