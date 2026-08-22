@@ -28,6 +28,14 @@ the batching comparison: historical M5 TCP evidence recorded approximately
 setup and historically measured about 12.3k. One- and two-frame data remains
 mandatory diagnostics but is not substituted for the batching threshold.
 
+### Reporting contract
+
+Use the normative AO2.9 benchmark reporting, publication, and aggregate
+procedure (`sprint-AO2-9-benchmark-report-template-and-procedure.md`). This
+sprint owns the M5 TCP f8 threshold and safety gates; AO2.9 owns the template,
+per-run path, failure/incomplete publication rule, and index contract. Publish
+this run as the `tcp` target with its raw evidence and calculated result.
+
 ## Preconditions
 
 - AO2.5.4 is merged and `just benchmark` proves snapshot-before-roster and

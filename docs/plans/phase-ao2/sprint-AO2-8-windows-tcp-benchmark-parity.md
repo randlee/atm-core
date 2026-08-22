@@ -26,6 +26,15 @@ For example, if AO2.7 records 15,500 msg/s, the Windows floor is 12,400 msg/s.
 The exact floor must be calculated from the committed AO2.7 artifact and
 recorded in the Windows raw/compact evidence; it must never be hardcoded.
 
+### Reporting contract
+
+Use the normative AO2.9 benchmark reporting, publication, and aggregate
+procedure (`sprint-AO2-9-benchmark-report-template-and-procedure.md`). This
+sprint owns the Windows parity calculation and safety gates; AO2.9 owns the
+template, per-run path, failure/incomplete publication rule, and index
+contract. Publish this run as the Windows `tcp` target and retain the AO2.7
+reference artifact and calculated floor in the run JSON.
+
 ## Preconditions
 
 - AO2.7 has passed on M5 with a reviewed f8 raw artifact and known p50.
