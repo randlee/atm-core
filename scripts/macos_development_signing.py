@@ -57,6 +57,19 @@ def parse_identities(output: str) -> tuple[SigningIdentity, ...]:
     )
 
 
+def unique_identities(identities: Sequence[SigningIdentity]) -> tuple[SigningIdentity, ...]:
+    """Return one identity per certificate fingerprint in stable order.
+
+    ``security find-identity`` can enumerate one usable certificate more than
+    once.  A signing decision is about the certificate fingerprint, not the
+    number of rows emitted by that command.
+    """
+    selected: dict[str, SigningIdentity] = {}
+    for identity in identities:
+        selected.setdefault(identity.fingerprint, identity)
+    return tuple(selected.values())
+
+
 def _certificate_team_identifier(common_name: str) -> str | None:
     certificate = _run(["security", "find-certificate", "-c", common_name, "-p"])
     if certificate.returncode != 0 or not certificate.stdout:
@@ -75,7 +88,7 @@ def _valid_identities() -> tuple[SigningIdentity, ...]:
     result = _run(["security", "find-identity", "-v", "-p", "codesigning"])
     if result.returncode != 0:
         return ()
-    return parse_identities(result.stdout)
+    return unique_identities(parse_identities(result.stdout))
 
 
 def _identity_with_team_identifier(identity: SigningIdentity) -> SigningIdentity | None:

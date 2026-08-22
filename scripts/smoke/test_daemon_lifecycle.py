@@ -17,8 +17,9 @@ class DaemonLifecycleTests(unittest.TestCase):
         completed = subprocess.CompletedProcess(["ps"], 0, stdout=listing, stderr="")
         with mock.patch.object(daemon_lifecycle.os, "name", "posix"), mock.patch.object(
             daemon_lifecycle.subprocess, "run", return_value=completed
-        ):
+        ) as run:
             self.assertEqual(daemon_lifecycle.count_atm_daemon_processes(), [42])
+        self.assertEqual(run.call_args.args[0], ["ps", "-x", "-o", "pid=,command="])
 
 
 if __name__ == "__main__":

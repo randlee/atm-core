@@ -43,7 +43,11 @@ def count_atm_daemon_processes() -> list[int]:
                 pids.append(int(columns[1]))
         return pids
     completed = subprocess.run(
-        ["ps", "-axo", "pid=,command="],
+        # The physical benchmark account must be isolated from the interactive
+        # account, not from every ATM daemon on the machine.  ``ps -x`` limits
+        # this scan to the executing OS user; global ``ps -ax`` incorrectly
+        # rejected a safe account whenever another user ran ATM.
+        ["ps", "-x", "-o", "pid=,command="],
         capture_output=True,
         text=True,
         encoding="utf-8",

@@ -27,6 +27,10 @@ class AppleDevelopmentSigningTests(unittest.TestCase):
             (signing.SigningIdentity("0123456789ABCDEF0123456789ABCDEF01234567", "Apple Development: test"),),
         )
 
+    def test_duplicate_security_rows_are_one_certificate_candidate(self) -> None:
+        identity = signing.SigningIdentity("A" * 40, "Apple Development: test")
+        self.assertEqual(signing.unique_identities((identity, identity)), (identity,))
+
     def test_default_resolution_uses_apple_prefix_and_team_identifier_not_hostname(self) -> None:
         selected = signing.SigningIdentity(
             "A" * 40,
