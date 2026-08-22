@@ -530,7 +530,11 @@ class AdmissionCapacityTests(unittest.TestCase):
         }
         self.assertEqual(
             RUNNER.host_runtime_client_environment(environment),
-            {"ATM_IDENTITY": "capacity-agent", "ATM_TEAM": "capacity-team"},
+            {
+                "ATM_HOME": "/tmp/atm-capacity-1",
+                "ATM_IDENTITY": "capacity-agent",
+                "ATM_TEAM": "capacity-team",
+            },
         )
         self.assertIn("ATM_HOME", environment)
 

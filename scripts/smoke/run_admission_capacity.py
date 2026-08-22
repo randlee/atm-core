@@ -778,10 +778,8 @@ def runtime_environment(
 
 
 def host_runtime_client_environment(environment: dict[str, str]) -> dict[str, str]:
-    """Use the OS-user runtime record, never the disposable config root, for doctor."""
-    result = dict(environment)
-    result.pop("ATM_HOME", None)
-    return result
+    """Keep every client operation inside the disposable benchmark state root."""
+    return dict(environment)
 
 
 def benchmark_doctor_payload(result: dict[str, object]) -> dict[str, object]:
