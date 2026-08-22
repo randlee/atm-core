@@ -467,12 +467,7 @@ fn writer_loop(
             break;
         };
         let mut batch = vec![first];
-        if runtime
-            .block_on(collect_batch(&mut receiver, &mut batch, &mut shutting_down))
-            .is_none()
-        {
-            break;
-        }
+        runtime.block_on(collect_batch(&mut receiver, &mut batch, &mut shutting_down));
         process_batch(&target, &mut connection, &mut cache, batch);
     }
     checkpoint_writer_connection(target.as_ref(), &mut connection, observability.as_ref());
@@ -510,7 +505,7 @@ async fn collect_batch(
     receiver: &mut tokio::sync::mpsc::Receiver<WriterMessage>,
     batch: &mut Vec<QueuedWrite>,
     shutting_down: &mut bool,
-) -> Option<()> {
+) {
     let deadline = tokio::time::Instant::now() + BATCH_TIME_BUDGET;
     // The admission channel is already bounded. Drain every write that has
     // arrived during the fixed coalescing window into one durable commit;
@@ -528,11 +523,11 @@ async fn collect_batch(
             }
             Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
                 *shutting_down = true;
-                return Some(());
+                return;
             }
             Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {
                 if *shutting_down {
-                    return Some(());
+                    return;
                 }
                 match tokio::time::timeout_at(deadline, receiver.recv()).await {
                     Ok(Some(WriterMessage::Submit { op, reply })) => {
@@ -543,9 +538,9 @@ async fn collect_batch(
                     }
                     Ok(None) => {
                         *shutting_down = true;
-                        return Some(());
+                        return;
                     }
-                    Err(_) => return Some(()),
+                    Err(_) => return,
                 }
             }
         }
@@ -709,9 +704,7 @@ mod tests {
         let collection = tokio::spawn(async move {
             let mut batch = vec![first];
             let mut shutting_down = false;
-            collect_batch(&mut receiver, &mut batch, &mut shutting_down)
-                .await
-                .expect("batch collection");
+            collect_batch(&mut receiver, &mut batch, &mut shutting_down).await;
             (batch, shutting_down)
         });
 
@@ -731,9 +724,7 @@ mod tests {
         let collection = tokio::spawn(async move {
             let mut batch = vec![first];
             let mut shutting_down = false;
-            collect_batch(&mut receiver, &mut batch, &mut shutting_down)
-                .await
-                .expect("batch collection");
+            collect_batch(&mut receiver, &mut batch, &mut shutting_down).await;
             (batch, shutting_down)
         });
 
@@ -757,9 +748,7 @@ mod tests {
         let collection = tokio::spawn(async move {
             let mut batch = vec![first];
             let mut shutting_down = false;
-            collect_batch(&mut receiver, &mut batch, &mut shutting_down)
-                .await
-                .expect("batch collection");
+            collect_batch(&mut receiver, &mut batch, &mut shutting_down).await;
             (batch, shutting_down, receiver)
         });
 
@@ -784,9 +773,7 @@ mod tests {
         let collection = tokio::spawn(async move {
             let mut batch = vec![first];
             let mut shutting_down = false;
-            collect_batch(&mut receiver, &mut batch, &mut shutting_down)
-                .await
-                .expect("batch collection");
+            collect_batch(&mut receiver, &mut batch, &mut shutting_down).await;
             (batch, shutting_down)
         });
 
@@ -812,9 +799,7 @@ mod tests {
         let mut batch = vec![first];
         let mut shutting_down = false;
 
-        collect_batch(&mut receiver, &mut batch, &mut shutting_down)
-            .await
-            .expect("batch collection");
+        collect_batch(&mut receiver, &mut batch, &mut shutting_down).await;
 
         assert_eq!(batch.len(), 1);
         assert!(shutting_down);
