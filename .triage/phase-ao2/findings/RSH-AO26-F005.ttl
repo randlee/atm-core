@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RSH-AO26-F005>
+  a triage:Finding ;
+  triage:findingId "RSH-AO26-F005" ;
+  triage:title "Bounded 1ms batch window doc/comment framing is inaccurate under a saturated producer" ;
+  triage:description "The 'bounded 1ms batch window' framing is only true for the idle-wait phase -- while try_recv keeps succeeding (already-queued backlog), the deadline is never consulted, so a saturated producer can extend a batch past 1ms (bounded only by channel capacity, 256). Not a safety issue; recommend clarifying the code comment/doc language." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation-accuracy" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "single-occurrence" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-22T05:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.6 ;
+  triage:foundAt "2026-08-22T04:57:52Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-AO26-F005/RSH-AO26-F005-01> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RSH-AO26-F005/RSH-AO26-F005-01>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/mod.rs" ;
+  triage:line 514 ;
+  triage:snippet "let deadline = tokio::time::Instant::now() + BATCH_TIME_BUDGET;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/admission-writer-batching-regression" ;
+  triage:headSha "5806140" ;
+  triage:occursIn <urn:atm:triage:worktree/AO2-6-fix/5806140> .
+
+<urn:atm:triage:worktree/AO2-6-fix/5806140>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/admission-writer-batching-regression" ;
+  triage:branch "fix/admission-writer-batching-regression" ;
+  triage:headSha "5806140" ;
+  triage:orderIndex 1 .
