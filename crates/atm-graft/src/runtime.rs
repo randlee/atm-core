@@ -27,9 +27,21 @@ use crate::{
 pub(crate) const RECEIVE_LOOP_READY_DEADLINE: Duration = Duration::from_secs(3);
 const HOST_NUDGE_INJECTION_DEADLINE: Duration = Duration::from_millis(250);
 const GRAFT_RECEIVER_IO_DEADLINE: Duration = Duration::from_secs(3);
+/// A live listener checks its published record at this cadence so an external
+/// record deletion is repaired without adding filesystem work to every poll.
 const GRAFT_RECEIVER_RECORD_RECHECK_INTERVAL: Duration = Duration::from_secs(1);
+/// Each recovery cycle makes a small, bounded number of bind attempts before
+/// yielding to the slower re-arm cadence below.
 const GRAFT_RECEIVER_REBIND_MAX_ATTEMPTS: usize = 3;
-const GRAFT_RECEIVER_REBIND_DELAY: Duration = Duration::from_millis(100);
+/// The first rebind delay is short enough for interactive recovery; later
+/// attempts increase linearly so a persistently bad socket does not spin.
+const GRAFT_RECEIVER_REBIND_INITIAL_DELAY: Duration = Duration::from_millis(100);
+/// Cool down after a successful rebind before polling again, preventing a
+/// repeated hard accept failure from becoming a tight rebind loop.
+const GRAFT_RECEIVER_REBIND_CYCLE_DELAY: Duration = Duration::from_millis(100);
+/// Wait between exhausted rebind cycles. The receiver remains armed and never
+/// starts a daemon; it only retries its own loopback listener publication.
+const GRAFT_RECEIVER_REARM_DELAY: Duration = Duration::from_secs(1);
 const MAX_HOST_NUDGE_HELPERS: usize = 8;
 
 type ReceiveLoopJoinHelper = (
@@ -513,7 +525,10 @@ pub(crate) fn run_graft_receiver_loop(ctx: GraftReceiverLoopContext) -> Result<(
                     thread::sleep(GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL);
                 }
                 Err(error) => {
-                    listener = recover_after_poll_accept_error(&ctx, listener, &error)?;
+                    match recover_after_poll_accept_error(&ctx, listener, &error)? {
+                        Some(rebound_listener) => listener = rebound_listener,
+                        None => return Ok(()),
+                    }
                     last_record_recheck = Instant::now();
                 }
             }
@@ -539,15 +554,37 @@ fn recover_after_poll_accept_error(
     ctx: &GraftReceiverLoopContext,
     listener: GraftReceiverListener,
     error: &AtmError,
-) -> Result<GraftReceiverListener, AtmError> {
+) -> Result<Option<GraftReceiverListener>, AtmError> {
     warn_runtime_error("poll_graft_receiver", Some(&ctx.endpoint_path), error);
     drop(listener);
-    rebind_graft_receiver(ctx)
+    loop {
+        if stop_requested(&ctx.stop_rx) {
+            return Ok(None);
+        }
+        match rebind_graft_receiver(ctx) {
+            Ok(Some(listener)) => {
+                if wait_for_stop_or_delay(&ctx.stop_rx, GRAFT_RECEIVER_REBIND_CYCLE_DELAY) {
+                    return Ok(None);
+                }
+                return Ok(Some(listener));
+            }
+            Ok(None) => return Ok(None),
+            Err(error) => {
+                warn_runtime_error("rearm_graft_receiver", Some(&ctx.endpoint_path), &error);
+                let snapshot = read_snapshot(&ctx.snapshot)?;
+                ctx.observability
+                    .receiver_ownership(&snapshot, "rebind_receiver_owner", "retry");
+                if wait_for_stop_or_delay(&ctx.stop_rx, GRAFT_RECEIVER_REARM_DELAY) {
+                    return Ok(None);
+                }
+            }
+        }
+    }
 }
 
 fn rebind_graft_receiver(
     ctx: &GraftReceiverLoopContext,
-) -> Result<GraftReceiverListener, AtmError> {
+) -> Result<Option<GraftReceiverListener>, AtmError> {
     let mut last_error = None;
     for attempt in 1..=GRAFT_RECEIVER_REBIND_MAX_ATTEMPTS {
         match GraftReceiverListener::bind(&ctx.endpoint_path, ctx.owner_chat_id.clone()) {
@@ -555,13 +592,16 @@ fn rebind_graft_receiver(
                 let snapshot = read_snapshot(&ctx.snapshot)?;
                 ctx.observability
                     .receiver_ownership(&snapshot, "rebind_receiver_owner", "ok");
-                return Ok(listener);
+                return Ok(Some(listener));
             }
             Err(error) => {
                 warn_runtime_error("rebind_graft_receiver", Some(&ctx.endpoint_path), &error);
                 last_error = Some(error);
                 if attempt < GRAFT_RECEIVER_REBIND_MAX_ATTEMPTS {
-                    thread::sleep(GRAFT_RECEIVER_REBIND_DELAY);
+                    let delay = GRAFT_RECEIVER_REBIND_INITIAL_DELAY.saturating_mul(attempt as u32);
+                    if wait_for_stop_or_delay(&ctx.stop_rx, delay) {
+                        return Ok(None);
+                    }
                 }
             }
         }
@@ -570,6 +610,13 @@ fn rebind_graft_receiver(
     ctx.observability
         .receiver_ownership(&snapshot, "rebind_receiver_owner", "error");
     Err(last_error.expect("at least one graft receiver rebind attempt"))
+}
+
+fn wait_for_stop_or_delay(stop_rx: &Receiver<()>, delay: Duration) -> bool {
+    matches!(
+        stop_rx.recv_timeout(delay),
+        Ok(()) | Err(RecvTimeoutError::Disconnected)
+    )
 }
 
 fn stop_requested(stop_rx: &Receiver<()>) -> bool {
@@ -637,7 +684,7 @@ mod tests {
         BoundedHostNudgeInjector, GraftReceiverLoopContext, MAX_HOST_NUDGE_HELPERS,
         RECEIVE_LOOP_READY_DEADLINE, ReceiverReadyLatch, handle_graft_receiver_connection,
         join_receive_loop_with_deadline, load_graft_config, read_snapshot,
-        recover_after_poll_accept_error, run_graft_receiver_loop,
+        recover_after_poll_accept_error, run_graft_receiver_loop, wait_for_stop_or_delay,
     };
     use crate::{GraftSessionState, SessionSnapshot};
 
@@ -840,6 +887,13 @@ mod tests {
     }
 
     #[test]
+    fn receiver_recovery_delays_observe_stop_without_waiting_for_backoff() {
+        let (stop_tx, stop_rx) = mpsc::channel();
+        stop_tx.send(()).expect("request stop");
+        assert!(wait_for_stop_or_delay(&stop_rx, Duration::from_secs(1)));
+    }
+
+    #[test]
     fn receiver_listener_binds_at_expected_endpoint() {
         let paths = test_paths();
         let endpoint_path = receiver_endpoint_path(&paths);
@@ -996,6 +1050,7 @@ mod tests {
             listener,
             &AtmError::daemon_unavailable("simulated hard accept failure"),
         )
+        .expect("recover after hard accept failure")
         .expect("rebind after hard accept failure");
         assert_ne!(
             fs::read_to_string(&endpoint_path).expect("read rebound record"),
