@@ -65,36 +65,44 @@ matrix; reporting the failure alone is not an outcome.
 
 ## Reproducibility and host-noise protocol
 
-Acceptance requires three consecutive complete M5 suites from the same
-candidate revision and `f8-v1` profile. Each must be independently
-snapshot/restored and must retain raw samples. The accepted artifact is the
-versioned JSON at
+Acceptance requires the final three **contiguous entries** in the complete M5
+attempt ledger for one candidate revision and `f8-v1` profile to pass. Every
+complete attempt, including a below-floor but error-free attempt, is appended
+before its result can be reported; missing sequence numbers, an unrecorded
+attempt, or three passing entries separated by a failure are non-accepting.
+Each attempt must be independently snapshot/restored and retain raw samples.
+The accepted artifact is the versioned JSON at
 `docs/plans/phase-ao2/artifacts/ao2-7-m5-suite-<candidate_revision>.json`;
-it contains all three suite IDs, raw hashes/paths, host/kernel/power facts,
-process/load/memory/disk telemetry captured immediately before and after each
-suite, and all four target distributions.
+it contains the typed `M5AttemptLedger`, all suite IDs, raw hashes/paths,
+host/kernel/power facts, process/load/memory/disk telemetry captured
+immediately before and after each suite, and all four target distributions.
 
 Host contention or power state is not an explanation without that telemetry.
-If it appears material, stop only the owned benchmark daemon, eliminate the
-identified competing process or restore the documented fixed-power condition,
-and repeat all three complete suites. The old run remains in the artifact; a
-quiet rerun cannot replace it silently.
+It is material only when either a non-benchmark process consumed at least 20%
+CPU for at least ten timed seconds, or one-minute load average exceeded 125%
+of the logical CPU count. One materiality-confirmed remediation authorizes one
+replacement three-suite series per candidate revision; a second requires the
+checkpoint below. Stop only the owned benchmark daemon, eliminate the proven
+competing process or restore the documented fixed-power condition, and append
+the new series. The old run remains in the ledger; a quiet rerun cannot replace
+it silently.
 
-`accepted_m5` means exactly: schema validates, `candidate_revision` equals the
-post-merge `integrate/phase-ao2` SHA, harness/profile/raw hashes match, three
-complete results exist, every target is error-free, every target meets its
-threshold, and the manifest's `accepted_m5=true` is derived from—not manually
-set beside—those facts. The AO2.8 Windows phase must fail closed if this
-artifact is missing, malformed, mismatched, or non-accepted.
+`accepted_m5` means exactly: the ledger schema validates,
+`candidate_revision` equals the post-merge `integrate/phase-ao2` SHA,
+harness/profile/raw hashes match, the final three ledger entries are contiguous
+complete results, every target is error-free, every target meets its threshold,
+and `M5AttemptLedger::derive_accepted_m5` recomputes `true`. The loader rejects
+a serialized `accepted_m5` that disagrees with that calculation. The AO2.8
+Windows phase fails closed if this artifact is missing, malformed, mismatched,
+or non-accepted.
 
 ## Checkpoint and escalation
 
 After three full root-cause/fix/retest cycles or two focused engineering days,
-hold an explicit checkpoint. This is **not** permission to stop: it packages
-the full matrix history, profiles/traces, rejected hypotheses, exact changed
-paths, and the next highest-value fix. The work continues in an immediately
-created continuation worktree unless an architecture/product decision says
-otherwise.
+hold an explicit M5 checkpoint. This is **not** permission to stop: it packages
+the full ledger, profiles/traces, rejected hypotheses, exact changed paths, and
+the next highest-value fix. The work continues in an immediately created
+continuation worktree unless an architecture/product decision says otherwise.
 
 The 5% tolerance is already incorporated into every stated closure floor.
 There is no additional allowance below a floor. A target below its floor, a
@@ -115,9 +123,13 @@ M5 manifest SHA.
 Windows must execute `sqlite`, `uds`, `tcp`, and `tcp-tls`; a Windows
 TCP-only/WSL/VM substitute is incomplete. It must record the native OS/CPU,
 power plan, Defender/AV status without exclusions, virtualization state, and
-all raw hashes. It may not change power policy, add exclusions, use WSL, or
-use a Windows-only fast path merely to improve a result. Below-floor results
-follow the same root-cause/fix/full-matrix loop before any conclusion.
+whether the benchmark account has a standard (non-elevated) token. It may not
+elevate the benchmark account, change power policy, add exclusions, use WSL,
+or use a Windows-only fast path merely to improve a result. Below-floor results
+follow the same root-cause/fix/full-matrix loop before any conclusion. The
+three-cycles/two-days checkpoint applies independently to the Windows loop:
+it retains every attempt and starts a continuation rather than silently ending
+the Windows phase.
 
 ## Acceptance criteria
 

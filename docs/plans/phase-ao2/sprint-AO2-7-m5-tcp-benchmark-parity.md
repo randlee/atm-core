@@ -44,12 +44,13 @@ AO2.8 because the latter consumes the exact contract created here.
 changes both this ID and the performance thresholds. It uses the released CLI
 and Tokio/Axum `atm-http-runtime` daemon, the public `/v1/atm/messages`
 request, active received hook, 8 request frames per connection, 1,000 requests
-per interval, 10 independent intervals, at least 20 timed seconds, 64 workers,
+per interval, exactly 10 independent intervals, exactly 20 timed seconds, 64 workers,
 and the existing bounded eight-in-flight HTTP/1.1 pipeline. The exact
 versioned request-body builder and its SHA-256 are recorded in every artifact.
-No iteration may change message content/size, roster semantics, worker count,
-connection behavior, logging level, hook, TLS mode, build features, or daemon
-implementation while retaining `f8-v1`.
+Every field of `F8Profile` is frozen for all attempts against a candidate
+revision. No iteration may change message content/size, roster semantics,
+worker count, connection behavior, logging level, hook, TLS mode, build
+features, or daemon implementation while retaining `f8-v1`.
 
 `sqlite` measures the production `atm-storage-rusqlite` admission writer;
 `uds` uses the released public UDS endpoint; `tcp` uses the same public TCP
@@ -93,21 +94,59 @@ struct TargetResult {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-struct BenchmarkSuiteManifest {
-    schema_version: u16,
+struct TargetThreshold {
+    target: BenchmarkTarget,
+    expected_msg_per_second: Decimal,
+    closure_floor_msg_per_second: Decimal,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct HostTelemetry {
+    logical_cpu_count: NonZeroU16,
+    load_average_1m: Decimal,
+    competing_process_cpu_percent: Decimal,
+    benchmark_process_cpu_percent: Decimal,
+    available_memory_bytes: u64,
+    free_disk_bytes: u64,
+    kernel_release: KernelRelease,
+    power_mode: PowerMode,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct CompleteSuiteAttempt {
+    sequence: NonZeroU32, // no gaps within one candidate ledger
     suite_id: SuiteId,
+    started_at: UtcTimestamp,
+    completed_at: UtcTimestamp,
+    results: [TargetResult; 4],
+    snapshot: VerifiedSnapshotId,
+    restore_verified: bool,
+    telemetry_before: HostTelemetry,
+    telemetry_after: HostTelemetry,
+    raw_artifact_sha256: [u8; 32],
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct M5AttemptLedger {
+    schema_version: u16,
     candidate_revision: GitRevision,
     harness_revision: GitRevision,
     host: BenchmarkHost,
     f8: F8Profile,
-    results: [TargetResult; 4],
-    snapshot: VerifiedSnapshotId,
-    restore_verified: bool,
+    thresholds: [TargetThreshold; 4],
+    attempts: Vec<CompleteSuiteAttempt>, // every completed attempt, pass or fail
+    accepted_m5: bool,                   // validated derivative; never caller-set
+}
+
+impl M5AttemptLedger {
+    fn derive_accepted_m5(&self) -> bool; // final 3 contiguous entries meet thresholds
+    fn validate(&self) -> Result<(), BenchmarkError>; // validates ordering and rejects mismatch
 }
 
 pub(crate) trait SuiteManifestStore {
-    fn publish(&self, manifest: &BenchmarkSuiteManifest) -> Result<ManifestPath, BenchmarkError>;
-    fn load_accepted_m5(&self, revision: GitRevision) -> Result<BenchmarkSuiteManifest, BenchmarkError>;
+    fn append_completed_attempt(&self, ledger: &mut M5AttemptLedger, attempt: CompleteSuiteAttempt)
+        -> Result<ManifestPath, BenchmarkError>;
+    fn load_accepted_m5(&self, revision: GitRevision) -> Result<M5AttemptLedger, BenchmarkError>;
 }
 ```
 
@@ -128,38 +167,36 @@ reporting contract (`RBP-002`).
 2. Implement the direct production-writer `sqlite` measurement without raw
    ad-hoc SQL. It must exercise the normal admission, writer batching,
    transaction/savepoint, commit, and reply-after-commit behavior.
-3. Implement the versioned JSON schema mirroring `BenchmarkSuiteManifest` and
+3. Implement the versioned JSON schema mirroring `M5AttemptLedger` and
    validate exact target order, one result per target, immutable `f8-v1`, all
-   raw hashes, and verified restoration.
-4. Publish a successful M5 suite only at
+   raw hashes, typed before/after telemetry, thresholds, contiguous sequence,
+   and verified restoration. Append
+   every completed M5 attempt (pass **and** fail) for a candidate revision to
+   its one ledger before interpreting the result; failed complete attempts may
+   never be discarded or replaced.
+4. Publish the M5 attempt ledger only at
    `docs/plans/phase-ao2/artifacts/ao2-7-m5-suite-<candidate_revision>.json`.
    The committed artifact must name the post-merge `integrate/phase-ao2` code
    SHA it actually tested, the harness SHA, host facts, the full profile, and
-   every raw evidence path/hash. It is immutable; a rerun gets a new suite ID
-   inside the same versioned artifact, never overwrites evidence.
+   every raw evidence path/hash. A rerun appends a new suite ID inside the same
+   candidate ledger, never overwrites evidence. `accepted_m5` is derived only
+   by `derive_accepted_m5` from the contiguous final three complete attempts;
+   loader validation recomputes it and rejects a serialized mismatch.
 5. Add deterministic tests that reject target selection/skip, missing/duplicate
    targets, profile drift, wrong candidate SHA, absent raw evidence, failed
    restore, and a Windows consumer trying to load a missing/mismatched M5
-   artifact. Test the direct writer's transaction/commit counters as well.
-
-## Governing decision and requirements update
-
-Before changing the default command, write ADR-054, *Mandatory complete
-benchmark matrix and immutable physical-performance evidence*. It records why
-the default is permanently unskippable, why diagnostic helpers cannot satisfy
-acceptance, the `f8-v1` freeze/change authority, artifact retention, and the
-M5-to-Windows handoff. Update `REQ-P-BENCHMARK-001` (or a narrowly scoped
-successor) to require the complete matrix and fail-closed artifact contract.
-The ADR and requirement update are AO2.7 deliverables, not post-hoc notes.
+   artifact. Test that a hand-edited `accepted_m5: true`, an omitted failed
+   attempt, or three non-contiguous passing attempts is rejected. Test the
+   direct writer's transaction/commit counters as well.
 
 ## AO2.7 acceptance criteria
 
 | Property | Required proof |
 | --- | --- |
 | Complete matrix | Plain `just benchmark` creates four ordered results; a subset is rejected. |
-| Comparable workload | Every result validates exact `f8-v1` fields and body hash. |
+| Comparable workload | Every ledger attempt validates every exact `f8-v1` field and body hash. |
 | Safety | Dedicated-account snapshot precedes roster; verified restore occurs between/finally; no interactive root is opened. |
-| Machine handoff | A schema-versioned M5 manifest is published at the fixed path and fails closed on SHA/profile/hash mismatch. |
+| Machine handoff | The schema-versioned ledger is published only after testing the post-merge `integrate/phase-ao2` SHA at the fixed path; it retains every complete attempt and fails closed on SHA/profile/hash/derived-acceptance mismatch. |
 | Rust shape | The typed contract above is implemented/mirrored without an open public trait or new daemon boundary. |
 | Gates | Focused runner/schema tests, architecture guards, `just lint`, and `just test` pass. |
 
