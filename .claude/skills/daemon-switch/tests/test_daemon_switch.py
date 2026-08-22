@@ -551,6 +551,40 @@ class TemporaryLaunchControlPlaneTests(unittest.TestCase):
         )
         stopped.assert_called_once_with(self.args, self.cli)
 
+    def test_recover_resumes_a_durably_restoring_session(self) -> None:
+        """A crash after RESTORING is journaled must not require manual repair."""
+        class FakeAdapter:
+            def restore_exact(self, _args: object, session: object) -> None:
+                self.restored = session
+
+        session = self.create_active_session().transition(DAEMON_SWITCH.TemporaryLaunchPhase.RESTORING)
+        self.journal.create(session)
+        self.args.session = session.session_id
+        adapter = FakeAdapter()
+        with (
+            mock.patch.object(DAEMON_SWITCH, "temporary_launch_journal", return_value=self.journal),
+            mock.patch.object(DAEMON_SWITCH, "selected_matched_pair", return_value=(self.cli, self.daemon)),
+            mock.patch.object(DAEMON_SWITCH, "account_identifier", return_value="uid:501"),
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Darwin"),
+            mock.patch.object(DAEMON_SWITCH, "temporary_launch_adapter", return_value=adapter),
+            mock.patch.object(DAEMON_SWITCH, "run_service") as service,
+            mock.patch.object(DAEMON_SWITCH, "require_stopped_daemon") as stopped,
+            mock.patch.object(DAEMON_SWITCH, "wait_for_temporary_launch", return_value=(True, "ready")),
+            redirect_stdout(io.StringIO()),
+        ):
+            DAEMON_SWITCH.restore_temporary_launch(self.args, recovery=True)
+
+        self.assertEqual(adapter.restored, session)
+        self.assertIsNone(self.journal.load())
+        self.assertEqual(
+            service.call_args_list,
+            [
+                mock.call(self.args, "stop", allow_absent=True),
+                mock.call(self.args, "start"),
+            ],
+        )
+        stopped.assert_called_once_with(self.args, self.cli)
+
     def create_active_session(self) -> object:
         return DAEMON_SWITCH.TemporaryLaunchSession.captured(
             peer_wire_security=DAEMON_SWITCH.PeerWireSecurity.PLAINTEXT_TEST,

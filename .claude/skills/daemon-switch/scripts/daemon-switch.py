@@ -673,7 +673,11 @@ def restore_temporary_launch(args: argparse.Namespace, *, recovery: bool) -> Non
         raise SwitchError("temporary-launch session is already completed")
     cli, daemon = selected_matched_pair(args)
     adapter = temporary_launch_adapter(args)
-    session = transition_temporary_session(journal, session, TemporaryLaunchPhase.RESTORING)
+    # RESTORING is the durable intent written before any restoration mutation.
+    # A crash after that write must resume from the same intent, not attempt an
+    # illegal second transition and strand the managed service.
+    if session.phase is not TemporaryLaunchPhase.RESTORING:
+        session = transition_temporary_session(journal, session, TemporaryLaunchPhase.RESTORING)
     run_service(args, "stop", allow_absent=True)
     require_stopped_daemon(args, cli)
     adapter.restore_exact(args, session)
