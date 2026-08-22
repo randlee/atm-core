@@ -121,9 +121,13 @@ values to the unrounded floor. The Windows artifact records both values and the
 M5 manifest SHA.
 
 Windows must execute `sqlite`, `uds`, `tcp`, and `tcp-tls`; a Windows
-TCP-only/WSL/VM substitute is incomplete. It must record the native OS/CPU,
-power plan, Defender/AV status without exclusions, virtualization state, and
-whether the benchmark account has a standard (non-elevated) token. It may not
+TCP-only/WSL/VM substitute is incomplete. It records a typed, validated
+`WindowsHostFacts` object (native OS/CPU, power plan, Defender/AV state,
+explicit absence of exclusions, virtualization/WSL state, and standard-token
+status) rather than prose assertions. Its committed result is exactly
+`docs/plans/phase-ao2/artifacts/ao2-8-fastpc4-suite-<candidate_revision>.json`,
+which contains `WindowsParityArtifact`, its M5-ledger SHA, the frozen F8
+profile, facts, and all complete suite attempts. It may not
 elevate the benchmark account, change power policy, add exclusions, use WSL,
 or use a Windows-only fast path merely to improve a result. Below-floor results
 follow the same root-cause/fix/full-matrix loop before any conclusion. The

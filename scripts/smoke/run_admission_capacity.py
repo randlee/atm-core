@@ -35,7 +35,13 @@ DEFAULT_RAW_EVIDENCE_DIR = ROOT / "artifacts" / "benchmark" / "send-message-benc
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.smoke.benchmark_schema import BenchmarkSchemaError, compact_evidence, distribution
+from scripts.smoke import benchmark_suite as SUITE
+from scripts.smoke.benchmark_schema import (
+    BenchmarkSchemaError,
+    BenchmarkSummary,
+    compact_evidence,
+    distribution,
+)
 from scripts.smoke.benchmark_policy import (
     baseline_reference,
     evaluate_profile_thresholds,
@@ -166,6 +172,84 @@ DEFAULT_CAPACITY_ROSTER = CapacityRoster(
     agent="capacity-agent",
     recipient="capacity-recipient",
 )
+
+
+@dataclass(frozen=True)
+class CapacityRunResult:
+    """One target's exit status plus both immutable evidence references.
+
+    Iteration preserves the historical two-value ``code, compact_path`` call
+    sites while a complete-suite ledger can retain the raw trace hash too.
+    """
+
+    code: int
+    compact_evidence_path: Path
+    raw_evidence_path: Path
+
+    def __iter__(self):
+        yield self.code
+        yield self.compact_evidence_path
+
+
+def suite_target_result(
+    target: str,
+    run: CapacityRunResult,
+    *,
+    artifact_root: Path = ROOT,
+) -> SUITE.TargetResult:
+    """Turn one completed target's real artifacts into ledger-safe evidence.
+
+    A nonzero benchmark exit may still have a complete measured profile (for
+    example, a below-floor result).  That evidence belongs in the suite ledger
+    for remediation.  A setup failure without metrics does not: it remains a
+    visible failed intent rather than being represented with invented rates.
+    """
+    if target not in BENCHMARK_TARGETS:
+        raise SmokeError(f"unknown required f8 target {target!r}")
+    if not run.compact_evidence_path.is_file() or not run.raw_evidence_path.is_file():
+        raise SmokeError("complete suite target requires both compact and raw evidence files")
+    try:
+        compact = BenchmarkSummary.model_validate_json(
+            run.compact_evidence_path.read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError) as error:
+        raise SmokeError(f"could not load compact target evidence: {error}") from error
+    expected_transport, expected_security = BENCHMARK_TARGETS[target]
+    if (
+        compact.benchmark_target != target
+        or compact.transport != expected_transport
+        or compact.peer_wire_security != expected_security
+    ):
+        raise SmokeError(
+            f"compact evidence does not match required target {target}: "
+            f"got target={compact.benchmark_target!r}, transport={compact.transport!r}, "
+            f"security={compact.peer_wire_security!r}"
+        )
+    if compact.metrics is None:
+        raise SmokeError(
+            f"target {target} did not reach a measured interval; retain its failed suite intent "
+            "and repair the ordinary runner before retrying"
+        )
+    try:
+        raw_relative = run.raw_evidence_path.resolve().relative_to(artifact_root.resolve())
+    except ValueError as error:
+        raise SmokeError("raw target evidence must remain below the benchmark artifact root") from error
+    metrics = compact.metrics
+    return SUITE.TargetResult(
+        target=target,
+        median_msg_per_second=metrics.admissions_per_second.p50,
+        p95_msg_per_second=metrics.admissions_per_second.p95,
+        p99_msg_per_second=(
+            metrics.admissions_per_second.p99
+            if metrics.admissions_per_second.p99 is not None
+            else metrics.admissions_per_second.p95
+        ),
+        requested=metrics.requested_count,
+        accepted=metrics.accepted_count,
+        errors=metrics.requested_count - metrics.accepted_count,
+        raw_artifact=raw_relative.as_posix(),
+        raw_artifact_sha256=SUITE.raw_file_sha256(run.raw_evidence_path),
+    )
 
 
 @dataclass
@@ -1463,7 +1547,7 @@ def run_capacity(
     managed_daemon: ManagedDaemonOptions | None = None,
     preflight_failure_code: str | None = None,
     preflight_failure: str | None = None,
-) -> tuple[int, Path]:
+) -> CapacityRunResult:
     """Start one branch daemon, exercise public UDS API, retain evidence, then clean up."""
     if managed_daemon is not None:
         raise SmokeError(
@@ -1750,7 +1834,74 @@ def run_capacity(
         raw_evidence_path = write_raw_evidence(raw_evidence_directory, evidence)
         evidence_path = write_evidence(evidence_directory, evidence)
         print(f"local benchmark trace: {raw_evidence_path}")
-    return (0 if evidence.get("passed") else 1), evidence_path
+    return CapacityRunResult(
+        0 if evidence.get("passed") else 1,
+        evidence_path,
+        raw_evidence_path,
+    )
+
+
+def run_required_f8_suite(args: argparse.Namespace) -> int:
+    """Run the ordinary command's unskippable sqlite/UDS/TCP/TLS matrix.
+
+    AO2.7 keeps target selection out of the ordinary ``just benchmark`` path:
+    its one result is a complete f8-v1 suite.  The legacy selectors below are
+    retained only for focused diagnostic tests and cannot represent the
+    default release benchmark command.
+    """
+    if any((args.target, args.transport, args.frames_per_connection, args.sustained, args.baseline)):
+        raise SmokeError("the required f8 suite does not permit target, transport, profile, or baseline selection")
+    codes: list[int] = []
+    for position, target in enumerate(BENCHMARK_TARGETS, start=1):
+        transport, peer_wire_security = BENCHMARK_TARGETS[target]
+        if args.atm_home is None:
+            with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temporary:
+                run = run_capacity(
+                    Path(temporary) / f"{CAPACITY_ROOT_PREFIX}{position}",
+                    args.evidence_dir,
+                    transport,
+                    8,
+                    ADMISSIONS_PER_INTERVAL,
+                    INTERVALS,
+                    args.workers,
+                    raw_evidence_directory=args.raw_evidence_dir,
+                    peer_wire_security=peer_wire_security,
+                    benchmark_target=target,
+                    comparison_required=False,
+                )
+        else:
+            run = run_capacity(
+                args.atm_home / f"{CAPACITY_ROOT_PREFIX}{position}",
+                args.evidence_dir,
+                transport,
+                8,
+                ADMISSIONS_PER_INTERVAL,
+                INTERVALS,
+                args.workers,
+                raw_evidence_directory=args.raw_evidence_dir,
+                peer_wire_security=peer_wire_security,
+                benchmark_target=target,
+                comparison_required=False,
+            )
+        codes.append(run.code)
+        try:
+            result = suite_target_result(target, run)
+        except SmokeError as error:
+            codes.append(1)
+            print(
+                f"FAIL required f8 target {target}: no ledger-safe measurement; {error}; "
+                f"compact={run.compact_evidence_path} raw={run.raw_evidence_path}"
+            )
+            continue
+        print(
+            f"{'PASS' if run.code == 0 else 'FAIL'} required f8 target {target}: "
+            f"p50={result.median_msg_per_second:.2f} msg/s "
+            f"p95={result.p95_msg_per_second:.2f} msg/s "
+            f"p99={result.p99_msg_per_second:.2f} msg/s "
+            f"accepted={result.accepted}/{result.requested} "
+            f"compact={run.compact_evidence_path} raw={result.raw_artifact}"
+        )
+    return 0 if all(code == 0 for code in codes) else 1
 
 
 def run_default_f8_matrix(args: argparse.Namespace) -> int:
@@ -1841,6 +1992,11 @@ def main() -> int:
     )
     parser.add_argument("--atm-home", type=Path)
     parser.add_argument(
+        "--diagnostic-only",
+        action="store_true",
+        help="permit a selected historical profile; its output is not a complete benchmark suite",
+    )
+    parser.add_argument(
         "--evidence-dir", type=Path,
         default=DEFAULT_EVIDENCE_DIR,
         help="committed compact benchmark summary directory (default: site/reports/send-message-benchmark)",
@@ -1893,8 +2049,15 @@ def main() -> int:
         )):
             parser.error("--bootstrap-plaintext-baseline cannot be combined with target/profile options")
         return run_plaintext_baseline_bootstrap(args)
-    if not any((args.target, args.transport, args.frames_per_connection, args.sustained, args.baseline)):
-        return run_default_f8_matrix(args)
+    selected_profile = any(
+        (args.target, args.transport, args.frames_per_connection, args.sustained, args.baseline)
+    )
+    if not selected_profile:
+        if args.diagnostic_only:
+            raise SmokeError("diagnostic-only requires an explicit selected profile")
+        return run_required_f8_suite(args)
+    if not args.diagnostic_only:
+        raise SmokeError("selected benchmark profiles require --diagnostic-only and cannot be suite evidence")
     transport, peer_wire_security, benchmark_target = resolve_benchmark_target(
         args.target, args.transport,
     )

@@ -10,7 +10,7 @@ from scripts.public_redaction import public_string
 
 
 SUMMARY_SCHEMA_VERSION = 3
-SUPPORTED_TRANSPORTS = frozenset({"uds", "tcp"})
+SUPPORTED_TRANSPORTS = frozenset({"sqlite", "uds", "tcp"})
 SUPPORTED_FRAMES = frozenset({1, 2, 4, 8, 16, 64})
 
 

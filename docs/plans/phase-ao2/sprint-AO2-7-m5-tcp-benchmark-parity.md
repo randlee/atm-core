@@ -110,14 +110,40 @@ struct HostTelemetry {
     free_disk_bytes: u64,
     kernel_release: KernelRelease,
     power_mode: PowerMode,
+    sample_interval_seconds: Decimal,
+    observation_duration_seconds: Decimal, // >= 10
+    competing_cpu_at_or_above_20_percent_seconds: Decimal,
+    load_above_125_percent_cpu_seconds: Decimal,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct SuiteIntent {
+    sequence: NonZeroU32, // append and fsync before the suite starts
+    suite_id: SuiteId,
+    started_at: UtcTimestamp,
+    candidate_revision: GitRevision,
+    production_revision: GitRevision,
+    harness_revision: GitRevision,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct CandidateLineage {
+    prior_candidate_revision: GitRevision,
+    prior_ledger_sha256: [u8; 32],
+    reviewed_at: UtcTimestamp,
+    disposition: ReviewedFailedOrIncomplete | AcceptedBaseline,
+    rationale: NonEmptyString,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct CompleteSuiteAttempt {
-    sequence: NonZeroU32, // no gaps within one candidate ledger
+    sequence: NonZeroU32, // must reference one durable SuiteIntent
     suite_id: SuiteId,
     started_at: UtcTimestamp,
     completed_at: UtcTimestamp,
+    candidate_revision: GitRevision,
+    production_revision: GitRevision,
+    harness_revision: GitRevision,
     results: [TargetResult; 4],
     snapshot: VerifiedSnapshotId,
     restore_verified: bool,
@@ -130,17 +156,19 @@ struct CompleteSuiteAttempt {
 struct M5AttemptLedger {
     schema_version: u16,
     candidate_revision: GitRevision,
-    harness_revision: GitRevision,
     host: BenchmarkHost,
     f8: F8Profile,
     thresholds: [TargetThreshold; 4],
+    lineage: Option<CandidateLineage>,
+    intents: Vec<SuiteIntent>, // every started suite, persisted before execution
     attempts: Vec<CompleteSuiteAttempt>, // every completed attempt, pass or fail
+    same_revision_rerun_checkpoint: Option<RerunCheckpoint>,
     accepted_m5: bool,                   // validated derivative; never caller-set
 }
 
 impl M5AttemptLedger {
-    fn derive_accepted_m5(&self) -> bool; // final 3 contiguous entries meet thresholds
-    fn validate(&self) -> Result<(), BenchmarkError>; // validates ordering and rejects mismatch
+    fn derive_accepted_m5(&self) -> bool; // final 3 error-free entries meet thresholds
+    fn validate(&self) -> Result<(), BenchmarkError>; // checks intent/completion pairing, durations, ordering, and derived mismatch
 }
 
 pub(crate) trait SuiteManifestStore {
@@ -169,25 +197,32 @@ reporting contract (`RBP-002`).
    transaction/savepoint, commit, and reply-after-commit behavior.
 3. Implement the versioned JSON schema mirroring `M5AttemptLedger` and
    validate exact target order, one result per target, immutable `f8-v1`, all
-   raw hashes, typed before/after telemetry, thresholds, contiguous sequence,
-   and verified restoration. Append
-   every completed M5 attempt (pass **and** fail) for a candidate revision to
-   its one ledger before interpreting the result; failed complete attempts may
-   never be discarded or replaced.
+   raw hashes, typed duration-bearing before/after telemetry, thresholds,
+   contiguous sequence, and verified restoration. Append and fsync a
+   `SuiteIntent` **before** each suite starts, then append its matching
+   completion; an interrupted suite remains visible as an unmatched intent and
+   blocks acceptance. Every complete M5 attempt (pass **and** fail) is retained;
+   failed complete attempts may never be discarded or replaced.
 4. Publish the M5 attempt ledger only at
    `docs/plans/phase-ao2/artifacts/ao2-7-m5-suite-<candidate_revision>.json`.
    The committed artifact must name the post-merge `integrate/phase-ao2` code
    SHA it actually tested, the harness SHA, host facts, the full profile, and
-   every raw evidence path/hash. A rerun appends a new suite ID inside the same
+   every raw evidence path/hash. A new candidate cannot silently reset an
+   unresolved series: its ledger must name and hash a reviewed prior candidate
+   ledger in `CandidateLineage`. A rerun appends a new suite ID inside the same
    candidate ledger, never overwrites evidence. `accepted_m5` is derived only
-   by `derive_accepted_m5` from the contiguous final three complete attempts;
-   loader validation recomputes it and rejects a serialized mismatch.
+   by `derive_accepted_m5` from the contiguous final three complete, error-free
+   attempts; loader validation recomputes it and rejects a serialized mismatch.
+   A same-production-revision recovery after a failed suite requires an
+   explicit rerun checkpoint naming the failed and recovery sequences.
 5. Add deterministic tests that reject target selection/skip, missing/duplicate
    targets, profile drift, wrong candidate SHA, absent raw evidence, failed
-   restore, and a Windows consumer trying to load a missing/mismatched M5
+   restore, short/noisy telemetry observations, unmatched intent, unreviewed
+   candidate lineage, per-attempt harness-revision mismatch, same-revision
+   lucky rerun, and a Windows consumer trying to load a missing/mismatched M5
    artifact. Test that a hand-edited `accepted_m5: true`, an omitted failed
-   attempt, or three non-contiguous passing attempts is rejected. Test the
-   direct writer's transaction/commit counters as well.
+   attempt, an above-floor attempt with errors, or three non-contiguous passing
+   attempts is rejected. Test the direct writer's transaction/commit counters.
 
 ## AO2.7 acceptance criteria
 
@@ -196,7 +231,7 @@ reporting contract (`RBP-002`).
 | Complete matrix | Plain `just benchmark` creates four ordered results; a subset is rejected. |
 | Comparable workload | Every ledger attempt validates every exact `f8-v1` field and body hash. |
 | Safety | Dedicated-account snapshot precedes roster; verified restore occurs between/finally; no interactive root is opened. |
-| Machine handoff | The schema-versioned ledger is published only after testing the post-merge `integrate/phase-ao2` SHA at the fixed path; it retains every complete attempt and fails closed on SHA/profile/hash/derived-acceptance mismatch. |
+| Machine handoff | The schema-versioned ledger is published only after testing the post-merge `integrate/phase-ao2` SHA at the fixed path; it retains every started and complete attempt and fails closed on SHA/profile/hash/lineage/telemetry/derived-acceptance mismatch. |
 | Rust shape | The typed contract above is implemented/mirrored without an open public trait or new daemon boundary. |
 | Gates | Focused runner/schema tests, architecture guards, `just lint`, and `just test` pass. |
 
