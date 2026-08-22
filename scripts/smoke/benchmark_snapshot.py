@@ -294,7 +294,13 @@ def create_verified_snapshot() -> VerifiedSnapshot:
     try:
         staging.mkdir(mode=0o700)
         destination = staging / MAIL_DATABASE_NAME
-        with closing(sqlite3.connect(f"file:{source.resolve()}?mode=ro", uri=True)) as reader:
+        # The daemon is stopped and sidecars are rejected before this point.
+        # macOS's SQLite VFS can nevertheless reject a plain ``mode=ro``
+        # handle immediately after a daemon lifecycle.  Immutable read mode
+        # is safe for this verified, sidecar-free source and avoids that VFS
+        # sidecar-open path while retaining the SQLite backup API.
+        source_uri = f"{source.resolve().as_uri()}?mode=ro&immutable=1"
+        with closing(sqlite3.connect(source_uri, uri=True)) as reader:
             with closing(sqlite3.connect(destination)) as writer:
                 reader.backup(writer)
                 writer.commit()

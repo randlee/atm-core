@@ -79,6 +79,16 @@ class BenchmarkReportTests(unittest.TestCase):
         self.assertEqual(result["metrics"]["accepted_count"], 999)
         self.assertEqual(result["failure"], "one admission failed")
 
+    def test_campaign_table_renders_an_incomplete_target_without_metrics(self) -> None:
+        failed = REPORT.load_result(self.fixture("failed-tcp-f8.json"))
+        failed["campaign_id"] = "20260822T200000Z-aaaaaaaaaaaa"
+        failed["benchmark_target"] = "tcp"
+        failed["metrics"] = None
+        rows = REPORT.campaign_target_rows([failed])
+        tcp = next(row for row in rows if row["test"] == "tcp")
+        self.assertIsNone(tcp["result_msg_per_second"])
+        self.assertFalse(tcp["passed"])
+
     def test_immutable_write_rejects_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "artifact.json"
