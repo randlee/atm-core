@@ -278,6 +278,11 @@ def create_verified_snapshot() -> VerifiedSnapshot:
     except BenchmarkAccountError as error:
         raise BenchmarkSnapshotError(str(error)) from error
     source = _mail_database(account)
+    # A SQLite backup made while a daemon still owns WAL sidecars is not the
+    # clean baseline the physical benchmark contract requires.  Keep this
+    # check in the snapshot owner so callers cannot accidentally duplicate or
+    # omit it.
+    _assert_restore_sidecars_absent(source)
     root = _snapshot_root(account)
     snapshot_id = _snapshot_id()
     staging = root / f".{snapshot_id}.staging"
