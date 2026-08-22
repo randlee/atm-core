@@ -37,6 +37,17 @@ SUPPORTED_FRAMES = frozenset({1, 2, 4, 8, 16, 64})
 SAFE_LABEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
+CAMPAIGN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+# AO2.8's approved M5 f8-v1 expectations.  A report makes the comparison
+# visible; it never substitutes a cosmetic PASS for a below-baseline result.
+TARGET_BASELINES = {
+    "sqlite": 45_000.0,
+    "uds": 24_000.0,
+    "tcp": 22_500.0,
+    "tcp-tls": 22_500.0,
+}
+TARGET_ORDER = ("sqlite", "uds", "tcp", "tcp-tls")
 
 
 class BenchmarkReportError(ValueError):
@@ -140,6 +151,12 @@ def result_id(result: dict[str, Any], _source: Path | None = None) -> str:
     return safe_artifact_id(
         f"{stamp}-{result['host_label']}-{result['transport']}{mode_suffix}-f{result['frames_per_connection']}"
     )
+
+
+def campaign_id(result: dict[str, Any]) -> str | None:
+    """Return the validated campaign label, excluding pre-campaign history."""
+    value = result.get("campaign_id")
+    return value if isinstance(value, str) and CAMPAIGN_ID.fullmatch(value) else None
 
 
 def compose(template: Path, variables: dict[str, Any], output: Path) -> None:
@@ -250,6 +267,86 @@ def latest_profile_results(records: Iterable[dict[str, Any]]) -> list[dict[str, 
     return list(latest.values())
 
 
+def campaign_groups(records: Iterable[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    """Group post-AO2.7 evidence into immutable, versioned campaign reports."""
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for result in records:
+        identifier = campaign_id(result)
+        if identifier is not None:
+            groups.setdefault(identifier, []).append(result)
+    return {
+        identifier: sorted(group, key=lambda item: item["generated_at"])
+        for identifier, group in groups.items()
+    }
+
+
+def campaign_target_rows(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return the requested four-row result/baseline/verdict table for one host."""
+    newest: dict[str, dict[str, Any]] = {}
+    for result in records:
+        target = result.get("benchmark_target")
+        if target in TARGET_ORDER and (
+            target not in newest or result["generated_at"] > newest[target]["generated_at"]
+        ):
+            newest[target] = result
+    rows: list[dict[str, Any]] = []
+    for target in TARGET_ORDER:
+        result = newest.get(target)
+        baseline = TARGET_BASELINES[target]
+        metric = result.get("metrics", {}).get("admissions_per_second", {}) if result else {}
+        value = metric.get("p50") if isinstance(metric, dict) else None
+        accepted = result.get("metrics", {}).get("accepted_count") if result else None
+        requested = result.get("metrics", {}).get("requested_count") if result else None
+        passed = (
+            isinstance(value, (int, float))
+            and isinstance(accepted, int)
+            and accepted == requested
+            and float(value) >= baseline
+        )
+        rows.append({
+            "test": target,
+            "result_msg_per_second": None if value is None else float(value),
+            "baseline_msg_per_second": baseline,
+            "passed": passed,
+            "artifact_id": result_id(result) if result else None,
+            "json_href": f"{result_id(result)}.json" if result else None,
+            "xhtml_href": f"{result_id(result)}.xhtml" if result else None,
+        })
+    return rows
+
+
+def render_campaign(identifier: str, records: Iterable[dict[str, Any]], report_dir: Path = REPORT_DIR) -> Path:
+    """Render one date/version campaign as XHTML with one table per host."""
+    by_host: dict[str, list[dict[str, Any]]] = {}
+    for result in records:
+        by_host.setdefault(result["host_label"], []).append(result)
+    host_panels = []
+    for host_label, host_records in sorted(by_host.items()):
+        rows = campaign_target_rows(host_records)
+        host_panels.append({
+            "host_label": host_label,
+            "source_revision": host_records[-1].get("source_revision") or "unversioned",
+            "daemon_version": host_records[-1].get("daemon_version") or "unknown",
+            "host_os": host_records[-1].get("host_os") or "unknown",
+            "host_arch": host_records[-1].get("host_arch") or "unknown",
+            "rows": rows,
+            "passed": all(row["passed"] for row in rows),
+        })
+    report_dir.mkdir(parents=True, exist_ok=True)
+    output = report_dir / f"{identifier}.xhtml"
+    compose(
+        ROOT / "templates" / "benchmark-report" / "benchmark-report.xhtml.j2",
+        {
+            "title": f"ATM benchmark campaign — {identifier}",
+            "campaign_id": identifier,
+            "generated_at": utc_now(),
+            "host_panels": host_panels,
+        },
+        output,
+    )
+    return output
+
+
 def current_campaign_results(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     """Return the newest host/transport/revision evidence campaign.
 
@@ -310,49 +407,23 @@ def campaign_status(results: Iterable[dict[str, Any]]) -> str:
 
 
 def render_aggregate(records: Iterable[dict[str, Any]], report_root: Path = REPORTS_ROOT) -> Path:
-    records = list(records)
-    rows = []
-    for result in records:
-        artifact_id = result_id(result)
-        rows.append({
-            "artifact_id": artifact_id,
-            "generated_at": result["generated_at"],
-            "host_label": result["host_label"],
-            "transport": result["transport"],
-            "peer_wire_security": result.get("peer_wire_security") or "legacy-unverified",
-            "benchmark_target": result.get("benchmark_target") or "legacy",
-            "frames_per_connection": result["frames_per_connection"],
-            "passed": result["passed"],
-            "direct_sqlite_admissions_per_second": (
-                result["direct_sqlite_message_write"]["admissions_per_second"]
-                if result.get("direct_sqlite_message_write") is not None
-                else None
-            ),
-            "json_href": f"{REPORT_NAME}/{artifact_id}.json",
-            "xhtml_href": f"{REPORT_NAME}/{artifact_id}.xhtml",
+    groups = campaign_groups(records)
+    campaigns = []
+    for identifier, campaign in sorted(groups.items(), reverse=True):
+        host_labels = sorted({record["host_label"] for record in campaign})
+        campaigns.append({
+            "campaign_id": identifier,
+            "host_labels": ", ".join(host_labels),
+            "source_revision": campaign[-1].get("source_revision") or "unversioned",
+            "generated_at": campaign[-1]["generated_at"],
+            "xhtml_href": f"{REPORT_NAME}/{identifier}.xhtml",
         })
     output = report_root / REPORT_HTML
     template = ROOT / "templates" / "benchmark-report" / "benchmark-report.html.j2"
-    campaign = current_campaign_results(records)
-    campaign_frames = {result["frames_per_connection"] for result in campaign}
-    campaign_missing_frames = sorted(SUPPORTED_FRAMES - campaign_frames)
-    campaign_reference = campaign[-1] if campaign else None
     compose(template, {
         "title": "ATM local transport benchmark", "generated_at": utc_now(),
-        "status": campaign_status(campaign),
-        "rows": rows,
-        "campaign_host_label": campaign_reference["host_label"] if campaign_reference else "none",
-        "campaign_transport": campaign_reference["transport"] if campaign_reference else "none",
-        "campaign_peer_wire_security": (
-            campaign_reference.get("peer_wire_security") or "legacy-unverified"
-            if campaign_reference else "none"
-        ),
-        "campaign_source_revision": campaign_reference.get("source_revision") if campaign_reference else None,
-        "campaign_profile_count": len(campaign),
-        "campaign_passed_count": sum(result["passed"] for result in campaign),
-        "campaign_failed_count": sum(not result["passed"] for result in campaign),
-        "campaign_missing_frames": ", ".join(str(frame) for frame in campaign_missing_frames) or "none",
-        "history_count": len(rows),
+        "campaigns": campaigns,
+        "legacy_count": sum(campaign_id(result) is None for result in records),
     }, output)
     return output
 
@@ -390,6 +461,8 @@ def process(inputs: list[Path]) -> int:
                 artifact_id = result_id(result)
                 immutable_write(REPORT_DIR / f"{artifact_id}.envelope.json", envelope_for(result))
                 render_run(result, artifact_id)
+            for identifier, campaign in campaign_groups(records).items():
+                render_campaign(identifier, campaign)
             render_aggregate(records)
             regenerate_index()
         except (BenchmarkReportError, OSError) as error:
@@ -398,7 +471,10 @@ def process(inputs: list[Path]) -> int:
         try:
             result, artifact_id = persist(source)
             render_run(result, artifact_id)
-            render_aggregate(evidence_records())
+            records = evidence_records()
+            for identifier, campaign in campaign_groups(records).items():
+                render_campaign(identifier, campaign)
+            render_aggregate(records)
         except (BenchmarkReportError, OSError) as error:
             errors.append(str(error))
         finally:
