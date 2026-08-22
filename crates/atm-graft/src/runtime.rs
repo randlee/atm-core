@@ -670,7 +670,8 @@ mod tests {
     use atm_core::boundary::PostSendHookEvent;
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::graft::{
-        GraftPostSendRequest, GraftPostSendResponse, GraftReceiverListener, deliver_graft_post_send,
+        GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL, GraftPostSendRequest, GraftPostSendResponse,
+        GraftReceiverListener, deliver_graft_post_send,
     };
     use atm_core::schema::AtmMessageId;
     use atm_core::test_support::{TEST_LEAD, TEST_QA, TEST_TEAM};
@@ -1010,8 +1011,12 @@ mod tests {
 
         fs::remove_file(&endpoint_path).expect("remove published endpoint record");
         let deadline = std::time::Instant::now() + Duration::from_secs(3);
+        let (_poll_wait_tx, poll_wait_rx) = mpsc::channel();
         while !endpoint_path.exists() && std::time::Instant::now() < deadline {
-            std::thread::sleep(Duration::from_millis(25));
+            assert!(
+                !wait_for_stop_or_delay(&poll_wait_rx, GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL),
+                "test-only wait channel must remain open until the endpoint record is restored"
+            );
         }
         assert!(
             endpoint_path.exists(),
