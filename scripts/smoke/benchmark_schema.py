@@ -10,7 +10,7 @@ from scripts.public_redaction import public_string
 
 
 SUMMARY_SCHEMA_VERSION = 3
-SUPPORTED_TRANSPORTS = frozenset({"uds", "tcp"})
+SUPPORTED_TRANSPORTS = frozenset({"sqlite", "uds", "tcp"})
 SUPPORTED_FRAMES = frozenset({1, 2, 4, 8, 16, 64})
 
 
@@ -122,7 +122,7 @@ class DirectSQLiteMessageWrite(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    kind: Literal["async_storage_admission"] = "async_storage_admission"
+    kind: Literal["async_storage_admission", "canonical_core_write"] = "async_storage_admission"
     requested_count: int = Field(gt=0)
     accepted_count: int = Field(ge=0)
     worker_count: int = Field(gt=0)
@@ -145,9 +145,9 @@ class BenchmarkSummary(BaseModel):
     artifact_kind: Literal["send_message_benchmark_summary"] = "send_message_benchmark_summary"
     generated_at: str = Field(min_length=1)
     host_label: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
-    transport: Literal["uds", "tcp"]
+    transport: Literal["sqlite", "uds", "tcp"]
     peer_wire_security: Optional[Literal["mutual-tls", "plaintext-test"]] = None
-    benchmark_target: Optional[Literal["tcp", "tcp-tls"]] = None
+    benchmark_target: Optional[Literal["sqlite", "uds", "tcp", "tcp-tls"]] = None
     hook_mode: Optional[Literal["active"]] = None
     frames_per_connection: Literal[1, 2, 4, 8, 16, 64]
     messages_per_connection: int = Field(gt=0)
@@ -161,7 +161,7 @@ class BenchmarkSummary(BaseModel):
     host_os: Optional[str] = None
     host_arch: Optional[str] = None
     command: Optional[str] = None
-    execution_daemon: Optional[Literal["shipped_atm_daemon"]] = None
+    execution_daemon: Optional[Literal["shipped_atm_daemon", "direct_production_writer"]] = None
     comparison_source_revision: Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     comparison_host_label: Optional[str] = Field(
         default=None, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
@@ -190,6 +190,10 @@ class BenchmarkSummary(BaseModel):
 
     @model_validator(mode="after")
     def run_matches_metrics(self) -> "BenchmarkSummary":
+        if self.benchmark_target == "sqlite" and self.transport != "sqlite":
+            raise ValueError("sqlite target must use the direct production-writer profile")
+        if self.benchmark_target == "uds" and self.transport != "uds":
+            raise ValueError("uds target must use the public UDS profile")
         if self.benchmark_target == "tcp" and (
             self.transport != "tcp" or self.peer_wire_security != "plaintext-test"
         ):

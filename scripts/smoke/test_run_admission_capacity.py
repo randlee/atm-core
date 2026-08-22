@@ -84,6 +84,151 @@ def healthy_managed_status() -> dict[str, object]:
 
 
 class AdmissionCapacityTests(unittest.TestCase):
+    def test_ordinary_benchmark_runs_all_four_f8_targets_in_fixed_order(self):
+        captured: list[dict[str, object]] = []
+
+        def run_capacity(*_args, **kwargs):
+            captured.append(kwargs)
+            return RUNNER.CapacityRunResult(0, Path("sentinel.evidence"), Path("sentinel.raw"))
+
+        measured = mock.Mock(
+            median_msg_per_second=45_000.0,
+            p95_msg_per_second=45_100.0,
+            p99_msg_per_second=45_200.0,
+            accepted=10_000,
+            requested=10_000,
+            raw_artifact="artifacts/raw.json",
+        )
+
+        with (
+            mock.patch.object(sys, "argv", ["run_admission_capacity.py"]),
+            mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity),
+            mock.patch.object(RUNNER, "suite_target_result", return_value=measured),
+            contextlib.redirect_stdout(stdout := io.StringIO()),
+        ):
+            self.assertEqual(RUNNER.main(), 0)
+
+        self.assertEqual(
+            [item["benchmark_target"] for item in captured],
+            ["sqlite", "uds", "tcp", "tcp-tls"],
+        )
+        self.assertTrue(all(item["comparison_required"] is False for item in captured))
+        self.assertTrue(all(item["raw_evidence_directory"] == RUNNER.DEFAULT_RAW_EVIDENCE_DIR for item in captured))
+        self.assertEqual(stdout.getvalue().count("p50=45000.00 msg/s"), 4)
+
+    def test_selected_profile_without_diagnostic_marker_is_rejected(self):
+        with mock.patch.object(sys, "argv", ["run_admission_capacity.py", "--target", "tcp"]):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "require --diagnostic-only"):
+                RUNNER.main()
+
+    def test_direct_production_writer_profile_keeps_real_interval_counts(self):
+        stdout = json.dumps(
+            {
+                "kind": "canonical_core_write",
+                "requested_count": 2_000,
+                "accepted_count": 2_000,
+                "worker_count": 64,
+                "elapsed_seconds": 1.0,
+                "admissions_per_second": 2_000.0,
+                "intervals": [
+                    {
+                        "requested_count": 1_000, "accepted_count": 1_000,
+                        "elapsed_seconds": 0.4, "admissions_per_second": 2_500.0,
+                    },
+                    {
+                        "requested_count": 1_000, "accepted_count": 1_000,
+                        "elapsed_seconds": 0.6, "admissions_per_second": 1666.0,
+                    },
+                ],
+            }
+        )
+        roster = RUNNER.CapacityRoster.unique()
+        with mock.patch.object(
+            RUNNER.subprocess, "run", return_value=mock.Mock(returncode=0, stdout=stdout, stderr=""),
+        ) as run:
+            profile, direct = RUNNER.run_direct_production_writer_profile(
+                Path("/bin/benchmark"), {"ATM_HOME": "/tmp/atm-capacity-test"}, roster,
+                1_000, 2, 64,
+            )
+
+        self.assertEqual(profile["sample_count"], 2)
+        self.assertEqual(profile["intervals"][0]["accepted_count"], 1_000)
+        self.assertEqual(direct["kind"], "canonical_core_write")
+        self.assertIn("--seconds", run.call_args.args[0])
+
+    def test_sqlite_probe_build_is_separate_from_the_released_daemon_pair(self):
+        probe = RUNNER.ROOT / "target" / "release" / "atm-daemon-benchmark"
+        completed = subprocess.CompletedProcess(["cargo"], 0, "", "")
+        with (
+            mock.patch.object(RUNNER.Path, "is_file", side_effect=[False, True]),
+            mock.patch.object(RUNNER.subprocess, "run", return_value=completed) as command,
+        ):
+            self.assertEqual(RUNNER.canonical_writer_probe(), probe)
+        command.assert_called_once()
+        self.assertIn("atm-daemon-bootstrap", command.call_args.args[0])
+        self.assertIn("benchmark-harness", command.call_args.args[0])
+
+    def test_capacity_run_result_preserves_compact_and_raw_evidence(self):
+        result = RUNNER.CapacityRunResult(0, Path("compact.json"), Path("raw.json"))
+        code, compact = result
+        self.assertEqual((code, compact, result.raw_evidence_path), (0, Path("compact.json"), Path("raw.json")))
+
+    def test_suite_target_result_retains_measured_below_floor_evidence(self):
+        """A nonzero suite target can be a useful measured remediation result."""
+        with tempfile.TemporaryDirectory() as directory:
+            artifacts = Path(directory) / "artifacts"
+            artifacts.mkdir()
+            evidence = complete_evidence(
+                transport="tcp",
+                peer_wire_security="plaintext-test",
+                benchmark_target="tcp",
+            )
+            compact = artifacts / "compact.json"
+            raw = artifacts / "raw.json"
+            compact.write_text(compact_evidence(evidence).model_dump_json(), encoding="utf-8")
+            raw.write_text(json.dumps(evidence), encoding="utf-8")
+
+            target = RUNNER.suite_target_result(
+                "tcp", RUNNER.CapacityRunResult(1, compact, raw), artifact_root=artifacts,
+            )
+
+        self.assertEqual(target.target, "tcp")
+        self.assertEqual(target.requested, 1_000)
+        self.assertEqual(target.accepted, 1_000)
+        self.assertEqual(target.errors, 0)
+        self.assertEqual(target.raw_artifact, "raw.json")
+
+    def test_suite_target_result_rejects_mismatched_or_unmeasured_artifacts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            artifacts = Path(directory) / "artifacts"
+            artifacts.mkdir()
+            raw = artifacts / "raw.json"
+            raw.write_text("{}", encoding="utf-8")
+            mismatch = artifacts / "mismatch.json"
+            mismatch.write_text(
+                compact_evidence(complete_evidence(
+                    transport="tcp", peer_wire_security="mutual-tls", benchmark_target="tcp-tls",
+                )).model_dump_json(),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(RUNNER.SmokeError, "does not match"):
+                RUNNER.suite_target_result(
+                    "tcp", RUNNER.CapacityRunResult(0, mismatch, raw), artifact_root=artifacts,
+                )
+
+            unmeasured = artifacts / "unmeasured.json"
+            unmeasured.write_text(
+                compact_evidence(complete_evidence(
+                    transport="tcp", peer_wire_security="plaintext-test", benchmark_target="tcp",
+                    runs=[], passed=False, failure="setup failed",
+                )).model_dump_json(),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(RUNNER.SmokeError, "did not reach a measured interval"):
+                RUNNER.suite_target_result(
+                    "tcp", RUNNER.CapacityRunResult(1, unmeasured, raw), artifact_root=artifacts,
+                )
+
     def _run_snapshot_lifecycle_case(self, fault: str | None = None) -> tuple[int, dict[str, object], dict[str, mock.Mock]]:
         """Exercise the runner lifecycle without inspecting a primary-account root."""
         captured: dict[str, object] = {}
@@ -1322,10 +1467,10 @@ class AdmissionCapacityTests(unittest.TestCase):
 
     def test_main_binds_the_validated_transport_before_selecting_profiles(self):
         with (
-            mock.patch.object(sys, "argv", ["run_admission_capacity.py", "--transport", "invalid"]),
+            mock.patch.object(sys, "argv", ["run_admission_capacity.py", "--diagnostic-only", "--transport", "invalid"]),
             mock.patch.object(RUNNER, "selected_profiles") as selected,
         ):
-            with self.assertRaisesRegex(RUNNER.SmokeError, "must be `uds` or `tcp`"):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "must be `sqlite`, `uds`, or `tcp`"):
                 RUNNER.main()
         selected.assert_not_called()
 
@@ -1343,6 +1488,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                     "argv",
                     [
                         "run_admission_capacity.py",
+                        "--diagnostic-only",
                         "--transport",
                         "tcp",
                         "--atm-home",
@@ -1383,6 +1529,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                     "argv",
                     [
                         "run_admission_capacity.py",
+                        "--diagnostic-only",
                         "--target",
                         "tcp",
                         "--atm-home",
@@ -1452,6 +1599,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                     "argv",
                     [
                         "run_admission_capacity.py",
+                        "--diagnostic-only",
                         "--transport", "uds",
                         "--atm-home", str(root),
                         "--frames-per-connection", "1",
