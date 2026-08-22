@@ -34,7 +34,7 @@
 
 use std::future::Future;
 use std::net::SocketAddr;
-use std::num::{NonZeroU32, NonZeroUsize};
+use std::num::{NonZeroU16, NonZeroU32, NonZeroUsize};
 #[cfg(unix)]
 use std::path::Path;
 use std::path::PathBuf;
@@ -183,6 +183,16 @@ impl DirectPeerTcpConfig {
     #[must_use]
     pub fn standard() -> Self {
         Self::new(DIRECT_PEER_TCP_PORT)
+    }
+
+    /// Uses an explicit non-zero direct-peer port selected at daemon launch.
+    ///
+    /// Normal service launches use [`Self::standard`]. An explicit port lets
+    /// an isolated physical benchmark daemon avoid contending with a live
+    /// daemon owned by another OS account on the same host.
+    #[must_use]
+    pub fn configured(port: NonZeroU16) -> Self {
+        Self::new(port.get())
     }
 
     /// Crate-private port selection keeps isolated runtime tests possible.

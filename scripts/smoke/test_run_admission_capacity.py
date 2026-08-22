@@ -1578,9 +1578,9 @@ class AdmissionCapacityTests(unittest.TestCase):
             ("uds", "plaintext-test", "uds"),
         )
 
-    def test_tcp_target_uses_fixed_direct_peer_listener_not_local_http_record(self):
-        endpoint = RUNNER.direct_peer_endpoint()
-        self.assertEqual(endpoint.address, ("127.0.0.1", 43_101))
+    def test_tcp_target_uses_explicit_direct_peer_listener_not_local_http_record(self):
+        endpoint = RUNNER.direct_peer_endpoint(43_102)
+        self.assertEqual(endpoint.address, ("127.0.0.1", 43_102))
         self.assertTrue(endpoint.direct_peer)
         self.assertIsNone(endpoint.capability)
         with self.assertRaisesRegex(RUNNER.SmokeError, "direct-peer listener"):
@@ -1590,7 +1590,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         identity = RUNNER.DisposableMtlsIdentity(
             "benchmark.example.test", Path("/tmp/identity.pem"), "a" * 64,
         )
-        endpoint = RUNNER.direct_peer_endpoint(identity)
+        endpoint = RUNNER.direct_peer_endpoint(43_102, identity)
         self.assertEqual(endpoint.tls_server_name, "benchmark.example.test")
         self.assertEqual(endpoint.tls_certificate_bundle, Path("/tmp/identity.pem"))
 
@@ -2024,7 +2024,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         reap.assert_called_once_with(process)
         output.join.assert_called_once_with()
 
-    def test_capacity_daemon_launches_the_shipped_binary_with_only_peer_wire_mode(self):
+    def test_capacity_daemon_launches_the_shipped_binary_with_explicit_peer_wire_and_port(self):
         process = mock.Mock()
         process.stdout = mock.Mock()
         process.stderr = mock.Mock()
@@ -2035,12 +2035,16 @@ class AdmissionCapacityTests(unittest.TestCase):
             mock.patch.object(RUNNER, "await_daemon_ready"),
         ):
             RUNNER.start_capacity_daemon(
-                Path("/release/atm-daemon"), Path("/tmp/atm-capacity-proof"), {},
+                Path("/release/atm-daemon"), Path("/tmp/atm-capacity-proof"),
+                {RUNNER.CAPACITY_DIRECT_PEER_PORT_ENV: "43102"},
                 "plaintext-test",
             )
         launched = popen.call_args.args[0]
         self.assertEqual(Path(launched[0]), Path("/release/atm-daemon"))
-        self.assertEqual(launched[1:], ["--peer-wire-security", "plaintext-test"])
+        self.assertEqual(
+            launched[1:],
+            ["--peer-wire-security", "plaintext-test", "--direct-peer-port", "43102"],
+        )
 
     def test_managed_mode_rejects_a_doctor_that_reports_the_wrong_wire_mode(self):
         status = healthy_managed_status()

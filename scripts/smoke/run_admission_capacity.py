@@ -92,6 +92,7 @@ DAEMON_OUTPUT_TAIL_LINES = 200
 GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
 PEER_WIRE_SECURITY_MODES = ("mutual-tls", "plaintext-test")
 DIRECT_PEER_TCP_PORT = 43_101
+CAPACITY_DIRECT_PEER_PORT_ENV = "ATM_CAPACITY_DIRECT_PEER_PORT"
 BENCHMARK_TARGETS = {
     # SQLite and UDS do not cross the peer wire.  They must stay independent
     # of the optional mTLS control plane so they measure their own production
@@ -802,6 +803,22 @@ def runtime_environment(
     return environment
 
 
+def allocate_direct_peer_port() -> int:
+    """Select an unoccupied loopback port for one benchmark daemon launch.
+
+    A physical benchmark account may share its host with a live daemon, whose
+    durable direct-peer listener uses the protocol default port.  The harness
+    must therefore select its own explicit listener rather than silently
+    continue after a port-bind failure and exercise another account's daemon.
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    if port == DIRECT_PEER_TCP_PORT:
+        raise SmokeError("benchmark direct-peer port collided with the protocol default")
+    return port
+
+
 def host_runtime_client_environment(environment: dict[str, str]) -> dict[str, str]:
     """Use the OS-user runtime record, never the disposable config root, for doctor."""
     result = dict(environment)
@@ -874,11 +891,12 @@ def start_capacity_daemon(
 ) -> tuple[subprocess.Popen[str], DaemonOutputCapture]:
     """Start the shipped daemon with its ordinary explicit peer-wire mode."""
     peer_wire_security = validate_peer_wire_security(peer_wire_security)
+    direct_peer_port = env.get(CAPACITY_DIRECT_PEER_PORT_ENV)
+    command = [str(daemon), "--peer-wire-security", peer_wire_security]
+    if direct_peer_port is not None:
+        command.extend(("--direct-peer-port", direct_peer_port))
     process = subprocess.Popen(
-        [
-            str(daemon),
-            "--peer-wire-security", peer_wire_security,
-        ],
+        command,
         cwd=home,
         env=env,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
@@ -1021,7 +1039,10 @@ def local_endpoint(transport: str) -> LocalEndpoint:
     raise SmokeError("TCP benchmark targets must use the direct-peer listener, not local-http.json")
 
 
-def direct_peer_endpoint(identity: DisposableMtlsIdentity | None = None) -> LocalEndpoint:
+def direct_peer_endpoint(
+    port: int,
+    identity: DisposableMtlsIdentity | None = None,
+) -> LocalEndpoint:
     """Return the fixed direct-peer listener rather than the local HTTP record.
 
     The direct listener is deliberately separate from the capability-authenticated
@@ -1030,14 +1051,14 @@ def direct_peer_endpoint(identity: DisposableMtlsIdentity | None = None) -> Loca
     """
     return LocalEndpoint(
         "tcp",
-        ("127.0.0.1", DIRECT_PEER_TCP_PORT),
+        ("127.0.0.1", port),
         direct_peer=True,
         tls_server_name=identity.host if identity is not None else None,
         tls_certificate_bundle=identity.certificate_bundle if identity is not None else None,
     )
 
 
-def disposable_peer_host() -> str:
+def disposable_peer_host(roster: CapacityRoster) -> str:
     """Resolve one durable authority for a local disposable mTLS peer.
 
     A literal address is intentionally forbidden: the same durable hostname is
@@ -1056,7 +1077,7 @@ def disposable_peer_host() -> str:
             "benchmark mTLS authority must be a durable DNS or mDNS hostname; "
             "set ATM_CAPACITY_PEER_HOST explicitly when local DNS is incomplete"
         )
-    return host
+    return f"capacity-{roster.run_id}.{host}"
 
 
 def _required_command(command: list[str], env: dict[str, str], description: str) -> None:
@@ -1071,6 +1092,8 @@ def provision_disposable_mtls_identity(
     atm: Path,
     env: dict[str, str],
     home: Path,
+    roster: CapacityRoster,
+    direct_peer_port: int,
 ) -> DisposableMtlsIdentity:
     """Install a self-contained, short-lived peer configuration before launch.
 
@@ -1082,7 +1105,7 @@ def provision_disposable_mtls_identity(
     openssl = shutil.which("openssl")
     if openssl is None:
         raise SmokeError("mTLS benchmark setup requires the system `openssl` executable")
-    host = disposable_peer_host()
+    host = disposable_peer_host(roster)
     tls_directory = home / "benchmark-mtls"
     tls_directory.mkdir(mode=0o700)
     config = tls_directory / "openssl.cnf"
@@ -1120,7 +1143,7 @@ def provision_disposable_mtls_identity(
     fingerprint = hashlib.sha256(der).hexdigest()
     _required_command(
         [
-            str(atm), "peer", "interface", "set", "--bind", f"127.0.0.1:{DIRECT_PEER_TCP_PORT}",
+            str(atm), "peer", "interface", "set", "--bind", f"127.0.0.1:{direct_peer_port}",
             "--advertise-host", host, "--enabled",
         ],
         env,
@@ -1137,7 +1160,7 @@ def provision_disposable_mtls_identity(
     _required_command(
         [
             str(atm), "peer", "trust", "add", "--host", host,
-            "--fingerprint", fingerprint, "--https-port", str(DIRECT_PEER_TCP_PORT), "--yes",
+            "--fingerprint", fingerprint, "--https-port", str(direct_peer_port), "--yes",
         ],
         env,
         "save disposable mTLS trusted peer",
@@ -1707,6 +1730,8 @@ def run_capacity(
     direct_writer = canonical_writer_probe() if transport == "sqlite" else None
     roster = CapacityRoster.unique()
     env = runtime_environment(home, roster)
+    direct_peer_port = allocate_direct_peer_port()
+    env[CAPACITY_DIRECT_PEER_PORT_ENV] = str(direct_peer_port)
     target_command = (
         f"just benchmark --target {benchmark_target}"
         if benchmark_target is not None
@@ -1734,6 +1759,7 @@ def run_capacity(
         "sample_count": None,
         "target_duration_s": TARGET_PROFILE_DURATION_SECONDS,
         "worker_limit": workers,
+        "direct_peer_port": direct_peer_port,
         "source_revision": source_revision(),
         "daemon_version": None,
         "host_os": platform.system().lower(),
@@ -1803,12 +1829,14 @@ def run_capacity(
             mtls_identity = run_lifecycle_phase(
                 evidence,
                 "snapshot",
-                lambda: provision_disposable_mtls_identity(atm, env, home),
+                lambda: provision_disposable_mtls_identity(
+                    atm, env, home, roster, direct_peer_port,
+                ),
             )
             evidence["disposable_mtls"] = {
                 "authority": mtls_identity.host,
                 "fingerprint_sha256": mtls_identity.fingerprint,
-                "direct_peer_port": DIRECT_PEER_TCP_PORT,
+                "direct_peer_port": direct_peer_port,
             }
         # The pre-roster daemon is deliberately short-lived: it initializes
         # the account database, then is quiesced before the public snapshot
@@ -1846,7 +1874,10 @@ def run_capacity(
             }
         else:
             endpoint = (
-                direct_peer_endpoint(mtls_identity if peer_wire_security == "mutual-tls" else None)
+                direct_peer_endpoint(
+                    direct_peer_port,
+                    mtls_identity if peer_wire_security == "mutual-tls" else None,
+                )
                 if transport == "tcp"
                 else local_endpoint(transport)
             )
