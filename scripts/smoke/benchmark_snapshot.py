@@ -152,7 +152,12 @@ def _sha256(path: Path) -> tuple[int, str]:
 def _database_facts(path: Path, label: str) -> tuple[int, int]:
     _require_regular_file(path, label)
     try:
-        uri = f"{path.resolve().as_uri()}?mode=ro"
+        # A SQLite backup of a WAL-mode source preserves its journal-mode
+        # header.  macOS SQLite otherwise tries to create a -shm companion
+        # even for this read-only verification.  The just-fsynced immutable
+        # candidate is complete in its main file, so verify it without any
+        # sidecar write or lock acquisition.
+        uri = f"{path.resolve().as_uri()}?mode=ro&immutable=1"
         with closing(sqlite3.connect(uri, uri=True)) as connection:
             quick_check = connection.execute("PRAGMA quick_check;").fetchone()
             user_version = connection.execute("PRAGMA user_version;").fetchone()
