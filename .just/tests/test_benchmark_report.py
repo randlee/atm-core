@@ -108,6 +108,31 @@ class BenchmarkReportTests(unittest.TestCase):
             self.assertEqual(set(envelope), {"schema_version", "report_type", "generated_at", "host_label", "report_html"})
             self.assertEqual(envelope["report_type"], "benchmark")
 
+    def test_rebuild_promotes_legacy_result_to_canonical_json_identity(self) -> None:
+        """Campaign summary links must target an artifact created by rebuild."""
+        payload = json.loads(self.fixture("failed-tcp-f8.json").read_text(encoding="utf-8"))
+        payload.update({
+            "campaign_id": "20260822T200000Z-aaaaaaaaaaaa",
+            "benchmark_target": "tcp-tls",
+            "peer_wire_security": "mutual-tls",
+        })
+        with tempfile.TemporaryDirectory() as directory:
+            report_dir = Path(directory) / "send-message-benchmark"
+            report_dir.mkdir()
+            (report_dir / "legacy-run.json").write_text(json.dumps(payload), encoding="utf-8")
+            result = REPORT.load_result(report_dir / "legacy-run.json")
+            artifact_id = REPORT.result_id(result)
+            with (
+                mock.patch.object(REPORT, "REPORT_DIR", report_dir),
+                mock.patch.object(REPORT, "evidence_records", return_value=[result]),
+                mock.patch.object(REPORT, "render_run"),
+                mock.patch.object(REPORT, "render_campaign"),
+                mock.patch.object(REPORT, "render_aggregate"),
+                mock.patch.object(REPORT, "regenerate_index"),
+            ):
+                self.assertEqual(REPORT.process([]), 0)
+            self.assertTrue((report_dir / f"{artifact_id}.json").is_file())
+
     def test_envelope_for_uses_the_validated_result_identity(self) -> None:
         result = REPORT.load_result(self.fixture("success-uds-f1.json"))
         envelope = json.loads(REPORT.envelope_for(result))

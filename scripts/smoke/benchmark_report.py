@@ -444,13 +444,18 @@ def envelope_for(result: dict[str, Any]) -> str:
     }, indent=2, sort_keys=True) + "\n"
 
 
-def persist(source: Path) -> tuple[dict[str, Any], str]:
-    result = load_result(source)
-    artifact_id = result_id(result, source)
+def persist_result(result: dict[str, Any]) -> str:
+    """Store one validated result under its canonical immutable identity."""
+    artifact_id = result_id(result)
     artifact = json.dumps(result, indent=2, sort_keys=True) + "\n"
     immutable_write(REPORT_DIR / f"{artifact_id}.json", artifact)
     immutable_write(REPORT_DIR / f"{artifact_id}.envelope.json", envelope_for(result))
-    return result, artifact_id
+    return artifact_id
+
+
+def persist(source: Path) -> tuple[dict[str, Any], str]:
+    result = load_result(source)
+    return result, persist_result(result)
 
 
 def process(inputs: list[Path]) -> int:
@@ -459,8 +464,7 @@ def process(inputs: list[Path]) -> int:
         try:
             records = evidence_records()
             for result in records:
-                artifact_id = result_id(result)
-                immutable_write(REPORT_DIR / f"{artifact_id}.envelope.json", envelope_for(result))
+                artifact_id = persist_result(result)
                 render_run(result, artifact_id)
             for identifier, campaign in campaign_groups(records).items():
                 render_campaign(identifier, campaign)
