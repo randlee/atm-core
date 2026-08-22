@@ -70,8 +70,13 @@ class BootstrapTests(unittest.TestCase):
         verify.assert_not_called()
 
     def test_pip_installs_inside_the_repository_venv(self) -> None:
-        command = bootstrap.pip_install_command(Path("/repo/.bootstrap-venv/bin/python"))
-        self.assertEqual(command[0], "/repo/.bootstrap-venv/bin/python")
+        python = (
+            Path(r"C:\repo\.bootstrap-venv\Scripts\python.exe")
+            if sys.platform == "win32"
+            else Path("/repo/.bootstrap-venv/bin/python")
+        )
+        command = bootstrap.pip_install_command(python)
+        self.assertEqual(Path(command[0]), python)
         self.assertIn("--no-deps", command)
 
     def test_seed_version_mismatch_refuses_before_any_installs(self) -> None:
