@@ -81,7 +81,56 @@ def _windows_current_sid() -> str:
 
 
 def _windows_current_principal() -> str:
-    return _windows_current_sid().casefold()
+    """Return the token default owner used for newly created Windows files."""
+    import ctypes
+    from ctypes import wintypes
+
+    token = wintypes.HANDLE()
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    open_process_token = advapi32.OpenProcessToken
+    open_process_token.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE)]
+    open_process_token.restype = wintypes.BOOL
+    if not open_process_token(kernel32.GetCurrentProcess(), 0x0008, ctypes.byref(token)):
+        raise BenchmarkAccountError(f"could not resolve the Windows benchmark-account owner: {ctypes.WinError()}")
+    try:
+        required = wintypes.DWORD()
+        get_token_information = advapi32.GetTokenInformation
+        get_token_information.argtypes = [
+            wintypes.HANDLE,
+            wintypes.DWORD,
+            wintypes.LPVOID,
+            wintypes.DWORD,
+            ctypes.POINTER(wintypes.DWORD),
+        ]
+        get_token_information.restype = wintypes.BOOL
+        if get_token_information(token, 4, None, 0, ctypes.byref(required)) or ctypes.get_last_error() != 122:
+            raise BenchmarkAccountError(f"could not resolve the Windows benchmark-account owner: {ctypes.WinError()}")
+        owner = ctypes.create_string_buffer(required.value)
+        if not get_token_information(token, 4, owner, required, ctypes.byref(required)):
+            raise BenchmarkAccountError(f"could not resolve the Windows benchmark-account owner: {ctypes.WinError()}")
+        owner_sid = ctypes.cast(owner, ctypes.POINTER(wintypes.LPVOID)).contents
+        return _windows_sid_text(owner_sid)
+    finally:
+        kernel32.CloseHandle(token)
+
+
+def _windows_sid_text(sid: Any) -> str:
+    """Convert a Windows SID allocated or returned by a security API to text."""
+    import ctypes
+    from ctypes import wintypes
+
+    sid_text = wintypes.LPVOID()
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    convert_sid = advapi32.ConvertSidToStringSidW
+    convert_sid.argtypes = [wintypes.LPVOID, ctypes.POINTER(wintypes.LPVOID)]
+    convert_sid.restype = wintypes.BOOL
+    if not convert_sid(sid, ctypes.byref(sid_text)):
+        raise BenchmarkAccountError(f"could not convert Windows manifest owner SID: {ctypes.FormatError()}")
+    try:
+        return f"sid:{ctypes.wstring_at(sid_text)}".casefold()
+    finally:
+        ctypes.WinDLL("kernel32", use_last_error=True).LocalFree(sid_text)
 
 
 def _windows_file_owner(path: Path) -> str:
@@ -120,18 +169,7 @@ def _windows_file_owner(path: Path) -> str:
             f"could not verify Windows manifest owner for {path} (error {error}: {detail})"
         )
     try:
-        sid_text = wintypes.LPVOID()
-        convert_sid = advapi32.ConvertSidToStringSidW
-        convert_sid.argtypes = [wintypes.LPVOID, ctypes.POINTER(wintypes.LPVOID)]
-        convert_sid.restype = wintypes.BOOL
-        if not convert_sid(owner, ctypes.byref(sid_text)):
-            raise BenchmarkAccountError(
-                f"could not convert Windows manifest owner SID for {path}: {ctypes.FormatError()}"
-            )
-        try:
-            return f"sid:{ctypes.wstring_at(sid_text)}".casefold()
-        finally:
-            ctypes.WinDLL("kernel32", use_last_error=True).LocalFree(sid_text)
+        return _windows_sid_text(owner)
     finally:
         ctypes.WinDLL("kernel32", use_last_error=True).LocalFree(descriptor)
 
