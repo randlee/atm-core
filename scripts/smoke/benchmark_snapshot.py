@@ -95,10 +95,29 @@ def _mail_database(account: BenchmarkAccount) -> Path:
     return database
 
 
+def _fsync_handle(handle: Any) -> None:
+    """Flush one regular file through the native durability primitive."""
+    if os.name != "nt":
+        os.fsync(handle.fileno())
+        return
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.FlushFileBuffers.argtypes = [wintypes.HANDLE]
+    kernel32.FlushFileBuffers.restype = wintypes.BOOL
+    file_handle = msvcrt.get_osfhandle(handle.fileno())
+    if file_handle == -1 or not kernel32.FlushFileBuffers(wintypes.HANDLE(file_handle)):
+        raise ctypes.WinError(ctypes.get_last_error())
+
+
 def _fsync_file(path: Path, label: str) -> None:
     try:
-        with path.open("rb") as handle:
-            os.fsync(handle.fileno())
+        # FlushFileBuffers requires a write-capable Windows file handle.
+        mode = "r+b" if os.name == "nt" else "rb"
+        with path.open(mode) as handle:
+            _fsync_handle(handle)
     except OSError as error:
         raise BenchmarkSnapshotError(f"could not fsync benchmark snapshot {label} {path}: {error}") from error
 
@@ -181,7 +200,7 @@ def _write_manifest(path: Path, payload: dict[str, object]) -> None:
         with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
             handle.write(json.dumps(payload, sort_keys=True, indent=2) + "\n")
             handle.flush()
-            os.fsync(handle.fileno())
+            _fsync_handle(handle)
         os.replace(temporary, path)
     except OSError as error:
         raise BenchmarkSnapshotError(f"could not publish benchmark snapshot manifest {path}: {error}") from error

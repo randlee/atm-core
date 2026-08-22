@@ -92,13 +92,12 @@ class BenchmarkAccountTests(unittest.TestCase):
                 with self.assertRaisesRegex(ACCOUNT.BenchmarkAccountError, "owner mismatch"):
                     self._require(home)
 
-    @unittest.skipUnless(os.name == "nt", "Windows owner verification uses Windows token SIDs")
-    def test_windows_owner_lookup_accepts_an_executing_token_principal(self):
+    @unittest.skipUnless(os.name == "nt", "Windows owner verification uses Win32 APIs")
+    def test_windows_owner_lookup_matches_executing_account_sid(self):
         with tempfile.TemporaryDirectory() as temporary:
             manifest = Path(temporary) / ACCOUNT.MANIFEST_NAME
             manifest.write_text("{}", encoding="utf-8")
-            self.assertIn(ACCOUNT._windows_file_owner(manifest), ACCOUNT._windows_current_owner_sids())
-            ACCOUNT._verify_manifest_owner(manifest, manifest.stat())
+            self.assertEqual(ACCOUNT._windows_file_owner(manifest), ACCOUNT._windows_current_principal())
 
     def test_bootstrap_is_never_an_implicit_runner_side_effect(self):
         with tempfile.TemporaryDirectory() as temporary:
