@@ -1,9 +1,9 @@
-"""Fail-closed identity contract for the disposable physical-benchmark account.
+"""Fail-closed contract for one disposable physical-benchmark state root.
 
-This module deliberately does not choose an ATM root.  ADR-026 derives that
-root from the executing OS user.  The manifest only proves that this user was
-explicitly bootstrapped as the disposable benchmark account before the harness
-may start a daemon or touch benchmark state.
+The benchmark runner supplies a fresh, validated temporary ``ATM_HOME``.
+The manifest proves that the root is owned by the executing OS account before
+the harness may start a daemon or touch benchmark state.  It never selects the
+interactive user's ``~/.atm`` database.
 """
 from __future__ import annotations
 
@@ -38,8 +38,10 @@ class BenchmarkAccount:
     manifest_path: Path
 
 
-def account_home() -> Path:
-    """Return the account home from OS identity, never a shell HOME override."""
+def account_home(home: Path | None = None) -> Path:
+    """Return an explicit disposable root, or the OS home for standalone use."""
+    if home is not None:
+        return home.resolve()
     if os.name == "nt":
         profile = os.environ.get("USERPROFILE", "").strip()
         if not profile:
@@ -212,7 +214,7 @@ def _manifest_payload(account: BenchmarkAccount, created_at: str, token: str) ->
     }
 
 
-def _parse_manifest(path: Path) -> BenchmarkAccount:
+def _parse_manifest(path: Path, home: Path) -> BenchmarkAccount:
     metadata = _verify_no_symlink(path, "manifest")
     if not stat.S_ISREG(metadata.st_mode):
         raise BenchmarkAccountError(f"benchmark-account manifest is not a regular file: {path}")
@@ -248,7 +250,6 @@ def _parse_manifest(path: Path) -> BenchmarkAccount:
         datetime.fromisoformat(created_at.replace("Z", "+00:00"))
     except ValueError as error:
         raise BenchmarkAccountError("benchmark-account manifest creation time is malformed") from error
-    home = account_home()
     state_root = canonical_durable_state_root(home)
     if account_id != current_account_id():
         raise BenchmarkAccountError("benchmark-account manifest does not match the executing account")
@@ -257,28 +258,28 @@ def _parse_manifest(path: Path) -> BenchmarkAccount:
     return BenchmarkAccount(account_id, home, state_root, path)
 
 
-def require_benchmark_account() -> BenchmarkAccount:
+def require_benchmark_account(home: Path | None = None) -> BenchmarkAccount:
     """Validate the current account before any benchmark setup side effect."""
-    home = account_home()
-    manifest_parent = home / ".atm"
+    selected_home = account_home(home)
+    manifest_parent = selected_home / ".atm"
     _verify_directory(manifest_parent, "manifest directory")
-    return _parse_manifest(manifest_path(home))
+    return _parse_manifest(manifest_path(selected_home), selected_home)
 
 
-def bootstrap_benchmark_account() -> BenchmarkAccount:
+def bootstrap_benchmark_account(home: Path | None = None) -> BenchmarkAccount:
     """Create the account-local manifest only for a clean disposable account.
 
     This is an explicit bootstrap action, never a side effect of benchmark
     execution.  A user with an existing ATM durable root cannot label their
     interactive account as disposable.
     """
-    home = account_home()
-    state_root = canonical_durable_state_root(home)
+    selected_home = account_home(home)
+    state_root = canonical_durable_state_root(selected_home)
     if state_root.exists():
         raise BenchmarkAccountError(
             "refusing to bootstrap a benchmark manifest beside an existing ATM durable state"
         )
-    parent = home / ".atm"
+    parent = selected_home / ".atm"
     if parent.exists():
         _verify_directory(parent, "manifest directory")
     else:
@@ -286,10 +287,10 @@ def bootstrap_benchmark_account() -> BenchmarkAccount:
             parent.mkdir(mode=0o700)
         except OSError as error:
             raise BenchmarkAccountError(f"could not create benchmark-account directory {parent}: {error}") from error
-    path = manifest_path(home)
+    path = manifest_path(selected_home)
     if path.exists() or path.is_symlink():
         raise BenchmarkAccountError(f"benchmark-account manifest already exists: {path}")
-    account = BenchmarkAccount(current_account_id(), home, state_root, path)
+    account = BenchmarkAccount(current_account_id(), selected_home, state_root, path)
     created_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     payload = json.dumps(
         _manifest_payload(account, created_at, secrets.token_urlsafe(32)), sort_keys=True, indent=2,
@@ -315,4 +316,4 @@ def bootstrap_benchmark_account() -> BenchmarkAccount:
             except OSError:
                 pass
             raise BenchmarkAccountError(f"could not finalize benchmark-account manifest {path}: {error}") from error
-    return require_benchmark_account()
+    return require_benchmark_account(selected_home)

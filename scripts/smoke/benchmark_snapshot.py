@@ -266,7 +266,7 @@ def _parse_verified_snapshot(account: BenchmarkAccount, snapshot_id: str) -> Ver
     )
 
 
-def create_verified_snapshot() -> VerifiedSnapshot:
+def create_verified_snapshot(home: Path | None = None) -> VerifiedSnapshot:
     """Create and atomically publish a verified snapshot for this account only.
 
     A failed attempt deliberately leaves its hidden staging directory in place
@@ -274,7 +274,7 @@ def create_verified_snapshot() -> VerifiedSnapshot:
     candidate until the database is consistent, fsynced, and hash-verified.
     """
     try:
-        account = require_benchmark_account()
+        account = require_benchmark_account(home)
     except BenchmarkAccountError as error:
         raise BenchmarkSnapshotError(str(error)) from error
     source = _mail_database(account)
@@ -329,10 +329,10 @@ def create_verified_snapshot() -> VerifiedSnapshot:
     return _parse_verified_snapshot(account, snapshot_id)
 
 
-def verify_completed_snapshot(snapshot_id: str) -> VerifiedSnapshot:
+def verify_completed_snapshot(snapshot_id: str, home: Path | None = None) -> VerifiedSnapshot:
     """Return a completed snapshot only after revalidating the current account."""
     try:
-        account = require_benchmark_account()
+        account = require_benchmark_account(home)
     except BenchmarkAccountError as error:
         raise BenchmarkSnapshotError(str(error)) from error
     return _parse_verified_snapshot(account, snapshot_id)
@@ -348,7 +348,7 @@ def _assert_restore_sidecars_absent(database: Path) -> None:
         )
 
 
-def restore_verified_snapshot(snapshot_id: str) -> VerifiedSnapshot:
+def restore_verified_snapshot(snapshot_id: str, home: Path | None = None) -> VerifiedSnapshot:
     """Atomically activate a previously verified account-local SQLite snapshot.
 
     The caller must stop the paired benchmark daemon first.  The helper
@@ -356,7 +356,7 @@ def restore_verified_snapshot(snapshot_id: str) -> VerifiedSnapshot:
     deleting state that could belong to an active process.
     """
     try:
-        account = require_benchmark_account()
+        account = require_benchmark_account(home)
     except BenchmarkAccountError as error:
         raise BenchmarkSnapshotError(str(error)) from error
     snapshot = _parse_verified_snapshot(account, snapshot_id)

@@ -773,7 +773,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 ],
             )
 
-    def test_undeclared_host_state_refuses_before_backup_or_daemon_quiesce(self):
+    def test_non_temporary_capacity_home_refuses_before_daemon_quiesce(self):
         with (
             mock.patch.dict(
                 os.environ,
@@ -782,14 +782,9 @@ class AdmissionCapacityTests(unittest.TestCase):
             ),
             mock.patch.object(RUNNER.HostStateBackup, "begin") as backup,
             mock.patch.object(RUNNER, "daemon_switch_result") as daemon_switch,
-            mock.patch.object(
-                RUNNER,
-                "require_benchmark_account",
-                side_effect=RUNNER.BenchmarkAccountError("manifest is missing"),
-            ),
             mock.patch.object(RUNNER, "release_binary") as release_binary,
         ):
-            with self.assertRaisesRegex(RUNNER.SmokeError, "benchmark-account preflight failed"):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "capacity ATM_HOME must be below"):
                 RUNNER.run_capacity(Path("/tmp/atm-capacity-unit"), Path("/tmp"), "tcp", 1)
 
         backup.assert_not_called()

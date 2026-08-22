@@ -256,8 +256,7 @@ class HostStateBackup:
     def begin(cls) -> "HostStateBackup":
         raise SmokeError(
             "refusing to replace the current OS user's primary ATM database; "
-            "run the benchmark under a dedicated clean OS user with "
-            "ATM_CAPACITY_ISOLATED_OS_USER=1"
+            "run against the runner-created disposable benchmark state root"
         )
 
     def restore(self) -> None:
@@ -1518,9 +1517,8 @@ def run_capacity(
     if managed_daemon is not None:
         raise SmokeError(
             "managed-daemon benchmarking is retired because it would touch the primary "
-            "OS-user-owned database; use a dedicated clean OS user instead"
+            "OS-user-owned database; use the runner-created disposable state root instead"
         )
-    benchmark_account = require_capacity_benchmark_account()
     transport = validate_transport(transport)
     peer_wire_security = validate_peer_wire_security(peer_wire_security)
     if frames_per_connection not in SPARSE_FRAMES_PER_CONNECTION:
@@ -1529,7 +1527,7 @@ def run_capacity(
         raise SmokeError("requested messages must be positive")
     if workers <= 0:
         raise SmokeError("capacity worker limit must be positive")
-    isolation_mode = "dedicated_benchmark_os_account"
+    isolation_mode = "disposable_benchmark_state_root"
     home = validate_capacity_home(atm_home)
     atm = release_binary("atm")
     daemon = release_binary("atm-daemon")
@@ -1571,11 +1569,7 @@ def run_capacity(
         "atm_home": str(home),
         "host_state_isolation": isolation_mode,
         "managed_log_level": managed_log_level,
-        "benchmark_account": {
-            "account_identity": (
-                f"sha256:{hashlib.sha256(str(benchmark_account.account_id).encode()).hexdigest()[:16]}"
-            ),
-        },
+        "benchmark_account": None,
         "lifecycle": {},
         "runs": [],
         "thresholds": None,
@@ -1626,6 +1620,16 @@ def run_capacity(
         )
         before = count_atm_daemon_processes()
         home.mkdir(parents=True, exist_ok=False)
+        try:
+            benchmark_account = bootstrap_benchmark_account(home)
+        except BenchmarkAccountError as error:
+            raise SmokeError(f"benchmark-account bootstrap failed: {error}") from error
+        evidence["benchmark_account"] = {
+            "account_identity": (
+                f"sha256:{hashlib.sha256(str(benchmark_account.account_id).encode()).hexdigest()[:16]}"
+            ),
+            "state_root": str(benchmark_account.durable_state_root),
+        }
         # The pre-roster daemon is deliberately short-lived: it initializes
         # the account database, then is quiesced before the public snapshot
         # owner copies the clean baseline.
@@ -1633,7 +1637,7 @@ def run_capacity(
         run_lifecycle_phase(
             evidence, "stop", lambda: stop_owned_daemon(output_key="pre_snapshot_daemon_output"),
         )
-        snapshot = run_lifecycle_phase(evidence, "snapshot", create_verified_snapshot)
+        snapshot = run_lifecycle_phase(evidence, "snapshot", lambda: create_verified_snapshot(home))
         evidence["clean_baseline_snapshot"] = snapshot_evidence(snapshot)
         evidence["clean_baseline_snapshot"]["sidecars_absent"] = True
 
@@ -1728,13 +1732,13 @@ def run_capacity(
         if snapshot is not None and process is None:
             try:
                 restored = run_lifecycle_phase(
-                    evidence, "restore", lambda: restore_verified_snapshot(snapshot.snapshot_id),
+                    evidence, "restore", lambda: restore_verified_snapshot(snapshot.snapshot_id, home),
                 )
                 evidence["restored_clean_baseline"] = snapshot_evidence(restored)
 
                 def verify_clean_baseline() -> None:
                     start_and_doctor()
-                    verified = verify_completed_snapshot(snapshot.snapshot_id)
+                    verified = verify_completed_snapshot(snapshot.snapshot_id, home)
                     evidence["post_restore_snapshot"] = snapshot_evidence(verified)
                     evidence["doctor_after_restore"] = {"status": "passed"}
 

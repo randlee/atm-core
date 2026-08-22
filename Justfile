@@ -183,8 +183,9 @@ validate target='all':
 smoke feature='normal' *args:
     {{python_cmd}} .just/run_smoke.py {{feature}} {{args}}
 
-# Bootstrap the dedicated disposable benchmark OS account. This action writes
-# only that account's manifest and refuses an account with existing ATM state.
+# Bootstrap a disposable benchmark state root only when --atm-home names a
+# fresh temporary directory. Normal `just benchmark` creates that state root
+# automatically and never selects the interactive ~/.atm database.
 benchmark-bootstrap:
     {{python_cmd}} scripts/smoke/run_admission_capacity.py --bootstrap-benchmark-account
 

@@ -38,6 +38,16 @@ class BenchmarkAccountTests(unittest.TestCase):
             self.assertFalse(account.durable_state_root.exists())
             self.assertEqual(self._require(home), account)
 
+    def test_explicit_disposable_root_is_used_instead_of_os_home(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary) / "atm-capacity-isolated"
+            home.mkdir()
+            with mock.patch.object(ACCOUNT, "current_account_id", return_value="uid:4242"):
+                account = ACCOUNT.bootstrap_benchmark_account(home)
+                self.assertEqual(ACCOUNT.require_benchmark_account(home), account)
+
+            self.assertEqual(account.home, home.resolve())
+
     def test_bootstrap_refuses_an_account_with_existing_durable_state(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
