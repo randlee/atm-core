@@ -79,8 +79,16 @@ class MacosLaunchAgentAdapter:
             return
         if Path(session.overlay_reference) != overlay or not session.overlay_digest:
             raise TemporaryLaunchError("temporary-launch journal does not name this session's owned overlay")
-        if not overlay.is_file() or self._digest(overlay.read_bytes()) != session.overlay_digest:
-            raise TemporaryLaunchError("temporary-launch owned overlay changed or is missing; refusing restore")
+        try:
+            metadata = overlay.lstat()
+        except FileNotFoundError:
+            # The prior restore attempt may have removed the owned overlay but
+            # crashed before durable COMPLETED/journal cleanup. The untouched
+            # source has already been re-validated, so this is the idempotent
+            # recovery path rather than an unsafe synthesized restoration.
+            return
+        if not stat.S_ISREG(metadata.st_mode) or self._digest(overlay.read_bytes()) != session.overlay_digest:
+            raise TemporaryLaunchError("temporary-launch owned overlay changed; refusing restore")
         overlay.unlink()
         self._fsync_directory(overlay.parent)
 

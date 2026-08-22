@@ -694,6 +694,16 @@ class MacosTemporaryLaunchAdapterTests(unittest.TestCase):
 
         self.assertTrue(Path(overlay_spec.overlay_reference).exists())
 
+    def test_restore_is_idempotent_after_the_owned_overlay_was_removed(self) -> None:
+        session = self.captured_session().transition(DAEMON_SWITCH.TemporaryLaunchPhase.STOPPED)
+        overlay_spec = self.adapter.apply_overlay(self.args, session)
+        session = session.with_overlay(overlay_spec)
+
+        self.adapter.restore_exact(self.args, session)
+        self.adapter.restore_exact(self.args, session)
+
+        self.assertFalse(Path(overlay_spec.overlay_reference).exists())
+
     def test_begin_then_restore_uses_only_the_owned_overlay_at_fake_service_boundary(self) -> None:
         journal = DAEMON_SWITCH.TemporaryLaunchJournal(self.root / "state" / "temporary-launch.json")
         original = self.source.read_bytes()
@@ -722,6 +732,40 @@ class MacosTemporaryLaunchAdapterTests(unittest.TestCase):
         self.assertNotEqual(overlay_start.args[0].launch_agent_plist, str(self.source))
         self.assertEqual(service.call_args_list[2], mock.call(self.args, "stop", allow_absent=True))
         self.assertEqual(service.call_args_list[3], mock.call(self.args, "start"))
+
+    def test_recover_completes_after_crash_between_overlay_removal_and_completion(self) -> None:
+        journal = DAEMON_SWITCH.TemporaryLaunchJournal(self.root / "state" / "temporary-launch.json")
+        with (
+            mock.patch.object(DAEMON_SWITCH, "temporary_launch_journal", return_value=journal),
+            mock.patch.object(DAEMON_SWITCH, "selected_matched_pair", return_value=(self.cli, self.daemon)),
+            mock.patch.object(DAEMON_SWITCH, "temporary_launch_adapter", return_value=self.adapter),
+            mock.patch.object(DAEMON_SWITCH, "account_identifier", return_value="uid:501"),
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Darwin"),
+            mock.patch.object(DAEMON_SWITCH, "require_stopped_daemon"),
+            mock.patch.object(DAEMON_SWITCH, "wait_for_temporary_launch", return_value=(True, "ready")),
+            redirect_stdout(io.StringIO()),
+        ):
+            with mock.patch.object(DAEMON_SWITCH, "run_service"):
+                DAEMON_SWITCH.begin_temporary_launch(self.args)
+            active = journal.load()
+            assert active is not None
+            self.args.session = active.session_id
+            with mock.patch.object(
+                DAEMON_SWITCH,
+                "run_service",
+                side_effect=[None, DAEMON_SWITCH.SwitchError("injected normal start failure")],
+            ):
+                with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "injected normal start failure"):
+                    DAEMON_SWITCH.restore_temporary_launch(self.args, recovery=False)
+
+            interrupted = journal.load()
+            assert interrupted is not None
+            self.assertEqual(interrupted.phase, DAEMON_SWITCH.TemporaryLaunchPhase.RESTORING)
+            self.assertFalse(Path(interrupted.overlay_reference or "").exists())
+            with mock.patch.object(DAEMON_SWITCH, "run_service"):
+                DAEMON_SWITCH.restore_temporary_launch(self.args, recovery=True)
+
+        self.assertIsNone(journal.load())
 
 
 if __name__ == "__main__":
