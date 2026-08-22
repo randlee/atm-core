@@ -1679,6 +1679,32 @@ class AdmissionCapacityTests(unittest.TestCase):
             RUNNER.MISSING_PLAINTEXT_BASELINE,
         )
 
+    def test_matrix_keeps_local_targets_independent_of_the_peer_wire(self):
+        self.assertEqual(
+            RUNNER.resolve_benchmark_target("sqlite", None),
+            ("sqlite", "plaintext-test", "sqlite"),
+        )
+        self.assertEqual(
+            RUNNER.resolve_benchmark_target("uds", None),
+            ("uds", "plaintext-test", "uds"),
+        )
+
+    def test_tcp_target_uses_fixed_direct_peer_listener_not_local_http_record(self):
+        endpoint = RUNNER.direct_peer_endpoint()
+        self.assertEqual(endpoint.address, ("127.0.0.1", 43_101))
+        self.assertTrue(endpoint.direct_peer)
+        self.assertIsNone(endpoint.capability)
+        with self.assertRaisesRegex(RUNNER.SmokeError, "direct-peer listener"):
+            RUNNER.local_endpoint("tcp")
+
+    def test_mtls_direct_peer_endpoint_carries_hostname_and_identity(self):
+        identity = RUNNER.DisposableMtlsIdentity(
+            "benchmark.example.test", Path("/tmp/identity.pem"), "a" * 64,
+        )
+        endpoint = RUNNER.direct_peer_endpoint(identity)
+        self.assertEqual(endpoint.tls_server_name, "benchmark.example.test")
+        self.assertEqual(endpoint.tls_certificate_bundle, Path("/tmp/identity.pem"))
+
     def test_main_records_uds_baseline_source_as_a_diffable_comparison(self):
         captured: dict[str, object] = {}
 
@@ -2115,13 +2141,14 @@ class AdmissionCapacityTests(unittest.TestCase):
     def test_failed_daemon_readiness_reaps_the_new_child(self):
         process = mock.Mock()
         output = mock.Mock()
+        output.evidence.return_value = {"stdout_tail": ["starting"], "stderr_tail": ["config failed"]}
         with (
             mock.patch.object(RUNNER.subprocess, "Popen", return_value=process),
             mock.patch.object(RUNNER.DaemonOutputCapture, "start", return_value=output),
             mock.patch.object(RUNNER, "await_daemon_ready", side_effect=RUNNER.SmokeError("not ready")),
             mock.patch.object(RUNNER, "reap_owned_daemon") as reap,
         ):
-            with self.assertRaisesRegex(RUNNER.SmokeError, "not ready"):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "not ready.*config failed"):
                 RUNNER.start_capacity_daemon(
                     Path("/tmp/daemon"), Path("/tmp"), {}, "mutual-tls"
                 )

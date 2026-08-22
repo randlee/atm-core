@@ -20,7 +20,9 @@ import platform
 import plistlib
 from queue import Empty, Queue
 import re
+import shutil
 import socket
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -95,9 +97,13 @@ SUSTAINED_MESSAGE_COUNTS = (10_000, 100_000)
 DAEMON_OUTPUT_TAIL_LINES = 200
 GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
 PEER_WIRE_SECURITY_MODES = ("mutual-tls", "plaintext-test")
+DIRECT_PEER_TCP_PORT = 43_101
 BENCHMARK_TARGETS = {
-    "sqlite": ("sqlite", None),
-    "uds": ("uds", "mutual-tls"),
+    # SQLite and UDS do not cross the peer wire.  They must stay independent
+    # of the optional mTLS control plane so they measure their own production
+    # boundaries rather than a peer-configuration precondition.
+    "sqlite": ("sqlite", "plaintext-test"),
+    "uds": ("uds", "plaintext-test"),
     "tcp": ("tcp", "plaintext-test"),
     "tcp-tls": ("tcp", "mutual-tls"),
 }
@@ -139,11 +145,29 @@ class HttpRequest:
 
 @dataclass(frozen=True)
 class LocalEndpoint:
-    """One authenticated public local daemon endpoint."""
+    """One public daemon endpoint, with peer-wire facts when applicable."""
 
     kind: str
     address: str | tuple[str, int]
     capability: str | None = None
+    direct_peer: bool = False
+    tls_server_name: str | None = None
+    tls_certificate_bundle: Path | None = None
+
+
+@dataclass(frozen=True)
+class DisposableMtlsIdentity:
+    """One benchmark-only identity installed before an mTLS daemon starts.
+
+    The PEM bundle is created below the runner's disposable state and is never
+    copied into evidence.  It is used both by the daemon's configured local
+    identity and by the physical benchmark client, which therefore proves the
+    actual mTLS listener rather than a plaintext lookalike.
+    """
+
+    host: str
+    certificate_bundle: Path
+    fingerprint: str
 
 
 @dataclass(frozen=True)
@@ -876,10 +900,20 @@ def start_capacity_daemon(
     output = DaemonOutputCapture.start(process)
     try:
         await_daemon_ready(process, output)
-    except (OSError, SmokeError):
+    except (OSError, SmokeError) as error:
         reap_owned_daemon(process)
         output.join()
-        raise
+        tails = output.evidence()
+        if isinstance(tails, dict):
+            stdout_lines = tails.get("stdout_tail", [])
+            stderr_lines = tails.get("stderr_tail", [])
+        else:
+            stdout_lines, stderr_lines = [], []
+        stdout_tail = " | ".join(str(line) for line in stdout_lines[-8:]) or "<unavailable>"
+        stderr_tail = " | ".join(str(line) for line in stderr_lines[-8:]) or "<unavailable>"
+        raise SmokeError(
+            f"{error}; daemon stdout tail: {stdout_tail}; daemon stderr tail: {stderr_tail}"
+        ) from error
     return process, output
 
 
@@ -975,9 +1009,11 @@ def resolve_benchmark_target(
     """Resolve public targets without inventing a benchmark-only transport.
 
     `tcp` deliberately selects the existing direct plaintext pipeline and
-    `tcp-tls` selects the same daemon with its ordinary mutual-TLS launch
-    argument.  Legacy `--transport` remains available for historical UDS
-    evidence, but it defaults to the secure daemon mode.
+    `tcp-tls` selects the same direct-peer listener with its ordinary mTLS
+    stream wrapper.  SQLite and UDS are local boundaries, so their target map
+    never asks the daemon to construct an mTLS adapter.  Legacy
+    ``--transport`` remains diagnostic-only and defaults to plaintext because
+    it has no target-level peer-wire claim.
     """
     if target is not None:
         selected_transport, peer_wire_security = BENCHMARK_TARGETS[target]
@@ -986,26 +1022,141 @@ def resolve_benchmark_target(
                 f"benchmark target {target!r} requires transport {selected_transport!r}"
             )
         return selected_transport, peer_wire_security, target
-    return validate_transport(transport or ("uds" if os.name != "nt" else "tcp")), "mutual-tls", None
+    return validate_transport(transport or ("uds" if os.name != "nt" else "tcp")), "plaintext-test", None
 
 
 def local_endpoint(transport: str) -> LocalEndpoint:
-    """Resolve the documented UDS/TCP public API without a dispatcher seam."""
+    """Resolve an ordinary same-host UDS endpoint without a dispatcher seam."""
     runtime = os_account_home() / ".atm" / "daemon"
     if transport == "sqlite":
         raise SmokeError("sqlite capacity target has no public socket endpoint")
     if transport == "uds":
         return LocalEndpoint("uds", str(runtime / "atm-daemon.sock"))
+    raise SmokeError("TCP benchmark targets must use the direct-peer listener, not local-http.json")
+
+
+def direct_peer_endpoint(identity: DisposableMtlsIdentity | None = None) -> LocalEndpoint:
+    """Return the fixed direct-peer listener rather than the local HTTP record.
+
+    The direct listener is deliberately separate from the capability-authenticated
+    loopback listener.  Pinning this address makes a TCP result prove the
+    DirectPeerTcpConfig path (and, when supplied, the mTLS stream adapter).
+    """
+    return LocalEndpoint(
+        "tcp",
+        ("127.0.0.1", DIRECT_PEER_TCP_PORT),
+        direct_peer=True,
+        tls_server_name=identity.host if identity is not None else None,
+        tls_certificate_bundle=identity.certificate_bundle if identity is not None else None,
+    )
+
+
+def disposable_peer_host() -> str:
+    """Resolve one durable authority for a local disposable mTLS peer.
+
+    A literal address is intentionally forbidden: the same durable hostname is
+    stored in peer configuration, checked by the TLS client, and used by the
+    server-side pin map.  An operator may supply a host only through the
+    explicit benchmark variable; no machine name is embedded in the runner.
+    """
+    host = os.environ.get("ATM_CAPACITY_PEER_HOST", socket.getfqdn()).strip().rstrip(".")
     try:
-        record = json.loads((runtime / "local-http.json").read_text(encoding="utf-8"))
-        address = record["ipv4_loopback"]
-        capability = record["capability_base64url"]
-        if not isinstance(address, str) or not isinstance(capability, str):
-            raise ValueError("missing loopback endpoint or capability")
-        host, port = address.rsplit(":", 1)
-        return LocalEndpoint("tcp", (host, int(port)), capability)
-    except (OSError, ValueError, json.JSONDecodeError, KeyError) as error:
-        raise SmokeError(f"could not read daemon local HTTP endpoint record: {error}") from error
+        socket.inet_pton(socket.AF_INET, host)
+        raise SmokeError("benchmark mTLS authority must be a durable hostname, not an IPv4 address")
+    except OSError:
+        pass
+    if "." not in host or host.startswith(".") or host.endswith("."):
+        raise SmokeError(
+            "benchmark mTLS authority must be a durable DNS or mDNS hostname; "
+            "set ATM_CAPACITY_PEER_HOST explicitly when local DNS is incomplete"
+        )
+    return host
+
+
+def _required_command(command: list[str], env: dict[str, str], description: str) -> None:
+    result = command_result(command, timeout=20.0, env=env)
+    if result["exit_code"] == 0:
+        return
+    detail = result["stderr"].strip() or result["stdout"].strip() or "no diagnostic output"
+    raise SmokeError(f"could not {description}: {detail}")
+
+
+def provision_disposable_mtls_identity(
+    atm: Path,
+    env: dict[str, str],
+    home: Path,
+) -> DisposableMtlsIdentity:
+    """Install a self-contained, short-lived peer configuration before launch.
+
+    This is benchmark control-plane setup, not a transport shortcut: the
+    daemon reads the normal persisted interface/certificate/trust records at
+    startup and the client validates the same certificate and hostname over
+    the fixed direct-peer listener.
+    """
+    openssl = shutil.which("openssl")
+    if openssl is None:
+        raise SmokeError("mTLS benchmark setup requires the system `openssl` executable")
+    host = disposable_peer_host()
+    tls_directory = home / "benchmark-mtls"
+    tls_directory.mkdir(mode=0o700)
+    config = tls_directory / "openssl.cnf"
+    private_key = tls_directory / "identity.key"
+    certificate = tls_directory / "identity.crt"
+    bundle = tls_directory / "identity.pem"
+    config.write_text(
+        "[req]\n"
+        "prompt = no\n"
+        "distinguished_name = subject\n"
+        "x509_extensions = extensions\n"
+        "[subject]\n"
+        f"CN = {host}\n"
+        "[extensions]\n"
+        f"subjectAltName = DNS:{host}\n"
+        "basicConstraints = critical,CA:FALSE\n"
+        "keyUsage = critical,digitalSignature,keyEncipherment\n"
+        "extendedKeyUsage = serverAuth,clientAuth\n",
+        encoding="utf-8",
+    )
+    _required_command(
+        [
+            openssl, "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+            "-keyout", str(private_key), "-out", str(certificate), "-days", "2",
+            "-config", str(config),
+        ],
+        env,
+        "generate disposable mTLS identity",
+    )
+    bundle.write_bytes(certificate.read_bytes() + private_key.read_bytes())
+    try:
+        der = ssl.PEM_cert_to_DER_cert(certificate.read_text(encoding="ascii"))
+    except (OSError, ValueError) as error:
+        raise SmokeError(f"could not calculate disposable mTLS certificate fingerprint: {error}") from error
+    fingerprint = hashlib.sha256(der).hexdigest()
+    _required_command(
+        [
+            str(atm), "peer", "interface", "set", "--bind", f"127.0.0.1:{DIRECT_PEER_TCP_PORT}",
+            "--advertise-host", host, "--enabled",
+        ],
+        env,
+        "save disposable mTLS interface",
+    )
+    _required_command(
+        [
+            str(atm), "peer", "certificate", "init", "--fingerprint", fingerprint,
+            "--private-key-ref", str(bundle), "--yes",
+        ],
+        env,
+        "save disposable mTLS local identity",
+    )
+    _required_command(
+        [
+            str(atm), "peer", "trust", "add", "--host", host,
+            "--fingerprint", fingerprint, "--https-port", str(DIRECT_PEER_TCP_PORT), "--yes",
+        ],
+        env,
+        "save disposable mTLS trusted peer",
+    )
+    return DisposableMtlsIdentity(host, bundle, fingerprint)
 
 
 def read_http_response(
@@ -1046,7 +1197,7 @@ def read_http_response(
 
 
 def submit_connection(endpoint: LocalEndpoint, requests: list[HttpRequest]) -> list[AdmissionResult]:
-    """Submit consecutive real requests over one public local connection."""
+    """Submit consecutive real requests over one selected public connection."""
     started = time.perf_counter()
     capability = (
         f"X-ATM-Local-Capability: {endpoint.capability}\r\n".encode("ascii")
@@ -1056,17 +1207,34 @@ def submit_connection(endpoint: LocalEndpoint, requests: list[HttpRequest]) -> l
     results: list[AdmissionResult] = []
     try:
         family = socket.AF_UNIX if endpoint.kind == "uds" else socket.AF_INET
-        with socket.socket(family, socket.SOCK_STREAM) as stream:
-            stream.settimeout(3.5)
+        with socket.socket(family, socket.SOCK_STREAM) as raw_stream:
+            raw_stream.settimeout(3.5)
             if endpoint.kind == "tcp":
-                stream.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-            stream.connect(endpoint.address)
+                raw_stream.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            raw_stream.connect(endpoint.address)
+            if endpoint.tls_server_name is not None:
+                if endpoint.tls_certificate_bundle is None:
+                    raise SmokeError("direct mTLS endpoint omitted its benchmark identity bundle")
+                context = ssl.create_default_context(
+                    ssl.Purpose.SERVER_AUTH,
+                    cafile=str(endpoint.tls_certificate_bundle),
+                )
+                context.load_cert_chain(str(endpoint.tls_certificate_bundle))
+                stream = context.wrap_socket(raw_stream, server_hostname=endpoint.tls_server_name)
+            else:
+                stream = raw_stream
             frames = []
+            if endpoint.kind == "tcp":
+                host = endpoint.tls_server_name or str(endpoint.address[0])
+                authority = f"Host: {host}:{endpoint.address[1]}\r\n".encode("ascii")
+            else:
+                authority = b"Host: localhost\r\n"
             for index, request in enumerate(requests):
                 connection = "close" if index + 1 == len(requests) else "keep-alive"
                 frames.append(
                     f"POST {request.path} HTTP/1.1\r\n".encode("ascii")
                     + b"Content-Type: application/json\r\n"
+                    + authority
                     + capability
                     + f"Content-Length: {len(request.body)}\r\nConnection: {connection}\r\n\r\n".encode("ascii")
                     + request.body
@@ -1091,6 +1259,8 @@ def submit_connection(endpoint: LocalEndpoint, requests: list[HttpRequest]) -> l
                         response_bytes=response_bytes,
                         response_summary=response_summary,
                     ))
+            if stream is not raw_stream:
+                stream.close()
         return results
     except (OSError, SmokeError) as error:
         return results + [AdmissionResult(
@@ -1587,6 +1757,7 @@ def run_capacity(
     daemon_output: DaemonOutputCapture | None = None
     before: list[int] | None = None
     snapshot: VerifiedSnapshot | None = None
+    mtls_identity: DisposableMtlsIdentity | None = None
     evidence: dict[str, Any] = {
         "schema_version": 2,
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -1672,13 +1843,17 @@ def run_capacity(
         )
         before = count_atm_daemon_processes()
         home.mkdir(parents=True, exist_ok=False)
-        if launch_peer_wire_security == "mutual-tls":
-            fingerprint = run_lifecycle_phase(
+        if benchmark_target == "tcp-tls":
+            mtls_identity = run_lifecycle_phase(
                 evidence,
                 "snapshot",
-                lambda: regenerate_mtls_identity(benchmark_account, atm),
+                lambda: provision_disposable_mtls_identity(atm, env, home),
             )
-            evidence["benchmark_mtls_identity"] = {"fingerprint": fingerprint, "path": "account-local"}
+            evidence["disposable_mtls"] = {
+                "authority": mtls_identity.host,
+                "fingerprint_sha256": mtls_identity.fingerprint,
+                "direct_peer_port": DIRECT_PEER_TCP_PORT,
+            }
         # The pre-roster daemon is deliberately short-lived: it initializes
         # the account database, then is quiesced before the public snapshot
         # owner copies the clean baseline.
@@ -1714,20 +1889,27 @@ def run_capacity(
                 )
             }
         else:
-            endpoint = local_endpoint(transport)
+            endpoint = (
+                direct_peer_endpoint(mtls_identity if peer_wire_security == "mutual-tls" else None)
+                if transport == "tcp"
+                else local_endpoint(transport)
+            )
             evidence["endpoint"] = {
                 "transport": endpoint.kind,
                 "address": endpoint.address,
+                "direct_peer": endpoint.direct_peer,
+                "tls_server_name": endpoint.tls_server_name,
             }
             if endpoint.kind == "uds" and not Path(str(endpoint.address)).exists():
                 raise SmokeError(f"daemon did not publish public local socket {endpoint.address}")
-            evidence["operational_checks"]["cached_roster_heartbeat"] = run_lifecycle_phase(
-                evidence,
-                "profile",
-                lambda: run_cached_roster_heartbeat_probe(
-                    endpoint, home, frames_per_connection, workers, roster,
-                ),
-            )
+            if not endpoint.direct_peer:
+                evidence["operational_checks"]["cached_roster_heartbeat"] = run_lifecycle_phase(
+                    evidence,
+                    "profile",
+                    lambda: run_cached_roster_heartbeat_probe(
+                        endpoint, home, frames_per_connection, workers, roster,
+                    ),
+                )
             profile = run_lifecycle_phase(
                 evidence,
                 "profile",

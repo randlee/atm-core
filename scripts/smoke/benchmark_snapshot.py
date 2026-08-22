@@ -154,8 +154,8 @@ def _database_facts(path: Path, label: str) -> tuple[int, int]:
     _assert_restore_sidecars_absent(path)
     try:
         # Every caller has already established that no live WAL state exists.
-        # Immutable reads keep fact collection from creating a shared-memory
-        # sidecar for a clean database whose persistent journal mode is WAL.
+        # Immutable reads avoid manufacturing a shared-memory sidecar when a
+        # clean WAL-mode snapshot is inspected on macOS.
         uri = f"{path.resolve().as_uri()}?mode=ro&immutable=1"
         with closing(sqlite3.connect(uri, uri=True)) as connection:
             quick_check = connection.execute("PRAGMA quick_check;").fetchone()
