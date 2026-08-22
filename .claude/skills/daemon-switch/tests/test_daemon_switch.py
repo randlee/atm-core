@@ -144,7 +144,7 @@ class MacosDevelopmentSigningTests(unittest.TestCase):
     def test_non_macos_has_no_signing_gate(self) -> None:
         daemon = Path("/candidate/atm-daemon")
         with (
-            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Linux"),
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="FreeBSD"),
             mock.patch.object(DAEMON_SWITCH, "macos_binary_has_development_signature") as signed,
         ):
             DAEMON_SWITCH.require_macos_development_signatures(Path("/candidate/atm"), daemon)
@@ -504,7 +504,7 @@ class TemporaryLaunchControlPlaneTests(unittest.TestCase):
         with (
             mock.patch.object(DAEMON_SWITCH, "temporary_launch_journal", return_value=self.journal),
             mock.patch.object(DAEMON_SWITCH, "selected_matched_pair", return_value=(self.cli, self.daemon)),
-            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Linux"),
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="FreeBSD"),
             mock.patch.object(DAEMON_SWITCH, "run_service") as service,
         ):
             with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "no direct-process fallback"):
@@ -902,6 +902,165 @@ class WindowsTemporaryLaunchAdapterTests(unittest.TestCase):
 
         with self.assertRaisesRegex(DAEMON_SWITCH.TemporaryLaunchError, "changed; refusing restore"):
             self.adapter.restore_exact(self.args, session)
+
+
+class LinuxTemporaryLaunchAdapterTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.cli = self.root / "atm"
+        self.daemon = self.root / "atm-daemon"
+        for binary in (self.cli, self.daemon):
+            binary.write_bytes(binary.name.encode("utf-8"))
+            binary.chmod(0o700)
+        self.args = argparse.Namespace(
+            yes=True,
+            service="atm-daemon-test",
+            peer_wire_security=DAEMON_SWITCH.PeerWireSecurity.PLAINTEXT_TEST,
+            repair_orphan=False,
+        )
+        self.fragment = self.root / "units" / "atm-daemon-test.service"
+        self.fragment.parent.mkdir()
+        self.fragment.write_text(
+            f"[Service]\nExecStart={self.daemon} --log-format json\n",
+            encoding="utf-8",
+        )
+        self.user_units = self.root / "config" / "systemd" / "user"
+        self.loaded_dropins: list[Path] = []
+        self.reloads = 0
+        self.before_reload: object | None = None
+        self.adapter = DAEMON_SWITCH.LinuxSystemdUserAdapter(self.user_units, self.run_systemctl)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def run_systemctl(self, command: object, _timeout: float) -> object:
+        values = list(command)
+        if values[2] == "show":
+            dropins = " ".join(str(path) for path in self.loaded_dropins)
+            stdout = f"FragmentPath={self.fragment}\nDropInPaths={dropins}\n"
+            return subprocess.CompletedProcess(values, 0, stdout, "")
+        if values[2] == "daemon-reload":
+            if callable(self.before_reload):
+                self.before_reload()
+            self.reloads += 1
+            directory = self.user_units / "atm-daemon-test.service.d"
+            self.loaded_dropins = sorted(directory.glob("*.conf")) if directory.exists() else []
+            return subprocess.CompletedProcess(values, 0, "", "")
+        raise AssertionError(f"unexpected systemctl command: {values}")
+
+    def captured_session(self) -> object:
+        captured = self.adapter.capture(
+            self.args,
+            self.cli,
+            self.daemon,
+            self.args.peer_wire_security,
+        )
+        return DAEMON_SWITCH.TemporaryLaunchSession.captured(
+            peer_wire_security=self.args.peer_wire_security,
+            platform="Linux",
+            account_id="uid:501",
+            service=self.args.service,
+            cli_path=self.cli,
+            cli_digest=DAEMON_SWITCH.sha256_file(self.cli),
+            daemon_path=self.daemon,
+            daemon_digest=DAEMON_SWITCH.sha256_file(self.daemon),
+            launch_spec=captured,
+        )
+
+    def test_overlay_preserves_source_and_replaces_only_exec_start(self) -> None:
+        original = self.fragment.read_bytes()
+        session = self.captured_session().transition(DAEMON_SWITCH.TemporaryLaunchPhase.STOPPED)
+        overlay_spec = self.adapter.apply_overlay(self.args, session)
+        session = session.with_overlay(overlay_spec)
+
+        self.assertEqual(self.fragment.read_bytes(), original)
+        self.assertEqual(
+            Path(overlay_spec.overlay_reference).read_text(encoding="utf-8"),
+            f"[Service]\nExecStart=\nExecStart={self.daemon} --log-format json "
+            "--peer-wire-security plaintext-test\n",
+        )
+        self.adapter.activate_overlay(self.args, session)
+        self.assertEqual(
+            [dropin.resolve() for dropin in self.loaded_dropins],
+            [Path(overlay_spec.overlay_reference).resolve()],
+        )
+
+        self.adapter.restore_exact(self.args, session)
+        self.adapter.restore_exact(self.args, session)
+
+        self.assertEqual(self.fragment.read_bytes(), original)
+        self.assertFalse(Path(overlay_spec.overlay_reference).exists())
+        self.assertEqual(self.loaded_dropins, [])
+
+    def test_capture_rejects_existing_dropin_and_preexisting_peer_wire_mode(self) -> None:
+        other = self.root / "other.conf"
+        other.write_text("[Service]\n", encoding="utf-8")
+        self.loaded_dropins = [other]
+        with self.assertRaisesRegex(DAEMON_SWITCH.TemporaryLaunchError, "unsupported or changed drop-ins"):
+            self.adapter.capture(self.args, self.cli, self.daemon, self.args.peer_wire_security)
+
+        self.loaded_dropins = []
+        self.fragment.write_text(
+            f"[Service]\nExecStart={self.daemon} --peer-wire-security mutual-tls\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(DAEMON_SWITCH.TemporaryLaunchError, "already selects"):
+            self.adapter.capture(self.args, self.cli, self.daemon, self.args.peer_wire_security)
+
+        self.fragment.write_text(
+            f"[Service]\nExecStart={self.daemon} --state %h/atm\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(DAEMON_SWITCH.TemporaryLaunchError, "unsupported quoting or shell-like"):
+            self.adapter.capture(self.args, self.cli, self.daemon, self.args.peer_wire_security)
+
+        self.fragment.write_text(
+            f"[Service]\nExecStart={self.daemon} --state '/tmp/atm state'\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(DAEMON_SWITCH.TemporaryLaunchError, "unsupported quoting or shell-like"):
+            self.adapter.capture(self.args, self.cli, self.daemon, self.args.peer_wire_security)
+
+    def test_restore_refuses_operator_changed_source_unit(self) -> None:
+        session = self.captured_session().transition(DAEMON_SWITCH.TemporaryLaunchPhase.STOPPED)
+        session = session.with_overlay(self.adapter.apply_overlay(self.args, session))
+        self.adapter.activate_overlay(self.args, session)
+        self.fragment.write_text(
+            f"[Service]\nExecStart={self.daemon} --operator-change\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(DAEMON_SWITCH.TemporaryLaunchError, "source unit changed"):
+            self.adapter.restore_exact(self.args, session)
+
+    def test_begin_journals_dropin_before_fake_systemd_reload(self) -> None:
+        journal = DAEMON_SWITCH.TemporaryLaunchJournal(self.root / "state" / "temporary-launch.json")
+
+        def assert_durable_overlay() -> None:
+            active = journal.load()
+            assert active is not None
+            self.assertEqual(active.phase, DAEMON_SWITCH.TemporaryLaunchPhase.OVERLAY_APPLIED)
+            self.assertIsNotNone(active.overlay_reference)
+            self.assertIsNotNone(active.overlay_digest)
+
+        self.before_reload = assert_durable_overlay
+        with (
+            mock.patch.object(DAEMON_SWITCH, "temporary_launch_journal", return_value=journal),
+            mock.patch.object(DAEMON_SWITCH, "selected_matched_pair", return_value=(self.cli, self.daemon)),
+            mock.patch.object(DAEMON_SWITCH, "temporary_launch_adapter", return_value=self.adapter),
+            mock.patch.object(DAEMON_SWITCH, "account_identifier", return_value="uid:501"),
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Linux"),
+            mock.patch.object(DAEMON_SWITCH, "run_service"),
+            mock.patch.object(DAEMON_SWITCH, "require_stopped_daemon"),
+            mock.patch.object(DAEMON_SWITCH, "wait_for_temporary_launch", return_value=(True, "ready")),
+            redirect_stdout(io.StringIO()),
+        ):
+            DAEMON_SWITCH.begin_temporary_launch(self.args)
+
+        active = journal.load()
+        assert active is not None
+        self.assertEqual(active.phase, DAEMON_SWITCH.TemporaryLaunchPhase.OVERLAY_STARTED)
 
 
 if __name__ == "__main__":

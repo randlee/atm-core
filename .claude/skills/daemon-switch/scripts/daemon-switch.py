@@ -51,6 +51,7 @@ from temporary_launch_windows import (  # noqa: E402
     parse_windows_command_line,
     quote_windows_command_line,
 )
+from temporary_launch_linux import LinuxSystemdUserAdapter  # noqa: E402
 
 
 WINDOWS_SERVICE_NOT_FOUND = 1060
@@ -120,6 +121,11 @@ def temporary_launch_adapter(_args: argparse.Namespace) -> TemporaryLaunchAdapte
         )
     if platform.system() == "Windows":
         return WindowsScmAdapter(lambda command, timeout: run(command, timeout=timeout))
+    if platform.system() == "Linux":
+        return LinuxSystemdUserAdapter(
+            systemd_user_config_directory(),
+            lambda command, timeout: run(command, timeout=timeout),
+        )
     raise SwitchError(
         "temporary-launch requires a reviewed platform adapter; no direct-process fallback is available"
     )
@@ -247,6 +253,12 @@ def state_path() -> Path:
     else:
         root = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
     return root / "atm" / "daemon-switch.json"
+
+
+def systemd_user_config_directory() -> Path:
+    """Return the current account's only user-service configuration root."""
+    root = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+    return root / "systemd" / "user"
 
 
 def load_state() -> dict[str, str]:
