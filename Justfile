@@ -1,14 +1,27 @@
 set windows-shell := ["pwsh", "-NoLogo", "-Command"]
 
-python_cmd := if os_family() == "windows" { "python" } else { "python3" }
-clippy_cmd := if os_family() == "windows" { "cargo clippy --workspace --all-targets --target x86_64-pc-windows-msvc -- -D warnings" } else { "cargo clippy --workspace --all-targets -- -D warnings" }
+# Homebrew is absent from non-interactive macOS account PATHs. Prepending its
+# standard location still leaves CI/Linux's python3.14 discoverable, while the
+# bootstrap script verifies the exact patch release before doing any work.
+seed_python_cmd := if os_family() == "windows" { "py -3.14" } else { "env PATH=/opt/homebrew/bin:$PATH python3.14" }
+# Keep the bootstrap venv first in PATH as well as executing its Python
+# directly. The path is absolute so helpers remain pinned after changing cwd;
+# PyO3 additionally receives its interpreter explicitly.
+python_cmd := if os_family() == "windows" { "$env:PATH = \"$PWD\\.bootstrap-venv\\Scripts;\" + $env:PATH; & \"$PWD\\.bootstrap-venv\\Scripts\\python.exe\"" } else { "env PATH=\"$PWD/.bootstrap-venv/bin:$PATH\" \"$PWD/.bootstrap-venv/bin/python\"" }
+clippy_cmd := if os_family() == "windows" { "$env:PATH = \"$PWD\\.bootstrap-venv\\Scripts;\" + $env:PATH; $env:PYO3_PYTHON = \"$PWD\\.bootstrap-venv\\Scripts\\python.exe\"; cargo clippy --workspace --all-targets --target x86_64-pc-windows-msvc -- -D warnings" } else { "env PATH=\"$PWD/.bootstrap-venv/bin:$PATH\" PYO3_PYTHON=\"$PWD/.bootstrap-venv/bin/python\" cargo clippy --workspace --all-targets -- -D warnings" }
 
 # Show the curated repo task help.
 default: help
 
 # Show the curated repo task help.
 help:
-    {{python_cmd}} .just/print_help.py
+    {{seed_python_cmd}} .just/print_help.py
+
+# Install and verify the exact toolchain/dependency contract shared by CI and
+# deterministic benchmark accounts. The seed Python, Rust, and Just versions
+# must already match tools/bootstrap.toml; this recipe never selects "latest".
+bootstrap *args:
+    {{seed_python_cmd}} tools/bootstrap.py {{args}}
 
 [private]
 _fmt-write:
