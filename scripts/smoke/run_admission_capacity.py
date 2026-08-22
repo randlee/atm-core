@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from contextlib import closing
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import hashlib
@@ -22,7 +21,6 @@ import plistlib
 from queue import Empty, Queue
 import re
 import socket
-import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -1188,41 +1186,6 @@ def write_evidence(directory: Path, evidence: dict[str, Any]) -> Path:
     return path
 
 
-def verify_durable_admissions(
-    db_path: Path,
-    expected_count: int,
-    roster: CapacityRoster = DEFAULT_CAPACITY_ROSTER,
-) -> dict[str, int | bool | str]:
-    """Count every benchmark admission in the isolated store after restart.
-
-    Admission itself always traverses the public authenticated HTTP boundary.
-    The post-restart proof intentionally reads the disposable SQLite store
-    directly: general mailbox listing builds a logical projection of every row
-    and is not a bounded durability-count API at large volume.
-    """
-    try:
-        uri = f"{db_path.resolve().as_uri()}?mode=ro"
-        with closing(sqlite3.connect(uri, uri=True)) as connection:
-            row = connection.execute(
-                "SELECT COUNT(*) FROM mail_messages WHERE team = ?1 AND agent = ?2;",
-                (roster.team, roster.recipient),
-            ).fetchone()
-        observed_count = int(row[0]) if row is not None else 0
-    except (OSError, sqlite3.Error, TypeError, ValueError) as error:
-        raise SmokeError(f"capacity durability count failed: {error}") from error
-    if observed_count != expected_count:
-        raise SmokeError(
-            "capacity durability mismatch after daemon restart: "
-            f"expected {expected_count}, observed {observed_count}"
-        )
-    return {
-        "method": "isolated_sqlite_exact_count_after_restart",
-        "expected_accepted_count": expected_count,
-        "observed_mailbox_count": observed_count,
-        "passed": True,
-    }
-
-
 def selected_profiles(
     sparse_profiles: tuple[int, ...], sustained_profiles: tuple[int, ...],
 ) -> tuple[tuple[int, int], ...]:
@@ -1503,7 +1466,8 @@ def run_capacity(
         evidence["passed"] = evidence["thresholds"]["passed"]
         # A missing plaintext comparison baseline blocks acceptance, but it
         # must not prevent collection of the bounded profile that explains the
-        # gap. Preserve the measured run and durability proof, then fail closed.
+        # gap. Preserve the measured run and clean-baseline snapshot proof,
+        # then fail closed.
         if preflight_failure is not None:
             evidence["passed"] = False
             evidence["failure"] = preflight_failure

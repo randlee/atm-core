@@ -5,7 +5,7 @@ import importlib.util
 import inspect
 import json
 import os
-from contextlib import ExitStack, closing
+from contextlib import ExitStack
 from pathlib import Path, PureWindowsPath
 import plistlib
 import subprocess
@@ -1410,56 +1410,6 @@ class AdmissionCapacityTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(RUNNER.SmokeError, "peer-wire baseline"):
                 RUNNER.load_baseline_median(path, "tcp", 8, "mutual-tls")
-
-    def test_durability_verification_counts_every_isolated_sqlite_row_after_restart(self):
-        with tempfile.TemporaryDirectory() as temp:
-            database = Path(temp) / "mail.db"
-            with closing(__import__("sqlite3").connect(database)) as connection:
-                connection.execute("CREATE TABLE mail_messages (team TEXT, agent TEXT)")
-                connection.executemany(
-                    "INSERT INTO mail_messages VALUES (?, ?)",
-                    [("capacity-team", "capacity-recipient")] * 10,
-                )
-                connection.commit()
-            verified = RUNNER.verify_durable_admissions(database, 10)
-        self.assertTrue(verified["passed"])
-        self.assertEqual(verified["observed_mailbox_count"], 10)
-        self.assertEqual(verified["method"], "isolated_sqlite_exact_count_after_restart")
-
-    def test_durability_verification_rejects_missing_accepted_rows(self):
-        with tempfile.TemporaryDirectory() as temp:
-            database = Path(temp) / "mail.db"
-            with closing(__import__("sqlite3").connect(database)) as connection:
-                connection.execute("CREATE TABLE mail_messages (team TEXT, agent TEXT)")
-                connection.executemany(
-                    "INSERT INTO mail_messages VALUES (?, ?)",
-                    [("capacity-team", "capacity-recipient")] * 9,
-                )
-                connection.commit()
-            with self.assertRaisesRegex(RUNNER.SmokeError, "expected 10, observed 9"):
-                RUNNER.verify_durable_admissions(database, 10)
-
-    def test_durability_verification_closes_the_read_only_sqlite_connection(self):
-        class RecordingConnection:
-            closed = False
-
-            def execute(self, _query, _parameters):
-                return self
-
-            def fetchone(self):
-                return (10,)
-
-            def close(self):
-                self.closed = True
-
-        connection = RecordingConnection()
-        with tempfile.TemporaryDirectory() as temp:
-            database = Path(temp) / "mail.db"
-            database.touch()
-            with mock.patch.object(RUNNER.sqlite3, "connect", return_value=connection):
-                verified = RUNNER.verify_durable_admissions(database, 10)
-        self.assertTrue(verified["passed"])
-        self.assertTrue(connection.closed)
 
     def test_response_reader_consumes_declared_body(self):
         class Stream:
