@@ -7,6 +7,7 @@ variable or a convenient path argument.
 """
 from __future__ import annotations
 
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
@@ -133,7 +134,7 @@ def _database_facts(path: Path, label: str) -> tuple[int, int]:
     _require_regular_file(path, label)
     try:
         uri = f"{path.resolve().as_uri()}?mode=ro"
-        with sqlite3.connect(uri, uri=True) as connection:
+        with closing(sqlite3.connect(uri, uri=True)) as connection:
             quick_check = connection.execute("PRAGMA quick_check;").fetchone()
             user_version = connection.execute("PRAGMA user_version;").fetchone()
             page_count = connection.execute("PRAGMA page_count;").fetchone()
@@ -265,9 +266,10 @@ def create_verified_snapshot() -> VerifiedSnapshot:
     try:
         staging.mkdir(mode=0o700)
         destination = staging / MAIL_DATABASE_NAME
-        with sqlite3.connect(f"file:{source.resolve()}?mode=ro", uri=True) as reader:
-            with sqlite3.connect(destination) as writer:
+        with closing(sqlite3.connect(f"file:{source.resolve()}?mode=ro", uri=True)) as reader:
+            with closing(sqlite3.connect(destination)) as writer:
                 reader.backup(writer)
+                writer.commit()
         _fsync_file(destination, "staged database")
         user_version, page_count = _database_facts(destination, "staged database")
         byte_count, sha256 = _sha256(destination)
@@ -277,8 +279,26 @@ def create_verified_snapshot() -> VerifiedSnapshot:
         )
         _fsync_directory(staging, "staging directory")
         os.replace(staging, final)
-        _fsync_directory(root, "snapshot root")
-    except (OSError, sqlite3.Error, BenchmarkSnapshotError) as error:
+        try:
+            _fsync_directory(root, "snapshot root")
+        except BenchmarkSnapshotError as error:
+            raise BenchmarkSnapshotError(
+                "benchmark snapshot was published at "
+                f"{final}, but parent-directory durability confirmation failed: {error}; "
+                "do not restore it until it has been independently re-verified"
+            ) from error
+    except BenchmarkSnapshotError as error:
+        if final.exists() or final.is_symlink():
+            raise
+        raise BenchmarkSnapshotError(
+            f"benchmark snapshot creation failed; preserved staging material at {staging}: {error}"
+        ) from error
+    except (OSError, sqlite3.Error) as error:
+        if final.exists() or final.is_symlink():
+            raise BenchmarkSnapshotError(
+                "benchmark snapshot publication reached "
+                f"{final}; staging no longer exists. Inspect that path before retrying: {error}"
+            ) from error
         raise BenchmarkSnapshotError(
             f"benchmark snapshot creation failed; preserved staging material at {staging}: {error}"
         ) from error
@@ -320,9 +340,10 @@ def restore_verified_snapshot(snapshot_id: str) -> VerifiedSnapshot:
     _assert_restore_sidecars_absent(live_database)
     staging = account.durable_state_root / f".{MAIL_DATABASE_NAME}.restore-staging-{secrets.token_hex(8)}"
     try:
-        with sqlite3.connect(f"file:{snapshot.database.resolve()}?mode=ro", uri=True) as reader:
-            with sqlite3.connect(staging) as writer:
+        with closing(sqlite3.connect(f"file:{snapshot.database.resolve()}?mode=ro", uri=True)) as reader:
+            with closing(sqlite3.connect(staging)) as writer:
                 reader.backup(writer)
+                writer.commit()
         _fsync_file(staging, "restore staging database")
         user_version, page_count = _database_facts(staging, "restore staging database")
         byte_count, sha256 = _sha256(staging)
@@ -331,8 +352,27 @@ def restore_verified_snapshot(snapshot_id: str) -> VerifiedSnapshot:
         ):
             raise BenchmarkSnapshotError("restore staging database does not match the verified snapshot")
         os.replace(staging, live_database)
-        _fsync_directory(account.durable_state_root, "durable state root")
-    except (OSError, sqlite3.Error, BenchmarkSnapshotError) as error:
+        try:
+            _fsync_directory(account.durable_state_root, "durable state root")
+        except BenchmarkSnapshotError as error:
+            raise BenchmarkSnapshotError(
+                "benchmark snapshot activation completed at "
+                f"{live_database}, but parent-directory durability confirmation failed: {error}; "
+                "the benchmark daemon must remain stopped while the account is inspected"
+            ) from error
+    except BenchmarkSnapshotError as error:
+        if not staging.exists() and live_database.exists():
+            raise
+        raise BenchmarkSnapshotError(
+            f"benchmark snapshot restore failed; preserved staging material at {staging}: {error}"
+        ) from error
+    except (OSError, sqlite3.Error) as error:
+        if not staging.exists() and live_database.exists():
+            raise BenchmarkSnapshotError(
+                "benchmark snapshot activation reached "
+                f"{live_database}; restore staging no longer exists. Keep the benchmark daemon stopped and "
+                f"inspect the active database before retrying: {error}"
+            ) from error
         raise BenchmarkSnapshotError(
             f"benchmark snapshot restore failed; preserved staging material at {staging}: {error}"
         ) from error
