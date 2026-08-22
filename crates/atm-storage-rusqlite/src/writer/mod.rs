@@ -19,11 +19,6 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 pub(crate) const CHANNEL_CAPACITY: usize = 256;
-// Coalesce writes that arrive immediately after the first admission so one
-// SQLite commit can durably acknowledge the concurrent burst. This is private
-// to the sole writer ingress: callers, HTTP, TLS, and benchmark modes cannot
-// tune or bypass it.
-const BATCH_TIME_BUDGET: Duration = Duration::from_millis(1);
 // Bound one write request long enough for a short lock wait + flush cycle while
 // still surfacing wedged durable-state work as an actionable timeout.
 const WRITE_OP_DEADLINE: Duration = Duration::from_secs(10);
@@ -481,24 +476,11 @@ fn collect_batch(
     batch: &mut Vec<QueuedWrite>,
     shutting_down: &mut bool,
 ) {
-    collect_batch_with_coalescing_window(receiver, batch, shutting_down, || {
-        // This is a dedicated synchronous writer thread, not a Tokio worker.
-        // Sleeping here retains the bounded 1 ms admission coalescing contract
-        // without creating an inner Tokio timer runtime or blocking an async
-        // executor.
-        thread::sleep(BATCH_TIME_BUDGET);
-    });
-}
-
-fn collect_batch_with_coalescing_window<F>(
-    receiver: &mut tokio::sync::mpsc::Receiver<WriterMessage>,
-    batch: &mut Vec<QueuedWrite>,
-    shutting_down: &mut bool,
-    wait_for_more: F,
-) where
-    F: FnOnce(),
-{
-    let mut wait_for_more = Some(wait_for_more);
+    // The bounded async ingress already provides backpressure. The dedicated
+    // writer drains the admitted burst before opening one ordered durable
+    // transaction, but never creates an extra Tokio timer runtime or adds a
+    // scheduler-dependent delay to every commit. Later arrivals join the next
+    // transaction in the same sole-writer sequence.
     loop {
         match receiver.try_recv() {
             Ok(WriterMessage::Submit { op, reply }) => {
@@ -514,12 +496,6 @@ fn collect_batch_with_coalescing_window<F>(
                 return;
             }
             Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {
-                if !*shutting_down {
-                    if let Some(wait_for_more) = wait_for_more.take() {
-                        wait_for_more();
-                        continue;
-                    }
-                }
                 return;
             }
         }
@@ -704,24 +680,6 @@ mod tests {
             receiver.try_recv(),
             Ok(WriterMessage::Submit { .. })
         ));
-    }
-
-    #[test]
-    fn batch_collection_includes_write_arriving_during_coalescing_window() {
-        let (sender, mut receiver) = tokio::sync::mpsc::channel(8);
-        sender.try_send(queued_write()).expect("first queued write");
-        let first = first_queued_write(&mut receiver);
-        let mut batch = vec![first];
-        let mut shutting_down = false;
-
-        collect_batch_with_coalescing_window(&mut receiver, &mut batch, &mut shutting_down, || {
-            sender
-                .try_send(queued_write())
-                .expect("write inside coalescing window")
-        });
-
-        assert_eq!(batch.len(), 2);
-        assert!(!shutting_down);
     }
 
     #[test]
