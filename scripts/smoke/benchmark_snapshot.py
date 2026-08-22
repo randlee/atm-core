@@ -74,8 +74,8 @@ def _require_regular_file(path: Path, label: str) -> None:
 
 
 def _snapshot_root(account: BenchmarkAccount) -> Path:
-    parent = account.home / ".atm"
-    _require_directory(parent, "account directory")
+    parent = account.home
+    _require_directory(parent, "benchmark root")
     root = parent / SNAPSHOT_ROOT_NAME
     if root.exists() or root.is_symlink():
         _require_directory(root, "root")

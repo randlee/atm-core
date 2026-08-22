@@ -69,7 +69,7 @@ class BenchmarkSnapshotTests(unittest.TestCase):
                 with self.assertRaisesRegex(SNAPSHOT.BenchmarkSnapshotError, "preserved staging material"):
                     self._snapshot(account)
 
-            root = account.home / ".atm" / SNAPSHOT.SNAPSHOT_ROOT_NAME
+            root = account.home / SNAPSHOT.SNAPSHOT_ROOT_NAME
             self.assertEqual(list(root.glob("snapshot-*")), [])
             staged = list(root.glob(".snapshot-*.staging"))
             self.assertEqual(len(staged), 1)
@@ -172,7 +172,7 @@ class BenchmarkSnapshotTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             account = self._account(Path(temporary))
             self._database(account, 1)
-            root = account.home / ".atm" / SNAPSHOT.SNAPSHOT_ROOT_NAME
+            root = account.home / SNAPSHOT.SNAPSHOT_ROOT_NAME
             root.mkdir()
             with (
                 mock.patch.object(SNAPSHOT, "require_benchmark_account", return_value=account),

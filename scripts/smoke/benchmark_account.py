@@ -39,27 +39,27 @@ class BenchmarkAccount:
 
 
 def account_home(home: Path | None = None) -> Path:
-    """Return an explicit disposable root, or the OS home for standalone use."""
+    """Return an explicit disposable ATM root, or the OS account's ATM root."""
     if home is not None:
         return home.resolve()
     if os.name == "nt":
         profile = os.environ.get("USERPROFILE", "").strip()
         if not profile:
             raise BenchmarkAccountError("could not resolve the Windows benchmark-account profile")
-        return Path(profile).resolve()
+        return (Path(profile) / ".atm").resolve()
     import pwd
 
-    return Path(pwd.getpwuid(os.geteuid()).pw_dir).resolve()
+    return (Path(pwd.getpwuid(os.geteuid()).pw_dir) / ".atm").resolve()
 
 
 def canonical_durable_state_root(home: Path | None = None) -> Path:
-    """Return the ADR-026 durable state root for exactly one OS account."""
-    return (home or account_home()) / ".atm" / "db"
+    """Return the selected ATM root's durable database directory."""
+    return (home or account_home()) / "db"
 
 
 def manifest_path(home: Path | None = None) -> Path:
-    """Return the one account-local manifest location; callers cannot override it."""
-    return (home or account_home()) / ".atm" / MANIFEST_NAME
+    """Return the selected ATM root's one benchmark-account manifest location."""
+    return (home or account_home()) / MANIFEST_NAME
 
 
 def current_account_id() -> str:
@@ -261,8 +261,7 @@ def _parse_manifest(path: Path, home: Path) -> BenchmarkAccount:
 def require_benchmark_account(home: Path | None = None) -> BenchmarkAccount:
     """Validate the current account before any benchmark setup side effect."""
     selected_home = account_home(home)
-    manifest_parent = selected_home / ".atm"
-    _verify_directory(manifest_parent, "manifest directory")
+    _verify_directory(selected_home, "benchmark root")
     return _parse_manifest(manifest_path(selected_home), selected_home)
 
 
@@ -279,7 +278,7 @@ def bootstrap_benchmark_account(home: Path | None = None) -> BenchmarkAccount:
         raise BenchmarkAccountError(
             "refusing to bootstrap a benchmark manifest beside an existing ATM durable state"
         )
-    parent = selected_home / ".atm"
+    parent = selected_home
     if parent.exists():
         _verify_directory(parent, "manifest directory")
     else:
