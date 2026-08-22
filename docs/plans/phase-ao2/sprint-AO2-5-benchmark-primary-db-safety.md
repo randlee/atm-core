@@ -164,6 +164,36 @@ if it does, the result is invalid rather than a performance result.
    M4, M5, and Windows when available; restore the benchmark account after an
    injected failure. Depends on 4.
 
+### AO2.5.4 daemon-switch launch-mode contract
+
+`daemon-switch` is the only lifecycle owner for a physical benchmark. Before
+the benchmark's pre-profile snapshot it must select the matched signed release
+pair, stop that benchmark account's managed daemon, and verify the stop. It
+then starts that same selected service with one temporary, explicit
+`--peer-wire-security` launch argument for either `plaintext-test` or
+`mutual-tls`. The runner must not start a child daemon, set an environment
+variable to choose peer-wire security, choose an alternate endpoint/root, or
+create a second daemon.
+
+The temporary launch argument is an operational overlay, not durable service
+configuration. `daemon-switch` records the original platform service launch
+configuration before applying the overlay, verifies the selected CLI/daemon
+pair and doctor mode after restart, and restores the exact original
+configuration on normal completion and every failure path before reporting the
+result. Platform adapters may differ (LaunchAgent plist on macOS, service
+configuration on Windows, user-service drop-in on Linux), but all must provide
+the same transaction: capture -> stopped proof -> overlay -> paired start and
+doctor -> quiesce -> restore original configuration -> paired start and
+doctor. Unsupported or ambiguous platform configuration fails closed; there
+is no direct-process fallback.
+
+The harness receives only a typed temporary peer-wire mode, not arbitrary
+arguments. It asks `daemon-switch` for the paired release transition and
+retains the returned lifecycle/evidence record. Snapshot, roster setup,
+daemon transitions, and restore are timed phases with monotonic start/end
+timestamps; `run_profile` starts only after the post-snapshot doctor proof and
+ends before quiesce/restore.
+
 ## Acceptance criteria and test matrix
 
 | Case | Required proof |
