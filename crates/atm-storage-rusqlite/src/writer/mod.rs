@@ -507,10 +507,10 @@ async fn collect_batch(
     shutting_down: &mut bool,
 ) {
     let deadline = tokio::time::Instant::now() + BATCH_TIME_BUDGET;
-    // The admission channel is already bounded. Drain every write that has
-    // arrived during the fixed coalescing window into one durable commit;
-    // an arbitrary operation-count ceiling would turn a burst into repeated
-    // fsyncs without improving admission safety or backpressure.
+    // Drain an already-queued bounded burst without delay. Once the queue is
+    // momentarily empty, wait only until this fixed deadline for a new arrival
+    // to join the commit. A saturated producer is bounded by channel capacity,
+    // rather than this idle-arrival deadline.
     loop {
         match receiver.try_recv() {
             Ok(WriterMessage::Submit { op, reply }) => {
