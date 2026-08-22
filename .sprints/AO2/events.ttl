@@ -80,3 +80,7 @@ triage:r10 a triage:Resolution ;
 triage:r11 a triage:Resolution ;
     triage:resolves <urn:atm:triage:finding/RBQA-F001> ;
     triage:resolvedAt "2026-08-20T21:55:00Z"^^xsd:dateTime .
+triage:a6 a triage:Assignment ;
+    triage:ofSprint triage:AO2.5 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-22T00:43:00Z"^^xsd:dateTime .
