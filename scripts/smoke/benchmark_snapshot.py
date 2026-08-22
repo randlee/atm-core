@@ -152,7 +152,11 @@ def _sha256(path: Path) -> tuple[int, str]:
 def _database_facts(path: Path, label: str) -> tuple[int, int]:
     _require_regular_file(path, label)
     try:
-        uri = f"{path.resolve().as_uri()}?mode=ro"
+        # Completed snapshots are deliberately sidecar-free.  Mark the
+        # verification connection immutable so SQLite reads the checkpointed
+        # main database without attempting to open a missing WAL shared-memory
+        # sidecar.
+        uri = f"{path.resolve().as_uri()}?mode=ro&immutable=1"
         with closing(sqlite3.connect(uri, uri=True)) as connection:
             quick_check = connection.execute("PRAGMA quick_check;").fetchone()
             user_version = connection.execute("PRAGMA user_version;").fetchone()
