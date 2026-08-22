@@ -44,6 +44,12 @@ from scripts.smoke.benchmark_policy import (
     profile_median_admissions_per_second,
     validated_profile_median,
 )
+from scripts.smoke.benchmark_account import (
+    BenchmarkAccount,
+    BenchmarkAccountError,
+    bootstrap_benchmark_account,
+    require_benchmark_account,
+)
 
 if os.name != "nt":
     import pwd
@@ -478,20 +484,22 @@ class DaemonOutputCapture:
             thread.join(timeout=1.0)
 
 
-def select_host_state_isolation() -> str:
-    """Require a dedicated clean OS user and never alter ambient state."""
-    if os.environ.get("ATM_CAPACITY_ISOLATED_OS_USER") == "1":
-        return "isolated_os_user"
+def require_capacity_benchmark_account() -> BenchmarkAccount:
+    """Validate benchmark-account identity before any runner setup side effect."""
     if os.environ.get("ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE") == "1":
         raise SmokeError(
             "ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE is retired: benchmarks must not "
-            "rename, replace, or restore the primary ~/.atm/db; use a dedicated clean "
-            "OS user with ATM_CAPACITY_ISOLATED_OS_USER=1"
+            "rename, replace, or restore the primary ~/.atm/db"
         )
-    raise SmokeError(
-        "set ATM_CAPACITY_ISOLATED_OS_USER=1 in a dedicated clean OS-user environment; "
-        "the benchmark refuses to alter an ambient daemon or its database"
-    )
+    if os.environ.get("ATM_CAPACITY_ISOLATED_OS_USER"):
+        raise SmokeError(
+            "ATM_CAPACITY_ISOLATED_OS_USER is retired: a benchmark account must prove "
+            "its account-local manifest rather than trust an environment assertion"
+        )
+    try:
+        return require_benchmark_account()
+    except BenchmarkAccountError as error:
+        raise SmokeError(f"benchmark-account preflight failed: {error}") from error
 
 
 def reap_owned_daemon(process: subprocess.Popen[str]) -> None:
@@ -1263,6 +1271,7 @@ def run_capacity(
             "managed-daemon benchmarking is retired because it would touch the primary "
             "OS-user-owned database; use a dedicated clean OS user instead"
         )
+    benchmark_account = require_capacity_benchmark_account()
     transport = validate_transport(transport)
     peer_wire_security = validate_peer_wire_security(peer_wire_security)
     if frames_per_connection not in SPARSE_FRAMES_PER_CONNECTION:
@@ -1271,7 +1280,7 @@ def run_capacity(
         raise SmokeError("requested messages must be positive")
     if workers <= 0:
         raise SmokeError("capacity worker limit must be positive")
-    isolation_mode = select_host_state_isolation()
+    isolation_mode = "dedicated_benchmark_os_account"
     home = validate_capacity_home(atm_home)
     atm = release_binary("atm")
     daemon = release_binary("atm-daemon")
@@ -1405,9 +1414,7 @@ def run_capacity(
         # needs the asserted healthy result after the restart.
         evidence["doctor_after_restart"] = {"status": "passed"}
         evidence["durability_after_restart"] = verify_durable_admissions(
-            os_account_home() / ".atm" / "db" / "mail.db",
-            expected_accepted_count,
-            roster,
+            benchmark_account.durable_state_root / "mail.db", expected_accepted_count, roster,
         )
         # A missing plaintext comparison baseline blocks acceptance, but it
         # must not prevent collection of the bounded profile that explains the
@@ -1462,6 +1469,11 @@ def run_capacity(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--bootstrap-benchmark-account",
+        action="store_true",
+        help="create the account-local benchmark manifest; refuses an account with existing ATM state",
+    )
     parser.add_argument("--atm-home", type=Path)
     parser.add_argument(
         "--evidence-dir", type=Path,
@@ -1503,6 +1515,13 @@ def main() -> int:
         help="add one 10K or 100K sustained profile after the sparse baseline",
     )
     args = parser.parse_args()
+    if args.bootstrap_benchmark_account:
+        try:
+            account = bootstrap_benchmark_account()
+        except BenchmarkAccountError as error:
+            raise SmokeError(f"benchmark-account bootstrap failed: {error}") from error
+        print(f"benchmark-account manifest created: {account.manifest_path}")
+        return 0
     transport, peer_wire_security, benchmark_target = resolve_benchmark_target(
         args.target, args.transport,
     )

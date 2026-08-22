@@ -183,9 +183,15 @@ validate target='all':
 smoke feature='normal' *args:
     {{python_cmd}} .just/run_smoke.py {{feature}} {{args}}
 
-# Run one isolated, release-built local admission benchmark. On Unix choose
-# UDS or loopback TCP; Windows accepts TCP only. The runner rejects ambient
-# daemon/database state and writes one report-compatible JSON artifact per run.
+# Bootstrap the dedicated disposable benchmark OS account. This action writes
+# only that account's manifest and refuses an account with existing ATM state.
+benchmark-bootstrap:
+    {{python_cmd}} scripts/smoke/run_admission_capacity.py --bootstrap-benchmark-account
+
+# Run one release-built local admission benchmark from a pre-bootstrapped,
+# dedicated OS account. On Unix choose UDS or loopback TCP; Windows accepts TCP
+# only. The runner rejects ambient daemon/database state and writes one
+# report-compatible JSON artifact per run.
 benchmark *args:
     cargo build --release -p agent-team-mail -p atm-daemon
     {{python_cmd}} .just/sign_daemon_dev.py
