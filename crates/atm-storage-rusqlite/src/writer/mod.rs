@@ -804,4 +804,24 @@ mod tests {
         assert_eq!(batch.len(), 1);
         assert!(shutting_down);
     }
+
+    #[tokio::test(start_paused = true)]
+    async fn batch_collection_marks_shutdown_when_sender_disconnects_while_waiting() {
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(8);
+        sender.try_send(queued_write()).expect("first queued write");
+        let first = first_queued_write(&mut receiver);
+        let collection = tokio::spawn(async move {
+            let mut batch = vec![first];
+            let mut shutting_down = false;
+            collect_batch(&mut receiver, &mut batch, &mut shutting_down).await;
+            (batch, shutting_down)
+        });
+
+        tokio::task::yield_now().await;
+        drop(sender);
+        let (batch, shutting_down) = collection.await.expect("collection task");
+
+        assert_eq!(batch.len(), 1);
+        assert!(shutting_down);
+    }
 }
