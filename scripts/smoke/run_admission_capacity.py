@@ -3,24 +3,23 @@
 
 This runner is deliberately a *clean-user* smoke gate. ADR-026 makes the
 daemon and its SQLite store OS-user-owned, not ``ATM_HOME``-owned. It therefore
-refuses to run beside an ambient daemon unless an authorized operator opts into
-the explicit daemon-switch backup/restore lifecycle; changing ``ATM_HOME``
-alone would not isolate a developer's real mail database.
+refuses to run beside an ambient daemon; changing ``ATM_HOME`` alone would not
+isolate a developer's real mail database.
 """
 from __future__ import annotations
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import closing
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
 import platform
+import plistlib
 from queue import Empty, Queue
 import re
-import shutil
 import socket
 import sqlite3
 import subprocess
@@ -146,32 +145,25 @@ DEFAULT_CAPACITY_ROSTER = CapacityRoster(
 
 @dataclass
 class HostStateBackup:
-    """Temporarily replace one idle host's complete ATM state with an empty root."""
+    """Retired unsafe host-state swapping interface.
+
+    A transient directory move is not a durable backup. Benchmarks must not
+    make room for their disposable state by changing the primary database.
+    """
 
     state_root: Path
     backup_root: Path | None
 
     @classmethod
     def begin(cls) -> "HostStateBackup":
-        state_root = os_account_home() / ".atm"
-        backup_root = state_root.with_name(
-            f".atm-capacity-backup-{os.getpid()}-{time.monotonic_ns()}"
+        raise SmokeError(
+            "refusing to replace the current OS user's primary ATM database; "
+            "run the benchmark under a dedicated clean OS user with "
+            "ATM_CAPACITY_ISOLATED_OS_USER=1"
         )
-        try:
-            if state_root.exists():
-                state_root.rename(backup_root)
-            state_root.mkdir(mode=0o700, parents=True, exist_ok=False)
-        except OSError:
-            if backup_root.exists() and not state_root.exists():
-                backup_root.rename(state_root)
-            raise
-        return cls(state_root, backup_root if backup_root.exists() else None)
 
     def restore(self) -> None:
-        if self.state_root.exists():
-            shutil.rmtree(self.state_root)
-        if self.backup_root is not None:
-            self.backup_root.rename(self.state_root)
+        raise SmokeError("host-state benchmark backup/restore is retired as unsafe")
 
 
 @dataclass(frozen=True)
@@ -197,6 +189,94 @@ class ManagedDaemonOptions:
         if self.repair_orphan:
             arguments.append("--repair-orphan")
         return arguments
+
+
+@dataclass
+class LaunchAgentPeerWireOverride:
+    """One disposable macOS LaunchAgent copy for a benchmark wire mode.
+
+    The managed daemon remains the selected CLI/daemon pair.  Only this copied
+    plist gains the normal daemon launch argument for the selected benchmark
+    mode.  The operator-owned source plist is never written; recovery verifies
+    that its original bytes still exist before it is launched again.
+    """
+
+    source_path: Path
+    source_bytes: bytes
+    temporary_directory: tempfile.TemporaryDirectory[str]
+    override_path: Path
+
+    @classmethod
+    def create(
+        cls,
+        source_path: Path,
+        peer_wire_security: str,
+        managed_log_level: str | None = None,
+    ) -> "LaunchAgentPeerWireOverride":
+        source = source_path.expanduser()
+        try:
+            source_bytes = source.read_bytes()
+            payload = plistlib.loads(source_bytes)
+        except (OSError, plistlib.InvalidFileException) as error:
+            raise SmokeError(f"could not read managed LaunchAgent plist {source}: {error}") from error
+        if not isinstance(payload, dict):
+            raise SmokeError(f"managed LaunchAgent plist {source} must contain a dictionary")
+        arguments = payload.get("ProgramArguments")
+        if not isinstance(arguments, list) or not all(isinstance(value, str) for value in arguments):
+            raise SmokeError(f"managed LaunchAgent plist {source} must contain string ProgramArguments")
+        if not any(value.endswith("atm-daemon") for value in arguments):
+            raise SmokeError(f"managed LaunchAgent plist {source} does not launch atm-daemon")
+
+        adjusted_arguments: list[str] = []
+        position = 0
+        while position < len(arguments):
+            argument = arguments[position]
+            if argument != "--peer-wire-security":
+                adjusted_arguments.append(argument)
+                position += 1
+                continue
+            if position + 1 >= len(arguments):
+                raise SmokeError(
+                    f"managed LaunchAgent plist {source} has --peer-wire-security without a value"
+                )
+            position += 2
+        adjusted_arguments.extend(("--peer-wire-security", peer_wire_security))
+        payload["ProgramArguments"] = adjusted_arguments
+        if managed_log_level is not None:
+            environment = payload.get("EnvironmentVariables", {})
+            if not isinstance(environment, dict) or not all(
+                isinstance(key, str) and isinstance(value, str)
+                for key, value in environment.items()
+            ):
+                raise SmokeError(
+                    f"managed LaunchAgent plist {source} must contain string EnvironmentVariables"
+                )
+            payload["EnvironmentVariables"] = {**environment, "ATM_LOG": managed_log_level}
+
+        temporary_directory = tempfile.TemporaryDirectory(prefix="atm-capacity-launch-")
+        override = Path(temporary_directory.name) / source.name
+        try:
+            with override.open("wb") as handle:
+                plistlib.dump(payload, handle, fmt=plistlib.FMT_XML, sort_keys=False)
+        except OSError as error:
+            temporary_directory.cleanup()
+            raise SmokeError(f"could not write benchmark LaunchAgent override {override}: {error}") from error
+        return cls(source, source_bytes, temporary_directory, override)
+
+    def assert_source_unchanged(self) -> None:
+        try:
+            current_bytes = self.source_path.read_bytes()
+        except OSError as error:
+            raise SmokeError(
+                f"could not re-read original managed LaunchAgent plist {self.source_path}: {error}"
+            ) from error
+        if current_bytes != self.source_bytes:
+            raise SmokeError(
+                "original managed LaunchAgent plist changed during benchmark; refusing to claim exact restoration"
+            )
+
+    def cleanup(self) -> None:
+        self.temporary_directory.cleanup()
 
 
 def daemon_switch_result(
@@ -260,6 +340,17 @@ def require_ready_managed_doctor(status: dict[str, Any]) -> None:
         raise SmokeError("managed daemon doctor version differs from the selected ATM CLI")
 
 
+def require_managed_peer_wire_security(status: dict[str, Any], expected: str) -> None:
+    """Prove that the disposable managed daemon launched in the requested mode."""
+    doctor_status = status.get("doctor")
+    daemon_context = doctor_status.get("daemon_context") if isinstance(doctor_status, dict) else None
+    actual = daemon_context.get("peer_wire_security") if isinstance(daemon_context, dict) else None
+    if actual != expected:
+        raise SmokeError(
+            f"managed daemon peer-wire mode mismatch: expected {expected}, got {actual or '<missing>'}"
+        )
+
+
 def selected_pair(status: dict[str, Any]) -> dict[str, str | None]:
     """Keep only the selected-pair identity needed to prove no selector drift."""
     result: dict[str, str | None] = {}
@@ -275,104 +366,55 @@ def selected_pair(status: dict[str, Any]) -> dict[str, str | None]:
     return result
 
 
+def resolved_managed_selector_links(
+    options: ManagedDaemonOptions, status: dict[str, Any],
+) -> ManagedDaemonOptions:
+    """Pass discovered selector paths to daemon-switch under the scrubbed harness environment.
+
+    The benchmark deliberately does not inherit the user's shell environment.
+    Capture its already-proven selectors from ``daemon-switch status`` before
+    quiescing the singleton, rather than depending on a Homebrew directory
+    being present in the benchmark process's PATH.
+    """
+    pair = selected_pair(status)
+    cli_link = options.cli_link or Path(str(pair["atm.selector"]))
+    daemon_link = options.daemon_link or Path(str(pair["atm_daemon.selector"]))
+    return replace(options, cli_link=cli_link, daemon_link=daemon_link)
+
+
 @dataclass
 class ManagedDaemonLifecycle:
-    """Quiesce, isolate, and recover one explicitly authorized daemon pair.
+    """Retired compatibility surface for the unsafe managed-host mode.
 
-    The state root is moved only after daemon-switch has stopped the managed
-    daemon, so an open SQLite connection cannot race the snapshot. The selected
-    pair is captured before quiescence and compared after restart. Capturing
-    selectors does not require an initial doctor result: controlled quiescence
-    is the recovery path for an unavailable managed daemon. Recovery always
-    requires a ready doctor result and this flow never changes CLI/daemon
-    selectors or their configuration.
+    It remains only to give callers a clear error. The runner never invokes a
+    daemon-switch lifecycle while benchmarking.
     """
 
     options: ManagedDaemonOptions
-    backup: HostStateBackup | None = None
-    pre_pair: dict[str, str | None] | None = None
-    quiesced: bool = False
-    isolated_service_running: bool = False
+    peer_wire_security: str | None = None
+    managed_log_level: str | None = None
+    launch_override: LaunchAgentPeerWireOverride | None = None
+
+    def isolated_options(self) -> ManagedDaemonOptions:
+        """Return the temporary launch configuration only for disposable state."""
+        if self.peer_wire_security is None:
+            return self.options
+        if self.options.launch_agent_plist is None:
+            raise SmokeError(
+                "managed peer-wire benchmark requires --managed-launch-agent-plist on macOS"
+            )
+        if self.launch_override is None:
+            self.launch_override = LaunchAgentPeerWireOverride.create(
+                self.options.launch_agent_plist, self.peer_wire_security, self.managed_log_level,
+            )
+        return replace(self.options, launch_agent_plist=self.launch_override.override_path)
 
     def begin(self) -> None:
-        # Record only the selected binaries before stopping the service.  A
-        # managed daemon may be unavailable precisely because this benchmark
-        # is being used to validate/recover a release candidate.  Requiring
-        # doctor here makes that safe recovery impossible; doctor is enforced
-        # after restoration below.
-        before = daemon_switch_result("status", self.options)
-        self.pre_pair = selected_pair(before)
-        daemon_switch_result("quiesce", self.options)
-        self.quiesced = True
-        try:
-            require_clean_host_daemon_state(smoke_label="admission-capacity smoke")
-            self.backup = HostStateBackup.begin()
-        except Exception as error:
-            recovery_error = self._restart_and_verify()
-            if recovery_error is not None:
-                raise SmokeError(
-                    f"could not isolate managed daemon state: {error}; recovery also failed: {recovery_error}"
-                ) from error
-            raise
+        raise SmokeError(
+            "managed-daemon benchmark lifecycle is retired: it must not touch an ambient "
+            "daemon or the primary OS-user-owned database"
+        )
 
-    def start_isolated_service(self) -> None:
-        """Start the already-selected candidate against the disposable state.
-
-        Managed-host benchmarking must measure the same launch-managed daemon
-        that will remain installed for dogfooding.  Daemon-switch deliberately
-        does not mutate launch arguments, so target-specific peer-wire mode
-        proof uses the owned clean-OS-user launch path below.
-        """
-        if self.backup is None or not self.quiesced:
-            raise SmokeError("managed benchmark cannot start before state isolation")
-        daemon_switch_result("restart", self.options)
-        after = daemon_switch_result("status", self.options, doctor=True)
-        if self.pre_pair is not None and selected_pair(after) != self.pre_pair:
-            raise SmokeError("managed daemon selectors changed before benchmark execution")
-        self.quiesced = False
-        self.isolated_service_running = True
-
-    def restart_isolated_service(self) -> None:
-        """Prove the selected candidate survives a restart on disposable state."""
-        if not self.isolated_service_running:
-            raise SmokeError("managed benchmark daemon is not running on disposable state")
-        daemon_switch_result("quiesce", self.options)
-        self.quiesced = True
-        self.isolated_service_running = False
-        self.start_isolated_service()
-
-    def restore(self) -> None:
-        if self.backup is None:
-            return
-        failures: list[str] = []
-        if self.isolated_service_running:
-            try:
-                daemon_switch_result("quiesce", self.options)
-                self.quiesced = True
-                self.isolated_service_running = False
-            except Exception as error:
-                failures.append(f"could not quiesce benchmark daemon: {error}")
-        if self.backup is not None:
-            try:
-                self.backup.restore()
-            except OSError as error:
-                failures.append(f"could not restore prior host ATM state: {error}")
-        recovery_error = self._restart_and_verify()
-        if recovery_error is not None:
-            failures.append(f"could not restore managed daemon pair: {recovery_error}")
-        if failures:
-            raise SmokeError("; ".join(failures))
-
-    def _restart_and_verify(self) -> Exception | None:
-        try:
-            daemon_switch_result("restart", self.options)
-            after = daemon_switch_result("status", self.options, doctor=True)
-            if self.pre_pair is not None and selected_pair(after) != self.pre_pair:
-                raise SmokeError("managed daemon selectors changed during capacity backup/restore")
-            self.quiesced = False
-            return None
-        except Exception as error:  # pragma: no cover - covered through callers' recovery paths.
-            return error
 
 
 class DaemonOutputCapture:
@@ -437,14 +479,18 @@ class DaemonOutputCapture:
 
 
 def select_host_state_isolation() -> str:
-    """Require either a clean OS user or explicit backup/restore authority."""
+    """Require a dedicated clean OS user and never alter ambient state."""
     if os.environ.get("ATM_CAPACITY_ISOLATED_OS_USER") == "1":
         return "isolated_os_user"
     if os.environ.get("ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE") == "1":
-        return "backup_restore"
+        raise SmokeError(
+            "ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE is retired: benchmarks must not "
+            "rename, replace, or restore the primary ~/.atm/db; use a dedicated clean "
+            "OS user with ATM_CAPACITY_ISOLATED_OS_USER=1"
+        )
     raise SmokeError(
-        "set ATM_CAPACITY_ISOLATED_OS_USER=1 in a dedicated clean OS-user environment, "
-        "or ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE=1 to back up and restore the idle host state"
+        "set ATM_CAPACITY_ISOLATED_OS_USER=1 in a dedicated clean OS-user environment; "
+        "the benchmark refuses to alter an ambient daemon or its database"
     )
 
 
@@ -1205,12 +1251,18 @@ def run_capacity(
     comparison_required: bool = True,
     raw_evidence_directory: Path = DEFAULT_RAW_EVIDENCE_DIR,
     peer_wire_security: str = "mutual-tls",
+    managed_log_level: str | None = None,
     benchmark_target: str | None = None,
     managed_daemon: ManagedDaemonOptions | None = None,
     preflight_failure_code: str | None = None,
     preflight_failure: str | None = None,
 ) -> tuple[int, Path]:
     """Start one branch daemon, exercise public UDS API, retain evidence, then clean up."""
+    if managed_daemon is not None:
+        raise SmokeError(
+            "managed-daemon benchmarking is retired because it would touch the primary "
+            "OS-user-owned database; use a dedicated clean OS user instead"
+        )
     transport = validate_transport(transport)
     peer_wire_security = validate_peer_wire_security(peer_wire_security)
     if frames_per_connection not in SPARSE_FRAMES_PER_CONNECTION:
@@ -1232,7 +1284,6 @@ def run_capacity(
     )
     process: subprocess.Popen[str] | None = None
     daemon_output: DaemonOutputCapture | None = None
-    managed_lifecycle: ManagedDaemonLifecycle | None = None
     before: list[int] | None = None
     evidence: dict[str, Any] = {
         "schema_version": 2,
@@ -1259,6 +1310,7 @@ def run_capacity(
         "execution_daemon": "shipped_atm_daemon",
         "atm_home": str(home),
         "host_state_isolation": isolation_mode,
+        "managed_log_level": managed_log_level,
         "runs": [],
         "thresholds": None,
         "comparison_source_revision": comparison_source_revision,
@@ -1274,40 +1326,17 @@ def run_capacity(
     }
     started_at = time.monotonic()
     try:
-        if isolation_mode == "isolated_os_user":
-            require_clean_host_daemon_state(smoke_label="admission-capacity smoke")
-        elif managed_daemon is None:
-            raise SmokeError(
-                "ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE=1 requires the managed daemon "
-                "service details; pass --managed-service and the platform-specific daemon-switch options"
-            )
-        if managed_daemon is not None and benchmark_target is not None:
-            raise SmokeError(
-                "managed daemon benchmark cannot prove a selected peer-wire mode: "
-                "daemon-switch preserves the installed launch arguments; run the target "
-                "from a clean OS-user campaign instead"
-            )
-        if isolation_mode == "backup_restore":
-            assert managed_daemon is not None
-            managed_lifecycle = ManagedDaemonLifecycle(managed_daemon)
-            managed_lifecycle.begin()
-        else:
-            before = count_atm_daemon_processes()
+        require_clean_host_daemon_state(smoke_label="admission-capacity smoke")
+        before = count_atm_daemon_processes()
         home.mkdir(parents=True, exist_ok=False)
-        if managed_lifecycle is not None:
-            managed_lifecycle.start_isolated_service()
-            managed_status = daemon_switch_result("status", managed_daemon, doctor=True)
-            doctor_payload = managed_status["doctor"]
-            evidence["managed_daemon"] = selected_pair(managed_status)
-        else:
-            process, daemon_output = start_capacity_daemon(daemon, home, env, peer_wire_security)
-            doctor = command_result(
-                [str(atm), "doctor", "--json"],
-                timeout=10.0,
-                env=host_runtime_client_environment(env),
-            )
-            doctor_payload = benchmark_doctor_payload(doctor)
-            evidence["daemon_pid"] = process.pid
+        process, daemon_output = start_capacity_daemon(daemon, home, env, peer_wire_security)
+        doctor = command_result(
+            [str(atm), "doctor", "--json"],
+            timeout=10.0,
+            env=host_runtime_client_environment(env),
+        )
+        doctor_payload = benchmark_doctor_payload(doctor)
+        evidence["daemon_pid"] = process.pid
         # The roster commands use the public daemon boundary. Start the
         # selected daemon before creating the disposable team members.
         prepare_capacity_roster(atm, env, home, roster)
@@ -1360,22 +1389,18 @@ def run_capacity(
         # Restart the actual execution daemon. A transport success alone is
         # not durable evidence, so prove every committed row survived using an
         # exact read-only count of its disposable store.
-        if managed_lifecycle is not None:
-            managed_lifecycle.restart_isolated_service()
-            daemon_switch_result("status", managed_daemon, doctor=True)
-        else:
-            reap_owned_daemon(process)
-            daemon_output.join()
-            evidence["pre_restart_daemon_output"] = daemon_output.evidence()
-            process = None
-            daemon_output = None
-            process, daemon_output = start_capacity_daemon(daemon, home, env, peer_wire_security)
-            restart_doctor = command_result(
-                [str(atm), "doctor", "--json"],
-                timeout=10.0,
-                env=host_runtime_client_environment(env),
-            )
-            benchmark_doctor_payload(restart_doctor)
+        reap_owned_daemon(process)
+        daemon_output.join()
+        evidence["pre_restart_daemon_output"] = daemon_output.evidence()
+        process = None
+        daemon_output = None
+        process, daemon_output = start_capacity_daemon(daemon, home, env, peer_wire_security)
+        restart_doctor = command_result(
+            [str(atm), "doctor", "--json"],
+            timeout=10.0,
+            env=host_runtime_client_environment(env),
+        )
+        benchmark_doctor_payload(restart_doctor)
         # The full doctor payload is host-private diagnostics; publication only
         # needs the asserted healthy result after the restart.
         evidence["doctor_after_restart"] = {"status": "passed"}
@@ -1418,14 +1443,6 @@ def run_capacity(
                 )
             except RuntimeError as error:
                 evidence["passed"] = False
-                evidence["cleanup_failure"] = str(error)
-        if managed_lifecycle is not None:
-            try:
-                managed_lifecycle.restore()
-                evidence["managed_daemon_recovery"] = "doctor-verified"
-            except SmokeError as error:
-                evidence["passed"] = False
-                evidence["managed_daemon_recovery"] = "failed"
                 evidence["cleanup_failure"] = str(error)
         raw_evidence_path = write_raw_evidence(raw_evidence_directory, evidence)
         evidence_path = write_evidence(evidence_directory, evidence)
@@ -1485,33 +1502,6 @@ def main() -> int:
         choices=SUSTAINED_MESSAGE_COUNTS,
         help="add one 10K or 100K sustained profile after the sparse baseline",
     )
-    parser.add_argument(
-        "--managed-service",
-        help=(
-            "daemon-switch service label for explicit ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE=1 "
-            "mode; never needed for an isolated OS user"
-        ),
-    )
-    parser.add_argument(
-        "--managed-launch-agent-plist",
-        type=Path,
-        help="macOS LaunchAgent plist required by daemon-switch backup/restore mode",
-    )
-    parser.add_argument(
-        "--managed-cli-link",
-        type=Path,
-        help="optional selected atm CLI symlink passed through to daemon-switch",
-    )
-    parser.add_argument(
-        "--managed-daemon-link",
-        type=Path,
-        help="optional selected atm-daemon symlink passed through to daemon-switch",
-    )
-    parser.add_argument(
-        "--managed-repair-orphan",
-        action="store_true",
-        help="allow daemon-switch's narrow verified-orphan repair during controlled lifecycle recovery",
-    )
     args = parser.parse_args()
     transport, peer_wire_security, benchmark_target = resolve_benchmark_target(
         args.target, args.transport,
@@ -1519,17 +1509,6 @@ def main() -> int:
     sparse_profiles = tuple(args.frames_per_connection or SPARSE_FRAMES_PER_CONNECTION)
     sustained_profiles = tuple(args.sustained or ())
     profiles = selected_profiles(sparse_profiles, sustained_profiles)
-    managed_daemon = (
-        ManagedDaemonOptions(
-            service=args.managed_service,
-            launch_agent_plist=args.managed_launch_agent_plist,
-            cli_link=args.managed_cli_link,
-            daemon_link=args.managed_daemon_link,
-            repair_orphan=args.managed_repair_orphan,
-        )
-        if args.managed_service
-        else None
-    )
     codes: list[int] = []
     current_revision = source_revision()
     host_label = os.environ.get("ATM_CAPACITY_HOST_LABEL", "local")
@@ -1604,7 +1583,6 @@ def main() -> int:
                     raw_evidence_directory=args.raw_evidence_dir,
                     peer_wire_security=peer_wire_security,
                     benchmark_target=benchmark_target,
-                    managed_daemon=managed_daemon,
                     preflight_failure_code=preflight_failure_code,
                     preflight_failure=preflight_failure,
                 )
@@ -1623,7 +1601,6 @@ def main() -> int:
                     raw_evidence_directory=args.raw_evidence_dir,
                     peer_wire_security=peer_wire_security,
                     benchmark_target=benchmark_target,
-                    managed_daemon=managed_daemon,
                     preflight_failure_code=preflight_failure_code,
                     preflight_failure=preflight_failure,
                 )

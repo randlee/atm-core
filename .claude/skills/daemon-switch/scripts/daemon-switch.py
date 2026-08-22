@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import shutil
 import signal
 import stat
@@ -34,6 +35,7 @@ from macos_development_signing import (  # noqa: E402
 
 WINDOWS_SERVICE_NOT_FOUND = 1060
 LIVE_PAIR_READINESS_ATTEMPTS = 200
+MACOS_LAUNCH_AGENT_PATH = re.compile(r"^path = (.+)$")
 # [cass: helpful starter-rust-logging] - retains the bounded readiness state
 # as one named operational contract rather than an unexplained retry literal.
 """Bounded 20-second readiness window for a managed replacement daemon.
@@ -242,14 +244,32 @@ def run_service(args: argparse.Namespace, action: str, *, allow_absent: bool = F
                 time.sleep(0.1)
         raise SwitchError("LaunchAgent remained loaded after controlled stop")
 
+    expected_plist = Path(args.launch_agent_plist).expanduser().resolve()
     last_detail = ""
     for _ in range(10):
         result = run(command, timeout=20.0)
-        if result.returncode == 0 or run(["launchctl", "print", service], timeout=2.0).returncode == 0:
+        loaded_plist = macos_loaded_launch_agent_plist(service)
+        if loaded_plist == expected_plist:
             return
+        if loaded_plist is not None:
+            raise SwitchError(
+                f"service start retained {loaded_plist} instead of requested {expected_plist}"
+            )
         last_detail = (result.stderr or result.stdout).strip()
         time.sleep(0.2)
     raise SwitchError(f"service start failed: {' '.join(command)}: {last_detail}")
+
+
+def macos_loaded_launch_agent_plist(service: str) -> Path | None:
+    """Return the exact plist launchd has loaded for one user LaunchAgent."""
+    result = run(["launchctl", "print", service], timeout=2.0)
+    if result.returncode != 0:
+        return None
+    for line in result.stdout.splitlines():
+        match = MACOS_LAUNCH_AGENT_PATH.match(line.strip())
+        if match is not None:
+            return Path(match.group(1)).expanduser().resolve()
+    return None
 
 
 def macos_path_owner_pids(path: Path) -> list[int]:

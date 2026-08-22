@@ -97,6 +97,22 @@ class QuiesceTests(unittest.TestCase):
         ):
             DAEMON_SWITCH.run_service(args, "stop", allow_absent=True)
 
+    def test_macos_start_rejects_a_different_loaded_plist(self) -> None:
+        args = mock.Mock(service="com.atm.daemon", launch_agent_plist="/wanted/atm.plist")
+        bootstrap = subprocess.CompletedProcess(
+            ["launchctl", "bootstrap"], 5, stdout="", stderr="service already loaded"
+        )
+        loaded = subprocess.CompletedProcess(
+            ["launchctl", "print"], 0, stdout="\tpath = /temporary/atm.plist\n", stderr=""
+        )
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Darwin"),
+            mock.patch.object(DAEMON_SWITCH.os, "getuid", return_value=501),
+            mock.patch.object(DAEMON_SWITCH, "run", side_effect=[bootstrap, loaded]),
+        ):
+            with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "retained"):
+                DAEMON_SWITCH.run_service(args, "start")
+
 
 class MacosDevelopmentSigningTests(unittest.TestCase):
     def test_identity_discovery_uses_the_shared_apple_resolver(self) -> None:
