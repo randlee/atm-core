@@ -68,6 +68,9 @@ class MacosLaunchAgentAdapter:
         overlay_args["launch_agent_plist"] = str(overlay)
         return argparse.Namespace(**overlay_args)
 
+    def activate_overlay(self, _args: argparse.Namespace, _session: TemporaryLaunchSession) -> None:
+        """launchctl receives the overlay only at the later managed-service start."""
+
     def restore_exact(self, args: argparse.Namespace, session: TemporaryLaunchSession) -> None:
         """Verify the untouched source and remove only this session's exact overlay."""
         source, contents, _plist = self._validated_source(args, Path(session.daemon_path))

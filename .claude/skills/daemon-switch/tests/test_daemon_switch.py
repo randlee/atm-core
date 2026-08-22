@@ -521,6 +521,9 @@ class TemporaryLaunchControlPlaneTests(unittest.TestCase):
             def apply_overlay(self, _args: object, _session: object) -> object:
                 return DAEMON_SWITCH.OverlayLaunchSpec("/overlay.plist", "overlay-sha")
 
+            def activate_overlay(self, _args: object, _session: object) -> None:
+                return None
+
             def start_args(self, arguments: object, _session: object) -> object:
                 return arguments
 
@@ -766,6 +769,139 @@ class MacosTemporaryLaunchAdapterTests(unittest.TestCase):
                 DAEMON_SWITCH.restore_temporary_launch(self.args, recovery=True)
 
         self.assertIsNone(journal.load())
+
+
+class WindowsTemporaryLaunchAdapterTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.cli = self.root / "atm.exe"
+        self.daemon = self.root / "atm-daemon.exe"
+        for binary in (self.cli, self.daemon):
+            binary.write_bytes(binary.name.encode("utf-8"))
+            binary.chmod(0o700)
+        self.args = argparse.Namespace(
+            yes=True,
+            service="atm-daemon-test",
+            peer_wire_security=DAEMON_SWITCH.PeerWireSecurity.PLAINTEXT_TEST,
+            repair_orphan=False,
+        )
+        self.current = DAEMON_SWITCH.quote_windows_command_line(
+            [str(self.daemon), "--log-format", "json"]
+        )
+        self.commands: list[list[str]] = []
+        self.before_config: object | None = None
+        self.adapter = DAEMON_SWITCH.WindowsScmAdapter(self.run_sc)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def run_sc(self, command: object, _timeout: float) -> object:
+        values = list(command)
+        self.commands.append(values)
+        if values[1] == "qc":
+            return subprocess.CompletedProcess(values, 0, f"BINARY_PATH_NAME   : {self.current}\n", "")
+        if values[1] == "config":
+            if callable(self.before_config):
+                self.before_config()
+            self.current = values[4]
+            return subprocess.CompletedProcess(values, 0, "SUCCESS\n", "")
+        raise AssertionError(f"unexpected SCM command: {values}")
+
+    def captured_session(self) -> object:
+        captured = self.adapter.capture(
+            self.args,
+            self.cli,
+            self.daemon,
+            self.args.peer_wire_security,
+        )
+        return DAEMON_SWITCH.TemporaryLaunchSession.captured(
+            peer_wire_security=self.args.peer_wire_security,
+            platform="Windows",
+            account_id="user:benchmark",
+            service=self.args.service,
+            cli_path=self.cli,
+            cli_digest=DAEMON_SWITCH.sha256_file(self.cli),
+            daemon_path=self.daemon,
+            daemon_digest=DAEMON_SWITCH.sha256_file(self.daemon),
+            launch_spec=captured,
+        )
+
+    def test_windows_argv_codec_round_trips_quoted_arguments(self) -> None:
+        argv = [
+            r"C:\\Program Files\\ATM\\atm-daemon.exe",
+            "--log-format",
+            "json",
+            "--label",
+            'quote " and trailing slash\\',
+            "",
+        ]
+
+        self.assertEqual(DAEMON_SWITCH.parse_windows_command_line(DAEMON_SWITCH.quote_windows_command_line(argv)), argv)
+
+    def test_overlay_is_journaled_before_exact_scm_mutation_then_restored(self) -> None:
+        session = self.captured_session().transition(DAEMON_SWITCH.TemporaryLaunchPhase.STOPPED)
+        overlay_spec = self.adapter.apply_overlay(self.args, session)
+        session = session.with_overlay(overlay_spec)
+        original = self.current
+
+        self.assertEqual(self.current, original)
+        self.adapter.activate_overlay(self.args, session)
+        self.assertEqual(self.current, overlay_spec.overlay_reference)
+        self.assertEqual(
+            DAEMON_SWITCH.parse_windows_command_line(self.current)[-2:],
+            ["--peer-wire-security", "plaintext-test"],
+        )
+
+        self.adapter.restore_exact(self.args, session)
+        self.adapter.restore_exact(self.args, session)
+
+        self.assertEqual(self.current, original)
+
+    def test_begin_persists_overlay_before_scm_config_at_fake_service_boundary(self) -> None:
+        journal = DAEMON_SWITCH.TemporaryLaunchJournal(self.root / "state" / "temporary-launch.json")
+
+        def assert_durable_overlay() -> None:
+            active = journal.load()
+            assert active is not None
+            self.assertEqual(active.phase, DAEMON_SWITCH.TemporaryLaunchPhase.OVERLAY_APPLIED)
+            self.assertIsNotNone(active.overlay_reference)
+            self.assertIsNotNone(active.overlay_digest)
+
+        self.before_config = assert_durable_overlay
+        with (
+            mock.patch.object(DAEMON_SWITCH, "temporary_launch_journal", return_value=journal),
+            mock.patch.object(DAEMON_SWITCH, "selected_matched_pair", return_value=(self.cli, self.daemon)),
+            mock.patch.object(DAEMON_SWITCH, "temporary_launch_adapter", return_value=self.adapter),
+            mock.patch.object(DAEMON_SWITCH, "account_identifier", return_value="user:benchmark"),
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Windows"),
+            mock.patch.object(DAEMON_SWITCH, "run_service"),
+            mock.patch.object(DAEMON_SWITCH, "require_stopped_daemon"),
+            mock.patch.object(DAEMON_SWITCH, "wait_for_temporary_launch", return_value=(True, "ready")),
+            redirect_stdout(io.StringIO()),
+        ):
+            DAEMON_SWITCH.begin_temporary_launch(self.args)
+
+        active = journal.load()
+        assert active is not None
+        self.assertEqual(active.phase, DAEMON_SWITCH.TemporaryLaunchPhase.OVERLAY_STARTED)
+
+    def test_capture_rejects_preexisting_peer_wire_security(self) -> None:
+        self.current = DAEMON_SWITCH.quote_windows_command_line(
+            [str(self.daemon), "--peer-wire-security", "mutual-tls"]
+        )
+
+        with self.assertRaisesRegex(DAEMON_SWITCH.TemporaryLaunchError, "already selects"):
+            self.adapter.capture(self.args, self.cli, self.daemon, self.args.peer_wire_security)
+
+    def test_restore_refuses_operator_changed_binary_path(self) -> None:
+        session = self.captured_session().transition(DAEMON_SWITCH.TemporaryLaunchPhase.STOPPED)
+        session = session.with_overlay(self.adapter.apply_overlay(self.args, session))
+        self.adapter.activate_overlay(self.args, session)
+        self.current = DAEMON_SWITCH.quote_windows_command_line([str(self.daemon), "--operator-change"])
+
+        with self.assertRaisesRegex(DAEMON_SWITCH.TemporaryLaunchError, "changed; refusing restore"):
+            self.adapter.restore_exact(self.args, session)
 
 
 if __name__ == "__main__":

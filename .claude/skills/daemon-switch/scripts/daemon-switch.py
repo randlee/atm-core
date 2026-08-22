@@ -46,6 +46,11 @@ from temporary_launch import (  # noqa: E402
     sha256_file,
 )
 from temporary_launch_macos import MacosLaunchAgentAdapter  # noqa: E402
+from temporary_launch_windows import (  # noqa: E402
+    WindowsScmAdapter,
+    parse_windows_command_line,
+    quote_windows_command_line,
+)
 
 
 WINDOWS_SERVICE_NOT_FOUND = 1060
@@ -84,6 +89,13 @@ class TemporaryLaunchAdapter(Protocol):
     ) -> OverlayLaunchSpec:
         """Apply one owned typed overlay after the singleton has stopped."""
 
+    def activate_overlay(
+        self,
+        args: argparse.Namespace,
+        session: TemporaryLaunchSession,
+    ) -> None:
+        """Mutate the native manager only after overlay recovery state is durable."""
+
     def start_args(
         self,
         args: argparse.Namespace,
@@ -106,6 +118,8 @@ def temporary_launch_adapter(_args: argparse.Namespace) -> TemporaryLaunchAdapte
         return MacosLaunchAgentAdapter(
             temporary_launch_journal().path.parent / "temporary-launch-overlays"
         )
+    if platform.system() == "Windows":
+        return WindowsScmAdapter(lambda command, timeout: run(command, timeout=timeout))
     raise SwitchError(
         "temporary-launch requires a reviewed platform adapter; no direct-process fallback is available"
     )
@@ -571,6 +585,18 @@ def transition_temporary_session(
     return next_session
 
 
+def activate_temporary_overlay(
+    adapter: TemporaryLaunchAdapter,
+    args: argparse.Namespace,
+    session: TemporaryLaunchSession,
+) -> None:
+    """Run a platform manager mutation only after its overlay is journaled."""
+    try:
+        adapter.activate_overlay(args, session)
+    except TemporaryLaunchError as error:
+        raise SwitchError(str(error)) from error
+
+
 def doctor_peer_wire_security(payload: dict[str, object]) -> str | None:
     """Read only the daemon's typed public diagnostic wire-mode projection."""
     daemon_context = payload.get("daemon_context")
@@ -633,6 +659,7 @@ def begin_temporary_launch(args: argparse.Namespace) -> None:
     except TemporaryLaunchError as error:
         raise SwitchError(str(error)) from error
     save_temporary_session(journal, session)
+    activate_temporary_overlay(adapter, args, session)
     session = transition_temporary_session(journal, session, TemporaryLaunchPhase.OVERLAY_STARTED)
     try:
         overlay_args = adapter.start_args(args, session)
