@@ -1,8 +1,10 @@
 """Focused unit tests for the AI.33 public admission-capacity runner."""
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import inspect
+import io
 import json
 import os
 from contextlib import ExitStack, closing
@@ -688,6 +690,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         with (
             mock.patch.object(sys, "argv", ["run_admission_capacity.py", "--managed-service", "x"]),
             mock.patch.object(RUNNER, "run_capacity") as run_capacity,
+            contextlib.redirect_stderr(io.StringIO()),
         ):
             with self.assertRaises(SystemExit) as exit_error:
                 RUNNER.main()
