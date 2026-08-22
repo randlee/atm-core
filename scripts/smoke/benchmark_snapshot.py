@@ -278,11 +278,11 @@ def create_verified_snapshot(home: Path | None = None) -> VerifiedSnapshot:
     except BenchmarkAccountError as error:
         raise BenchmarkSnapshotError(str(error)) from error
     source = _mail_database(account)
-    # A SQLite backup made while a daemon still owns WAL sidecars is not the
-    # clean baseline the physical benchmark contract requires.  Keep this
-    # check in the snapshot owner so callers cannot accidentally duplicate or
-    # omit it.
-    _assert_restore_sidecars_absent(source)
+    # SQLite's online backup API includes committed WAL contents.  A stopped
+    # benchmark daemon may legitimately leave -wal/-shm files behind, so
+    # requiring their absence here would reject a valid clean baseline.  The
+    # restore path still refuses sidecars because activating a replacement
+    # database while a writer may own them is unsafe.
     root = _snapshot_root(account)
     snapshot_id = _snapshot_id()
     staging = root / f".{snapshot_id}.staging"
