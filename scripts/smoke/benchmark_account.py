@@ -99,7 +99,10 @@ def _windows_file_owner(path: Path) -> str:
     )
     owner = result.stdout.strip()
     if result.returncode != 0 or not owner:
-        raise BenchmarkAccountError(f"could not verify Windows manifest owner for {path}")
+        detail = result.stderr.strip() or "no output"
+        raise BenchmarkAccountError(
+            f"could not verify Windows manifest owner for {path} (exit {result.returncode}: {detail})"
+        )
     return owner.casefold()
 
 
