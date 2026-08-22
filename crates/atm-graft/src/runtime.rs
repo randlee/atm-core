@@ -513,9 +513,7 @@ pub(crate) fn run_graft_receiver_loop(ctx: GraftReceiverLoopContext) -> Result<(
                     thread::sleep(GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL);
                 }
                 Err(error) => {
-                    warn_runtime_error("poll_graft_receiver", Some(&ctx.endpoint_path), &error);
-                    drop(listener);
-                    listener = rebind_graft_receiver(&ctx)?;
+                    listener = recover_after_poll_accept_error(&ctx, listener, &error)?;
                     last_record_recheck = Instant::now();
                 }
             }
@@ -535,6 +533,16 @@ pub(crate) fn run_graft_receiver_loop(ctx: GraftReceiverLoopContext) -> Result<(
         warn_runtime_error("set_session_state", Some(&ctx.endpoint_path), &state_error);
     }
     result
+}
+
+fn recover_after_poll_accept_error(
+    ctx: &GraftReceiverLoopContext,
+    listener: GraftReceiverListener,
+    error: &AtmError,
+) -> Result<GraftReceiverListener, AtmError> {
+    warn_runtime_error("poll_graft_receiver", Some(&ctx.endpoint_path), error);
+    drop(listener);
+    rebind_graft_receiver(ctx)
 }
 
 fn rebind_graft_receiver(
@@ -627,8 +635,9 @@ mod tests {
 
     use super::{
         BoundedHostNudgeInjector, GraftReceiverLoopContext, MAX_HOST_NUDGE_HELPERS,
-        RECEIVE_LOOP_READY_DEADLINE, ReceiverReadyLatch, join_receive_loop_with_deadline,
-        load_graft_config, read_snapshot, run_graft_receiver_loop,
+        RECEIVE_LOOP_READY_DEADLINE, ReceiverReadyLatch, handle_graft_receiver_connection,
+        join_receive_loop_with_deadline, load_graft_config, read_snapshot,
+        recover_after_poll_accept_error, run_graft_receiver_loop,
     };
     use crate::{GraftSessionState, SessionSnapshot};
 
@@ -956,6 +965,62 @@ mod tests {
         );
         assert_eq!(injector.nudges.lock().expect("nudges lock").len(), 1);
         stop_receiver(stop_tx, join);
+    }
+
+    #[test]
+    fn hard_accept_failure_rebinds_and_resumes_authenticated_delivery() {
+        let paths = test_paths();
+        let endpoint_path = receiver_endpoint_path(&paths);
+        let injector = Arc::new(RecordingInjector::default());
+        let (_stop_tx, stop_rx) = mpsc::channel();
+        let snapshot = Arc::new(RwLock::new(SessionSnapshot {
+            team: TeamName::from_validated(TEST_TEAM),
+            agent: AgentName::from_validated(TEST_QA),
+            state: GraftSessionState::Listening,
+        }));
+        let ctx = GraftReceiverLoopContext {
+            endpoint_path: endpoint_path.clone(),
+            owner_chat_id: None,
+            snapshot: Arc::clone(&snapshot),
+            injector: injector.clone() as Arc<dyn HostNudgeInjector>,
+            observability: Arc::new(NoopObservability),
+            stop_rx,
+            ready_tx: None,
+        };
+        let listener =
+            GraftReceiverListener::bind(&endpoint_path, None).expect("bind initial listener");
+        let initial_record = fs::read_to_string(&endpoint_path).expect("read initial record");
+
+        let listener = recover_after_poll_accept_error(
+            &ctx,
+            listener,
+            &AtmError::daemon_unavailable("simulated hard accept failure"),
+        )
+        .expect("rebind after hard accept failure");
+        assert_ne!(
+            fs::read_to_string(&endpoint_path).expect("read rebound record"),
+            initial_record,
+            "rebind must republish a fresh capability record"
+        );
+
+        let sender = std::thread::spawn({
+            let endpoint_path = endpoint_path.clone();
+            move || deliver_request(&endpoint_path, request_event())
+        });
+        let mut stream = loop {
+            if let Some(stream) = listener.poll_accept().expect("poll rebound listener") {
+                break stream;
+            }
+            std::thread::yield_now();
+        };
+        let bounded_injector = BoundedHostNudgeInjector::spawn(injector.clone());
+        handle_graft_receiver_connection(&ctx, &bounded_injector, &listener, &mut stream)
+            .expect("deliver through rebound listener");
+        assert_eq!(
+            sender.join().expect("join sender"),
+            GraftPostSendResponse::Delivered
+        );
+        assert_eq!(injector.nudges.lock().expect("nudges lock").len(), 1);
     }
 
     #[test]
