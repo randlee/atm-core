@@ -21,15 +21,17 @@ class ReleasePreflightWorkflowTests(unittest.TestCase):
         self.assertIn("python3 scripts/validate_release.py all \\", text)
         self.assertIn("--staged-install-root \"${STAGED_INSTALL_ROOT}\"", text)
 
-    def test_release_preflight_installs_validation_python_dependencies_before_validation(self) -> None:
+    def test_release_preflight_uses_the_shared_pinned_bootstrap_before_validation(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
 
         install_python = text.index("- name: Install Python\n")
-        install_dependencies = text.index("- name: Install Python validation dependencies")
+        bootstrap = text.index("- name: Bootstrap exact repository tools")
         validate = text.index("- name: Run canonical retained release validation suite")
-        self.assertLess(install_python, install_dependencies)
-        self.assertLess(install_dependencies, validate)
-        self.assertIn("python -m pip install codespell 'pydantic>=2.12,<3'", text)
+        self.assertLess(install_python, bootstrap)
+        self.assertLess(bootstrap, validate)
+        self.assertIn('python-version: "3.14.7"', text)
+        self.assertIn("tool: just@1.58.0", text)
+        self.assertIn("run: just bootstrap", text)
 
 
 if __name__ == "__main__":

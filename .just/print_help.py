@@ -9,6 +9,7 @@ SECTIONS = (
         "General",
         (
             ("help", "Show this help."),
+            ("bootstrap", "Install and verify the exact pinned CI tool contract."),
             ("build", "Build the full workspace."),
             ("test", "Run the full workspace test suite."),
             ("clean", "Remove workspace build artifacts."),
