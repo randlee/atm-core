@@ -1697,6 +1697,20 @@ class AdmissionCapacityTests(unittest.TestCase):
         with self.assertRaisesRegex(RUNNER.SmokeError, "direct-peer listener"):
             RUNNER.local_endpoint("tcp")
 
+    def test_direct_peer_request_carries_complete_immutable_origin_metadata(self):
+        body = __import__("json").loads(
+            RUNNER.http_request_body(Path("/tmp/atm-capacity-test"), 42, peer_origin=True)
+        )
+        self.assertRegex(body["origin_message_id"], r"^[0-9A-HJKMNP-TV-Z]{26}$")
+        self.assertTrue(body["origin_timestamp"].endswith("Z"))
+
+    def test_local_request_does_not_invent_peer_origin_metadata(self):
+        body = __import__("json").loads(
+            RUNNER.http_request_body(Path("/tmp/atm-capacity-test"), 42)
+        )
+        self.assertNotIn("origin_message_id", body)
+        self.assertNotIn("origin_timestamp", body)
+
     def test_mtls_direct_peer_endpoint_carries_hostname_and_identity(self):
         identity = RUNNER.DisposableMtlsIdentity(
             "benchmark.example.test", Path("/tmp/identity.pem"), "a" * 64,

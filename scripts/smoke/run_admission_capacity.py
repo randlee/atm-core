@@ -99,6 +99,7 @@ GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
 PEER_WIRE_SECURITY_MODES = ("mutual-tls", "plaintext-test")
 DIRECT_PEER_TCP_PORT = 43_101
 CAPACITY_DIRECT_PEER_PORT_ENV = "ATM_CAPACITY_DIRECT_PEER_PORT"
+CROCKFORD_BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 BENCHMARK_TARGETS = {
     # SQLite and UDS do not cross the peer wire.  They must stay independent
     # of the optional mTLS control plane so they measure their own production
@@ -961,6 +962,8 @@ def http_request_body(
     home: Path,
     sequence: int,
     roster: CapacityRoster = DEFAULT_CAPACITY_ROSTER,
+    *,
+    peer_origin: bool = False,
 ) -> bytes:
     """Build the documented /v1/atm/messages request; no dispatcher shortcut."""
     payload = {
@@ -978,7 +981,22 @@ def http_request_body(
         "expires_at": None,
         "dry_run": False,
     }
+    if peer_origin:
+        payload.update(benchmark_origin_metadata(sequence))
     return json.dumps(payload, separators=(",", ":")).encode("utf-8")
+
+
+def benchmark_origin_metadata(sequence: int) -> dict[str, str]:
+    """Return the immutable provenance pair required by direct-peer ingress."""
+    milliseconds = int(time.time() * 1_000)
+    entropy = (uuid.uuid4().int ^ sequence) & ((1 << 80) - 1)
+    value = (milliseconds << 80) | entropy
+    encoded = "".join(
+        CROCKFORD_BASE32[(value >> (5 * offset)) & 0x1F]
+        for offset in range(25, -1, -1)
+    )
+    timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return {"origin_message_id": encoded, "origin_timestamp": timestamp}
 
 
 def cached_roster_heartbeat_body(
@@ -1413,7 +1431,12 @@ def run_profile(
             requests = [
                 HttpRequest(
                     "/v1/atm/messages",
-                    http_request_body(home, sequence + offset, roster),
+                    http_request_body(
+                        home,
+                        sequence + offset,
+                        roster,
+                        peer_origin=endpoint.direct_peer,
+                    ),
                     201,
                 )
                 for offset in range(message_count)
@@ -1848,12 +1871,10 @@ def run_capacity(
         process = None
         daemon_output = None
 
-    def start_and_doctor() -> None:
+    def start_and_doctor(mode: str = launch_peer_wire_security) -> None:
         """Start the exact released daemon and require its public ready response."""
         nonlocal process, daemon_output
-        process, daemon_output = start_capacity_daemon(
-            daemon, home, env, launch_peer_wire_security,
-        )
+        process, daemon_output = start_capacity_daemon(daemon, home, env, mode)
         doctor = command_result(
             [str(atm), "doctor", "--json"],
             timeout=10.0,
@@ -1872,6 +1893,11 @@ def run_capacity(
         before = count_atm_daemon_processes()
         home.mkdir(parents=True, exist_ok=False)
         if benchmark_target == "tcp-tls":
+            # Peer configuration uses the daemon's ordinary local API.  It
+            # must exist before the mTLS runtime validates that configuration,
+            # so a bounded plaintext control-plane daemon persists the
+            # disposable state and is stopped before the measured mTLS launch.
+            run_lifecycle_phase(evidence, "snapshot", lambda: start_and_doctor("plaintext-test"))
             mtls_identity = run_lifecycle_phase(
                 evidence,
                 "snapshot",
@@ -1884,6 +1910,11 @@ def run_capacity(
                 "fingerprint_sha256": mtls_identity.fingerprint,
                 "direct_peer_port": direct_peer_port,
             }
+            run_lifecycle_phase(
+                evidence,
+                "stop",
+                lambda: stop_owned_daemon(output_key="mtls_setup_daemon_output"),
+            )
         # The pre-roster daemon is deliberately short-lived: it initializes
         # the account database, then is quiesced before the public snapshot
         # owner copies the clean baseline.
