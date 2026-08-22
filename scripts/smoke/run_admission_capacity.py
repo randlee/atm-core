@@ -1153,8 +1153,12 @@ def provision_disposable_mtls_identity(
         f"CN = {host}\n"
         "[extensions]\n"
         f"subjectAltName = DNS:{host}\n"
-        "basicConstraints = critical,CA:FALSE\n"
-        "keyUsage = critical,digitalSignature,keyEncipherment\n"
+        # This short-lived self-signed certificate is the benchmark's local
+        # trust anchor as well as its mTLS identity.  CA:TRUE is required for
+        # standard TLS verification to accept that explicit local anchor; it
+        # is retained only inside the disposable benchmark account.
+        "basicConstraints = critical,CA:TRUE\n"
+        "keyUsage = critical,digitalSignature,keyEncipherment,keyCertSign\n"
         "extendedKeyUsage = serverAuth,clientAuth\n",
         encoding="utf-8",
     )
