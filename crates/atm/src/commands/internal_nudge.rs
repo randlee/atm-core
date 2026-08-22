@@ -175,6 +175,8 @@ impl GraftNudgeSink {
         let request = GraftPostSendRequest {
             event: event.clone(),
             rendered_nudge: rendered_nudge.to_string(),
+            // This legacy diagnostic command has no admitted message body.
+            message_body: String::new(),
         };
         let response = deliver_graft_post_send(
             &record_path,
