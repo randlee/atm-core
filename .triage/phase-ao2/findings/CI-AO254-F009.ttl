@@ -15,8 +15,10 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-22T07:00:00Z"^^xsd:dateTime ;
+  triage:closureNote "Fixed on fix/benchmark-snapshot-restore-mandatory commit a5767690 (fix(smoke): honor Windows token default owner, cherry-picked with -x from a74615f82): ported the ctypes GetTokenInformation(TokenOwner) fix onto this sibling branch, which had never received PR #978's fix since the two branches share only a common ancestor, not a fast-forward relationship. Merge-forward to 48fe6be2 (merging origin/integrate/phase-ao2, resolving one import-only conflict in test_run_admission_capacity.py) then merged as PR #983 to integrate/phase-ao2 at 82270cb26 (2026-08-22T06:41:18Z). quality-mgr independently diff-confirmed the cherry-pick was byte-identical to the working PR #978 fix, then independently verified 'Just lint (windows-latest)' PASS in real GitHub CI (job 96992274203, 6m59s/7m20s across two CI runs) via gh CLI/API; PR #983 CI fully green (19/19 checks)." ;
   triage:triagedAt "2026-08-22T06:10:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.5.4 ;
   triage:foundAt "2026-08-22T05:55:40Z"^^xsd:dateTime ;
@@ -28,8 +30,8 @@
   triage:file "scripts/smoke/benchmark_account.py" ;
   triage:line 74 ;
   triage:snippet "def _windows_current_sid() -> str: ... subprocess.run([\"whoami\", \"/user\", \"/fo\", \"csv\", \"/nh\"], ...)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "fix/benchmark-snapshot-restore-mandatory" ;
   triage:headSha "9b08e8611dbcd9de1f8ae1bb6b9f933201105a98" ;
   triage:occursIn <urn:atm:triage:worktree/AO254-O1-SnapRestore> .

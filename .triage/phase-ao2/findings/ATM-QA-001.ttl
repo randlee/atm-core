@@ -15,8 +15,10 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "scripts/smoke/run_admission_capacity.py" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-22T07:00:00Z"^^xsd:dateTime ;
+  triage:closureNote "Fixed on fix/benchmark-snapshot-restore-mandatory commit 892d1fb31 (fix(smoke): remove stale capacity durability proof): removed the orphaned verify_durable_admissions() function and its 3 dead unit tests, corrected the stale 'durability proof' comment to reference the clean-baseline snapshot proof. PR #983 merged to integrate/phase-ao2 at 82270cb26 (2026-08-22T06:41:18Z). quality-mgr independently re-verified via fresh worktree, confirmed zero remaining references to verify_durable_admissions/durability; PR #983 CI fully green (19/19 checks) confirmed via gh CLI." ;
   triage:triagedAt "2026-08-22T05:25:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.5.4 ;
   triage:foundAt "2026-08-22T05:22:27Z"^^xsd:dateTime ;
@@ -28,8 +30,8 @@
   triage:file "scripts/smoke/run_admission_capacity.py" ;
   triage:line 1191 ;
   triage:snippet "def verify_durable_admissions(...): orphaned function; stale comment at lines 1505-1506" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "fix/benchmark-snapshot-restore-mandatory" ;
   triage:headSha "56b1166a" ;
   triage:occursIn <urn:atm:triage:worktree/fix-benchmark-snapshot-restore-mandatory/56b1166a> .

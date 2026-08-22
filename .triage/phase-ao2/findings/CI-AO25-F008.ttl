@@ -15,8 +15,10 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "scripts/smoke/ (Windows-specific owner-lookup test and run_admission_capacity.py CLI arg parsing)" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-22T07:00:00Z"^^xsd:dateTime ;
+  triage:closureNote "Fixed on fix/benchmark-primary-db-safety commit a74615f82 (fix(smoke): honor Windows token default owner): rewrote _windows_current_principal() to use ctypes OpenProcessToken/GetTokenInformation(TokenOwner) instead of whoami-based SID lookup. A parallel divergent commit 5d290ae9f (PowerShell owner-set approach) was superseded/discarded at the self-merge 08a725b99 -- confirmed via inspection of the final merged file state, with zero dangling references to the discarded approach. PR #978 merged to integrate/phase-ao2 at 85b041cf9 (2026-08-22T06:15:47Z). quality-mgr independently verified 'Just lint (windows-latest)' PASS in real GitHub CI (job 96986939683, 5m19s) via gh CLI/API, not local re-run; PR #978 CI fully green (19/19 checks)." ;
   triage:triagedAt "2026-08-22T05:28:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.5 ;
   triage:foundAt "2026-08-22T05:23:38Z"^^xsd:dateTime ;
@@ -29,8 +31,8 @@
   triage:file "scripts/smoke/test_benchmark_account.py" ;
   triage:line 96 ;
   triage:snippet "def test_windows_owner_lookup_matches_executing_account_sid(self):" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "fix/benchmark-primary-db-safety" ;
   triage:headSha "726d3a75" ;
   triage:occursIn <urn:atm:triage:worktree/primary-db-safety/726d3a75> .
@@ -40,8 +42,8 @@
   triage:file "scripts/smoke/test_run_admission_capacity.py" ;
   triage:line 390 ;
   triage:snippet "mock.patch.object(sys, argv, [run_admission_capacity.py, --managed-service, x])" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "fix/benchmark-primary-db-safety" ;
   triage:headSha "726d3a75" ;
   triage:occursIn <urn:atm:triage:worktree/primary-db-safety/726d3a75> .

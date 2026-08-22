@@ -15,8 +15,10 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "scripts/smoke/test_run_admission_capacity.py" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-22T07:00:00Z"^^xsd:dateTime ;
+  triage:closureNote "Fixed on fix/benchmark-snapshot-restore-mandatory commit 9b08e8611 (test(smoke): prove real benchmark snapshot isolation): added test_real_snapshot_lifecycle_never_touches_interactive_root, which builds a real interactive .atm tree, fingerprints all file bytes, runs the real snapshot/restore lifecycle with only daemon/network/roster/profile seams mocked, and asserts the interactive tree is byte-identical afterward with no snapshot artifacts left behind. PR #983 merged to integrate/phase-ao2 at 82270cb26 (2026-08-22T06:41:18Z). quality-mgr independently re-verified via fresh worktree + real pytest run; PR #983 CI fully green (19/19 checks) confirmed via gh CLI." ;
   triage:triagedAt "2026-08-22T05:25:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.5.4 ;
   triage:foundAt "2026-08-22T05:22:27Z"^^xsd:dateTime ;
@@ -28,8 +30,8 @@
   triage:file "scripts/smoke/test_run_admission_capacity.py" ;
   triage:line 1 ;
   triage:snippet "fault-injection tests fully mock benchmark_snapshot module functions" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "fix/benchmark-snapshot-restore-mandatory" ;
   triage:headSha "56b1166a17d8e416647fe160a8d3559dbc9e30ce" ;
   triage:occursIn <urn:atm:triage:worktree/ao2-6/56b1166a17d8e416647fe160a8d3559dbc9e30ce> .

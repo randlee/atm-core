@@ -15,8 +15,10 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "single-occurrence" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-22T07:00:00Z"^^xsd:dateTime ;
+  triage:closureNote "Fixed on fix/admission-writer-batching-regression commit f0e3d085a (docs(storage): clarify writer batch deadline): corrected the batch-window comment to describe idle-wait-only bounding under a saturated producer. PR #982 merged to integrate/phase-ao2 at b7054fb95 (2026-08-22T06:15:51Z). quality-mgr independently re-verified via fresh worktree + real cargo test run; PR #982 CI fully green (19/19 checks) confirmed via gh CLI." ;
   triage:triagedAt "2026-08-22T05:20:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.6 ;
   triage:foundAt "2026-08-22T04:57:52Z"^^xsd:dateTime ;
@@ -28,8 +30,8 @@
   triage:file "crates/atm-storage-rusqlite/src/writer/mod.rs" ;
   triage:line 514 ;
   triage:snippet "let deadline = tokio::time::Instant::now() + BATCH_TIME_BUDGET;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "fix/admission-writer-batching-regression" ;
   triage:headSha "5806140" ;
   triage:occursIn <urn:atm:triage:worktree/AO2-6-fix/5806140> .

@@ -15,8 +15,10 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "single-occurrence" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-22T07:00:00Z"^^xsd:dateTime ;
+  triage:closureNote "Fixed on fix/admission-writer-batching-regression commit f3e39913b (test(storage): cover batch wait disconnect): added batch_collection_marks_shutdown_when_sender_disconnects_while_waiting, a paused-clock test that drops the sender only after collect_batch parks in timeout_at, exercising the previously-untested Ok(None) mid-wait disconnect branch. PR #982 merged to integrate/phase-ao2 at b7054fb95 (2026-08-22T06:15:51Z). quality-mgr independently re-verified via fresh worktree + real cargo test run; PR #982 CI fully green (19/19 checks) confirmed via gh CLI." ;
   triage:triagedAt "2026-08-22T05:20:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.6 ;
   triage:foundAt "2026-08-22T04:57:52Z"^^xsd:dateTime ;
@@ -28,8 +30,8 @@
   triage:file "crates/atm-storage-rusqlite/src/writer/mod.rs" ;
   triage:line 544 ;
   triage:snippet "Ok(None) => { *shutting_down = true; return Some(()); }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "fix/admission-writer-batching-regression" ;
   triage:headSha "58061405073b4e57bffb0050ca954b6778c82719" ;
   triage:occursIn <urn:atm:triage:worktree/fix-admission-regression/58061405> .

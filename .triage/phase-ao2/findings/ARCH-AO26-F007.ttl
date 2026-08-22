@@ -15,8 +15,10 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-22T07:00:00Z"^^xsd:dateTime ;
+  triage:closureNote "Fixed on fix/admission-writer-batching-regression commit 3798e676a (test(architecture): guard smoke batch-window consumers): added collect_python_files/writer_batch_window_smoke_sources walking scripts/smoke/, chained into the existing Rust sweep so scripts/smoke/run_admission_capacity.py is covered again. PR #982 merged to integrate/phase-ao2 at b7054fb95 (2026-08-22T06:15:51Z). quality-mgr independently re-verified via fresh worktree + real cargo test run; PR #982 CI fully green (19/19 checks) confirmed via gh CLI." ;
   triage:triagedAt "2026-08-22T05:20:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.6 ;
   triage:foundAt "2026-08-22T05:14:11Z"^^xsd:dateTime ;
@@ -28,8 +30,8 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 1529 ;
   triage:snippet "ai11_guarded_workspace_sources() sweep excludes scripts/smoke/run_admission_capacity.py" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "fix/admission-writer-batching-regression" ;
   triage:headSha "b484ebb48c2d2881b399273ab756be83e70ae3ab" ;
   triage:occursIn <urn:atm:triage:worktree/AO2-7> .
