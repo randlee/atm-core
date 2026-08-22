@@ -147,11 +147,11 @@ class BenchmarkSnapshotTests(unittest.TestCase):
 
             snapshot = self._snapshot(account)
 
+            self.assertFalse(snapshot.database.with_name("mail.db-shm").exists())
+            self.assertFalse(snapshot.database.with_name("mail.db-wal").exists())
             with closing(sqlite3.connect(snapshot.database)) as connection:
                 observed = connection.execute("SELECT COUNT(*) FROM entries").fetchone()
             self.assertEqual(observed, (2,))
-            self.assertFalse(snapshot.database.with_name("mail.db-shm").exists())
-            self.assertFalse(snapshot.database.with_name("mail.db-wal").exists())
 
     def test_account_validation_fails_before_any_sqlite_operation(self):
         failure = ACCOUNT.BenchmarkAccountError("manifest is missing")
