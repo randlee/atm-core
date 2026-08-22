@@ -35,7 +35,13 @@ DEFAULT_RAW_EVIDENCE_DIR = ROOT / "artifacts" / "benchmark" / "send-message-benc
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.smoke.benchmark_schema import BenchmarkSchemaError, compact_evidence, distribution
+from scripts.smoke import benchmark_suite as SUITE
+from scripts.smoke.benchmark_schema import (
+    BenchmarkSchemaError,
+    BenchmarkSummary,
+    compact_evidence,
+    distribution,
+)
 from scripts.smoke.benchmark_policy import (
     baseline_reference,
     evaluate_profile_thresholds,
@@ -84,6 +90,8 @@ DAEMON_OUTPUT_TAIL_LINES = 200
 GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
 PEER_WIRE_SECURITY_MODES = ("mutual-tls", "plaintext-test")
 BENCHMARK_TARGETS = {
+    "sqlite": ("sqlite", "mutual-tls"),
+    "uds": ("uds", "mutual-tls"),
     "tcp": ("tcp", "plaintext-test"),
     "tcp-tls": ("tcp", "mutual-tls"),
 }
@@ -153,6 +161,84 @@ DEFAULT_CAPACITY_ROSTER = CapacityRoster(
     agent="capacity-agent",
     recipient="capacity-recipient",
 )
+
+
+@dataclass(frozen=True)
+class CapacityRunResult:
+    """One target's exit status plus both immutable evidence references.
+
+    Iteration preserves the historical two-value ``code, compact_path`` call
+    sites while a complete-suite ledger can retain the raw trace hash too.
+    """
+
+    code: int
+    compact_evidence_path: Path
+    raw_evidence_path: Path
+
+    def __iter__(self):
+        yield self.code
+        yield self.compact_evidence_path
+
+
+def suite_target_result(
+    target: str,
+    run: CapacityRunResult,
+    *,
+    artifact_root: Path = ROOT,
+) -> SUITE.TargetResult:
+    """Turn one completed target's real artifacts into ledger-safe evidence.
+
+    A nonzero benchmark exit may still have a complete measured profile (for
+    example, a below-floor result).  That evidence belongs in the suite ledger
+    for remediation.  A setup failure without metrics does not: it remains a
+    visible failed intent rather than being represented with invented rates.
+    """
+    if target not in BENCHMARK_TARGETS:
+        raise SmokeError(f"unknown required f8 target {target!r}")
+    if not run.compact_evidence_path.is_file() or not run.raw_evidence_path.is_file():
+        raise SmokeError("complete suite target requires both compact and raw evidence files")
+    try:
+        compact = BenchmarkSummary.model_validate_json(
+            run.compact_evidence_path.read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError) as error:
+        raise SmokeError(f"could not load compact target evidence: {error}") from error
+    expected_transport, expected_security = BENCHMARK_TARGETS[target]
+    if (
+        compact.benchmark_target != target
+        or compact.transport != expected_transport
+        or compact.peer_wire_security != expected_security
+    ):
+        raise SmokeError(
+            f"compact evidence does not match required target {target}: "
+            f"got target={compact.benchmark_target!r}, transport={compact.transport!r}, "
+            f"security={compact.peer_wire_security!r}"
+        )
+    if compact.metrics is None:
+        raise SmokeError(
+            f"target {target} did not reach a measured interval; retain its failed suite intent "
+            "and repair the ordinary runner before retrying"
+        )
+    try:
+        raw_relative = run.raw_evidence_path.resolve().relative_to(artifact_root.resolve())
+    except ValueError as error:
+        raise SmokeError("raw target evidence must remain below the benchmark artifact root") from error
+    metrics = compact.metrics
+    return SUITE.TargetResult(
+        target=target,
+        median_msg_per_second=metrics.admissions_per_second.p50,
+        p95_msg_per_second=metrics.admissions_per_second.p95,
+        p99_msg_per_second=(
+            metrics.admissions_per_second.p99
+            if metrics.admissions_per_second.p99 is not None
+            else metrics.admissions_per_second.p95
+        ),
+        requested=metrics.requested_count,
+        accepted=metrics.accepted_count,
+        errors=metrics.requested_count - metrics.accepted_count,
+        raw_artifact=raw_relative.as_posix(),
+        raw_artifact_sha256=SUITE.raw_file_sha256(run.raw_evidence_path),
+    )
 
 
 @dataclass
@@ -610,6 +696,38 @@ def release_binary(name: str) -> Path:
     return path
 
 
+def canonical_writer_probe() -> Path:
+    """Build the existing test-only writer probe when sqlite evidence needs it.
+
+    The public recipe still builds only the released CLI/daemon pair.  This
+    probe is neither a daemon nor a TLS selection: it invokes the existing
+    bootstrap-owned canonical admission writer to measure the standalone
+    sqlite target without SQL shortcuts or a second HTTP pipeline.
+    """
+    suffix = ".exe" if os.name == "nt" else ""
+    probe = ROOT / "target" / "release" / f"atm-daemon-benchmark{suffix}"
+    if probe.is_file():
+        return probe
+    try:
+        result = subprocess.run(
+            [
+                "cargo", "build", "--release", "-p", "atm-daemon-bootstrap",
+                "--features", "benchmark-harness", "--bin", "atm-daemon-benchmark",
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=600.0,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise SmokeError(f"could not build canonical sqlite writer probe: {error}") from error
+    if result.returncode != 0 or not probe.is_file():
+        detail = result.stderr.strip() or result.stdout.strip() or "no executable produced"
+        raise SmokeError(f"could not build canonical sqlite writer probe: {detail}")
+    return probe
+
+
 def source_revision() -> str:
     """Bind retained benchmark evidence to the checkout that built the daemon."""
     result = subprocess.run(
@@ -820,10 +938,10 @@ def cached_roster_heartbeat_body(
 
 def validate_transport(transport: str) -> str:
     """Keep platform transport selection explicit and comparable."""
-    if transport not in {"uds", "tcp"}:
-        raise SmokeError("capacity transport must be `uds` or `tcp`")
-    if os.name == "nt" and transport != "tcp":
-        raise SmokeError("Windows capacity benchmarking supports only `tcp`")
+    if transport not in {"sqlite", "uds", "tcp"}:
+        raise SmokeError("capacity transport must be `sqlite`, `uds`, or `tcp`")
+    if os.name == "nt" and transport == "uds":
+        raise SmokeError("Windows capacity benchmarking does not support UDS")
     return transport
 
 
@@ -860,6 +978,8 @@ def resolve_benchmark_target(
 def local_endpoint(transport: str) -> LocalEndpoint:
     """Resolve the documented UDS/TCP public API without a dispatcher seam."""
     runtime = os_account_home() / ".atm" / "daemon"
+    if transport == "sqlite":
+        raise SmokeError("sqlite capacity target has no public socket endpoint")
     if transport == "uds":
         return LocalEndpoint("uds", str(runtime / "atm-daemon.sock"))
     try:
@@ -1114,6 +1234,104 @@ def run_profile(
     }
 
 
+def run_direct_production_writer_profile(
+    benchmark_binary: Path,
+    environment: dict[str, str],
+    roster: CapacityRoster,
+    requested_messages: int,
+    sample_count: int,
+    workers: int,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Measure the real canonical Tokio write admission without raw SQL.
+
+    The owned daemon is deliberately stopped before this subprocess opens the
+    dedicated benchmark account.  Its `--direct-core-write` entrypoint calls
+    ``prepare_write_with_async_runtime`` and therefore exercises the same
+    roster validation, async writer queue, batch transaction, commit, and
+    reply-after-commit path as the released daemon, while excluding only the
+    public wire codec that the UDS/TCP targets measure separately.
+    """
+    direct_environment = dict(environment)
+    direct_environment.update(
+        {
+            "ATM_CAPACITY_CORE_TEAM": roster.team,
+            "ATM_CAPACITY_CORE_AGENT": roster.agent,
+            "ATM_CAPACITY_CORE_RECIPIENT": roster.recipient,
+        }
+    )
+    result = subprocess.run(
+        [
+            str(benchmark_binary), "--direct-core-write", str(requested_messages),
+            "--workers", str(workers), "--intervals", str(sample_count),
+            "--seconds", str(int(TARGET_PROFILE_DURATION_SECONDS)),
+        ],
+        cwd=ROOT,
+        env=direct_environment,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=TARGET_PROFILE_DURATION_SECONDS + 60.0,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip() or "no diagnostic output"
+        raise SmokeError(f"direct production-writer benchmark failed: {detail}")
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise SmokeError("direct production-writer benchmark returned malformed JSON") from error
+    if not isinstance(payload, dict) or payload.get("kind") != "canonical_core_write":
+        raise SmokeError("direct production-writer benchmark returned the wrong measurement kind")
+    direct_intervals = payload.get("intervals")
+    if not isinstance(direct_intervals, list) or len(direct_intervals) < sample_count:
+        raise SmokeError("direct production-writer benchmark returned too few intervals")
+    intervals: list[dict[str, Any]] = []
+    for index, item in enumerate(direct_intervals, start=1):
+        if not isinstance(item, dict):
+            raise SmokeError("direct production-writer interval is malformed")
+        accepted = int(item.get("accepted_count", -1))
+        requested = int(item.get("requested_count", -1))
+        elapsed = float(item.get("elapsed_seconds", 0.0))
+        rate = float(item.get("admissions_per_second", 0.0))
+        if requested != requested_messages or accepted < 0 or accepted > requested or elapsed <= 0 or rate < 0:
+            raise SmokeError("direct production-writer interval has invalid counts or timing")
+        intervals.append(
+            {
+                "interval": index,
+                "accepted_count": accepted,
+                "response_count": accepted,
+                "elapsed_seconds": elapsed,
+                "admissions_per_second": rate,
+                "latency_ms": {"min": 0.0, "p50": 0.0, "p95": 0.0, "max": 0.0},
+                "connections": 0,
+                "request_frames_per_second": rate,
+                "connections_per_second": 0.0,
+                "requested_count": requested,
+                "time_to_send_1k_s": elapsed * (1_000 / max(accepted, 1)),
+                "application_wire_bytes": {"request": 0, "response": 0, "total": 0},
+                "application_wire_bytes_per_second": 0.0,
+                "error_free": accepted == requested,
+                "bytes_per_second": 0.0,
+                "first_failure": None if accepted == requested else "direct production writer accepted fewer messages than requested",
+                "passed": accepted == requested,
+            }
+        )
+    run_duration = sum(float(item["elapsed_seconds"]) for item in intervals)
+    return (
+        {
+            "operation": "canonical_production_writer",
+            "recipient": f"{roster.recipient}@{roster.team}",
+            "requested_messages_per_sample": requested_messages,
+            "minimum_sample_count": sample_count,
+            "sample_count": len(intervals),
+            "target_duration_s": TARGET_PROFILE_DURATION_SECONDS,
+            "run_duration_s": run_duration,
+            "intervals": intervals,
+            "passed": all(item["passed"] for item in intervals),
+        },
+        payload,
+    )
+
+
 def run_cached_roster_heartbeat_probe(
     endpoint: LocalEndpoint,
     home: Path,
@@ -1295,7 +1513,7 @@ def run_capacity(
     managed_daemon: ManagedDaemonOptions | None = None,
     preflight_failure_code: str | None = None,
     preflight_failure: str | None = None,
-) -> tuple[int, Path]:
+) -> CapacityRunResult:
     """Start one branch daemon, exercise public UDS API, retain evidence, then clean up."""
     if managed_daemon is not None:
         raise SmokeError(
@@ -1315,6 +1533,7 @@ def run_capacity(
     home = validate_capacity_home(atm_home)
     atm = release_binary("atm")
     daemon = release_binary("atm-daemon")
+    direct_writer = canonical_writer_probe() if transport == "sqlite" else None
     roster = CapacityRoster.unique()
     env = runtime_environment(home, roster)
     target_command = (
@@ -1348,7 +1567,7 @@ def run_capacity(
         "host_arch": platform.machine().lower(),
         "command": target_command,
         "release": {"atm": str(atm), "atm_daemon": str(daemon)},
-        "execution_daemon": "shipped_atm_daemon",
+        "execution_daemon": "direct_production_writer" if transport == "sqlite" else "shipped_atm_daemon",
         "atm_home": str(home),
         "host_state_isolation": isolation_mode,
         "managed_log_level": managed_log_level,
@@ -1423,28 +1642,47 @@ def run_capacity(
         run_lifecycle_phase(
             evidence, "profile", lambda: prepare_capacity_roster(atm, env, home, roster),
         )
-        endpoint = local_endpoint(transport)
-        evidence["endpoint"] = {
-            "transport": endpoint.kind,
-            "address": endpoint.address,
-        }
-        if endpoint.kind == "uds" and not Path(str(endpoint.address)).exists():
-            raise SmokeError(f"daemon did not publish public local socket {endpoint.address}")
-        evidence["operational_checks"]["cached_roster_heartbeat"] = run_lifecycle_phase(
-            evidence,
-            "profile",
-            lambda: run_cached_roster_heartbeat_probe(
-                endpoint, home, frames_per_connection, workers, roster,
-            ),
-        )
-        profile = run_lifecycle_phase(
-            evidence,
-            "profile",
-            lambda: run_profile(
-                endpoint, home, frames_per_connection, requested_messages,
-                sample_count, workers, roster=roster,
-            ),
-        )
+        if transport == "sqlite":
+            if direct_writer is None:
+                raise SmokeError("direct production-writer binary is unavailable")
+            run_lifecycle_phase(evidence, "stop", stop_owned_daemon)
+            profile, direct_measurement = run_lifecycle_phase(
+                evidence,
+                "profile",
+                lambda: run_direct_production_writer_profile(
+                    direct_writer, env, roster, requested_messages, sample_count, workers,
+                ),
+            )
+            evidence["direct_sqlite_message_write"] = {
+                field: direct_measurement[field]
+                for field in (
+                    "kind", "requested_count", "accepted_count", "worker_count",
+                    "elapsed_seconds", "admissions_per_second",
+                )
+            }
+        else:
+            endpoint = local_endpoint(transport)
+            evidence["endpoint"] = {
+                "transport": endpoint.kind,
+                "address": endpoint.address,
+            }
+            if endpoint.kind == "uds" and not Path(str(endpoint.address)).exists():
+                raise SmokeError(f"daemon did not publish public local socket {endpoint.address}")
+            evidence["operational_checks"]["cached_roster_heartbeat"] = run_lifecycle_phase(
+                evidence,
+                "profile",
+                lambda: run_cached_roster_heartbeat_probe(
+                    endpoint, home, frames_per_connection, workers, roster,
+                ),
+            )
+            profile = run_lifecycle_phase(
+                evidence,
+                "profile",
+                lambda: run_profile(
+                    endpoint, home, frames_per_connection, requested_messages,
+                    sample_count, workers, roster=roster,
+                ),
+            )
         evidence["runs"] = [profile]
         evidence["sample_count"] = profile["sample_count"]
         evidence["target_duration_s"] = profile["target_duration_s"]
@@ -1539,7 +1777,74 @@ def run_capacity(
         raw_evidence_path = write_raw_evidence(raw_evidence_directory, evidence)
         evidence_path = write_evidence(evidence_directory, evidence)
         print(f"local benchmark trace: {raw_evidence_path}")
-    return (0 if evidence.get("passed") else 1), evidence_path
+    return CapacityRunResult(
+        0 if evidence.get("passed") else 1,
+        evidence_path,
+        raw_evidence_path,
+    )
+
+
+def run_required_f8_suite(args: argparse.Namespace) -> int:
+    """Run the ordinary command's unskippable sqlite/UDS/TCP/TLS matrix.
+
+    AO2.7 keeps target selection out of the ordinary ``just benchmark`` path:
+    its one result is a complete f8-v1 suite.  The legacy selectors below are
+    retained only for focused diagnostic tests and cannot represent the
+    default release benchmark command.
+    """
+    if any((args.target, args.transport, args.frames_per_connection, args.sustained, args.baseline)):
+        raise SmokeError("the required f8 suite does not permit target, transport, profile, or baseline selection")
+    codes: list[int] = []
+    for position, target in enumerate(BENCHMARK_TARGETS, start=1):
+        transport, peer_wire_security = BENCHMARK_TARGETS[target]
+        if args.atm_home is None:
+            with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temporary:
+                run = run_capacity(
+                    Path(temporary) / f"{CAPACITY_ROOT_PREFIX}{position}",
+                    args.evidence_dir,
+                    transport,
+                    8,
+                    ADMISSIONS_PER_INTERVAL,
+                    INTERVALS,
+                    args.workers,
+                    raw_evidence_directory=args.raw_evidence_dir,
+                    peer_wire_security=peer_wire_security,
+                    benchmark_target=target,
+                    comparison_required=False,
+                )
+        else:
+            run = run_capacity(
+                args.atm_home / f"{CAPACITY_ROOT_PREFIX}{position}",
+                args.evidence_dir,
+                transport,
+                8,
+                ADMISSIONS_PER_INTERVAL,
+                INTERVALS,
+                args.workers,
+                raw_evidence_directory=args.raw_evidence_dir,
+                peer_wire_security=peer_wire_security,
+                benchmark_target=target,
+                comparison_required=False,
+            )
+        codes.append(run.code)
+        try:
+            result = suite_target_result(target, run)
+        except SmokeError as error:
+            codes.append(1)
+            print(
+                f"FAIL required f8 target {target}: no ledger-safe measurement; {error}; "
+                f"compact={run.compact_evidence_path} raw={run.raw_evidence_path}"
+            )
+            continue
+        print(
+            f"{'PASS' if run.code == 0 else 'FAIL'} required f8 target {target}: "
+            f"p50={result.median_msg_per_second:.2f} msg/s "
+            f"p95={result.p95_msg_per_second:.2f} msg/s "
+            f"p99={result.p99_msg_per_second:.2f} msg/s "
+            f"accepted={result.accepted}/{result.requested} "
+            f"compact={run.compact_evidence_path} raw={result.raw_artifact}"
+        )
+    return 0 if all(code == 0 for code in codes) else 1
 
 
 def main() -> int:
@@ -1550,6 +1855,11 @@ def main() -> int:
         help="create the account-local benchmark manifest; refuses an account with existing ATM state",
     )
     parser.add_argument("--atm-home", type=Path)
+    parser.add_argument(
+        "--diagnostic-only",
+        action="store_true",
+        help="permit a selected historical profile; its output is not a complete benchmark suite",
+    )
     parser.add_argument(
         "--evidence-dir", type=Path,
         default=DEFAULT_EVIDENCE_DIR,
@@ -1597,6 +1907,15 @@ def main() -> int:
             raise SmokeError(f"benchmark-account bootstrap failed: {error}") from error
         print(f"benchmark-account manifest created: {account.manifest_path}")
         return 0
+    selected_profile = any(
+        (args.target, args.transport, args.frames_per_connection, args.sustained, args.baseline)
+    )
+    if not selected_profile:
+        if args.diagnostic_only:
+            raise SmokeError("diagnostic-only requires an explicit selected profile")
+        return run_required_f8_suite(args)
+    if not args.diagnostic_only:
+        raise SmokeError("selected benchmark profiles require --diagnostic-only and cannot be suite evidence")
     transport, peer_wire_security, benchmark_target = resolve_benchmark_target(
         args.target, args.transport,
     )
