@@ -1,62 +1,138 @@
 ---
 phase: AO2
 sprint: AO2.8
-title: Windows full benchmark-matrix parity after accepted M5 suite
-branch: future-evidence-worktree
+title: M5 full-matrix performance remediation and Windows parity
+branch: future-dev-worktree
 integration_branch: integrate/phase-ao2
 status: draft_for_review
 depends_on:
-  - AO2.7-m5-tcp-benchmark-parity
+  - AO2.7-m5-benchmark-harness-contract
+dependency_relations:
+  - prerequisite: AO2.7
+    relation: must_follow
+parallel_safe_with: []
 ---
 
-# AO2.8 — Windows full benchmark-matrix parity after accepted M5 suite
+# AO2.8 — M5 full-matrix performance remediation and Windows parity
 
 ## Decision
 
-AO2.8 runs the same mandatory `sqlite`, `uds`, `tcp`, and `tcp-tls` suite on
-fastpc4/Windows after AO2.7 has produced an accepted M5 suite for the same
-merged SHA. Windows is not permitted to run only TCP: if a required target is
-not implemented or supported, the Windows suite is blocked and the missing
-target must be fixed before parity can be claimed.
+AO2.8 consumes the AO2.7 contract and actively restores the intended operating
+point. It is not evidence-only: a low number, test failure, or harness/runtime
+defect starts root-cause and repair work in the same iteration. It preserves
+all functionality and fixes bad implementation choices rather than removing
+TLS, bypassing the public Tokio/Axum daemon path, disabling hooks, changing
+the workload, or compiling a special binary.
 
-For each target, the Windows f8 median must be at least 80% of the matching
-accepted M5 f8 median. The suite report calculates all four floors from the
-referenced M5 artifact; no floor is hardcoded. This is a cross-hardware parity
-floor, not a claim that the machines should have identical absolute results.
+The four M5 `f8-v1` target expectations are: `sqlite` ~=45,000, `uds` ~=24,000,
+`tcp` ~=22,500, and `tcp-tls` ~=22,500 messages/second. Historical UDS is
+5–10% faster than TCP, so a 24k target preserves that relationship. A 5%
+run-to-run tolerance makes the closure floors SQLite >=42,750, UDS >=22,800,
+TCP >=21,375, and TCP+TLS >=21,375 msg/s. The 16k TCP/TLS result is a material
+regression, not an acceptable redefinition of success. The targets apply to
+the released production path, not separate best-effort measurements. Windows
+uses fastpc4 only after M5 acceptance; its target is 85% of each matching M5
+median, with the same explicit 5% run-to-run tolerance.
 
-## Required procedure and closure
+## Required M5 remediation loop
 
-1. Bind the suite to the accepted M5 manifest: exact source SHA, binary hashes,
-   target medians, and computed 80% floor for every target.
-2. Run one ordinary `just benchmark` invocation under Windows' dedicated
-   benchmark OS account. It must retain the complete four-target matrix,
-   snapshot-before-roster, exact restore between targets/finally, and no
-   interactive-account access.
-3. Preserve all raw samples, percentiles, accepted/errors, target diagnostics,
-   suite settings, daemon logs, and restore evidence.
-4. If any Windows target misses its floor, take the first failing target in
-   `sqlite`, `uds`, `tcp`, `tcp-tls` order; reproduce it, inspect the released
-   hot path against its faster adjacent layer, remove the measured unjustified
-   work while retaining functionality, add a focused regression test, run all
-   correctness/boundary gates, and rerun the entire Windows matrix. An
-   ordinary test, harness, configuration, or runtime failure is fixed in that
-   iteration, not reported as a stopping point. Do not tune one target in
-   isolation, skip UDS, disable TLS, or use a Windows-only fast path.
-5. AO2.8 passes only when all four targets meet their computed floors in one
-   complete suite. If no safe improvement remains after exhaustive profiling,
-   it is blocked with the same complete analysis required by AO2.7, never
-   passed as partial evidence.
+1. Run the ordinary `just benchmark` suite on M5. It must publish all four
+   results through AO2.7's exact `f8-v1` manifest contract; partial artifacts
+   are invalid.
+2. Choose the first failing target in the fixed order `sqlite`, `uds`, `tcp`,
+   `tcp-tls`. All four values remain in every subsequent report, but that
+   target remains the active investigation until a later complete suite clears
+   it.
+3. Inspect the released hot path and its faster adjacent layer. Quantify
+   writer batch/transaction/commit/fsync work; allocations/copies and
+   serialization; router/middleware/hook work; locks/channels; TCP framing and
+   connection behavior; logging; and TLS stream/handshake work. Capture a
+   profiler/allocation trace when wall-clock measurements cannot distinguish
+   the limiting operation.
+4. Make the smallest justified production correction, with a focused behavior
+   and performance-invariant regression test. Preserve ordering, savepoints,
+   reply-after-commit durability, typed error/recovery context, active hook,
+   public API, and crate boundaries. TLS work must remain outside plaintext
+   TCP's steady-state path.
+5. Run focused tests, architecture/boundary checks, `just lint`, and
+   `just test`; then rerun the complete M5 matrix. A target-only rerun is
+   diagnostic evidence, not acceptance evidence.
+
+An ordinary test, configuration, fixture, report-schema, daemon, or runtime
+failure is repaired in the active iteration. Its progress report records the
+reproduction, measured root cause, patch, test evidence, and the complete
+matrix; reporting the failure alone is not an outcome.
+
+## Reproducibility and host-noise protocol
+
+Acceptance requires three consecutive complete M5 suites from the same
+candidate revision and `f8-v1` profile. Each must be independently
+snapshot/restored and must retain raw samples. The accepted artifact is the
+versioned JSON at
+`docs/plans/phase-ao2/artifacts/ao2-7-m5-suite-<candidate_revision>.json`;
+it contains all three suite IDs, raw hashes/paths, host/kernel/power facts,
+process/load/memory/disk telemetry captured immediately before and after each
+suite, and all four target distributions.
+
+Host contention or power state is not an explanation without that telemetry.
+If it appears material, stop only the owned benchmark daemon, eliminate the
+identified competing process or restore the documented fixed-power condition,
+and repeat all three complete suites. The old run remains in the artifact; a
+quiet rerun cannot replace it silently.
+
+`accepted_m5` means exactly: schema validates, `candidate_revision` equals the
+post-merge `integrate/phase-ao2` SHA, harness/profile/raw hashes match, three
+complete results exist, every target is error-free, every target meets its
+threshold, and the manifest's `accepted_m5=true` is derived from—not manually
+set beside—those facts. The AO2.8 Windows phase must fail closed if this
+artifact is missing, malformed, mismatched, or non-accepted.
+
+## Checkpoint and escalation
+
+After three full root-cause/fix/retest cycles or two focused engineering days,
+hold an explicit checkpoint. This is **not** permission to stop: it packages
+the full matrix history, profiles/traces, rejected hypotheses, exact changed
+paths, and the next highest-value fix. The work continues in an immediately
+created continuation worktree unless an architecture/product decision says
+otherwise.
+
+The 5% tolerance is already incorporated into every stated closure floor.
+There is no additional allowance below a floor. A target below its floor, a
+missing target, or an uninvestigated ordinary defect remains blocked and is
+never passed without an explicit product decision that changes the documented
+baseline and threshold.
+
+## Windows parity phase
+
+After `accepted_m5`, run the same three complete `f8-v1` suites under fastpc4's
+dedicated benchmark account. For each target, compute the expected Windows
+median as `accepted_m5_p50 * 0.85`; its closure floor is that expected value
+times `0.95` (an effective 80.75% of the M5 value). Display both values rounded
+half-up to two fractional messages/second, while comparing unrounded measured
+values to the unrounded floor. The Windows artifact records both values and the
+M5 manifest SHA.
+
+Windows must execute `sqlite`, `uds`, `tcp`, and `tcp-tls`; a Windows
+TCP-only/WSL/VM substitute is incomplete. It must record the native OS/CPU,
+power plan, Defender/AV status without exclusions, virtualization state, and
+all raw hashes. It may not change power policy, add exclusions, use WSL, or
+use a Windows-only fast path merely to improve a result. Below-floor results
+follow the same root-cause/fix/full-matrix loop before any conclusion.
 
 ## Acceptance criteria
 
-| Requirement | Evidence |
+| Property | Required proof |
 | --- | --- |
-| Complete suite | Exactly one accepted artifact each for `sqlite`, `uds`, `tcp`, and `tcp-tls`; no omitted target. |
-| Comparable source | Same merged SHA and matched released CLI/Tokio-Axum daemon pair as M5. |
-| Thresholds | Each Windows f8 median ≥80% of the matching accepted M5 f8 median. |
-| Safety | Dedicated-account preflight and verified snapshot/restore before, between, and after targets. |
-| Integrity | All target samples and diagnostics are retained; no unexpected errors or partial publication. |
-| Closure | One complete all-target Windows suite passes, or the sprint remains blocked only by an evidenced major/external constraint after exhaustive measured remediation. |
+| M5 closure | Three consecutive complete `f8-v1` M5 suites meet SQLite >=42,750, UDS >=22,800, TCP >=21,375, and TCP+TLS >=21,375 msg/s (the 5%-tolerant floors for 45k/24k/22.5k/22.5k historical parity targets). |
+| No false completion | Low numbers and ordinary faults have RCA, repair, test/gate evidence, and a next full-matrix result. |
+| M5 handoff | AO2.7's immutable, schema-valid `accepted_m5` manifest is committed at the fixed path for the exact tested post-merge SHA. |
+| Windows parity | Three complete native fastpc4 matrices meet the 85%-of-M5 target with its stated 5% tolerance (>=80.75% of matching M5 values), using the stated precision rule. |
+| Matrix reports | Each iteration reports suite ID/SHA, all four medians and thresholds, accepted/errors, active target, and change since prior suite. |
+| Safety | Every suite uses AO2.5.4's dedicated account and verified snapshot/restore; no interactive database is accessed. |
 
-M5, M4, synthetic results, or a TCP-only artifact cannot substitute for this
-Windows result.
+## Rollback
+
+Each remediation is a scoped production commit with focused regression tests;
+revert the offending commit if a complete matrix exposes a regression. Harness
+and benchmark-account safety remain intact. No result authorizes a legacy
+synchronous daemon path or a bypass of the released CLI/daemon pair.
