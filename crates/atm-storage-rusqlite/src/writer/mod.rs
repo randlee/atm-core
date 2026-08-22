@@ -14,10 +14,9 @@ use atm_storage::{AtmError, AtmErrorCode};
 use rusqlite::TransactionBehavior;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TryRecvError, TrySendError};
+use std::sync::mpsc::{self, RecvTimeoutError, SyncSender};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
-use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 pub(crate) const CHANNEL_CAPACITY: usize = 256;
 // Coalesce writes that arrive immediately after the first admission so one
@@ -52,23 +51,17 @@ impl ReplyTx {
 }
 
 enum WriterMessage {
-    Submit {
-        op: Box<WriteOp>,
-        reply: ReplyTx,
-        _permit: OwnedSemaphorePermit,
-    },
+    Submit { op: Box<WriteOp>, reply: ReplyTx },
     Shutdown,
 }
 
 struct QueuedWrite {
     op: Box<WriteOp>,
     reply: ReplyTx,
-    _permit: OwnedSemaphorePermit,
 }
 
 pub(crate) struct SqliteWriter {
-    sender: Option<SyncSender<WriterMessage>>,
-    capacity: Arc<Semaphore>,
+    sender: Option<tokio::sync::mpsc::Sender<WriterMessage>>,
     worker: Option<JoinHandle<()>>,
     observability: Arc<dyn SqliteObservability>,
     write_op_deadline: Duration,
@@ -110,8 +103,7 @@ impl SqliteWriter {
         let mut connection = open_writer_connection_for_target(target.as_ref())?;
         ensure_schema(&mut connection, target.as_ref())?;
 
-        let (sender, receiver) = mpsc::sync_channel(channel_capacity);
-        let capacity = Arc::new(Semaphore::new(channel_capacity));
+        let (sender, receiver) = tokio::sync::mpsc::channel(channel_capacity);
         let worker_observability = Arc::clone(&observability);
         let worker = thread::Builder::new()
             .name("atm-sqlite-writer".to_string())
@@ -130,7 +122,6 @@ impl SqliteWriter {
             })?;
         Ok(Self {
             sender: Some(sender),
-            capacity,
             worker: Some(worker),
             observability,
             write_op_deadline,
@@ -152,58 +143,29 @@ impl SqliteWriter {
         })?;
         let (reply_tx, reply_rx) = mpsc::sync_channel(1);
         let deadline = Instant::now() + self.write_op_deadline;
-        let permit = loop {
-            match Arc::clone(&self.capacity).try_acquire_owned() {
-                Ok(permit) => break permit,
-                Err(tokio::sync::TryAcquireError::NoPermits) if Instant::now() < deadline => {
-                    thread::park_timeout(SUBMIT_RETRY_INTERVAL);
-                }
-                Err(tokio::sync::TryAcquireError::NoPermits) => {
-                    let error = writer_queue_timeout_error(self.write_op_deadline);
-                    self.observability
-                        .emit_or_warn(SqliteObservabilityEvent::new(
-                            "writer_submit",
-                            SqliteObservabilityOutcome::Timeout,
-                            error.message().to_owned(),
-                            Some(error.code()),
-                        ));
-                    return Err(error);
-                }
-                Err(tokio::sync::TryAcquireError::Closed) => {
-                    let error = writer_channel_closed_error();
-                    self.observability
-                        .emit_or_warn(SqliteObservabilityEvent::new(
-                            "writer_submit",
-                            SqliteObservabilityOutcome::Failed,
-                            error.message().to_owned(),
-                            Some(error.code()),
-                        ));
-                    return Err(error);
-                }
-            }
-        };
-        let message = WriterMessage::Submit {
+        let mut message = WriterMessage::Submit {
             op: Box::new(op),
             reply: ReplyTx::Sync(reply_tx),
-            _permit: permit,
         };
         loop {
             match sender.try_send(message) {
                 Ok(()) => break,
-                // The permit is acquired before enqueueing, so a full queue
-                // here would violate the writer's fixed-capacity invariant.
-                Err(TrySendError::Full(_)) => {
-                    let error = writer_channel_closed_error();
-                    self.observability
-                        .emit_or_warn(SqliteObservabilityEvent::new(
-                            "writer_submit",
-                            SqliteObservabilityOutcome::Failed,
-                            error.message().to_owned(),
-                            Some(error.code()),
-                        ));
-                    return Err(error);
+                Err(tokio::sync::mpsc::error::TrySendError::Full(returned)) => {
+                    if Instant::now() >= deadline {
+                        let error = writer_queue_timeout_error(self.write_op_deadline);
+                        self.observability
+                            .emit_or_warn(SqliteObservabilityEvent::new(
+                                "writer_submit",
+                                SqliteObservabilityOutcome::Timeout,
+                                error.message().to_owned(),
+                                Some(error.code()),
+                            ));
+                        return Err(error);
+                    }
+                    message = returned;
+                    thread::park_timeout(SUBMIT_RETRY_INTERVAL);
                 }
-                Err(TrySendError::Disconnected(_)) => {
+                Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
                     let error = writer_channel_closed_error();
                     self.observability
                         .emit_or_warn(SqliteObservabilityEvent::new(
@@ -259,49 +221,34 @@ impl SqliteWriter {
             error
         })?;
         let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
-        let permit = tokio::time::timeout(
-            self.write_op_deadline,
-            Arc::clone(&self.capacity).acquire_owned(),
-        )
-        .await
-        .map_err(|_| {
-            let error = writer_queue_timeout_error(self.write_op_deadline);
-            self.observability
-                .emit_or_warn(SqliteObservabilityEvent::new(
-                    "writer_submit",
-                    SqliteObservabilityOutcome::Timeout,
-                    error.message().to_owned(),
-                    Some(error.code()),
-                ));
-            error
-        })?
-        .map_err(|_| {
-            let error = writer_channel_closed_error();
-            self.observability
-                .emit_or_warn(SqliteObservabilityEvent::new(
-                    "writer_submit",
-                    SqliteObservabilityOutcome::Failed,
-                    error.message().to_owned(),
-                    Some(error.code()),
-                ));
-            error
-        })?;
         let message = WriterMessage::Submit {
             op: Box::new(op),
             reply: ReplyTx::Async(reply_tx),
-            _permit: permit,
         };
-        sender.try_send(message).map_err(|_| {
-            let error = writer_channel_closed_error();
-            self.observability
-                .emit_or_warn(SqliteObservabilityEvent::new(
-                    "writer_submit",
-                    SqliteObservabilityOutcome::Failed,
-                    error.message().to_owned(),
-                    Some(error.code()),
-                ));
-            error
-        })?;
+        tokio::time::timeout(self.write_op_deadline, sender.send(message))
+            .await
+            .map_err(|_| {
+                let error = writer_queue_timeout_error(self.write_op_deadline);
+                self.observability
+                    .emit_or_warn(SqliteObservabilityEvent::new(
+                        "writer_submit",
+                        SqliteObservabilityOutcome::Timeout,
+                        error.message().to_owned(),
+                        Some(error.code()),
+                    ));
+                error
+            })?
+            .map_err(|_| {
+                let error = writer_channel_closed_error();
+                self.observability
+                    .emit_or_warn(SqliteObservabilityEvent::new(
+                        "writer_submit",
+                        SqliteObservabilityOutcome::Failed,
+                        error.message().to_owned(),
+                        Some(error.code()),
+                    ));
+                error
+            })?;
         tokio::time::timeout(self.write_op_deadline, reply_rx)
             .await
             .map_err(|_| {
@@ -336,8 +283,11 @@ impl Drop for SqliteWriter {
 
         if let Some(sender) = sender {
             match sender.try_send(WriterMessage::Shutdown) {
-                Ok(()) | Err(TrySendError::Disconnected(_)) => {}
-                Err(TrySendError::Full(_)) => {
+                Ok(()) | Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {}
+                // Accepted risk: std::sync::mpsc::SyncSender does not expose a
+                // queue-depth probe here, so shutdown logging cannot report an
+                // exact depth without replacing the channel primitive.
+                Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
                     let detail = "sqlite writer shutdown signal skipped because the bounded queue was full; relying on channel disconnect to let the writer exit once in-flight work drains";
                     tracing::warn!("{detail}");
                     self.observability
@@ -434,14 +384,17 @@ fn writer_unavailable_reply_error() -> AtmError {
     AtmError::daemon_unavailable("sqlite writer is unavailable during shutdown")
 }
 
-fn drain_submit_replies(receiver: &Receiver<WriterMessage>) {
+fn drain_submit_replies(receiver: &mut tokio::sync::mpsc::Receiver<WriterMessage>) {
     loop {
         match receiver.try_recv() {
             Ok(WriterMessage::Submit { reply, .. }) => {
                 reply.send(Err(writer_unavailable_reply_error()));
             }
             Ok(WriterMessage::Shutdown) => continue,
-            Err(TryRecvError::Empty | TryRecvError::Disconnected) => break,
+            Err(
+                tokio::sync::mpsc::error::TryRecvError::Empty
+                | tokio::sync::mpsc::error::TryRecvError::Disconnected,
+            ) => break,
         }
     }
 }
@@ -479,94 +432,95 @@ fn checkpoint_writer_connection(
 fn writer_loop(
     target: Arc<SharedDbTarget>,
     mut connection: SqliteConnection,
-    receiver: Receiver<WriterMessage>,
+    mut receiver: tokio::sync::mpsc::Receiver<WriterMessage>,
     observability: Arc<dyn SqliteObservability>,
 ) {
     let mut cache = stmt_cache::WriterStatementCache;
     let mut shutting_down = false;
     loop {
-        let Some(first) = receive_first_message(&receiver, shutting_down) else {
+        let Some(first) = receive_first_message(&mut receiver, shutting_down) else {
             break;
         };
         let mut batch = vec![first];
-        collect_batch(&receiver, &mut batch, &mut shutting_down);
+        collect_batch(&mut receiver, &mut batch, &mut shutting_down);
         process_batch(&target, &mut connection, &mut cache, batch);
     }
     checkpoint_writer_connection(target.as_ref(), &mut connection, observability.as_ref());
 }
 
 fn receive_first_message(
-    receiver: &Receiver<WriterMessage>,
+    receiver: &mut tokio::sync::mpsc::Receiver<WriterMessage>,
     shutting_down: bool,
 ) -> Option<QueuedWrite> {
     if shutting_down {
         match receiver.try_recv() {
-            Ok(WriterMessage::Submit { op, reply, _permit }) => {
-                Some(QueuedWrite { op, reply, _permit })
-            }
+            Ok(WriterMessage::Submit { op, reply }) => Some(QueuedWrite { op, reply }),
             Ok(WriterMessage::Shutdown) => {
                 drain_submit_replies(receiver);
                 None
             }
-            Err(TryRecvError::Empty | TryRecvError::Disconnected) => None,
+            Err(
+                tokio::sync::mpsc::error::TryRecvError::Empty
+                | tokio::sync::mpsc::error::TryRecvError::Disconnected,
+            ) => None,
         }
     } else {
-        match receiver.recv() {
-            Ok(WriterMessage::Submit { op, reply, _permit }) => {
-                Some(QueuedWrite { op, reply, _permit })
-            }
-            Ok(WriterMessage::Shutdown) => {
+        match receiver.blocking_recv() {
+            Some(WriterMessage::Submit { op, reply }) => Some(QueuedWrite { op, reply }),
+            Some(WriterMessage::Shutdown) => {
                 drain_submit_replies(receiver);
                 None
             }
-            Err(_) => None,
+            None => None,
         }
     }
 }
 
 fn collect_batch(
-    receiver: &Receiver<WriterMessage>,
+    receiver: &mut tokio::sync::mpsc::Receiver<WriterMessage>,
     batch: &mut Vec<QueuedWrite>,
     shutting_down: &mut bool,
 ) {
-    let deadline = Instant::now() + BATCH_TIME_BUDGET;
+    collect_batch_with_coalescing_window(receiver, batch, shutting_down, || {
+        // This is a dedicated synchronous writer thread, not a Tokio worker.
+        // Sleeping here retains the bounded 1 ms admission coalescing contract
+        // without creating an inner Tokio timer runtime or blocking an async
+        // executor.
+        thread::sleep(BATCH_TIME_BUDGET);
+    });
+}
+
+fn collect_batch_with_coalescing_window<F>(
+    receiver: &mut tokio::sync::mpsc::Receiver<WriterMessage>,
+    batch: &mut Vec<QueuedWrite>,
+    shutting_down: &mut bool,
+    wait_for_more: F,
+) where
+    F: FnOnce(),
+{
+    let mut wait_for_more = Some(wait_for_more);
     loop {
         match receiver.try_recv() {
-            Ok(WriterMessage::Submit { op, reply, _permit }) => {
-                batch.push(QueuedWrite { op, reply, _permit });
+            Ok(WriterMessage::Submit { op, reply }) => {
+                batch.push(QueuedWrite { op, reply });
                 continue;
             }
             Ok(WriterMessage::Shutdown) => {
                 *shutting_down = true;
                 continue;
             }
-            Err(TryRecvError::Disconnected) => {
+            Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
                 *shutting_down = true;
                 return;
             }
-            Err(TryRecvError::Empty) => {
-                if *shutting_down {
-                    return;
-                }
-                let Some(remaining) = deadline.checked_duration_since(Instant::now()) else {
-                    return;
-                };
-                if remaining.is_zero() {
-                    return;
-                }
-                match receiver.recv_timeout(remaining) {
-                    Ok(WriterMessage::Submit { op, reply, _permit }) => {
-                        batch.push(QueuedWrite { op, reply, _permit });
-                    }
-                    Ok(WriterMessage::Shutdown) => {
-                        *shutting_down = true;
-                    }
-                    Err(RecvTimeoutError::Timeout) => return,
-                    Err(RecvTimeoutError::Disconnected) => {
-                        *shutting_down = true;
-                        return;
+            Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {
+                if !*shutting_down {
+                    if let Some(wait_for_more) = wait_for_more.take() {
+                        wait_for_more();
+                        continue;
                     }
                 }
+                return;
             }
         }
     }
@@ -706,48 +660,46 @@ mod tests {
         WriterMessage::Submit {
             op: Box::new(WriteOp::UpsertMessages(Vec::new())),
             reply: ReplyTx::Sync(reply),
-            _permit: Arc::new(Semaphore::new(1))
-                .try_acquire_owned()
-                .expect("test permit"),
         }
     }
 
-    fn first_queued_write(receiver: &Receiver<WriterMessage>) -> QueuedWrite {
-        let WriterMessage::Submit { op, reply, _permit } = receiver.recv().expect("first write")
-        else {
+    fn first_queued_write(
+        receiver: &mut tokio::sync::mpsc::Receiver<WriterMessage>,
+    ) -> QueuedWrite {
+        let WriterMessage::Submit { op, reply } = receiver.try_recv().expect("first write") else {
             panic!("test queue contains only submit messages");
         };
-        QueuedWrite { op, reply, _permit }
+        QueuedWrite { op, reply }
     }
 
     #[test]
-    fn batch_collection_drains_all_queued_writes_within_its_window() {
-        let (sender, receiver) = mpsc::sync_channel(128);
-        sender.send(queued_write()).expect("first queued write");
+    fn batch_collection_drains_all_already_queued_writes() {
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(128);
+        sender.try_send(queued_write()).expect("first queued write");
         for _ in 0..96 {
-            sender.send(queued_write()).expect("queued write");
+            sender.try_send(queued_write()).expect("queued write");
         }
-        let first = first_queued_write(&receiver);
+        let first = first_queued_write(&mut receiver);
         let mut batch = vec![first];
         let mut shutting_down = false;
-        collect_batch(&receiver, &mut batch, &mut shutting_down);
+        collect_batch(&mut receiver, &mut batch, &mut shutting_down);
 
         assert_eq!(batch.len(), 97);
         assert!(!shutting_down);
     }
 
     #[test]
-    fn batch_collection_leaves_write_received_after_window_for_next_transaction() {
-        let (sender, receiver) = mpsc::sync_channel(8);
-        sender.send(queued_write()).expect("first queued write");
-        let first = first_queued_write(&receiver);
+    fn batch_collection_returns_when_the_admitted_burst_is_drained() {
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(8);
+        sender.try_send(queued_write()).expect("first queued write");
+        let first = first_queued_write(&mut receiver);
         let mut batch = vec![first];
         let mut shutting_down = false;
-        collect_batch(&receiver, &mut batch, &mut shutting_down);
+        collect_batch(&mut receiver, &mut batch, &mut shutting_down);
 
         assert_eq!(batch.len(), 1);
         assert!(!shutting_down);
-        sender.send(queued_write()).expect("later queued write");
+        sender.try_send(queued_write()).expect("later queued write");
         assert!(matches!(
             receiver.try_recv(),
             Ok(WriterMessage::Submit { .. })
@@ -755,17 +707,35 @@ mod tests {
     }
 
     #[test]
-    fn batch_collection_drains_an_already_queued_shutdown() {
-        let (sender, receiver) = mpsc::sync_channel(8);
-        sender.send(queued_write()).expect("first queued write");
-        sender.send(queued_write()).expect("queued write");
-        sender
-            .send(WriterMessage::Shutdown)
-            .expect("queued shutdown");
-        let first = first_queued_write(&receiver);
+    fn batch_collection_includes_write_arriving_during_coalescing_window() {
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(8);
+        sender.try_send(queued_write()).expect("first queued write");
+        let first = first_queued_write(&mut receiver);
         let mut batch = vec![first];
         let mut shutting_down = false;
-        collect_batch(&receiver, &mut batch, &mut shutting_down);
+
+        collect_batch_with_coalescing_window(&mut receiver, &mut batch, &mut shutting_down, || {
+            sender
+                .try_send(queued_write())
+                .expect("write inside coalescing window")
+        });
+
+        assert_eq!(batch.len(), 2);
+        assert!(!shutting_down);
+    }
+
+    #[test]
+    fn batch_collection_drains_an_already_queued_shutdown() {
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(8);
+        sender.try_send(queued_write()).expect("first queued write");
+        sender.try_send(queued_write()).expect("queued write");
+        sender
+            .try_send(WriterMessage::Shutdown)
+            .expect("queued shutdown");
+        let first = first_queued_write(&mut receiver);
+        let mut batch = vec![first];
+        let mut shutting_down = false;
+        collect_batch(&mut receiver, &mut batch, &mut shutting_down);
 
         assert_eq!(batch.len(), 2);
         assert!(shutting_down);
@@ -773,14 +743,14 @@ mod tests {
 
     #[test]
     fn batch_collection_marks_disconnected_receiver_for_shutdown() {
-        let (sender, receiver) = mpsc::sync_channel(8);
-        sender.send(queued_write()).expect("first queued write");
-        let first = first_queued_write(&receiver);
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(8);
+        sender.try_send(queued_write()).expect("first queued write");
+        let first = first_queued_write(&mut receiver);
         drop(sender);
         let mut batch = vec![first];
         let mut shutting_down = false;
 
-        collect_batch(&receiver, &mut batch, &mut shutting_down);
+        collect_batch(&mut receiver, &mut batch, &mut shutting_down);
 
         assert_eq!(batch.len(), 1);
         assert!(shutting_down);
