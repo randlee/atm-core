@@ -183,7 +183,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         path = Path(tempfile.gettempdir()) / "atm-capacity-unit-home"
         self.assertEqual(RUNNER.validate_capacity_home(path), path.resolve())
 
-    def test_isolation_accepts_clean_user_or_explicit_backup_restore(self):
+    def test_isolation_accepts_only_a_dedicated_clean_user(self):
         with mock.patch.dict(os.environ, {"ATM_CAPACITY_ISOLATED_OS_USER": "1"}, clear=False):
             self.assertEqual(RUNNER.select_host_state_isolation(), "isolated_os_user")
         with mock.patch.dict(
@@ -191,22 +191,18 @@ class AdmissionCapacityTests(unittest.TestCase):
             {"ATM_CAPACITY_ISOLATED_OS_USER": "", "ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE": "1"},
             clear=False,
         ):
-            self.assertEqual(RUNNER.select_host_state_isolation(), "backup_restore")
+            with self.assertRaisesRegex(RUNNER.SmokeError, "is retired"):
+                RUNNER.select_host_state_isolation()
 
-    def test_backup_restore_returns_the_complete_prior_host_state(self):
+    def test_host_state_backup_refuses_without_changing_the_primary_database(self):
         with tempfile.TemporaryDirectory() as temp:
             os_home = Path(temp)
             original = os_home / ".atm" / "db"
             original.mkdir(parents=True)
             (original / "mail.db").write_text("prior state", encoding="utf-8")
-            release = os_home / ".atm" / "releases" / "candidate" / "atm"
-            release.parent.mkdir(parents=True)
-            release.write_text("selected binary", encoding="utf-8")
             with mock.patch.object(RUNNER, "os_account_home", return_value=os_home):
-                backup = RUNNER.HostStateBackup.begin()
-                (os_home / ".atm" / "db" / "mail.db").write_text("benchmark state", encoding="utf-8")
-                self.assertEqual(release.read_text(encoding="utf-8"), "selected binary")
-                backup.restore()
+                with self.assertRaisesRegex(RUNNER.SmokeError, "refusing to replace"):
+                    RUNNER.HostStateBackup.begin()
             self.assertEqual((original / "mail.db").read_text(encoding="utf-8"), "prior state")
 
     def test_launch_agent_override_preserves_source_and_replaces_only_wire_mode(self):
@@ -278,6 +274,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(resolved.cli_link, Path("/active/atm"))
         self.assertEqual(resolved.daemon_link, Path("/active/atm-daemon"))
 
+    @unittest.skip("retired: benchmarks must not operate the primary user's daemon or database")
     def test_managed_mode_uses_temporary_plist_then_restarts_original_pair(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -348,6 +345,60 @@ class AdmissionCapacityTests(unittest.TestCase):
         backup.assert_not_called()
         daemon_switch.assert_not_called()
 
+    def test_managed_lifecycle_refuses_before_any_daemon_switch(self):
+        options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
+        with mock.patch.object(RUNNER, "daemon_switch_result") as daemon_switch:
+            with self.assertRaisesRegex(RUNNER.SmokeError, "retired"):
+                RUNNER.ManagedDaemonLifecycle(options).begin()
+
+        daemon_switch.assert_not_called()
+
+    def test_run_capacity_refuses_managed_daemon_before_any_host_mutation(self):
+        options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
+        captured: dict[str, object] = {}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            home = root / "atm-capacity-benchmark"
+            primary = root / "primary" / ".atm" / "db"
+            primary.mkdir(parents=True)
+            mail_db = primary / "mail.db"
+            mail_db.write_text("primary-state", encoding="utf-8")
+            with (
+                mock.patch.object(RUNNER, "select_host_state_isolation", return_value="isolated_os_user"),
+                mock.patch.object(RUNNER, "daemon_switch_result") as daemon_switch,
+                mock.patch.object(RUNNER, "require_clean_host_daemon_state") as clean,
+                mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"),
+                mock.patch.object(
+                    RUNNER,
+                    "write_evidence",
+                    side_effect=lambda _path, value: (captured.update(value), root / "evidence.json")[1],
+                ),
+            ):
+                code, _evidence = RUNNER.run_capacity(
+                    home, root, "tcp", 1, sample_count=1,
+                    raw_evidence_directory=root, managed_daemon=options,
+                )
+
+            self.assertEqual(code, 1)
+            self.assertIn("managed-daemon benchmarking is retired", str(captured["failure"]))
+            self.assertEqual(mail_db.read_text(encoding="utf-8"), "primary-state")
+            self.assertFalse(home.exists())
+
+        clean.assert_not_called()
+        daemon_switch.assert_not_called()
+
+    def test_main_rejects_retired_managed_host_arguments_before_running_a_benchmark(self):
+        with (
+            mock.patch.object(sys, "argv", ["run_admission_capacity.py", "--managed-service", "x"]),
+            mock.patch.object(RUNNER, "run_capacity") as run_capacity,
+        ):
+            with self.assertRaises(SystemExit) as exit_error:
+                RUNNER.main()
+
+        self.assertEqual(exit_error.exception.code, 2)
+        run_capacity.assert_not_called()
+
+    @unittest.skip("retired: benchmarks must not operate the primary user's daemon or database")
     def test_managed_lifecycle_quiesces_then_restores_original_state_and_pair(self):
         options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
         before = healthy_managed_status()
@@ -380,6 +431,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             [("status", False), ("quiesce", False), ("restart", False), ("status", True)],
         )
 
+    @unittest.skip("retired: benchmarks must not operate the primary user's daemon or database")
     def test_managed_lifecycle_recovers_an_unavailable_pre_quiesce_daemon(self):
         """Initial selector capture must not require the very doctor recovery restores."""
         options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
@@ -413,6 +465,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             [("status", False), ("quiesce", False), ("restart", False), ("status", True)],
         )
 
+    @unittest.skip("retired: benchmarks must not operate the primary user's daemon or database")
     def test_managed_lifecycle_executes_and_restarts_the_selected_service_on_disposable_state(self):
         options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
         calls: list[tuple[str, bool]] = []
@@ -447,6 +500,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             ],
         )
 
+    @unittest.skip("retired: benchmarks must not operate the primary user's daemon or database")
     def test_backup_snapshot_failure_restarts_the_managed_pair(self):
         options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
         status = healthy_managed_status()
@@ -466,6 +520,7 @@ class AdmissionCapacityTests(unittest.TestCase):
 
         self.assertEqual(calls, ["status", "quiesce", "restart", "status"])
 
+    @unittest.skip("retired: benchmarks must not operate the primary user's daemon or database")
     def test_restore_attempts_restart_and_doctor_even_when_state_restore_fails(self):
         options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
         calls: list[str] = []
@@ -532,6 +587,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             with self.assertRaisesRegex(RUNNER.SmokeError, "selected release"):
                 RUNNER.daemon_switch_result("status", options, doctor=True)
 
+    @unittest.skip("retired: benchmarks must not operate the primary user's daemon or database")
     def test_restore_surfaces_a_failed_doctor_after_state_is_put_back(self):
         options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
         status = healthy_managed_status()
@@ -562,6 +618,7 @@ class AdmissionCapacityTests(unittest.TestCase):
 
         self.assertEqual(calls, ["status", "quiesce", "restart", "status"])
 
+    @unittest.skip("retired: benchmarks must not operate the primary user's daemon or database")
     def test_benchmark_failure_restores_managed_state_and_verifies_doctor(self):
         options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
         status = healthy_managed_status()
