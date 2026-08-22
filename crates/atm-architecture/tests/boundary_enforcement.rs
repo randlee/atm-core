@@ -1526,6 +1526,25 @@ fn atm_runtime_must_not_depend_on_atm_storage_rusqlite() {
 }
 
 #[test]
+fn sqlite_writer_batch_window_is_private_to_storage() {
+    let root = workspace_root();
+    let writer = read_source(&root.join("crates/atm-storage-rusqlite/src/writer/mod.rs"));
+    assert!(writer.contains("const BATCH_TIME_BUDGET: Duration = Duration::from_millis(1);"));
+    assert!(!writer.contains("pub(crate) const BATCH_TIME_BUDGET"));
+
+    for source in [
+        "crates/atm-http-runtime/src/http1_server.rs",
+        "crates/atm-http-runtime/src/client.rs",
+        "scripts/smoke/run_admission_capacity.py",
+    ] {
+        assert!(
+            !read_source(&root.join(source)).contains("BATCH_TIME_BUDGET"),
+            "the writer batch window must not become {source} configuration"
+        );
+    }
+}
+
+#[test]
 fn atm_storage_rusqlite_must_not_depend_on_atm_runtime() {
     assert_forbidden_edge_absent("atm-storage-rusqlite", "atm-runtime");
 }
