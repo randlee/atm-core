@@ -1,9 +1,10 @@
 set windows-shell := ["pwsh", "-NoLogo", "-Command"]
 
-# Homebrew is absent from non-interactive macOS account PATHs. Prepending its
-# standard location still leaves CI/Linux's python3.14 discoverable, while the
-# bootstrap script verifies the exact patch release before doing any work.
-seed_python_cmd := if os_family() == "windows" { "py -3.14" } else { "env PATH=/opt/homebrew/bin:$PATH python3.14" }
+# Homebrew is absent from non-interactive macOS account PATHs. Append its
+# standard location as a developer-account fallback, never ahead of the
+# interpreter selected by CI (for example actions/setup-python's 3.14.7).
+# The bootstrap script verifies the exact patch release before doing any work.
+seed_python_cmd := if os_family() == "windows" { "py -3.14" } else { "env PATH=\"$PATH:/opt/homebrew/bin\" python3.14" }
 # Keep the bootstrap venv first in PATH as well as executing its Python
 # directly. The path is absolute so helpers remain pinned after changing cwd;
 # PyO3 additionally receives its interpreter explicitly.

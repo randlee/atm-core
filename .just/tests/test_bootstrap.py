@@ -106,6 +106,11 @@ class BootstrapTests(unittest.TestCase):
         self.assertIn("$PWD/.bootstrap-venv/bin:$PATH", justfile)
         self.assertIn("PYO3_PYTHON", justfile)
 
+    def test_seed_python_preserves_ci_python_precedence(self) -> None:
+        justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
+        self.assertIn('PATH=\\"$PATH:/opt/homebrew/bin\\" python3.14', justfile)
+        self.assertNotIn("PATH=/opt/homebrew/bin:$PATH python3.14", justfile)
+
 
 if __name__ == "__main__":
     unittest.main()
