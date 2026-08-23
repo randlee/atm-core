@@ -38,6 +38,10 @@ class BenchmarkSnapshotTests(unittest.TestCase):
         with mock.patch.object(SNAPSHOT, "require_benchmark_account", return_value=account):
             return SNAPSHOT.verify_completed_snapshot(snapshot_id)
 
+    def _verify_active(self, account: ACCOUNT.BenchmarkAccount, snapshot_id: str) -> SNAPSHOT.VerifiedSnapshot:
+        with mock.patch.object(SNAPSHOT, "require_benchmark_account", return_value=account):
+            return SNAPSHOT.verify_active_snapshot(snapshot_id)
+
     def test_snapshot_is_sqlite_verified_hashed_and_account_bound(self):
         with tempfile.TemporaryDirectory() as temporary:
             account = self._account(Path(temporary))
@@ -92,6 +96,33 @@ class BenchmarkSnapshotTests(unittest.TestCase):
             self.assertEqual(observed, (1,))
             self.assertEqual(restored, snapshot)
             self.assertEqual(list(account.durable_state_root.glob(".mail.db.restore-staging-*")), [])
+
+    def test_active_verification_proves_exact_bytes_without_creating_sidecars(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            account = self._account(Path(temporary))
+            database = self._database(account, 1)
+            snapshot = self._snapshot(account)
+            with closing(sqlite3.connect(database)) as connection:
+                connection.execute("INSERT INTO entries(value) VALUES (99)")
+                connection.commit()
+            with mock.patch.object(SNAPSHOT, "require_benchmark_account", return_value=account):
+                SNAPSHOT.restore_verified_snapshot(snapshot.snapshot_id)
+
+            self.assertEqual(self._verify_active(account, snapshot.snapshot_id), snapshot)
+            self.assertFalse(database.with_name(f"{database.name}-wal").exists())
+            self.assertFalse(database.with_name(f"{database.name}-shm").exists())
+
+    def test_active_verification_rejects_any_live_byte_drift(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            account = self._account(Path(temporary))
+            database = self._database(account, 1)
+            snapshot = self._snapshot(account)
+            with closing(sqlite3.connect(database)) as connection:
+                connection.execute("INSERT INTO entries(value) VALUES (99)")
+                connection.commit()
+
+            with self.assertRaisesRegex(SNAPSHOT.BenchmarkSnapshotError, "does not match"):
+                self._verify_active(account, snapshot.snapshot_id)
 
     def test_restore_refuses_tampered_snapshot_without_changing_live_database(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -157,6 +188,7 @@ class BenchmarkSnapshotTests(unittest.TestCase):
         for operation in (
             SNAPSHOT.create_verified_snapshot,
             lambda: SNAPSHOT.verify_completed_snapshot("snapshot-20260822T011500Z-0123456789abcdef"),
+            lambda: SNAPSHOT.verify_active_snapshot("snapshot-20260822T011500Z-0123456789abcdef"),
             lambda: SNAPSHOT.restore_verified_snapshot("snapshot-20260822T011500Z-0123456789abcdef"),
         ):
             with (
