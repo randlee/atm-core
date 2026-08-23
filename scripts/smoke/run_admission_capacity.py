@@ -95,11 +95,10 @@ DIRECT_PEER_TCP_PORT = 43_101
 CAPACITY_DIRECT_PEER_PORT_ENV = "ATM_CAPACITY_DIRECT_PEER_PORT"
 CROCKFORD_BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 BENCHMARK_TARGETS = {
-    # SQLite and UDS do not cross the peer wire.  They must stay independent
-    # of the optional mTLS control plane so they measure their own production
-    # boundaries rather than a peer-configuration precondition.
-    "sqlite": ("sqlite", "plaintext-test"),
-    "uds": ("uds", "plaintext-test"),
+    # SQLite is a direct-storage target, so it does not select a peer-wire
+    # mode. The daemon itself still starts in its normal secure default.
+    "sqlite": ("sqlite", None),
+    "uds": ("uds", "mutual-tls"),
     "tcp": ("tcp", "plaintext-test"),
     "tcp-tls": ("tcp", "mutual-tls"),
 }

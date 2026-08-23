@@ -1,0 +1,47 @@
+{
+  "imports": [
+    {
+      "campaign_id": "historical-20260823-94b75a3ea2e9",
+      "display_host_label": "m5-atmbench",
+      "filename": "20260823-110402.419746-local-sqlite-f8.json",
+      "provenance_note": "Exact imported source artifact. The original summary has no campaign ID or snapshot/restore lifecycle fields, so it is a historical measurement and not accepted-candidate evidence.",
+      "sha256": "d6178233f611214d868751d9b7f76f7d095cd34c68fbc7a2121d87b558da9a36"
+    },
+    {
+      "campaign_id": "historical-20260823-94b75a3ea2e9",
+      "display_host_label": "m5-atmbench",
+      "filename": "20260823-110423.475063-local-uds-mutual-tls-f8.json",
+      "provenance_note": "Exact imported source artifact. The original summary has no campaign ID or snapshot/restore lifecycle fields, so it is a historical measurement and not accepted-candidate evidence.",
+      "sha256": "af56ea89981049f965067aeddde2d96ad41753294ada86ed73080ccebd613cfb"
+    },
+    {
+      "campaign_id": "historical-20260823-94b75a3ea2e9",
+      "display_host_label": "m5-atmbench",
+      "filename": "20260823-110446.929025-local-tcp-plaintext-test-f8.json",
+      "provenance_note": "Exact imported source artifact. The original summary has no campaign ID or snapshot/restore lifecycle fields, so it is a historical measurement and not accepted-candidate evidence.",
+      "sha256": "78cdfae09f2acd65a8ace188af323fcaeccfcacff432a5131d19532c45f2e5ba"
+    },
+    {
+      "campaign_id": "historical-20260823-94b75a3ea2e9",
+      "display_host_label": "m5-atmbench",
+      "filename": "20260823-110510.260883-local-tcp-mutual-tls-f8.json",
+      "provenance_note": "Exact imported source artifact. The original summary has no campaign ID or snapshot/restore lifecycle fields, so it is a historical measurement and not accepted-candidate evidence.",
+      "sha256": "f7b471e89709bceaac733095982b1bd826519fe1d238a28b7367406e49f2c014"
+    },
+    {
+      "campaign_id": "historical-20260823-ff9329dc1083",
+      "display_host_label": "m5-atmbench",
+      "filename": "20260823-120126.729783-m5-atmbench-tcp-plaintext-test-f8.json",
+      "provenance_note": "Exact imported TCP-only confirmation artifact. The original summary has no campaign ID or snapshot/restore lifecycle fields; SQLite and UDS were not run in this provenance set.",
+      "sha256": "11d6a4a0d2d162f060dadfc6463a39c33185c91946c79ad752bdd10f66299b99"
+    },
+    {
+      "campaign_id": "historical-20260823-ff9329dc1083",
+      "display_host_label": "m5-atmbench",
+      "filename": "20260823-120215.579235-m5-atmbench-tcp-mutual-tls-f8.json",
+      "provenance_note": "Exact imported TCP-only confirmation artifact. The original summary has no campaign ID or snapshot/restore lifecycle fields; SQLite and UDS were not run in this provenance set.",
+      "sha256": "689b261fc389af7e8f3e7b16f08402e40912f1184d6a11c6fe6f01079b9ecf8c"
+    }
+  ],
+  "schema_version": 1
+}
