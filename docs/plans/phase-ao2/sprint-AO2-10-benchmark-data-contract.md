@@ -28,11 +28,26 @@ are binding.
    post-hoc migration), and at end of the matrix writes one campaign file
    `site/reports/send-message-benchmark/<campaign_id>.campaign.json` valid
    against `BenchmarkCampaign`.
-3. **Machine-classified status.** `status` is computed, never caller-supplied:
-   `INCOMPLETE` when any lifecycle stage is missing (with mandatory
-   `incomplete_reason`); otherwise `PASS` iff `messages_durable ==
-   messages_admitted == messages_requested` (100% durable writes, D2) and
-   `metrics.admissions_per_second.p50 >= baseline.value`; otherwise `FAIL`.
+3. **Machine-classified status with one decision owner.** `status` is
+   computed, never caller-supplied, by a single function
+   `classify_status()` implemented in `scripts/smoke/benchmark_policy.py`
+   (which already docstrings itself as the acceptance/baseline policy
+   module — `benchmark_schema.py` stays purely structural, its
+   `model_validator` only cross-checks that a stored `status` equals the
+   `classify_status()` output): `INCOMPLETE` when any lifecycle stage is
+   missing (with mandatory `incomplete_reason`); otherwise `PASS` iff
+   `messages_durable == messages_admitted == messages_requested` (100%
+   durable writes, D2) and `metrics.admissions_per_second.p50 >=
+   baseline.value`; otherwise `FAIL`.
+   The legacy decision path `evaluate_profile_thresholds()` (and its
+   cross-transport comparison concept — `comparison_ratio` /
+   `comparison_strict` / `comparison_required`, e.g. tcp needing a ratio of
+   another transport's median) is **explicitly retired, not ported**: the
+   per-(host, target) floors in `baselines.json` (D1–D3) replace
+   cross-transport ratios as the sole acceptance rule, so the v4 contract
+   deliberately has no comparison fields. `evaluate_profile_thresholds()`
+   and every call site (including the runner's threshold evaluation and
+   comparison-reference loading) are deleted in this sprint.
 4. **Missing baseline is a hard error.** If `baselines.json` has no entry for
    the run's `(host_label, target)`, result emission fails with an explicit
    operator-facing error naming the missing pair — never a silent None,
@@ -48,7 +63,9 @@ are binding.
    argument path, and the hardcoded Windows comparison defaults in
    `run_admission_capacity.py` (locate by the `mac-arm64-01` literal and the
    `comparison_required` OS branch, per AC #4's grep gate — line numbers
-   drift) are removed.
+   drift) are removed. The static per-target constants in
+   `benchmark_report.py` (locate by the `TARGET_MSG_PER_SECOND` dict; never
+   by line number) are removed with them.
 6. **One artifact-id/campaign-id derivation helper** in
    `benchmark_schema.py`, used by both runner and report (removes the
    duplicated timestamp munging at `run_admission_capacity.py:1086-1098` and
@@ -63,7 +80,11 @@ are binding.
    `scripts/smoke/benchmark_suite.py` (retain only what `TargetResult`
    validation actually needs, or fold it into `benchmark_schema.py` and delete
    the module); dead helpers `parse_utc` and `safe_label` in
-   `benchmark_report.py`.
+   `benchmark_report.py`; `evaluate_profile_thresholds()` in
+   `benchmark_policy.py` plus all its call sites and the cross-transport
+   comparison machinery (`comparison_ratio`/`comparison_strict`/
+   `comparison_required`, comparison-reference loading) per deliverable 3 —
+   `classify_status()` is the single surviving decision owner.
 
 ## Contract (normative signatures)
 
@@ -150,9 +171,13 @@ a required target must not validate as PASS.
    sqlite-variant validator (network fields required for network targets,
    forbidden for sqlite); ratchet test rejects a baselines.json revision that
    lowers any value.
-4. `grep`-gate: no occurrence of `DEFAULT_TARGETS *=` static baseline
-   constants in `benchmark_report.py`; no `--baseline` argument in
+4. `grep`-gate: no occurrence of `TARGET_MSG_PER_SECOND` in
+   `benchmark_report.py`; no `--baseline` argument in
    `run_admission_capacity.py`; no `mac-arm64-01` literal in the runner;
+   no `evaluate_profile_thresholds` and no `comparison_ratio` /
+   `comparison_strict` / `comparison_required` identifiers anywhere under
+   `scripts/smoke/` (single decision owner is `classify_status()` in
+   `benchmark_policy.py`);
    D12: no `tcp+tls` (plus-form) string anywhere under `scripts/smoke/`,
    test fixtures, or emitted JSON artifacts — the machine identifier is
    `tcp-tls` only.

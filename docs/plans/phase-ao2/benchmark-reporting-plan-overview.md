@@ -58,6 +58,16 @@ report-provenance fixes merged into it by PR #1003 (head branch
 instead). Neither `integrate/phase-ao2` nor develop has the matrix runner
 today; all four sprint docs assume it as their starting point.
 
+Dispatch evidence (recorded 2026-08-23, per quality-mgr ATM-QA-002):
+`git merge-base --is-ancestor c1335cb1775c9a556cb1f02aac9725f4d2d92edc
+origin/fix/ao2-7-direct-peer-benchmark-harness` succeeds — the PR #1003 head
+(`fix/ao2-7-report-provenance` @ `c1335cb17`) is an ancestor of the harness
+branch, whose tip `69cf6d3a1` is itself the PR #1003 merge commit
+("Merge pull request #1003 from randlee/fix/ao2-7-report-provenance"); the
+branch also already contains a merge of `origin/integrate/phase-ao2`
+(`aad0af7bd`). The provenance fixes are therefore contained in the
+precondition branch.
+
 Rationale for the split: AO2.10 closes the data/schema seam, AO2.11 closes
 rendering, AO2.12 closes history, AO2.13 closes operator procedure. Each is a
 distinct closure type with non-intersecting primary files; merging any two
@@ -83,6 +93,8 @@ the benchmarked runtime.
 | 3 | plan-scope-reviewer (sonnet) | `ba5ade5a` | FAIL — round-2 closures confirmed; 1 Important (D12 had no owning sprint or enforcing AC), 1 minor (QA-history table split in two) | Fixed in round-3 commit: D12 cited in AO2.10 (machine-id half, plus-form grep gate in AC #4) and AO2.11 (display-label half, new AC #9); tables merged. |
 
 | 4 | plan-scope-reviewer (sonnet) | `ec9a29e5` | **PASS** — D12 ownership/enforcement and QA-table merge verified closed; no new findings; all four sprints PASS | Hardening complete; ready for quality-mgr gate. |
+
+| 5 | quality-mgr gate (ruthless-boundary-qa + req-qa + arch-qa) | `5fc6853f` | FAIL — 1 Blocking (RBQA-F001: `evaluate_profile_thresholds()` left as a live second pass/fail decision owner with unported cross-transport comparison), 1 Important (RBQA-F002: status logic belongs in `benchmark_policy.py`, not `benchmark_schema.py`), 1 Important (ATM-QA-002: branch-ancestry dispatch evidence missing), 1 minor (ATM-QA-001: stale line-number locator). arch-qa PASS; rust reviewers N/A | Fixed in round-5 commit: AO2.10 deliverable 3 makes `classify_status()` in `benchmark_policy.py` the single decision owner and explicitly retires (deletes, not ports) `evaluate_profile_thresholds()` + all cross-transport comparison machinery, with deliverable 8 and AC #4 grep gates extended (`evaluate_profile_thresholds`, `comparison_*` banned under `scripts/smoke/`); schema keeps only a cross-check validator; ancestry evidence recorded under the Base-branch precondition; locator converted to `TARGET_MSG_PER_SECOND` grep. |
 
 Operator additions after round 1: D11 (UTC-only JSON; rendered reports show
 Pacific 24-hour fallback inside `<time>` elements upgraded to viewer-local
