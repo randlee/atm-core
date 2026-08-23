@@ -27,7 +27,7 @@ required_variables:
 <body>
   <h1>{{ title | e }}</h1>
   <p class="meta">Generated {{ generated_at | e }}</p>
-  <p>Each campaign is an immutable date/version report. Open it to see one four-target table for every benchmarked host.</p>
+  <p>Each campaign is an immutable date/version report. The full target table is shown below and the XHTML link is supplemental detail.</p>
   <h2>Benchmark campaigns</h2>
   <table>
     <thead><tr><th>Campaign</th><th>UTC timestamp</th><th>Source revision</th><th>Hosts</th><th>Report</th></tr></thead>
@@ -38,11 +38,28 @@ required_variables:
         <td><time datetime="{{ campaign.generated_at | e }}">{{ campaign.generated_at | e }}</time></td>
         <td>{{ campaign.source_revision | e }}</td>
         <td>{{ campaign.host_labels | e }}</td>
-        <td><a href="{{ campaign.xhtml_href | e }}">XHTML report</a></td>
+        <td><a href="{{ campaign.xhtml_href | e }}">XHTML detail</a></td>
       </tr>
 {% endfor %}
     </tbody>
   </table>
+{% for campaign in campaigns %}
+  <h2>{{ campaign.campaign_id | e }}</h2>
+{% for panel in campaign.host_panels %}
+  <h3>{{ panel.host_label | e }} · <code>{{ panel.source_revision | e }}</code></h3>
+{% if panel.provenance_note %}
+  <p class="meta">Historical import: {{ panel.provenance_note | e }} Raw artifact host label: <code>{{ panel.raw_host_label | e }}</code>.</p>
+{% endif %}
+  <table>
+    <thead><tr><th>Test</th><th>Result msg/sec</th><th>Target msg/sec</th><th>Pass/Fail</th></tr></thead>
+    <tbody>
+{% for row in panel.rows %}
+      <tr><td>{{ row.test | e }}</td><td>{{ 'n/a' if row.result_msg_per_second is none else '%.2f' | format(row.result_msg_per_second) }}</td><td>{{ '%.2f' | format(row.target_msg_per_second) }}</td><td class="{{ 'pass' if row.passed else 'fail' }}">{{ 'PASS' if row.passed else 'FAIL' }}</td></tr>
+{% endfor %}
+    </tbody>
+  </table>
+{% endfor %}
+{% endfor %}
   <p class="meta">{{ legacy_count }} pre-campaign artifacts remain in the immutable evidence directory but are not used as campaign results.</p>
 </body>
 </html>

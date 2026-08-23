@@ -73,6 +73,38 @@ class BenchmarkReportTests(unittest.TestCase):
             with self.assertRaisesRegex(REPORT.BenchmarkReportError, "source_revision"):
                 REPORT.load_result(source)
 
+    def test_hash_bound_historical_import_is_rendered_without_rewriting_raw_artifact(self) -> None:
+        payload = json.loads(self.fixture("success-uds-f1.json").read_text(encoding="utf-8"))
+        payload.update({
+            "benchmark_target": "uds",
+            "source_revision": "a" * 40,
+            "host_label": "local",
+        })
+        with tempfile.TemporaryDirectory() as directory:
+            report_dir = Path(directory) / "send-message-benchmark"
+            report_dir.mkdir()
+            artifact = report_dir / "historical.json"
+            artifact.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            manifest = {
+                "schema_version": 1,
+                "imports": [{
+                    "filename": "historical.json",
+                    "sha256": REPORT.file_sha256(artifact),
+                    "campaign_id": "historical-20260823-aaaaaaaaaaaa",
+                    "display_host_label": "m5-atmbench",
+                    "provenance_note": "Exact imported source artifact.",
+                }],
+            }
+            (report_dir / REPORT.HISTORICAL_IMPORTS_NAME).write_text(json.dumps(manifest), encoding="utf-8")
+            records = REPORT.evidence_records(report_dir)
+            self.assertEqual(REPORT.campaign_id(records[0]), "historical-20260823-aaaaaaaaaaaa")
+            self.assertEqual(records[0]["_report_display_host_label"], "m5-atmbench")
+            with mock.patch.object(REPORT, "ROOT", ROOT):
+                output = REPORT.render_aggregate(records, Path(directory))
+            text = output.read_text(encoding="utf-8")
+        self.assertIn("m5-atmbench", text)
+        self.assertIn("Exact imported source artifact.", text)
+
     def test_failed_run_is_retained(self) -> None:
         result = REPORT.load_result(self.fixture("failed-tcp-f8.json"))
         self.assertFalse(result["passed"])
@@ -108,8 +140,8 @@ class BenchmarkReportTests(unittest.TestCase):
             self.assertEqual(set(envelope), {"schema_version", "report_type", "generated_at", "host_label", "report_html"})
             self.assertEqual(envelope["report_type"], "benchmark")
 
-    def test_rebuild_promotes_legacy_result_to_canonical_json_identity(self) -> None:
-        """Campaign summary links must target an artifact created by rebuild."""
+    def test_rebuild_does_not_rewrite_existing_raw_evidence(self) -> None:
+        """A rendering rebuild must not normalize or replace immutable raw JSON."""
         payload = json.loads(self.fixture("failed-tcp-f8.json").read_text(encoding="utf-8"))
         payload.update({
             "campaign_id": "20260822T200000Z-aaaaaaaaaaaa",
@@ -121,7 +153,7 @@ class BenchmarkReportTests(unittest.TestCase):
             report_dir.mkdir()
             (report_dir / "legacy-run.json").write_text(json.dumps(payload), encoding="utf-8")
             result = REPORT.load_result(report_dir / "legacy-run.json")
-            artifact_id = REPORT.result_id(result)
+            original = (report_dir / "legacy-run.json").read_text(encoding="utf-8")
             with (
                 mock.patch.object(REPORT, "REPORT_DIR", report_dir),
                 mock.patch.object(REPORT, "evidence_records", return_value=[result]),
@@ -131,7 +163,7 @@ class BenchmarkReportTests(unittest.TestCase):
                 mock.patch.object(REPORT, "regenerate_index"),
             ):
                 self.assertEqual(REPORT.process([]), 0)
-            self.assertTrue((report_dir / f"{artifact_id}.json").is_file())
+            self.assertEqual((report_dir / "legacy-run.json").read_text(encoding="utf-8"), original)
 
     def test_envelope_for_uses_the_validated_result_identity(self) -> None:
         result = REPORT.load_result(self.fixture("success-uds-f1.json"))
@@ -219,8 +251,17 @@ class BenchmarkReportTests(unittest.TestCase):
             output = REPORT.render_campaign(campaign_id, targets, Path(directory))
             text = output.read_text(encoding="utf-8")
         self.assertIn("Result msg/sec", text)
-        self.assertIn("Baseline msg/sec", text)
+        self.assertIn("Target msg/sec", text)
         self.assertIn("tcp-tls", text)
+
+    def test_campaign_table_refuses_to_mix_source_revisions(self) -> None:
+        base = REPORT.load_result(self.fixture("success-uds-f1.json"))
+        records = [
+            {**base, "benchmark_target": "tcp", "source_revision": "a" * 40},
+            {**base, "benchmark_target": "tcp-tls", "source_revision": "b" * 40},
+        ]
+        with self.assertRaisesRegex(REPORT.BenchmarkReportError, "mix source revisions"):
+            REPORT.campaign_target_rows(records)
 
     def test_bounded_benchmark_failure_code_is_rendered(self) -> None:
         failed = {

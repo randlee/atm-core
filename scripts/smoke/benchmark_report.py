@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 from html import escape
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -30,6 +31,7 @@ REPORTS_ROOT = ROOT / "site" / "reports"
 REPORT_NAME = "send-message-benchmark"
 REPORT_HTML = f"{REPORT_NAME}.html"
 REPORT_DIR = REPORTS_ROOT / REPORT_NAME
+HISTORICAL_IMPORTS_NAME = "historical-imports.json"
 ENVELOPE_SCHEMA_VERSION = 1
 AI40_SCHEMA_VERSION = SUMMARY_SCHEMA_VERSION
 SUPPORTED_TRANSPORTS = frozenset({"uds", "tcp"})
@@ -39,9 +41,10 @@ SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
 CAMPAIGN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
-# AO2.8's approved M5 f8-v1 expectations.  A report makes the comparison
-# visible; it never substitutes a cosmetic PASS for a below-baseline result.
-TARGET_BASELINES = {
+# AO2.8's approved M5 f8-v1 performance targets.  These are expectations,
+# not measurements from a comparison run, so reports must never call them a
+# baseline.  An empirical baseline needs its own raw artifact and provenance.
+TARGET_MSG_PER_SECOND = {
     "sqlite": 45_000.0,
     "uds": 24_000.0,
     "tcp": 22_500.0,
@@ -155,7 +158,7 @@ def result_id(result: dict[str, Any], _source: Path | None = None) -> str:
 
 def campaign_id(result: dict[str, Any]) -> str | None:
     """Return the validated campaign label, excluding pre-campaign history."""
-    value = result.get("campaign_id")
+    value = result.get("_report_campaign_id", result.get("campaign_id"))
     return value if isinstance(value, str) and CAMPAIGN_ID.fullmatch(value) else None
 
 
@@ -176,15 +179,67 @@ def compose(template: Path, variables: dict[str, Any], output: Path) -> None:
             variables_path.unlink(missing_ok=True)
 
 
+def file_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def historical_imports(report_dir: Path) -> dict[str, dict[str, str]]:
+    """Load hash-bound display metadata for immutable historical artifacts."""
+    manifest = report_dir / HISTORICAL_IMPORTS_NAME
+    if not manifest.exists():
+        return {}
+    try:
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise BenchmarkReportError(f"{manifest}: invalid historical-import manifest") from error
+    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+        raise BenchmarkReportError(f"{manifest}: unsupported historical-import manifest")
+    entries = payload.get("imports")
+    if not isinstance(entries, list):
+        raise BenchmarkReportError(f"{manifest}: imports must be a list")
+    imported: dict[str, dict[str, str]] = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise BenchmarkReportError(f"{manifest}: import must be an object")
+        filename = entry.get("filename")
+        digest = entry.get("sha256")
+        identifier = entry.get("campaign_id")
+        display_host = entry.get("display_host_label")
+        note = entry.get("provenance_note")
+        if (
+            not isinstance(filename, str) or Path(filename).name != filename or not filename.endswith(".json")
+            or not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest)
+            or not isinstance(identifier, str) or not CAMPAIGN_ID.fullmatch(identifier)
+            or not isinstance(display_host, str) or not SAFE_ID.fullmatch(display_host)
+            or not isinstance(note, str) or not note.strip()
+        ):
+            raise BenchmarkReportError(f"{manifest}: invalid historical import entry")
+        artifact = report_dir / filename
+        if not artifact.is_file() or file_sha256(artifact) != digest:
+            raise BenchmarkReportError(f"{manifest}: hash mismatch for {filename}")
+        if filename in imported:
+            raise BenchmarkReportError(f"{manifest}: duplicate import for {filename}")
+        imported[filename] = {
+            "campaign_id": identifier,
+            "display_host_label": display_host,
+            "provenance_note": note.strip(),
+        }
+    return imported
+
+
 def evidence_records(report_dir: Path = REPORT_DIR) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     if not report_dir.is_dir():
         return records
+    imported = historical_imports(report_dir)
     for path in sorted(report_dir.glob("*.json")):
-        if path.name.endswith(".envelope.json"):
+        if path.name.endswith(".envelope.json") or path.name == HISTORICAL_IMPORTS_NAME:
             continue
         try:
-            records.append(load_result(path))
+            record = load_result(path)
+            if metadata := imported.get(path.name):
+                record.update({f"_report_{key}": value for key, value in metadata.items()})
+            records.append(record)
         except BenchmarkReportError:
             continue
     return sorted(records, key=lambda item: (item["generated_at"], item["host_label"], item["transport"], item["frames_per_connection"]))
@@ -281,7 +336,11 @@ def campaign_groups(records: Iterable[dict[str, Any]]) -> dict[str, list[dict[st
 
 
 def campaign_target_rows(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Return the requested four-row result/baseline/verdict table for one host."""
+    """Return one revision-homogeneous four-target result/target/verdict table."""
+    records = list(records)
+    revisions = {record.get("source_revision") for record in records}
+    if len(revisions) > 1:
+        raise BenchmarkReportError("campaign target table cannot mix source revisions")
     newest: dict[str, dict[str, Any]] = {}
     for result in records:
         target = result.get("benchmark_target")
@@ -292,7 +351,7 @@ def campaign_target_rows(records: Iterable[dict[str, Any]]) -> list[dict[str, An
     rows: list[dict[str, Any]] = []
     for target in TARGET_ORDER:
         result = newest.get(target)
-        baseline = TARGET_BASELINES[target]
+        target_msg_per_second = TARGET_MSG_PER_SECOND[target]
         metrics = result.get("metrics") if result else None
         metric = metrics.get("admissions_per_second", {}) if isinstance(metrics, dict) else {}
         value = metric.get("p50") if isinstance(metric, dict) else None
@@ -302,12 +361,12 @@ def campaign_target_rows(records: Iterable[dict[str, Any]]) -> list[dict[str, An
             isinstance(value, (int, float))
             and isinstance(accepted, int)
             and accepted == requested
-            and float(value) >= baseline
+            and float(value) >= target_msg_per_second
         )
         rows.append({
             "test": target,
             "result_msg_per_second": None if value is None else float(value),
-            "baseline_msg_per_second": baseline,
+            "target_msg_per_second": target_msg_per_second,
             "passed": passed,
             "artifact_id": result_id(result) if result else None,
             "json_href": f"{result_id(result)}.json" if result else None,
@@ -316,23 +375,33 @@ def campaign_target_rows(records: Iterable[dict[str, Any]]) -> list[dict[str, An
     return rows
 
 
-def render_campaign(identifier: str, records: Iterable[dict[str, Any]], report_dir: Path = REPORT_DIR) -> Path:
-    """Render one date/version campaign as XHTML with one table per host."""
-    by_host: dict[str, list[dict[str, Any]]] = {}
+def campaign_panels(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return one provenance-preserving panel per rendered host and revision."""
+    by_host_revision: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for result in records:
-        by_host.setdefault(result["host_label"], []).append(result)
+        source_revision = result.get("source_revision") or "unversioned"
+        display_host = result.get("_report_display_host_label", result["host_label"])
+        by_host_revision.setdefault((display_host, source_revision), []).append(result)
     host_panels = []
-    for host_label, host_records in sorted(by_host.items()):
+    for (host_label, source_revision), host_records in sorted(by_host_revision.items()):
         rows = campaign_target_rows(host_records)
         host_panels.append({
             "host_label": host_label,
-            "source_revision": host_records[-1].get("source_revision") or "unversioned",
+            "source_revision": source_revision,
             "daemon_version": host_records[-1].get("daemon_version") or "unknown",
             "host_os": host_records[-1].get("host_os") or "unknown",
             "host_arch": host_records[-1].get("host_arch") or "unknown",
+            "raw_host_label": host_records[-1]["host_label"],
+            "provenance_note": host_records[-1].get("_report_provenance_note"),
             "rows": rows,
             "passed": all(row["passed"] for row in rows),
         })
+    return host_panels
+
+
+def render_campaign(identifier: str, records: Iterable[dict[str, Any]], report_dir: Path = REPORT_DIR) -> Path:
+    """Render one date/version campaign as XHTML with one panel per host/revision."""
+    host_panels = campaign_panels(records)
     report_dir.mkdir(parents=True, exist_ok=True)
     output = report_dir / f"{identifier}.xhtml"
     compose(
@@ -414,10 +483,13 @@ def render_aggregate(records: Iterable[dict[str, Any]], report_root: Path = REPO
         host_labels = sorted({record["host_label"] for record in campaign})
         campaigns.append({
             "campaign_id": identifier,
-            "host_labels": ", ".join(host_labels),
+            "host_labels": ", ".join(
+                sorted({record.get("_report_display_host_label", record["host_label"]) for record in campaign})
+            ),
             "source_revision": campaign[-1].get("source_revision") or "unversioned",
             "generated_at": campaign[-1]["generated_at"],
             "xhtml_href": f"{REPORT_NAME}/{identifier}.xhtml",
+            "host_panels": campaign_panels(campaign),
         })
     output = report_root / REPORT_HTML
     template = ROOT / "templates" / "benchmark-report" / "benchmark-report.html.j2"
@@ -464,7 +536,11 @@ def process(inputs: list[Path]) -> int:
         try:
             records = evidence_records()
             for result in records:
-                artifact_id = persist_result(result)
+                # Rebuild is a rendering operation: evidence is immutable and
+                # must never be normalized, renamed, or rewritten merely to
+                # regenerate HTML.  New inputs are persisted in the input
+                # branch below before they enter this path.
+                artifact_id = result_id(result)
                 render_run(result, artifact_id)
             for identifier, campaign in campaign_groups(records).items():
                 render_campaign(identifier, campaign)
