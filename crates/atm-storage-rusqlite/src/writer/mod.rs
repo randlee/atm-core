@@ -587,13 +587,44 @@ fn process_batch(
 
     let mut replies: Vec<(ReplyTx, Result<WriteOpResult, AtmError>)> =
         Vec::with_capacity(batch_len);
-    for queued in batch {
-        replies.push(process_queued_write(
-            target,
-            &mut transaction,
-            cache,
-            queued,
-        ));
+    let mut queued_writes = batch.into_iter().peekable();
+    while let Some(queued) = queued_writes.next() {
+        if !is_batchable_message_admission(&queued) {
+            replies.push(process_queued_write(
+                target,
+                &mut transaction,
+                cache,
+                queued,
+            ));
+            continue;
+        }
+
+        let mut admissions = vec![queued];
+        while queued_writes
+            .peek()
+            .is_some_and(is_batchable_message_admission)
+        {
+            admissions.push(
+                queued_writes
+                    .next()
+                    .expect("peeked queued message admission must remain available"),
+            );
+        }
+        if admissions.len() == 1 {
+            replies.push(process_queued_write(
+                target,
+                &mut transaction,
+                cache,
+                admissions.pop().expect("one admission is present"),
+            ));
+        } else {
+            replies.extend(process_message_admission_group(
+                target,
+                &mut transaction,
+                cache,
+                admissions,
+            ));
+        }
     }
 
     let commit_error = transaction.commit().err().map(|error| {
@@ -613,6 +644,78 @@ fn process_batch(
             result
         };
         reply.send(final_result);
+    }
+}
+
+/// Ordinary immutable message admissions are the hot path.  They are fully
+/// contained in the outer writer transaction, so a contiguous admitted burst
+/// can share one inner savepoint.  If any member reports an error or panics,
+/// the shared savepoint is dropped and the whole group is replayed through the
+/// established one-savepoint-per-operation path.  The fallback therefore
+/// retains the existing per-operation rollback and reply semantics; only an
+/// all-success group avoids redundant `SAVEPOINT` / `RELEASE` round trips.
+fn is_batchable_message_admission(queued: &QueuedWrite) -> bool {
+    matches!(&*queued.op, WriteOp::UpsertMessage(_))
+}
+
+fn process_message_admission_group(
+    target: &SharedDbTarget,
+    transaction: &mut rusqlite::Transaction<'_>,
+    cache: &mut stmt_cache::WriterStatementCache,
+    admissions: Vec<QueuedWrite>,
+) -> Vec<(ReplyTx, Result<WriteOpResult, AtmError>)> {
+    let savepoint = match transaction.savepoint() {
+        Ok(savepoint) => savepoint,
+        Err(error) => {
+            let error = sqlite_error(
+                target,
+                "failed to open sqlite writer message-admission savepoint",
+                error,
+            );
+            return admissions
+                .into_iter()
+                .map(|queued| (queued.reply, Err(copy_error(target, &error))))
+                .collect();
+        }
+    };
+
+    let mut results = Vec::with_capacity(admissions.len());
+    for queued in &admissions {
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            ops::execute(&queued.op, &savepoint, cache, target)
+        }));
+        match result {
+            Ok(Ok(result)) => results.push(result),
+            Ok(Err(_)) | Err(_) => {
+                // Roll back every tentative row before replaying.  A replay is
+                // intentionally conservative: it preserves the established
+                // operation-by-operation error isolation for rare failures.
+                drop(savepoint);
+                return admissions
+                    .into_iter()
+                    .map(|queued| process_queued_write(target, transaction, cache, queued))
+                    .collect();
+            }
+        }
+    }
+
+    match savepoint.commit() {
+        Ok(()) => admissions
+            .into_iter()
+            .zip(results)
+            .map(|(queued, result)| (queued.reply, Ok(result)))
+            .collect(),
+        Err(error) => {
+            let error = sqlite_error(
+                target,
+                "failed to commit sqlite writer message-admission savepoint",
+                error,
+            );
+            admissions
+                .into_iter()
+                .map(|queued| (queued.reply, Err(copy_error(target, &error))))
+                .collect()
+        }
     }
 }
 
@@ -698,6 +801,59 @@ fn copy_error(target: &SharedDbTarget, error: &AtmError) -> AtmError {
 mod tests {
     use super::*;
     use crate::observability::NullSqliteObservability;
+    use crate::shared_db::{SharedDbTarget, ensure_schema, open_writer_connection_for_target};
+    use atm_storage::contract::{Message, MessageKey};
+    use atm_storage::schema::MessageEnvelope;
+    use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
+    use chrono::Utc;
+    use rusqlite::params;
+    use serde_json::Map;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_TEST_DB_ID: AtomicU64 = AtomicU64::new(1);
+
+    fn message(key: &str) -> Message {
+        let team: TeamName = "writer-test-team".parse().expect("team");
+        let agent: AgentName = "writer-test-agent".parse().expect("agent");
+        Message {
+            team: team.clone(),
+            agent: agent.clone(),
+            message_key: MessageKey::new(key).expect("message key"),
+            envelope: MessageEnvelope {
+                from: agent,
+                source_chat_id: None,
+                text: format!("payload for {key}"),
+                timestamp: IsoTimestamp::from_datetime(Utc::now()),
+                read: false,
+                source_team: Some(team),
+                destination_chat_id: None,
+                summary: None,
+                message_id: None,
+                requires_ack: false,
+                pending_ack_at: None,
+                acknowledged_at: None,
+                acknowledges_message_id: None,
+                parent_message_id: None,
+                thread_mode: None,
+                expires_at: None,
+                task_id: None,
+                extra: Map::new(),
+            },
+        }
+    }
+
+    fn queued_upsert(
+        message: Message,
+    ) -> (QueuedWrite, mpsc::Receiver<Result<WriteOpResult, AtmError>>) {
+        let (reply, receiver) = mpsc::sync_channel(1);
+        (
+            QueuedWrite {
+                op: Box::new(WriteOp::UpsertMessage(Box::new(message))),
+                reply: ReplyTx::Sync(reply),
+            },
+            receiver,
+        )
+    }
 
     #[test]
     fn writer_runtime_builder_failure_returns_daemon_unavailable() {
@@ -869,5 +1025,61 @@ mod tests {
 
         assert_eq!(batch.len(), 1);
         assert!(shutting_down);
+    }
+
+    #[test]
+    fn grouped_message_admissions_replay_individually_after_a_member_sqlite_error() {
+        let target = SharedDbTarget::InMemory {
+            uri: format!(
+                "file:writer-group-replay-{}?mode=memory&cache=shared",
+                NEXT_TEST_DB_ID.fetch_add(1, Ordering::Relaxed)
+            ),
+        };
+        let mut connection = open_writer_connection_for_target(&target).expect("writer connection");
+        ensure_schema(&mut connection, &target).expect("schema");
+        let mut cache = stmt_cache::WriterStatementCache;
+        connection
+            .execute_batch(
+                "CREATE TRIGGER reject_group_member
+                 BEFORE INSERT ON mail_messages
+                 WHEN NEW.message_key = 'atm:group-rejected'
+                 BEGIN SELECT RAISE(ABORT, 'intentional grouped-admission failure'); END;",
+            )
+            .expect("install deterministic writer failure trigger");
+
+        let (first, first_reply) = queued_upsert(message("atm:group-first"));
+        // The trigger forces a database error after the group savepoint has
+        // admitted its first row, rather than relying on pre-enqueue input
+        // validation.  The fallback must therefore undo that tentative row.
+        let (invalid, invalid_reply) = queued_upsert(message("atm:group-rejected"));
+        let (last, last_reply) = queued_upsert(message("atm:group-last"));
+
+        process_batch(
+            &target,
+            &mut connection,
+            &mut cache,
+            vec![first, invalid, last],
+        );
+
+        assert!(matches!(
+            first_reply.recv().expect("first reply"),
+            Ok(WriteOpResult::UpsertMessage { inserted: true, .. })
+        ));
+        assert!(invalid_reply.recv().expect("invalid reply").is_err());
+        assert!(matches!(
+            last_reply.recv().expect("last reply"),
+            Ok(WriteOpResult::UpsertMessage { inserted: true, .. })
+        ));
+        let persisted: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM mail_messages WHERE message_key IN (?1, ?2)",
+                params!["atm:group-first", "atm:group-last"],
+                |row| row.get(0),
+            )
+            .expect("count successful replay rows");
+        assert_eq!(
+            persisted, 2,
+            "both valid members survive the fallback replay"
+        );
     }
 }
