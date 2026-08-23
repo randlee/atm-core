@@ -1550,6 +1550,24 @@ class AdmissionCapacityTests(unittest.TestCase):
             ],
         )
 
+    def test_default_f8_matrix_fails_closed_when_one_required_target_fails(self):
+        observed: list[str] = []
+        outcomes = iter((0, 0, 1, 0))
+
+        def run_capacity(*_args, **kwargs):
+            observed.append(kwargs["benchmark_target"])
+            return next(outcomes), Path(f"{kwargs['benchmark_target']}.json")
+
+        args = argparse.Namespace(
+            atm_home=None,
+            evidence_dir=Path("evidence"),
+            raw_evidence_dir=Path("raw"),
+            workers=64,
+        )
+        with mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity):
+            self.assertEqual(RUNNER.run_default_f8_matrix(args), 1)
+        self.assertEqual(observed, ["sqlite", "uds", "tcp", "tcp-tls"])
+
     def test_plaintext_baseline_bootstrap_runs_the_complete_required_set(self):
         observed: list[tuple[int, bool, str, str]] = []
 
