@@ -116,8 +116,8 @@ def test_live_ttl_counts_drive_sprint_gates(tmp_path):
     assert second["ready_to_merge"] is True
     assert second["previous_sprints_merged"] is True
     assert second["ok_to_merge"] is True
-    assert "| Sprint | DEV | QA | CI | PR | Live B | Live I | Live M | Ready | OK |" in report["table"]
-    assert "| AICH-S1 (AI.21-pre) | ✅ | ❌ | ✅ | #1 🏁 |" in report["table"]
+    assert "| Sprint | DEV | QA | CI | PR | FLAGS | Ready | OK |" in report["table"]
+    assert "| AICH-S1 (AI.21-pre) | ✅ | ❌ | ✅ | #1 🏁 | 1:0:1 |" in report["table"]
 
 
 def test_github_state_replaces_manual_metadata(tmp_path):

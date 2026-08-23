@@ -321,6 +321,13 @@ def _gate_icon(value: bool | None) -> str:
     return "?"
 
 
+def _flags_cell(q: dict[str, Any]) -> str:
+    blockers = q["blockers"] if q["blockers"] is not None else "?"
+    important = q["important"] if q["important"] is not None else "?"
+    minor = q["minor"] if q["minor"] is not None else "?"
+    return f"{blockers}:{important}:{minor}"
+
+
 def _pr_cell(meta: dict[str, Any]) -> str:
     number = meta.get("pr_number")
     if isinstance(number, int) and not isinstance(number, bool):
@@ -1070,8 +1077,7 @@ def build_report(
         marker = " ⚠️" if row.get("diagnostics") else ""
         lines.append(
             f"| {row['id']} ({phase_sprint}){marker} | {row['dev_icon']} | {row['qa_icon']} | "
-            f"{row['ci_icon']} | {_pr_cell(row)} | {q['blockers'] if q['blockers'] is not None else '?'} | "
-            f"{q['important'] if q['important'] is not None else '?'} | {q['minor'] if q['minor'] is not None else '?'} | "
+            f"{row['ci_icon']} | {_pr_cell(row)} | {_flags_cell(q)} | "
             f"{row['ready_icon']} | {row['ok_icon']} |"
         )
         detail = (
@@ -1094,10 +1100,10 @@ def build_report(
                 f"- {_diagnostic_text(item)}" for item in row["diagnostics"]
             )
         detailed.append(detail)
-    integration_row = f"| **integrate/{plan_phase or ('phase-' + phase_name)}** | | — | — | — | — | — | — | — | — |"
+    integration_row = f"| **integrate/{plan_phase or ('phase-' + phase_name)}** | | — | — | — | — | — | — |"
     table = (
-        "| Sprint | DEV | QA | CI | PR | Live B | Live I | Live M | Ready | OK |\n"
-        "|--------|-----|----|----|----|--------|--------|--------|-------|----|\n"
+        "| Sprint | DEV | QA | CI | PR | FLAGS | Ready | OK |\n"
+        "|--------|-----|----|----|----|-------|-------|----|\n"
         + "\n".join(lines) + "\n" + integration_row
     )
     if diagnostics:
