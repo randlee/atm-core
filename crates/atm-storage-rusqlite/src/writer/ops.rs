@@ -1,6 +1,7 @@
 use super::stmt_cache::WriterStatementCache;
 use crate::search_schema::{
-    sync_inserted_message_projection, sync_message_projection_by_key, sync_template_projection,
+    InsertedMessageProjection, sync_inserted_message_projection, sync_message_projection_by_key,
+    sync_template_projection,
 };
 use crate::shared_db::{SharedDbTarget, serialize_json, sqlite_error, sqlite_thread_mode};
 use atm_storage::contract::{
@@ -640,15 +641,17 @@ fn execute_upsert_message(
         sync_inserted_message_projection(
             connection,
             target,
-            record.team.as_str(),
-            record.agent.as_str(),
-            record.message_key.as_str(),
-            values.message_id.as_deref(),
-            &values.message_at,
-            &values.message_text,
-            values.summary.as_deref(),
-            &values.classification.tags_json,
-            &values.from_agent,
+            InsertedMessageProjection {
+                team: record.team.as_str(),
+                agent: record.agent.as_str(),
+                message_key: record.message_key.as_str(),
+                message_id: values.message_id.as_deref(),
+                message_at: &values.message_at,
+                message_text: &values.message_text,
+                summary: values.summary.as_deref(),
+                tags_json: &values.classification.tags_json,
+                from_agent: &values.from_agent,
+            },
         )?;
     }
     let timestamps = initial_state_timestamps(

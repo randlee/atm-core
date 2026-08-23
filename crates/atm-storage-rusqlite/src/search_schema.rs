@@ -208,32 +208,41 @@ pub(crate) fn sync_template_projection(
 /// just inserted through the writer lane.  Its canonical fields are already
 /// present in the admitted request, so avoid a redundant row read on every
 /// successful durable write.
+///
+/// This deliberately groups the writer's canonical values at the call
+/// boundary.  Keeping the data together makes it harder for a future caller
+/// to pass a field from a different message while preserving the no-reread
+/// fast path.
+pub(crate) struct InsertedMessageProjection<'a> {
+    pub(crate) team: &'a str,
+    pub(crate) agent: &'a str,
+    pub(crate) message_key: &'a str,
+    pub(crate) message_id: Option<&'a str>,
+    pub(crate) message_at: &'a str,
+    pub(crate) message_text: &'a str,
+    pub(crate) summary: Option<&'a str>,
+    pub(crate) tags_json: &'a str,
+    pub(crate) from_agent: &'a str,
+}
+
 pub(crate) fn sync_inserted_message_projection(
     connection: &SqliteConnection,
     target: &SharedDbTarget,
-    team: &str,
-    agent: &str,
-    message_key: &str,
-    message_id: Option<&str>,
-    message_at: &str,
-    message_text: &str,
-    summary: Option<&str>,
-    tags_json: &str,
-    from_agent: &str,
+    projection: InsertedMessageProjection<'_>,
 ) -> Result<(), atm_storage::AtmError> {
     sync_message_projection_fields(
         connection,
         target,
-        team,
-        agent,
-        message_key,
-        message_id,
-        message_at,
-        message_text,
-        summary,
-        Some(tags_json),
+        projection.team,
+        projection.agent,
+        projection.message_key,
+        projection.message_id,
+        projection.message_at,
+        projection.message_text,
+        projection.summary,
+        Some(projection.tags_json),
         None,
-        Some(from_agent),
+        Some(projection.from_agent),
     )
 }
 
