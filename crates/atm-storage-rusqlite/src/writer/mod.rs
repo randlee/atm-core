@@ -220,14 +220,9 @@ impl SqliteWriter {
             op: Box::new(op),
             reply: ReplyTx::Async(reply_tx),
         };
-        // One end-to-end deadline bounds the same two stages without
-        // registering and clearing a second Tokio timer for every durable
-        // admission. The queue and reply retain their distinct diagnostics.
-        let deadline = tokio::time::sleep(self.write_op_deadline);
-        tokio::pin!(deadline);
-        let enqueue = tokio::select! {
-            result = sender.send(message) => result,
-            _ = &mut deadline => {
+        tokio::time::timeout(self.write_op_deadline, sender.send(message))
+            .await
+            .map_err(|_| {
                 let error = writer_queue_timeout_error(self.write_op_deadline);
                 self.observability
                     .emit_or_warn(SqliteObservabilityEvent::new(
@@ -236,36 +231,22 @@ impl SqliteWriter {
                         error.message().to_owned(),
                         Some(error.code()),
                     ));
-                return Err(error);
-            }
-        };
-        enqueue.map_err(|_| {
-            let error = writer_channel_closed_error();
-            self.observability
-                .emit_or_warn(SqliteObservabilityEvent::new(
-                    "writer_submit",
-                    SqliteObservabilityOutcome::Failed,
-                    error.message().to_owned(),
-                    Some(error.code()),
-                ));
-            error
-        })?;
-        tokio::select! {
-            result = reply_rx => match result {
-                Ok(result) => result,
-                Err(_) => {
-                    let error = writer_reply_channel_closed_error();
-                    self.observability
-                        .emit_or_warn(SqliteObservabilityEvent::new(
-                            "writer_reply",
-                            SqliteObservabilityOutcome::Failed,
-                            error.message().to_owned(),
-                            Some(error.code()),
-                        ));
-                    Err(error)
-                }
-            },
-            _ = &mut deadline => {
+                error
+            })?
+            .map_err(|_| {
+                let error = writer_channel_closed_error();
+                self.observability
+                    .emit_or_warn(SqliteObservabilityEvent::new(
+                        "writer_submit",
+                        SqliteObservabilityOutcome::Failed,
+                        error.message().to_owned(),
+                        Some(error.code()),
+                    ));
+                error
+            })?;
+        tokio::time::timeout(self.write_op_deadline, reply_rx)
+            .await
+            .map_err(|_| {
                 let error = writer_reply_timeout_error(self.write_op_deadline);
                 self.observability
                     .emit_or_warn(SqliteObservabilityEvent::new(
@@ -274,9 +255,19 @@ impl SqliteWriter {
                         error.message().to_owned(),
                         Some(error.code()),
                     ));
-                Err(error)
-            }
-        }
+                error
+            })?
+            .map_err(|_| {
+                let error = writer_reply_channel_closed_error();
+                self.observability
+                    .emit_or_warn(SqliteObservabilityEvent::new(
+                        "writer_reply",
+                        SqliteObservabilityOutcome::Failed,
+                        error.message().to_owned(),
+                        Some(error.code()),
+                    ));
+                error
+            })?
     }
 }
 
