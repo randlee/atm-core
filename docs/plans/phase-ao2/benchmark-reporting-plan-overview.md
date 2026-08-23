@@ -82,6 +82,8 @@ the benchmarked runtime.
 | 3 | critical-plan-reviewer (sonnet) | `ba5ade5a` | **PASS** — all round-2 findings verified closed against live doc text and the base branch's `BENCHMARK_TARGETS`; 1 minor wording (AO2.12 deliverable-2 prose predated the ownership move) | Wording fixed in round-3 commit. |
 | 3 | plan-scope-reviewer (sonnet) | `ba5ade5a` | FAIL — round-2 closures confirmed; 1 Important (D12 had no owning sprint or enforcing AC), 1 minor (QA-history table split in two) | Fixed in round-3 commit: D12 cited in AO2.10 (machine-id half, plus-form grep gate in AC #4) and AO2.11 (display-label half, new AC #9); tables merged. |
 
+| 4 | plan-scope-reviewer (sonnet) | `ec9a29e5` | **PASS** — D12 ownership/enforcement and QA-table merge verified closed; no new findings; all four sprints PASS | Hardening complete; ready for quality-mgr gate. |
+
 Operator additions after round 1: D11 (UTC-only JSON; rendered reports show
 Pacific 24-hour fallback inside `<time>` elements upgraded to viewer-local
 time by a small inline script). After round 2: D12 (canonical `tcp-tls`
