@@ -8,45 +8,45 @@
     body { font-family: sans-serif; color: #1f2937; margin: 2rem auto; max-width: 75rem; padding: 0 1rem; }
     table { border-collapse: collapse; margin: 1rem 0 2rem; width: 100%; }
     th, td { border: 1px solid #cbd5e1; padding: .55rem; text-align: left; }
-    th { background: #f1f5f9; } .info { color: #1e40af; font-weight: bold; }
+    th { background: #f1f5f9; } .info { color: #1e40af; font-weight: bold; } .pass { color: #065f46; font-weight: bold; } .fail { color: #991b1b; font-weight: bold; }
     .meta { color: #475569; } code { font-family: ui-monospace, monospace; }
   </style>
 </head>
 <body>
   <h1>ATM benchmark campaign — ao2-7-final-20260822T212211Z-66fbdf88</h1>
-  <p class="meta">Campaign <code>ao2-7-final-20260822T212211Z-66fbdf88</code> · rendered 2026-08-23T17:56:30.988163Z.</p>
+  <p class="meta">Campaign <code>ao2-7-final-20260822T212211Z-66fbdf88</code> · rendered 2026-08-23T18:03:26.687313Z.</p>
   <section>
     <h2>m5-atmbench</h2>
     <p class="meta">darwin / arm64 · daemon atm 1.4.4 · source <code>66fbdf881dbfa308a272e4e783df5e4c9b6c9759</code></p>
     <table>
-      <thead><tr><th>Test</th><th>Result msg/sec</th><th>Historical baseline msg/sec</th><th>Comparison</th><th>Evidence</th></tr></thead>
+      <thead><tr><th>Test</th><th>Result msg/sec</th><th>Reference msg/sec (floor)</th><th>Pass/Fail</th><th>Evidence</th></tr></thead>
       <tbody>
         <tr>
           <td>sqlite</td>
           <td>8142.81</td>
-          <td>n/a</td>
-          <td class="info">N/A — no empirical baseline artifact</td>
+          <td>45000.00 (45000.00) · approved target</td>
+          <td class="fail">FAIL</td>
           <td><a href="20260822-212211.483406-m5-atmbench-sqlite-plaintext-test-f8.json">JSON</a> · <a href="20260822-212211.483406-m5-atmbench-sqlite-plaintext-test-f8.xhtml">panel</a></td>
         </tr>
         <tr>
           <td>uds</td>
           <td>9679.34</td>
-          <td>n/a</td>
-          <td class="info">N/A — no empirical baseline artifact</td>
+          <td>24000.00 (24000.00) · approved target</td>
+          <td class="fail">FAIL</td>
           <td><a href="20260822-212232.234806-m5-atmbench-uds-plaintext-test-f8.json">JSON</a> · <a href="20260822-212232.234806-m5-atmbench-uds-plaintext-test-f8.xhtml">panel</a></td>
         </tr>
         <tr>
           <td>tcp</td>
           <td>8827.55</td>
-          <td>n/a</td>
-          <td class="info">N/A — no empirical baseline artifact</td>
+          <td>22500.00 (22500.00) · approved target</td>
+          <td class="fail">FAIL</td>
           <td><a href="20260822-212255.586698-m5-atmbench-tcp-plaintext-test-f8.json">JSON</a> · <a href="20260822-212255.586698-m5-atmbench-tcp-plaintext-test-f8.xhtml">panel</a></td>
         </tr>
         <tr>
           <td>tcp-tls</td>
           <td>7649.91</td>
-          <td>n/a</td>
-          <td class="info">N/A — no empirical baseline artifact</td>
+          <td>22500.00 (22500.00) · approved target</td>
+          <td class="fail">FAIL</td>
           <td><a href="20260822-212315.853287-m5-atmbench-tcp-mutual-tls-f8.json">JSON</a> · <a href="20260822-212315.853287-m5-atmbench-tcp-mutual-tls-f8.xhtml">panel</a></td>
         </tr>
       </tbody>

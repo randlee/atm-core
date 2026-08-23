@@ -16,7 +16,7 @@
 </head>
 <body>
   <h1>ATM local transport benchmark</h1>
-  <p class="meta">Generated 2026-08-23T17:56:31.015113Z</p>
+  <p class="meta">Generated 2026-08-23T18:03:26.712078Z</p>
   <p>Each campaign is an immutable date/version report. The full target table is shown below and the XHTML link is supplemental detail.</p>
   <h2>Benchmark campaigns</h2>
   <table>
@@ -49,35 +49,36 @@
   <h3>m5-atmbench · <code>ff9329dc108327c693649b3fcb67d7cf4f6b1558</code></h3>
   <p class="meta">Historical import: Exact imported TCP-only confirmation artifact. The original summary has no campaign ID or snapshot/restore lifecycle fields; SQLite and UDS were not run in this provenance set. Raw artifact host label: <code>m5-atmbench</code>.</p>
   <table>
-    <thead><tr><th>Test</th><th>Result msg/sec</th><th>Historical baseline msg/sec</th><th>Comparison</th></tr></thead>
+    <thead><tr><th>Test</th><th>Result msg/sec</th><th>Reference msg/sec (floor)</th><th>Pass/Fail</th></tr></thead>
     <tbody>
-      <tr><td>sqlite</td><td>n/a</td><td>n/a</td><td class="info">N/A — no empirical baseline artifact</td></tr>
-      <tr><td>uds</td><td>n/a</td><td>n/a</td><td class="info">N/A — no empirical baseline artifact</td></tr>
-      <tr><td>tcp</td><td>22113.98</td><td>n/a</td><td class="info">N/A — no empirical baseline artifact</td></tr>
-      <tr><td>tcp-tls</td><td>22297.31</td><td>n/a</td><td class="info">N/A — no empirical baseline artifact</td></tr>
+      <tr><td>sqlite</td><td>n/a</td><td>n/a</td><td class="info">NOT RUN</td></tr>
+      <tr><td>uds</td><td>n/a</td><td>n/a</td><td class="info">NOT RUN</td></tr>
+      <tr><td>tcp</td><td>22113.98</td><td><a href="20260823-110446.929025-local-tcp-plaintext-test-f8.json">18116.50</a> (17210.67) · empirical baseline</td><td class="pass">PASS</td></tr>
+      <tr><td>tcp-tls</td><td>22297.31</td><td><a href="20260823-110510.260883-local-tcp-mutual-tls-f8.json">17934.37</a> (17037.65) · empirical baseline</td><td class="pass">PASS</td></tr>
     </tbody>
   </table>
   <h2>historical-20260823-94b75a3ea2e9</h2>
   <h3>m5-atmbench · <code>94b75a3ea2e929e7afc9d63cb50bfd03003b1022</code></h3>
   <p class="meta">Historical import: Exact imported source artifact. The original summary has no campaign ID or snapshot/restore lifecycle fields, so it is a historical measurement and not accepted-candidate evidence. Raw artifact host label: <code>local</code>.</p>
+  <p class="meta">This complete f8 matrix is the hash-bound empirical baseline. Later compatible records pass at or above its displayed 95% retention floor.</p>
   <table>
-    <thead><tr><th>Test</th><th>Result msg/sec</th><th>Historical baseline msg/sec</th><th>Comparison</th></tr></thead>
+    <thead><tr><th>Test</th><th>Result msg/sec</th><th>Reference msg/sec (floor)</th><th>Pass/Fail</th></tr></thead>
     <tbody>
-      <tr><td>sqlite</td><td>37483.10</td><td>n/a</td><td class="info">N/A — no empirical baseline artifact</td></tr>
-      <tr><td>uds</td><td>18937.17</td><td>n/a</td><td class="info">N/A — no empirical baseline artifact</td></tr>
-      <tr><td>tcp</td><td>18116.50</td><td>n/a</td><td class="info">N/A — no empirical baseline artifact</td></tr>
-      <tr><td>tcp-tls</td><td>17934.37</td><td>n/a</td><td class="info">N/A — no empirical baseline artifact</td></tr>
+      <tr><td>sqlite</td><td>37483.10</td><td><a href="20260823-110402.419746-local-sqlite-f8.json">37483.10</a> (35608.95) · empirical baseline</td><td class="info">BASELINE</td></tr>
+      <tr><td>uds</td><td>18937.17</td><td><a href="20260823-110423.475063-local-uds-mutual-tls-f8.json">18937.17</a> (17990.31) · empirical baseline</td><td class="info">BASELINE</td></tr>
+      <tr><td>tcp</td><td>18116.50</td><td><a href="20260823-110446.929025-local-tcp-plaintext-test-f8.json">18116.50</a> (17210.67) · empirical baseline</td><td class="info">BASELINE</td></tr>
+      <tr><td>tcp-tls</td><td>17934.37</td><td><a href="20260823-110510.260883-local-tcp-mutual-tls-f8.json">17934.37</a> (17037.65) · empirical baseline</td><td class="info">BASELINE</td></tr>
     </tbody>
   </table>
   <h2>ao2-7-final-20260822T212211Z-66fbdf88</h2>
   <h3>m5-atmbench · <code>66fbdf881dbfa308a272e4e783df5e4c9b6c9759</code></h3>
   <table>
-    <thead><tr><th>Test</th><th>Result msg/sec</th><th>Historical baseline msg/sec</th><th>Comparison</th></tr></thead>
+    <thead><tr><th>Test</th><th>Result msg/sec</th><th>Reference msg/sec (floor)</th><th>Pass/Fail</th></tr></thead>
     <tbody>
-      <tr><td>sqlite</td><td>8142.81</td><td>n/a</td><td class="info">N/A — no empirical baseline artifact</td></tr>
-      <tr><td>uds</td><td>9679.34</td><td>n/a</td><td class="info">N/A — no empirical baseline artifact</td></tr>
-      <tr><td>tcp</td><td>8827.55</td><td>n/a</td><td class="info">N/A — no empirical baseline artifact</td></tr>
-      <tr><td>tcp-tls</td><td>7649.91</td><td>n/a</td><td class="info">N/A — no empirical baseline artifact</td></tr>
+      <tr><td>sqlite</td><td>8142.81</td><td>45000.00 (45000.00) · approved target</td><td class="fail">FAIL</td></tr>
+      <tr><td>uds</td><td>9679.34</td><td>24000.00 (24000.00) · approved target</td><td class="fail">FAIL</td></tr>
+      <tr><td>tcp</td><td>8827.55</td><td>22500.00 (22500.00) · approved target</td><td class="fail">FAIL</td></tr>
+      <tr><td>tcp-tls</td><td>7649.91</td><td>22500.00 (22500.00) · approved target</td><td class="fail">FAIL</td></tr>
     </tbody>
   </table>
   <p class="meta">123 pre-campaign artifacts remain in the immutable evidence directory but are not used as campaign results.</p>

@@ -50,11 +50,14 @@ required_variables:
 {% if panel.provenance_note %}
   <p class="meta">Historical import: {{ panel.provenance_note | e }} Raw artifact host label: <code>{{ panel.raw_host_label | e }}</code>.</p>
 {% endif %}
+{% if panel.empirical_baseline %}
+  <p class="meta">This complete f8 matrix is the hash-bound empirical baseline. Later compatible records pass at or above its displayed 95% retention floor.</p>
+{% endif %}
   <table>
-    <thead><tr><th>Test</th><th>Result msg/sec</th><th>Historical baseline msg/sec</th><th>Comparison</th></tr></thead>
+    <thead><tr><th>Test</th><th>Result msg/sec</th><th>Reference msg/sec (floor)</th><th>Pass/Fail</th></tr></thead>
     <tbody>
 {% for row in panel.rows %}
-      <tr><td>{{ row.test | e }}</td><td>{{ 'n/a' if row.result_msg_per_second is none else '%.2f' | format(row.result_msg_per_second) }}</td><td>{{ 'n/a' if row.baseline_msg_per_second is none else '%.2f' | format(row.baseline_msg_per_second) }}</td><td class="{{ row.comparison_class | e }}">{{ row.comparison | e }}</td></tr>
+      <tr><td>{{ row.test | e }}</td><td>{{ 'n/a' if row.result_msg_per_second is none else '%.2f' | format(row.result_msg_per_second) }}</td><td>{% if row.baseline_msg_per_second is none %}n/a{% else %}{% if row.baseline_json_href %}<a href="{{ row.baseline_json_href | e }}">{{ '%.2f' | format(row.baseline_msg_per_second) }}</a>{% else %}{{ '%.2f' | format(row.baseline_msg_per_second) }}{% endif %}{% if row.baseline_floor_msg_per_second is not none %} ({{ '%.2f' | format(row.baseline_floor_msg_per_second) }}){% endif %} · {{ row.reference_kind | e }}{% endif %}</td><td class="{{ row.comparison_class | e }}">{{ row.comparison | e }}</td></tr>
 {% endfor %}
     </tbody>
   </table>

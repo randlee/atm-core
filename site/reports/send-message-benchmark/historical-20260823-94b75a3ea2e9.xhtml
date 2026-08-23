@@ -8,46 +8,47 @@
     body { font-family: sans-serif; color: #1f2937; margin: 2rem auto; max-width: 75rem; padding: 0 1rem; }
     table { border-collapse: collapse; margin: 1rem 0 2rem; width: 100%; }
     th, td { border: 1px solid #cbd5e1; padding: .55rem; text-align: left; }
-    th { background: #f1f5f9; } .info { color: #1e40af; font-weight: bold; }
+    th { background: #f1f5f9; } .info { color: #1e40af; font-weight: bold; } .pass { color: #065f46; font-weight: bold; } .fail { color: #991b1b; font-weight: bold; }
     .meta { color: #475569; } code { font-family: ui-monospace, monospace; }
   </style>
 </head>
 <body>
   <h1>ATM benchmark campaign — historical-20260823-94b75a3ea2e9</h1>
-  <p class="meta">Campaign <code>historical-20260823-94b75a3ea2e9</code> · rendered 2026-08-23T17:56:30.997729Z.</p>
+  <p class="meta">Campaign <code>historical-20260823-94b75a3ea2e9</code> · rendered 2026-08-23T18:03:26.696128Z.</p>
   <section>
     <h2>m5-atmbench</h2>
     <p class="meta">darwin / arm64 · daemon atm 1.4.4 · source <code>94b75a3ea2e929e7afc9d63cb50bfd03003b1022</code></p>
     <p class="meta">Historical import: Exact imported source artifact. The original summary has no campaign ID or snapshot/restore lifecycle fields, so it is a historical measurement and not accepted-candidate evidence. Raw artifact host label: <code>local</code>.</p>
+    <p class="meta">This complete f8 matrix is the hash-bound empirical baseline. Later compatible records pass at or above its displayed 95% retention floor.</p>
     <table>
-      <thead><tr><th>Test</th><th>Result msg/sec</th><th>Historical baseline msg/sec</th><th>Comparison</th><th>Evidence</th></tr></thead>
+      <thead><tr><th>Test</th><th>Result msg/sec</th><th>Reference msg/sec (floor)</th><th>Pass/Fail</th><th>Evidence</th></tr></thead>
       <tbody>
         <tr>
           <td>sqlite</td>
           <td>37483.10</td>
-          <td>n/a</td>
-          <td class="info">N/A — no empirical baseline artifact</td>
+          <td><a href="20260823-110402.419746-local-sqlite-f8.json">37483.10</a> (35608.95) · empirical baseline</td>
+          <td class="info">BASELINE</td>
           <td><a href="20260823-110402.419746-local-sqlite-f8.json">JSON</a> · <a href="20260823-110402.419746-local-sqlite-f8.xhtml">panel</a></td>
         </tr>
         <tr>
           <td>uds</td>
           <td>18937.17</td>
-          <td>n/a</td>
-          <td class="info">N/A — no empirical baseline artifact</td>
+          <td><a href="20260823-110423.475063-local-uds-mutual-tls-f8.json">18937.17</a> (17990.31) · empirical baseline</td>
+          <td class="info">BASELINE</td>
           <td><a href="20260823-110423.475063-local-uds-mutual-tls-f8.json">JSON</a> · <a href="20260823-110423.475063-local-uds-mutual-tls-f8.xhtml">panel</a></td>
         </tr>
         <tr>
           <td>tcp</td>
           <td>18116.50</td>
-          <td>n/a</td>
-          <td class="info">N/A — no empirical baseline artifact</td>
+          <td><a href="20260823-110446.929025-local-tcp-plaintext-test-f8.json">18116.50</a> (17210.67) · empirical baseline</td>
+          <td class="info">BASELINE</td>
           <td><a href="20260823-110446.929025-local-tcp-plaintext-test-f8.json">JSON</a> · <a href="20260823-110446.929025-local-tcp-plaintext-test-f8.xhtml">panel</a></td>
         </tr>
         <tr>
           <td>tcp-tls</td>
           <td>17934.37</td>
-          <td>n/a</td>
-          <td class="info">N/A — no empirical baseline artifact</td>
+          <td><a href="20260823-110510.260883-local-tcp-mutual-tls-f8.json">17934.37</a> (17037.65) · empirical baseline</td>
+          <td class="info">BASELINE</td>
           <td><a href="20260823-110510.260883-local-tcp-mutual-tls-f8.json">JSON</a> · <a href="20260823-110510.260883-local-tcp-mutual-tls-f8.xhtml">panel</a></td>
         </tr>
       </tbody>

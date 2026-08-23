@@ -1,4 +1,9 @@
 {
+  "empirical_baseline": {
+    "campaign_id": "historical-20260823-94b75a3ea2e9",
+    "description": "First complete four-target M5 f8 matrix retained as the empirical reference for compatible subsequent historical M5 artifacts.",
+    "minimum_retention_fraction": 0.95
+  },
   "imports": [
     {
       "campaign_id": "historical-20260823-94b75a3ea2e9",

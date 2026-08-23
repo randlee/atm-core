@@ -119,7 +119,7 @@ class BenchmarkReportTests(unittest.TestCase):
         rows = REPORT.campaign_target_rows([failed])
         tcp = next(row for row in rows if row["test"] == "tcp")
         self.assertIsNone(tcp["result_msg_per_second"])
-        self.assertEqual(tcp["comparison"], "N/A — no empirical baseline artifact")
+        self.assertEqual(tcp["comparison"], "FAIL")
 
     def test_immutable_write_rejects_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -251,8 +251,51 @@ class BenchmarkReportTests(unittest.TestCase):
             output = REPORT.render_campaign(campaign_id, targets, Path(directory))
             text = output.read_text(encoding="utf-8")
         self.assertIn("Result msg/sec", text)
-        self.assertIn("Historical baseline msg/sec", text)
+        self.assertIn("Reference msg/sec (floor)", text)
         self.assertIn("tcp-tls", text)
+
+    def test_historical_import_uses_manifest_backed_empirical_baseline(self) -> None:
+        base = REPORT.load_result(self.fixture("success-uds-f1.json"))
+        baseline_id = "historical-20260823-aaaaaaaaaaaa"
+        baseline = []
+        for target in REPORT.TARGET_ORDER:
+            baseline.append({
+                **base,
+                "campaign_id": baseline_id,
+                "benchmark_target": target,
+                "frames_per_connection": 8,
+                "source_revision": "a" * 40,
+                "host_label": "m5-atmbench",
+                "_report_campaign_id": baseline_id,
+                "_report_display_host_label": "m5-atmbench",
+                "_report_provenance_note": "historical",
+            })
+        candidate = {
+            **baseline[2],
+            "generated_at": "2026-08-24T00:00:00Z",
+            "campaign_id": "historical-20260824-bbbbbbbbbbbb",
+            "_report_campaign_id": "historical-20260824-bbbbbbbbbbbb",
+        }
+        candidate["metrics"] = {
+            **candidate["metrics"],
+            "admissions_per_second": {**candidate["metrics"]["admissions_per_second"], "p50": 1_200.0},
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            report_dir = Path(directory)
+            (report_dir / REPORT.HISTORICAL_IMPORTS_NAME).write_text(json.dumps({
+                "schema_version": 1,
+                "imports": [],
+                "empirical_baseline": {
+                    "campaign_id": baseline_id,
+                    "minimum_retention_fraction": 0.95,
+                },
+            }), encoding="utf-8")
+            REPORT.annotate_empirical_baseline([*baseline, candidate], report_dir)
+        rows = REPORT.campaign_target_rows([candidate])
+        tcp = next(row for row in rows if row["test"] == "tcp")
+        self.assertEqual(tcp["baseline_msg_per_second"], 1_250.0)
+        self.assertEqual(tcp["baseline_floor_msg_per_second"], 1_187.5)
+        self.assertEqual(tcp["comparison"], "PASS")
 
     def test_campaign_table_refuses_to_mix_source_revisions(self) -> None:
         base = REPORT.load_result(self.fixture("success-uds-f1.json"))
