@@ -97,6 +97,7 @@ def regenerate_mtls_identity(account: BenchmarkAccount, atm: Path) -> str:
             "generate a benchmark mTLS certificate",
         )
         try:
+            os.chmod(private_key, 0o600)
             bundle_bytes = certificate.read_bytes() + private_key.read_bytes()
             if not bundle_bytes:
                 raise OSError("generated PEM files were empty")
