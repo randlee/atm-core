@@ -520,13 +520,44 @@ fn process_batch(
 
     let mut replies: Vec<(ReplyTx, Result<WriteOpResult, AtmError>)> =
         Vec::with_capacity(batch_len);
-    for queued in batch {
-        replies.push(process_queued_write(
-            target,
-            &mut transaction,
-            cache,
-            queued,
-        ));
+    let mut queued_writes = batch.into_iter().peekable();
+    while let Some(queued) = queued_writes.next() {
+        if !is_batchable_message_admission(&queued) {
+            replies.push(process_queued_write(
+                target,
+                &mut transaction,
+                cache,
+                queued,
+            ));
+            continue;
+        }
+
+        let mut admissions = vec![queued];
+        while queued_writes
+            .peek()
+            .is_some_and(is_batchable_message_admission)
+        {
+            admissions.push(
+                queued_writes
+                    .next()
+                    .expect("peeked queued message admission must remain available"),
+            );
+        }
+        if admissions.len() == 1 {
+            replies.push(process_queued_write(
+                target,
+                &mut transaction,
+                cache,
+                admissions.pop().expect("one admission is present"),
+            ));
+        } else {
+            replies.extend(process_message_admission_group(
+                target,
+                &mut transaction,
+                cache,
+                admissions,
+            ));
+        }
     }
 
     let commit_error = transaction.commit().err().map(|error| {
@@ -546,6 +577,78 @@ fn process_batch(
             result
         };
         reply.send(final_result);
+    }
+}
+
+/// Ordinary immutable message admissions are the hot path.  They are fully
+/// contained in the outer writer transaction, so a contiguous admitted burst
+/// can share one inner savepoint.  If any member reports an error or panics,
+/// the shared savepoint is dropped and the whole group is replayed through the
+/// established one-savepoint-per-operation path.  The fallback therefore
+/// retains the existing per-operation rollback and reply semantics; only an
+/// all-success group avoids redundant `SAVEPOINT` / `RELEASE` round trips.
+fn is_batchable_message_admission(queued: &QueuedWrite) -> bool {
+    matches!(&*queued.op, WriteOp::UpsertMessage(_))
+}
+
+fn process_message_admission_group(
+    target: &SharedDbTarget,
+    transaction: &mut rusqlite::Transaction<'_>,
+    cache: &mut stmt_cache::WriterStatementCache,
+    admissions: Vec<QueuedWrite>,
+) -> Vec<(ReplyTx, Result<WriteOpResult, AtmError>)> {
+    let savepoint = match transaction.savepoint() {
+        Ok(savepoint) => savepoint,
+        Err(error) => {
+            let error = sqlite_error(
+                target,
+                "failed to open sqlite writer message-admission savepoint",
+                error,
+            );
+            return admissions
+                .into_iter()
+                .map(|queued| (queued.reply, Err(copy_error(target, &error))))
+                .collect();
+        }
+    };
+
+    let mut results = Vec::with_capacity(admissions.len());
+    for queued in &admissions {
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            ops::execute(&queued.op, &savepoint, cache, target)
+        }));
+        match result {
+            Ok(Ok(result)) => results.push(result),
+            Ok(Err(_)) | Err(_) => {
+                // Roll back every tentative row before replaying.  A replay is
+                // intentionally conservative: it preserves the established
+                // operation-by-operation error isolation for rare failures.
+                drop(savepoint);
+                return admissions
+                    .into_iter()
+                    .map(|queued| process_queued_write(target, transaction, cache, queued))
+                    .collect();
+            }
+        }
+    }
+
+    match savepoint.commit() {
+        Ok(()) => admissions
+            .into_iter()
+            .zip(results)
+            .map(|(queued, result)| (queued.reply, Ok(result)))
+            .collect(),
+        Err(error) => {
+            let error = sqlite_error(
+                target,
+                "failed to commit sqlite writer message-admission savepoint",
+                error,
+            );
+            admissions
+                .into_iter()
+                .map(|queued| (queued.reply, Err(copy_error(target, &error))))
+                .collect()
+        }
     }
 }
 
