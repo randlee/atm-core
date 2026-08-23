@@ -733,6 +733,59 @@ fn copy_error(target: &SharedDbTarget, error: &AtmError) -> AtmError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shared_db::{SharedDbTarget, ensure_schema, open_writer_connection_for_target};
+    use atm_storage::contract::{Message, MessageKey};
+    use atm_storage::schema::MessageEnvelope;
+    use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
+    use chrono::Utc;
+    use rusqlite::params;
+    use serde_json::Map;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_TEST_DB_ID: AtomicU64 = AtomicU64::new(1);
+
+    fn message(key: &str) -> Message {
+        let team: TeamName = "writer-test-team".parse().expect("team");
+        let agent: AgentName = "writer-test-agent".parse().expect("agent");
+        Message {
+            team: team.clone(),
+            agent: agent.clone(),
+            message_key: MessageKey::new(key).expect("message key"),
+            envelope: MessageEnvelope {
+                from: agent,
+                source_chat_id: None,
+                text: format!("payload for {key}"),
+                timestamp: IsoTimestamp::from_datetime(Utc::now()),
+                read: false,
+                source_team: Some(team),
+                destination_chat_id: None,
+                summary: None,
+                message_id: None,
+                requires_ack: false,
+                pending_ack_at: None,
+                acknowledged_at: None,
+                acknowledges_message_id: None,
+                parent_message_id: None,
+                thread_mode: None,
+                expires_at: None,
+                task_id: None,
+                extra: Map::new(),
+            },
+        }
+    }
+
+    fn queued_upsert(
+        message: Message,
+    ) -> (QueuedWrite, mpsc::Receiver<Result<WriteOpResult, AtmError>>) {
+        let (reply, receiver) = mpsc::sync_channel(1);
+        (
+            QueuedWrite {
+                op: Box::new(WriteOp::UpsertMessage(Box::new(message))),
+                reply: ReplyTx::Sync(reply),
+            },
+            receiver,
+        )
+    }
 
     fn queued_write() -> WriterMessage {
         let (reply, _receiver) = mpsc::sync_channel(1);
@@ -815,5 +868,53 @@ mod tests {
 
         assert_eq!(batch.len(), 1);
         assert!(shutting_down);
+    }
+
+    #[test]
+    fn grouped_message_admissions_replay_individually_after_a_member_validation_error() {
+        let target = SharedDbTarget::InMemory {
+            uri: format!(
+                "file:writer-group-replay-{}?mode=memory&cache=shared",
+                NEXT_TEST_DB_ID.fetch_add(1, Ordering::Relaxed)
+            ),
+        };
+        let mut connection = open_writer_connection_for_target(&target).expect("writer connection");
+        ensure_schema(&mut connection, &target).expect("schema");
+        let mut cache = stmt_cache::WriterStatementCache;
+
+        let (first, first_reply) = queued_upsert(message("atm:group-first"));
+        // `MessageKey` guarantees non-blank input, while the writer remains
+        // the owner of the durable `atm:` / `ext:` invariant.  This forces a
+        // member failure after the group savepoint has admitted its first row.
+        let (invalid, invalid_reply) = queued_upsert(message("invalid-group-member"));
+        let (last, last_reply) = queued_upsert(message("atm:group-last"));
+
+        process_batch(
+            &target,
+            &mut connection,
+            &mut cache,
+            vec![first, invalid, last],
+        );
+
+        assert!(matches!(
+            first_reply.recv().expect("first reply"),
+            Ok(WriteOpResult::UpsertMessage { inserted: true, .. })
+        ));
+        assert!(invalid_reply.recv().expect("invalid reply").is_err());
+        assert!(matches!(
+            last_reply.recv().expect("last reply"),
+            Ok(WriteOpResult::UpsertMessage { inserted: true, .. })
+        ));
+        let persisted: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM mail_messages WHERE message_key IN (?1, ?2)",
+                params!["atm:group-first", "atm:group-last"],
+                |row| row.get(0),
+            )
+            .expect("count successful replay rows");
+        assert_eq!(
+            persisted, 2,
+            "both valid members survive the fallback replay"
+        );
     }
 }
