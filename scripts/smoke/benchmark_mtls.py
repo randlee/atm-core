@@ -5,6 +5,12 @@ Its identity must therefore outlive the runner's temporary ``ATM_HOME``.
 This module owns only a disposable account's PEM bundle and records its path
 through the ordinary ``atm peer certificate init`` command; it owns no peer
 trust, listener, or runtime lifecycle.
+
+Each regeneration creates a self-signed certificate solely for a temporary,
+account-scoped benchmark daemon.  The two-day validity period deliberately
+limits the fixture's lifetime; the runner regenerates it for each mTLS
+benchmark campaign.  It is never a production identity, certificate authority,
+or reusable trust anchor.
 """
 from __future__ import annotations
 
