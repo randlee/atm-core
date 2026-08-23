@@ -50,6 +50,8 @@ class BenchmarkMtlsTests(unittest.TestCase):
             self.assertEqual(commands[-1][-1], "--yes")
             self.assertIn(str(bundle), commands[-1])
             self.assertIn(fingerprint, commands[-1])
+            self.assertIn("extendedKeyUsage=serverAuth,clientAuth", commands[0])
+            self.assertIn("subjectAltName=DNS:atm-benchmark.local,DNS:localhost", commands[0])
 
     def test_regeneration_refuses_a_symlinked_identity_location(self):
         with tempfile.TemporaryDirectory() as temporary:
