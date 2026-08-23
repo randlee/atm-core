@@ -41,8 +41,8 @@ authoritative source; agents follow it mechanically.
    so the manual step list in the skill is two commands + push.
 3. **Docs alignment:** `docs/cross-platform-guidelines.md` gains the
    Windows-benchmark specifics currently only in AI.52 (host label, TCP-only,
-   native invocation, symlink daemon-switch); the five superseded sprint docs
-   get their pointer lines; `docs/plans/phase-ao2/README` (or phase index, if
+   native invocation, symlink daemon-switch); the superseded sprint docs
+   (deliverable 1's seven-doc list) get their pointer lines; `docs/plans/phase-ao2/README` (or phase index, if
    present) links the skill.
 
 ## Skill outline (normative structure)

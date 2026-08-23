@@ -20,7 +20,7 @@ Fixes audit findings B (dual `--rebuild`/`--input` render paths) and C
      INCOMPLETE, a visible note block at the BOTTOM of the panel with
      `incomplete_reason` (D4).
    - `benchmark-phase-report.html.j2` — `phase-<id>.html`: 2×2 candlestick
-     grid at top (tcp, tcp+tls / uds, sqlite — D5), then every panel of the
+     grid at top (tcp, tcp-tls / uds, sqlite — D5), then every panel of the
      phase embedded newest-first by `started_at` descending.
    - `benchmark-index.html.j2` — `index.html` in
      `site/reports/send-message-benchmark/`: the latest phase's 2×2 grid plus
@@ -32,13 +32,17 @@ Fixes audit findings B (dual `--rebuild`/`--input` render paths) and C
    helper feeding the j2 variables. One small **inline** script per page
    (allowed by the no-external-URL gate, which forbids only `<script src=`)
    rewrites each `<time>` text to the viewer's local zone, same 24-hour
-   format; without script execution the Pacific text stands. Sorting and
-   grouping always use the UTC values.
+   format; without script execution the Pacific text stands. In the
+   `.xhtml.j2` panel template (strict XHTML: `xmlns` declared, parsed as
+   XML), the inline script body MUST be wrapped in `<![CDATA[ ... ]]>` so
+   `<` and `&` in script code cannot break XML well-formedness; the `.html`
+   templates need no wrapping. Sorting and grouping always use the UTC
+   values.
 3. **Chart data preparation** in `scripts/smoke/benchmark_report.py`: a pure
    function computes candlestick geometry as plain JSON variables; the j2
    template emits self-contained inline SVG. No external JS/CSS dependencies;
    the site must render offline.
-3. **Single render path.** `benchmark_report.py` exposes exactly one flow:
+4. **Single render path.** `benchmark_report.py` exposes exactly one flow:
    read validated JSON (campaign files + `historical-record.json` when
    present) → render panels → render phase report(s) → render index → run
    `just reports-index`. The `--input`/`--rebuild` split is removed;
@@ -47,18 +51,25 @@ Fixes audit findings B (dual `--rebuild`/`--input` render paths) and C
    recipe is kept as a thin passthrough to this single flow and its comment
    is updated to describe the post-AO2.11 behavior (the retired aggregate is
    no longer mentioned).
-4. **Wyvern preview.** `just benchmark-show` renders/copies the newest
+5. **Wyvern preview.** `just benchmark-show` renders/copies the newest
    campaign panel to an `.html` twin under
    `artifacts/benchmark/preview/latest.html` and opens it with `wyvern`
    (interim for [randlee/wyvern#115](https://github.com/randlee/wyvern/issues/115);
    switch to direct `.xhtml` when that lands). `just benchmark` prints the
    exact `just benchmark-show` command at the end of every run.
-5. **Retire** `site/reports/send-message-benchmark.html` (delete file and its
+6. **Retire** `site/reports/send-message-benchmark.html` (delete file and its
    generation code path); `index.html` and `phase-<id>.html` replace it (D6).
+7. **`HistoricalRecord` model classes.** Implement `RatchetPoint`,
+   `HistoricalResultEntry`, `HistoricalCampaignEntry`, `UnattributedEntry`,
+   and `HistoricalRecord` in `scripts/smoke/benchmark_schema.py` exactly per
+   the normative contract in
+   [sprint-AO2-12-historical-data-migration.md](./sprint-AO2-12-historical-data-migration.md)
+   § "HistoricalRecord contract", plus an empty-record fixture used for
+   pre-AO2.12 rendering. AO2.12 consumes these classes unchanged.
 
 ## Candlestick contract (normative)
 
-- One chart per target; grid order: row 1 = tcp, tcp+tls; row 2 = uds, sqlite.
+- One chart per target; grid order: row 1 = tcp, tcp-tls; row 2 = uds, sqlite.
   Windows series simply absent from the uds chart.
 - One series (color) per `host_label`; x-axis = campaign `started_at`
   (chronological); y-axis = admissions/sec.
@@ -72,7 +83,7 @@ Fixes audit findings B (dual `--rebuild`/`--input` render paths) and C
 
 ```python
 def candlestick_series(
-    charts: Sequence[Literal["tcp", "tcp+tls", "uds", "sqlite"]],
+    charts: Sequence[Literal["tcp", "tcp-tls", "uds", "sqlite"]],
     historical: HistoricalRecord,      # normative model defined in AO2.12
     phase_campaigns: Sequence[BenchmarkCampaign],
     baselines: BaselineSet,
@@ -108,7 +119,20 @@ stub shapes.
    sprint evidence notes).
 6. `site/reports/send-message-benchmark.html` no longer exists on the branch
    and nothing regenerates it (grep gate on the filename).
-7. `.just/tests` suite green on macOS and Windows CI lanes.
+7. Time display (D11): template/unit tests assert every rendered timestamp
+   is a `<time datetime="<UTC ISO Z>">` element whose text is the Pacific
+   24-hour format; a fixture with campaigns whose UTC order differs from
+   their Pacific calendar-date order proves sorting/grouping uses the UTC
+   values; a DOM/grep check asserts exactly one inline (non-`src`) time
+   upgrade script per page; every rendered `.xhtml` panel (including an
+   INCOMPLETE-status fixture and one containing the inline script) passes a
+   strict XML parse (`xml.etree.ElementTree.parse` or equivalent) as an
+   automated test — a well-formedness failure fails the suite, not just a
+   grep gate.
+8. `HistoricalRecord` classes exist in `benchmark_schema.py`, field-for-field
+   equal to AO2.12's normative contract (docstring cross-references it), and
+   the empty-record fixture round-trips through model validation.
+9. `.just/tests` suite green on macOS and Windows CI lanes.
 
 ## Required validation
 

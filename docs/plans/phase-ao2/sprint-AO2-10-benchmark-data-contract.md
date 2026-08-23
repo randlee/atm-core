@@ -18,10 +18,10 @@ are binding.
    of 3–4 results). `SUMMARY_SCHEMA_VERSION = 4`. Both `extra="forbid"`,
    `frozen=True`.
 2. **Runner emits v4 directly.** Starting point is the four-target matrix
-   runner (`BENCHMARK_TARGETS`: sqlite/uds/tcp/tcp+tls, one unskippable
-   matrix per invocation) from `fix/ao2-7-report-provenance`, whose merge
-   into `integrate/phase-ao2` is a dispatch precondition for this sprint
-   (see overview, Base-branch precondition) — this sprint changes its
+   runner (`BENCHMARK_TARGETS`: sqlite/uds/tcp/tcp-tls, one unskippable
+   matrix per invocation) from `origin/fix/ao2-7-direct-peer-benchmark-harness`,
+   whose merge into `integrate/phase-ao2` is a dispatch precondition for this
+   sprint (see overview, Base-branch precondition) — this sprint changes its
    *emission*, it does not build matrix execution. The runner writes
    per-target compact JSON already valid against `BenchmarkRunResult` (no
    post-hoc migration), and at end of the matrix writes one campaign file
@@ -69,7 +69,7 @@ are binding.
 ```python
 class BaselineEntry(BaseModel, frozen=True, extra="forbid"):
     host_label: str          # SAFE_LABEL pattern
-    target: Literal["sqlite", "uds", "tcp", "tcp+tls"]
+    target: Literal["sqlite", "uds", "tcp", "tcp-tls"]
     p50_floor: float         # msg/s; ratchet: may only increase across revisions
     approved_by: str         # quality-mgr approval reference
     effective_from: datetime # UTC
@@ -84,7 +84,7 @@ class BenchmarkRunResult(BaseModel, frozen=True, extra="forbid"):
     campaign_id: str
     host_label: str
     os: Literal["macos", "windows", "linux"]
-    target: Literal["sqlite", "uds", "tcp", "tcp+tls"]
+    target: Literal["sqlite", "uds", "tcp", "tcp-tls"]
     status: Literal["PASS", "FAIL", "INCOMPLETE"]
     incomplete_reason: str | None      # required iff status == INCOMPLETE
     generated_at: datetime             # UTC, ISO-8601
@@ -123,7 +123,7 @@ present for network targets and absent for sqlite — implementers never invent
 degenerate network values.
 
 Target matrix is OS-derived, not caller-chosen: macOS/Linux = sqlite, uds,
-tcp, tcp+tls; Windows = sqlite, tcp, tcp+tls (uds rejected). Roll-up status:
+tcp, tcp-tls; Windows = sqlite, tcp, tcp-tls (uds rejected). Roll-up status:
 INCOMPLETE if any result INCOMPLETE or a required target missing; else FAIL if
 any result FAIL; else PASS. This is enforced in code, not prose: a
 `model_validator` on `BenchmarkCampaign` checks `results` covers the
@@ -143,7 +143,7 @@ a required target must not validate as PASS.
 3. Unit tests: status classification truth table (lifecycle-missing →
    INCOMPLETE; durable < requested → FAIL even above baseline; p50 below floor
    → FAIL; both satisfied → PASS; **required target entirely absent from a
-   campaign — e.g. tcp+tls never ran on a macOS campaign — → campaign
+   campaign — e.g. tcp-tls never ran on a macOS campaign — → campaign
    roll-up INCOMPLETE**; **missing `BaselineEntry` for (host_label, target) →
    hard emission error, not PASS/FAIL**); Windows matrix rejects uds;
    sqlite-variant validator (network fields required for network targets,
@@ -178,7 +178,9 @@ a required target must not validate as PASS.
 
 - must_follow: AO2.6 (writer-batching regression) — merged; benchmark numbers
   achieved there must not regress (standing constraint).
-- must_follow: merge of `fix/ao2-7-report-provenance` (four-target matrix
-  runner, PR #1003 lineage) into `integrate/phase-ao2` — hard dispatch
-  precondition; this sprint modifies that runner's emission.
+- must_follow: merge of `origin/fix/ao2-7-direct-peer-benchmark-harness`
+  (four-target matrix runner; already contains PR #1003's provenance fixes)
+  into `integrate/phase-ao2` — hard dispatch precondition; this sprint
+  modifies that runner's emission. Branch name per the overview's Base-branch
+  precondition, which is authoritative.
 - parallel_safe: none — AO2.11/12/13 all consume this contract.

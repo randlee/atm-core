@@ -55,7 +55,7 @@ preserved bit-exactly; only structure is normalized.
 ```python
 class RatchetPoint(BaseModel, frozen=True, extra="forbid"):
     host_label: str
-    target: Literal["sqlite", "uds", "tcp", "tcp+tls"]
+    target: Literal["sqlite", "uds", "tcp", "tcp-tls"]
     effective_from: datetime           # UTC; start of this baseline value
     p50_floor: float                   # best passing p50 seen so far (non-decreasing)
     source_campaign_id: str            # campaign that set this value
