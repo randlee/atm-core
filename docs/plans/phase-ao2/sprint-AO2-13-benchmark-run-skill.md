@@ -13,10 +13,10 @@ authoritative source; agents follow it mechanically.
 ## Deliverables
 
 1. **Repo skill** `.claude/skills/benchmark-run/SKILL.md` — the single
-   canonical procedure, superseding the procedural text in AI.40, AI.52,
-   AL.9, AO2.7, and AO2.8 (those docs remain as history; the skill states the
-   supersession and each of those five docs gains a one-line pointer to the
-   skill). The skill covers, for macOS and Windows:
+   canonical procedure, superseding the procedural text in AI.40, AI.49,
+   AI.52, AL.9, AO2.5.4, AO2.7, and AO2.8 (those docs remain as history; the
+   skill states the supersession and each of those seven docs gains a
+   one-line pointer to the skill). The skill covers, for macOS and Windows:
    - Preconditions: dedicated benchmark account (ADR-052), daemon-switch
      status check, clean git state, current branch expectations.
    - The run: exact command (`just benchmark`), required environment
@@ -67,8 +67,9 @@ authoritative source; agents follow it mechanically.
 2. `just benchmark-publish` stages only report artifacts (test: dirty
    unrelated file is not staged) and fails when `reports-index --check`
    fails.
-3. Each of the five superseded docs contains the pointer line (grep gate:
-   `benchmark-run/SKILL.md` appears in all five).
+3. Each of the seven superseded docs (AI.40, AI.49, AI.52, AL.9, AO2.5.4,
+   AO2.7, AO2.8) contains the pointer line (grep gate:
+   `benchmark-run/SKILL.md` appears in all seven).
 4. A dry-run transcript of the full skill executed on macOS (steps 1–4
    against a real run) is committed as sprint evidence.
 5. `.just/tests` green on macOS and Windows CI lanes.
@@ -78,15 +79,20 @@ authoritative source; agents follow it mechanically.
 - Live macOS end-to-end: one real `just benchmark` following the skill text
   verbatim, including the wyvern display step (live-verify gate before
   quality-mgr dispatch).
-- Windows walkthrough may be textual-verified by CI lane + review if no
-  Windows operator slot is available this sprint; if so, that is recorded as
-  an explicit follow-up validation row, not silently waived.
+- If no Windows operator slot is available this sprint, Windows verification
+  is: (a) the Windows CI lane green on `.just/tests` for this branch, and
+  (b) a named reviewer's step-by-step walkthrough of the skill's Windows
+  appendix recorded as a PR review comment confirming every command is valid
+  for `os.name == "nt"`. A live Windows execution is then recorded as an
+  explicit follow-up validation row in this doc — not silently waived.
 
 ## Non-closure / out of scope
 
 - Automated scheduled benchmark runs (not requested).
 - Deleting INCOMPLETE artifacts (future cleanup).
-- Rewriting the superseded sprint docs beyond the pointer line.
+- Rewriting the seven superseded sprint docs beyond the pointer line. (The
+  AO2.5.4 snapshot/restore *mechanism* remains mandatory and unchanged; only
+  its operator-procedure text is superseded by the skill.)
 
 ## Dependencies
 

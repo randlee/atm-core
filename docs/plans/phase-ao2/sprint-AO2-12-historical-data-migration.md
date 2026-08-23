@@ -50,6 +50,56 @@ preserved bit-exactly; only structure is normalized.
    data — candlesticks now show historical final/best points (closing
    AO2.11's non-closure).
 
+## HistoricalRecord contract (normative — owned here, consumed by AO2.11)
+
+```python
+class RatchetPoint(BaseModel, frozen=True, extra="forbid"):
+    host_label: str
+    target: Literal["sqlite", "uds", "tcp", "tcp+tls"]
+    effective_from: datetime           # UTC; start of this baseline value
+    p50_floor: float                   # best passing p50 seen so far (non-decreasing)
+    source_campaign_id: str            # campaign that set this value
+
+class HistoricalResultEntry(BaseModel, frozen=True, extra="forbid"):
+    result: BenchmarkRunResult         # v4, values/timestamps bit-exact from source
+    displayed_status: Literal["PASS", "FAIL", "INCOMPLETE"]  # re-derived per D8
+    evidence_gap: Literal["durability-counts-missing"] | None
+    source_files: tuple[str, ...]      # legacy filenames this entry was migrated from
+
+class HistoricalCampaignEntry(BaseModel, frozen=True, extra="forbid"):
+    campaign: BenchmarkCampaign        # v4
+    final_best: bool                   # exactly one True per campaign group
+    results: tuple[HistoricalResultEntry, ...]
+
+class UnattributedEntry(BaseModel, frozen=True, extra="forbid"):
+    source_file: str
+    reason: str                        # why it joined no campaign group
+
+class HistoricalRecord(BaseModel, frozen=True, extra="forbid"):
+    schema_version: Literal[1]
+    generated_from_commit: str         # SHA the migration ran against
+    campaigns: tuple[HistoricalCampaignEntry, ...]   # started_at ascending
+    ratchet: tuple[RatchetPoint, ...]  # per (host,target), effective_from ascending
+    unattributed: tuple[UnattributedEntry, ...]
+```
+
+Notes on the contract:
+
+- `HistoricalResultEntry` **wraps `BenchmarkRunResult` unmodified** — the
+  result's closed `status` Literal from AO2.10 is untouched;
+  `displayed_status` (the D8 ratchet re-derivation) and `evidence_gap` live
+  on the wrapper, never inside the v4 result. No amendment to the AO2.10
+  contract is required.
+- **Implementation ownership:** these model classes are *implemented* in
+  `scripts/smoke/benchmark_schema.py` during **AO2.11** (which needs them to
+  type and test `candlestick_series()`), exactly as specified here; AO2.11
+  ships them alongside an empty-record fixture. AO2.12 consumes the classes
+  unchanged. Any divergence AO2.12 discovers is a plan amendment to this
+  section plus an AO2.11-compatible code change — never a silent fork.
+
+AO2.11's `candlestick_series()` consumes this model exactly as defined here;
+AO2.11 fixture data must validate against it.
+
 ## Migration tool contract
 
 ```
@@ -68,7 +118,10 @@ silent skips (memory: dont-dismiss-gap-warnings).
    for the real tree, that each migrated record's p50/p95/p99/min/max,
    counts, `generated_at`, and `source_revision` are equal to the source
    (string-exact for timestamps, numeric-exact for values).
-2. `historical-record.json` validates against `HistoricalRecord`; exactly one
+2. This sprint uses the `HistoricalRecord` classes shipped by AO2.11
+   without modification (grep gate: no class redefinition outside
+   `benchmark_schema.py`); `historical-record.json` validates against
+   `HistoricalRecord`; exactly one
    `final_best` per historical campaign group; ratchet trace is
    non-decreasing per (host, target).
 3. `--check` mode passes on the migrated tree; a deliberately corrupted value

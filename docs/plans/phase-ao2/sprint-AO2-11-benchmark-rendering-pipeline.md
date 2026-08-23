@@ -25,7 +25,16 @@ Fixes audit findings B (dual `--rebuild`/`--input` render paths) and C
    - `benchmark-index.html.j2` — `index.html` in
      `site/reports/send-message-benchmark/`: the latest phase's 2×2 grid plus
      a links list to all historical phase reports, newest first (D6).
-2. **Chart data preparation** in `scripts/smoke/benchmark_report.py`: a pure
+2. **Time display (D11):** every timestamp shown in panels, phase reports,
+   the index, and chart axes is emitted as a `<time datetime="<UTC ISO>">`
+   element whose text is pre-rendered in `America/Los_Angeles`, 24-hour
+   format (e.g. `Aug 23, 2026 · 11:59 PDT`), by a single shared formatting
+   helper feeding the j2 variables. One small **inline** script per page
+   (allowed by the no-external-URL gate, which forbids only `<script src=`)
+   rewrites each `<time>` text to the viewer's local zone, same 24-hour
+   format; without script execution the Pacific text stands. Sorting and
+   grouping always use the UTC values.
+3. **Chart data preparation** in `scripts/smoke/benchmark_report.py`: a pure
    function computes candlestick geometry as plain JSON variables; the j2
    template emits self-contained inline SVG. No external JS/CSS dependencies;
    the site must render offline.
@@ -34,7 +43,10 @@ Fixes audit findings B (dual `--rebuild`/`--input` render paths) and C
    present) → render panels → render phase report(s) → render index → run
    `just reports-index`. The `--input`/`--rebuild` split is removed;
    `--rebuild` remains as the only (default) verb. Rendering never mutates
-   result JSON (regeneration property).
+   result JSON (regeneration property). The `benchmark-report` Justfile
+   recipe is kept as a thin passthrough to this single flow and its comment
+   is updated to describe the post-AO2.11 behavior (the retired aggregate is
+   no longer mentioned).
 4. **Wyvern preview.** `just benchmark-show` renders/copies the newest
    campaign panel to an `.html` twin under
    `artifacts/benchmark/preview/latest.html` and opens it with `wyvern`
@@ -61,12 +73,21 @@ Fixes audit findings B (dual `--rebuild`/`--input` render paths) and C
 ```python
 def candlestick_series(
     charts: Sequence[Literal["tcp", "tcp+tls", "uds", "sqlite"]],
-    historical: HistoricalRecord,      # AO2.12 model; empty pre-AO2.12
+    historical: HistoricalRecord,      # normative model defined in AO2.12
     phase_campaigns: Sequence[BenchmarkCampaign],
     baselines: BaselineSet,
 ) -> dict[str, ChartVars]:             # JSON-serializable j2 vars only
     ...
 ```
+
+`HistoricalRecord` (with `HistoricalCampaignEntry.final_best`, the `ratchet`
+trace, `evidence_gap`, and `unattributed`) is defined normatively in
+[sprint-AO2-12-historical-data-migration.md](./sprint-AO2-12-historical-data-migration.md)
+§ "HistoricalRecord contract". This sprint **implements** those model classes
+in `scripts/smoke/benchmark_schema.py` exactly per that normative section
+(plus an empty-record fixture for pre-AO2.12 rendering); AO2.12 consumes them
+unchanged. Fixtures must validate against the implemented model — no ad-hoc
+stub shapes.
 
 ## Acceptance criteria
 
@@ -108,6 +129,6 @@ def candlestick_series(
 
 - must_follow: AO2.10 (consumes v4 models, baselines.json, campaign files).
   Merge-forward trigger: AO2.10 dev push.
-- parallel_safe: AO2.13 may start once templates/`just benchmark-show` names
-  are fixed by this doc, but its PR must not merge first (it documents this
-  sprint's commands).
+- AO2.13 is a must_follow child of this sprint (PR-completion trigger: this
+  sprint's PR merges first) — see AO2.13's Dependencies section, which is
+  authoritative for that relation.
