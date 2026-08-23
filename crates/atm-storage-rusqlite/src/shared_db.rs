@@ -25,7 +25,7 @@ const SQLITE_BUSY_TIMEOUT_MS: u64 = 5_000;
 // sole durable writer transaction.  The SQLite default is only 2 MiB, which
 // churns cache pages under a concurrent admission burst.  This setting applies
 // only to the one writer connection and bounds its page cache at 32 MiB.
-const WRITER_CACHE_KIB: i64 = 64 * 1024;
+const WRITER_CACHE_KIB: i64 = 32 * 1024;
 #[cfg(test)]
 static NEXT_IN_MEMORY_DB_ID: AtomicU64 = AtomicU64::new(1);
 
