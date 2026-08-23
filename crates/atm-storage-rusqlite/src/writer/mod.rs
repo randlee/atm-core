@@ -26,6 +26,13 @@ const WRITE_OP_DEADLINE: Duration = Duration::from_secs(10);
 // filesystem delay; callers can restart cleanly after this deadline expires.
 const WRITER_SHUTDOWN_JOIN_DEADLINE: Duration = Duration::from_secs(5);
 const SUBMIT_RETRY_INTERVAL: Duration = Duration::from_millis(5);
+// A successful queued operation remains inside this named savepoint until the
+// enclosing writer transaction commits. SQLite releases nested savepoints as
+// part of that commit, preserving per-operation rollback while avoiding a
+// second SQL control statement on every successful admission.
+const OPEN_WRITER_OPERATION_SAVEPOINT: &str = "SAVEPOINT atm_writer_operation;";
+const ROLLBACK_WRITER_OPERATION_SAVEPOINT: &str =
+    "ROLLBACK TO SAVEPOINT atm_writer_operation; RELEASE SAVEPOINT atm_writer_operation;";
 
 enum ReplyTx {
     Sync(SyncSender<Result<WriteOpResult, AtmError>>),
@@ -570,56 +577,51 @@ fn process_queued_write(
     cache: &mut stmt_cache::WriterStatementCache,
     queued: QueuedWrite,
 ) -> (ReplyTx, Result<WriteOpResult, AtmError>) {
-    let savepoint = match transaction.savepoint() {
-        Ok(savepoint) => savepoint,
-        Err(error) => {
-            return (
-                queued.reply,
-                Err(sqlite_error(
-                    target,
-                    "failed to open sqlite writer savepoint",
-                    error,
-                )),
-            );
-        }
-    };
+    if let Err(error) = transaction.execute_batch(OPEN_WRITER_OPERATION_SAVEPOINT) {
+        return (
+            queued.reply,
+            Err(sqlite_error(
+                target,
+                "failed to open sqlite writer savepoint",
+                error,
+            )),
+        );
+    }
 
     let result = catch_unwind(AssertUnwindSafe(|| {
-        ops::execute(&queued.op, &savepoint, cache, target)
+        ops::execute(&queued.op, transaction, cache, target)
     }));
     let reply = queued.reply;
-    (reply, finalize_queued_write(target, savepoint, result))
+    (reply, finalize_queued_write(target, transaction, result))
 }
 
 fn finalize_queued_write(
     target: &SharedDbTarget,
-    savepoint: rusqlite::Savepoint<'_>,
+    transaction: &mut rusqlite::Transaction<'_>,
     result: std::thread::Result<Result<WriteOpResult, AtmError>>,
 ) -> Result<WriteOpResult, AtmError> {
     match result {
-        Ok(Ok(op_result)) => commit_savepoint(target, savepoint, op_result),
-        Ok(Err(error)) => {
-            drop(savepoint);
-            Err(error)
-        }
-        Err(_) => {
-            drop(savepoint);
-            Err(AtmError::daemon_unavailable(
-                "sqlite writer operation panicked",
-            ))
-        }
+        Ok(Ok(op_result)) => Ok(op_result),
+        Ok(Err(error)) => rollback_queued_write(target, transaction, error),
+        Err(_) => rollback_queued_write(
+            target,
+            transaction,
+            AtmError::daemon_unavailable("sqlite writer operation panicked"),
+        ),
     }
 }
 
-fn commit_savepoint(
+fn rollback_queued_write(
     target: &SharedDbTarget,
-    savepoint: rusqlite::Savepoint<'_>,
-    op_result: WriteOpResult,
+    transaction: &mut rusqlite::Transaction<'_>,
+    original_error: AtmError,
 ) -> Result<WriteOpResult, AtmError> {
-    savepoint
-        .commit()
-        .map(|()| op_result)
-        .map_err(|error| sqlite_error(target, "failed to commit sqlite writer savepoint", error))
+    transaction
+        .execute_batch(ROLLBACK_WRITER_OPERATION_SAVEPOINT)
+        .map_err(|error| {
+            sqlite_error(target, "failed to roll back sqlite writer savepoint", error)
+        })?;
+    Err(original_error)
 }
 
 fn copy_error(target: &SharedDbTarget, error: &AtmError) -> AtmError {
@@ -712,5 +714,52 @@ mod tests {
 
         assert_eq!(batch.len(), 1);
         assert!(shutting_down);
+    }
+
+    #[test]
+    fn outer_commit_releases_successful_operation_savepoints_and_keeps_failed_op_isolated() {
+        let mut connection = rusqlite::Connection::open_in_memory().expect("in-memory database");
+        connection
+            .execute_batch("CREATE TABLE writer_savepoint_test (value INTEGER PRIMARY KEY);")
+            .expect("test schema");
+        let transaction = connection.transaction().expect("outer transaction");
+
+        transaction
+            .execute_batch(OPEN_WRITER_OPERATION_SAVEPOINT)
+            .expect("open first savepoint");
+        transaction
+            .execute("INSERT INTO writer_savepoint_test(value) VALUES (1)", [])
+            .expect("first operation persists pending outer commit");
+
+        transaction
+            .execute_batch(OPEN_WRITER_OPERATION_SAVEPOINT)
+            .expect("open second savepoint");
+        assert!(
+            transaction
+                .execute("INSERT INTO writer_savepoint_test(value) VALUES (1)", [])
+                .is_err()
+        );
+        transaction
+            .execute_batch(ROLLBACK_WRITER_OPERATION_SAVEPOINT)
+            .expect("failed operation rolls back without releasing first operation");
+
+        transaction
+            .execute_batch(OPEN_WRITER_OPERATION_SAVEPOINT)
+            .expect("open third savepoint");
+        transaction
+            .execute("INSERT INTO writer_savepoint_test(value) VALUES (2)", [])
+            .expect("third operation persists pending outer commit");
+        transaction
+            .commit()
+            .expect("outer commit releases successful nested savepoints");
+
+        let values = connection
+            .prepare("SELECT value FROM writer_savepoint_test ORDER BY value")
+            .expect("query persisted rows")
+            .query_map([], |row| row.get::<_, i64>(0))
+            .expect("map persisted rows")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("read persisted rows");
+        assert_eq!(values, vec![1, 2]);
     }
 }
