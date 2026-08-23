@@ -55,6 +55,25 @@ class BenchmarkSnapshotTests(unittest.TestCase):
             self.assertGreater(snapshot.page_count, 0)
             self.assertEqual(snapshot, self._verify(account, snapshot.snapshot_id))
 
+    def test_snapshot_reads_clean_source_immutably_without_creating_sidecars(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            account = self._account(Path(temporary))
+            database = self._database(account, 1)
+            expected_source = f"file:{database.resolve()}?mode=ro&immutable=1"
+
+            with mock.patch.object(SNAPSHOT.sqlite3, "connect", wraps=sqlite3.connect) as connect:
+                snapshot = self._snapshot(account)
+
+            self.assertTrue(snapshot.database.is_file())
+            self.assertTrue(
+                any(
+                    call.args == (expected_source,) and call.kwargs == {"uri": True}
+                    for call in connect.call_args_list
+                )
+            )
+            self.assertFalse(database.with_name(f"{database.name}-wal").exists())
+            self.assertFalse(database.with_name(f"{database.name}-shm").exists())
+
     def test_tampered_completed_snapshot_is_not_a_restore_candidate(self):
         with tempfile.TemporaryDirectory() as temporary:
             account = self._account(Path(temporary))

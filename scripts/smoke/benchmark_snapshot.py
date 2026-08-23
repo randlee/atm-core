@@ -290,7 +290,11 @@ def create_verified_snapshot() -> VerifiedSnapshot:
     try:
         staging.mkdir(mode=0o700)
         destination = staging / MAIL_DATABASE_NAME
-        with closing(sqlite3.connect(f"file:{source.resolve()}?mode=ro", uri=True)) as reader:
+        # Sidecars have already been rejected above, so this immutable reader
+        # cannot observe an active WAL and must not create a transient shared-
+        # memory sidecar merely to copy an otherwise clean WAL-journal database.
+        source_uri = f"file:{source.resolve()}?mode=ro&immutable=1"
+        with closing(sqlite3.connect(source_uri, uri=True)) as reader:
             with closing(sqlite3.connect(destination)) as writer:
                 reader.backup(writer)
                 writer.commit()
