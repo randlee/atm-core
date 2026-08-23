@@ -61,6 +61,11 @@ from scripts.smoke.benchmark_snapshot import (
 if os.name != "nt":
     import pwd
 
+try:
+    import resource
+except ImportError:  # Windows has no POSIX rlimit API.
+    resource = None
+
 from scripts.smoke.daemon_lifecycle import (
     assert_no_process_leak,
     count_atm_daemon_processes,
@@ -98,6 +103,11 @@ DAEMON_SWITCH = ROOT / ".claude" / "skills" / "daemon-switch" / "scripts" / "dae
 MANAGED_DAEMON_TIMEOUT_SECONDS = 120.0
 DIAGNOSTIC_SAMPLE_COUNT = 3
 DIAGNOSTIC_DURATION_SECONDS = 3.0
+# A connection worker owns one client socket while its corresponding daemon
+# child owns the peer socket. Leave enough descriptors for the Python runner,
+# subprocess pipes, and the bounded daemon control plane instead of scheduling
+# more simultaneous connections than the OS account can open.
+DESCRIPTOR_RESERVE = 64
 
 
 @dataclass(frozen=True)
@@ -969,6 +979,25 @@ def submit_connection(endpoint: LocalEndpoint, requests: list[HttpRequest]) -> l
         )]
 
 
+def admission_connection_worker_limit(requested_workers: int) -> int:
+    """Bound concurrent client sockets by the process soft descriptor limit.
+
+    This is deliberately a benchmark-client concern. It does not tune or
+    modify the daemon, its transport, or the production write pipeline.
+    """
+    if requested_workers <= 0:
+        raise SmokeError("capacity workers must be positive")
+    if resource is None:
+        return requested_workers
+    try:
+        soft_limit, _hard_limit = resource.getrlimit(resource.RLIMIT_NOFILE)
+    except (OSError, ValueError):
+        return requested_workers
+    if soft_limit == resource.RLIM_INFINITY:
+        return requested_workers
+    return min(requested_workers, max(1, int(soft_limit) - DESCRIPTOR_RESERVE))
+
+
 def run_interval(
     submit: Callable[[int, int], list[AdmissionResult]],
     interval: int,
@@ -983,8 +1012,9 @@ def run_interval(
         raise SmokeError("requested messages must be positive")
     started = time.perf_counter()
     results: list[AdmissionResult] = []
-    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="atm-capacity") as executor:
-        connections = (requested_messages + frames_per_connection - 1) // frames_per_connection
+    connections = (requested_messages + frames_per_connection - 1) // frames_per_connection
+    connection_workers = min(connections, admission_connection_worker_limit(workers))
+    with ThreadPoolExecutor(max_workers=connection_workers, thread_name_prefix="atm-capacity") as executor:
         futures = [
             executor.submit(
                 submit,
@@ -1021,6 +1051,7 @@ def run_interval(
         "admissions_per_second": accepted / elapsed_seconds if elapsed_seconds else 0.0,
         "latency_ms": latency_distribution,
         "connections": connections,
+        "connection_workers": connection_workers,
         "request_frames_per_second": len(results) / elapsed_seconds if elapsed_seconds else 0.0,
         "connections_per_second": connections / elapsed_seconds if elapsed_seconds else 0.0,
         "requested_count": requested_messages,
