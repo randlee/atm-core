@@ -1494,6 +1494,52 @@ mod tests {
     }
 
     #[test]
+    fn message_search_automerge_policy_preserves_immediate_search_visibility() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let record = message("atm:search-automerge", "needle is visible immediately");
+        backend
+            .message_store()
+            .save_message(&record)
+            .expect("seed message");
+
+        let query = MessageSearchQuery {
+            expression: Some(SearchExpression::Atom(
+                SearchAtom::term("needle").expect("atom"),
+            )),
+            ..MessageSearchQuery::default()
+        };
+        assert_eq!(
+            backend
+                .message_search_store()
+                .search(&query)
+                .expect("immediate search")
+                .matches
+                .len(),
+            1,
+            "FTS merge configuration must not defer transactional search visibility"
+        );
+
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                let automerge: i64 = connection
+                    .query_row(
+                        "SELECT v FROM mail_messages_fts_config WHERE k = 'automerge'",
+                        [],
+                        |row| row.get(0),
+                    )
+                    .map_err(|error| {
+                        AtmError::mailbox_read(format!(
+                            "message-search automerge policy query failed: {error}"
+                        ))
+                    })?;
+                assert_eq!(automerge, 8);
+                Ok(())
+            })
+            .expect("message-search automerge policy");
+    }
+
+    #[test]
     fn search_reindex_matches_transactional_projection_and_delete_removes_hit() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let record = message("atm:search-rebuild", "needle before rebuild");

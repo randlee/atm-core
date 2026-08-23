@@ -8,6 +8,13 @@ use serde_json::Value;
 
 use crate::shared_db::{SharedDbTarget, SqliteConnection, sqlite_error};
 
+// Keep incremental FTS5 merge work out of the canonical write hot path for a
+// larger burst, while retaining bounded automatic maintenance and immediate
+// transactional index visibility. Higher values defer more merge work to a
+// later insert; 8 is the smallest measured improvement over SQLite's default
+// of 4 on the M5 projection workload.
+const MESSAGE_FTS_AUTOMERGE: i64 = 8;
+
 const SEARCH_DDL: &str = r#"
 CREATE TABLE IF NOT EXISTS mail_message_search_documents (
     search_rowid INTEGER PRIMARY KEY,
@@ -93,6 +100,7 @@ pub(crate) fn ensure_schema(
             error,
         )
     })?;
+    configure_message_fts_automerge(connection, target)?;
     let current: Option<i64> = connection
         .query_row(
             "SELECT version FROM search_projection_schema WHERE singleton = 1",
@@ -123,6 +131,31 @@ pub(crate) fn ensure_schema(
                 )
             })?;
     }
+    Ok(())
+}
+
+/// Configure a persistent, bounded FTS5 merge policy for message projections.
+///
+/// This is intentionally an FTS configuration command rather than a schema
+/// revision: it changes neither the source rows nor their immediate
+/// transactional projection/search visibility, and is applied idempotently to
+/// both new and existing databases during backend initialization.
+fn configure_message_fts_automerge(
+    connection: &SqliteConnection,
+    target: &SharedDbTarget,
+) -> Result<(), atm_storage::AtmError> {
+    connection
+        .execute(
+            "INSERT INTO mail_messages_fts(mail_messages_fts, rank) VALUES ('automerge', ?1)",
+            rusqlite::params![MESSAGE_FTS_AUTOMERGE],
+        )
+        .map_err(|error| {
+            sqlite_error(
+                target,
+                "failed to configure SQLite message-search FTS merge policy",
+                error,
+            )
+        })?;
     Ok(())
 }
 
