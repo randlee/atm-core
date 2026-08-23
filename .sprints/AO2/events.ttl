@@ -111,3 +111,11 @@ triage:a9 a triage:Assignment ;
 triage:c7 a triage:Completion ;
     triage:ofSprint triage:AO2.5.4 ;
     triage:at "2026-08-22T05:12:00Z"^^xsd:dateTime .
+triage:a10 a triage:Assignment ;
+    triage:ofSprint triage:AO2.7 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-22T20:34:39Z"^^xsd:dateTime .
+triage:a11 a triage:Assignment ;
+    triage:ofSprint triage:AO2.9 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-22T20:38:14Z"^^xsd:dateTime .
