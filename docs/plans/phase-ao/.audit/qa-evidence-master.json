@@ -152,7 +152,7 @@
       "result_from": "arch-ctm",
       "result_shared_path": null,
       "result_temp_path": null,
-      "verdict": "arch-ctm self-reported complete at 46ebe74e0; quality-mgr's independent re-verification (AO2S3-QA2-CORRECTION) found this self-report inaccurate re: just lint",
+      "verdict": "SUPERSEDED",
       "blockers": 0,
       "important": 0,
       "minor": 0,
@@ -302,7 +302,7 @@
       "result_from": "quality-mgr",
       "result_shared_path": null,
       "result_temp_path": null,
-      "verdict": "PASS (no blocking findings; 2 Important recommended before merge)",
+      "verdict": "PASS",
       "blockers": 0,
       "important": 2,
       "minor": 0,
@@ -327,7 +327,7 @@
       "result_from": "quality-mgr",
       "result_shared_path": null,
       "result_temp_path": null,
-      "verdict": "CLEAR",
+      "verdict": "PASS",
       "blockers": 0,
       "important": 0,
       "minor": 0,
@@ -366,5 +366,12 @@
     "AO2.2 and AO2.3 QA-round assignment_message_id/assignment_time_utc fields are null except where an explicit team-lead dispatch message was independently located (AO2.3 QA-3 only) -- most rounds were self-initiated arch-ctm fix/report cycles without a distinct formal ATM assignment message, so no value was guessed for the others.",
     "AO2S3-QA2 is recorded as a real but corrected round (arch-ctm's self-report), not a quality-mgr verdict -- included for evidentiary completeness of the multi-round history, not as an independent QA pass verdict.",
     "AO2.4 has no discrete intermediate finding-by-finding QA round recorded between QA-1 FAIL and the final re-verify PASS -- only those two endpoints were independently re-located in the ATM mailbox; the fix work in between is evidenced by commit references (2fc172b36a3f, aedd04bea) cited in the re-verify run's evidence field rather than a separate run entry."
-  ]
+  ],
+  "verdict_enum": [
+    "PASS",
+    "FAIL",
+    "BLOCKING",
+    "SUPERSEDED"
+  ],
+  "verdict_enum_note": "verdict is a strict enum; any qualifier/detail text belongs in the evidence field, never in verdict. SUPERSEDED marks a self-reported or provisional result later corrected/replaced by a subsequent run for the same sprint."
 }
