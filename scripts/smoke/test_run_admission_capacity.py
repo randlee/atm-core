@@ -1697,6 +1697,26 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(sorted(requested_connection_sizes)[0], 40)
         self.assertTrue(result["passed"])
 
+    def test_connection_worker_limit_reserves_descriptors_under_a_posix_soft_limit(self):
+        limited_resource = mock.Mock()
+        limited_resource.RLIMIT_NOFILE = 7
+        limited_resource.RLIM_INFINITY = -1
+        limited_resource.getrlimit.return_value = (256, 256)
+        with mock.patch.object(RUNNER, "resource", limited_resource):
+            self.assertEqual(RUNNER.admission_connection_worker_limit(512), 192)
+
+    def test_connection_worker_limit_keeps_requested_workers_without_rlimit_support(self):
+        with mock.patch.object(RUNNER, "resource", None):
+            self.assertEqual(RUNNER.admission_connection_worker_limit(512), 512)
+
+    def test_connection_worker_limit_keeps_requested_workers_for_an_unbounded_limit(self):
+        unlimited_resource = mock.Mock()
+        unlimited_resource.RLIMIT_NOFILE = 7
+        unlimited_resource.RLIM_INFINITY = -1
+        unlimited_resource.getrlimit.return_value = (-1, -1)
+        with mock.patch.object(RUNNER, "resource", unlimited_resource):
+            self.assertEqual(RUNNER.admission_connection_worker_limit(512), 512)
+
     def test_interval_uses_the_published_application_wire_metric_names(self):
         result = RUNNER.run_interval(
             lambda _sequence, message_count: [
