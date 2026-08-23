@@ -168,7 +168,7 @@ class BenchmarkSnapshotTests(unittest.TestCase):
             root = account.home / ".atm" / SNAPSHOT.SNAPSHOT_ROOT_NAME
             self.assertFalse(root.exists())
 
-    def test_source_in_wal_mode_is_snapshotted_by_the_sqlite_backup_api(self):
+    def test_snapshot_refuses_live_wal_sidecars_before_creating_a_candidate(self):
         with tempfile.TemporaryDirectory() as temporary:
             account = self._account(Path(temporary))
             database = self._database(account, 1)
@@ -177,11 +177,11 @@ class BenchmarkSnapshotTests(unittest.TestCase):
                 connection.execute("INSERT INTO entries(value) VALUES (99)")
                 connection.commit()
 
-            snapshot = self._snapshot(account)
+                with self.assertRaisesRegex(SNAPSHOT.BenchmarkSnapshotError, "daemon to be stopped"):
+                    self._snapshot(account)
 
-            with closing(sqlite3.connect(snapshot.database)) as connection:
-                observed = connection.execute("SELECT COUNT(*) FROM entries").fetchone()
-            self.assertEqual(observed, (2,))
+            root = account.home / ".atm" / SNAPSHOT.SNAPSHOT_ROOT_NAME
+            self.assertFalse(root.exists())
 
     def test_account_validation_fails_before_any_sqlite_operation(self):
         failure = ACCOUNT.BenchmarkAccountError("manifest is missing")
