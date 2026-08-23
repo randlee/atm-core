@@ -41,16 +41,17 @@ SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
 CAMPAIGN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
-# AO2.8's approved M5 f8-v1 performance targets.  These are expectations,
-# not measurements from a comparison run, so reports must never call them a
-# baseline.  An empirical baseline needs its own raw artifact and provenance.
+TARGET_ORDER = ("sqlite", "uds", "tcp", "tcp-tls")
+
+# AO2.8's approved M5 f8-v1 closure thresholds apply only to a new,
+# accepted-candidate campaign. Historical imports use the raw empirical
+# baseline declared in their hash-bound sidecar instead.
 TARGET_MSG_PER_SECOND = {
     "sqlite": 45_000.0,
     "uds": 24_000.0,
     "tcp": 22_500.0,
     "tcp-tls": 22_500.0,
 }
-TARGET_ORDER = ("sqlite", "uds", "tcp", "tcp-tls")
 
 
 class BenchmarkReportError(ValueError):
@@ -227,6 +228,76 @@ def historical_imports(report_dir: Path) -> dict[str, dict[str, str]]:
     return imported
 
 
+def historical_baseline_policy(report_dir: Path) -> tuple[str, float] | None:
+    """Return the explicitly designated empirical baseline campaign and floor."""
+    manifest = report_dir / HISTORICAL_IMPORTS_NAME
+    if not manifest.exists():
+        return None
+    try:
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise BenchmarkReportError(f"{manifest}: invalid historical-import manifest") from error
+    policy = payload.get("empirical_baseline") if isinstance(payload, dict) else None
+    if policy is None:
+        return None
+    if not isinstance(policy, dict):
+        raise BenchmarkReportError(f"{manifest}: empirical_baseline must be an object")
+    identifier = policy.get("campaign_id")
+    retention = policy.get("minimum_retention_fraction")
+    if (
+        not isinstance(identifier, str) or not CAMPAIGN_ID.fullmatch(identifier)
+        or not isinstance(retention, (int, float)) or not 0 < float(retention) <= 1
+    ):
+        raise BenchmarkReportError(f"{manifest}: invalid empirical_baseline")
+    return identifier, float(retention)
+
+
+def annotate_empirical_baseline(records: list[dict[str, Any]], report_dir: Path) -> None:
+    """Annotate only compatible M5 f8 records with the manifest-backed baseline."""
+    policy = historical_baseline_policy(report_dir)
+    if policy is None:
+        return
+    identifier, retention = policy
+    baseline_records = [record for record in records if campaign_id(record) == identifier]
+    baseline_by_target: dict[str, dict[str, Any]] = {}
+    for record in baseline_records:
+        target = record.get("benchmark_target")
+        rates = (record.get("metrics") or {}).get("admissions_per_second") or {}
+        value = rates.get("p50")
+        if target in TARGET_ORDER and isinstance(value, (int, float)):
+            baseline_by_target[target] = record
+    if set(baseline_by_target) != set(TARGET_ORDER):
+        raise BenchmarkReportError(
+            f"{report_dir / HISTORICAL_IMPORTS_NAME}: empirical baseline must contain all four f8 targets"
+        )
+    baseline_start = min(record["generated_at"] for record in baseline_records)
+    for record in records:
+        target = record.get("benchmark_target")
+        display_host = record.get("_report_display_host_label", record["host_label"])
+        if (
+            target not in baseline_by_target or record.get("frames_per_connection") != 8
+            or display_host != "m5-atmbench"
+        ):
+            continue
+        baseline = baseline_by_target[target]
+        baseline_value = float(baseline["metrics"]["admissions_per_second"]["p50"])
+        record["_report_baseline_msg_per_second"] = baseline_value
+        record["_report_baseline_floor_msg_per_second"] = baseline_value * retention
+        record["_report_baseline_artifact_id"] = result_id(baseline)
+        if campaign_id(record) == identifier:
+            record["_report_comparison"] = "BASELINE"
+            record["_report_comparison_class"] = "info"
+        elif record["generated_at"] < baseline_start:
+            record["_report_comparison"] = "N/A — predates empirical baseline"
+            record["_report_comparison_class"] = "info"
+        else:
+            rates = (record.get("metrics") or {}).get("admissions_per_second") or {}
+            value = rates.get("p50")
+            passed = isinstance(value, (int, float)) and float(value) >= baseline_value * retention
+            record["_report_comparison"] = "PASS" if passed else "FAIL"
+            record["_report_comparison_class"] = "pass" if passed else "fail"
+
+
 def evidence_records(report_dir: Path = REPORT_DIR) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     if not report_dir.is_dir():
@@ -242,6 +313,7 @@ def evidence_records(report_dir: Path = REPORT_DIR) -> list[dict[str, Any]]:
             records.append(record)
         except BenchmarkReportError:
             continue
+    annotate_empirical_baseline(records, report_dir)
     return sorted(records, key=lambda item: (item["generated_at"], item["host_label"], item["transport"], item["frames_per_connection"]))
 
 
@@ -336,7 +408,13 @@ def campaign_groups(records: Iterable[dict[str, Any]]) -> dict[str, list[dict[st
 
 
 def campaign_target_rows(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Return one revision-homogeneous four-target result/target/verdict table."""
+    """Return one revision-homogeneous four-target measurement table.
+
+    These immutable summaries do not carry an empirical, parameter-compatible
+    comparison artifact.  Do not turn a later aspiration into a retroactive
+    performance verdict: comparison remains unavailable until that artifact is
+    published alongside the campaign.
+    """
     records = list(records)
     revisions = {record.get("source_revision") for record in records}
     if len(revisions) > 1:
@@ -351,23 +429,49 @@ def campaign_target_rows(records: Iterable[dict[str, Any]]) -> list[dict[str, An
     rows: list[dict[str, Any]] = []
     for target in TARGET_ORDER:
         result = newest.get(target)
-        target_msg_per_second = TARGET_MSG_PER_SECOND[target]
         metrics = result.get("metrics") if result else None
         metric = metrics.get("admissions_per_second", {}) if isinstance(metrics, dict) else {}
         value = metric.get("p50") if isinstance(metric, dict) else None
-        accepted = metrics.get("accepted_count") if isinstance(metrics, dict) else None
-        requested = metrics.get("requested_count") if isinstance(metrics, dict) else None
-        passed = (
-            isinstance(value, (int, float))
-            and isinstance(accepted, int)
-            and accepted == requested
-            and float(value) >= target_msg_per_second
-        )
+        historical_import = bool(result and result.get("_report_provenance_note"))
+        baseline = result.get("_report_baseline_msg_per_second") if result else None
+        floor = result.get("_report_baseline_floor_msg_per_second") if result else None
+        if result is None:
+            comparison = "NOT RUN"
+            comparison_class = "info"
+        elif historical_import and baseline is None:
+            comparison = "N/A — no compatible empirical baseline"
+            comparison_class = "info"
+        elif historical_import:
+            comparison = result["_report_comparison"]
+            comparison_class = result["_report_comparison_class"]
+        else:
+            baseline = TARGET_MSG_PER_SECOND[target]
+            floor = baseline
+            accepted = metrics.get("accepted_count") if isinstance(metrics, dict) else None
+            requested = metrics.get("requested_count") if isinstance(metrics, dict) else None
+            passed = (
+                isinstance(value, (int, float))
+                and isinstance(accepted, int)
+                and accepted == requested
+                and float(value) >= baseline
+            )
+            comparison = "PASS" if passed else "FAIL"
+            comparison_class = "pass" if passed else "fail"
         rows.append({
             "test": target,
             "result_msg_per_second": None if value is None else float(value),
-            "target_msg_per_second": target_msg_per_second,
-            "passed": passed,
+            "baseline_msg_per_second": baseline,
+            "baseline_floor_msg_per_second": floor,
+            "baseline_artifact_id": (
+                result.get("_report_baseline_artifact_id") if result and historical_import else None
+            ),
+            "baseline_json_href": (
+                f"{result['_report_baseline_artifact_id']}.json"
+                if result and historical_import and result.get("_report_baseline_artifact_id") else None
+            ),
+            "reference_kind": "empirical baseline" if historical_import else "approved target",
+            "comparison": comparison,
+            "comparison_class": comparison_class,
             "artifact_id": result_id(result) if result else None,
             "json_href": f"{result_id(result)}.json" if result else None,
             "xhtml_href": f"{result_id(result)}.xhtml" if result else None,
@@ -393,8 +497,9 @@ def campaign_panels(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
             "host_arch": host_records[-1].get("host_arch") or "unknown",
             "raw_host_label": host_records[-1]["host_label"],
             "provenance_note": host_records[-1].get("_report_provenance_note"),
+            "empirical_baseline": all(row["comparison"] == "BASELINE" for row in rows),
             "rows": rows,
-            "passed": all(row["passed"] for row in rows),
+            "comparison_available": False,
         })
     return host_panels
 

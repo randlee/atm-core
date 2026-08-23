@@ -8,46 +8,46 @@
     body { font-family: sans-serif; color: #1f2937; margin: 2rem auto; max-width: 75rem; padding: 0 1rem; }
     table { border-collapse: collapse; margin: 1rem 0 2rem; width: 100%; }
     th, td { border: 1px solid #cbd5e1; padding: .55rem; text-align: left; }
-    th { background: #f1f5f9; } .pass { color: #065f46; font-weight: bold; } .fail { color: #991b1b; font-weight: bold; }
+    th { background: #f1f5f9; } .info { color: #1e40af; font-weight: bold; } .pass { color: #065f46; font-weight: bold; } .fail { color: #991b1b; font-weight: bold; }
     .meta { color: #475569; } code { font-family: ui-monospace, monospace; }
   </style>
 </head>
 <body>
   <h1>ATM benchmark campaign — historical-20260823-ff9329dc1083</h1>
-  <p class="meta">Campaign <code>historical-20260823-ff9329dc1083</code> · rendered 2026-08-23T17:45:48.292497Z.</p>
+  <p class="meta">Campaign <code>historical-20260823-ff9329dc1083</code> · rendered 2026-08-23T18:03:26.703476Z.</p>
   <section>
     <h2>m5-atmbench</h2>
     <p class="meta">darwin / arm64 · daemon atm 1.4.4 · source <code>ff9329dc108327c693649b3fcb67d7cf4f6b1558</code></p>
     <p class="meta">Historical import: Exact imported TCP-only confirmation artifact. The original summary has no campaign ID or snapshot/restore lifecycle fields; SQLite and UDS were not run in this provenance set. Raw artifact host label: <code>m5-atmbench</code>.</p>
     <table>
-      <thead><tr><th>Test</th><th>Result msg/sec</th><th>Target msg/sec</th><th>Pass/Fail</th><th>Evidence</th></tr></thead>
+      <thead><tr><th>Test</th><th>Result msg/sec</th><th>Reference msg/sec (floor)</th><th>Pass/Fail</th><th>Evidence</th></tr></thead>
       <tbody>
         <tr>
           <td>sqlite</td>
           <td>n/a</td>
-          <td>45000.00</td>
-          <td class="fail">FAIL</td>
+          <td>n/a</td>
+          <td class="info">NOT RUN</td>
           <td>missing</td>
         </tr>
         <tr>
           <td>uds</td>
           <td>n/a</td>
-          <td>24000.00</td>
-          <td class="fail">FAIL</td>
+          <td>n/a</td>
+          <td class="info">NOT RUN</td>
           <td>missing</td>
         </tr>
         <tr>
           <td>tcp</td>
           <td>22113.98</td>
-          <td>22500.00</td>
-          <td class="fail">FAIL</td>
+          <td><a href="20260823-110446.929025-local-tcp-plaintext-test-f8.json">18116.50</a> (17210.67) · empirical baseline</td>
+          <td class="pass">PASS</td>
           <td><a href="20260823-120126.729783-m5-atmbench-tcp-plaintext-test-f8.json">JSON</a> · <a href="20260823-120126.729783-m5-atmbench-tcp-plaintext-test-f8.xhtml">panel</a></td>
         </tr>
         <tr>
           <td>tcp-tls</td>
           <td>22297.31</td>
-          <td>22500.00</td>
-          <td class="fail">FAIL</td>
+          <td><a href="20260823-110510.260883-local-tcp-mutual-tls-f8.json">17934.37</a> (17037.65) · empirical baseline</td>
+          <td class="pass">PASS</td>
           <td><a href="20260823-120215.579235-m5-atmbench-tcp-mutual-tls-f8.json">JSON</a> · <a href="20260823-120215.579235-m5-atmbench-tcp-mutual-tls-f8.xhtml">panel</a></td>
         </tr>
       </tbody>
