@@ -128,6 +128,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 stack.enter_context(mock.patch.object(RUNNER, "require_clean_host_daemon_state"))
                 stack.enter_context(mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]))
                 stack.enter_context(mock.patch.object(RUNNER, "runtime_environment", return_value={}))
+                stack.enter_context(mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64))
                 calls["start"] = stack.enter_context(
                     mock.patch.object(
                         RUNNER,
@@ -173,7 +174,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                         return_value=snapshot,
                     ),
                 )
-                stack.enter_context(mock.patch.object(RUNNER, "verify_completed_snapshot", return_value=snapshot))
+                stack.enter_context(mock.patch.object(RUNNER, "verify_active_snapshot", return_value=snapshot))
                 calls["reap"] = stack.enter_context(
                     mock.patch.object(
                         RUNNER,
@@ -205,6 +206,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(captured["clean_baseline_snapshot"]["snapshot_id"], "snapshot-20260822T000000Z-0123456789abcdef")
         self.assertEqual(captured["post_restore_snapshot"]["snapshot_id"], "snapshot-20260822T000000Z-0123456789abcdef")
         self.assertTrue(all(item["duration_s"] >= 0 for entries in captured["lifecycle"].values() for item in entries))
+        self.assertEqual(calls["start"].call_count, 2)
 
     def test_real_snapshot_lifecycle_never_touches_interactive_root(self):
         """Exercise the real account-bound snapshot APIs through ``run_capacity``.
@@ -271,6 +273,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 stack.enter_context(mock.patch.object(RUNNER, "require_clean_host_daemon_state"))
                 stack.enter_context(mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]))
                 stack.enter_context(mock.patch.object(RUNNER, "runtime_environment", return_value={}))
+                stack.enter_context(mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64))
                 stack.enter_context(
                     mock.patch.object(RUNNER, "start_capacity_daemon", return_value=(process, output)),
                 )
@@ -948,6 +951,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
                 mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64),
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
                 mock.patch.object(RUNNER, "local_endpoint", side_effect=RUNNER.SmokeError("benchmark failed")),
                 mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"),
@@ -1006,6 +1010,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
                 mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64),
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
                 mock.patch.object(RUNNER, "start_capacity_daemon", side_effect=RUNNER.SmokeError("stop after evidence setup")),
                 mock.patch.object(RUNNER, "write_raw_evidence", return_value=Path(directory) / "raw.json"),
@@ -1042,6 +1047,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
                 mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64),
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
                 mock.patch.object(
                     RUNNER, "start_capacity_daemon", side_effect=RUNNER.SmokeError("setup failed"),
@@ -1101,6 +1107,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
                 mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64),
                 mock.patch.object(RUNNER, "start_capacity_daemon", return_value=(process, daemon_output)) as start,
                 mock.patch.object(RUNNER, "command_result", return_value={}),
                 mock.patch.object(RUNNER, "benchmark_doctor_payload", return_value={}),
@@ -1114,7 +1121,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                     RUNNER,
                     create_verified_snapshot=mock.DEFAULT,
                     restore_verified_snapshot=mock.DEFAULT,
-                    verify_completed_snapshot=mock.DEFAULT,
+                    verify_active_snapshot=mock.DEFAULT,
                 ) as snapshot_api,
                 mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"),
                 mock.patch.object(
@@ -1125,7 +1132,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             ):
                 snapshot_api["create_verified_snapshot"].return_value = snapshot
                 snapshot_api["restore_verified_snapshot"].return_value = snapshot
-                snapshot_api["verify_completed_snapshot"].return_value = snapshot
+                snapshot_api["verify_active_snapshot"].return_value = snapshot
                 code, _evidence = RUNNER.run_capacity(
                     home, root, "tcp", 1, sample_count=1,
                     raw_evidence_directory=root,
@@ -1134,7 +1141,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 )
 
         self.assertEqual(code, 1)
-        self.assertEqual(start.call_count, 3)
+        self.assertEqual(start.call_count, 2)
         self.assertEqual(captured["runs"], [profile])
         self.assertEqual(captured["clean_baseline_snapshot"]["snapshot_id"], snapshot.snapshot_id)
         self.assertEqual(captured["post_restore_snapshot"]["snapshot_id"], snapshot.snapshot_id)

@@ -38,6 +38,10 @@ class BenchmarkSnapshotTests(unittest.TestCase):
         with mock.patch.object(SNAPSHOT, "require_benchmark_account", return_value=account):
             return SNAPSHOT.verify_completed_snapshot(snapshot_id)
 
+    def _verify_active(self, account: ACCOUNT.BenchmarkAccount, snapshot_id: str) -> SNAPSHOT.VerifiedSnapshot:
+        with mock.patch.object(SNAPSHOT, "require_benchmark_account", return_value=account):
+            return SNAPSHOT.verify_active_snapshot(snapshot_id)
+
     def test_snapshot_is_sqlite_verified_hashed_and_account_bound(self):
         with tempfile.TemporaryDirectory() as temporary:
             account = self._account(Path(temporary))
@@ -50,6 +54,25 @@ class BenchmarkSnapshotTests(unittest.TestCase):
             self.assertEqual(snapshot.user_version, 52)
             self.assertGreater(snapshot.page_count, 0)
             self.assertEqual(snapshot, self._verify(account, snapshot.snapshot_id))
+
+    def test_snapshot_reads_clean_source_immutably_without_creating_sidecars(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            account = self._account(Path(temporary))
+            database = self._database(account, 1)
+            expected_source = f"file:{database.resolve()}?mode=ro&immutable=1"
+
+            with mock.patch.object(SNAPSHOT.sqlite3, "connect", wraps=sqlite3.connect) as connect:
+                snapshot = self._snapshot(account)
+
+            self.assertTrue(snapshot.database.is_file())
+            self.assertTrue(
+                any(
+                    call.args == (expected_source,) and call.kwargs == {"uri": True}
+                    for call in connect.call_args_list
+                )
+            )
+            self.assertFalse(database.with_name(f"{database.name}-wal").exists())
+            self.assertFalse(database.with_name(f"{database.name}-shm").exists())
 
     def test_tampered_completed_snapshot_is_not_a_restore_candidate(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -84,14 +107,51 @@ class BenchmarkSnapshotTests(unittest.TestCase):
                 connection.execute("INSERT INTO entries(value) VALUES (99)")
                 connection.commit()
 
-            with mock.patch.object(SNAPSHOT, "require_benchmark_account", return_value=account):
+            expected_reader = f"file:{snapshot.database.resolve()}?mode=ro&immutable=1"
+            with (
+                mock.patch.object(SNAPSHOT, "require_benchmark_account", return_value=account),
+                mock.patch.object(SNAPSHOT.sqlite3, "connect", wraps=sqlite3.connect) as connect,
+            ):
                 restored = SNAPSHOT.restore_verified_snapshot(snapshot.snapshot_id)
 
             with closing(sqlite3.connect(database)) as connection:
                 observed = connection.execute("SELECT COUNT(*) FROM entries").fetchone()
             self.assertEqual(observed, (1,))
             self.assertEqual(restored, snapshot)
+            self.assertTrue(
+                any(
+                    call.args == (expected_reader,) and call.kwargs == {"uri": True}
+                    for call in connect.call_args_list
+                )
+            )
             self.assertEqual(list(account.durable_state_root.glob(".mail.db.restore-staging-*")), [])
+
+    def test_active_verification_proves_exact_bytes_without_creating_sidecars(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            account = self._account(Path(temporary))
+            database = self._database(account, 1)
+            snapshot = self._snapshot(account)
+            with closing(sqlite3.connect(database)) as connection:
+                connection.execute("INSERT INTO entries(value) VALUES (99)")
+                connection.commit()
+            with mock.patch.object(SNAPSHOT, "require_benchmark_account", return_value=account):
+                SNAPSHOT.restore_verified_snapshot(snapshot.snapshot_id)
+
+            self.assertEqual(self._verify_active(account, snapshot.snapshot_id), snapshot)
+            self.assertFalse(database.with_name(f"{database.name}-wal").exists())
+            self.assertFalse(database.with_name(f"{database.name}-shm").exists())
+
+    def test_active_verification_rejects_any_live_byte_drift(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            account = self._account(Path(temporary))
+            database = self._database(account, 1)
+            snapshot = self._snapshot(account)
+            with closing(sqlite3.connect(database)) as connection:
+                connection.execute("INSERT INTO entries(value) VALUES (99)")
+                connection.commit()
+
+            with self.assertRaisesRegex(SNAPSHOT.BenchmarkSnapshotError, "does not match"):
+                self._verify_active(account, snapshot.snapshot_id)
 
     def test_restore_refuses_tampered_snapshot_without_changing_live_database(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -137,7 +197,7 @@ class BenchmarkSnapshotTests(unittest.TestCase):
             root = account.home / ".atm" / SNAPSHOT.SNAPSHOT_ROOT_NAME
             self.assertFalse(root.exists())
 
-    def test_source_in_wal_mode_is_snapshotted_by_the_sqlite_backup_api(self):
+    def test_snapshot_refuses_live_wal_sidecars_before_creating_a_candidate(self):
         with tempfile.TemporaryDirectory() as temporary:
             account = self._account(Path(temporary))
             database = self._database(account, 1)
@@ -146,6 +206,29 @@ class BenchmarkSnapshotTests(unittest.TestCase):
                 connection.execute("INSERT INTO entries(value) VALUES (99)")
                 connection.commit()
 
+                with self.assertRaisesRegex(SNAPSHOT.BenchmarkSnapshotError, "daemon to be stopped"):
+                    self._snapshot(account)
+
+            root = account.home / ".atm" / SNAPSHOT.SNAPSHOT_ROOT_NAME
+            self.assertFalse(root.exists())
+
+    def test_snapshot_copies_closed_wal_journal_database_without_sidecars(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            account = self._account(Path(temporary))
+            database = self._database(account, 1)
+            with closing(sqlite3.connect(database)) as connection:
+                self.assertEqual(connection.execute("PRAGMA journal_mode = WAL").fetchone(), ("wal",))
+                connection.execute("INSERT INTO entries(value) VALUES (99)")
+                connection.commit()
+
+            # macOS SQLite can retain inactive WAL files after the last
+            # connection closes. The production guard deliberately refuses
+            # that ambiguous state; this fixture models the runner's verified
+            # clean precondition without relying on host cleanup behavior.
+            for suffix in ("-wal", "-shm"):
+                database.with_name(f"{database.name}{suffix}").unlink(missing_ok=True)
+            self.assertFalse(database.with_name(f"{database.name}-wal").exists())
+            self.assertFalse(database.with_name(f"{database.name}-shm").exists())
             snapshot = self._snapshot(account)
 
             with closing(sqlite3.connect(snapshot.database)) as connection:
@@ -157,6 +240,7 @@ class BenchmarkSnapshotTests(unittest.TestCase):
         for operation in (
             SNAPSHOT.create_verified_snapshot,
             lambda: SNAPSHOT.verify_completed_snapshot("snapshot-20260822T011500Z-0123456789abcdef"),
+            lambda: SNAPSHOT.verify_active_snapshot("snapshot-20260822T011500Z-0123456789abcdef"),
             lambda: SNAPSHOT.restore_verified_snapshot("snapshot-20260822T011500Z-0123456789abcdef"),
         ):
             with (

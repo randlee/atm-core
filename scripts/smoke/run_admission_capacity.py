@@ -49,12 +49,13 @@ from scripts.smoke.benchmark_account import (
     bootstrap_benchmark_account,
     require_benchmark_account,
 )
+from scripts.smoke.benchmark_mtls import BenchmarkMtlsError, regenerate_mtls_identity
 from scripts.smoke.benchmark_snapshot import (
     BenchmarkSnapshotError,
     VerifiedSnapshot,
     create_verified_snapshot,
     restore_verified_snapshot,
-    verify_completed_snapshot,
+    verify_active_snapshot,
 )
 
 if os.name != "nt":
@@ -547,7 +548,10 @@ def run_lifecycle_phase(
     started = time.monotonic()
     try:
         result = action()
-    except (BenchmarkSnapshotError, OSError, RuntimeError, ValueError, SmokeError, subprocess.TimeoutExpired) as error:
+    except (
+        BenchmarkMtlsError, BenchmarkSnapshotError, OSError, RuntimeError, ValueError, SmokeError,
+        subprocess.TimeoutExpired,
+    ) as error:
         finished_wall = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         evidence.setdefault("lifecycle", {}).setdefault(phase, []).append(
             {
@@ -1407,6 +1411,13 @@ def run_capacity(
         )
         before = count_atm_daemon_processes()
         home.mkdir(parents=True, exist_ok=False)
+        if peer_wire_security == "mutual-tls":
+            fingerprint = run_lifecycle_phase(
+                evidence,
+                "snapshot",
+                lambda: regenerate_mtls_identity(benchmark_account, atm),
+            )
+            evidence["benchmark_mtls_identity"] = {"fingerprint": fingerprint, "path": "account-local"}
         # The pre-roster daemon is deliberately short-lived: it initializes
         # the account database, then is quiesced before the public snapshot
         # owner copies the clean baseline.
@@ -1495,10 +1506,14 @@ def run_capacity(
                 evidence["restored_clean_baseline"] = snapshot_evidence(restored)
 
                 def verify_clean_baseline() -> None:
-                    start_and_doctor()
-                    verified = verify_completed_snapshot(snapshot.snapshot_id)
+                    # Keep the daemon stopped: a post-restore start can recreate
+                    # SQLite sidecars and invalidate the exact clean baseline.
+                    verified = verify_active_snapshot(snapshot.snapshot_id)
                     evidence["post_restore_snapshot"] = snapshot_evidence(verified)
-                    evidence["doctor_after_restore"] = {"status": "passed"}
+                    evidence["restored_live_database"] = {
+                        **snapshot_evidence(verified),
+                        "sidecars_absent": True,
+                    }
 
                 run_lifecycle_phase(evidence, "post_restore_verify", verify_clean_baseline)
                 run_lifecycle_phase(evidence, "cleanup", stop_owned_daemon)
