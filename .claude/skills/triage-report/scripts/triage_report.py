@@ -241,6 +241,9 @@ def _dev_states(events: Graph | None) -> dict[str, dict[str, Any]]:
     return states
 
 
+QA_VERDICT_ENUM = frozenset({"PASS", "FAIL", "BLOCKING", "SUPERSEDED"})
+
+
 def _qa_runs(master: Any) -> dict[str, dict[str, Any]]:
     if master is None:
         return {}
@@ -255,6 +258,13 @@ def _qa_runs(master: Any) -> dict[str, dict[str, Any]]:
         sprint = run.get("aich_sprint")
         if not sprint:
             continue
+        verdict = run.get("verdict")
+        if verdict is not None and verdict not in QA_VERDICT_ENUM:
+            raise ReportError(
+                f"QA evidence master run {run.get('run_id')!r} has invalid verdict "
+                f"{verdict!r}; verdict must be one of {sorted(QA_VERDICT_ENUM)}. "
+                "Qualifier/detail text belongs in the evidence field, not verdict."
+            )
         candidate = _timestamp(run.get("result_time_utc") or run.get("assignment_time_utc"))
         previous = latest.get(sprint)
         previous_dt = _timestamp(previous.get("result_time_utc")) if previous else None
@@ -1047,10 +1057,7 @@ def build_report(
         )
         row["dev_icon"] = ICONS.get(row["dev_status"], "—")
         qa_value = row["qa"]["verdict"]
-        qa_passed = bool(qa_value) and (
-            qa_value.upper().startswith("PASS") or qa_value.upper() == "CLEAR"
-        )
-        row["qa_icon"] = "✅" if qa_passed else (ICONS["fail"] if qa_value else "—")
+        row["qa_icon"] = "✅" if qa_value == "PASS" else (ICONS["fail"] if qa_value else "—")
         row["ci_icon"] = _status_icon(row["ci_status"])
         row["ready_icon"] = _gate_icon(row["ready_to_merge"])
         row["ok_icon"] = _gate_icon(row["ok_to_merge"])
