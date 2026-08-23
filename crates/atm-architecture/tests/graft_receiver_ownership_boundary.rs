@@ -23,11 +23,23 @@ fn receiver_record_publication_and_unlink_stay_in_the_listener_owner() {
         !production.contains("pub fn write_receiver_record"),
         "endpoint record publication must remain private to GraftReceiverListener"
     );
+    let authorized_record_publication_sites = [
+        "fn write_receiver_record(",
+        "write_receiver_record(record_path, &record)?;",
+        "write_receiver_record(&self.record_path, &self.record)?;",
+    ];
     assert_eq!(
         production.matches("write_receiver_record(").count(),
-        2,
-        "only the private helper and GraftReceiverListener::bind may publish a receiver record"
+        authorized_record_publication_sites.len(),
+        "only the private helper, GraftReceiverListener::bind, and same-owner republish may publish a receiver record"
     );
+    for site in authorized_record_publication_sites {
+        assert_eq!(
+            production.matches(site).count(),
+            1,
+            "receiver record publication site must remain the reviewed exact call site: {site}"
+        );
+    }
     assert_eq!(
         production
             .matches("fs::remove_file(&self.record_path)")

@@ -138,6 +138,12 @@ pub struct GraftNudgeTarget {
     pub recipient_team: TeamName,
     /// Canonical database-resolved `<atm …>` nudge text for the receiver.
     pub rendered_nudge: String,
+    /// Immutable body of the message that triggered this nudge.
+    ///
+    /// Unlike `description`, this preserves the complete admitted content so
+    /// an embedded host never needs to perform a follow-up mailbox read just
+    /// to inject the message it was notified about.
+    pub message_body: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
