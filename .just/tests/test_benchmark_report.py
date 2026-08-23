@@ -119,7 +119,7 @@ class BenchmarkReportTests(unittest.TestCase):
         rows = REPORT.campaign_target_rows([failed])
         tcp = next(row for row in rows if row["test"] == "tcp")
         self.assertIsNone(tcp["result_msg_per_second"])
-        self.assertFalse(tcp["passed"])
+        self.assertEqual(tcp["comparison"], "N/A — no empirical baseline artifact")
 
     def test_immutable_write_rejects_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -251,7 +251,7 @@ class BenchmarkReportTests(unittest.TestCase):
             output = REPORT.render_campaign(campaign_id, targets, Path(directory))
             text = output.read_text(encoding="utf-8")
         self.assertIn("Result msg/sec", text)
-        self.assertIn("Target msg/sec", text)
+        self.assertIn("Historical baseline msg/sec", text)
         self.assertIn("tcp-tls", text)
 
     def test_campaign_table_refuses_to_mix_source_revisions(self) -> None:

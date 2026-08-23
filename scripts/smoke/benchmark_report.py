@@ -41,15 +41,6 @@ SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
 CAMPAIGN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
-# AO2.8's approved M5 f8-v1 performance targets.  These are expectations,
-# not measurements from a comparison run, so reports must never call them a
-# baseline.  An empirical baseline needs its own raw artifact and provenance.
-TARGET_MSG_PER_SECOND = {
-    "sqlite": 45_000.0,
-    "uds": 24_000.0,
-    "tcp": 22_500.0,
-    "tcp-tls": 22_500.0,
-}
 TARGET_ORDER = ("sqlite", "uds", "tcp", "tcp-tls")
 
 
@@ -336,7 +327,13 @@ def campaign_groups(records: Iterable[dict[str, Any]]) -> dict[str, list[dict[st
 
 
 def campaign_target_rows(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Return one revision-homogeneous four-target result/target/verdict table."""
+    """Return one revision-homogeneous four-target measurement table.
+
+    These immutable summaries do not carry an empirical, parameter-compatible
+    comparison artifact.  Do not turn a later aspiration into a retroactive
+    performance verdict: comparison remains unavailable until that artifact is
+    published alongside the campaign.
+    """
     records = list(records)
     revisions = {record.get("source_revision") for record in records}
     if len(revisions) > 1:
@@ -351,23 +348,15 @@ def campaign_target_rows(records: Iterable[dict[str, Any]]) -> list[dict[str, An
     rows: list[dict[str, Any]] = []
     for target in TARGET_ORDER:
         result = newest.get(target)
-        target_msg_per_second = TARGET_MSG_PER_SECOND[target]
         metrics = result.get("metrics") if result else None
         metric = metrics.get("admissions_per_second", {}) if isinstance(metrics, dict) else {}
         value = metric.get("p50") if isinstance(metric, dict) else None
-        accepted = metrics.get("accepted_count") if isinstance(metrics, dict) else None
-        requested = metrics.get("requested_count") if isinstance(metrics, dict) else None
-        passed = (
-            isinstance(value, (int, float))
-            and isinstance(accepted, int)
-            and accepted == requested
-            and float(value) >= target_msg_per_second
-        )
         rows.append({
             "test": target,
             "result_msg_per_second": None if value is None else float(value),
-            "target_msg_per_second": target_msg_per_second,
-            "passed": passed,
+            "baseline_msg_per_second": None,
+            "comparison": "N/A — no empirical baseline artifact",
+            "comparison_class": "info",
             "artifact_id": result_id(result) if result else None,
             "json_href": f"{result_id(result)}.json" if result else None,
             "xhtml_href": f"{result_id(result)}.xhtml" if result else None,
@@ -394,7 +383,7 @@ def campaign_panels(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
             "raw_host_label": host_records[-1]["host_label"],
             "provenance_note": host_records[-1].get("_report_provenance_note"),
             "rows": rows,
-            "passed": all(row["passed"] for row in rows),
+            "comparison_available": False,
         })
     return host_panels
 
