@@ -1121,6 +1121,9 @@ mod tests {
 
     #[test]
     fn closed_python_session_rejects_reconnect() {
+        // reconnect_client converts the closed-session error into PyErr, so
+        // this test must not rely on another parallel test initializing PyO3.
+        Python::initialize();
         let caller = PyAgentAddress::new(TEST_SENDER.to_string(), TEST_TEAM.to_string(), None)
             .expect("caller");
         let session = PyGraftSession {
