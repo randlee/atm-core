@@ -107,13 +107,23 @@ class BenchmarkSnapshotTests(unittest.TestCase):
                 connection.execute("INSERT INTO entries(value) VALUES (99)")
                 connection.commit()
 
-            with mock.patch.object(SNAPSHOT, "require_benchmark_account", return_value=account):
+            expected_reader = f"file:{snapshot.database.resolve()}?mode=ro&immutable=1"
+            with (
+                mock.patch.object(SNAPSHOT, "require_benchmark_account", return_value=account),
+                mock.patch.object(SNAPSHOT.sqlite3, "connect", wraps=sqlite3.connect) as connect,
+            ):
                 restored = SNAPSHOT.restore_verified_snapshot(snapshot.snapshot_id)
 
             with closing(sqlite3.connect(database)) as connection:
                 observed = connection.execute("SELECT COUNT(*) FROM entries").fetchone()
             self.assertEqual(observed, (1,))
             self.assertEqual(restored, snapshot)
+            self.assertTrue(
+                any(
+                    call.args == (expected_reader,) and call.kwargs == {"uri": True}
+                    for call in connect.call_args_list
+                )
+            )
             self.assertEqual(list(account.durable_state_root.glob(".mail.db.restore-staging-*")), [])
 
     def test_active_verification_proves_exact_bytes_without_creating_sidecars(self):

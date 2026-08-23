@@ -406,7 +406,11 @@ def restore_verified_snapshot(snapshot_id: str) -> VerifiedSnapshot:
     _assert_restore_sidecars_absent(live_database)
     staging = account.durable_state_root / f".{MAIL_DATABASE_NAME}.restore-staging-{secrets.token_hex(8)}"
     try:
-        with closing(sqlite3.connect(f"file:{snapshot.database.resolve()}?mode=ro", uri=True)) as reader:
+        # `_parse_verified_snapshot` and the live-sidecar guard above prove
+        # this is a quiescent snapshot. Immutable access avoids manufacturing
+        # shared-memory state for a snapshot whose journal mode remains WAL.
+        snapshot_uri = f"file:{snapshot.database.resolve()}?mode=ro&immutable=1"
+        with closing(sqlite3.connect(snapshot_uri, uri=True)) as reader:
             with closing(sqlite3.connect(staging)) as writer:
                 reader.backup(writer)
                 writer.commit()
