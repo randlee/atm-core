@@ -151,8 +151,12 @@ def _sha256(path: Path) -> tuple[int, str]:
 
 def _database_facts(path: Path, label: str) -> tuple[int, int]:
     _require_regular_file(path, label)
+    _assert_restore_sidecars_absent(path)
     try:
-        uri = f"{path.resolve().as_uri()}?mode=ro"
+        # Every caller has already established that no live WAL state exists.
+        # Immutable reads keep fact collection from creating a shared-memory
+        # sidecar for a clean database whose persistent journal mode is WAL.
+        uri = f"{path.resolve().as_uri()}?mode=ro&immutable=1"
         with closing(sqlite3.connect(uri, uri=True)) as connection:
             quick_check = connection.execute("PRAGMA quick_check;").fetchone()
             user_version = connection.execute("PRAGMA user_version;").fetchone()
@@ -269,6 +273,11 @@ def _parse_verified_snapshot(account: BenchmarkAccount, snapshot_id: str) -> Ver
 def create_verified_snapshot() -> VerifiedSnapshot:
     """Create and atomically publish a verified snapshot for this account only.
 
+    The caller must first stop the dedicated benchmark account's sole daemon
+    writer. The sidecar check below is the immediate enforcement point; the
+    runner owns the surrounding stop-to-snapshot lifecycle and therefore
+    leaves no writer in that interval.
+
     A failed attempt deliberately leaves its hidden staging directory in place
     for diagnosis, but no completed snapshot manifest becomes a restore
     candidate until the database is consistent, fsynced, and hash-verified.
@@ -290,7 +299,11 @@ def create_verified_snapshot() -> VerifiedSnapshot:
     try:
         staging.mkdir(mode=0o700)
         destination = staging / MAIL_DATABASE_NAME
-        with closing(sqlite3.connect(f"file:{source.resolve()}?mode=ro", uri=True)) as reader:
+        # Sidecars have already been rejected above, so this immutable reader
+        # cannot observe an active WAL and must not create a transient shared-
+        # memory sidecar merely to copy an otherwise clean WAL-journal database.
+        source_uri = f"file:{source.resolve()}?mode=ro&immutable=1"
+        with closing(sqlite3.connect(source_uri, uri=True)) as reader:
             with closing(sqlite3.connect(destination)) as writer:
                 reader.backup(writer)
                 writer.commit()
@@ -393,7 +406,11 @@ def restore_verified_snapshot(snapshot_id: str) -> VerifiedSnapshot:
     _assert_restore_sidecars_absent(live_database)
     staging = account.durable_state_root / f".{MAIL_DATABASE_NAME}.restore-staging-{secrets.token_hex(8)}"
     try:
-        with closing(sqlite3.connect(f"file:{snapshot.database.resolve()}?mode=ro", uri=True)) as reader:
+        # `_parse_verified_snapshot` and the live-sidecar guard above prove
+        # this is a quiescent snapshot. Immutable access avoids manufacturing
+        # shared-memory state for a snapshot whose journal mode remains WAL.
+        snapshot_uri = f"file:{snapshot.database.resolve()}?mode=ro&immutable=1"
+        with closing(sqlite3.connect(snapshot_uri, uri=True)) as reader:
             with closing(sqlite3.connect(staging)) as writer:
                 reader.backup(writer)
                 writer.commit()
