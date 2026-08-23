@@ -54,7 +54,7 @@ from scripts.smoke.benchmark_snapshot import (
     VerifiedSnapshot,
     create_verified_snapshot,
     restore_verified_snapshot,
-    verify_completed_snapshot,
+    verify_active_snapshot,
 )
 
 if os.name != "nt":
@@ -1495,10 +1495,14 @@ def run_capacity(
                 evidence["restored_clean_baseline"] = snapshot_evidence(restored)
 
                 def verify_clean_baseline() -> None:
-                    start_and_doctor()
-                    verified = verify_completed_snapshot(snapshot.snapshot_id)
+                    # Keep the daemon stopped: a post-restore start can recreate
+                    # SQLite sidecars and invalidate the exact clean baseline.
+                    verified = verify_active_snapshot(snapshot.snapshot_id)
                     evidence["post_restore_snapshot"] = snapshot_evidence(verified)
-                    evidence["doctor_after_restore"] = {"status": "passed"}
+                    evidence["restored_live_database"] = {
+                        **snapshot_evidence(verified),
+                        "sidecars_absent": True,
+                    }
 
                 run_lifecycle_phase(evidence, "post_restore_verify", verify_clean_baseline)
                 run_lifecycle_phase(evidence, "cleanup", stop_owned_daemon)

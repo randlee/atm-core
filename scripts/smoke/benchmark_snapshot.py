@@ -338,6 +338,35 @@ def verify_completed_snapshot(snapshot_id: str) -> VerifiedSnapshot:
     return _parse_verified_snapshot(account, snapshot_id)
 
 
+def verify_active_snapshot(snapshot_id: str) -> VerifiedSnapshot:
+    """Prove the stopped benchmark account exactly matches a verified snapshot.
+
+    This performs only read-only SQLite and filesystem checks. It must never
+    start a daemon after restore: doing so can create SQLite sidecars or alter
+    the restored database, invalidating the clean-baseline guarantee.
+    """
+    try:
+        account = require_benchmark_account()
+    except BenchmarkAccountError as error:
+        raise BenchmarkSnapshotError(str(error)) from error
+    snapshot = _parse_verified_snapshot(account, snapshot_id)
+    live_database = _mail_database(account)
+    _assert_restore_sidecars_absent(live_database)
+    _fsync_file(live_database, "active database")
+    user_version, page_count = _database_facts(live_database, "active database")
+    byte_count, sha256 = _sha256(live_database)
+    if (user_version, page_count, byte_count, sha256) != (
+        snapshot.user_version,
+        snapshot.page_count,
+        snapshot.byte_count,
+        snapshot.sha256,
+    ):
+        raise BenchmarkSnapshotError(
+            "active benchmark database does not match the verified restored snapshot"
+        )
+    return snapshot
+
+
 def _assert_restore_sidecars_absent(database: Path) -> None:
     sidecars = [database.with_name(f"{database.name}{suffix}") for suffix in ("-wal", "-shm")]
     present = [str(path) for path in sidecars if path.exists() or path.is_symlink()]
