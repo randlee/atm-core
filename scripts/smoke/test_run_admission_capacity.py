@@ -128,6 +128,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 stack.enter_context(mock.patch.object(RUNNER, "require_clean_host_daemon_state"))
                 stack.enter_context(mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]))
                 stack.enter_context(mock.patch.object(RUNNER, "runtime_environment", return_value={}))
+                stack.enter_context(mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64))
                 calls["start"] = stack.enter_context(
                     mock.patch.object(
                         RUNNER,
@@ -271,6 +272,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 stack.enter_context(mock.patch.object(RUNNER, "require_clean_host_daemon_state"))
                 stack.enter_context(mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]))
                 stack.enter_context(mock.patch.object(RUNNER, "runtime_environment", return_value={}))
+                stack.enter_context(mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64))
                 stack.enter_context(
                     mock.patch.object(RUNNER, "start_capacity_daemon", return_value=(process, output)),
                 )
@@ -948,6 +950,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
                 mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64),
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
                 mock.patch.object(RUNNER, "local_endpoint", side_effect=RUNNER.SmokeError("benchmark failed")),
                 mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"),
@@ -1006,6 +1009,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
                 mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64),
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
                 mock.patch.object(RUNNER, "start_capacity_daemon", side_effect=RUNNER.SmokeError("stop after evidence setup")),
                 mock.patch.object(RUNNER, "write_raw_evidence", return_value=Path(directory) / "raw.json"),
@@ -1042,6 +1046,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
                 mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64),
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
                 mock.patch.object(
                     RUNNER, "start_capacity_daemon", side_effect=RUNNER.SmokeError("setup failed"),
@@ -1101,6 +1106,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
                 mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64),
                 mock.patch.object(RUNNER, "start_capacity_daemon", return_value=(process, daemon_output)) as start,
                 mock.patch.object(RUNNER, "command_result", return_value={}),
                 mock.patch.object(RUNNER, "benchmark_doctor_payload", return_value={}),

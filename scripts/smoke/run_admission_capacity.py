@@ -49,6 +49,7 @@ from scripts.smoke.benchmark_account import (
     bootstrap_benchmark_account,
     require_benchmark_account,
 )
+from scripts.smoke.benchmark_mtls import BenchmarkMtlsError, regenerate_mtls_identity
 from scripts.smoke.benchmark_snapshot import (
     BenchmarkSnapshotError,
     VerifiedSnapshot,
@@ -547,7 +548,10 @@ def run_lifecycle_phase(
     started = time.monotonic()
     try:
         result = action()
-    except (BenchmarkSnapshotError, OSError, RuntimeError, ValueError, SmokeError, subprocess.TimeoutExpired) as error:
+    except (
+        BenchmarkMtlsError, BenchmarkSnapshotError, OSError, RuntimeError, ValueError, SmokeError,
+        subprocess.TimeoutExpired,
+    ) as error:
         finished_wall = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         evidence.setdefault("lifecycle", {}).setdefault(phase, []).append(
             {
@@ -1407,6 +1411,13 @@ def run_capacity(
         )
         before = count_atm_daemon_processes()
         home.mkdir(parents=True, exist_ok=False)
+        if peer_wire_security == "mutual-tls":
+            fingerprint = run_lifecycle_phase(
+                evidence,
+                "snapshot",
+                lambda: regenerate_mtls_identity(benchmark_account, atm),
+            )
+            evidence["benchmark_mtls_identity"] = {"fingerprint": fingerprint, "path": "account-local"}
         # The pre-roster daemon is deliberately short-lived: it initializes
         # the account database, then is quiesced before the public snapshot
         # owner copies the clean baseline.
