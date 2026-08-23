@@ -871,7 +871,7 @@ mod tests {
     }
 
     #[test]
-    fn grouped_message_admissions_replay_individually_after_a_member_validation_error() {
+    fn grouped_message_admissions_replay_individually_after_a_member_sqlite_error() {
         let target = SharedDbTarget::InMemory {
             uri: format!(
                 "file:writer-group-replay-{}?mode=memory&cache=shared",
@@ -881,12 +881,20 @@ mod tests {
         let mut connection = open_writer_connection_for_target(&target).expect("writer connection");
         ensure_schema(&mut connection, &target).expect("schema");
         let mut cache = stmt_cache::WriterStatementCache;
+        connection
+            .execute_batch(
+                "CREATE TRIGGER reject_group_member
+                 BEFORE INSERT ON mail_messages
+                 WHEN NEW.message_key = 'atm:group-rejected'
+                 BEGIN SELECT RAISE(ABORT, 'intentional grouped-admission failure'); END;",
+            )
+            .expect("install deterministic writer failure trigger");
 
         let (first, first_reply) = queued_upsert(message("atm:group-first"));
-        // `MessageKey` guarantees non-blank input, while the writer remains
-        // the owner of the durable `atm:` / `ext:` invariant.  This forces a
-        // member failure after the group savepoint has admitted its first row.
-        let (invalid, invalid_reply) = queued_upsert(message("invalid-group-member"));
+        // The trigger forces a database error after the group savepoint has
+        // admitted its first row, rather than relying on pre-enqueue input
+        // validation.  The fallback must therefore undo that tentative row.
+        let (invalid, invalid_reply) = queued_upsert(message("atm:group-rejected"));
         let (last, last_reply) = queued_upsert(message("atm:group-last"));
 
         process_batch(
