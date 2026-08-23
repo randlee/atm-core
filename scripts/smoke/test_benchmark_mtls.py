@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -46,7 +47,8 @@ class BenchmarkMtlsTests(unittest.TestCase):
             bundle = home / ".atm" / MTLS.IDENTITY_DIRECTORY_NAME / MTLS.IDENTITY_BUNDLE_NAME
             self.assertEqual(fingerprint, "ab" * 32)
             self.assertEqual(bundle.read_text(encoding="utf-8"), "CERTKEY")
-            self.assertEqual(bundle.stat().st_mode & 0o777, 0o600)
+            if os.name != "nt":
+                self.assertEqual(bundle.stat().st_mode & 0o777, 0o600)
             self.assertEqual(commands[-1][-1], "--yes")
             self.assertIn(str(bundle), commands[-1])
             self.assertIn(fingerprint, commands[-1])
