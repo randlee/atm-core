@@ -1405,6 +1405,41 @@ class AdmissionCapacityTests(unittest.TestCase):
             ],
         )
 
+    def test_plaintext_baseline_bootstrap_runs_the_complete_required_set(self):
+        observed: list[tuple[int, bool, str, str]] = []
+
+        def run_capacity(*_args, **kwargs):
+            observed.append((
+                _args[3], kwargs["comparison_required"], kwargs["peer_wire_security"],
+                kwargs["benchmark_target"],
+            ))
+            return 0, Path("evidence.json")
+
+        args = argparse.Namespace(
+            atm_home=None,
+            evidence_dir=Path("evidence"),
+            raw_evidence_dir=Path("raw"),
+            workers=64,
+        )
+        with mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity):
+            self.assertEqual(RUNNER.run_plaintext_baseline_bootstrap(args), 0)
+        self.assertEqual(
+            observed,
+            [(frame, False, "plaintext-test", "tcp") for frame in RUNNER.TCP_COMPARISON_FRAMES],
+        )
+
+    def test_plaintext_baseline_bootstrap_dispatches_only_when_explicit(self):
+        with (
+            mock.patch.object(
+                sys,
+                "argv",
+                ["run_admission_capacity.py", "--bootstrap-plaintext-baseline"],
+            ),
+            mock.patch.object(RUNNER, "run_plaintext_baseline_bootstrap", return_value=0) as bootstrap,
+        ):
+            self.assertEqual(RUNNER.main(), 0)
+        bootstrap.assert_called_once()
+
     def test_main_allows_windows_tcp_without_a_comparison_reference(self):
         captured: dict[str, object] = {}
 

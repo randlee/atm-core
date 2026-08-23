@@ -1785,12 +1785,59 @@ def run_default_f8_matrix(args: argparse.Namespace) -> int:
     return 0 if all(code == 0 for code in codes) else 1
 
 
+def run_plaintext_baseline_bootstrap(args: argparse.Namespace) -> int:
+    """Establish the explicit six-frame TCP baseline for a clean benchmark account.
+
+    This is deliberately a one-time, opt-in bootstrap.  Ordinary focused TCP
+    runs continue to require this accepted same-host evidence; otherwise the
+    first new benchmark account could never create the complete comparison set
+    that the gate requires.
+    """
+    codes: list[int] = []
+    for position, frames_per_connection in enumerate(TCP_COMPARISON_FRAMES, start=1):
+        if args.atm_home is None:
+            with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temporary:
+                home = Path(temporary) / f"{CAPACITY_ROOT_PREFIX}{position}"
+                code, evidence = run_capacity(
+                    home, args.evidence_dir, "tcp", frames_per_connection,
+                    workers=args.workers,
+                    comparison_required=False,
+                    raw_evidence_directory=args.raw_evidence_dir,
+                    peer_wire_security="plaintext-test",
+                    benchmark_target="tcp",
+                )
+        else:
+            home = args.atm_home / f"{CAPACITY_ROOT_PREFIX}{position}"
+            code, evidence = run_capacity(
+                home, args.evidence_dir, "tcp", frames_per_connection,
+                workers=args.workers,
+                comparison_required=False,
+                raw_evidence_directory=args.raw_evidence_dir,
+                peer_wire_security="plaintext-test",
+                benchmark_target="tcp",
+            )
+        codes.append(code)
+        print(
+            f"{'PASS' if code == 0 else 'FAIL'} plaintext baseline "
+            f"f{frames_per_connection}: {evidence}"
+        )
+    return 0 if all(code == 0 for code in codes) else 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--bootstrap-benchmark-account",
         action="store_true",
         help="create the account-local benchmark manifest; refuses an account with existing ATM state",
+    )
+    parser.add_argument(
+        "--bootstrap-plaintext-baseline",
+        action="store_true",
+        help=(
+            "one-time dedicated-account bootstrap for the complete six-frame "
+            "same-host plaintext TCP comparison set"
+        ),
     )
     parser.add_argument("--atm-home", type=Path)
     parser.add_argument(
@@ -1840,6 +1887,12 @@ def main() -> int:
             raise SmokeError(f"benchmark-account bootstrap failed: {error}") from error
         print(f"benchmark-account manifest created: {account.manifest_path}")
         return 0
+    if args.bootstrap_plaintext_baseline:
+        if any((
+            args.target, args.transport, args.frames_per_connection, args.sustained, args.baseline,
+        )):
+            parser.error("--bootstrap-plaintext-baseline cannot be combined with target/profile options")
+        return run_plaintext_baseline_bootstrap(args)
     if not any((args.target, args.transport, args.frames_per_connection, args.sustained, args.baseline)):
         return run_default_f8_matrix(args)
     transport, peer_wire_security, benchmark_target = resolve_benchmark_target(
