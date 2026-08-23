@@ -1047,7 +1047,10 @@ def build_report(
         )
         row["dev_icon"] = ICONS.get(row["dev_status"], "—")
         qa_value = row["qa"]["verdict"]
-        row["qa_icon"] = "✅" if qa_value and qa_value.upper() == "PASS" else (ICONS["fail"] if qa_value else "—")
+        qa_passed = bool(qa_value) and (
+            qa_value.upper().startswith("PASS") or qa_value.upper() == "CLEAR"
+        )
+        row["qa_icon"] = "✅" if qa_passed else (ICONS["fail"] if qa_value else "—")
         row["ci_icon"] = _status_icon(row["ci_status"])
         row["ready_icon"] = _gate_icon(row["ready_to_merge"])
         row["ok_icon"] = _gate_icon(row["ok_to_merge"])
