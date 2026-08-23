@@ -5,7 +5,9 @@ Status: draft · Branch: `feature/ao2-11-benchmark-rendering` off
 `integrate/phase-ao2`
 recommended_agent: arch-ctm · recommended_model: deep-reasoning
 
-Implements decisions D4–D6, D9, D10 of
+Implements decisions D4–D6, D9, D10, D11 (rendered time display), and D12
+(display-label half: “TCP + TLS” as human label for the `tcp-tls` machine id)
+of
 [benchmark-reporting-plan-overview.md](./benchmark-reporting-plan-overview.md).
 Fixes audit findings B (dual `--rebuild`/`--input` render paths) and C
 (no phase report, no chart, no wyvern step).
@@ -132,7 +134,12 @@ stub shapes.
 8. `HistoricalRecord` classes exist in `benchmark_schema.py`, field-for-field
    equal to AO2.12's normative contract (docstring cross-references it), and
    the empty-record fixture round-trips through model validation.
-9. `.just/tests` suite green on macOS and Windows CI lanes.
+9. Target labels (D12): template tests assert panels, phase report, and
+   index render the human label “TCP + TLS” for the `tcp-tls` target, while
+   machine contexts — `datetime`/`id`/`class` attributes, filenames, and
+   JSON-embedded chart variables — retain the hyphenated `tcp-tls` id and
+   contain no plus-form string.
+10. `.just/tests` suite green on macOS and Windows CI lanes.
 
 ## Required validation
 

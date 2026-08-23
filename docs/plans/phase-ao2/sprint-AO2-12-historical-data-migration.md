@@ -22,8 +22,9 @@ preserved bit-exactly; only structure is normalized.
    (host/transport/revision + timestamp adjacency), and emits v4
    `BenchmarkRunResult`/`BenchmarkCampaign` records with `generated_at`,
    metric values, counts, and revisions copied unchanged.
-2. **`historical-record.json`** — the single historical record (D7), validated
-   by a `HistoricalRecord` Pydantic model: all migrated campaigns, each entry
+2. **`historical-record.json`** — the single historical record (D7),
+   populated into a `HistoricalRecord` instance (classes implemented in
+   AO2.11, consumed here unchanged): all migrated campaigns, each entry
    carrying `final_best: bool` (the final/best run of its campaign group, the
    only point AO2.11 charts), and a per-(host, target) running-best baseline
    trace implementing the retroactive ratchet (D8): baseline-as-of-run =

@@ -76,14 +76,16 @@ the benchmarked runtime.
 | 1 | plan-scope-reviewer (sonnet) | `eead638e` | FAIL — 1 Blocking (missing normative `HistoricalRecord` contract), 2 Important (AO2.11↔AO2.13 dependency mislabeled `parallel_safe`; AI.49/AO2.5.4 dropped from supersession list), 1 minor (`benchmark-report` recipe disposition unstated) | All fixed in round-1 fix commit: `HistoricalRecord` contract added to AO2.12 with implementation ownership in AO2.11; dependency relabeled must_follow; supersession list expanded to seven docs; recipe note added. |
 | 1 | critical-plan-reviewer (sonnet) | `eead638e` | FAIL — 5 Blocking (matrix runner absent from base branch; AC didn't pin N=4/3; campaign target-coverage roll-up unenforced; missing-BaselineEntry behavior undefined; D1 seed below recorded empirical baseline unjustified), 2 Important (sqlite-target metrics shape undefined; `HistoricalRecord` stub ownership), 2 minor | All fixed in round-1 fix commit: base-branch precondition added (merge `fix/ao2-7-report-provenance` before AO2.10); AC #2 pins 4/3 via real matrix run; `BenchmarkCampaign` coverage `model_validator` + truth-table case; missing baseline = hard emission error + test + seeded-label live-verify rule; D1 justification added (deliberate variance headroom, quality-mgr confirms vs AO2.7/AO2.8 figures at revision 1); sqlite variant rule (network fields None, validator-enforced); implementation-ownership rule for `HistoricalRecord`; Windows textual-verification defined; line-number refs replaced with grep locators. |
 
-Operator additions after round 1: D11 (UTC-only JSON; rendered reports show
-Pacific 24-hour fallback inside `<time>` elements upgraded to viewer-local
-time by a small inline script).
-
-| Round | Reviewer | Commit reviewed | Result | Disposition |
-|-------|----------|-----------------|--------|-------------|
 | 2 | plan-scope-reviewer (sonnet) | `19eeeda0` | FAIL — round-1 closures confirmed; new: 1 Blocking (base-branch precondition named two branches ambiguously), 3 Important (stale "five docs" restatement in AO2.13 deliverable 3; D11 had no AC; `HistoricalRecord` implementation outside AO2.11's deliverables list), 1 minor (duplicate deliverable numbering) | All fixed in round-2 fix commit: precondition unified on `origin/fix/ao2-7-direct-peer-benchmark-harness` (single source of truth, both docs); AO2.13 deliverable 3 now cross-references deliverable 1's seven-doc list; AO2.11 AC #7 (time display) added; `HistoricalRecord` implementation promoted to AO2.11 deliverable 7 + AC #8; deliverables renumbered 1–7. |
 | 2 | critical-plan-reviewer (sonnet) | `19eeeda0` | FAIL — all 10 round-1 findings verified closed; new: 2 Blocking (`tcp+tls` in docs vs `tcp-tls` in the base branch's code/schemas/filenames — zero `tcp+tls` occurrences there; inline time script would break strict-XHTML well-formedness with no CDATA rule or XML-parse gate), 1 minor (D1 "~5–8%" headroom claim vs actual ~2.4–6.6%) | All fixed in round-2 fix commit: canonical identifier `tcp-tls` adopted across all docs + new D12 (machine id never renamed; "TCP + TLS" is display-label only); D11/AO2.11 now require `<![CDATA[...]]>` wrapping in `.xhtml` output and a strict XML parse gate in AC #7; D1 states per-target headroom percentages. |
+
+| 3 | critical-plan-reviewer (sonnet) | `ba5ade5a` | **PASS** — all round-2 findings verified closed against live doc text and the base branch's `BENCHMARK_TARGETS`; 1 minor wording (AO2.12 deliverable-2 prose predated the ownership move) | Wording fixed in round-3 commit. |
+| 3 | plan-scope-reviewer (sonnet) | `ba5ade5a` | FAIL — round-2 closures confirmed; 1 Important (D12 had no owning sprint or enforcing AC), 1 minor (QA-history table split in two) | Fixed in round-3 commit: D12 cited in AO2.10 (machine-id half, plus-form grep gate in AC #4) and AO2.11 (display-label half, new AC #9); tables merged. |
+
+Operator additions after round 1: D11 (UTC-only JSON; rendered reports show
+Pacific 24-hour fallback inside `<time>` elements upgraded to viewer-local
+time by a small inline script). After round 2: D12 (canonical `tcp-tls`
+machine identifier; “TCP + TLS” display-only).
 
 ## Out of scope
 

@@ -7,7 +7,8 @@ recommended_agent: arch-ctm · recommended_model: deep-reasoning
 Fixes audit findings A.2 (envelope/publication gap), A.3 (campaign identity
 not persisted), A.4 (schema drift, v2-writer/v3-model), A.5 (competing
 baselines), A.7 (duplicated derivations), B (dead code, unused ledger seam).
-Decisions D1–D3 from
+Decisions D1–D3, D11 (UTC-only storage), and D12 (machine-identifier half:
+`tcp-tls` in all code, schemas, filenames, and JSON) from
 [benchmark-reporting-plan-overview.md](./benchmark-reporting-plan-overview.md)
 are binding.
 
@@ -151,7 +152,10 @@ a required target must not validate as PASS.
    lowers any value.
 4. `grep`-gate: no occurrence of `DEFAULT_TARGETS *=` static baseline
    constants in `benchmark_report.py`; no `--baseline` argument in
-   `run_admission_capacity.py`; no `mac-arm64-01` literal in the runner.
+   `run_admission_capacity.py`; no `mac-arm64-01` literal in the runner;
+   D12: no `tcp+tls` (plus-form) string anywhere under `scripts/smoke/`,
+   test fixtures, or emitted JSON artifacts — the machine identifier is
+   `tcp-tls` only.
 5. `.just/tests/` suite passes on macOS and Windows CI lanes.
 6. `baselines.json` present with D1 seed values, revision 1, and a
    quality-mgr approval reference recorded in the PR.
