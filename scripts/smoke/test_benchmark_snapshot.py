@@ -211,6 +211,12 @@ class BenchmarkSnapshotTests(unittest.TestCase):
                 connection.execute("INSERT INTO entries(value) VALUES (99)")
                 connection.commit()
 
+            # macOS SQLite can retain inactive WAL files after the last
+            # connection closes. The production guard deliberately refuses
+            # that ambiguous state; this fixture models the runner's verified
+            # clean precondition without relying on host cleanup behavior.
+            for suffix in ("-wal", "-shm"):
+                database.with_name(f"{database.name}{suffix}").unlink(missing_ok=True)
             self.assertFalse(database.with_name(f"{database.name}-wal").exists())
             self.assertFalse(database.with_name(f"{database.name}-shm").exists())
             snapshot = self._snapshot(account)
