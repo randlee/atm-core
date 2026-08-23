@@ -1,6 +1,7 @@
 """Focused unit tests for the AI.33 public admission-capacity runner."""
 from __future__ import annotations
 
+import argparse
 import contextlib
 import importlib.util
 import inspect
@@ -91,19 +92,9 @@ class AdmissionCapacityTests(unittest.TestCase):
             captured.append(kwargs)
             return RUNNER.CapacityRunResult(0, Path("sentinel.evidence"), Path("sentinel.raw"))
 
-        measured = mock.Mock(
-            median_msg_per_second=45_000.0,
-            p95_msg_per_second=45_100.0,
-            p99_msg_per_second=45_200.0,
-            accepted=10_000,
-            requested=10_000,
-            raw_artifact="artifacts/raw.json",
-        )
-
         with (
             mock.patch.object(sys, "argv", ["run_admission_capacity.py"]),
             mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity),
-            mock.patch.object(RUNNER, "suite_target_result", return_value=measured),
             contextlib.redirect_stdout(stdout := io.StringIO()),
         ):
             self.assertEqual(RUNNER.main(), 0)
@@ -114,7 +105,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         )
         self.assertTrue(all(item["comparison_required"] is False for item in captured))
         self.assertTrue(all(item["raw_evidence_directory"] == RUNNER.DEFAULT_RAW_EVIDENCE_DIR for item in captured))
-        self.assertEqual(stdout.getvalue().count("p50=45000.00 msg/s"), 4)
+        self.assertEqual(stdout.getvalue().count("PASS f8 target"), 4)
 
     def test_selected_profile_without_diagnostic_marker_is_rejected(self):
         with mock.patch.object(sys, "argv", ["run_admission_capacity.py", "--target", "tcp"]):
@@ -273,6 +264,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 stack.enter_context(mock.patch.object(RUNNER, "require_clean_host_daemon_state"))
                 stack.enter_context(mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]))
                 stack.enter_context(mock.patch.object(RUNNER, "runtime_environment", return_value={}))
+                stack.enter_context(mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64))
                 calls["start"] = stack.enter_context(
                     mock.patch.object(
                         RUNNER,
@@ -318,7 +310,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                         return_value=snapshot,
                     ),
                 )
-                stack.enter_context(mock.patch.object(RUNNER, "verify_completed_snapshot", return_value=snapshot))
+                stack.enter_context(mock.patch.object(RUNNER, "verify_active_snapshot", return_value=snapshot))
                 calls["reap"] = stack.enter_context(
                     mock.patch.object(
                         RUNNER,
@@ -350,6 +342,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(captured["clean_baseline_snapshot"]["snapshot_id"], "snapshot-20260822T000000Z-0123456789abcdef")
         self.assertEqual(captured["post_restore_snapshot"]["snapshot_id"], "snapshot-20260822T000000Z-0123456789abcdef")
         self.assertTrue(all(item["duration_s"] >= 0 for entries in captured["lifecycle"].values() for item in entries))
+        self.assertEqual(calls["start"].call_count, 2)
 
     def test_real_snapshot_lifecycle_never_touches_interactive_root(self):
         """Exercise the real account-bound snapshot APIs through ``run_capacity``.
@@ -416,6 +409,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 stack.enter_context(mock.patch.object(RUNNER, "require_clean_host_daemon_state"))
                 stack.enter_context(mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]))
                 stack.enter_context(mock.patch.object(RUNNER, "runtime_environment", return_value={}))
+                stack.enter_context(mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64))
                 stack.enter_context(
                     mock.patch.object(RUNNER, "start_capacity_daemon", return_value=(process, output)),
                 )
@@ -1093,6 +1087,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
                 mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64),
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
                 mock.patch.object(RUNNER, "local_endpoint", side_effect=RUNNER.SmokeError("benchmark failed")),
                 mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"),
@@ -1151,6 +1146,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
                 mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64),
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
                 mock.patch.object(RUNNER, "start_capacity_daemon", side_effect=RUNNER.SmokeError("stop after evidence setup")),
                 mock.patch.object(RUNNER, "write_raw_evidence", return_value=Path(directory) / "raw.json"),
@@ -1187,6 +1183,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
                 mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64),
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
                 mock.patch.object(
                     RUNNER, "start_capacity_daemon", side_effect=RUNNER.SmokeError("setup failed"),
@@ -1246,6 +1243,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
                 mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64),
                 mock.patch.object(RUNNER, "start_capacity_daemon", return_value=(process, daemon_output)) as start,
                 mock.patch.object(RUNNER, "command_result", return_value={}),
                 mock.patch.object(RUNNER, "benchmark_doctor_payload", return_value={}),
@@ -1259,7 +1257,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                     RUNNER,
                     create_verified_snapshot=mock.DEFAULT,
                     restore_verified_snapshot=mock.DEFAULT,
-                    verify_completed_snapshot=mock.DEFAULT,
+                    verify_active_snapshot=mock.DEFAULT,
                 ) as snapshot_api,
                 mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"),
                 mock.patch.object(
@@ -1270,7 +1268,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             ):
                 snapshot_api["create_verified_snapshot"].return_value = snapshot
                 snapshot_api["restore_verified_snapshot"].return_value = snapshot
-                snapshot_api["verify_completed_snapshot"].return_value = snapshot
+                snapshot_api["verify_active_snapshot"].return_value = snapshot
                 code, _evidence = RUNNER.run_capacity(
                     home, root, "tcp", 1, sample_count=1,
                     raw_evidence_directory=root,
@@ -1279,7 +1277,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 )
 
         self.assertEqual(code, 1)
-        self.assertEqual(start.call_count, 3)
+        self.assertEqual(start.call_count, 2)
         self.assertEqual(captured["runs"], [profile])
         self.assertEqual(captured["clean_baseline_snapshot"]["snapshot_id"], snapshot.snapshot_id)
         self.assertEqual(captured["post_restore_snapshot"]["snapshot_id"], snapshot.snapshot_id)
@@ -1344,6 +1342,41 @@ class AdmissionCapacityTests(unittest.TestCase):
             recorded["direct_sqlite_message_write"]["admissions_per_second"],
             50_000.0,
         )
+
+    def test_direct_writer_profile_requires_and_preserves_real_intervals(self):
+        payload = {
+            "kind": "canonical_core_write",
+            "requested_count": 2_000,
+            "accepted_count": 2_000,
+            "worker_count": 64,
+            "elapsed_seconds": 0.1,
+            "admissions_per_second": 20_000.0,
+            "intervals": [
+                {
+                    "requested_count": 1_000,
+                    "accepted_count": 1_000,
+                    "elapsed_seconds": 0.05,
+                    "admissions_per_second": 20_000.0,
+                },
+                {
+                    "requested_count": 1_000,
+                    "accepted_count": 1_000,
+                    "elapsed_seconds": 0.05,
+                    "admissions_per_second": 20_000.0,
+                },
+            ],
+        }
+        completed = mock.Mock(returncode=0, stdout=json.dumps(payload), stderr="")
+        roster = RUNNER.CapacityRoster("test", "team", "agent", "recipient")
+        with mock.patch.object(RUNNER.subprocess, "run", return_value=completed) as run:
+            profile, measurement = RUNNER.run_direct_production_writer_profile(
+                Path("/tmp/atm-daemon-benchmark"), {}, roster, 1_000, 2, 64,
+            )
+        self.assertEqual(measurement, payload)
+        self.assertEqual(profile["sample_count"], 2)
+        self.assertEqual(profile["intervals"][0]["admissions_per_second"], 20_000.0)
+        self.assertIn("--direct-core-write", run.call_args.args[0])
+        self.assertIn("--intervals", run.call_args.args[0])
 
     def test_profile_schema_distinguishes_minimum_from_actual_sample_count(self):
         interval = {"passed": True, "elapsed_seconds": 0.6}
@@ -1477,10 +1510,70 @@ class AdmissionCapacityTests(unittest.TestCase):
     def test_plain_benchmark_command_dispatches_the_required_four_target_matrix(self):
         with (
             mock.patch.object(sys, "argv", ["run_admission_capacity.py"]),
-            mock.patch.object(RUNNER, "run_required_f8_suite", return_value=0) as matrix,
+            mock.patch.object(RUNNER, "run_default_f8_matrix", return_value=0) as matrix,
         ):
             self.assertEqual(RUNNER.main(), 0)
         matrix.assert_called_once()
+
+    def test_default_f8_matrix_runs_targets_in_fixed_order(self):
+        observed: list[tuple[str, str | None]] = []
+
+        def run_capacity(*_args, **kwargs):
+            observed.append((kwargs["benchmark_target"], kwargs["peer_wire_security"]))
+            return 0, Path("evidence.json")
+
+        args = argparse.Namespace(
+            atm_home=None,
+            evidence_dir=Path("evidence"),
+            raw_evidence_dir=Path("raw"),
+            workers=64,
+        )
+        with mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity):
+            self.assertEqual(RUNNER.run_default_f8_matrix(args), 0)
+        self.assertEqual(
+            observed,
+            [
+                ("sqlite", None),
+                ("uds", "mutual-tls"),
+                ("tcp", "plaintext-test"),
+                ("tcp-tls", "mutual-tls"),
+            ],
+        )
+
+    def test_plaintext_baseline_bootstrap_runs_the_complete_required_set(self):
+        observed: list[tuple[int, bool, str, str]] = []
+
+        def run_capacity(*_args, **kwargs):
+            observed.append((
+                _args[3], kwargs["comparison_required"], kwargs["peer_wire_security"],
+                kwargs["benchmark_target"],
+            ))
+            return 0, Path("evidence.json")
+
+        args = argparse.Namespace(
+            atm_home=None,
+            evidence_dir=Path("evidence"),
+            raw_evidence_dir=Path("raw"),
+            workers=64,
+        )
+        with mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity):
+            self.assertEqual(RUNNER.run_plaintext_baseline_bootstrap(args), 0)
+        self.assertEqual(
+            observed,
+            [(frame, False, "plaintext-test", "tcp") for frame in RUNNER.TCP_COMPARISON_FRAMES],
+        )
+
+    def test_plaintext_baseline_bootstrap_dispatches_only_when_explicit(self):
+        with (
+            mock.patch.object(
+                sys,
+                "argv",
+                ["run_admission_capacity.py", "--bootstrap-plaintext-baseline"],
+            ),
+            mock.patch.object(RUNNER, "run_plaintext_baseline_bootstrap", return_value=0) as bootstrap,
+        ):
+            self.assertEqual(RUNNER.main(), 0)
+        bootstrap.assert_called_once()
 
     def test_main_allows_windows_tcp_without_a_comparison_reference(self):
         captured: dict[str, object] = {}
@@ -1892,6 +1985,26 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(result["connections"], 16)
         self.assertEqual(sorted(requested_connection_sizes)[0], 40)
         self.assertTrue(result["passed"])
+
+    def test_connection_worker_limit_reserves_descriptors_under_a_posix_soft_limit(self):
+        limited_resource = mock.Mock()
+        limited_resource.RLIMIT_NOFILE = 7
+        limited_resource.RLIM_INFINITY = -1
+        limited_resource.getrlimit.return_value = (256, 256)
+        with mock.patch.object(RUNNER, "resource", limited_resource):
+            self.assertEqual(RUNNER.admission_connection_worker_limit(512), 192)
+
+    def test_connection_worker_limit_keeps_requested_workers_without_rlimit_support(self):
+        with mock.patch.object(RUNNER, "resource", None):
+            self.assertEqual(RUNNER.admission_connection_worker_limit(512), 512)
+
+    def test_connection_worker_limit_keeps_requested_workers_for_an_unbounded_limit(self):
+        unlimited_resource = mock.Mock()
+        unlimited_resource.RLIMIT_NOFILE = 7
+        unlimited_resource.RLIM_INFINITY = -1
+        unlimited_resource.getrlimit.return_value = (-1, -1)
+        with mock.patch.object(RUNNER, "resource", unlimited_resource):
+            self.assertEqual(RUNNER.admission_connection_worker_limit(512), 512)
 
     def test_interval_uses_the_published_application_wire_metric_names(self):
         result = RUNNER.run_interval(

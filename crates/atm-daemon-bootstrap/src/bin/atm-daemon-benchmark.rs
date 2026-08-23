@@ -304,7 +304,7 @@ async fn run_direct_core_write(
     while intervals.len() < minimum_intervals.get()
         || started.elapsed().as_secs() < target_duration_seconds
     {
-        let interval = run_direct_core_write_interval(
+        let (interval_accepted, interval_seconds) = run_direct_core_write_interval(
             runtime.clone(),
             home.clone(),
             messages,
@@ -312,12 +312,12 @@ async fn run_direct_core_write(
             intervals.len() * messages.get(),
         )
         .await?;
-        accepted += interval.0;
+        accepted += interval_accepted;
         intervals.push(serde_json::json!({
             "requested_count": messages.get(),
-            "accepted_count": interval.0,
-            "elapsed_seconds": interval.1,
-            "admissions_per_second": interval.0 as f64 / interval.1,
+            "accepted_count": interval_accepted,
+            "elapsed_seconds": interval_seconds,
+            "admissions_per_second": interval_accepted as f64 / interval_seconds,
         }));
     }
     let elapsed_seconds = started.elapsed().as_secs_f64();
@@ -380,6 +380,12 @@ async fn run_direct_core_write_interval(
                 "direct core-write benchmark task failed: {error}"
             ))
         })??;
+    }
+    if accepted != messages.get() {
+        return Err(AtmError::daemon_unavailable(format!(
+            "direct core-write benchmark accepted {accepted} of {} messages",
+            messages.get()
+        )));
     }
     Ok((accepted, started.elapsed().as_secs_f64()))
 }

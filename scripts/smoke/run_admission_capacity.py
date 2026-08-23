@@ -57,16 +57,22 @@ from scripts.smoke.benchmark_account import (
     bootstrap_benchmark_account,
     require_benchmark_account,
 )
+from scripts.smoke.benchmark_mtls import BenchmarkMtlsError, regenerate_mtls_identity
 from scripts.smoke.benchmark_snapshot import (
     BenchmarkSnapshotError,
     VerifiedSnapshot,
     create_verified_snapshot,
     restore_verified_snapshot,
-    verify_completed_snapshot,
+    verify_active_snapshot,
 )
 
 if os.name != "nt":
     import pwd
+
+try:
+    import resource
+except ImportError:  # Windows has no POSIX rlimit API.
+    resource = None
 
 from scripts.smoke.daemon_lifecycle import (
     assert_no_process_leak,
@@ -95,8 +101,6 @@ DIRECT_PEER_TCP_PORT = 43_101
 CAPACITY_DIRECT_PEER_PORT_ENV = "ATM_CAPACITY_DIRECT_PEER_PORT"
 CROCKFORD_BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 BENCHMARK_TARGETS = {
-    # SQLite is a direct-storage target, so it does not select a peer-wire
-    # mode. The daemon itself still starts in its normal secure default.
     "sqlite": ("sqlite", None),
     "uds": ("uds", "mutual-tls"),
     "tcp": ("tcp", "plaintext-test"),
@@ -112,6 +116,11 @@ DAEMON_SWITCH = ROOT / ".claude" / "skills" / "daemon-switch" / "scripts" / "dae
 MANAGED_DAEMON_TIMEOUT_SECONDS = 120.0
 DIAGNOSTIC_SAMPLE_COUNT = 3
 DIAGNOSTIC_DURATION_SECONDS = 3.0
+# A connection worker owns one client socket while its corresponding daemon
+# child owns the peer socket. Leave enough descriptors for the Python runner,
+# subprocess pipes, and the bounded daemon control plane instead of scheduling
+# more simultaneous connections than the OS account can open.
+DESCRIPTOR_RESERVE = 64
 
 
 @dataclass(frozen=True)
@@ -658,7 +667,10 @@ def run_lifecycle_phase(
     started = time.monotonic()
     try:
         result = action()
-    except (BenchmarkSnapshotError, OSError, RuntimeError, ValueError, SmokeError, subprocess.TimeoutExpired) as error:
+    except (
+        BenchmarkMtlsError, BenchmarkSnapshotError, OSError, RuntimeError, ValueError, SmokeError,
+        subprocess.TimeoutExpired,
+    ) as error:
         finished_wall = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         evidence.setdefault("lifecycle", {}).setdefault(phase, []).append(
             {
@@ -722,12 +734,12 @@ def release_binary(name: str) -> Path:
 
 
 def canonical_writer_probe() -> Path:
-    """Build the existing test-only writer probe when sqlite evidence needs it.
+    """Build the existing direct canonical-writer probe when sqlite needs it.
 
-    The public recipe still builds only the released CLI/daemon pair.  This
-    probe is neither a daemon nor a TLS selection: it invokes the existing
-    bootstrap-owned canonical admission writer to measure the standalone
-    sqlite target without SQL shortcuts or a second HTTP pipeline.
+    The normal benchmark recipe still starts only the shipped Tokio/Axum
+    daemon.  This feature-gated helper does not create a second daemon: its
+    sole invocation is ``--direct-core-write``, which measures the existing
+    async admission/writer/commit path without an HTTP codec.
     """
     suffix = ".exe" if os.name == "nt" else ""
     probe = ROOT / "target" / "release" / f"atm-daemon-benchmark{suffix}"
@@ -1026,7 +1038,7 @@ def validate_peer_wire_security(value: str) -> str:
 def resolve_benchmark_target(
     target: str | None,
     transport: str | None,
-) -> tuple[str, str, str | None]:
+) -> tuple[str, str | None, str | None]:
     """Resolve public targets without inventing a benchmark-only transport.
 
     `tcp` deliberately selects the existing direct plaintext pipeline and
@@ -1299,6 +1311,25 @@ def submit_connection(endpoint: LocalEndpoint, requests: list[HttpRequest]) -> l
         )]
 
 
+def admission_connection_worker_limit(requested_workers: int) -> int:
+    """Bound concurrent client sockets by the process soft descriptor limit.
+
+    This is deliberately a benchmark-client concern. It does not tune or
+    modify the daemon, its transport, or the production write pipeline.
+    """
+    if requested_workers <= 0:
+        raise SmokeError("capacity workers must be positive")
+    if resource is None:
+        return requested_workers
+    try:
+        soft_limit, _hard_limit = resource.getrlimit(resource.RLIMIT_NOFILE)
+    except (OSError, ValueError):
+        return requested_workers
+    if soft_limit == resource.RLIM_INFINITY:
+        return requested_workers
+    return min(requested_workers, max(1, int(soft_limit) - DESCRIPTOR_RESERVE))
+
+
 def run_interval(
     submit: Callable[[int, int], list[AdmissionResult]],
     interval: int,
@@ -1313,8 +1344,9 @@ def run_interval(
         raise SmokeError("requested messages must be positive")
     started = time.perf_counter()
     results: list[AdmissionResult] = []
-    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="atm-capacity") as executor:
-        connections = (requested_messages + frames_per_connection - 1) // frames_per_connection
+    connections = (requested_messages + frames_per_connection - 1) // frames_per_connection
+    connection_workers = min(connections, admission_connection_worker_limit(workers))
+    with ThreadPoolExecutor(max_workers=connection_workers, thread_name_prefix="atm-capacity") as executor:
         futures = [
             executor.submit(
                 submit,
@@ -1351,6 +1383,7 @@ def run_interval(
         "admissions_per_second": accepted / elapsed_seconds if elapsed_seconds else 0.0,
         "latency_ms": latency_distribution,
         "connections": connections,
+        "connection_workers": connection_workers,
         "request_frames_per_second": len(results) / elapsed_seconds if elapsed_seconds else 0.0,
         "connections_per_second": connections / elapsed_seconds if elapsed_seconds else 0.0,
         "requested_count": requested_messages,
@@ -1461,14 +1494,13 @@ def run_direct_production_writer_profile(
     sample_count: int,
     workers: int,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Measure the real canonical Tokio write admission without raw SQL.
+    """Measure the canonical Tokio admission writer without raw SQL or HTTP.
 
-    The owned daemon is deliberately stopped before this subprocess opens the
-    dedicated benchmark account.  Its `--direct-core-write` entrypoint calls
-    ``prepare_write_with_async_runtime`` and therefore exercises the same
-    roster validation, async writer queue, batch transaction, commit, and
-    reply-after-commit path as the released daemon, while excluding only the
-    public wire codec that the UDS/TCP targets measure separately.
+    The benchmark-owned daemon first creates the disposable roster and is then
+    stopped.  The direct binary calls ``prepare_write_with_async_runtime`` so
+    this lane includes the canonical write preparation, writer queue, batch
+    transaction, commit, and post-commit response decision; it excludes only
+    the public socket/codec measured by UDS and TCP.
     """
     direct_environment = dict(environment)
     direct_environment.update(
@@ -1522,6 +1554,7 @@ def run_direct_production_writer_profile(
                 "admissions_per_second": rate,
                 "latency_ms": {"min": 0.0, "p50": 0.0, "p95": 0.0, "max": 0.0},
                 "connections": 0,
+                "connection_workers": 0,
                 "request_frames_per_second": rate,
                 "connections_per_second": 0.0,
                 "requested_count": requested,
@@ -1534,7 +1567,6 @@ def run_direct_production_writer_profile(
                 "passed": accepted == requested,
             }
         )
-    run_duration = sum(float(item["elapsed_seconds"]) for item in intervals)
     return (
         {
             "operation": "canonical_production_writer",
@@ -1543,7 +1575,7 @@ def run_direct_production_writer_profile(
             "minimum_sample_count": sample_count,
             "sample_count": len(intervals),
             "target_duration_s": TARGET_PROFILE_DURATION_SECONDS,
-            "run_duration_s": run_duration,
+            "run_duration_s": sum(float(item["elapsed_seconds"]) for item in intervals),
             "intervals": intervals,
             "passed": all(item["passed"] for item in intervals),
         },
@@ -1742,7 +1774,15 @@ def run_capacity(
         )
     benchmark_account = require_capacity_benchmark_account()
     transport = validate_transport(transport)
-    peer_wire_security = validate_peer_wire_security(peer_wire_security)
+    if transport == "sqlite":
+        if peer_wire_security is not None:
+            raise SmokeError("sqlite capacity target must not select a peer-wire security mode")
+        launch_peer_wire_security = "mutual-tls"
+    else:
+        if peer_wire_security is None:
+            raise SmokeError("public capacity target requires an explicit peer-wire security mode")
+        peer_wire_security = validate_peer_wire_security(peer_wire_security)
+        launch_peer_wire_security = peer_wire_security
     if frames_per_connection not in SPARSE_FRAMES_PER_CONNECTION:
         raise SmokeError(f"frames per connection must be one of {SPARSE_FRAMES_PER_CONNECTION}")
     if requested_messages <= 0:
@@ -1792,7 +1832,9 @@ def run_capacity(
         "host_arch": platform.machine().lower(),
         "command": target_command,
         "release": {"atm": str(atm), "atm_daemon": str(daemon)},
-        "execution_daemon": "direct_production_writer" if transport == "sqlite" else "shipped_atm_daemon",
+        "execution_daemon": (
+            "direct_production_writer" if transport == "sqlite" else "shipped_atm_daemon"
+        ),
         "atm_home": str(home),
         "host_state_isolation": isolation_mode,
         "managed_log_level": managed_log_level,
@@ -1830,10 +1872,12 @@ def run_capacity(
         process = None
         daemon_output = None
 
-    def start_and_doctor(mode: str = peer_wire_security) -> None:
+    def start_and_doctor() -> None:
         """Start the exact released daemon and require its public ready response."""
         nonlocal process, daemon_output
-        process, daemon_output = start_capacity_daemon(daemon, home, env, mode)
+        process, daemon_output = start_capacity_daemon(
+            daemon, home, env, launch_peer_wire_security,
+        )
         doctor = command_result(
             [str(atm), "doctor", "--json"],
             timeout=10.0,
@@ -1851,29 +1895,13 @@ def run_capacity(
         )
         before = count_atm_daemon_processes()
         home.mkdir(parents=True, exist_ok=False)
-        if benchmark_target == "tcp-tls":
-            # Peer configuration uses the daemon's ordinary local API.  It
-            # must exist before the mTLS runtime validates that configuration,
-            # so a bounded plaintext control-plane daemon persists the
-            # disposable state and is stopped before the measured mTLS launch.
-            run_lifecycle_phase(evidence, "snapshot", lambda: start_and_doctor("plaintext-test"))
-            mtls_identity = run_lifecycle_phase(
+        if launch_peer_wire_security == "mutual-tls":
+            fingerprint = run_lifecycle_phase(
                 evidence,
                 "snapshot",
-                lambda: provision_disposable_mtls_identity(
-                    atm, env, home, roster, direct_peer_port,
-                ),
+                lambda: regenerate_mtls_identity(benchmark_account, atm),
             )
-            evidence["disposable_mtls"] = {
-                "authority": mtls_identity.host,
-                "fingerprint_sha256": mtls_identity.fingerprint,
-                "direct_peer_port": direct_peer_port,
-            }
-            run_lifecycle_phase(
-                evidence,
-                "stop",
-                lambda: stop_owned_daemon(output_key="mtls_setup_daemon_output"),
-            )
+            evidence["benchmark_mtls_identity"] = {"fingerprint": fingerprint, "path": "account-local"}
         # The pre-roster daemon is deliberately short-lived: it initializes
         # the account database, then is quiesced before the public snapshot
         # owner copies the clean baseline.
@@ -1909,30 +1937,20 @@ def run_capacity(
                 )
             }
         else:
-            endpoint = (
-                direct_peer_endpoint(
-                    direct_peer_port,
-                    mtls_identity if peer_wire_security == "mutual-tls" else None,
-                )
-                if transport == "tcp"
-                else local_endpoint(transport)
-            )
+            endpoint = local_endpoint(transport)
             evidence["endpoint"] = {
                 "transport": endpoint.kind,
                 "address": endpoint.address,
-                "direct_peer": endpoint.direct_peer,
-                "tls_server_name": endpoint.tls_server_name,
             }
             if endpoint.kind == "uds" and not Path(str(endpoint.address)).exists():
                 raise SmokeError(f"daemon did not publish public local socket {endpoint.address}")
-            if not endpoint.direct_peer:
-                evidence["operational_checks"]["cached_roster_heartbeat"] = run_lifecycle_phase(
-                    evidence,
-                    "profile",
-                    lambda: run_cached_roster_heartbeat_probe(
-                        endpoint, home, frames_per_connection, workers, roster,
-                    ),
-                )
+            evidence["operational_checks"]["cached_roster_heartbeat"] = run_lifecycle_phase(
+                evidence,
+                "profile",
+                lambda: run_cached_roster_heartbeat_probe(
+                    endpoint, home, frames_per_connection, workers, roster,
+                ),
+            )
             profile = run_lifecycle_phase(
                 evidence,
                 "profile",
@@ -1991,10 +2009,14 @@ def run_capacity(
                 evidence["restored_clean_baseline"] = snapshot_evidence(restored)
 
                 def verify_clean_baseline() -> None:
-                    start_and_doctor()
-                    verified = verify_completed_snapshot(snapshot.snapshot_id)
+                    # Keep the daemon stopped: a post-restore start can recreate
+                    # SQLite sidecars and invalidate the exact clean baseline.
+                    verified = verify_active_snapshot(snapshot.snapshot_id)
                     evidence["post_restore_snapshot"] = snapshot_evidence(verified)
-                    evidence["doctor_after_restore"] = {"status": "passed"}
+                    evidence["restored_live_database"] = {
+                        **snapshot_evidence(verified),
+                        "sidecars_absent": True,
+                    }
 
                 run_lifecycle_phase(evidence, "post_restore_verify", verify_clean_baseline)
                 run_lifecycle_phase(evidence, "cleanup", stop_owned_daemon)
@@ -2115,12 +2137,91 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
     return 0 if all(code == 0 for code in codes) else 1
 
 
+def run_default_f8_matrix(args: argparse.Namespace) -> int:
+    """Run the ordinary four-target f8 suite in its fixed, comparable order."""
+    codes: list[int] = []
+    for position, (target, (transport, peer_wire_security)) in enumerate(
+        BENCHMARK_TARGETS.items(), start=1,
+    ):
+        if args.atm_home is None:
+            with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temporary:
+                home = Path(temporary) / f"{CAPACITY_ROOT_PREFIX}{position}"
+                code, evidence = run_capacity(
+                    home, args.evidence_dir, transport, 8,
+                    workers=args.workers,
+                    comparison_required=False,
+                    raw_evidence_directory=args.raw_evidence_dir,
+                    peer_wire_security=peer_wire_security,
+                    benchmark_target=target,
+                )
+        else:
+            home = args.atm_home / f"{CAPACITY_ROOT_PREFIX}{position}"
+            code, evidence = run_capacity(
+                home, args.evidence_dir, transport, 8,
+                workers=args.workers,
+                comparison_required=False,
+                raw_evidence_directory=args.raw_evidence_dir,
+                peer_wire_security=peer_wire_security,
+                benchmark_target=target,
+            )
+        codes.append(code)
+        print(f"{'PASS' if code == 0 else 'FAIL'} f8 target {target}: {evidence}")
+    return 0 if all(code == 0 for code in codes) else 1
+
+
+def run_plaintext_baseline_bootstrap(args: argparse.Namespace) -> int:
+    """Establish the explicit six-frame TCP baseline for a clean benchmark account.
+
+    This is deliberately a one-time, opt-in bootstrap.  Ordinary focused TCP
+    runs continue to require this accepted same-host evidence; otherwise the
+    first new benchmark account could never create the complete comparison set
+    that the gate requires.
+    """
+    codes: list[int] = []
+    for position, frames_per_connection in enumerate(TCP_COMPARISON_FRAMES, start=1):
+        if args.atm_home is None:
+            with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temporary:
+                home = Path(temporary) / f"{CAPACITY_ROOT_PREFIX}{position}"
+                code, evidence = run_capacity(
+                    home, args.evidence_dir, "tcp", frames_per_connection,
+                    workers=args.workers,
+                    comparison_required=False,
+                    raw_evidence_directory=args.raw_evidence_dir,
+                    peer_wire_security="plaintext-test",
+                    benchmark_target="tcp",
+                )
+        else:
+            home = args.atm_home / f"{CAPACITY_ROOT_PREFIX}{position}"
+            code, evidence = run_capacity(
+                home, args.evidence_dir, "tcp", frames_per_connection,
+                workers=args.workers,
+                comparison_required=False,
+                raw_evidence_directory=args.raw_evidence_dir,
+                peer_wire_security="plaintext-test",
+                benchmark_target="tcp",
+            )
+        codes.append(code)
+        print(
+            f"{'PASS' if code == 0 else 'FAIL'} plaintext baseline "
+            f"f{frames_per_connection}: {evidence}"
+        )
+    return 0 if all(code == 0 for code in codes) else 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--bootstrap-benchmark-account",
         action="store_true",
         help="create the account-local benchmark manifest; refuses an account with existing ATM state",
+    )
+    parser.add_argument(
+        "--bootstrap-plaintext-baseline",
+        action="store_true",
+        help=(
+            "one-time dedicated-account bootstrap for the complete six-frame "
+            "same-host plaintext TCP comparison set"
+        ),
     )
     parser.add_argument("--atm-home", type=Path)
     parser.add_argument(
@@ -2142,8 +2243,8 @@ def main() -> int:
         "--target",
         choices=tuple(BENCHMARK_TARGETS),
         help=(
-            "public peer-wire benchmark target: `tcp` selects plaintext-test; "
-            "`tcp-tls` selects mutual TLS"
+            "one focused benchmark target; without a target the ordinary command runs "
+            "the required sqlite, UDS, plaintext TCP, and mTLS TCP f8 matrix"
         ),
     )
     parser.add_argument("--transport")
@@ -2175,15 +2276,19 @@ def main() -> int:
             raise SmokeError(f"benchmark-account bootstrap failed: {error}") from error
         print(f"benchmark-account manifest created: {account.manifest_path}")
         return 0
-    selected_profile = any(
-        (args.target, args.transport, args.frames_per_connection, args.sustained, args.baseline)
-    )
-    if not selected_profile:
-        if args.diagnostic_only:
-            raise SmokeError("diagnostic-only requires an explicit selected profile")
-        return run_required_f8_suite(args)
+    if args.bootstrap_plaintext_baseline:
+        if any((
+            args.target, args.transport, args.frames_per_connection, args.sustained, args.baseline,
+        )):
+            parser.error("--bootstrap-plaintext-baseline cannot be combined with target/profile options")
+        return run_plaintext_baseline_bootstrap(args)
+    if not any((args.target, args.transport, args.frames_per_connection, args.sustained, args.baseline)):
+        return run_default_f8_matrix(args)
     if not args.diagnostic_only:
-        raise SmokeError("selected benchmark profiles require --diagnostic-only and cannot be suite evidence")
+        raise SmokeError(
+            "selected benchmark target, transport, profile, or baseline options "
+            "require --diagnostic-only"
+        )
     transport, peer_wire_security, benchmark_target = resolve_benchmark_target(
         args.target, args.transport,
     )
@@ -2220,7 +2325,7 @@ def main() -> int:
                     raise SmokeError("UDS multi-frame profile requires the current UDS one-frame reference")
                 comparison_median = uds_one_frame_median
                 comparison_strict = True
-        else:
+        elif transport == "tcp":
             # Connection setup dominates one/two-frame TCP.  Keep an explicit
             # short-frame floor instead of hiding it, while retaining the
             # stricter batching-parity floor where frames amortize setup.

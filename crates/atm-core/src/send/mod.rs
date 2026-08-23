@@ -404,9 +404,12 @@ impl PreparedWrite {
                 message,
                 post_write.delivery_snapshot.recipient_pane_id.as_ref(),
             )?;
-            if let Some(dispatch) =
-                hook::build_built_in_dispatch(runtime, &post_write.delivery_snapshot, &event)
-            {
+            if let Some(dispatch) = hook::build_built_in_dispatch(
+                runtime,
+                &post_write.delivery_snapshot,
+                &event,
+                &message.envelope.text,
+            ) {
                 dispatches.push(dispatch);
             }
         }

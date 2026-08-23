@@ -1,14 +1,28 @@
 set windows-shell := ["pwsh", "-NoLogo", "-Command"]
 
-python_cmd := if os_family() == "windows" { "python" } else { "python3" }
-clippy_cmd := if os_family() == "windows" { "cargo clippy --workspace --all-targets --target x86_64-pc-windows-msvc -- -D warnings" } else { "cargo clippy --workspace --all-targets -- -D warnings" }
+# Homebrew is absent from non-interactive macOS account PATHs. Append its
+# standard location as a developer-account fallback, never ahead of the
+# interpreter selected by CI (for example actions/setup-python's 3.14.7).
+# The bootstrap script verifies the exact patch release before doing any work.
+seed_python_cmd := if os_family() == "windows" { "python" } else { "env PATH=\"$PATH:/opt/homebrew/bin\" python3.14" }
+# Keep the bootstrap venv first in PATH as well as executing its Python
+# directly. The path is absolute so helpers remain pinned after changing cwd;
+# PyO3 additionally receives its interpreter explicitly.
+python_cmd := if os_family() == "windows" { "$env:PATH = \"$PWD\\.bootstrap-venv\\Scripts;\" + $env:PATH; & \"$PWD\\.bootstrap-venv\\Scripts\\python.exe\"" } else { "env PATH=\"$PWD/.bootstrap-venv/bin:$PATH\" \"$PWD/.bootstrap-venv/bin/python\"" }
+clippy_cmd := if os_family() == "windows" { "$env:PATH = \"$PWD\\.bootstrap-venv\\Scripts;\" + $env:PATH; $env:PYO3_PYTHON = \"$PWD\\.bootstrap-venv\\Scripts\\python.exe\"; cargo clippy --workspace --all-targets --target x86_64-pc-windows-msvc -- -D warnings" } else { "env PATH=\"$PWD/.bootstrap-venv/bin:$PATH\" PYO3_PYTHON=\"$PWD/.bootstrap-venv/bin/python\" cargo clippy --workspace --all-targets -- -D warnings" }
 
 # Show the curated repo task help.
 default: help
 
 # Show the curated repo task help.
 help:
-    {{python_cmd}} .just/print_help.py
+    {{seed_python_cmd}} .just/print_help.py
+
+# Install and verify the exact toolchain/dependency contract shared by CI and
+# deterministic benchmark accounts. The seed Python, Rust, and Just versions
+# must already match tools/bootstrap.toml; this recipe never selects "latest".
+bootstrap *args:
+    {{seed_python_cmd}} tools/bootstrap.py {{args}}
 
 [private]
 _fmt-write:
@@ -150,6 +164,10 @@ reports-index *args:
 # Build the PyO3 extension with Maturin and prove Python can import it.
 test-graft-python:
     {{python_cmd}} scripts/test_atm_graft_python.py
+
+# Run the benchmark-runner unit tests with the repository bootstrap Python.
+test-admission-capacity:
+    {{python_cmd}} -m unittest scripts/smoke/test_run_admission_capacity.py
 
 # Build the PyO3 extension and run the Hermes graft reference-adapter tests.
 test-hermes-graft-bridge:

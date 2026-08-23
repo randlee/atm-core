@@ -42,12 +42,13 @@ def count_atm_daemon_processes() -> list[int]:
             if len(columns) > 1 and columns[1].isdigit():
                 pids.append(int(columns[1]))
         return pids
+    # A capacity run owns only the daemon processes started by its isolated OS
+    # account.  A different account's daemon has a separate ATM home, UDS
+    # path, and dynamically selected loopback endpoint, so rejecting it here
+    # would be a false positive (and must never lead to terminating it).
+    owner_uid = os.getuid()
     completed = subprocess.run(
-        # The physical benchmark account must be isolated from the interactive
-        # account, not from every ATM daemon on the machine.  ``ps -x`` limits
-        # this scan to the executing OS user; global ``ps -ax`` incorrectly
-        # rejected a safe account whenever another user ran ATM.
-        ["ps", "-x", "-o", "pid=,command="],
+        ["ps", "-axo", "uid=,pid=,command="],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -62,12 +63,13 @@ def count_atm_daemon_processes() -> list[int]:
         stripped = line.strip()
         if not stripped:
             continue
-        parts = stripped.split(None, 1)
-        if len(parts) != 2 or not parts[0].isdigit():
+        parts = stripped.split(None, 2)
+        if len(parts) != 3 or not parts[0].isdigit() or not parts[1].isdigit():
             continue
-        pid = int(parts[0])
-        executable = parts[1].split(None, 1)[0]
-        if os.path.basename(executable) == daemon_name:
+        process_uid = int(parts[0])
+        pid = int(parts[1])
+        executable = parts[2].split(None, 1)[0]
+        if process_uid == owner_uid and os.path.basename(executable) == daemon_name:
             pids.append(pid)
     return pids
 

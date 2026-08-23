@@ -1,0 +1,9 @@
+# This file is deliberately a fully exact closure for the Python packages that
+# `just lint`, the test helpers, and the physical benchmark harness import.
+annotated-types==0.8.0
+codespell==2.4.3
+maturin==1.14.1
+pydantic==2.13.4
+pydantic-core==2.46.4
+typing-extensions==4.16.0
+typing-inspection==0.4.4

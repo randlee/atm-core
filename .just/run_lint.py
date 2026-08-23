@@ -19,6 +19,13 @@ from lint_common import workspace_crate_section_lines
 from lint_common import write_log
 
 
+if sys.platform == "win32":
+    # Cross-host diagnostics may contain Unicode that the legacy Windows
+    # console code page cannot encode.
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+
 PYTHON_LINT_ORDER = (
     "version",
     "boundaries",
