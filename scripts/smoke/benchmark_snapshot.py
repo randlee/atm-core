@@ -273,6 +273,11 @@ def _parse_verified_snapshot(account: BenchmarkAccount, snapshot_id: str) -> Ver
 def create_verified_snapshot() -> VerifiedSnapshot:
     """Create and atomically publish a verified snapshot for this account only.
 
+    The caller must first stop the dedicated benchmark account's sole daemon
+    writer. The sidecar check below is the immediate enforcement point; the
+    runner owns the surrounding stop-to-snapshot lifecycle and therefore
+    leaves no writer in that interval.
+
     A failed attempt deliberately leaves its hidden staging directory in place
     for diagnosis, but no completed snapshot manifest becomes a restore
     candidate until the database is consistent, fsynced, and hash-verified.

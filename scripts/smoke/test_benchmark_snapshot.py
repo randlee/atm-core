@@ -202,6 +202,23 @@ class BenchmarkSnapshotTests(unittest.TestCase):
             root = account.home / ".atm" / SNAPSHOT.SNAPSHOT_ROOT_NAME
             self.assertFalse(root.exists())
 
+    def test_snapshot_copies_closed_wal_journal_database_without_sidecars(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            account = self._account(Path(temporary))
+            database = self._database(account, 1)
+            with closing(sqlite3.connect(database)) as connection:
+                self.assertEqual(connection.execute("PRAGMA journal_mode = WAL").fetchone(), ("wal",))
+                connection.execute("INSERT INTO entries(value) VALUES (99)")
+                connection.commit()
+
+            self.assertFalse(database.with_name(f"{database.name}-wal").exists())
+            self.assertFalse(database.with_name(f"{database.name}-shm").exists())
+            snapshot = self._snapshot(account)
+
+            with closing(sqlite3.connect(snapshot.database)) as connection:
+                observed = connection.execute("SELECT COUNT(*) FROM entries").fetchone()
+            self.assertEqual(observed, (2,))
+
     def test_account_validation_fails_before_any_sqlite_operation(self):
         failure = ACCOUNT.BenchmarkAccountError("manifest is missing")
         for operation in (
