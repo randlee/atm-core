@@ -1474,6 +1474,14 @@ class AdmissionCapacityTests(unittest.TestCase):
                 RUNNER.main()
         selected.assert_not_called()
 
+    def test_plain_benchmark_command_dispatches_the_required_four_target_matrix(self):
+        with (
+            mock.patch.object(sys, "argv", ["run_admission_capacity.py"]),
+            mock.patch.object(RUNNER, "run_required_f8_suite", return_value=0) as matrix,
+        ):
+            self.assertEqual(RUNNER.main(), 0)
+        matrix.assert_called_once()
+
     def test_main_allows_windows_tcp_without_a_comparison_reference(self):
         captured: dict[str, object] = {}
 
@@ -1568,14 +1576,14 @@ class AdmissionCapacityTests(unittest.TestCase):
             RUNNER.MISSING_PLAINTEXT_BASELINE,
         )
 
-    def test_matrix_keeps_local_targets_independent_of_the_peer_wire(self):
+    def test_matrix_uses_the_documented_secure_default_for_local_daemon_targets(self):
         self.assertEqual(
             RUNNER.resolve_benchmark_target("sqlite", None),
-            ("sqlite", "plaintext-test", "sqlite"),
+            ("sqlite", None, "sqlite"),
         )
         self.assertEqual(
             RUNNER.resolve_benchmark_target("uds", None),
-            ("uds", "plaintext-test", "uds"),
+            ("uds", "mutual-tls", "uds"),
         )
 
     def test_tcp_target_uses_explicit_direct_peer_listener_not_local_http_record(self):
