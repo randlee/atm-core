@@ -1,6 +1,7 @@
 """Focused unit tests for the AI.33 public admission-capacity runner."""
 from __future__ import annotations
 
+import argparse
 import contextlib
 import importlib.util
 import inspect
@@ -1207,6 +1208,41 @@ class AdmissionCapacityTests(unittest.TestCase):
             50_000.0,
         )
 
+    def test_direct_writer_profile_requires_and_preserves_real_intervals(self):
+        payload = {
+            "kind": "canonical_core_write",
+            "requested_count": 2_000,
+            "accepted_count": 2_000,
+            "worker_count": 64,
+            "elapsed_seconds": 0.1,
+            "admissions_per_second": 20_000.0,
+            "intervals": [
+                {
+                    "requested_count": 1_000,
+                    "accepted_count": 1_000,
+                    "elapsed_seconds": 0.05,
+                    "admissions_per_second": 20_000.0,
+                },
+                {
+                    "requested_count": 1_000,
+                    "accepted_count": 1_000,
+                    "elapsed_seconds": 0.05,
+                    "admissions_per_second": 20_000.0,
+                },
+            ],
+        }
+        completed = mock.Mock(returncode=0, stdout=json.dumps(payload), stderr="")
+        roster = RUNNER.CapacityRoster("test", "team", "agent", "recipient")
+        with mock.patch.object(RUNNER.subprocess, "run", return_value=completed) as run:
+            profile, measurement = RUNNER.run_direct_production_writer_profile(
+                Path("/tmp/atm-daemon-benchmark"), {}, roster, 1_000, 2, 64,
+            )
+        self.assertEqual(measurement, payload)
+        self.assertEqual(profile["sample_count"], 2)
+        self.assertEqual(profile["intervals"][0]["admissions_per_second"], 20_000.0)
+        self.assertIn("--direct-core-write", run.call_args.args[0])
+        self.assertIn("--intervals", run.call_args.args[0])
+
     def test_profile_schema_distinguishes_minimum_from_actual_sample_count(self):
         interval = {"passed": True, "elapsed_seconds": 0.6}
         with mock.patch.object(RUNNER, "run_interval", return_value=interval):
@@ -1332,9 +1368,42 @@ class AdmissionCapacityTests(unittest.TestCase):
             mock.patch.object(sys, "argv", ["run_admission_capacity.py", "--transport", "invalid"]),
             mock.patch.object(RUNNER, "selected_profiles") as selected,
         ):
-            with self.assertRaisesRegex(RUNNER.SmokeError, "must be `uds` or `tcp`"):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "must be `sqlite`, `uds`, or `tcp`"):
                 RUNNER.main()
         selected.assert_not_called()
+
+    def test_plain_benchmark_command_dispatches_the_required_four_target_matrix(self):
+        with (
+            mock.patch.object(sys, "argv", ["run_admission_capacity.py"]),
+            mock.patch.object(RUNNER, "run_default_f8_matrix", return_value=0) as matrix,
+        ):
+            self.assertEqual(RUNNER.main(), 0)
+        matrix.assert_called_once()
+
+    def test_default_f8_matrix_runs_targets_in_fixed_order(self):
+        observed: list[tuple[str, str | None]] = []
+
+        def run_capacity(*_args, **kwargs):
+            observed.append((kwargs["benchmark_target"], kwargs["peer_wire_security"]))
+            return 0, Path("evidence.json")
+
+        args = argparse.Namespace(
+            atm_home=None,
+            evidence_dir=Path("evidence"),
+            raw_evidence_dir=Path("raw"),
+            workers=64,
+        )
+        with mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity):
+            self.assertEqual(RUNNER.run_default_f8_matrix(args), 0)
+        self.assertEqual(
+            observed,
+            [
+                ("sqlite", None),
+                ("uds", "mutual-tls"),
+                ("tcp", "plaintext-test"),
+                ("tcp-tls", "mutual-tls"),
+            ],
+        )
 
     def test_main_allows_windows_tcp_without_a_comparison_reference(self):
         captured: dict[str, object] = {}

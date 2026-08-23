@@ -85,6 +85,8 @@ DAEMON_OUTPUT_TAIL_LINES = 200
 GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
 PEER_WIRE_SECURITY_MODES = ("mutual-tls", "plaintext-test")
 BENCHMARK_TARGETS = {
+    "sqlite": ("sqlite", None),
+    "uds": ("uds", "mutual-tls"),
     "tcp": ("tcp", "plaintext-test"),
     "tcp-tls": ("tcp", "mutual-tls"),
 }
@@ -614,6 +616,38 @@ def release_binary(name: str) -> Path:
     return path
 
 
+def canonical_writer_probe() -> Path:
+    """Build the existing direct canonical-writer probe when sqlite needs it.
+
+    The normal benchmark recipe still starts only the shipped Tokio/Axum
+    daemon.  This feature-gated helper does not create a second daemon: its
+    sole invocation is ``--direct-core-write``, which measures the existing
+    async admission/writer/commit path without an HTTP codec.
+    """
+    suffix = ".exe" if os.name == "nt" else ""
+    probe = ROOT / "target" / "release" / f"atm-daemon-benchmark{suffix}"
+    if probe.is_file():
+        return probe
+    try:
+        result = subprocess.run(
+            [
+                "cargo", "build", "--release", "-p", "atm-daemon-bootstrap",
+                "--features", "benchmark-harness", "--bin", "atm-daemon-benchmark",
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=600.0,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise SmokeError(f"could not build canonical sqlite writer probe: {error}") from error
+    if result.returncode != 0 or not probe.is_file():
+        detail = result.stderr.strip() or result.stdout.strip() or "no executable produced"
+        raise SmokeError(f"could not build canonical sqlite writer probe: {detail}")
+    return probe
+
+
 def source_revision() -> str:
     """Bind retained benchmark evidence to the checkout that built the daemon."""
     result = subprocess.run(
@@ -824,10 +858,10 @@ def cached_roster_heartbeat_body(
 
 def validate_transport(transport: str) -> str:
     """Keep platform transport selection explicit and comparable."""
-    if transport not in {"uds", "tcp"}:
-        raise SmokeError("capacity transport must be `uds` or `tcp`")
-    if os.name == "nt" and transport != "tcp":
-        raise SmokeError("Windows capacity benchmarking supports only `tcp`")
+    if transport not in {"sqlite", "uds", "tcp"}:
+        raise SmokeError("capacity transport must be `sqlite`, `uds`, or `tcp`")
+    if os.name == "nt" and transport == "uds":
+        raise SmokeError("Windows capacity benchmarking does not support UDS")
     return transport
 
 
@@ -843,7 +877,7 @@ def validate_peer_wire_security(value: str) -> str:
 def resolve_benchmark_target(
     target: str | None,
     transport: str | None,
-) -> tuple[str, str, str | None]:
+) -> tuple[str, str | None, str | None]:
     """Resolve public targets without inventing a benchmark-only transport.
 
     `tcp` deliberately selects the existing direct plaintext pipeline and
@@ -864,6 +898,8 @@ def resolve_benchmark_target(
 def local_endpoint(transport: str) -> LocalEndpoint:
     """Resolve the documented UDS/TCP public API without a dispatcher seam."""
     runtime = os_account_home() / ".atm" / "daemon"
+    if transport == "sqlite":
+        raise SmokeError("sqlite capacity target has no public socket endpoint")
     if transport == "uds":
         return LocalEndpoint("uds", str(runtime / "atm-daemon.sock"))
     try:
@@ -1118,6 +1154,103 @@ def run_profile(
     }
 
 
+def run_direct_production_writer_profile(
+    benchmark_binary: Path,
+    environment: dict[str, str],
+    roster: CapacityRoster,
+    requested_messages: int,
+    sample_count: int,
+    workers: int,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Measure the canonical Tokio admission writer without raw SQL or HTTP.
+
+    The benchmark-owned daemon first creates the disposable roster and is then
+    stopped.  The direct binary calls ``prepare_write_with_async_runtime`` so
+    this lane includes the canonical write preparation, writer queue, batch
+    transaction, commit, and post-commit response decision; it excludes only
+    the public socket/codec measured by UDS and TCP.
+    """
+    direct_environment = dict(environment)
+    direct_environment.update(
+        {
+            "ATM_CAPACITY_CORE_TEAM": roster.team,
+            "ATM_CAPACITY_CORE_AGENT": roster.agent,
+            "ATM_CAPACITY_CORE_RECIPIENT": roster.recipient,
+        }
+    )
+    result = subprocess.run(
+        [
+            str(benchmark_binary), "--direct-core-write", str(requested_messages),
+            "--workers", str(workers), "--intervals", str(sample_count),
+            "--seconds", str(int(TARGET_PROFILE_DURATION_SECONDS)),
+        ],
+        cwd=ROOT,
+        env=direct_environment,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=TARGET_PROFILE_DURATION_SECONDS + 60.0,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip() or "no diagnostic output"
+        raise SmokeError(f"direct production-writer benchmark failed: {detail}")
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise SmokeError("direct production-writer benchmark returned malformed JSON") from error
+    if not isinstance(payload, dict) or payload.get("kind") != "canonical_core_write":
+        raise SmokeError("direct production-writer benchmark returned the wrong measurement kind")
+    direct_intervals = payload.get("intervals")
+    if not isinstance(direct_intervals, list) or len(direct_intervals) < sample_count:
+        raise SmokeError("direct production-writer benchmark returned too few intervals")
+    intervals: list[dict[str, Any]] = []
+    for index, item in enumerate(direct_intervals, start=1):
+        if not isinstance(item, dict):
+            raise SmokeError("direct production-writer interval is malformed")
+        accepted = int(item.get("accepted_count", -1))
+        requested = int(item.get("requested_count", -1))
+        elapsed = float(item.get("elapsed_seconds", 0.0))
+        rate = float(item.get("admissions_per_second", 0.0))
+        if requested != requested_messages or accepted < 0 or accepted > requested or elapsed <= 0 or rate < 0:
+            raise SmokeError("direct production-writer interval has invalid counts or timing")
+        intervals.append(
+            {
+                "interval": index,
+                "accepted_count": accepted,
+                "response_count": accepted,
+                "elapsed_seconds": elapsed,
+                "admissions_per_second": rate,
+                "latency_ms": {"min": 0.0, "p50": 0.0, "p95": 0.0, "max": 0.0},
+                "connections": 0,
+                "connection_workers": 0,
+                "request_frames_per_second": rate,
+                "connections_per_second": 0.0,
+                "requested_count": requested,
+                "time_to_send_1k_s": elapsed * (1_000 / max(accepted, 1)),
+                "application_wire_bytes": {"request": 0, "response": 0, "total": 0},
+                "application_wire_bytes_per_second": 0.0,
+                "error_free": accepted == requested,
+                "bytes_per_second": 0.0,
+                "first_failure": None if accepted == requested else "direct production writer accepted fewer messages than requested",
+                "passed": accepted == requested,
+            }
+        )
+    return (
+        {
+            "operation": "canonical_production_writer",
+            "recipient": f"{roster.recipient}@{roster.team}",
+            "requested_messages_per_sample": requested_messages,
+            "minimum_sample_count": sample_count,
+            "sample_count": len(intervals),
+            "target_duration_s": TARGET_PROFILE_DURATION_SECONDS,
+            "run_duration_s": sum(float(item["elapsed_seconds"]) for item in intervals),
+            "intervals": intervals,
+            "passed": all(item["passed"] for item in intervals),
+        },
+        payload,
+    )
+
+
 def run_cached_roster_heartbeat_probe(
     endpoint: LocalEndpoint,
     home: Path,
@@ -1308,7 +1441,15 @@ def run_capacity(
         )
     benchmark_account = require_capacity_benchmark_account()
     transport = validate_transport(transport)
-    peer_wire_security = validate_peer_wire_security(peer_wire_security)
+    if transport == "sqlite":
+        if peer_wire_security is not None:
+            raise SmokeError("sqlite capacity target must not select a peer-wire security mode")
+        launch_peer_wire_security = "mutual-tls"
+    else:
+        if peer_wire_security is None:
+            raise SmokeError("public capacity target requires an explicit peer-wire security mode")
+        peer_wire_security = validate_peer_wire_security(peer_wire_security)
+        launch_peer_wire_security = peer_wire_security
     if frames_per_connection not in SPARSE_FRAMES_PER_CONNECTION:
         raise SmokeError(f"frames per connection must be one of {SPARSE_FRAMES_PER_CONNECTION}")
     if requested_messages <= 0:
@@ -1319,6 +1460,7 @@ def run_capacity(
     home = validate_capacity_home(atm_home)
     atm = release_binary("atm")
     daemon = release_binary("atm-daemon")
+    direct_writer = canonical_writer_probe() if transport == "sqlite" else None
     roster = CapacityRoster.unique()
     env = runtime_environment(home, roster)
     target_command = (
@@ -1352,7 +1494,9 @@ def run_capacity(
         "host_arch": platform.machine().lower(),
         "command": target_command,
         "release": {"atm": str(atm), "atm_daemon": str(daemon)},
-        "execution_daemon": "shipped_atm_daemon",
+        "execution_daemon": (
+            "direct_production_writer" if transport == "sqlite" else "shipped_atm_daemon"
+        ),
         "atm_home": str(home),
         "host_state_isolation": isolation_mode,
         "managed_log_level": managed_log_level,
@@ -1393,7 +1537,9 @@ def run_capacity(
     def start_and_doctor() -> None:
         """Start the exact released daemon and require its public ready response."""
         nonlocal process, daemon_output
-        process, daemon_output = start_capacity_daemon(daemon, home, env, peer_wire_security)
+        process, daemon_output = start_capacity_daemon(
+            daemon, home, env, launch_peer_wire_security,
+        )
         doctor = command_result(
             [str(atm), "doctor", "--json"],
             timeout=10.0,
@@ -1411,7 +1557,7 @@ def run_capacity(
         )
         before = count_atm_daemon_processes()
         home.mkdir(parents=True, exist_ok=False)
-        if peer_wire_security == "mutual-tls":
+        if launch_peer_wire_security == "mutual-tls":
             fingerprint = run_lifecycle_phase(
                 evidence,
                 "snapshot",
@@ -1434,28 +1580,47 @@ def run_capacity(
         run_lifecycle_phase(
             evidence, "profile", lambda: prepare_capacity_roster(atm, env, home, roster),
         )
-        endpoint = local_endpoint(transport)
-        evidence["endpoint"] = {
-            "transport": endpoint.kind,
-            "address": endpoint.address,
-        }
-        if endpoint.kind == "uds" and not Path(str(endpoint.address)).exists():
-            raise SmokeError(f"daemon did not publish public local socket {endpoint.address}")
-        evidence["operational_checks"]["cached_roster_heartbeat"] = run_lifecycle_phase(
-            evidence,
-            "profile",
-            lambda: run_cached_roster_heartbeat_probe(
-                endpoint, home, frames_per_connection, workers, roster,
-            ),
-        )
-        profile = run_lifecycle_phase(
-            evidence,
-            "profile",
-            lambda: run_profile(
-                endpoint, home, frames_per_connection, requested_messages,
-                sample_count, workers, roster=roster,
-            ),
-        )
+        if transport == "sqlite":
+            if direct_writer is None:
+                raise SmokeError("direct production-writer binary is unavailable")
+            run_lifecycle_phase(evidence, "stop", stop_owned_daemon)
+            profile, direct_measurement = run_lifecycle_phase(
+                evidence,
+                "profile",
+                lambda: run_direct_production_writer_profile(
+                    direct_writer, env, roster, requested_messages, sample_count, workers,
+                ),
+            )
+            evidence["direct_sqlite_message_write"] = {
+                field: direct_measurement[field]
+                for field in (
+                    "kind", "requested_count", "accepted_count", "worker_count",
+                    "elapsed_seconds", "admissions_per_second",
+                )
+            }
+        else:
+            endpoint = local_endpoint(transport)
+            evidence["endpoint"] = {
+                "transport": endpoint.kind,
+                "address": endpoint.address,
+            }
+            if endpoint.kind == "uds" and not Path(str(endpoint.address)).exists():
+                raise SmokeError(f"daemon did not publish public local socket {endpoint.address}")
+            evidence["operational_checks"]["cached_roster_heartbeat"] = run_lifecycle_phase(
+                evidence,
+                "profile",
+                lambda: run_cached_roster_heartbeat_probe(
+                    endpoint, home, frames_per_connection, workers, roster,
+                ),
+            )
+            profile = run_lifecycle_phase(
+                evidence,
+                "profile",
+                lambda: run_profile(
+                    endpoint, home, frames_per_connection, requested_messages,
+                    sample_count, workers, roster=roster,
+                ),
+            )
         evidence["runs"] = [profile]
         evidence["sample_count"] = profile["sample_count"]
         evidence["target_duration_s"] = profile["target_duration_s"]
@@ -1557,6 +1722,38 @@ def run_capacity(
     return (0 if evidence.get("passed") else 1), evidence_path
 
 
+def run_default_f8_matrix(args: argparse.Namespace) -> int:
+    """Run the ordinary four-target f8 suite in its fixed, comparable order."""
+    codes: list[int] = []
+    for position, (target, (transport, peer_wire_security)) in enumerate(
+        BENCHMARK_TARGETS.items(), start=1,
+    ):
+        if args.atm_home is None:
+            with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temporary:
+                home = Path(temporary) / f"{CAPACITY_ROOT_PREFIX}{position}"
+                code, evidence = run_capacity(
+                    home, args.evidence_dir, transport, 8,
+                    workers=args.workers,
+                    comparison_required=False,
+                    raw_evidence_directory=args.raw_evidence_dir,
+                    peer_wire_security=peer_wire_security,
+                    benchmark_target=target,
+                )
+        else:
+            home = args.atm_home / f"{CAPACITY_ROOT_PREFIX}{position}"
+            code, evidence = run_capacity(
+                home, args.evidence_dir, transport, 8,
+                workers=args.workers,
+                comparison_required=False,
+                raw_evidence_directory=args.raw_evidence_dir,
+                peer_wire_security=peer_wire_security,
+                benchmark_target=target,
+            )
+        codes.append(code)
+        print(f"{'PASS' if code == 0 else 'FAIL'} f8 target {target}: {evidence}")
+    return 0 if all(code == 0 for code in codes) else 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -1579,8 +1776,8 @@ def main() -> int:
         "--target",
         choices=tuple(BENCHMARK_TARGETS),
         help=(
-            "public peer-wire benchmark target: `tcp` selects plaintext-test; "
-            "`tcp-tls` selects mutual TLS"
+            "one focused benchmark target; without a target the ordinary command runs "
+            "the required sqlite, UDS, plaintext TCP, and mTLS TCP f8 matrix"
         ),
     )
     parser.add_argument("--transport")
@@ -1612,6 +1809,8 @@ def main() -> int:
             raise SmokeError(f"benchmark-account bootstrap failed: {error}") from error
         print(f"benchmark-account manifest created: {account.manifest_path}")
         return 0
+    if not any((args.target, args.transport, args.frames_per_connection, args.sustained, args.baseline)):
+        return run_default_f8_matrix(args)
     transport, peer_wire_security, benchmark_target = resolve_benchmark_target(
         args.target, args.transport,
     )
@@ -1648,7 +1847,7 @@ def main() -> int:
                     raise SmokeError("UDS multi-frame profile requires the current UDS one-frame reference")
                 comparison_median = uds_one_frame_median
                 comparison_strict = True
-        else:
+        elif transport == "tcp":
             # Connection setup dominates one/two-frame TCP.  Keep an explicit
             # short-frame floor instead of hiding it, while retaining the
             # stricter batching-parity floor where frames amortize setup.
