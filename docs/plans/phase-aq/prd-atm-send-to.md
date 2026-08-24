@@ -83,8 +83,9 @@ Add `attachments: []` to `MessageEnvelope`. **No new `MessageKind` verb** — th
 
 - **Same host:** sender copies into the known agent-accessible temp area, `<known-temp>/atm/<msg-id>/`. Envelope references it.
 - **Cross-host:** envelope carries `{sha256, size, origin_host, origin_path}`
-  through the accepted ADR-034 HTTPS transport and ADR-035 canonical write
-  ingress. AQ1 chooses and records the authenticated peer byte-fetch endpoint;
+  through the accepted transport stack — ADR-035 canonical write ingress
+  under ADR-047 layered peer-wire security (`PeerWireMode`, mTLS default),
+  with ADR-034 as the single-router HTTP shape reference. AQ1 chooses and records the authenticated peer byte-fetch endpoint;
   AQ3 implements it. The receiving daemon fetches into its own
   `<known-temp>/atm/<msg-id>/`, verifies hash and size, and only then makes the
   message readable. Sender code holds no fetch, SSH, or retry state. ADR-028

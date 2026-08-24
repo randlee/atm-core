@@ -70,7 +70,8 @@ Dependency rationale:
 Branch pattern: `feature/aq-N-<slug>` off `integrate/phase-aq`, PR target
 `integrate/phase-aq`. Creating the `integrate/phase-aq` branch/worktree from
 `develop` (carrying phase-ao2 merges) at phase start is a dispatch
-precondition for AQ1 — every sprint PR, AQ1 included, targets
+precondition for AQ1, verified mechanically on the cut head:
+`test -f docs/adr/ADR-047-*.md && test -f docs/adr/ADR-053-*.md` — every sprint PR, AQ1 included, targets
 `integrate/phase-aq` per the repo integration-branch policy.
 
 ## Verified baseline facts (integrate/phase-ao2)

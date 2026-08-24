@@ -154,6 +154,22 @@ pub enum SweepPolicy { Ttl, OnAck, Both } // decision (d) selects the default
 pub trait AttachmentReferenceCheck {
     fn is_referenced(&self, sha256: &AttachmentSha) -> Result<bool, StorageError>;
 }
+
+// The second ADR-018 §3-authorized storage capability (deliverable 5;
+// AQ4 consumes as &dyn). Extends — never duplicates — the reference
+// authority; per-message ack/expiry state backs the SweepPolicy decision.
+pub trait AttachmentSweepStore: AttachmentReferenceCheck {
+    /// None = msg-id unknown to storage (dir treated as foreign, left+logged).
+    fn message_sweep_state(
+        &self,
+        msg_id: &AtmMessageId,
+    ) -> Result<Option<MessageSweepState>, StorageError>;
+}
+
+pub struct MessageSweepState {
+    pub acknowledged_at: Option<IsoTimestamp>,
+    pub expires_at: Option<IsoTimestamp>,
+}
 ```
 
 Member-to-address resolution is deliberately absent here: AQ2 owns the single
@@ -191,6 +207,10 @@ attachment root; it must not delete or rename existing mailbox paths.
 
 ## Required validation
 
+- Mechanical dispatch-precondition gate, run on the freshly cut
+  `integrate/phase-aq` head before AQ1 dispatch and recorded in the dispatch
+  message: `test -f docs/adr/ADR-047-*.md && test -f docs/adr/ADR-053-*.md`
+  (fails fast if the AO2 merge has not reached the cut branch).
 - `just test` workspace, all three CI lanes (ubuntu, macOS, Windows).
 - `cargo test -p atm-architecture` green over the new boundary records.
 - ADR reviewed by quality-mgr with explicit sign-off on decisions (a)–(i),
