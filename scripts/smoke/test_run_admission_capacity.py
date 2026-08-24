@@ -158,6 +158,27 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(captured, ["sqlite", "uds", "tcp", "tcp-tls"])
         self.assertIn("FAIL required f8 target tcp", stdout.getvalue())
 
+    def test_ordinary_benchmark_refuses_before_running_when_a_target_has_no_baseline(self):
+        baselines = RUNNER.BaselineSet(
+            revision=1,
+            entries=(RUNNER.BaselineEntry(
+                host_label="rand-m5", target="sqlite", p50_floor=35_000,
+                approved_by="quality-mgr", effective_from="2026-08-24T00:00:00Z",
+            ),),
+        )
+        with (
+            mock.patch.object(sys, "argv", ["run_admission_capacity.py"]),
+            mock.patch.dict(os.environ, {"ATM_CAPACITY_HOST_LABEL": "rand-m5"}, clear=False),
+            mock.patch.object(RUNNER, "load_baselines", return_value=baselines),
+            mock.patch.object(RUNNER, "run_capacity") as run_capacity,
+        ):
+            with self.assertRaisesRegex(
+                RUNNER.SmokeError,
+                r"host_label='rand-m5', target='uds'",
+            ):
+                RUNNER.main()
+        run_capacity.assert_not_called()
+
     def test_selected_profile_without_diagnostic_marker_is_rejected(self):
         with mock.patch.object(sys, "argv", ["run_admission_capacity.py", "--target", "tcp"]):
             with self.assertRaisesRegex(RUNNER.SmokeError, "require --diagnostic-only"):

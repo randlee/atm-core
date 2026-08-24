@@ -2140,10 +2140,16 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
     # Fail before exercising any target when the reviewed policy has no floor;
     # this makes an accidental local/default run explicit rather than publish a
     # result with a silent or caller-selected baseline.
-    target_baselines = {
-        target: baselines.entry_for(host_label, target)
-        for target in BENCHMARK_TARGETS
-    }
+    try:
+        target_baselines = {
+            target: baselines.entry_for(host_label, target)
+            for target in BENCHMARK_TARGETS
+        }
+    except BenchmarkSchemaError as error:
+        raise SmokeError(
+            "required benchmark campaign has no reviewed baseline: "
+            f"{error}"
+        ) from error
     hashes = binary_hashes()
     os_name = benchmark_os()
     print(f"benchmark campaign: {campaign_identifier}")
