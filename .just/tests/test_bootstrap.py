@@ -59,6 +59,7 @@ class BootstrapTests(unittest.TestCase):
         manifest = bootstrap.load_manifest()
         self.assertEqual(bootstrap.homebrew_python_formula(manifest), "python@3.14")
 
+    @unittest.skipUnless(sys.platform == "darwin", "Homebrew seed paths are macOS-specific")
     def test_macos_homebrew_seed_commands_update_only_declared_seed_packages(self) -> None:
         manifest = bootstrap.load_manifest()
         commands = bootstrap.homebrew_seed_commands(manifest, Path("/opt/homebrew/bin/brew"))
