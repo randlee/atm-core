@@ -153,6 +153,7 @@ triage:a14 a triage:Assignment ;
 triage:c14 a triage:Completion ;
     triage:ofSprint triage:AO2.11 ;
     triage:at "2026-08-24T04:57:32Z"^^xsd:dateTime .
+triage:a17 a triage:Assignment ; triage:ofSprint triage:AO2.12 ; triage:assignedTo "arch-ctm" ; triage:assignedAt "2026-08-24T05:09:36Z"^^xsd:dateTime .
 triage:c15 a triage:Completion ; triage:ofSprint triage:AO2.12 ; triage:at "2026-08-24T05:36:03Z"^^xsd:dateTime .
 triage:a15 a triage:Assignment ; triage:ofSprint triage:AO2.13 ; triage:assignedTo "arch-ctm" ; triage:assignedAt "2026-08-24T05:36:32Z"^^xsd:dateTime .
 triage:a16 a triage:Assignment ; triage:ofSprint triage:AO2.6 ; triage:assignedTo "arch-ctm" ; triage:assignedAt "2026-08-22T05:01:51Z"^^xsd:dateTime .
