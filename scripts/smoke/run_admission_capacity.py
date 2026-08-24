@@ -1359,7 +1359,32 @@ def read_http_response(
     return status, header_end + content_length, summary
 
 
-def submit_connection(endpoint: LocalEndpoint, requests: list[HttpRequest]) -> list[AdmissionResult]:
+def tls_client_context(endpoint: LocalEndpoint) -> ssl.SSLContext | None:
+    """Prepare one immutable mTLS client context for a benchmark profile.
+
+    A profile represents one benchmark client.  Reusing its context is both
+    representative of a long-lived client and lets TLS safely reuse sessions
+    across the profile's short-lived HTTP connections.  Context construction
+    and PEM parsing are setup work, so they must not be charged to each timed
+    connection.
+    """
+    if endpoint.tls_server_name is None:
+        return None
+    if endpoint.tls_certificate_bundle is None:
+        raise SmokeError("direct mTLS endpoint omitted its benchmark identity bundle")
+    context = ssl.create_default_context(
+        ssl.Purpose.SERVER_AUTH,
+        cafile=str(endpoint.tls_certificate_bundle),
+    )
+    context.load_cert_chain(str(endpoint.tls_certificate_bundle))
+    return context
+
+
+def submit_connection(
+    endpoint: LocalEndpoint,
+    requests: list[HttpRequest],
+    tls_context: ssl.SSLContext | None = None,
+) -> list[AdmissionResult]:
     """Submit consecutive real requests over one selected public connection."""
     started = time.perf_counter()
     capability = (
@@ -1376,14 +1401,13 @@ def submit_connection(endpoint: LocalEndpoint, requests: list[HttpRequest]) -> l
                 raw_stream.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             raw_stream.connect(endpoint.address)
             if endpoint.tls_server_name is not None:
-                if endpoint.tls_certificate_bundle is None:
+                context = tls_context or tls_client_context(endpoint)
+                if context is None:
                     raise SmokeError("direct mTLS endpoint omitted its benchmark identity bundle")
-                context = ssl.create_default_context(
-                    ssl.Purpose.SERVER_AUTH,
-                    cafile=str(endpoint.tls_certificate_bundle),
+                stream = context.wrap_socket(
+                    raw_stream,
+                    server_hostname=endpoint.tls_server_name,
                 )
-                context.load_cert_chain(str(endpoint.tls_certificate_bundle))
-                stream = context.wrap_socket(raw_stream, server_hostname=endpoint.tls_server_name)
             else:
                 stream = raw_stream
             frames = []
@@ -1551,6 +1575,7 @@ def run_profile(
         raise SmokeError("capacity sample count must be positive")
     if target_duration_seconds <= 0:
         raise SmokeError("capacity target duration must be positive")
+    profile_tls_context = tls_client_context(endpoint)
 
     def interval_requests(interval: int) -> list[HttpRequest]:
         """Create one unique, immutable request batch before timing begins."""
@@ -1591,7 +1616,7 @@ def run_profile(
             selected = requests[offset:offset + message_count]
             if offset < 0 or len(selected) != message_count:
                 raise SmokeError("timed interval selected requests outside its prepared batch")
-            return submit_connection(endpoint, selected)
+            return submit_connection(endpoint, selected, profile_tls_context)
 
         interval = run_interval(
             submit,
