@@ -1,11 +1,18 @@
 """Focused unit tests for the AI.33 public admission-capacity runner."""
 from __future__ import annotations
 
+import argparse
+import contextlib
 import importlib.util
+import inspect
+import io
 import json
 import os
-from contextlib import closing
+from contextlib import ExitStack, closing
 from pathlib import Path, PureWindowsPath
+import plistlib
+import sqlite3
+import subprocess
 import sys
 import tempfile
 import threading
@@ -13,6 +20,7 @@ import unittest
 from unittest import mock
 
 from scripts.smoke.benchmark_schema import compact_evidence, distribution, percentile
+from scripts.smoke import benchmark_snapshot as SNAPSHOT
 
 
 def load_runner():
@@ -27,6 +35,15 @@ def load_runner():
 
 
 RUNNER = load_runner()
+
+
+def expected_ordinary_targets() -> list[str]:
+    """Return the platform-specific target order exercised by the runner."""
+    return [
+        target
+        for target in ("sqlite", "uds", "tcp", "tcp-tls")
+        if target in RUNNER.required_targets(RUNNER.benchmark_os())
+    ]
 
 
 def complete_evidence(**overrides):
@@ -77,6 +94,664 @@ def healthy_managed_status() -> dict[str, object]:
 
 
 class AdmissionCapacityTests(unittest.TestCase):
+    def test_ordinary_benchmark_runs_required_f8_targets_in_fixed_order(self):
+        captured: list[dict[str, object]] = []
+
+        def run_capacity(*_args, **kwargs):
+            captured.append(kwargs)
+            metrics = mock.Mock(admissions_per_second=mock.Mock(p50=45_000.0))
+            result = mock.Mock(
+                status="PASS", metrics=metrics,
+                messages_admitted=10_000, messages_requested=10_000,
+            )
+            return RUNNER.CapacityRunResult(
+                0, Path("sentinel.evidence"), Path("sentinel.raw"), result,
+            )
+
+        with (
+            mock.patch.object(sys, "argv", ["run_admission_capacity.py"]),
+            mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity),
+            mock.patch.object(
+                RUNNER,
+                "load_baselines",
+                return_value=mock.Mock(entry_for=mock.Mock(return_value=mock.Mock(p50_floor=1))),
+            ),
+            mock.patch.object(RUNNER, "binary_hashes", return_value={"atm": "a" * 64}),
+            mock.patch.object(RUNNER, "BenchmarkCampaign", return_value=mock.Mock(status="PASS", model_dump=mock.Mock(return_value={}))),
+            mock.patch.object(RUNNER, "atomic_json"),
+            contextlib.redirect_stdout(stdout := io.StringIO()),
+        ):
+            self.assertEqual(RUNNER.main(), 0)
+
+        expected_targets = expected_ordinary_targets()
+        self.assertEqual([item["benchmark_target"] for item in captured], expected_targets)
+        self.assertTrue(all("benchmark_target" in item for item in captured))
+        self.assertTrue(all("v4_emission" in item for item in captured))
+        self.assertTrue(all(item["raw_evidence_directory"] == RUNNER.DEFAULT_RAW_EVIDENCE_DIR for item in captured))
+        self.assertEqual(stdout.getvalue().count("p50=45000.00 msg/s"), len(expected_targets))
+
+    def test_ordinary_benchmark_exit_code_uses_the_stored_v4_result_status(self):
+        """A retired interval gate cannot override a passing reviewed result."""
+        def run_capacity(*_args, **_kwargs):
+            metrics = mock.Mock(admissions_per_second=mock.Mock(p50=45_000.0))
+            result = mock.Mock(
+                status="PASS", metrics=metrics,
+                messages_admitted=10_000, messages_requested=10_000,
+            )
+            # Simulate an obsolete child-side diagnostic threshold returning
+            # failure while the immutable v4 acceptance status is PASS.
+            return RUNNER.CapacityRunResult(
+                1, Path("sentinel.evidence"), Path("sentinel.raw"), result,
+            )
+
+        with (
+            mock.patch.object(sys, "argv", ["run_admission_capacity.py"]),
+            mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity),
+            mock.patch.object(
+                RUNNER,
+                "load_baselines",
+                return_value=mock.Mock(entry_for=mock.Mock(return_value=mock.Mock(p50_floor=1))),
+            ),
+            mock.patch.object(RUNNER, "binary_hashes", return_value={"atm": "a" * 64}),
+            mock.patch.object(RUNNER, "BenchmarkCampaign", return_value=mock.Mock(status="PASS", model_dump=mock.Mock(return_value={}))),
+            mock.patch.object(RUNNER, "atomic_json"),
+        ):
+            self.assertEqual(RUNNER.main(), 0)
+
+    def test_ordinary_benchmark_fails_when_one_required_target_fails(self):
+        """A measured failure remains visible, but cannot pass the four-target suite."""
+        captured: list[str] = []
+
+        def run_capacity(*_args, **kwargs):
+            target = kwargs["benchmark_target"]
+            captured.append(target)
+            metrics = mock.Mock(admissions_per_second=mock.Mock(p50=45_000.0))
+            result = mock.Mock(
+                status="FAIL" if target == "tcp" else "PASS", metrics=metrics,
+                messages_admitted=10_000, messages_requested=10_000,
+            )
+            return RUNNER.CapacityRunResult(
+                1 if target == "tcp" else 0,
+                Path("sentinel.evidence"),
+                Path("sentinel.raw"),
+                result,
+            )
+
+        with (
+            mock.patch.object(sys, "argv", ["run_admission_capacity.py"]),
+            mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity),
+            mock.patch.object(
+                RUNNER,
+                "load_baselines",
+                return_value=mock.Mock(entry_for=mock.Mock(return_value=mock.Mock(p50_floor=1))),
+            ),
+            mock.patch.object(RUNNER, "binary_hashes", return_value={"atm": "a" * 64}),
+            mock.patch.object(RUNNER, "BenchmarkCampaign", return_value=mock.Mock(status="FAIL", model_dump=mock.Mock(return_value={}))),
+            mock.patch.object(RUNNER, "atomic_json"),
+            contextlib.redirect_stdout(stdout := io.StringIO()),
+        ):
+            self.assertEqual(RUNNER.main(), 1)
+
+        expected_targets = expected_ordinary_targets()
+        self.assertEqual(captured, expected_targets)
+        self.assertIn("FAIL required f8 target tcp", stdout.getvalue())
+
+    def test_windows_ordinary_benchmark_excludes_uds(self):
+        captured: list[str] = []
+
+        def run_capacity(*_args, **kwargs):
+            captured.append(kwargs["benchmark_target"])
+            metrics = mock.Mock(admissions_per_second=mock.Mock(p50=45_000.0))
+            result = mock.Mock(
+                status="PASS", metrics=metrics,
+                messages_admitted=10_000, messages_requested=10_000,
+            )
+            return RUNNER.CapacityRunResult(
+                0, Path("sentinel.evidence"), Path("sentinel.raw"), result,
+            )
+        with (
+            mock.patch.object(sys, "argv", ["run_admission_capacity.py"]),
+            mock.patch.object(RUNNER, "benchmark_os", return_value="windows"),
+            mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity),
+            mock.patch.object(
+                RUNNER,
+                "load_baselines",
+                return_value=mock.Mock(entry_for=mock.Mock(return_value=mock.Mock(p50_floor=1))),
+            ),
+            mock.patch.object(RUNNER, "binary_hashes", return_value={"atm": "a" * 64}),
+            mock.patch.object(RUNNER, "BenchmarkCampaign", return_value=mock.Mock(status="PASS", model_dump=mock.Mock(return_value={}))),
+            mock.patch.object(RUNNER, "atomic_json"),
+        ):
+            self.assertEqual(RUNNER.main(), 0)
+        self.assertEqual(captured, ["sqlite", "tcp", "tcp-tls"])
+
+    def test_ordinary_benchmark_refuses_before_running_when_a_target_has_no_baseline(self):
+        baselines = RUNNER.BaselineSet(
+            revision=1,
+            entries=(RUNNER.BaselineEntry(
+                host_label="rand-m5", target="sqlite", p50_floor=35_000,
+                approved_by="quality-mgr", effective_from="2026-08-24T00:00:00Z",
+            ),),
+        )
+        missing_target = expected_ordinary_targets()[1]
+        with (
+            mock.patch.object(sys, "argv", ["run_admission_capacity.py"]),
+            mock.patch.dict(os.environ, {"ATM_CAPACITY_HOST_LABEL": "rand-m5"}, clear=False),
+            mock.patch.object(RUNNER, "load_baselines", return_value=baselines),
+            mock.patch.object(RUNNER, "run_capacity") as run_capacity,
+        ):
+            with self.assertRaisesRegex(
+                RUNNER.SmokeError,
+                rf"host_label='rand-m5', target='{missing_target}'",
+            ):
+                RUNNER.main()
+        run_capacity.assert_not_called()
+
+    def test_selected_profile_without_diagnostic_marker_is_rejected(self):
+        with mock.patch.object(sys, "argv", ["run_admission_capacity.py", "--target", "tcp"]):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "require --diagnostic-only"):
+                RUNNER.main()
+
+    def test_direct_production_writer_profile_keeps_real_interval_counts(self):
+        stdout = json.dumps(
+            {
+                "kind": "canonical_core_write",
+                "requested_count": 2_000,
+                "accepted_count": 2_000,
+                "worker_count": 64,
+                "elapsed_seconds": 1.0,
+                "admissions_per_second": 2_000.0,
+                "intervals": [
+                    {
+                        "requested_count": 1_000, "accepted_count": 1_000,
+                        "elapsed_seconds": 0.4, "admissions_per_second": 2_500.0,
+                    },
+                    {
+                        "requested_count": 1_000, "accepted_count": 1_000,
+                        "elapsed_seconds": 0.6, "admissions_per_second": 1666.0,
+                    },
+                ],
+            }
+        )
+        roster = RUNNER.CapacityRoster.unique()
+        with mock.patch.object(
+            RUNNER.subprocess, "run", return_value=mock.Mock(returncode=0, stdout=stdout, stderr=""),
+        ) as run:
+            profile, direct = RUNNER.run_direct_production_writer_profile(
+                Path("/bin/benchmark"), {"ATM_HOME": "/tmp/atm-capacity-test"}, roster,
+                1_000, 2, 64,
+            )
+
+        self.assertEqual(profile["sample_count"], 2)
+        self.assertEqual(profile["intervals"][0]["accepted_count"], 1_000)
+        self.assertEqual(direct["kind"], "canonical_core_write")
+        self.assertIn("--seconds", run.call_args.args[0])
+
+    def test_sqlite_probe_build_is_separate_from_the_released_daemon_pair(self):
+        suffix = ".exe" if os.name == "nt" else ""
+        probe = RUNNER.ROOT / "target" / "release" / f"atm-daemon-benchmark{suffix}"
+        completed = subprocess.CompletedProcess(["cargo"], 0, "", "")
+        with (
+            mock.patch.object(RUNNER.Path, "is_file", side_effect=[False, True]),
+            mock.patch.object(RUNNER.subprocess, "run", return_value=completed) as command,
+        ):
+            self.assertEqual(RUNNER.canonical_writer_probe(), probe)
+        command.assert_called_once()
+        self.assertIn("atm-daemon-bootstrap", command.call_args.args[0])
+        self.assertIn("benchmark-harness", command.call_args.args[0])
+
+    def test_capacity_run_result_preserves_compact_and_raw_evidence(self):
+        result = RUNNER.CapacityRunResult(0, Path("compact.json"), Path("raw.json"))
+        code, compact = result
+        self.assertEqual((code, compact, result.raw_evidence_path), (0, Path("compact.json"), Path("raw.json")))
+
+    def test_matrix_writer_emits_v4_directly_without_a_legacy_summary_file(self):
+        evidence = complete_evidence(
+            host_label="rand-m5",
+            transport="tcp",
+            peer_wire_security="plaintext-test",
+            benchmark_target="tcp",
+            frames_per_connection=8,
+            source_revision="a" * 40,
+            durability_after_restart={
+                "expected_accepted_count": 1_000,
+                "observed_mailbox_count": 1_000,
+                "passed": True,
+            },
+        )
+        context = RUNNER.V4EmissionContext(
+            target="tcp",
+            campaign_id="20260824T000000Z-rand-m5",
+            os_name="macos",
+            baseline=RUNNER.BaselineEntry(
+                host_label="rand-m5",
+                target="tcp",
+                p50_floor=1,
+                approved_by="quality-mgr",
+                effective_from="2026-08-24T00:00:00Z",
+            ),
+            binary_hashes={"atm": "b" * 64, "atm-daemon": "c" * 64},
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path, result = RUNNER.write_v4_evidence(Path(directory), evidence, context)
+            recorded = json.loads(path.read_text(encoding="utf-8"))
+
+        self.assertEqual(path.name, "20260824T000000Z-rand-m5-tcp.json")
+        self.assertEqual(result.schema_version, 4)
+        self.assertEqual(recorded["schema_version"], 4)
+        self.assertNotIn("artifact_kind", recorded)
+        self.assertNotIn("transport", recorded)
+        self.assertNotIn("thresholds", recorded)
+
+    def test_durability_count_after_restart_is_exact_and_roster_scoped(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            database_root = root / ".atm" / "db"
+            database_root.mkdir(parents=True)
+            database = database_root / "mail.db"
+            with closing(sqlite3.connect(database)) as connection:
+                connection.execute(
+                    "CREATE TABLE mail_messages(team TEXT NOT NULL, agent TEXT NOT NULL)"
+                )
+                connection.executemany(
+                    "INSERT INTO mail_messages(team, agent) VALUES (?, ?)",
+                    [
+                        ("target-team", "target-recipient"),
+                        ("target-team", "target-recipient"),
+                        ("other-team", "other-recipient"),
+                    ],
+                )
+                connection.commit()
+            account = mock.Mock(durable_state_root=database_root)
+            roster = RUNNER.CapacityRoster(
+                run_id="target", team="target-team", agent="target-agent",
+                recipient="target-recipient",
+            )
+            observation = RUNNER.verify_durability_after_restart(account, roster, 2)
+
+        self.assertEqual(observation, {
+            "expected_accepted_count": 2,
+            "observed_mailbox_count": 2,
+            "passed": True,
+        })
+
+    def test_durability_count_marks_an_exact_count_mismatch_without_hiding_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            database_root = root / ".atm" / "db"
+            database_root.mkdir(parents=True)
+            database = database_root / "mail.db"
+            with closing(sqlite3.connect(database)) as connection:
+                connection.execute(
+                    "CREATE TABLE mail_messages(team TEXT NOT NULL, agent TEXT NOT NULL)"
+                )
+                connection.execute(
+                    "INSERT INTO mail_messages(team, agent) VALUES ('target-team', 'target-recipient')"
+                )
+                connection.commit()
+            account = mock.Mock(durable_state_root=database_root)
+            roster = RUNNER.CapacityRoster(
+                run_id="target", team="target-team", agent="target-agent",
+                recipient="target-recipient",
+            )
+            observation = RUNNER.verify_durability_after_restart(account, roster, 2)
+
+        self.assertEqual(observation["observed_mailbox_count"], 1)
+        self.assertFalse(observation["passed"])
+
+    def test_durability_count_rejects_invalid_expected_count_before_reading_sqlite(self):
+        account = mock.Mock(durable_state_root=Path("/not-used"))
+        roster = RUNNER.CapacityRoster(
+            run_id="target", team="target-team", agent="target-agent", recipient="target-recipient",
+        )
+        with mock.patch.object(RUNNER.sqlite3, "connect") as connect:
+            with self.assertRaisesRegex(RUNNER.SmokeError, "must not be negative"):
+                RUNNER.verify_durability_after_restart(account, roster, -1)
+        connect.assert_not_called()
+
+    def _run_snapshot_lifecycle_case(
+        self,
+        fault: str | None = None,
+        *,
+        transport: str = "tcp",
+        peer_wire_security: str | None = "plaintext-test",
+        benchmark_target: str = "tcp",
+    ) -> tuple[int, dict[str, object], dict[str, mock.Mock]]:
+        """Exercise the runner lifecycle without inspecting a primary-account root."""
+        captured: dict[str, object] = {}
+        calls: dict[str, mock.Mock] = {}
+        profile = {
+            "sample_count": 1,
+            "target_duration_s": 1.0,
+            "run_duration_s": 1.0,
+            "intervals": complete_evidence()["runs"][0]["intervals"],
+        }
+        snapshot = mock.Mock(
+            snapshot_id="snapshot-20260822T000000Z-0123456789abcdef",
+            account_id="uid:4242",
+            user_version=1,
+            page_count=2,
+            byte_count=8192,
+            sha256="1" * 64,
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            interactive_database = root / "interactive" / ".atm" / "db" / "mail.db"
+            interactive_database.parent.mkdir(parents=True)
+            interactive_database.write_bytes(b"interactive account must remain unchanged")
+            original_interactive = interactive_database.read_bytes()
+            home = root / "atm-capacity-case"
+            atm = root / "atm"
+            daemon = root / "atm-daemon"
+            atm.touch()
+            daemon.touch()
+            account = mock.Mock(account_id="uid:4242", durable_state_root=root / "benchmark" / ".atm" / "db")
+            process = mock.Mock(pid=123)
+            output = mock.Mock()
+            output.evidence.return_value = {}
+
+            with ExitStack() as stack:
+                calls["release"] = stack.enter_context(
+                    mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
+                )
+                stack.enter_context(
+                    mock.patch.object(RUNNER, "require_capacity_benchmark_account", return_value=account),
+                )
+                stack.enter_context(mock.patch.object(RUNNER, "require_clean_host_daemon_state"))
+                stack.enter_context(mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]))
+                stack.enter_context(mock.patch.object(RUNNER, "runtime_environment", return_value={}))
+                stack.enter_context(mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64))
+                calls["provision_mtls"] = stack.enter_context(mock.patch.object(
+                    RUNNER,
+                    "provision_disposable_mtls_identity",
+                    return_value=mock.Mock(host="localhost", fingerprint="a" * 64),
+                ))
+                calls["start"] = stack.enter_context(
+                    mock.patch.object(
+                        RUNNER,
+                        "start_capacity_daemon",
+                        side_effect=(RUNNER.SmokeError("injected snapshot start failure") if fault == "start" else None),
+                        return_value=(process, output),
+                    ),
+                )
+                stack.enter_context(mock.patch.object(RUNNER, "command_result", return_value={}))
+                stack.enter_context(mock.patch.object(RUNNER, "benchmark_doctor_payload", return_value={}))
+                stack.enter_context(mock.patch.object(RUNNER, "prepare_capacity_roster"))
+                stack.enter_context(
+                    mock.patch.object(RUNNER, "local_endpoint", return_value=RUNNER.LocalEndpoint("tcp", "127.0.0.1:1")),
+                )
+                stack.enter_context(mock.patch.object(RUNNER, "run_cached_roster_heartbeat_probe", return_value={}))
+                stack.enter_context(mock.patch.object(
+                    RUNNER,
+                    "verify_durability_after_restart",
+                    return_value={
+                        "expected_accepted_count": 1_000,
+                        "observed_mailbox_count": 1_000,
+                        "passed": True,
+                    },
+                ))
+                calls["profile"] = stack.enter_context(
+                    mock.patch.object(
+                        RUNNER,
+                        "run_profile",
+                        side_effect=(RUNNER.SmokeError("injected profile failure") if fault == "profile" else None),
+                        return_value=profile,
+                    ),
+                )
+                stack.enter_context(mock.patch.object(RUNNER, "release_version", return_value="atm test"))
+                calls["snapshot"] = stack.enter_context(
+                    mock.patch.object(
+                        RUNNER,
+                        "create_verified_snapshot",
+                        side_effect=(RUNNER.BenchmarkSnapshotError("injected snapshot failure") if fault == "snapshot" else None),
+                        return_value=snapshot,
+                    ),
+                )
+                calls["restore"] = stack.enter_context(
+                    mock.patch.object(
+                        RUNNER,
+                        "restore_verified_snapshot",
+                        side_effect=(RUNNER.BenchmarkSnapshotError("injected restore failure") if fault == "restore" else None),
+                        return_value=snapshot,
+                    ),
+                )
+                stack.enter_context(mock.patch.object(RUNNER, "verify_active_snapshot", return_value=snapshot))
+                calls["reap"] = stack.enter_context(
+                    mock.patch.object(
+                        RUNNER,
+                        "reap_owned_daemon",
+                        side_effect=(subprocess.TimeoutExpired("atm-daemon", 10) if fault == "stop" else None),
+                    ),
+                )
+                stack.enter_context(mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"))
+                stack.enter_context(
+                    mock.patch.object(
+                        RUNNER,
+                        "write_evidence",
+                        side_effect=lambda _path, value: (captured.update(value), root / "evidence.json")[1],
+                    ),
+                )
+                code, _evidence_path = RUNNER.run_capacity(
+                    home,
+                    root,
+                    transport,
+                    1,
+                    sample_count=1,
+                    raw_evidence_directory=root,
+                    peer_wire_security=peer_wire_security,
+                    benchmark_target=benchmark_target,
+                )
+
+            self.assertEqual(interactive_database.read_bytes(), original_interactive)
+        return code, captured, calls
+
+    def test_snapshot_lifecycle_restores_clean_baseline_after_success(self):
+        code, captured, calls = self._run_snapshot_lifecycle_case()
+
+        self.assertEqual(code, 0)
+        self.assertEqual(calls["snapshot"].call_count, 1)
+        self.assertEqual(calls["restore"].call_count, 1)
+        self.assertEqual(captured["clean_baseline_snapshot"]["snapshot_id"], "snapshot-20260822T000000Z-0123456789abcdef")
+        self.assertEqual(captured["post_restore_snapshot"]["snapshot_id"], "snapshot-20260822T000000Z-0123456789abcdef")
+        self.assertTrue(all(item["duration_s"] >= 0 for entries in captured["lifecycle"].values() for item in entries))
+        self.assertEqual(calls["start"].call_count, 3)
+
+    @unittest.skipIf(os.name == "nt", "UDS is not supported on Windows")
+    def test_secure_default_uds_provisions_disposable_identity_before_measured_launch(self):
+        code, captured, calls = self._run_snapshot_lifecycle_case(
+            transport="uds",
+            peer_wire_security="mutual-tls",
+            benchmark_target="uds",
+        )
+
+        self.assertEqual(code, 0)
+        self.assertEqual(calls["provision_mtls"].call_count, 1)
+        self.assertEqual(calls["start"].call_count, 4)
+        self.assertEqual(captured["disposable_mtls"]["authority"], "localhost")
+
+    def test_real_snapshot_lifecycle_never_touches_interactive_root(self):
+        """Exercise the real account-bound snapshot APIs through ``run_capacity``.
+
+        The daemon, roster, and public profile are deliberately stubbed: this
+        test proves the filesystem boundary, not the network benchmark.  The
+        snapshot module itself is not mocked, so create, restore, and verify
+        operate on a real disposable SQLite database.
+        """
+        profile = {
+            "sample_count": 1,
+            "target_duration_s": 1.0,
+            "run_duration_s": 1.0,
+            "intervals": complete_evidence()["runs"][0]["intervals"],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            interactive_root = root / "interactive" / ".atm"
+            interactive_database = interactive_root / "db" / "mail.db"
+            interactive_database.parent.mkdir(parents=True)
+            interactive_database.write_bytes(b"interactive account must remain unchanged")
+            (interactive_root / "identity.json").write_text('{"interactive":true}\n', encoding="utf-8")
+            interactive_before = {
+                path.relative_to(interactive_root): path.read_bytes()
+                for path in interactive_root.rglob("*")
+                if path.is_file()
+            }
+
+            benchmark_home = root / "benchmark"
+            benchmark_state = benchmark_home / ".atm" / "db"
+            benchmark_state.mkdir(parents=True)
+            benchmark_database = benchmark_state / SNAPSHOT.MAIL_DATABASE_NAME
+            with closing(sqlite3.connect(benchmark_database)) as connection:
+                connection.execute("CREATE TABLE benchmark_rows(value INTEGER NOT NULL)")
+                connection.execute("INSERT INTO benchmark_rows(value) VALUES (1)")
+                connection.execute("PRAGMA user_version = 54")
+                connection.commit()
+            account = RUNNER.BenchmarkAccount(
+                account_id="uid:benchmark-test",
+                home=benchmark_home,
+                durable_state_root=benchmark_state,
+                manifest_path=benchmark_home / ".atm" / "benchmark-account.json",
+            )
+            home = root / "atm-capacity-real-snapshot"
+            atm = root / "atm"
+            daemon = root / "atm-daemon"
+            atm.touch()
+            daemon.touch()
+            process = mock.Mock(pid=123)
+            output = mock.Mock()
+            output.evidence.return_value = {}
+            captured: dict[str, object] = {}
+
+            with ExitStack() as stack:
+                stack.enter_context(mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]))
+                stack.enter_context(
+                    mock.patch.object(RUNNER, "require_capacity_benchmark_account", return_value=account),
+                )
+                # The real snapshot functions resolve their account through
+                # this account-local seam; no snapshot API is replaced.
+                stack.enter_context(
+                    mock.patch.object(SNAPSHOT, "require_benchmark_account", return_value=account),
+                )
+                stack.enter_context(mock.patch.object(RUNNER, "require_clean_host_daemon_state"))
+                stack.enter_context(mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]))
+                stack.enter_context(mock.patch.object(RUNNER, "runtime_environment", return_value={}))
+                stack.enter_context(mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64))
+                stack.enter_context(
+                    mock.patch.object(RUNNER, "start_capacity_daemon", return_value=(process, output)),
+                )
+                stack.enter_context(mock.patch.object(RUNNER, "reap_owned_daemon"))
+                stack.enter_context(
+                    mock.patch.object(
+                        RUNNER,
+                        "command_result",
+                        return_value={
+                            "exit_code": 0,
+                            "stderr": "",
+                            "stdout": json.dumps({
+                                "summary": {"status": "healthy"},
+                                "runtime_status": {"liveness": "running", "readiness": "ready"},
+                            }),
+                        },
+                    ),
+                )
+                stack.enter_context(mock.patch.object(RUNNER, "prepare_capacity_roster"))
+                stack.enter_context(
+                    mock.patch.object(
+                        RUNNER,
+                        "local_endpoint",
+                        return_value=RUNNER.LocalEndpoint("tcp", ("127.0.0.1", 1)),
+                    ),
+                )
+                stack.enter_context(mock.patch.object(RUNNER, "run_cached_roster_heartbeat_probe", return_value={}))
+                stack.enter_context(mock.patch.object(RUNNER, "run_profile", return_value=profile))
+                stack.enter_context(mock.patch.object(
+                    RUNNER,
+                    "verify_durability_after_restart",
+                    return_value={
+                        "expected_accepted_count": 1_000,
+                        "observed_mailbox_count": 1_000,
+                        "passed": True,
+                    },
+                ))
+                stack.enter_context(mock.patch.object(RUNNER, "release_version", return_value="atm test"))
+                stack.enter_context(mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"))
+                stack.enter_context(
+                    mock.patch.object(
+                        RUNNER,
+                        "write_evidence",
+                        side_effect=lambda _path, evidence: (captured.update(evidence), root / "evidence.json")[1],
+                    ),
+                )
+                code, _evidence_path = RUNNER.run_capacity(
+                    home,
+                    root,
+                    "tcp",
+                    1,
+                    sample_count=1,
+                    raw_evidence_directory=root,
+                    peer_wire_security="plaintext-test",
+                    benchmark_target="tcp",
+                )
+
+            self.assertEqual(code, 0)
+            self.assertEqual(
+                {
+                    path.relative_to(interactive_root): path.read_bytes()
+                    for path in interactive_root.rglob("*")
+                    if path.is_file()
+                },
+                interactive_before,
+            )
+            self.assertFalse((interactive_root / SNAPSHOT.SNAPSHOT_ROOT_NAME).exists())
+            self.assertIn("clean_baseline_snapshot", captured)
+            self.assertIn("restored_clean_baseline", captured)
+            self.assertIn("post_restore_snapshot", captured)
+            self.assertEqual(
+                captured["clean_baseline_snapshot"]["snapshot_id"],
+                captured["post_restore_snapshot"]["snapshot_id"],
+            )
+
+    def test_runner_reaches_only_account_bound_snapshot_apis_not_primary_state_mutation(self):
+        source = inspect.getsource(RUNNER.run_capacity)
+
+        self.assertIn("create_verified_snapshot", source)
+        self.assertIn("restore_verified_snapshot", source)
+        self.assertNotIn("HostStateBackup", source)
+        self.assertNotIn("ManagedDaemonLifecycle", source)
+        self.assertNotIn("os.replace(", source)
+        self.assertNotIn("os.rename(", source)
+
+    def test_snapshot_failure_prevents_roster_and_restore(self):
+        code, captured, calls = self._run_snapshot_lifecycle_case("snapshot")
+
+        self.assertEqual(code, 1)
+        self.assertEqual(calls["profile"].call_count, 0)
+        self.assertEqual(calls["restore"].call_count, 0)
+        self.assertEqual(captured["lifecycle"]["snapshot"][-1]["status"], "failed")
+
+    def test_profile_failure_still_restores_the_published_baseline(self):
+        code, captured, calls = self._run_snapshot_lifecycle_case("profile")
+
+        self.assertEqual(code, 1)
+        self.assertEqual(calls["snapshot"].call_count, 1)
+        self.assertEqual(calls["restore"].call_count, 1)
+        self.assertEqual(captured["lifecycle"]["profile"][-1]["status"], "failed")
+
+    def test_stop_failure_never_attempts_snapshot_restore(self):
+        code, captured, calls = self._run_snapshot_lifecycle_case("stop")
+
+        self.assertEqual(code, 1)
+        self.assertEqual(calls["snapshot"].call_count, 0)
+        self.assertEqual(calls["restore"].call_count, 0)
+        self.assertEqual(captured["lifecycle"]["stop"][-1]["status"], "failed")
+
+    def test_restore_failure_is_retained_as_a_stable_lifecycle_failure(self):
+        code, captured, calls = self._run_snapshot_lifecycle_case("restore")
+
+        self.assertEqual(code, 1)
+        self.assertEqual(calls["restore"].call_count, 1)
+        self.assertEqual(captured["lifecycle"]["restore"][-1]["status"], "failed")
+        self.assertIn("recovery:", captured["failure"])
+
     def test_host_runtime_doctor_environment_ignores_disposable_atm_home(self):
         environment = {
             "ATM_HOME": "/tmp/atm-capacity-1",
@@ -89,7 +764,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         )
         self.assertIn("ATM_HOME", environment)
 
-    def test_benchmark_doctor_accepts_ready_null_observability_runtime(self):
+    def test_benchmark_doctor_rejects_a_ready_runtime_with_unhealthy_observability(self):
         result = {
             "exit_code": 1,
             "stderr": "",
@@ -99,10 +774,8 @@ class AdmissionCapacityTests(unittest.TestCase):
                 "runtime_status": {"liveness": "running", "readiness": "ready"},
             }),
         }
-        self.assertEqual(
-            RUNNER.benchmark_doctor_payload(result)["runtime_status"],
-            {"liveness": "running", "readiness": "ready"},
-        )
+        with self.assertRaisesRegex(RUNNER.SmokeError, "capacity doctor"):
+            RUNNER.benchmark_doctor_payload(result)
 
     def test_benchmark_doctor_rejects_other_or_not_ready_failure(self):
         for payload in (
@@ -184,27 +857,151 @@ class AdmissionCapacityTests(unittest.TestCase):
         path = Path(tempfile.gettempdir()) / "atm-capacity-unit-home"
         self.assertEqual(RUNNER.validate_capacity_home(path), path.resolve())
 
-    def test_isolation_accepts_clean_user_or_explicit_backup_restore(self):
+    def test_isolation_requires_a_valid_manifest_not_environment_assertion(self):
         with mock.patch.dict(os.environ, {"ATM_CAPACITY_ISOLATED_OS_USER": "1"}, clear=False):
-            self.assertEqual(RUNNER.select_host_state_isolation(), "isolated_os_user")
-        with mock.patch.dict(
-            os.environ,
-            {"ATM_CAPACITY_ISOLATED_OS_USER": "", "ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE": "1"},
-            clear=False,
-        ):
-            self.assertEqual(RUNNER.select_host_state_isolation(), "backup_restore")
+            with self.assertRaisesRegex(RUNNER.SmokeError, "environment assertion"):
+                RUNNER.require_capacity_benchmark_account()
+        with mock.patch.dict(os.environ, {"ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE": "1"}, clear=False):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "is retired"):
+                RUNNER.require_capacity_benchmark_account()
+        account = mock.Mock(durable_state_root=Path("/benchmark/.atm/db"))
+        with mock.patch.object(RUNNER, "require_benchmark_account", return_value=account):
+            self.assertEqual(RUNNER.require_capacity_benchmark_account(), account)
 
-    def test_backup_restore_returns_the_complete_prior_host_state(self):
+    def test_host_state_backup_refuses_without_changing_the_primary_database(self):
         with tempfile.TemporaryDirectory() as temp:
             os_home = Path(temp)
-            original = os_home / ".atm"
-            original.mkdir()
+            original = os_home / ".atm" / "db"
+            original.mkdir(parents=True)
             (original / "mail.db").write_text("prior state", encoding="utf-8")
             with mock.patch.object(RUNNER, "os_account_home", return_value=os_home):
-                backup = RUNNER.HostStateBackup.begin()
-                (os_home / ".atm" / "mail.db").write_text("benchmark state", encoding="utf-8")
-                backup.restore()
+                with self.assertRaisesRegex(RUNNER.SmokeError, "refusing to replace"):
+                    RUNNER.HostStateBackup.begin()
             self.assertEqual((original / "mail.db").read_text(encoding="utf-8"), "prior state")
+
+    def test_launch_agent_override_preserves_source_and_replaces_only_wire_mode(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "com.example.atm.plist"
+            original_payload = {
+                "Label": "com.example.atm",
+                "ProgramArguments": [
+                    "/usr/bin/env", "-u", "ATM_TEAM", "/selected/atm-daemon",
+                    "--peer-wire-security", "mutual-tls", "--other-option", "value",
+                ],
+            }
+            with source.open("wb") as handle:
+                plistlib.dump(original_payload, handle)
+            source_bytes = source.read_bytes()
+
+            override = RUNNER.LaunchAgentPeerWireOverride.create(source, "plaintext-test")
+            with override.override_path.open("rb") as handle:
+                override_payload = plistlib.load(handle)
+
+            self.assertEqual(source.read_bytes(), source_bytes)
+            self.assertEqual(
+                override_payload["ProgramArguments"],
+                [
+                    "/usr/bin/env", "-u", "ATM_TEAM", "/selected/atm-daemon",
+                    "--other-option", "value", "--peer-wire-security", "plaintext-test",
+                ],
+            )
+            override.assert_source_unchanged()
+            override.cleanup()
+            self.assertFalse(override.override_path.exists())
+
+    def test_launch_agent_override_can_change_only_its_temporary_log_level(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "com.example.atm.plist"
+            payload = {
+                "Label": "com.example.atm",
+                "ProgramArguments": ["/selected/atm-daemon"],
+                "EnvironmentVariables": {"ATM_LOG": "debug", "HOME": "/example"},
+            }
+            with source.open("wb") as handle:
+                plistlib.dump(payload, handle)
+            source_bytes = source.read_bytes()
+
+            override = RUNNER.LaunchAgentPeerWireOverride.create(
+                source, "plaintext-test", "off",
+            )
+            with override.override_path.open("rb") as handle:
+                override_payload = plistlib.load(handle)
+
+            self.assertEqual(source.read_bytes(), source_bytes)
+            self.assertEqual(
+                override_payload["EnvironmentVariables"], {"ATM_LOG": "off", "HOME": "/example"},
+            )
+            override.cleanup()
+
+    def test_managed_mode_requires_the_explicit_launch_agent_plist(self):
+        lifecycle = RUNNER.ManagedDaemonLifecycle(
+            RUNNER.ManagedDaemonOptions(service="com.example.atm"),
+            peer_wire_security="plaintext-test",
+        )
+        with self.assertRaisesRegex(RUNNER.SmokeError, "managed-launch-agent-plist"):
+            lifecycle.isolated_options()
+
+    def test_managed_mode_derives_selector_links_from_pre_quiesce_status(self):
+        options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
+        resolved = RUNNER.resolved_managed_selector_links(options, healthy_managed_status())
+
+        self.assertEqual(resolved.cli_link, Path("/active/atm"))
+        self.assertEqual(resolved.daemon_link, Path("/active/atm-daemon"))
+
+    @unittest.skip("retired: benchmarks must not operate the primary user's daemon or database")
+    def test_managed_mode_uses_temporary_plist_then_restarts_original_pair(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "com.example.atm.plist"
+            source_payload = {
+                "Label": "com.example.atm",
+                "ProgramArguments": ["/selected/atm-daemon"],
+            }
+            with source.open("wb") as handle:
+                plistlib.dump(source_payload, handle)
+            source_bytes = source.read_bytes()
+            options = RUNNER.ManagedDaemonOptions(
+                service="com.example.atm", launch_agent_plist=source,
+            )
+            status = healthy_managed_status()
+            status["doctor"]["daemon_context"]["peer_wire_security"] = "plaintext-test"
+            calls: list[tuple[str, Path, bool]] = []
+
+            def daemon_switch(action, passed_options, *, doctor=False):
+                assert passed_options.launch_agent_plist is not None
+                calls.append((action, passed_options.launch_agent_plist, doctor))
+                return status
+
+            os_home = root / "os-home"
+            state = os_home / ".atm"
+            state.mkdir(parents=True)
+            (state / "mail.db").write_text("managed-state", encoding="utf-8")
+            with (
+                mock.patch.object(RUNNER, "os_account_home", return_value=os_home),
+                mock.patch.object(RUNNER, "daemon_switch_result", side_effect=daemon_switch),
+                mock.patch.object(RUNNER, "require_clean_host_daemon_state"),
+            ):
+                lifecycle = RUNNER.ManagedDaemonLifecycle(
+                    options, peer_wire_security="plaintext-test",
+                )
+                lifecycle.begin()
+                lifecycle.start_isolated_service()
+                override_path = lifecycle.launch_override.override_path
+                lifecycle.restart_isolated_service()
+                lifecycle.restore()
+
+            self.assertEqual(source.read_bytes(), source_bytes)
+            self.assertEqual((state / "mail.db").read_text(encoding="utf-8"), "managed-state")
+            self.assertFalse(override_path.exists())
+            self.assertEqual(
+                [(action, path == source, doctor) for action, path, doctor in calls],
+                [
+                    ("status", True, False), ("quiesce", True, False),
+                    ("restart", False, False), ("status", False, True),
+                    ("quiesce", False, False), ("restart", False, False), ("status", False, True),
+                    ("quiesce", False, False), ("restart", True, False), ("status", True, True),
+                ],
+            )
 
     def test_undeclared_host_state_refuses_before_backup_or_daemon_quiesce(self):
         with (
@@ -215,13 +1012,68 @@ class AdmissionCapacityTests(unittest.TestCase):
             ),
             mock.patch.object(RUNNER.HostStateBackup, "begin") as backup,
             mock.patch.object(RUNNER, "daemon_switch_result") as daemon_switch,
+            mock.patch.object(
+                RUNNER,
+                "require_benchmark_account",
+                side_effect=RUNNER.BenchmarkAccountError("manifest is missing"),
+            ),
+            mock.patch.object(RUNNER, "release_binary") as release_binary,
         ):
-            with self.assertRaisesRegex(RUNNER.SmokeError, "ATM_CAPACITY_ISOLATED_OS_USER"):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "benchmark-account preflight failed"):
                 RUNNER.run_capacity(Path("/tmp/atm-capacity-unit"), Path("/tmp"), "tcp", 1)
 
         backup.assert_not_called()
         daemon_switch.assert_not_called()
+        release_binary.assert_not_called()
 
+    def test_managed_lifecycle_refuses_before_any_daemon_switch(self):
+        options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
+        with mock.patch.object(RUNNER, "daemon_switch_result") as daemon_switch:
+            with self.assertRaisesRegex(RUNNER.SmokeError, "retired"):
+                RUNNER.ManagedDaemonLifecycle(options).begin()
+
+        daemon_switch.assert_not_called()
+
+    def test_run_capacity_refuses_managed_daemon_before_any_host_mutation(self):
+        options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            home = root / "atm-capacity-benchmark"
+            primary = root / "primary" / ".atm" / "db"
+            primary.mkdir(parents=True)
+            mail_db = primary / "mail.db"
+            mail_db.write_text("primary-state", encoding="utf-8")
+            with (
+                mock.patch.object(RUNNER, "release_binary") as release_binary,
+                mock.patch.object(RUNNER, "daemon_switch_result") as daemon_switch,
+                mock.patch.object(RUNNER, "require_clean_host_daemon_state") as clean,
+            ):
+                with self.assertRaisesRegex(RUNNER.SmokeError, "managed-daemon benchmarking is retired"):
+                    RUNNER.run_capacity(
+                        home, root, "tcp", 1, sample_count=1,
+                        raw_evidence_directory=root, managed_daemon=options,
+                    )
+
+            self.assertEqual(mail_db.read_text(encoding="utf-8"), "primary-state")
+            self.assertFalse(home.exists())
+
+        clean.assert_not_called()
+        daemon_switch.assert_not_called()
+        release_binary.assert_not_called()
+
+    def test_main_rejects_retired_managed_host_arguments_before_running_a_benchmark(self):
+        with (
+            mock.patch.object(sys, "argv", ["run_admission_capacity.py", "--managed-service", "x"]),
+            mock.patch.object(RUNNER, "run_capacity") as run_capacity,
+            contextlib.redirect_stderr(io.StringIO()),
+        ):
+            with self.assertRaises(SystemExit) as exit_error:
+                RUNNER.main()
+
+        self.assertEqual(exit_error.exception.code, 2)
+        run_capacity.assert_not_called()
+
+    @unittest.skip("retired: benchmarks must not operate the primary user's daemon or database")
     def test_managed_lifecycle_quiesces_then_restores_original_state_and_pair(self):
         options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
         before = healthy_managed_status()
@@ -233,8 +1085,8 @@ class AdmissionCapacityTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp:
             os_home = Path(temp)
-            state = os_home / ".atm"
-            state.mkdir()
+            state = os_home / ".atm" / "db"
+            state.mkdir(parents=True)
             (state / "mail.db").write_text("managed-state", encoding="utf-8")
             with (
                 mock.patch.object(RUNNER, "os_account_home", return_value=os_home),
@@ -254,6 +1106,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             [("status", False), ("quiesce", False), ("restart", False), ("status", True)],
         )
 
+    @unittest.skip("retired: benchmarks must not operate the primary user's daemon or database")
     def test_managed_lifecycle_recovers_an_unavailable_pre_quiesce_daemon(self):
         """Initial selector capture must not require the very doctor recovery restores."""
         options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
@@ -287,6 +1140,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             [("status", False), ("quiesce", False), ("restart", False), ("status", True)],
         )
 
+    @unittest.skip("retired: benchmarks must not operate the primary user's daemon or database")
     def test_managed_lifecycle_executes_and_restarts_the_selected_service_on_disposable_state(self):
         options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
         calls: list[tuple[str, bool]] = []
@@ -321,6 +1175,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             ],
         )
 
+    @unittest.skip("retired: benchmarks must not operate the primary user's daemon or database")
     def test_backup_snapshot_failure_restarts_the_managed_pair(self):
         options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
         status = healthy_managed_status()
@@ -340,6 +1195,7 @@ class AdmissionCapacityTests(unittest.TestCase):
 
         self.assertEqual(calls, ["status", "quiesce", "restart", "status"])
 
+    @unittest.skip("retired: benchmarks must not operate the primary user's daemon or database")
     def test_restore_attempts_restart_and_doctor_even_when_state_restore_fails(self):
         options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
         calls: list[str] = []
@@ -406,6 +1262,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             with self.assertRaisesRegex(RUNNER.SmokeError, "selected release"):
                 RUNNER.daemon_switch_result("status", options, doctor=True)
 
+    @unittest.skip("retired: benchmarks must not operate the primary user's daemon or database")
     def test_restore_surfaces_a_failed_doctor_after_state_is_put_back(self):
         options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
         status = healthy_managed_status()
@@ -436,6 +1293,7 @@ class AdmissionCapacityTests(unittest.TestCase):
 
         self.assertEqual(calls, ["status", "quiesce", "restart", "status"])
 
+    @unittest.skip("retired: benchmarks must not operate the primary user's daemon or database")
     def test_benchmark_failure_restores_managed_state_and_verifies_doctor(self):
         options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
         status = healthy_managed_status()
@@ -454,7 +1312,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             (state / "mail.db").write_text("managed-state", encoding="utf-8")
             home = root / "atm-capacity-benchmark"
             atm = root / "atm"
-            daemon = root / "atm-daemon-benchmark"
+            daemon = root / "atm-daemon"
             atm.touch()
             daemon.touch()
             with (
@@ -465,9 +1323,8 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
                 mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64),
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
-                mock.patch.object(RUNNER, "run_direct_storage_probe"),
-                mock.patch.object(RUNNER, "run_direct_core_write_probe"),
                 mock.patch.object(RUNNER, "local_endpoint", side_effect=RUNNER.SmokeError("benchmark failed")),
                 mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"),
                 mock.patch.object(
@@ -501,12 +1358,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             with self.assertRaisesRegex(RUNNER.SmokeError, "Windows"):
                 RUNNER.validate_transport("uds")
 
-    def test_hook_mode_is_explicit_and_environment_cannot_disable_the_hook(self):
-        self.assertEqual(RUNNER.validate_hook_mode("active"), "active")
-        self.assertEqual(RUNNER.validate_hook_mode("disabled"), "disabled")
-        with self.assertRaisesRegex(RUNNER.SmokeError, "hook mode"):
-            RUNNER.validate_hook_mode("unexpected")
-
+    def test_runtime_environment_cannot_disable_the_hook(self):
         environment = RUNNER.runtime_environment(Path("/tmp/atm-capacity-unit"))
         self.assertNotIn("ATM_HTTP_RECEIVED_HOOK_MODE", environment)
         self.assertNotIn("ATM_HTTP_BENCHMARK_MODE", environment)
@@ -521,11 +1373,16 @@ class AdmissionCapacityTests(unittest.TestCase):
             daemon.touch()
             atm.touch()
             with (
-                mock.patch.object(RUNNER, "select_host_state_isolation", return_value="isolated_os_user"),
+                mock.patch.object(
+                    RUNNER,
+                    "require_capacity_benchmark_account",
+                    return_value=mock.Mock(durable_state_root=Path(directory) / ".atm" / "db"),
+                ),
                 mock.patch.object(RUNNER, "require_clean_host_daemon_state"),
                 mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
                 mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64),
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
                 mock.patch.object(RUNNER, "start_capacity_daemon", side_effect=RUNNER.SmokeError("stop after evidence setup")),
                 mock.patch.object(RUNNER, "write_raw_evidence", return_value=Path(directory) / "raw.json"),
@@ -537,11 +1394,11 @@ class AdmissionCapacityTests(unittest.TestCase):
             ):
                 _code, evidence_path = RUNNER.run_capacity(
                     home, Path(directory), "tcp", 1, sample_count=1,
-                    raw_evidence_directory=Path(directory), hook_mode="disabled",
+                    raw_evidence_directory=Path(directory),
                 )
         self.assertEqual(evidence_path.name, "evidence.json")
-        self.assertEqual(captured["hook_mode"], "disabled")
-        self.assertIn("disabled", captured["stages"]["post_commit_received_hook"])
+        self.assertEqual(captured["hook_mode"], "active")
+        self.assertIn("active", captured["stages"]["post_commit_received_hook"])
 
     def test_failed_setup_records_a_schema_valid_duration(self):
         captured: dict[str, object] = {}
@@ -553,25 +1410,17 @@ class AdmissionCapacityTests(unittest.TestCase):
             daemon.touch()
             atm.touch()
             with (
-                mock.patch.object(RUNNER, "select_host_state_isolation", return_value="isolated_os_user"),
+                mock.patch.object(
+                    RUNNER,
+                    "require_capacity_benchmark_account",
+                    return_value=mock.Mock(durable_state_root=root / ".atm" / "db"),
+                ),
                 mock.patch.object(RUNNER, "require_clean_host_daemon_state"),
                 mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
                 mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64),
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
-                mock.patch.object(
-                    RUNNER,
-                    "run_direct_storage_probe",
-                    return_value={
-                        "kind": "async_storage_admission",
-                        "requested_count": 1,
-                        "accepted_count": 1,
-                        "worker_count": 1,
-                        "elapsed_seconds": 1.0,
-                        "admissions_per_second": 1.0,
-                    },
-                ),
-                mock.patch.object(RUNNER, "run_direct_core_write_probe", return_value={}),
                 mock.patch.object(
                     RUNNER, "start_capacity_daemon", side_effect=RUNNER.SmokeError("setup failed"),
                 ),
@@ -589,7 +1438,8 @@ class AdmissionCapacityTests(unittest.TestCase):
                 )
 
         self.assertEqual(code, 1)
-        self.assertEqual(captured["failure"], "setup failed")
+        self.assertIn("benchmark snapshot phase failed: setup failed", captured["failure"])
+        self.assertIn("recovery:", captured["failure"])
         self.assertIsInstance(captured["run_duration_s"], float)
         self.assertGreaterEqual(captured["run_duration_s"], 0.0)
 
@@ -652,6 +1502,41 @@ class AdmissionCapacityTests(unittest.TestCase):
             50_000.0,
         )
 
+    def test_direct_writer_profile_requires_and_preserves_real_intervals(self):
+        payload = {
+            "kind": "canonical_core_write",
+            "requested_count": 2_000,
+            "accepted_count": 2_000,
+            "worker_count": 64,
+            "elapsed_seconds": 0.1,
+            "admissions_per_second": 20_000.0,
+            "intervals": [
+                {
+                    "requested_count": 1_000,
+                    "accepted_count": 1_000,
+                    "elapsed_seconds": 0.05,
+                    "admissions_per_second": 20_000.0,
+                },
+                {
+                    "requested_count": 1_000,
+                    "accepted_count": 1_000,
+                    "elapsed_seconds": 0.05,
+                    "admissions_per_second": 20_000.0,
+                },
+            ],
+        }
+        completed = mock.Mock(returncode=0, stdout=json.dumps(payload), stderr="")
+        roster = RUNNER.CapacityRoster("test", "team", "agent", "recipient")
+        with mock.patch.object(RUNNER.subprocess, "run", return_value=completed) as run:
+            profile, measurement = RUNNER.run_direct_production_writer_profile(
+                Path("/tmp/atm-daemon-benchmark"), {}, roster, 1_000, 2, 64,
+            )
+        self.assertEqual(measurement, payload)
+        self.assertEqual(profile["sample_count"], 2)
+        self.assertEqual(profile["intervals"][0]["admissions_per_second"], 20_000.0)
+        self.assertIn("--direct-core-write", run.call_args.args[0])
+        self.assertIn("--intervals", run.call_args.args[0])
+
     def test_profile_schema_distinguishes_minimum_from_actual_sample_count(self):
         interval = {"passed": True, "elapsed_seconds": 0.6}
         with mock.patch.object(RUNNER, "run_interval", return_value=interval):
@@ -665,15 +1550,15 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(profile["target_duration_s"], 1.0)
 
     def test_evidence_filename_matches_the_published_benchmark_convention(self):
-        evidence = complete_evidence(host_label="mac-arm64-01", frames_per_connection=16)
+        evidence = complete_evidence(host_label="rand-m5", frames_per_connection=16)
         with tempfile.TemporaryDirectory() as temp:
             path = RUNNER.evidence_filename(Path(temp), evidence)
-        self.assertEqual(path.name, "20260801-050000.123456-mac-arm64-01-tcp-f16.json")
+        self.assertEqual(path.name, "20260801-050000.123456-rand-m5-tcp-f16.json")
 
     def test_evidence_filename_is_the_report_renderer_artifact_id(self):
         import benchmark_report
 
-        evidence = complete_evidence(host_label="mac-arm64-01", transport="uds", frames_per_connection=8)
+        evidence = complete_evidence(host_label="rand-m5", transport="uds", frames_per_connection=8)
         with tempfile.TemporaryDirectory() as temp:
             path = RUNNER.write_evidence(Path(temp), evidence)
             result = benchmark_report.load_result(path)
@@ -681,7 +1566,7 @@ class AdmissionCapacityTests(unittest.TestCase):
 
     def test_evidence_writer_redacts_host_private_fields_but_retains_endpoint_shape(self):
         evidence = complete_evidence(
-            host_label="mac-arm64-01", transport="uds", atm_home="/Users/randlee/private/atm",
+            host_label="rand-m5", transport="uds", atm_home="/Users/randlee/private/atm",
             doctor={"details": "/Users/randlee/.atm/logs/atm.log.jsonl"},
             endpoint={"transport": "uds", "address": "/Users/randlee/.atm/daemon.sock"},
         )
@@ -694,7 +1579,7 @@ class AdmissionCapacityTests(unittest.TestCase):
 
     def test_published_doctor_status_is_compact(self):
         evidence = complete_evidence(
-            host_label="mac-arm64-01", doctor={"host_private": "full diagnostics"},
+            host_label="rand-m5", doctor={"host_private": "full diagnostics"},
             doctor_status="passed", doctor_after_restart={"status": "passed"},
         )
         with tempfile.TemporaryDirectory() as temp:
@@ -713,257 +1598,81 @@ class AdmissionCapacityTests(unittest.TestCase):
             recorded = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(recorded["failure"], "could not open <redacted-path>")
 
-    def test_thresholds_require_admission_and_optional_baseline(self):
-        profile = {
-            "intervals": [
-                {"admissions_per_second": 1_100, "passed": True},
-                {"admissions_per_second": 900, "passed": False},
-            ]
-        }
-        thresholds = RUNNER.evaluate_profile_thresholds(profile, 950)
-        self.assertEqual(thresholds["median_admissions_per_second"], 1_000)
-        self.assertTrue(thresholds["baseline_passed"])
-        self.assertFalse(thresholds["admission_passed"])
-        self.assertFalse(thresholds["passed"])
-
-    def test_thresholds_retain_a_explicit_transport_comparison_floor(self):
-        profile = {"intervals": [{"admissions_per_second": 790, "passed": True}]}
-        thresholds = RUNNER.evaluate_profile_thresholds(
-            profile, None, comparison_median=1_000, comparison_ratio=0.75,
-        )
-        self.assertEqual(thresholds["comparison_target_admissions_per_second"], 750)
-        self.assertTrue(thresholds["comparison_passed"])
-        self.assertTrue(thresholds["passed"])
-
-    def test_windows_comparison_is_reported_without_gating_windows_acceptance(self):
-        profile = {"intervals": [{"admissions_per_second": 800, "passed": True}]}
-        thresholds = RUNNER.evaluate_profile_thresholds(
-            profile, None, comparison_median=2_000, comparison_ratio=0.75,
-            comparison_required=False,
-        )
-        self.assertFalse(thresholds["comparison_passed"])
-        self.assertFalse(thresholds["comparison_required"])
-        self.assertTrue(thresholds["passed"])
-
-    def test_matching_profile_reference_uses_one_complete_passed_ancestor_set(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            for frame in RUNNER.TCP_COMPARISON_FRAMES:
-                payload = {
-                    "host_label": "mac-arm64-01",
-                    "transport": "uds",
-                    "frames_per_connection": frame,
-                    "source_revision": "b" * 40,
-                    "generated_at": f"2026-08-01T00:00:{frame:02d}Z",
-                    "passed": True,
-                    "sample_count": 10,
-                    "minimum_sample_count": 10,
-                    "run_duration_s": 20.0,
-                    "target_duration_s": 20.0,
-                    "runs": [{"intervals": [{"admissions_per_second": frame * 1_000}]}],
-                }
-                (root / f"f{frame}.json").write_text(json.dumps(payload), encoding="utf-8")
-            with mock.patch.object(RUNNER, "is_ancestor_revision", return_value=True):
-                median, reference = RUNNER.matching_profile_reference(
-                    root, "mac-arm64-01", "uds", 4, "c" * 40,
-                )
-        self.assertEqual(median, 4_000)
-        self.assertEqual(reference, "b" * 40)
-
     def test_main_binds_the_validated_transport_before_selecting_profiles(self):
         with (
-            mock.patch.object(sys, "argv", ["run_admission_capacity.py", "--transport", "invalid"]),
+            mock.patch.object(sys, "argv", ["run_admission_capacity.py", "--diagnostic-only", "--transport", "invalid"]),
             mock.patch.object(RUNNER, "selected_profiles") as selected,
         ):
-            with self.assertRaisesRegex(RUNNER.SmokeError, "must be `uds` or `tcp`"):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "must be `sqlite`, `uds`, or `tcp`"):
                 RUNNER.main()
         selected.assert_not_called()
 
-    def test_main_allows_windows_tcp_without_a_comparison_reference(self):
-        captured: dict[str, object] = {}
+    def test_plain_benchmark_command_dispatches_the_required_four_target_matrix(self):
+        with (
+            mock.patch.object(sys, "argv", ["run_admission_capacity.py"]),
+            mock.patch.object(RUNNER, "run_required_f8_suite", return_value=0) as matrix,
+        ):
+            self.assertEqual(RUNNER.main(), 0)
+        matrix.assert_called_once()
 
-        def run_capacity(*_args, **kwargs):
-            captured.update(kwargs)
-            return 0, mock.sentinel.evidence
+    def test_matrix_uses_the_documented_secure_default_for_local_daemon_targets(self):
+        self.assertEqual(
+            RUNNER.resolve_benchmark_target("sqlite", None),
+            ("sqlite", None, "sqlite"),
+        )
+        self.assertEqual(
+            RUNNER.resolve_benchmark_target("uds", None),
+            ("uds", "mutual-tls", "uds"),
+        )
 
-        with tempfile.TemporaryDirectory() as directory:
-            with (
-                mock.patch.object(
-                    sys,
-                    "argv",
-                    [
-                        "run_admission_capacity.py",
-                        "--transport",
-                        "tcp",
-                        "--atm-home",
-                        directory,
-                        "--frames-per-connection",
-                        "1",
-                    ],
-                ),
-                mock.patch.object(RUNNER.os, "name", "nt"),
-                # PureWindowsPath models argv path conversion without asking
-                # the Windows host to instantiate an unsupported PosixPath.
-                mock.patch.object(RUNNER, "Path", PureWindowsPath),
-                mock.patch.object(RUNNER, "source_revision", return_value="a" * 40),
-                mock.patch.object(
-                    RUNNER,
-                    "matching_profile_reference",
-                    side_effect=RUNNER.SmokeError("missing comparison reference"),
-                ) as comparison,
-                mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity),
-            ):
-                self.assertEqual(RUNNER.main(), 0)
+    def test_tcp_target_uses_explicit_direct_peer_listener_not_local_http_record(self):
+        endpoint = RUNNER.direct_peer_endpoint(43_102)
+        self.assertEqual(endpoint.address, ("127.0.0.1", 43_102))
+        self.assertTrue(endpoint.direct_peer)
+        self.assertIsNone(endpoint.capability)
+        with self.assertRaisesRegex(RUNNER.SmokeError, "direct-peer listener"):
+            RUNNER.local_endpoint("tcp")
 
-        comparison.assert_called_once()
-        self.assertIsNone(captured["comparison_median"])
-        self.assertFalse(captured["comparison_required"])
+    def test_direct_peer_request_carries_complete_immutable_origin_metadata(self):
+        body = __import__("json").loads(
+            RUNNER.http_request_body(Path("/tmp/atm-capacity-test"), 42, peer_origin=True)
+        )
+        self.assertRegex(body["origin_message_id"], r"^[0-9A-HJKMNP-TV-Z]{26}$")
+        self.assertTrue(body["origin_timestamp"].endswith("Z"))
 
-    def test_main_records_uds_baseline_source_as_a_diffable_comparison(self):
-        captured: dict[str, object] = {}
+    def test_local_request_does_not_invent_peer_origin_metadata(self):
+        body = __import__("json").loads(
+            RUNNER.http_request_body(Path("/tmp/atm-capacity-test"), 42)
+        )
+        self.assertNotIn("origin_message_id", body)
+        self.assertNotIn("origin_timestamp", body)
 
-        def run_capacity(*_args, **kwargs):
-            captured.update(kwargs)
-            return 0, evidence_path
+    def test_mtls_direct_peer_endpoint_carries_hostname_and_identity(self):
+        identity = RUNNER.DisposableMtlsIdentity(
+            "benchmark.example.test", Path("/tmp/identity.pem"), "a" * 64,
+        )
+        endpoint = RUNNER.direct_peer_endpoint(43_102, identity)
+        self.assertEqual(endpoint.tls_server_name, "benchmark.example.test")
+        self.assertEqual(endpoint.tls_certificate_bundle, Path("/tmp/identity.pem"))
 
-        baseline = {
-            "generated_at": "2026-08-01T00:00:00Z",
-            "source_revision": "b" * 40,
-            "transport": "uds",
-            "frames_per_connection": 1,
-            "passed": True,
-            "sample_count": 10,
-            "minimum_sample_count": 10,
-            "run_duration_s": 20.0,
-            "target_duration_s": 20.0,
-            "runs": [{"intervals": [{"admissions_per_second": 1_000}]}],
-        }
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            baseline_path = root / "baseline.json"
-            evidence_path = root / "evidence.json"
-            baseline_path.write_text(json.dumps(baseline), encoding="utf-8")
-            evidence_path.write_text(json.dumps(baseline), encoding="utf-8")
-            with (
-                mock.patch.object(
-                    sys,
-                    "argv",
-                    [
-                        "run_admission_capacity.py",
-                        "--transport", "uds",
-                        "--atm-home", str(root),
-                        "--frames-per-connection", "1",
-                        "--baseline", str(baseline_path),
-                    ],
-                ),
-                mock.patch.object(RUNNER, "source_revision", return_value="a" * 40),
-                mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity),
-                # This verifies the portable UDS comparison schema. Keep the
-                # Windows runtime guard covered by its dedicated unit test;
-                # mocking only this validation preserves Windows `pathlib`.
-                mock.patch.object(RUNNER, "validate_transport", return_value="uds"),
-            ):
-                self.assertEqual(RUNNER.main(), 0)
+    def test_disposable_peer_authority_is_unique_per_benchmark_run(self):
+        first = RUNNER.CapacityRoster("first", "team", "agent", "recipient")
+        second = RUNNER.CapacityRoster("second", "team", "agent", "recipient")
+        with mock.patch.dict(os.environ, {"ATM_CAPACITY_PEER_HOST": "m5.local"}, clear=False):
+            self.assertEqual(RUNNER.disposable_peer_host(first), "capacity-first.m5.local")
+            self.assertEqual(RUNNER.disposable_peer_host(second), "capacity-second.m5.local")
 
-        self.assertEqual(captured["comparison_median"], 1_000)
-        self.assertEqual(captured["comparison_source_revision"], "b" * 40)
-        self.assertEqual(captured["comparison_host_label"], "local")
-
-    def test_baseline_requires_matching_transport_and_frame_profile(self):
-        payload = {
-            "transport": "tcp",
-            "frames_per_connection": 8,
-            "passed": True,
-            "sample_count": 10,
-            "minimum_sample_count": 10,
-            "run_duration_s": 20.0,
-            "target_duration_s": 20.0,
-            "runs": [{"intervals": [{"admissions_per_second": 1_000}]}],
-        }
-        with tempfile.TemporaryDirectory() as temp:
-            path = Path(temp) / "baseline.json"
-            path.write_text(__import__("json").dumps(payload), encoding="utf-8")
-            self.assertEqual(RUNNER.load_baseline_median(path, "tcp", 8), 1_000)
-            with self.assertRaisesRegex(RUNNER.SmokeError, "transport"):
-                RUNNER.load_baseline_median(path, "uds", 8)
-            with self.assertRaisesRegex(RUNNER.SmokeError, "frames_per_connection"):
-                RUNNER.load_baseline_median(path, "tcp", 16)
-
-    def test_baseline_reference_retains_source_revision_and_observed_result(self):
-        payload = {
-            "generated_at": "2026-08-01T00:00:00Z",
-            "source_revision": "a" * 40,
-            "run_duration_s": 20.0,
-            "passed": False,
-            "runs": [{"intervals": [{"admissions_per_second": 180.0}]}],
-        }
-        with tempfile.TemporaryDirectory() as temp:
-            path = Path(temp) / "baseline.json"
-            path.write_text(json.dumps(payload), encoding="utf-8")
-            reference = RUNNER.baseline_reference(path)
-        self.assertEqual(reference["source_revision"], "a" * 40)
-        self.assertFalse(reference["passed"])
-        self.assertEqual(reference["median_admissions_per_second"], 180.0)
-
-    def test_invalid_baseline_is_rejected_before_its_median_is_used(self):
-        payload = {"transport": "uds", "frames_per_connection": 1, "passed": False,
-                   "sample_count": 1, "minimum_sample_count": 10, "run_duration_s": 0.1,
-                   "target_duration_s": 20.0, "runs": [{"intervals": [{"admissions_per_second": 180.0}]}]}
-        with tempfile.TemporaryDirectory() as temp:
-            path = Path(temp) / "baseline.json"
-            path.write_text(json.dumps(payload), encoding="utf-8")
-            with self.assertRaisesRegex(RUNNER.SmokeError, "did not pass"):
-                RUNNER.load_baseline_median(path, "uds", 1)
-
-    def test_durability_verification_counts_every_isolated_sqlite_row_after_restart(self):
-        with tempfile.TemporaryDirectory() as temp:
-            database = Path(temp) / "mail.db"
-            with closing(__import__("sqlite3").connect(database)) as connection:
-                connection.execute("CREATE TABLE mail_messages (team TEXT, agent TEXT)")
-                connection.executemany(
-                    "INSERT INTO mail_messages VALUES (?, ?)",
-                    [("capacity-team", "capacity-recipient")] * 10,
-                )
-                connection.commit()
-            verified = RUNNER.verify_durable_admissions(database, 10)
-        self.assertTrue(verified["passed"])
-        self.assertEqual(verified["observed_mailbox_count"], 10)
-        self.assertEqual(verified["method"], "isolated_sqlite_exact_count_after_restart")
-
-    def test_durability_verification_rejects_missing_accepted_rows(self):
-        with tempfile.TemporaryDirectory() as temp:
-            database = Path(temp) / "mail.db"
-            with closing(__import__("sqlite3").connect(database)) as connection:
-                connection.execute("CREATE TABLE mail_messages (team TEXT, agent TEXT)")
-                connection.executemany(
-                    "INSERT INTO mail_messages VALUES (?, ?)",
-                    [("capacity-team", "capacity-recipient")] * 9,
-                )
-                connection.commit()
-            with self.assertRaisesRegex(RUNNER.SmokeError, "expected 10, observed 9"):
-                RUNNER.verify_durable_admissions(database, 10)
-
-    def test_durability_verification_closes_the_read_only_sqlite_connection(self):
-        class RecordingConnection:
-            closed = False
-
-            def execute(self, _query, _parameters):
-                return self
-
-            def fetchone(self):
-                return (10,)
-
-            def close(self):
-                self.closed = True
-
-        connection = RecordingConnection()
-        with tempfile.TemporaryDirectory() as temp:
-            database = Path(temp) / "mail.db"
-            database.touch()
-            with mock.patch.object(RUNNER.sqlite3, "connect", return_value=connection):
-                verified = RUNNER.verify_durable_admissions(database, 10)
-        self.assertTrue(verified["passed"])
-        self.assertTrue(connection.closed)
+    def test_public_tcp_targets_select_only_the_ordinary_daemon_mode(self):
+        self.assertEqual(
+            RUNNER.resolve_benchmark_target("tcp", None),
+            ("tcp", "plaintext-test", "tcp"),
+        )
+        self.assertEqual(
+            RUNNER.resolve_benchmark_target("tcp-tls", "tcp"),
+            ("tcp", "mutual-tls", "tcp-tls"),
+        )
+        with self.assertRaisesRegex(RUNNER.SmokeError, "requires transport"):
+            RUNNER.resolve_benchmark_target("tcp-tls", "uds")
 
     def test_response_reader_consumes_declared_body(self):
         class Stream:
@@ -1031,15 +1740,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             ],
         )
         self.assertEqual(command.call_args_list[1].args[0][4], "capacity-recipient")
-        self.assertEqual(len(command.call_args_list), 4)
-        self.assertEqual(
-            command.call_args_list[2].args[0],
-            [
-                str(atm), "teams", "add-member", "capacity-core-team", "capacity-core-agent",
-                "--home-dir", str(capacity_home), "--json",
-            ],
-        )
-        self.assertEqual(command.call_args_list[3].args[0][4], "capacity-core-recipient")
+        self.assertEqual(len(command.call_args_list), 2)
 
     def test_capacity_roster_is_unique_per_profile(self):
         first = RUNNER.CapacityRoster.unique()
@@ -1048,9 +1749,6 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertNotEqual(first.team, second.team)
         self.assertNotEqual(first.agent, second.agent)
         self.assertNotEqual(first.recipient, second.recipient)
-        self.assertNotEqual(first.core_team, second.core_team)
-        self.assertNotEqual(first.core_agent, second.core_agent)
-        self.assertNotEqual(first.core_recipient, second.core_recipient)
 
     def test_custom_capacity_roster_flows_to_public_request(self):
         roster = RUNNER.CapacityRoster.unique()
@@ -1088,68 +1786,6 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(request.path, "/v1/atm/heartbeat")
         self.assertEqual(request.expected_status, 200)
         self.assertEqual(run_profile.call_args.kwargs["operation"], "cached_roster_heartbeat")
-        self.assertEqual(run_profile.call_args.kwargs["minimum_admissions_per_second"], 0)
-
-    def test_direct_storage_probe_requires_a_complete_json_result(self):
-        daemon = Path("/tmp/atm-daemon-benchmark")
-        payload = {
-            "kind": "async_storage_admission",
-            "requested_count": RUNNER.DIRECT_STORAGE_DIAGNOSTIC_WRITES,
-            "accepted_count": RUNNER.DIRECT_STORAGE_DIAGNOSTIC_WRITES,
-            "worker_count": 8,
-            "elapsed_seconds": 0.2,
-            "admissions_per_second": 50_000.0,
-        }
-        with mock.patch.object(
-            RUNNER,
-            "command_result",
-            return_value={"exit_code": 0, "stdout": json.dumps(payload) + "\n", "stderr": ""},
-        ) as command:
-            result = RUNNER.run_direct_storage_probe(daemon, {"ATM_HOME": "/tmp/home"}, 8)
-
-        self.assertEqual(result, payload)
-        self.assertEqual(
-            command.call_args.args[0],
-            [
-                str(daemon), "--direct-storage-admission",
-                str(RUNNER.DIRECT_STORAGE_DIAGNOSTIC_WRITES), "--workers", "8",
-            ],
-        )
-
-    def test_direct_storage_probe_rejects_a_partial_or_non_json_result(self):
-        with mock.patch.object(
-            RUNNER,
-            "command_result",
-            return_value={"exit_code": 0, "stdout": "not-json\n", "stderr": ""},
-        ):
-            with self.assertRaisesRegex(RUNNER.SmokeError, "no JSON result"):
-                RUNNER.run_direct_storage_probe(Path("/tmp/daemon"), {}, 1)
-
-    def test_direct_core_write_probe_uses_the_canonical_write_mode(self):
-        daemon = Path("/tmp/atm-daemon-benchmark")
-        payload = {
-            "kind": "canonical_core_write",
-            "requested_count": RUNNER.DIRECT_STORAGE_DIAGNOSTIC_WRITES,
-            "accepted_count": RUNNER.DIRECT_STORAGE_DIAGNOSTIC_WRITES,
-            "worker_count": 8,
-            "elapsed_seconds": 0.5,
-            "admissions_per_second": 20_000.0,
-        }
-        with mock.patch.object(
-            RUNNER,
-            "command_result",
-            return_value={"exit_code": 0, "stdout": json.dumps(payload) + "\n", "stderr": ""},
-        ) as command:
-            result = RUNNER.run_direct_core_write_probe(daemon, {"ATM_HOME": "/tmp/home"}, 8)
-
-        self.assertEqual(result, payload)
-        self.assertEqual(
-            command.call_args.args[0],
-            [
-                str(daemon), "--direct-core-write",
-                str(RUNNER.DIRECT_STORAGE_DIAGNOSTIC_WRITES), "--workers", "8",
-            ],
-        )
 
     def test_interval_preserves_the_first_failure_and_requires_all_1000_responses(self):
         calls = 0
@@ -1181,6 +1817,26 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(result["connections"], 16)
         self.assertEqual(sorted(requested_connection_sizes)[0], 40)
         self.assertTrue(result["passed"])
+
+    def test_connection_worker_limit_reserves_descriptors_under_a_posix_soft_limit(self):
+        limited_resource = mock.Mock()
+        limited_resource.RLIMIT_NOFILE = 7
+        limited_resource.RLIM_INFINITY = -1
+        limited_resource.getrlimit.return_value = (256, 256)
+        with mock.patch.object(RUNNER, "resource", limited_resource):
+            self.assertEqual(RUNNER.admission_connection_worker_limit(512), 192)
+
+    def test_connection_worker_limit_keeps_requested_workers_without_rlimit_support(self):
+        with mock.patch.object(RUNNER, "resource", None):
+            self.assertEqual(RUNNER.admission_connection_worker_limit(512), 512)
+
+    def test_connection_worker_limit_keeps_requested_workers_for_an_unbounded_limit(self):
+        unlimited_resource = mock.Mock()
+        unlimited_resource.RLIMIT_NOFILE = 7
+        unlimited_resource.RLIM_INFINITY = -1
+        unlimited_resource.getrlimit.return_value = (-1, -1)
+        with mock.patch.object(RUNNER, "resource", unlimited_resource):
+            self.assertEqual(RUNNER.admission_connection_worker_limit(512), 512)
 
     def test_interval_uses_the_published_application_wire_metric_names(self):
         result = RUNNER.run_interval(
@@ -1302,15 +1958,15 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(result["sample_count"], 1)
         self.assertEqual(run_interval.call_count, 1)
 
-    def test_profile_retains_clean_under_threshold_intervals(self):
-        interval = {"passed": False, "error_free": True, "elapsed_seconds": 0.4}
+    def test_profile_retains_clean_intervals_until_the_sustained_duration(self):
+        interval = {"passed": True, "error_free": True, "elapsed_seconds": 0.4}
         with mock.patch.object(RUNNER, "run_interval", return_value=interval) as run_interval:
             result = RUNNER.run_profile(
                 RUNNER.LocalEndpoint("uds", "/tmp/atm-capacity-test"),
                 Path("/tmp/atm-capacity-test"), 64, 1_000, 2, 2,
                 target_duration_seconds=1.0,
             )
-        self.assertFalse(result["passed"])
+        self.assertTrue(result["passed"])
         self.assertEqual(result["sample_count"], 3)
         self.assertEqual(run_interval.call_count, 3)
 
@@ -1328,16 +1984,47 @@ class AdmissionCapacityTests(unittest.TestCase):
     def test_failed_daemon_readiness_reaps_the_new_child(self):
         process = mock.Mock()
         output = mock.Mock()
+        output.evidence.return_value = {"stdout_tail": ["starting"], "stderr_tail": ["config failed"]}
         with (
             mock.patch.object(RUNNER.subprocess, "Popen", return_value=process),
             mock.patch.object(RUNNER.DaemonOutputCapture, "start", return_value=output),
             mock.patch.object(RUNNER, "await_daemon_ready", side_effect=RUNNER.SmokeError("not ready")),
             mock.patch.object(RUNNER, "reap_owned_daemon") as reap,
         ):
-            with self.assertRaisesRegex(RUNNER.SmokeError, "not ready"):
-                RUNNER.start_capacity_daemon(Path("/tmp/daemon"), Path("/tmp"), {}, "active")
+            with self.assertRaisesRegex(RUNNER.SmokeError, "not ready.*config failed"):
+                RUNNER.start_capacity_daemon(
+                    Path("/tmp/daemon"), Path("/tmp"), {}, "mutual-tls"
+                )
         reap.assert_called_once_with(process)
         output.join.assert_called_once_with()
+
+    def test_capacity_daemon_launches_the_shipped_binary_with_explicit_peer_wire_and_port(self):
+        process = mock.Mock()
+        process.stdout = mock.Mock()
+        process.stderr = mock.Mock()
+        output = mock.Mock()
+        with (
+            mock.patch.object(RUNNER.subprocess, "Popen", return_value=process) as popen,
+            mock.patch.object(RUNNER.DaemonOutputCapture, "start", return_value=output),
+            mock.patch.object(RUNNER, "await_daemon_ready"),
+        ):
+            RUNNER.start_capacity_daemon(
+                Path("/release/atm-daemon"), Path("/tmp/atm-capacity-proof"),
+                {RUNNER.CAPACITY_DIRECT_PEER_PORT_ENV: "43102"},
+                "plaintext-test",
+            )
+        launched = popen.call_args.args[0]
+        self.assertEqual(Path(launched[0]), Path("/release/atm-daemon"))
+        self.assertEqual(
+            launched[1:],
+            ["--peer-wire-security", "plaintext-test", "--direct-peer-port", "43102"],
+        )
+
+    def test_managed_mode_rejects_a_doctor_that_reports_the_wrong_wire_mode(self):
+        status = healthy_managed_status()
+        status["doctor"]["daemon_context"]["peer_wire_security"] = "mutual-tls"
+        with self.assertRaisesRegex(RUNNER.SmokeError, "expected plaintext-test"):
+            RUNNER.require_managed_peer_wire_security(status, "plaintext-test")
 
     def test_daemon_output_capture_retains_bounded_stdout_and_stderr_tails(self):
         capture = RUNNER.DaemonOutputCapture()

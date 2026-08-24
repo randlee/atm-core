@@ -1,5 +1,9 @@
 # ADR-034 — Minimal Cross-Host HTTPS Transport
 
+> **Forward reconciliation:** ADR-047 partially supersedes this ADR's
+> peer-wire mode-selection wording. Its single-router, canonical-request, and
+> stream-adapter constraints remain in force.
+
 | Field | Value |
 | --- | --- |
 | ID | ADR-034 |

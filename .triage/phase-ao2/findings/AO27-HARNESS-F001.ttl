@@ -1,0 +1,55 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO27-HARNESS-F001>
+  a triage:Finding ;
+  triage:findingId "AO27-HARNESS-F001" ;
+  triage:title "M5AttemptLedger contract implemented but never called" ;
+  triage:description "The M5AttemptLedger safety contract (SuiteIntent, CompleteSuiteAttempt, derive_accepted_m5, crash-safe append-before-execute) is fully implemented in scripts/smoke/benchmark_suite.py but is never instantiated or called outside its own unit test. The actual entry points (run_admission_capacity.py and benchmark_report.py) derive PASS/FAIL from each target's latest evidence file independently, bypassing the ledger's restore-verified check, intent/completion pairing, 3-consecutive-attempt requirement, and candidate-lineage check. This means the PR ships the ledger's building blocks but not the actual AO2.7 safety and acceptance deliverable." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "HARNESS" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "deferred" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-22T21:10:00Z"^^xsd:dateTime ;
+  triage:deferredNote "Fixing as originally scoped (wiring M5AttemptLedger into current entry points) is throwaway: AO2.10 (docs/plans/phase-ao2/sprint-AO2-10-benchmark-data-contract.md) replaces this PASS/FAIL derivation path with a single-owner classify_status() model and deletes the unused ledger module outright (AO2.10 deliverable 8) rather than wiring it in. AO2.10/AO2.11 are infrastructure sprints (v4 schema/runner emission, then rendering) and do not themselves restore an equivalent acceptance safety net. Re-promoted 2026-08-24 from 'pending AO2.10' to 'pending AO2.12/AO2.13': neither sprint doc currently names a replacement for the deleted 3-consecutive-attempt/crash-safe acceptance discipline, so this finding stays open and must be explicitly re-evaluated once AO2.10+AO2.11 land -- either as an AO2.13 (canonical benchmark-run workflow, docs/plans/phase-ao2/sprint-AO2-13-benchmark-run-skill.md) deliverable addition enforcing an equivalent safety gate, or closed with an explicit team-lead/quality-mgr rationale for why no replacement is required." ;
+  triage:foundIn triage:AO2.7 ;
+  triage:foundAt "2026-08-22T21:09:45Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO27-HARNESS-F001/ao2-7-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO27-HARNESS-F001/ao2-7-2> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AO27-HARNESS-F001/ao2-7-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 1 ;
+  triage:snippet "Entry point does not instantiate M5AttemptLedger" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/ao2-7-direct-peer-benchmark-harness" ;
+  triage:headSha "934caaaa7fef7803740be228a1276d552ea29db5" ;
+  triage:occursIn <urn:atm:triage:worktree/ao2-7/934caaaa7fef7803740be228a1276d552ea29db5> .
+
+<urn:atm:triage:occurrence/AO27-HARNESS-F001/ao2-7-2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/benchmark_report.py" ;
+  triage:line 1 ;
+  triage:snippet "Campaign XHTML renderer bypasses ledger" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/ao2-7-direct-peer-benchmark-harness" ;
+  triage:headSha "934caaaa7fef7803740be228a1276d552ea29db5" ;
+  triage:occursIn <urn:atm:triage:worktree/ao2-7/934caaaa7fef7803740be228a1276d552ea29db5> .
+
+<urn:atm:triage:worktree/ao2-7/934caaaa7fef7803740be228a1276d552ea29db5>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ao2-7" ;
+  triage:branch "fix/ao2-7-direct-peer-benchmark-harness" ;
+  triage:headSha "934caaaa7fef7803740be228a1276d552ea29db5" ;
+  triage:orderIndex 8 .

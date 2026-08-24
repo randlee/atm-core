@@ -35,6 +35,8 @@ enum BenchmarkInvocation {
     DirectCoreWrite {
         messages: NonZeroUsize,
         workers: NonZeroUsize,
+        minimum_intervals: NonZeroUsize,
+        target_duration_seconds: u64,
     },
 }
 
@@ -47,8 +49,19 @@ async fn main() {
         Ok(BenchmarkInvocation::DirectStorageAdmission { messages, workers }) => {
             run_direct_storage_admission(messages, workers).await
         }
-        Ok(BenchmarkInvocation::DirectCoreWrite { messages, workers }) => {
-            run_direct_core_write(messages, workers).await
+        Ok(BenchmarkInvocation::DirectCoreWrite {
+            messages,
+            workers,
+            minimum_intervals,
+            target_duration_seconds,
+        }) => {
+            run_direct_core_write(
+                messages,
+                workers,
+                minimum_intervals,
+                target_duration_seconds,
+            )
+            .await
         }
         Err(error) => Err(error),
     };
@@ -91,12 +104,14 @@ fn parse_benchmark_invocation(
             Ok(BenchmarkInvocation::DirectStorageAdmission { messages, workers })
         }
         Some("--direct-core-write") => {
-            let (messages, workers) = parse_concurrent_arguments(
-                args,
-                "direct-core-write",
-                "usage: atm-daemon-benchmark --direct-core-write <count> --workers <count>",
-            )?;
-            Ok(BenchmarkInvocation::DirectCoreWrite { messages, workers })
+            let (messages, workers, minimum_intervals, target_duration_seconds) =
+                parse_direct_core_write_arguments(args)?;
+            Ok(BenchmarkInvocation::DirectCoreWrite {
+                messages,
+                workers,
+                minimum_intervals,
+                target_duration_seconds,
+            })
         }
         _ => Err(AtmError::config(
             "usage: atm-daemon-benchmark --hook-mode <active|disabled> | --direct-storage-admission <count> --workers <count> | --direct-core-write <count> --workers <count>",
@@ -118,6 +133,44 @@ fn parse_concurrent_arguments(
         return Err(AtmError::config(usage));
     }
     Ok((messages, workers))
+}
+
+fn parse_direct_core_write_arguments(
+    mut args: impl Iterator<Item = String>,
+) -> Result<(NonZeroUsize, NonZeroUsize, NonZeroUsize, u64), AtmError> {
+    let usage = "usage: atm-daemon-benchmark --direct-core-write <count> --workers <count> [--intervals <count> --seconds <count>]";
+    let messages = parse_nonzero_argument(args.next(), "direct-core-write message count")?;
+    if args.next().as_deref() != Some("--workers") {
+        return Err(AtmError::config(usage));
+    }
+    let workers = parse_nonzero_argument(args.next(), "direct-core-write worker count")?;
+    let Some(option) = args.next() else {
+        return Ok((messages, workers, NonZeroUsize::MIN, 0));
+    };
+    if option != "--intervals" {
+        return Err(AtmError::config(usage));
+    }
+    let minimum_intervals =
+        parse_nonzero_argument(args.next(), "direct-core-write interval count")?;
+    if args.next().as_deref() != Some("--seconds") {
+        return Err(AtmError::config(usage));
+    }
+    let target_duration_seconds = args
+        .next()
+        .ok_or_else(|| AtmError::config("direct-core-write duration is required"))?
+        .parse::<u64>()
+        .map_err(|_| {
+            AtmError::config("direct-core-write duration must be a non-negative integer")
+        })?;
+    if args.next().is_some() {
+        return Err(AtmError::config(usage));
+    }
+    Ok((
+        messages,
+        workers,
+        minimum_intervals,
+        target_duration_seconds,
+    ))
 }
 
 fn parse_nonzero_argument(value: Option<String>, name: &str) -> Result<NonZeroUsize, AtmError> {
@@ -238,15 +291,67 @@ fn direct_storage_message(run_id: &str, sequence: usize) -> Message {
 async fn run_direct_core_write(
     messages: NonZeroUsize,
     workers: NonZeroUsize,
+    minimum_intervals: NonZeroUsize,
+    target_duration_seconds: u64,
 ) -> Result<(), AtmError> {
     let runtime = atm_daemon_bootstrap::assemble_default_runtime()?
         .for_daemon()
         .service_runtime;
     let home = atm_core::home::atm_home()?;
+    let started = Instant::now();
+    let mut accepted = 0_usize;
+    let mut intervals = Vec::new();
+    while intervals.len() < minimum_intervals.get()
+        || started.elapsed().as_secs() < target_duration_seconds
+    {
+        let (interval_accepted, interval_seconds) = run_direct_core_write_interval(
+            runtime.clone(),
+            home.clone(),
+            messages,
+            workers,
+            intervals.len() * messages.get(),
+        )
+        .await?;
+        accepted += interval_accepted;
+        intervals.push(serde_json::json!({
+            "requested_count": messages.get(),
+            "accepted_count": interval_accepted,
+            "elapsed_seconds": interval_seconds,
+            "admissions_per_second": interval_accepted as f64 / interval_seconds,
+        }));
+    }
+    let elapsed_seconds = started.elapsed().as_secs_f64();
+    let requested = messages.get() * intervals.len();
+    if accepted != requested {
+        return Err(AtmError::daemon_unavailable(format!(
+            "direct core-write benchmark accepted {accepted} of {requested} messages"
+        )));
+    }
+    println!(
+        "{}",
+        serde_json::json!({
+            "kind": "canonical_core_write",
+            "requested_count": requested,
+            "accepted_count": accepted,
+            "worker_count": workers.get(),
+            "elapsed_seconds": elapsed_seconds,
+            "admissions_per_second": accepted as f64 / elapsed_seconds,
+            "intervals": intervals,
+        })
+    );
+    Ok(())
+}
+
+async fn run_direct_core_write_interval(
+    runtime: atm_core::LocalServiceRuntime,
+    home: std::path::PathBuf,
+    messages: NonZeroUsize,
+    workers: NonZeroUsize,
+    sequence_offset: usize,
+) -> Result<(usize, f64), AtmError> {
     let next = Arc::new(AtomicUsize::new(0));
     let started = Instant::now();
     let mut tasks = JoinSet::new();
-
     for _ in 0..workers.get() {
         let runtime = runtime.clone();
         let home = home.clone();
@@ -259,7 +364,7 @@ async fn run_direct_core_write(
                     return Ok::<usize, AtmError>(accepted);
                 }
                 prepare_write_with_async_runtime(
-                    direct_core_write_request(&home, sequence)?,
+                    direct_core_write_request(&home, sequence_offset + sequence)?,
                     &NullObservability,
                     &runtime,
                 )
@@ -268,7 +373,6 @@ async fn run_direct_core_write(
             }
         });
     }
-
     let mut accepted = 0_usize;
     while let Some(result) = tasks.join_next().await {
         accepted += result.map_err(|error| {
@@ -277,25 +381,13 @@ async fn run_direct_core_write(
             ))
         })??;
     }
-    let elapsed_seconds = started.elapsed().as_secs_f64();
     if accepted != messages.get() {
         return Err(AtmError::daemon_unavailable(format!(
             "direct core-write benchmark accepted {accepted} of {} messages",
             messages.get()
         )));
     }
-    println!(
-        "{}",
-        serde_json::json!({
-            "kind": "canonical_core_write",
-            "requested_count": messages.get(),
-            "accepted_count": accepted,
-            "worker_count": workers.get(),
-            "elapsed_seconds": elapsed_seconds,
-            "admissions_per_second": accepted as f64 / elapsed_seconds,
-        })
-    );
-    Ok(())
+    Ok((accepted, started.elapsed().as_secs_f64()))
 }
 
 fn direct_core_write_request(
@@ -404,8 +496,31 @@ mod tests {
         .expect("core invocation parses");
         assert!(matches!(
             core,
-            BenchmarkInvocation::DirectCoreWrite { messages, workers }
-                if messages.get() == 10_000 && workers.get() == 64
+            BenchmarkInvocation::DirectCoreWrite {
+                messages, workers, minimum_intervals, target_duration_seconds,
+            }
+                if messages.get() == 10_000
+                    && workers.get() == 64
+                    && minimum_intervals.get() == 1
+                    && target_duration_seconds == 0
+        ));
+
+        let intervalled = parse_benchmark_invocation([
+            "--direct-core-write".to_owned(),
+            "1000".to_owned(),
+            "--workers".to_owned(),
+            "64".to_owned(),
+            "--intervals".to_owned(),
+            "10".to_owned(),
+            "--seconds".to_owned(),
+            "20".to_owned(),
+        ])
+        .expect("intervalled core invocation parses");
+        assert!(matches!(
+            intervalled,
+            BenchmarkInvocation::DirectCoreWrite {
+                minimum_intervals, target_duration_seconds, ..
+            } if minimum_intervals.get() == 10 && target_duration_seconds == 20
         ));
     }
 

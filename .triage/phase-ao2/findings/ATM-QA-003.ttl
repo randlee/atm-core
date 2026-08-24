@@ -1,0 +1,55 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-003" ;
+  triage:title "ADR-034/040 do not self-annotate supersession by ADR-047" ;
+  triage:description "docs/adr/ADR-034 and docs/adr/ADR-040 do not carry a self-annotation noting that they are partially superseded/reconciled by the new ADR-047, making the ADR chain harder to trace forward from the older records." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "req-qa" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-20T09:00:24Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.1 ;
+  triage:foundAt "2026-08-20T09:00:24Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/S1-034> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/S1-040> ;
+  triage:triageRecordVersion "2" ;
+  triage:closedNote "Confirmed genuinely fixed by quality-mgr QA-2 for PR #961 @57c53349ef ('ATM-QA-003 (minor): ADR-034/040 now self-annotate ADR-047's partial supersession'). Independently re-verified on integrate/phase-ao2 @b2370b9ecf94: both ADR-034 and ADR-040 carry a 'Forward reconciliation: ADR-047 partially supersedes...' note. This record was left open in triage despite the underlying fix landing -- a closure-tracking gap, not a code gap." .
+
+<urn:atm:triage:occurrence/ATM-QA-003/S1-034>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-034-minimal-cross-host-https-transport.md" ;
+  triage:line 1 ;
+  triage:snippet "# ADR-034 — Minimal Cross-Host HTTPS Transport" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s1-peer-wire-policy" ;
+  triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
+  triage:occursIn <urn:atm:triage:worktree/S1/d137ab8d> .
+
+<urn:atm:triage:occurrence/ATM-QA-003/S1-040>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-040-peer-authority-resolution.md" ;
+  triage:line 1 ;
+  triage:snippet "# ADR-040 — Peer Authority Resolution" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pao-s1-peer-wire-policy" ;
+  triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
+  triage:occursIn <urn:atm:triage:worktree/S1/d137ab8d> .
+
+<urn:atm:triage:worktree/S1/d137ab8d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pao-s1-peer-wire-policy" ;
+  triage:branch "feature/pao-s1-peer-wire-policy" ;
+  triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,62 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QA-001-AO23>
+  a triage:Finding ;
+  triage:findingId "QA-001-AO23" ;
+  triage:title "run_replacement_daemon_with_selector exceeds RULE-002 80-line limit (117 lines)" ;
+  triage:description "crates/atm-daemon-bootstrap/src/lib.rs's run_replacement_daemon_with_selector is 117 lines, exceeding just lint's RULE-002 80-line hard limit. Confirmed via just lint failing with RULE-002 failed: new hard violations (80+ lines) overlap the current diff. Remediation: extract sub-steps (adapter selection, config assembly, shutdown handling) into named helper functions." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-qa" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-20T20:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.3 ;
+  triage:foundAt "2026-08-20T20:36:55Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-001-AO23/S3-Occurrence-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-001-AO23/S4-Occurrence-1> ;
+  triage:triageRecordVersion "2" ;
+  triage:closedNote "Confirmed fixed by quality-mgr QA-2 for PR #967 (commits baa48d7bd/ea25d03e1/03b820d76/d505ab633/87bab74b3/aa548a329); code-verified fix on feature/pao-s3-runtime-peer-wire-mode @ae3232d34." .
+
+<urn:atm:triage:occurrence/QA-001-AO23/S3-Occurrence-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 306 ;
+  triage:snippet "async fn run_replacement_daemon_with_selector(" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:headSha "e6a428355253de23a428bac2f047180ec95dfc7c" ;
+  triage:occursIn <urn:atm:triage:worktree/S3/e6a428355253de23a428bac2f047180ec95dfc7c> .
+
+<urn:atm:triage:occurrence/QA-001-AO23/S4-Occurrence-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 288 ;
+  triage:snippet "async fn run_replacement_daemon_with_selector(" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s4-peer-wire-proof" ;
+  triage:headSha "49154a38f20a3f723dc8bd6d305dfc79bb241d30" ;
+  triage:occursIn <urn:atm:triage:worktree/S4/49154a38f20a3f723dc8bd6d305dfc79bb241d30> .
+
+<urn:atm:triage:worktree/S3/e6a428355253de23a428bac2f047180ec95dfc7c>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:branch "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:headSha "e6a428355253de23a428bac2f047180ec95dfc7c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/S4/49154a38f20a3f723dc8bd6d305dfc79bb241d30>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s4-peer-wire-proof" ;
+  triage:branch "feature/pao-s4-peer-wire-proof" ;
+  triage:headSha "49154a38f20a3f723dc8bd6d305dfc79bb241d30" ;
+  triage:orderIndex 4 .

@@ -1,0 +1,155 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:a1 a triage:Assignment ;
+    triage:ofSprint triage:AO2.1 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-20T08:28:20Z"^^xsd:dateTime .
+
+triage:c1 a triage:Completion ;
+    triage:ofSprint triage:AO2.1 ;
+    triage:at "2026-08-20T08:45:54Z"^^xsd:dateTime .
+
+triage:a2 a triage:Assignment ;
+    triage:ofSprint triage:AO2.1 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-20T09:09:24Z"^^xsd:dateTime .
+
+triage:c2 a triage:Completion ;
+    triage:ofSprint triage:AO2.1 ;
+    triage:at "2026-08-20T09:32:59Z"^^xsd:dateTime .
+
+triage:a3 a triage:Assignment ;
+    triage:ofSprint triage:AO2.2 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-20T16:09:59Z"^^xsd:dateTime .
+
+triage:c3 a triage:Completion ;
+    triage:ofSprint triage:AO2.2 ;
+    triage:at "2026-08-20T16:37:10Z"^^xsd:dateTime .
+
+triage:r1 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AO22-ATM-QA-001> ;
+    triage:resolvedAt "2026-08-20T18:29:30Z"^^xsd:dateTime .
+
+triage:r2 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AO22-ATM-QA-002> ;
+    triage:resolvedAt "2026-08-20T18:29:30Z"^^xsd:dateTime .
+
+triage:r3 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AO22-ATM-QA-003> ;
+    triage:resolvedAt "2026-08-20T18:29:30Z"^^xsd:dateTime .
+
+triage:r4 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AO22-ATM-QA-004> ;
+    triage:resolvedAt "2026-08-20T18:29:30Z"^^xsd:dateTime .
+
+triage:r5 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AO22-ATM-QA-005> ;
+    triage:resolvedAt "2026-08-20T18:29:30Z"^^xsd:dateTime .
+
+triage:r6 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AO22-RBQA-F001> ;
+    triage:resolvedAt "2026-08-20T18:29:30Z"^^xsd:dateTime .
+
+triage:r7 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AO22-RBQA-F003> ;
+    triage:resolvedAt "2026-08-20T18:29:30Z"^^xsd:dateTime .
+
+triage:r8 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AO22-RSH-001> ;
+    triage:resolvedAt "2026-08-20T18:29:30Z"^^xsd:dateTime .
+
+triage:r9 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AO22-RSH-002> ;
+    triage:resolvedAt "2026-08-20T18:29:30Z"^^xsd:dateTime .
+triage:a4 a triage:Assignment ;
+    triage:ofSprint triage:AO2.3 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-20T19:18:28Z"^^xsd:dateTime .
+triage:c4 a triage:Completion ;
+    triage:ofSprint triage:AO2.3 ;
+    triage:at "2026-08-20T20:18:52Z"^^xsd:dateTime .
+triage:a5 a triage:Assignment ;
+    triage:ofSprint triage:AO2.4 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-20T20:19:17Z"^^xsd:dateTime .
+triage:r10 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/RBP-F001> ;
+    triage:resolvedAt "2026-08-20T21:55:00Z"^^xsd:dateTime .
+triage:r11 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/RBQA-F001> ;
+    triage:resolvedAt "2026-08-20T21:55:00Z"^^xsd:dateTime .
+triage:a6 a triage:Assignment ;
+    triage:ofSprint triage:AO2.5 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-22T00:43:00Z"^^xsd:dateTime .
+triage:a7 a triage:Assignment ;
+    triage:ofSprint triage:AO2.3 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-20T20:40:00Z"^^xsd:dateTime .
+triage:c5 a triage:Completion ;
+    triage:ofSprint triage:AO2.3 ;
+    triage:at "2026-08-20T22:36:00Z"^^xsd:dateTime .
+triage:r12 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/ATM-QA-104> ;
+    triage:resolvedAt "2026-08-22T04:35:20Z"^^xsd:dateTime .
+triage:r13 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/ATM-QA-105> ;
+    triage:resolvedAt "2026-08-22T04:35:20Z"^^xsd:dateTime .
+triage:a8 a triage:Assignment ;
+    triage:ofSprint triage:AO2.6 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-22T04:36:00Z"^^xsd:dateTime .
+triage:c6 a triage:Completion ;
+    triage:ofSprint triage:AO2.6 ;
+    triage:at "2026-08-22T04:46:36Z"^^xsd:dateTime .
+triage:a9 a triage:Assignment ;
+    triage:ofSprint triage:AO2.5.4 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-22T05:10:00Z"^^xsd:dateTime .
+triage:c7 a triage:Completion ;
+    triage:ofSprint triage:AO2.5.4 ;
+    triage:at "2026-08-22T05:12:00Z"^^xsd:dateTime .
+triage:a10 a triage:Assignment ;
+    triage:ofSprint triage:AO2.7 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-22T20:34:39Z"^^xsd:dateTime .
+triage:a11 a triage:Assignment ;
+    triage:ofSprint triage:AO2.9 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-22T20:38:14Z"^^xsd:dateTime .
+
+triage:c8 a triage:Completion ;
+    triage:ofSprint triage:AO2.4 ;
+    triage:at "2026-08-20T23:29:50Z"^^xsd:dateTime .
+
+triage:c9 a triage:Completion ;
+    triage:ofSprint triage:AO2.5 ;
+    triage:at "2026-08-22T06:15:47Z"^^xsd:dateTime .
+triage:a12 a triage:Assignment ;
+    triage:ofSprint triage:AO2.10 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-24T00:52:02Z"^^xsd:dateTime .
+
+triage:c12 a triage:Completion ;
+    triage:ofSprint triage:AO2.10 ;
+    triage:at "2026-08-24T03:17:18Z"^^xsd:dateTime .
+
+triage:a13 a triage:Assignment ;
+    triage:ofSprint triage:AO2.10 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-24T03:33:09Z"^^xsd:dateTime .
+
+triage:c13 a triage:Completion ;
+    triage:ofSprint triage:AO2.10 ;
+    triage:at "2026-08-24T03:56:17Z"^^xsd:dateTime .
+
+triage:a14 a triage:Assignment ;
+    triage:ofSprint triage:AO2.11 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-24T04:35:00Z"^^xsd:dateTime .
+
+triage:c14 a triage:Completion ;
+    triage:ofSprint triage:AO2.11 ;
+    triage:at "2026-08-24T04:57:32Z"^^xsd:dateTime .

@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "revision": 2,
+  "entries": [
+    {
+      "host_label": "rand-m5",
+      "target": "sqlite",
+      "p50_floor": 35000.0,
+      "approved_by": "quality-mgr: AO2.10 seed review",
+      "effective_from": "2026-08-24T00:00:00Z"
+    },
+    {
+      "host_label": "rand-m5",
+      "target": "uds",
+      "p50_floor": 18000.0,
+      "approved_by": "quality-mgr: AO2.10 seed review",
+      "effective_from": "2026-08-24T00:00:00Z"
+    },
+    {
+      "host_label": "rand-m5",
+      "target": "tcp",
+      "p50_floor": 17500.0,
+      "approved_by": "quality-mgr: AO2.10 seed review",
+      "effective_from": "2026-08-24T00:00:00Z"
+    },
+    {
+      "host_label": "rand-m5",
+      "target": "tcp-tls",
+      "p50_floor": 17500.0,
+      "approved_by": "quality-mgr: AO2.10 seed review",
+      "effective_from": "2026-08-24T00:00:00Z"
+    },
+    {
+      "host_label": "windows-x64-01",
+      "target": "tcp",
+      "p50_floor": 8793.914612253,
+      "approved_by": "historical migration seed; pending quality review",
+      "effective_from": "2026-08-01T21:13:05.279797Z"
+    },
+    {
+      "host_label": "windows-x64-01",
+      "target": "tcp-tls",
+      "p50_floor": 6891.680319866575,
+      "approved_by": "historical migration seed; pending quality review",
+      "effective_from": "2026-08-21T01:37:53.253097Z"
+    }
+  ]
+}

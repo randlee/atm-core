@@ -71,7 +71,7 @@ AO.1 development pushed; AO.1 PR merged before AO.2 PR completion.
        pub async fn connect(
            &self,
            tcp: TcpStream,
-           peer: &PeerAuthority,
+           peer: &HostName,
        ) -> Result<impl AsyncRead + AsyncWrite + Send + Unpin, AtmError>;
 
        pub async fn accept(
@@ -80,6 +80,10 @@ AO.1 development pushed; AO.1 PR merged before AO.2 PR completion.
        ) -> Result<impl AsyncRead + AsyncWrite + Send + Unpin, AtmError>;
    }
    ```
+
+   `HostName` is the repository's concrete typed peer authority. AO.2 does
+   not introduce a second `PeerAuthority` alias or newtype solely for this
+   facade.
 
    `atm-http-runtime` receives the result only through private generic
    HTTP-over-stream helpers (`S: AsyncRead + AsyncWrite + Send + Unpin`), so it
@@ -107,7 +111,7 @@ AO.1 development pushed; AO.1 PR merged before AO.2 PR completion.
 
 ## Required Validation
 
-- `cargo test -p peer-tls -p atm-core -p atm-storage`
+- `cargo test -p peer-tls -p agent-team-mail-core -p atm-storage`
 - `cargo test -p atm-architecture --test boundary_enforcement`
 - `just lint`
 - `just test`

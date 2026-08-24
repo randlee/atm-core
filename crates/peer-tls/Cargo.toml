@@ -1,0 +1,20 @@
+[package]
+name = "peer-tls"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Concrete, bounded mTLS byte-stream adapter for ATM peers."
+
+[dependencies]
+atm-storage = { path = "../atm-storage", version = "1.4.4" }
+rustls.workspace = true
+tokio.workspace = true
+tokio-rustls.workspace = true
+
+[dev-dependencies]
+rcgen = "0.13"
+tempfile = "3"

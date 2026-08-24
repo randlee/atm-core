@@ -27,6 +27,10 @@ class AppleDevelopmentSigningTests(unittest.TestCase):
             (signing.SigningIdentity("0123456789ABCDEF0123456789ABCDEF01234567", "Apple Development: test"),),
         )
 
+    def test_duplicate_security_rows_are_one_certificate_candidate(self) -> None:
+        identity = signing.SigningIdentity("A" * 40, "Apple Development: test")
+        self.assertEqual(signing.unique_identities((identity, identity)), (identity,))
+
     def test_default_resolution_uses_apple_prefix_and_team_identifier_not_hostname(self) -> None:
         selected = signing.SigningIdentity(
             "A" * 40,
@@ -57,6 +61,46 @@ class AppleDevelopmentSigningTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(signing.SigningIdentityError, "exactly one"):
                 signing.resolve_apple_development_identity()
+
+    def test_default_resolution_deduplicates_repeated_keychain_certificate_rows(self) -> None:
+        selected = signing.SigningIdentity("A" * 40, "Apple Development: test")
+        with (
+            mock.patch.object(signing, "_valid_identities", return_value=(selected,) * 4),
+            mock.patch.object(
+                signing,
+                "_certificate_team_identifier",
+                return_value=signing.DEFAULT_TEAM_IDENTIFIER,
+            ),
+            mock.patch.dict(signing.os.environ, {}, clear=True),
+        ):
+            self.assertEqual(
+                signing.resolve_apple_development_identity(),
+                signing.SigningIdentity(
+                    selected.fingerprint,
+                    selected.common_name,
+                    signing.DEFAULT_TEAM_IDENTIFIER,
+                ),
+            )
+
+    def test_override_deduplicates_repeated_keychain_certificate_rows(self) -> None:
+        selected = signing.SigningIdentity("A" * 40, "Apple Development: test")
+        with (
+            mock.patch.object(signing, "_valid_identities", return_value=(selected,) * 4),
+            mock.patch.object(
+                signing,
+                "_certificate_team_identifier",
+                return_value=signing.DEFAULT_TEAM_IDENTIFIER,
+            ),
+            mock.patch.dict(signing.os.environ, {signing.SIGNING_IDENTITY_ENVIRONMENT_VARIABLE: selected.fingerprint}),
+        ):
+            self.assertEqual(
+                signing.resolve_apple_development_identity(),
+                signing.SigningIdentity(
+                    selected.fingerprint,
+                    selected.common_name,
+                    signing.DEFAULT_TEAM_IDENTIFIER,
+                ),
+            )
 
     def test_override_selects_the_matching_valid_identity(self) -> None:
         selected = signing.SigningIdentity("A" * 40, "Apple Development: alternate", "OTHERTEAM")

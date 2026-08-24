@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F001>
+  a triage:Finding ;
+  triage:findingId "RBQA-F001" ;
+  triage:title "Fault-injection tests fully mock benchmark_snapshot; no unmocked integration test proves interactive-root isolation" ;
+  triage:description "All fault-injection tests in test_run_admission_capacity.py fully mock benchmark_snapshot's functions, so the 'interactive root never touched' guarantee is proven only structurally (the snapshot/restore APIs take no path argument, so a caller can't misroute them), not via an integration test exercising run_capacity() against the real (unmocked) benchmark_snapshot module. ruthless-boundary-qa rates this important, not blocking, since the API-shape argument (no path parameter means no misroute is even expressible) is genuinely sound on its own. Recommend adding one integration-style test that exercises run_capacity() against the real, unmocked benchmark_snapshot module to prove the isolation end-to-end rather than relying solely on the API-shape argument and mocked unit tests." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "scripts/smoke/test_run_admission_capacity.py" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-08-22T07:00:00Z"^^xsd:dateTime ;
+  triage:closureNote "Fixed on fix/benchmark-snapshot-restore-mandatory commit 9b08e8611 (test(smoke): prove real benchmark snapshot isolation): added test_real_snapshot_lifecycle_never_touches_interactive_root, which builds a real interactive .atm tree, fingerprints all file bytes, runs the real snapshot/restore lifecycle with only daemon/network/roster/profile seams mocked, and asserts the interactive tree is byte-identical afterward with no snapshot artifacts left behind. PR #983 merged to integrate/phase-ao2 at 82270cb26 (2026-08-22T06:41:18Z). quality-mgr independently re-verified via fresh worktree + real pytest run; PR #983 CI fully green (19/19 checks) confirmed via gh CLI." ;
+  triage:triagedAt "2026-08-22T05:25:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.5.4 ;
+  triage:foundAt "2026-08-22T05:22:27Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/RBQA-F001-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F001/RBQA-F001-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_admission_capacity.py" ;
+  triage:line 1 ;
+  triage:snippet "fault-injection tests fully mock benchmark_snapshot module functions" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "fix/benchmark-snapshot-restore-mandatory" ;
+  triage:headSha "56b1166a17d8e416647fe160a8d3559dbc9e30ce" ;
+  triage:occursIn <urn:atm:triage:worktree/ao2-6/56b1166a17d8e416647fe160a8d3559dbc9e30ce> .
+
+<urn:atm:triage:worktree/ao2-6/56b1166a17d8e416647fe160a8d3559dbc9e30ce>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ao2-6" ;
+  triage:branch "fix/benchmark-snapshot-restore-mandatory" ;
+  triage:headSha "56b1166a17d8e416647fe160a8d3559dbc9e30ce" ;
+  triage:orderIndex 6 .

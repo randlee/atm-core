@@ -24,8 +24,15 @@ use atm_core::protocol::{RequestEnvelope, RequestId, next_request_id};
 use atm_core::schema::AtmMessageId;
 use atm_core::send::SendRequest;
 use atm_core::types::{HostName, IsoTimestamp};
+use axum::body::Body;
+use http_body_util::BodyExt;
+use hyper::client::conn::http1;
+use hyper_util::rt::TokioIo;
+use tokio::net::TcpStream;
 
 use reqwest::header::{HeaderName, HeaderValue};
+
+use crate::PeerStreamAdapter;
 
 /// Fixed plain-TCP port for direct peer writes.
 ///
@@ -38,9 +45,8 @@ const REQUEST_ID_HEADER: &str = "X-ATM-Request-Id";
 
 /// One bounded budget for the selected write connector.
 ///
-/// CLI and graft deliberately share this value and
-/// [`selected_write_transport`], so a host-qualified write cannot acquire a
-/// different deadline or silently select a different connector by caller.
+/// The daemon owns this direct-plaintext budget after the CLI or graft
+/// submits the canonical request through its ordinary local transport.
 pub const SAME_HOST_REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 
 /// Returns the fixed direct-peer protocol port.
@@ -140,6 +146,26 @@ pub fn direct_peer_tcp_client(
     )?))
 }
 
+/// Builds the same typed peer-write client over a bootstrap-selected opaque
+/// stream adapter.  The caller provides no TLS value: this runtime owns only
+/// the established stream, normal request encoding, deadline, and response
+/// decoding.
+pub fn peer_stream_write_client(
+    host: HostName,
+    port: NonZeroU16,
+    request_timeout: Duration,
+    adapter: Arc<dyn PeerStreamAdapter>,
+) -> Result<Arc<dyn DaemonApiClient + Send + Sync>, AtmError> {
+    if request_timeout.is_zero() {
+        return Err(AtmError::config(
+            "direct peer HTTP client request timeout must be greater than zero",
+        ));
+    }
+    let connector = PeerStreamConnector::new(host, port, adapter);
+    let client = Arc::new(HttpRuntimeClient::new(Arc::new(connector), request_timeout));
+    Ok(Arc::new(PeerStreamWriteClient { client }))
+}
+
 pub(crate) fn direct_peer_write_client(
     host: HostName,
     port: NonZeroU16,
@@ -155,20 +181,18 @@ pub(crate) fn direct_peer_write_client(
     Ok(DirectPeerWriteClient { client })
 }
 
-/// Selects the one physical connector for a canonical write before encoding.
+/// Selects the owner-authorized local daemon for every canonical write.
 ///
-/// An unqualified recipient stays on the caller-supplied, owner-authorized
-/// same-host client. A host-qualified recipient is an explicit direct-peer
-/// request and selects the shared direct-peer HTTP client; configuration or
-/// connection failures never downgrade it to same-host IPC.
+/// Host-qualified addressing remains part of the canonical request, but the
+/// CLI and graft never select a peer socket themselves. The selected daemon
+/// owns the one peer-wire mode and forwards the admitted write through either
+/// the unchanged plaintext connector or its bootstrap-composed opaque stream
+/// adapter.
 pub fn selected_write_transport<'client>(
-    request: &SendRequest,
+    _request: &SendRequest,
     same_host_transport: &Arc<dyn DaemonApiClient + Send + Sync + 'client>,
 ) -> Result<Arc<dyn DaemonApiClient + Send + Sync + 'client>, AtmError> {
-    let Some(host) = request.to.as_ref().and_then(|recipient| recipient.host()) else {
-        return Ok(Arc::clone(same_host_transport));
-    };
-    direct_peer_tcp_client(host.clone(), direct_peer_port(), SAME_HOST_REQUEST_DEADLINE)
+    Ok(Arc::clone(same_host_transport))
 }
 
 /// Builds the one selected same-host client for retained write call chains.
@@ -232,6 +256,14 @@ struct DirectPeerTcpConnector {
     authority: String,
 }
 
+/// Transport-neutral outbound connector over an authenticated opaque stream.
+struct PeerStreamConnector {
+    authority: String,
+    host: HostName,
+    port: NonZeroU16,
+    adapter: Arc<dyn PeerStreamAdapter>,
+}
+
 /// Send-only peer adapter over the shared typed HTTP client.
 ///
 /// The client owns only sender-side provenance completion.  It never changes
@@ -244,6 +276,48 @@ pub(crate) struct DirectPeerWriteClient {
     client: Arc<HttpRuntimeClient<DirectPeerTcpConnector>>,
 }
 
+/// Mirrors the direct peer's one-write provenance completion while replacing
+/// only connection establishment with the selected opaque stream adapter.
+struct PeerStreamWriteClient {
+    client: Arc<HttpRuntimeClient<PeerStreamConnector>>,
+}
+
+impl boundary::sealed::Sealed for PeerStreamWriteClient {}
+
+#[async_trait]
+impl DaemonApiClient for PeerStreamWriteClient {
+    async fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
+        let RequestEnvelope::Write(write) = request.into_inner() else {
+            return Err(AtmError::validation(
+                "direct peer HTTP transport accepts canonical write requests only",
+            ));
+        };
+        let write = *write;
+        let has_id = write.origin_message_id.is_some();
+        let has_timestamp = write.origin_timestamp.is_some();
+        if has_id != has_timestamp {
+            return Err(AtmError::validation(
+                "direct peer write origin metadata must contain both message ID and timestamp",
+            ));
+        }
+        let write = if has_id {
+            write
+        } else {
+            write.with_origin_metadata(AtmMessageId::new(), IsoTimestamp::now())
+        };
+        let mut peer_response_shape = write.clone();
+        peer_response_shape.acknowledges_message_id = None;
+        self.client
+            .execute_envelope_with_deadline(
+                RequestEnvelope::Write(Box::new(write)),
+                RequestEnvelope::Write(Box::new(peer_response_shape)),
+                RequestDeadline::after(self.client.request_timeout),
+                None,
+            )
+            .await
+    }
+}
+
 impl boundary::sealed::Sealed for DirectPeerWriteClient {}
 
 #[async_trait]
@@ -254,15 +328,6 @@ impl DaemonApiClient for DirectPeerWriteClient {
 }
 
 impl DirectPeerWriteClient {
-    pub(crate) async fn execute_with_request_id(
-        &self,
-        request: ApiRequest,
-        request_id: RequestId,
-    ) -> Result<ApiResponse, AtmError> {
-        self.execute_with_optional_request_id(request, Some(request_id))
-            .await
-    }
-
     async fn execute_with_optional_request_id(
         &self,
         request: ApiRequest,
@@ -322,6 +387,22 @@ impl DirectPeerTcpConnector {
     }
 }
 
+impl PeerStreamConnector {
+    fn new(host: HostName, port: NonZeroU16, adapter: Arc<dyn PeerStreamAdapter>) -> Self {
+        let authority = if host.as_str().contains(':') {
+            format!("[{}]:{}", host.as_str(), port)
+        } else {
+            format!("{}:{}", host.as_str(), port)
+        };
+        Self {
+            authority,
+            host,
+            port,
+            adapter,
+        }
+    }
+}
+
 #[async_trait]
 impl HttpRuntimeConnector for DirectPeerTcpConnector {
     fn connection_target(&self) -> String {
@@ -354,6 +435,113 @@ impl HttpRuntimeConnector for DirectPeerTcpConnector {
             .await
             .map_err(|failure| direct_peer_connection_failure(&self.authority, failure))
     }
+}
+
+#[async_trait]
+impl HttpRuntimeConnector for PeerStreamConnector {
+    fn connection_target(&self) -> String {
+        format!("direct peer `{}`", self.authority)
+    }
+
+    fn deadline_elapsed(&self) -> HttpRuntimeClientFailure {
+        HttpRuntimeClientFailure::PeerConnectTimeout {
+            target: self.authority.clone(),
+            cause: format!(
+                "{} did not resolve or establish a connection before the configured request deadline",
+                self.connection_target()
+            ),
+        }
+    }
+
+    async fn exchange(
+        &self,
+        request: HttpRequest,
+        deadline: RequestDeadline,
+    ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
+        let stream = TcpStream::connect((self.host.as_str(), self.port.get()))
+            .await
+            .map_err(|source| HttpRuntimeClientFailure::PeerConnect {
+                target: self.authority.clone(),
+                cause: source.to_string(),
+            })?;
+        let stream = self
+            .adapter
+            .connect(stream, &self.host)
+            .await
+            .map_err(|error| HttpRuntimeClientFailure::PeerConnect {
+                target: self.authority.clone(),
+                cause: error.to_string(),
+            })?;
+        execute_opaque_peer_request(stream, request, deadline)
+            .await
+            .map_err(|failure| direct_peer_connection_failure(&self.authority, failure))
+    }
+}
+
+async fn execute_opaque_peer_request(
+    stream: Box<dyn crate::AuthenticatedPeerStream>,
+    request: HttpRequest,
+    deadline: RequestDeadline,
+) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
+    let (mut sender, connection) = http1::handshake(TokioIo::new(stream))
+        .await
+        .map_err(|source| HttpRuntimeClientFailure::Connect(source.to_string()))?;
+    tokio::spawn(async move {
+        if let Err(error) = connection.await {
+            tracing::debug!(%error, "opaque peer HTTP client connection ended");
+        }
+    });
+    let method: axum::http::Method = request.method.parse().map_err(|source| {
+        HttpRuntimeClientFailure::RequestWrite(format!(
+            "shared HTTP request has an invalid method `{}`: {source}",
+            request.method
+        ))
+    })?;
+    let mut builder = axum::http::Request::builder()
+        .method(method)
+        .uri(&request.path);
+    for header in request.headers {
+        let (name, value) = header.split_once(':').ok_or_else(|| {
+            HttpRuntimeClientFailure::RequestWrite(format!(
+                "shared HTTP request has a malformed header `{header}`"
+            ))
+        })?;
+        let name = HeaderName::from_bytes(name.as_bytes()).map_err(|source| {
+            HttpRuntimeClientFailure::RequestWrite(format!(
+                "shared HTTP request has an invalid header name `{name}`: {source}"
+            ))
+        })?;
+        let value = HeaderValue::from_str(value.trim_start()).map_err(|source| {
+            HttpRuntimeClientFailure::RequestWrite(format!(
+                "shared HTTP request has an invalid value for `{name}`: {source}"
+            ))
+        })?;
+        builder = builder.header(name, value);
+    }
+    let request = builder.body(Body::from(request.body)).map_err(|source| {
+        HttpRuntimeClientFailure::RequestWrite(format!(
+            "shared HTTP request could not be built for opaque peer stream: {source}"
+        ))
+    })?;
+    let remaining = deadline
+        .remaining()
+        .ok_or(HttpRuntimeClientFailure::Cancelled)?;
+    let response = tokio::time::timeout(remaining, sender.send_request(request))
+        .await
+        .map_err(|_| HttpRuntimeClientFailure::Timeout)?
+        .map_err(|source| HttpRuntimeClientFailure::Connect(source.to_string()))?;
+    let (parts, body) = response.into_parts();
+    let body = body
+        .collect()
+        .await
+        .map_err(|source| {
+            HttpRuntimeClientFailure::ResponseDecode(
+                AtmError::daemon_unavailable("failed to read opaque peer HTTP response body")
+                    .with_cause(source),
+            )
+        })?
+        .to_bytes();
+    Ok(axum::http::Response::from_parts(parts, body.to_vec()))
 }
 
 /// Preserve the direct-peer authority when the shared HTTP exchange fails
@@ -764,8 +952,24 @@ mod tests {
 
     use super::{
         DirectPeerTcpConnector, HttpRuntimeClient, HttpRuntimeClientFailure, HttpRuntimeConnector,
-        direct_peer_connection_failure, direct_peer_tcp_client,
+        direct_peer_connection_failure, direct_peer_tcp_client, selected_write_transport,
     };
+
+    struct LocalOnlyClient;
+
+    impl atm_core::boundary::sealed::Sealed for LocalOnlyClient {}
+
+    #[async_trait]
+    impl DaemonApiClient for LocalOnlyClient {
+        async fn execute(
+            &self,
+            _request: ApiRequest,
+        ) -> Result<atm_core::api::ApiResponse, AtmError> {
+            Err(AtmError::daemon_unavailable(
+                "test local transport is not invoked",
+            ))
+        }
+    }
 
     #[derive(Default)]
     struct RecordingConnector {
@@ -821,6 +1025,27 @@ mod tests {
         .err()
         .expect("zero budget must fail before a peer request is attempted");
         assert!(error.message().contains("timeout"));
+    }
+
+    #[test]
+    fn host_qualified_write_stays_on_the_same_host_daemon_transport() {
+        let mut request = match write_request() {
+            RequestEnvelope::Write(request) => *request,
+            _ => unreachable!("fixture is a write"),
+        };
+        request.to = Some(
+            "recipient@test-team.rand-m5"
+                .parse()
+                .expect("host-qualified fixture"),
+        );
+        let same_host: Arc<dyn DaemonApiClient + Send + Sync> = Arc::new(LocalOnlyClient);
+
+        let selected = selected_write_transport(&request, &same_host)
+            .expect("host qualification must not make the CLI or graft open a socket");
+        assert!(
+            Arc::ptr_eq(&selected, &same_host),
+            "daemon composition, not the caller, selects the peer-wire transport"
+        );
     }
 
     fn sent_response() -> axum::http::Response<Vec<u8>> {

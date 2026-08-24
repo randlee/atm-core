@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-101>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-101" ;
+  triage:title "Missing release-interface test for PlaintextTest arm under invalid/absent TLS state" ;
+  triage:description "Deliverable 5/AC2 requires a release-interface test that launches/exercises the PeerWireSecurity::PlaintextTest arm with deliberately invalid or absent TLS/peer configuration and proves the direct-peer pipeline still completes a write unaffected. No such test exists." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-20T20:38:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.3 ;
+  triage:foundAt "2026-08-20T20:36:55Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "2" ;
+  triage:closedNote "Confirmed genuinely fixed by quality-mgr QA-3 for PR #967 @46ebe74e0: plaintext_test_bootstrap_runs_direct_peer_write_without_tls_configuration launches the real composition root under PeerWireMode::plaintext_test(), proves a genuine typed write lands in durable storage; 13/13 atm-daemon-bootstrap tests pass." .
+
+<urn:atm:triage:worktree/feature/pao-s3-runtime-peer-wire-mode/e6a428355>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:branch "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:headSha "e6a428355253de23a428bac2f047180ec95dfc7c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/feature/pao-s4-peer-wire-proof/49154a38f>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s4-peer-wire-proof" ;
+  triage:branch "feature/pao-s4-peer-wire-proof" ;
+  triage:headSha "49154a38f20a3f723dc8bd6d305dfc79bb241d30" ;
+  triage:orderIndex 4 .

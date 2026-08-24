@@ -3,7 +3,9 @@ ser
 de
 
 # Add project-specific false positives here if codespell reports any.
+# Windows `whoami /user /fo csv` format flag.
 FO
+fo
 
 # TTL predicate spelling.
 foundIn
