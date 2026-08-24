@@ -17,7 +17,10 @@ decision (d). A shared well-known folder with no owner is a guaranteed leak.
    and AQ1's `AttachmentReferenceCheck` only; `mail_message_states.
    acknowledged_at` (`crates/atm-storage-rusqlite/src/shared_db.rs`) is
    cited solely as the backend-crate implementation detail behind those
-   trait methods — the sweeper never imports backend symbols. Interval and TTL from
+   trait methods — the sweeper never imports backend symbols. Both traits are
+   synchronous by AQ1's recorded exception, so the sweeper task invokes them
+   via `spawn_blocking`/a bounded blocking pool, never inline on the async
+   worker (same rail as AQ3 deliverable 6). Interval and TTL from
    daemon config (`AtmConfig`, key added by AQ1 decision (e)) with
    documented defaults.
 2. **Safety rails**: sweeper deletes only paths matching the AQ1 layout
