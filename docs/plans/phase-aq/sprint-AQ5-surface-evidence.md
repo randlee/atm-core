@@ -56,7 +56,7 @@ linked artifact.
      (c). A hang is not a fallback. The floor is set to the Wyvern commit
      that lands `pick-member.html` (recorded with its PR).
    - **Degradation is silent-but-logged, never a failure**: absent,
-     too-old, unparseable-version, probe-timeout, or missing-asset →
+     too-old, unparsable-version, probe-timeout, or missing-asset →
      native fallback picker with a one-line note on stderr. A Wyvern problem must never
      turn into a failed send or a blocked gesture.
    - **The linked Wyvern PR/commit and the schema-fixture revision are
@@ -88,7 +88,7 @@ linked artifact.
 2a. Wyvern dependency contract (deliverable 3a): harness cases prove
    picker selection falls back to the native picker — with the stderr note
    and a successful send — for each of: `wyvern` absent from `PATH`,
-   version below the pin, unparseable `--version`, `--version` hanging
+   version below the pin, unparsable `--version`, `--version` hanging
    past the probe deadline (child killed, treated as absent), unknown
    `schema_version`, missing page asset. No test lane requires Wyvern
    installed.
