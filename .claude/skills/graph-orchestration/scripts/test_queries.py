@@ -172,6 +172,55 @@ triage:unknown a triage:Finding ; triage:findingId "U-1" ; triage:foundIn triage
             ("M-1", "minor", "MINOR"),
         ]
 
+    def test_branch_scoped_occurrence_open_survives_stale_resolution(self):
+        """A finding whose branch occurrence is genuinely still open must be
+        returned in branch-scoped mode even when a (mistaken) triage:Resolution
+        event already exists for it — the branch occurrence's own closed/status
+        fields are authoritative in this mode, not a blanket Resolution filter.
+
+        Regression test for 2026-08-24: AO212-MIGRATE-F002/F003/F004 had a
+        Resolution event recorded before their fix commits ever landed on the
+        certified branch, which silently and permanently suppressed them from
+        every branch-scoped open-findings query even though their occurrence
+        on that branch was correctly still marked open."""
+        findings = PREFIX + """
+triage:f1 a triage:Finding ; triage:findingId "F-1" ; triage:foundIn triage:S1 ;
+    triage:foundAt "2026-07-01T09:00:00Z"^^xsd:dateTime ; triage:severity "blocking" ;
+    triage:description "still broken on this branch" ;
+    triage:hasOccurrence triage:occ1 .
+triage:occ1 triage:branch "feature/x" ; triage:closed false ; triage:status "open" .
+triage:r1 a triage:Resolution ; triage:resolves triage:f1 ;
+    triage:resolvedAt "2026-07-01T10:00:00Z"^^xsd:dateTime .
+"""
+        from rdflib import Literal
+        g = Graph()
+        g.parse(data=findings, format="turtle")
+        rows = list(g.query(
+            (SCRIPTS / "open-findings-for-sprint.sparql").read_text(),
+            initBindings={"SPRINT": URIRef(f"{TRIAGE}S1"), "BRANCH": Literal("feature/x")},
+        ))
+        assert len(rows) == 1
+        assert str(rows[0][1]) == "F-1"
+
+    def test_branch_scoped_occurrence_closed_still_excluded(self):
+        """Sanity check: branch-scoped mode still excludes a finding whose
+        occurrence on that specific branch is actually closed."""
+        from rdflib import Literal
+        findings = PREFIX + """
+triage:f1 a triage:Finding ; triage:findingId "F-1" ; triage:foundIn triage:S1 ;
+    triage:foundAt "2026-07-01T09:00:00Z"^^xsd:dateTime ; triage:severity "blocking" ;
+    triage:description "fixed on this branch" ;
+    triage:hasOccurrence triage:occ1 .
+triage:occ1 triage:branch "feature/x" ; triage:closed true ; triage:status "fixed" .
+"""
+        g = Graph()
+        g.parse(data=findings, format="turtle")
+        rows = list(g.query(
+            (SCRIPTS / "open-findings-for-sprint.sparql").read_text(),
+            initBindings={"SPRINT": URIRef(f"{TRIAGE}S1"), "BRANCH": Literal("feature/x")},
+        ))
+        assert len(rows) == 0
+
 
 # ── validate-structure tests ──────────────────────────────────────────────────
 
