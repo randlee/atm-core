@@ -246,10 +246,23 @@ def result_from_summary(
 def migrated_record(reports_dir: Path, generated_from_commit: str) -> tuple[HistoricalRecord, dict[str, Any]]:
     imports = imports_by_filename(reports_dir)
     facts: list[tuple[Path, BenchmarkSummary, str, str]] = []
+    unattributed: list[UnattributedEntry] = []
     for path in source_files(reports_dir):
+        # Invalid source evidence remains a hard, named error; only an
+        # otherwise-valid summary that cannot be assigned to a campaign is
+        # an unattributed historical record.
         summary = legacy_summary(read_json(path), path)
-        campaign = summary.campaign_id or imports.get(path.name) or fallback_campaign_id(path)
-        facts.append((path, summary, campaign, target_for(summary, path)))
+        try:
+            campaign = summary.campaign_id or imports.get(path.name) or fallback_campaign_id(path)
+            target = target_for(summary, path)
+            # Host/OS is required to safely associate an otherwise valid
+            # source with a historical campaign.  Keep such orphan evidence
+            # visible instead of aborting the entire migration.
+            os_for(summary, path)
+        except MigrationError as exc:
+            unattributed.append(UnattributedEntry(source_file=path.name, reason=str(exc)))
+            continue
+        facts.append((path, summary, campaign, target))
     facts.sort(key=lambda fact: (fact[1].generated_at, fact[0].name))
 
     best: dict[tuple[str, str], float] = {}
@@ -331,13 +344,14 @@ def migrated_record(reports_dir: Path, generated_from_commit: str) -> tuple[Hist
     entries.sort(key=lambda entry: entry.campaign.started_at)
     record = HistoricalRecord(
         schema_version=1, generated_from_commit=generated_from_commit,
-        campaigns=tuple(entries), ratchet=tuple(ratchet), unattributed=(),
+        campaigns=tuple(entries), ratchet=tuple(ratchet), unattributed=tuple(unattributed),
     )
     audit = {
         "schema_version": 1,
         "generated_from_commit": generated_from_commit,
         "source_count": len(facts),
-        "unattributed_count": 0,
+        "unattributed_count": len(unattributed),
+        "unattributed": [entry.model_dump(mode="json") for entry in unattributed],
         "mappings": [
             {
                 "source_file": path.name, "source_sha256": source_sha(path),

@@ -67,6 +67,23 @@ class MigrateBenchmarkHistoryTests(unittest.TestCase):
             with self.assertRaisesRegex(MIGRATE.MigrationError, "broken.json"):
                 MIGRATE.migrated_record(reports, "0" * 40)
 
+    def test_valid_but_unclassifiable_source_is_retained_as_unattributed(self) -> None:
+        source_name = "20260801-063351.969883-mac-arm64-01-uds-f1.json"
+        with tempfile.TemporaryDirectory() as temp:
+            reports = Path(temp)
+            source = json.loads((self.fixture_dir() / source_name).read_text(encoding="utf-8"))
+            source["host_label"] = "unknown-host"
+            source["host_os"] = None
+            (reports / "orphan.json").write_text(json.dumps(source), encoding="utf-8")
+            (reports / "baselines.json").write_text(
+                json.dumps({"schema_version": 1, "revision": 1, "entries": []}), encoding="utf-8"
+            )
+            record, audit = MIGRATE.migrated_record(reports, "0" * 40)
+        self.assertEqual(record.campaigns, ())
+        self.assertEqual(record.unattributed[0].source_file, "orphan.json")
+        self.assertIn("missing host OS", record.unattributed[0].reason)
+        self.assertEqual(audit["unattributed_count"], 1)
+
     def test_v1_summary_shape_keeps_recorded_timestamp_and_p50(self) -> None:
         source_name = "20260801-063351.969883-mac-arm64-01-uds-f1.json"
         with tempfile.TemporaryDirectory() as temp:
