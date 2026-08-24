@@ -12,10 +12,12 @@ the AN8/AN12 pattern.
 1. `docs/plans/phase-aq/validation-evidence.md` recording, per requirement
    R1–R8 + R13 (PRD §5), the test/artifact that closes it, with links.
 2. Live scenario evidence: US-2 executed end-to-end cross-host ("send missing
-   doc to a running agent") — command transcript, delivery proof, and the
-   post-sweep state a TTL later.
-3. Residue check: after the scenario + sweep, `<known-temp>/atm/` contains
-   no expired msg dirs (PRD §8 "nothing leaks").
+   doc to a running agent") over a configured transfer script — command
+   transcript, delivery proof, and the unconfigured-host failure showing the
+   canonical error. Post-sweep state evidenced with a short-TTL test config
+   (the 30-day production TTL is not waited out).
+3. Residue check: after the scenario + a short-TTL sweep, `$ATM_TEMP`
+   contains no expired entries (PRD §8 "nothing leaks").
 4. Open-item register: anything discovered but deferred (team addressing,
    Share Extension, Phase 2) listed with a home.
 

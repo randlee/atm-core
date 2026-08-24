@@ -1337,15 +1337,18 @@ does not pass. The authoritative outline is
 ## 48. Phase AQ — ATM Send-To Shell Integration [PROPOSED]
 
 Phase AQ delivers PRD Phase 1 of ATM "Send To": one gesture from the OS file
-manager (Finder / Explorer / Nautilus) to a delivered message with file
-attachments, same-host and cross-host. Attachments travel by reference
-(`attachments[]` on `MessageEnvelope`, content-addressed pull by the
-receiving daemon per ADR-054) with a daemon-owned temp-lifecycle sweeper and
-thin per-OS shell glue over the pipeline
+manager (Finder / Explorer / Nautilus) to a delivered message whose text
+names files landed under the recipient host's `$ATM_TEMP`. Cross-host bytes
+move via user-configured per-host transfer scripts (sftp default over fleet
+SSH; unconfigured hosts fail closed with a setup-doc error) — no envelope
+change, no daemon transfer machinery. ADR-054 defines the system-level
+`ATM_TEMP` contract (mandatory env var, 30-day TTL sweep) and the
+transfer-script seam; thin per-OS shell glue drives the pipeline
 `atm teams --json --members | <picker> | atm send --attach "$@" --from-json`.
-Six sprints: AQ1 contract+ADR-054, AQ2 CLI surface + same-host delivery,
-AQ3 cross-host pull, AQ4 sweeper, AQ5 picker/shell glue (macOS, Windows,
-Ubuntu), AQ6 validation evidence. Branches `feature/aq-N-<slug>` off
+Six sprints: AQ1 ATM_TEMP contract+ADR-054, AQ2 CLI surface + staging/
+transfer invocation, AQ3 transfer example scripts + setup doc, AQ4 ATM_TEMP
+sweeper, AQ5 picker/shell glue (macOS, Windows, Ubuntu), AQ6 validation
+evidence. Branches `feature/aq-N-<slug>` off
 `integrate/phase-aq`, all PRs target `integrate/phase-aq`. The authoritative
 plan is [Phase AQ plan](./plans/phase-aq/plan-phase-aq.md); source PRD is
 [prd-atm-send-to](./plans/phase-aq/prd-atm-send-to.md). PRD Phase 2

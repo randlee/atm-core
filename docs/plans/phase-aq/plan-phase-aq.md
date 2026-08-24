@@ -1,191 +1,118 @@
 # Plan — Phase AQ: ATM Send-To Shell Integration
 
-Status: hardened — plan-QA PASS (2026-08-23) · Source PRD: [prd-atm-send-to.md](./prd-atm-send-to.md)
-Reference code: `integrate/phase-ao2` (envelope at
-`crates/atm-storage/src/schema/inbox_message.rs`, CLI at
-`crates/atm/src/commands/{teams,send}.rs`).
+Status: redrafted — script-based transfer model (2026-08-23, per Rand) ·
+Source PRD: [prd-atm-send-to.md](./prd-atm-send-to.md)
+Reference code: `integrate/phase-ao2` (CLI at
+`crates/atm/src/commands/{teams,send}.rs`, daemon maintenance-worker
+precedent at `crates/atm-daemon/bin_support/daemon_observability.rs`).
 
 ## Scope
 
-PRD Phase 1 only: one gesture from Finder/Explorer to a delivered message with
-attachments, same-host and cross-host. PRD Phase 2 (drafting agent, Wyvern
-chat sessions) is explicitly out of scope for this plan and will be planned
-after the Wyvern chat-window integration exists.
+PRD Phase 1 only: one gesture from Finder/Explorer/Nautilus to a delivered
+message whose text names files landed under the recipient host's `$ATM_TEMP`.
+PRD Phase 2 (drafting agent, Wyvern chat sessions, structured `attachments`
+metadata, `note_source`) is out of scope and planned after the Wyvern
+chat-window integration exists.
 
-## Binding decisions (from PRD)
+## Binding decisions (from PRD, as redrafted per Rand 2026-08-23)
 
-- **Pull, not push.** Cross-host attachment bytes are fetched by the receiving
-  daemon; the sender ships references `{sha256, size, origin_host,
-  origin_path}`. Fetch mechanism is decided in AQ1's ADR against the
-  **accepted** cross-host transport stack: ADR-035 (canonical write ingress +
-  host routing, active) and ADR-047 (layered peer-wire security — `PeerWireMode`
-  default mTLS — which supersedes ADR-034's transport wording and ADR-040;
-  the ADR-047 file lives on `integrate/phase-ao2` and reaches `develop` with
-  the AO2 merge, a phase-AQ dispatch precondition). ADR-034 remains the
-  reference for the single-router HTTP shape it established. Not assumed to
-  be sftp. ADR-028 and ADR-031 are superseded and must not be cited as
-  authority.
-- **No new protocol verb.** `attachments: []` is an optional envelope field
-  on `MessageEnvelope` (`crates/atm-storage/src/schema/inbox_message.rs:137`);
-  no new `WriteRequest` variant or protocol message kind.
-- **R13 chaining invariant.** Every pipeline stage is side-effect-free except
-  the final `atm send`.
-- **Per-message temp subdirs** `<known-temp>/atm/<msg-id>/` with a
-  daemon-owned sweeper.
+- **Transfer is an environment concern, not daemon machinery.** Cross-host
+  bytes move via a specifically named, user-provided script per destination
+  host (`~/.atm/transfer/<host>`), defaulting to sftp over the fleet's
+  passwordless SSH, with Tailscale variants. Org-level SSH/Tailscale setup
+  involves IT and cannot be planned around; the product ships modifiable
+  examples and a setup doc. An unconfigured host fails the send closed with
+  the canonical error: `File transfer to <host> not enabled. Read
+  docs/cross-host-file-transfer.md to set up cross-host file transfer.` The
+  daemon carries only ordinary messages — **no fetch/push endpoints, no
+  transfer state machine, no envelope change, no new storage traits.**
+- **`ATM_TEMP` is a system-level contract.** A mandatory environment
+  variable naming the ATM scratch root for all features, validated at
+  daemon/CLI startup. One TTL-only sweeper (30 days) covers everything under
+  it; `<known-temp>/atm/` per-feature layouts are a non-issue.
+- **R13 chaining invariant.** Every pipeline stage is side-effect-free
+  except the final `atm send`; any staging/transfer failure aborts the whole
+  invocation with zero sends and the reason on stderr.
+- **No new protocol verb, no `MessageEnvelope` change in Phase 1.** Landed
+  paths ride in message text via the AQ1 decision-(d) template.
 
 ## Sprints
 
 | Sprint | Title | Depends |
 |---|---|---|
-| AQ1 | Attachment contract + ADR | — |
-| AQ2 | CLI surface: teams projection, send --attach/--from-json, same-host delivery | must_follow AQ1 |
-| AQ3 | Cross-host attachment pull | must_follow AQ2 |
-| AQ4 | Temp lifecycle sweeper | must_follow AQ2 · parallel_safe AQ3 gated by AQ1 layout contract |
-| AQ5 | Wyvern picker + shell glue (macOS Shortcuts, Windows SendTo) | must_follow AQ2 · parallel_safe AQ3, AQ4 |
+| AQ1 | ATM_TEMP contract + transfer-script seam (ADR-054) | — |
+| AQ2 | CLI surface: picker projection, `--attach`/`--from-json` fan-out, staging + transfer invocation | must_follow AQ1 |
+| AQ3 | Transfer example scripts + setup doc | must_follow AQ2 · parallel_safe AQ4, AQ5 |
+| AQ4 | ATM_TEMP sweeper (TTL-only, 30 d) | must_follow AQ1 · parallel_safe AQ2, AQ3, AQ5 |
+| AQ5 | Wyvern picker + shell glue (macOS, Windows, Ubuntu) | must_follow AQ2 · parallel_safe AQ3, AQ4 |
 | AQ6 | Validation evidence | must_follow all |
-
-The table is an ownership map, not a second requirements list. The sprint
-documents below are authoritative for each sprint's deliverables, acceptance
-criteria, paths-to-delete (when any), and required validation. AQ1 owns the
-envelope/layout/transport-policy contract; AQ2 owns the CLI projection,
-staging, and same-host write path; AQ3 owns authenticated remote fetch and
-pending-delivery state; AQ4 owns reclamation; AQ5 owns picker and platform
-shell glue; AQ6 owns phase evidence and the merge gate. No later sprint may
-redefine an earlier contract.
-
-Dependency rationale:
-
-- AQ1 must merge first because every later sprint consumes its attachment
-  schema, `attachment_dir()` function, limits, and pending-delivery policy.
-- AQ2 must merge before AQ3/AQ4/AQ5 because the remote and UI paths consume
-  the validated CLI envelope and recipient projection.
-- AQ3 and AQ4 are parallel-safe only after AQ1: AQ3 owns fetch/delivery and
-  AQ4 owns the sweeper; both call AQ1's path function and neither may alter
-  the other's runtime modules or storage state machine.
-- AQ5 is parallel-safe with AQ3/AQ4 after AQ2 because it owns scripts/UI
-  adapters and linked Wyvern artifacts, not daemon fetch or reclamation code.
-- AQ6 must follow AQ1–AQ5 because it certifies the merged phase, not partial
-  feature branches.
 
 Branch pattern: `feature/aq-N-<slug>` off `integrate/phase-aq`, PR target
 `integrate/phase-aq`. Creating the `integrate/phase-aq` branch/worktree from
 `develop` (carrying phase-ao2 merges) at phase start is a dispatch
 precondition for AQ1, verified mechanically on the cut head:
-`test -f docs/adr/ADR-047-*.md && test -f docs/adr/ADR-053-*.md` — every sprint PR, AQ1 included, targets
-`integrate/phase-aq` per the repo integration-branch policy.
+`test -f docs/adr/ADR-047-*.md && test -f docs/adr/ADR-053-*.md`.
 
 ## Verified baseline facts (integrate/phase-ao2)
 
 Verified against the reference tree; sprint docs cite these, reviewers should
 not re-litigate them:
 
-- `MessageEnvelope` lives at
-  `crates/atm-storage/src/schema/inbox_message.rs:137` with established
-  back-compat patterns (`#[serde(default, skip_serializing_if =
-  "Option::is_none")]`, `RawMessageEnvelope` custom deserialize, flattened
-  `extra` map). Storage truth is SQLite (`mail_messages` /
-  `mail_message_states`, `crates/atm-storage-rusqlite/src/shared_db.rs`);
-  `mail_message_states.acknowledged_at` makes an on-ack sweeper queryable.
-- There is **no** `Sha256Hex` type; the nearest precedent is `TemplateSha`
-  (`crates/atm-storage/src/types.rs`), a validated lowercase 64-hex newtype.
-  `AtmMessageId` (ULID) and `HostName` exist as named.
 - `atm teams --json` emits `{name, member_count}` per team only. Per-member
   data lives in `atm members --json` (`MemberSummary`: `name`, `agent_id`,
   `harness`, `model`, `tmux_pane_id`, `home_dir`, `live_cwd`); runtime member
   state is `RuntimeMemberState` = `Unknown | IdentityConflict | Offline |
-  Idle | Active`. The PRD §4.2 picker projection (nested members with
-  `{id, host, cwd, status}`) **does not exist and must be built** (AQ2),
-  including the status mapping.
+  Idle | Active`. The PRD §4.2 picker projection **does not exist and must
+  be built** (AQ2), including the status mapping.
 - No current roster or heartbeat record supplies a member host. AQ1 decision
-  (h) therefore makes host sourcing an explicit roster metadata binding,
-  managed by `teams add-member/update-member --host` and checked against
-  `TrustedPeer`; AQ2 owns the thin projection/resolution implementation and
-  does not modify heartbeat or daemon runtime plumbing.
+  (e) makes host an explicit roster metadata binding via
+  `teams add-member/update-member --host`; AQ2 owns the thin
+  projection/resolution and touches no heartbeat or daemon runtime code.
 - `atm send` is single-recipient (`to` positional, required) with existing
   flags `--team --host --chat-id --as --file --stdin --template --vars --var
   --tag --category --content-format --summary --requires-ack --task-id
-  --dry-run --json`. No fan-out, no attachment support anywhere. Sends go
-  through the daemon HTTP transport only (no direct storage writes).
-- Cross-host delivery is **stateless HTTPS push**: sender daemon persists
-  locally, then POSTs the canonical write to the peer; receiver-side
-  persistence *is* delivery (no separate delivery step), and ADR-034
-  explicitly rejects outbox/retry/receipt state. There is **no** existing
-  byte-fetch, parked-message, dead-letter, or retry machinery. AQ3's pull
-  model therefore requires an explicit AQ1 ADR decision on
-  pending-delivery semantics (see AQ1 decision (f)) that extends or
-  supersedes those constraints — it cannot be assumed.
-- Daemon runtime is Tokio+Axum (`atm-http-runtime`) as the only serving
-  path; background-task precedent is the retained-log maintenance worker
-  (60 s cadence, `crates/atm-daemon/bin_support/daemon_observability.rs`).
-  Observability is structured log events + health surface (e.g.
-  `queue_full_drops_total`), not a metrics registry.
-- `AtmConfig` (`crates/atm-core/src/config/types.rs`) has **no** temp/spool
-  directory key today; daemon directory conventions are `~/.atm/{daemon,db,
-  logs}` (`crates/atm-core/src/home.rs`).
-- CI runs ubuntu + macOS + Windows lanes (`.github/workflows/ci.yml` os
-  matrix). A two-daemon peer-pair harness exists
-  (`.just/tests/test_peer_pair_smoke.py`, `scripts/smoke/run_peer_pair.py`);
-  grep-gate precedent exists (`scripts/check-legacy-mailbox-paths.py`). ADRs
-  live in `docs/adr/`; ADR-047 and ADR-053 both exist on
-  `integrate/phase-ao2` (merged to `develop` before `integrate/phase-aq` is
-  cut — a dispatch precondition; this plan branch predates that merge), so
-  the AQ1 ADR is ADR-054. Machine-readable boundary records live at
-  repo-root `boundaries/<crate>/*.toml`, enforced by
-  `cargo test -p atm-architecture`.
-- ADR-018 §3 caps optional `atm-storage` capability traits; ADR-036 used the
-  follow-up-ADR mechanism once and closed the door. The two new store traits
-  (`AttachmentDeliveryStore`, `AttachmentSweepStore`) therefore require the
-  ADR-018 §3 follow-up amendment + `docs/atm-storage/boundaries.md` +
-  repo-root `boundaries/atm-storage/*.toml` records + `boundary-guard`
-  review, all owned by AQ1 (deliverable 5). `PeerAttachmentSource` is a
-  transport-adapter trait in `atm-http-runtime` (its record goes under
-  `boundaries/atm-http-runtime/`), outside that cap.
+  --dry-run --json`. No fan-out, no attach support. Sends go through the
+  daemon HTTP transport only.
+- Message delivery (local and cross-host) is the existing canonical path
+  (ADR-035 ingress under ADR-047 peer-wire security) and is **unchanged by
+  this phase** — Send-To adds no delivery semantics.
+- `AtmConfig` (`crates/atm-core/src/config/types.rs`) has no temp/spool key;
+  daemon directory conventions are `~/.atm/{daemon,db,logs}`
+  (`crates/atm-core/src/home.rs`). `ATM_TEMP` is new (AQ1).
+- Daemon background-task precedent: retained-log maintenance worker (60 s
+  cadence, `crates/atm-daemon/bin_support/daemon_observability.rs`);
+  observability is structured log events + health surface (e.g.
+  `queue_full_drops_total`), no metrics registry.
+- CI runs ubuntu + macOS + Windows lanes (`.github/workflows/ci.yml`).
+  Python-driven shell-script test convention exists under `.just/tests/`
+  (e.g. `test_release_gate.py`). ADRs live in `docs/adr/`; ADR-047 (created
+  by phase-AO sprint AO.1) and ADR-053 exist on `integrate/phase-ao2`, so
+  the AQ1 ADR is ADR-054.
+- The fleet has passwordless SSH configured peer-to-peer from this machine
+  to all destinations (Rand, 2026-08-23) — the sftp example script's
+  baseline assumption.
 
 ## Open decisions routed to sprints
 
-- Directory attachments: reference vs tar at origin → AQ1 ADR.
-- Size limit and over-limit behavior → AQ1 ADR.
-- Sweeper policy TTL vs on-ack → AQ1 ADR (decided), AQ4 (implemented).
-- Known-temp root: named from existing daemon config in AQ1; if no such
-  config key exists, AQ1 adds it. Do not hardcode a path in any sprint.
-- Picker projection: the PRD §4.2 teams→members JSON does not exist (see
-  baseline facts). AQ2 builds it, including the `RuntimeMemberState` →
-  `active|idle|dead` mapping and sourcing of `host`/`cwd`; registration gaps
-  become AQ2 deliverables, not surprises.
-- Member host binding: AQ1 decides the durable roster field and authority;
-  AQ2 must reject unresolved IDs and prove local-vs-remote routing from that
-  field only. It may not invent a DNS/heartbeat inference.
-- Dedupe storage mechanism (hardlink vs copy) and the sweeper's
-  still-referenced check → AQ1 ADR decision (i); AQ3 (reuse) and AQ4
-  (reclamation) implement that one mechanism, and both reuse AQ2's canonical
-  `resolve_picker_recipient` rather than defining their own resolution.
-- Message-id allocation vs staging order: `attachment_dir()` is keyed by
-  `AtmMessageId`, so who allocates the ULID (CLI vs daemon) and when staging
-  happens relative to the canonical write → AQ1 ADR decision (g).
-- Post-fetch `local_path` population mutates a stored envelope; the storage
-  update path for that is an AQ3 deliverable, decided in AQ1 decision (f).
-- Wyvern cold-start latency measured in AQ5 before the Shortcuts prototype is
-  replaced; the Shortcuts/Out-GridView fallback remains shippable.
-
-## Phase-level closure contract
-
-Phase AQ closes only when AQ1–AQ5 each satisfy their sprint acceptance
-criteria and AQ6 publishes the requirement-to-evidence matrix. The phase
-cannot claim success from a picker demo, schema-only change, or test-only
-fixture. A missing cross-host fetch, unverified host projection, unbounded
-temp residue, or absent platform evidence remains an open requirement.
-
-The phase-level required validation is the union of the sprint validation
-commands plus the two-daemon cross-host suite and the three CI lanes. AQ6 must
-record the exact merged SHA, branch, commands, evidence paths, and any
-deferred item with its owning follow-on; it may not close a gap by narrative
-only.
+- `ATM_TEMP` strictness (fail-on-unset vs documented default), exact error
+  texts, and the message path template → AQ1 ADR decisions (a)/(c)/(d).
+- Remote-`ATM_TEMP` resolution approach inside transfer scripts → AQ3
+  (script-owner's choice; examples show fixed-value and ssh-echo variants).
+- Wyvern cold-start latency measured in AQ5 before the Shortcuts prototype
+  is replaced; the Shortcuts/Out-GridView/zenity fallback remains shippable.
 
 ## Non-closure
 
-- PRD Phase 2 (atm draft, chat sessions, "Open with agent").
+- PRD Phase 2 (atm draft, chat sessions, "Open with agent", structured
+  `attachments` envelope metadata, `note_source`).
 - `atm queue` / `atm spawn` shell entries.
 - Team-level addressing (client-side fan-out stands for this phase).
+- Managed SSH/Tailscale enrollment (environment/IT concern; documented,
+  not implemented).
+- The prior pull-based transfer design (fetch endpoint, pending-delivery
+  semantics, `AttachmentDeliveryStore`/`AttachmentSweepStore`, ADR-018 §3
+  amendment): **rejected 2026-08-23 by Rand** as daemon state-machine
+  complexity for a script-sized problem; retained only in git history.
 
 ## Plan-hardening QA history (2026-08-23)
 
@@ -210,4 +137,5 @@ by five explore agents before hardening began.
 | 6 | fixes | fenix | 931bc6294 / efc398dba | PASS | – | – | – | – |
 | 7 | plan-QA-3 | req-qa; ruthless-boundary-qa | 931bc6294 / efc398dba | FAIL | 0 | 1 | 0 | RBQA-F007 sync-trait execution contract |
 | 7 | fixes | fenix | 88b318837 | PASS | – | – | – | recorded sync exception + spawn_blocking rail |
-| 8 | final | req-qa PASS (deliverables 16/16, 100%) · arch-qa PASS (merge-ready) · ruthless-boundary-qa PASS · rust-best-practices PASS · rust-service-hardening PASS | 88b318837 | **PASS** | 0 | 0 | 0 | quality-mgr gate: PASS |
+| 8 | final | req-qa PASS (deliverables 16/16, 100%) · arch-qa PASS (merge-ready) · ruthless-boundary-qa PASS · rust-best-practices PASS · rust-service-hardening PASS | 88b318837 | **PASS** | 0 | 0 | 0 | quality-mgr gate: PASS (pull-based design) |
+| 9 | redesign | Rand + fenix | (this commit) | REDRAFT | – | – | – | Rand rejected pull-based transfer as daemon state-machine over-engineering; plan redrafted to script-based transfer + system-level ATM_TEMP; re-review required |

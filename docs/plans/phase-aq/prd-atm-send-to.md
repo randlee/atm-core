@@ -69,35 +69,42 @@ Multi-select over recipients. `note` is a free-text "why" that travels with the 
 
 **Cancel:** Wyvern exits non-zero, emits no JSON, pipeline halts. No partial sends.
 
-### 4.3 Envelope change
+### 4.3 No envelope change (Phase 1)
 
-Add `attachments: []` to `MessageEnvelope`. **No new `MessageKind` verb** — the three-verb collapse stands.
+Phase 1 changes **nothing** in `MessageEnvelope` and adds no new verb. The
+landed file path travels in the message *text* via a small, documented
+template ("Attached files (on this host): <path> …"). Structured
+`attachments` metadata and `note_source` are Phase-2 candidates, adopted only
+if agents demonstrably need machine-readable refs.
 
-```json
-{ "sha256": "…", "size": 0, "name": "…", "kind": "file|dir",
-  "origin_host": "…", "origin_path": "…", "local_path": "…" }
-```
-`local_path` is populated by the *receiving* daemon once bytes land.
+### 4.4 Transport: user-configured transfer scripts, not daemon machinery
 
-### 4.4 Transport: pull, not push
+Cross-host file transfer is an **environment concern** (SSH keys, Tailscale,
+IT policy), not something the daemon can plan around. The design:
 
-- **Same host:** sender copies into the known agent-accessible temp area, `<known-temp>/atm/<msg-id>/`. Envelope references it.
-- **Cross-host:** envelope carries `{sha256, size, origin_host, origin_path}`
-  through the accepted transport stack — ADR-035 canonical write ingress
-  under ADR-047 layered peer-wire security (`PeerWireMode`, mTLS default),
-  with ADR-034 as the single-router HTTP shape reference. AQ1 chooses and records the authenticated peer byte-fetch endpoint;
-  AQ3 implements it. The receiving daemon fetches into its own
-  `<known-temp>/atm/<msg-id>/`, verifies hash and size, and only then makes the
-  message readable. Sender code holds no fetch, SSH, or retry state. ADR-028
-  and ADR-031 are historical/superseded references, not authority for this
-  design.
-- **Fan-out:** N recipients → N envelopes client-side; content-addressing makes repeated pulls cheap and deduplicable.
+- **Same host:** `atm send --attach` copies into `$ATM_TEMP/send-to/<transfer-id>/`
+  and the message text names the landed paths.
+- **Cross-host:** `atm send --attach` resolves a **specifically named,
+  user-provided transfer script for the destination host**
+  (`~/.atm/transfer/<host>`), runs it, and sends an ordinary message naming
+  the landed remote paths. The repo ships modifiable **examples**
+  (sftp default, Tailscale, rsync) that a human or agent adapts to their
+  environment, plus a setup document.
+- **Not configured:** the send **fails closed** with the exact error the user
+  must see: `File transfer to <host> not enabled. Read
+  docs/cross-host-file-transfer.md to set up cross-host file transfer.`
+  No daemon endpoint, no fetch/push state machine, no envelope semantics —
+  the daemon carries only the ordinary message.
+- **Fan-out:** N recipients → N ordinary messages client-side; remote
+  recipients sharing a host share one transfer.
 
-### 4.5 Lifecycle
+### 4.5 Lifecycle: ATM_TEMP as a system-level contract
 
-Daemon-owned sweeper on `<known-temp>/atm/`. AQ1 closes the policy (TTL,
-on-ack, or both) and names the configured root; AQ4 implements exactly that
-decision. A shared well-known folder with no owner is a guaranteed leak.
+`ATM_TEMP` is a **mandatory, system-level environment variable** defining the
+ATM scratch area for *all* features, validated at daemon/CLI startup with an
+actionable error. A periodic daemon sweep removes anything under `$ATM_TEMP`
+older than **30 days** (TTL-only; no ack coupling, no storage traits). With
+that contract in place, per-feature temp layouts are a non-issue.
 
 ### 4.6 Shell integration (thin glue only)
 
@@ -164,11 +171,11 @@ No new machinery. The guarantee that makes it work: **every stage is one-shot, r
 |---|---|---|
 | R1 | One gesture from file manager to delivered message, macOS + Windows + Linux (Ubuntu/GNOME first) | Must |
 | R2 | Multi-select recipients; multi-file via `$@` | Must |
-| R3 | Cross-host delivery with hash verification | Must |
+| R3 | Cross-host delivery via configured per-host transfer script; unconfigured → fail closed with the setup-doc error shown to the user | Must |
 | R4 | Dead/idle members visibly disabled in picker | Must |
 | R5 | Cancel never results in a send | Must |
 | R6 | `atm teams --json --members` and `atm send --from-json` usable without Wyvern (TUI, Raycast, scripts) | Must |
-| R7 | Sweeper reclaims inbox space per policy | Should |
+| R7 | Periodic sweep of `$ATM_TEMP` removes entries older than 30 days | Should |
 | R8 | Attachment contents flagged as untrusted in agent conventions (CLAUDE.md) | Should |
 | R9 | Phase 2: draft never blocks picker open | Must (P2) |
 | R10 | Phase 2: local model default; cloud requires explicit flag | Must (P2) |
@@ -195,16 +202,19 @@ path, one immutable message per recipient. The AQ1 ADR owns message-id
 allocation versus staging; AQ2 tests that order rather than inventing a
 second rule.
 
-All attachment bytes remain outside the message envelope. The envelope carries
-references only; `local_path` is receiving-daemon-owned and is absent until
-hash/size verification succeeds. This is the production boundary for both
+All attachment bytes remain outside the message bus. The message carries the
+landed path in its text; staging (local copy or transfer-script invocation)
+completes before the send, and any transfer failure aborts the whole
+invocation with zero sends. This is the production boundary for both
 same-host and cross-host paths.
 
 ## 6. Open Questions (block ADR, not prototype)
 
-1. Directories: send as reference (`kind: dir`, recursive pull) or tar at origin?
-2. Size limit, and what happens above it (refuse / warn / chunk)?
-3. Sweeper policy: TTL vs on-ack vs both.
+1. Directories: transfer recursively as a directory, or tar first? (Default:
+   whatever the example scripts do — likely recursive `sftp -r`/`scp -r`.)
+2. Size limit: none beyond the transfer mechanism's own; revisit only if it
+   bites.
+3. Sweeper policy: **decided** — TTL-only, 30 days, over all of `$ATM_TEMP`.
 4. Team-level addressing in atm-core, or stay with client-side fan-out?
 5. Wyvern cold-start latency — is it under the ~1 s context-menu tolerance? **Measure before committing Wyvern as the picker.**
 6. Which registration fields supply member `cwd`? Host sourcing is no longer
@@ -216,19 +226,22 @@ same-host and cross-host paths.
 
 ## 7. Milestones
 
-1. **ADR-054 `attachments`** — envelope field, pull semantics, lifecycle decision.
+1. **ADR-054 `ATM_TEMP` + transfer-script seam** — system temp contract,
+   30-day sweep, per-host script resolution + error contract, message-text
+   path convention.
 2. **`atm teams --json --members` + `atm send --attach --from-json`** — testable with `echo '{"recipients":[…]}' |`.
-3. **macOS Shortcuts prototype** using `osascript choose from list` — validates the workflow with zero UI work.
-4. **`pick-member.html` in Wyvern** — replace step 3's picker; measure latency.
-5. **Windows SendTo `.lnk`**.
-6. Same-host → cross-host pull.
-7. Sweeper.
+3. **Transfer example scripts + setup doc** — sftp default, Tailscale
+   variant; the "not enabled" error path.
+4. **macOS Shortcuts prototype** using `osascript choose from list` — validates the workflow with zero UI work.
+5. **`pick-member.html` in Wyvern** — replace step 4's picker; measure latency.
+6. **Windows SendTo `.lnk`** + Nautilus script.
+7. `$ATM_TEMP` sweeper.
 8. **(P2)** `wyvern chat.html --attach` — "Open with agent", no ATM. Integration smoke test for chat window.
 9. **(P2)** `atm draft` one-shot prefill, local model.
 10. **(P2)** Interactive drafting via chat contract; `new` then `fork`.
 
 ## 8. Success
 
-**Phase 1:** a file dropped on the shortcut appears in the right agent's inbox on another host, with its note, within a few seconds, and the human never opened a terminal. Nothing leaks in `<known-temp>/atm/` after a week.
+**Phase 1:** a file dropped on the shortcut appears in the right agent's inbox on another host, with its note, within a few seconds, and the human never opened a terminal. Nothing under `$ATM_TEMP` survives past its 30-day TTL.
 
 **Phase 2:** US-1 through US-4 each complete in one gesture plus at most one edit. A chain of three hops works with no stage aware it's in a chain.
