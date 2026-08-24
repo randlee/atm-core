@@ -23,6 +23,11 @@ use tokio::sync::{Semaphore, watch};
 use tokio::task::JoinSet;
 use tower::ServiceExt;
 
+use crate::message_handler::AuthenticatedConnector;
+use crate::{
+    CanonicalWriteHandler, PeerStreamAdapter, RuntimeLimits, RuntimeTimeouts, canonical_api_router,
+};
+
 /// Serves the capability-authenticated loopback adapter with bounded
 /// header-read time and cooperative graceful shutdown.
 pub(crate) async fn serve_loopback_http1(
@@ -64,6 +69,69 @@ pub(crate) async fn serve_loopback_http1(
                         // not a listener failure. Hyper has already closed it;
                         // keep accepting healthy clients.
                         tracing::debug!(%error, peer = %peer, "HTTP/1 loopback connection ended");
+                    }
+                });
+            }
+        }
+    }
+
+    drain_connections(connections).await
+}
+
+/// Serves authenticated opaque peer streams through the exact canonical Axum
+/// route used by every other runtime adapter. Authentication completes before
+/// the router is constructed or HTTP bytes are decoded.
+pub(crate) async fn serve_authenticated_peer_http1(
+    listener: TcpListener,
+    adapter: Arc<dyn PeerStreamAdapter>,
+    handler: Arc<dyn CanonicalWriteHandler>,
+    limits: RuntimeLimits,
+    timeouts: RuntimeTimeouts,
+    mut shutdown_rx: watch::Receiver<()>,
+) -> io::Result<()> {
+    let mut connections = JoinSet::new();
+    let permits = Arc::new(Semaphore::new(limits.max_connections));
+
+    loop {
+        let permit = tokio::select! {
+            _ = shutdown_rx.changed() => break,
+            permit = Arc::clone(&permits).acquire_owned() => permit.expect("connection semaphore remains owned by the server"),
+        };
+        tokio::select! {
+            _ = shutdown_rx.changed() => break,
+            accepted = listener.accept() => {
+                let (stream, peer) = accepted?;
+                let adapter = Arc::clone(&adapter);
+                let handler = Arc::clone(&handler);
+                let connection_shutdown = shutdown_rx.clone();
+                connections.spawn(async move {
+                    let _permit = permit;
+                    let accepted = match adapter.accept(stream).await {
+                        Ok(accepted) => accepted,
+                        Err(error) => {
+                            tracing::debug!(%error, peer = %peer, "peer stream authentication failed before HTTP decode");
+                            return;
+                        }
+                    };
+                    let router = canonical_api_router(
+                        handler,
+                        AuthenticatedConnector::peer(accepted.source_host),
+                        limits,
+                        timeouts,
+                    );
+                    let service = router
+                        .into_make_service_with_connect_info::<SocketAddr>()
+                        .oneshot(peer)
+                        .await
+                        .expect("Axum's peer make-service is infallible");
+                    if let Err(error) = serve_connection(
+                        TokioIo::new(accepted.stream),
+                        service,
+                        timeouts.request,
+                        connection_shutdown,
+                    )
+                    .await {
+                        tracing::debug!(%error, peer = %peer, "authenticated peer HTTP/1 connection ended");
                     }
                 });
             }

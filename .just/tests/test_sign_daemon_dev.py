@@ -92,18 +92,20 @@ class SignDaemonDevTests(unittest.TestCase):
         self.assertIn(
             "benchmark *args:\n"
             "    cargo build --release -p agent-team-mail -p atm-daemon\n"
-            "    # The isolated capacity runner launches this feature-gated bootstrap binary.\n"
-            "    cargo build --release -p atm-daemon-bootstrap --features benchmark-harness --bin atm-daemon-benchmark\n"
             "    {{python_cmd}} .just/sign_daemon_dev.py",
             justfile,
         )
+        self.assertNotIn("benchmark-harness", justfile)
+        self.assertNotIn("atm-daemon-benchmark", justfile)
 
     def test_benchmark_recipe_publishes_the_canonical_report(self) -> None:
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
         self.assertIn(
-            "    {{python_cmd}} scripts/smoke/run_admission_capacity.py {{args}}\n"
-            "    # Publish all captured variants into the canonical report site.\n"
-            "    {{python_cmd}} scripts/smoke/benchmark_report.py --rebuild",
+            "    # Retain the complete campaign report even when a target fails; the runner\n"
+            "    # records the attempt before returning its non-zero status.\n"
+            "    {{python_cmd}} scripts/smoke/run_admission_capacity.py {{args}} || benchmark_status=$?\n"
+            "    {{python_cmd}} scripts/smoke/benchmark_report.py --rebuild\n"
+            "    exit ${benchmark_status:-0}",
             justfile,
         )
 
