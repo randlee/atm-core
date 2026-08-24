@@ -114,6 +114,17 @@ pub trait PendingNudgeStore {
     /// Read-path clear (same state update that sets read = 1).
     fn clear_pending_on_read(&self, member: &MemberKey, msg: &AtmMessageId)
         -> Result<(), StorageError>;
+    /// Synchronous-handoff clear for ONE named message: the caller has
+    /// just handed exactly this message to its channel (AQ2 graft
+    /// queue-kind wire handoff; AQ2.5 bare-CLI FIFO append) and clears
+    /// exactly its marker — unconditional, idempotent (clearing an
+    /// already-clear marker is Ok). Distinct from `claim_next_pending`
+    /// (oldest-select for drain/sweep) and `clear_pending_on_read`
+    /// (read path); with a backlog present, the just-handed-off message
+    /// is NOT necessarily the oldest, so oldest-select must never be
+    /// used for handoff clears.
+    fn clear_pending_on_handoff(&self, member: &MemberKey, msg: &AtmMessageId)
+        -> Result<(), StorageError>;
 }
 
 pub struct NudgeClaim { pub msg: AtmMessageId, pub attempt: u32 }

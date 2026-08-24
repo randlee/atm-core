@@ -27,8 +27,11 @@ message), NOT a background task.
    the `GraftPostSendRequest` contract per ADR-054 (g) — both sides move
    together; the receiver process compat concern is addressed explicitly).
    The steer channel is untouched. Marker cleared on successful handoff
-   (`PendingNudgeStore::claim_pending` semantics — handoff is the graft
-   recipient's drain).
+   via `PendingNudgeStore::clear_pending_on_handoff(member, msg)` — the
+   specific-message clear AQ1's contract defines for synchronous
+   handoffs (never `claim_next_pending`, which selects the OLDEST
+   pending message and would clear the wrong marker when a backlog
+   exists). Handoff is the graft recipient's drain.
 2. **Handoff failure policy** per ADR-054 (f): on failure,
    `nudge_pending_at` stays set, a structured failure event
    (`subsystem`/`action`/`outcome` + `{member, msg_id}`) is emitted, and a

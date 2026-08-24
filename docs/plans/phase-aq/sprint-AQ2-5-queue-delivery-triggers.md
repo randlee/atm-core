@@ -110,18 +110,35 @@ work and the false-stuck problem cannot arise.
    persisted**; a daemon restart empties it and that is the accepted
    trade (staleness beats loss; the mail remains durably unread in the
    mailbox, visible to `atm read` and the operator).
-   - **FIFO**: one bounded in-memory FIFO per bare-CLI (team, member)
-     inside the daemon (plain `VecDeque` behind the runtime's existing
-     shared state, beside `RuntimeHealth` — no new async machinery).
+   - **FIFO**: one bounded in-memory FIFO per bare-CLI (team, member).
+     Type: `BareCliFifo = Arc<Mutex<HashMap<MemberKey,
+     VecDeque<QueuedNudgeMessage>>>>` — a plain shared map, no new async
+     machinery. **Wiring (explicit, one interpretation)**: constructed
+     ONCE in atm-daemon-bootstrap's `run_replacement_daemon_with_selector`
+     composition root (beside where `RuntimeHealth` is constructed today,
+     `atm-daemon-bootstrap/src/lib.rs` ~:217) and cloned into BOTH
+     consumers: (1) `StorageAndNudgeRouter` via a new
+     `with_bare_cli_fifo(...)` builder step (mirroring
+     `with_runtime_health`) for the get handler, and (2) a widened
+     selector factory — `active_received_hook_selector(service_runtime,
+     bare_cli_fifo)` and the matching `selector_factory` closure
+     signature — for `PullPendingReceivedHook`. The FIFO deliberately
+     does NOT live inside `LocalServiceRuntime` or `RuntimeHealth`; it is
+     composition-root state like they are, reached by clone, so neither
+     atm-core nor the health type grows daemon-RAM concerns.
      Capacity `BARE_CLI_FIFO_CAPACITY` (constant, default 32); overflow
      drops the **oldest** item (staleness preference) and increments a
      cumulative dropped counter on the health report
      (`queue_full_drops_total` precedent).
    - **Producer**: `PullPendingReceivedHook` (deliverable 4) appends
-     `{kind, msg_id, body}` on message arrival and clears the pending
-     marker — the append **is** the handoff, mirroring AQ2's
-     handoff-clears-marker semantics. Bounded and synchronous; the al3
-     no-detached-work test stays green by construction.
+     `{kind, msg_id, body}` on message arrival and clears exactly that
+     message's marker via AQ1's
+     `PendingNudgeStore::clear_pending_on_handoff(member, msg)` — the
+     specific-message handoff clear, same as AQ2's graft channel (never
+     `claim_next_pending`, which selects the oldest pending and would
+     clear the wrong marker under a backlog). The append **is** the
+     handoff. Bounded and synchronous; the al3 no-detached-work test
+     stays green by construction.
    - **Consumer — one route, one CLI surface, a straight line**:
 
    ```rust
@@ -190,9 +207,22 @@ work and the false-stuck problem cannot arise.
      handle exactly as AQ2's queue channel wires it into
      `storage_and_nudge_router.rs`.
    - `PostSendBuiltInTarget::QueuePull` — a third variant in core's
-     post-persistence dispatch-target planning (the selector's
-     doc-comment is explicit that core plans the target; the selector
-     "owns no application routing").
+     post-persistence dispatch-target planning. **This sprint owns the
+     third branch in `build_built_in_dispatch`
+     (`atm-core/src/send/hook.rs:17`, invoked from
+     `build_received_hook_dispatches`, `send/mod.rs` ~:391)**: classify
+     via `classify_delivery_channel`; a `BareCli` member's dispatch —
+     any kind, steer or queue — becomes a `QueuePull` target. This is a
+     shared-file seam with AQ1, whose deliverable 2 gives the same
+     function the kind decision; AQ1 lands first (already
+     `must_follow AQ1`), and this sprint's branch builds on it —
+     sequenced single ownership, mirroring the `received_hook_selector.rs`
+     seam with AQ2.
+   - `PostSendEmissionPath::QueuePull` — a matching variant in
+     `atm-core/src/boundary/mod.rs`'s emission-path enum
+     (`ExternalHook | LocalTmux | GraftPort` today);
+     `PullPendingReceivedHook::emit_received_message` returns it, so the
+     impl is fully specified.
    - `PullPendingReceivedHook` — a third `AsyncMessageReceivedHookEmitter`
      impl (sealed, beside `TokioTmuxReceivedHook` /
      `PublishedGraftReceivedHook` in
@@ -234,15 +264,28 @@ work and the false-stuck problem cannot arise.
 
    // atm-daemon-bootstrap/src/received_hook_selector.rs (on top of
    // AQ2's merged changes — must_follow AQ2):
-   struct PullPendingReceivedHook { /* shared handle to the daemon's
-       bare-CLI FIFO state (deliverable 3) */ }
+   pub type BareCliFifo =
+       Arc<Mutex<HashMap<MemberKey, VecDeque<QueuedNudgeMessage>>>>;
+
+   struct PullPendingReceivedHook { fifo: BareCliFifo, /* + store
+       handle for clear_pending_on_handoff */ }
    impl boundary::sealed::Sealed for PullPendingReceivedHook {}
    impl AsyncMessageReceivedHookEmitter for PullPendingReceivedHook {
-       // emit = bounded synchronous FIFO append + pending-marker clear
-       // (the handoff; no detached work — al3 green by construction)
+       // emit = bounded synchronous FIFO append +
+       // clear_pending_on_handoff(member, msg); returns
+       // PostSendEmissionPath::QueuePull (no detached work — al3
+       // green by construction)
    }
    // ReplacementReceivedHookSelector::select_emitter gains:
    //   PostSendBuiltInTarget::QueuePull(_) => Some(&self.queue_pull)
+
+   // Composition-root wiring (atm-daemon-bootstrap/src/lib.rs, beside
+   // today's RuntimeHealth construction ~:217):
+   //   let bare_cli_fifo: BareCliFifo = Arc::default();
+   //   StorageAndNudgeRouter ... .with_bare_cli_fifo(bare_cli_fifo.clone())
+   //   active_received_hook_selector(service_runtime, bare_cli_fifo)
+   //   // selector_factory widens to
+   //   //   FnOnce(LocalServiceRuntime, BareCliFifo) -> ...
    ```
    - Extensibility (naming rule above): a future harness channel adds
      one classifier arm + one target variant + one emitter impl — no
@@ -351,7 +394,12 @@ work and the false-stuck problem cannot arise.
 ## Dependencies
 
 - must_follow: AQ1 (kinds + pending-marker dispatch the emitter hands
-  off from). Merge-forward trigger: AQ1 dev push.
+  off from; `clear_pending_on_handoff` in its store contract; AND a
+  shared-file seam — AQ1's deliverable 2 edits
+  `send/hook.rs::build_built_in_dispatch` first, this sprint adds the
+  `QueuePull` branch on top, sequenced single ownership like the
+  `received_hook_selector.rs` seam with AQ2). Merge-forward trigger:
+  AQ1 dev push.
 - must_follow: AQ1.7 (the classifier's graft-lease input reads AQ1.5's
   `GraftReceiverEndpointStore` — the daemon registry, never the retired
   file record; same reasoning as AQ2's identical dependency).
