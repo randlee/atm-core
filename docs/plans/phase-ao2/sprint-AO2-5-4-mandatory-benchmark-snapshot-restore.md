@@ -148,3 +148,8 @@ independent and must remain. An interrupted benchmark account is recovered by
 stopping only its owned daemon and invoking the existing verified-snapshot
 restore procedure; operators must not copy, rename, or restore the interactive
 account as part of this recovery.
+
+## Current operator procedure
+
+For any new benchmark run, follow the canonical
+[`benchmark-run` skill](../../../.claude/skills/benchmark-run/SKILL.md).

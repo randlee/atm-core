@@ -2,6 +2,17 @@
 
 Rules and patterns for ensuring atm works correctly on Ubuntu, macOS, and Windows CI.
 
+## Windows Benchmark Execution
+
+Use the dedicated benchmark OS account and the canonical
+[`benchmark-run` skill](../.claude/skills/benchmark-run/SKILL.md). Windows runs
+the `sqlite`, `tcp`, and `tcp-tls` matrix; Unix-domain sockets are not a
+Windows target. Before a run, set
+`ATM_CAPACITY_HOST_LABEL=windows-x64-01` and select the paired CLI and daemon
+through daemon-switch's `atm.exe` and `atm-daemon.exe` selector symlinks. Run
+the native PowerShell command `just benchmark`, then `just benchmark-show`,
+then `just benchmark-publish`; do not use WSL or replace an installed binary.
+
 ## Phase S Daemon Portability Guard
 
 For same-host daemon functionality, operating-system-specific implementation

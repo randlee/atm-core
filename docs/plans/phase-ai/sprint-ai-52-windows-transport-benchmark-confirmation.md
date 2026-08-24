@@ -162,3 +162,8 @@ The aggregate benchmark report (`just benchmark-report`) also writes/updates
 under `site/reports/` (the existing `site/reports/send-message-benchmark.html`
 aggregate view) — this must be regenerated and committed after all ten
 profiles' worth of Windows runs are captured, not just the raw per-run JSON.
+
+## Current operator procedure
+
+For any new benchmark run, follow the canonical
+[`benchmark-run` skill](../../../.claude/skills/benchmark-run/SKILL.md).
