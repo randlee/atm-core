@@ -1,6 +1,6 @@
 # Plan — Phase AQ: ATM Send-To Shell Integration
 
-Status: ready_for_scope_review · Source PRD: [prd-atm-send-to.md](./prd-atm-send-to.md)
+Status: hardened — plan-QA PASS (2026-08-23) · Source PRD: [prd-atm-send-to.md](./prd-atm-send-to.md)
 Reference code: `integrate/phase-ao2` (envelope at
 `crates/atm-storage/src/schema/inbox_message.rs`, CLI at
 `crates/atm/src/commands/{teams,send}.rs`).
@@ -186,3 +186,28 @@ only.
 - PRD Phase 2 (atm draft, chat sessions, "Open with agent").
 - `atm queue` / `atm spawn` shell entries.
 - Team-level addressing (client-side fan-out stands for this phase).
+
+## Plan-hardening QA history (2026-08-23)
+
+Coordinator: fenix (plan edits by coordinator; reviews by background sonnet
+agents per Rand's direction). Baseline verified against `integrate/phase-ao2`
+by five explore agents before hardening began.
+
+| Round | Step | Reviewer | reviewed_commit | status | blocking | important | minor | Note |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 1 guidelines pass | Cipher-311d | 3db031a00 | PASS | – | – | – | contracts, paths-to-delete, --members |
+| 1 | 2 plan-scope | plan-scope-reviewer | 3db031a00 | FAIL | 1 | 1 | 0 | host-sourcing gap; legacy-send compat gate |
+| 1 | 3 fixes | Cipher-311d | 68f18d6af | PASS | – | – | – | decision (h) roster host binding |
+| 1 | 4 critical | critical-plan-reviewer | 68f18d6af | FAIL | 1 | 3 | 1 | dup resolver; dedupe ADR; ADR-035 collision; R8 orphan |
+| 2 | 5 fixes | fenix | 5d31d9823 | PASS | – | – | – | decisions (i), (f) rework, R8→AQ5 |
+| 2 | 4 critical | critical-plan-reviewer | 5d31d9823 | FAIL | 0 | 1 | 0 | AQ3 stale vs decision (f) |
+| 3 | 5 fixes | fenix | b865c00c4 | PASS | – | – | – | AQ3 implements (f) exactly |
+| 3 | 4 critical | critical-plan-reviewer | b865c00c4 | PASS | 0 | 0 | 0 | closed on cycle 3/3 |
+| 4 | 5 consistency | fenix | 6408ab8b0 | PASS | – | – | – | project-plan §48; ADR-054 in PRD |
+| 5 | 6 plan-QA-1 | req-qa / arch-qa / ruthless-boundary-qa / rust-best-practices / rust-service-hardening | 6408ab8b0 | FAIL | 4 | 12 | 8 | 24 findings incl. ADR-047 supersession, ADR-018 §3 cap, fetch-endpoint hardening |
+| 5 | fixes | fenix | 998009075 | PASS | – | – | – | all 24 folded in |
+| 6 | plan-QA-2 | same five reviewers | 998009075 | FAIL | 1 | 2 | 2 | SweepStore signature; dispatch gate; http-runtime.toml collision; PRD wording |
+| 6 | fixes | fenix | 931bc6294 / efc398dba | PASS | – | – | – | – |
+| 7 | plan-QA-3 | req-qa; ruthless-boundary-qa | 931bc6294 / efc398dba | FAIL | 0 | 1 | 0 | RBQA-F007 sync-trait execution contract |
+| 7 | fixes | fenix | 88b318837 | PASS | – | – | – | recorded sync exception + spawn_blocking rail |
+| 8 | final | req-qa PASS (deliverables 16/16, 100%) · arch-qa PASS (merge-ready) · ruthless-boundary-qa PASS · rust-best-practices PASS · rust-service-hardening PASS | 88b318837 | **PASS** | 0 | 0 | 0 | quality-mgr gate: PASS |
