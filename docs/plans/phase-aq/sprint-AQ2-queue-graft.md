@@ -87,3 +87,7 @@ None.
   before every dev/fix round.
 - parallel_safe: AQ3 (graft channel vs tmux drain — disjoint emitters; both
   consume, never redefine, AQ1's store and kinds).
+- Downstream: AQ2.5 must_follow this sprint — it adds
+  `PullPendingReceivedHook` and a selector match arm to the same
+  `received_hook_selector.rs` this sprint's queue-channel changes touch;
+  this sprint's diff lands first (recorded in AQ2.5's Dependencies).

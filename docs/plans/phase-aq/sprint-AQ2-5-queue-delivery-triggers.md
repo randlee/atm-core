@@ -204,8 +204,46 @@ work and the false-stuck problem cannot arise.
      that calls the classifier — the sweep claims only for members
      classified `TmuxSteer` or `Graft` (recorded in AQ3's deliverable 3
      and gated by AQ3's own AC; AQ3 takes `must_follow AQ2.5` for this
-     seam). Exactly one sprint authors each diff; no shared-file
-     double-ownership.
+     seam). `received_hook_selector.rs` is shared with AQ2's
+     queue-channel edits, so this sprint takes `must_follow AQ2` and
+     lands its emitter + selector arm on top of AQ2's merged changes.
+     Exactly one sprint authors each diff — ownership is sequenced,
+     never concurrent, on every shared file.
+
+   ```rust
+   // atm-core (beside the existing delivery-policy/dispatch planning;
+   // exact module placement follows DeliveryHarnessPath's home):
+   /// Single code owner of the delivery-trigger table.
+   pub enum DeliveryChannel { TmuxSteer, Graft, BareCli }
+
+   /// Pure decision over already-fetched inputs — the caller performs
+   /// the roster read and the GraftReceiverEndpointStore::lookup; the
+   /// classifier itself does no I/O (trivially unit-testable).
+   pub fn classify_delivery_channel(
+       pane_id: Option<&str>,                     // roster row
+       graft_lease: Option<&GraftReceiverLease>,  // AQ1.5 lookup result
+   ) -> DeliveryChannel
+
+   // core's post-persistence dispatch-target planning gains:
+   pub enum PostSendBuiltInTarget {
+       LocalTmux(/* existing payload, unchanged */),
+       Graft(/* existing payload, unchanged */),
+       /// NEW: bare-CLI members — emitter appends to the RAM FIFO.
+       QueuePull(QueuePullTarget), // { team, member, kind, msg_id, body }
+   }
+
+   // atm-daemon-bootstrap/src/received_hook_selector.rs (on top of
+   // AQ2's merged changes — must_follow AQ2):
+   struct PullPendingReceivedHook { /* shared handle to the daemon's
+       bare-CLI FIFO state (deliverable 3) */ }
+   impl boundary::sealed::Sealed for PullPendingReceivedHook {}
+   impl AsyncMessageReceivedHookEmitter for PullPendingReceivedHook {
+       // emit = bounded synchronous FIFO append + pending-marker clear
+       // (the handoff; no detached work — al3 green by construction)
+   }
+   // ReplacementReceivedHookSelector::select_emitter gains:
+   //   PostSendBuiltInTarget::QueuePull(_) => Some(&self.queue_pull)
+   ```
    - Extensibility (naming rule above): a future harness channel adds
      one classifier arm + one target variant + one emitter impl — no
      renames anywhere.
@@ -318,7 +356,15 @@ work and the false-stuck problem cannot arise.
   `GraftReceiverEndpointStore` — the daemon registry, never the retired
   file record; same reasoning as AQ2's identical dependency).
   Merge-forward trigger: AQ1.7 dev push.
-- parallel_safe: AQ2 (graft channel — disjoint emitters/files).
+- must_follow: AQ2 (shared file:
+  `atm-daemon-bootstrap/src/received_hook_selector.rs` — AQ2 edits
+  `PublishedGraftReceivedHook`'s emit path and this sprint adds
+  `PullPendingReceivedHook` + the `ReplacementReceivedHookSelector`
+  match arm to the same file and match statement. AQ2 lands its
+  selector-file changes first; this sprint's diff builds on them —
+  single owner per diff, sequenced, mirroring the AQ2.5→AQ3 classifier
+  seam resolution). Merge-forward trigger: AQ2 dev push. The resulting
+  sprint chain is AQ2 → AQ2.5 → AQ3.
 - Downstream: AQ3 takes `must_follow AQ2.5` for the classifier seam its
   sweep pre-check calls, and its **live-evidence validation** requires
   this sprint's heartbeat producer (both recorded in AQ3; AQ3's other
