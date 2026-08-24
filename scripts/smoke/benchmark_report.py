@@ -26,6 +26,7 @@ from scripts.smoke.benchmark_schema import (
     BenchmarkSchemaError,
     HistoricalRecord,
     artifact_id,
+    classify_status,
 )
 
 
@@ -210,6 +211,36 @@ def incomplete_reason(campaign: BenchmarkCampaign) -> str | None:
     return "; ".join(reasons) if reasons else "Required target results are missing."
 
 
+def current_historical_display_status(
+    result: BenchmarkRunResult, historical: HistoricalRecord,
+) -> str:
+    """Reclassify a historical point against the ratchet's current high-water mark.
+
+    ``result.status`` and its baseline are immutable ingest-time evidence.  A
+    phase chart instead answers the distinct, present-tense question: does this
+    older point meet the best durable result subsequently observed for this
+    host/target?  The distinction is temporal, never a manufactured floor.
+    """
+    current_floor = max(
+        (
+            point.p50_floor
+            for point in historical.ratchet
+            if point.host_label == result.host_label and point.target == result.target
+        ),
+        default=result.baseline.p50_floor,
+    )
+    return classify_status(
+        lifecycle_complete=result.metrics is not None and result.durability_after_restart is not None,
+        messages_requested=result.messages_requested,
+        messages_admitted=result.messages_admitted,
+        messages_durable=result.messages_durable,
+        p50_admissions_per_second=(
+            None if result.metrics is None else result.metrics.admissions_per_second.p50
+        ),
+        baseline_p50_floor=current_floor,
+    )
+
+
 def panel_variables(campaign: BenchmarkCampaign) -> dict[str, Any]:
     return {
         "title": f"ATM benchmark campaign — {campaign.campaign_id}",
@@ -243,10 +274,11 @@ def _chart_points(
             continue
         for historical_result in entry.results:
             result = historical_result.result
-            if result.target == target and result.metrics is not None and historical_result.displayed_status != "INCOMPLETE":
+            status = current_historical_display_status(result, historical)
+            if result.target == target and result.metrics is not None and status != "INCOMPLETE":
                 points.append({
                     "host_label": result.host_label, "timestamp": result.generated_at,
-                    "status": historical_result.displayed_status,
+                    "status": status,
                     "distribution": result.metrics.admissions_per_second,
                 })
     for campaign in phase_campaigns:

@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 import hashlib
 import html
 import json
-import math
 from pathlib import Path
 import subprocess
 import sys
@@ -188,33 +187,13 @@ def result_from_summary(
         })
     durability = summary.durability_after_restart
     gap = None if durability is not None else "durability-counts-missing"
-    d8_status = classify_status(
-        lifecycle_complete=metrics is not None and durability is not None,
-        messages_requested=0 if metrics is None else metrics.requested_count,
-        messages_admitted=0 if metrics is None else metrics.accepted_count,
-        messages_durable=0 if durability is None else durability.observed_mailbox_count,
-        p50_admissions_per_second=None if metrics is None else metrics.admissions_per_second.p50,
-        baseline_p50_floor=p50_floor,
-    )
-    # The v3 summary's pass/fail result is immutable source evidence.  A v4
-    # result validates its status against a baseline, so represent that
-    # original judgement with the smallest compatible source baseline rather
-    # than overwriting it with the D8 display re-derivation below.
-    source_floor = p50_floor
-    if (
-        metrics is not None
-        and durability is not None
-        and not summary.passed
-        and d8_status != "INCOMPLETE"
-    ):
-        source_floor = math.nextafter(metrics.admissions_per_second.p50, math.inf)
     status = classify_status(
         lifecycle_complete=metrics is not None and durability is not None,
         messages_requested=0 if metrics is None else metrics.requested_count,
         messages_admitted=0 if metrics is None else metrics.accepted_count,
         messages_durable=0 if durability is None else durability.observed_mailbox_count,
         p50_admissions_per_second=None if metrics is None else metrics.admissions_per_second.p50,
-        baseline_p50_floor=source_floor,
+        baseline_p50_floor=p50_floor,
     )
     reason = None
     if status == "INCOMPLETE":
@@ -235,7 +214,10 @@ def result_from_summary(
             messages_admitted=0 if metrics is None else metrics.accepted_count,
             messages_durable=0 if durability is None else durability.observed_mailbox_count,
             metrics=metrics,
-            baseline=BaselineRef(revision=1, p50_floor=source_floor),
+            # A migrated result records the factual D8 floor in force before
+            # this source observation.  Never synthesize a floor merely to
+            # reproduce a retired legacy boolean judgement.
+            baseline=BaselineRef(revision=1, p50_floor=p50_floor),
             durability_after_restart=durability,
             direct_sqlite_message_write=summary.direct_sqlite_message_write,
         ), gap
@@ -282,14 +264,10 @@ def migrated_record(reports_dir: Path, generated_from_commit: str) -> tuple[Hist
         # Updating first would allow a record-setting observation to certify
         # itself against its own value.
         result, gap = result_from_summary(summary, path, campaign, prior)
-        displayed_status = classify_status(
-            lifecycle_complete=metrics is not None and durable is not None,
-            messages_requested=0 if metrics is None else metrics.requested_count,
-            messages_admitted=0 if metrics is None else metrics.accepted_count,
-            messages_durable=0 if durable is None else durable.observed_mailbox_count,
-            p50_admissions_per_second=None if metrics is None else metrics.admissions_per_second.p50,
-            baseline_p50_floor=prior,
-        )
+        # ``result`` was classified against the pre-observation D8 floor.
+        # Reuse its schema-validated result instead of independently deriving
+        # a subtly different acceptance decision.
+        displayed_status = result.status
         if eligible and displayed_status == "PASS" and observed is not None and observed > prior:
             best[key] = observed
             ratchet.append(RatchetPoint(
@@ -405,7 +383,7 @@ def updated_baselines(reports_dir: Path, record: HistoricalRecord) -> BaselineSe
     for campaign_entry in record.campaigns:
         for entry in campaign_entry.results:
             result = entry.result
-            if result.os != "windows" or entry.displayed_status != "PASS" or result.metrics is None:
+            if result.os != "windows" or result.status != "PASS" or result.metrics is None:
                 continue
             key = (result.host_label, result.target)
             candidate = (result.metrics.admissions_per_second.p50, result.generated_at, result.campaign_id)
