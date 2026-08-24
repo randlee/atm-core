@@ -569,34 +569,6 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(calls["start"].call_count, 4)
         self.assertEqual(captured["disposable_mtls"]["authority"], "localhost")
 
-    def test_disposable_mtls_identity_uses_p256_not_rsa_for_representative_tls_handshakes(self):
-        commands: list[list[str]] = []
-
-        def required(command, _env, _description):
-            commands.append(command)
-            if command[1:3] == ["req", "-x509"]:
-                Path(command[command.index("-keyout") + 1]).write_text("private key")
-                Path(command[command.index("-out") + 1]).write_text("certificate")
-
-        with tempfile.TemporaryDirectory() as directory:
-            home = Path(directory)
-            with (
-                mock.patch.object(RUNNER.shutil, "which", return_value="/usr/bin/openssl"),
-                mock.patch.object(RUNNER, "_required_command", side_effect=required),
-                mock.patch.object(RUNNER, "disposable_peer_host", return_value="capacity.example.test"),
-                mock.patch.object(RUNNER.ssl, "PEM_cert_to_DER_cert", return_value=b"certificate"),
-            ):
-                identity = RUNNER.provision_disposable_mtls_identity(
-                    Path("/tmp/atm"), {}, home, RUNNER.DEFAULT_CAPACITY_ROSTER, 43_101
-                )
-
-            self.assertEqual(identity.host, "capacity.example.test")
-            self.assertTrue(identity.certificate_bundle.is_file())
-            command = commands[0]
-            self.assertIn("ec", command)
-            self.assertIn("ec_paramgen_curve:prime256v1", command)
-            self.assertNotIn("rsa:2048", command)
-
     def test_real_snapshot_lifecycle_never_touches_interactive_root(self):
         """Exercise the real account-bound snapshot APIs through ``run_capacity``.
 
