@@ -110,16 +110,17 @@ work and the false-stuck problem cannot arise.
    persisted**; a daemon restart empties it and that is the accepted
    trade (staleness beats loss; the mail remains durably unread in the
    mailbox, visible to `atm read` and the operator).
-   - **FIFO**: one bounded in-memory FIFO per bare-CLI (team, member).
-     Type: `BareCliFifo = Arc<Mutex<HashMap<BareCliMemberKey,
+   - **FIFO**: one bounded in-memory FIFO per bare-CLI (team, agent).
+     Type: `BareCliFifo = Arc<Mutex<HashMap<MemberKey,
      VecDeque<QueuedNudgeMessage>>>>` — a plain shared map, no new async
-     machinery. **Key type (explicit — `runtime_health::MemberKey` is
-     private to atm-http-runtime and stays that way)**: a new
-     (superseded by AQ1's canonical `MemberKey` — identical shape)
-     `pub struct BareCliMemberKey { pub team: TeamName, pub member:
-     AgentName }` defined in **atm-core** beside `QueuedNudgeMessage`
-     (both crates already depend on atm-core; no visibility widening of
-     any existing type). **Wiring (explicit, one interpretation)**: constructed
+     machinery. **Key type**: AQ1's canonical public
+     `atm_core MemberKey { team, agent }` (defined by AQ1 per the
+     ruthless-boundary-qa one-canonical-key finding; both crates already
+     depend on atm-core). The PRIVATE `runtime_health::MemberKey`
+     (atm-http-runtime) is intentionally untouched and must be
+     module-qualified wherever both are in scope. This sprint's earlier
+     `BareCliMemberKey` (identical shape) is superseded — no such type
+     is introduced. **Wiring (explicit, one interpretation)**: constructed
      ONCE in atm-daemon-bootstrap's `run_replacement_daemon_with_selector`
      composition root (beside where `RuntimeHealth` is constructed today,
      `atm-daemon-bootstrap/src/lib.rs` ~:217) and cloned into BOTH
@@ -265,15 +266,13 @@ work and the false-stuck problem cannot arise.
        LocalTmux(/* existing payload, unchanged */),
        Graft(/* existing payload, unchanged */),
        /// NEW: bare-CLI members — emitter appends to the RAM FIFO.
-       QueuePull(QueuePullTarget), // { team, member, kind, msg_id, body }
+       QueuePull(QueuePullTarget), // { team, agent, kind, msg_id, body }
    }
 
-   // atm-core (beside QueuedNudgeMessage — NOT the private
-   // runtime_health::MemberKey, which is unchanged):
-   // Superseded by AQ1's canonical public atm-core MemberKey (same
-   // shape); this sprint uses MemberKey directly — BareCliMemberKey is
-   // retained in this doc only as the historical name of the map key:
-   pub struct BareCliMemberKey { pub team: TeamName, pub member: AgentName }
+   // Key: AQ1's canonical public atm_core::MemberKey { team, agent }
+   // (NOT the private runtime_health::MemberKey, which is unchanged —
+   // module-qualify where both are in scope). BareCliMemberKey is
+   // superseded; no new key type is introduced by this sprint.
    // Derivation at the producer:
    //   PullPendingReceivedHook::emit_received_message constructs
    //   MemberKey { team: envelope.recipient_team.clone(),
@@ -281,7 +280,7 @@ work and the false-stuck problem cannot arise.
    //   from the delivered message envelope — the same fields the
    //   read-path clear uses, so producer and store key can never skew.
    pub type BareCliFifo =
-       Arc<Mutex<HashMap<BareCliMemberKey, VecDeque<QueuedNudgeMessage>>>>;
+       Arc<Mutex<HashMap<MemberKey, VecDeque<QueuedNudgeMessage>>>>;
 
    // atm-daemon-bootstrap/src/received_hook_selector.rs (on top of
    // AQ2's merged changes — must_follow AQ2):
