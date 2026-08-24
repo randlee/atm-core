@@ -28,7 +28,6 @@ use atm_core::send::{WarningEntry, WriteOutcome, prepare_write_with_async_runtim
 
 use crate::CanonicalWriteHandler;
 use crate::PeerConnectionPool;
-use crate::PeerStreamAdapter;
 use crate::RuntimeHealth;
 
 /// Bounded bridge for a synchronous core operation that is not a storage-writer
@@ -101,7 +100,6 @@ pub struct StorageAndNudgeRouter {
     doctor_ports: Option<atm_core::doctor::RuntimeDoctorPorts>,
     daemon_context: Option<atm_core::doctor::DoctorExecutionContext>,
     direct_peer_port: NonZeroU16,
-    peer_stream_adapter: Option<Arc<dyn PeerStreamAdapter>>,
     peer_connection_pool: Option<PeerConnectionPool>,
     shared_direct_peer_client: Option<reqwest::Client>,
 }
@@ -126,7 +124,6 @@ impl StorageAndNudgeRouter {
             doctor_ports: None,
             daemon_context: None,
             direct_peer_port: crate::direct_peer_port(),
-            peer_stream_adapter: None,
             peer_connection_pool: None,
             shared_direct_peer_client: None,
         }
@@ -161,15 +158,6 @@ impl StorageAndNudgeRouter {
         daemon_context: atm_core::doctor::DoctorExecutionContext,
     ) -> Self {
         self.daemon_context = Some(daemon_context);
-        self
-    }
-
-    /// Installs the bootstrap-selected opaque peer-stream adapter for remote
-    /// writes. Absence is explicit plaintext-test mode and preserves the
-    /// existing direct TCP connector unchanged.
-    #[must_use]
-    pub fn with_peer_stream_adapter(mut self, adapter: Arc<dyn PeerStreamAdapter>) -> Self {
-        self.peer_stream_adapter = Some(adapter);
         self
     }
 
@@ -233,7 +221,7 @@ impl StorageAndNudgeRouter {
     /// Delivers one locally admitted host-qualified write using the daemon's
     /// selected peer-wire mode. The record is already durable at this point;
     /// this method creates neither a second application route nor delivery
-    /// recovery state. Per ADR-053, connection reuse can redial only before
+    /// recovery state. Per ADR-057, connection reuse can redial only before
     /// exchange; it never retries a request after handing it to the sender.
     async fn dispatch_resolved_peer_write(
         &self,
@@ -251,23 +239,14 @@ impl StorageAndNudgeRouter {
                 "request deadline expired before cross-host acknowledgement delivery",
             )
         })?;
-        let client = match (
-            self.peer_connection_pool.as_ref(),
-            self.peer_stream_adapter.as_ref(),
-        ) {
-            (Some(pool), Some(_)) => crate::client::pooled_peer_stream_write_client(
+        let client = match self.peer_connection_pool.as_ref() {
+            Some(pool) => crate::client::pooled_peer_stream_write_client(
                 host.clone(),
                 self.direct_peer_port,
                 remaining,
                 pool.clone(),
             )?,
-            (None, Some(adapter)) => crate::client::peer_stream_write_client(
-                host.clone(),
-                self.direct_peer_port,
-                remaining,
-                Arc::clone(adapter),
-            )?,
-            (_, None) => match self.shared_direct_peer_client.as_ref() {
+            None => match self.shared_direct_peer_client.as_ref() {
                 Some(client) => crate::client::direct_peer_tcp_client_with_shared_client(
                     host.clone(),
                     self.direct_peer_port,
@@ -2264,8 +2243,7 @@ mod tests {
         let adapter = Arc::new(CountingPassthroughPeerAdapter::default());
         let remote = fixture(true, None, None);
         let remote_runtime = HttpRuntimeBuilder::new(
-            direct_peer_runtime_config(&remote, crate::DirectPeerTcpConfig::ephemeral_for_test())
-                .with_peer_stream_adapter(adapter.clone()),
+            direct_peer_runtime_config(&remote, crate::DirectPeerTcpConfig::ephemeral_for_test()),
             Arc::new(remote.router.clone()),
         )
         .build()
@@ -2284,7 +2262,6 @@ mod tests {
             .router
             .clone()
             .with_direct_peer_port(NonZeroU16::new(remote_port).expect("non-zero port"))
-            .with_peer_stream_adapter(adapter.clone())
             .with_peer_connection_pool(pool.clone());
 
         for _ in 0..3 {

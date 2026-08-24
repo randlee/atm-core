@@ -59,7 +59,7 @@ const CANONICAL_WRITE_ENVELOPE_OVERHEAD_BYTES: usize = 64 * 1024;
 /// The bootstrap-owned peer transport selection passed as one coherent unit
 /// into replacement-daemon composition. Runtime code receives only the
 /// opaque established-stream adapter and validated pool bounds.
-struct SelectedPeerTransport {
+struct SelectedPeerAdapterSelection {
     adapter: Option<Arc<dyn PeerStreamAdapter>>,
     pool_config: PeerPoolConfig,
 }
@@ -477,7 +477,7 @@ fn build_replacement_handler(
     ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     daemon_launch_identity: &DaemonLaunchIdentity,
     peer_wire_mode: PeerWireMode,
-    peer_transport: SelectedPeerTransport,
+    peer_adapter_selection: SelectedPeerAdapterSelection,
     runtime_health: RuntimeHealth,
 ) -> Result<Arc<StorageAndNudgeRouter>, AtmError> {
     let selector = selector_factory(assembly.service_runtime.clone());
@@ -497,13 +497,11 @@ fn build_replacement_handler(
         peer_wire_security: Some(peer_wire_mode.security().into()),
     })
     .with_shared_direct_peer_client(shared_direct_peer_client()?);
-    let handler = match peer_transport.adapter {
-        Some(adapter) => handler
-            .with_peer_stream_adapter(Arc::clone(&adapter))
-            .with_peer_connection_pool(PeerConnectionPool::new(
-                peer_transport.pool_config,
-                adapter,
-            )),
+    let handler = match peer_adapter_selection.adapter {
+        Some(adapter) => handler.with_peer_connection_pool(PeerConnectionPool::new(
+            peer_adapter_selection.pool_config,
+            adapter,
+        )),
         None => handler,
     };
     Ok(Arc::new(handler))
@@ -642,7 +640,7 @@ async fn run_replacement_daemon_with_selector(
         selector_factory,
         &daemon_launch_identity,
         peer_wire_mode,
-        SelectedPeerTransport {
+        SelectedPeerAdapterSelection {
             adapter: peer_stream_adapter.clone(),
             pool_config: peer_pool_config,
         },
@@ -905,8 +903,8 @@ mod replacement_runtime_tests {
     use serde_json::Map;
 
     use super::{
-        DaemonLaunchIdentity, REPLACEMENT_DRAIN_DEADLINE, SelectedPeerTransport, ShutdownSignal,
-        assemble_host_runtime_with_template_composer, build_replacement_handler,
+        DaemonLaunchIdentity, REPLACEMENT_DRAIN_DEADLINE, SelectedPeerAdapterSelection,
+        ShutdownSignal, assemble_host_runtime_with_template_composer, build_replacement_handler,
         parse_direct_peer_port, parse_peer_pool_config_with_environment, parse_peer_wire_mode,
         peer_stream_adapter_for_mode, replacement_runtime_config_with_direct_peer,
         write_ready_signal_if_requested,
@@ -1148,7 +1146,7 @@ mod replacement_runtime_tests {
             |_| Arc::new(NoReceivedHookSelector),
             &DaemonLaunchIdentity::default(),
             PeerWireMode::plaintext_test(),
-            SelectedPeerTransport {
+            SelectedPeerAdapterSelection {
                 adapter: peer_stream_adapter.clone(),
                 pool_config: PeerPoolConfig::default(),
             },

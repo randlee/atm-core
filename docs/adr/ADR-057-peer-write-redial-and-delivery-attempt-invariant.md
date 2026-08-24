@@ -1,4 +1,4 @@
-# ADR-053 — Peer-Write Redial and Delivery-Attempt Invariant
+# ADR-057 — Peer-Write Redial and Delivery-Attempt Invariant
 
 | Field | Value |
 | --- | --- |

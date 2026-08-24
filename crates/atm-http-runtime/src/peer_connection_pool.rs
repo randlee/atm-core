@@ -905,6 +905,50 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn expired_deadline_releases_idle_reservation_without_probe_or_redial() {
+        let port = start_keep_alive_peer().await;
+        let adapter = Arc::new(CountingPassthroughAdapter::default());
+        let pool = PeerConnectionPool::new(PeerPoolConfig::default(), adapter.clone());
+        let peer = "127.0.0.1".parse().expect("peer authority");
+        let mut initial = pool
+            .acquire(
+                &peer,
+                std::num::NonZeroU16::new(port).expect("non-zero test port"),
+                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
+            )
+            .await
+            .expect("initial connection is pooled");
+        complete_one_request(&mut initial).await;
+        drop(initial);
+
+        let result = pool
+            .acquire(
+                &peer,
+                std::num::NonZeroU16::new(port).expect("non-zero test port"),
+                atm_core::api::RequestDeadline::after(std::time::Duration::ZERO),
+            )
+            .await;
+        let failure = match result {
+            Ok(_) => panic!("expired budget rejects liveness probing before a redial"),
+            Err(failure) => failure,
+        };
+        assert!(matches!(
+            failure,
+            super::HttpRuntimeClientFailure::PeerConnectTimeout { .. }
+        ));
+        assert_eq!(
+            adapter.connects.load(Ordering::SeqCst),
+            1,
+            "expired acquire neither probes into a replacement dial nor connects again"
+        );
+        assert_eq!(
+            pool.pooled_count(),
+            0,
+            "the popped idle reservation is released when no request budget remains"
+        );
+    }
+
+    #[tokio::test]
     async fn failed_exchange_is_not_retried_after_the_request_is_handed_to_the_sender() {
         let (port, accepted) = start_drop_peer().await;
         let adapter = Arc::new(CountingPassthroughAdapter::default());
