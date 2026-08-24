@@ -204,6 +204,10 @@ atm inbox
 
 **Nudge ARCH-CTM to check inbox** (when he hasn't replied):
 
+This manual tmux nudge is a steer-kind nudge (immediate, out-of-band prompt
+injection) — it is not a queue-kind nudge and does not wait for harness
+readiness.
+
 ARCH-CTM runs in a tmux pane. Discover the pane, then send-keys:
 ```bash
 # Find arch-ctm's pane

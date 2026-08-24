@@ -1576,7 +1576,7 @@ contain:
 The post-send hook is the steer-nudge path: it runs only after a successful
 outbound mailbox write from `atm send` or `atm ack` — persist, then emit the
 steer nudge; queue-kind nudges defer emission until harness readiness
-(ADR-055), and neither kind ever precedes persistence. It executes once when
+(ADR-054), and neither kind ever precedes persistence. It executes once when
 recipient matching succeeds, uses `is_ack = false` for `atm send` and
 `is_ack = true` for `atm ack`, may optionally emit one structured stdout
 result for observability, and never rolls back a successful message write on
@@ -2730,7 +2730,7 @@ Architectural rules:
 - send success is durable ATM persistence
 - after persistence, ATM emits the steer nudge when the recipient exposes
   that capability; queue-kind nudges defer emission until harness readiness
-  (ADR-055), and neither kind ever precedes persistence
+  (ADR-054), and neither kind ever precedes persistence
 - the shipped default emitter path is the receiver-only
   `MessageReceivedHookEmitter` delivery path
 - the built-in renderer selects exactly one of six named template kinds:

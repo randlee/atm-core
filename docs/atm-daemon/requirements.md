@@ -82,7 +82,7 @@ Receiver-specific post-send handoff rule:
   advisory-stream request/response family
 - daemon ownership ends at durable persistence, then emission of the steer
   nudge through the accepted capability seam; queue-kind nudges defer
-  emission until harness readiness (ADR-055), and neither kind ever precedes
+  emission until harness readiness (ADR-054), and neither kind ever precedes
   persistence
 
 Current retained ATM surfaces not modeled as daemon request/response packets:

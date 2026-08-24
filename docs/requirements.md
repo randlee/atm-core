@@ -3917,7 +3917,7 @@ mail correctness.
   - every canonical write orders idempotent persistence, optional receiver-side
     acknowledgement mutation, and exactly one post-write router dispatch:
     persist, then emit the steer nudge; queue-kind nudges defer emission
-    until harness readiness (ADR-055); neither kind ever precedes
+    until harness readiness (ADR-054); neither kind ever precedes
     persistence
   - a destination host is consumed as an origin-side routing selector before
     an authenticated peer request reaches receiver-side routing; source host is
@@ -4344,7 +4344,7 @@ mail correctness.
   - `atm ack` persists the reply to durable ATM state
   - after successful persistence, ATM emits the steer nudge only when the
     recipient exposes that capability; queue-kind nudges defer emission
-    until harness readiness (ADR-055), and neither kind ever precedes
+    until harness readiness (ADR-054), and neither kind ever precedes
     persistence
   - the shipped default post-send path is the built-in in-process
     implementation

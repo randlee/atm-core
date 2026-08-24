@@ -233,7 +233,7 @@ Initial crate requirement IDs:
   pass through `DaemonRequestDispatcher::route_write` and the canonical
   `MessageWriter::write` persistence boundary: persist, then emit the steer
   nudge through exactly one `PostWriteRouter::dispatch`; queue-kind nudges
-  defer emission until harness readiness (ADR-055), and neither kind ever
+  defer emission until harness readiness (ADR-054), and neither kind ever
   precedes persistence. Adapters may authenticate and label provenance but
   may not implement a parallel write, acknowledgement, or nudge path. This is
   the crate-level refinement of

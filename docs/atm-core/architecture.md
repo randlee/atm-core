@@ -634,7 +634,7 @@ Architectural rules:
   governing delivery contract
 - write-affecting mail events persist first, then emit the steer nudge only
   when the recipient exposes that capability; queue-kind nudges defer
-  emission until harness readiness (ADR-055), and neither kind ever precedes
+  emission until harness readiness (ADR-054), and neither kind ever precedes
   persistence
 - `atm-core` owns the direct post-send seam through
   `MessageReceivedHookEmitter`, not through `DeliveryPlan` or `NotificationSink`

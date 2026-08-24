@@ -138,7 +138,7 @@ Current packet-supported daemon surface:
 Receiver-handoff rule:
 - the daemon persists first, then emits the steer nudge after durable message
   commit; queue-kind nudges defer emission until harness readiness
-  (ADR-055), and neither kind ever precedes persistence
+  (ADR-054), and neither kind ever precedes persistence
 - receiver-specific delivery details stay behind receiver implementations such
   as local tmux and `atm-graft`
 - when the retained built-in helper is used directly, it must consume one
