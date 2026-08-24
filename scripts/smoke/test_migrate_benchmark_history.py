@@ -24,6 +24,9 @@ spec.loader.exec_module(MIGRATE)
 
 class MigrateBenchmarkHistoryTests(unittest.TestCase):
     def fixture_dir(self) -> Path:
+        return ROOT / "scripts/smoke/fixtures/benchmark-legacy"
+
+    def migrated_report_dir(self) -> Path:
         return ROOT / "site/reports/send-message-benchmark"
 
     def test_real_shape_fixtures_preserve_source_bytes_and_metrics(self) -> None:
@@ -79,6 +82,19 @@ class MigrateBenchmarkHistoryTests(unittest.TestCase):
         self.assertEqual(migrated.generated_at.isoformat().replace("+00:00", "Z"), source["generated_at"])
         self.assertEqual(migrated.metrics.admissions_per_second.p50, source["metrics"]["admissions_per_second"]["p50"])
         self.assertEqual(audit["mappings"][0]["source_file"], "v1-result.json")
+
+    def test_post_cleanup_tree_is_a_valid_noop(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            reports = Path(temp)
+            (reports / "historical-record.json").write_text(
+                (self.migrated_report_dir() / "historical-record.json").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            (reports / "baselines.json").write_text(
+                (self.migrated_report_dir() / "baselines.json").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            self.assertEqual(MIGRATE.main(["--reports-dir", str(reports), "--check"]), 0)
 
 
 if __name__ == "__main__":

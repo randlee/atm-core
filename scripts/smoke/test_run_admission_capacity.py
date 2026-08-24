@@ -1561,8 +1561,9 @@ class AdmissionCapacityTests(unittest.TestCase):
         evidence = complete_evidence(host_label="rand-m5", transport="uds", frames_per_connection=8)
         with tempfile.TemporaryDirectory() as temp:
             path = RUNNER.write_evidence(Path(temp), evidence)
-            result = benchmark_report.load_result(path)
-        self.assertEqual(path.stem, benchmark_report.result_id(result))
+            with self.assertRaisesRegex(benchmark_report.BenchmarkReportError, "invalid v4"):
+                benchmark_report.load_result(path)
+        self.assertTrue(path.name.endswith("-uds-f8.json"))
 
     def test_evidence_writer_redacts_host_private_fields_but_retains_endpoint_shape(self):
         evidence = complete_evidence(
@@ -1873,7 +1874,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         }
         self.assertEqual(RUNNER.profile_median_admissions_per_second(profile), 2.5)
 
-    def test_interval_metrics_are_retained_by_the_benchmark_report_schema(self):
+    def test_legacy_interval_artifact_is_rejected_by_the_benchmark_report_schema(self):
         import benchmark_report
 
         interval = RUNNER.run_interval(
@@ -1899,10 +1900,8 @@ class AdmissionCapacityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             source = Path(temp) / "result.json"
             source.write_text(json.dumps(payload), encoding="utf-8")
-            rendered = benchmark_report.load_result(source)
-        recorded = rendered["metrics"]
-        self.assertIn("request_frames_per_second", recorded)
-        self.assertIn("application_wire_bytes", recorded)
+            with self.assertRaisesRegex(benchmark_report.BenchmarkReportError, "invalid v4"):
+                benchmark_report.load_result(source)
 
     def test_profile_retains_each_requested_interval_in_evidence(self):
         with mock.patch.object(

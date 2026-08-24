@@ -71,6 +71,19 @@ def source_files(reports_dir: Path) -> list[Path]:
     return selected
 
 
+def migrated_tree_is_valid(reports_dir: Path) -> bool:
+    """Validate the idempotent, post-cleanup historical tree without legacy input."""
+    record_path = reports_dir / "historical-record.json"
+    if not record_path.exists():
+        return False
+    try:
+        HistoricalRecord.model_validate(read_json(record_path))
+        BaselineSet.model_validate(read_json(reports_dir / "baselines.json"))
+    except (MigrationError, BenchmarkSchemaError, ValueError):
+        return False
+    return not (reports_dir / "historical-imports.json").exists()
+
+
 def legacy_summary(payload: dict[str, Any], source: Path) -> BenchmarkSummary:
     """Use the pre-existing compact summary validator without writing source."""
     version = payload.get("schema_version")
@@ -392,6 +405,12 @@ def main(argv: Iterable[str] | None = None) -> int:
     parser.add_argument("--check", action="store_true", help="validate and compare without writing")
     args = parser.parse_args(argv)
     reports_dir = args.reports_dir.resolve()
+    if not source_files(reports_dir):
+        if not migrated_tree_is_valid(reports_dir):
+            raise MigrationError(
+                f"{reports_dir}: no legacy input and no valid migrated historical record"
+            )
+        return 0
     record, audit = migrated_record(reports_dir, migration_revision(reports_dir))
     record_path = reports_dir / "historical-record.json"
     baselines_path = reports_dir / "baselines.json"
