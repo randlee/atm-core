@@ -62,7 +62,9 @@ Result: connect + TLS-handshake cost on every peer write.
    `into_atm_error` mapping are unchanged — existing tests assert on
    specific variants/messages; pooling adds reuse underneath, never new
    caller-visible failure shapes.
-7. **New ADR — peer-write redial and delivery-attempt invariant**:
+7. **New ADR — peer-write redial and delivery-attempt invariant**
+   (`docs/adr/ADR-0NN-peer-write-redial-and-delivery-attempt-invariant.md`,
+   NN = next available number at authoring time, added to `docs/adr/INDEX.md`):
    documents the redial-safety invariant fixed in the contract block
    (staleness detected only at acquire time via sender liveness; no retry
    of any failure after a request is handed to `exchange`; delivery-attempt
@@ -99,8 +101,14 @@ impl PeerConnectionPool {
     /// Borrow a live connection to `peer`, dialing (TCP + adapter handshake)
     /// only when none is pooled. At most `max_per_peer` concurrent
     /// connections per peer; excess acquirers dial unpooled (never queue a
-    /// durable write behind a pool slot).
-    pub async fn acquire(&self, peer: &HostName, port: u16)
+    /// durable write behind a pool slot). The caller's remaining per-write
+    /// budget bounds EVERYTHING here — the liveness check, any redial, and
+    /// the dial itself — producing today's PeerConnectTimeout when it
+    /// elapses, exactly like PeerStreamConnector::exchange does now.
+    /// Locking rule: the candidate entry is popped out of the
+    /// std::sync::Mutex-guarded slot map first; is_closed()/ready() runs on
+    /// the owned entry OUTSIDE the lock (never .await while holding it).
+    pub async fn acquire(&self, peer: &HostName, port: u16, deadline: RequestDeadline)
         -> Result<PooledPeerConnection, HttpRuntimeClientFailure>;
 }
 
@@ -116,7 +124,10 @@ impl PeerConnectionPool {
 /// own timer task, never in Drop.
 pub struct PooledPeerConnection {
     peer: HostName,
-    sender: hyper::client::conn::http1::SendRequest<RuntimeBody>,
+    // Real types only — the same ones execute_opaque_peer_request drives
+    // today: axum::body::Body request bodies over the http1 sender, and
+    // axum::http::Response<Vec<u8>> back out. No new wrapper types.
+    sender: hyper::client::conn::http1::SendRequest<axum::body::Body>,
     driver: tokio::task::JoinHandle<()>,
     health: GuardHealth,          // Healthy only after a successful exchange
     pool: Weak<PoolShared>,
@@ -124,11 +135,16 @@ pub struct PooledPeerConnection {
 
 impl PooledPeerConnection {
     /// One request/response cycle over the pooled sender, preserving the
-    /// HttpRuntimeClientFailure taxonomy. Success ⇒ guard Healthy
+    /// HttpRuntimeClientFailure taxonomy. Takes the same request type the
+    /// connector layer consumes today (atm_core::api::HttpRequest) and the
+    /// caller's RequestDeadline; the send is bounded by
+    /// tokio::time::timeout(deadline.remaining(), ...) producing
+    /// HttpRuntimeClientFailure::Timeout, exactly as
+    /// execute_opaque_peer_request does now. Success ⇒ guard Healthy
     /// (returned to pool at Drop). Failure ⇒ guard Failed (closed at
     /// Drop), error surfaced unchanged.
-    pub async fn exchange(&mut self, request: HttpRuntimeRequest)
-        -> Result<HttpRuntimeResponse, HttpRuntimeClientFailure>;
+    pub async fn exchange(&mut self, request: HttpRequest, deadline: RequestDeadline)
+        -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure>;
 }
 
 // Redial-safety invariant (durable-write double-send safety):
@@ -201,7 +217,7 @@ layered on top of, and never replaces, that config reuse.
 
 - Unit/integration tests above; full workspace test + clippy; both CI lanes.
 - Live-verify gate before quality-mgr dispatch: the m5 before/after
-  benchmark pair from AC #8, plus one real cross-host mTLS dispatch burst
+  benchmark pair from AC #9, plus one real cross-host mTLS dispatch burst
   demonstrating reuse in daemon logs.
 - Reviewers: standard set plus `boundary-guard` (deliverable 8) and
   `rust-service-hardening` lens (pool lifecycle, timeouts, backpressure —
@@ -224,6 +240,8 @@ layered on top of, and never replaces, that config reuse.
 |-------|----------|--------|--------|-------------|
 | 1 | plan-scope-reviewer (sonnet) | `ed23eba5` | FAIL — 2 Important (no `PooledPeerConnection` signature; config CLI/env plumbing had no AC), 1 minor (defaults hedged "proposed") | Fixed in round-1 fix commit: full guard signature with through-the-guard `exchange`; AC #8 added; defaults fixed. |
 | 1 | critical-plan-reviewer (sonnet) | `ed23eba5` | FAIL — 3 Blocking (pool stored raw streams, incompatible with hyper http1 keep-alive and AC #1; nonexistent `OpaquePeerStream` trait name; redial-on-write-failure risked durable-write double-send), 4 Important (`max_total` semantics contradiction; no plaintext test-adapter seam; guard health-signaling undefined; missing ADR), 2 minor | Fixed in round-1 fix commit: pool stores post-handshake `SendRequest` + driver handle keyed off `EstablishedPeerStream`; real trait names; redial-safety invariant = acquire-time liveness only, no post-`exchange` retry ever, redial's own failure surfaced with today's variant shape; `max_pooled_total` defined as pooled-entry ceiling with unbounded-fallback risk stated + multi-peer AC; plaintext reuse proven via TCP listener spy (AC #1); health recorded by `exchange` itself, sync Drop; new ADR deliverable 7; reviewer pointer to `SendRequest::is_closed()/ready()`. |
+| 2 | plan-scope-reviewer (sonnet) | `82252f3b` | FAIL — round-1 closures confirmed; 1 Important (live-verify gate cited stale AC #8 after renumbering), 1 minor (ADR lacked path/number convention) | Fixed in round-2 commit: gate re-pointed to AC #9; ADR path + INDEX.md convention stated. |
+| 2 | critical-plan-reviewer (sonnet) | `82252f3b` | FAIL — round-1 closures verified against real code; 2 new Blocking (contract used undefined types `RuntimeBody`/`HttpRuntimeRequest`/`HttpRuntimeResponse`; no `RequestDeadline` threaded through `acquire`/`exchange`, silently dropping the per-write timeout contract deliverable 6 claims unchanged), 1 minor (liveness check vs mutex-across-await) | Fixed in round-2 commit: real types (`axum::body::Body`, `atm_core::api::HttpRequest`, `axum::http::Response<Vec<u8>>`); `RequestDeadline` threaded through both `acquire` and `exchange` with today's Timeout/PeerConnectTimeout trigger conditions stated; pop-entry-then-check-outside-the-lock rule added. |
 
 ## Dependencies
 
