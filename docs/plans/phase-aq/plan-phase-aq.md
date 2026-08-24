@@ -45,7 +45,7 @@ kind-aware send surface.
 | Sprint | Title | Depends |
 |---|---|---|
 | AQ1 | `atm queue`: CLI verb, taxonomy (ADR-054), kind-aware dispatch + renames, `PendingNudgeStore` | — |
-| AQ2 | Queue: atm-graft dual-channel | must_follow AQ1 · parallel_safe AQ3 |
+| AQ2 | Queue: atm-graft dual-channel | must_follow AQ1 · parallel_safe AQ3 (AQ2 owns the graft channel's send-and-report; AQ3 owns kind-agnostic claim/dispatch scheduling; retry state lives only in AQ1's store — neither calls the other's code) |
 | AQ3 | Queue: tmux idle-drain | must_follow AQ1 · parallel_safe AQ2 |
 | AQ4 | Send-To core: ATM_TEMP (ADR-055), CLI surface, transfer scripts, sweeper | must_follow AQ1–AQ3 |
 | AQ5 | Send-To surface + phase evidence | must_follow AQ4 |

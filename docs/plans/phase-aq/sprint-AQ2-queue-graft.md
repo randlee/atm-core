@@ -33,10 +33,13 @@ message), NOT a background task.
    (`subsystem`/`action`/`outcome` + `{member, msg_id}`) is emitted, and a
    cumulative failed-handoff counter appears on the health report
    (`queue_full_drops_total` precedent) — a queued graft message never
-   silently loses its nudge. (Recovery: AQ3's sweep re-attempts failed
-   handoffs — not a tmux drain — up to ADR-054 (f)'s max auto-retry count;
-   past it the marker stays set, auto-retry stops, and a distinct "stuck"
-   health signal surfaces for the operator.)
+   silently loses its nudge. **Ownership**: this sprint owns only the graft
+   channel's send-and-report behavior — on failure it reports the failure
+   to its caller, which calls AQ1's `PendingNudgeStore::requeue_pending`.
+   AQ2 implements no retry scheduling and keeps no attempt state of its
+   own; retry eligibility, the attempt count, and the stuck flag all live
+   in AQ1's store, and re-dispatch scheduling is AQ3's kind-agnostic sweep.
+   That is what keeps AQ2 and AQ3 genuinely parallel-safe.
 3. **Python surface**: `PyNudge` (and the hermes-atm runtime callback)
    carries the kind — additive, backward-compatible field per ADR-054 (g);
    `hermes-atm` routes queue-kind to Hermes `/queue` and steer-kind to

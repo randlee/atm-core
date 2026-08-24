@@ -4,6 +4,20 @@ Status: draft · Branch: `feature/aq-4-send-to-core` off `integrate/phase-aq`
 · PR target: `integrate/phase-aq`
 recommended_agent: arch-ctm · recommended_model: deep-reasoning
 
+Consolidation note (Rand, 2026-08-23): this sprint deliberately carries
+what an earlier draft split across four sprints (ATM_TEMP contract, CLI
+surface, sweeper, transfer scripts). The justification is not scope-neutral
+reshuffling: all four share one owner and one contract — the `ATM_TEMP`
+root and the staging convention — so splitting them buys four dispatch/QA
+cycles for work that is sequential inside one owner's context, and the
+finer-grained split already went through this phase's QA rounds (its
+hardened acceptance criteria are preserved verbatim below). To keep a
+slipping sub-scope visible before the final gate, the deliverables land in
+the stated order (1 → 2 → 3/4 → 5 → 6 → 7) and the PR opens once
+deliverables 1–4 are pushed, so CLI-surface QA runs while the sweeper and
+example scripts finish; a script-harness or sweeper failure is triaged
+against its own deliverable, not treated as a CLI-surface regression.
+
 The PRD Phase-1 Send-To core, end to end: a file picked in the OS file
 manager reaches an agent's `$ATM_TEMP` on any configured host and an
 ordinary message names the landed path — or the send fails closed with an

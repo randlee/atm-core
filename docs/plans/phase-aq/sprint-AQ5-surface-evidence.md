@@ -27,6 +27,27 @@ linked artifact.
    field, `PickerOutput` on confirm, nonzero on cancel. **Cold-start
    gate**: measured launch-to-interactive; if > 1 s the fallback stays
    default and the finding is recorded.
+3a. **Wyvern dependency contract** — Wyvern is an **optional runtime
+   dependency**, never a build-time or packaging dependency of atm-core,
+   and never required for any test lane:
+   - **Compatibility is schema-versioned, not just version-pinned.** The
+     real contract is the `PickerInput`/`PickerOutput` JSON schema: the
+     checked-in fixture carries a `schema_version`, the Wyvern page
+     declares the version it implements, and the pipeline script treats a
+     version it does not recognize exactly like a missing picker (falls
+     back, records why).
+   - **Minimum CLI version floor**, recorded as a single constant in
+     `scripts/send-to/atm-send-to.{sh,ps1}` and documented alongside the
+     install steps: the script probes `wyvern --version` and uses Wyvern
+     only when the binary is on `PATH`, parses a version `>=` the floor,
+     and the page asset resolves. The floor is set to the Wyvern commit
+     that lands `pick-member.html` (recorded with its PR).
+   - **Degradation is silent-but-logged, never a failure**: absent,
+     too-old, unparseable-version, or missing-asset → native fallback
+     picker with a one-line note on stderr. A Wyvern problem must never
+     turn into a failed send or a blocked gesture.
+   - **The linked Wyvern PR/commit and the schema-fixture revision are
+     both recorded in the atm-core PR**; Wyvern source is not vendored.
 4. **Shell entries**: macOS Quick Action/Shortcut; Windows
    `%APPDATA%\Microsoft\Windows\SendTo\*.lnk`; Ubuntu Nautilus script
    (`~/.local/share/nautilus-scripts/`) + portable XDG `.desktop` "Open
@@ -50,7 +71,13 @@ linked artifact.
 1. Script harness: cancel → exit ≠ 0, zero sends; multi-file +
    multi-recipient happy path delivers (stub picker).
 2. Fallback pickers' output validates against PRD §4.2 fixtures (shared
-   with Wyvern, not duplicated).
+   with Wyvern, not duplicated), including the `schema_version` field.
+2a. Wyvern dependency contract (deliverable 3a): harness cases prove
+   picker selection falls back to the native picker — with the stderr note
+   and a successful send — for each of: `wyvern` absent from `PATH`,
+   version below the floor, unparseable `--version`, unknown
+   `schema_version`, missing page asset. No test lane requires Wyvern
+   installed.
 3. R8 text present in `CLAUDE.md`, names `$ATM_TEMP/send-to` (grep-check).
 4. Manual E2E: Finder (macOS), Explorer SendTo (Windows), Nautilus
    (Ubuntu) each deliver to a live agent — transcript + screenshot

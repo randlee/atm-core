@@ -37,7 +37,13 @@ no deferral surface exists. `mail_message_states` migrates via
    `http-runtime.toml`'s unconditional post-write invariant stay untouched;
    (d) `PendingNudgeStore` governance via the ADR-018 §3 follow-up process
    (amendment to ADR-036, `boundaries/atm-storage/pending-nudge-store.toml`,
-   `atm-architecture` test, `boundary-guard` review as merge precondition);
+   `atm-architecture` test, `boundary-guard` review as merge precondition —
+   the governance chain runs **in parallel** with this sprint's dev and
+   test work and gates only the final merge, never intermediate review:
+   the ADR-018 §3 amendment and TOML record are authored alongside
+   deliverable 6, and dev/QA on deliverables 2–5 proceed independently, so
+   a multi-round boundary-guard review delays merge without blocking or
+   invalidating tested work);
    (e) `MemberStateTransitionSink`'s relationship to ADR-019 and
    `RuntimeHealth`'s observability scope (implemented AQ3);
    (f) the graft dual-channel contract + handoff failure policy, including
@@ -71,9 +77,11 @@ no deferral surface exists. `mail_message_states` migrates via
    fork — `NudgeMode` lives in `atm-core::send` alongside `WriteRequest`,
    caller-owned per ADR-019). Same cancel semantics as send. (`--attach`
    parity arrives automatically when AQ4 adds it to the shared surface.)
-4. **`nudge_pending_at` column** on `mail_message_states` via
-   `ensure_column`. Set at write time for queued messages; FIFO derived
-   (unread + pending, ULID order — restart-safe, no in-memory truth).
+4. **`nudge_pending_at` + `nudge_attempts` columns** on
+   `mail_message_states` via `ensure_column`. Set at write time for queued
+   messages; FIFO derived (unread + pending, ULID order — restart-safe, no
+   in-memory truth). `nudge_attempts` is the single owner of retry state
+   for every recipient kind — no sprint keeps its own attempt tracking.
 5. **Steer-suppression + read-path clear**: a `Deferred` write omits the
    steer dispatch inside `build_received_hook_dispatches` (which already
    returns `Ok(Vec::new())` for no-dispatch); the read-state transition
@@ -89,18 +97,26 @@ no deferral surface exists. `mail_message_states` migrates via
 pub enum NudgeMode { Immediate, Deferred }
 
 pub trait PendingNudgeStore {
-    /// Oldest unread pending message for the member, ULID order.
-    fn next_pending(&self, member: &MemberKey)
-        -> Result<Option<AtmMessageId>, StorageError>;
-    /// Atomic claim: clears nudge_pending_at iff still set and unread;
-    /// true iff this caller won. THE at-most-once mechanism
-    /// (single conditional UPDATE ... RETURNING).
-    fn claim_pending(&self, member: &MemberKey, msg: &AtmMessageId)
-        -> Result<bool, StorageError>;
+    /// Atomically select-and-claim the oldest eligible pending message
+    /// (unread, marker set, attempts < ADR-054 (f) max) in ULID order and
+    /// clear its marker, returning the attempt number. `None` = nothing
+    /// eligible, or another caller won the race. THE at-most-once
+    /// mechanism: one conditional UPDATE ... RETURNING, shared verbatim by
+    /// the idle-transition drain and the recovery sweep.
+    fn claim_next_pending(&self, member: &MemberKey)
+        -> Result<Option<NudgeClaim>, StorageError>;
+    /// Dispatch of a claimed nudge failed: re-set the marker with
+    /// attempts = attempt + 1. At/over the max, the marker stays set but
+    /// becomes ineligible for auto-retry and is flagged stuck (the health
+    /// signal in ADR-054 (f)).
+    fn requeue_pending(&self, member: &MemberKey, claim: &NudgeClaim)
+        -> Result<(), StorageError>;
     /// Read-path clear (same state update that sets read = 1).
     fn clear_pending_on_read(&self, member: &MemberKey, msg: &AtmMessageId)
         -> Result<(), StorageError>;
 }
+
+pub struct NudgeClaim { pub msg: AtmMessageId, pub attempt: u32 }
 ```
 
 No raw SQL above the backend crate (`no_backend_specific_message_contract`
@@ -124,6 +140,9 @@ most once.
    with `atm send`.
 4. Reading a queued message before any nudge clears its marker; daemon
    restart with pending rows re-derives the FIFO (query test).
+4a. `claim_next_pending`/`requeue_pending` round-trip: a failed dispatch
+   requeues with an incremented attempt; at the ADR-054 (f) max the row
+   becomes auto-retry-ineligible and flags stuck (no unbounded retry).
 5. Kind-aware dispatch test: Steer and Queue dispatches route through the
    selector; tmux emitter receives Steer only.
 6. Boundary governance: ADR-018 §3 amendment + pending-nudge-store TOML +

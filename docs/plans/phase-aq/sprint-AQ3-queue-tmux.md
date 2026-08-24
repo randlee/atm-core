@@ -39,20 +39,25 @@ pub trait MemberStateTransitionSink: Send + Sync {
 ```
 
 2. **Drain step**: on an idle transition for member M, call AQ1's
-   `PendingNudgeStore::next_pending` + `claim_pending` — the backend-side
-   atomic claim is THE at-most-once mechanism, shared verbatim with the
-   recovery sweep; the claim winner fires the ordinary steer delivery for
-   exactly that message-id via the existing selector path. **One message
+   `PendingNudgeStore::claim_next_pending` — the backend-side atomic
+   select-and-claim is THE at-most-once mechanism, shared verbatim with
+   the recovery sweep; the claim winner dispatches for exactly that
+   message-id via the existing selector path (steer for tmux members), and
+   a failed dispatch is requeued via `requeue_pending`. **One message
    per transition.** Read rows never appear (markers cleared by AQ1's
    read hook).
-3. **Recovery sweep**: low-frequency periodic pass (maintenance-cadence
-   precedent) draining for currently-Idle members with non-empty FIFOs —
-   covers restarts (in-memory `RuntimeHealth` resets) and missed
-   transitions; also re-attempts failed graft handoffs (AQ2) up to ADR-054
-   (f)'s max auto-retry count — past it, auto-retry stops and the "stuck"
-   health signal surfaces (attempt count tracked per marker). One per
-   member per pass. Daemon shutdown cancels and joins the
-   task within the daemon deadline.
+3. **Recovery sweep** — **kind-agnostic**: a low-frequency periodic pass
+   (maintenance-cadence precedent) that claims via
+   `PendingNudgeStore::claim_next_pending` and re-dispatches through the
+   ordinary `MessageReceivedHookSelector`, which routes by recipient kind
+   (graft → AQ2's queue channel, tmux → steer). The sweep contains **no
+   graft-specific logic and calls no AQ2 code** — that is why AQ2/AQ3 stay
+   parallel-safe — and a failed dispatch is requeued via
+   `requeue_pending`, so retry bounds and the stuck flag are enforced by
+   AQ1's store, not here. This covers restarts (in-memory `RuntimeHealth`
+   resets), missed transitions, and failed graft handoffs by the same
+   mechanism. One per member per pass. Daemon shutdown cancels and joins
+   the task within the daemon deadline.
 4. **Observability**: per-drain structured event (`subsystem`/`action`/
    `outcome` + `{member, msg_id}`) and a cumulative drained counter on the
    health report. Recorded exception: events emit via `emit_daemon_event`
