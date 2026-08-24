@@ -39,8 +39,15 @@ if str(ROOT) not in sys.path:
 
 from scripts.smoke import benchmark_suite as SUITE
 from scripts.smoke.benchmark_schema import (
+    BaselineEntry,
+    BaselineSet,
+    BaselineRef,
+    BenchmarkCampaign,
+    BenchmarkRunResult,
     BenchmarkSchemaError,
     BenchmarkSummary,
+    artifact_id,
+    campaign_id as derive_campaign_id,
     compact_evidence,
     distribution,
 )
@@ -108,6 +115,7 @@ BENCHMARK_TARGETS = {
     "tcp": ("tcp", "plaintext-test"),
     "tcp-tls": ("tcp", "mutual-tls"),
 }
+BASELINES_PATH = DEFAULT_EVIDENCE_DIR / "baselines.json"
 MISSING_PLAINTEXT_BASELINE = "missing_compatible_plaintext_baseline"
 DAEMON_SWITCH = ROOT / ".claude" / "skills" / "daemon-switch" / "scripts" / "daemon-switch.py"
 # The daemon-switch control plane can legitimately wait through its documented
@@ -214,6 +222,124 @@ class CapacityRunResult:
     def __iter__(self):
         yield self.code
         yield self.compact_evidence_path
+
+
+def benchmark_os() -> str:
+    """Normalize the runner OS name to the public v4 contract vocabulary."""
+    if os.name == "nt":
+        return "windows"
+    if sys.platform == "darwin":
+        return "macos"
+    return "linux"
+
+
+def load_baselines(path: Path = BASELINES_PATH) -> BaselineSet:
+    """Load the single reviewed source of per-host/per-target acceptance floors."""
+    try:
+        return BaselineSet.model_validate_json(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise SmokeError(f"could not load benchmark baselines {path}: {error}") from error
+
+
+def binary_hashes() -> dict[str, str]:
+    """Record the exact release executables measured by a v4 campaign."""
+    try:
+        return {
+            "atm": hashlib.sha256(release_binary("atm").read_bytes()).hexdigest(),
+            "atm-daemon": hashlib.sha256(release_binary("atm-daemon").read_bytes()).hexdigest(),
+        }
+    except OSError as error:
+        raise SmokeError(f"could not hash benchmark release binaries: {error}") from error
+
+
+def atomic_json(path: Path, payload: dict[str, Any]) -> None:
+    """Publish a validated immutable JSON artifact or fail before partial output."""
+    content = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(content, encoding="utf-8")
+    temporary.replace(path)
+
+
+def v4_result_from_summary(
+    summary: BenchmarkSummary,
+    *,
+    target: str,
+    campaign: str,
+    os_name: str,
+    baseline: BaselineEntry,
+    hashes: dict[str, str],
+) -> BenchmarkRunResult:
+    """Convert one runner-owned compact trace into its direct v4 public form."""
+    metrics = summary.metrics
+    if metrics is not None and target == "sqlite":
+        metric_values = metrics.model_dump()
+        for field in (
+            "connection_count", "application_wire_bytes", "request_frames_per_second",
+            "connections_per_second", "application_wire_bytes_per_second",
+        ):
+            metric_values[field] = None
+        metrics = type(metrics).model_validate(metric_values)
+    requested = 0 if metrics is None else metrics.requested_count
+    admitted = 0 if metrics is None else metrics.accepted_count
+    durable = (
+        0
+        if summary.durability_after_restart is None
+        else summary.durability_after_restart.observed_mailbox_count
+    )
+    complete = metrics is not None and summary.durability_after_restart is not None
+    generated_at = datetime.fromisoformat(summary.generated_at.replace("Z", "+00:00"))
+    status = "INCOMPLETE" if not complete else (
+        "PASS" if requested == admitted == durable and metrics.admissions_per_second.p50 >= baseline.p50_floor else "FAIL"
+    )
+    return BenchmarkRunResult(
+        campaign_id=campaign,
+        host_label=summary.host_label,
+        os=os_name,
+        target=target,
+        status=status,
+        incomplete_reason=(
+            None if complete else (summary.failure or "benchmark did not complete every lifecycle stage")
+        ),
+        generated_at=generated_at,
+        source_revision=summary.source_revision or source_revision(),
+        binary_hashes=hashes,
+        frames_per_connection=0 if target == "sqlite" else summary.frames_per_connection,
+        messages_requested=requested,
+        messages_admitted=admitted,
+        messages_durable=durable,
+        metrics=metrics,
+        baseline=BaselineRef(revision=1, p50_floor=baseline.p50_floor),
+        durability_after_restart=summary.durability_after_restart,
+        direct_sqlite_message_write=summary.direct_sqlite_message_write,
+    )
+
+
+def publish_v4_target(
+    run: CapacityRunResult,
+    *,
+    target: str,
+    campaign: str,
+    os_name: str,
+    baseline: BaselineEntry,
+    hashes: dict[str, str],
+) -> BenchmarkRunResult:
+    """Replace the temporary internal compact trace with its public v4 result."""
+    try:
+        summary = BenchmarkSummary.model_validate_json(
+            run.compact_evidence_path.read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError) as error:
+        raise SmokeError(f"could not load benchmark target evidence for v4 publication: {error}") from error
+    result = v4_result_from_summary(
+        summary, target=target, campaign=campaign, os_name=os_name,
+        baseline=baseline, hashes=hashes,
+    )
+    destination = run.compact_evidence_path.parent / f"{artifact_id(campaign_id=campaign, target=target)}.json"
+    atomic_json(destination, result.model_dump(mode="json"))
+    if run.compact_evidence_path != destination:
+        run.compact_evidence_path.unlink()
+    return result
 
 
 def suite_target_result(
@@ -2101,14 +2227,22 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
     if any((args.target, args.transport, args.frames_per_connection, args.sustained, args.baseline)):
         raise SmokeError("the required f8 suite does not permit target, transport, profile, or baseline selection")
     source = source_revision()
-    supplied_campaign = os.environ.get("ATM_BENCHMARK_CAMPAIGN_ID")
-    if supplied_campaign is not None and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", supplied_campaign):
-        raise SmokeError("ATM_BENCHMARK_CAMPAIGN_ID must be a safe opaque campaign label")
-    campaign_id = supplied_campaign or (
-        f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{source[:12]}"
-    )
-    print(f"benchmark campaign: {campaign_id}")
+    host_label = os.environ.get("ATM_CAPACITY_HOST_LABEL", "local")
+    started_at = datetime.now(timezone.utc)
+    campaign_identifier = derive_campaign_id(started_at=started_at, host_label=host_label)
+    baselines = load_baselines()
+    # Fail before exercising any target when the reviewed policy has no floor;
+    # this makes an accidental local/default run explicit rather than publish a
+    # result with a silent or caller-selected baseline.
+    target_baselines = {
+        target: baselines.entry_for(host_label, target)
+        for target in BENCHMARK_TARGETS
+    }
+    hashes = binary_hashes()
+    os_name = benchmark_os()
+    print(f"benchmark campaign: {campaign_identifier}")
     codes: list[int] = []
+    published_results: list[BenchmarkRunResult] = []
     for position, target in enumerate(BENCHMARK_TARGETS, start=1):
         transport, peer_wire_security = BENCHMARK_TARGETS[target]
         if args.atm_home is None:
@@ -2125,7 +2259,7 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
                     peer_wire_security=peer_wire_security,
                     benchmark_target=target,
                     comparison_required=False,
-                    campaign_id=campaign_id,
+                    campaign_id=campaign_identifier,
                 )
         else:
             run = run_capacity(
@@ -2140,9 +2274,18 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
                 peer_wire_security=peer_wire_security,
                 benchmark_target=target,
                 comparison_required=False,
-                campaign_id=campaign_id,
+                campaign_id=campaign_identifier,
             )
         codes.append(run.code)
+        try:
+            published_results.append(publish_v4_target(
+                run, target=target, campaign=campaign_identifier, os_name=os_name,
+                baseline=target_baselines[target], hashes=hashes,
+            ))
+        except SmokeError as error:
+            codes.append(1)
+            print(f"FAIL required f8 target {target}: v4 publication failed; {error}")
+            continue
         try:
             result = suite_target_result(target, run)
         except SmokeError as error:
@@ -2160,7 +2303,28 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
             f"accepted={result.accepted}/{result.requested} "
             f"compact={run.compact_evidence_path} raw={result.raw_artifact}"
         )
-    return 0 if all(code == 0 for code in codes) else 1
+    campaign_status = (
+        "INCOMPLETE" if len(published_results) != len(BENCHMARK_TARGETS)
+        else "FAIL" if any(result.status == "FAIL" for result in published_results)
+        else "INCOMPLETE" if any(result.status == "INCOMPLETE" for result in published_results)
+        else "PASS"
+    )
+    campaign = BenchmarkCampaign(
+        campaign_id=campaign_identifier,
+        host_label=host_label,
+        os=os_name,
+        phase="ao2",
+        started_at=started_at,
+        completed_at=datetime.now(timezone.utc),
+        source_revision=source,
+        results=tuple(published_results),
+        status=campaign_status,
+    )
+    atomic_json(
+        args.evidence_dir / f"{campaign_identifier}.campaign.json",
+        campaign.model_dump(mode="json"),
+    )
+    return 0 if all(code == 0 for code in codes) and campaign.status == "PASS" else 1
 
 
 def run_default_f8_matrix(args: argparse.Namespace) -> int:

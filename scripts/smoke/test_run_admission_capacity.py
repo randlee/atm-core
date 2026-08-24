@@ -105,6 +105,10 @@ class AdmissionCapacityTests(unittest.TestCase):
             mock.patch.object(sys, "argv", ["run_admission_capacity.py"]),
             mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity),
             mock.patch.object(RUNNER, "suite_target_result", return_value=measured),
+            mock.patch.object(RUNNER, "load_baselines", return_value=mock.Mock(entry_for=mock.Mock())),
+            mock.patch.object(RUNNER, "binary_hashes", return_value={"atm": "a" * 64}),
+            mock.patch.object(RUNNER, "publish_v4_target", return_value=mock.Mock(status="PASS")),
+            mock.patch.object(RUNNER, "BenchmarkCampaign", return_value=mock.Mock(status="PASS", model_dump=mock.Mock(return_value={}))),
             contextlib.redirect_stdout(stdout := io.StringIO()),
         ):
             self.assertEqual(RUNNER.main(), 0)
@@ -143,6 +147,10 @@ class AdmissionCapacityTests(unittest.TestCase):
             mock.patch.object(sys, "argv", ["run_admission_capacity.py"]),
             mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity),
             mock.patch.object(RUNNER, "suite_target_result", return_value=measured),
+            mock.patch.object(RUNNER, "load_baselines", return_value=mock.Mock(entry_for=mock.Mock())),
+            mock.patch.object(RUNNER, "binary_hashes", return_value={"atm": "a" * 64}),
+            mock.patch.object(RUNNER, "publish_v4_target", return_value=mock.Mock(status="PASS")),
+            mock.patch.object(RUNNER, "BenchmarkCampaign", return_value=mock.Mock(status="FAIL", model_dump=mock.Mock(return_value={}))),
             contextlib.redirect_stdout(stdout := io.StringIO()),
         ):
             self.assertEqual(RUNNER.main(), 1)
