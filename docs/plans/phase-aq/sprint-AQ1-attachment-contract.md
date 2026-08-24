@@ -34,7 +34,14 @@ that every later sprint cites. No delivery behavior changes.
    retry scoping; (g) **msg-id allocation vs staging order**: who allocates
    the `AtmMessageId` ULID (CLI vs daemon) and when `attachment_dir(msg_id)`
    staging happens relative to the canonical write, so that cancel (R5/R13)
-   provably stages nothing.
+   provably stages nothing; and (h) **member-host sourcing**: a durable,
+   optional `host` registration field is written by the existing
+   `teams add-member`/`update-member --host` admin path, validated as a
+   `HostName`, and never inferred from heartbeat, DNS, or socket state. A
+   non-null remote host must match an enabled `TrustedPeer`; an unresolved
+   member remains `host: null` and is not routable through `--from-json` until
+   explicitly registered. This is a roster/CLI metadata extension only, not a
+   daemon heartbeat or runtime-plumbing sprint.
 2. **`Attachment` type** in `crates/atm-storage/src/schema/inbox_message.rs`
    (or sibling module) and optional `attachments` field on `MessageEnvelope`
    (`inbox_message.rs:137`), following the established back-compat patterns
@@ -73,6 +80,12 @@ pub struct Attachment {
 pub enum NoteSource { Human, Drafted, Edited }
 
 pub fn attachment_dir(known_temp: &Path, msg_id: &AtmMessageId) -> PathBuf;
+
+pub fn resolve_member_target(
+    member_id: &str,
+    roster: &dyn RosterStore,
+    peers: &dyn PeerConfigStore,
+) -> Result<AgentAddress, AddressResolutionError>;
 ```
 
 `local_path` is never set by the sender; a validator rejects sender-side
@@ -81,7 +94,7 @@ escape the configured staging root; it is retained only for operator context.
 
 ## Acceptance criteria
 
-1. ADR merged with all seven decisions (a)–(g) closed, none deferred.
+1. ADR merged with all eight decisions (a)–(h) closed, none deferred.
 2. Round-trip serde tests: envelope without `attachments` deserializes;
    envelope with attachments round-trips; sender-set `local_path` rejected.
 3. `attachment_dir()` unit-tested; no other code path constructs the layout.
@@ -95,7 +108,7 @@ attachment root; it must not delete or rename existing mailbox paths.
 ## Required validation
 
 - `just test` workspace, all three CI lanes (ubuntu, macOS, Windows).
-- ADR reviewed by quality-mgr with explicit sign-off on decisions (a)–(g).
+- ADR reviewed by quality-mgr with explicit sign-off on decisions (a)–(h).
 - `cargo test -p atm-storage` and the focused envelope/path tests named in the
   implementation PR; the tests must run without a daemon or network.
 

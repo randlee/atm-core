@@ -16,10 +16,11 @@ Makes the pipeline real on one host:
    from the members surface (`MemberSummary`: `agent_id`, `home_dir`,
    `live_cwd`, pane) and runtime state. Includes the normative status
    mapping from `RuntimeMemberState`: `Active → active`, `Idle → idle`,
-   `Offline | Unknown | IdentityConflict → dead`. Any field the roster
-   cannot supply (e.g. `host`, `cwd` for remote members) becomes a
-   registration/projection deliverable in this sprint, recorded in the PR —
-   not silently absent.
+   `Offline | Unknown | IdentityConflict → dead`. `host` is sourced only
+   from AQ1 decision (h)'s durable roster binding; AQ2 adds the `--host`
+   admin metadata plumbing needed to write/read that field, but does not
+   change heartbeat or daemon runtime code. Missing host is emitted as `null`
+   and the picker marks the member unroutable.
 2. **`atm send --attach <path>...`** (repeatable): computes sha256 + size,
    copies same-host content into `attachment_dir()` (AQ1), populates
    `attachments` on the envelope. Missing/unreadable path → hard error before
@@ -50,6 +51,13 @@ Each member object is exactly:
  "cwd":"absolute-or-null","status":"active|idle|dead"}
 ```
 
+The source record is explicit: `RosterEntry.metadata_json["host"]` stores an
+optional validated `HostName`, `MemberSummary` projects it as
+`host: Option<HostName>`, and `teams add-member/update-member --host` is the
+only Phase-1 writer. The implementation must add/update that metadata through
+the existing roster mutation requests; no heartbeat or live socket observation
+may populate it.
+
 `atm send --from-json` accepts exactly one JSON object on stdin:
 
 ```json
@@ -62,6 +70,21 @@ all attachment paths before allocating any message ID or creating a staging
 directory. It then calls the existing canonical daemon write client once per
 recipient; no CLI storage adapter is permitted.
 
+Recipient resolution is explicit and testable:
+
+```rust
+fn resolve_picker_recipient(
+    member_id: &str,
+    roster: &dyn RosterStore,
+    peers: &dyn PeerConfigStore,
+) -> Result<AgentAddress, AddressResolutionError>;
+```
+
+The resolver maps a null-host member to the local canonical team address,
+maps a registered host only when it matches an enabled `TrustedPeer`, and
+rejects an unresolved/disabled remote member before staging or writing. It
+never derives host from heartbeat, DNS, socket family, or the picker UI.
+
 ## Acceptance criteria
 
 1. Truth-table tests for `--from-json`: valid multi-recipient → N envelopes
@@ -73,7 +96,13 @@ recipient; no CLI storage adapter is permitted.
    attachments share `sha256` (dedupe observable at the reference level).
 4. `atm teams --json --members` output validates against the picker input schema in the
    PRD (§4.2) via a fixture test.
-5. `just test` all three CI lanes (ubuntu, macOS, Windows); no clippy
+5. `atm send --from-json` resolves every recipient through the AQ1 host binding
+   and proves local-vs-remote routing; null/unknown/disabled host bindings
+   fail closed before staging.
+6. Legacy single-recipient `atm send <to> <message>` still requires both
+   positional arguments and preserves its existing malformed/missing-input
+   exit codes/messages after the parser makes them optional for `--from-json`.
+7. `just test` all three CI lanes (ubuntu, macOS, Windows); no clippy
    warnings in touched crates.
 
 ## Paths to delete
@@ -88,6 +117,8 @@ existing single-recipient `atm send` mode or alter legacy team-count output.
   committed as evidence on the sprint branch.
 - Focused command tests for `atm teams --json --members` and
   `atm send --from-json` are named in the PR and run independently of Wyvern.
+- The legacy `atm send` positional compatibility test runs in the same command
+  suite; its expected diagnostics are captured from the pre-AQ2 baseline.
 
 ## Non-closure / out of scope
 

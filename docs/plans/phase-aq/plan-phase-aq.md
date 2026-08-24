@@ -91,6 +91,11 @@ not re-litigate them:
   Idle | Active`. The PRD §4.2 picker projection (nested members with
   `{id, host, cwd, status}`) **does not exist and must be built** (AQ2),
   including the status mapping.
+- No current roster or heartbeat record supplies a member host. AQ1 decision
+  (h) therefore makes host sourcing an explicit roster metadata binding,
+  managed by `teams add-member/update-member --host` and checked against
+  `TrustedPeer`; AQ2 owns the thin projection/resolution implementation and
+  does not modify heartbeat or daemon runtime plumbing.
 - `atm send` is single-recipient (`to` positional, required) with existing
   flags `--team --host --chat-id --as --file --stdin --template --vars --var
   --tag --category --content-format --summary --requires-ack --task-id
@@ -129,6 +134,9 @@ not re-litigate them:
   baseline facts). AQ2 builds it, including the `RuntimeMemberState` →
   `active|idle|dead` mapping and sourcing of `host`/`cwd`; registration gaps
   become AQ2 deliverables, not surprises.
+- Member host binding: AQ1 decides the durable roster field and authority;
+  AQ2 must reject unresolved IDs and prove local-vs-remote routing from that
+  field only. It may not invent a DNS/heartbeat inference.
 - Message-id allocation vs staging order: `attachment_dir()` is keyed by
   `AtmMessageId`, so who allocates the ULID (CLI vs daemon) and when staging
   happens relative to the canonical write → AQ1 ADR decision (g).

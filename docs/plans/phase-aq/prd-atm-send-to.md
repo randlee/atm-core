@@ -54,6 +54,13 @@ Wyvern is used as a `dialog`/`zenity`-class picker: CLI-hosted webview, custom H
 ```
 `status` drives greying-out so a human can't send into a void.
 
+`host` is an optional durable roster binding, written by the existing
+`atm teams add-member`/`update-member --host` path and validated against the
+enabled trusted-peer configuration. It is not inferred from heartbeat, DNS,
+socket addresses, or the current process. A null host is displayed as
+unroutable; `--from-json` rejects that recipient until an operator registers a
+host or supplies an explicit canonical `agent@team.host` target.
+
 **Output from picker** (stdout):
 ```json
 { "recipients": ["member-id", "…"], "note": "optional one-liner" }
@@ -199,10 +206,9 @@ same-host and cross-host paths.
 3. Sweeper policy: TTL vs on-ack vs both.
 4. Team-level addressing in atm-core, or stay with client-side fan-out?
 5. Wyvern cold-start latency — is it under the ~1 s context-menu tolerance? **Measure before committing Wyvern as the picker.**
-6. Which existing roster/registration fields can supply member `host` and
-   `cwd`, and which registration/projection changes must AQ2 add? (The
-   current `atm teams --json` output has no member entries; AQ2 owns this
-   projection.)
+6. Which registration fields supply member `cwd`? Host sourcing is no longer
+   open: AQ1 decision (h) owns the explicit roster `host` binding and AQ2
+   implements its projection/resolution without heartbeat changes.
 7. (P2) Which local model is the drafter default, and what is "Luna"? Does it run on the Mac Studio via Ollama/MLX?
 8. (P2) Does `fork` in the Wyvern chat integration fork the *session transcript* or the *agent process*? Send-To only needs transcript.
 9. (P2) Byte cap for the drafter — and does a directory get a tree listing or nothing?
