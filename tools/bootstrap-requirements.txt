@@ -6,4 +6,5 @@ maturin==1.14.1
 pydantic==2.13.4
 pydantic-core==2.46.4
 typing-extensions==4.16.0
+tzdata==2026.3
 typing-inspection==0.4.4

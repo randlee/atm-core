@@ -217,11 +217,17 @@ benchmark *args:
     # records the attempt before returning its non-zero status.
     {{python_cmd}} scripts/smoke/run_admission_capacity.py {{args}} || benchmark_status=$?
     {{python_cmd}} scripts/smoke/benchmark_report.py --rebuild || exit $?
+    echo 'View the newest campaign panel: just benchmark-show'
     exit ${benchmark_status:-0}
 
-# Persist AI.40 benchmark JSON and render the aggregate public report.
-benchmark-report *args:
-    {{python_cmd}} scripts/smoke/benchmark_report.py {{args}}
+# Rebuild immutable benchmark panels, phase reports, and the report index from JSON.
+benchmark-report:
+    {{python_cmd}} scripts/smoke/benchmark_report.py --rebuild
+
+# Render/copy the newest XHTML campaign panel to an HTML twin and open it in Wyvern.
+benchmark-show:
+    {{python_cmd}} scripts/smoke/benchmark_report.py --rebuild
+    {{python_cmd}} scripts/smoke/benchmark_show.py
 
 # Generate architecture visualization artifacts.
 view target='all':
