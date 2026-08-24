@@ -54,15 +54,17 @@ pub trait MemberStateTransitionSink: Send + Sync {
    graft-specific logic and calls no AQ2 code** — that is why AQ2/AQ3 stay
    parallel-safe — and a failed dispatch is requeued via
    `requeue_pending`, so retry bounds and the stuck flag are enforced by
-   AQ1's store, not here. **Viable-channel pre-check (AQ2.5 deliverable
-   4, contract recorded in both docs)**: before claiming for member M,
-   the sweep checks M's roster shape and claims **only** when M has a
-   channel the sweep can dispatch through (tmux `pane_id` or graft
-   root). Pull-designated members are drained by AQ2.5's Stop-hook path,
-   and no-channel members are skipped entirely — no claim, no dispatch
-   failure, no attempt increment — so a message pending for a
-   channel-less member stays claimable indefinitely instead of burning
-   ADR-054 (f)'s attempt budget into a false stuck flag. This covers restarts (in-memory `RuntimeHealth`
+   AQ1's store, not here. **Channel pre-check (owned HERE; consumes
+   AQ2.5's classifier seam)**: before claiming for member M, the sweep
+   calls AQ2.5's `DeliveryChannel` classifier and claims **only** when
+   M is classified `TmuxSteer` or `Graft` — the channels this sweep can
+   dispatch through. Bare-CLI members never have sweep work by
+   construction (AQ2.5's emitter clears their pending marker on FIFO
+   append — handoff semantics), and the pre-check is the belt to that
+   suspender: no claim, no dispatch failure, no attempt increment for
+   any member the classifier does not route to a sweep-dispatchable
+   channel. This sprint authors the pre-check diff; AQ2.5 authors the
+   classifier — exactly one owner per file. This covers restarts (in-memory `RuntimeHealth`
    resets), missed transitions, and failed graft handoffs by the same
    mechanism. One per member per pass. Daemon shutdown cancels and joins
    the task within the daemon deadline.
@@ -85,7 +87,13 @@ pub trait MemberStateTransitionSink: Send + Sync {
    (atomic-claim test).
 5. No transition, no tick → no nudge. Shutdown mid-pass cancels and joins
    within the deadline.
-6. `just test` + daemon integration suite, all three lanes.
+6. Sweep channel pre-check (owned here): the sweep claims only for
+   members the AQ2.5 classifier resolves to `TmuxSteer` or `Graft`; for
+   a bare-CLI member the sweep performs no claim and no attempt
+   increment (test double over the classifier seam), and a pending
+   marker for such a member — should one exist — is never driven to a
+   stuck flag by this sweep.
+7. `just test` + daemon integration suite, all three lanes.
 
 ## Paths to delete
 
@@ -98,9 +106,9 @@ None.
   observed draining one-per-idle-transition; transcript committed.
   **Requires AQ2.5's heartbeat producer** — no in-tree client sends
   `TeamMemberHeartbeatRequest` today, so a live idle transition cannot
-  occur without it. Code deliverables and their double-driven tests do
-  not depend on AQ2.5 (the sink is exercised by injecting heartbeats
-  directly).
+  occur without it. The sink/drain tests are exercised by injecting
+  heartbeats directly; the sweep pre-check consumes AQ2.5's classifier
+  seam (see Dependencies).
 
 ## Non-closure / out of scope
 
@@ -111,7 +119,7 @@ None.
 
 - must_follow: AQ1 (kinds, store, suppression) — merge-forward before every
   dev/fix round.
-- parallel_safe: AQ2 (tmux drain vs graft channel — disjoint emitters);
-  AQ2.5 (heartbeat producer vs sink/drain — disjoint sides of the
-  existing Heartbeat route; only the live-evidence validation step above
-  waits on AQ2.5).
+- must_follow: AQ2.5 (the sweep pre-check consumes its `DeliveryChannel`
+  classifier seam; the live-evidence validation additionally requires
+  its heartbeat producer). Merge-forward trigger: AQ2.5 dev push.
+- parallel_safe: AQ2 (tmux drain vs graft channel — disjoint emitters).
