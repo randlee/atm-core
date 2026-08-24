@@ -139,8 +139,14 @@ pub trait GraftReceiverEndpointStore: sealed::Sealed + Send + Sync {
 in ADR-056):** the lease table's primary key (team, agent) is the same
 natural key as `team_roster`; consumers (roster views, the planned
 liveness hooks, doctor) read via `LEFT JOIN ... USING (team, agent)` — no
-SQL `FOREIGN KEY` is declared (the existing schema uses none, and
-`save_roster`'s whole-roster rewrite would fight a real constraint).
+SQL `FOREIGN KEY` is declared. The schema does have FK precedent
+(`mail_message_states` → `mail_messages`, ON DELETE CASCADE), but it does
+not apply here: message-state rows are written 1:1 alongside their parent
+message and share its lifecycle, whereas `save_roster` does a per-team
+`DELETE FROM team_roster` + bulk re-INSERT on every save — a real FK from
+the lease table to roster would either cascade-drop live leases on every
+roster save or reject the save. The shared natural key expresses the
+relationship; the constraint would only fight the roster write pattern.
 Anti-state-machine guardrails, binding on every consumer:
 
 - exactly two writers, ever: the receiver (register/refresh/unregister)
@@ -152,7 +158,12 @@ Anti-state-machine guardrails, binding on every consumer:
   nothing to fall out of sync;
 - no mirroring into roster rows, no events/subscriptions/callbacks at
   this layer — a future liveness-hook feature builds on these rows,
-  reading the same derivation.
+  reading the same derivation;
+- this read-time aliveness predicate is intentionally STRICTER than the
+  displacement rule's active-lease-window check (deliverable 4), which
+  never consults `unreachable_at` — unreachable is delivery-advisory
+  display state, not a write-conflict input. Two predicates, two
+  purposes, both defined here.
 
 Lease timing constants (defined here/ADR-056, implemented by AQ1.6):
 `GRAFT_LEASE_REFRESH_INTERVAL = 1s` (matches the existing
