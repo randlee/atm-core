@@ -1,0 +1,56 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO211-RENDER-F003>
+  a triage:Finding ;
+  triage:findingId "AO211-RENDER-F003" ;
+  triage:title "AC4 SVG chart test coverage narrower than golden 2x2-grid requirement" ;
+  triage:description "Sprint AO2.11 AC4 requires fixture-driven golden test rendering 2 hosts x 4 targets x mixed PASS/FAIL, asserting candle count, series count, FAIL styling, and baseline line presence. req-qa (ATM-QA-003) and quality-mgr inspection: test_chart_geometry_has_all_candles_series_fail_outline_and_baselines only checks candlestick_series() dict for single target (tcp), not full rendered markup across 2x2 grid, and is not golden/reference-file test. quality-mgr visually confirmed FAIL styling and baseline lines render correctly in index.html. This is coverage gap versus AC4 literal wording, not active functional defect." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RENDER" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-24T05:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.11 ;
+  triage:foundAt "2026-08-24T05:14:31Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO211-RENDER-F003/AO211-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO211-RENDER-F003/AO211-1>
+  a triage:Occurrence ;
+  triage:file ".just/tests/test_benchmark_report.py" ;
+  triage:line 154 ;
+  triage:snippet "def test_chart_geometry_has_all_candles_series_fail_outline_and_baselines(self)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ao2-11-benchmark-rendering-pipeline" ;
+  triage:headSha "77681d4669e20ca631e9f2f42c08ff2d3efbed91" ;
+  triage:occursIn <urn:atm:triage:worktree/AO211/77681d4669e20ca631e9f2f42c08ff2d3efbed91> .
+
+<urn:atm:triage:worktree/AO210/ea953ac44>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/ao2-10" ;
+  triage:branch "feature/ao2-10-benchmark-data-contract" ;
+  triage:headSha "ea953ac44" ;
+  triage:orderIndex 11 .
+
+<urn:atm:triage:worktree/AO211/77681d4669e20ca631e9f2f42c08ff2d3efbed91>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/ao2-11" ;
+  triage:branch "feature/ao2-11-benchmark-rendering-pipeline" ;
+  triage:headSha "77681d4669e20ca631e9f2f42c08ff2d3efbed91" ;
+  triage:orderIndex 12 .
+
+<urn:atm:triage:worktree/AO212/5f40e9fee>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/ao2-12" ;
+  triage:branch "feature/ao2-12-historical-data-migration" ;
+  triage:headSha "5f40e9fee" ;
+  triage:orderIndex 13 .
