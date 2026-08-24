@@ -10,11 +10,12 @@ that every later sprint cites. No delivery behavior changes.
 
 ## Deliverables
 
-1. **ADR-054 attachments-by-reference** (numbering note: ADR-047 and
-   ADR-053 exist on `integrate/phase-ao2`, which merges to `develop` before
-   `integrate/phase-aq` is cut — a dispatch precondition; this plan branch
-   predates that merge — so 054 is the next free number at AQ1 dispatch
-   time) deciding, with rationale: (a) fetch mechanism for cross-host bytes
+1. **ADR-054 attachments-by-reference** (numbering note: ADR-047 — created
+   by phase-AO sprint AO.1 — and ADR-053 are both physically present on the
+   `integrate/phase-ao2` worktree, which merges to `develop` before
+   `integrate/phase-aq` is cut — a dispatch precondition verified by the
+   mechanical gate below; this plan branch predates that merge — so 054 is
+   the next free number at AQ1 dispatch time) deciding, with rationale: (a) fetch mechanism for cross-host bytes
    over the **accepted** canonical transport stack — ADR-035 canonical write
    ingress plus ADR-047 layered peer-wire security (`PeerWireMode`, default
    mTLS), which supersedes ADR-034's transport wording and ADR-040
@@ -28,7 +29,19 @@ that every later sprint cites. No delivery behavior changes.
    verified structurally, e.g. route-table inspection), with an explicit
    server-side idle-read and total-transfer timeout on the serving side (in
    addition to the client-side fetch deadline) and a bounded in-flight fetch
-   concurrency limit per origin host recorded alongside the size limit;
+   concurrency limit per origin host recorded alongside the size limit.
+   **Contract-clause reconciliation is part of this decision**: the existing
+   `boundaries/atm-http-runtime/http-runtime.toml` `[contracts]` section
+   authorizes only `atm-core` `ApiRequest`/`ApiResponse`/`AtmError`
+   (`core_contracts_only` gate), so ADR-054 must pick and record one of:
+   (1) model the fetch exchange inside the existing `ApiRequest`/
+   `ApiResponse` envelope (no TOML contract change — preferred if the byte
+   stream fits the one-wire-contract rule), or (2) amend that `[contracts]`
+   clause in the same PR that adds the `PeerAttachmentSource` record, naming
+   `AttachmentFetchRequest`/`VerifiedAttachment`/`AttachmentFetchError` as a
+   narrowly scoped authorized exception, with `boundary-guard` explicitly
+   reviewing the widening as a policy relaxation. Silent collision at AQ3
+   time is not an option;
    sftp/SSH permitted only as an explicitly justified fallback; (b) directory handling (reference w/ recursive pull vs
    tar at origin), including an explicit cap on file count and recursion
    depth for `kind: dir` attachments and refusal of symlinks that escape the
@@ -106,7 +119,11 @@ that every later sprint cites. No delivery behavior changes.
 5. **Storage-boundary governance for the new traits**: ADR-054 carries the
    ADR-018 §3 follow-up amendment to ADR-036 authorizing exactly two new
    optional storage capability traits — `AttachmentDeliveryStore` (AQ3) and
-   `AttachmentSweepStore` (AQ4) — with rationale; `docs/atm-storage/
+   `AttachmentSweepStore` (AQ4) — with rationale, AND adds a "Phase AQ
+   extension" subsection to ADR-036 itself (mirroring its existing "Phase AN
+   extension"), so a reader of ADR-036 alone sees the current capability
+   list — the same reader-of-the-ADR-alone principle decision (f) applies to
+   ADR-035; `docs/atm-storage/
    boundaries.md` and new `docs/boundaries/atm-storage/*.toml` records are
    updated in the same PR (records live at repo-root
    `boundaries/atm-storage/*.toml`, e.g. `peer-config-store.toml`;
