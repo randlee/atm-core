@@ -64,9 +64,11 @@ def time_view(value: datetime) -> dict[str, str]:
     """Shared UTC/Pacific presentation helper used by every template context."""
     utc_value = value.astimezone(timezone.utc)
     local = utc_value.astimezone(PACIFIC)
+    # `%-d` is a glibc/macOS strftime extension rejected by Windows' CRT;
+    # interpolate the day number portably instead.
     return {
         "datetime": utc_text(utc_value),
-        "text": local.strftime("%b %-d, %Y · %H:%M %Z"),
+        "text": local.strftime(f"%b {local.day}, %Y · %H:%M %Z"),
     }
 
 
