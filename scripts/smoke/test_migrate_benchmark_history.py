@@ -33,6 +33,8 @@ class MigrateBenchmarkHistoryTests(unittest.TestCase):
         names = (
             "20260801-063351.969883-mac-arm64-01-uds-f1.json",
             "20260801-200412.808565-windows-x64-01-tcp-f1.json",
+            "20260809-193021.750417-local-tcp-f1.json",
+            "20260820-220233.418717-local-tcp-f1.json",
         )
         with tempfile.TemporaryDirectory() as temp:
             reports = Path(temp) / "reports"
@@ -46,8 +48,8 @@ class MigrateBenchmarkHistoryTests(unittest.TestCase):
             record, audit = MIGRATE.migrated_record(reports, "0" * 40)
             after = {name: (reports / name).read_bytes() for name in names}
         self.assertEqual(after, before)
-        self.assertEqual(len(record.campaigns), 2)
-        self.assertEqual(audit["source_count"], 2)
+        self.assertEqual(len(record.campaigns), 4)
+        self.assertEqual(audit["source_count"], 4)
         source = json.loads(before[names[0]])
         migrated = next(item for item in audit["mappings"] if item["source_file"] == names[0])
         self.assertEqual(migrated["generated_at"], source["generated_at"])
@@ -55,6 +57,19 @@ class MigrateBenchmarkHistoryTests(unittest.TestCase):
             migrated["metrics"]["admissions_per_second"]["p50"],
             source["metrics"]["admissions_per_second"]["p50"],
         )
+
+    def test_check_mode_names_a_corrupted_legacy_fixture(self) -> None:
+        source_name = "20260801-063351.969883-mac-arm64-01-uds-f1.json"
+        with tempfile.TemporaryDirectory() as temp:
+            reports = Path(temp)
+            source = json.loads((self.fixture_dir() / source_name).read_text(encoding="utf-8"))
+            source["metrics"]["requested_count"] = -1
+            (reports / "broken.json").write_text(json.dumps(source), encoding="utf-8")
+            (reports / "baselines.json").write_text(
+                json.dumps({"schema_version": 1, "revision": 1, "entries": []}), encoding="utf-8"
+            )
+            with self.assertRaisesRegex(MIGRATE.MigrationError, "broken.json"):
+                MIGRATE.main(["--reports-dir", str(reports), "--check"])
 
     def test_invalid_legacy_source_names_the_offending_file(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
