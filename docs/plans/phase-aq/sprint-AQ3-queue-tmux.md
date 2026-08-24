@@ -88,6 +88,11 @@ None.
 - `just test` + daemon integration suite, ubuntu/macOS/Windows.
 - Live evidence: a real tmux-harness member queued 2 messages while busy,
   observed draining one-per-idle-transition; transcript committed.
+  **Requires AQ2.5's heartbeat producer** — no in-tree client sends
+  `TeamMemberHeartbeatRequest` today, so a live idle transition cannot
+  occur without it. Code deliverables and their double-driven tests do
+  not depend on AQ2.5 (the sink is exercised by injecting heartbeats
+  directly).
 
 ## Non-closure / out of scope
 
@@ -98,4 +103,7 @@ None.
 
 - must_follow: AQ1 (kinds, store, suppression) — merge-forward before every
   dev/fix round.
-- parallel_safe: AQ2 (tmux drain vs graft channel — disjoint emitters).
+- parallel_safe: AQ2 (tmux drain vs graft channel — disjoint emitters);
+  AQ2.5 (heartbeat producer vs sink/drain — disjoint sides of the
+  existing Heartbeat route; only the live-evidence validation step above
+  waits on AQ2.5).

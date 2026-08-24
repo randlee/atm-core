@@ -51,6 +51,16 @@ delivery recovers with zero manual steps (no Hermes profile reset). See
 sprint-AQ1-5 for the requirement text and ADR-056. Sub-numbered ids follow
 the AO2.5.x precedent to avoid renumbering the hardened AQ2–AQ6 docs.
 
+Delivery-trigger insertion (per Rand, 2026-08-24, sprint AQ2.5): the plan
+wired queue through the CLI/daemon but never answered *when* a queued
+message is delivered — no in-tree client produces the
+`TeamMemberHeartbeatRequest` idle signal AQ3's drain consumes, and members
+without a tmux `pane_id` in the roster had no injection path at all. AQ2.5
+adds the hook-driven heartbeat producer (one hook shape for Claude and
+Codex, tmux and non-tmux) and the non-tmux Claude pull-at-Stop path; the
+full trigger-policy matrix is normative in sprint-AQ2-5 and lands as an
+ADR-054 addendum.
+
 | Sprint | Title | Depends |
 |---|---|---|
 | AQ1 | `atm queue`: CLI verb, taxonomy (ADR-054), kind-aware dispatch + renames, `PendingNudgeStore` | — |
@@ -60,7 +70,8 @@ the AO2.5.x precedent to avoid renumbering the hardened AQ2–AQ6 docs.
 | AQ1.8 | Graft file-record retirement + AI3133 closure | must_follow AQ1.7 · parallel_safe AQ1.9 |
 | AQ1.9 | hermes-atm wheel bump + live restart-matrix verification on m5 | must_follow AQ1.7 · parallel_safe AQ1.8 |
 | AQ2 | Queue: atm-graft dual-channel | must_follow AQ1, AQ1.7 · parallel_safe AQ3 (AQ2 owns the graft channel's send-and-report; AQ3 owns kind-agnostic claim/dispatch scheduling; retry state lives only in AQ1's store — neither calls the other's code) |
-| AQ3 | Queue: tmux idle-drain | must_follow AQ1 · parallel_safe AQ2 |
+| AQ2.5 | Queue delivery triggers: heartbeat producer (harness idle hooks) + non-tmux Claude pull (ADR-054 addendum) | must_follow AQ1 · parallel_safe AQ2 |
+| AQ3 | Queue: tmux idle-drain | must_follow AQ1 · parallel_safe AQ2 · live-evidence step requires AQ2.5's heartbeat producer |
 | AQ4 | Send-To core: ATM_TEMP (ADR-055), CLI surface, transfer scripts, sweeper | must_follow AQ1–AQ3 |
 | AQ5 | Send-To surface + phase evidence | must_follow AQ4 |
 | AQ6 | SC-ecosystem dependency preflight (pin-latest + integration tests) + Wyvern contract issue | must_follow AQ5 |
@@ -140,3 +151,9 @@ by five explore agents before hardening began.
 | 3 | critical-plan-reviewer (sonnet) | `d83cc8f3a` | FAIL — 1 Important (liveness block falsely claimed the schema has no FK precedent; `mail_message_states`→`mail_messages` FK exists), 1 minor (displacement vs read-time predicates not cross-referenced) | Fixed in round-3 commit: rationale rewritten acknowledging the FK precedent and distinguishing it (1:1 lifecycle vs save_roster's delete+reinsert pattern, verified at roster_store.rs); intentional two-predicate note added. |
 | 4 | critical-plan-reviewer (sonnet) | `9dee3e807` | **PASS** — FK-rationale correction and two-predicates note verified; zero findings; insertion hardening complete | Ready for quality-mgr gate. |
 | 5 | quality-mgr gate (PR #1011 insertion) | `4052d35b2` | FAIL — 1 Blocking (AQ1.8 deleted `graft_receiver_record_path_*` while atm-graft/src/lib.rs:390/:784 still call it for the retained flock's lock path — all 4 hardening rounds missed it by never grepping that file), 1 Important (AQ1.7 AC#2 grep-gate exemption clause false as written), 1 minor (finding-prefix count 13+ vs actual 11) | Fixed in round-5 commit: AQ1.6 deliverable 5 introduces `graft_receiver_lock_path_from_root` (independent derivation, same on-disk `.lock` location) and migrates both lib.rs call sites pre-deletion; AQ1.7 AC#2 rewritten to reflect the migration with a whole-workspace grep; AQ1.8 test-migration scope + grep gate extended to atm-graft/src/lib.rs, count corrected. |
+
+## Insertion QA history (AQ2.5)
+
+| Round | Reviewer(s) | Commit | Verdict | Notes |
+|---|---|---|---|---|
+| 0 | — (initial draft, fenix) | (this commit) | DRAFT | Delivery-trigger gap identified by Rand 2026-08-24 (no in-tree `TeamMemberHeartbeatRequest` producer; no non-tmux injection policy). Grounded in a verified production Codex Stop-hook baseline (randlee/schook#168). Hardening rounds (plan-scope + critical-plan reviewers, then quality-mgr gate) pending. |
