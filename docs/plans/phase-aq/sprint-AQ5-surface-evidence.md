@@ -40,11 +40,16 @@ linked artifact.
      `scripts/send-to/atm-send-to.{sh,ps1}` and documented alongside the
      install steps: the script probes `wyvern --version` and uses Wyvern
      only when the binary is on `PATH`, parses a version `>=` the floor,
-     and the page asset resolves. The floor is set to the Wyvern commit
+     and the page asset resolves. **The probe runs under a short bounded
+     deadline** (1–2 s, well inside the cold-start budget) with the child
+     killed on expiry — `wyvern` is an arbitrary environment-provided
+     executable resolved from `PATH`, the same trust tier as a transfer
+     script, so it gets the same bounded-execution guarantee as ADR-055
+     (c). A hang is not a fallback. The floor is set to the Wyvern commit
      that lands `pick-member.html` (recorded with its PR).
    - **Degradation is silent-but-logged, never a failure**: absent,
-     too-old, unparseable-version, or missing-asset → native fallback
-     picker with a one-line note on stderr. A Wyvern problem must never
+     too-old, unparseable-version, probe-timeout, or missing-asset →
+     native fallback picker with a one-line note on stderr. A Wyvern problem must never
      turn into a failed send or a blocked gesture.
    - **The linked Wyvern PR/commit and the schema-fixture revision are
      both recorded in the atm-core PR**; Wyvern source is not vendored.
@@ -75,7 +80,8 @@ linked artifact.
 2a. Wyvern dependency contract (deliverable 3a): harness cases prove
    picker selection falls back to the native picker — with the stderr note
    and a successful send — for each of: `wyvern` absent from `PATH`,
-   version below the floor, unparseable `--version`, unknown
+   version below the floor, unparseable `--version`, `--version` hanging
+   past the probe deadline (child killed, treated as absent), unknown
    `schema_version`, missing page asset. No test lane requires Wyvern
    installed.
 3. R8 text present in `CLAUDE.md`, names `$ATM_TEMP/send-to` (grep-check).
