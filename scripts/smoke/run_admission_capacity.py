@@ -1277,18 +1277,8 @@ def provision_disposable_mtls_identity(
     )
     _required_command(
         [
-            # P-256 is the ordinary modern TLS identity choice.  ``genpkey``
-            # emits the PKCS#8 encoding accepted by the Rustls provider.
-            openssl, "genpkey", "-algorithm", "EC", "-pkeyopt",
-            "ec_paramgen_curve:prime256v1", "-out", str(private_key),
-        ],
-        env,
-        "generate disposable mTLS private key",
-    )
-    _required_command(
-        [
-            openssl, "req", "-x509", "-new", "-key", str(private_key),
-            "-out", str(certificate), "-days", "2",
+            openssl, "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+            "-keyout", str(private_key), "-out", str(certificate), "-days", "2",
             "-config", str(config),
         ],
         env,
