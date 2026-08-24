@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import closing
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import hashlib
@@ -22,6 +23,7 @@ from queue import Empty, Queue
 import re
 import shutil
 import socket
+import sqlite3
 import ssl
 import subprocess
 import sys
@@ -716,11 +718,47 @@ LIFECYCLE_RECOVERY = {
     "preflight": "correct the disposable benchmark-account manifest before retrying",
     "snapshot": "keep the benchmark daemon stopped and inspect retained snapshot staging material",
     "profile": "the runner will stop its owned daemon and restore the published clean snapshot",
+    "restart": "keep the benchmark daemon stopped and inspect its restart diagnostics before retrying",
+    "durability": "keep the benchmark daemon stopped and inspect the disposable benchmark store",
     "stop": "keep the benchmark daemon stopped; do not restore while SQLite sidecars may be active",
     "restore": "keep the benchmark daemon stopped and inspect retained restore staging material",
     "post_restore_verify": "keep the benchmark daemon stopped and inspect the restored benchmark account",
     "cleanup": "remove only the per-run temporary ATM_HOME after inspecting the retained evidence",
 }
+
+
+def verify_durability_after_restart(
+    benchmark_account: BenchmarkAccount,
+    roster: CapacityRoster,
+    expected_accepted_count: int,
+) -> dict[str, Any]:
+    """Count this run's recipient rows after a fresh daemon has reopened SQLite.
+
+    The benchmark roster is unique per target, so its recipient mailbox is an
+    exact, isolated measurement: roster setup cannot contribute mail rows and
+    no other target can share its ``(team, agent)`` pair.  The caller starts
+    and doctors a new owned daemon immediately before this read; the query is
+    deliberately read-only and never touches an interactive account.
+    """
+    if expected_accepted_count < 0:
+        raise SmokeError("durability expected accepted count must not be negative")
+    database = benchmark_account.durable_state_root / "mail.db"
+    try:
+        with closing(sqlite3.connect(f"file:{database}?mode=ro", uri=True)) as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) FROM mail_messages WHERE team = ? AND agent = ?",
+                (roster.team, roster.recipient),
+            ).fetchone()
+    except sqlite3.Error as error:
+        raise SmokeError(f"could not count durable benchmark mailbox rows: {error}") from error
+    if row is None or not isinstance(row[0], int):
+        raise SmokeError("durability count query returned no integer mailbox count")
+    observed = row[0]
+    return {
+        "expected_accepted_count": expected_accepted_count,
+        "observed_mailbox_count": observed,
+        "passed": observed == expected_accepted_count,
+    }
 
 
 def snapshot_evidence(snapshot: VerifiedSnapshot) -> dict[str, Any]:
@@ -1985,9 +2023,33 @@ def run_capacity(
         evidence["run_duration_s"] = profile["run_duration_s"]
         evidence["daemon_version"] = release_version(atm)
 
+        # A 201/direct-writer success is not enough for a benchmark result:
+        # reopen the isolated account store with a fresh shipped daemon, then
+        # count this target's unique recipient mailbox.  This happens before
+        # the clean snapshot is restored and is intentionally outside every
+        # timed interval.
+        run_lifecycle_phase(evidence, "stop", stop_owned_daemon)
+        run_lifecycle_phase(evidence, "restart", start_and_doctor)
+        evidence["doctor_after_restart"] = {"status": evidence["doctor_status"]}
+        expected_accepted_count = sum(
+            int(interval["accepted_count"]) for interval in profile["intervals"]
+        )
+        evidence["durability_after_restart"] = run_lifecycle_phase(
+            evidence,
+            "durability",
+            lambda: verify_durability_after_restart(
+                benchmark_account,
+                roster,
+                expected_accepted_count,
+            ),
+        )
+
         # v4 applies reviewed per-host/target floors only after this runner
         # has completed its lifecycle and emitted its factual measurements.
-        evidence["passed"] = all(bool(item.get("passed")) for item in profile["intervals"])
+        evidence["passed"] = (
+            all(bool(item.get("passed")) for item in profile["intervals"])
+            and bool(evidence["durability_after_restart"]["passed"])
+        )
     except (OSError, RuntimeError, ValueError, SmokeError) as error:
         evidence["passed"] = False
         evidence["failure"] = str(error)

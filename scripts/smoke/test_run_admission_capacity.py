@@ -306,6 +306,72 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertNotIn("transport", recorded)
         self.assertNotIn("thresholds", recorded)
 
+    def test_durability_count_after_restart_is_exact_and_roster_scoped(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            database_root = root / ".atm" / "db"
+            database_root.mkdir(parents=True)
+            database = database_root / "mail.db"
+            with closing(sqlite3.connect(database)) as connection:
+                connection.execute(
+                    "CREATE TABLE mail_messages(team TEXT NOT NULL, agent TEXT NOT NULL)"
+                )
+                connection.executemany(
+                    "INSERT INTO mail_messages(team, agent) VALUES (?, ?)",
+                    [
+                        ("target-team", "target-recipient"),
+                        ("target-team", "target-recipient"),
+                        ("other-team", "other-recipient"),
+                    ],
+                )
+                connection.commit()
+            account = mock.Mock(durable_state_root=database_root)
+            roster = RUNNER.CapacityRoster(
+                run_id="target", team="target-team", agent="target-agent",
+                recipient="target-recipient",
+            )
+            observation = RUNNER.verify_durability_after_restart(account, roster, 2)
+
+        self.assertEqual(observation, {
+            "expected_accepted_count": 2,
+            "observed_mailbox_count": 2,
+            "passed": True,
+        })
+
+    def test_durability_count_marks_an_exact_count_mismatch_without_hiding_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            database_root = root / ".atm" / "db"
+            database_root.mkdir(parents=True)
+            database = database_root / "mail.db"
+            with closing(sqlite3.connect(database)) as connection:
+                connection.execute(
+                    "CREATE TABLE mail_messages(team TEXT NOT NULL, agent TEXT NOT NULL)"
+                )
+                connection.execute(
+                    "INSERT INTO mail_messages(team, agent) VALUES ('target-team', 'target-recipient')"
+                )
+                connection.commit()
+            account = mock.Mock(durable_state_root=database_root)
+            roster = RUNNER.CapacityRoster(
+                run_id="target", team="target-team", agent="target-agent",
+                recipient="target-recipient",
+            )
+            observation = RUNNER.verify_durability_after_restart(account, roster, 2)
+
+        self.assertEqual(observation["observed_mailbox_count"], 1)
+        self.assertFalse(observation["passed"])
+
+    def test_durability_count_rejects_invalid_expected_count_before_reading_sqlite(self):
+        account = mock.Mock(durable_state_root=Path("/not-used"))
+        roster = RUNNER.CapacityRoster(
+            run_id="target", team="target-team", agent="target-agent", recipient="target-recipient",
+        )
+        with mock.patch.object(RUNNER.sqlite3, "connect") as connect:
+            with self.assertRaisesRegex(RUNNER.SmokeError, "must not be negative"):
+                RUNNER.verify_durability_after_restart(account, roster, -1)
+        connect.assert_not_called()
+
     def _run_snapshot_lifecycle_case(self, fault: str | None = None) -> tuple[int, dict[str, object], dict[str, mock.Mock]]:
         """Exercise the runner lifecycle without inspecting a primary-account root."""
         captured: dict[str, object] = {}
@@ -366,6 +432,15 @@ class AdmissionCapacityTests(unittest.TestCase):
                     mock.patch.object(RUNNER, "local_endpoint", return_value=RUNNER.LocalEndpoint("tcp", "127.0.0.1:1")),
                 )
                 stack.enter_context(mock.patch.object(RUNNER, "run_cached_roster_heartbeat_probe", return_value={}))
+                stack.enter_context(mock.patch.object(
+                    RUNNER,
+                    "verify_durability_after_restart",
+                    return_value={
+                        "expected_accepted_count": 1_000,
+                        "observed_mailbox_count": 1_000,
+                        "passed": True,
+                    },
+                ))
                 calls["profile"] = stack.enter_context(
                     mock.patch.object(
                         RUNNER,
@@ -423,7 +498,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(captured["clean_baseline_snapshot"]["snapshot_id"], "snapshot-20260822T000000Z-0123456789abcdef")
         self.assertEqual(captured["post_restore_snapshot"]["snapshot_id"], "snapshot-20260822T000000Z-0123456789abcdef")
         self.assertTrue(all(item["duration_s"] >= 0 for entries in captured["lifecycle"].values() for item in entries))
-        self.assertEqual(calls["start"].call_count, 2)
+        self.assertEqual(calls["start"].call_count, 3)
 
     def test_real_snapshot_lifecycle_never_touches_interactive_root(self):
         """Exercise the real account-bound snapshot APIs through ``run_capacity``.
@@ -519,6 +594,15 @@ class AdmissionCapacityTests(unittest.TestCase):
                 )
                 stack.enter_context(mock.patch.object(RUNNER, "run_cached_roster_heartbeat_probe", return_value={}))
                 stack.enter_context(mock.patch.object(RUNNER, "run_profile", return_value=profile))
+                stack.enter_context(mock.patch.object(
+                    RUNNER,
+                    "verify_durability_after_restart",
+                    return_value={
+                        "expected_accepted_count": 1_000,
+                        "observed_mailbox_count": 1_000,
+                        "passed": True,
+                    },
+                ))
                 stack.enter_context(mock.patch.object(RUNNER, "release_version", return_value="atm test"))
                 stack.enter_context(mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"))
                 stack.enter_context(
