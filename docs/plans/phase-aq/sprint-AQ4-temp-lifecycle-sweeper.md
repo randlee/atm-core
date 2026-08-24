@@ -13,23 +13,35 @@ decision (d). A shared well-known folder with no owner is a guaranteed leak.
    retained-log maintenance-worker precedent
    (`crates/atm-daemon/bin_support/daemon_observability.rs`, 60 s cadence),
    scanning `attachment_dir()` roots and applying the ADR policy (TTL /
-   on-ack / both). On-ack state is queried from
-   `mail_message_states.acknowledged_at`
-   (`crates/atm-storage-rusqlite/src/shared_db.rs`). Interval and TTL from
+   on-ack / both). All storage access goes through `AttachmentSweepStore`
+   and AQ1's `AttachmentReferenceCheck` only; `mail_message_states.
+   acknowledged_at` (`crates/atm-storage-rusqlite/src/shared_db.rs`) is
+   cited solely as the backend-crate implementation detail behind those
+   trait methods — the sweeper never imports backend symbols. Interval and TTL from
    daemon config (`AtmConfig`, key added by AQ1 decision (e)) with
    documented defaults.
 2. **Safety rails**: sweeper deletes only paths matching the AQ1 layout
    derivation; anything else under the root is logged and left. Never follows
    symlinks out of the root.
 3. **Observability**: per-sweep structured log event `{scanned,
-   reclaimed_bytes, skipped_foreign}` via the existing daemon event surface
-   (`emit_daemon_event`) and a cumulative counter exposed through the health
-   report, following the `queue_full_drops_total` precedent — the daemon has
-   no metrics registry.
+   reclaimed_bytes, skipped_foreign}` plus the mandatory `subsystem`,
+   `action`, `outcome` fields (ATM daemon logging advisory), and a
+   cumulative counter exposed through the health report, following the
+   `queue_full_drops_total` precedent — the daemon has no metrics registry.
+   Recorded exception (reviewed): the event is emitted through the existing
+   `emit_daemon_event` composition helper for consistency with the
+   retained-log worker precedent; this reuse is an explicit, scoped
+   exception to the tracing-facade preference and does not authorize
+   refactoring `emit_daemon_event` itself in this phase.
 4. **Dedupe interaction**: content still referenced by an unswept msg-id is
-   not reclaimed; the reference check (link-count vs refcount vs ack-state
-   query) implements ADR-054 decision (i) exactly as AQ3's reuse path does —
-   one mechanism, two consumers.
+   not reclaimed; the check calls AQ1's `AttachmentReferenceCheck::
+   is_referenced` — the single authority implementing ADR-054 decision (i) —
+   exactly as AQ3's reuse path does. One mechanism, one API, two consumers.
+
+`SweeperError` semantics: per-entry failures (foreign file, symlink escape,
+busy file) are skip-and-log, never `Err`; `SweeperError` is returned only
+for pass-fatal conditions (staging root unavailable/unreadable, storage
+trait failure), which surface on the health report.
 
 ## Normative sweeper boundary
 

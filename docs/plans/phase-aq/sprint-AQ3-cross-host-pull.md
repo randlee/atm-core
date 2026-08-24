@@ -9,7 +9,8 @@ verifies content address, then delivers the message.
 
 Verified baseline: no byte-fetch, parked-message, dead-letter, or retry
 machinery exists today — cross-host delivery is a stateless HTTPS push
-(ADR-034/035) where receiver-side persistence *is* delivery. Every
+(ADR-035 ingress under ADR-047 peer-wire security, single-router shape per
+ADR-034) where receiver-side persistence *is* delivery. Every
 deliverable below is new construction implementing AQ1 ADR decisions (a),
 (f), and (i) exactly as recorded in ADR-054; this sprint re-opens none of
 them, and deviations require an ADR change, not a sprint-local choice.
@@ -44,9 +45,32 @@ them, and deviations require an ADR change, not a sprint-local choice.
    decided there, not here — no refetch. Any member/host address resolution
    this path needs reuses AQ2's canonical `resolve_picker_recipient`; AQ3
    must not define a second resolver.
-5. **Sender holds no transport state**: grep-gate (precedent:
-   `scripts/check-legacy-mailbox-paths.py`) that no fetch/ssh/transport
-   client code is reachable from `atm send`'s attach path.
+5. **Single-owner grep-gate** (precedent:
+   `scripts/check-legacy-mailbox-paths.py`), enumerated in CI, failing on:
+   (a) fetch/ssh/transport client code reachable from `atm send`'s attach
+   path; (b) any `attachment_dir`-shaped path construction outside AQ1's
+   owner module; (c) any second member-address resolver outside AQ2's
+   `resolve_picker_recipient`.
+6. **Runtime hardening** (all per ADR-054 decision (a) bounds): server-side
+   idle-read + total-transfer timeouts on the byte-fetch route; bounded
+   in-flight fetch concurrency per origin host; daemon-side sha256/size
+   verification and file copies run under `spawn_blocking` (or a bounded
+   blocking pool), never inline on async workers; daemon shutdown cancels
+   in-flight fetches within the shutdown deadline and removes (or leaves for
+   AQ4's safety rails) partial staging files; a cumulative
+   `attachment_fetch_failures_total` (and pending-count) counter on the
+   daemon health surface; all new warn/error events carry `subsystem`,
+   `action`, `outcome` structured fields per the ATM daemon logging advisory
+   alongside `{msg_id, sha256, origin_host}`.
+
+`AttachmentFetchError` inventory (variants normative):
+
+| Variant | Cause | Outcome |
+|---|---|---|
+| `HashMismatch` | bytes fail sha256 verify | park + structured error |
+| `SizeExceeded` | declared/actual size over ADR limit | park + structured error |
+| `TransportOrAuth` | TLS/allowlist/HTTP failure | park; retry only per ADR bounds |
+| `OriginUnreachable` | peer down/timeout | park; retry only per ADR bounds |
 
 ## Normative fetch and storage boundary
 
@@ -56,12 +80,18 @@ second inbound write path:
 
 ```rust
 pub struct AttachmentFetchRequest {
-    pub sha256: AttachmentSha,
+    pub sha256: AttachmentSha,   // sole lookup key — content-addressed
     pub size: u64,
     pub origin_host: HostName,
-    pub origin_path: String,
+    // origin_path deliberately absent (ADR-054): it lives only on the
+    // persisted Attachment for display/audit and never reaches the fetch
+    // boundary, so no implementation can misuse it as a lookup/path key.
 }
 
+// Dyn-dispatched (matching the phase's &dyn convention); methods are
+// object-safe boxed-future async per the repo async-trait convention.
+// PeerAttachmentSource is a transport-adapter trait owned by
+// atm-http-runtime (outside the ADR-018 §3 storage-capability cap).
 pub trait PeerAttachmentSource {
     async fn fetch(
         &self,
@@ -80,7 +110,8 @@ pub trait AttachmentDeliveryStore {
 }
 ```
 
-The route is authenticated by ADR-034/035 peer context, serves only the
+The route is authenticated by the ADR-035 ingress + ADR-047 peer-wire
+context (mTLS default, plaintext test mode), serves only the
 requested content-addressed bytes from the origin's registered staging root,
 ignores `origin_path` as a filesystem instruction, enforces the declared size
 limit, and returns no message or routing state. `set_local_path` is the only post-fetch
@@ -99,8 +130,12 @@ AQ1 ADR.
    event or filesystem inode check per ADR mechanism).
 3. Ordering test: recipient read at any point never yields attachment refs
    without `local_path`.
-4. Grep-gate (deliverable 5) enumerated in CI.
+4. Grep-gate (deliverable 5, all three prongs) enumerated in CI.
 5. `just test` all three CI lanes (ubuntu, macOS, Windows).
+6. Hardening tests (deliverable 6): stalled-peer fetch is cut by the
+   server-side timeout; concurrency cap observed under multi-attachment
+   fan-in; shutdown mid-fetch leaves no unreclaimable partial file; health
+   counter increments on induced failure.
 
 ## Paths to delete
 

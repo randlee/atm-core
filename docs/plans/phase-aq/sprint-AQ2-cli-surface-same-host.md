@@ -86,6 +86,15 @@ maps a registered host only when it matches an enabled `TrustedPeer`, and
 rejects an unresolved/disabled remote member before staging or writing. It
 never derives host from heartbeat, DNS, socket family, or the picker UI.
 
+`AddressResolutionError` inventory (variants are normative; codes/messages
+finalized in-sprint):
+
+| Variant | Cause | Recovery |
+|---|---|---|
+| `UnknownMember` | id not in roster | pick a rostered member or `atm members` to list |
+| `HostNotTrusted` | registered host matches no enabled `TrustedPeer` | enable the peer (`atm peer ...`) or fix the binding |
+| `HostUnregistered` | member has `host: null` but a remote send is required | `atm teams update-member --host <host>` or use explicit `agent@team.host` |
+
 ## Acceptance criteria
 
 1. Truth-table tests for `--from-json`: valid multi-recipient → N envelopes

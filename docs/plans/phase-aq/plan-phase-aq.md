@@ -17,10 +17,14 @@ after the Wyvern chat-window integration exists.
 - **Pull, not push.** Cross-host attachment bytes are fetched by the receiving
   daemon; the sender ships references `{sha256, size, origin_host,
   origin_path}`. Fetch mechanism is decided in AQ1's ADR against the
-  **accepted** cross-host transport, ADR-034 (minimal cross-host HTTPS,
-  port 43101) and ADR-035 (canonical write ingress + host routing) — not
-  assumed to be sftp. ADR-028 and ADR-031 are superseded and must not be
-  cited as authority.
+  **accepted** cross-host transport stack: ADR-035 (canonical write ingress +
+  host routing, active) and ADR-047 (layered peer-wire security — `PeerWireMode`
+  default mTLS — which supersedes ADR-034's transport wording and ADR-040;
+  the ADR-047 file lives on `integrate/phase-ao2` and reaches `develop` with
+  the AO2 merge, a phase-AQ dispatch precondition). ADR-034 remains the
+  reference for the single-router HTTP shape it established. Not assumed to
+  be sftp. ADR-028 and ADR-031 are superseded and must not be cited as
+  authority.
 - **No new protocol verb.** `attachments: []` is an optional envelope field
   on `MessageEnvelope` (`crates/atm-storage/src/schema/inbox_message.rs:137`);
   no new `WriteRequest` variant or protocol message kind.
@@ -121,7 +125,20 @@ not re-litigate them:
   matrix). A two-daemon peer-pair harness exists
   (`.just/tests/test_peer_pair_smoke.py`, `scripts/smoke/run_peer_pair.py`);
   grep-gate precedent exists (`scripts/check-legacy-mailbox-paths.py`). ADRs
-  live in `docs/adr/`; highest is ADR-053, so the AQ1 ADR is ADR-054.
+  live in `docs/adr/`; ADR-047 and ADR-053 both exist on
+  `integrate/phase-ao2` (merged to `develop` before `integrate/phase-aq` is
+  cut — a dispatch precondition; this plan branch predates that merge), so
+  the AQ1 ADR is ADR-054. Machine-readable boundary records live at
+  repo-root `boundaries/<crate>/*.toml`, enforced by
+  `cargo test -p atm-architecture`.
+- ADR-018 §3 caps optional `atm-storage` capability traits; ADR-036 used the
+  follow-up-ADR mechanism once and closed the door. The two new store traits
+  (`AttachmentDeliveryStore`, `AttachmentSweepStore`) therefore require the
+  ADR-018 §3 follow-up amendment + `docs/atm-storage/boundaries.md` +
+  repo-root `boundaries/atm-storage/*.toml` records + `boundary-guard`
+  review, all owned by AQ1 (deliverable 5). `PeerAttachmentSource` is a
+  transport-adapter trait in `atm-http-runtime` (its record goes under
+  `boundaries/atm-http-runtime/`), outside that cap.
 
 ## Open decisions routed to sprints
 
