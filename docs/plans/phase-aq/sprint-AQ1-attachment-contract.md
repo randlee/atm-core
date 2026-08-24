@@ -25,12 +25,23 @@ that every later sprint cites. No delivery behavior changes.
    adds one, honoring existing `~/.atm/*` directory conventions
    (`crates/atm-core/src/home.rs`) — no hardcoded paths;
    (f) **pending-delivery semantics for cross-host pull**: under ADR-035,
-   receiver-side persistence *is* delivery and ADR-034 rejects outbox/retry
-   state, so this decision must pick — and explicitly extend or supersede
-   ADR-034/035 for — one of: block the inbound peer write until fetch+verify
-   completes, or persist in a new not-yet-deliverable (parked) state hidden
-   from the read surface until `local_path` is set; including the storage
-   update path that mutates the stored envelope post-fetch and any bounded
+   receiver-side persistence *is* delivery, its write handler forbids
+   pre-persistence transport work ("no host inspection before persistence
+   outside PostWriteRouter") and cross-host-specific persistence/nudge
+   handlers, and ADR-034 rejects outbox/retry state. The decision must
+   therefore be demonstrated compatible with ADR-035's write-ordering and
+   Prohibitions in the ADR-054 text itself. The default-candidate shape that
+   satisfies both: persist the inbound envelope through the ordinary canonical
+   write (attachments present with `local_path: None` as an ordinary field
+   state), run fetch+verify strictly post-write, and gate only the *read
+   surface projection* of the message on all attachments having verified
+   `local_path` — no blocked inbound write, no hidden cross-host-specific
+   persistence state. If ADR-054 instead chooses an option that genuinely
+   conflicts with ADR-034/035 text, it must add an explicit scoped amendment
+   note to ADR-035 (and ADR-034 if the fetch endpoint touches its transport
+   responsibilities), mirroring the superseded-by convention ADR-034 already
+   uses — a reader of ADR-035 alone must see the exception. Includes the
+   storage update path that sets `local_path` post-fetch and any bounded
    retry scoping; (g) **msg-id allocation vs staging order**: who allocates
    the `AtmMessageId` ULID (CLI vs daemon) and when `attachment_dir(msg_id)`
    staging happens relative to the canonical write, so that cancel (R5/R13)
@@ -41,7 +52,15 @@ that every later sprint cites. No delivery behavior changes.
    non-null remote host must match an enabled `TrustedPeer`; an unresolved
    member remains `host: null` and is not routable through `--from-json` until
    explicitly registered. This is a roster/CLI metadata extension only, not a
-   daemon heartbeat or runtime-plumbing sprint.
+   daemon heartbeat or runtime-plumbing sprint. The resolution *algorithm* is
+   NOT an AQ1 deliverable: AQ2's `resolve_picker_recipient` (see AQ2
+   "Normative CLI contracts") is the single canonical implementation; AQ1
+   owns only the durable roster `host` field and its validation rules;
+   and (i) **dedupe storage mechanism**: how a second message referencing an
+   already-present `sha256` on the same host shares bytes — hardlink vs copy —
+   and how the sweeper detects "still referenced" (link-count vs refcount vs
+   ack-state query), so AQ3's reuse path and AQ4's reclamation check implement
+   one compatible mechanism. Must state the Windows/NTFS behavior explicitly.
 2. **`Attachment` type** in `crates/atm-storage/src/schema/inbox_message.rs`
    (or sibling module) and optional `attachments` field on `MessageEnvelope`
    (`inbox_message.rs:137`), following the established back-compat patterns
@@ -80,13 +99,13 @@ pub struct Attachment {
 pub enum NoteSource { Human, Drafted, Edited }
 
 pub fn attachment_dir(known_temp: &Path, msg_id: &AtmMessageId) -> PathBuf;
-
-pub fn resolve_member_target(
-    member_id: &str,
-    roster: &dyn RosterStore,
-    peers: &dyn PeerConfigStore,
-) -> Result<AgentAddress, AddressResolutionError>;
 ```
+
+Member-to-address resolution is deliberately absent here: AQ2 owns the single
+canonical `resolve_picker_recipient` implementation (decision (h) defines only
+the roster field it reads). Later sprints needing resolution (e.g. AQ3) reuse
+AQ2's function; defining a second resolver anywhere in the phase is a
+boundary violation.
 
 `local_path` is never set by the sender; a validator rejects sender-side
 population. `origin_path` is never dereferenced by the receiver and must not
@@ -94,7 +113,10 @@ escape the configured staging root; it is retained only for operator context.
 
 ## Acceptance criteria
 
-1. ADR merged with all eight decisions (a)–(h) closed, none deferred.
+1. ADR merged with all nine decisions (a)–(i) closed, none deferred; the
+   decision-(f) text demonstrates ADR-035 write-ordering/Prohibitions
+   compatibility or carries the required scoped amendment notes in
+   ADR-035/ADR-034 themselves.
 2. Round-trip serde tests: envelope without `attachments` deserializes;
    envelope with attachments round-trips; sender-set `local_path` rejected.
 3. `attachment_dir()` unit-tested; no other code path constructs the layout.
@@ -108,7 +130,7 @@ attachment root; it must not delete or rename existing mailbox paths.
 ## Required validation
 
 - `just test` workspace, all three CI lanes (ubuntu, macOS, Windows).
-- ADR reviewed by quality-mgr with explicit sign-off on decisions (a)–(h).
+- ADR reviewed by quality-mgr with explicit sign-off on decisions (a)–(i).
 - `cargo test -p atm-storage` and the focused envelope/path tests named in the
   implementation PR; the tests must run without a daemon or network.
 

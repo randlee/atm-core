@@ -27,7 +27,9 @@ decision (d). A shared well-known folder with no owner is a guaranteed leak.
    report, following the `queue_full_drops_total` precedent — the daemon has
    no metrics registry.
 4. **Dedupe interaction**: content still referenced by an unswept msg-id is
-   not reclaimed (refcount or link-count check per AQ1/AQ3 mechanism).
+   not reclaimed; the reference check (link-count vs refcount vs ack-state
+   query) implements ADR-054 decision (i) exactly as AQ3's reuse path does —
+   one mechanism, two consumers.
 
 ## Normative sweeper boundary
 

@@ -32,7 +32,11 @@ deliverable below is new construction shaped by AQ1 ADR decisions (a) and
    extension, not an assumption); never a delivered envelope with
    missing/mismatched bytes.
 4. **Dedupe**: a second envelope referencing an already-present `sha256` on
-   the receiving host reuses bytes (hardlink or copy per ADR) — no refetch.
+   the receiving host reuses bytes exactly per ADR-054 decision (i) — the
+   hardlink-vs-copy mechanism and its reference/link-count semantics are
+   decided there, not here — no refetch. Any member/host address resolution
+   this path needs reuses AQ2's canonical `resolve_picker_recipient`; AQ3
+   must not define a second resolver.
 5. **Sender holds no transport state**: grep-gate (precedent:
    `scripts/check-legacy-mailbox-paths.py`) that no fetch/ssh/transport
    client code is reachable from `atm send`'s attach path.

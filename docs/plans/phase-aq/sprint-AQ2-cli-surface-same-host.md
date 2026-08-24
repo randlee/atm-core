@@ -58,7 +58,8 @@ only Phase-1 writer. The implementation must add/update that metadata through
 the existing roster mutation requests; no heartbeat or live socket observation
 may populate it.
 
-`atm send --from-json` accepts exactly one JSON object on stdin:
+`atm send --from-json` accepts exactly one JSON object on stdin — the
+`PickerOutput` schema (the name AQ5 and the PRD §4.2 picker contract bind to):
 
 ```json
 {"recipients":["member-id", "member-id-2"], "note":"optional text"}

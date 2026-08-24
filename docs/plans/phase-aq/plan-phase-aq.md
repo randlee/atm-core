@@ -137,6 +137,10 @@ not re-litigate them:
 - Member host binding: AQ1 decides the durable roster field and authority;
   AQ2 must reject unresolved IDs and prove local-vs-remote routing from that
   field only. It may not invent a DNS/heartbeat inference.
+- Dedupe storage mechanism (hardlink vs copy) and the sweeper's
+  still-referenced check → AQ1 ADR decision (i); AQ3 (reuse) and AQ4
+  (reclamation) implement that one mechanism, and both reuse AQ2's canonical
+  `resolve_picker_recipient` rather than defining their own resolution.
 - Message-id allocation vs staging order: `attachment_dir()` is keyed by
   `AtmMessageId`, so who allocates the ULID (CLI vs daemon) and when staging
   happens relative to the canonical write → AQ1 ADR decision (g).
