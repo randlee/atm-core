@@ -244,13 +244,15 @@ def migrated_record(reports_dir: Path, generated_from_commit: str) -> tuple[Hist
             and durable.observed_mailbox_count == durable.expected_accepted_count
         )
         observed = None if metrics is None else metrics.admissions_per_second.p50
-        floor = max(prior, observed) if eligible and observed is not None else prior
-        result, gap = result_from_summary(summary, path, campaign, floor)
-        if eligible and observed is not None and floor > prior:
-            best[key] = floor
+        # D8 classifies this result against the floor that existed before it.
+        # Updating first would allow a record-setting observation to certify
+        # itself against its own value.
+        result, gap = result_from_summary(summary, path, campaign, prior)
+        if eligible and observed is not None and observed > prior:
+            best[key] = observed
             ratchet.append(RatchetPoint(
                 host_label=summary.host_label, target=target,
-                effective_from=result.generated_at, p50_floor=floor,
+                effective_from=result.generated_at, p50_floor=observed,
                 source_campaign_id=campaign,
             ))
         converted.append((path, result, gap))

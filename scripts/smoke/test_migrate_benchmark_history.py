@@ -96,6 +96,29 @@ class MigrateBenchmarkHistoryTests(unittest.TestCase):
             )
             self.assertEqual(MIGRATE.main(["--reports-dir", str(reports), "--check"]), 0)
 
+    def test_record_setting_run_is_classified_against_the_prior_ratchet_floor(self) -> None:
+        source_name = "20260801-063351.969883-mac-arm64-01-uds-f1.json"
+        with tempfile.TemporaryDirectory() as temp:
+            reports = Path(temp)
+            source = json.loads((self.fixture_dir() / source_name).read_text(encoding="utf-8"))
+            earlier = json.loads(json.dumps(source))
+            earlier["generated_at"] = "2026-08-01T06:00:00Z"
+            later = json.loads(json.dumps(source))
+            later["generated_at"] = "2026-08-01T06:01:00Z"
+            earlier_rate = earlier["metrics"]["admissions_per_second"]["p50"]
+            for percentile in later["metrics"]["admissions_per_second"]:
+                later["metrics"]["admissions_per_second"][percentile] *= 2
+            (reports / "earlier.json").write_text(json.dumps(earlier), encoding="utf-8")
+            (reports / "later.json").write_text(json.dumps(later), encoding="utf-8")
+            (reports / "baselines.json").write_text(
+                json.dumps({"schema_version": 1, "revision": 1, "entries": []}), encoding="utf-8"
+            )
+            record, _audit = MIGRATE.migrated_record(reports, "0" * 40)
+        results = [entry.result for campaign in record.campaigns for entry in campaign.results]
+        later_result = next(result for result in results if result.generated_at.isoformat().endswith("06:01:00+00:00"))
+        self.assertEqual(later_result.baseline.p50_floor, earlier_rate)
+        self.assertLess(later_result.baseline.p50_floor, later_result.metrics.admissions_per_second.p50)
+
 
 if __name__ == "__main__":
     unittest.main()
