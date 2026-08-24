@@ -205,6 +205,16 @@ fn parse_peer_pool_config_with_environment(
     mut environment: impl FnMut(&str) -> Option<std::ffi::OsString>,
 ) -> Result<PeerPoolConfig, AtmError> {
     let mut config = PeerPoolConfig::default();
+    apply_peer_pool_environment(&mut config, &mut environment)?;
+    apply_peer_pool_launch_overrides(&mut config, arguments)?;
+    config.validate()?;
+    Ok(config)
+}
+
+fn apply_peer_pool_environment(
+    config: &mut PeerPoolConfig,
+    environment: &mut impl FnMut(&str) -> Option<std::ffi::OsString>,
+) -> Result<(), AtmError> {
     if let Some(value) = environment("ATM_PEER_POOL_MAX_PER_PEER") {
         config.max_per_peer = parse_pool_usize("ATM_PEER_POOL_MAX_PER_PEER", value)?;
     }
@@ -215,50 +225,22 @@ fn parse_peer_pool_config_with_environment(
         config.idle_timeout =
             Duration::from_millis(parse_pool_u64("ATM_PEER_POOL_IDLE_TIMEOUT_MS", value)?);
     }
+    Ok(())
+}
 
+fn apply_peer_pool_launch_overrides(
+    config: &mut PeerPoolConfig,
+    arguments: impl IntoIterator<Item = std::ffi::OsString>,
+) -> Result<(), AtmError> {
     let mut arguments = arguments.into_iter();
     let _program = arguments.next();
     let mut max_per_peer_seen = false;
     let mut max_total_seen = false;
     let mut idle_timeout_seen = false;
     while let Some(argument) = arguments.next() {
-        let argument = argument
-            .into_string()
-            .map_err(|_| AtmError::config("peer-pool launch arguments must be valid UTF-8"))?;
-        let (name, value) = if argument == "--peer-pool-max-per-peer" {
-            (
-                "--peer-pool-max-per-peer",
-                Some(next_pool_argument(&mut arguments, &argument)?),
-            )
-        } else if argument == "--peer-pool-max-pooled-total" {
-            (
-                "--peer-pool-max-pooled-total",
-                Some(next_pool_argument(&mut arguments, &argument)?),
-            )
-        } else if argument == "--peer-pool-idle-timeout-ms" {
-            (
-                "--peer-pool-idle-timeout-ms",
-                Some(next_pool_argument(&mut arguments, &argument)?),
-            )
-        } else if let Some(value) = argument.strip_prefix("--peer-pool-max-per-peer=") {
-            (
-                "--peer-pool-max-per-peer",
-                Some(std::ffi::OsString::from(value)),
-            )
-        } else if let Some(value) = argument.strip_prefix("--peer-pool-max-pooled-total=") {
-            (
-                "--peer-pool-max-pooled-total",
-                Some(std::ffi::OsString::from(value)),
-            )
-        } else if let Some(value) = argument.strip_prefix("--peer-pool-idle-timeout-ms=") {
-            (
-                "--peer-pool-idle-timeout-ms",
-                Some(std::ffi::OsString::from(value)),
-            )
-        } else {
+        let Some((name, value)) = peer_pool_launch_argument(&mut arguments, argument)? else {
             continue;
         };
-        let value = value.expect("all selected peer-pool flags have a value");
         match name {
             "--peer-pool-max-per-peer" => {
                 if max_per_peer_seen {
@@ -290,8 +272,54 @@ fn parse_peer_pool_config_with_environment(
             _ => unreachable!("selected flag name is exhaustive"),
         }
     }
-    config.validate()?;
-    Ok(config)
+    Ok(())
+}
+
+fn peer_pool_launch_argument(
+    arguments: &mut impl Iterator<Item = std::ffi::OsString>,
+    argument: std::ffi::OsString,
+) -> Result<Option<(&'static str, std::ffi::OsString)>, AtmError> {
+    let argument = argument
+        .into_string()
+        .map_err(|_| AtmError::config("peer-pool launch arguments must be valid UTF-8"))?;
+    let selected = match argument.as_str() {
+        "--peer-pool-max-per-peer" => Some((
+            "--peer-pool-max-per-peer",
+            next_pool_argument(arguments, &argument)?,
+        )),
+        "--peer-pool-max-pooled-total" => Some((
+            "--peer-pool-max-pooled-total",
+            next_pool_argument(arguments, &argument)?,
+        )),
+        "--peer-pool-idle-timeout-ms" => Some((
+            "--peer-pool-idle-timeout-ms",
+            next_pool_argument(arguments, &argument)?,
+        )),
+        _ => argument
+            .strip_prefix("--peer-pool-max-per-peer=")
+            .map(|value| ("--peer-pool-max-per-peer", std::ffi::OsString::from(value)))
+            .or_else(|| {
+                argument
+                    .strip_prefix("--peer-pool-max-pooled-total=")
+                    .map(|value| {
+                        (
+                            "--peer-pool-max-pooled-total",
+                            std::ffi::OsString::from(value),
+                        )
+                    })
+            })
+            .or_else(|| {
+                argument
+                    .strip_prefix("--peer-pool-idle-timeout-ms=")
+                    .map(|value| {
+                        (
+                            "--peer-pool-idle-timeout-ms",
+                            std::ffi::OsString::from(value),
+                        )
+                    })
+            }),
+    };
+    Ok(selected)
 }
 
 fn next_pool_argument(
@@ -625,13 +653,7 @@ async fn run_replacement_daemon_with_selector(
     let runtime_health = RuntimeHealth::with_owner(std::process::id());
     let assembly = assemble_daemon_runtime()?;
     let workflow_telemetry = assembly.workflow_telemetry.clone();
-    let peer_stream_adapter = peer_stream_adapter_for_mode(peer_wire_mode, || {
-        Ok(Arc::new(BootstrapMtlsStreamAdapter {
-            adapter: Arc::new(MtlsPeerStreamAdapter::from_peer_config(
-                assembly.peer_config_store.as_ref(),
-            )?),
-        }) as Arc<dyn PeerStreamAdapter>)
-    })?;
+    let peer_stream_adapter = bootstrap_peer_stream_adapter(&assembly, peer_wire_mode)?;
     // The shipped daemon always keeps the injected receiver hook active.
     // Benchmark-only selection is available only from the separate binary.
     let handler = build_replacement_handler(
@@ -668,11 +690,7 @@ async fn run_replacement_daemon_with_selector(
     if let Err(error) = emit_ready_signal_if_requested() {
         // The process has not advertised readiness, so it must not retain an
         // otherwise-live listener when its supervisor handshake fails.
-        let _ = running.begin_shutdown().finish().await;
-        handler
-            .shutdown_peer_connections(REPLACEMENT_DRAIN_DEADLINE)
-            .await;
-        workflow_telemetry.shutdown().await;
+        let _ = shutdown_replacement_daemon(running, handler.as_ref(), workflow_telemetry).await;
         return Err(error);
     }
     tokio::select! {
@@ -682,20 +700,40 @@ async fn run_replacement_daemon_with_selector(
         }
         _ = running.wait_for_server_stop() => {
             eprintln!("replacement ATM HTTP runtime server stopped unexpectedly; beginning cleanup");
-            let stopped = running.begin_shutdown().finish().await;
-            handler
-                .shutdown_peer_connections(REPLACEMENT_DRAIN_DEADLINE)
-                .await;
-            let result = match stopped {
+            let result = match shutdown_replacement_daemon(running, handler.as_ref(), workflow_telemetry).await {
                 Ok(_) => Err(AtmError::daemon_unavailable(
                     "replacement HTTP runtime server stopped unexpectedly",
                 )),
                 Err(error) => Err(error),
             };
-            workflow_telemetry.shutdown().await;
             return result;
         }
     }
+    shutdown_replacement_daemon(running, handler.as_ref(), workflow_telemetry).await
+}
+
+fn bootstrap_peer_stream_adapter(
+    assembly: &RuntimeAssembly,
+    peer_wire_mode: PeerWireMode,
+) -> Result<Option<Arc<dyn PeerStreamAdapter>>, AtmError> {
+    peer_stream_adapter_for_mode(peer_wire_mode, || {
+        Ok(Arc::new(BootstrapMtlsStreamAdapter {
+            adapter: Arc::new(MtlsPeerStreamAdapter::from_peer_config(
+                assembly.peer_config_store.as_ref(),
+            )?),
+        }) as Arc<dyn PeerStreamAdapter>)
+    })
+}
+
+/// Drain the Axum runtime before releasing outbound peer drivers and the
+/// best-effort workflow telemetry worker. Every terminal daemon path uses the
+/// same sequence so a failed ready handshake cannot leave either subsystem
+/// alive after the listener is gone.
+async fn shutdown_replacement_daemon(
+    running: atm_http_runtime::HttpRuntime<atm_http_runtime::Running>,
+    handler: &StorageAndNudgeRouter,
+    workflow_telemetry: atm_runtime::WorkflowTelemetryRuntime,
+) -> Result<(), AtmError> {
     let stopped = running.begin_shutdown().finish().await;
     handler
         .shutdown_peer_connections(REPLACEMENT_DRAIN_DEADLINE)
