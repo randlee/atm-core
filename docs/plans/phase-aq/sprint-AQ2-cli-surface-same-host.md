@@ -26,9 +26,13 @@ the daemon carries only ordinary messages.
 2. **`atm send --attach <path>...`** (repeatable): same-host recipients →
    copy into `send_to_staging_dir()` (AQ1) under the local `$ATM_TEMP`;
    remote recipients → resolve `~/.atm/transfer/<host>` and invoke it per
-   the AQ1 decision-(c) contract, grouping recipients by host (one transfer
-   per destination host per invocation). Missing/unreadable source path →
-   hard error before any staging or send.
+   the AQ1 decision-(c) contract — argv-array exec, bounded deadline with
+   child kill on expiry, capped stdout/stderr, single-line absolute-path
+   stdout validation — grouping recipients by host (one transfer per
+   destination host per invocation), transfers executed **sequentially per
+   host** (bounded, no unbounded concurrent child processes from one
+   fan-out). Missing/unreadable source path → hard error before any staging
+   or send.
 3. **Transfer failure semantics (R3/R5/R13)**: a missing transfer script
    yields the canonical AQ1 error verbatim (`File transfer to <host> not
    enabled. Read docs/cross-host-file-transfer.md …`); a failing script's

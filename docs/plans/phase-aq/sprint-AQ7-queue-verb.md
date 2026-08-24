@@ -9,9 +9,13 @@ is deferred until the recipient harness is ready (AQ8 drains it). The
 message itself is written durably and immediately through the unchanged
 canonical path — there is no separate queue store to lose.
 
-Verified baseline (integrate/phase-ao2): the nudge fires synchronously
-immediately post-persistence in `storage_and_nudge_router.rs:556-561`
-(`emit_received_hook` after `commit_write`); **no deferral surface exists**.
+Verified baseline (integrate/phase-ao2): the steer nudge fires synchronously
+immediately post-persistence — `emit_received_hook` call site at
+`storage_and_nudge_router.rs:538` (definition at :234), guarded only by
+`if committed.newly_persisted`, and that single-call-site property is
+mechanically pinned by
+`atm-architecture/tests/boundary_enforcement.rs::al3_received_hook_is_single_receiver_side_path_without_detached_work`;
+**no deferral surface exists**.
 `mail_message_states` has an `ensure_column` migration pattern
 (`shared_db.rs:888-935`). The queue channel is defined in **hermes-atm**
 (M5 side, wrapping atm-graft): Hermes exposes `/steer` (immediate
@@ -33,13 +37,22 @@ is on the atm-core side of the graft boundary.
    The recipient's pending FIFO is **derived**: unread rows with
    `nudge_pending_at NOT NULL`, ordered by message ULID — restart-safe by
    construction, no in-memory truth.
-3. **Steer-nudge suppression**: the post-write hook path skips the
-   **immediate steer-shaped** notification for queued messages — the tmux
-   send-keys nudge and the graft steer-channel emission (one guarded branch
-   at the existing `emit_received_hook` call site; delivery/persistence
-   unchanged). This suppression explicitly does NOT cover deliverable 4's
-   graft queue-channel handoff, which is a separate, allowed write-time
-   action.
+3. **Steer-nudge suppression — upstream seam, NOT the router call site**:
+   the queued-vs-immediate decision is caller-owned state-machine logic per
+   ADR-019 and is implemented inside
+   `PreparedWrite::build_received_hook_dispatches`
+   (`crates/atm-core/src/send/mod.rs:391-417`), which already returns
+   `Ok(Vec::new())` for its no-dispatch case — a `NudgeMode::Deferred`
+   write simply omits the steer-shaped dispatch (tmux send-keys / graft
+   steer-channel) from the returned dispatch set. The
+   `storage_and_nudge_router.rs` `emit_received_hook` call site, its
+   `if committed.newly_persisted` guard, the `al3_*` architecture test, and
+   `boundaries/atm-http-runtime/http-runtime.toml`'s unconditional
+   post-write hook invariant are all **untouched** — the emitter still runs
+   unconditionally; it just receives no steer dispatch for a deferred
+   write. This suppression explicitly does NOT cover deliverable 4's graft
+   queue-channel handoff, which is a separate, allowed write-time dispatch
+   produced by the same seam.
 3a. **Read-path marker clear**: the existing read-state transition (the
    code path that sets `mail_message_states.read = 1` when a message is
    read via `atm read`/the read surface) additionally clears
@@ -60,11 +73,54 @@ is on the atm-core side of the graft boundary.
    the exact channel contract with team-lead@atm-dev on M5 (frame any
    needed surface as an atm-graft API addition per standing practice).
 
+5. **ADR-055 conformance**: every mechanism in this sprint implements
+   AQ9's ADR-055 exactly as recorded — taxonomy (a), pending-marker
+   semantics (b), suppression seam (c), `PendingNudgeStore` governance (d),
+   dual-channel contract and handoff failure policy (f). AQ7 re-opens none
+   of them; deviations require an ADR change.
+6. **`PendingNudgeStore` storage capability** (authorized by ADR-055 (d)) (owned by `atm-storage`): the
+   queue's three storage operations go through one narrow trait — never raw
+   SQL above the backend crate (`no_backend_specific_message_contract`
+   gate). Ships with the ADR-018 §3 follow-up amendment naming it as the
+   newly authorized optional capability trait, a
+   `boundaries/atm-storage/pending-nudge-store.toml` record, an
+   `atm-architecture` boundary test, and `boundary-guard` review as a merge
+   precondition (the `message-store.toml` closed contract list is
+   unaffected — this is a separate capability, not a `MessageStore`
+   widening).
+7. **Observability + handoff failure policy**: the suppression decision and
+   the graft queue-channel handoff each emit a structured event with the
+   mandatory `subsystem`/`action`/`outcome` fields plus `{member, msg_id}`.
+   On queue-channel handoff **failure**, `nudge_pending_at` stays set (so
+   recovery/retry can act), a structured failure event is emitted, and a
+   cumulative failed-handoff counter appears on the health report
+   (`queue_full_drops_total` precedent) — a queued graft message never
+   silently loses its nudge.
+
 ## Normative contract
 
 ```rust
-/// Shared by send/queue: the only behavioral fork.
+/// Shared by send/queue: the only behavioral fork. Lives in atm-core::send
+/// alongside WriteRequest (caller-owned decision, ADR-019).
 pub enum NudgeMode { Immediate, Deferred }
+
+/// The ADR-018 §3-authorized storage capability behind the queue (owned by
+/// atm-storage; fixed/internal implementation set, ADR-001 sealed-supertrait
+/// pattern; sync methods by the same recorded exception as AQ1's traits —
+/// async callers use spawn_blocking).
+pub trait PendingNudgeStore {
+    /// Oldest unread pending message for the member, ULID order.
+    fn next_pending(&self, member: &MemberKey)
+        -> Result<Option<AtmMessageId>, StorageError>;
+    /// Atomic claim: clears nudge_pending_at iff still set and unread;
+    /// returns true iff this caller won the claim. THE at-most-once
+    /// mechanism (single conditional UPDATE … RETURNING).
+    fn claim_pending(&self, member: &MemberKey, msg: &AtmMessageId)
+        -> Result<bool, StorageError>;
+    /// Read-path clear (same state update that sets read = 1).
+    fn clear_pending_on_read(&self, member: &MemberKey, msg: &AtmMessageId)
+        -> Result<(), StorageError>;
+}
 ```
 
 Queue rows: `nudge_pending_at` is an ISO timestamp (set = deferred nudge
@@ -120,6 +176,6 @@ None. `atm send` immediate behavior is unchanged.
 
 ## Dependencies
 
-- must_follow: AQ2 (shares the send/staging surface) — merge-forward before
-  every dev/fix round.
+- must_follow: AQ2 (shares the send/staging surface) and AQ9 (taxonomy,
+  ADR-055, kind-aware dispatch) — merge-forward before every dev/fix round.
 - parallel_safe: AQ3, AQ4, AQ5 (disjoint); AQ8 must_follow AQ7.

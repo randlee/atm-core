@@ -20,24 +20,37 @@ ActiveToolUse→Active, Idle→Idle, SessionEnded→Offline.
 
 1. **Idle-transition hook**: `RuntimeHealth.record_heartbeat()` gains a
    transition notification (callback/channel registered by the runtime) that
-   fires when a member's state changes to `Idle`. In-memory, best-effort —
-   correctness never depends on it (see deliverable 3).
-2. **Drain step**: on an idle transition for member M, **atomically claim**
-   M's oldest unread message with `nudge_pending_at NOT NULL` (ULID order —
-   AQ7's derived FIFO) via a single conditional
-   `UPDATE … SET nudge_pending_at = NULL WHERE … RETURNING message_key`
-   (or equivalent row-guarded operation); only the caller whose claim
-   succeeds fires the ordinary received-hook nudge for that message-id via
-   the existing `MessageReceivedHookSelector` path. The claim operation is
-   THE at-most-once mechanism and is shared verbatim by the transition hook
-   and the recovery sweep — neither path reads-then-clears in two steps.
-   **One message per transition.** Already-read rows are skipped (their
-   markers were cleared by AQ7's read hook).
+   fires when a member's state changes to `Idle`. Execution contract:
+   `on_transition` fires **strictly after `record_heartbeat` releases its
+   mutex** — never inside the critical section its module doc scopes to
+   in-memory status fields — and the storage claim it triggers runs under
+   `spawn_blocking`/a bounded blocking pool (AQ4's rail), never inline on
+   the async task that handled the heartbeat. `RuntimeHealth`'s module doc
+   comment is updated to acknowledge the sink (best-effort,
+   non-authoritative — the recovery sweep is the correctness backstop), and
+   `MemberStateTransitionSink` gets a boundary record under
+   `boundaries/atm-http-runtime/` (crate placement: alongside
+   `RuntimeHealth`; fixed/internal implementation set — one production impl
+   plus test doubles, ADR-001 sealed-supertrait pattern, not a plugin
+   extension point). In-memory, best-effort — correctness never depends on
+   it (see deliverable 3).
+2. **Drain step**: on an idle transition for member M, call AQ7's
+   `PendingNudgeStore::next_pending` + `claim_pending` — the atomic
+   conditional-UPDATE claim inside the storage backend is THE at-most-once
+   mechanism, shared verbatim by the transition hook and the recovery sweep
+   (neither path reads-then-clears in two steps, and no SQL appears above
+   the backend crate). Only the caller whose claim succeeds fires the
+   ordinary received-hook steer delivery for that message-id via the
+   existing `MessageReceivedHookSelector` path. **One message per
+   transition.** Already-read rows are skipped (their markers were cleared
+   by AQ7's read-path hook).
 3. **Recovery sweep**: a low-frequency periodic pass (piggybacking the AQ4
    maintenance cadence pattern) performs the same drain check for members
    currently `Idle` whose pending FIFO is non-empty — covering daemon
    restarts (in-memory `RuntimeHealth` resets) and missed transitions. Same
-   one-per-member-per-pass bound.
+   one-per-member-per-pass bound. Daemon shutdown cancels and joins the
+   recovery-sweep task within the daemon deadline (mirroring AQ4) — an
+   in-progress claim/nudge attempt never outlives daemon teardown.
 4. **Observability**: structured event per drained nudge `{member, msg_id}`
    plus mandatory `subsystem`/`action`/`outcome` fields, and a cumulative
    drained-nudge counter on the health report (`queue_full_drops_total`
@@ -74,6 +87,8 @@ the same outcome as an ignored immediate nudge today).
    exactly one nudge and one clear (atomic-claim test exercising both
    triggers simultaneously).
 4. No transition, no sweep tick → no nudge (deferral actually defers).
+4a. Shutdown mid-pass: the recovery-sweep task cancels and joins within the
+   daemon deadline (test mirrors AQ4's shutdown AC).
 5. Graft recipients are never drained: the deferred queue is exclusively a
    tmux received-hook concern (AQ7 routes graft queued nudges on the graft
    queue channel; the harness integration owns delivery).
@@ -97,8 +112,9 @@ None.
 
 ## Dependencies
 
-- must_follow: AQ7 (consumes the pending marker and suppression) —
-  merge-forward before every dev/fix round.
+- must_follow: AQ7 (consumes the pending marker and suppression; AQ9's
+  ADR-055 and kind-aware dispatch arrive transitively) — merge-forward
+  before every dev/fix round.
 - parallel_safe: AQ3, AQ5 (disjoint). AQ4 parallel_safe (both touch daemon
   periodic tasks but own separate tasks; AQ8's sweep reuses the cadence
   pattern, not AQ4's code).

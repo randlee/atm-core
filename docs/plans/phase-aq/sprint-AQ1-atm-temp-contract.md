@@ -44,8 +44,20 @@ the product's job is a clean seam and an actionable failure message.
    at `~/.atm/transfer/<host>` (`.ps1` on Windows). Invocation contract:
    `<script> <host> <transfer-id> <file>...`; on success prints the landed
    destination directory (absolute path on the destination, conventionally
-   `$ATM_TEMP/send-to/<transfer-id>/`) to stdout; nonzero exit means the
-   transfer failed and stderr is propagated to the user verbatim. A missing
+   `$ATM_TEMP/send-to/<transfer-id>/`) as a **single line** on stdout;
+   nonzero exit means the transfer failed and stderr is propagated to the
+   user (bounded — see below). Hardening is part of this decision: the
+   script is invoked via **direct process exec with an argv array**
+   (`Command::new(script).args(...)`) — never a shell-interpolated string,
+   so file paths and note text cannot be reinterpreted; a **bounded
+   execution deadline** applies (default 60 s, configurable), on expiry the
+   child is killed and the invocation is an ordinary transfer failure;
+   captured stdout/stderr are **size-capped** (documented cap, truncated
+   with a marker on overflow); and the stdout landed-dir string is
+   **validated as untrusted input** before use — exactly one line, absolute
+   path, no control characters — rejection is a transfer failure. The same
+   untrusted-data stance R8 applies to file contents applies to this
+   metadata channel. A missing
    script produces the canonical error, exactly:
    `File transfer to <host> not enabled. Read
    docs/cross-host-file-transfer.md to set up cross-host file transfer.`
@@ -93,9 +105,28 @@ pub fn send_to_staging_dir(atm_temp: &AtmTemp, transfer_id: &Ulid) -> PathBuf;
 // = $ATM_TEMP/send-to/<transfer-id>/
 ```
 
-`AtmTempError` inventory (variants normative): `Unset`, `NotAbsolute`,
-`Unresolvable` (canonicalization failure), `NotWritable` — each with the
-actionable recovery text from decision (a).
+```rust
+/// Read seam for environment access (fixed/internal implementation set —
+/// one production impl + test doubles; ADR-001 sealed-supertrait pattern;
+/// trivially object-safe).
+pub trait EnvSource {
+    fn var(&self, key: &str) -> Option<String>;
+}
+```
+
+`AtmTempError` inventory (variants and recovery normative):
+
+| Variant | Cause | Recovery |
+|---|---|---|
+| `Unset` | `ATM_TEMP` not set | `export ATM_TEMP=<absolute path>`; see `docs/cross-host-file-transfer.md` / the ADR-054 doc |
+| `NotAbsolute` | value is a relative path | use an absolute path |
+| `Unresolvable` | canonicalization failed | check for broken symlinks / missing parent directories |
+| `NotWritable` | directory not writable/creatable | fix permissions or choose a writable directory |
+
+Trait scoping note (applies phase-wide): `EnvSource`, `RosterStore` (AQ2),
+`MemberStateTransitionSink` (AQ8), and `PendingNudgeStore` (AQ7) are all
+fixed/internal implementation sets — not plugin extension points — adopting
+the ADR-001 sealed-supertrait pattern.
 
 Transfer-script resolution and the canonical not-enabled error are CLI-side
 (AQ2) behavior specified by decision (c); no daemon code participates in
@@ -116,6 +147,12 @@ transfer.
    convention.
 4. `docs/cross-host-file-transfer.md` exists and contains the invocation
    contract and the canonical error text verbatim.
+4a. Single-owner mechanical gate: an `atm-architecture` boundary test
+   (precedent: `boundary_enforcement.rs`'s single-call-site assertion for
+   `emit_received_hook`) asserts exactly one construction site for the
+   `send_to_staging_dir()` convention and exactly one
+   member-address-resolver definition (`resolve_picker_recipient`, AQ2) —
+   enumerated in CI, not prose.
 5. Existing consumers compile and pass unchanged (`just test`).
 
 ## Paths to delete

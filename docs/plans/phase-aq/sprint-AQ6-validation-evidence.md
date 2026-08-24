@@ -30,7 +30,7 @@ requirement:
 
 ```text
 requirement | deliverable/sprint | command or live artifact | exact SHA | result | reviewer
-R1..R8,R13..R15 | AQ1..AQ5,AQ7,AQ8 | path + command        | 40-hex     | PASS/OPEN | name
+R1..R8,R13..R15 | AQ1..AQ5,AQ7..AQ9 | path + command       | 40-hex     | PASS/OPEN | name
 ```
 
 R9–R12 are Phase-2 requirements and must appear in the open-item register as
@@ -68,7 +68,7 @@ AQ4 residue proof.
 
 ## Dependencies
 
-- must_follow: AQ1–AQ5, AQ7, AQ8 all merged to `integrate/phase-aq`; merge-forward is
+- must_follow: AQ1–AQ5, AQ7, AQ8, AQ9 all merged to `integrate/phase-aq`; merge-forward is
   required before every evidence fix round so the matrix describes the actual
   integrated head.
 - parallel_safe: none — AQ6 consumes every public contract and owns the only

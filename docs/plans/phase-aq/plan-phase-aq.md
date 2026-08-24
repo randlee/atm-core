@@ -46,8 +46,9 @@ chat-window integration exists.
 | AQ4 | ATM_TEMP sweeper (TTL-only, 30 d) | must_follow AQ1 · parallel_safe AQ2, AQ3, AQ5 |
 | AQ5 | Wyvern picker + shell glue (macOS, Windows, Ubuntu) | must_follow AQ2 · parallel_safe AQ3, AQ4 |
 | AQ6 | Validation evidence | must_follow all |
-| AQ7 | `atm queue` verb: deferred-nudge send + pending-marker FIFO | must_follow AQ2 · parallel_safe AQ3, AQ4, AQ5 |
+| AQ7 | `atm queue` verb: deferred-nudge send + pending-marker FIFO | must_follow AQ2, AQ9 · parallel_safe AQ3, AQ4, AQ5 |
 | AQ8 | Idle-drain for deferred nudges (heartbeat transition + recovery sweep) | must_follow AQ7 · parallel_safe AQ3, AQ4, AQ5 |
+| AQ9 | Nudge taxonomy: ADR-055 + code refactor (steer/queue kinds, kind-aware dispatch, rename inventory) | must_follow AQ1 · parallel_safe AQ2, AQ3, AQ4, AQ5 |
 
 The table is an ownership map, not a second requirements list; each sprint
 doc's own Dependencies section is authoritative on any mismatch, and no
@@ -97,9 +98,17 @@ not re-litigate them:
 - The fleet has passwordless SSH configured peer-to-peer from this machine
   to all destinations (Rand, 2026-08-23) — the sftp example script's
   baseline assumption.
-- Nudges fire synchronously immediately post-persistence
-  (`storage_and_nudge_router.rs:556-561` → `MessageReceivedHookSelector` →
-  tmux send-keys or graft endpoint); **no deferral surface exists**. Member
+- Nudges (steer kind — today's only kind) fire synchronously immediately
+  post-persistence (`emit_received_hook` call site at
+  `storage_and_nudge_router.rs:538`, definition :234, pinned by the `al3_*`
+  architecture test → `MessageReceivedHookSelector` →
+  `TokioTmuxReceivedHook` send-keys or `PublishedGraftReceivedHook`
+  endpoint); **no deferral surface exists**. Terminology (Rand,
+  2026-08-23): *nudge* is the umbrella term; *steer* (immediate) and
+  *queue* (deferred) are its kinds — ADR-055 (AQ9) owns the taxonomy, the
+  code-rename inventory and compat policy (post_send_hooks config key and
+  NudgeTemplateOverrideStore cluster deliberately unrenamed), and repo docs
+  were swept for the taxonomy during planning on this branch. Member
   state arrives via `TeamMemberHeartbeatRequest`
   (`HeartbeatActivity: ActiveToolUse|Idle|SessionEnded`) into in-memory
   `RuntimeHealth` (polling-only; no transition events today).

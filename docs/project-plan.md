@@ -1345,10 +1345,17 @@ change, no daemon transfer machinery. ADR-054 defines the system-level
 `ATM_TEMP` contract (mandatory env var, 30-day TTL sweep) and the
 transfer-script seam; thin per-OS shell glue drives the pipeline
 `atm teams --json --members | <picker> | atm send --attach "$@" --from-json`.
-Six sprints: AQ1 ATM_TEMP contract+ADR-054, AQ2 CLI surface + staging/
-transfer invocation, AQ3 transfer example scripts + setup doc, AQ4 ATM_TEMP
-sweeper, AQ5 picker/shell glue (macOS, Windows, Ubuntu), AQ6 validation
-evidence. Branches `feature/aq-N-<slug>` off
+Phase 1 also delivers `atm queue` — `atm send` with the nudge deferred until
+the recipient harness is ready (nudge taxonomy: steer = immediate, queue =
+deferred; ADR-055) — via a `nudge_pending_at` marker, a `PendingNudgeStore`
+storage capability, graft dual-channel wiring (harness owns landing; Hermes
+`/steer`+`/queue` complete), and a tmux idle-drain, under the ADR-055 nudge
+taxonomy (nudge = umbrella; steer/queue = kinds) with its code-rename
+inventory. Nine sprints: AQ1
+ATM_TEMP contract+ADR-054, AQ2 CLI surface + staging/transfer invocation,
+AQ3 transfer example scripts + setup doc, AQ4 ATM_TEMP sweeper, AQ5
+picker/shell glue (macOS, Windows, Ubuntu), AQ6 validation evidence, AQ7
+`atm queue` verb, AQ8 idle-drain, AQ9 nudge-taxonomy ADR-055 + refactor. Branches `feature/aq-N-<slug>` off
 `integrate/phase-aq`, all PRs target `integrate/phase-aq`. The authoritative
 plan is [Phase AQ plan](./plans/phase-aq/plan-phase-aq.md); source PRD is
 [prd-atm-send-to](./plans/phase-aq/prd-atm-send-to.md). PRD Phase 2

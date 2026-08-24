@@ -1013,6 +1013,8 @@ Missing-team-config fallback is limited to `send`:
 
 ### 6.2 Queue Inspection Services
 
+('queue' here = the mailbox/query surface, unrelated to queue-kind nudges)
+
 Phase S.5 splits queue inspection into two command surfaces:
 
 - `atm list` finds messages through a bounded metadata query
@@ -1571,11 +1573,14 @@ contain:
 - optional `recipient_pane_id` when ATM already knows the authoritative pane
   mapping for the recipient
 
-The post-send hook runs only after a successful outbound mailbox write from
-`atm send` or `atm ack`. It executes once when recipient matching succeeds,
-uses `is_ack = false` for `atm send` and `is_ack = true` for `atm ack`, may
-optionally emit one structured stdout result for observability, and never rolls
-back a successful message write on failure or timeout.
+The post-send hook is the steer-nudge path: it runs only after a successful
+outbound mailbox write from `atm send` or `atm ack` — persist, then emit the
+steer nudge; queue-kind nudges defer emission until harness readiness
+(ADR-055), and neither kind ever precedes persistence. It executes once when
+recipient matching succeeds, uses `is_ack = false` for `atm send` and
+`is_ack = true` for `atm ack`, may optionally emit one structured stdout
+result for observability, and never rolls back a successful message write on
+failure or timeout.
 
 Hook configuration lookup note:
 - send/ack must resolve post-send hook configuration from the sender's
@@ -2708,14 +2713,24 @@ There are three distinct paths:
 
 ### 21.3.1 New-Message Failure Contract
 
+> **Nudge taxonomy (Phase AQ).** "nudge" is the umbrella term for any
+> post-delivery recipient notification. "steer" (steer nudge) is the
+> immediate kind, emitted right after durable persistence — this is the
+> only kind that existed before Phase AQ, so legacy text below that says
+> plain "nudge" for the immediate case means steer nudge. "queue" (queue
+> nudge) is the deferred kind, introduced by Phase AQ, delivered when the
+> recipient harness is ready. Persistence ordering is unchanged for both
+> kinds: neither kind ever precedes durable persistence.
+
 The accepted daemon + SQLite runtime keeps one direct post-persist rule for new
 messages.
 
 Architectural rules:
 
 - send success is durable ATM persistence
-- after persistence, ATM may emit one post-send effect when the recipient
-  exposes that capability
+- after persistence, ATM emits the steer nudge when the recipient exposes
+  that capability; queue-kind nudges defer emission until harness readiness
+  (ADR-055), and neither kind ever precedes persistence
 - the shipped default emitter path is the receiver-only
   `MessageReceivedHookEmitter` delivery path
 - the built-in renderer selects exactly one of six named template kinds:
@@ -2994,8 +3009,8 @@ Minimum method set:
 - return typed backpressure / unavailable results
 
 Current implementation note:
-- the historical `R.17` daemon-owned queued notifier worker was retired by
-  `AD.5`
+- the historical `R.17` daemon-owned queued notifier worker (retired internal
+  worker queue — unrelated to queue-kind nudges) was retired by `AD.5`
 - the accepted runtime must not require a daemon notification queue/worker just
   to append one post-send event or warning
 - if notification logging survives, it is a direct append at the event site
