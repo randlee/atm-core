@@ -1347,7 +1347,7 @@ transfer-script seam; thin per-OS shell glue drives the pipeline
 `atm teams --json --members | <picker> | atm send --attach "$@" --from-json`.
 Phase 1 also delivers `atm queue` — `atm send` with the nudge deferred until
 the recipient harness is ready (nudge taxonomy: steer = immediate, queue =
-deferred; ADR-055) — via a `nudge_pending_at` marker, a `PendingNudgeStore`
+deferred; ADR-054) — via a `nudge_pending_at` marker, a `PendingNudgeStore`
 storage capability, graft dual-channel wiring (harness owns landing; Hermes
 `/steer`+`/queue` complete), and a tmux idle-drain, under the ADR-054 nudge
 taxonomy (nudge = umbrella; steer/queue = kinds) with its code-rename

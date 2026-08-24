@@ -174,6 +174,9 @@ paths unchanged.
 
 - `just test` workspace + daemon integration suite + script harness,
   ubuntu/macOS/Windows; recorded same-host demo transcript committed.
+- Focused command tests for `atm teams --json --members` and
+  `atm send --from-json` are named in the PR and run **independently of
+  Wyvern and of any real SSH configuration** (stub scripts only) — R6.
 - ADR-055 quality-mgr sign-off on decisions (a)–(e).
 
 ## Non-closure / out of scope
