@@ -2,12 +2,19 @@
 #
 # Parameters: $SPRINT. A terminal triage:status excludes a finding in the
 # legacy origin-sprint mode. When $BRANCH is bound, the query instead uses
-# occurrence-level state: a finding is returned only when its own occurrence on
-# that branch is still open. This lets triage-report count downstream
-# promotions on their branch without keeping a closed origin sprint blocked.
-# Resolution events are honored in both modes. Results are ordered for dispatch
-# review: invalid severity first (fail closed), then Blocking, Important, and
-# Minor; ties use foundAt.
+# occurrence-level state exclusively: a finding is returned only when its own
+# occurrence on that branch is still open. This lets triage-report count
+# downstream promotions on their branch without keeping a closed origin sprint
+# blocked. The finding-level triage:status terminal check and any
+# triage:Resolution event are honored ONLY in legacy origin-sprint mode — in
+# branch-scoped mode they are ignored in favor of the branch occurrence's own
+# closed/status fields, which are the authoritative per-branch signal. This
+# was fixed 2026-08-24: a stale/incorrect Resolution event (or finding-level
+# status) previously suppressed a finding across every branch permanently,
+# even one where its occurrence was still genuinely open — see
+# AO212-MIGRATE-F001..F006. Results are ordered for dispatch review: invalid
+# severity first (fail closed), then Blocking, Important, and Minor; ties use
+# foundAt.
 
 PREFIX triage: <urn:atm:triage:>
 
@@ -39,12 +46,16 @@ SELECT ?finding ?findingId ?severity ?rawSeverity ?status ?foundAt ?description 
     })
   )
 
-  FILTER NOT EXISTS {
-    ?resolution a triage:Resolution ;
-                triage:resolves ?finding .
-  }
   FILTER (
-    !BOUND(?status)
+    BOUND(?BRANCH)
+    || NOT EXISTS {
+      ?resolution a triage:Resolution ;
+                  triage:resolves ?finding .
+    }
+  )
+  FILTER (
+    BOUND(?BRANCH)
+    || !BOUND(?status)
     || !(
       LCASE(STR(?status)) IN (
         "absent", "accepted", "closed", "dismissed", "false_positive",
