@@ -798,6 +798,110 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn overflow_drop_after_failed_exchange_closes_its_driver() {
+        let port = start_keep_alive_peer().await;
+        let pool = PeerConnectionPool::new(
+            PeerPoolConfig {
+                max_per_peer: 1,
+                max_pooled_total: 1,
+                ..PeerPoolConfig::default()
+            },
+            Arc::new(CountingPassthroughAdapter::default()),
+        );
+        let peer = "127.0.0.1".parse().expect("peer authority");
+        let retained = pool
+            .acquire(
+                &peer,
+                std::num::NonZeroU16::new(port).expect("non-zero test port"),
+                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
+            )
+            .await
+            .expect("first borrow reserves the only retained slot");
+        let mut overflow = pool
+            .acquire(
+                &peer,
+                std::num::NonZeroU16::new(port).expect("non-zero test port"),
+                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
+            )
+            .await
+            .expect("second borrow dials overflow connection");
+
+        let failure = overflow
+            .exchange(
+                atm_core::api::HttpRequest {
+                    method: "POST".to_owned(),
+                    path: "/v1/atm/messages".to_owned(),
+                    headers: vec!["malformed-header".to_owned()],
+                    body: Vec::new(),
+                },
+                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
+            )
+            .await
+            .expect_err("malformed request marks the overflow guard failed before write");
+        assert!(matches!(
+            failure,
+            super::HttpRuntimeClientFailure::RequestWrite(_)
+        ));
+
+        let completed_before_drop = pool.completed_driver_count();
+        drop(overflow);
+        assert_eq!(
+            pool.pooled_count(),
+            1,
+            "a failed overflow borrow never consumes the retained reservation"
+        );
+        assert_driver_completions(
+            &pool,
+            completed_before_drop + 1,
+            "failed overflow exchange drop",
+        )
+        .await;
+        drop(retained);
+        pool.shutdown(std::time::Duration::from_secs(1)).await;
+    }
+
+    #[tokio::test]
+    async fn overflow_drop_without_exchange_closes_its_driver() {
+        let port = start_keep_alive_peer().await;
+        let pool = PeerConnectionPool::new(
+            PeerPoolConfig {
+                max_per_peer: 1,
+                max_pooled_total: 1,
+                ..PeerPoolConfig::default()
+            },
+            Arc::new(CountingPassthroughAdapter::default()),
+        );
+        let peer = "127.0.0.1".parse().expect("peer authority");
+        let retained = pool
+            .acquire(
+                &peer,
+                std::num::NonZeroU16::new(port).expect("non-zero test port"),
+                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
+            )
+            .await
+            .expect("first borrow reserves the only retained slot");
+        let overflow = pool
+            .acquire(
+                &peer,
+                std::num::NonZeroU16::new(port).expect("non-zero test port"),
+                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
+            )
+            .await
+            .expect("second borrow dials overflow connection");
+
+        let completed_before_drop = pool.completed_driver_count();
+        drop(overflow);
+        assert_eq!(
+            pool.pooled_count(),
+            1,
+            "an unused overflow borrow never enters the retained pool"
+        );
+        assert_driver_completions(&pool, completed_before_drop + 1, "unused overflow drop").await;
+        drop(retained);
+        pool.shutdown(std::time::Duration::from_secs(1)).await;
+    }
+
+    #[tokio::test]
     async fn expired_idle_connection_is_evicted_and_redialed() {
         let port = start_keep_alive_peer().await;
         let adapter = std::sync::Arc::new(CountingPassthroughAdapter::default());
