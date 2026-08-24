@@ -26,13 +26,14 @@ use atm_core::send::SendRequest;
 use atm_core::types::{HostName, IsoTimestamp};
 use axum::body::Body;
 use http_body_util::BodyExt;
+use hyper::body::Incoming;
 use hyper::client::conn::http1;
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpStream;
 
 use reqwest::header::{HeaderName, HeaderValue};
 
-use crate::PeerStreamAdapter;
+use crate::{PeerConnectionPool, PeerStreamAdapter};
 
 /// Fixed plain-TCP port for direct peer writes.
 ///
@@ -139,10 +140,37 @@ pub fn direct_peer_tcp_client(
     port: NonZeroU16,
     request_timeout: Duration,
 ) -> Result<Arc<dyn DaemonApiClient + Send + Sync>, AtmError> {
+    direct_peer_tcp_client_with_shared_client(
+        host,
+        port,
+        request_timeout,
+        shared_direct_peer_client()?,
+    )
+}
+
+/// Builds the process-owned plaintext peer client. Cloning this handle is
+/// cheap and keeps reqwest's connection pool alive across canonical writes.
+pub fn shared_direct_peer_client() -> Result<reqwest::Client, AtmError> {
+    reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|source| {
+            AtmError::config("failed to build direct peer HTTP client").with_cause(source)
+        })
+}
+
+/// Builds one typed peer-write facade using the daemon-owned plaintext client.
+pub(crate) fn direct_peer_tcp_client_with_shared_client(
+    host: HostName,
+    port: NonZeroU16,
+    request_timeout: Duration,
+    client: reqwest::Client,
+) -> Result<Arc<dyn DaemonApiClient + Send + Sync>, AtmError> {
     Ok(Arc::new(direct_peer_write_client(
         host,
         port,
         request_timeout,
+        client,
     )?))
 }
 
@@ -166,17 +194,37 @@ pub fn peer_stream_write_client(
     Ok(Arc::new(PeerStreamWriteClient { client }))
 }
 
+/// Builds the typed peer-write client over the daemon-owned opaque-stream
+/// pool. The pool key is the configured host authority; TLS remains outside
+/// this crate behind the established-stream adapter seam.
+pub(crate) fn pooled_peer_stream_write_client(
+    host: HostName,
+    port: NonZeroU16,
+    request_timeout: Duration,
+    pool: PeerConnectionPool,
+) -> Result<Arc<dyn DaemonApiClient + Send + Sync>, AtmError> {
+    if request_timeout.is_zero() {
+        return Err(AtmError::config(
+            "direct peer HTTP client request timeout must be greater than zero",
+        ));
+    }
+    let connector = PooledPeerStreamConnector::new(host, port, pool);
+    let client = Arc::new(HttpRuntimeClient::new(Arc::new(connector), request_timeout));
+    Ok(Arc::new(PeerStreamWriteClient { client }))
+}
+
 pub(crate) fn direct_peer_write_client(
     host: HostName,
     port: NonZeroU16,
     request_timeout: Duration,
+    client: reqwest::Client,
 ) -> Result<DirectPeerWriteClient, AtmError> {
     if request_timeout.is_zero() {
         return Err(AtmError::config(
             "direct peer HTTP client request timeout must be greater than zero",
         ));
     }
-    let connector = DirectPeerTcpConnector::new(host, port)?;
+    let connector = DirectPeerTcpConnector::new(client, host, port);
     let client = Arc::new(HttpRuntimeClient::new(Arc::new(connector), request_timeout));
     Ok(DirectPeerWriteClient { client })
 }
@@ -264,6 +312,15 @@ struct PeerStreamConnector {
     adapter: Arc<dyn PeerStreamAdapter>,
 }
 
+/// Connector facade which keeps request translation and public error mapping
+/// in the existing shared `HttpRuntimeClient` boundary.
+struct PooledPeerStreamConnector {
+    authority: String,
+    host: HostName,
+    port: NonZeroU16,
+    pool: PeerConnectionPool,
+}
+
 /// Send-only peer adapter over the shared typed HTTP client.
 ///
 /// The client owns only sender-side provenance completion.  It never changes
@@ -278,14 +335,20 @@ pub(crate) struct DirectPeerWriteClient {
 
 /// Mirrors the direct peer's one-write provenance completion while replacing
 /// only connection establishment with the selected opaque stream adapter.
-struct PeerStreamWriteClient {
-    client: Arc<HttpRuntimeClient<PeerStreamConnector>>,
+struct PeerStreamWriteClient<Connector> {
+    client: Arc<HttpRuntimeClient<Connector>>,
 }
 
-impl boundary::sealed::Sealed for PeerStreamWriteClient {}
+impl<Connector> boundary::sealed::Sealed for PeerStreamWriteClient<Connector> where
+    Connector: Send + Sync
+{
+}
 
 #[async_trait]
-impl DaemonApiClient for PeerStreamWriteClient {
+impl<Connector> DaemonApiClient for PeerStreamWriteClient<Connector>
+where
+    Connector: HttpRuntimeConnector + 'static,
+{
     async fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
         let RequestEnvelope::Write(write) = request.into_inner() else {
             return Err(AtmError::validation(
@@ -369,21 +432,15 @@ impl DirectPeerWriteClient {
 }
 
 impl DirectPeerTcpConnector {
-    fn new(host: HostName, port: NonZeroU16) -> Result<Self, AtmError> {
-        let client = reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .map_err(|source| {
-                AtmError::config("failed to build direct peer HTTP client").with_cause(source)
-            })?;
-        Ok(Self {
+    fn new(client: reqwest::Client, host: HostName, port: NonZeroU16) -> Self {
+        Self {
             authority: if host.as_str().contains(':') {
                 format!("[{}]:{}", host.as_str(), port)
             } else {
                 format!("{}:{}", host.as_str(), port)
             },
             client,
-        })
+        }
     }
 }
 
@@ -399,6 +456,18 @@ impl PeerStreamConnector {
             host,
             port,
             adapter,
+        }
+    }
+}
+
+impl PooledPeerStreamConnector {
+    fn new(host: HostName, port: NonZeroU16, pool: PeerConnectionPool) -> Self {
+        let authority = direct_peer_authority(&host, port);
+        Self {
+            authority,
+            host,
+            port,
+            pool,
         }
     }
 }
@@ -478,7 +547,27 @@ impl HttpRuntimeConnector for PeerStreamConnector {
     }
 }
 
-async fn execute_opaque_peer_request(
+#[async_trait]
+impl HttpRuntimeConnector for PooledPeerStreamConnector {
+    fn connection_target(&self) -> String {
+        format!("direct peer `{}`", self.authority)
+    }
+
+    fn deadline_elapsed(&self) -> HttpRuntimeClientFailure {
+        peer_connect_deadline_failure(&self.authority, &self.connection_target())
+    }
+
+    async fn exchange(
+        &self,
+        request: HttpRequest,
+        deadline: RequestDeadline,
+    ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
+        let mut connection = self.pool.acquire(&self.host, self.port, deadline).await?;
+        connection.exchange(request, deadline).await
+    }
+}
+
+pub(crate) async fn execute_opaque_peer_request(
     stream: Box<dyn crate::AuthenticatedPeerStream>,
     request: HttpRequest,
     deadline: RequestDeadline,
@@ -491,6 +580,40 @@ async fn execute_opaque_peer_request(
             tracing::debug!(%error, "opaque peer HTTP client connection ended");
         }
     });
+    let request = build_opaque_peer_request(request)?;
+    let remaining = deadline
+        .remaining()
+        .ok_or(HttpRuntimeClientFailure::Cancelled)?;
+    let response = tokio::time::timeout(remaining, sender.send_request(request))
+        .await
+        .map_err(|_| HttpRuntimeClientFailure::Timeout)?
+        .map_err(|source| HttpRuntimeClientFailure::Connect(source.to_string()))?;
+    collect_opaque_peer_response(response).await
+}
+
+/// Executes one canonical HTTP request over an already-negotiated HTTP/1
+/// sender. This is the pooled counterpart to `execute_opaque_peer_request`:
+/// it deliberately reuses the exact request encoding and response decoding
+/// behavior while skipping only TCP/TLS and HTTP/1 establishment.
+pub(crate) async fn execute_opaque_peer_request_with_sender(
+    sender: &mut http1::SendRequest<Body>,
+    request: HttpRequest,
+    deadline: RequestDeadline,
+) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
+    let request = build_opaque_peer_request(request)?;
+    let remaining = deadline
+        .remaining()
+        .ok_or(HttpRuntimeClientFailure::Cancelled)?;
+    let response = tokio::time::timeout(remaining, sender.send_request(request))
+        .await
+        .map_err(|_| HttpRuntimeClientFailure::Timeout)?
+        .map_err(|source| HttpRuntimeClientFailure::Connect(source.to_string()))?;
+    collect_opaque_peer_response(response).await
+}
+
+fn build_opaque_peer_request(
+    request: HttpRequest,
+) -> Result<axum::http::Request<Body>, HttpRuntimeClientFailure> {
     let method: axum::http::Method = request.method.parse().map_err(|source| {
         HttpRuntimeClientFailure::RequestWrite(format!(
             "shared HTTP request has an invalid method `{}`: {source}",
@@ -518,18 +641,16 @@ async fn execute_opaque_peer_request(
         })?;
         builder = builder.header(name, value);
     }
-    let request = builder.body(Body::from(request.body)).map_err(|source| {
+    builder.body(Body::from(request.body)).map_err(|source| {
         HttpRuntimeClientFailure::RequestWrite(format!(
             "shared HTTP request could not be built for opaque peer stream: {source}"
         ))
-    })?;
-    let remaining = deadline
-        .remaining()
-        .ok_or(HttpRuntimeClientFailure::Cancelled)?;
-    let response = tokio::time::timeout(remaining, sender.send_request(request))
-        .await
-        .map_err(|_| HttpRuntimeClientFailure::Timeout)?
-        .map_err(|source| HttpRuntimeClientFailure::Connect(source.to_string()))?;
+    })
+}
+
+async fn collect_opaque_peer_response(
+    response: axum::http::Response<Incoming>,
+) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
     let (parts, body) = response.into_parts();
     let body = body
         .collect()
@@ -547,7 +668,7 @@ async fn execute_opaque_peer_request(
 /// Preserve the direct-peer authority when the shared HTTP exchange fails
 /// before a response.  A host-qualified recipient never uses the local daemon
 /// endpoint, so reporting this as local daemon unavailability is misleading.
-fn direct_peer_connection_failure(
+pub(crate) fn direct_peer_connection_failure(
     authority: &str,
     failure: HttpRuntimeClientFailure,
 ) -> HttpRuntimeClientFailure {
@@ -557,6 +678,26 @@ fn direct_peer_connection_failure(
             cause,
         },
         other => other,
+    }
+}
+
+pub(crate) fn direct_peer_authority(host: &HostName, port: NonZeroU16) -> String {
+    if host.as_str().contains(':') {
+        format!("[{}]:{}", host.as_str(), port)
+    } else {
+        format!("{}:{}", host.as_str(), port)
+    }
+}
+
+pub(crate) fn peer_connect_deadline_failure(
+    authority: &str,
+    connection_target: &str,
+) -> HttpRuntimeClientFailure {
+    HttpRuntimeClientFailure::PeerConnectTimeout {
+        target: authority.to_owned(),
+        cause: format!(
+            "{connection_target} did not resolve or establish a connection before the configured request deadline"
+        ),
     }
 }
 
@@ -939,6 +1080,7 @@ where
 mod tests {
     use std::collections::VecDeque;
     use std::num::NonZeroU16;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
@@ -949,10 +1091,16 @@ mod tests {
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendRequest};
     use atm_core::test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
     use atm_core::types::{AgentName, CommandAction, TeamName};
+    use axum::Router;
+    use axum::http::StatusCode;
+    use axum::routing::post;
+    use tokio::net::TcpListener;
+    use tokio::sync::watch;
 
     use super::{
         DirectPeerTcpConnector, HttpRuntimeClient, HttpRuntimeClientFailure, HttpRuntimeConnector,
         direct_peer_connection_failure, direct_peer_tcp_client, selected_write_transport,
+        shared_direct_peer_client,
     };
 
     struct LocalOnlyClient;
@@ -1067,6 +1215,67 @@ mod tests {
             .status(201)
             .body(serde_json::to_vec(&outcome).expect("encode outcome"))
             .expect("response")
+    }
+
+    async fn start_plaintext_peer_with_connection_counter() -> (u16, Arc<AtomicUsize>) {
+        let listener = TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .expect("plaintext peer listener binds");
+        let port = listener.local_addr().expect("listener address").port();
+        let accepted = Arc::new(AtomicUsize::new(0));
+        let accepted_for_task = Arc::clone(&accepted);
+        tokio::spawn(async move {
+            let router =
+                Router::new().route("/v1/atm/messages", post(|| async { StatusCode::CREATED }));
+            loop {
+                let (stream, _) = listener.accept().await.expect("plaintext peer accepts");
+                accepted_for_task.fetch_add(1, Ordering::SeqCst);
+                let router = router.clone();
+                let (shutdown_tx, shutdown_rx) = watch::channel(());
+                tokio::spawn(async move {
+                    let _shutdown_tx = shutdown_tx;
+                    let _ = crate::http1_server::serve_connection(
+                        hyper_util::rt::TokioIo::new(stream),
+                        router,
+                        Duration::from_secs(30),
+                        shutdown_rx,
+                    )
+                    .await;
+                });
+            }
+        });
+        (port, accepted)
+    }
+
+    #[tokio::test]
+    async fn shared_plaintext_client_reuses_the_daemon_lifetime_connection_pool() {
+        let (port, accepted) = start_plaintext_peer_with_connection_counter().await;
+        let connector = DirectPeerTcpConnector::new(
+            shared_direct_peer_client().expect("shared plaintext client"),
+            "127.0.0.1".parse().expect("peer host"),
+            NonZeroU16::new(port).expect("non-zero test port"),
+        );
+        let request = HttpRequest {
+            method: "POST".to_owned(),
+            path: "/v1/atm/messages".to_owned(),
+            headers: Vec::new(),
+            body: Vec::new(),
+        };
+        for _ in 0..3 {
+            let response = connector
+                .exchange(
+                    request.clone(),
+                    RequestDeadline::after(Duration::from_secs(1)),
+                )
+                .await
+                .expect("shared plaintext connection writes successfully");
+            assert_eq!(response.status(), StatusCode::CREATED);
+        }
+        assert_eq!(
+            accepted.load(Ordering::SeqCst),
+            1,
+            "one reqwest client keeps its established connection for sequential writes"
+        );
     }
 
     #[tokio::test]
@@ -1334,10 +1543,10 @@ mod tests {
     #[test]
     fn direct_peer_deadline_is_reported_as_a_connect_failure() {
         let connector = DirectPeerTcpConnector::new(
+            shared_direct_peer_client().expect("shared peer client"),
             "unresolvable.example".parse().expect("valid host syntax"),
             NonZeroU16::new(43_101).expect("non-zero port"),
-        )
-        .expect("direct peer connector");
+        );
         let error = connector.deadline_elapsed().into_atm_error();
 
         assert_eq!(error.code(), AtmErrorCode::RemoteDeliveryUnconfirmed);

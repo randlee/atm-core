@@ -27,6 +27,7 @@ use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::{WarningEntry, WriteOutcome, prepare_write_with_async_runtime};
 
 use crate::CanonicalWriteHandler;
+use crate::PeerConnectionPool;
 use crate::PeerStreamAdapter;
 use crate::RuntimeHealth;
 
@@ -101,6 +102,8 @@ pub struct StorageAndNudgeRouter {
     daemon_context: Option<atm_core::doctor::DoctorExecutionContext>,
     direct_peer_port: NonZeroU16,
     peer_stream_adapter: Option<Arc<dyn PeerStreamAdapter>>,
+    peer_connection_pool: Option<PeerConnectionPool>,
+    shared_direct_peer_client: Option<reqwest::Client>,
 }
 
 impl StorageAndNudgeRouter {
@@ -124,6 +127,8 @@ impl StorageAndNudgeRouter {
             daemon_context: None,
             direct_peer_port: crate::direct_peer_port(),
             peer_stream_adapter: None,
+            peer_connection_pool: None,
+            shared_direct_peer_client: None,
         }
     }
 
@@ -168,6 +173,33 @@ impl StorageAndNudgeRouter {
         self
     }
 
+    /// Installs the daemon-owned outbound pool paired with the selected
+    /// authenticated stream adapter. The pool is a transport implementation
+    /// detail; canonical request routing remains in this router.
+    #[must_use]
+    pub fn with_peer_connection_pool(mut self, pool: PeerConnectionPool) -> Self {
+        self.peer_connection_pool = Some(pool);
+        self
+    }
+
+    /// Injects the daemon-lifetime reqwest client for direct plaintext peers.
+    /// Clones share reqwest's built-in connection pool; this router never
+    /// creates a second plaintext pooling mechanism.
+    #[must_use]
+    pub fn with_shared_direct_peer_client(mut self, client: reqwest::Client) -> Self {
+        self.shared_direct_peer_client = Some(client);
+        self
+    }
+
+    /// Drains retained authenticated peer connections after HTTP request
+    /// admission has stopped. Individual request guards remain non-blocking
+    /// on drop; only this daemon lifecycle path awaits driver termination.
+    pub async fn shutdown_peer_connections(&self, deadline: std::time::Duration) {
+        if let Some(pool) = &self.peer_connection_pool {
+            pool.shutdown(deadline).await;
+        }
+    }
+
     async fn commit_write(
         &self,
         request: atm_core::send::WriteRequest,
@@ -201,7 +233,8 @@ impl StorageAndNudgeRouter {
     /// Delivers one locally admitted host-qualified write using the daemon's
     /// selected peer-wire mode. The record is already durable at this point;
     /// this method creates neither a second application route nor delivery
-    /// recovery state.
+    /// recovery state. Per ADR-053, connection reuse can redial only before
+    /// exchange; it never retries a request after handing it to the sender.
     async fn dispatch_resolved_peer_write(
         &self,
         request: &atm_core::send::WriteRequest,
@@ -218,18 +251,35 @@ impl StorageAndNudgeRouter {
                 "request deadline expired before cross-host acknowledgement delivery",
             )
         })?;
-        let client = match self.peer_stream_adapter.as_ref() {
-            Some(adapter) => crate::client::peer_stream_write_client(
+        let client = match (
+            self.peer_connection_pool.as_ref(),
+            self.peer_stream_adapter.as_ref(),
+        ) {
+            (Some(pool), Some(_)) => crate::client::pooled_peer_stream_write_client(
+                host.clone(),
+                self.direct_peer_port,
+                remaining,
+                pool.clone(),
+            )?,
+            (None, Some(adapter)) => crate::client::peer_stream_write_client(
                 host.clone(),
                 self.direct_peer_port,
                 remaining,
                 Arc::clone(adapter),
             )?,
-            None => crate::client::direct_peer_tcp_client(
-                host.clone(),
-                self.direct_peer_port,
-                remaining,
-            )?,
+            (_, None) => match self.shared_direct_peer_client.as_ref() {
+                Some(client) => crate::client::direct_peer_tcp_client_with_shared_client(
+                    host.clone(),
+                    self.direct_peer_port,
+                    remaining,
+                    client.clone(),
+                )?,
+                None => crate::client::direct_peer_tcp_client(
+                    host.clone(),
+                    self.direct_peer_port,
+                    remaining,
+                )?,
+            },
         };
         let request = request.clone().with_origin_metadata(message_id, timestamp);
         match client
