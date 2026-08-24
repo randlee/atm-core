@@ -406,7 +406,10 @@ def updated_baselines(reports_dir: Path, record: HistoricalRecord) -> BaselineSe
 
 
 def current_revision() -> str:
-    completed = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, check=True, capture_output=True, text=True)
+    completed = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True, capture_output=True, text=True,
+        encoding="utf-8", errors="replace",
+    )
     return completed.stdout.strip()
 
 

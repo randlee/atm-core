@@ -90,7 +90,7 @@ def compose(template: Path, variables: dict[str, Any], output: Path) -> None:
         completed = subprocess.run(
             ["sc-compose", "render", "--root", str(ROOT), "--file", str(template),
              "--var-file", str(variables_path), "--output", str(output)],
-            cwd=ROOT, capture_output=True, text=True, check=False,
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False,
         )
         if completed.returncode != 0:
             raise BenchmarkReportError(
@@ -409,7 +409,10 @@ def render_envelope(campaigns: Sequence[BenchmarkCampaign], report_root: Path = 
 
 
 def regenerate_index() -> None:
-    completed = subprocess.run(["just", "reports-index"], cwd=ROOT, capture_output=True, text=True, check=False)
+    completed = subprocess.run(
+        ["just", "reports-index"], cwd=ROOT, capture_output=True, text=True,
+        encoding="utf-8", errors="replace", check=False,
+    )
     if completed.returncode != 0:
         raise BenchmarkReportError(f"reports-index failed: {completed.stderr.strip() or completed.stdout.strip()}")
 
