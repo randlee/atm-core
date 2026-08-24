@@ -161,8 +161,9 @@ pub struct PooledPeerConnection {
 
 // Counter-lifetime invariant — EXHAUSTIVE, one rule set covering every
 // path (all counter ops under the slot-map mutex, never across .await).
-// A reservation is PER-CONNECTION-LIFETIME: it is taken exactly once,
-// released exactly once, and borrow cycles never touch it.
+// A reservation is taken exactly once and released exactly once over its
+// own lifetime — which may span more than one physical connection object
+// via redial-success — and borrow/reuse cycles never touch it.
 //
 //   Acquire path            | counter effect
 //   ------------------------|------------------------------------------
@@ -347,6 +348,7 @@ layered on top of, and never replaces, that config reuse.
 | 5 | quality-mgr gate round 2 (PR #1018) | `1be4a46b`+r4 fixes | FAIL — 1 Blocking (counter discipline contradictory: "Drop decrements on BOTH paths" vs one-time reservation — reuse cycles would monotonically drain the counter), 3 Important (pool-teardown driver drain untested; ADR deliverable had no AC; overflow-Drop-after-failure branch missing from AC #9), 3 minor | Fixed in round-5 commit: reservation defined as per-connection-lifetime (reuse-acquire touches no counter; Drop decrements only on actual close/discard; increments == decrements == 1 per lifetime; redial replaces under the same reservation); teardown drain semantics in contract + AC #9; new AC #10 ADR non-stub grep gate (benchmark gate → #11); AC #9 gains overflow-Drop-after-failure and N-cycle counter-drift test; DirectPeerTcpConnector signature spelled out; deliverables 2+4 declared one coordinated bootstrap edit. |
 | 6 | quality-mgr gate round 3 (PR #1018) | round-5 head | FAIL — 1 Blocking (third reservation-leak instance: redial-FAILURE path had no stated release; no guard exists so no Drop can decrement), 2 Important (overflow-Drop-with-no-exchange missing from AC #9; AC #10 ADR grep passable by boilerplate), 1 minor (QA rows out of order) | Fixed in round-6 commit, adopting quality-mgr's structural recommendation: counter-lifetime invariant rewritten ONCE as an exhaustive table covering all acquire paths (fresh/reuse/redial-success/redial-FAILURE/overflow) and all Drop paths, with a standing rule that future edits update the table rather than adding parallel rules; redial-failure release stated inside the redial-safety paragraph + counter test in AC #9; sixth AC #9 branch added; AC #10 gains a Consequences/Failure-modes substance floor with explicit quality-mgr sign-off; QA rows re-sorted. |
 | 7 | quality-mgr gate round 4 (PR #1018) | `e843a0efb` | FAIL — narrower: counter arithmetic verified sound; 1 Blocking (closing invariant said connection-scoped while the redial-success row makes reservations span connections), 2 Important (ConnectionOrigin comment and AC #5 restated table rules without deferring; GuardHealth variant set never shown), 1 minor (mutex guarantee only in preamble) | Fixed in round-7 commit: invariant reworded reservation-scoped with explicit redial-success backreference; both restatements now defer to the table; `GuardHealth { Unused, Healthy, Failed }` spelled out with per-variant Drop mapping; mutex exclusivity moved into the table's contract. |
+| 8 | quality-mgr gate round 5 (PR #1018) | `455d97d9a` | FAIL — one line: the table's preamble sentence still carried the connection-scoped wording round-7 fixed in the closing invariant | Fixed in round-8 commit: preamble reworded reservation-scoped, matching the closing sentence verbatim in meaning. |
 
 ## Dependencies
 
