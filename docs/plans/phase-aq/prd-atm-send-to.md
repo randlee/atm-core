@@ -215,7 +215,7 @@ same-host and cross-host paths.
 
 ## 7. Milestones
 
-1. **ADR-0xx `attachments`** — envelope field, pull semantics, lifecycle decision.
+1. **ADR-054 `attachments`** — envelope field, pull semantics, lifecycle decision.
 2. **`atm teams --json --members` + `atm send --attach --from-json`** — testable with `echo '{"recipients":[…]}' |`.
 3. **macOS Shortcuts prototype** using `osascript choose from list` — validates the workflow with zero UI work.
 4. **`pick-member.html` in Wyvern** — replace step 3's picker; measure latency.
