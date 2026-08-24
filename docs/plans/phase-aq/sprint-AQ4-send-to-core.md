@@ -165,8 +165,8 @@ fn resolve_picker_recipient(
    carries the stub's dir; multi-line/relative/control-char stdout →
    rejected as transfer failure.
 4. `--from-json` truth-table: valid multi-recipient → N messages;
-   empty/malformed/cancel → exit ≠ 0, zero staging, zero transfer
-   invocations. Legacy single-recipient `atm send <to> <msg>` preserves
+   empty/malformed/cancel/unrecognized `schema_version` → exit ≠ 0, zero
+   staging, zero transfer invocations. Legacy single-recipient `atm send <to> <msg>` preserves
    required positionals and existing diagnostics (captured from pre-sprint
    baseline).
 5. Projection fixture validates against PRD §4.2; `--from-json` resolves
