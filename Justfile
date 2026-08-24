@@ -216,7 +216,7 @@ benchmark *args:
     # Retain the complete campaign report even when a target fails; the runner
     # records the attempt before returning its non-zero status.
     {{python_cmd}} scripts/smoke/run_admission_capacity.py {{args}} || benchmark_status=$?
-    {{python_cmd}} scripts/smoke/benchmark_report.py --rebuild
+    {{python_cmd}} scripts/smoke/benchmark_report.py --rebuild || exit $?
     exit ${benchmark_status:-0}
 
 # Persist AI.40 benchmark JSON and render the aggregate public report.

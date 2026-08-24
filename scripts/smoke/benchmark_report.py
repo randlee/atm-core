@@ -20,9 +20,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.smoke.benchmark_schema import (
+    BenchmarkRunResult,
     BenchmarkSchemaError,
     BenchmarkSummary,
-    SUMMARY_SCHEMA_VERSION,
+    LEGACY_SUMMARY_SCHEMA_VERSION,
+    artifact_id as derive_artifact_id,
     compact_evidence,
 )
 
@@ -32,24 +34,18 @@ REPORT_NAME = "send-message-benchmark"
 REPORT_HTML = f"{REPORT_NAME}.html"
 REPORT_DIR = REPORTS_ROOT / REPORT_NAME
 HISTORICAL_IMPORTS_NAME = "historical-imports.json"
+BASELINES_FILENAME = "baselines.json"
 ENVELOPE_SCHEMA_VERSION = 1
-AI40_SCHEMA_VERSION = SUMMARY_SCHEMA_VERSION
+# AO2.10 introduces v4 emission.  This reader continues to accept v3
+# artifacts unchanged until AO2.12 performs the separately reviewed history
+# migration; reports must never require rewriting existing evidence in place.
+AI40_SCHEMA_VERSION = LEGACY_SUMMARY_SCHEMA_VERSION
 SUPPORTED_TRANSPORTS = frozenset({"uds", "tcp"})
 SUPPORTED_FRAMES = frozenset({1, 2, 4, 8, 16, 64})
-SAFE_LABEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
 CAMPAIGN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
-# AO2.8's approved M5 f8-v1 performance targets.  These are expectations,
-# not measurements from a comparison run, so reports must never call them a
-# baseline.  An empirical baseline needs its own raw artifact and provenance.
-TARGET_MSG_PER_SECOND = {
-    "sqlite": 45_000.0,
-    "uds": 24_000.0,
-    "tcp": 22_500.0,
-    "tcp-tls": 22_500.0,
-}
 TARGET_ORDER = ("sqlite", "uds", "tcp", "tcp-tls")
 
 
@@ -59,25 +55,6 @@ class BenchmarkReportError(ValueError):
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
-
-def parse_utc(value: Any, source: Path) -> str:
-    if not isinstance(value, str) or not value:
-        raise BenchmarkReportError(f"{source}: generated_at must be a non-empty UTC timestamp")
-    normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
-    try:
-        parsed = datetime.fromisoformat(normalized)
-    except ValueError as error:
-        raise BenchmarkReportError(f"{source}: generated_at is not ISO-8601") from error
-    if parsed.tzinfo is None or parsed.utcoffset() != timezone.utc.utcoffset(parsed):
-        raise BenchmarkReportError(f"{source}: generated_at must include UTC timezone")
-    return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-
-
-def safe_label(value: Any, field: str, source: Path) -> str:
-    if not isinstance(value, str) or not SAFE_LABEL.fullmatch(value):
-        raise BenchmarkReportError(f"{source}: {field} is not a safe opaque label")
-    return value
 
 
 def safe_artifact_id(value: str) -> str:
@@ -115,6 +92,28 @@ def migrate_result(payload: dict[str, Any], source: Path) -> dict[str, Any]:
 
 
 def validate_result(payload: dict[str, Any], source: Path) -> dict[str, Any]:
+    if payload.get("schema_version") == 4:
+        try:
+            result = BenchmarkRunResult.model_validate(payload).model_dump(mode="json")
+        except Exception as error:
+            raise BenchmarkReportError(f"{source}: invalid v4 benchmark result: {error}") from error
+        target = result["target"]
+        return {
+            **result,
+            # Rendering remains compatible while AO2.11 owns the presentation
+            # refactor; these are descriptive projections, never acceptance
+            # inputs.
+            "transport": "sqlite" if target == "sqlite" else ("uds" if target == "uds" else "tcp"),
+            "peer_wire_security": (
+                None if target == "sqlite" else ("plaintext-test" if target == "tcp" else "mutual-tls")
+            ),
+            "benchmark_target": target,
+            "passed": result["status"] == "PASS",
+            "host_os": result["os"],
+            "host_arch": "unknown",
+            "daemon_version": "recorded by binary hash",
+            "run_duration_s": 0.0,
+        }
     payload = migrate_result(payload, source)
     migration = payload.pop("migration", None)
     try:
@@ -148,6 +147,10 @@ def immutable_write(path: Path, content: str) -> bool:
 
 
 def result_id(result: dict[str, Any], _source: Path | None = None) -> str:
+    if result.get("schema_version") == 4:
+        return derive_artifact_id(
+            campaign_id=str(result["campaign_id"]), target=str(result["target"]),
+        )
     stamp = result["generated_at"].replace("-", "").replace(":", "").replace("T", "-").replace("Z", "")
     mode = result.get("peer_wire_security")
     mode_suffix = f"-{mode}" if mode is not None else ""
@@ -233,7 +236,11 @@ def evidence_records(report_dir: Path = REPORT_DIR) -> list[dict[str, Any]]:
         return records
     imported = historical_imports(report_dir)
     for path in sorted(report_dir.glob("*.json")):
-        if path.name.endswith(".envelope.json") or path.name == HISTORICAL_IMPORTS_NAME:
+        if (
+            path.name.endswith(".envelope.json")
+            or path.name.endswith(".campaign.json")
+            or path.name in {HISTORICAL_IMPORTS_NAME, BASELINES_FILENAME}
+        ):
             continue
         try:
             record = load_result(path)
@@ -336,7 +343,7 @@ def campaign_groups(records: Iterable[dict[str, Any]]) -> dict[str, list[dict[st
 
 
 def campaign_target_rows(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Return one revision-homogeneous four-target result/target/verdict table."""
+    """Return one revision-homogeneous table from immutable result snapshots."""
     records = list(records)
     revisions = {record.get("source_revision") for record in records}
     if len(revisions) > 1:
@@ -351,22 +358,22 @@ def campaign_target_rows(records: Iterable[dict[str, Any]]) -> list[dict[str, An
     rows: list[dict[str, Any]] = []
     for target in TARGET_ORDER:
         result = newest.get(target)
-        target_msg_per_second = TARGET_MSG_PER_SECOND[target]
         metrics = result.get("metrics") if result else None
         metric = metrics.get("admissions_per_second", {}) if isinstance(metrics, dict) else {}
         value = metric.get("p50") if isinstance(metric, dict) else None
-        accepted = metrics.get("accepted_count") if isinstance(metrics, dict) else None
-        requested = metrics.get("requested_count") if isinstance(metrics, dict) else None
+        baseline = result.get("baseline") if isinstance(result, dict) else None
+        floor = baseline.get("p50_floor") if isinstance(baseline, dict) else None
+        # v4 verdicts and floors are immutable result facts.  A report must
+        # not reinterpret history through whatever baseline file exists now.
         passed = (
-            isinstance(value, (int, float))
-            and isinstance(accepted, int)
-            and accepted == requested
-            and float(value) >= target_msg_per_second
+            result.get("status") == "PASS"
+            if isinstance(result, dict) and result.get("schema_version") == 4
+            else bool(result and result.get("passed"))
         )
         rows.append({
             "test": target,
             "result_msg_per_second": None if value is None else float(value),
-            "target_msg_per_second": target_msg_per_second,
+            "baseline_msg_per_second": float(floor) if isinstance(floor, (int, float)) else None,
             "passed": passed,
             "artifact_id": result_id(result) if result else None,
             "json_href": f"{result_id(result)}.json" if result else None,
@@ -465,17 +472,6 @@ def current_campaign_results(records: Iterable[dict[str, Any]]) -> list[dict[str
     ]
 
 
-def campaign_status(results: Iterable[dict[str, Any]]) -> str:
-    """Report PASS only for a complete, passing six-profile candidate."""
-    results = list(results)
-    if not results:
-        return "INFO"
-    if any(not result["passed"] for result in results):
-        return "FAIL"
-    frames = {result["frames_per_connection"] for result in results}
-    return "PASS" if frames == SUPPORTED_FRAMES else "INFO"
-
-
 def render_aggregate(records: Iterable[dict[str, Any]], report_root: Path = REPORTS_ROOT) -> Path:
     groups = campaign_groups(records)
     campaigns = []
@@ -542,6 +538,7 @@ def process(inputs: list[Path]) -> int:
                 # branch below before they enter this path.
                 artifact_id = result_id(result)
                 render_run(result, artifact_id)
+                immutable_write(REPORT_DIR / f"{artifact_id}.envelope.json", envelope_for(result))
             for identifier, campaign in campaign_groups(records).items():
                 render_campaign(identifier, campaign)
             render_aggregate(records)
