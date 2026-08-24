@@ -111,9 +111,14 @@ work and the false-stuck problem cannot arise.
    trade (staleness beats loss; the mail remains durably unread in the
    mailbox, visible to `atm read` and the operator).
    - **FIFO**: one bounded in-memory FIFO per bare-CLI (team, member).
-     Type: `BareCliFifo = Arc<Mutex<HashMap<MemberKey,
+     Type: `BareCliFifo = Arc<Mutex<HashMap<BareCliMemberKey,
      VecDeque<QueuedNudgeMessage>>>>` — a plain shared map, no new async
-     machinery. **Wiring (explicit, one interpretation)**: constructed
+     machinery. **Key type (explicit — `runtime_health::MemberKey` is
+     private to atm-http-runtime and stays that way)**: a new
+     `pub struct BareCliMemberKey { pub team: TeamName, pub member:
+     AgentName }` defined in **atm-core** beside `QueuedNudgeMessage`
+     (both crates already depend on atm-core; no visibility widening of
+     any existing type). **Wiring (explicit, one interpretation)**: constructed
      ONCE in atm-daemon-bootstrap's `run_replacement_daemon_with_selector`
      composition root (beside where `RuntimeHealth` is constructed today,
      `atm-daemon-bootstrap/src/lib.rs` ~:217) and cloned into BOTH
@@ -262,10 +267,14 @@ work and the false-stuck problem cannot arise.
        QueuePull(QueuePullTarget), // { team, member, kind, msg_id, body }
    }
 
+   // atm-core (beside QueuedNudgeMessage — NOT the private
+   // runtime_health::MemberKey, which is unchanged):
+   pub struct BareCliMemberKey { pub team: TeamName, pub member: AgentName }
+   pub type BareCliFifo =
+       Arc<Mutex<HashMap<BareCliMemberKey, VecDeque<QueuedNudgeMessage>>>>;
+
    // atm-daemon-bootstrap/src/received_hook_selector.rs (on top of
    // AQ2's merged changes — must_follow AQ2):
-   pub type BareCliFifo =
-       Arc<Mutex<HashMap<MemberKey, VecDeque<QueuedNudgeMessage>>>>;
 
    struct PullPendingReceivedHook { fifo: BareCliFifo, /* + store
        handle for clear_pending_on_handoff */ }
@@ -286,6 +295,14 @@ work and the false-stuck problem cannot arise.
    //   active_received_hook_selector(service_runtime, bare_cli_fifo)
    //   // selector_factory widens to
    //   //   FnOnce(LocalServiceRuntime, BareCliFifo) -> ...
+   //
+   // Benchmark harness (second real caller of the widened signature —
+   // received_hook_selector.rs ~:55, lib.rs ~:171, Justfile-wired):
+   //   benchmark_received_hook_selector's Active arm calls
+   //   active_received_hook_selector(service_runtime, Arc::default())
+   //   — an empty FIFO; bare-CLI delivery is intentionally outside
+   //   benchmark semantics (the benchmark roster has no bare-CLI
+   //   members), and the harness keeps compiling with no compat shim.
    ```
    - Extensibility (naming rule above): a future harness channel adds
      one classifier arm + one target variant + one emitter impl — no
