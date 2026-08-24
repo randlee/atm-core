@@ -106,9 +106,13 @@ class BenchmarkReportTests(unittest.TestCase):
     def test_rebuild_renders_panels_phases_index_and_is_byte_identical(self) -> None:
         # Filename order is deliberately newest, oldest, middle: rendering
         # must use the UTC values rather than filenames or Pacific dates.
-        first = campaign(datetime(2026, 8, 24, 7, tzinfo=UTC), identifier="20260824T070000Z-rand-m5")
-        second = campaign(datetime(2026, 8, 24, 8, tzinfo=UTC), identifier="20260824T080000Z-rand-m5")
-        third = campaign(datetime(2026, 8, 24, 9, tzinfo=UTC), identifier="20260824T090000Z-rand-m5")
+        # ``second`` and ``first`` share the Aug 23 Pacific calendar date,
+        # while their UTC dates differ.  Filename order deliberately puts the
+        # older record first, so a Pacific-date-only sort cannot satisfy the
+        # descending UTC order asserted below.
+        first = campaign(datetime(2026, 8, 24, 0, 30, tzinfo=UTC), identifier="z-later-utc")
+        second = campaign(datetime(2026, 8, 23, 23, 30, tzinfo=UTC), identifier="a-earlier-utc")
+        third = campaign(datetime(2026, 8, 24, 7, 1, tzinfo=UTC), identifier="m-latest-utc")
         with tempfile.TemporaryDirectory() as directory:
             root, report_dir = Path(directory), Path(directory) / "site/reports/send-message-benchmark"
             write_inputs(report_dir, [third, first, second])
@@ -124,8 +128,11 @@ class BenchmarkReportTests(unittest.TestCase):
             phase = (report_dir / "phase-ao2.html").read_text(encoding="utf-8")
             index = (report_dir / "index.html").read_text(encoding="utf-8")
             panel = (report_dir / f"{first.campaign_id}.xhtml").read_text(encoding="utf-8")
-        self.assertLess(phase.index(third.campaign_id), phase.index(second.campaign_id))
-        self.assertLess(phase.index(second.campaign_id), phase.index(first.campaign_id))
+        self.assertIn("Aug 23, 2026", REPORT.time_view(first.started_at)["text"])
+        self.assertIn("Aug 23, 2026", REPORT.time_view(second.started_at)["text"])
+        self.assertGreater(first.started_at, second.started_at)
+        self.assertLess(phase.index(third.campaign_id), phase.index(first.campaign_id))
+        self.assertLess(phase.index(first.campaign_id), phase.index(second.campaign_id))
         self.assertNotIn("<script src=", phase)
         for page in (panel, phase, index):
             self.assertEqual(page.count("<script"), 1)
