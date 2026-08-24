@@ -168,6 +168,15 @@ pub enum SweepPolicy { Ttl, OnAck, Both } // decision (d) selects the default
 
 // The single "is this content still referenced?" authority (decision (i));
 // AQ3's reuse path and AQ4's sweeper both call this — no second check.
+//
+// Deliberately SYNCHRONOUS (an explicit, stated exception to the
+// async-for-dyn-dispatch policy in deliverable 5): these are bounded
+// indexed lookups, not I/O-shaped operations. Async callers (AQ4's
+// run_attachment_sweeper Tokio task, AQ3's reuse path) MUST invoke them
+// via spawn_blocking / a bounded blocking pool — the same discipline AQ3
+// deliverable 6 mandates for hash/copy work — never inline on an async
+// worker. (ADR-036's AsyncMessageSearchStore precedent covers the
+// alternative; ADR-054 records this choice.)
 pub trait AttachmentReferenceCheck {
     fn is_referenced(&self, sha256: &AttachmentSha) -> Result<bool, StorageError>;
 }
