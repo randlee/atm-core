@@ -171,3 +171,4 @@ triage:r22 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AO212-M
 triage:r23 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AO212-MIGRATE-F004> ; triage:resolvedAt "2026-08-24T07:17:23Z"^^xsd:dateTime .
 triage:r24 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AO212-MIGRATE-F005> ; triage:resolvedAt "2026-08-24T07:17:23Z"^^xsd:dateTime .
 triage:r25 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AO212-MIGRATE-F006> ; triage:resolvedAt "2026-08-24T07:17:23Z"^^xsd:dateTime .
+triage:r26 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AO210-CONTRACT-F001> ; triage:resolvedAt "2026-08-23T20:50:00Z"^^xsd:dateTime .
