@@ -191,7 +191,8 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertIn("--seconds", run.call_args.args[0])
 
     def test_sqlite_probe_build_is_separate_from_the_released_daemon_pair(self):
-        probe = RUNNER.ROOT / "target" / "release" / "atm-daemon-benchmark"
+        suffix = ".exe" if os.name == "nt" else ""
+        probe = RUNNER.ROOT / "target" / "release" / f"atm-daemon-benchmark{suffix}"
         completed = subprocess.CompletedProcess(["cargo"], 0, "", "")
         with (
             mock.patch.object(RUNNER.Path, "is_file", side_effect=[False, True]),
