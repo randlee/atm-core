@@ -54,7 +54,15 @@ pub trait MemberStateTransitionSink: Send + Sync {
    graft-specific logic and calls no AQ2 code** — that is why AQ2/AQ3 stay
    parallel-safe — and a failed dispatch is requeued via
    `requeue_pending`, so retry bounds and the stuck flag are enforced by
-   AQ1's store, not here. This covers restarts (in-memory `RuntimeHealth`
+   AQ1's store, not here. **Viable-channel pre-check (AQ2.5 deliverable
+   4, contract recorded in both docs)**: before claiming for member M,
+   the sweep checks M's roster shape and claims **only** when M has a
+   channel the sweep can dispatch through (tmux `pane_id` or graft
+   root). Pull-designated members are drained by AQ2.5's Stop-hook path,
+   and no-channel members are skipped entirely — no claim, no dispatch
+   failure, no attempt increment — so a message pending for a
+   channel-less member stays claimable indefinitely instead of burning
+   ADR-054 (f)'s attempt budget into a false stuck flag. This covers restarts (in-memory `RuntimeHealth`
    resets), missed transitions, and failed graft handoffs by the same
    mechanism. One per member per pass. Daemon shutdown cancels and joins
    the task within the daemon deadline.
