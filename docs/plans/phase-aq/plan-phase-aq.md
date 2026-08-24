@@ -47,7 +47,11 @@ chat-window integration exists.
 | AQ5 | Wyvern picker + shell glue (macOS, Windows, Ubuntu) | must_follow AQ2 · parallel_safe AQ3, AQ4 |
 | AQ6 | Validation evidence | must_follow all |
 | AQ7 | `atm queue` verb: deferred-nudge send + pending-marker FIFO | must_follow AQ2 · parallel_safe AQ3, AQ4, AQ5 |
-| AQ8 | Idle-drain for deferred nudges (heartbeat transition + recovery sweep) | must_follow AQ7 · parallel_safe AQ3, AQ5 |
+| AQ8 | Idle-drain for deferred nudges (heartbeat transition + recovery sweep) | must_follow AQ7 · parallel_safe AQ3, AQ4, AQ5 |
+
+The table is an ownership map, not a second requirements list; each sprint
+doc's own Dependencies section is authoritative on any mismatch, and no
+later sprint may redefine an earlier contract.
 
 Branch pattern: `feature/aq-N-<slug>` off `integrate/phase-aq`, PR target
 `integrate/phase-aq`. Creating the `integrate/phase-aq` branch/worktree from

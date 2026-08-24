@@ -36,6 +36,13 @@ is on the atm-core side of the graft boundary.
 3. **Nudge suppression**: the post-write hook path skips the immediate
    `emit_received_hook` for queued messages (one guarded branch at the
    existing call site; delivery/persistence unchanged).
+3a. **Read-path marker clear**: the existing read-state transition (the
+   code path that sets `mail_message_states.read = 1` when a message is
+   read via `atm read`/the read surface) additionally clears
+   `nudge_pending_at` in the same state update — the concrete function is
+   identified in the PR the way deliverable 3 names its call site. This is
+   the build task behind the "reading clears the marker" invariant and
+   AC 3.
 4. **Graft dual-channel wiring**: atm-graft wires BOTH channels
    independently — immediate nudges on the existing steer-shaped channel,
    queued nudges on a distinct queue-shaped channel — and **where they land
@@ -60,6 +67,16 @@ Queue rows: `nudge_pending_at` is an ISO timestamp (set = deferred nudge
 outstanding). Invariants: a queued message is readable immediately (`atm
 read` does not wait for a nudge); reading a message clears its pending
 marker; markers survive daemon restart.
+
+**TTL interaction (decided — accepted risk, documented):** staged
+attachments for queued messages age under the same unconditional AQ1/AQ4
+30-day `$ATM_TEMP` sweep as everything else — deliberately no exemption for
+outstanding `nudge_pending_at` rows, because coupling the sweeper to message
+state is exactly the machinery this phase removed. A recipient drained
+toward a path the sweeper already reclaimed sees an ordinary
+missing-file situation, identical to any stale path reference; a message
+left unread for 30 days is abandoned by definition. Recorded in AQ6's
+open-item register with this rationale.
 
 ## Acceptance criteria
 

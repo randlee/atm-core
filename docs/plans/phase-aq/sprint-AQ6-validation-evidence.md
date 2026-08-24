@@ -19,7 +19,11 @@ the AN8/AN12 pattern.
 3. Residue check: after the scenario + a short-TTL sweep, `$ATM_TEMP`
    contains no expired entries (PRD §8 "nothing leaks").
 4. Open-item register: anything discovered but deferred (team addressing,
-   Share Extension, Phase 2) listed with a home.
+   Share Extension, Phase 2) listed with a home — including the accepted
+   queued-attachment/TTL interaction (AQ7 "TTL interaction"): attachments
+   for messages left unread past the 30-day sweep may be reclaimed before a
+   deferred nudge fires; accepted with rationale, no sweeper state
+   coupling.
 
 The evidence file is a versioned, reviewable table with one row per Phase-1
 requirement:

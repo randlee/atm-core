@@ -22,12 +22,17 @@ ActiveToolUse→Active, Idle→Idle, SessionEnded→Offline.
    transition notification (callback/channel registered by the runtime) that
    fires when a member's state changes to `Idle`. In-memory, best-effort —
    correctness never depends on it (see deliverable 3).
-2. **Drain step**: on an idle transition for member M, query M's oldest
-   unread message with `nudge_pending_at NOT NULL` (ULID order — AQ7's
-   derived FIFO); if one exists, fire the ordinary received-hook nudge for
-   exactly that message-id via the existing `MessageReceivedHookSelector`
-   path, and clear its `nudge_pending_at`. **One message per transition.**
-   Already-read rows are skipped (their markers were cleared by AQ7).
+2. **Drain step**: on an idle transition for member M, **atomically claim**
+   M's oldest unread message with `nudge_pending_at NOT NULL` (ULID order —
+   AQ7's derived FIFO) via a single conditional
+   `UPDATE … SET nudge_pending_at = NULL WHERE … RETURNING message_key`
+   (or equivalent row-guarded operation); only the caller whose claim
+   succeeds fires the ordinary received-hook nudge for that message-id via
+   the existing `MessageReceivedHookSelector` path. The claim operation is
+   THE at-most-once mechanism and is shared verbatim by the transition hook
+   and the recovery sweep — neither path reads-then-clears in two steps.
+   **One message per transition.** Already-read rows are skipped (their
+   markers were cleared by AQ7's read hook).
 3. **Recovery sweep**: a low-frequency periodic pass (piggybacking the AQ4
    maintenance cadence pattern) performs the same drain check for members
    currently `Idle` whose pending FIFO is non-empty — covering daemon
@@ -64,6 +69,10 @@ the same outcome as an ignored immediate nudge today).
    drains instead.
 3. Daemon restart with pending rows → recovery sweep drains for an Idle
    member without any heartbeat transition.
+3a. Concurrency: an idle-transition drain and a recovery-sweep pass fired
+   concurrently for the same member with one pending message produce
+   exactly one nudge and one clear (atomic-claim test exercising both
+   triggers simultaneously).
 4. No transition, no sweep tick → no nudge (deferral actually defers).
 5. Graft recipients are never drained: the deferred queue is exclusively a
    tmux received-hook concern (AQ7 routes graft queued nudges on the graft
