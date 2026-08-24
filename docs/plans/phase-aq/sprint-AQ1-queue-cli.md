@@ -101,7 +101,7 @@ no deferral surface exists. `mail_message_states` migrates via
 /// intentionally untouched here; a non-blocking follow-up may migrate it
 /// onto this type. AQ2.5's BareCliMemberKey has the identical shape and
 /// is superseded by this type — AQ2.5 uses THIS key (see its deliverable
-/// 2 note and the derivation at PullPendingReceivedHook::emit).
+/// 3 note and the derivation at PullPendingReceivedHook::emit).
 pub struct MemberKey { pub team: TeamName, pub agent: AgentName }
 
 pub enum NudgeMode { Immediate, Deferred }

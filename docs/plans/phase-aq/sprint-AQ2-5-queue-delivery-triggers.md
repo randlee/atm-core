@@ -379,7 +379,7 @@ work and the false-stuck problem cannot arise.
     Windows; cross-platform-guidelines apply). Codex hook scripts' unit
     tests green on ubuntu/macOS (Codex/hermes are not used on Windows).
 
-10. Boundary-manifest freshness: `boundaries/atm-core/
+11. Boundary-manifest freshness: `boundaries/atm-core/
    message-received-hook-emitter.toml` is updated in the same PR that
    lands `PullPendingReceivedHook` as the third
    `AsyncMessageReceivedHookEmitter` implementor — the `[status].notes`
