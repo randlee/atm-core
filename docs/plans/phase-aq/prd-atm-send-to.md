@@ -47,7 +47,8 @@ Wyvern is used as a `dialog`/`zenity`-class picker: CLI-hosted webview, custom H
 **Input to picker** (`atm teams --json --members`, the AQ2 projection; plain
 `atm teams --json` remains the existing team-count output):
 ```json
-{ "teams": [ { "id": "…", "name": "…",
+{ "schema_version": 1,
+  "teams": [ { "id": "…", "name": "…",
     "members": [ { "id": "…", "name": "…", "host": "…", "cwd": "…",
                    "status": "active|idle|dead" } ] } ] }
 ```
@@ -62,9 +63,15 @@ host or supplies an explicit canonical `agent@team.host` target.
 
 **Output from picker** (stdout):
 ```json
-{ "recipients": ["member-id", "…"], "note": "optional one-liner" }
+{ "schema_version": 1, "recipients": ["member-id", "…"],
+  "note": "optional one-liner" }
 ```
-Multi-select over recipients. `note` is a free-text "why" that travels with the attachment.
+Multi-select over recipients. `note` is a free-text "why" that travels with the
+attachment. `schema_version` is the compatibility gate between `atm` and any
+out-of-tree picker (notably Wyvern): a picker declares the version it emits,
+and a version the consuming stage does not recognize is treated exactly like a
+missing picker (fall back, record why) rather than a parse error. The same
+field appears on `PickerInput`.
 
 **Cancel:** Wyvern exits non-zero, emits no JSON, pipeline halts. No partial sends.
 
@@ -210,9 +217,13 @@ atm send --attach PATH... --from-json < PickerOutput
 ```
 
 `PickerInput` is the nested team/member object above. `PickerOutput` is
-exactly `{"recipients":["member-id",...],"note":"optional"}`; unknown
-keys, empty recipients, malformed JSON, or a cancelled picker are hard
-failures and must not stage files or invoke the daemon. `atm send
+`{"schema_version":1,"recipients":["member-id",...],"note":"optional"}` —
+those three keys and no others at this version; unknown keys, empty
+recipients, malformed JSON, or a cancelled picker are hard failures and must
+not stage files or invoke the daemon. An unrecognized `schema_version` is
+not a hard failure at the picker-selection stage: the pipeline falls back to
+the native picker (AQ5 deliverable 3a). Additive evolution happens by
+incrementing `schema_version`, never by silently widening this shape. `atm send
 --from-json` performs client-side fan-out through the existing canonical write
 path, one immutable message per recipient. The AQ1 ADR owns message-id
 allocation versus staging; AQ2 tests that order rather than inventing a

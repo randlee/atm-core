@@ -122,8 +122,10 @@ fn resolve_picker_recipient(
    unbounded child fan-out). Missing/unreadable source → hard error before
    any staging.
 4. **`atm send --from-json`**: stdin is exactly one `PickerOutput` object
-   `{"recipients":[...],"note":"..."}` (rejects unknown keys, empty/dup
-   recipients, malformed/trailing input); fan-out one canonical write per
+   `{"schema_version":1,"recipients":[...],"note":"..."}` (rejects unknown
+   keys, empty/dup recipients, malformed/trailing input, and an
+   unrecognized `schema_version` — the version gate is the picker
+   compatibility contract, PRD §4.2/§5a); fan-out one canonical write per
    recipient (send is single-recipient today — positional `to`/`message`
    become clap-optional; mutually exclusive with positional `to`,
    `--stdin`, `--file`, `--template`; conflicts rejected by clap). All
