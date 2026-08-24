@@ -64,6 +64,22 @@ class MigrateBenchmarkHistoryTests(unittest.TestCase):
             with self.assertRaisesRegex(MIGRATE.MigrationError, "broken.json"):
                 MIGRATE.migrated_record(reports, "0" * 40)
 
+    def test_v1_summary_shape_keeps_recorded_timestamp_and_p50(self) -> None:
+        source_name = "20260801-063351.969883-mac-arm64-01-uds-f1.json"
+        with tempfile.TemporaryDirectory() as temp:
+            reports = Path(temp)
+            source = json.loads((self.fixture_dir() / source_name).read_text(encoding="utf-8"))
+            source["schema_version"] = 1
+            (reports / "v1-result.json").write_text(json.dumps(source), encoding="utf-8")
+            (reports / "baselines.json").write_text(
+                json.dumps({"schema_version": 1, "revision": 1, "entries": []}), encoding="utf-8"
+            )
+            record, audit = MIGRATE.migrated_record(reports, "0" * 40)
+        migrated = record.campaigns[0].results[0].result
+        self.assertEqual(migrated.generated_at.isoformat().replace("+00:00", "Z"), source["generated_at"])
+        self.assertEqual(migrated.metrics.admissions_per_second.p50, source["metrics"]["admissions_per_second"]["p50"])
+        self.assertEqual(audit["mappings"][0]["source_file"], "v1-result.json")
+
 
 if __name__ == "__main__":
     unittest.main()
