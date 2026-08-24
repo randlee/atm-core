@@ -8,7 +8,7 @@ First of the graft connection-model sprints (AQ1.5–AQ1.9) inserted per Rand
 2026-08-24: replace the file-based receiver endpoint record with
 push-registration to the daemon, making the SQLite-backed runtime the single
 source of truth for receiver endpoints. Motivation: the record file's
-truncating-write race (open finding AI3133 defect #2) causes live Hermes
+truncating-write race (open finding AI3133-HERMES-GRAFT-RECEIVER-SINGLETON-UNSAFE defect #2) causes live Hermes
 agents to fall back to CLI/file workarounds, and AQ2's queue-graft channel
 must not ship on that foundation.
 
@@ -27,7 +27,9 @@ receivers refresh their lease on a timer; liveness is validated at use.
    route. Register is an idempotent lease upsert (re-announce = refresh).
 2. **Durable store**: `GraftReceiverEndpointStore` trait in
    `crates/atm-storage/src/contract.rs` (sealed, `Send + Sync`, patterned
-   on `RosterStore`), with a rusqlite implementation and idempotent
+   on `RosterStore`, including the `sealed::Sealed` bound every sibling
+   storage trait carries — plus `impl sealed::Sealed for` the rusqlite
+   implementation), with a rusqlite implementation and idempotent
    `CREATE TABLE IF NOT EXISTS graft_receiver_endpoints` +
    `ensure_graft_receiver_endpoint_columns` migration helper in
    `crates/atm-storage-rusqlite/src/shared_db.rs` (the repo's established
@@ -37,8 +39,11 @@ receivers refresh their lease on a timer; liveness is validated at use.
    `heartbeat`/`validate_heartbeat_member`: gated to
    `AuthenticatedIngress::Local` only, member validated against the roster.
    Unlike heartbeat's in-memory `RuntimeHealth` (which deliberately resets
-   on daemon restart), writes go to the durable store.
-4. **Displacement rule (AI3133 property (c), decided here)**: a register
+   on daemon restart), writes go to the durable store. **The handler
+   rejects any non-loopback `endpoint` value** — ingress gating restricts
+   who may call; this validates what they submit. (Delivery must never be
+   induced to dial a non-loopback address carrying the capability token.)
+4. **Displacement rule (AI3133-HERMES-GRAFT-RECEIVER-SINGLETON-UNSAFE property (c), decided here)**: a register
    for a (team, agent) whose existing lease has a different
    `owner_generation` AND `last_seen_at` within the active-lease window is
    **rejected** with the graft-receiver-already-active error (mirroring
@@ -51,13 +56,47 @@ receivers refresh their lease on a timer; liveness is validated at use.
    (`docs/adr/ADR-056-graft-receiver-registration-and-lease.md`, INDEX.md
    entry): records the push-registration decision, the lease/refresh model,
    the displacement rule, the lifecycle-independence requirement, and the
-   planned supersession of AI3133 (defects #1/#3 already fixed by AI.36's
+   planned supersession of AI3133-HERMES-GRAFT-RECEIVER-SINGLETON-UNSAFE (defects #1/#3 already fixed by AI.36's
    flock + generation-checked Drop; #2 is eliminated with the file itself
    in AQ1.8).
 
 ## Contract (normative)
 
 ```rust
+/// Every trait method returns this; callers' obligations are fixed here.
+pub enum GraftEndpointStoreError {
+    /// register: an existing lease with a different owner_generation is
+    /// still within the active window. AQ1.6 client: log + back off; the
+    /// bind itself still succeeds (flock already proved same-host
+    /// exclusivity; cross-host duplicates surface here).
+    AlreadyActive,
+    /// refresh/unregister: caller's owner_generation does not match the
+    /// stored lease. AQ1.6 client: stop refreshing this generation
+    /// (a newer bind owns the lease); never retry.
+    NotOwner,
+    /// lookup miss is NOT an error (Ok(None)); this variant is for
+    /// underlying SQLite/I-O failures on any method. AQ1.6 client: treat
+    /// like daemon-unavailable (retry next tick); AQ1.7 consumers:
+    /// surface as today's delivery infrastructure error.
+    Storage(String),
+}
+
+pub struct GraftReceiverLease {
+    pub endpoint: SocketAddr,
+    pub capability: LocalCapability,
+    pub owner_generation: String,
+    pub registered_at: DateTime<Utc>,
+    pub last_seen_at: DateTime<Utc>,
+    /// Set by mark_unreachable; cleared by the next successful refresh or
+    /// re-register. AQ1.7 doctor renders it as reachable-at-last-use;
+    /// delivery treats it as advisory only (it still attempts the dial).
+    pub unreachable_since: Option<DateTime<Utc>>,
+}
+
+// Envelope shapes (protocol.rs): GraftReceiverRegister carries the full
+// GraftReceiverRegistration; GraftReceiverUnregister carries only
+// { team, agent, owner_generation }, mirroring the store's unregister.
+
 pub struct GraftReceiverRegistration {
     pub team: TeamName,
     pub agent: AgentName,
@@ -68,16 +107,20 @@ pub struct GraftReceiverRegistration {
 
 // graft_receiver_endpoints table columns:
 // team, agent, endpoint, capability, owner_generation,
-// registered_at (UTC), last_seen_at (UTC)
+// registered_at (UTC), last_seen_at (UTC),
+// unreachable_at (UTC, NULLABLE) — backs mark_unreachable/
+//   GraftReceiverLease.unreachable_since; CLEARED (set NULL) by any
+//   successful refresh or register for the same (team, agent)
 // PRIMARY KEY (team, agent)
 
-pub trait GraftReceiverEndpointStore: Send + Sync {
-    /// Idempotent lease upsert. Err(AlreadyActive) iff an existing row has
-    /// a different owner_generation and last_seen_at within the active
-    /// window (see ADR-056; window = 3 × refresh interval).
+pub trait GraftReceiverEndpointStore: sealed::Sealed + Send + Sync {
+    /// Idempotent lease upsert (also clears unreachable_at).
+    /// Err(AlreadyActive) iff an existing row has a different
+    /// owner_generation and last_seen_at within ACTIVE_LEASE_WINDOW.
     fn register(&self, reg: &GraftReceiverRegistration, now: DateTime<Utc>)
         -> Result<(), GraftEndpointStoreError>;
-    /// Refresh last_seen_at; Err(NotOwner) on generation mismatch.
+    /// Refresh last_seen_at and clear unreachable_at;
+    /// Err(NotOwner) on generation mismatch.
     fn refresh(&self, team: &TeamName, agent: &AgentName,
         owner_generation: &str, now: DateTime<Utc>) -> Result<(), GraftEndpointStoreError>;
     /// Remove iff owner_generation matches (mirrors generation-checked Drop).
@@ -92,11 +135,20 @@ pub trait GraftReceiverEndpointStore: Send + Sync {
 }
 ```
 
+Lease timing constants (defined here/ADR-056, implemented by AQ1.6):
+`GRAFT_LEASE_REFRESH_INTERVAL = 1s` (matches the existing
+`GRAFT_RECEIVER_RECORD_RECHECK_INTERVAL` cadence) and
+`ACTIVE_LEASE_WINDOW = 15 × GRAFT_LEASE_REFRESH_INTERVAL = 15s`. The wide
+multiple is deliberate headroom against refresh jitter and momentary
+daemon/storage hiccups — a live receiver missing a handful of ticks must
+never look displaceable (see AQ1.6's every-iteration refresh rule).
+
 ## Acceptance criteria
 
 1. Round-trip unit tests: register → lookup → refresh → unregister against
    the rusqlite store; upsert idempotence (same generation re-register
-   refreshes, never errors).
+   refreshes, never errors); mark_unreachable sets `unreachable_at` and a
+   subsequent refresh or register clears it.
 2. Displacement truth table: live lease + different generation → rejected
    with already-active error; expired lease (last_seen beyond window) +
    different generation → replaced; matching generation → refresh.
@@ -104,12 +156,15 @@ pub trait GraftReceiverEndpointStore: Send + Sync {
    returns the lease (daemon-restart survival — the lifecycle
    requirement's storage half).
 4. Handler tests: non-local ingress rejected; unknown roster member
-   rejected; envelope round-trips through the route spec (mirroring the
+   rejected; non-loopback `endpoint` in a register request rejected; envelope round-trips through the route spec (mirroring the
    existing heartbeat handler tests).
 5. `ensure_*` migration helper is idempotent on an existing DB (test opens
    a pre-migration fixture DB twice).
-6. `cargo test` workspace + boundary-enforcement suite green on both CI
-   lanes; ADR-056 present and indexed.
+
+## Required validation
+
+- `cargo test` workspace + boundary-enforcement suite green on both CI
+  lanes; ADR-056 present and indexed.
 
 ## Non-closure / out of scope
 

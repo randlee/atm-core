@@ -19,10 +19,15 @@ written (dual-write) so nothing downstream changes until AQ1.7's cutover.
    the daemon via the same client seam `GraftClient` already uses for
    send/read (`atm_daemon_client::resolve_daemon_local_ipc_endpoint` +
    `atm_http_runtime::preferred_local_client`).
-2. **Lease refresh**: the existing `republish_if_missing` timer path in
-   `crates/atm-graft/src/runtime.rs` additionally calls registration
-   refresh on each tick — one timer, two maintenance actions during the
-   dual-write period; refresh-only after AQ1.8.
+2. **Lease refresh — starvation-proof**: refresh uses AQ1.5's
+   `GRAFT_LEASE_REFRESH_INTERVAL` and is elapsed-checked on **every**
+   accept-loop iteration in `crates/atm-graft/src/runtime.rs`, NOT only in
+   the idle branch where today's `handle_idle_graft_receiver` recheck
+   lives — a receiver busy draining back-to-back nudges must still refresh
+   on cadence, or a live receiver could starve its lease past
+   `ACTIVE_LEASE_WINDOW` and be spuriously displaced. During the
+   dual-write period the same elapsed check also drives the file
+   republish; refresh-only after AQ1.8.
 3. **Daemon-unavailable resilience (lifecycle requirement)**: registration
    and refresh failures are logged, backed off, and retried on the next
    tick — they NEVER fail the bind, crash the receiver, or require any
@@ -55,8 +60,15 @@ written (dual-write) so nothing downstream changes until AQ1.7's cutover.
 5. Drop unregisters when generation matches; a stale lease left by a
    SIGKILLed receiver is replaced by the next bind (displacement rule from
    AQ1.5 exercised end-to-end).
-6. `cargo test` workspace green on both CI lanes; file-record behavior
-   byte-identical (existing graft tests pass unmodified).
+6. Sustained-load refresh: a receiver kept continuously busy (back-to-back
+   accepted connections, no idle iterations) for longer than
+   `ACTIVE_LEASE_WINDOW` still refreshes on cadence and its lease never
+   becomes displaceable (deterministic clock per ADR-008).
+
+## Required validation
+
+- `cargo test` workspace green on both CI lanes; file-record behavior
+  byte-identical (existing graft tests pass unmodified).
 
 ## Non-closure / out of scope
 

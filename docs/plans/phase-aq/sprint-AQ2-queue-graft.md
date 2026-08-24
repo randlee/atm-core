@@ -22,7 +22,8 @@ message), NOT a background task.
 
 1. **Queue-shaped channel** per ADR-054 (f): a queue-kind dispatch to a
    graft recipient is handed to the graft receiver over the published
-   endpoint as a distinct queue-kind wire message (versioned evolution of
+   endpoint (resolved via the AQ1.7 registry lease, not the retired file
+   record) as a distinct queue-kind wire message (versioned evolution of
    the `GraftPostSendRequest` contract per ADR-054 (g) — both sides move
    together; the receiver process compat concern is addressed explicitly).
    The steer channel is untouched. Marker cleared on successful handoff

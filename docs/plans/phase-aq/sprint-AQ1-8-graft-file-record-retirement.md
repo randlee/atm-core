@@ -1,4 +1,4 @@
-# Sprint AQ1.8 — Graft File-Record Retirement + AI3133 Closure
+# Sprint AQ1.8 — Graft File-Record Retirement + Receiver-Singleton Finding Closure
 
 Status: draft · Branch: `feature/aq-1-8-graft-file-retirement` off
 `integrate/phase-aq` · PR target: `integrate/phase-aq`
@@ -26,7 +26,7 @@ AI3133 TOCTOU class rather than patching it.
    `crates/atm-architecture/tests/graft_receiver_ownership_boundary.rs`
    updated to assert the new ownership model (flock + daemon lease +
    generation), reviewed by `boundary-guard` as explicit diffs.
-3. **AI3133 closure**: `.triage/phase-AI/findings/AI3133-...ttl` updated
+3. **Finding closure**: `.triage/phase-AI/findings/AI3133-HERMES-GRAFT-RECEIVER-SINGLETON-UNSAFE.ttl` (exactly this file — 13+ distinct findings share the AI3133 prefix; none of the others are touched) updated
    with a supersession Resolution referencing ADR-056 and this sprint's
    merge commit (ancestry-verified per the standing resolution rule):
    defect #1 (no exclusivity) — fixed by AI.36's flock, retained; defect
@@ -46,14 +46,27 @@ AI3133 TOCTOU class rather than patching it.
    its tests.
 2. Rewritten ownership/boundary tests pass; `boundary-guard` sign-off on
    the boundary-test diff recorded in the PR.
-3. AI3133 record shows the supersession Resolution with
+3. `.triage/phase-AI/findings/AI3133-HERMES-GRAFT-RECEIVER-SINGLETON-UNSAFE.ttl` shows the supersession Resolution covering its three occurrences (bind-overwrite, record-truncate-write, drop-unconditional-delete) with
    `merge-base --is-ancestor` evidence.
 4. Upgrade test: a fixture tree with a pre-existing record file binds
    cleanly, registers, and removes the orphan.
-5. `cargo test` workspace green on both CI lanes.
+
+## Required validation
+
+- `cargo test` workspace green on both CI lanes.
 
 ## Non-closure / out of scope
 
+- **Accepted residual risk (disclosed, recorded in ADR-056; Rand signs off
+  via plan approval)**: after the file is retired, a receiver that binds
+  while the daemon is down has NO backing record until its first
+  successful registration tick after the daemon returns. A delivery
+  attempt in that window gets the AQ1.7 receiver-not-registered error.
+  Worst case once the daemon is reachable is bounded by
+  `GRAFT_LEASE_REFRESH_INTERVAL` (1s); while the daemon is down, delivery
+  was impossible anyway (the daemon performs delivery). This narrow
+  cold-start window replaces today's behavior where bind writes the file
+  regardless of daemon state — disclosed here, not silently introduced.
 - hermes-atm wheel bump/smoke (AQ1.9).
 - Any multi-receiver-per-agent design (explicitly out; ADR-056 records
   single-active-lease as the model).

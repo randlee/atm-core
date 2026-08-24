@@ -48,12 +48,20 @@ the file is written but no longer read by anything in-tree.
 5. The daemon-restart / receiver-restart matrix (both orders) passes an
    end-to-end test with zero manual steps — the Hermes profile-reset bug
    class is regression-locked here.
-6. `cargo test` workspace green on both CI lanes.
+
+## Required validation
+
+- `cargo test` workspace green on both CI lanes.
 
 ## Non-closure / out of scope
 
 - File-record write path and its machinery still exist (deleted in AQ1.8).
 - hermes-atm wheel bump (AQ1.9).
+- **Version-skew posture**: `atm` CLI and daemon ship and switch as a
+  matched release pair in this repo (the daemon-switch tooling enforces
+  the pairing), so AC #2's "no file-path errors" claim applies to
+  same-version fleets; a pre-AQ1.7 CLI binary against a post-AQ1.8 daemon
+  is out of scope and unsupported, like any other unmatched pair.
 
 ## Dependencies
 
