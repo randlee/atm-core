@@ -123,12 +123,13 @@ impl PeerConnectionPool {
 /// it never gets the raw sender — so the guard, not the caller, records
 /// health: no separate mark_failed() exists or is needed, because
 /// `exchange` observes the I/O result itself and sets the guard's health
-/// state before returning. Drop is sync and non-blocking: a healthy guard
-/// pushes its live sender back onto a std::sync::Mutex-guarded slot map
-/// (no .await, no tokio::spawn in Drop); a failed guard — or one dropped
-/// without a completed exchange — just drops the sender, which closes the
-/// connection and ends its driver task. Idle eviction runs on the pool's
-/// own timer task, never in Drop.
+/// state before returning. Drop is sync and non-blocking: a healthy
+/// **Pooled-origin** guard pushes its live sender back onto a
+/// std::sync::Mutex-guarded slot map (no .await, no tokio::spawn in Drop);
+/// a failed guard, one dropped without a completed exchange, or ANY
+/// Overflow-origin guard (healthy or not — see counter discipline below)
+/// just drops the sender, which closes the connection and ends its driver
+/// task. Idle eviction runs on the pool's own timer task, never in Drop.
 /// Set at acquire time, BEFORE any .await, under the slot-map mutex:
 /// Pooled = a slot was reserved (per-peer and total counters incremented
 /// pre-dial, so a concurrent acquirer can never over-commit the ceiling);
