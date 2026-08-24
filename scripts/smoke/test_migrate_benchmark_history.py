@@ -114,10 +114,29 @@ class MigrateBenchmarkHistoryTests(unittest.TestCase):
                 json.dumps({"schema_version": 1, "revision": 1, "entries": []}), encoding="utf-8"
             )
             record, _audit = MIGRATE.migrated_record(reports, "0" * 40)
-        results = [entry.result for campaign in record.campaigns for entry in campaign.results]
-        later_result = next(result for result in results if result.generated_at.isoformat().endswith("06:01:00+00:00"))
-        self.assertEqual(later_result.baseline.p50_floor, earlier_rate)
-        self.assertLess(later_result.baseline.p50_floor, later_result.metrics.admissions_per_second.p50)
+        entries = [entry for campaign in record.campaigns for entry in campaign.results]
+        later_entry = next(entry for entry in entries if entry.result.generated_at.isoformat().endswith("06:01:00+00:00"))
+        self.assertEqual(later_entry.displayed_status, "PASS")
+        self.assertEqual(record.ratchet[0].p50_floor, earlier_rate)
+        self.assertLess(record.ratchet[0].p50_floor, later_entry.result.metrics.admissions_per_second.p50)
+
+    def test_original_status_and_d8_display_can_diverge(self) -> None:
+        source_name = "20260801-063351.969883-mac-arm64-01-uds-f1.json"
+        with tempfile.TemporaryDirectory() as temp:
+            reports = Path(temp)
+            source = json.loads((self.fixture_dir() / source_name).read_text(encoding="utf-8"))
+            # Preserve a legacy source FAIL while its D8 comparison against
+            # the empty ratchet should display PASS.
+            source["passed"] = False
+            (reports / "original-fail.json").write_text(json.dumps(source), encoding="utf-8")
+            (reports / "baselines.json").write_text(
+                json.dumps({"schema_version": 1, "revision": 1, "entries": []}), encoding="utf-8"
+            )
+            record, _audit = MIGRATE.migrated_record(reports, "0" * 40)
+        entry = record.campaigns[0].results[0]
+        self.assertEqual(entry.result.status, "FAIL")
+        self.assertEqual(entry.displayed_status, "PASS")
+        self.assertGreater(entry.result.baseline.p50_floor, entry.result.metrics.admissions_per_second.p50)
 
 
 if __name__ == "__main__":

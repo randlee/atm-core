@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import hashlib
 import html
 import json
+import math
 from pathlib import Path
 import subprocess
 import sys
@@ -187,13 +188,33 @@ def result_from_summary(
         })
     durability = summary.durability_after_restart
     gap = None if durability is not None else "durability-counts-missing"
-    status = classify_status(
+    d8_status = classify_status(
         lifecycle_complete=metrics is not None and durability is not None,
         messages_requested=0 if metrics is None else metrics.requested_count,
         messages_admitted=0 if metrics is None else metrics.accepted_count,
         messages_durable=0 if durability is None else durability.observed_mailbox_count,
         p50_admissions_per_second=None if metrics is None else metrics.admissions_per_second.p50,
         baseline_p50_floor=p50_floor,
+    )
+    # The v3 summary's pass/fail result is immutable source evidence.  A v4
+    # result validates its status against a baseline, so represent that
+    # original judgement with the smallest compatible source baseline rather
+    # than overwriting it with the D8 display re-derivation below.
+    source_floor = p50_floor
+    if (
+        metrics is not None
+        and durability is not None
+        and not summary.passed
+        and d8_status != "INCOMPLETE"
+    ):
+        source_floor = math.nextafter(metrics.admissions_per_second.p50, math.inf)
+    status = classify_status(
+        lifecycle_complete=metrics is not None and durability is not None,
+        messages_requested=0 if metrics is None else metrics.requested_count,
+        messages_admitted=0 if metrics is None else metrics.accepted_count,
+        messages_durable=0 if durability is None else durability.observed_mailbox_count,
+        p50_admissions_per_second=None if metrics is None else metrics.admissions_per_second.p50,
+        baseline_p50_floor=source_floor,
     )
     reason = None
     if status == "INCOMPLETE":
@@ -214,7 +235,7 @@ def result_from_summary(
             messages_admitted=0 if metrics is None else metrics.accepted_count,
             messages_durable=0 if durability is None else durability.observed_mailbox_count,
             metrics=metrics,
-            baseline=BaselineRef(revision=1, p50_floor=p50_floor),
+            baseline=BaselineRef(revision=1, p50_floor=source_floor),
             durability_after_restart=durability,
             direct_sqlite_message_write=summary.direct_sqlite_message_write,
         ), gap
@@ -232,7 +253,7 @@ def migrated_record(reports_dir: Path, generated_from_commit: str) -> tuple[Hist
     facts.sort(key=lambda fact: (fact[1].generated_at, fact[0].name))
 
     best: dict[tuple[str, str], float] = {}
-    converted: list[tuple[Path, BenchmarkRunResult, str | None]] = []
+    converted: list[tuple[Path, BenchmarkRunResult, str, str | None]] = []
     ratchet: list[RatchetPoint] = []
     for path, summary, campaign, target in facts:
         key = (summary.host_label, target)
@@ -248,16 +269,24 @@ def migrated_record(reports_dir: Path, generated_from_commit: str) -> tuple[Hist
         # Updating first would allow a record-setting observation to certify
         # itself against its own value.
         result, gap = result_from_summary(summary, path, campaign, prior)
-        if eligible and observed is not None and observed > prior:
+        displayed_status = classify_status(
+            lifecycle_complete=metrics is not None and durable is not None,
+            messages_requested=0 if metrics is None else metrics.requested_count,
+            messages_admitted=0 if metrics is None else metrics.accepted_count,
+            messages_durable=0 if durable is None else durable.observed_mailbox_count,
+            p50_admissions_per_second=None if metrics is None else metrics.admissions_per_second.p50,
+            baseline_p50_floor=prior,
+        )
+        if eligible and displayed_status == "PASS" and observed is not None and observed > prior:
             best[key] = observed
             ratchet.append(RatchetPoint(
                 host_label=summary.host_label, target=target,
                 effective_from=result.generated_at, p50_floor=observed,
                 source_campaign_id=campaign,
             ))
-        converted.append((path, result, gap))
+        converted.append((path, result, displayed_status, gap))
 
-    by_campaign: dict[str, list[tuple[Path, BenchmarkRunResult, str | None]]] = defaultdict(list)
+    by_campaign: dict[str, list[tuple[Path, BenchmarkRunResult, str, str | None]]] = defaultdict(list)
     for item in converted:
         by_campaign[item[1].campaign_id].append(item)
     entries: list[HistoricalCampaignEntry] = []
@@ -269,7 +298,7 @@ def migrated_record(reports_dir: Path, generated_from_commit: str) -> tuple[Hist
             # A legacy frame sweep has repeated targets.  Preserve each source
             # record in an individual incomplete historical campaign rather
             # than dropping or coalescing its measured value.
-            for path, result, gap in items:
+            for path, result, displayed_status, gap in items:
                 single = result.model_copy(update={"campaign_id": fallback_campaign_id(path)})
                 campaign = BenchmarkCampaign(
                     campaign_id=single.campaign_id, host_label=single.host_label, os=single.os,
@@ -278,7 +307,7 @@ def migrated_record(reports_dir: Path, generated_from_commit: str) -> tuple[Hist
                 )
                 entries.append(HistoricalCampaignEntry(
                     campaign=campaign, final_best=True,
-                    results=(HistoricalResultEntry(result=single, displayed_status=("INCOMPLETE" if gap else single.status), evidence_gap=gap, source_files=(path.name,)),),
+                    results=(HistoricalResultEntry(result=single, displayed_status=displayed_status, evidence_gap=gap, source_files=(path.name,)),),
                 ))
             continue
         campaign_status = classify_status(
@@ -295,9 +324,9 @@ def migrated_record(reports_dir: Path, generated_from_commit: str) -> tuple[Hist
         entries.append(HistoricalCampaignEntry(
             campaign=campaign, final_best=True,
             results=tuple(HistoricalResultEntry(
-                result=result, displayed_status=("INCOMPLETE" if gap else result.status), evidence_gap=gap,
+                result=result, displayed_status=displayed_status, evidence_gap=gap,
                 source_files=(path.name,),
-            ) for path, result, gap in items),
+            ) for path, result, displayed_status, gap in items),
         ))
     entries.sort(key=lambda entry: entry.campaign.started_at)
     record = HistoricalRecord(
