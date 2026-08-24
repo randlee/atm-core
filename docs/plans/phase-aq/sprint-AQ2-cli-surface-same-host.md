@@ -5,13 +5,13 @@ PR target: `integrate/phase-aq`
 recommended_agent: arch-ctm · recommended_model: deep-reasoning
 
 Makes the pipeline real on one host:
-`atm teams --json | <picker> | atm send --attach "$@" --from-json`.
+`atm teams --json --members | <picker> | atm send --attach "$@" --from-json`.
 
 ## Deliverables
 
-1. **Picker projection for `atm teams --json`** (build, not audit — verified
+1. **Picker projection for `atm teams --json --members`** (build, not audit — verified
    baseline: today's output is `{name, member_count}` per team with no member
-   entries). Extend `atm teams --json` (or add `--members`) to emit the PRD
+   entries). Add the `--members` projection to emit the PRD
    §4.2 nested projection `{id, name, host, cwd, status}` per member, sourced
    from the members surface (`MemberSummary`: `agent_id`, `home_dir`,
    `live_cwd`, pane) and runtime state. Includes the normative status
@@ -39,6 +39,29 @@ Makes the pipeline real on one host:
 5. **Cross-host refusal stub**: recipient on another host → explicit
    "cross-host attachments land in AQ3" error, never a reference-only send.
 
+## Normative CLI contracts
+
+The new picker projection is exposed as `atm teams --json --members`; the
+existing `atm teams --json` team-count shape remains backwards-compatible.
+Each member object is exactly:
+
+```json
+{"id":"agent-id","name":"display-name","host":"host-or-null",
+ "cwd":"absolute-or-null","status":"active|idle|dead"}
+```
+
+`atm send --from-json` accepts exactly one JSON object on stdin:
+
+```json
+{"recipients":["member-id", "member-id-2"], "note":"optional text"}
+```
+
+The parser rejects unknown keys, empty recipients, duplicate recipients,
+malformed JSON, and trailing non-whitespace. It validates all recipients and
+all attachment paths before allocating any message ID or creating a staging
+directory. It then calls the existing canonical daemon write client once per
+recipient; no CLI storage adapter is permitted.
+
 ## Acceptance criteria
 
 1. Truth-table tests for `--from-json`: valid multi-recipient → N envelopes
@@ -48,16 +71,23 @@ Makes the pipeline real on one host:
    sha256 verified, recipient reads envelope with populated `local_path`.
 3. Duplicate content to two recipients produces two envelopes whose
    attachments share `sha256` (dedupe observable at the reference level).
-4. `atm teams --json` output validates against the picker input schema in the
+4. `atm teams --json --members` output validates against the picker input schema in the
    PRD (§4.2) via a fixture test.
 5. `just test` all three CI lanes (ubuntu, macOS, Windows); no clippy
    warnings in touched crates.
+
+## Paths to delete
+
+None. AQ2 extends the CLI and adds staging code; it must not delete the
+existing single-recipient `atm send` mode or alter legacy team-count output.
 
 ## Required validation
 
 - `just test` workspace, ubuntu + macOS + Windows CI lanes.
 - One recorded same-host demo transcript (command + resulting envelope JSON)
   committed as evidence on the sprint branch.
+- Focused command tests for `atm teams --json --members` and
+  `atm send --from-json` are named in the PR and run independently of Wyvern.
 
 ## Non-closure / out of scope
 
@@ -65,6 +95,9 @@ Makes the pipeline real on one host:
 
 ## Dependencies
 
-- must_follow: AQ1 (contract) — merge-forward before every dev/fix round.
+- must_follow: AQ1 (contract) — merge-forward before every dev/fix round so
+  the CLI never stages against a stale envelope/layout or pending-delivery
+  rule.
 - Dispatch precondition: `integrate/phase-aq` created from `develop`.
-- parallel_safe: none at start; AQ3/AQ4/AQ5 fan out after this merges.
+- parallel_safe: none before AQ2 merges; AQ3/AQ4/AQ5 may fan out only after
+  they consume this exact projection and canonical send contract.

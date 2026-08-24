@@ -1,6 +1,6 @@
 # Plan — Phase AQ: ATM Send-To Shell Integration
 
-Status: draft · Source PRD: [prd-atm-send-to.md](./prd-atm-send-to.md)
+Status: ready_for_scope_review · Source PRD: [prd-atm-send-to.md](./prd-atm-send-to.md)
 Reference code: `integrate/phase-ao2` (envelope at
 `crates/atm-storage/src/schema/inbox_message.rs`, CLI at
 `crates/atm/src/commands/{teams,send}.rs`).
@@ -39,6 +39,29 @@ after the Wyvern chat-window integration exists.
 | AQ4 | Temp lifecycle sweeper | must_follow AQ2 · parallel_safe AQ3 gated by AQ1 layout contract |
 | AQ5 | Wyvern picker + shell glue (macOS Shortcuts, Windows SendTo) | must_follow AQ2 · parallel_safe AQ3, AQ4 |
 | AQ6 | Validation evidence | must_follow all |
+
+The table is an ownership map, not a second requirements list. The sprint
+documents below are authoritative for each sprint's deliverables, acceptance
+criteria, paths-to-delete (when any), and required validation. AQ1 owns the
+envelope/layout/transport-policy contract; AQ2 owns the CLI projection,
+staging, and same-host write path; AQ3 owns authenticated remote fetch and
+pending-delivery state; AQ4 owns reclamation; AQ5 owns picker and platform
+shell glue; AQ6 owns phase evidence and the merge gate. No later sprint may
+redefine an earlier contract.
+
+Dependency rationale:
+
+- AQ1 must merge first because every later sprint consumes its attachment
+  schema, `attachment_dir()` function, limits, and pending-delivery policy.
+- AQ2 must merge before AQ3/AQ4/AQ5 because the remote and UI paths consume
+  the validated CLI envelope and recipient projection.
+- AQ3 and AQ4 are parallel-safe only after AQ1: AQ3 owns fetch/delivery and
+  AQ4 owns the sweeper; both call AQ1's path function and neither may alter
+  the other's runtime modules or storage state machine.
+- AQ5 is parallel-safe with AQ3/AQ4 after AQ2 because it owns scripts/UI
+  adapters and linked Wyvern artifacts, not daemon fetch or reclamation code.
+- AQ6 must follow AQ1–AQ5 because it certifies the merged phase, not partial
+  feature branches.
 
 Branch pattern: `feature/aq-N-<slug>` off `integrate/phase-aq`, PR target
 `integrate/phase-aq`. Creating the `integrate/phase-aq` branch/worktree from
@@ -113,6 +136,20 @@ not re-litigate them:
   update path for that is an AQ3 deliverable, decided in AQ1 decision (f).
 - Wyvern cold-start latency measured in AQ5 before the Shortcuts prototype is
   replaced; the Shortcuts/Out-GridView fallback remains shippable.
+
+## Phase-level closure contract
+
+Phase AQ closes only when AQ1–AQ5 each satisfy their sprint acceptance
+criteria and AQ6 publishes the requirement-to-evidence matrix. The phase
+cannot claim success from a picker demo, schema-only change, or test-only
+fixture. A missing cross-host fetch, unverified host projection, unbounded
+temp residue, or absent platform evidence remains an open requirement.
+
+The phase-level required validation is the union of the sprint validation
+commands plus the two-daemon cross-host suite and the three CI lanes. AQ6 must
+record the exact merged SHA, branch, commands, evidence paths, and any
+deferred item with its owning follow-on; it may not close a gap by narrative
+only.
 
 ## Non-closure
 

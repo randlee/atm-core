@@ -29,6 +29,37 @@ decision (d). A shared well-known folder with no owner is a guaranteed leak.
 4. **Dedupe interaction**: content still referenced by an unswept msg-id is
    not reclaimed (refcount or link-count check per AQ1/AQ3 mechanism).
 
+## Normative sweeper boundary
+
+The daemon owns one supervised task; it is not a detached process and does not
+walk arbitrary temporary directories:
+
+```rust
+pub struct AttachmentSweepConfig {
+    pub interval: Duration,
+    pub ttl: Duration,
+    pub policy: SweepPolicy, // AQ1 ADR decision: ttl, on_ack, or both
+}
+
+pub struct SweepStats {
+    pub scanned: u64,
+    pub reclaimed_bytes: u64,
+    pub skipped_foreign: u64,
+}
+
+pub async fn run_attachment_sweeper(
+    cx: &DaemonContext,
+    store: &dyn AttachmentSweepStore,
+    config: AttachmentSweepConfig,
+) -> Result<(), SweeperError>;
+```
+
+Each pass calls only `attachment_dir()`/the AQ1 path parser, refuses symlink
+escapes, checks message acknowledgement/reference state through the storage
+trait, emits one structured event with `SweepStats`, and updates the existing
+health projection. Shutdown cancels and joins the task within the daemon
+deadline.
+
 ## Acceptance criteria
 
 1. Unit tests: expired dirs reclaimed; unexpired kept; foreign files skipped
@@ -39,6 +70,12 @@ decision (d). A shared well-known folder with no owner is a guaranteed leak.
 4. `just test` all three CI lanes (ubuntu, macOS, Windows). Windows lane
    exercises the hardlink/symlink safety rails (no Unix-only assumptions in
    the layout scan).
+
+## Paths to delete
+
+None. AQ4 reclaims only expired/acknowledged AQ1 attachment directories; it
+must not delete foreign files, active message data, or existing daemon/log
+directories.
 
 ## Required validation
 
@@ -52,6 +89,9 @@ decision (d). A shared well-known folder with no owner is a guaranteed leak.
 
 ## Dependencies
 
-- must_follow: AQ2 — merge-forward before every dev/fix round.
-- parallel_safe: AQ3 (sweeper task vs delivery/fetch path; both consume
-  AQ1's layout, neither redefines it). AQ5 parallel_safe.
+- must_follow: AQ2 — merge-forward before every dev/fix round so the sweeper
+  sees the current message-id/staging behavior.
+- parallel_safe: AQ3 only after AQ1's layout and policy are merged. AQ3 owns
+  fetch/delivery while AQ4 owns the supervised sweep; both consume, never
+  redefine, AQ1's `attachment_dir()`. AQ5 is parallel-safe because it owns
+  shell/UI adapters only.

@@ -36,7 +36,7 @@ Right-click (Finder / Explorer) → pick one or more team members → the file(s
 ### 4.1 Pipeline (the whole product)
 
 ```
-atm teams --json \
+atm teams --json --members \
   | wyvern pick-member.html --stdin-json --out-json \
   | atm send --attach "$@" --from-json
 ```
@@ -45,7 +45,8 @@ Wyvern is used as a `dialog`/`zenity`-class picker: CLI-hosted webview, custom H
 
 ### 4.2 Contracts
 
-**Input to picker** (`atm teams --json`):
+**Input to picker** (`atm teams --json --members`, the AQ2 projection; plain
+`atm teams --json` remains the existing team-count output):
 ```json
 { "teams": [ { "id": "…", "name": "…",
     "members": [ { "id": "…", "name": "…", "host": "…", "cwd": "…",
@@ -74,12 +75,21 @@ Add `attachments: []` to `MessageEnvelope`. **No new `MessageKind` verb** — th
 ### 4.4 Transport: pull, not push
 
 - **Same host:** sender copies into the known agent-accessible temp area, `<known-temp>/atm/<msg-id>/`. Envelope references it.
-- **Cross-host:** envelope carries `{sha256, size, origin_host, origin_path}` via existing ADR-028 host routing. Receiving `atm-core` fetches (Tailscale SSH / sftp) into its own `<known-temp>/atm/<msg-id>/`, verifies hash, then delivers the message. Sender process holds no SSH state.
+- **Cross-host:** envelope carries `{sha256, size, origin_host, origin_path}`
+  through the accepted ADR-034 HTTPS transport and ADR-035 canonical write
+  ingress. AQ1 chooses and records the authenticated peer byte-fetch endpoint;
+  AQ3 implements it. The receiving daemon fetches into its own
+  `<known-temp>/atm/<msg-id>/`, verifies hash and size, and only then makes the
+  message readable. Sender code holds no fetch, SSH, or retry state. ADR-028
+  and ADR-031 are historical/superseded references, not authority for this
+  design.
 - **Fan-out:** N recipients → N envelopes client-side; content-addressing makes repeated pulls cheap and deduplicable.
 
 ### 4.5 Lifecycle
 
-Daemon-owned sweeper on `<known-temp>/atm/`. Policy: TTL or on-ack — **decision pending**. A shared well-known folder with no owner is a guaranteed leak.
+Daemon-owned sweeper on `<known-temp>/atm/`. AQ1 closes the policy (TTL,
+on-ack, or both) and names the configured root; AQ4 implements exactly that
+decision. A shared well-known folder with no owner is a guaranteed leak.
 
 ### 4.6 Shell integration (thin glue only)
 
@@ -97,7 +107,7 @@ Daemon-owned sweeper on `<known-temp>/atm/`. Policy: TTL or on-ack — **decisio
 ### 2a. One-shot prefill (fits the existing pipe)
 
 ```
-atm teams --json \
+atm teams --json --members \
   | atm draft --attach "$@" --model <fast> --merge \
   | wyvern pick-member.html --stdin-json --out-json \
   | atm send --attach "$@" --from-json
@@ -149,7 +159,7 @@ No new machinery. The guarantee that makes it work: **every stage is one-shot, r
 | R3 | Cross-host delivery with hash verification | Must |
 | R4 | Dead/idle members visibly disabled in picker | Must |
 | R5 | Cancel never results in a send | Must |
-| R6 | `atm teams --json` and `atm send --from-json` usable without Wyvern (TUI, Raycast, scripts) | Must |
+| R6 | `atm teams --json --members` and `atm send --from-json` usable without Wyvern (TUI, Raycast, scripts) | Must |
 | R7 | Sweeper reclaims inbox space per policy | Should |
 | R8 | Attachment contents flagged as untrusted in agent conventions (CLAUDE.md) | Should |
 | R9 | Phase 2: draft never blocks picker open | Must (P2) |
@@ -158,6 +168,30 @@ No new machinery. The guarantee that makes it work: **every stage is one-shot, r
 | R12 | Phase 2: "Open with agent" entry works with zero ATM daemons running | Must (P2) |
 | R13 | Pipeline stages are side-effect-free except final send (chaining invariant) | Must |
 
+### 5a. Phase-1 command and envelope contract
+
+The phase-1 shell contract is executable without Wyvern:
+
+```text
+atm teams --json --members -> PickerInput JSON
+picker(PickerInput, "$@") -> PickerOutput JSON or non-zero/no output
+atm send --attach PATH... --from-json < PickerOutput
+```
+
+`PickerInput` is the nested team/member object above. `PickerOutput` is
+exactly `{"recipients":["member-id",...],"note":"optional"}`; unknown
+keys, empty recipients, malformed JSON, or a cancelled picker are hard
+failures and must not stage files or invoke the daemon. `atm send
+--from-json` performs client-side fan-out through the existing canonical write
+path, one immutable message per recipient. The AQ1 ADR owns message-id
+allocation versus staging; AQ2 tests that order rather than inventing a
+second rule.
+
+All attachment bytes remain outside the message envelope. The envelope carries
+references only; `local_path` is receiving-daemon-owned and is absent until
+hash/size verification succeeds. This is the production boundary for both
+same-host and cross-host paths.
+
 ## 6. Open Questions (block ADR, not prototype)
 
 1. Directories: send as reference (`kind: dir`, recursive pull) or tar at origin?
@@ -165,7 +199,10 @@ No new machinery. The guarantee that makes it work: **every stage is one-shot, r
 3. Sweeper policy: TTL vs on-ack vs both.
 4. Team-level addressing in atm-core, or stay with client-side fan-out?
 5. Wyvern cold-start latency — is it under the ~1 s context-menu tolerance? **Measure before committing Wyvern as the picker.**
-6. Does `atm teams` already exist with member cwd/host, or does member registration need to grow fields?
+6. Which existing roster/registration fields can supply member `host` and
+   `cwd`, and which registration/projection changes must AQ2 add? (The
+   current `atm teams --json` output has no member entries; AQ2 owns this
+   projection.)
 7. (P2) Which local model is the drafter default, and what is "Luna"? Does it run on the Mac Studio via Ollama/MLX?
 8. (P2) Does `fork` in the Wyvern chat integration fork the *session transcript* or the *agent process*? Send-To only needs transcript.
 9. (P2) Byte cap for the drafter — and does a directory get a tree listing or nothing?
@@ -173,7 +210,7 @@ No new machinery. The guarantee that makes it work: **every stage is one-shot, r
 ## 7. Milestones
 
 1. **ADR-0xx `attachments`** — envelope field, pull semantics, lifecycle decision.
-2. **`atm teams --json` + `atm send --attach --from-json`** — testable with `echo '{"recipients":[…]}' |`.
+2. **`atm teams --json --members` + `atm send --attach --from-json`** — testable with `echo '{"recipients":[…]}' |`.
 3. **macOS Shortcuts prototype** using `osascript choose from list` — validates the workflow with zero UI work.
 4. **`pick-member.html` in Wyvern** — replace step 3's picker; measure latency.
 5. **Windows SendTo `.lnk`**.

@@ -48,6 +48,9 @@ that every later sprint cites. No delivery behavior changes.
 3. **Layout contract** `<known-temp>/atm/<msg-id>/` documented in the ADR and
    expressed as a pure path-derivation function usable by daemon, sweeper,
    and tests.
+   The receiver treats `origin_path` as display/audit metadata only; it is
+   never a remote filesystem instruction. The fetch endpoint serves bytes
+   only from an authenticated, content-addressed staging record.
 4. **sc-lint candidate note**: whether R13 (stages side-effect-free except
    final send) is expressible as a lint; finding recorded either way.
 
@@ -73,7 +76,8 @@ pub fn attachment_dir(known_temp: &Path, msg_id: &AtmMessageId) -> PathBuf;
 ```
 
 `local_path` is never set by the sender; a validator rejects sender-side
-population.
+population. `origin_path` is never dereferenced by the receiver and must not
+escape the configured staging root; it is retained only for operator context.
 
 ## Acceptance criteria
 
@@ -83,10 +87,17 @@ population.
 3. `attachment_dir()` unit-tested; no other code path constructs the layout.
 4. Existing envelope consumers compile and pass unchanged (`just test`).
 
+## Paths to delete
+
+None. AQ1 adds a backwards-compatible optional field and a new configured
+attachment root; it must not delete or rename existing mailbox paths.
+
 ## Required validation
 
 - `just test` workspace, all three CI lanes (ubuntu, macOS, Windows).
 - ADR reviewed by quality-mgr with explicit sign-off on decisions (a)–(g).
+- `cargo test -p atm-storage` and the focused envelope/path tests named in the
+  implementation PR; the tests must run without a daemon or network.
 
 ## Non-closure / out of scope
 
@@ -94,5 +105,8 @@ population.
 
 ## Dependencies
 
-- must_follow: none.
-- parallel_safe: none (every AQ sprint consumes this contract).
+- must_follow: none — AQ1 is the contract root and is dispatched from the
+  phase branch carrying the verified AO2 baseline.
+- parallel_safe: none — every later AQ sprint consumes the schema, path
+  function, configured root, and pending-delivery decisions, so parallel
+  implementation would create competing contracts.

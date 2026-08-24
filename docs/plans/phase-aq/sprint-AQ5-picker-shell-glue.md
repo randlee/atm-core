@@ -12,7 +12,7 @@ Wyvern-side PR as a linked artifact.
 ## Deliverables
 
 1. **Pipeline script** (versioned in-repo, e.g. `scripts/send-to/atm-send-to.sh`
-   + `.ps1`): `atm teams --json | <picker> | atm send --attach "$@"
+   + `.ps1`): `atm teams --json --members | <picker> | atm send --attach "$@"
    --from-json`. Nonzero from any stage halts with no send (R5/R13).
 2. **Fallback picker first**: macOS `osascript`/Shortcuts "Choose from list";
    Windows `Out-GridView`; Linux `zenity --list --checklist` (with a plain
@@ -32,6 +32,25 @@ Wyvern-side PR as a linked artifact.
    menus recorded as a follow-on). Install steps documented; no Share
    Extension / MSIX in this phase.
 
+## Normative shell boundary
+
+The versioned scripts are adapters only. Their contract is:
+
+```text
+atm-send-to.sh|.ps1 [PATH...]
+  stdout: picker output only when the picker exits 0
+  exit != 0: cancellation, malformed picker output, or send failure
+  side effects before final send: none (no staging, daemon call, or partial fan-out)
+```
+
+They invoke `atm teams --json --members`, pass the JSON to the selected
+picker, validate the exact AQ2 `PickerOutput`, and invoke
+`atm send --attach PATH... --from-json` once. The fallback pickers and the
+Wyvern page share checked-in JSON fixtures; no picker may implement ATM
+addressing, attachment hashing, or direct storage writes. The atm-core PR
+records the immutable Wyvern PR/commit and schema fixture revision; Wyvern
+source code is not copied into this repository.
+
 ## Acceptance criteria
 
 1. Script tests: cancel at picker → exit ≠ 0, zero sends (harness with a
@@ -42,6 +61,12 @@ Wyvern-side PR as a linked artifact.
    and Nautilus script on Ubuntu each deliver to a live agent (transcript +
    screenshot committed).
 5. `just test` unaffected crates remain green on all three CI lanes.
+
+## Paths to delete
+
+None. AQ5 adds shell entries and picker adapters; it must not remove existing
+CLI commands, alter daemon routing, or install a platform-specific service as
+part of the repository test harness.
 
 ## Required validation
 
@@ -58,5 +83,8 @@ Wyvern-side PR as a linked artifact.
 
 ## Dependencies
 
-- must_follow: AQ2 — merge-forward before every dev/fix round.
-- parallel_safe: AQ3, AQ4 (UI/scripts vs daemon internals).
+- must_follow: AQ2 — merge-forward before every dev/fix round so shell scripts
+  consume the current projection and send contract.
+- parallel_safe: AQ3 and AQ4 after AQ2: AQ5 owns scripts, picker fixtures,
+  and platform entry points while AQ3 owns remote delivery and AQ4 owns the
+  daemon sweeper. AQ5 may not modify their runtime modules or storage paths.
