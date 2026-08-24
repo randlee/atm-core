@@ -1,6 +1,6 @@
 # Plan — Phase AQ: ATM Send-To Shell Integration
 
-Status: redrafted — script-based transfer model (2026-08-23, per Rand) ·
+Status: hardened — plan-QA PASS (2026-08-24, queue-first 6-sprint structure) ·
 Source PRD: [prd-atm-send-to.md](./prd-atm-send-to.md)
 Reference code: `integrate/phase-ao2` (CLI at
 `crates/atm/src/commands/{teams,send}.rs`, daemon maintenance-worker
@@ -112,4 +112,5 @@ by five explore agents before hardening began.
 | 12 | verify | ruthless-boundary-qa | 054600099 → c825fdd55 | PASS | 0 | 0 | 0 | RBQA-F012 closed structurally; RBQA-F013 (unbounded `wyvern --version` probe) raised and fixed — zero open |
 | 12 | verify | critical-plan-reviewer | 054600099 | FAIL | 0 | 1 | 0 | 014/016 closed; **015 mitigation accepted — AQ4 split NOT required**; PLAN-CRIT-017 PRD schema not updated for `schema_version` |
 | 13 | fixes + verify | fenix; critical-plan-reviewer | 0a2730064 | **PASS** | 0 | 0 | 1 | PRD §4.2/§5a carry `schema_version` with fall-back semantics; AQ4 stdin contract aligned; PLAN-CRIT-M3 wording fixed |
-| 14 | Wyvern policy | Rand + fenix | (this commit) | UPDATE | – | – | – | pin-latest Wyvern policy (bump every atm release, no version ranges); new AQ6: sc-ecosystem preflight rules (sc-compose/sc-observability/wyvern bump-to-latest + integration tests, fix-forward) + Wyvern-repo contract-test GH issue |
+| 14 | Wyvern policy | Rand + fenix | 6fa5c5a7b | UPDATE | – | – | – | pin-latest Wyvern policy (bump every atm release, no version ranges); new AQ6: sc-ecosystem preflight rules (sc-compose/sc-observability/wyvern bump-to-latest + integration tests, fix-forward) + Wyvern-repo contract-test GH issue |
+| 15 | final verify | req-qa · critical-plan-reviewer · ruthless-boundary-qa | e97505ac1 / ea43d2d0b | **PASS** | 0 | 0 | 0 | ATM-QA-013/PLAN-CRIT-018 (phase close → AQ6 AC5) and PLAN-CRIT-019 (dependency-currency extension + per-dep integration targets) closed; req-qa 18/18 deliverables (100%); critical reviewer: zero Blocking/Important across all six sprints, PRD, and plan — full arc closed |
