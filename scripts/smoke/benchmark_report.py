@@ -20,7 +20,6 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.smoke.benchmark_schema import (
-    BaselineSet,
     BenchmarkRunResult,
     BenchmarkSchemaError,
     BenchmarkSummary,
@@ -34,8 +33,8 @@ REPORTS_ROOT = ROOT / "site" / "reports"
 REPORT_NAME = "send-message-benchmark"
 REPORT_HTML = f"{REPORT_NAME}.html"
 REPORT_DIR = REPORTS_ROOT / REPORT_NAME
-BASELINES_PATH = REPORT_DIR / "baselines.json"
 HISTORICAL_IMPORTS_NAME = "historical-imports.json"
+BASELINES_FILENAME = "baselines.json"
 ENVELOPE_SCHEMA_VERSION = 1
 # AO2.10 introduces v4 emission.  This reader continues to accept v3
 # artifacts unchanged until AO2.12 performs the separately reviewed history
@@ -240,7 +239,7 @@ def evidence_records(report_dir: Path = REPORT_DIR) -> list[dict[str, Any]]:
         if (
             path.name.endswith(".envelope.json")
             or path.name.endswith(".campaign.json")
-            or path.name in {HISTORICAL_IMPORTS_NAME, BASELINES_PATH.name}
+            or path.name in {HISTORICAL_IMPORTS_NAME, BASELINES_FILENAME}
         ):
             continue
         try:
@@ -343,18 +342,8 @@ def campaign_groups(records: Iterable[dict[str, Any]]) -> dict[str, list[dict[st
     }
 
 
-def load_baselines(path: Path = BASELINES_PATH) -> BaselineSet:
-    """Load the sole reviewed acceptance floors used by benchmark reports."""
-    try:
-        return BaselineSet.model_validate_json(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as error:
-        raise BenchmarkReportError(f"could not load benchmark baselines {path}: {error}") from error
-
-
-def campaign_target_rows(
-    records: Iterable[dict[str, Any]], baselines: BaselineSet | None = None,
-) -> list[dict[str, Any]]:
-    """Return one revision-homogeneous result/floor/verdict table."""
+def campaign_target_rows(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return one revision-homogeneous table from immutable result snapshots."""
     records = list(records)
     revisions = {record.get("source_revision") for record in records}
     if len(revisions) > 1:
@@ -366,34 +355,25 @@ def campaign_target_rows(
             target not in newest or result["generated_at"] > newest[target]["generated_at"]
         ):
             newest[target] = result
-    if baselines is None:
-        baselines = load_baselines()
     rows: list[dict[str, Any]] = []
     for target in TARGET_ORDER:
         result = newest.get(target)
-        baseline = None
-        if result is not None:
-            try:
-                baseline = baselines.entry_for(result["host_label"], target)
-            except BenchmarkSchemaError:
-                baseline = None
         metrics = result.get("metrics") if result else None
         metric = metrics.get("admissions_per_second", {}) if isinstance(metrics, dict) else {}
         value = metric.get("p50") if isinstance(metric, dict) else None
-        accepted = metrics.get("accepted_count") if isinstance(metrics, dict) else None
-        requested = metrics.get("requested_count") if isinstance(metrics, dict) else None
+        baseline = result.get("baseline") if isinstance(result, dict) else None
+        floor = baseline.get("p50_floor") if isinstance(baseline, dict) else None
+        # v4 verdicts and floors are immutable result facts.  A report must
+        # not reinterpret history through whatever baseline file exists now.
         passed = (
-            isinstance(value, (int, float))
-            and isinstance(accepted, int)
-            and accepted == requested
-            and baseline is not None
-            and float(value) >= baseline.p50_floor
-            and result.get("status", "PASS") == "PASS"
+            result.get("status") == "PASS"
+            if isinstance(result, dict) and result.get("schema_version") == 4
+            else bool(result and result.get("passed"))
         )
         rows.append({
             "test": target,
             "result_msg_per_second": None if value is None else float(value),
-            "baseline_msg_per_second": None if baseline is None else baseline.p50_floor,
+            "baseline_msg_per_second": float(floor) if isinstance(floor, (int, float)) else None,
             "passed": passed,
             "artifact_id": result_id(result) if result else None,
             "json_href": f"{result_id(result)}.json" if result else None,
@@ -490,17 +470,6 @@ def current_campaign_results(records: Iterable[dict[str, Any]]) -> list[dict[str
             result.get("source_revision"),
         ) == key
     ]
-
-
-def campaign_status(results: Iterable[dict[str, Any]]) -> str:
-    """Report PASS only for a complete, passing six-profile candidate."""
-    results = list(results)
-    if not results:
-        return "INFO"
-    if any(not result["passed"] for result in results):
-        return "FAIL"
-    frames = {result["frames_per_connection"] for result in results}
-    return "PASS" if frames == SUPPORTED_FRAMES else "INFO"
 
 
 def render_aggregate(records: Iterable[dict[str, Any]], report_root: Path = REPORTS_ROOT) -> Path:

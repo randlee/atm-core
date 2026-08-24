@@ -148,13 +148,57 @@ class BenchmarkReportTests(unittest.TestCase):
             source = Path(directory) / "v4.json"
             source.write_text(json.dumps(payload), encoding="utf-8")
             record = REPORT.load_result(source)
-            floors = REPORT.BaselineSet.model_validate_json(
-                (ROOT / "site/reports/send-message-benchmark/baselines.json").read_text(encoding="utf-8")
-            )
-        tcp = next(row for row in REPORT.campaign_target_rows([record], floors) if row["test"] == "tcp")
+        tcp = next(row for row in REPORT.campaign_target_rows([record]) if row["test"] == "tcp")
         self.assertEqual(tcp["baseline_msg_per_second"], 17_500)
         self.assertTrue(tcp["passed"])
         self.assertEqual(REPORT.result_id(record), "20260824T000000Z-rand-m5-tcp")
+
+    def test_v4_rendering_uses_stored_verdict_after_live_baseline_ratchets(self) -> None:
+        """A later reviewed floor cannot rewrite an immutable campaign result."""
+        payload = {
+            "schema_version": 4,
+            "campaign_id": "20260824T000000Z-rand-m5",
+            "host_label": "rand-m5",
+            "os": "macos",
+            "target": "tcp",
+            "status": "PASS",
+            "incomplete_reason": None,
+            "generated_at": "2026-08-24T00:00:00Z",
+            "source_revision": "a" * 40,
+            "binary_hashes": {"atm-daemon": "b" * 64},
+            "frames_per_connection": 8,
+            "messages_requested": 10,
+            "messages_admitted": 10,
+            "messages_durable": 10,
+            "metrics": {
+                "interval_count": 1, "passed_interval_count": 1,
+                "accepted_count": 10, "requested_count": 10, "response_count": 10,
+                "connection_count": 1,
+                "application_wire_bytes": {"request": 1, "response": 1, "total": 2},
+                "admissions_per_second": {"min": 18000, "p50": 18000, "p95": 18000, "p99": 18000, "max": 18000},
+                "request_frames_per_second": {"min": 1, "p50": 1, "p95": 1, "p99": 1, "max": 1},
+                "connections_per_second": {"min": 1, "p50": 1, "p95": 1, "p99": 1, "max": 1},
+                "application_wire_bytes_per_second": {"min": 2, "p50": 2, "p95": 2, "p99": 2, "max": 2},
+                "time_to_send_1k_s": {"min": 1, "p50": 1, "p95": 1, "p99": 1, "max": 1},
+                "interval_latency_ms": {"min": 1, "p50": 1, "p95": 1, "p99": 1, "max": 1},
+            },
+            "baseline": {"revision": 1, "p50_floor": 17500},
+            "durability_after_restart": {
+                "expected_accepted_count": 10, "observed_mailbox_count": 10, "passed": True,
+            },
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "v4.json"
+            source.write_text(json.dumps(payload), encoding="utf-8")
+            record = REPORT.load_result(source)
+            # This intentionally higher current floor models a later ratchet.
+            (Path(directory) / "baselines.json").write_text(
+                json.dumps({"revision": 2, "entries": [{"p50_floor": 99999}]}),
+                encoding="utf-8",
+            )
+            row = next(row for row in REPORT.campaign_target_rows([record]) if row["test"] == "tcp")
+        self.assertEqual(row["baseline_msg_per_second"], 17_500)
+        self.assertTrue(row["passed"])
 
     def test_campaign_table_renders_an_incomplete_target_without_metrics(self) -> None:
         failed = REPORT.load_result(self.fixture("failed-tcp-f8.json"))
@@ -272,7 +316,7 @@ class BenchmarkReportTests(unittest.TestCase):
         self.assertIn("20260801T020000Z-aaaaaaaaaaaa", text)
         self.assertIn("1 pre-campaign artifacts", text)
 
-    def test_current_campaign_is_complete_only_for_all_six_frames_of_one_candidate(self) -> None:
+    def test_current_campaign_keeps_one_revision_homogeneous(self) -> None:
         base = REPORT.load_result(self.fixture("success-uds-f1.json"))
         revision = "b" * 40
         campaign = [
@@ -286,9 +330,6 @@ class BenchmarkReportTests(unittest.TestCase):
             for index, frame in enumerate(sorted(REPORT.SUPPORTED_FRAMES))
         ]
         self.assertEqual(REPORT.current_campaign_results(campaign), campaign)
-        self.assertEqual(REPORT.campaign_status(campaign), "PASS")
-        self.assertEqual(REPORT.campaign_status(campaign[:-1]), "INFO")
-        self.assertEqual(REPORT.campaign_status([{**campaign[0], "passed": False}]), "FAIL")
 
     def test_peer_wire_mode_is_rendered_and_separates_campaigns(self) -> None:
         plain = REPORT.load_result(self.fixture("failed-tcp-f8.json"))
