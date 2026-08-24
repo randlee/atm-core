@@ -37,6 +37,15 @@ def load_runner():
 RUNNER = load_runner()
 
 
+def expected_ordinary_targets() -> list[str]:
+    """Return the platform-specific target order exercised by the runner."""
+    return [
+        target
+        for target in ("sqlite", "uds", "tcp", "tcp-tls")
+        if target in RUNNER.required_targets(RUNNER.benchmark_os())
+    ]
+
+
 def complete_evidence(**overrides):
     evidence = {
         "schema_version": 2,
@@ -85,7 +94,7 @@ def healthy_managed_status() -> dict[str, object]:
 
 
 class AdmissionCapacityTests(unittest.TestCase):
-    def test_ordinary_benchmark_runs_all_four_f8_targets_in_fixed_order(self):
+    def test_ordinary_benchmark_runs_required_f8_targets_in_fixed_order(self):
         captured: list[dict[str, object]] = []
 
         def run_capacity(*_args, **kwargs):
@@ -114,14 +123,12 @@ class AdmissionCapacityTests(unittest.TestCase):
         ):
             self.assertEqual(RUNNER.main(), 0)
 
-        self.assertEqual(
-            [item["benchmark_target"] for item in captured],
-            ["sqlite", "uds", "tcp", "tcp-tls"],
-        )
+        expected_targets = expected_ordinary_targets()
+        self.assertEqual([item["benchmark_target"] for item in captured], expected_targets)
         self.assertTrue(all("benchmark_target" in item for item in captured))
         self.assertTrue(all("v4_emission" in item for item in captured))
         self.assertTrue(all(item["raw_evidence_directory"] == RUNNER.DEFAULT_RAW_EVIDENCE_DIR for item in captured))
-        self.assertEqual(stdout.getvalue().count("p50=45000.00 msg/s"), 4)
+        self.assertEqual(stdout.getvalue().count("p50=45000.00 msg/s"), len(expected_targets))
 
     def test_ordinary_benchmark_exit_code_uses_the_stored_v4_result_status(self):
         """A retired interval gate cannot override a passing reviewed result."""
@@ -185,7 +192,8 @@ class AdmissionCapacityTests(unittest.TestCase):
         ):
             self.assertEqual(RUNNER.main(), 1)
 
-        self.assertEqual(captured, ["sqlite", "uds", "tcp", "tcp-tls"])
+        expected_targets = expected_ordinary_targets()
+        self.assertEqual(captured, expected_targets)
         self.assertIn("FAIL required f8 target tcp", stdout.getvalue())
 
     def test_windows_ordinary_benchmark_excludes_uds(self):
@@ -225,6 +233,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 approved_by="quality-mgr", effective_from="2026-08-24T00:00:00Z",
             ),),
         )
+        missing_target = expected_ordinary_targets()[1]
         with (
             mock.patch.object(sys, "argv", ["run_admission_capacity.py"]),
             mock.patch.dict(os.environ, {"ATM_CAPACITY_HOST_LABEL": "rand-m5"}, clear=False),
@@ -233,7 +242,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(
                 RUNNER.SmokeError,
-                r"host_label='rand-m5', target='uds'",
+                rf"host_label='rand-m5', target='{missing_target}'",
             ):
                 RUNNER.main()
         run_capacity.assert_not_called()
@@ -547,6 +556,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertTrue(all(item["duration_s"] >= 0 for entries in captured["lifecycle"].values() for item in entries))
         self.assertEqual(calls["start"].call_count, 3)
 
+    @unittest.skipIf(os.name == "nt", "UDS is not supported on Windows")
     def test_secure_default_uds_provisions_disposable_identity_before_measured_launch(self):
         code, captured, calls = self._run_snapshot_lifecycle_case(
             transport="uds",
