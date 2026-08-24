@@ -372,7 +372,14 @@ class AdmissionCapacityTests(unittest.TestCase):
                 RUNNER.verify_durability_after_restart(account, roster, -1)
         connect.assert_not_called()
 
-    def _run_snapshot_lifecycle_case(self, fault: str | None = None) -> tuple[int, dict[str, object], dict[str, mock.Mock]]:
+    def _run_snapshot_lifecycle_case(
+        self,
+        fault: str | None = None,
+        *,
+        transport: str = "tcp",
+        peer_wire_security: str | None = "plaintext-test",
+        benchmark_target: str = "tcp",
+    ) -> tuple[int, dict[str, object], dict[str, mock.Mock]]:
         """Exercise the runner lifecycle without inspecting a primary-account root."""
         captured: dict[str, object] = {}
         calls: dict[str, mock.Mock] = {}
@@ -417,6 +424,11 @@ class AdmissionCapacityTests(unittest.TestCase):
                 stack.enter_context(mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]))
                 stack.enter_context(mock.patch.object(RUNNER, "runtime_environment", return_value={}))
                 stack.enter_context(mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64))
+                calls["provision_mtls"] = stack.enter_context(mock.patch.object(
+                    RUNNER,
+                    "provision_disposable_mtls_identity",
+                    return_value=mock.Mock(host="localhost", fingerprint="a" * 64),
+                ))
                 calls["start"] = stack.enter_context(
                     mock.patch.object(
                         RUNNER,
@@ -483,7 +495,14 @@ class AdmissionCapacityTests(unittest.TestCase):
                     ),
                 )
                 code, _evidence_path = RUNNER.run_capacity(
-                    home, root, "tcp", 1, sample_count=1, raw_evidence_directory=root,
+                    home,
+                    root,
+                    transport,
+                    1,
+                    sample_count=1,
+                    raw_evidence_directory=root,
+                    peer_wire_security=peer_wire_security,
+                    benchmark_target=benchmark_target,
                 )
 
             self.assertEqual(interactive_database.read_bytes(), original_interactive)
@@ -499,6 +518,18 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(captured["post_restore_snapshot"]["snapshot_id"], "snapshot-20260822T000000Z-0123456789abcdef")
         self.assertTrue(all(item["duration_s"] >= 0 for entries in captured["lifecycle"].values() for item in entries))
         self.assertEqual(calls["start"].call_count, 3)
+
+    def test_secure_default_uds_provisions_disposable_identity_before_measured_launch(self):
+        code, captured, calls = self._run_snapshot_lifecycle_case(
+            transport="uds",
+            peer_wire_security="mutual-tls",
+            benchmark_target="uds",
+        )
+
+        self.assertEqual(code, 0)
+        self.assertEqual(calls["provision_mtls"].call_count, 1)
+        self.assertEqual(calls["start"].call_count, 4)
+        self.assertEqual(captured["disposable_mtls"]["authority"], "localhost")
 
     def test_real_snapshot_lifecycle_never_touches_interactive_root(self):
         """Exercise the real account-bound snapshot APIs through ``run_capacity``.
@@ -613,7 +644,14 @@ class AdmissionCapacityTests(unittest.TestCase):
                     ),
                 )
                 code, _evidence_path = RUNNER.run_capacity(
-                    home, root, "tcp", 1, sample_count=1, raw_evidence_directory=root,
+                    home,
+                    root,
+                    "tcp",
+                    1,
+                    sample_count=1,
+                    raw_evidence_directory=root,
+                    peer_wire_security="plaintext-test",
+                    benchmark_target="tcp",
                 )
 
             self.assertEqual(code, 0)

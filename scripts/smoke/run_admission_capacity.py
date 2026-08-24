@@ -1927,11 +1927,11 @@ def run_capacity(
         )
         before = count_atm_daemon_processes()
         home.mkdir(parents=True, exist_ok=False)
-        if benchmark_target == "tcp-tls":
-            # Peer configuration uses the daemon's ordinary local API.  It
-            # must exist before the mTLS runtime validates that configuration,
-            # so a bounded plaintext control-plane daemon persists the
-            # disposable state and is stopped before the measured mTLS launch.
+        if launch_peer_wire_security == "mutual-tls":
+            # Every mTLS daemon launch validates its configured identity,
+            # including the secure-default daemon used by the sqlite and UDS
+            # targets.  Persist a disposable identity through the ordinary
+            # plaintext control plane before any measured mTLS launch.
             run_lifecycle_phase(evidence, "snapshot", lambda: start_and_doctor("plaintext-test"))
             mtls_identity = run_lifecycle_phase(
                 evidence,
