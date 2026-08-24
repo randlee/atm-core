@@ -1,0 +1,71 @@
+{
+  "baseline": {
+    "p50_floor": 35000.0,
+    "revision": 1
+  },
+  "binary_hashes": {
+    "atm": "62f57bb2b63cf6857d5d2d29007e218cbddb6e442f8bdacc83b30c39381dd076",
+    "atm-daemon": "309d8d71af766e5c80c297e3e89cc3c7b0950431f93ae44e109d6a1da832425d"
+  },
+  "campaign_id": "20260824T212145Z-rand-m5",
+  "direct_sqlite_message_write": {
+    "accepted_count": 190000,
+    "admissions_per_second": 9473.13708437694,
+    "elapsed_seconds": 20.056713875,
+    "kind": "canonical_core_write",
+    "requested_count": 190000,
+    "worker_count": 64
+  },
+  "durability_after_restart": {
+    "expected_accepted_count": 190000,
+    "method": "isolated_sqlite_exact_count_after_restart",
+    "observed_mailbox_count": 190000,
+    "passed": true
+  },
+  "frames_per_connection": 0,
+  "generated_at": "2026-08-24T21:21:56.517545Z",
+  "host_label": "rand-m5",
+  "incomplete_reason": null,
+  "messages_admitted": 190000,
+  "messages_durable": 190000,
+  "messages_requested": 190000,
+  "metrics": {
+    "accepted_count": 190000,
+    "admissions_per_second": {
+      "max": 12245.922518039897,
+      "min": 7170.939052396258,
+      "p50": 9378.415815673023,
+      "p95": 11137.061454260556,
+      "p99": 12066.941454253
+    },
+    "application_wire_bytes": null,
+    "application_wire_bytes_per_second": null,
+    "connection_count": null,
+    "connections_per_second": null,
+    "first_failure": null,
+    "interval_count": 190,
+    "interval_latency_ms": {
+      "max": 0.0,
+      "min": 0.0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "p99": 0.0
+    },
+    "passed_interval_count": 190,
+    "request_frames_per_second": null,
+    "requested_count": 190000,
+    "response_count": 190000,
+    "time_to_send_1k_s": {
+      "max": 0.13945175,
+      "min": 0.081659834,
+      "p50": 0.106627938,
+      "p95": 0.119851666,
+      "p99": 0.125393583
+    }
+  },
+  "os": "macos",
+  "schema_version": 4,
+  "source_revision": "971b92fcba575adf7f0e81fdf1707ac72d1027b9",
+  "status": "FAIL",
+  "target": "sqlite"
+}
