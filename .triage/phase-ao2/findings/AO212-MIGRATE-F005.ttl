@@ -1,0 +1,99 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO212-MIGRATE-F005>
+  a triage:Finding ;
+  triage:findingId "AO212-MIGRATE-F005" ;
+  triage:title "Required validation test gaps: legacy-shape fixture coverage and --check failure-naming test" ;
+  triage:description "Quality-mgr QA-1 on PR #1014, req-qa B4/B5: two Required validation items from the sprint doc have zero test coverage. (a) No fixture suite covering all four documented legacy shapes (23/25/26/35-key) -- only two same-shape files plus one synthetic v1 mutation exist in test_real_shape_fixtures_preserve_source_bytes_and_metrics(). (b) The --check mode's deliberately-corrupted-fixture-must-fail-naming-the-file requirement (AC3) has zero test coverage; main()/--check mode is never invoked in the test suite." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "MIGRATE" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-23T23:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.12 ;
+  triage:foundAt "2026-08-24T05:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO212-MIGRATE-F005/AO212-shape-gap> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO212-MIGRATE-F005/AO212-check-gap> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO212-MIGRATE-F005/AO213-shape-gap> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO212-MIGRATE-F005/AO213-check-gap> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO212-MIGRATE-F005/AO212-shape-gap>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_migrate_benchmark_history.py" ;
+  triage:line 29 ;
+  triage:snippet "test_real_shape_fixtures_preserve_source_bytes_and_metrics: missing v25/v26/v35-key shape fixtures" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ao2-12-historical-data-migration" ;
+  triage:headSha "8788090d6" ;
+  triage:occursIn <urn:atm:triage:worktree/AO212/8788090d6> .
+
+<urn:atm:triage:occurrence/AO212-MIGRATE-F005/AO212-check-gap>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_migrate_benchmark_history.py" ;
+  triage:line 25 ;
+  triage:snippet "MigrateBenchmarkHistoryTests: missing test_check_mode_validates_and_names_corrupted_fixture" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ao2-12-historical-data-migration" ;
+  triage:headSha "8788090d6" ;
+  triage:occursIn <urn:atm:triage:worktree/AO212/8788090d6> .
+
+<urn:atm:triage:occurrence/AO212-MIGRATE-F005/AO213-shape-gap>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_migrate_benchmark_history.py" ;
+  triage:line 29 ;
+  triage:snippet "test_real_shape_fixtures_preserve_source_bytes_and_metrics: missing v25/v26/v35-key shape fixtures" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ao2-13-benchmark-run-skill" ;
+  triage:headSha "beaec158e" ;
+  triage:occursIn <urn:atm:triage:worktree/AO213/beaec158e> .
+
+<urn:atm:triage:occurrence/AO212-MIGRATE-F005/AO213-check-gap>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_migrate_benchmark_history.py" ;
+  triage:line 25 ;
+  triage:snippet "MigrateBenchmarkHistoryTests: missing test_check_mode_validates_and_names_corrupted_fixture" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ao2-13-benchmark-run-skill" ;
+  triage:headSha "beaec158e" ;
+  triage:occursIn <urn:atm:triage:worktree/AO213/beaec158e> .
+
+<urn:atm:triage:worktree/AO210/879bf41>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-ao2-10" ;
+  triage:branch "feature/ao2-10-benchmark-data-contract" ;
+  triage:headSha "879bf41" ;
+  triage:orderIndex 11 .
+
+<urn:atm:triage:worktree/AO211/c7b4455>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-ao2-11" ;
+  triage:branch "feature/ao2-11-benchmark-rendering-pipeline" ;
+  triage:headSha "c7b4455" ;
+  triage:orderIndex 12 .
+
+<urn:atm:triage:worktree/AO212/8788090d6>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-ao2-12" ;
+  triage:branch "feature/ao2-12-historical-data-migration" ;
+  triage:headSha "8788090d6" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/AO213/beaec158e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-ao2-13" ;
+  triage:branch "feature/ao2-13-benchmark-run-skill" ;
+  triage:headSha "beaec158e" ;
+  triage:orderIndex 14 .

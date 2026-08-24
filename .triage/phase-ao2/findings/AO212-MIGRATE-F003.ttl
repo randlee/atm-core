@@ -1,0 +1,75 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO212-MIGRATE-F003>
+  a triage:Finding ;
+  triage:findingId "AO212-MIGRATE-F003" ;
+  triage:title "displayed_status structurally guaranteed equal to result.status, contradicting sprint doc contract" ;
+  triage:description "quality-mgr QA-1 on PR #1014, arch-qa ARCH-004, consistent with the same root cause as AO212-MIGRATE-F002 (self-referential ratchet floor): displayed_status is structurally guaranteed to equal result.status in every case, because both derive from the same ratchet-floor-based classify_status call. This means no per-run 'as originally judged' status is preserved anywhere in the migrated record, contradicting the sprint doc's contract note (lines 89-93) that the wrapped result's status is untouched and only displayed_status carries the D8 re-derivation. Likely resolves automatically once AO212-MIGRATE-F002 is fixed by classifying against the pre-update floor (prior) rather than the post-update floor, since the original per-run classification would then reflect the floor at the time the run actually occurred -- note this dependency in the triage record." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "MIGRATE" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-23T23:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.12 ;
+  triage:foundAt "2026-08-24T05:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO212-MIGRATE-F003/AO212-MIGRATE-F003-AO212> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO212-MIGRATE-F003/AO212-MIGRATE-F003-AO213> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO212-MIGRATE-F003/AO212-MIGRATE-F003-AO212>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/migrate_benchmark_history.py" ;
+  triage:line 283 ;
+  triage:snippet "displayed_status=(\"INCOMPLETE\" if gap else result.status)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ao2-12-historical-data-migration" ;
+  triage:headSha "8788090d6" ;
+  triage:occursIn <urn:atm:triage:worktree/AO212/8788090d6> .
+
+<urn:atm:triage:occurrence/AO212-MIGRATE-F003/AO212-MIGRATE-F003-AO213>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/migrate_benchmark_history.py" ;
+  triage:line 283 ;
+  triage:snippet "displayed_status=(\"INCOMPLETE\" if gap else result.status)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ao2-13-benchmark-run-skill" ;
+  triage:headSha "dccd103db" ;
+  triage:occursIn <urn:atm:triage:worktree/AO213/dccd103db> .
+
+<urn:atm:triage:worktree/AO210/1d668e269>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ao2-10" ;
+  triage:branch "feature/ao2-10-benchmark-data-contract" ;
+  triage:headSha "1d668e269" ;
+  triage:orderIndex 11 .
+
+<urn:atm:triage:worktree/AO211/77681d466>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ao2-11" ;
+  triage:branch "feature/ao2-11-benchmark-rendering-pipeline" ;
+  triage:headSha "77681d466" ;
+  triage:orderIndex 12 .
+
+<urn:atm:triage:worktree/AO212/8788090d6>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ao2-12" ;
+  triage:branch "feature/ao2-12-historical-data-migration" ;
+  triage:headSha "8788090d6" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/AO213/dccd103db>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ao2-13" ;
+  triage:branch "feature/ao2-13-benchmark-run-skill" ;
+  triage:headSha "dccd103db" ;
+  triage:orderIndex 14 .
