@@ -98,8 +98,9 @@ linked artifact.
    committed. Cold-start numbers + method in the PR.
 5. Every Must requirement maps to a passing gate; any gap is a Blocking
    finding, not a footnote. Evidence file reviewable by req-qa directly.
-6. `integrate/phase-aq` → `develop` merge PR opened with evidence linked.
-   `just test` all three lanes on the final integrate head.
+6. `just test` all three lanes green on the AQ5 head. (Phase closure — the
+   `integrate/phase-aq` → `develop` merge PR — is AQ6's AC: AQ6 lands after
+   this sprint and the phase must not close without it.)
 
 ## Paths to delete
 
