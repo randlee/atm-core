@@ -204,6 +204,18 @@ class BenchmarkSchemaV4Tests(unittest.TestCase):
         )
         self.assertEqual(HistoricalRecord.model_validate_json(empty.model_dump_json()), empty)
 
+    def test_each_historical_contract_model_documents_its_ao212_ownership(self) -> None:
+        """Keep the migration boundary visible at every public model class."""
+        for model in (
+            RatchetPoint,
+            HistoricalResultEntry,
+            HistoricalCampaignEntry,
+            UnattributedEntry,
+            HistoricalRecord,
+        ):
+            self.assertIsNotNone(model.__doc__)
+            self.assertIn("AO2.12", model.__doc__)
+
     def test_historical_record_rejects_non_monotonic_ratchet_and_wrong_campaign_result(self) -> None:
         tcp = result()
         campaign = BenchmarkCampaign(
