@@ -79,6 +79,9 @@ None.
 
 ## Dependencies
 
+- must_follow: AQ1.7 (graft endpoint consumer cutover) — the queue channel
+  resolves receiver endpoints via the daemon registry, never the retired
+  file record. Merge-forward trigger: AQ1.7 dev push.
 - must_follow: AQ1 (taxonomy, kinds, `PendingNudgeStore`) — merge-forward
   before every dev/fix round.
 - parallel_safe: AQ3 (graft channel vs tmux drain — disjoint emitters; both

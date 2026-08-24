@@ -42,10 +42,24 @@ Queue ships first (per Rand, 2026-08-23): it is self-contained, unblocks
 Hermes/graft consumers, and the Send-To CLI work then lands on the
 kind-aware send surface.
 
+Graft connection-model insertion (per Rand, 2026-08-24, sprints
+AQ1.5–AQ1.9): the file-based receiver endpoint record is replaced with
+push-registration to the daemon (SQLite-backed runtime as single source of
+truth) before AQ2 puts the queue's graft channel on that foundation. Binding
+lifecycle requirement: daemon and graft receivers restart independently and
+delivery recovers with zero manual steps (no Hermes profile reset). See
+sprint-AQ1-5 for the requirement text and ADR-056. Sub-numbered ids follow
+the AO2.5.x precedent to avoid renumbering the hardened AQ2–AQ6 docs.
+
 | Sprint | Title | Depends |
 |---|---|---|
 | AQ1 | `atm queue`: CLI verb, taxonomy (ADR-054), kind-aware dispatch + renames, `PendingNudgeStore` | — |
-| AQ2 | Queue: atm-graft dual-channel | must_follow AQ1 · parallel_safe AQ3 (AQ2 owns the graft channel's send-and-report; AQ3 owns kind-agnostic claim/dispatch scheduling; retry state lives only in AQ1's store — neither calls the other's code) |
+| AQ1.5 | Graft registration: daemon API + durable SQLite store (ADR-056) | must_follow AQ1 |
+| AQ1.6 | Graft registration: receiver announce-at-init + lease refresh (dual-write) | must_follow AQ1.5 |
+| AQ1.7 | Graft endpoint consumer cutover (delivery, `_internal-nudge`, doctor) | must_follow AQ1.6 |
+| AQ1.8 | Graft file-record retirement + AI3133 closure | must_follow AQ1.7 · parallel_safe AQ1.9 |
+| AQ1.9 | hermes-atm wheel bump + live restart-matrix verification on m5 | must_follow AQ1.7 · parallel_safe AQ1.8 |
+| AQ2 | Queue: atm-graft dual-channel | must_follow AQ1, AQ1.7 · parallel_safe AQ3 (AQ2 owns the graft channel's send-and-report; AQ3 owns kind-agnostic claim/dispatch scheduling; retry state lives only in AQ1's store — neither calls the other's code) |
 | AQ3 | Queue: tmux idle-drain | must_follow AQ1 · parallel_safe AQ2 |
 | AQ4 | Send-To core: ATM_TEMP (ADR-055), CLI surface, transfer scripts, sweeper | must_follow AQ1–AQ3 |
 | AQ5 | Send-To surface + phase evidence | must_follow AQ4 |
@@ -56,7 +70,8 @@ doc's own Dependencies section is authoritative on any mismatch, and no
 later sprint may redefine an earlier contract.
 
 ADR numbering: ADR-054 = nudge taxonomy + queue mechanism (AQ1); ADR-055 =
-ATM_TEMP + transfer seam (AQ4). ADR-047 (phase-AO AO.1) and ADR-053 are on
+ATM_TEMP + transfer seam (AQ4); ADR-056 = graft receiver registration and
+lease semantics (AQ1.5). ADR-047 (phase-AO AO.1) and ADR-053 are on
 `integrate/phase-ao2`, which merges to `develop` before `integrate/phase-aq`
 is cut — verified mechanically on the cut head:
 `test -f docs/adr/ADR-047-*.md && test -f docs/adr/ADR-053-*.md`.
