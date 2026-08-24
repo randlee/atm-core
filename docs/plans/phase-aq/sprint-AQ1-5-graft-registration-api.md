@@ -135,6 +135,25 @@ pub trait GraftReceiverEndpointStore: sealed::Sealed + Send + Sync {
 }
 ```
 
+**Read-side consumers and liveness derivation (Rand, 2026-08-24; recorded
+in ADR-056):** the lease table's primary key (team, agent) is the same
+natural key as `team_roster`; consumers (roster views, the planned
+liveness hooks, doctor) read via `LEFT JOIN ... USING (team, agent)` — no
+SQL `FOREIGN KEY` is declared (the existing schema uses none, and
+`save_roster`'s whole-roster rewrite would fight a real constraint).
+Anti-state-machine guardrails, binding on every consumer:
+
+- exactly two writers, ever: the receiver (register/refresh/unregister)
+  and the delivery path (`mark_unreachable`); everything else is
+  read-only;
+- aliveness is DERIVED at read time — `lease exists AND last_seen_at
+  within ACTIVE_LEASE_WINDOW AND unreachable_at IS NULL` — never stored
+  as a boolean/status column, so there is no transition to miss and
+  nothing to fall out of sync;
+- no mirroring into roster rows, no events/subscriptions/callbacks at
+  this layer — a future liveness-hook feature builds on these rows,
+  reading the same derivation.
+
 Lease timing constants (defined here/ADR-056, implemented by AQ1.6):
 `GRAFT_LEASE_REFRESH_INTERVAL = 1s` (matches the existing
 `GRAFT_RECEIVER_RECORD_RECHECK_INTERVAL` cadence) and
