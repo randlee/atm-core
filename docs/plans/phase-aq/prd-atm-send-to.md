@@ -1,7 +1,7 @@
 # PRD Brief: ATM "Send To" Shell Integration
 
 **Status:** Draft · **Owner:** Rand · **Date:** 2026-08-22
-**Scope:** Phase 1 = `atm send`. Phase 2 = agent-assisted note drafting + non-ATM session launch. `atm queue` and `atm launch/spawn` remain follow-ons, but Phase 2 lays their groundwork.
+**Scope:** Phase 1 = `atm send` + `atm queue` (deferred-nudge send). Phase 2 = agent-assisted note drafting + non-ATM session launch. `atm queue` and `atm launch/spawn` remain follow-ons, but Phase 2 lays their groundwork.
 
 ---
 
@@ -26,7 +26,6 @@ Right-click (Finder / Explorer) → pick one or more team members → the file(s
 ## 3. Non-Goals
 
 - Spawning agents on a folder (`atm spawn`) — different UX, folder is a workdir.
-- Queueing work (`atm queue`) — same plumbing, different page; later.
 - Replacing the OS-native Share sheet; we add an entry, we don't own the sheet.
 - Binary transport inside the message bus. Messages carry references, not bytes.
 - Designing Wyvern's chat/session integration. Phase 2b *consumes* it with a minimal contract; it does not define it.
@@ -106,6 +105,19 @@ actionable error. A periodic daemon sweep removes anything under `$ATM_TEMP`
 older than **30 days** (TTL-only; no ack coupling, no storage traits). With
 that contract in place, per-feature temp layouts are a non-issue.
 
+### 4.5a `atm queue` — deferred-nudge send
+
+`atm queue` is `atm send` with one difference: the post-write nudge is
+deferred until the recipient harness is ready. The message is written
+durably and immediately through the unchanged canonical path; a
+`nudge_pending_at` marker on the message state derives a restart-safe
+per-recipient FIFO (unread + pending, ULID order). When the harness
+transitions to idle (heartbeat surface), the daemon nudges the NEXT unread
+queued message — one per idle transition; reading a message first clears its
+marker. Graft recipients use the atm-graft queue channel where it exists
+(presence verified in-sprint; not found on the reference tree — M5
+coordination if absent), falling back to the same idle-drain.
+
 ### 4.6 Shell integration (thin glue only)
 
 | Platform | Mechanism | Cost |
@@ -182,6 +194,8 @@ No new machinery. The guarantee that makes it work: **every stage is one-shot, r
 | R11 | Phase 2: `note_source` on envelope | Should (P2) |
 | R12 | Phase 2: "Open with agent" entry works with zero ATM daemons running | Must (P2) |
 | R13 | Pipeline stages are side-effect-free except final send (chaining invariant) | Must |
+| R14 | `atm queue` mirrors the full `atm send` surface; message durable+readable immediately; no immediate nudge | Must |
+| R15 | Deferred nudges drain one-per-idle-transition, oldest unread first; read-first messages never nudged; pending markers survive daemon restart | Must |
 
 ### 5a. Phase-1 command and envelope contract
 
@@ -236,6 +250,7 @@ same-host and cross-host paths.
 5. **`pick-member.html` in Wyvern** — replace step 4's picker; measure latency.
 6. **Windows SendTo `.lnk`** + Nautilus script.
 7. `$ATM_TEMP` sweeper.
+7a. **`atm queue`** verb + idle-drain (heartbeat-driven), graft queue channel where available.
 8. **(P2)** `wyvern chat.html --attach` — "Open with agent", no ATM. Integration smoke test for chat window.
 9. **(P2)** `atm draft` one-shot prefill, local model.
 10. **(P2)** Interactive drafting via chat contract; `new` then `fork`.

@@ -10,7 +10,7 @@ the AN8/AN12 pattern.
 ## Deliverables
 
 1. `docs/plans/phase-aq/validation-evidence.md` recording, per requirement
-   R1–R8 + R13 (PRD §5), the test/artifact that closes it, with links.
+   R1–R8 + R13–R15 (PRD §5), the test/artifact that closes it, with links.
 2. Live scenario evidence: US-2 executed end-to-end cross-host ("send missing
    doc to a running agent") over a configured transfer script — command
    transcript, delivery proof, and the unconfigured-host failure showing the
@@ -26,7 +26,7 @@ requirement:
 
 ```text
 requirement | deliverable/sprint | command or live artifact | exact SHA | result | reviewer
-R1..R8,R13 | AQ1..AQ5           | path + command             | 40-hex     | PASS/OPEN | name
+R1..R8,R13..R15 | AQ1..AQ5,AQ7,AQ8 | path + command        | 40-hex     | PASS/OPEN | name
 ```
 
 R9–R12 are Phase-2 requirements and must appear in the open-item register as
@@ -64,7 +64,7 @@ AQ4 residue proof.
 
 ## Dependencies
 
-- must_follow: AQ1–AQ5 all merged to `integrate/phase-aq`; merge-forward is
+- must_follow: AQ1–AQ5, AQ7, AQ8 all merged to `integrate/phase-aq`; merge-forward is
   required before every evidence fix round so the matrix describes the actual
   integrated head.
 - parallel_safe: none — AQ6 consumes every public contract and owns the only

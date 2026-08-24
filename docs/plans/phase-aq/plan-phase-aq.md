@@ -46,6 +46,8 @@ chat-window integration exists.
 | AQ4 | ATM_TEMP sweeper (TTL-only, 30 d) | must_follow AQ1 · parallel_safe AQ2, AQ3, AQ5 |
 | AQ5 | Wyvern picker + shell glue (macOS, Windows, Ubuntu) | must_follow AQ2 · parallel_safe AQ3, AQ4 |
 | AQ6 | Validation evidence | must_follow all |
+| AQ7 | `atm queue` verb: deferred-nudge send + pending-marker FIFO | must_follow AQ2 · parallel_safe AQ3, AQ4, AQ5 |
+| AQ8 | Idle-drain for deferred nudges (heartbeat transition + recovery sweep) | must_follow AQ7 · parallel_safe AQ3, AQ5 |
 
 Branch pattern: `feature/aq-N-<slug>` off `integrate/phase-aq`, PR target
 `integrate/phase-aq`. Creating the `integrate/phase-aq` branch/worktree from
@@ -91,6 +93,17 @@ not re-litigate them:
 - The fleet has passwordless SSH configured peer-to-peer from this machine
   to all destinations (Rand, 2026-08-23) — the sftp example script's
   baseline assumption.
+- Nudges fire synchronously immediately post-persistence
+  (`storage_and_nudge_router.rs:556-561` → `MessageReceivedHookSelector` →
+  tmux send-keys or graft endpoint); **no deferral surface exists**. Member
+  state arrives via `TeamMemberHeartbeatRequest`
+  (`HeartbeatActivity: ActiveToolUse|Idle|SessionEnded`) into in-memory
+  `RuntimeHealth` (polling-only; no transition events today).
+  `mail_message_states` migrates via the `ensure_column` pattern
+  (`shared_db.rs:888-935`). **No graft queue channel exists in
+  atm-graft/atm-graft-python on the reference tree** — AQ7 verifies against
+  the integration baseline and coordinates with M5 if it lives in
+  hermes-atm or an unmerged branch.
 
 ## Open decisions routed to sprints
 
@@ -105,7 +118,10 @@ not re-litigate them:
 
 - PRD Phase 2 (atm draft, chat sessions, "Open with agent", structured
   `attachments` envelope metadata, `note_source`).
-- `atm queue` / `atm spawn` shell entries.
+- `atm spawn` shell entries (`atm queue` is now in scope: AQ7/AQ8; its
+  dedicated shell entry, if any, is a follow-on).
+- Durable heartbeat history / member-state subscription APIs beyond the
+  internal transition sink (AQ8).
 - Team-level addressing (client-side fan-out stands for this phase).
 - Managed SSH/Tailscale enrollment (environment/IT concern; documented,
   not implemented).
