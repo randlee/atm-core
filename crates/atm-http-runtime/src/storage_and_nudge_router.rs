@@ -723,7 +723,7 @@ mod tests {
     use std::pin::Pin;
     use std::sync::Arc;
     use std::sync::Mutex;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::time::Duration;
 
     use atm_core::boundary::{
@@ -757,10 +757,14 @@ mod tests {
 
     use super::{BlockingCoreBridge, StorageAndNudgeRouter};
     use crate::{
+        AcceptedPeerStream, EstablishedPeerStream, HttpRuntimeBuilder, HttpRuntimeConfig,
+        LoopbackTcpConfig, PeerConnectionPool, PeerPoolConfig, PeerStreamAdapter, PeerStreamFuture,
+        direct_peer_tcp_client,
+    };
+    use crate::{
         AuthenticatedConnector, CanonicalWriteHandler, NonZeroDuration, RuntimeHealth,
         RuntimeLimits, RuntimeTimeouts, canonical_message_router,
     };
-    use crate::{HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig, direct_peer_tcp_client};
     #[cfg(unix)]
     use crate::{UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid};
 
@@ -936,6 +940,37 @@ mod tests {
         database_path: PathBuf,
         home_dir: PathBuf,
         current_dir: PathBuf,
+    }
+
+    /// Test-only opaque adapter: it preserves the selected authenticated-peer
+    /// seam while counting outbound establishments. It is deliberately not a
+    /// TLS substitute; physical mTLS remains covered by the live peer gate.
+    #[derive(Default)]
+    struct CountingPassthroughPeerAdapter {
+        outbound_connects: AtomicUsize,
+    }
+
+    impl PeerStreamAdapter for CountingPassthroughPeerAdapter {
+        fn connect<'a>(
+            &'a self,
+            stream: tokio::net::TcpStream,
+            _peer: &'a atm_core::types::HostName,
+        ) -> PeerStreamFuture<'a, EstablishedPeerStream> {
+            self.outbound_connects.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async move { Ok(Box::new(stream) as EstablishedPeerStream) })
+        }
+
+        fn accept<'a>(
+            &'a self,
+            stream: tokio::net::TcpStream,
+        ) -> PeerStreamFuture<'a, AcceptedPeerStream> {
+            Box::pin(async move {
+                Ok(AcceptedPeerStream {
+                    source_host: "127.0.0.1".parse().expect("loopback source host"),
+                    stream: Box::new(stream),
+                })
+            })
+        }
     }
 
     fn fixture(
@@ -2217,6 +2252,85 @@ mod tests {
             1,
             "the peer listener receives exactly the locally admitted canonical write"
         );
+        remote_runtime
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("remote runtime drains");
+    }
+
+    #[tokio::test]
+    async fn selected_router_reuses_one_opaque_peer_connection_across_three_loopback_writes() {
+        let adapter = Arc::new(CountingPassthroughPeerAdapter::default());
+        let remote = fixture(true, None, None);
+        let remote_runtime = HttpRuntimeBuilder::new(
+            direct_peer_runtime_config(&remote, crate::DirectPeerTcpConfig::ephemeral_for_test())
+                .with_peer_stream_adapter(adapter.clone()),
+            Arc::new(remote.router.clone()),
+        )
+        .build()
+        .expect("valid authenticated remote direct peer configuration")
+        .start()
+        .await
+        .expect("authenticated remote direct peer runtime starts");
+        let remote_port = remote_runtime
+            .direct_peer_address()
+            .expect("ephemeral remote direct peer listener is bound")
+            .port();
+
+        let pool = PeerConnectionPool::new(PeerPoolConfig::default(), adapter.clone());
+        let mut local = fixture(true, None, None);
+        local.router = local
+            .router
+            .clone()
+            .with_direct_peer_port(NonZeroU16::new(remote_port).expect("non-zero port"))
+            .with_peer_stream_adapter(adapter.clone())
+            .with_peer_connection_pool(pool.clone());
+
+        for _ in 0..3 {
+            let mut outbound = write_request(local.home_dir.clone(), local.current_dir.clone());
+            outbound.to = Some(
+                "recipient@test-team.127.0.0.1"
+                    .parse()
+                    .expect("host-qualified loopback recipient"),
+            );
+            let response = local
+                .router
+                .dispatch(
+                    ApiRequest::new(RequestEnvelope::Write(Box::new(outbound))),
+                    AuthenticatedIngress::Local,
+                    RequestDeadline::after(Duration::from_secs(1)),
+                )
+                .await
+                .expect("selected router forwards the local write");
+            assert!(matches!(
+                response.into_inner(),
+                ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
+            ));
+        }
+
+        assert_eq!(
+            adapter.outbound_connects.load(Ordering::SeqCst),
+            1,
+            "three sequential router dispatches establish one opaque peer stream"
+        );
+        assert_eq!(
+            remote
+                .message_store
+                .list_messages(&MessageQuery {
+                    team: "test-team".parse().expect("team"),
+                    agent: "recipient".parse().expect("agent"),
+                    sender: None,
+                    task_id: None,
+                    limit: None,
+                })
+                .expect("read remote recipient mailbox")
+                .len(),
+            3,
+            "every dispatched write crosses the canonical remote peer listener"
+        );
+
+        pool.shutdown(Duration::from_secs(1)).await;
         remote_runtime
             .begin_shutdown()
             .finish()
