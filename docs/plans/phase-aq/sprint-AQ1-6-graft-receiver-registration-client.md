@@ -38,7 +38,19 @@ written (dual-write) so nothing downstream changes until AQ1.7's cutover.
 4. **Unregister on drop**: generation-checked `Drop` additionally sends
    unregister (best-effort, non-blocking — a missed unregister just leaves
    a lease that expires by window).
-5. **Dual-write invariant**: the file record write remains byte-identical
+5. **Lock-path decoupling (required before AQ1.8 can delete the record
+   path builders)**: introduce a dedicated
+   `graft_receiver_lock_path_from_root(root, team, agent)` in
+   `atm-core::graft` that derives the flock path independently of the
+   JSON record path (same on-disk `.lock` location as today's
+   `receiver_ownership_lock_path(record_path)`, so existing locks stay
+   valid), and migrate BOTH `crates/atm-graft/src/lib.rs` call sites —
+   `GraftSession::activate_with_observability` (~:390, production) and
+   the bare-workspace activation test (~:784) — to pass the lock path;
+   `GraftReceiverListener::bind` derives the record path internally
+   during the dual-write period. After this sprint, no code outside
+   `atm-core/src/graft.rs` references `graft_receiver_record_path_*`.
+6. **Dual-write invariant**: the file record write remains byte-identical
    to today (including its known race — no interim behavior change hides
    inside this sprint); every consumer keeps reading the file until AQ1.7.
 

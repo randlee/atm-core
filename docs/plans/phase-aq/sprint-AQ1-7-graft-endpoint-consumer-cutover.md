@@ -39,8 +39,13 @@ the file is written but no longer read by anything in-tree.
    receiver-not-registered error naming (team, agent) — no file-path
    errors anywhere (grep gate: `read_receiver_record` and
    `graft_receiver_record_path` have zero call sites outside
-   `atm-core/src/graft.rs`'s own write/republish code and tests slated for
-   AQ1.8 deletion).
+   `atm-core/src/graft.rs`'s own write/republish internals — AQ1.6's
+   lock-path decoupling (deliverable 5) has already migrated the two
+   former `crates/atm-graft/src/lib.rs` call sites (~:390 production,
+   ~:784 test) to `graft_receiver_lock_path_from_root`, so the only
+   record-path references left are the graft.rs internals slated for
+   AQ1.8 deletion; the gate greps the whole workspace including
+   atm-graft).
 3. Connect-failure path: dead endpoint → `mark_unreachable` recorded +
    today's delivery error surfaced (no new error shapes).
 4. Doctor section renders for a live receiver and for a stale lease

@@ -19,14 +19,15 @@ AI3133 TOCTOU class rather than patching it.
    record file dies). Note: this function may carry a small interim
    atomic-write hardening commit from a develop fix branch — it is deleted
    regardless; the deletion is a strict superset.
-2. **Test migration**: unit tests in `graft.rs` and
-   `atm-graft/src/runtime.rs` that exercised file write/read/republish are
-   rewritten against the registry lease model;
+2. **Test migration**: unit tests in `graft.rs`, `atm-graft/src/lib.rs`
+   (the bare-workspace activation test now on the AQ1.6 lock-path
+   builder), and `atm-graft/src/runtime.rs` that exercised file
+   write/read/republish are rewritten against the registry lease model;
    `crates/atm-core/tests/graft_receiver_ownership.rs` and
    `crates/atm-architecture/tests/graft_receiver_ownership_boundary.rs`
    updated to assert the new ownership model (flock + daemon lease +
    generation), reviewed by `boundary-guard` as explicit diffs.
-3. **Finding closure**: `.triage/phase-AI/findings/AI3133-HERMES-GRAFT-RECEIVER-SINGLETON-UNSAFE.ttl` (exactly this file — 13+ distinct findings share the AI3133 prefix; none of the others are touched) updated
+3. **Finding closure**: `.triage/phase-AI/findings/AI3133-HERMES-GRAFT-RECEIVER-SINGLETON-UNSAFE.ttl` (exactly this file — 11 distinct findings share the AI3133 prefix; none of the others are touched) updated
    with a supersession Resolution referencing ADR-056 and this sprint's
    merge commit (ancestry-verified per the standing resolution rule):
    defect #1 (no exclusivity) — fixed by AI.36's flock, retained; defect
@@ -42,8 +43,10 @@ AI3133 TOCTOU class rather than patching it.
 
 1. Grep gates: zero occurrences of `write_receiver_record`,
    `read_receiver_record`, or `graft_receiver_record_path` anywhere in the
-   workspace (including tests); `ReceiverOwnershipGuard` still present with
-   its tests.
+   workspace (including tests and `crates/atm-graft/src/lib.rs`
+   explicitly — the AQ1.6 lock-path migration is a precondition, verified
+   here); `ReceiverOwnershipGuard` and
+   `graft_receiver_lock_path_from_root` still present with their tests.
 2. Rewritten ownership/boundary tests pass; `boundary-guard` sign-off on
    the boundary-test diff recorded in the PR.
 3. `.triage/phase-AI/findings/AI3133-HERMES-GRAFT-RECEIVER-SINGLETON-UNSAFE.ttl` shows the supersession Resolution covering its three occurrences (bind-overwrite, record-truncate-write, drop-unconditional-delete) with
