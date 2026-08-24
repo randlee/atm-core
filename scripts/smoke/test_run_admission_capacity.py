@@ -117,6 +117,39 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertTrue(all(item["raw_evidence_directory"] == RUNNER.DEFAULT_RAW_EVIDENCE_DIR for item in captured))
         self.assertEqual(stdout.getvalue().count("p50=45000.00 msg/s"), 4)
 
+    def test_ordinary_benchmark_fails_when_one_required_target_fails(self):
+        """A measured failure remains visible, but cannot pass the four-target suite."""
+        captured: list[str] = []
+
+        def run_capacity(*_args, **kwargs):
+            target = kwargs["benchmark_target"]
+            captured.append(target)
+            return RUNNER.CapacityRunResult(
+                1 if target == "tcp" else 0,
+                Path("sentinel.evidence"),
+                Path("sentinel.raw"),
+            )
+
+        measured = mock.Mock(
+            median_msg_per_second=45_000.0,
+            p95_msg_per_second=45_100.0,
+            p99_msg_per_second=45_200.0,
+            accepted=10_000,
+            requested=10_000,
+            raw_artifact="artifacts/raw.json",
+        )
+
+        with (
+            mock.patch.object(sys, "argv", ["run_admission_capacity.py"]),
+            mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity),
+            mock.patch.object(RUNNER, "suite_target_result", return_value=measured),
+            contextlib.redirect_stdout(stdout := io.StringIO()),
+        ):
+            self.assertEqual(RUNNER.main(), 1)
+
+        self.assertEqual(captured, ["sqlite", "uds", "tcp", "tcp-tls"])
+        self.assertIn("FAIL required f8 target tcp", stdout.getvalue())
+
     def test_selected_profile_without_diagnostic_marker_is_rejected(self):
         with mock.patch.object(sys, "argv", ["run_admission_capacity.py", "--target", "tcp"]):
             with self.assertRaisesRegex(RUNNER.SmokeError, "require --diagnostic-only"):
