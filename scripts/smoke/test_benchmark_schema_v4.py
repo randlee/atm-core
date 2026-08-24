@@ -122,6 +122,30 @@ class BenchmarkSchemaV4Tests(unittest.TestCase):
         )
         self.assertEqual(campaign.status, "INCOMPLETE")
 
+    def test_all_required_targets_present_with_a_fail_and_no_incomplete_is_fail(self) -> None:
+        """The pure-FAIL roll-up branch: previously only exercised implicitly
+        alongside an INCOMPLETE target in the precedence test below."""
+        sqlite = result("sqlite")
+        uds = result("uds")
+        tcp = result(
+            "tcp",
+            status="FAIL",
+            baseline=BaselineRef(revision=1, p50_floor=20_001),
+        )
+        tls = result("tcp-tls")
+        campaign = BenchmarkCampaign(
+            campaign_id=sqlite.campaign_id,
+            host_label=sqlite.host_label,
+            os="macos",
+            phase="ao2",
+            started_at=NOW,
+            completed_at=NOW,
+            source_revision=sqlite.source_revision,
+            results=(sqlite, uds, tcp, tls),
+            status="FAIL",
+        )
+        self.assertEqual(campaign.status, "FAIL")
+
     def test_mixed_fail_and_incomplete_campaign_uses_incomplete_precedence(self) -> None:
         """Campaign construction cannot diverge from the canonical policy."""
         sqlite = result("sqlite")
