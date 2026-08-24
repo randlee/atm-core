@@ -6,6 +6,13 @@
     <dt>Generated</dt><dd>2026-08-01T06:35:26.979698Z</dd>
     <dt>Host label</dt><dd>mac-arm64-01</dd>
     <dt>Transport</dt><dd>uds</dd>
+    <dt>Peer-wire security</dt><dd>legacy-unverified</dd>
+    <dt>Benchmark target</dt><dd>legacy</dd>
+    <dt>Hook mode</dt><dd>unknown</dd>
+    <dt>Daemon/client version</dt><dd>unknown</dd>
+    <dt>Host profile</dt><dd>unknown / unknown</dd>
+    <dt>Command</dt><dd>legacy</dd>
+    <dt>Execution daemon</dt><dd>legacy-unverified</dd>
     <dt>Frames per connection</dt><dd>64</dd>
     <dt>Run duration (seconds)</dt><dd>20.02195504100013</dd>
     <dt>Artifact</dt><dd>20260801-063526.979698-mac-arm64-01-uds-f64.json</dd>
@@ -13,5 +20,7 @@
   <h2>Failure diagnostics</h2><pre>capacity durability list failed: daemon request exceeded the 3s runtime deadline; retry the read-only ATM command after the same-host daemon catches up
   Recovery: Ensure atm-daemon binary is installed, then restore the single local daemon to a healthy serving state and retry.</pre>
   <h2>Samples</h2>
-<table><thead><tr><th>Intervals</th><th>Accepted</th><th>Responses</th><th>Admissions/s (min / p50 / p95 / max)</th><th>Status</th></tr></thead><tbody><tr><td>510</td><td>510000</td><td>510000</td><td>21917.11 / 25549.71 / 27865.73 / 29727.51</td><td>FAIL</td></tr></tbody></table>
+<table><thead><tr><th>Intervals</th><th>Accepted</th><th>Responses</th><th>Admissions/s (min / p50 / p95 / p99 / max)</th><th>Status</th></tr></thead><tbody><tr><td>510</td><td>510000</td><td>510000</td><td>21917.11 / 25549.71 / 27865.73 / n/a / 29727.51</td><td>FAIL</td></tr></tbody></table>
+  <h2>Direct SQLite message-write ceiling</h2>
+<p>Not captured by this historical run.</p>
 </section>

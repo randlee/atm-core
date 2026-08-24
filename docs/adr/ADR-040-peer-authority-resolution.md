@@ -1,5 +1,9 @@
 # ADR-040 — Peer Authority Resolution
 
+> **Forward reconciliation:** ADR-047 partially supersedes this ADR's
+> peer-wire mode-selection wording. Its authority-resolution, hostname, pin,
+> and allowlist rules remain in force.
+
 | Field | Value |
 | --- | --- |
 | ID | ADR-040 |

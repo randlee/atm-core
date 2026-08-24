@@ -24,8 +24,8 @@ pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
     BootstrapTraceReport, DaemonRuntimeDoctorReport, DoctorEnvironmentVisibility,
     DoctorExecutionContext, DoctorFinding, DoctorReport, DoctorSeverity, DoctorStatus,
-    DoctorSummary, PeerAuthorityDoctorReport, PeerConfigDoctorReport, PostSendDoctorReport,
-    PostSendHookRuleIndex, PostSendHookRuleReport, RecipientDeliveryPath,
+    DoctorSummary, PeerAuthorityDoctorReport, PeerConfigDoctorReport, PeerWireSecurityStatus,
+    PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport, RecipientDeliveryPath,
     RecipientDeliveryPathReport,
 };
 
@@ -307,6 +307,7 @@ fn doctor_client_context(environment: &DoctorEnvironmentVisibility) -> DoctorExe
         version: Some(crate::protocol::ReleaseVersion::current()),
         cli_schema_version: Some(crate::protocol::CLI_SCHEMA_VERSION),
         http_api_version: Some(crate::protocol::HttpApiVersion::current()),
+        peer_wire_security: None,
     }
 }
 

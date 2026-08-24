@@ -559,21 +559,21 @@ NORMAL_ROWS = FAST_ROWS + [
     ),
     SuiteRowSpec(
         id="AD17-CI-001",
-        flow="windows CI retains the explicit atm-daemon lane on the accepted line",
+        flow="CI exercises the replacement runtime without restoring the frozen daemon lane",
         commands=[
             [
                 "rg",
                 "-n",
-                "Run atm-daemon tests",
+                "Run replacement-workspace tests excluding legacy atm-daemon",
                 ".github/workflows/ci.yml",
             ],
             [
                 "python3",
                 "-c",
-                "from pathlib import Path; data = Path('.github/workflows/ci.yml').read_text(encoding='utf-8'); raise SystemExit(1 if \"if: runner.os != 'Windows'\" in data else 0)",
+                "from pathlib import Path; data = Path('.github/workflows/ci.yml').read_text(encoding='utf-8'); required = 'cargo test --workspace --exclude atm-daemon --verbose'; forbidden = 'Run atm-daemon tests'; raise SystemExit(0 if required in data and forbidden not in data else 1)",
             ],
         ],
-        pass_note="the explicit atm-daemon CI lane remains present and the Windows skip guard is absent",
+        pass_note="the replacement-runtime CI lane remains present and no frozen atm-daemon test lane is restored",
     ),
     SuiteRowSpec(
         id="AD18-RUNTIME-ROOT-001",

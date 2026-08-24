@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "report_type": "smoke",
+  "generated_at": "2026-08-20T22:24:12.812913+00:00",
+  "host_label": "rand-m4.local",
+  "report_html": "smoke/macos/rand-m4.local/20260820T222412780815Z-pid97059-crosshost-curl-tls/index.html",
+  "status": "FAIL"
+}

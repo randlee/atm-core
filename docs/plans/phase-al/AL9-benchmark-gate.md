@@ -64,49 +64,29 @@ The following compact artifact is a real current-runtime
 This row clears the minimum 1,000 admissions/s floor for its own isolated
 local TCP/f64 run. It does **not** close the gate: it has no matching frozen
 baseline comparison, no separately recorded hook-active companion, and is not
-a physical M5 or Windows result. The runner still correctly refuses to attach
-to or replace an ambient daemon and requires an isolated OS user (or explicit
-idle-host backup/restore authority).
+a physical M5 or Windows result. The runner correctly refuses to attach to or
+replace an ambient daemon and requires an isolated OS user.
 
-The runner selects its mode only by launching the separately compiled
-`atm-daemon-benchmark --hook-mode <active|disabled>` binary. That binary is
-available only with `atm-daemon-bootstrap`'s `benchmark-harness` feature; the
-shipped `atm-daemon` composition always injects the active received-hook
-selector and does not read a hook-mode environment variable. Build the
-harness with:
+Historical note: this AL.9 harness design was superseded by AO.4 because an
+alternate benchmark executable cannot prove the shipped daemon's performance.
+Current public commands are `just benchmark --target tcp` and
+`just benchmark --target tcp-tls`; each launches the shipped Tokio/Axum
+`atm-daemon` with its explicit peer-wire mode and retains the active hook.
+The historical rows above are not AO.4-compatible baseline evidence without
+new shipped-daemon provenance. Current-runtime rows not enumerated above,
+including hook-active and Windows, remain **pending** until an authorized
+operator executes the isolated benchmark gate.
 
-```sh
-cargo build --release -p atm-daemon-bootstrap \
-  --features benchmark-harness --bin atm-daemon-benchmark
-```
+### Retired managed-host backup/restore mode
 
-The production daemon remains unable to select `disabled`. Current-runtime
-rows not enumerated above, including hook-active and Windows, are still
-**pending** until an authorized operator executes the isolated benchmark gate.
-
-### Explicit managed-host backup/restore mode
-
-The default remains fail-closed: a runner must use a dedicated clean OS user
-and refuses to attach to, stop, or replace an ambient daemon. An operator who
-is explicitly authorized to interrupt the sole managed daemon may instead set
-`ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE=1` and provide the normal
-`daemon-switch` service details to the runner:
-
-```sh
-ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE=1 \
-python3 scripts/smoke/run_admission_capacity.py \
-  --managed-service <actual-label> \
-  --managed-launch-agent-plist ~/Library/LaunchAgents/<actual-label>.plist
-```
-
-On Linux or Windows, supply the service name and any documented selector-link
-arguments appropriate to `daemon-switch`. This mode captures the selected
-pair and its healthy doctor state, calls only `daemon-switch quiesce` to stop
-the one managed daemon, atomically moves the complete host `.atm` state root,
-and runs the disposable benchmark. In a `finally` path it restores that root,
-restarts the same selected pair through `daemon-switch`, verifies `atm doctor`
-through the switch status, and rejects selector drift. It must be used only by
-an authorized operator; it does not weaken the clean-user default.
+`ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE` and the managed-daemon benchmark
+arguments are retired. Moving, replacing, or restoring `~/.atm/db` is not a
+durable backup protocol and may destroy the active OS user's data. The runner
+fails before it can call `daemon-switch`, quiesce an ambient daemon, or mutate
+that database. Every physical benchmark must run under a dedicated clean OS
+user with `ATM_CAPACITY_ISOLATED_OS_USER=1`. A durable backup/recovery design
+is planned separately and is not an authorization to benchmark against the
+live database.
 
 ## Required artifacts before closure
 

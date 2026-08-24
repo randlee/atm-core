@@ -21,6 +21,11 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 const SQLITE_BUSY_TIMEOUT_MS: u64 = 5_000;
+// Search projection writes touch several B-trees and FTS segments inside the
+// sole durable writer transaction.  The SQLite default is only 2 MiB, which
+// churns cache pages under a concurrent admission burst.  This setting applies
+// only to the one writer connection and bounds its page cache at 32 MiB.
+const WRITER_CACHE_KIB: i64 = 32 * 1024;
 #[cfg(test)]
 static NEXT_IN_MEMORY_DB_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -636,6 +641,9 @@ pub(crate) fn open_writer_connection_for_target(
 ) -> Result<Connection, AtmError> {
     let mut connection = open_connection_for_target(target)?;
     enable_write_ahead_log(&mut connection, target)?;
+    connection
+        .pragma_update(None, "cache_size", -WRITER_CACHE_KIB)
+        .map_err(|error| sqlite_error(target, "failed to configure SQLite writer cache", error))?;
     Ok(connection)
 }
 
@@ -1102,6 +1110,10 @@ mod tests {
                 .query_row("PRAGMA journal_mode;", [], |row| row.get(0))
                 .expect("read writer journal mode");
             assert_eq!(writer_mode.to_ascii_lowercase(), "wal");
+            let writer_cache_kib: i64 = writer
+                .query_row("PRAGMA cache_size;", [], |row| row.get(0))
+                .expect("read writer cache size");
+            assert_eq!(writer_cache_kib, -WRITER_CACHE_KIB);
 
             let reader = open_connection_for_target(&target).expect("open reader connection");
             let reader_mode: String = reader
