@@ -22,6 +22,7 @@ if str(ROOT) not in sys.path:
 from scripts.smoke.benchmark_schema import (
     BenchmarkSchemaError,
     BenchmarkSummary,
+    LEGACY_SUMMARY_SCHEMA_VERSION,
     SUMMARY_SCHEMA_VERSION,
     compact_evidence,
 )
@@ -33,7 +34,10 @@ REPORT_HTML = f"{REPORT_NAME}.html"
 REPORT_DIR = REPORTS_ROOT / REPORT_NAME
 HISTORICAL_IMPORTS_NAME = "historical-imports.json"
 ENVELOPE_SCHEMA_VERSION = 1
-AI40_SCHEMA_VERSION = SUMMARY_SCHEMA_VERSION
+# AO2.10 introduces v4 emission.  This reader continues to accept v3
+# artifacts unchanged until AO2.12 performs the separately reviewed history
+# migration; reports must never require rewriting existing evidence in place.
+AI40_SCHEMA_VERSION = LEGACY_SUMMARY_SCHEMA_VERSION
 SUPPORTED_TRANSPORTS = frozenset({"uds", "tcp"})
 SUPPORTED_FRAMES = frozenset({1, 2, 4, 8, 16, 64})
 SAFE_LABEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")

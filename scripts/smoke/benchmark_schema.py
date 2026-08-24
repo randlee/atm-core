@@ -1,15 +1,19 @@
 """Versioned, public benchmark-summary schema shared by runner and migration."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from math import isclose
+import re
 from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from scripts.public_redaction import public_string
+from scripts.smoke.benchmark_policy import classify_status
 
 
-SUMMARY_SCHEMA_VERSION = 3
+SUMMARY_SCHEMA_VERSION = 4
+LEGACY_SUMMARY_SCHEMA_VERSION = 3
 SUPPORTED_TRANSPORTS = frozenset({"sqlite", "uds", "tcp"})
 SUPPORTED_FRAMES = frozenset({1, 2, 4, 8, 16, 64})
 
@@ -64,12 +68,12 @@ class BenchmarkMetrics(BaseModel):
     accepted_count: int = Field(ge=0)
     requested_count: int = Field(ge=0)
     response_count: int = Field(ge=0)
-    connection_count: int = Field(ge=0)
-    application_wire_bytes: WireBytes
+    connection_count: int | None = Field(default=None, ge=0)
+    application_wire_bytes: WireBytes | None = None
     admissions_per_second: MetricDistribution
-    request_frames_per_second: MetricDistribution
-    connections_per_second: MetricDistribution
-    application_wire_bytes_per_second: MetricDistribution
+    request_frames_per_second: MetricDistribution | None = None
+    connections_per_second: MetricDistribution | None = None
+    application_wire_bytes_per_second: MetricDistribution | None = None
     time_to_send_1k_s: MetricDistribution
     interval_latency_ms: MetricDistribution
     first_failure: Optional[str] = None
@@ -136,12 +140,222 @@ class DirectSQLiteMessageWrite(BaseModel):
         return self
 
 
+class BaselineEntry(BaseModel):
+    """One quality-reviewed per-host/per-target v4 acceptance floor."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    host_label: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+    target: Literal["sqlite", "uds", "tcp", "tcp-tls"]
+    p50_floor: float = Field(ge=0)
+    approved_by: str = Field(min_length=1)
+    effective_from: datetime
+
+    @field_validator("effective_from")
+    @classmethod
+    def utc_effective_from(cls, value: datetime) -> datetime:
+        return require_utc(value, "effective_from")
+
+
+class BaselineSet(BaseModel):
+    """The one reviewed source of benchmark acceptance floors."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal[1] = 1
+    revision: int = Field(ge=1)
+    entries: tuple[BaselineEntry, ...]
+
+    @model_validator(mode="after")
+    def unique_host_target_entries(self) -> "BaselineSet":
+        pairs = [(entry.host_label, entry.target) for entry in self.entries]
+        if len(pairs) != len(set(pairs)):
+            raise ValueError("baselines may contain only one entry per host_label and target")
+        return self
+
+    def entry_for(self, host_label: str, target: str) -> BaselineEntry:
+        for entry in self.entries:
+            if entry.host_label == host_label and entry.target == target:
+                return entry
+        raise BenchmarkSchemaError(
+            f"missing benchmark baseline for host_label={host_label!r}, target={target!r}"
+        )
+
+
+def require_non_decreasing_baselines(previous: BaselineSet, current: BaselineSet) -> None:
+    """Reject a baseline revision that lowers any already-reviewed floor."""
+    if current.revision <= previous.revision:
+        raise BenchmarkSchemaError("baseline revision must increase")
+    current_entries = {(entry.host_label, entry.target): entry for entry in current.entries}
+    for entry in previous.entries:
+        replacement = current_entries.get((entry.host_label, entry.target))
+        if replacement is None:
+            raise BenchmarkSchemaError(
+                f"baseline revision may not remove {(entry.host_label, entry.target)!r}"
+            )
+        if replacement.p50_floor < entry.p50_floor:
+            raise BenchmarkSchemaError(
+                f"baseline revision may not lower {(entry.host_label, entry.target)!r}"
+            )
+
+
+class BaselineRef(BaseModel):
+    """Immutable snapshot of the reviewed floor applied to a result."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    revision: int = Field(ge=1)
+    p50_floor: float = Field(ge=0)
+
+
+def require_utc(value: datetime, field: str) -> datetime:
+    """Reject naive and non-UTC datetimes at the public artifact boundary."""
+    if value.tzinfo is None or value.utcoffset() != timezone.utc.utcoffset(value):
+        raise ValueError(f"{field} must be an ISO-8601 UTC timestamp")
+    return value
+
+
+def artifact_id(*, campaign_id: str, target: str) -> str:
+    """Derive one safe deterministic per-target public artifact identifier."""
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", campaign_id):
+        raise BenchmarkSchemaError("campaign_id must be a safe opaque identifier")
+    if target not in {"sqlite", "uds", "tcp", "tcp-tls"}:
+        raise BenchmarkSchemaError(f"unknown benchmark target {target!r}")
+    return f"{campaign_id}-{target}"
+
+
+def campaign_id(*, started_at: datetime, host_label: str) -> str:
+    """Derive the single UTC-and-host campaign identity shared by runner/report."""
+    require_utc(started_at, "started_at")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", host_label):
+        raise BenchmarkSchemaError("host_label must be a safe label")
+    return f"{started_at.strftime('%Y%m%dT%H%M%SZ')}-{host_label}"
+
+
+class BenchmarkRunResult(BaseModel):
+    """The v4 public result for exactly one required benchmark target."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal[4] = SUMMARY_SCHEMA_VERSION
+    campaign_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    host_label: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+    os: Literal["macos", "windows", "linux"]
+    target: Literal["sqlite", "uds", "tcp", "tcp-tls"]
+    status: Literal["PASS", "FAIL", "INCOMPLETE"]
+    incomplete_reason: str | None = None
+    generated_at: datetime
+    source_revision: str = Field(pattern=r"^[0-9a-f]{40}$")
+    binary_hashes: dict[str, str]
+    frames_per_connection: int = Field(ge=0)
+    messages_requested: int = Field(ge=0)
+    messages_admitted: int = Field(ge=0)
+    messages_durable: int = Field(ge=0)
+    metrics: BenchmarkMetrics | None = None
+    baseline: BaselineRef
+    durability_after_restart: DurabilityAfterRestart | None = None
+    direct_sqlite_message_write: DirectSQLiteMessageWrite | None = None
+
+    @field_validator("generated_at")
+    @classmethod
+    def utc_generated_at(cls, value: datetime) -> datetime:
+        return require_utc(value, "generated_at")
+
+    @model_validator(mode="after")
+    def consistent_status_and_target_shape(self) -> "BenchmarkRunResult":
+        if (self.status == "INCOMPLETE") != (self.incomplete_reason is not None):
+            raise ValueError("incomplete_reason is required iff status is INCOMPLETE")
+        if self.messages_admitted > self.messages_requested or self.messages_durable > self.messages_admitted:
+            raise ValueError("message counts must satisfy durable <= admitted <= requested")
+        if self.target == "sqlite" and self.frames_per_connection != 0:
+            raise ValueError("sqlite target must have frames_per_connection=0")
+        if self.target != "sqlite" and self.frames_per_connection <= 0:
+            raise ValueError("network target must have frames_per_connection > 0")
+        network_fields = (
+            self.metrics.application_wire_bytes if self.metrics else None,
+            self.metrics.request_frames_per_second if self.metrics else None,
+            self.metrics.connections_per_second if self.metrics else None,
+            self.metrics.application_wire_bytes_per_second if self.metrics else None,
+        )
+        if self.target == "sqlite" and any(value is not None for value in network_fields):
+            raise ValueError("sqlite metrics must not invent network values")
+        if self.target != "sqlite" and self.metrics is not None and any(
+            value is None for value in network_fields
+        ):
+            raise ValueError("network target metrics require all network values")
+        expected = classify_status(
+            lifecycle_complete=self.metrics is not None and self.durability_after_restart is not None,
+            messages_requested=self.messages_requested,
+            messages_admitted=self.messages_admitted,
+            messages_durable=self.messages_durable,
+            p50_admissions_per_second=(
+                None if self.metrics is None else self.metrics.admissions_per_second.p50
+            ),
+            baseline_p50_floor=self.baseline.p50_floor,
+        )
+        if self.status != expected:
+            raise ValueError(f"status must equal classify_status() output {expected}")
+        return self
+
+
+def required_targets(os_name: str) -> frozenset[str]:
+    """Return the unskippable v4 target matrix for an OS identifier."""
+    targets = {"sqlite", "tcp", "tcp-tls"}
+    if os_name in {"macos", "linux"}:
+        targets.add("uds")
+    return frozenset(targets)
+
+
+class BenchmarkCampaign(BaseModel):
+    """A complete computer/run benchmark campaign with machine-derived roll-up."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal[4] = SUMMARY_SCHEMA_VERSION
+    campaign_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    host_label: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+    os: Literal["macos", "windows", "linux"]
+    phase: str = Field(min_length=1)
+    started_at: datetime
+    completed_at: datetime | None = None
+    source_revision: str = Field(pattern=r"^[0-9a-f]{40}$")
+    results: tuple[BenchmarkRunResult, ...]
+    status: Literal["PASS", "FAIL", "INCOMPLETE"]
+
+    @field_validator("started_at", "completed_at")
+    @classmethod
+    def utc_campaign_times(cls, value: datetime | None) -> datetime | None:
+        return None if value is None else require_utc(value, "campaign timestamp")
+
+    @model_validator(mode="after")
+    def complete_matrix_has_derived_status(self) -> "BenchmarkCampaign":
+        targets = {result.target for result in self.results}
+        expected_targets = required_targets(self.os)
+        if len(targets) != len(self.results):
+            raise ValueError("campaign may contain each target only once")
+        if any(result.campaign_id != self.campaign_id for result in self.results):
+            raise ValueError("every result must belong to its campaign")
+        if any(result.host_label != self.host_label or result.os != self.os for result in self.results):
+            raise ValueError("every result must match campaign host and OS")
+        if targets != expected_targets:
+            expected = "INCOMPLETE"
+        elif any(result.status == "INCOMPLETE" for result in self.results):
+            expected = "INCOMPLETE"
+        elif any(result.status == "FAIL" for result in self.results):
+            expected = "FAIL"
+        else:
+            expected = "PASS"
+        if self.status != expected:
+            raise ValueError(f"campaign status must equal derived roll-up {expected}")
+        return self
+
+
 class BenchmarkSummary(BaseModel):
     """One immutable public artifact for one transport/frame benchmark run."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal[SUMMARY_SCHEMA_VERSION] = SUMMARY_SCHEMA_VERSION
+    schema_version: Literal[LEGACY_SUMMARY_SCHEMA_VERSION] = LEGACY_SUMMARY_SCHEMA_VERSION
     artifact_kind: Literal["send_message_benchmark_summary"] = "send_message_benchmark_summary"
     generated_at: str = Field(min_length=1)
     campaign_id: Optional[str] = Field(
