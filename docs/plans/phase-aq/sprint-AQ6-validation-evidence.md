@@ -29,8 +29,8 @@ the AN8/AN12 pattern.
 
 ## Required validation
 
-- Full `just test` + integration suites, macOS + Windows lanes, on the final
-  integrate head.
+- Full `just test` + integration suites, ubuntu + macOS + Windows lanes, on
+  the final integrate head.
 
 ## Non-closure / out of scope
 

@@ -15,8 +15,9 @@ Wyvern-side PR as a linked artifact.
    + `.ps1`): `atm teams --json | <picker> | atm send --attach "$@"
    --from-json`. Nonzero from any stage halts with no send (R5/R13).
 2. **Fallback picker first**: macOS `osascript`/Shortcuts "Choose from list";
-   Windows `Out-GridView`. Emits the PRD §4.2 output JSON. This ships and
-   remains the reference implementation.
+   Windows `Out-GridView`; Linux `zenity --list --checklist` (with a plain
+   `fzf`/terminal fallback where no display server). Emits the PRD §4.2
+   output JSON. This ships and remains the reference implementation.
 3. **Wyvern `pick-member.html`** (Wyvern repo, linked PR): stdin JSON →
    member list grouped by team, dead/idle greyed (R4), multi-select, note
    field, output JSON on confirm, nonzero exit on cancel.
@@ -24,8 +25,12 @@ Wyvern-side PR as a linked artifact.
    > 1 s, the fallback picker remains the default and the finding is
    recorded — Wyvern adoption is not forced by this sprint.
 5. **Shell entries**: macOS Quick Action / Shortcut invoking the script;
-   Windows `%APPDATA%\Microsoft\Windows\SendTo\*.lnk`. Install steps
-   documented; no Share Extension / MSIX in this phase.
+   Windows `%APPDATA%\Microsoft\Windows\SendTo\*.lnk`; Linux (Ubuntu first)
+   a Nautilus script in `~/.local/share/nautilus-scripts/` (drop-in, SendTo-
+   class cost) plus a portable XDG `.desktop` "Open With" entry in
+   `~/.local/share/applications/` for non-GNOME file managers (KDE service
+   menus recorded as a follow-on). Install steps documented; no Share
+   Extension / MSIX in this phase.
 
 ## Acceptance criteria
 
@@ -33,14 +38,17 @@ Wyvern-side PR as a linked artifact.
    stub picker). Multi-file + multi-recipient happy path delivers.
 2. Fixture test: fallback pickers' output JSON validates against PRD §4.2.
 3. Cold-start measurement recorded with method + numbers in the PR.
-4. Manual E2E evidence: Finder gesture on macOS and Explorer SendTo on
-   Windows each deliver to a live agent (transcript + screenshot committed).
-5. `just test` unaffected crates remain green both lanes.
+4. Manual E2E evidence: Finder gesture on macOS, Explorer SendTo on Windows,
+   and Nautilus script on Ubuntu each deliver to a live agent (transcript +
+   screenshot committed).
+5. `just test` unaffected crates remain green on all three CI lanes.
 
 ## Required validation
 
-- Script harness under `.just/tests` or equivalent, both lanes where
-  applicable (SendTo path Windows-only, Quick Action macOS-only).
+- Script harness under `.just/tests` (existing python-driven shell-script
+  test convention, e.g. `test_release_gate.py`), per-lane where applicable
+  (SendTo Windows-only, Quick Action macOS-only, Nautilus script
+  ubuntu-only).
 - Linked Wyvern PR reviewed; schema fixtures shared, not duplicated.
 
 ## Non-closure / out of scope

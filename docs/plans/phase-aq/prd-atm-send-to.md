@@ -89,6 +89,8 @@ Daemon-owned sweeper on `<known-temp>/atm/`. Policy: TTL or on-ack — **decisio
 | macOS (later) | Share Extension — requires signed app bundle + extension target; depends on atm-daemon code-signing work | High |
 | Windows (first) | `%APPDATA%\Microsoft\Windows\SendTo\*.lnk` | Trivial |
 | Windows (later) | Win11 context menu (sparse MSIX) | High |
+| Linux/Ubuntu (first) | Nautilus script (`~/.local/share/nautilus-scripts/`) + XDG `.desktop` "Open With" entry | Trivial |
+| Linux (later) | KDE Dolphin service menus, other file managers | Low |
 
 ## 4a. Phase 2 — Agent-Assisted Drafting and Sessions
 
@@ -142,7 +144,7 @@ No new machinery. The guarantee that makes it work: **every stage is one-shot, r
 
 | ID | Requirement | Priority |
 |---|---|---|
-| R1 | One gesture from file manager to delivered message, macOS + Windows | Must |
+| R1 | One gesture from file manager to delivered message, macOS + Windows + Linux (Ubuntu/GNOME first) | Must |
 | R2 | Multi-select recipients; multi-file via `$@` | Must |
 | R3 | Cross-host delivery with hash verification | Must |
 | R4 | Dead/idle members visibly disabled in picker | Must |
