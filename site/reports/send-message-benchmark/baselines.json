@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "revision": 1,
+  "entries": [
+    {
+      "host_label": "rand-m5",
+      "target": "sqlite",
+      "p50_floor": 35000.0,
+      "approved_by": "quality-mgr: AO2.10 seed review",
+      "effective_from": "2026-08-24T00:00:00Z"
+    },
+    {
+      "host_label": "rand-m5",
+      "target": "uds",
+      "p50_floor": 18000.0,
+      "approved_by": "quality-mgr: AO2.10 seed review",
+      "effective_from": "2026-08-24T00:00:00Z"
+    },
+    {
+      "host_label": "rand-m5",
+      "target": "tcp",
+      "p50_floor": 17500.0,
+      "approved_by": "quality-mgr: AO2.10 seed review",
+      "effective_from": "2026-08-24T00:00:00Z"
+    },
+    {
+      "host_label": "rand-m5",
+      "target": "tcp-tls",
+      "p50_floor": 17500.0,
+      "approved_by": "quality-mgr: AO2.10 seed review",
+      "effective_from": "2026-08-24T00:00:00Z"
+    }
+  ]
+}

@@ -111,6 +111,50 @@ class BenchmarkReportTests(unittest.TestCase):
         self.assertEqual(result["metrics"]["accepted_count"], 999)
         self.assertEqual(result["failure"], "one admission failed")
 
+    def test_v4_result_uses_the_reviewed_host_target_floor(self) -> None:
+        payload = {
+            "schema_version": 4,
+            "campaign_id": "20260824T000000Z-rand-m5",
+            "host_label": "rand-m5",
+            "os": "macos",
+            "target": "tcp",
+            "status": "PASS",
+            "incomplete_reason": None,
+            "generated_at": "2026-08-24T00:00:00Z",
+            "source_revision": "a" * 40,
+            "binary_hashes": {"atm-daemon": "b" * 64},
+            "frames_per_connection": 8,
+            "messages_requested": 10,
+            "messages_admitted": 10,
+            "messages_durable": 10,
+            "metrics": {
+                "interval_count": 1, "passed_interval_count": 1,
+                "accepted_count": 10, "requested_count": 10, "response_count": 10,
+                "connection_count": 1,
+                "application_wire_bytes": {"request": 1, "response": 1, "total": 2},
+                "admissions_per_second": {"min": 18000, "p50": 18000, "p95": 18000, "p99": 18000, "max": 18000},
+                "request_frames_per_second": {"min": 1, "p50": 1, "p95": 1, "p99": 1, "max": 1},
+                "connections_per_second": {"min": 1, "p50": 1, "p95": 1, "p99": 1, "max": 1},
+                "application_wire_bytes_per_second": {"min": 2, "p50": 2, "p95": 2, "p99": 2, "max": 2},
+                "time_to_send_1k_s": {"min": 1, "p50": 1, "p95": 1, "p99": 1, "max": 1},
+                "interval_latency_ms": {"min": 1, "p50": 1, "p95": 1, "p99": 1, "max": 1},
+            },
+            "baseline": {"revision": 1, "p50_floor": 17500},
+            "durability_after_restart": {
+                "expected_accepted_count": 10, "observed_mailbox_count": 10, "passed": True,
+            },
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "v4.json"
+            source.write_text(json.dumps(payload), encoding="utf-8")
+            record = REPORT.load_result(source)
+            floors = REPORT.BaselineSet.model_validate_json(
+                (ROOT / "site/reports/send-message-benchmark/baselines.json").read_text(encoding="utf-8")
+            )
+        tcp = next(row for row in REPORT.campaign_target_rows([record], floors) if row["test"] == "tcp")
+        self.assertEqual(tcp["baseline_msg_per_second"], 17_500)
+        self.assertTrue(tcp["passed"])
+
     def test_campaign_table_renders_an_incomplete_target_without_metrics(self) -> None:
         failed = REPORT.load_result(self.fixture("failed-tcp-f8.json"))
         failed["campaign_id"] = "20260822T200000Z-aaaaaaaaaaaa"
@@ -251,7 +295,7 @@ class BenchmarkReportTests(unittest.TestCase):
             output = REPORT.render_campaign(campaign_id, targets, Path(directory))
             text = output.read_text(encoding="utf-8")
         self.assertIn("Result msg/sec", text)
-        self.assertIn("Target msg/sec", text)
+        self.assertIn("Baseline msg/sec", text)
         self.assertIn("tcp-tls", text)
 
     def test_campaign_table_refuses_to_mix_source_revisions(self) -> None:

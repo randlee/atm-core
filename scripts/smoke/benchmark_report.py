@@ -20,10 +20,12 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.smoke.benchmark_schema import (
+    BaselineSet,
+    BenchmarkRunResult,
     BenchmarkSchemaError,
     BenchmarkSummary,
     LEGACY_SUMMARY_SCHEMA_VERSION,
-    SUMMARY_SCHEMA_VERSION,
+    artifact_id as derive_artifact_id,
     compact_evidence,
 )
 
@@ -32,6 +34,7 @@ REPORTS_ROOT = ROOT / "site" / "reports"
 REPORT_NAME = "send-message-benchmark"
 REPORT_HTML = f"{REPORT_NAME}.html"
 REPORT_DIR = REPORTS_ROOT / REPORT_NAME
+BASELINES_PATH = REPORT_DIR / "baselines.json"
 HISTORICAL_IMPORTS_NAME = "historical-imports.json"
 ENVELOPE_SCHEMA_VERSION = 1
 # AO2.10 introduces v4 emission.  This reader continues to accept v3
@@ -45,15 +48,6 @@ SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
 CAMPAIGN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
-# AO2.8's approved M5 f8-v1 performance targets.  These are expectations,
-# not measurements from a comparison run, so reports must never call them a
-# baseline.  An empirical baseline needs its own raw artifact and provenance.
-TARGET_MSG_PER_SECOND = {
-    "sqlite": 45_000.0,
-    "uds": 24_000.0,
-    "tcp": 22_500.0,
-    "tcp-tls": 22_500.0,
-}
 TARGET_ORDER = ("sqlite", "uds", "tcp", "tcp-tls")
 
 
@@ -119,6 +113,28 @@ def migrate_result(payload: dict[str, Any], source: Path) -> dict[str, Any]:
 
 
 def validate_result(payload: dict[str, Any], source: Path) -> dict[str, Any]:
+    if payload.get("schema_version") == 4:
+        try:
+            result = BenchmarkRunResult.model_validate(payload).model_dump(mode="json")
+        except Exception as error:
+            raise BenchmarkReportError(f"{source}: invalid v4 benchmark result: {error}") from error
+        target = result["target"]
+        return {
+            **result,
+            # Rendering remains compatible while AO2.11 owns the presentation
+            # refactor; these are descriptive projections, never acceptance
+            # inputs.
+            "transport": "sqlite" if target == "sqlite" else ("uds" if target == "uds" else "tcp"),
+            "peer_wire_security": (
+                None if target == "sqlite" else ("plaintext-test" if target == "tcp" else "mutual-tls")
+            ),
+            "benchmark_target": target,
+            "passed": result["status"] == "PASS",
+            "host_os": result["os"],
+            "host_arch": "unknown",
+            "daemon_version": "recorded by binary hash",
+            "run_duration_s": 0.0,
+        }
     payload = migrate_result(payload, source)
     migration = payload.pop("migration", None)
     try:
@@ -152,6 +168,10 @@ def immutable_write(path: Path, content: str) -> bool:
 
 
 def result_id(result: dict[str, Any], _source: Path | None = None) -> str:
+    if result.get("schema_version") == 4:
+        return derive_artifact_id(
+            campaign_id=str(result["campaign_id"]), target=str(result["target"]),
+        )
     stamp = result["generated_at"].replace("-", "").replace(":", "").replace("T", "-").replace("Z", "")
     mode = result.get("peer_wire_security")
     mode_suffix = f"-{mode}" if mode is not None else ""
@@ -237,7 +257,11 @@ def evidence_records(report_dir: Path = REPORT_DIR) -> list[dict[str, Any]]:
         return records
     imported = historical_imports(report_dir)
     for path in sorted(report_dir.glob("*.json")):
-        if path.name.endswith(".envelope.json") or path.name == HISTORICAL_IMPORTS_NAME:
+        if (
+            path.name.endswith(".envelope.json")
+            or path.name.endswith(".campaign.json")
+            or path.name in {HISTORICAL_IMPORTS_NAME, BASELINES_PATH.name}
+        ):
             continue
         try:
             record = load_result(path)
@@ -339,8 +363,18 @@ def campaign_groups(records: Iterable[dict[str, Any]]) -> dict[str, list[dict[st
     }
 
 
-def campaign_target_rows(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Return one revision-homogeneous four-target result/target/verdict table."""
+def load_baselines(path: Path = BASELINES_PATH) -> BaselineSet:
+    """Load the sole reviewed acceptance floors used by benchmark reports."""
+    try:
+        return BaselineSet.model_validate_json(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise BenchmarkReportError(f"could not load benchmark baselines {path}: {error}") from error
+
+
+def campaign_target_rows(
+    records: Iterable[dict[str, Any]], baselines: BaselineSet | None = None,
+) -> list[dict[str, Any]]:
+    """Return one revision-homogeneous result/floor/verdict table."""
     records = list(records)
     revisions = {record.get("source_revision") for record in records}
     if len(revisions) > 1:
@@ -352,10 +386,17 @@ def campaign_target_rows(records: Iterable[dict[str, Any]]) -> list[dict[str, An
             target not in newest or result["generated_at"] > newest[target]["generated_at"]
         ):
             newest[target] = result
+    if baselines is None:
+        baselines = load_baselines()
     rows: list[dict[str, Any]] = []
     for target in TARGET_ORDER:
         result = newest.get(target)
-        target_msg_per_second = TARGET_MSG_PER_SECOND[target]
+        baseline = None
+        if result is not None:
+            try:
+                baseline = baselines.entry_for(result["host_label"], target)
+            except BenchmarkSchemaError:
+                baseline = None
         metrics = result.get("metrics") if result else None
         metric = metrics.get("admissions_per_second", {}) if isinstance(metrics, dict) else {}
         value = metric.get("p50") if isinstance(metric, dict) else None
@@ -365,12 +406,14 @@ def campaign_target_rows(records: Iterable[dict[str, Any]]) -> list[dict[str, An
             isinstance(value, (int, float))
             and isinstance(accepted, int)
             and accepted == requested
-            and float(value) >= target_msg_per_second
+            and baseline is not None
+            and float(value) >= baseline.p50_floor
+            and result.get("status", "PASS") == "PASS"
         )
         rows.append({
             "test": target,
             "result_msg_per_second": None if value is None else float(value),
-            "target_msg_per_second": target_msg_per_second,
+            "baseline_msg_per_second": None if baseline is None else baseline.p50_floor,
             "passed": passed,
             "artifact_id": result_id(result) if result else None,
             "json_href": f"{result_id(result)}.json" if result else None,
