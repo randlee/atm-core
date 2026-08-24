@@ -33,9 +33,13 @@ is on the atm-core side of the graft boundary.
    The recipient's pending FIFO is **derived**: unread rows with
    `nudge_pending_at NOT NULL`, ordered by message ULID — restart-safe by
    construction, no in-memory truth.
-3. **Nudge suppression**: the post-write hook path skips the immediate
-   `emit_received_hook` for queued messages (one guarded branch at the
-   existing call site; delivery/persistence unchanged).
+3. **Steer-nudge suppression**: the post-write hook path skips the
+   **immediate steer-shaped** notification for queued messages — the tmux
+   send-keys nudge and the graft steer-channel emission (one guarded branch
+   at the existing `emit_received_hook` call site; delivery/persistence
+   unchanged). This suppression explicitly does NOT cover deliverable 4's
+   graft queue-channel handoff, which is a separate, allowed write-time
+   action.
 3a. **Read-path marker clear**: the existing read-state transition (the
    code path that sets `mail_message_states.read = 1` when a message is
    read via `atm read`/the read surface) additionally clears
@@ -81,8 +85,12 @@ open-item register with this rationale.
 ## Acceptance criteria
 
 1. `atm queue <to> <msg>` delivers a durably readable message immediately
-   with **no** tmux/graft nudge emitted; `mail_message_states` row carries
-   `nudge_pending_at`.
+   with **no immediate/steer-shaped nudge** emitted (no tmux send-keys, no
+   graft steer-channel emission) — the graft **queue-channel handoff
+   (AC 5) is the one allowed write-time channel action** for graft
+   recipients; `mail_message_states` row carries `nudge_pending_at` (for
+   tmux recipients; cleared on queue-channel handoff for graft per
+   deliverable 4).
 2. Full-surface parity test: every `atm send` flag combination accepted by
    `atm queue` (shared truth-table with AQ2's tests); `--attach`/`--from-json`
    behave identically apart from nudge deferral.
