@@ -65,8 +65,9 @@ the same outcome as an ignored immediate nudge today).
 3. Daemon restart with pending rows → recovery sweep drains for an Idle
    member without any heartbeat transition.
 4. No transition, no sweep tick → no nudge (deferral actually defers).
-5. Graft recipients: if AQ7 wired the graft queue channel, drain excludes
-   them; else they drain identically (matching AQ7's recorded fallback).
+5. Graft recipients are never drained: the deferred queue is exclusively a
+   tmux received-hook concern (AQ7 routes graft queued nudges on the graft
+   queue channel; the harness integration owns delivery).
 6. `just test` all three CI lanes; daemon integration suite green.
 
 ## Paths to delete

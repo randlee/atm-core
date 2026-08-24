@@ -102,9 +102,12 @@ not re-litigate them:
   `mail_message_states` migrates via the `ensure_column` pattern
   (`shared_db.rs:888-935`). The queue channel is defined in **hermes-atm**
   (M5): Hermes exposes `/steer` (immediate) and `/queue` (deferred) as
-  first-class input channels; atm-core's crates carry no queue surface on
-  the reference tree, so AQ7 wires the atm-core side of that boundary (M5
-  coordination for the exact contract).
+  first-class input channels, and the Hermes integration is complete;
+  atm-core's crates carry no queue surface on the reference tree. AQ7 wires
+  atm-graft with BOTH channels independently (immediate → steer-shaped,
+  queued → queue-shaped); where nudges land is the harness integration's
+  responsibility, never atm-core routing logic. The deferred queue + idle
+  drain (AQ8) is exclusively the tmux received-hook's concern.
 
 ## Open decisions routed to sprints
 
