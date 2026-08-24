@@ -115,6 +115,7 @@ work and the false-stuck problem cannot arise.
      VecDeque<QueuedNudgeMessage>>>>` — a plain shared map, no new async
      machinery. **Key type (explicit — `runtime_health::MemberKey` is
      private to atm-http-runtime and stays that way)**: a new
+     (superseded by AQ1's canonical `MemberKey` — identical shape)
      `pub struct BareCliMemberKey { pub team: TeamName, pub member:
      AgentName }` defined in **atm-core** beside `QueuedNudgeMessage`
      (both crates already depend on atm-core; no visibility widening of
@@ -269,7 +270,16 @@ work and the false-stuck problem cannot arise.
 
    // atm-core (beside QueuedNudgeMessage — NOT the private
    // runtime_health::MemberKey, which is unchanged):
+   // Superseded by AQ1's canonical public atm-core MemberKey (same
+   // shape); this sprint uses MemberKey directly — BareCliMemberKey is
+   // retained in this doc only as the historical name of the map key:
    pub struct BareCliMemberKey { pub team: TeamName, pub member: AgentName }
+   // Derivation at the producer:
+   //   PullPendingReceivedHook::emit_received_message constructs
+   //   MemberKey { team: envelope.recipient_team.clone(),
+   //               agent: envelope.recipient.clone() }
+   //   from the delivered message envelope — the same fields the
+   //   read-path clear uses, so producer and store key can never skew.
    pub type BareCliFifo =
        Arc<Mutex<HashMap<BareCliMemberKey, VecDeque<QueuedNudgeMessage>>>>;
 
@@ -308,7 +318,11 @@ work and the false-stuck problem cannot arise.
      one classifier arm + one target variant + one emitter impl — no
      renames anywhere.
 
-5. **ADR-054 addendum**: the delivery-trigger policy table, the
+5. **ADR-054 addendum**: one clarifying sentence that 'steer = immediate'
+   describes the KIND's delivery intent, while the bare-CLI mechanism may
+   still defer steer-kind physically until the member's next Stop-pull
+   (FIFO deferral is a mechanism property, not a kind change); plus the
+   delivery-trigger policy table, the
    classifier as its single code owner with its enforcement call sites,
    the mechanism-positive channel naming rule, the heartbeat-producer
    decision (hook-side debounce, daemon stays dumb), the RAM-only FIFO
@@ -365,6 +379,13 @@ work and the false-stuck problem cannot arise.
     green on **all three lanes including Windows** (Claude Code runs on
     Windows; cross-platform-guidelines apply). Codex hook scripts' unit
     tests green on ubuntu/macOS (Codex/hermes are not used on Windows).
+
+10. Boundary-manifest freshness: `boundaries/atm-core/
+   message-received-hook-emitter.toml` is updated in the same PR that
+   lands `PullPendingReceivedHook` as the third
+   `AsyncMessageReceivedHookEmitter` implementor — the `[status].notes`
+   implementor list names it, and a test (or the boundary suite) fails if
+   the manifest's implementor count disagrees with the code's.
 
 ## Required validation
 
