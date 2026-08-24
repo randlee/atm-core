@@ -90,24 +90,24 @@ class AdmissionCapacityTests(unittest.TestCase):
 
         def run_capacity(*_args, **kwargs):
             captured.append(kwargs)
-            return RUNNER.CapacityRunResult(0, Path("sentinel.evidence"), Path("sentinel.raw"))
-
-        measured = mock.Mock(
-            median_msg_per_second=45_000.0,
-            p95_msg_per_second=45_100.0,
-            p99_msg_per_second=45_200.0,
-            accepted=10_000,
-            requested=10_000,
-            raw_artifact="artifacts/raw.json",
-        )
+            metrics = mock.Mock(admissions_per_second=mock.Mock(p50=45_000.0))
+            result = mock.Mock(
+                status="PASS", metrics=metrics,
+                messages_admitted=10_000, messages_requested=10_000,
+            )
+            return RUNNER.CapacityRunResult(
+                0, Path("sentinel.evidence"), Path("sentinel.raw"), result,
+            )
 
         with (
             mock.patch.object(sys, "argv", ["run_admission_capacity.py"]),
             mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity),
-            mock.patch.object(RUNNER, "suite_target_result", return_value=measured),
-            mock.patch.object(RUNNER, "load_baselines", return_value=mock.Mock(entry_for=mock.Mock())),
+            mock.patch.object(
+                RUNNER,
+                "load_baselines",
+                return_value=mock.Mock(entry_for=mock.Mock(return_value=mock.Mock(p50_floor=1))),
+            ),
             mock.patch.object(RUNNER, "binary_hashes", return_value={"atm": "a" * 64}),
-            mock.patch.object(RUNNER, "publish_v4_target", return_value=mock.Mock(status="PASS")),
             mock.patch.object(RUNNER, "BenchmarkCampaign", return_value=mock.Mock(status="PASS", model_dump=mock.Mock(return_value={}))),
             mock.patch.object(RUNNER, "atomic_json"),
             contextlib.redirect_stdout(stdout := io.StringIO()),
@@ -119,6 +119,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             ["sqlite", "uds", "tcp", "tcp-tls"],
         )
         self.assertTrue(all("benchmark_target" in item for item in captured))
+        self.assertTrue(all("v4_emission" in item for item in captured))
         self.assertTrue(all(item["raw_evidence_directory"] == RUNNER.DEFAULT_RAW_EVIDENCE_DIR for item in captured))
         self.assertEqual(stdout.getvalue().count("p50=45000.00 msg/s"), 4)
 
@@ -129,28 +130,27 @@ class AdmissionCapacityTests(unittest.TestCase):
         def run_capacity(*_args, **kwargs):
             target = kwargs["benchmark_target"]
             captured.append(target)
+            metrics = mock.Mock(admissions_per_second=mock.Mock(p50=45_000.0))
+            result = mock.Mock(
+                status="FAIL" if target == "tcp" else "PASS", metrics=metrics,
+                messages_admitted=10_000, messages_requested=10_000,
+            )
             return RUNNER.CapacityRunResult(
                 1 if target == "tcp" else 0,
                 Path("sentinel.evidence"),
                 Path("sentinel.raw"),
+                result,
             )
-
-        measured = mock.Mock(
-            median_msg_per_second=45_000.0,
-            p95_msg_per_second=45_100.0,
-            p99_msg_per_second=45_200.0,
-            accepted=10_000,
-            requested=10_000,
-            raw_artifact="artifacts/raw.json",
-        )
 
         with (
             mock.patch.object(sys, "argv", ["run_admission_capacity.py"]),
             mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity),
-            mock.patch.object(RUNNER, "suite_target_result", return_value=measured),
-            mock.patch.object(RUNNER, "load_baselines", return_value=mock.Mock(entry_for=mock.Mock())),
+            mock.patch.object(
+                RUNNER,
+                "load_baselines",
+                return_value=mock.Mock(entry_for=mock.Mock(return_value=mock.Mock(p50_floor=1))),
+            ),
             mock.patch.object(RUNNER, "binary_hashes", return_value={"atm": "a" * 64}),
-            mock.patch.object(RUNNER, "publish_v4_target", return_value=mock.Mock(status="PASS")),
             mock.patch.object(RUNNER, "BenchmarkCampaign", return_value=mock.Mock(status="FAIL", model_dump=mock.Mock(return_value={}))),
             mock.patch.object(RUNNER, "atomic_json"),
             contextlib.redirect_stdout(stdout := io.StringIO()),
@@ -165,21 +165,24 @@ class AdmissionCapacityTests(unittest.TestCase):
 
         def run_capacity(*_args, **kwargs):
             captured.append(kwargs["benchmark_target"])
-            return RUNNER.CapacityRunResult(0, Path("sentinel.evidence"), Path("sentinel.raw"))
-
-        measured = mock.Mock(
-            median_msg_per_second=45_000.0, p95_msg_per_second=45_100.0,
-            p99_msg_per_second=45_200.0, accepted=10_000, requested=10_000,
-            raw_artifact="artifacts/raw.json",
-        )
+            metrics = mock.Mock(admissions_per_second=mock.Mock(p50=45_000.0))
+            result = mock.Mock(
+                status="PASS", metrics=metrics,
+                messages_admitted=10_000, messages_requested=10_000,
+            )
+            return RUNNER.CapacityRunResult(
+                0, Path("sentinel.evidence"), Path("sentinel.raw"), result,
+            )
         with (
             mock.patch.object(sys, "argv", ["run_admission_capacity.py"]),
             mock.patch.object(RUNNER, "benchmark_os", return_value="windows"),
             mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity),
-            mock.patch.object(RUNNER, "suite_target_result", return_value=measured),
-            mock.patch.object(RUNNER, "load_baselines", return_value=mock.Mock(entry_for=mock.Mock())),
+            mock.patch.object(
+                RUNNER,
+                "load_baselines",
+                return_value=mock.Mock(entry_for=mock.Mock(return_value=mock.Mock(p50_floor=1))),
+            ),
             mock.patch.object(RUNNER, "binary_hashes", return_value={"atm": "a" * 64}),
-            mock.patch.object(RUNNER, "publish_v4_target", return_value=mock.Mock(status="PASS")),
             mock.patch.object(RUNNER, "BenchmarkCampaign", return_value=mock.Mock(status="PASS", model_dump=mock.Mock(return_value={}))),
             mock.patch.object(RUNNER, "atomic_json"),
         ):
@@ -265,61 +268,43 @@ class AdmissionCapacityTests(unittest.TestCase):
         code, compact = result
         self.assertEqual((code, compact, result.raw_evidence_path), (0, Path("compact.json"), Path("raw.json")))
 
-    def test_suite_target_result_retains_measured_below_floor_evidence(self):
-        """A nonzero suite target can be a useful measured remediation result."""
+    def test_matrix_writer_emits_v4_directly_without_a_legacy_summary_file(self):
+        evidence = complete_evidence(
+            host_label="rand-m5",
+            transport="tcp",
+            peer_wire_security="plaintext-test",
+            benchmark_target="tcp",
+            frames_per_connection=8,
+            source_revision="a" * 40,
+            durability_after_restart={
+                "expected_accepted_count": 1_000,
+                "observed_mailbox_count": 1_000,
+                "passed": True,
+            },
+        )
+        context = RUNNER.V4EmissionContext(
+            target="tcp",
+            campaign_id="20260824T000000Z-rand-m5",
+            os_name="macos",
+            baseline=RUNNER.BaselineEntry(
+                host_label="rand-m5",
+                target="tcp",
+                p50_floor=1,
+                approved_by="quality-mgr",
+                effective_from="2026-08-24T00:00:00Z",
+            ),
+            binary_hashes={"atm": "b" * 64, "atm-daemon": "c" * 64},
+        )
         with tempfile.TemporaryDirectory() as directory:
-            artifacts = Path(directory) / "artifacts"
-            artifacts.mkdir()
-            evidence = complete_evidence(
-                transport="tcp",
-                peer_wire_security="plaintext-test",
-                benchmark_target="tcp",
-            )
-            compact = artifacts / "compact.json"
-            raw = artifacts / "raw.json"
-            compact.write_text(compact_evidence(evidence).model_dump_json(), encoding="utf-8")
-            raw.write_text(json.dumps(evidence), encoding="utf-8")
+            path, result = RUNNER.write_v4_evidence(Path(directory), evidence, context)
+            recorded = json.loads(path.read_text(encoding="utf-8"))
 
-            target = RUNNER.suite_target_result(
-                "tcp", RUNNER.CapacityRunResult(1, compact, raw), artifact_root=artifacts,
-            )
-
-        self.assertEqual(target.target, "tcp")
-        self.assertEqual(target.requested, 1_000)
-        self.assertEqual(target.accepted, 1_000)
-        self.assertEqual(target.errors, 0)
-        self.assertEqual(target.raw_artifact, "raw.json")
-
-    def test_suite_target_result_rejects_mismatched_or_unmeasured_artifacts(self):
-        with tempfile.TemporaryDirectory() as directory:
-            artifacts = Path(directory) / "artifacts"
-            artifacts.mkdir()
-            raw = artifacts / "raw.json"
-            raw.write_text("{}", encoding="utf-8")
-            mismatch = artifacts / "mismatch.json"
-            mismatch.write_text(
-                compact_evidence(complete_evidence(
-                    transport="tcp", peer_wire_security="mutual-tls", benchmark_target="tcp-tls",
-                )).model_dump_json(),
-                encoding="utf-8",
-            )
-            with self.assertRaisesRegex(RUNNER.SmokeError, "does not match"):
-                RUNNER.suite_target_result(
-                    "tcp", RUNNER.CapacityRunResult(0, mismatch, raw), artifact_root=artifacts,
-                )
-
-            unmeasured = artifacts / "unmeasured.json"
-            unmeasured.write_text(
-                compact_evidence(complete_evidence(
-                    transport="tcp", peer_wire_security="plaintext-test", benchmark_target="tcp",
-                    runs=[], passed=False, failure="setup failed",
-                )).model_dump_json(),
-                encoding="utf-8",
-            )
-            with self.assertRaisesRegex(RUNNER.SmokeError, "did not reach a measured interval"):
-                RUNNER.suite_target_result(
-                    "tcp", RUNNER.CapacityRunResult(1, unmeasured, raw), artifact_root=artifacts,
-                )
+        self.assertEqual(path.name, "20260824T000000Z-rand-m5-tcp.json")
+        self.assertEqual(result.schema_version, 4)
+        self.assertEqual(recorded["schema_version"], 4)
+        self.assertNotIn("artifact_kind", recorded)
+        self.assertNotIn("transport", recorded)
+        self.assertNotIn("thresholds", recorded)
 
     def _run_snapshot_lifecycle_case(self, fault: str | None = None) -> tuple[int, dict[str, object], dict[str, mock.Mock]]:
         """Exercise the runner lifecycle without inspecting a primary-account root."""

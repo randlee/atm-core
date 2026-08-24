@@ -37,7 +37,6 @@ DEFAULT_RAW_EVIDENCE_DIR = ROOT / "artifacts" / "benchmark" / "send-message-benc
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.smoke import benchmark_suite as SUITE
 from scripts.smoke.benchmark_schema import (
     BaselineEntry,
     BaselineSet,
@@ -45,11 +44,13 @@ from scripts.smoke.benchmark_schema import (
     BenchmarkCampaign,
     BenchmarkRunResult,
     BenchmarkSchemaError,
-    BenchmarkSummary,
+    DurabilityAfterRestart,
     artifact_id,
     campaign_id as derive_campaign_id,
     compact_evidence,
+    direct_sqlite_write_from_evidence,
     distribution,
+    metrics_from_evidence,
     required_targets,
 )
 from scripts.smoke.benchmark_policy import classify_status, profile_median_admissions_per_second
@@ -213,10 +214,22 @@ class CapacityRunResult:
     code: int
     compact_evidence_path: Path
     raw_evidence_path: Path
+    result: BenchmarkRunResult | None = None
 
     def __iter__(self):
         yield self.code
         yield self.compact_evidence_path
+
+
+@dataclass(frozen=True)
+class V4EmissionContext:
+    """All caller-owned facts required for one direct v4 target publication."""
+
+    target: str
+    campaign_id: str
+    os_name: str
+    baseline: BaselineEntry
+    binary_hashes: dict[str, str]
 
 
 def benchmark_os() -> str:
@@ -256,18 +269,29 @@ def atomic_json(path: Path, payload: dict[str, Any]) -> None:
     temporary.replace(path)
 
 
-def v4_result_from_summary(
-    summary: BenchmarkSummary,
+def v4_result_from_evidence(
+    evidence: dict[str, Any],
     *,
-    target: str,
-    campaign: str,
-    os_name: str,
-    baseline: BaselineEntry,
-    hashes: dict[str, str],
+    context: V4EmissionContext,
 ) -> BenchmarkRunResult:
-    """Convert one runner-owned compact trace into its direct v4 public form."""
-    metrics = summary.metrics
-    if metrics is not None and target == "sqlite":
+    """Build the public v4 result directly from the runner's factual trace.
+
+    The normal matrix never persists a legacy summary and then migrates it.
+    ``metrics_from_evidence`` is merely in-memory aggregation of the verbose
+    trace, shared with the read-only v1-v3 compatibility loader.
+    """
+    try:
+        metrics = metrics_from_evidence(evidence)
+        durability_raw = evidence.get("durability_after_restart")
+        durability = (
+            None
+            if durability_raw is None
+            else DurabilityAfterRestart.model_validate(durability_raw)
+        )
+        direct_sqlite = direct_sqlite_write_from_evidence(evidence)
+    except BenchmarkSchemaError as error:
+        raise SmokeError(f"could not summarize benchmark evidence: {error}") from error
+    if metrics is not None and context.target == "sqlite":
         metric_values = metrics.model_dump()
         for field in (
             "connection_count", "application_wire_bytes", "request_frames_per_second",
@@ -277,130 +301,58 @@ def v4_result_from_summary(
         metrics = type(metrics).model_validate(metric_values)
     requested = 0 if metrics is None else metrics.requested_count
     admitted = 0 if metrics is None else metrics.accepted_count
-    durable = (
-        0
-        if summary.durability_after_restart is None
-        else summary.durability_after_restart.observed_mailbox_count
-    )
-    complete = metrics is not None and summary.durability_after_restart is not None
-    generated_at = datetime.fromisoformat(summary.generated_at.replace("Z", "+00:00"))
+    durable = 0 if durability is None else durability.observed_mailbox_count
+    complete = metrics is not None and durability is not None
+    try:
+        generated_at = datetime.fromisoformat(str(evidence["generated_at"]).replace("Z", "+00:00"))
+    except (KeyError, ValueError) as error:
+        raise SmokeError(f"benchmark evidence has invalid generated_at: {error}") from error
     status = classify_status(
         lifecycle_complete=complete,
         messages_requested=requested,
         messages_admitted=admitted,
         messages_durable=durable,
         p50_admissions_per_second=(None if metrics is None else metrics.admissions_per_second.p50),
-        baseline_p50_floor=baseline.p50_floor,
+        baseline_p50_floor=context.baseline.p50_floor,
     )
     return BenchmarkRunResult(
-        campaign_id=campaign,
-        host_label=summary.host_label,
-        os=os_name,
-        target=target,
+        campaign_id=context.campaign_id,
+        host_label=str(evidence["host_label"]),
+        os=context.os_name,
+        target=context.target,
         status=status,
         incomplete_reason=(
-            None if complete else (summary.failure or "benchmark did not complete every lifecycle stage")
+            None
+            if complete
+            else str(evidence.get("failure") or "benchmark did not complete every lifecycle stage")
         ),
         generated_at=generated_at,
-        source_revision=summary.source_revision or source_revision(),
-        binary_hashes=hashes,
-        frames_per_connection=0 if target == "sqlite" else summary.frames_per_connection,
+        source_revision=str(evidence.get("source_revision") or source_revision()),
+        binary_hashes=context.binary_hashes,
+        frames_per_connection=(
+            0 if context.target == "sqlite" else int(evidence["frames_per_connection"])
+        ),
         messages_requested=requested,
         messages_admitted=admitted,
         messages_durable=durable,
         metrics=metrics,
-        baseline=BaselineRef(revision=1, p50_floor=baseline.p50_floor),
-        durability_after_restart=summary.durability_after_restart,
-        direct_sqlite_message_write=summary.direct_sqlite_message_write,
+        baseline=BaselineRef(revision=1, p50_floor=context.baseline.p50_floor),
+        durability_after_restart=durability,
+        direct_sqlite_message_write=direct_sqlite,
     )
 
 
-def publish_v4_target(
-    run: CapacityRunResult,
-    *,
-    target: str,
-    campaign: str,
-    os_name: str,
-    baseline: BaselineEntry,
-    hashes: dict[str, str],
-) -> BenchmarkRunResult:
-    """Replace the temporary internal compact trace with its public v4 result."""
+def write_v4_evidence(
+    directory: Path, evidence: dict[str, Any], context: V4EmissionContext,
+) -> tuple[Path, BenchmarkRunResult]:
+    """Validate and atomically publish the ordinary matrix's direct v4 output."""
     try:
-        summary = BenchmarkSummary.model_validate_json(
-            run.compact_evidence_path.read_text(encoding="utf-8")
-        )
-    except (OSError, ValueError) as error:
-        raise SmokeError(f"could not load benchmark target evidence for v4 publication: {error}") from error
-    result = v4_result_from_summary(
-        summary, target=target, campaign=campaign, os_name=os_name,
-        baseline=baseline, hashes=hashes,
-    )
-    destination = run.compact_evidence_path.parent / f"{artifact_id(campaign_id=campaign, target=target)}.json"
+        result = v4_result_from_evidence(evidence, context=context)
+    except (KeyError, ValueError) as error:
+        raise SmokeError(f"could not emit direct v4 benchmark evidence: {error}") from error
+    destination = directory / f"{artifact_id(campaign_id=context.campaign_id, target=context.target)}.json"
     atomic_json(destination, result.model_dump(mode="json"))
-    if run.compact_evidence_path != destination:
-        run.compact_evidence_path.unlink()
-    return result
-
-
-def suite_target_result(
-    target: str,
-    run: CapacityRunResult,
-    *,
-    artifact_root: Path = ROOT,
-) -> SUITE.TargetResult:
-    """Turn one completed target's real artifacts into ledger-safe evidence.
-
-    A nonzero benchmark exit may still have a complete measured profile (for
-    example, a below-floor result).  That evidence belongs in the suite ledger
-    for remediation.  A setup failure without metrics does not: it remains a
-    visible failed intent rather than being represented with invented rates.
-    """
-    if target not in BENCHMARK_TARGETS:
-        raise SmokeError(f"unknown required f8 target {target!r}")
-    if not run.compact_evidence_path.is_file() or not run.raw_evidence_path.is_file():
-        raise SmokeError("complete suite target requires both compact and raw evidence files")
-    try:
-        compact = BenchmarkSummary.model_validate_json(
-            run.compact_evidence_path.read_text(encoding="utf-8")
-        )
-    except (OSError, ValueError) as error:
-        raise SmokeError(f"could not load compact target evidence: {error}") from error
-    expected_transport, expected_security = BENCHMARK_TARGETS[target]
-    if (
-        compact.benchmark_target != target
-        or compact.transport != expected_transport
-        or compact.peer_wire_security != expected_security
-    ):
-        raise SmokeError(
-            f"compact evidence does not match required target {target}: "
-            f"got target={compact.benchmark_target!r}, transport={compact.transport!r}, "
-            f"security={compact.peer_wire_security!r}"
-        )
-    if compact.metrics is None:
-        raise SmokeError(
-            f"target {target} did not reach a measured interval; retain its failed suite intent "
-            "and repair the ordinary runner before retrying"
-        )
-    try:
-        raw_relative = run.raw_evidence_path.resolve().relative_to(artifact_root.resolve())
-    except ValueError as error:
-        raise SmokeError("raw target evidence must remain below the benchmark artifact root") from error
-    metrics = compact.metrics
-    return SUITE.TargetResult(
-        target=target,
-        median_msg_per_second=metrics.admissions_per_second.p50,
-        p95_msg_per_second=metrics.admissions_per_second.p95,
-        p99_msg_per_second=(
-            metrics.admissions_per_second.p99
-            if metrics.admissions_per_second.p99 is not None
-            else metrics.admissions_per_second.p95
-        ),
-        requested=metrics.requested_count,
-        accepted=metrics.accepted_count,
-        errors=metrics.requested_count - metrics.accepted_count,
-        raw_artifact=raw_relative.as_posix(),
-        raw_artifact_sha256=SUITE.raw_file_sha256(run.raw_evidence_path),
-    )
+    return destination, result
 
 
 @dataclass
@@ -1773,7 +1725,11 @@ def write_raw_evidence(directory: Path, evidence: dict[str, Any]) -> Path:
 
 
 def write_evidence(directory: Path, evidence: dict[str, Any]) -> Path:
-    """Write the Pydantic-validated compact public benchmark summary."""
+    """Write a legacy v3 diagnostic artifact for read-only compatibility.
+
+    The ordinary matrix path supplies ``V4EmissionContext`` to ``run_capacity``
+    and therefore bypasses this compatibility writer entirely.
+    """
     path = evidence_filename(directory, evidence)
     try:
         summary = compact_evidence(evidence).model_dump(mode="json")
@@ -1812,6 +1768,7 @@ def run_capacity(
     preflight_failure_code: str | None = None,
     preflight_failure: str | None = None,
     campaign_id: str | None = None,
+    v4_emission: V4EmissionContext | None = None,
 ) -> CapacityRunResult:
     """Start one branch daemon, exercise public UDS API, retain evidence, then clean up."""
     if managed_daemon is not None:
@@ -2114,12 +2071,19 @@ def run_capacity(
             evidence["passed"] = False
             evidence["failure"] = str(error)
         raw_evidence_path = write_raw_evidence(raw_evidence_directory, evidence)
-        evidence_path = write_evidence(evidence_directory, evidence)
+        published_result: BenchmarkRunResult | None = None
+        if v4_emission is None:
+            evidence_path = write_evidence(evidence_directory, evidence)
+        else:
+            evidence_path, published_result = write_v4_evidence(
+                evidence_directory, evidence, v4_emission,
+            )
         print(f"local benchmark trace: {raw_evidence_path}")
     return CapacityRunResult(
         0 if evidence.get("passed") else 1,
         evidence_path,
         raw_evidence_path,
+        published_result,
     )
 
 
@@ -2162,6 +2126,13 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
     codes: list[int] = []
     published_results: list[BenchmarkRunResult] = []
     for position, (target, (transport, peer_wire_security)) in enumerate(target_matrix, start=1):
+        emission = V4EmissionContext(
+            target=target,
+            campaign_id=campaign_identifier,
+            os_name=os_name,
+            baseline=target_baselines[target],
+            binary_hashes=hashes,
+        )
         if args.atm_home is None:
             with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temporary:
                 run = run_capacity(
@@ -2176,6 +2147,7 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
                     peer_wire_security=peer_wire_security,
                     benchmark_target=target,
                     campaign_id=campaign_identifier,
+                    v4_emission=emission,
                 )
         else:
             run = run_capacity(
@@ -2190,33 +2162,21 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
                 peer_wire_security=peer_wire_security,
                 benchmark_target=target,
                 campaign_id=campaign_identifier,
+                v4_emission=emission,
             )
         codes.append(run.code)
-        try:
-            published_results.append(publish_v4_target(
-                run, target=target, campaign=campaign_identifier, os_name=os_name,
-                baseline=target_baselines[target], hashes=hashes,
-            ))
-        except SmokeError as error:
+        if run.result is None:
             codes.append(1)
-            print(f"FAIL required f8 target {target}: v4 publication failed; {error}")
+            print(f"FAIL required f8 target {target}: direct v4 publication failed")
             continue
-        try:
-            result = suite_target_result(target, run)
-        except SmokeError as error:
-            codes.append(1)
-            print(
-                f"FAIL required f8 target {target}: no ledger-safe measurement; {error}; "
-                f"compact={run.compact_evidence_path} raw={run.raw_evidence_path}"
-            )
-            continue
+        result = run.result
+        published_results.append(result)
+        metrics = result.metrics
         print(
-            f"{'PASS' if run.code == 0 else 'FAIL'} required f8 target {target}: "
-            f"p50={result.median_msg_per_second:.2f} msg/s "
-            f"p95={result.p95_msg_per_second:.2f} msg/s "
-            f"p99={result.p99_msg_per_second:.2f} msg/s "
-            f"accepted={result.accepted}/{result.requested} "
-            f"compact={run.compact_evidence_path} raw={result.raw_artifact}"
+            f"{result.status} required f8 target {target}: "
+            f"p50={'n/a' if metrics is None else f'{metrics.admissions_per_second.p50:.2f}'} msg/s "
+            f"accepted={result.messages_admitted}/{result.messages_requested} "
+            f"evidence={run.compact_evidence_path} raw={run.raw_evidence_path}"
         )
     campaign_status = (
         "INCOMPLETE" if len(published_results) != len(target_matrix)

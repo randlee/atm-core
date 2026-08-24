@@ -451,17 +451,43 @@ def distribution(values: list[float]) -> dict[str, float]:
     }
 
 
-def compact_evidence(evidence: dict[str, Any]) -> BenchmarkSummary:
-    """Convert one v2 verbose runner record into its v3 public summary."""
+def direct_sqlite_write_from_evidence(
+    evidence: dict[str, Any],
+) -> DirectSQLiteMessageWrite | None:
+    """Extract the optional direct-writer measurement from raw runner facts.
+
+    This helper deliberately has no schema-version semantics.  It is shared by
+    the v4 writer and the read-only legacy compactor so the ordinary runner
+    never has to emit a v3 file just to reuse its factual aggregation logic.
+    """
+    decomposition = evidence.get("decomposition", {})
+    value = evidence.get("direct_sqlite_message_write")
+    if value is None and isinstance(decomposition, dict):
+        value = decomposition.get("async_storage_admission")
+    if value is None:
+        return None
+    try:
+        return DirectSQLiteMessageWrite.model_validate(value)
+    except ValidationError as error:
+        raise BenchmarkSchemaError(str(error)) from error
+
+
+def metrics_from_evidence(evidence: dict[str, Any]) -> BenchmarkMetrics | None:
+    """Aggregate verbose runner intervals into public v4 metric facts.
+
+    Returning ``None`` represents an incomplete lifecycle.  Callers own the
+    status decision; this structural helper neither applies a baseline nor
+    writes a versioned artifact.
+    """
     try:
         profile = evidence["runs"][0]
         intervals = profile["intervals"]
     except (IndexError, KeyError, TypeError):
-        profile, intervals = {}, []
+        intervals = []
     if not isinstance(intervals, list):
         raise BenchmarkSchemaError("evidence intervals must be a list")
     if not intervals:
-        return failed_summary(evidence)
+        return None
 
     def metric(name: str, default: float = 0.0) -> list[float]:
         return [float(interval.get(name, default)) for interval in intervals]
@@ -472,17 +498,65 @@ def compact_evidence(evidence: dict[str, Any]) -> BenchmarkSummary:
             for interval in intervals
         ]
 
-    request_bytes = sum(int(interval.get("application_wire_bytes", {}).get("request", 0)) for interval in intervals)
-    response_bytes = sum(int(interval.get("application_wire_bytes", {}).get("response", 0)) for interval in intervals)
-    first_failure = next((public_string(str(interval["first_failure"])) for interval in intervals if interval.get("first_failure")), None)
+    request_bytes = sum(
+        int(interval.get("application_wire_bytes", {}).get("request", 0))
+        for interval in intervals
+    )
+    response_bytes = sum(
+        int(interval.get("application_wire_bytes", {}).get("response", 0))
+        for interval in intervals
+    )
+    first_failure = next(
+        (
+            public_string(str(interval["first_failure"]))
+            for interval in intervals
+            if interval.get("first_failure")
+        ),
+        None,
+    )
+    try:
+        return BenchmarkMetrics.model_validate({
+            "interval_count": len(intervals),
+            "passed_interval_count": sum(bool(interval.get("passed")) for interval in intervals),
+            "accepted_count": sum(int(interval.get("accepted_count", 0)) for interval in intervals),
+            "requested_count": sum(int(interval.get("requested_count", 0)) for interval in intervals),
+            "response_count": sum(int(interval.get("response_count", 0)) for interval in intervals),
+            "connection_count": sum(int(interval.get("connections", 0)) for interval in intervals),
+            "application_wire_bytes": {
+                "request": request_bytes,
+                "response": response_bytes,
+                "total": request_bytes + response_bytes,
+            },
+            "admissions_per_second": distribution(metric("admissions_per_second")),
+            "request_frames_per_second": distribution(
+                metric("request_frames_per_second", metric("admissions_per_second")[0])
+            ),
+            "connections_per_second": distribution(metric("connections_per_second")),
+            "application_wire_bytes_per_second": distribution(
+                metric("application_wire_bytes_per_second", metric("bytes_per_second")[0])
+            ),
+            "time_to_send_1k_s": distribution(
+                metric("time_to_send_1k_s", metric("elapsed_seconds")[0])
+            ),
+            "interval_latency_ms": {
+                "min": min(latency("min")),
+                "p50": distribution(latency("p50"))["p50"],
+                "p95": distribution(latency("p95"))["p95"],
+                "p99": distribution(latency("p99", "p95"))["p99"],
+                "max": max(latency("max")),
+            },
+            "first_failure": first_failure,
+        })
+    except ValidationError as error:
+        raise BenchmarkSchemaError(str(error)) from error
+
+
+def compact_evidence(evidence: dict[str, Any]) -> BenchmarkSummary:
+    """Convert one v2 verbose runner record into its v3 public summary."""
+    metrics = metrics_from_evidence(evidence)
+    if metrics is None:
+        return failed_summary(evidence)
     thresholds = evidence.get("thresholds")
-    decomposition = evidence.get("decomposition", {})
-    # Runner evidence carries this diagnostic below `decomposition`.  Accepting
-    # the already-compact spelling too makes a report rebuild lossless when it
-    # reprocesses a published artifact.
-    direct_sqlite_message_write = evidence.get("direct_sqlite_message_write")
-    if direct_sqlite_message_write is None and isinstance(decomposition, dict):
-        direct_sqlite_message_write = decomposition.get("async_storage_admission")
     summary = {
         "generated_at": evidence["generated_at"],
         "campaign_id": evidence.get("campaign_id"),
@@ -493,9 +567,9 @@ def compact_evidence(evidence: dict[str, Any]) -> BenchmarkSummary:
         "hook_mode": evidence.get("hook_mode"),
         "frames_per_connection": evidence["frames_per_connection"],
         "messages_per_connection": evidence.get("messages_per_connection", evidence["frames_per_connection"]),
-        "requested_messages_per_sample": evidence.get("requested_messages_per_sample", intervals[0].get("requested_count", 1_000)),
-        "minimum_sample_count": evidence.get("minimum_sample_count", len(intervals)),
-        "sample_count": len(intervals),
+        "requested_messages_per_sample": evidence.get("requested_messages_per_sample", metrics.requested_count),
+        "minimum_sample_count": evidence.get("minimum_sample_count", metrics.interval_count),
+        "sample_count": metrics.interval_count,
         "target_duration_s": evidence.get("target_duration_s", evidence["run_duration_s"]),
         "run_duration_s": evidence["run_duration_s"],
         "source_revision": evidence.get("source_revision"),
@@ -511,30 +585,9 @@ def compact_evidence(evidence: dict[str, Any]) -> BenchmarkSummary:
         "doctor_status": evidence.get("doctor_status"),
         "doctor_after_restart_status": evidence.get("doctor_after_restart", {}).get("status"),
         "durability_after_restart": evidence.get("durability_after_restart"),
-        "direct_sqlite_message_write": direct_sqlite_message_write,
+        "direct_sqlite_message_write": direct_sqlite_write_from_evidence(evidence),
         "thresholds": thresholds,
-        "metrics": {
-            "interval_count": len(intervals),
-            "passed_interval_count": sum(bool(interval.get("passed")) for interval in intervals),
-            "accepted_count": sum(int(interval.get("accepted_count", 0)) for interval in intervals),
-            "requested_count": sum(int(interval.get("requested_count", 0)) for interval in intervals),
-            "response_count": sum(int(interval.get("response_count", 0)) for interval in intervals),
-            "connection_count": sum(int(interval.get("connections", 0)) for interval in intervals),
-            "application_wire_bytes": {"request": request_bytes, "response": response_bytes, "total": request_bytes + response_bytes},
-            "admissions_per_second": distribution(metric("admissions_per_second")),
-            "request_frames_per_second": distribution(metric("request_frames_per_second", metric("admissions_per_second")[0] if intervals else 0.0)),
-            "connections_per_second": distribution(metric("connections_per_second")),
-            "application_wire_bytes_per_second": distribution(metric("application_wire_bytes_per_second", metric("bytes_per_second")[0] if intervals else 0.0)),
-            "time_to_send_1k_s": distribution(metric("time_to_send_1k_s", metric("elapsed_seconds")[0] if intervals else 0.0)),
-            "interval_latency_ms": {
-                "min": min(latency("min")),
-                "p50": distribution(latency("p50"))["p50"],
-                "p95": distribution(latency("p95"))["p95"],
-                "p99": distribution(latency("p99", "p95"))["p99"],
-                "max": max(latency("max")),
-            },
-            "first_failure": first_failure,
-        },
+        "metrics": metrics,
         "passed": bool(evidence.get("passed", False)),
         "benchmark_evidence_failure_code": evidence.get("benchmark_evidence_failure_code"),
         "failure": public_string(str(evidence["failure"])) if evidence.get("failure") else None,
