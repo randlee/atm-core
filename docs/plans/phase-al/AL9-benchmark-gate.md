@@ -122,3 +122,8 @@ Tokio/Axum evidence pass and add only its resulting report links here:
    artifact's proof SHA, host, operating system, architecture, and command
    outcome. Do not treat legacy pre-Tokio evidence as a substitute for these
    rows.
+
+## Current operator procedure
+
+For any new benchmark run, follow the canonical
+[`benchmark-run` skill](../../../.claude/skills/benchmark-run/SKILL.md).

@@ -24,11 +24,9 @@ from scripts.smoke.benchmark_schema import (
     BenchmarkCampaign,
     BenchmarkRunResult,
     BenchmarkSchemaError,
-    BenchmarkSummary,
     HistoricalRecord,
-    LEGACY_SUMMARY_SCHEMA_VERSION,
     artifact_id,
-    compact_evidence,
+    classify_status,
 )
 
 
@@ -92,7 +90,7 @@ def compose(template: Path, variables: dict[str, Any], output: Path) -> None:
         completed = subprocess.run(
             ["sc-compose", "render", "--root", str(ROOT), "--file", str(template),
              "--var-file", str(variables_path), "--output", str(output)],
-            cwd=ROOT, capture_output=True, text=True, check=False,
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False,
         )
         if completed.returncode != 0:
             raise BenchmarkReportError(
@@ -113,67 +111,23 @@ def load_json(path: Path) -> dict[str, Any]:
     return payload
 
 
-# The suite runner still reads legacy, per-target diagnostic artifacts in a
-# handful of focused tests.  Keep that adapter read-only: v4 campaigns remain
-# the sole input to the public renderer, and this path never writes, migrates,
-# or changes historical evidence on disk.
-def _migrate_legacy_result(payload: dict[str, Any], source: Path) -> dict[str, Any]:
-    version = payload.get("schema_version")
-    if version == LEGACY_SUMMARY_SCHEMA_VERSION:
-        return payload
-    if version not in {1, 2} or isinstance(version, bool):
-        raise BenchmarkReportError(
-            f"{source}: expected benchmark schema version 1, 2, or {LEGACY_SUMMARY_SCHEMA_VERSION}"
-        )
-    samples = payload.get("samples", payload.get("runs", []))
-    if not isinstance(samples, list):
-        raise BenchmarkReportError(f"{source}: legacy samples must be a list")
-    legacy = {
-        **payload,
-        "schema_version": 2,
-        "run_duration_s": payload.get("run_duration_s", payload.get("duration_seconds", 0)),
-        "runs": samples if samples and isinstance(samples[0], dict) and "intervals" in samples[0] else [{"intervals": samples}],
-        "minimum_sample_count": payload.get("minimum_sample_count", len(samples)),
-        "sample_count": payload.get("sample_count", len(samples)),
-        "target_duration_s": payload.get(
-            "target_duration_s", payload.get("run_duration_s", payload.get("duration_seconds", 0))
-        ),
-    }
-    try:
-        result = compact_evidence(legacy).model_dump(mode="json")
-    except BenchmarkSchemaError as exc:
-        raise BenchmarkReportError(f"{source}: cannot compact legacy interval evidence: {exc}") from exc
-    result["migration"] = {"from_schema_version": version}
-    return result
-
-
 def load_result(source: Path) -> dict[str, Any]:
-    """Read a legacy diagnostic result for runner compatibility, without mutation."""
+    """Read one strict v4 benchmark result; historical loading is retired."""
     payload = load_json(source)
-    if payload.get("schema_version") == 4:
-        try:
-            result = BenchmarkRunResult.model_validate(payload).model_dump(mode="json")
-        except Exception as exc:  # pydantic reports structured validation details.
-            raise BenchmarkReportError(f"{source}: invalid v4 benchmark result: {exc}") from exc
-        target = result["target"]
-        return {
-            **result,
-            "transport": "sqlite" if target == "sqlite" else ("uds" if target == "uds" else "tcp"),
-            "peer_wire_security": (
-                None if target == "sqlite" else ("plaintext-test" if target == "tcp" else "mutual-tls")
-            ),
-            "benchmark_target": target,
-            "passed": result["status"] == "PASS",
-        }
-    migrated = _migrate_legacy_result(payload, source)
-    migration = migrated.pop("migration", None)
     try:
-        result = BenchmarkSummary.model_validate(migrated).model_dump(mode="json")
+        result = BenchmarkRunResult.model_validate(payload).model_dump(mode="json")
     except Exception as exc:  # pydantic reports structured validation details.
-        raise BenchmarkReportError(f"{source}: invalid benchmark summary: {exc}") from exc
-    if migration is not None:
-        result["migration"] = migration
-    return result
+        raise BenchmarkReportError(f"{source}: invalid v4 benchmark result: {exc}") from exc
+    target = result["target"]
+    return {
+        **result,
+        "transport": "sqlite" if target == "sqlite" else ("uds" if target == "uds" else "tcp"),
+        "peer_wire_security": (
+            None if target == "sqlite" else ("plaintext-test" if target == "tcp" else "mutual-tls")
+        ),
+        "benchmark_target": target,
+        "passed": result["status"] == "PASS",
+    }
 
 
 def result_id(result: dict[str, Any], _source: Path | None = None) -> str:
@@ -259,6 +213,36 @@ def incomplete_reason(campaign: BenchmarkCampaign) -> str | None:
     return "; ".join(reasons) if reasons else "Required target results are missing."
 
 
+def current_historical_display_status(
+    result: BenchmarkRunResult, historical: HistoricalRecord,
+) -> str:
+    """Reclassify a historical point against the ratchet's current high-water mark.
+
+    ``result.status`` and its baseline are immutable ingest-time evidence.  A
+    phase chart instead answers the distinct, present-tense question: does this
+    older point meet the best durable result subsequently observed for this
+    host/target?  The distinction is temporal, never a manufactured floor.
+    """
+    current_floor = max(
+        (
+            point.p50_floor
+            for point in historical.ratchet
+            if point.host_label == result.host_label and point.target == result.target
+        ),
+        default=result.baseline.p50_floor,
+    )
+    return classify_status(
+        lifecycle_complete=result.metrics is not None and result.durability_after_restart is not None,
+        messages_requested=result.messages_requested,
+        messages_admitted=result.messages_admitted,
+        messages_durable=result.messages_durable,
+        p50_admissions_per_second=(
+            None if result.metrics is None else result.metrics.admissions_per_second.p50
+        ),
+        baseline_p50_floor=current_floor,
+    )
+
+
 def panel_variables(campaign: BenchmarkCampaign) -> dict[str, Any]:
     return {
         "title": f"ATM benchmark campaign — {campaign.campaign_id}",
@@ -292,10 +276,11 @@ def _chart_points(
             continue
         for historical_result in entry.results:
             result = historical_result.result
-            if result.target == target and result.metrics is not None and historical_result.displayed_status != "INCOMPLETE":
+            status = current_historical_display_status(result, historical)
+            if result.target == target and result.metrics is not None and status != "INCOMPLETE":
                 points.append({
                     "host_label": result.host_label, "timestamp": result.generated_at,
-                    "status": historical_result.displayed_status,
+                    "status": status,
                     "distribution": result.metrics.admissions_per_second,
                 })
     for campaign in phase_campaigns:
@@ -424,7 +409,10 @@ def render_envelope(campaigns: Sequence[BenchmarkCampaign], report_root: Path = 
 
 
 def regenerate_index() -> None:
-    completed = subprocess.run(["just", "reports-index"], cwd=ROOT, capture_output=True, text=True, check=False)
+    completed = subprocess.run(
+        ["just", "reports-index"], cwd=ROOT, capture_output=True, text=True,
+        encoding="utf-8", errors="replace", check=False,
+    )
     if completed.returncode != 0:
         raise BenchmarkReportError(f"reports-index failed: {completed.stderr.strip() or completed.stdout.strip()}")
 

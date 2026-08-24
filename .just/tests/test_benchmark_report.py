@@ -16,7 +16,7 @@ if str(ROOT) not in sys.path:
 
 from scripts.smoke.benchmark_schema import (
     BaselineRef, BenchmarkCampaign, BenchmarkMetrics, BenchmarkRunResult,
-    DurabilityAfterRestart, MetricDistribution, WireBytes,
+    DurabilityAfterRestart, HistoricalRecord, MetricDistribution, RatchetPoint, WireBytes,
 )
 
 
@@ -35,11 +35,11 @@ def distribution(value: float) -> MetricDistribution:
     return MetricDistribution(min=value - spread, p50=value, p95=value + spread, p99=value + spread * 1.25, max=value + spread * 1.5)
 
 
-def result(target: str, stamp: datetime, *, identifier: str, status: str = "PASS", host: str = "rand-m5", floor: float = 16_000) -> BenchmarkRunResult:
+def result(target: str, stamp: datetime, *, identifier: str, status: str = "PASS", host: str = "rand-m5", floor: float = 16_000, p50: float = 18_000) -> BenchmarkRunResult:
     network = target != "sqlite"
     metrics = BenchmarkMetrics(
         interval_count=2, passed_interval_count=2, accepted_count=10, requested_count=10,
-        response_count=10, admissions_per_second=distribution(18_000),
+        response_count=10, admissions_per_second=distribution(p50),
         time_to_send_1k_s=distribution(1), interval_latency_ms=distribution(1),
         **({"connection_count": 2, "application_wire_bytes": WireBytes(request=1, response=1, total=2),
             "request_frames_per_second": distribution(1), "connections_per_second": distribution(1),
@@ -169,6 +169,34 @@ class BenchmarkReportTests(unittest.TestCase):
         self.assertEqual(len(charts["tcp"]["series"]), 2)
         self.assertEqual(len(charts["tcp"]["baseline_lines"]), 2)
         self.assertEqual(charts["tcp"]["candles"][1]["status"], "FAIL")
+
+    def test_historical_display_uses_current_ratchet_not_frozen_ingest_floor(self) -> None:
+        older = result(
+            "tcp", datetime(2026, 8, 24, 7, tzinfo=UTC),
+            identifier="20260824T070000Z-rand-m5", floor=16_000,
+        )
+        later = result(
+            "tcp", datetime(2026, 8, 24, 8, tzinfo=UTC),
+            identifier="20260824T080000Z-rand-m5", floor=18_000, p50=20_000,
+        )
+        historical = HistoricalRecord(
+            schema_version=1,
+            generated_from_commit="a" * 40,
+            campaigns=(),
+            ratchet=(
+                RatchetPoint(
+                    host_label="rand-m5", target="tcp", effective_from=older.generated_at,
+                    p50_floor=18_000, source_campaign_id=older.campaign_id,
+                ),
+                RatchetPoint(
+                    host_label="rand-m5", target="tcp", effective_from=later.generated_at,
+                    p50_floor=20_000, source_campaign_id=later.campaign_id,
+                ),
+            ),
+            unattributed=(),
+        )
+        self.assertEqual(older.status, "PASS")
+        self.assertEqual(REPORT.current_historical_display_status(older, historical), "FAIL")
 
     def test_preview_copies_the_newest_panel_without_opening_wyvern(self) -> None:
         item = campaign(datetime(2026, 8, 24, 7, tzinfo=UTC), identifier="20260824T070000Z-rand-m5")

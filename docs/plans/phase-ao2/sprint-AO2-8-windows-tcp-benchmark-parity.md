@@ -152,3 +152,8 @@ Each remediation is a scoped production commit with focused regression tests;
 revert the offending commit if a complete matrix exposes a regression. Harness
 and benchmark-account safety remain intact. No result authorizes a legacy
 synchronous daemon path or a bypass of the released CLI/daemon pair.
+
+## Current operator procedure
+
+For any new benchmark run, follow the canonical
+[`benchmark-run` skill](../../../.claude/skills/benchmark-run/SKILL.md).

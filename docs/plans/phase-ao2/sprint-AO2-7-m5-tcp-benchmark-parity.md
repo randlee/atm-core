@@ -243,3 +243,8 @@ ordinary harness/configuration/schema test is fixed in this sprint with a
 reproduction, root cause, repair, and validation; it is not reported as a
 terminal benchmark result. Rollback is a scoped harness revert; AO2.5.4's
 database-safety refusal remains in force.
+
+## Current operator procedure
+
+For any new benchmark run, follow the canonical
+[`benchmark-run` skill](../../../.claude/skills/benchmark-run/SKILL.md).

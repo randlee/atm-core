@@ -1535,46 +1535,62 @@ def run_profile(
     expected_status: int = 201,
     roster: CapacityRoster = DEFAULT_CAPACITY_ROSTER,
 ) -> dict[str, Any]:
-    """Collect at least ten independent intervals over one sustained profile."""
+    """Collect at least ten independent intervals over one sustained profile.
+
+    The prepared request bytes are deliberately outside each interval's timer.
+    A capacity result measures the released daemon's admission path, not Python
+    UUID/timestamp creation, JSON serialization, or worker-thread/GIL work.
+    This preserves the exact request payload, including direct-peer provenance.
+    """
     if sample_count <= 0:
         raise SmokeError("capacity sample count must be positive")
     if target_duration_seconds <= 0:
         raise SmokeError("capacity target duration must be positive")
 
-    def submit(sequence: int, message_count: int) -> list[AdmissionResult]:
+    def interval_requests(interval: int) -> list[HttpRequest]:
+        """Create one unique, immutable request batch before timing begins."""
+        sequence_start = interval * requested_messages
         if operation == "write":
-            requests = [
+            return [
                 HttpRequest(
                     "/v1/atm/messages",
                     http_request_body(
                         home,
-                        sequence + offset,
+                        sequence_start + offset,
                         roster,
                         peer_origin=endpoint.direct_peer,
                     ),
                     201,
                 )
-                for offset in range(message_count)
+                for offset in range(requested_messages)
             ]
-        elif operation == "cached_roster_heartbeat":
-            requests = [
+        if operation == "cached_roster_heartbeat":
+            return [
                 HttpRequest(
                     "/v1/atm/heartbeat",
-                    cached_roster_heartbeat_body(sequence + offset, roster),
+                    cached_roster_heartbeat_body(sequence_start + offset, roster),
                     200,
                 )
-                for offset in range(message_count)
+                for offset in range(requested_messages)
             ]
-        else:
-            raise SmokeError(f"unsupported capacity benchmark operation {operation!r}")
-        return submit_connection(endpoint, requests)
+        raise SmokeError(f"unsupported capacity benchmark operation {operation!r}")
 
     intervals: list[dict[str, Any]] = []
     elapsed_seconds = 0.0
     while len(intervals) < sample_count or elapsed_seconds < target_duration_seconds:
+        interval_index = len(intervals)
+        requests = interval_requests(interval_index)
+
+        def submit(sequence: int, message_count: int) -> list[AdmissionResult]:
+            offset = sequence - interval_index * requested_messages
+            selected = requests[offset:offset + message_count]
+            if offset < 0 or len(selected) != message_count:
+                raise SmokeError("timed interval selected requests outside its prepared batch")
+            return submit_connection(endpoint, selected)
+
         interval = run_interval(
             submit,
-            len(intervals),
+            interval_index,
             frames_per_connection,
             workers,
             requested_messages,

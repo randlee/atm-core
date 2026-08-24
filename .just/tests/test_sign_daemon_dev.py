@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 from pathlib import Path
 import importlib.util
+import tempfile
 from unittest import mock
 import subprocess
 import sys
@@ -41,6 +42,7 @@ class SignDaemonDevTests(unittest.TestCase):
         completed = subprocess.CompletedProcess(["codesign"], 0, stdout="", stderr="")
         with (
             mock.patch.object(sign_daemon_dev.sys, "platform", "darwin"),
+            mock.patch.object(sign_daemon_dev, "unlock_login_keychain") as unlock,
             mock.patch.object(sign_daemon_dev, "resolve_apple_development_identity", return_value=identity),
             mock.patch.object(sign_daemon_dev.subprocess, "run", return_value=completed) as run,
             mock.patch.object(sign_daemon_dev, "verify_apple_signature", return_value=True),
@@ -48,6 +50,7 @@ class SignDaemonDevTests(unittest.TestCase):
         ):
             self.assertEqual(sign_daemon_dev.main(), 0)
 
+        unlock.assert_called_once_with()
         commands = [call.args[0] for call in run.call_args_list]
         self.assertEqual(
             commands,
@@ -73,6 +76,48 @@ class SignDaemonDevTests(unittest.TestCase):
         ):
             self.assertEqual(sign_daemon_dev.main(), 1)
         self.assertIn("missing Apple identity", stderr.getvalue())
+
+    def test_account_secret_unlocks_only_the_current_login_keychain(self) -> None:
+        completed = subprocess.CompletedProcess(["security"], 0, stdout="", stderr="")
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            secret_file = Path(temporary_directory) / "keychain-secret"
+            secret_file.write_text("secret-value\n", encoding="utf-8")
+            with mock.patch.object(sign_daemon_dev.subprocess, "run", return_value=completed) as run:
+                sign_daemon_dev.unlock_login_keychain(secret_file)
+
+            self.assertEqual(
+                run.call_args.args[0],
+                ["security", "unlock-keychain", "-p", "secret-value", str(sign_daemon_dev.LOGIN_KEYCHAIN)],
+            )
+            self.assertEqual(run.call_args.kwargs["stdout"], sign_daemon_dev.subprocess.DEVNULL)
+            self.assertEqual(run.call_args.kwargs["stderr"], sign_daemon_dev.subprocess.DEVNULL)
+
+    def test_absent_account_secret_does_not_attempt_an_unlock(self) -> None:
+        with (
+            mock.patch.dict(sign_daemon_dev.os.environ, {}, clear=True),
+            mock.patch.object(
+                sign_daemon_dev,
+                "BENCHMARK_KEYCHAIN_SECRET_FILE",
+                Path("/private/tmp/does-not-exist-atm-keychain-secret"),
+            ),
+            mock.patch.object(sign_daemon_dev.subprocess, "run") as run,
+        ):
+            sign_daemon_dev.unlock_login_keychain()
+        run.assert_not_called()
+
+    def test_configured_secret_file_overrides_benchmark_account_default(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            home = Path(temporary_directory)
+            with mock.patch.dict(
+                sign_daemon_dev.os.environ,
+                {
+                    sign_daemon_dev.KEYCHAIN_SECRET_FILE_ENVIRONMENT_VARIABLE: "~/custom-secret",
+                    "HOME": str(home),
+                    "USERPROFILE": str(home),
+                },
+                clear=True,
+            ):
+                self.assertEqual(sign_daemon_dev.keychain_secret_file(), home / "custom-secret")
 
     def test_build_recipe_runs_signing_hook_after_cargo(self) -> None:
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
@@ -105,6 +150,7 @@ class SignDaemonDevTests(unittest.TestCase):
             "    # records the attempt before returning its non-zero status.\n"
             "    {{python_cmd}} scripts/smoke/run_admission_capacity.py {{args}} || benchmark_status=$?\n"
             "    {{python_cmd}} scripts/smoke/benchmark_report.py --rebuild || exit $?\n"
+            "    {{python_cmd}} .just/generate_report_index.py --check || exit $?\n"
             "    echo 'View the newest campaign panel: just benchmark-show'\n"
             "    exit ${benchmark_status:-0}",
             justfile,

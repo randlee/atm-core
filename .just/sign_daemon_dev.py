@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -30,6 +31,49 @@ MANAGED_TARGETS = (
     (REPO_ROOT / "target" / "release" / "atm-daemon", DAEMON_IDENTIFIER),
 )
 ENTITLEMENTS = REPO_ROOT / "scripts" / "macos_debug.entitlements"
+KEYCHAIN_SECRET_FILE_ENVIRONMENT_VARIABLE = "ATM_SIGNING_KEYCHAIN_SECRET_FILE"
+BENCHMARK_KEYCHAIN_SECRET_FILE = Path.home() / ".atmbench" / "keychain-secret"
+LOGIN_KEYCHAIN = Path.home() / "Library" / "Keychains" / "login.keychain-db"
+
+
+def keychain_secret_file() -> Path | None:
+    """Return the optional, account-local login-keychain unlock secret.
+
+    The dedicated ``atmbench`` account receives this non-repository file during
+    its macOS provisioning.  Other accounts may provide an equivalent path via
+    the environment variable; absence deliberately preserves normal signing
+    behavior for developer machines whose login keychain is already unlocked.
+    """
+    configured = os.environ.get(KEYCHAIN_SECRET_FILE_ENVIRONMENT_VARIABLE, "").strip()
+    if configured:
+        return Path(configured).expanduser()
+    if BENCHMARK_KEYCHAIN_SECRET_FILE.is_file():
+        return BENCHMARK_KEYCHAIN_SECRET_FILE
+    return None
+
+
+def unlock_login_keychain(secret_file: Path | None = None) -> None:
+    """Unlock the current account's login keychain when provisioned for it.
+
+    The secret is read only from the account-local, untracked file and is never
+    written to stdout/stderr or a repository artifact.  Signing fails closed if
+    an explicitly provisioned secret cannot unlock the keychain.
+    """
+    secret_file = keychain_secret_file() if secret_file is None else secret_file
+    if secret_file is None:
+        return
+    secret = secret_file.read_text(encoding="utf-8").strip()
+    if not secret:
+        raise SigningIdentityError(
+            f"signing keychain secret file is empty: {secret_file}; repair local account provisioning."
+        )
+    subprocess.run(
+        ["security", "unlock-keychain", "-p", secret, str(LOGIN_KEYCHAIN)],
+        cwd=REPO_ROOT,
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
 
 def sign_and_verify_binary(binary: Path, identifier: str, identity: SigningIdentity) -> None:
@@ -66,6 +110,7 @@ def main() -> int:
     if sys.platform != "darwin":
         return 0
     try:
+        unlock_login_keychain()
         identity = resolve_apple_development_identity()
     except (OSError, subprocess.SubprocessError, SigningIdentityError) as error:
         print(f"error: unable to resolve Apple Development signing identity: {error}", file=sys.stderr)

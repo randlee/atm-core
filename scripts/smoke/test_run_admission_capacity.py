@@ -1549,6 +1549,58 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(profile["sample_count"], 2)
         self.assertEqual(profile["target_duration_s"], 1.0)
 
+    def test_profile_prepares_unique_direct_peer_writes_before_timed_interval(self):
+        endpoint = RUNNER.LocalEndpoint("tcp", ("127.0.0.1", 43_101), direct_peer=True)
+        prepared: list[tuple[int, bool]] = []
+
+        def body(_home, sequence, _roster, *, peer_origin=False):
+            prepared.append((sequence, peer_origin))
+            return f"body-{sequence}".encode()
+
+        def timed_interval(submit, interval, _frames, _workers, requested_messages, **_kwargs):
+            self.assertEqual(interval, 0)
+            self.assertEqual(prepared, [(index, True) for index in range(requested_messages)])
+            responses = submit(0, 2) + submit(2, 2)
+            self.assertEqual([result.status for result in responses], [201] * requested_messages)
+            self.assertEqual(
+                prepared,
+                [(index, True) for index in range(requested_messages)],
+                "submitting the timed batch must not construct another request body",
+            )
+            return {"passed": True, "error_free": True, "elapsed_seconds": 0.1}
+
+        with (
+            mock.patch.object(RUNNER, "http_request_body", side_effect=body),
+            mock.patch.object(
+                RUNNER,
+                "submit_connection",
+                side_effect=lambda _endpoint, requests: [
+                    RUNNER.AdmissionResult(201, 0.1) for _request in requests
+                ],
+            ) as submit_connection,
+            mock.patch.object(RUNNER, "run_interval", side_effect=timed_interval),
+        ):
+            profile = RUNNER.run_profile(
+                endpoint,
+                Path("/tmp/atm-capacity-test"),
+                4,
+                4,
+                1,
+                1,
+                target_duration_seconds=0.1,
+            )
+
+        self.assertTrue(profile["passed"])
+        self.assertEqual(profile["sample_count"], 1)
+        self.assertEqual(
+            [
+                request.body
+                for call in submit_connection.call_args_list
+                for request in call.args[1]
+            ],
+            [b"body-0", b"body-1", b"body-2", b"body-3"],
+        )
+
     def test_evidence_filename_matches_the_published_benchmark_convention(self):
         evidence = complete_evidence(host_label="rand-m5", frames_per_connection=16)
         with tempfile.TemporaryDirectory() as temp:
@@ -1561,8 +1613,9 @@ class AdmissionCapacityTests(unittest.TestCase):
         evidence = complete_evidence(host_label="rand-m5", transport="uds", frames_per_connection=8)
         with tempfile.TemporaryDirectory() as temp:
             path = RUNNER.write_evidence(Path(temp), evidence)
-            result = benchmark_report.load_result(path)
-        self.assertEqual(path.stem, benchmark_report.result_id(result))
+            with self.assertRaisesRegex(benchmark_report.BenchmarkReportError, "invalid v4"):
+                benchmark_report.load_result(path)
+        self.assertTrue(path.name.endswith("-uds-f8.json"))
 
     def test_evidence_writer_redacts_host_private_fields_but_retains_endpoint_shape(self):
         evidence = complete_evidence(
@@ -1639,6 +1692,20 @@ class AdmissionCapacityTests(unittest.TestCase):
         )
         self.assertRegex(body["origin_message_id"], r"^[0-9A-HJKMNP-TV-Z]{26}$")
         self.assertTrue(body["origin_timestamp"].endswith("Z"))
+
+    def test_direct_peer_requests_have_unique_origin_metadata(self):
+        requests = [
+            __import__("json").loads(
+                RUNNER.http_request_body(Path("/tmp/atm-capacity-test"), sequence, peer_origin=True)
+            )
+            for sequence in range(4)
+        ]
+        origin_ids = {request["origin_message_id"] for request in requests}
+        self.assertEqual(len(origin_ids), len(requests))
+        self.assertEqual(
+            [request["message_source"]["Inline"] for request in requests],
+            ["capacity-0", "capacity-1", "capacity-2", "capacity-3"],
+        )
 
     def test_local_request_does_not_invent_peer_origin_metadata(self):
         body = __import__("json").loads(
@@ -1873,7 +1940,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         }
         self.assertEqual(RUNNER.profile_median_admissions_per_second(profile), 2.5)
 
-    def test_interval_metrics_are_retained_by_the_benchmark_report_schema(self):
+    def test_legacy_interval_artifact_is_rejected_by_the_benchmark_report_schema(self):
         import benchmark_report
 
         interval = RUNNER.run_interval(
@@ -1899,10 +1966,8 @@ class AdmissionCapacityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             source = Path(temp) / "result.json"
             source.write_text(json.dumps(payload), encoding="utf-8")
-            rendered = benchmark_report.load_result(source)
-        recorded = rendered["metrics"]
-        self.assertIn("request_frames_per_second", recorded)
-        self.assertIn("application_wire_bytes", recorded)
+            with self.assertRaisesRegex(benchmark_report.BenchmarkReportError, "invalid v4"):
+                benchmark_report.load_result(source)
 
     def test_profile_retains_each_requested_interval_in_evidence(self):
         with mock.patch.object(
