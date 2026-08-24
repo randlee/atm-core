@@ -38,10 +38,17 @@ Result: connect + TLS-handshake cost on every peer write.
    exactly matching `MtlsPeerStreamAdapter::client_config_for`'s
    exact-authority lookup — never by resolved IP; a pooled entry is never
    reused across peers. Dropping/evicting an entry closes the sender, which
-   ends its driver task (no task leaks; asserted in tests).
+   ends its driver task (driver-task completion is observed by AC #9 —
+   sync Drop cannot join, so tests await a completion signal).
 2. **Plaintext client reuse**: one shared daemon-lifetime `reqwest::Client`
    (its built-in pool then engages) replacing per-dispatch construction in
-   `DirectPeerTcpConnector`. No custom pool needed on this path.
+   `DirectPeerTcpConnector`. No custom pool needed on this path. Wiring
+   contract mirrors deliverable 1's: `StorageAndNudgeRouter` gains
+   `with_shared_direct_peer_client(client: reqwest::Client) -> Self`
+   (builder style of `with_peer_stream_adapter`), and
+   `build_replacement_handler` in `atm-daemon-bootstrap` constructs the one
+   shared client at daemon scope and injects it — `DirectPeerTcpConnector`
+   borrows it instead of building its own.
 3. **Router integration**: `StorageAndNudgeRouter` gains a pool handle
    (builder method mirroring `with_peer_stream_adapter`);
    `dispatch_resolved_peer_write` changes to acquire → execute → release,
@@ -122,8 +129,15 @@ impl PeerConnectionPool {
 /// without a completed exchange — just drops the sender, which closes the
 /// connection and ends its driver task. Idle eviction runs on the pool's
 /// own timer task, never in Drop.
+/// Set at acquire time, BEFORE any .await, under the slot-map mutex:
+/// Pooled = a slot was reserved (per-peer and total counters incremented
+/// pre-dial, so a concurrent acquirer can never over-commit the ceiling);
+/// Overflow = capacity was already full, this dial is unpooled.
+pub enum ConnectionOrigin { Pooled, Overflow }
+
 pub struct PooledPeerConnection {
     peer: HostName,
+    origin: ConnectionOrigin,
     // Real types only — the same ones execute_opaque_peer_request drives
     // today: axum::body::Body request bodies over the http1 sender, and
     // axum::http::Response<Vec<u8>> back out. No new wrapper types.
@@ -132,6 +146,16 @@ pub struct PooledPeerConnection {
     health: GuardHealth,          // Healthy only after a successful exchange
     pool: Weak<PoolShared>,
 }
+
+// Counter discipline (all under the slot-map mutex, never across .await):
+// - Pooled origin: counters increment at reservation (pre-dial); Drop
+//   decrements on BOTH paths — healthy (sender re-enters the slot map)
+//   and failed/incomplete (sender dropped, slot freed). A failed dial
+//   also releases its reservation before surfacing the error.
+// - Overflow origin: counters are never touched, and Drop NEVER pushes an
+//   overflow sender into the slot map — healthy or not, it is closed on
+//   Drop. Overflow connections exist for exactly one exchange, preserving
+//   AC #5's ceiling invariant even when slots free mid-flight.
 
 impl PooledPeerConnection {
     /// One request/response cycle over the pooled sender, preserving the
@@ -194,6 +218,10 @@ layered on top of, and never replaces, that config reuse.
    (single-peer concurrency test); `max_pooled_total` exceeded across
    multiple peers → dispatches still succeed via unpooled dials while the
    pool's retained-entry count never exceeds the ceiling (multi-peer test).
+   Includes the overflow-Drop case: an Overflow-origin connection whose
+   exchange succeeds is closed at Drop and does NOT enter the slot map,
+   even when a slot has freed in the meantime (test frees a slot mid-flight
+   and asserts the retained count and the closed overflow connection).
 6. All three existing router dispatch tests and
    `authenticated_peer_stream_uses_the_same_canonical_router_after_the_adapter`
    pass unmodified.
@@ -204,7 +232,13 @@ layered on top of, and never replaces, that config reuse.
    (valid values, rejection of zero/negative/garbage for `max_per_peer`,
    `max_pooled_total`, `idle_timeout`, and defaults applied when unset),
    mirroring how `parse_direct_peer_port` is tested.
-9. **Benchmark gate (standing no-regression constraint + D1/D3)**: live
+9. Driver-task completion (no leaks): tests observe the connection-driver
+   task actually complete — via a completion signal (e.g. the driver task
+   resolving a oneshot/notify observed with a bounded `tokio::time::timeout`,
+   never an unbounded join) — for each of: idle eviction, Drop after a
+   failed exchange, Drop with no completed exchange, and overflow-Drop
+   after a successful exchange.
+10. **Benchmark gate (standing no-regression constraint + D1/D3)**: live
    `just benchmark` on rand-m5 before/after on the same revision pair; tcp
    and tcp-tls f8 p50 must not regress below `baselines.json` floors, and
    the after-run is expected to improve tcp/tcp-tls p50 (pooling removes
@@ -217,7 +251,7 @@ layered on top of, and never replaces, that config reuse.
 
 - Unit/integration tests above; full workspace test + clippy; both CI lanes.
 - Live-verify gate before quality-mgr dispatch: the m5 before/after
-  benchmark pair from AC #9, plus one real cross-host mTLS dispatch burst
+  benchmark pair from AC #10, plus one real cross-host mTLS dispatch burst
   demonstrating reuse in daemon logs.
 - Reviewers: standard set plus `boundary-guard` (deliverable 8) and
   `rust-service-hardening` lens (pool lifecycle, timeouts, backpressure —
@@ -243,6 +277,7 @@ layered on top of, and never replaces, that config reuse.
 | 2 | plan-scope-reviewer (sonnet) | `82252f3b` | FAIL — round-1 closures confirmed; 1 Important (live-verify gate cited stale AC #8 after renumbering), 1 minor (ADR lacked path/number convention) | Fixed in round-2 commit: gate re-pointed to AC #9; ADR path + INDEX.md convention stated. |
 | 2 | critical-plan-reviewer (sonnet) | `82252f3b` | FAIL — round-1 closures verified against real code; 2 new Blocking (contract used undefined types `RuntimeBody`/`HttpRuntimeRequest`/`HttpRuntimeResponse`; no `RequestDeadline` threaded through `acquire`/`exchange`, silently dropping the per-write timeout contract deliverable 6 claims unchanged), 1 minor (liveness check vs mutex-across-await) | Fixed in round-2 commit: real types (`axum::body::Body`, `atm_core::api::HttpRequest`, `axum::http::Response<Vec<u8>>`); `RequestDeadline` threaded through both `acquire` and `exchange` with today's Timeout/PeerConnectTimeout trigger conditions stated; pop-entry-then-check-outside-the-lock rule added. |
 | 3 | both reviewers (sonnet) | `21241a01` | **PASS** — all round-2 closures verified against real code (types, deadline semantics incl. RequestDeadline being Copy over a fixed Instant, lock discipline); zero findings | Hardening complete; ready for quality-mgr gate. |
+| 4 | quality-mgr gate (PR #1018) | `1be4a46b` | FAIL — 1 Blocking (AC #5 unimplementable: no Pooled/Overflow origin distinction, so a healthy overflow dial would re-enter the slot map on Drop and breach the ceiling), 2 Important (deliverable-1 "no task leaks; asserted in tests" had no observing AC — sync Drop can't join; deliverable 2 lacked a composition-root wiring contract) | Fixed in round-4 commit: `ConnectionOrigin { Pooled, Overflow }` set pre-await under the mutex with explicit counter increment (pre-dial reservation) / decrement (both Drop paths) discipline and overflow-never-re-enters rule + mid-flight slot-free test in AC #5; new AC #9 (driver-task completion via bounded-timeout signal for eviction/failed/incomplete/overflow Drop paths, benchmark gate renumbered #10); `with_shared_direct_peer_client` builder + bootstrap injection point for the shared reqwest::Client. Discarded false positive (nonexistent-seam claim from a plan-doc-only worktree) noted, no action. |
 
 ## Dependencies
 
