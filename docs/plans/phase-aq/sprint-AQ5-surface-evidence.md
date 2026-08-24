@@ -36,11 +36,19 @@ linked artifact.
      declares the version it implements, and the pipeline script treats a
      version it does not recognize exactly like a missing picker (falls
      back, records why).
-   - **Minimum CLI version floor**, recorded as a single constant in
+   - **Pin-latest version policy (Rand, 2026-08-23)**: the minimum Wyvern
+     version is pinned to the **most recent Wyvern release** at the time of
+     each atm release, recorded as a single constant in
      `scripts/send-to/atm-send-to.{sh,ps1}` and documented alongside the
-     install steps: the script probes `wyvern --version` and uses Wyvern
-     only when the binary is on `PATH`, parses a version `>=` the floor,
-     and the page asset resolves. **The probe runs under a short bounded
+     install steps. We always demand the most recent Wyvern — the pin is
+     bumped to latest as part of every atm release preflight (AQ6), never
+     left to accumulate a "supports everything after X" range that grows
+     the integration surface. The script probes `wyvern --version` and
+     uses Wyvern only when the binary is on `PATH`, parses a version `>=`
+     the pin, and the page asset resolves. Consequently the schema
+     compatibility question is always "does the pinned (latest) Wyvern
+     support the expected `schema_version`?" — verified by AQ6's preflight
+     integration test, not assumed. **The probe runs under a short bounded
      deadline** (1–2 s, well inside the cold-start budget) with the child
      killed on expiry — `wyvern` is an arbitrary environment-provided
      executable resolved from `PATH`, the same trust tier as a transfer
@@ -80,7 +88,7 @@ linked artifact.
 2a. Wyvern dependency contract (deliverable 3a): harness cases prove
    picker selection falls back to the native picker — with the stderr note
    and a successful send — for each of: `wyvern` absent from `PATH`,
-   version below the floor, unparseable `--version`, `--version` hanging
+   version below the pin, unparseable `--version`, `--version` hanging
    past the probe deadline (child killed, treated as absent), unknown
    `schema_version`, missing page asset. No test lane requires Wyvern
    installed.
