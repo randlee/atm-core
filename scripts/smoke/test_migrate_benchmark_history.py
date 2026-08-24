@@ -170,6 +170,30 @@ class MigrateBenchmarkHistoryTests(unittest.TestCase):
         self.assertEqual(entry.displayed_status, "PASS")
         self.assertGreater(entry.result.baseline.p50_floor, entry.result.metrics.admissions_per_second.p50)
 
+    def test_updated_baselines_adds_only_a_passing_windows_seed(self) -> None:
+        source_name = "20260801-063351.969883-mac-arm64-01-uds-f1.json"
+        with tempfile.TemporaryDirectory() as temp:
+            reports = Path(temp)
+            source = json.loads((self.fixture_dir() / source_name).read_text(encoding="utf-8"))
+            source.update({
+                "host_label": "windows-x64-02",
+                "host_os": "windows",
+                "transport": "tcp",
+                "peer_wire_security": "plaintext-test",
+                "benchmark_target": "tcp",
+            })
+            (reports / "windows-passing.json").write_text(json.dumps(source), encoding="utf-8")
+            (reports / "baselines.json").write_text(
+                json.dumps({"schema_version": 1, "revision": 1, "entries": []}), encoding="utf-8"
+            )
+            record, _audit = MIGRATE.migrated_record(reports, "0" * 40)
+            updated = MIGRATE.updated_baselines(reports, record)
+        seed = updated.entry_for("windows-x64-02", "tcp")
+        self.assertEqual(updated.revision, 2)
+        self.assertEqual(seed.p50_floor, source["metrics"]["admissions_per_second"]["p50"])
+        self.assertEqual(seed.effective_from.isoformat().replace("+00:00", "Z"), source["generated_at"])
+        self.assertEqual(seed.approved_by, "historical migration seed; pending quality review")
+
 
 if __name__ == "__main__":
     unittest.main()
