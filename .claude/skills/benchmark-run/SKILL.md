@@ -35,10 +35,14 @@ if (-not (Test-Path (Join-Path ($env:ATM_HOME ?? "$HOME\\.atm") "benchmark-accou
 
 The working tree must be clean before the run. Bootstrap only when the account
 manifest is absent; an existing manifest is the expected state for a reusable
-dedicated account. `daemon-switch status --doctor` and `atm doctor --json`
-must identify one healthy matched CLI/daemon pair. On macOS, `just benchmark`
-signs the release daemon before it is selected; do not run a worktree daemon
-outside daemon-switch.
+dedicated account. The ordinary benchmark harness uses its own temporary ATM
+home and daemon; it never selects, stops, or writes an ambient daemon or its
+database. Therefore `daemon-switch status --doctor` and `atm doctor --json`
+are useful account-health diagnostics, not a prerequisite for the harness.
+On macOS, `just benchmark` signs its fresh release binaries first. A dedicated
+benchmark account with a locked Apple Development keychain must be provisioned
+with its account-local, untracked keychain secret; the signing helper unlocks
+it without printing the secret or prompting the operator.
 
 ## 2. Run
 
