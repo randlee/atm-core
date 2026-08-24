@@ -1609,7 +1609,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             tls_server_name="capacity.example.test",
             tls_certificate_bundle=Path("/tmp/capacity-identity.pem"),
         )
-        context = mock.Mock(spec=RUNNER.TlsClientContext)
+        context = mock.Mock(spec=RUNNER.ssl.SSLContext)
 
         def timed_interval(submit, _interval, _frames, _workers, _messages, **_kwargs):
             responses = submit(0, 2) + submit(2, 2)
@@ -1649,46 +1649,16 @@ class AdmissionCapacityTests(unittest.TestCase):
             tls_server_name="capacity.example.test",
             tls_certificate_bundle=Path("/tmp/capacity-identity.pem"),
         )
-        ssl_context = mock.Mock(spec=RUNNER.ssl.SSLContext)
-        with mock.patch.object(
-            RUNNER.ssl, "create_default_context", return_value=ssl_context
-        ) as create:
+        context = mock.Mock(spec=RUNNER.ssl.SSLContext)
+        with mock.patch.object(RUNNER.ssl, "create_default_context", return_value=context) as create:
             actual = RUNNER.tls_client_context(endpoint)
 
-        self.assertIsInstance(actual, RUNNER.TlsClientContext)
-        self.assertIs(actual.context, ssl_context)
-        self.assertEqual(actual.server_name, "capacity.example.test")
+        self.assertIs(actual, context)
         create.assert_called_once_with(
             RUNNER.ssl.Purpose.SERVER_AUTH,
             cafile="/tmp/capacity-identity.pem",
         )
-        ssl_context.load_cert_chain.assert_called_once_with("/tmp/capacity-identity.pem")
-
-    def test_tls_client_context_reuses_the_last_negotiated_session(self):
-        ssl_context = mock.Mock(spec=RUNNER.ssl.SSLContext)
-        first = mock.Mock(session="first-session")
-        second = mock.Mock(session="second-session")
-        ssl_context.wrap_socket.side_effect = [first, second]
-        client = RUNNER.TlsClientContext(ssl_context, "capacity.example.test")
-
-        self.assertIs(client.wrap_socket(mock.sentinel.first_socket), first)
-        self.assertIs(client.wrap_socket(mock.sentinel.second_socket), second)
-
-        self.assertEqual(
-            ssl_context.wrap_socket.call_args_list,
-            [
-                mock.call(
-                    mock.sentinel.first_socket,
-                    server_hostname="capacity.example.test",
-                    session=None,
-                ),
-                mock.call(
-                    mock.sentinel.second_socket,
-                    server_hostname="capacity.example.test",
-                    session="first-session",
-                ),
-            ],
-        )
+        context.load_cert_chain.assert_called_once_with("/tmp/capacity-identity.pem")
 
     def test_tls_client_context_rejects_missing_identity_bundle(self):
         endpoint = RUNNER.LocalEndpoint(

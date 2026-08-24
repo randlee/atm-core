@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import closing
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -158,35 +158,6 @@ class LocalEndpoint:
     direct_peer: bool = False
     tls_server_name: str | None = None
     tls_certificate_bundle: Path | None = None
-
-
-@dataclass
-class TlsClientContext:
-    """One immutable TLS configuration plus its profile-local session cache."""
-
-    context: ssl.SSLContext
-    server_name: str
-    _session: ssl.SSLSession | None = field(default=None, init=False, repr=False)
-    _session_lock: Lock = field(default_factory=Lock, init=False, repr=False)
-
-    def wrap_socket(self, stream: socket.socket) -> ssl.SSLSocket:
-        """Wrap one connection and retain its negotiated resumable session.
-
-        The cache is profile-local: it never crosses hosts, identities, or
-        benchmark runs.  A new connection still performs the normal TLS
-        negotiation; it may use a standard TLS resumption ticket only when the
-        server permits it.
-        """
-        with self._session_lock:
-            session = self._session
-        tls_stream = self.context.wrap_socket(
-            stream,
-            server_hostname=self.server_name,
-            session=session,
-        )
-        with self._session_lock:
-            self._session = tls_stream.session
-        return tls_stream
 
 
 @dataclass(frozen=True)
@@ -1383,7 +1354,7 @@ def read_http_response(
     return status, header_end + content_length, summary
 
 
-def tls_client_context(endpoint: LocalEndpoint) -> TlsClientContext | None:
+def tls_client_context(endpoint: LocalEndpoint) -> ssl.SSLContext | None:
     """Prepare one immutable mTLS client context for a benchmark profile.
 
     A profile represents one benchmark client.  Reusing its context is both
@@ -1401,13 +1372,13 @@ def tls_client_context(endpoint: LocalEndpoint) -> TlsClientContext | None:
         cafile=str(endpoint.tls_certificate_bundle),
     )
     context.load_cert_chain(str(endpoint.tls_certificate_bundle))
-    return TlsClientContext(context, endpoint.tls_server_name)
+    return context
 
 
 def submit_connection(
     endpoint: LocalEndpoint,
     requests: list[HttpRequest],
-    tls_context: TlsClientContext | None = None,
+    tls_context: ssl.SSLContext | None = None,
 ) -> list[AdmissionResult]:
     """Submit consecutive real requests over one selected public connection."""
     started = time.perf_counter()
@@ -1428,7 +1399,10 @@ def submit_connection(
                 context = tls_context or tls_client_context(endpoint)
                 if context is None:
                     raise SmokeError("direct mTLS endpoint omitted its benchmark identity bundle")
-                stream = context.wrap_socket(raw_stream)
+                stream = context.wrap_socket(
+                    raw_stream,
+                    server_hostname=endpoint.tls_server_name,
+                )
             else:
                 stream = raw_stream
             frames = []
