@@ -134,10 +134,10 @@ impl PeerConnectionPool {
 /// Overflow-origin guard (healthy or not — see counter discipline below)
 /// just drops the sender, which closes the connection and ends its driver
 /// task. Idle eviction runs on the pool's own timer task, never in Drop.
-/// Set at acquire time, BEFORE any .await, under the slot-map mutex:
-/// Pooled = a slot was reserved (per-peer and total counters incremented
-/// pre-dial, so a concurrent acquirer can never over-commit the ceiling);
-/// Overflow = capacity was already full, this dial is unpooled.
+/// Set at acquire time, BEFORE any .await, under the slot-map mutex.
+/// Pooled = a slot was reserved; Overflow = capacity was full, unpooled.
+/// Counter timing/effects are defined SOLELY by the counter-lifetime
+/// table below — this comment intentionally restates nothing from it.
 pub enum ConnectionOrigin { Pooled, Overflow }
 
 pub struct PooledPeerConnection {
@@ -148,7 +148,14 @@ pub struct PooledPeerConnection {
     // axum::http::Response<Vec<u8>> back out. No new wrapper types.
     sender: hyper::client::conn::http1::SendRequest<axum::body::Body>,
     driver: tokio::task::JoinHandle<()>,
-    health: GuardHealth,          // Healthy only after a successful exchange
+    health: GuardHealth,
+    // enum GuardHealth { Unused, Healthy, Failed } — Unused: no exchange
+    // was completed on this borrow (initial state; Drop closes/discards,
+    // or returns an idle-but-never-borrowed pooled entry per the table);
+    // Healthy: last exchange succeeded (Drop follows the healthy row);
+    // Failed: exchange errored (Drop follows the failed row). Three
+    // variants because AC #9 distinguishes failed-exchange Drop from
+    // no-completed-exchange Drop.
     pool: Weak<PoolShared>,
 }
 
@@ -181,10 +188,14 @@ pub struct PooledPeerConnection {
 //     teardown              |
 //   any Overflow Drop       | no counter ever; never enters slot map
 //
-// Invariant: over any pooled connection's lifetime, exactly one +1 and
-// exactly one -1, regardless of borrow, reuse, or redial count. Every
-// future edit to acquire/Drop behavior must update THIS table, not add
-// a parallel rule elsewhere.
+// Invariant: over any RESERVATION's lifetime — which may span more than
+// one physical connection object, because the redial-success row above
+// hands the replacement connection the SAME reservation — exactly one +1
+// and exactly one -1, regardless of borrow, reuse, or redial count. All
+// counter ops occur under the slot-map mutex (exclusivity is part of the
+// table's contract, not just the preamble). Every future edit to
+// acquire/Drop behavior must update THIS table, not add a parallel rule
+// elsewhere.
 // Pool teardown: dropping/shutting down PeerConnectionPool closes every
 // pooled sender and drains their driver tasks (bounded await on the
 // pool's own shutdown path — never inside a Drop impl of the guard),
@@ -253,10 +264,11 @@ layered on top of, and never replaces, that config reuse.
    (single-peer concurrency test); `max_pooled_total` exceeded across
    multiple peers → dispatches still succeed via unpooled dials while the
    pool's retained-entry count never exceeds the ceiling (multi-peer test).
-   Includes the overflow-Drop case: an Overflow-origin connection whose
-   exchange succeeds is closed at Drop and does NOT enter the slot map,
-   even when a slot has freed in the meantime (test frees a slot mid-flight
-   and asserts the retained count and the closed overflow connection).
+   Includes the overflow-Drop case (behavior per the counter-lifetime
+   table's Overflow rows — not restated here): test frees a slot
+   mid-flight during a successful overflow exchange and asserts the
+   retained count is unchanged and the overflow connection is closed at
+   Drop.
 6. All three existing router dispatch tests and
    `authenticated_peer_stream_uses_the_same_canonical_router_after_the_adapter`
    pass unmodified.
@@ -334,6 +346,7 @@ layered on top of, and never replaces, that config reuse.
 | 4 | quality-mgr gate (PR #1018) | `1be4a46b` | FAIL — 1 Blocking (AC #5 unimplementable: no Pooled/Overflow origin distinction, so a healthy overflow dial would re-enter the slot map on Drop and breach the ceiling), 2 Important (deliverable-1 "no task leaks; asserted in tests" had no observing AC — sync Drop can't join; deliverable 2 lacked a composition-root wiring contract) | Fixed in round-4 commit: `ConnectionOrigin { Pooled, Overflow }` set pre-await under the mutex with explicit counter increment (pre-dial reservation) / decrement (both Drop paths) discipline and overflow-never-re-enters rule + mid-flight slot-free test in AC #5; new AC #9 (driver-task completion via bounded-timeout signal for eviction/failed/incomplete/overflow Drop paths, benchmark gate renumbered #10); `with_shared_direct_peer_client` builder + bootstrap injection point for the shared reqwest::Client. Discarded false positive (nonexistent-seam claim from a plan-doc-only worktree) noted, no action. |
 | 5 | quality-mgr gate round 2 (PR #1018) | `1be4a46b`+r4 fixes | FAIL — 1 Blocking (counter discipline contradictory: "Drop decrements on BOTH paths" vs one-time reservation — reuse cycles would monotonically drain the counter), 3 Important (pool-teardown driver drain untested; ADR deliverable had no AC; overflow-Drop-after-failure branch missing from AC #9), 3 minor | Fixed in round-5 commit: reservation defined as per-connection-lifetime (reuse-acquire touches no counter; Drop decrements only on actual close/discard; increments == decrements == 1 per lifetime; redial replaces under the same reservation); teardown drain semantics in contract + AC #9; new AC #10 ADR non-stub grep gate (benchmark gate → #11); AC #9 gains overflow-Drop-after-failure and N-cycle counter-drift test; DirectPeerTcpConnector signature spelled out; deliverables 2+4 declared one coordinated bootstrap edit. |
 | 6 | quality-mgr gate round 3 (PR #1018) | round-5 head | FAIL — 1 Blocking (third reservation-leak instance: redial-FAILURE path had no stated release; no guard exists so no Drop can decrement), 2 Important (overflow-Drop-with-no-exchange missing from AC #9; AC #10 ADR grep passable by boilerplate), 1 minor (QA rows out of order) | Fixed in round-6 commit, adopting quality-mgr's structural recommendation: counter-lifetime invariant rewritten ONCE as an exhaustive table covering all acquire paths (fresh/reuse/redial-success/redial-FAILURE/overflow) and all Drop paths, with a standing rule that future edits update the table rather than adding parallel rules; redial-failure release stated inside the redial-safety paragraph + counter test in AC #9; sixth AC #9 branch added; AC #10 gains a Consequences/Failure-modes substance floor with explicit quality-mgr sign-off; QA rows re-sorted. |
+| 7 | quality-mgr gate round 4 (PR #1018) | `e843a0efb` | FAIL — narrower: counter arithmetic verified sound; 1 Blocking (closing invariant said connection-scoped while the redial-success row makes reservations span connections), 2 Important (ConnectionOrigin comment and AC #5 restated table rules without deferring; GuardHealth variant set never shown), 1 minor (mutex guarantee only in preamble) | Fixed in round-7 commit: invariant reworded reservation-scoped with explicit redial-success backreference; both restatements now defer to the table; `GuardHealth { Unused, Healthy, Failed }` spelled out with per-variant Drop mapping; mutex exclusivity moved into the table's contract. |
 
 ## Dependencies
 
