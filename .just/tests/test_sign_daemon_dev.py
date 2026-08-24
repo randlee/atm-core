@@ -104,7 +104,7 @@ class SignDaemonDevTests(unittest.TestCase):
             "    # Retain the complete campaign report even when a target fails; the runner\n"
             "    # records the attempt before returning its non-zero status.\n"
             "    {{python_cmd}} scripts/smoke/run_admission_capacity.py {{args}} || benchmark_status=$?\n"
-            "    {{python_cmd}} scripts/smoke/benchmark_report.py --rebuild\n"
+            "    {{python_cmd}} scripts/smoke/benchmark_report.py --rebuild || exit $?\n"
             "    exit ${benchmark_status:-0}",
             justfile,
         )

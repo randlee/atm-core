@@ -73,6 +73,68 @@ def require_version(label: str, actual: str, expected: str) -> None:
         raise BootstrapError(f"{label} must be exactly {expected}; found {actual or 'no version output'}.")
 
 
+def homebrew_python_formula(manifest: BootstrapManifest) -> str:
+    """Return the Homebrew formula for the manifest's Python major/minor line."""
+    major, minor, _patch = manifest.python.split(".")
+    return f"python@{major}.{minor}"
+
+
+def homebrew_seed_commands(manifest: BootstrapManifest, brew: Path) -> tuple[tuple[str, ...], ...]:
+    """Return the only mutable local-macOS seed synchronization commands."""
+    formula = homebrew_python_formula(manifest)
+    return (
+        (str(brew), "install", formula, "just"),
+        (str(brew), "upgrade", formula, "just"),
+    )
+
+
+def seed_tool_matches(label: str, actual: str, expected: str) -> bool:
+    """Return whether a seed tool has the exact manifest version."""
+    try:
+        require_version(label, actual, expected)
+    except BootstrapError:
+        return False
+    return True
+
+
+def synchronize_macos_seed_tools(manifest: BootstrapManifest, *, dry_run: bool) -> None:
+    """Repair local Homebrew seed drift before enforcing the exact contract.
+
+    GitHub Actions supplies its own pinned seeds and must never mutate a runner's
+    package manager. Local macOS development instead uses Homebrew's current
+    stable bottle for the manifest-derived major/minor Python formula and just.
+    The exact patch still remains an explicit postcondition below.
+    """
+    if sys.platform != "darwin" or os.environ.get("CI"):
+        return
+
+    python_matches = seed_tool_matches("Python", platform.python_version(), manifest.python)
+    try:
+        just_matches = seed_tool_matches("just", command_output(["just", "--version"]), manifest.just)
+    except BootstrapError:
+        just_matches = False
+    if python_matches and just_matches:
+        return
+
+    brew = next((candidate for candidate in (Path("/opt/homebrew/bin/brew"), Path("/usr/local/bin/brew")) if candidate.is_file()), None)
+    if brew is None:
+        raise BootstrapError(
+            "macOS seed tools drifted and Homebrew was not found at /opt/homebrew/bin/brew or /usr/local/bin/brew. "
+            "Install Homebrew, then rerun just bootstrap."
+        )
+    for command in homebrew_seed_commands(manifest, brew):
+        run(command, dry_run=dry_run)
+    if dry_run:
+        return
+
+    formula = homebrew_python_formula(manifest)
+    prefix = Path(command_output([str(brew), "--prefix", formula]))
+    major, minor, _patch = manifest.python.split(".")
+    python = prefix / "bin" / f"python{major}.{minor}"
+    require_version("Homebrew Python", command_output([str(python), "--version"]), manifest.python)
+    os.execv(str(python), [str(python), str(Path(__file__).resolve()), *sys.argv[1:]])
+
+
 def verify_seed_tools(manifest: BootstrapManifest) -> None:
     """Verify the minimal tools that must exist before a Just recipe can run."""
     require_version("Python", platform.python_version(), manifest.python)
@@ -243,7 +305,9 @@ def verify_installed_tools(manifest: BootstrapManifest, python: Path) -> None:
 
 def bootstrap(manifest: BootstrapManifest, *, dry_run: bool) -> None:
     """Install the complete contract, then verify it rather than trusting installs."""
-    verify_seed_tools(manifest)
+    synchronize_macos_seed_tools(manifest, dry_run=dry_run)
+    if not dry_run:
+        verify_seed_tools(manifest)
     python = ensure_bootstrap_venv(manifest, dry_run=dry_run)
     for name, version in manifest.cargo_tools:
         run(cargo_install_command(name, version, force=not registry_tool_matches(name, version, manifest.rust)), dry_run=dry_run)

@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO210-CONTRACT-F003>
+  a triage:Finding ;
+  triage:findingId "AO210-CONTRACT-F003" ;
+  triage:title "benchmark_report.py campaign_target_rows recomputes live pass/fail instead of trusting stored result snapshot" ;
+  triage:description "benchmark_report.py:385 campaign_target_rows() recomputes 'passed' from live baselines.json + raw metrics instead of trusting the immutable stored result['status']/result['baseline'] snapshot. Because baselines.json only ratchets upward, an old artifact that legitimately PASSED under its recorded floor can render as failed once the floor rises later -- exactly the divergence AO2.10 exists to eliminate. Note: benchmark_report.py:495 campaign_status() (the six-profile v3 function) has ZERO callers anywhere in scripts/smoke/ -- it is dead code, not a live risk; only campaign_target_rows's inline recompute is live and blocking. Confirmed by req-qa, arch-qa, ruthless-boundary-qa, and quality-mgr's own direct verification of the live call chain." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "CONTRACT" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-24T03:30:17Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.10 ;
+  triage:foundAt "2026-08-24T03:28:59Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO210-CONTRACT-F003/ao2-10-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO210-CONTRACT-F003/ao2-10-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO210-CONTRACT-F003/ao2-10-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/benchmark_report.py" ;
+  triage:line 385 ;
+  triage:snippet "campaign_target_rows recomputes passed from live baselines.json instead of trusting stored result status/baseline snapshot" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ao2-10-benchmark-data-contract" ;
+  triage:headSha "b207dd097a34a2b954c76a43b12e416ace1875f3" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-ao2-10/b207dd097a34a2b954c76a43b12e416ace1875f3> .
+
+<urn:atm:triage:occurrence/AO210-CONTRACT-F003/ao2-10-2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/benchmark_report.py" ;
+  triage:line 495 ;
+  triage:snippet "dead code: six-profile v3 campaign_status() has zero callers, recommend deletion as cleanup alongside the fix" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ao2-10-benchmark-data-contract" ;
+  triage:headSha "b207dd097a34a2b954c76a43b12e416ace1875f3" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-ao2-10/b207dd097a34a2b954c76a43b12e416ace1875f3> .
+
+<urn:atm:triage:worktree/feature-ao2-10/b207dd097a34a2b954c76a43b12e416ace1875f3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ao2-10-benchmark-data-contract" ;
+  triage:branch "feature/ao2-10-benchmark-data-contract" ;
+  triage:headSha "b207dd097a34a2b954c76a43b12e416ace1875f3" ;
+  triage:orderIndex 11 .

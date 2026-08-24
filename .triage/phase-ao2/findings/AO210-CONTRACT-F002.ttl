@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO210-CONTRACT-F002>
+  a triage:Finding ;
+  triage:findingId "AO210-CONTRACT-F002" ;
+  triage:title "Second live independent decision gate: minimum_admissions_per_second bypasses classify_status as sole owner" ;
+  triage:description "Interval-level pass/fail in run_admission_capacity.py (lines ~1520-1523, 2049, 2132, 2251) is gated by a hardcoded minimum_admissions_per_second (default 1000/s), unrelated to baselines.json. This feeds evidence['passed'] -> CapacityRunResult.code -> is ANDed with campaign.status=='PASS' for the final process exit code. A target can pass its reviewed baseline (classify_status==PASS) yet the run still exit nonzero (or vice versa) depending on this unrelated threshold. No test exercises the divergence. This violates the sprint's core mandate that classify_status() be the single-owner PASS/FAIL/INCOMPLETE decision. Confirmed by ruthless-boundary-qa (RBQA-F002) and quality-mgr's own direct read." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "CONTRACT" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-23T20:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.10 ;
+  triage:foundAt "2026-08-24T03:28:59Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO210-CONTRACT-F002/ao2-10-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO210-CONTRACT-F002/ao2-10-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 1520 ;
+  triage:snippet "minimum_admissions_per_second hardcoded interval gate feeds exit code independent of classify_status" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ao2-10-benchmark-data-contract" ;
+  triage:headSha "b207dd097a34a2b954c76a43b12e416ace1875f3" ;
+  triage:occursIn <urn:atm:triage:worktree/ao2-10/b207dd097a34a2b954c76a43b12e416ace1875f3> .
+
+<urn:atm:triage:worktree/ao2-10/b207dd097a34a2b954c76a43b12e416ace1875f3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ao2-10" ;
+  triage:branch "feature/ao2-10-benchmark-data-contract" ;
+  triage:headSha "b207dd097a34a2b954c76a43b12e416ace1875f3" ;
+  triage:orderIndex 11 .

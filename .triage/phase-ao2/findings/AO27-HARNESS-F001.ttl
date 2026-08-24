@@ -15,14 +15,15 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "deferred" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-22T21:10:00Z"^^xsd:dateTime ;
+  triage:deferredNote "Fixing as originally scoped (wiring M5AttemptLedger into current entry points) is throwaway: AO2.10 (docs/plans/phase-ao2/sprint-AO2-10-benchmark-data-contract.md) replaces this PASS/FAIL derivation path with a single-owner classify_status() model and deletes the unused ledger module outright (AO2.10 deliverable 8) rather than wiring it in. AO2.10/AO2.11 are infrastructure sprints (v4 schema/runner emission, then rendering) and do not themselves restore an equivalent acceptance safety net. Re-promoted 2026-08-24 from 'pending AO2.10' to 'pending AO2.12/AO2.13': neither sprint doc currently names a replacement for the deleted 3-consecutive-attempt/crash-safe acceptance discipline, so this finding stays open and must be explicitly re-evaluated once AO2.10+AO2.11 land -- either as an AO2.13 (canonical benchmark-run workflow, docs/plans/phase-ao2/sprint-AO2-13-benchmark-run-skill.md) deliverable addition enforcing an equivalent safety gate, or closed with an explicit team-lead/quality-mgr rationale for why no replacement is required." ;
   triage:foundIn triage:AO2.7 ;
   triage:foundAt "2026-08-22T21:09:45Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AO27-HARNESS-F001/ao2-7-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AO27-HARNESS-F001/ao2-7-2> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AO27-HARNESS-F001/ao2-7-1>
   a triage:Occurrence ;
