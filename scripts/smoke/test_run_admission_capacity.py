@@ -123,6 +123,34 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertTrue(all(item["raw_evidence_directory"] == RUNNER.DEFAULT_RAW_EVIDENCE_DIR for item in captured))
         self.assertEqual(stdout.getvalue().count("p50=45000.00 msg/s"), 4)
 
+    def test_ordinary_benchmark_exit_code_uses_the_stored_v4_result_status(self):
+        """A retired interval gate cannot override a passing reviewed result."""
+        def run_capacity(*_args, **_kwargs):
+            metrics = mock.Mock(admissions_per_second=mock.Mock(p50=45_000.0))
+            result = mock.Mock(
+                status="PASS", metrics=metrics,
+                messages_admitted=10_000, messages_requested=10_000,
+            )
+            # Simulate an obsolete child-side diagnostic threshold returning
+            # failure while the immutable v4 acceptance status is PASS.
+            return RUNNER.CapacityRunResult(
+                1, Path("sentinel.evidence"), Path("sentinel.raw"), result,
+            )
+
+        with (
+            mock.patch.object(sys, "argv", ["run_admission_capacity.py"]),
+            mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity),
+            mock.patch.object(
+                RUNNER,
+                "load_baselines",
+                return_value=mock.Mock(entry_for=mock.Mock(return_value=mock.Mock(p50_floor=1))),
+            ),
+            mock.patch.object(RUNNER, "binary_hashes", return_value={"atm": "a" * 64}),
+            mock.patch.object(RUNNER, "BenchmarkCampaign", return_value=mock.Mock(status="PASS", model_dump=mock.Mock(return_value={}))),
+            mock.patch.object(RUNNER, "atomic_json"),
+        ):
+            self.assertEqual(RUNNER.main(), 0)
+
     def test_ordinary_benchmark_fails_when_one_required_target_fails(self):
         """A measured failure remains visible, but cannot pass the four-target suite."""
         captured: list[str] = []
@@ -1748,7 +1776,6 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(request.path, "/v1/atm/heartbeat")
         self.assertEqual(request.expected_status, 200)
         self.assertEqual(run_profile.call_args.kwargs["operation"], "cached_roster_heartbeat")
-        self.assertEqual(run_profile.call_args.kwargs["minimum_admissions_per_second"], 0)
 
     def test_interval_preserves_the_first_failure_and_requires_all_1000_responses(self):
         calls = 0
@@ -1921,15 +1948,15 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(result["sample_count"], 1)
         self.assertEqual(run_interval.call_count, 1)
 
-    def test_profile_retains_clean_under_threshold_intervals(self):
-        interval = {"passed": False, "error_free": True, "elapsed_seconds": 0.4}
+    def test_profile_retains_clean_intervals_until_the_sustained_duration(self):
+        interval = {"passed": True, "error_free": True, "elapsed_seconds": 0.4}
         with mock.patch.object(RUNNER, "run_interval", return_value=interval) as run_interval:
             result = RUNNER.run_profile(
                 RUNNER.LocalEndpoint("uds", "/tmp/atm-capacity-test"),
                 Path("/tmp/atm-capacity-test"), 64, 1_000, 2, 2,
                 target_duration_seconds=1.0,
             )
-        self.assertFalse(result["passed"])
+        self.assertTrue(result["passed"])
         self.assertEqual(result["sample_count"], 3)
         self.assertEqual(run_interval.call_count, 3)
 

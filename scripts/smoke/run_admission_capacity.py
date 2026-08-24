@@ -302,7 +302,11 @@ def v4_result_from_evidence(
     requested = 0 if metrics is None else metrics.requested_count
     admitted = 0 if metrics is None else metrics.accepted_count
     durable = 0 if durability is None else durability.observed_mailbox_count
-    complete = metrics is not None and durability is not None
+    complete = (
+        metrics is not None
+        and durability is not None
+        and bool(evidence.get("passed"))
+    )
     try:
         generated_at = datetime.fromisoformat(str(evidence["generated_at"]).replace("Z", "+00:00"))
     except (KeyError, ValueError) as error:
@@ -1453,7 +1457,6 @@ def run_interval(
     workers: int,
     requested_messages: int = ADMISSIONS_PER_INTERVAL,
     expected_status: int = 201,
-    minimum_admissions_per_second: float = 1_000.0,
 ) -> dict[str, Any]:
     """Run one exactly-sized admission interval without retrying failed writes."""
     if requested_messages <= 0:
@@ -1517,10 +1520,10 @@ def run_interval(
             (request_bytes + response_bytes) / elapsed_seconds if elapsed_seconds else 0.0
         ),
         "first_failure": failures[0] if failures else None,
-        "passed": error_free and (
-            minimum_admissions_per_second <= 0
-            or elapsed_seconds <= requested_messages / minimum_admissions_per_second
-        ),
+        # This is a factual request/response outcome.  The reviewed v4 floor
+        # is applied exactly once by classify_status() when result evidence
+        # is emitted.
+        "passed": error_free,
     }
 
 
@@ -1534,7 +1537,6 @@ def run_profile(
     target_duration_seconds: float = TARGET_PROFILE_DURATION_SECONDS,
     operation: str = "write",
     expected_status: int = 201,
-    minimum_admissions_per_second: float = 1_000.0,
     roster: CapacityRoster = DEFAULT_CAPACITY_ROSTER,
 ) -> dict[str, Any]:
     """Collect at least ten independent intervals over one sustained profile."""
@@ -1581,7 +1583,6 @@ def run_profile(
             workers,
             requested_messages,
             expected_status=expected_status,
-            minimum_admissions_per_second=minimum_admissions_per_second,
         )
         intervals.append(interval)
         elapsed_seconds += float(interval["elapsed_seconds"])
@@ -1727,7 +1728,6 @@ def run_cached_roster_heartbeat_probe(
         target_duration_seconds=DIAGNOSTIC_DURATION_SECONDS,
         operation="cached_roster_heartbeat",
         expected_status=200,
-        minimum_admissions_per_second=0,
         roster=roster,
     )
     return {
@@ -2044,8 +2044,8 @@ def run_capacity(
             ),
         )
 
-        # v4 applies reviewed per-host/target floors only after this runner
-        # has completed its lifecycle and emitted its factual measurements.
+        # This factual completion marker is distinct from acceptance.  The
+        # canonical classifier applies the reviewed floor at v4 emission.
         evidence["passed"] = (
             all(bool(item.get("passed")) for item in profile["intervals"])
             and bool(evidence["durability_after_restart"]["passed"])
@@ -2129,7 +2129,9 @@ def run_capacity(
             )
         print(f"local benchmark trace: {raw_evidence_path}")
     return CapacityRunResult(
-        0 if evidence.get("passed") else 1,
+        (
+            0 if published_result is not None and published_result.status == "PASS" else 1
+        ) if v4_emission is not None else (0 if evidence.get("passed") else 1),
         evidence_path,
         raw_evidence_path,
         published_result,
@@ -2247,7 +2249,7 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
         args.evidence_dir / f"{campaign_identifier}.campaign.json",
         campaign.model_dump(mode="json"),
     )
-    return 0 if all(code == 0 for code in codes) and campaign.status == "PASS" else 1
+    return 0 if campaign.status == "PASS" else 1
 
 
 def main() -> int:
