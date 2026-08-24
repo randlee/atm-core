@@ -52,8 +52,11 @@ AQ4 residue proof.
 
 - Full `just test` + integration suites, ubuntu + macOS + Windows lanes, on
   the final integrate head.
-- The two-daemon peer-pair suite, shell-script harness, and residue check named
-  by AQ2–AQ5 must be rerun at the exact final `integrate/phase-aq` SHA.
+- The AQ3 transfer-script harness, the AQ2/AQ5 command and shell-script
+  harnesses, and the residue check must be rerun at the exact final
+  `integrate/phase-aq` SHA. (The existing cross-host message-delivery smoke
+  suite runs unchanged as part of `just test` — this phase does not alter
+  the ADR-035/047 delivery path.)
 
 ## Non-closure / out of scope
 

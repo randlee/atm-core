@@ -65,8 +65,8 @@ Shutdown cancels and joins the task within the daemon deadline.
 1. Unit tests: expired entries reclaimed; unexpired kept; symlink escape not
    followed; per-entry failure skips and logs without failing the pass.
 2. Integration test: entry older than TTL is gone after a sweep; a fresh
-   entry survives; zero-interval/zero-TTL rejected by AQ1 startup validation
-   (cross-reference, not retested here).
+   entry survives. (Zero-interval/zero-TTL rejection is an AQ1 decision-(a)
+   startup-validation deliverable with its own AQ1 AC — verified there.)
 3. Config defaults (30 d TTL, sweep interval) documented in the ADR appendix
    or daemon config docs.
 4. `just test` all three CI lanes (ubuntu, macOS, Windows); Windows lane

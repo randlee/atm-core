@@ -21,9 +21,20 @@ the product's job is a clean seam and an actionable failure message.
    rationale:
    (a) **`ATM_TEMP` system contract**: a mandatory environment variable
    naming the ATM scratch root for *all* ATM features, not just Send-To.
-   Validated at daemon and CLI startup — unset, unresolvable, or
-   non-writable fails fast with an actionable error naming this ADR's doc.
-   Documented in the daemon config docs; no per-feature temp layouts.
+   Validation is split by consumer: the **daemon validates eagerly at
+   startup** (it owns the sweeper) — unset, unresolvable, non-absolute, or
+   non-writable fails boot with an actionable error naming this ADR's doc;
+   the **CLI resolves lazily at first actual use** (staging, transfer, any
+   future consumer) with the same error — commands that never touch scratch
+   space (`atm read`, `atm send` without `--attach`, …) run unaffected in an
+   unconfigured shell. Because daemon validation is eager, **this sprint
+   owns the environment rollout**: `ATM_TEMP` is set in
+   `.github/workflows/ci.yml` (all lanes), the `justfile` test targets, the
+   daemon launch/service overlays, and the developer-setup docs, in the same
+   PR. Config-value validation rides the same gate: a zero sweep interval or
+   zero TTL is rejected at daemon startup (no disable sentinels — disabling
+   the sweeper is not a supported configuration). Documented in the daemon
+   config docs; no per-feature temp layouts.
    (b) **Sweep policy**: TTL-only, 30 days, over everything under
    `$ATM_TEMP`. No ack coupling, no storage traits, no ADR-018 §3
    involvement. Interval and TTL from daemon config with documented
@@ -55,8 +66,11 @@ the product's job is a clean seam and an actionable failure message.
    rules. (Note: with script-based transfer, `TrustedPeer` enrollment is
    NOT required for a host to be a transfer destination — the script's own
    SSH/Tailscale auth governs; the roster binding only names the host.)
-2. **`ATM_TEMP` startup validation** in daemon and CLI bootstrap, per
-   decision (a), with unit tests for unset/unwritable/relative-path cases.
+2. **`ATM_TEMP` validation** per decision (a): eager in daemon bootstrap,
+   lazy-on-first-use in the CLI, with unit tests for
+   unset/unresolvable/relative/unwritable cases and for zero
+   interval/TTL rejection; plus the decision-(a) environment rollout
+   (CI workflows, justfile, launch overlays, developer docs).
 3. **`docs/cross-host-file-transfer.md`**: the setup document the canonical
    error points at — what to create at `~/.atm/transfer/<host>`, the
    invocation contract, and pointers to the shipped examples (AQ3).
@@ -80,7 +94,8 @@ pub fn send_to_staging_dir(atm_temp: &AtmTemp, transfer_id: &Ulid) -> PathBuf;
 ```
 
 `AtmTempError` inventory (variants normative): `Unset`, `NotAbsolute`,
-`NotWritable` — each with the actionable recovery text from decision (a).
+`Unresolvable` (canonicalization failure), `NotWritable` — each with the
+actionable recovery text from decision (a).
 
 Transfer-script resolution and the canonical not-enabled error are CLI-side
 (AQ2) behavior specified by decision (c); no daemon code participates in
@@ -89,9 +104,14 @@ transfer.
 ## Acceptance criteria
 
 1. ADR merged with decisions (a)–(e) closed, none deferred.
-2. Startup validation tests: unset / non-absolute / non-writable `ATM_TEMP`
-   fail daemon and CLI startup with the decision-(a) error text; a valid
-   value round-trips into `AtmTemp`.
+2. Validation tests: unset / non-absolute / unresolvable / non-writable
+   `ATM_TEMP` fails daemon startup and fails the CLI at first scratch-space
+   use with the decision-(a) error text; commands that touch no scratch
+   space succeed with `ATM_TEMP` unset; zero sweep-interval/TTL config
+   rejected at daemon startup; a valid value round-trips into `AtmTemp`.
+2a. Environment rollout verified: `ATM_TEMP` set in all three CI lanes and
+   the justfile test targets, and pre-existing unrelated test suites pass
+   unchanged after the rollout (this is what makes AC 5 satisfiable).
 3. `send_to_staging_dir()` unit-tested; no other code path constructs the
    convention.
 4. `docs/cross-host-file-transfer.md` exists and contains the invocation
