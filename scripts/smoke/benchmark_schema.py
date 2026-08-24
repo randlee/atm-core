@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from math import isclose
 import re
 from typing import Any, Literal, Optional
 
@@ -334,7 +333,9 @@ class BenchmarkCampaign(BaseModel):
 class BenchmarkSummary(BaseModel):
     """One immutable public artifact for one transport/frame benchmark run."""
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    # This read-only v3 compatibility model intentionally drops retired
+    # acceptance metadata from historical artifacts.  v4 remains strict.
+    model_config = ConfigDict(extra="ignore", frozen=True)
 
     schema_version: Literal[LEGACY_SUMMARY_SCHEMA_VERSION] = LEGACY_SUMMARY_SCHEMA_VERSION
     artifact_kind: Literal["send_message_benchmark_summary"] = "send_message_benchmark_summary"
@@ -360,24 +361,14 @@ class BenchmarkSummary(BaseModel):
     host_arch: Optional[str] = None
     command: Optional[str] = None
     execution_daemon: Optional[Literal["shipped_atm_daemon", "direct_production_writer"]] = None
-    comparison_source_revision: Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{40}$")
-    comparison_host_label: Optional[str] = Field(
-        default=None, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
-    )
     worker_limit: Optional[int] = Field(default=None, gt=0)
     host_state_isolation: Optional[str] = None
     doctor_status: Optional[Literal["passed"]] = None
     doctor_after_restart_status: Optional[Literal["passed"]] = None
     durability_after_restart: Optional[DurabilityAfterRestart] = None
     direct_sqlite_message_write: Optional[DirectSQLiteMessageWrite] = None
-    # v1-v3 artifacts remain read-only historical input through AO2.12.  Their
-    # retired gate payload is intentionally opaque: v4 never emits or uses it.
-    thresholds: Optional[dict[str, Any]] = None
     metrics: Optional[BenchmarkMetrics] = None
     passed: bool
-    benchmark_evidence_failure_code: Optional[
-        Literal["missing_compatible_plaintext_baseline"]
-    ] = None
     failure: Optional[str] = None
     cleanup_failure: Optional[str] = None
 
@@ -390,6 +381,7 @@ class BenchmarkSummary(BaseModel):
 
     @model_validator(mode="after")
     def run_matches_metrics(self) -> "BenchmarkSummary":
+        """Validate v3 shape without reenacting its retired acceptance policy."""
         if self.benchmark_target == "sqlite" and self.transport != "sqlite":
             raise ValueError("sqlite target must use the direct production-writer profile")
         if self.benchmark_target == "uds" and self.transport != "uds":
@@ -408,22 +400,8 @@ class BenchmarkSummary(BaseModel):
             return self
         if self.sample_count != self.metrics.interval_count:
             raise ValueError("sample_count must equal metrics.interval_count")
-        expected_passed = (
-            self.metrics.passed_interval_count == self.sample_count
-            and self.failure is None
-            and self.cleanup_failure is None
-            and (self.thresholds is None or bool(self.thresholds.get("passed", False)))
-        )
-        if self.passed != expected_passed:
-            raise ValueError("passed must agree with metrics and failure")
         if self.durability_after_restart is not None and self.durability_after_restart.expected_accepted_count != self.metrics.accepted_count:
             raise ValueError("durability expected count must equal accepted_count")
-        if self.thresholds is not None and self.thresholds.get("median_admissions_per_second") is not None:
-            if not isclose(
-                float(self.thresholds["median_admissions_per_second"]),
-                self.metrics.admissions_per_second.p50,
-            ):
-                raise ValueError("threshold median must equal admissions_per_second.p50")
         return self
 
 
@@ -556,7 +534,6 @@ def compact_evidence(evidence: dict[str, Any]) -> BenchmarkSummary:
     metrics = metrics_from_evidence(evidence)
     if metrics is None:
         return failed_summary(evidence)
-    thresholds = evidence.get("thresholds")
     summary = {
         "generated_at": evidence["generated_at"],
         "campaign_id": evidence.get("campaign_id"),
@@ -567,8 +544,12 @@ def compact_evidence(evidence: dict[str, Any]) -> BenchmarkSummary:
         "hook_mode": evidence.get("hook_mode"),
         "frames_per_connection": evidence["frames_per_connection"],
         "messages_per_connection": evidence.get("messages_per_connection", evidence["frames_per_connection"]),
-        "requested_messages_per_sample": evidence.get("requested_messages_per_sample", metrics.requested_count),
-        "minimum_sample_count": evidence.get("minimum_sample_count", metrics.interval_count),
+        "requested_messages_per_sample": (
+            evidence.get("requested_messages_per_sample")
+            or metrics.requested_count
+            or 1_000
+        ),
+        "minimum_sample_count": evidence.get("minimum_sample_count") or metrics.interval_count,
         "sample_count": metrics.interval_count,
         "target_duration_s": evidence.get("target_duration_s", evidence["run_duration_s"]),
         "run_duration_s": evidence["run_duration_s"],
@@ -578,18 +559,14 @@ def compact_evidence(evidence: dict[str, Any]) -> BenchmarkSummary:
         "host_arch": evidence.get("host_arch"),
         "command": evidence.get("command"),
         "execution_daemon": evidence.get("execution_daemon"),
-        "comparison_source_revision": evidence.get("comparison_source_revision"),
-        "comparison_host_label": evidence.get("comparison_host_label"),
         "worker_limit": evidence.get("worker_limit"),
         "host_state_isolation": evidence.get("host_state_isolation"),
         "doctor_status": evidence.get("doctor_status"),
         "doctor_after_restart_status": evidence.get("doctor_after_restart", {}).get("status"),
         "durability_after_restart": evidence.get("durability_after_restart"),
         "direct_sqlite_message_write": direct_sqlite_write_from_evidence(evidence),
-        "thresholds": thresholds,
         "metrics": metrics,
         "passed": bool(evidence.get("passed", False)),
-        "benchmark_evidence_failure_code": evidence.get("benchmark_evidence_failure_code"),
         "failure": public_string(str(evidence["failure"])) if evidence.get("failure") else None,
         "cleanup_failure": public_string(str(evidence["cleanup_failure"])) if evidence.get("cleanup_failure") else None,
     }
@@ -623,8 +600,6 @@ def failed_summary(evidence: dict[str, Any]) -> BenchmarkSummary:
             "host_arch": evidence.get("host_arch"),
             "command": evidence.get("command"),
             "execution_daemon": evidence.get("execution_daemon"),
-            "comparison_source_revision": evidence.get("comparison_source_revision"),
-            "comparison_host_label": evidence.get("comparison_host_label"),
             "worker_limit": evidence.get("worker_limit"),
             "host_state_isolation": evidence.get("host_state_isolation"),
             "doctor_status": evidence.get("doctor_status"),
@@ -637,7 +612,6 @@ def failed_summary(evidence: dict[str, Any]) -> BenchmarkSummary:
                 else None
             ),
             "passed": False,
-            "benchmark_evidence_failure_code": evidence.get("benchmark_evidence_failure_code"),
             "failure": public_string(str(evidence.get("failure") or "benchmark did not reach an interval")),
             "cleanup_failure": public_string(str(evidence["cleanup_failure"])) if evidence.get("cleanup_failure") else None,
         }

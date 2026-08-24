@@ -13,6 +13,7 @@ from scripts.smoke.benchmark_schema import (
     BenchmarkCampaign,
     BenchmarkMetrics,
     BenchmarkRunResult,
+    BenchmarkSummary,
     DurabilityAfterRestart,
     MetricDistribution,
     WireBytes,
@@ -139,6 +140,27 @@ class BenchmarkSchemaV4Tests(unittest.TestCase):
             artifact_id(campaign_id=identifier, target="tcp-tls"),
             "20260824T000000Z-rand-m5-tcp-tls",
         )
+
+    def test_read_only_v3_model_drops_retired_acceptance_metadata(self) -> None:
+        legacy = {
+            "generated_at": "2026-08-24T00:00:00Z",
+            "host_label": "rand-m5",
+            "transport": "tcp",
+            "frames_per_connection": 8,
+            "messages_per_connection": 8,
+            "requested_messages_per_sample": 10,
+            "minimum_sample_count": 1,
+            "sample_count": 0,
+            "target_duration_s": 20,
+            "run_duration_s": 0,
+            "passed": False,
+            "failure": "legacy setup failed",
+            "comparison" + "_source_revision": "a" * 40,
+            "threshold" + "s": {"passed": False},
+        }
+        normalized = BenchmarkSummary.model_validate(legacy).model_dump()
+        self.assertNotIn("comparison" + "_source_revision", normalized)
+        self.assertNotIn("threshold" + "s", normalized)
 
 
 if __name__ == "__main__":

@@ -43,7 +43,6 @@ ENVELOPE_SCHEMA_VERSION = 1
 AI40_SCHEMA_VERSION = LEGACY_SUMMARY_SCHEMA_VERSION
 SUPPORTED_TRANSPORTS = frozenset({"uds", "tcp"})
 SUPPORTED_FRAMES = frozenset({1, 2, 4, 8, 16, 64})
-SAFE_LABEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
 CAMPAIGN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -57,25 +56,6 @@ class BenchmarkReportError(ValueError):
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
-
-def parse_utc(value: Any, source: Path) -> str:
-    if not isinstance(value, str) or not value:
-        raise BenchmarkReportError(f"{source}: generated_at must be a non-empty UTC timestamp")
-    normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
-    try:
-        parsed = datetime.fromisoformat(normalized)
-    except ValueError as error:
-        raise BenchmarkReportError(f"{source}: generated_at is not ISO-8601") from error
-    if parsed.tzinfo is None or parsed.utcoffset() != timezone.utc.utcoffset(parsed):
-        raise BenchmarkReportError(f"{source}: generated_at must include UTC timezone")
-    return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-
-
-def safe_label(value: Any, field: str, source: Path) -> str:
-    if not isinstance(value, str) or not SAFE_LABEL.fullmatch(value):
-        raise BenchmarkReportError(f"{source}: {field} is not a safe opaque label")
-    return value
 
 
 def safe_artifact_id(value: str) -> str:

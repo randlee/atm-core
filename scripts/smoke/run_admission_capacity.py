@@ -95,7 +95,6 @@ MAX_IN_FLIGHT_REQUESTS = 8
 READY_TIMEOUT_SECONDS = 30.0
 CAPACITY_ROOT_PREFIX = "atm-capacity-"
 SPARSE_FRAMES_PER_CONNECTION = (1, 2, 4, 8, 16, 64)
-TCP_COMPARISON_FRAMES = (1, 2, 4, 8, 16, 64)
 SUSTAINED_MESSAGE_COUNTS = (10_000, 100_000)
 DAEMON_OUTPUT_TAIL_LINES = 200
 GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
@@ -112,7 +111,6 @@ BENCHMARK_TARGETS = {
     "tcp-tls": ("tcp", "mutual-tls"),
 }
 BASELINES_PATH = DEFAULT_EVIDENCE_DIR / "baselines.json"
-MISSING_PLAINTEXT_BASELINE = "missing_compatible_plaintext_baseline"
 DAEMON_SWITCH = ROOT / ".claude" / "skills" / "daemon-switch" / "scripts" / "daemon-switch.py"
 # The daemon-switch control plane can legitimately wait through its documented
 # launchctl unload/owner-repair windows (up to 20s + two 20x2s polls).  Its
@@ -1765,8 +1763,6 @@ def run_capacity(
     managed_log_level: str | None = None,
     benchmark_target: str | None = None,
     managed_daemon: ManagedDaemonOptions | None = None,
-    preflight_failure_code: str | None = None,
-    preflight_failure: str | None = None,
     campaign_id: str | None = None,
     v4_emission: V4EmissionContext | None = None,
 ) -> CapacityRunResult:
@@ -1849,8 +1845,6 @@ def run_capacity(
         },
         "lifecycle": {},
         "runs": [],
-        "thresholds": None,
-        "benchmark_evidence_failure_code": preflight_failure_code,
         "stages": {
             "runtime_view_validation": "daemon-owned; no peer/store/network work is requested by this client before response",
             "sqlite_transaction": "measured by each public admission response latency",
@@ -1994,13 +1988,6 @@ def run_capacity(
         # v4 applies reviewed per-host/target floors only after this runner
         # has completed its lifecycle and emitted its factual measurements.
         evidence["passed"] = all(bool(item.get("passed")) for item in profile["intervals"])
-        # A missing plaintext comparison baseline blocks acceptance, but it
-        # must not prevent collection of the bounded profile that explains the
-        # gap. Preserve the measured run and clean-baseline snapshot proof,
-        # then fail closed.
-        if preflight_failure is not None:
-            evidence["passed"] = False
-            evidence["failure"] = preflight_failure
     except (OSError, RuntimeError, ValueError, SmokeError) as error:
         evidence["passed"] = False
         evidence["failure"] = str(error)
@@ -2202,87 +2189,12 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
     return 0 if all(code == 0 for code in codes) and campaign.status == "PASS" else 1
 
 
-def run_default_f8_matrix(args: argparse.Namespace) -> int:
-    """Run the ordinary four-target f8 suite in its fixed, comparable order."""
-    codes: list[int] = []
-    for position, (target, (transport, peer_wire_security)) in enumerate(
-        BENCHMARK_TARGETS.items(), start=1,
-    ):
-        if args.atm_home is None:
-            with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temporary:
-                home = Path(temporary) / f"{CAPACITY_ROOT_PREFIX}{position}"
-                code, evidence = run_capacity(
-                    home, args.evidence_dir, transport, 8,
-                    workers=args.workers,
-                    raw_evidence_directory=args.raw_evidence_dir,
-                    peer_wire_security=peer_wire_security,
-                    benchmark_target=target,
-                )
-        else:
-            home = args.atm_home / f"{CAPACITY_ROOT_PREFIX}{position}"
-            code, evidence = run_capacity(
-                home, args.evidence_dir, transport, 8,
-                workers=args.workers,
-                raw_evidence_directory=args.raw_evidence_dir,
-                peer_wire_security=peer_wire_security,
-                benchmark_target=target,
-            )
-        codes.append(code)
-        print(f"{'PASS' if code == 0 else 'FAIL'} f8 target {target}: {evidence}")
-    return 0 if all(code == 0 for code in codes) else 1
-
-
-def run_plaintext_baseline_bootstrap(args: argparse.Namespace) -> int:
-    """Establish the explicit six-frame TCP baseline for a clean benchmark account.
-
-    This is deliberately a one-time, opt-in bootstrap.  Ordinary focused TCP
-    runs continue to require this accepted same-host evidence; otherwise the
-    first new benchmark account could never create the complete comparison set
-    that the gate requires.
-    """
-    codes: list[int] = []
-    for position, frames_per_connection in enumerate(TCP_COMPARISON_FRAMES, start=1):
-        if args.atm_home is None:
-            with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temporary:
-                home = Path(temporary) / f"{CAPACITY_ROOT_PREFIX}{position}"
-                code, evidence = run_capacity(
-                    home, args.evidence_dir, "tcp", frames_per_connection,
-                    workers=args.workers,
-                    raw_evidence_directory=args.raw_evidence_dir,
-                    peer_wire_security="plaintext-test",
-                    benchmark_target="tcp",
-                )
-        else:
-            home = args.atm_home / f"{CAPACITY_ROOT_PREFIX}{position}"
-            code, evidence = run_capacity(
-                home, args.evidence_dir, "tcp", frames_per_connection,
-                workers=args.workers,
-                raw_evidence_directory=args.raw_evidence_dir,
-                peer_wire_security="plaintext-test",
-                benchmark_target="tcp",
-            )
-        codes.append(code)
-        print(
-            f"{'PASS' if code == 0 else 'FAIL'} plaintext baseline "
-            f"f{frames_per_connection}: {evidence}"
-        )
-    return 0 if all(code == 0 for code in codes) else 1
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--bootstrap-benchmark-account",
         action="store_true",
         help="create the account-local benchmark manifest; refuses an account with existing ATM state",
-    )
-    parser.add_argument(
-        "--bootstrap-plaintext-baseline",
-        action="store_true",
-        help=(
-            "one-time dedicated-account bootstrap for the complete six-frame "
-            "same-host plaintext TCP comparison set"
-        ),
     )
     parser.add_argument("--atm-home", type=Path)
     parser.add_argument(
@@ -2332,12 +2244,6 @@ def main() -> int:
             raise SmokeError(f"benchmark-account bootstrap failed: {error}") from error
         print(f"benchmark-account manifest created: {account.manifest_path}")
         return 0
-    if args.bootstrap_plaintext_baseline:
-        if any((
-            args.target, args.transport, args.frames_per_connection, args.sustained,
-        )):
-            parser.error("--bootstrap-plaintext-baseline cannot be combined with target/profile options")
-        return run_plaintext_baseline_bootstrap(args)
     selected_profile = any(
         (args.target, args.transport, args.frames_per_connection, args.sustained)
     )
