@@ -114,9 +114,10 @@ durably and immediately through the unchanged canonical path; a
 per-recipient FIFO (unread + pending, ULID order). When the harness
 transitions to idle (heartbeat surface), the daemon nudges the NEXT unread
 queued message — one per idle transition; reading a message first clears its
-marker. Graft recipients use the atm-graft queue channel where it exists
-(presence verified in-sprint; not found on the reference tree — M5
-coordination if absent), falling back to the same idle-drain.
+marker. Hermes-fronted graft recipients route the nudge through
+hermes-atm's first-class `/queue` input channel (Hermes owns readiness;
+`/steer` remains the immediate path), bypassing the idle-drain; non-Hermes
+graft recipients fall back to the same idle-drain as tmux.
 
 ### 4.6 Shell integration (thin glue only)
 

@@ -13,9 +13,12 @@ Verified baseline (integrate/phase-ao2): the nudge fires synchronously
 immediately post-persistence in `storage_and_nudge_router.rs:556-561`
 (`emit_received_hook` after `commit_write`); **no deferral surface exists**.
 `mail_message_states` has an `ensure_column` migration pattern
-(`shared_db.rs:888-935`). **No graft queue channel was found in atm-graft /
-atm-graft-python on the reference tree** — its existence must be verified,
-not assumed.
+(`shared_db.rs:888-935`). The queue channel is defined in **hermes-atm**
+(M5 side, wrapping atm-graft): Hermes exposes `/steer` (immediate
+injection — what the graft nudge path feeds today) and `/queue` (deferred)
+as first-class input channels. It is not present in atm-core's
+atm-graft/atm-graft-python crates on the reference tree — the wiring seam
+is on the atm-core side of the graft boundary.
 
 ## Deliverables
 
@@ -33,15 +36,16 @@ not assumed.
 3. **Nudge suppression**: the post-write hook path skips the immediate
    `emit_received_hook` for queued messages (one guarded branch at the
    existing call site; delivery/persistence unchanged).
-4. **Graft path verification + wiring**: verify whether the proactively
-   defined atm-graft queue channel exists on the integration baseline (it
-   was NOT found on `integrate/phase-ao2`; it may live in hermes-atm on the
-   M5 side or an unmerged branch — coordinate with team-lead@atm-dev on M5,
-   framing any gap as an atm-graft API addition). If present: queued
-   messages to graft recipients deliver through it and bypass AQ8's drain.
-   If absent: graft recipients use the same AQ8 idle-drain as tmux, and the
-   channel wiring is recorded as a follow-on with an owner — not silently
-   dropped.
+4. **Hermes `/queue` wiring**: for Hermes-fronted graft recipients, a
+   queued message's nudge is delivered through hermes-atm's `/queue` input
+   channel instead of `/steer` — Hermes owns readiness, so these recipients
+   bypass AQ8's idle-drain entirely (no `nudge_pending_at` drain needed;
+   the marker is cleared on successful `/queue` handoff). Coordinate the
+   exact channel contract with team-lead@atm-dev on M5 (frame any needed
+   surface as an atm-graft API addition per standing practice). Graft
+   recipients NOT fronted by Hermes `/queue` (older harnesses) fall back to
+   the AQ8 idle-drain like tmux — the routing decision is per-recipient
+   capability, recorded in the PR.
 
 ## Normative contract
 
@@ -67,8 +71,10 @@ marker; markers survive daemon restart.
    (verified via the state row).
 4. Daemon restart with pending rows present → FIFO re-derivable (query test;
    drain behavior itself is AQ8's AC).
-5. Graft verification result recorded in the PR: channel present + wired, or
-   absent + fallback active + follow-on filed.
+5. Hermes-fronted recipient: `atm queue` hands the nudge to `/queue` (test
+   double records the channel), marker cleared on handoff, AQ8 drain never
+   touches it; non-Hermes graft recipient falls back to the drain. Channel
+   contract linked in the PR.
 6. `just test` all three CI lanes; no clippy warnings in touched crates.
 
 ## Paths to delete

@@ -100,10 +100,11 @@ not re-litigate them:
   (`HeartbeatActivity: ActiveToolUse|Idle|SessionEnded`) into in-memory
   `RuntimeHealth` (polling-only; no transition events today).
   `mail_message_states` migrates via the `ensure_column` pattern
-  (`shared_db.rs:888-935`). **No graft queue channel exists in
-  atm-graft/atm-graft-python on the reference tree** — AQ7 verifies against
-  the integration baseline and coordinates with M5 if it lives in
-  hermes-atm or an unmerged branch.
+  (`shared_db.rs:888-935`). The queue channel is defined in **hermes-atm**
+  (M5): Hermes exposes `/steer` (immediate) and `/queue` (deferred) as
+  first-class input channels; atm-core's crates carry no queue surface on
+  the reference tree, so AQ7 wires the atm-core side of that boundary (M5
+  coordination for the exact contract).
 
 ## Open decisions routed to sprints
 
