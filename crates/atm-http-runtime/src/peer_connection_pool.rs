@@ -177,6 +177,7 @@ impl PeerConnectionPool {
                 }
             };
             if ready {
+                tracing::debug!(%peer, %authority, "reusing pooled opaque peer connection");
                 return Ok(PooledPeerConnection {
                     peer: peer.clone(),
                     authority,
@@ -196,6 +197,7 @@ impl PeerConnectionPool {
         }
 
         let origin = self.shared.reserve_or_overflow(peer);
+        tracing::debug!(%peer, %authority, ?origin, "opening opaque peer connection");
         self.acquire_fresh(peer, port, deadline, authority, origin)
             .await
     }
