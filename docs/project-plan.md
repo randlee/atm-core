@@ -1341,7 +1341,7 @@ manager (Finder / Explorer / Nautilus) to a delivered message whose text
 names files landed under the recipient host's `$ATM_TEMP`. Cross-host bytes
 move via user-configured per-host transfer scripts (sftp default over fleet
 SSH; unconfigured hosts fail closed with a setup-doc error) — no envelope
-change, no daemon transfer machinery. ADR-054 defines the system-level
+change, no daemon transfer machinery. ADR-055 defines the system-level
 `ATM_TEMP` contract (mandatory env var, 30-day TTL sweep) and the
 transfer-script seam; thin per-OS shell glue drives the pipeline
 `atm teams --json --members | <picker> | atm send --attach "$@" --from-json`.
