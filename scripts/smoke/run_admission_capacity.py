@@ -1277,7 +1277,11 @@ def provision_disposable_mtls_identity(
     )
     _required_command(
         [
-            openssl, "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+            # P-256 is the ordinary modern TLS identity choice.  It preserves
+            # the same self-signed mTLS trust contract while avoiding an
+            # artificial RSA-2048 handshake bottleneck in the benchmark client.
+            openssl, "req", "-x509", "-newkey", "ec", "-pkeyopt",
+            "ec_paramgen_curve:prime256v1", "-nodes",
             "-keyout", str(private_key), "-out", str(certificate), "-days", "2",
             "-config", str(config),
         ],
