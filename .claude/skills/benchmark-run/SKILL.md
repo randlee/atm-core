@@ -21,7 +21,7 @@ macOS and Linux:
 git status --short
 python3 .claude/skills/daemon-switch/scripts/daemon-switch.py status --doctor
 atm doctor --json
-just benchmark-bootstrap
+test -f "${ATM_HOME:-$HOME/.atm}/benchmark-account.json" || just benchmark-bootstrap
 ```
 
 Windows PowerShell:
@@ -30,13 +30,15 @@ Windows PowerShell:
 git status --short
 python .claude/skills/daemon-switch/scripts/daemon-switch.py status --doctor
 atm doctor --json
-just benchmark-bootstrap
+if (-not (Test-Path (Join-Path ($env:ATM_HOME ?? "$HOME\\.atm") "benchmark-account.json"))) { just benchmark-bootstrap }
 ```
 
-The working tree must be clean before the run. `daemon-switch status --doctor`
-and `atm doctor --json` must identify one healthy matched CLI/daemon pair. On
-macOS, `just benchmark` signs the release daemon before it is selected; do not
-run a worktree daemon outside daemon-switch.
+The working tree must be clean before the run. Bootstrap only when the account
+manifest is absent; an existing manifest is the expected state for a reusable
+dedicated account. `daemon-switch status --doctor` and `atm doctor --json`
+must identify one healthy matched CLI/daemon pair. On macOS, `just benchmark`
+signs the release daemon before it is selected; do not run a worktree daemon
+outside daemon-switch.
 
 ## 2. Run
 

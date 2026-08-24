@@ -35,6 +35,7 @@ class BenchmarkRunSkillTests(unittest.TestCase):
             self.assertIn(heading, self.text)
         for command in (
             "just benchmark-bootstrap",
+            "benchmark-account.json",
             "ATM_CAPACITY_HOST_LABEL=rand-m5 just benchmark",
             "just benchmark-show",
             "just benchmark-publish",
