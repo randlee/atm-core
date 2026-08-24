@@ -7,6 +7,8 @@
 | Scope | `atm-graft`, Python binding, and Hermes reference adapter |
 | Relates to | ADR-037, ADR-039, ADR-033 |
 
+*Terminology note (Phase AQ): 'nudge' below means the steer (immediate) kind; see the nudge taxonomy in docs/requirements.md.*
+
 ## Context
 
 ATM mail is durable in the daemon-owned mailbox. Graft exists to provide a
@@ -75,7 +77,8 @@ to make the one-profile path reliable.
 
 ## Consequences
 
-- A profile restart becomes recoverable even when a prior live nudge was lost.
+- A profile restart becomes recoverable even when a prior live steer nudge was
+  lost.
 - A second live gateway cannot silently steal another profile's wake-ups.
 - The host agent sees concise ATM work prompts in its safe steer flow and uses
   its normal ATM skills to inspect/ack durable mail.

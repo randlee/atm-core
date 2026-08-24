@@ -1349,13 +1349,12 @@ Phase 1 also delivers `atm queue` — `atm send` with the nudge deferred until
 the recipient harness is ready (nudge taxonomy: steer = immediate, queue =
 deferred; ADR-055) — via a `nudge_pending_at` marker, a `PendingNudgeStore`
 storage capability, graft dual-channel wiring (harness owns landing; Hermes
-`/steer`+`/queue` complete), and a tmux idle-drain, under the ADR-055 nudge
+`/steer`+`/queue` complete), and a tmux idle-drain, under the ADR-054 nudge
 taxonomy (nudge = umbrella; steer/queue = kinds) with its code-rename
-inventory. Nine sprints: AQ1
-ATM_TEMP contract+ADR-054, AQ2 CLI surface + staging/transfer invocation,
-AQ3 transfer example scripts + setup doc, AQ4 ATM_TEMP sweeper, AQ5
-picker/shell glue (macOS, Windows, Ubuntu), AQ6 validation evidence, AQ7
-`atm queue` verb, AQ8 idle-drain, AQ9 nudge-taxonomy ADR-055 + refactor. Branches `feature/aq-N-<slug>` off
+inventory. Queue ships first. Five sprints: AQ1 `atm queue` CLI verb +
+ADR-054 taxonomy + `PendingNudgeStore`, AQ2 graft dual-channel, AQ3 tmux
+idle-drain, AQ4 Send-To core (ATM_TEMP ADR-055, CLI surface, transfer
+scripts, sweeper), AQ5 surface + phase evidence. Branches `feature/aq-N-<slug>` off
 `integrate/phase-aq`, all PRs target `integrate/phase-aq`. The authoritative
 plan is [Phase AQ plan](./plans/phase-aq/plan-phase-aq.md); source PRD is
 [prd-atm-send-to](./plans/phase-aq/prd-atm-send-to.md). PRD Phase 2

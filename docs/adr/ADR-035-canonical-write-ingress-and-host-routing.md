@@ -7,6 +7,8 @@
 | Scope | Repository-wide |
 | Relates to | ADR-012, ADR-018, ADR-019, ADR-033, ADR-034, Phase AI |
 
+*Terminology note (Phase AQ): 'nudge' below means the steer (immediate) kind; see the nudge taxonomy in docs/requirements.md.*
+
 ## Decision
 
 Every write—CLI send, CLI ack, graft send, Unix UDS HTTP, loopback-TCP HTTP,

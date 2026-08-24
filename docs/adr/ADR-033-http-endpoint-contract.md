@@ -7,6 +7,8 @@
 | Scope | Repository-wide |
 | Relates to | ADR-003, ADR-032, ADR-035, Phase AI |
 
+*Terminology note (Phase AQ): 'nudge' below means the steer (immediate) kind; see the nudge taxonomy in docs/requirements.md.*
+
 ## Decision
 
 ATM uses one daemon HTTP router. Unix local clients use HTTP over UDS and may

@@ -38,6 +38,8 @@ durable ATM write
   -> normal Hermes message pipeline
 ```
 
+(Hermes `mode="queue"|"steer"` is Hermes's session-dispatch mode; ATM's Phase-AQ queue/steer *nudge kinds* align with but are distinct from it.)
+
 The host API has two explicit delivery capabilities. `queue` is the default: an idle session follows normal runner dispatch, while a busy matching session queues once and drains after its active turn. `steer` is explicit only: it targets the already-running, exact profile/chat session through Hermes's normal steer seam. It must never be selected implicitly, cross a profile or chat boundary, manufacture a second ATM session, impersonate a Telegram network user, or read/ack/replay mail.
 
 AL.17 proves both host capabilities because they belong in one reviewed Hermes API. The ATM-side MVP remains queue-only: `hermes-atm` and AL.16–AL.19 always request `mode="queue"`. An ATM feature that deliberately selects steer remains a later, separately reviewed product decision.

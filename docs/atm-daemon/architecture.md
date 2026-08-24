@@ -136,7 +136,9 @@ Current packet-supported daemon surface:
 - heartbeat
 
 Receiver-handoff rule:
-- the daemon may emit one post-send event after durable message commit
+- the daemon persists first, then emits the steer nudge after durable message
+  commit; queue-kind nudges defer emission until harness readiness
+  (ADR-055), and neither kind ever precedes persistence
 - receiver-specific delivery details stay behind receiver implementations such
   as local tmux and `atm-graft`
 - when the retained built-in helper is used directly, it must consume one
@@ -144,8 +146,9 @@ Receiver-handoff rule:
   override state from inside daemon-owned code; the shipped daemon path
   otherwise resolves, renders, and delivers built-in nudges in-process
 - the accepted daemon architecture must not require daemon-owned graft session
-  registration, per-session nudge queues, fetch/drain inspection, or a
-  dedicated advisory-stream request family
+  registration, per-session nudge queues (retired internal worker queue —
+  unrelated to queue-kind nudges), fetch/drain inspection, or a dedicated
+  advisory-stream request family
 - transport receive loops remain thin request dispatch paths rather than
   homes for receiver-specific session behavior
 

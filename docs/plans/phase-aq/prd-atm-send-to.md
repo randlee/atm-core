@@ -242,17 +242,17 @@ same-host and cross-host paths.
 
 ## 7. Milestones
 
-1. **ADR-054 `ATM_TEMP` + transfer-script seam** — system temp contract,
+1. **`atm queue` + ADR-054 taxonomy** — verb, kind-aware dispatch,
+   `PendingNudgeStore`, code renames (queue ships before the Send-To work).
+2. **Graft dual-channel** (Hermes `/steer`+`/queue`), then **tmux
+   idle-drain**.
+3. **ADR-055 `ATM_TEMP` + transfer-script seam** — system temp contract,
    30-day sweep, per-host script resolution + error contract, message-text
    path convention.
-2. **`atm teams --json --members` + `atm send --attach --from-json`** — testable with `echo '{"recipients":[…]}' |`.
-3. **Transfer example scripts + setup doc** — sftp default, Tailscale
-   variant; the "not enabled" error path.
-4. **macOS Shortcuts prototype** using `osascript choose from list` — validates the workflow with zero UI work.
-5. **`pick-member.html` in Wyvern** — replace step 4's picker; measure latency.
-6. **Windows SendTo `.lnk`** + Nautilus script.
-7. `$ATM_TEMP` sweeper.
-7a. **`atm queue`** verb + idle-drain (heartbeat-driven), graft queue channel where available.
+4. **`atm teams --json --members` + `atm send --attach --from-json`** — testable with `echo '{"recipients":[…]}' |`; transfer example scripts + setup doc; `$ATM_TEMP` sweeper.
+5. **macOS Shortcuts prototype** using `osascript choose from list` — validates the workflow with zero UI work.
+6. **`pick-member.html` in Wyvern** — replace step 5's picker; measure latency.
+7. **Windows SendTo `.lnk`** + Nautilus script; phase evidence.
 8. **(P2)** `wyvern chat.html --attach` — "Open with agent", no ATM. Integration smoke test for chat window.
 9. **(P2)** `atm draft` one-shot prefill, local model.
 10. **(P2)** Interactive drafting via chat contract; `new` then `fork`.
