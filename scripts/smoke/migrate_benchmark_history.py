@@ -374,13 +374,25 @@ def current_revision() -> str:
     return completed.stdout.strip()
 
 
+def migration_revision(reports_dir: Path) -> str:
+    """Retain the first migration commit so repeated checks are byte-stable."""
+    existing = reports_dir / "historical-record.json"
+    if not existing.exists():
+        return current_revision()
+    try:
+        value = read_json(existing).get("generated_from_commit")
+    except MigrationError:
+        return current_revision()
+    return value if isinstance(value, str) and len(value) == 40 else current_revision()
+
+
 def main(argv: Iterable[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reports-dir", type=Path, default=REPORT_DIR)
     parser.add_argument("--check", action="store_true", help="validate and compare without writing")
     args = parser.parse_args(argv)
     reports_dir = args.reports_dir.resolve()
-    record, audit = migrated_record(reports_dir, current_revision())
+    record, audit = migrated_record(reports_dir, migration_revision(reports_dir))
     record_path = reports_dir / "historical-record.json"
     baselines_path = reports_dir / "baselines.json"
     audit_json = ARTIFACT_DIR / "migration-audit.json"
