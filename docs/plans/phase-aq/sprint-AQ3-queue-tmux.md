@@ -48,8 +48,10 @@ pub trait MemberStateTransitionSink: Send + Sync {
 3. **Recovery sweep**: low-frequency periodic pass (maintenance-cadence
    precedent) draining for currently-Idle members with non-empty FIFOs —
    covers restarts (in-memory `RuntimeHealth` resets) and missed
-   transitions; also re-attempts failed graft handoffs (AQ2, per ADR-054
-   (f)). One per member per pass. Daemon shutdown cancels and joins the
+   transitions; also re-attempts failed graft handoffs (AQ2) up to ADR-054
+   (f)'s max auto-retry count — past it, auto-retry stops and the "stuck"
+   health signal surfaces (attempt count tracked per marker). One per
+   member per pass. Daemon shutdown cancels and joins the
    task within the daemon deadline.
 4. **Observability**: per-drain structured event (`subsystem`/`action`/
    `outcome` + `{member, msg_id}`) and a cumulative drained counter on the

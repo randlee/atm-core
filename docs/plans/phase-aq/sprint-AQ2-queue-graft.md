@@ -33,9 +33,10 @@ message), NOT a background task.
    (`subsystem`/`action`/`outcome` + `{member, msg_id}`) is emitted, and a
    cumulative failed-handoff counter appears on the health report
    (`queue_full_drops_total` precedent) — a queued graft message never
-   silently loses its nudge. (Recovery: AQ3's sweep also covers graft
-   recipients whose handoff failed, re-attempting the handoff — not a tmux
-   drain — per ADR-054 (f).)
+   silently loses its nudge. (Recovery: AQ3's sweep re-attempts failed
+   handoffs — not a tmux drain — up to ADR-054 (f)'s max auto-retry count;
+   past it the marker stays set, auto-retry stops, and a distinct "stuck"
+   health signal surfaces for the operator.)
 3. **Python surface**: `PyNudge` (and the hermes-atm runtime callback)
    carries the kind — additive, backward-compatible field per ADR-054 (g);
    `hermes-atm` routes queue-kind to Hermes `/queue` and steer-kind to

@@ -40,8 +40,11 @@ no deferral surface exists. `mail_message_states` migrates via
    `atm-architecture` test, `boundary-guard` review as merge precondition);
    (e) `MemberStateTransitionSink`'s relationship to ADR-019 and
    `RuntimeHealth`'s observability scope (implemented AQ3);
-   (f) the graft dual-channel contract + handoff failure policy
-   (implemented AQ2);
+   (f) the graft dual-channel contract + handoff failure policy, including
+   **bounded re-attempts**: a concrete max auto-retry count for failed
+   handoffs (recovery-sweep re-attempts, AQ3), after which the marker stays
+   set but auto-retry stops and a distinct "stuck" health signal surfaces
+   for operator action (implemented AQ2/AQ3);
    (g) rename/compat policy: `.atm.toml` `post_send_hooks` key and the
    external command-hook system are a DISTINCT mechanism — NOT renamed;
    `NudgeTemplateOverrideStore` cluster keeps its names (already
