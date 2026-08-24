@@ -14,17 +14,32 @@ regression-tested inside Wyvern's own CI.
 
 ## Deliverables
 
-1. **Preflight dependency rules**: extend `docs/release-preflight-checklist.md`
-   (and the `preflight` skill/publisher flow that executes it) with a
-   mandatory step for every atm release: for each sc-ecosystem dependency
+1. **Preflight dependency rules**: extend the **existing
+   `dependency-currency` validator target** in
+   `docs/release-preflight-checklist.md` (`validate_release.py
+   dependency-currency` — extended, not duplicated by a parallel step) and
+   the `preflight` skill/publisher flow that executes it, with a mandatory
+   step for every atm release: for each sc-ecosystem dependency
    (sc-compose, sc-observability, Wyvern — one authoritative list, extend
    here as the ecosystem grows), (a) look up the most recent release,
-   (b) bump the recorded pin to it, (c) run the dependency's integration
-   tests against that release (for Wyvern: the AQ5 picker fixture suite —
-   `PickerInput`/`PickerOutput` `schema_version`, cancel semantics,
-   cold-start measurement — against the real binary). A regression found
-   here **blocks the atm release until fixed forward** (ours or an upstream
-   issue) — the answer is never staying on an old pin.
+   (b) bump the recorded pin to it, (c) run that dependency's named
+   integration-test target against the bumped release:
+   - **Wyvern**: the AQ5 picker fixture suite (`PickerInput`/`PickerOutput`
+     `schema_version`, cancel semantics, cold-start measurement) against
+     the real binary;
+   - **sc-compose**: `cargo test -p atm-template-sc-compose` plus an
+     `sc-compose render` smoke over the repo's canonical `.j2` assets
+     (the codex-orchestration / plan-hardening templates) with the bumped
+     binary;
+   - **sc-observability**: the daemon observability test suite
+     (`crates/atm-daemon/bin_support/daemon_observability.rs` tests, which
+     exercise `sc_observability`/`sc_observability_types`) built against
+     the bumped release.
+   Where a listed target proves insufficient, this deliverable creates the
+   missing coverage under `.just/tests/test_ecosystem_pins.py` rather than
+   leaving the step unfalsifiable. A regression found here **blocks the atm
+   release until fixed forward** (ours or an upstream issue) — the answer
+   is never staying on an old pin.
 2. **Wyvern pin-bump mechanics**: the AQ5 pin constant is the single source
    the preflight step updates; the preflight verifies pinned == latest
    available and that the pinned Wyvern supports the expected picker
@@ -42,10 +57,11 @@ regression-tested inside Wyvern's own CI.
 
 ## Acceptance criteria
 
-1. `docs/release-preflight-checklist.md` (and the executing skill) carry the
-   sc-ecosystem bump-to-latest + integration-test step with the
-   fix-forward rule; the dependency list names sc-compose,
-   sc-observability, and Wyvern.
+1. The `dependency-currency` target in `docs/release-preflight-checklist.md`
+   (and the executing skill) carries the sc-ecosystem bump-to-latest +
+   integration-test step with the fix-forward rule; the dependency list
+   names sc-compose, sc-observability, and Wyvern, each with its concrete
+   integration-test target from deliverable 1.
 2. A dry-run of the preflight step against current releases is executed
    once and its transcript committed as evidence (proves the mechanics,
    whatever the result).
