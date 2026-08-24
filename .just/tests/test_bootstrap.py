@@ -55,9 +55,23 @@ class BootstrapTests(unittest.TestCase):
         })
         self.assertEqual(dict(manifest.python_packages)["maturin"], "1.14.1")
 
+    def test_macos_homebrew_seed_formula_is_derived_from_the_exact_python_pin(self) -> None:
+        manifest = bootstrap.load_manifest()
+        self.assertEqual(bootstrap.homebrew_python_formula(manifest), "python@3.14")
+
+    @unittest.skipUnless(sys.platform == "darwin", "Homebrew seed paths are macOS-specific")
+    def test_macos_homebrew_seed_commands_update_only_declared_seed_packages(self) -> None:
+        manifest = bootstrap.load_manifest()
+        commands = bootstrap.homebrew_seed_commands(manifest, Path("/opt/homebrew/bin/brew"))
+        self.assertEqual(commands, (
+            ("/opt/homebrew/bin/brew", "install", "python@3.14", "just"),
+            ("/opt/homebrew/bin/brew", "upgrade", "python@3.14", "just"),
+        ))
+
     def test_dry_run_never_executes_installers(self) -> None:
         manifest = bootstrap.load_manifest()
         with (
+            mock.patch.object(bootstrap, "synchronize_macos_seed_tools"),
             mock.patch.object(bootstrap, "verify_seed_tools"),
             mock.patch.object(bootstrap, "ensure_bootstrap_venv", return_value=Path("/tmp/bootstrap-python")),
             mock.patch.object(bootstrap, "verify_installed_tools") as verify,

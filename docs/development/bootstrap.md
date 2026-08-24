@@ -15,19 +15,27 @@ then verifies every reported version.
 ## Seed contract
 
 `just` cannot install itself and Python must exist before a Python recipe can
-run. A runner therefore supplies these exact seed tools before it invokes the
-shared recipe:
+run. GitHub CI supplies these exact seed tools before it invokes the shared
+recipe:
 
 - Rust `1.94.1`, with `clippy` and `rustfmt`;
 - Python `3.14.7`; and
 - `just` `1.58.0`.
 
-GitHub CI provisions those seeds explicitly and then runs `just bootstrap`.
-An operator provisioning a benchmark account must supply the same three exact
-versions and run the same command from a clean checkout. If any seed version is
-different, the recipe refuses before it installs or modifies any dependent
-tool. The bootstrap never writes packages into the system Python; every other
-Python-backed `just` recipe runs through `.bootstrap-venv` after setup. Its
+On a local macOS account, `just bootstrap` makes this seed contract
+reproducible through Homebrew: if Python or `just` differs from the exact
+manifest value, it installs/upgrades only `python@<manifest major.minor>` and
+`just`, then re-executes through the Homebrew Python. Homebrew is preferred
+because it keeps the host on its current stable bottle as pins advance; the
+bootstrap still rejects a Homebrew release that does not exactly match the
+manifest. CI is excluded from this host-package action and continues to
+provision its own seeds explicitly.
+
+An operator provisioning a non-macOS benchmark account must supply the same
+three exact versions and run the same command from a clean checkout. If any
+seed version is different, the recipe refuses before it installs or modifies
+any dependent tool. The bootstrap never writes packages into the system Python;
+every other Python-backed `just` recipe runs through `.bootstrap-venv` after setup. Its
 `bin`/`Scripts` directory is also first on child-process `PATH`, so PyO3 and
 other helpers cannot accidentally select an unrelated account-level Python.
 
