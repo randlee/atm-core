@@ -217,6 +217,7 @@ benchmark *args:
     # records the attempt before returning its non-zero status.
     {{python_cmd}} scripts/smoke/run_admission_capacity.py {{args}} || benchmark_status=$?
     {{python_cmd}} scripts/smoke/benchmark_report.py --rebuild || exit $?
+    {{python_cmd}} .just/generate_report_index.py --check || exit $?
     echo 'View the newest campaign panel: just benchmark-show'
     exit ${benchmark_status:-0}
 
@@ -228,6 +229,10 @@ benchmark-report:
 benchmark-show:
     {{python_cmd}} scripts/smoke/benchmark_report.py --rebuild
     {{python_cmd}} scripts/smoke/benchmark_show.py
+
+# Verify the report index and stage exactly the public benchmark-report artifacts.
+benchmark-publish:
+    {{python_cmd}} scripts/smoke/benchmark_publish.py
 
 # Generate architecture visualization artifacts.
 view target='all':
