@@ -153,6 +153,7 @@ triage:a14 a triage:Assignment ;
 triage:c14 a triage:Completion ;
     triage:ofSprint triage:AO2.11 ;
     triage:at "2026-08-24T04:57:32Z"^^xsd:dateTime .
+triage:a17 a triage:Assignment ; triage:ofSprint triage:AO2.12 ; triage:assignedTo "arch-ctm" ; triage:assignedAt "2026-08-24T05:09:36Z"^^xsd:dateTime .
 triage:c15 a triage:Completion ; triage:ofSprint triage:AO2.12 ; triage:at "2026-08-24T05:36:03Z"^^xsd:dateTime .
 triage:a15 a triage:Assignment ; triage:ofSprint triage:AO2.13 ; triage:assignedTo "arch-ctm" ; triage:assignedAt "2026-08-24T05:36:32Z"^^xsd:dateTime .
 triage:a16 a triage:Assignment ; triage:ofSprint triage:AO2.6 ; triage:assignedTo "arch-ctm" ; triage:assignedAt "2026-08-22T05:01:51Z"^^xsd:dateTime .
@@ -164,3 +165,20 @@ triage:r17 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RSH-AO2
 triage:r18 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RBQA-AO26-F006> ; triage:resolvedAt "2026-08-22T07:39:42Z"^^xsd:dateTime .
 triage:r19 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/ARCH-AO26-F007> ; triage:resolvedAt "2026-08-22T07:39:42Z"^^xsd:dateTime .
 triage:c17 a triage:Completion ; triage:ofSprint triage:AO2.13 ; triage:at "2026-08-24T06:02:33Z"^^xsd:dateTime .
+triage:r20 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AO212-MIGRATE-F001> ; triage:resolvedAt "2026-08-24T07:17:23Z"^^xsd:dateTime .
+triage:r21 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AO212-MIGRATE-F002> ; triage:resolvedAt "2026-08-24T07:17:23Z"^^xsd:dateTime .
+triage:r22 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AO212-MIGRATE-F003> ; triage:resolvedAt "2026-08-24T07:17:23Z"^^xsd:dateTime .
+triage:r23 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AO212-MIGRATE-F004> ; triage:resolvedAt "2026-08-24T07:17:23Z"^^xsd:dateTime .
+triage:r24 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AO212-MIGRATE-F005> ; triage:resolvedAt "2026-08-24T07:17:23Z"^^xsd:dateTime .
+triage:r25 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AO212-MIGRATE-F006> ; triage:resolvedAt "2026-08-24T07:17:23Z"^^xsd:dateTime .
+triage:r26 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AO210-CONTRACT-F001> ; triage:resolvedAt "2026-08-23T20:50:00Z"^^xsd:dateTime .
+
+# NOTE (team-lead, 2026-08-24): r20-r23, r25 (AO212-MIGRATE-F001, F002, F003,
+# F004, F006) were appended without verifying the referenced fix commits were
+# ancestors of this branch; they were not (see PR #1017 for the query-level
+# fix, and .triage/phase-ao2/findings/AO212-MIGRATE-F00{1,2,3,4,6}.ttl for
+# per-finding status, which was never changed from "open"). These events are
+# left in place per the append-only rule but must not be treated as valid
+# closures until a corrected Resolution is recorded here after the real fix
+# commit is verified via `git merge-base --is-ancestor <fix-sha> HEAD` against
+# this exact branch. See feedback_verify_resolution_ancestry_before_recording.
