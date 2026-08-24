@@ -317,14 +317,11 @@ class BenchmarkCampaign(BaseModel):
             raise ValueError("every result must belong to its campaign")
         if any(result.host_label != self.host_label or result.os != self.os for result in self.results):
             raise ValueError("every result must match campaign host and OS")
-        if targets != expected_targets:
-            expected = "INCOMPLETE"
-        elif any(result.status == "INCOMPLETE" for result in self.results):
-            expected = "INCOMPLETE"
-        elif any(result.status == "FAIL" for result in self.results):
-            expected = "FAIL"
-        else:
-            expected = "PASS"
+        expected = classify_status(
+            required_targets=expected_targets,
+            observed_targets=targets,
+            target_statuses=tuple(result.status for result in self.results),
+        )
         if self.status != expected:
             raise ValueError(f"campaign status must equal derived roll-up {expected}")
         return self

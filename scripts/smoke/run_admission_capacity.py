@@ -2227,11 +2227,10 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
             f"accepted={result.messages_admitted}/{result.messages_requested} "
             f"evidence={run.compact_evidence_path} raw={run.raw_evidence_path}"
         )
-    campaign_status = (
-        "INCOMPLETE" if len(published_results) != len(target_matrix)
-        else "FAIL" if any(result.status == "FAIL" for result in published_results)
-        else "INCOMPLETE" if any(result.status == "INCOMPLETE" for result in published_results)
-        else "PASS"
+    campaign_status = classify_status(
+        required_targets=required_targets(os_name),
+        observed_targets=tuple(result.target for result in published_results),
+        target_statuses=tuple(result.status for result in published_results),
     )
     campaign = BenchmarkCampaign(
         campaign_id=campaign_identifier,

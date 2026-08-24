@@ -117,6 +117,34 @@ class BenchmarkSchemaV4Tests(unittest.TestCase):
         )
         self.assertEqual(campaign.status, "INCOMPLETE")
 
+    def test_mixed_fail_and_incomplete_campaign_uses_incomplete_precedence(self) -> None:
+        """Campaign construction cannot diverge from the canonical policy."""
+        sqlite = result("sqlite")
+        uds = result(
+            "uds",
+            status="FAIL",
+            baseline=BaselineRef(revision=1, p50_floor=20_001),
+        )
+        tcp = result(
+            "tcp",
+            status="INCOMPLETE",
+            incomplete_reason="restart evidence missing",
+            durability_after_restart=None,
+        )
+        tls = result("tcp-tls")
+        campaign = BenchmarkCampaign(
+            campaign_id=sqlite.campaign_id,
+            host_label=sqlite.host_label,
+            os="macos",
+            phase="ao2",
+            started_at=NOW,
+            completed_at=NOW,
+            source_revision=sqlite.source_revision,
+            results=(sqlite, uds, tcp, tls),
+            status="INCOMPLETE",
+        )
+        self.assertEqual(campaign.status, "INCOMPLETE")
+
     def test_sqlite_rejects_invented_network_metrics(self) -> None:
         with self.assertRaises(ValidationError):
             result("sqlite", metrics=metrics(network=True))
