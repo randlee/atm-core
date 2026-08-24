@@ -16,6 +16,8 @@ from scripts.smoke.benchmark_schema import (
     DurabilityAfterRestart,
     MetricDistribution,
     WireBytes,
+    artifact_id,
+    campaign_id,
     require_non_decreasing_baselines,
 )
 
@@ -129,6 +131,14 @@ class BenchmarkSchemaV4Tests(unittest.TestCase):
         ),))
         with self.assertRaisesRegex(ValueError, "may not lower"):
             require_non_decreasing_baselines(old, lowered)
+
+    def test_campaign_and_target_ids_are_utc_safe_and_shared(self) -> None:
+        identifier = campaign_id(started_at=NOW, host_label="rand-m5")
+        self.assertEqual(identifier, "20260824T000000Z-rand-m5")
+        self.assertEqual(
+            artifact_id(campaign_id=identifier, target="tcp-tls"),
+            "20260824T000000Z-rand-m5-tcp-tls",
+        )
 
 
 if __name__ == "__main__":

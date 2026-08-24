@@ -154,6 +154,7 @@ class BenchmarkReportTests(unittest.TestCase):
         tcp = next(row for row in REPORT.campaign_target_rows([record], floors) if row["test"] == "tcp")
         self.assertEqual(tcp["baseline_msg_per_second"], 17_500)
         self.assertTrue(tcp["passed"])
+        self.assertEqual(REPORT.result_id(record), "20260824T000000Z-rand-m5-tcp")
 
     def test_campaign_table_renders_an_incomplete_target_without_metrics(self) -> None:
         failed = REPORT.load_result(self.fixture("failed-tcp-f8.json"))
