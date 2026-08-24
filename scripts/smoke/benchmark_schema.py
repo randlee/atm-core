@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 import re
 from typing import Any, Literal, Optional
 
@@ -324,6 +325,104 @@ class BenchmarkCampaign(BaseModel):
         )
         if self.status != expected:
             raise ValueError(f"campaign status must equal derived roll-up {expected}")
+        return self
+
+
+# The historical-record contract is owned by AO2.12's plan, but these models
+# deliberately live here so AO2.11 can consume an empty record without
+# inventing a second, incompatible wire shape.  See
+# docs/plans/phase-ao2/sprint-AO2-12-historical-data-migration.md.
+class RatchetPoint(BaseModel):
+    """One immutable, UTC-effective reviewed historical baseline point."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    host_label: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+    target: Literal["sqlite", "uds", "tcp", "tcp-tls"]
+    effective_from: datetime
+    p50_floor: float = Field(ge=0)
+    source_campaign_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+    @field_validator("effective_from")
+    @classmethod
+    def utc_effective_from(cls, value: datetime) -> datetime:
+        return require_utc(value, "effective_from")
+
+
+class HistoricalResultEntry(BaseModel):
+    """An unmodified v4 result plus migration-only display provenance."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    result: BenchmarkRunResult
+    displayed_status: Literal["PASS", "FAIL", "INCOMPLETE"]
+    evidence_gap: Literal["durability-counts-missing"] | None
+    source_files: tuple[str, ...]
+
+    @field_validator("source_files")
+    @classmethod
+    def source_files_are_safe_basenames(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        if any(not value or value != Path(value).name for value in values):
+            raise ValueError("source_files must contain safe non-empty basenames")
+        return values
+
+
+class HistoricalCampaignEntry(BaseModel):
+    """A migrated campaign and the result records that came from it."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    campaign: BenchmarkCampaign
+    final_best: bool
+    results: tuple[HistoricalResultEntry, ...]
+
+    @model_validator(mode="after")
+    def results_match_campaign(self) -> "HistoricalCampaignEntry":
+        if tuple(entry.result for entry in self.results) != self.campaign.results:
+            raise ValueError("historical entries must preserve campaign results exactly")
+        return self
+
+
+class UnattributedEntry(BaseModel):
+    """A legacy source that migration could not safely assign to a campaign."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_file: str
+    reason: str = Field(min_length=1)
+
+    @field_validator("source_file")
+    @classmethod
+    def source_file_is_safe_basename(cls, value: str) -> str:
+        if not value or value != Path(value).name:
+            raise ValueError("source_file must be a safe non-empty basename")
+        return value
+
+
+class HistoricalRecord(BaseModel):
+    """AO2.12-normalized historical benchmark record consumed by AO2.11."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal[1]
+    generated_from_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    campaigns: tuple[HistoricalCampaignEntry, ...]
+    ratchet: tuple[RatchetPoint, ...]
+    unattributed: tuple[UnattributedEntry, ...]
+
+    @model_validator(mode="after")
+    def chronological_and_monotonic(self) -> "HistoricalRecord":
+        starts = [entry.campaign.started_at for entry in self.campaigns]
+        if starts != sorted(starts):
+            raise ValueError("historical campaigns must be started_at ascending")
+        by_host_target: dict[tuple[str, str], list[RatchetPoint]] = {}
+        for point in self.ratchet:
+            by_host_target.setdefault((point.host_label, point.target), []).append(point)
+        for points in by_host_target.values():
+            if [point.effective_from for point in points] != sorted(point.effective_from for point in points):
+                raise ValueError("ratchet points must be effective_from ascending per host and target")
+            if any(after.p50_floor < before.p50_floor for before, after in zip(points, points[1:])):
+                raise ValueError("ratchet points must be non-decreasing per host and target")
         return self
 
 

@@ -15,7 +15,12 @@ from scripts.smoke.benchmark_schema import (
     BenchmarkRunResult,
     BenchmarkSummary,
     DurabilityAfterRestart,
+    HistoricalCampaignEntry,
+    HistoricalRecord,
+    HistoricalResultEntry,
     MetricDistribution,
+    RatchetPoint,
+    UnattributedEntry,
     WireBytes,
     artifact_id,
     campaign_id,
@@ -189,6 +194,45 @@ class BenchmarkSchemaV4Tests(unittest.TestCase):
         normalized = BenchmarkSummary.model_validate(legacy).model_dump()
         self.assertNotIn("comparison" + "_source_revision", normalized)
         self.assertNotIn("threshold" + "s", normalized)
+
+    def test_empty_historical_record_round_trips_through_the_normative_model(self) -> None:
+        """AO2.11 can render before AO2.12 contributes any history."""
+        empty = HistoricalRecord(
+            schema_version=1,
+            generated_from_commit="a" * 40,
+            campaigns=(), ratchet=(), unattributed=(),
+        )
+        self.assertEqual(HistoricalRecord.model_validate_json(empty.model_dump_json()), empty)
+
+    def test_historical_record_rejects_non_monotonic_ratchet_and_wrong_campaign_result(self) -> None:
+        tcp = result()
+        campaign = BenchmarkCampaign(
+            campaign_id=tcp.campaign_id, host_label=tcp.host_label, os=tcp.os,
+            phase="ao2", started_at=NOW, completed_at=NOW,
+            source_revision=tcp.source_revision, results=(tcp,), status="INCOMPLETE",
+        )
+        entry = HistoricalResultEntry(
+            result=tcp, displayed_status="PASS", evidence_gap=None, source_files=("source.json",),
+        )
+        historical_campaign = HistoricalCampaignEntry(
+            campaign=campaign, final_best=True, results=(entry,),
+        )
+        with self.assertRaisesRegex(ValidationError, "non-decreasing"):
+            HistoricalRecord(
+                schema_version=1, generated_from_commit="a" * 40,
+                campaigns=(historical_campaign,), unattributed=(UnattributedEntry(source_file="orphan.json", reason="no group"),),
+                ratchet=(
+                    RatchetPoint(host_label="rand-m5", target="tcp", effective_from=NOW, p50_floor=20_000, source_campaign_id=tcp.campaign_id),
+                    RatchetPoint(host_label="rand-m5", target="tcp", effective_from=NOW.replace(microsecond=1), p50_floor=19_999, source_campaign_id=tcp.campaign_id),
+                ),
+            )
+        mismatched = result("tcp-tls")
+        with self.assertRaisesRegex(ValidationError, "preserve campaign results"):
+            HistoricalCampaignEntry(
+                campaign=campaign,
+                final_best=True,
+                results=(HistoricalResultEntry(result=mismatched, displayed_status="PASS", evidence_gap=None, source_files=("wrong.json",)),),
+            )
 
 
 if __name__ == "__main__":
