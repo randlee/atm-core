@@ -10,8 +10,9 @@ verifies content address, then delivers the message.
 Verified baseline: no byte-fetch, parked-message, dead-letter, or retry
 machinery exists today — cross-host delivery is a stateless HTTPS push
 (ADR-034/035) where receiver-side persistence *is* delivery. Every
-deliverable below is new construction shaped by AQ1 ADR decisions (a) and
-(f); this sprint implements those decisions, it does not re-open them.
+deliverable below is new construction implementing AQ1 ADR decisions (a),
+(f), and (i) exactly as recorded in ADR-054; this sprint re-opens none of
+them, and deviations require an ADR change, not a sprint-local choice.
 
 ## Deliverables
 
@@ -19,12 +20,18 @@ deliverable below is new construction shaped by AQ1 ADR decisions (a) and
    content-addressed bytes over the authenticated peer channel (new peer
    HTTP endpoint or the justified fallback); the receiving daemon fetches
    into `attachment_dir()` and verifies sha256 and size.
-2. **Pending-delivery semantics** per ADR decision (f): on an inbound
-   envelope with attachments whose `origin_host` ≠ local host, the chosen
-   mechanism (blocked inbound write, or parked not-yet-deliverable state
-   hidden from the read surface) guarantees the recipient never observes an
-   envelope whose attachments lack `local_path`. Includes the storage update
-   path that sets `local_path` on the persisted envelope post-fetch.
+2. **Pending-delivery semantics**: implement AQ1's decision (f) exactly as
+   written in ADR-054 — AQ3 makes no mechanism choice of its own. The
+   decision-(f) default-candidate shape is: ordinary canonical write with
+   `local_path: None` as an ordinary field state, fetch+verify strictly
+   post-write, and gating only the read-surface projection until every
+   attachment has a verified `local_path` — which is how the recipient never
+   observes an envelope whose attachments lack `local_path`. If ADR-054
+   instead recorded the non-default option (blocked inbound write or a
+   hidden persistence state), AQ3's PR must cite the corresponding scoped
+   amendment note in ADR-035/ADR-034 — it must not re-derive or re-justify
+   the mechanism locally. Includes the storage update path that sets
+   `local_path` on the persisted envelope post-fetch.
 3. **Failure semantics**: fetch or hash failure → message held/parked per
    decision (f) with an operator-visible structured log event naming
    `{msg_id, sha256, origin_host}`; retry only as scoped by the ADR (ADR-034
