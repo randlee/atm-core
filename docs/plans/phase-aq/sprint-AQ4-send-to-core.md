@@ -65,8 +65,14 @@ destinations (Rand) — the sftp example's baseline.
 pub struct AtmTemp(PathBuf); // constructed only by startup/lazy validation
 
 pub trait EnvSource { fn var(&self, key: &str) -> Option<String>; }
-// fixed/internal; ADR-001 sealed-supertrait pattern (as are RosterStore
-// and this sprint's other seams)
+
+pub trait RosterStore {
+    /// Roster lookup for picker/recipient resolution: name, registered
+    /// host binding (decision (e)), and projection fields.
+    fn member(&self, member_id: &str) -> Result<Option<RosterEntry>, StorageError>;
+}
+// Both fixed/internal; ADR-001 sealed-supertrait pattern (as are this
+// sprint's other seams). Trivially object-safe sync traits.
 
 pub fn resolve_atm_temp(env: &dyn EnvSource) -> Result<AtmTemp, AtmTempError>;
 pub fn send_to_staging_dir(atm_temp: &AtmTemp, transfer_id: &Ulid) -> PathBuf;
