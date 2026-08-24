@@ -1,0 +1,51 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO213-BENCH-F003>
+  a triage:Finding ;
+  triage:findingId "AO213-BENCH-F003" ;
+  triage:title "Test count discrepancy in dev completion report" ;
+  triage:description "rust-qa-agent reproduced the test suite twice in a clean isolated worktree: 648 passed / 9 skipped, both runs identical. Dev (arch-ctm) reported '649 tests / 9 skipped' -- actual is 648. Not a merge blocker (suite is green either way), but the dev report should be corrected rather than waved off." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "reporting-accuracy" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-24T06:21:45Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.13 ;
+  triage:foundAt "2026-08-24T06:21:45Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:worktree/AO210/ea953ac44>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AO210" ;
+  triage:branch "feature/ao2-10-benchmark-data-contract" ;
+  triage:headSha "ea953ac44" ;
+  triage:orderIndex 11 .
+
+<urn:atm:triage:worktree/AO211/77681d466>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AO211" ;
+  triage:branch "feature/ao2-11-benchmark-rendering-pipeline" ;
+  triage:headSha "77681d466" ;
+  triage:orderIndex 12 .
+
+<urn:atm:triage:worktree/AO212/8788090d6>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AO212" ;
+  triage:branch "feature/ao2-12-historical-data-migration" ;
+  triage:headSha "8788090d6" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/AO213/bf522d879ab6d0fd32760ee58e683a26607b5c7c>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AO213" ;
+  triage:branch "feature/ao2-13-benchmark-run-skill" ;
+  triage:headSha "bf522d879ab6d0fd32760ee58e683a26607b5c7c" ;
+  triage:orderIndex 14 .

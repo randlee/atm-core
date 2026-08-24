@@ -1,0 +1,75 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO212-MIGRATE-F007>
+  a triage:Finding ;
+  triage:findingId "AO212-MIGRATE-F007" ;
+  triage:title "Machine gate does not catch rigged-input class of defect (ratchet self-reference)" ;
+  triage:description "quality-mgr QA-1 on PR #1014, ruthless-boundary-qa RBQA-F007: the sprint's stated machine gate ('grep gate: no class redefinition outside benchmark_schema.py') would not catch AO212-MIGRATE-F002's class of defect (a rigged input value, not a redefinition/rename). Recommend a durable property test asserting the floor used to classify run N never depends on run N's own contribution. This is a test-hardening recommendation tied to fixing F002, not an independent code defect." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "MIGRATE" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-24T05:47:10Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.12 ;
+  triage:foundAt "2026-08-24T05:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO212-MIGRATE-F007/AO212-gate-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO212-MIGRATE-F007/AO213-gate-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO212-MIGRATE-F007/AO212-gate-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ao2/sprint-AO2-12-historical-data-migration.md" ;
+  triage:line 123 ;
+  triage:snippet "grep gate: no class redefinition outside `benchmark_schema.py`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ao2-12-historical-data-migration" ;
+  triage:headSha "8788090d6" ;
+  triage:occursIn <urn:atm:triage:worktree/AO212/8788090d6> .
+
+<urn:atm:triage:occurrence/AO212-MIGRATE-F007/AO213-gate-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ao2/sprint-AO2-12-historical-data-migration.md" ;
+  triage:line 123 ;
+  triage:snippet "grep gate: no class redefinition outside `benchmark_schema.py`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ao2-13-benchmark-run-skill" ;
+  triage:headSha "beaec158e" ;
+  triage:occursIn <urn:atm:triage:worktree/AO213/beaec158e> .
+
+<urn:atm:triage:worktree/AO210/1d668e269>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-ao2-10" ;
+  triage:branch "feature/ao2-10-benchmark-data-contract" ;
+  triage:headSha "1d668e269" ;
+  triage:orderIndex 11 .
+
+<urn:atm:triage:worktree/AO211/77681d466>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-ao2-11" ;
+  triage:branch "feature/ao2-11-benchmark-rendering-pipeline" ;
+  triage:headSha "77681d466" ;
+  triage:orderIndex 12 .
+
+<urn:atm:triage:worktree/AO212/8788090d6>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-ao2-12" ;
+  triage:branch "feature/ao2-12-historical-data-migration" ;
+  triage:headSha "8788090d6" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/AO213/beaec158e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-ao2-13" ;
+  triage:branch "feature/ao2-13-benchmark-run-skill" ;
+  triage:headSha "beaec158e" ;
+  triage:orderIndex 14 .
