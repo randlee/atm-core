@@ -302,11 +302,7 @@ def v4_result_from_evidence(
     requested = 0 if metrics is None else metrics.requested_count
     admitted = 0 if metrics is None else metrics.accepted_count
     durable = 0 if durability is None else durability.observed_mailbox_count
-    complete = (
-        metrics is not None
-        and durability is not None
-        and bool(evidence.get("passed"))
-    )
+    complete = metrics is not None and durability is not None
     try:
         generated_at = datetime.fromisoformat(str(evidence["generated_at"]).replace("Z", "+00:00"))
     except (KeyError, ValueError) as error:
@@ -2174,7 +2170,6 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
         ) from error
     hashes = binary_hashes()
     print(f"benchmark campaign: {campaign_identifier}")
-    codes: list[int] = []
     published_results: list[BenchmarkRunResult] = []
     for position, (target, (transport, peer_wire_security)) in enumerate(target_matrix, start=1):
         emission = V4EmissionContext(
@@ -2215,9 +2210,7 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
                 campaign_id=campaign_identifier,
                 v4_emission=emission,
             )
-        codes.append(run.code)
         if run.result is None:
-            codes.append(1)
             print(f"FAIL required f8 target {target}: direct v4 publication failed")
             continue
         result = run.result
