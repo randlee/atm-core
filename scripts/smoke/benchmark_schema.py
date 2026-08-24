@@ -10,7 +10,7 @@ from scripts.public_redaction import public_string
 
 
 SUMMARY_SCHEMA_VERSION = 3
-SUPPORTED_TRANSPORTS = frozenset({"uds", "tcp"})
+SUPPORTED_TRANSPORTS = frozenset({"sqlite", "uds", "tcp"})
 SUPPORTED_FRAMES = frozenset({1, 2, 4, 8, 16, 64})
 
 
@@ -144,6 +144,9 @@ class BenchmarkSummary(BaseModel):
     schema_version: Literal[SUMMARY_SCHEMA_VERSION] = SUMMARY_SCHEMA_VERSION
     artifact_kind: Literal["send_message_benchmark_summary"] = "send_message_benchmark_summary"
     generated_at: str = Field(min_length=1)
+    campaign_id: Optional[str] = Field(
+        default=None, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    )
     host_label: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
     transport: Literal["sqlite", "uds", "tcp"]
     peer_wire_security: Optional[Literal["mutual-tls", "plaintext-test"]] = None
@@ -282,6 +285,7 @@ def compact_evidence(evidence: dict[str, Any]) -> BenchmarkSummary:
         direct_sqlite_message_write = decomposition.get("async_storage_admission")
     summary = {
         "generated_at": evidence["generated_at"],
+        "campaign_id": evidence.get("campaign_id"),
         "host_label": evidence["host_label"],
         "transport": evidence["transport"],
         "peer_wire_security": evidence.get("peer_wire_security"),
@@ -347,6 +351,7 @@ def failed_summary(evidence: dict[str, Any]) -> BenchmarkSummary:
     try:
         summary = {
             "generated_at": evidence["generated_at"],
+            "campaign_id": evidence.get("campaign_id"),
             "host_label": evidence["host_label"],
             "transport": evidence["transport"],
             "peer_wire_security": evidence.get("peer_wire_security"),

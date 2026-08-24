@@ -41,6 +41,7 @@ class BenchmarkMtlsTests(unittest.TestCase):
             with (
                 mock.patch.object(MTLS.shutil, "which", return_value="/usr/bin/openssl"),
                 mock.patch.object(MTLS.subprocess, "run", side_effect=run),
+                mock.patch.object(MTLS.os, "chmod", wraps=os.chmod) as chmod,
             ):
                 fingerprint = MTLS.regenerate_mtls_identity(self._account(home), atm)
 
@@ -49,6 +50,9 @@ class BenchmarkMtlsTests(unittest.TestCase):
             self.assertEqual(bundle.read_text(encoding="utf-8"), "CERTKEY")
             if os.name != "nt":
                 self.assertEqual(bundle.stat().st_mode & 0o777, 0o600)
+            chmod_calls = [(Path(call.args[0]).name, call.args[1]) for call in chmod.call_args_list]
+            self.assertIn(("private-key.pem", 0o600), chmod_calls)
+            self.assertIn((MTLS.IDENTITY_BUNDLE_NAME, 0o600), chmod_calls)
             self.assertEqual(commands[-1][-1], "--yes")
             self.assertIn(str(bundle), commands[-1])
             self.assertIn(fingerprint, commands[-1])
