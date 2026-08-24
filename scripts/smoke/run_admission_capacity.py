@@ -51,13 +51,7 @@ from scripts.smoke.benchmark_schema import (
     compact_evidence,
     distribution,
 )
-from scripts.smoke.benchmark_policy import (
-    baseline_reference,
-    evaluate_profile_thresholds,
-    load_baseline_median,
-    profile_median_admissions_per_second,
-    validated_profile_median,
-)
+from scripts.smoke.benchmark_policy import classify_status, profile_median_admissions_per_second
 from scripts.smoke.benchmark_account import (
     BenchmarkAccount,
     BenchmarkAccountError,
@@ -289,8 +283,13 @@ def v4_result_from_summary(
     )
     complete = metrics is not None and summary.durability_after_restart is not None
     generated_at = datetime.fromisoformat(summary.generated_at.replace("Z", "+00:00"))
-    status = "INCOMPLETE" if not complete else (
-        "PASS" if requested == admitted == durable and metrics.admissions_per_second.p50 >= baseline.p50_floor else "FAIL"
+    status = classify_status(
+        lifecycle_complete=complete,
+        messages_requested=requested,
+        messages_admitted=admitted,
+        messages_durable=durable,
+        p50_admissions_per_second=(None if metrics is None else metrics.admissions_per_second.p50),
+        baseline_p50_floor=baseline.p50_floor,
     )
     return BenchmarkRunResult(
         campaign_id=campaign,
@@ -1796,80 +1795,6 @@ def selected_profiles(
     return tuple(profiles)
 
 
-def matching_profile_reference(
-    directory: Path,
-    host_label: str,
-    transport: str,
-    frames_per_connection: int,
-    revision: str,
-    peer_wire_security: str = "plaintext-test",
-) -> tuple[float, str]:
-    """Use only one complete accepted same-mode revision for comparison."""
-    by_revision: dict[str, dict[int, tuple[str, float]]] = {}
-    for path in directory.glob("*.json"):
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-            candidate_revision = payload.get("source_revision")
-            candidate_frame = payload.get("frames_per_connection")
-            if (
-                payload.get("host_label") == host_label
-                and payload.get("transport") == transport
-                and payload.get("peer_wire_security") == peer_wire_security
-                and payload.get("execution_daemon") == "shipped_atm_daemon"
-                and candidate_frame in TCP_COMPARISON_FRAMES
-                and isinstance(candidate_revision, str)
-                and GIT_REVISION.fullmatch(candidate_revision)
-                and is_ancestor_revision(candidate_revision, revision)
-            ):
-                by_revision.setdefault(candidate_revision, {})[candidate_frame] = (
-                    str(payload.get("generated_at", "")),
-                    validated_profile_median(payload, "comparison evidence"),
-                )
-        except (OSError, TypeError, ValueError, json.JSONDecodeError, SmokeError):
-            continue
-    complete = {
-        candidate_revision: profiles
-        for candidate_revision, profiles in by_revision.items()
-        if all(frame in profiles for frame in TCP_COMPARISON_FRAMES)
-    }
-    if not complete:
-        raise SmokeError(
-            "missing a complete passed comparison set for host "
-            f"{host_label}, mode {peer_wire_security}, at or before source revision {revision}"
-        )
-    selected_revision, profiles = max(
-        complete.items(),
-        key=lambda item: max(generated for generated, _median in item[1].values()),
-    )
-    _generated_at, median = profiles[frames_per_connection]
-    return median, selected_revision
-
-
-def baseline_comparison_reference(
-    path: Path | None,
-    peer_wire_security: str | None = None,
-) -> tuple[float | None, str | None]:
-    """Return a durable baseline's median and source revision for public evidence."""
-    reference = baseline_reference(path)
-    if reference is None:
-        return None, None
-    if (
-        peer_wire_security is not None
-        and (
-            reference.get("peer_wire_security") != peer_wire_security
-            or reference.get("execution_daemon") != "shipped_atm_daemon"
-        )
-    ):
-        raise SmokeError(
-            "capacity peer-wire baseline must record the matching explicit mode "
-            "and execution_daemon=shipped_atm_daemon"
-        )
-    revision = reference.get("source_revision")
-    if not isinstance(revision, str) or not GIT_REVISION.fullmatch(revision):
-        raise SmokeError("capacity baseline must record a full source_revision for comparison")
-    return float(reference["median_admissions_per_second"]), revision
-
-
 def run_capacity(
     atm_home: Path,
     evidence_directory: Path,
@@ -1878,13 +1803,6 @@ def run_capacity(
     requested_messages: int = ADMISSIONS_PER_INTERVAL,
     sample_count: int = INTERVALS,
     workers: int = DEFAULT_WORKERS,
-    baseline_path: Path | None = None,
-    comparison_median: float | None = None,
-    comparison_source_revision: str | None = None,
-    comparison_host_label: str | None = None,
-    comparison_ratio: float = 1.0,
-    comparison_strict: bool = False,
-    comparison_required: bool = True,
     raw_evidence_directory: Path = DEFAULT_RAW_EVIDENCE_DIR,
     peer_wire_security: str = "mutual-tls",
     managed_log_level: str | None = None,
@@ -1974,8 +1892,6 @@ def run_capacity(
         "lifecycle": {},
         "runs": [],
         "thresholds": None,
-        "comparison_source_revision": comparison_source_revision,
-        "comparison_host_label": comparison_host_label,
         "benchmark_evidence_failure_code": preflight_failure_code,
         "stages": {
             "runtime_view_validation": "daemon-owned; no peer/store/network work is requested by this client before response",
@@ -2117,19 +2033,9 @@ def run_capacity(
         evidence["run_duration_s"] = profile["run_duration_s"]
         evidence["daemon_version"] = release_version(atm)
 
-        # Preserve the completed public profile before validating its
-        # comparison reference. A stale or failed baseline must make the run
-        # fail closed, but it must not erase the measurements that explain
-        # that failure from the compact evidence.
-        baseline_median = load_baseline_median(
-            baseline_path, transport, frames_per_connection, peer_wire_security,
-        )
-        evidence["baseline"] = baseline_reference(baseline_path)
-        evidence["thresholds"] = evaluate_profile_thresholds(
-            profile, baseline_median, comparison_median, comparison_ratio,
-            comparison_strict, comparison_required,
-        )
-        evidence["passed"] = evidence["thresholds"]["passed"]
+        # v4 applies reviewed per-host/target floors only after this runner
+        # has completed its lifecycle and emitted its factual measurements.
+        evidence["passed"] = all(bool(item.get("passed")) for item in profile["intervals"])
         # A missing plaintext comparison baseline blocks acceptance, but it
         # must not prevent collection of the bounded profile that explains the
         # gap. Preserve the measured run and clean-baseline snapshot proof,
@@ -2224,8 +2130,8 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
     retained only for focused diagnostic tests and cannot represent the
     default release benchmark command.
     """
-    if any((args.target, args.transport, args.frames_per_connection, args.sustained, args.baseline)):
-        raise SmokeError("the required f8 suite does not permit target, transport, profile, or baseline selection")
+    if any((args.target, args.transport, args.frames_per_connection, args.sustained)):
+        raise SmokeError("the required f8 suite does not permit target, transport, or profile selection")
     source = source_revision()
     host_label = os.environ.get("ATM_CAPACITY_HOST_LABEL", "local")
     started_at = datetime.now(timezone.utc)
@@ -2258,7 +2164,6 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
                     raw_evidence_directory=args.raw_evidence_dir,
                     peer_wire_security=peer_wire_security,
                     benchmark_target=target,
-                    comparison_required=False,
                     campaign_id=campaign_identifier,
                 )
         else:
@@ -2273,7 +2178,6 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
                 raw_evidence_directory=args.raw_evidence_dir,
                 peer_wire_security=peer_wire_security,
                 benchmark_target=target,
-                comparison_required=False,
                 campaign_id=campaign_identifier,
             )
         codes.append(run.code)
@@ -2339,7 +2243,6 @@ def run_default_f8_matrix(args: argparse.Namespace) -> int:
                 code, evidence = run_capacity(
                     home, args.evidence_dir, transport, 8,
                     workers=args.workers,
-                    comparison_required=False,
                     raw_evidence_directory=args.raw_evidence_dir,
                     peer_wire_security=peer_wire_security,
                     benchmark_target=target,
@@ -2349,7 +2252,6 @@ def run_default_f8_matrix(args: argparse.Namespace) -> int:
             code, evidence = run_capacity(
                 home, args.evidence_dir, transport, 8,
                 workers=args.workers,
-                comparison_required=False,
                 raw_evidence_directory=args.raw_evidence_dir,
                 peer_wire_security=peer_wire_security,
                 benchmark_target=target,
@@ -2375,7 +2277,6 @@ def run_plaintext_baseline_bootstrap(args: argparse.Namespace) -> int:
                 code, evidence = run_capacity(
                     home, args.evidence_dir, "tcp", frames_per_connection,
                     workers=args.workers,
-                    comparison_required=False,
                     raw_evidence_directory=args.raw_evidence_dir,
                     peer_wire_security="plaintext-test",
                     benchmark_target="tcp",
@@ -2385,7 +2286,6 @@ def run_plaintext_baseline_bootstrap(args: argparse.Namespace) -> int:
             code, evidence = run_capacity(
                 home, args.evidence_dir, "tcp", frames_per_connection,
                 workers=args.workers,
-                comparison_required=False,
                 raw_evidence_directory=args.raw_evidence_dir,
                 peer_wire_security="plaintext-test",
                 benchmark_target="tcp",
@@ -2440,11 +2340,6 @@ def main() -> int:
     parser.add_argument("--transport")
     parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
     parser.add_argument(
-        "--baseline",
-        type=Path,
-        help="compatible prior evidence artifact whose median this profile must meet",
-    )
-    parser.add_argument(
         "--frames-per-connection",
         type=int,
         action="append",
@@ -2468,12 +2363,12 @@ def main() -> int:
         return 0
     if args.bootstrap_plaintext_baseline:
         if any((
-            args.target, args.transport, args.frames_per_connection, args.sustained, args.baseline,
+            args.target, args.transport, args.frames_per_connection, args.sustained,
         )):
             parser.error("--bootstrap-plaintext-baseline cannot be combined with target/profile options")
         return run_plaintext_baseline_bootstrap(args)
     selected_profile = any(
-        (args.target, args.transport, args.frames_per_connection, args.sustained, args.baseline)
+        (args.target, args.transport, args.frames_per_connection, args.sustained)
     )
     if not selected_profile:
         if args.diagnostic_only:
@@ -2488,104 +2383,27 @@ def main() -> int:
     sustained_profiles = tuple(args.sustained or ())
     profiles = selected_profiles(sparse_profiles, sustained_profiles)
     codes: list[int] = []
-    current_revision = source_revision()
-    host_label = os.environ.get("ATM_CAPACITY_HOST_LABEL", "local")
-    comparison_host_label = os.environ.get(
-        "ATM_CAPACITY_COMPARISON_HOST_LABEL",
-        "mac-arm64-01" if os.name == "nt" else host_label,
-    )
-    uds_one_frame_median: float | None = None
     for position, (frames_per_connection, requested_messages) in enumerate(profiles, start=1):
-        comparison_median: float | None = None
-        comparison_source_revision: str | None = None
-        comparison_ratio = 1.0
-        comparison_strict = False
-        comparison_required = True
-        preflight_failure_code: str | None = None
-        preflight_failure: str | None = None
-        profile_baseline = None
-        if transport == "uds":
-            if frames_per_connection == 1:
-                profile_baseline = args.baseline
-                comparison_median, comparison_source_revision = baseline_comparison_reference(
-                    profile_baseline,
-                )
-                if comparison_source_revision is not None:
-                    comparison_host_label = host_label
-            else:
-                if uds_one_frame_median is None:
-                    raise SmokeError("UDS multi-frame profile requires the current UDS one-frame reference")
-                comparison_median = uds_one_frame_median
-                comparison_strict = True
-        elif transport == "tcp":
-            # Connection setup dominates one/two-frame TCP.  Keep an explicit
-            # short-frame floor instead of hiding it, while retaining the
-            # stricter batching-parity floor where frames amortize setup.
-            comparison_ratio = 0.9 if frames_per_connection >= 8 else 0.75
-            comparison_required = os.name != "nt"
-            try:
-                comparison_median, comparison_source_revision = matching_profile_reference(
-                    args.evidence_dir,
-                    comparison_host_label,
-                    transport,
-                    frames_per_connection,
-                    current_revision,
-                    peer_wire_security,
-                )
-            except SmokeError:
-                # The first accepted mutual-TLS campaign establishes its own
-                # same-mode baseline. Plaintext cannot use that exception:
-                # its pre-AO direct-TCP baseline is the regression gate.
-                if peer_wire_security == "mutual-tls":
-                    comparison_required = False
-                else:
-                    preflight_failure_code = MISSING_PLAINTEXT_BASELINE
-                    preflight_failure = (
-                        "missing a complete passed same-host plaintext baseline; "
-                        "this run is retained as bounded benchmark evidence rather than "
-                        "being discarded before publication"
-                    )
         if args.atm_home is None:
             with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temp:
                 home = Path(temp) / f"{CAPACITY_ROOT_PREFIX}{position}"
                 code, evidence = run_capacity(
                     home, args.evidence_dir, transport,
                     frames_per_connection, requested_messages, workers=args.workers,
-                    baseline_path=profile_baseline,
-                    comparison_median=comparison_median,
-                    comparison_source_revision=comparison_source_revision,
-                    comparison_host_label=comparison_host_label,
-                    comparison_ratio=comparison_ratio,
-                    comparison_strict=comparison_strict,
-                    comparison_required=comparison_required,
                     raw_evidence_directory=args.raw_evidence_dir,
                     peer_wire_security=peer_wire_security,
                     benchmark_target=benchmark_target,
-                    preflight_failure_code=preflight_failure_code,
-                    preflight_failure=preflight_failure,
                 )
         else:
             home = args.atm_home / f"{CAPACITY_ROOT_PREFIX}{position}"
             code, evidence = run_capacity(
                     home, args.evidence_dir, transport,
                     frames_per_connection, requested_messages, workers=args.workers,
-                    baseline_path=profile_baseline,
-                    comparison_median=comparison_median,
-                    comparison_source_revision=comparison_source_revision,
-                    comparison_host_label=comparison_host_label,
-                    comparison_ratio=comparison_ratio,
-                    comparison_strict=comparison_strict,
-                    comparison_required=comparison_required,
                     raw_evidence_directory=args.raw_evidence_dir,
                     peer_wire_security=peer_wire_security,
                     benchmark_target=benchmark_target,
-                    preflight_failure_code=preflight_failure_code,
-                    preflight_failure=preflight_failure,
                 )
         codes.append(code)
-        if transport == "uds" and frames_per_connection == 1 and code == 0:
-            payload = json.loads(evidence.read_text(encoding="utf-8"))
-            uds_one_frame_median = validated_profile_median(payload, "current UDS evidence")
         print(f"{'PASS' if code == 0 else 'FAIL'} admission-capacity evidence: {evidence}")
     return 0 if all(code == 0 for code in codes) else 1
 

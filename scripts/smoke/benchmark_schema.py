@@ -85,25 +85,6 @@ class BenchmarkMetrics(BaseModel):
         return self
 
 
-class BenchmarkThresholds(BaseModel):
-    """Acceptance gates evaluated from the same interval trace."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    admissions_per_second_minimum: float = Field(ge=0)
-    median_admissions_per_second: float = Field(ge=0)
-    baseline_median_admissions_per_second: Optional[float] = Field(default=None, ge=0)
-    baseline_passed: bool
-    admission_passed: bool
-    comparison_median_admissions_per_second: Optional[float] = Field(default=None, ge=0)
-    comparison_ratio: Optional[float] = Field(default=None, ge=0)
-    comparison_target_admissions_per_second: Optional[float] = Field(default=None, ge=0)
-    comparison_strict: Optional[bool] = None
-    comparison_required: Optional[bool] = None
-    comparison_passed: bool
-    passed: bool
-
-
 class DurabilityAfterRestart(BaseModel):
     """Exact isolated-store count recorded after the owned daemon restarts."""
 
@@ -389,7 +370,9 @@ class BenchmarkSummary(BaseModel):
     doctor_after_restart_status: Optional[Literal["passed"]] = None
     durability_after_restart: Optional[DurabilityAfterRestart] = None
     direct_sqlite_message_write: Optional[DirectSQLiteMessageWrite] = None
-    thresholds: Optional[BenchmarkThresholds] = None
+    # v1-v3 artifacts remain read-only historical input through AO2.12.  Their
+    # retired gate payload is intentionally opaque: v4 never emits or uses it.
+    thresholds: Optional[dict[str, Any]] = None
     metrics: Optional[BenchmarkMetrics] = None
     passed: bool
     benchmark_evidence_failure_code: Optional[
@@ -429,14 +412,17 @@ class BenchmarkSummary(BaseModel):
             self.metrics.passed_interval_count == self.sample_count
             and self.failure is None
             and self.cleanup_failure is None
-            and (self.thresholds is None or self.thresholds.passed)
+            and (self.thresholds is None or bool(self.thresholds.get("passed", False)))
         )
         if self.passed != expected_passed:
             raise ValueError("passed must agree with metrics and failure")
         if self.durability_after_restart is not None and self.durability_after_restart.expected_accepted_count != self.metrics.accepted_count:
             raise ValueError("durability expected count must equal accepted_count")
-        if self.thresholds is not None:
-            if not isclose(self.thresholds.median_admissions_per_second, self.metrics.admissions_per_second.p50):
+        if self.thresholds is not None and self.thresholds.get("median_admissions_per_second") is not None:
+            if not isclose(
+                float(self.thresholds["median_admissions_per_second"]),
+                self.metrics.admissions_per_second.p50,
+            ):
                 raise ValueError("threshold median must equal admissions_per_second.p50")
         return self
 

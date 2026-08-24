@@ -117,7 +117,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             [item["benchmark_target"] for item in captured],
             ["sqlite", "uds", "tcp", "tcp-tls"],
         )
-        self.assertTrue(all(item["comparison_required"] is False for item in captured))
+        self.assertTrue(all("benchmark_target" in item for item in captured))
         self.assertTrue(all(item["raw_evidence_directory"] == RUNNER.DEFAULT_RAW_EVIDENCE_DIR for item in captured))
         self.assertEqual(stdout.getvalue().count("p50=45000.00 msg/s"), 4)
 
@@ -341,11 +341,6 @@ class AdmissionCapacityTests(unittest.TestCase):
                     ),
                 )
                 stack.enter_context(mock.patch.object(RUNNER, "release_version", return_value="atm test"))
-                stack.enter_context(mock.patch.object(RUNNER, "load_baseline_median", return_value=None))
-                stack.enter_context(mock.patch.object(RUNNER, "baseline_reference", return_value=None))
-                stack.enter_context(
-                    mock.patch.object(RUNNER, "evaluate_profile_thresholds", return_value={"passed": True}),
-                )
                 calls["snapshot"] = stack.enter_context(
                     mock.patch.object(
                         RUNNER,
@@ -491,11 +486,6 @@ class AdmissionCapacityTests(unittest.TestCase):
                 stack.enter_context(mock.patch.object(RUNNER, "run_cached_roster_heartbeat_probe", return_value={}))
                 stack.enter_context(mock.patch.object(RUNNER, "run_profile", return_value=profile))
                 stack.enter_context(mock.patch.object(RUNNER, "release_version", return_value="atm test"))
-                stack.enter_context(mock.patch.object(RUNNER, "load_baseline_median", return_value=None))
-                stack.enter_context(mock.patch.object(RUNNER, "baseline_reference", return_value=None))
-                stack.enter_context(
-                    mock.patch.object(RUNNER, "evaluate_profile_thresholds", return_value={"passed": True}),
-                )
                 stack.enter_context(mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"))
                 stack.enter_context(
                     mock.patch.object(
@@ -1443,15 +1433,15 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(profile["target_duration_s"], 1.0)
 
     def test_evidence_filename_matches_the_published_benchmark_convention(self):
-        evidence = complete_evidence(host_label="mac-arm64-01", frames_per_connection=16)
+        evidence = complete_evidence(host_label="rand-m5", frames_per_connection=16)
         with tempfile.TemporaryDirectory() as temp:
             path = RUNNER.evidence_filename(Path(temp), evidence)
-        self.assertEqual(path.name, "20260801-050000.123456-mac-arm64-01-tcp-f16.json")
+        self.assertEqual(path.name, "20260801-050000.123456-rand-m5-tcp-f16.json")
 
     def test_evidence_filename_is_the_report_renderer_artifact_id(self):
         import benchmark_report
 
-        evidence = complete_evidence(host_label="mac-arm64-01", transport="uds", frames_per_connection=8)
+        evidence = complete_evidence(host_label="rand-m5", transport="uds", frames_per_connection=8)
         with tempfile.TemporaryDirectory() as temp:
             path = RUNNER.write_evidence(Path(temp), evidence)
             result = benchmark_report.load_result(path)
@@ -1459,7 +1449,7 @@ class AdmissionCapacityTests(unittest.TestCase):
 
     def test_evidence_writer_redacts_host_private_fields_but_retains_endpoint_shape(self):
         evidence = complete_evidence(
-            host_label="mac-arm64-01", transport="uds", atm_home="/Users/randlee/private/atm",
+            host_label="rand-m5", transport="uds", atm_home="/Users/randlee/private/atm",
             doctor={"details": "/Users/randlee/.atm/logs/atm.log.jsonl"},
             endpoint={"transport": "uds", "address": "/Users/randlee/.atm/daemon.sock"},
         )
@@ -1472,7 +1462,7 @@ class AdmissionCapacityTests(unittest.TestCase):
 
     def test_published_doctor_status_is_compact(self):
         evidence = complete_evidence(
-            host_label="mac-arm64-01", doctor={"host_private": "full diagnostics"},
+            host_label="rand-m5", doctor={"host_private": "full diagnostics"},
             doctor_status="passed", doctor_after_restart={"status": "passed"},
         )
         with tempfile.TemporaryDirectory() as temp:
@@ -1490,65 +1480,6 @@ class AdmissionCapacityTests(unittest.TestCase):
             path = RUNNER.write_evidence(Path(temp), evidence)
             recorded = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(recorded["failure"], "could not open <redacted-path>")
-
-    def test_thresholds_require_admission_and_optional_baseline(self):
-        profile = {
-            "intervals": [
-                {"admissions_per_second": 1_100, "passed": True},
-                {"admissions_per_second": 900, "passed": False},
-            ]
-        }
-        thresholds = RUNNER.evaluate_profile_thresholds(profile, 950)
-        self.assertEqual(thresholds["median_admissions_per_second"], 1_000)
-        self.assertTrue(thresholds["baseline_passed"])
-        self.assertFalse(thresholds["admission_passed"])
-        self.assertFalse(thresholds["passed"])
-
-    def test_thresholds_retain_a_explicit_transport_comparison_floor(self):
-        profile = {"intervals": [{"admissions_per_second": 790, "passed": True}]}
-        thresholds = RUNNER.evaluate_profile_thresholds(
-            profile, None, comparison_median=1_000, comparison_ratio=0.75,
-        )
-        self.assertEqual(thresholds["comparison_target_admissions_per_second"], 750)
-        self.assertTrue(thresholds["comparison_passed"])
-        self.assertTrue(thresholds["passed"])
-
-    def test_windows_comparison_is_reported_without_gating_windows_acceptance(self):
-        profile = {"intervals": [{"admissions_per_second": 800, "passed": True}]}
-        thresholds = RUNNER.evaluate_profile_thresholds(
-            profile, None, comparison_median=2_000, comparison_ratio=0.75,
-            comparison_required=False,
-        )
-        self.assertFalse(thresholds["comparison_passed"])
-        self.assertFalse(thresholds["comparison_required"])
-        self.assertTrue(thresholds["passed"])
-
-    def test_matching_profile_reference_uses_one_complete_passed_ancestor_set(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            for frame in RUNNER.TCP_COMPARISON_FRAMES:
-                payload = {
-                    "host_label": "mac-arm64-01",
-                    "transport": "uds",
-                    "peer_wire_security": "plaintext-test",
-                    "execution_daemon": "shipped_atm_daemon",
-                    "frames_per_connection": frame,
-                    "source_revision": "b" * 40,
-                    "generated_at": f"2026-08-01T00:00:{frame:02d}Z",
-                    "passed": True,
-                    "sample_count": 10,
-                    "minimum_sample_count": 10,
-                    "run_duration_s": 20.0,
-                    "target_duration_s": 20.0,
-                    "runs": [{"intervals": [{"admissions_per_second": frame * 1_000}]}],
-                }
-                (root / f"f{frame}.json").write_text(json.dumps(payload), encoding="utf-8")
-            with mock.patch.object(RUNNER, "is_ancestor_revision", return_value=True):
-                median, reference = RUNNER.matching_profile_reference(
-                    root, "mac-arm64-01", "uds", 4, "c" * 40,
-                )
-        self.assertEqual(median, 4_000)
-        self.assertEqual(reference, "b" * 40)
 
     def test_main_binds_the_validated_transport_before_selecting_profiles(self):
         with (
@@ -1611,13 +1542,10 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(observed, ["sqlite", "uds", "tcp", "tcp-tls"])
 
     def test_plaintext_baseline_bootstrap_runs_the_complete_required_set(self):
-        observed: list[tuple[int, bool, str, str]] = []
+        observed: list[tuple[int, str, str]] = []
 
         def run_capacity(*_args, **kwargs):
-            observed.append((
-                _args[3], kwargs["comparison_required"], kwargs["peer_wire_security"],
-                kwargs["benchmark_target"],
-            ))
+            observed.append((_args[3], kwargs["peer_wire_security"], kwargs["benchmark_target"]))
             return 0, Path("evidence.json")
 
         args = argparse.Namespace(
@@ -1630,7 +1558,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             self.assertEqual(RUNNER.run_plaintext_baseline_bootstrap(args), 0)
         self.assertEqual(
             observed,
-            [(frame, False, "plaintext-test", "tcp") for frame in RUNNER.TCP_COMPARISON_FRAMES],
+            [(frame, "plaintext-test", "tcp") for frame in RUNNER.TCP_COMPARISON_FRAMES],
         )
 
     def test_plaintext_baseline_bootstrap_dispatches_only_when_explicit(self):
@@ -1644,100 +1572,6 @@ class AdmissionCapacityTests(unittest.TestCase):
         ):
             self.assertEqual(RUNNER.main(), 0)
         bootstrap.assert_called_once()
-
-    def test_main_allows_windows_tcp_without_a_comparison_reference(self):
-        captured: dict[str, object] = {}
-
-        def run_capacity(*_args, **kwargs):
-            captured.update(kwargs)
-            return 0, mock.sentinel.evidence
-
-        with tempfile.TemporaryDirectory() as directory:
-            with (
-                mock.patch.object(
-                    sys,
-                    "argv",
-                    [
-                        "run_admission_capacity.py",
-                        "--diagnostic-only",
-                        "--transport",
-                        "tcp",
-                        "--atm-home",
-                        directory,
-                        "--frames-per-connection",
-                        "1",
-                    ],
-                ),
-                mock.patch.object(RUNNER.os, "name", "nt"),
-                # PureWindowsPath models argv path conversion without asking
-                # the Windows host to instantiate an unsupported PosixPath.
-                mock.patch.object(RUNNER, "Path", PureWindowsPath),
-                mock.patch.object(RUNNER, "source_revision", return_value="a" * 40),
-                mock.patch.object(
-                    RUNNER,
-                    "matching_profile_reference",
-                    side_effect=RUNNER.SmokeError("missing comparison reference"),
-                ) as comparison,
-                mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity),
-            ):
-                self.assertEqual(RUNNER.main(), 0)
-
-        comparison.assert_called_once()
-        self.assertIsNone(captured["comparison_median"])
-        self.assertFalse(captured["comparison_required"])
-
-    def test_main_publishes_plaintext_baseline_gap_as_failure_evidence(self):
-        captured: dict[str, object] = {}
-
-        def run_capacity(*_args, **kwargs):
-            captured.update(kwargs)
-            return 1, mock.sentinel.evidence
-
-        with tempfile.TemporaryDirectory() as directory:
-            with (
-                mock.patch.object(
-                    sys,
-                    "argv",
-                    [
-                        "run_admission_capacity.py",
-                        "--diagnostic-only",
-                        "--target",
-                        "tcp",
-                        "--atm-home",
-                        directory,
-                        "--frames-per-connection",
-                        "1",
-                    ],
-                ),
-                mock.patch.object(RUNNER, "source_revision", return_value="a" * 40),
-                mock.patch.object(
-                    RUNNER,
-                    "matching_profile_reference",
-                    side_effect=RUNNER.SmokeError("missing comparison reference"),
-                ),
-                mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity),
-            ):
-                self.assertEqual(RUNNER.main(), 1)
-
-        self.assertEqual(
-            captured["preflight_failure_code"],
-            RUNNER.MISSING_PLAINTEXT_BASELINE,
-        )
-        self.assertIn("missing a complete passed same-host plaintext baseline", captured["preflight_failure"])
-
-    def test_failed_summary_retains_the_plaintext_baseline_failure_code(self):
-        summary = compact_evidence(complete_evidence(
-            runs=[],
-            passed=False,
-            peer_wire_security="plaintext-test",
-            benchmark_target="tcp",
-            failure="no compatible baseline",
-            benchmark_evidence_failure_code=RUNNER.MISSING_PLAINTEXT_BASELINE,
-        ))
-        self.assertEqual(
-            summary.benchmark_evidence_failure_code,
-            RUNNER.MISSING_PLAINTEXT_BASELINE,
-        )
 
     def test_matrix_uses_the_documented_secure_default_for_local_daemon_targets(self):
         self.assertEqual(
@@ -1786,103 +1620,6 @@ class AdmissionCapacityTests(unittest.TestCase):
             self.assertEqual(RUNNER.disposable_peer_host(first), "capacity-first.m5.local")
             self.assertEqual(RUNNER.disposable_peer_host(second), "capacity-second.m5.local")
 
-    def test_main_records_uds_baseline_source_as_a_diffable_comparison(self):
-        captured: dict[str, object] = {}
-
-        def run_capacity(*_args, **kwargs):
-            captured.update(kwargs)
-            return 0, evidence_path
-
-        baseline = {
-            "generated_at": "2026-08-01T00:00:00Z",
-            "source_revision": "b" * 40,
-            "transport": "uds",
-            "frames_per_connection": 1,
-            "passed": True,
-            "sample_count": 10,
-            "minimum_sample_count": 10,
-            "run_duration_s": 20.0,
-            "target_duration_s": 20.0,
-            "runs": [{"intervals": [{"admissions_per_second": 1_000}]}],
-        }
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            baseline_path = root / "baseline.json"
-            evidence_path = root / "evidence.json"
-            baseline_path.write_text(json.dumps(baseline), encoding="utf-8")
-            evidence_path.write_text(json.dumps(baseline), encoding="utf-8")
-            with (
-                mock.patch.object(
-                    sys,
-                    "argv",
-                    [
-                        "run_admission_capacity.py",
-                        "--diagnostic-only",
-                        "--transport", "uds",
-                        "--atm-home", str(root),
-                        "--frames-per-connection", "1",
-                        "--baseline", str(baseline_path),
-                    ],
-                ),
-                mock.patch.object(RUNNER, "source_revision", return_value="a" * 40),
-                mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity),
-                # This verifies the portable UDS comparison schema. Keep the
-                # Windows runtime guard covered by its dedicated unit test;
-                # mocking only this validation preserves Windows `pathlib`.
-                mock.patch.object(RUNNER, "validate_transport", return_value="uds"),
-            ):
-                self.assertEqual(RUNNER.main(), 0)
-
-        self.assertEqual(captured["comparison_median"], 1_000)
-        self.assertEqual(captured["comparison_source_revision"], "b" * 40)
-        self.assertEqual(captured["comparison_host_label"], "local")
-
-    def test_baseline_requires_matching_transport_and_frame_profile(self):
-        payload = {
-            "transport": "tcp",
-            "frames_per_connection": 8,
-            "passed": True,
-            "sample_count": 10,
-            "minimum_sample_count": 10,
-            "run_duration_s": 20.0,
-            "target_duration_s": 20.0,
-            "runs": [{"intervals": [{"admissions_per_second": 1_000}]}],
-        }
-        with tempfile.TemporaryDirectory() as temp:
-            path = Path(temp) / "baseline.json"
-            path.write_text(__import__("json").dumps(payload), encoding="utf-8")
-            self.assertEqual(RUNNER.load_baseline_median(path, "tcp", 8), 1_000)
-            with self.assertRaisesRegex(RUNNER.SmokeError, "transport"):
-                RUNNER.load_baseline_median(path, "uds", 8)
-            with self.assertRaisesRegex(RUNNER.SmokeError, "frames_per_connection"):
-                RUNNER.load_baseline_median(path, "tcp", 16)
-
-    def test_baseline_reference_retains_source_revision_and_observed_result(self):
-        payload = {
-            "generated_at": "2026-08-01T00:00:00Z",
-            "source_revision": "a" * 40,
-            "run_duration_s": 20.0,
-            "passed": False,
-            "runs": [{"intervals": [{"admissions_per_second": 180.0}]}],
-        }
-        with tempfile.TemporaryDirectory() as temp:
-            path = Path(temp) / "baseline.json"
-            path.write_text(json.dumps(payload), encoding="utf-8")
-            reference = RUNNER.baseline_reference(path)
-        self.assertEqual(reference["source_revision"], "a" * 40)
-        self.assertFalse(reference["passed"])
-        self.assertEqual(reference["median_admissions_per_second"], 180.0)
-
-    def test_invalid_baseline_is_rejected_before_its_median_is_used(self):
-        payload = {"transport": "uds", "frames_per_connection": 1, "passed": False,
-                   "sample_count": 1, "minimum_sample_count": 10, "run_duration_s": 0.1,
-                   "target_duration_s": 20.0, "runs": [{"intervals": [{"admissions_per_second": 180.0}]}]}
-        with tempfile.TemporaryDirectory() as temp:
-            path = Path(temp) / "baseline.json"
-            path.write_text(json.dumps(payload), encoding="utf-8")
-            with self.assertRaisesRegex(RUNNER.SmokeError, "did not pass"):
-                RUNNER.load_baseline_median(path, "uds", 1)
-
     def test_public_tcp_targets_select_only_the_ordinary_daemon_mode(self):
         self.assertEqual(
             RUNNER.resolve_benchmark_target("tcp", None),
@@ -1894,22 +1631,6 @@ class AdmissionCapacityTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(RUNNER.SmokeError, "requires transport"):
             RUNNER.resolve_benchmark_target("tcp-tls", "uds")
-
-    def test_mode_aware_baseline_rejects_cross_security_comparison(self):
-        payload = complete_evidence(
-            transport="tcp",
-            peer_wire_security="plaintext-test",
-            execution_daemon="shipped_atm_daemon",
-            frames_per_connection=8,
-        )
-        with tempfile.TemporaryDirectory() as temp:
-            path = Path(temp) / "baseline.json"
-            path.write_text(json.dumps(payload), encoding="utf-8")
-            self.assertEqual(
-                RUNNER.load_baseline_median(path, "tcp", 8, "plaintext-test"), 1_000,
-            )
-            with self.assertRaisesRegex(RUNNER.SmokeError, "peer-wire baseline"):
-                RUNNER.load_baseline_median(path, "tcp", 8, "mutual-tls")
 
     def test_response_reader_consumes_declared_body(self):
         class Stream:

@@ -81,6 +81,13 @@ class BenchmarkSchemaV4Tests(unittest.TestCase):
     def test_non_durable_complete_result_is_fail(self) -> None:
         self.assertEqual(result(messages_durable=9, status="FAIL").status, "FAIL")
 
+    def test_complete_result_below_its_host_target_floor_is_fail(self) -> None:
+        below_floor = result(
+            status="FAIL",
+            baseline=BaselineRef(revision=1, p50_floor=20_001),
+        )
+        self.assertEqual(below_floor.status, "FAIL")
+
     def test_missing_lifecycle_is_incomplete_with_reason(self) -> None:
         incomplete = result(
             status="INCOMPLETE", incomplete_reason="post-restart durability missing",
