@@ -6,6 +6,7 @@ import argparse
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -21,8 +22,13 @@ if str(ROOT) not in sys.path:
 from scripts.smoke.benchmark_schema import (
     BaselineSet,
     BenchmarkCampaign,
+    BenchmarkRunResult,
     BenchmarkSchemaError,
+    BenchmarkSummary,
     HistoricalRecord,
+    LEGACY_SUMMARY_SCHEMA_VERSION,
+    artifact_id,
+    compact_evidence,
 )
 
 
@@ -37,10 +43,18 @@ TARGET_ORDER: tuple[Literal["sqlite", "uds", "tcp", "tcp-tls"], ...] = (
 TARGET_LABELS = {"sqlite": "SQLite", "uds": "UDS", "tcp": "TCP", "tcp-tls": "TCP + TLS"}
 SERIES_COLORS = ("#2563eb", "#9333ea", "#0f766e", "#c2410c", "#475569")
 PACIFIC = ZoneInfo("America/Los_Angeles")
+SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
 class BenchmarkReportError(ValueError):
     """The public benchmark evidence cannot be deterministically rendered."""
+
+
+def _safe_artifact_id(value: str) -> str:
+    candidate = re.sub(r"[^A-Za-z0-9._-]+", "-", value).strip("-")[:128]
+    if not candidate or not SAFE_ID.fullmatch(candidate):
+        raise BenchmarkReportError(f"unsafe benchmark artifact id: {value!r}")
+    return candidate
 
 
 def utc_text(value: datetime) -> str:
@@ -95,6 +109,84 @@ def load_json(path: Path) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise BenchmarkReportError(f"{path}: JSON root must be an object")
     return payload
+
+
+# The suite runner still reads legacy, per-target diagnostic artifacts in a
+# handful of focused tests.  Keep that adapter read-only: v4 campaigns remain
+# the sole input to the public renderer, and this path never writes, migrates,
+# or changes historical evidence on disk.
+def _migrate_legacy_result(payload: dict[str, Any], source: Path) -> dict[str, Any]:
+    version = payload.get("schema_version")
+    if version == LEGACY_SUMMARY_SCHEMA_VERSION:
+        return payload
+    if version not in {1, 2} or isinstance(version, bool):
+        raise BenchmarkReportError(
+            f"{source}: expected benchmark schema version 1, 2, or {LEGACY_SUMMARY_SCHEMA_VERSION}"
+        )
+    samples = payload.get("samples", payload.get("runs", []))
+    if not isinstance(samples, list):
+        raise BenchmarkReportError(f"{source}: legacy samples must be a list")
+    legacy = {
+        **payload,
+        "schema_version": 2,
+        "run_duration_s": payload.get("run_duration_s", payload.get("duration_seconds", 0)),
+        "runs": samples if samples and isinstance(samples[0], dict) and "intervals" in samples[0] else [{"intervals": samples}],
+        "minimum_sample_count": payload.get("minimum_sample_count", len(samples)),
+        "sample_count": payload.get("sample_count", len(samples)),
+        "target_duration_s": payload.get(
+            "target_duration_s", payload.get("run_duration_s", payload.get("duration_seconds", 0))
+        ),
+    }
+    try:
+        result = compact_evidence(legacy).model_dump(mode="json")
+    except BenchmarkSchemaError as exc:
+        raise BenchmarkReportError(f"{source}: cannot compact legacy interval evidence: {exc}") from exc
+    result["migration"] = {"from_schema_version": version}
+    return result
+
+
+def load_result(source: Path) -> dict[str, Any]:
+    """Read a legacy diagnostic result for runner compatibility, without mutation."""
+    payload = load_json(source)
+    if payload.get("schema_version") == 4:
+        try:
+            result = BenchmarkRunResult.model_validate(payload).model_dump(mode="json")
+        except Exception as exc:  # pydantic reports structured validation details.
+            raise BenchmarkReportError(f"{source}: invalid v4 benchmark result: {exc}") from exc
+        target = result["target"]
+        return {
+            **result,
+            "transport": "sqlite" if target == "sqlite" else ("uds" if target == "uds" else "tcp"),
+            "peer_wire_security": (
+                None if target == "sqlite" else ("plaintext-test" if target == "tcp" else "mutual-tls")
+            ),
+            "benchmark_target": target,
+            "passed": result["status"] == "PASS",
+        }
+    migrated = _migrate_legacy_result(payload, source)
+    migration = migrated.pop("migration", None)
+    try:
+        result = BenchmarkSummary.model_validate(migrated).model_dump(mode="json")
+    except Exception as exc:  # pydantic reports structured validation details.
+        raise BenchmarkReportError(f"{source}: invalid benchmark summary: {exc}") from exc
+    if migration is not None:
+        result["migration"] = migration
+    return result
+
+
+def result_id(result: dict[str, Any], _source: Path | None = None) -> str:
+    """Return the existing immutable artifact identifier without creating output."""
+    if result.get("schema_version") == 4:
+        try:
+            return artifact_id(campaign_id=str(result["campaign_id"]), target=str(result["target"]))
+        except BenchmarkSchemaError as exc:
+            raise BenchmarkReportError(f"invalid v4 artifact identity: {exc}") from exc
+    stamp = str(result["generated_at"]).replace("-", "").replace(":", "").replace("T", "-").replace("Z", "")
+    security = result.get("peer_wire_security")
+    suffix = f"-{security}" if security is not None else ""
+    return _safe_artifact_id(
+        f"{stamp}-{result['host_label']}-{result['transport']}{suffix}-f{result['frames_per_connection']}"
+    )
 
 
 def load_campaigns(report_dir: Path = REPORT_DIR) -> list[BenchmarkCampaign]:

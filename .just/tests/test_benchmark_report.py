@@ -88,6 +88,21 @@ class BenchmarkReportTests(unittest.TestCase):
         self.assertEqual(REPORT.empty_historical_record().campaigns, ())
         self.assertEqual(REPORT.empty_historical_record().schema_version, 1)
 
+    def test_compatibility_reader_never_rewrites_recorded_result_bytes(self) -> None:
+        item = result(
+            "tcp", datetime(2026, 8, 24, 7, tzinfo=UTC),
+            identifier="20260824T070000Z-rand-m5",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "recorded-result.json"
+            source.write_text(item.model_dump_json(indent=2), encoding="utf-8")
+            before = source.read_bytes()
+            rendered = REPORT.load_result(source)
+            after = source.read_bytes()
+        self.assertEqual(after, before)
+        self.assertEqual(rendered["target"], "tcp")
+        self.assertEqual(rendered["status"], "PASS")
+
     def test_rebuild_renders_panels_phases_index_and_is_byte_identical(self) -> None:
         # Filename order is deliberately newest, oldest, middle: rendering
         # must use the UTC values rather than filenames or Pacific dates.
