@@ -89,7 +89,11 @@ from scripts.smoke.smoke_common import SmokeError, command_result
 INTERVALS = 10
 ADMISSIONS_PER_INTERVAL = 1_000
 TARGET_PROFILE_DURATION_SECONDS = 20.0
-DEFAULT_WORKERS = 64
+# An f8 sample issues ceil(1_000 / 8) = 125 independent connections.  The
+# ordinary benchmark must have enough workers to occupy all of them; 64
+# underdrives every lane and makes its output incomparable with the reviewed
+# f8/512 historical measurements.
+DEFAULT_WORKERS = 512
 # Keep the benchmark's HTTP/1.1 pipeline below the local socket's bidirectional
 # buffer capacity. The sender writes one bounded batch, then the reader drains
 # every matching response before the next batch.
