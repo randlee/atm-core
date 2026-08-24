@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import closing
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import hashlib
@@ -22,6 +23,7 @@ from queue import Empty, Queue
 import re
 import shutil
 import socket
+import sqlite3
 import ssl
 import subprocess
 import sys
@@ -37,20 +39,23 @@ DEFAULT_RAW_EVIDENCE_DIR = ROOT / "artifacts" / "benchmark" / "send-message-benc
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.smoke import benchmark_suite as SUITE
 from scripts.smoke.benchmark_schema import (
+    BaselineEntry,
+    BaselineSet,
+    BaselineRef,
+    BenchmarkCampaign,
+    BenchmarkRunResult,
     BenchmarkSchemaError,
-    BenchmarkSummary,
+    DurabilityAfterRestart,
+    artifact_id,
+    campaign_id as derive_campaign_id,
     compact_evidence,
+    direct_sqlite_write_from_evidence,
     distribution,
+    metrics_from_evidence,
+    required_targets,
 )
-from scripts.smoke.benchmark_policy import (
-    baseline_reference,
-    evaluate_profile_thresholds,
-    load_baseline_median,
-    profile_median_admissions_per_second,
-    validated_profile_median,
-)
+from scripts.smoke.benchmark_policy import classify_status, profile_median_admissions_per_second
 from scripts.smoke.benchmark_account import (
     BenchmarkAccount,
     BenchmarkAccountError,
@@ -92,7 +97,6 @@ MAX_IN_FLIGHT_REQUESTS = 8
 READY_TIMEOUT_SECONDS = 30.0
 CAPACITY_ROOT_PREFIX = "atm-capacity-"
 SPARSE_FRAMES_PER_CONNECTION = (1, 2, 4, 8, 16, 64)
-TCP_COMPARISON_FRAMES = (1, 2, 4, 8, 16, 64)
 SUSTAINED_MESSAGE_COUNTS = (10_000, 100_000)
 DAEMON_OUTPUT_TAIL_LINES = 200
 GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
@@ -108,7 +112,7 @@ BENCHMARK_TARGETS = {
     "tcp": ("tcp", "plaintext-test"),
     "tcp-tls": ("tcp", "mutual-tls"),
 }
-MISSING_PLAINTEXT_BASELINE = "missing_compatible_plaintext_baseline"
+BASELINES_PATH = DEFAULT_EVIDENCE_DIR / "baselines.json"
 DAEMON_SWITCH = ROOT / ".claude" / "skills" / "daemon-switch" / "scripts" / "daemon-switch.py"
 # The daemon-switch control plane can legitimately wait through its documented
 # launchctl unload/owner-repair windows (up to 20s + two 20x2s polls).  Its
@@ -210,71 +214,145 @@ class CapacityRunResult:
     code: int
     compact_evidence_path: Path
     raw_evidence_path: Path
+    result: BenchmarkRunResult | None = None
 
     def __iter__(self):
         yield self.code
         yield self.compact_evidence_path
 
 
-def suite_target_result(
-    target: str,
-    run: CapacityRunResult,
-    *,
-    artifact_root: Path = ROOT,
-) -> SUITE.TargetResult:
-    """Turn one completed target's real artifacts into ledger-safe evidence.
+@dataclass(frozen=True)
+class V4EmissionContext:
+    """All caller-owned facts required for one direct v4 target publication."""
 
-    A nonzero benchmark exit may still have a complete measured profile (for
-    example, a below-floor result).  That evidence belongs in the suite ledger
-    for remediation.  A setup failure without metrics does not: it remains a
-    visible failed intent rather than being represented with invented rates.
-    """
-    if target not in BENCHMARK_TARGETS:
-        raise SmokeError(f"unknown required f8 target {target!r}")
-    if not run.compact_evidence_path.is_file() or not run.raw_evidence_path.is_file():
-        raise SmokeError("complete suite target requires both compact and raw evidence files")
+    target: str
+    campaign_id: str
+    os_name: str
+    baseline: BaselineEntry
+    binary_hashes: dict[str, str]
+
+
+def benchmark_os() -> str:
+    """Normalize the runner OS name to the public v4 contract vocabulary."""
+    if os.name == "nt":
+        return "windows"
+    if sys.platform == "darwin":
+        return "macos"
+    return "linux"
+
+
+def load_baselines(path: Path = BASELINES_PATH) -> BaselineSet:
+    """Load the single reviewed source of per-host/per-target acceptance floors."""
     try:
-        compact = BenchmarkSummary.model_validate_json(
-            run.compact_evidence_path.read_text(encoding="utf-8")
-        )
+        return BaselineSet.model_validate_json(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
-        raise SmokeError(f"could not load compact target evidence: {error}") from error
-    expected_transport, expected_security = BENCHMARK_TARGETS[target]
-    if (
-        compact.benchmark_target != target
-        or compact.transport != expected_transport
-        or compact.peer_wire_security != expected_security
-    ):
-        raise SmokeError(
-            f"compact evidence does not match required target {target}: "
-            f"got target={compact.benchmark_target!r}, transport={compact.transport!r}, "
-            f"security={compact.peer_wire_security!r}"
-        )
-    if compact.metrics is None:
-        raise SmokeError(
-            f"target {target} did not reach a measured interval; retain its failed suite intent "
-            "and repair the ordinary runner before retrying"
-        )
+        raise SmokeError(f"could not load benchmark baselines {path}: {error}") from error
+
+
+def binary_hashes() -> dict[str, str]:
+    """Record the exact release executables measured by a v4 campaign."""
     try:
-        raw_relative = run.raw_evidence_path.resolve().relative_to(artifact_root.resolve())
-    except ValueError as error:
-        raise SmokeError("raw target evidence must remain below the benchmark artifact root") from error
-    metrics = compact.metrics
-    return SUITE.TargetResult(
-        target=target,
-        median_msg_per_second=metrics.admissions_per_second.p50,
-        p95_msg_per_second=metrics.admissions_per_second.p95,
-        p99_msg_per_second=(
-            metrics.admissions_per_second.p99
-            if metrics.admissions_per_second.p99 is not None
-            else metrics.admissions_per_second.p95
-        ),
-        requested=metrics.requested_count,
-        accepted=metrics.accepted_count,
-        errors=metrics.requested_count - metrics.accepted_count,
-        raw_artifact=raw_relative.as_posix(),
-        raw_artifact_sha256=SUITE.raw_file_sha256(run.raw_evidence_path),
+        return {
+            "atm": hashlib.sha256(release_binary("atm").read_bytes()).hexdigest(),
+            "atm-daemon": hashlib.sha256(release_binary("atm-daemon").read_bytes()).hexdigest(),
+        }
+    except OSError as error:
+        raise SmokeError(f"could not hash benchmark release binaries: {error}") from error
+
+
+def atomic_json(path: Path, payload: dict[str, Any]) -> None:
+    """Publish a validated immutable JSON artifact or fail before partial output."""
+    content = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(content, encoding="utf-8")
+    temporary.replace(path)
+
+
+def v4_result_from_evidence(
+    evidence: dict[str, Any],
+    *,
+    context: V4EmissionContext,
+) -> BenchmarkRunResult:
+    """Build the public v4 result directly from the runner's factual trace.
+
+    The normal matrix never persists a legacy summary and then migrates it.
+    ``metrics_from_evidence`` is merely in-memory aggregation of the verbose
+    trace, shared with the read-only v1-v3 compatibility loader.
+    """
+    try:
+        metrics = metrics_from_evidence(evidence)
+        durability_raw = evidence.get("durability_after_restart")
+        durability = (
+            None
+            if durability_raw is None
+            else DurabilityAfterRestart.model_validate(durability_raw)
+        )
+        direct_sqlite = direct_sqlite_write_from_evidence(evidence)
+    except BenchmarkSchemaError as error:
+        raise SmokeError(f"could not summarize benchmark evidence: {error}") from error
+    if metrics is not None and context.target == "sqlite":
+        metric_values = metrics.model_dump()
+        for field in (
+            "connection_count", "application_wire_bytes", "request_frames_per_second",
+            "connections_per_second", "application_wire_bytes_per_second",
+        ):
+            metric_values[field] = None
+        metrics = type(metrics).model_validate(metric_values)
+    requested = 0 if metrics is None else metrics.requested_count
+    admitted = 0 if metrics is None else metrics.accepted_count
+    durable = 0 if durability is None else durability.observed_mailbox_count
+    complete = metrics is not None and durability is not None
+    try:
+        generated_at = datetime.fromisoformat(str(evidence["generated_at"]).replace("Z", "+00:00"))
+    except (KeyError, ValueError) as error:
+        raise SmokeError(f"benchmark evidence has invalid generated_at: {error}") from error
+    status = classify_status(
+        lifecycle_complete=complete,
+        messages_requested=requested,
+        messages_admitted=admitted,
+        messages_durable=durable,
+        p50_admissions_per_second=(None if metrics is None else metrics.admissions_per_second.p50),
+        baseline_p50_floor=context.baseline.p50_floor,
     )
+    return BenchmarkRunResult(
+        campaign_id=context.campaign_id,
+        host_label=str(evidence["host_label"]),
+        os=context.os_name,
+        target=context.target,
+        status=status,
+        incomplete_reason=(
+            None
+            if complete
+            else str(evidence.get("failure") or "benchmark did not complete every lifecycle stage")
+        ),
+        generated_at=generated_at,
+        source_revision=str(evidence.get("source_revision") or source_revision()),
+        binary_hashes=context.binary_hashes,
+        frames_per_connection=(
+            0 if context.target == "sqlite" else int(evidence["frames_per_connection"])
+        ),
+        messages_requested=requested,
+        messages_admitted=admitted,
+        messages_durable=durable,
+        metrics=metrics,
+        baseline=BaselineRef(revision=1, p50_floor=context.baseline.p50_floor),
+        durability_after_restart=durability,
+        direct_sqlite_message_write=direct_sqlite,
+    )
+
+
+def write_v4_evidence(
+    directory: Path, evidence: dict[str, Any], context: V4EmissionContext,
+) -> tuple[Path, BenchmarkRunResult]:
+    """Validate and atomically publish the ordinary matrix's direct v4 output."""
+    try:
+        result = v4_result_from_evidence(evidence, context=context)
+    except (KeyError, ValueError) as error:
+        raise SmokeError(f"could not emit direct v4 benchmark evidence: {error}") from error
+    destination = directory / f"{artifact_id(campaign_id=context.campaign_id, target=context.target)}.json"
+    atomic_json(destination, result.model_dump(mode="json"))
+    return destination, result
 
 
 @dataclass
@@ -640,11 +718,47 @@ LIFECYCLE_RECOVERY = {
     "preflight": "correct the disposable benchmark-account manifest before retrying",
     "snapshot": "keep the benchmark daemon stopped and inspect retained snapshot staging material",
     "profile": "the runner will stop its owned daemon and restore the published clean snapshot",
+    "restart": "keep the benchmark daemon stopped and inspect its restart diagnostics before retrying",
+    "durability": "keep the benchmark daemon stopped and inspect the disposable benchmark store",
     "stop": "keep the benchmark daemon stopped; do not restore while SQLite sidecars may be active",
     "restore": "keep the benchmark daemon stopped and inspect retained restore staging material",
     "post_restore_verify": "keep the benchmark daemon stopped and inspect the restored benchmark account",
     "cleanup": "remove only the per-run temporary ATM_HOME after inspecting the retained evidence",
 }
+
+
+def verify_durability_after_restart(
+    benchmark_account: BenchmarkAccount,
+    roster: CapacityRoster,
+    expected_accepted_count: int,
+) -> dict[str, Any]:
+    """Count this run's recipient rows after a fresh daemon has reopened SQLite.
+
+    The benchmark roster is unique per target, so its recipient mailbox is an
+    exact, isolated measurement: roster setup cannot contribute mail rows and
+    no other target can share its ``(team, agent)`` pair.  The caller starts
+    and doctors a new owned daemon immediately before this read; the query is
+    deliberately read-only and never touches an interactive account.
+    """
+    if expected_accepted_count < 0:
+        raise SmokeError("durability expected accepted count must not be negative")
+    database = benchmark_account.durable_state_root / "mail.db"
+    try:
+        with closing(sqlite3.connect(f"file:{database}?mode=ro", uri=True)) as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) FROM mail_messages WHERE team = ? AND agent = ?",
+                (roster.team, roster.recipient),
+            ).fetchone()
+    except sqlite3.Error as error:
+        raise SmokeError(f"could not count durable benchmark mailbox rows: {error}") from error
+    if row is None or not isinstance(row[0], int):
+        raise SmokeError("durability count query returned no integer mailbox count")
+    observed = row[0]
+    return {
+        "expected_accepted_count": expected_accepted_count,
+        "observed_mailbox_count": observed,
+        "passed": observed == expected_accepted_count,
+    }
 
 
 def snapshot_evidence(snapshot: VerifiedSnapshot) -> dict[str, Any]:
@@ -1339,7 +1453,6 @@ def run_interval(
     workers: int,
     requested_messages: int = ADMISSIONS_PER_INTERVAL,
     expected_status: int = 201,
-    minimum_admissions_per_second: float = 1_000.0,
 ) -> dict[str, Any]:
     """Run one exactly-sized admission interval without retrying failed writes."""
     if requested_messages <= 0:
@@ -1403,10 +1516,10 @@ def run_interval(
             (request_bytes + response_bytes) / elapsed_seconds if elapsed_seconds else 0.0
         ),
         "first_failure": failures[0] if failures else None,
-        "passed": error_free and (
-            minimum_admissions_per_second <= 0
-            or elapsed_seconds <= requested_messages / minimum_admissions_per_second
-        ),
+        # This is a factual request/response outcome.  The reviewed v4 floor
+        # is applied exactly once by classify_status() when result evidence
+        # is emitted.
+        "passed": error_free,
     }
 
 
@@ -1420,7 +1533,6 @@ def run_profile(
     target_duration_seconds: float = TARGET_PROFILE_DURATION_SECONDS,
     operation: str = "write",
     expected_status: int = 201,
-    minimum_admissions_per_second: float = 1_000.0,
     roster: CapacityRoster = DEFAULT_CAPACITY_ROSTER,
 ) -> dict[str, Any]:
     """Collect at least ten independent intervals over one sustained profile."""
@@ -1467,7 +1579,6 @@ def run_profile(
             workers,
             requested_messages,
             expected_status=expected_status,
-            minimum_admissions_per_second=minimum_admissions_per_second,
         )
         intervals.append(interval)
         elapsed_seconds += float(interval["elapsed_seconds"])
@@ -1613,7 +1724,6 @@ def run_cached_roster_heartbeat_probe(
         target_duration_seconds=DIAGNOSTIC_DURATION_SECONDS,
         operation="cached_roster_heartbeat",
         expected_status=200,
-        minimum_admissions_per_second=0,
         roster=roster,
     )
     return {
@@ -1647,7 +1757,11 @@ def write_raw_evidence(directory: Path, evidence: dict[str, Any]) -> Path:
 
 
 def write_evidence(directory: Path, evidence: dict[str, Any]) -> Path:
-    """Write the Pydantic-validated compact public benchmark summary."""
+    """Write a legacy v3 diagnostic artifact for read-only compatibility.
+
+    The ordinary matrix path supplies ``V4EmissionContext`` to ``run_capacity``
+    and therefore bypasses this compatibility writer entirely.
+    """
     path = evidence_filename(directory, evidence)
     try:
         summary = compact_evidence(evidence).model_dump(mode="json")
@@ -1670,80 +1784,6 @@ def selected_profiles(
     return tuple(profiles)
 
 
-def matching_profile_reference(
-    directory: Path,
-    host_label: str,
-    transport: str,
-    frames_per_connection: int,
-    revision: str,
-    peer_wire_security: str = "plaintext-test",
-) -> tuple[float, str]:
-    """Use only one complete accepted same-mode revision for comparison."""
-    by_revision: dict[str, dict[int, tuple[str, float]]] = {}
-    for path in directory.glob("*.json"):
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-            candidate_revision = payload.get("source_revision")
-            candidate_frame = payload.get("frames_per_connection")
-            if (
-                payload.get("host_label") == host_label
-                and payload.get("transport") == transport
-                and payload.get("peer_wire_security") == peer_wire_security
-                and payload.get("execution_daemon") == "shipped_atm_daemon"
-                and candidate_frame in TCP_COMPARISON_FRAMES
-                and isinstance(candidate_revision, str)
-                and GIT_REVISION.fullmatch(candidate_revision)
-                and is_ancestor_revision(candidate_revision, revision)
-            ):
-                by_revision.setdefault(candidate_revision, {})[candidate_frame] = (
-                    str(payload.get("generated_at", "")),
-                    validated_profile_median(payload, "comparison evidence"),
-                )
-        except (OSError, TypeError, ValueError, json.JSONDecodeError, SmokeError):
-            continue
-    complete = {
-        candidate_revision: profiles
-        for candidate_revision, profiles in by_revision.items()
-        if all(frame in profiles for frame in TCP_COMPARISON_FRAMES)
-    }
-    if not complete:
-        raise SmokeError(
-            "missing a complete passed comparison set for host "
-            f"{host_label}, mode {peer_wire_security}, at or before source revision {revision}"
-        )
-    selected_revision, profiles = max(
-        complete.items(),
-        key=lambda item: max(generated for generated, _median in item[1].values()),
-    )
-    _generated_at, median = profiles[frames_per_connection]
-    return median, selected_revision
-
-
-def baseline_comparison_reference(
-    path: Path | None,
-    peer_wire_security: str | None = None,
-) -> tuple[float | None, str | None]:
-    """Return a durable baseline's median and source revision for public evidence."""
-    reference = baseline_reference(path)
-    if reference is None:
-        return None, None
-    if (
-        peer_wire_security is not None
-        and (
-            reference.get("peer_wire_security") != peer_wire_security
-            or reference.get("execution_daemon") != "shipped_atm_daemon"
-        )
-    ):
-        raise SmokeError(
-            "capacity peer-wire baseline must record the matching explicit mode "
-            "and execution_daemon=shipped_atm_daemon"
-        )
-    revision = reference.get("source_revision")
-    if not isinstance(revision, str) or not GIT_REVISION.fullmatch(revision):
-        raise SmokeError("capacity baseline must record a full source_revision for comparison")
-    return float(reference["median_admissions_per_second"]), revision
-
-
 def run_capacity(
     atm_home: Path,
     evidence_directory: Path,
@@ -1752,21 +1792,13 @@ def run_capacity(
     requested_messages: int = ADMISSIONS_PER_INTERVAL,
     sample_count: int = INTERVALS,
     workers: int = DEFAULT_WORKERS,
-    baseline_path: Path | None = None,
-    comparison_median: float | None = None,
-    comparison_source_revision: str | None = None,
-    comparison_host_label: str | None = None,
-    comparison_ratio: float = 1.0,
-    comparison_strict: bool = False,
-    comparison_required: bool = True,
     raw_evidence_directory: Path = DEFAULT_RAW_EVIDENCE_DIR,
     peer_wire_security: str = "mutual-tls",
     managed_log_level: str | None = None,
     benchmark_target: str | None = None,
     managed_daemon: ManagedDaemonOptions | None = None,
-    preflight_failure_code: str | None = None,
-    preflight_failure: str | None = None,
     campaign_id: str | None = None,
+    v4_emission: V4EmissionContext | None = None,
 ) -> CapacityRunResult:
     """Start one branch daemon, exercise public UDS API, retain evidence, then clean up."""
     if managed_daemon is not None:
@@ -1847,10 +1879,6 @@ def run_capacity(
         },
         "lifecycle": {},
         "runs": [],
-        "thresholds": None,
-        "comparison_source_revision": comparison_source_revision,
-        "comparison_host_label": comparison_host_label,
-        "benchmark_evidence_failure_code": preflight_failure_code,
         "stages": {
             "runtime_view_validation": "daemon-owned; no peer/store/network work is requested by this client before response",
             "sqlite_transaction": "measured by each public admission response latency",
@@ -1895,11 +1923,11 @@ def run_capacity(
         )
         before = count_atm_daemon_processes()
         home.mkdir(parents=True, exist_ok=False)
-        if benchmark_target == "tcp-tls":
-            # Peer configuration uses the daemon's ordinary local API.  It
-            # must exist before the mTLS runtime validates that configuration,
-            # so a bounded plaintext control-plane daemon persists the
-            # disposable state and is stopped before the measured mTLS launch.
+        if launch_peer_wire_security == "mutual-tls":
+            # Every mTLS daemon launch validates its configured identity,
+            # including the secure-default daemon used by the sqlite and UDS
+            # targets.  Persist a disposable identity through the ordinary
+            # plaintext control plane before any measured mTLS launch.
             run_lifecycle_phase(evidence, "snapshot", lambda: start_and_doctor("plaintext-test"))
             mtls_identity = run_lifecycle_phase(
                 evidence,
@@ -1991,26 +2019,33 @@ def run_capacity(
         evidence["run_duration_s"] = profile["run_duration_s"]
         evidence["daemon_version"] = release_version(atm)
 
-        # Preserve the completed public profile before validating its
-        # comparison reference. A stale or failed baseline must make the run
-        # fail closed, but it must not erase the measurements that explain
-        # that failure from the compact evidence.
-        baseline_median = load_baseline_median(
-            baseline_path, transport, frames_per_connection, peer_wire_security,
+        # A 201/direct-writer success is not enough for a benchmark result:
+        # reopen the isolated account store with a fresh shipped daemon, then
+        # count this target's unique recipient mailbox.  This happens before
+        # the clean snapshot is restored and is intentionally outside every
+        # timed interval.
+        run_lifecycle_phase(evidence, "stop", stop_owned_daemon)
+        run_lifecycle_phase(evidence, "restart", start_and_doctor)
+        evidence["doctor_after_restart"] = {"status": evidence["doctor_status"]}
+        expected_accepted_count = sum(
+            int(interval["accepted_count"]) for interval in profile["intervals"]
         )
-        evidence["baseline"] = baseline_reference(baseline_path)
-        evidence["thresholds"] = evaluate_profile_thresholds(
-            profile, baseline_median, comparison_median, comparison_ratio,
-            comparison_strict, comparison_required,
+        evidence["durability_after_restart"] = run_lifecycle_phase(
+            evidence,
+            "durability",
+            lambda: verify_durability_after_restart(
+                benchmark_account,
+                roster,
+                expected_accepted_count,
+            ),
         )
-        evidence["passed"] = evidence["thresholds"]["passed"]
-        # A missing plaintext comparison baseline blocks acceptance, but it
-        # must not prevent collection of the bounded profile that explains the
-        # gap. Preserve the measured run and clean-baseline snapshot proof,
-        # then fail closed.
-        if preflight_failure is not None:
-            evidence["passed"] = False
-            evidence["failure"] = preflight_failure
+
+        # This factual completion marker is distinct from acceptance.  The
+        # canonical classifier applies the reviewed floor at v4 emission.
+        evidence["passed"] = (
+            all(bool(item.get("passed")) for item in profile["intervals"])
+            and bool(evidence["durability_after_restart"]["passed"])
+        )
     except (OSError, RuntimeError, ValueError, SmokeError) as error:
         evidence["passed"] = False
         evidence["failure"] = str(error)
@@ -2081,12 +2116,21 @@ def run_capacity(
             evidence["passed"] = False
             evidence["failure"] = str(error)
         raw_evidence_path = write_raw_evidence(raw_evidence_directory, evidence)
-        evidence_path = write_evidence(evidence_directory, evidence)
+        published_result: BenchmarkRunResult | None = None
+        if v4_emission is None:
+            evidence_path = write_evidence(evidence_directory, evidence)
+        else:
+            evidence_path, published_result = write_v4_evidence(
+                evidence_directory, evidence, v4_emission,
+            )
         print(f"local benchmark trace: {raw_evidence_path}")
     return CapacityRunResult(
-        0 if evidence.get("passed") else 1,
+        (
+            0 if published_result is not None and published_result.status == "PASS" else 1
+        ) if v4_emission is not None else (0 if evidence.get("passed") else 1),
         evidence_path,
         raw_evidence_path,
+        published_result,
     )
 
 
@@ -2098,19 +2142,43 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
     retained only for focused diagnostic tests and cannot represent the
     default release benchmark command.
     """
-    if any((args.target, args.transport, args.frames_per_connection, args.sustained, args.baseline)):
-        raise SmokeError("the required f8 suite does not permit target, transport, profile, or baseline selection")
+    if any((args.target, args.transport, args.frames_per_connection, args.sustained)):
+        raise SmokeError("the required f8 suite does not permit target, transport, or profile selection")
     source = source_revision()
-    supplied_campaign = os.environ.get("ATM_BENCHMARK_CAMPAIGN_ID")
-    if supplied_campaign is not None and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", supplied_campaign):
-        raise SmokeError("ATM_BENCHMARK_CAMPAIGN_ID must be a safe opaque campaign label")
-    campaign_id = supplied_campaign or (
-        f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{source[:12]}"
+    host_label = os.environ.get("ATM_CAPACITY_HOST_LABEL", "local")
+    started_at = datetime.now(timezone.utc)
+    campaign_identifier = derive_campaign_id(started_at=started_at, host_label=host_label)
+    baselines = load_baselines()
+    os_name = benchmark_os()
+    target_matrix = tuple(
+        (target, configuration)
+        for target, configuration in BENCHMARK_TARGETS.items()
+        if target in required_targets(os_name)
     )
-    print(f"benchmark campaign: {campaign_id}")
-    codes: list[int] = []
-    for position, target in enumerate(BENCHMARK_TARGETS, start=1):
-        transport, peer_wire_security = BENCHMARK_TARGETS[target]
+    # Fail before exercising any target when the reviewed policy has no floor;
+    # this makes an accidental local/default run explicit rather than publish a
+    # result with a silent or caller-selected baseline.
+    try:
+        target_baselines = {
+            target: baselines.entry_for(host_label, target)
+            for target, _configuration in target_matrix
+        }
+    except BenchmarkSchemaError as error:
+        raise SmokeError(
+            "required benchmark campaign has no reviewed baseline: "
+            f"{error}"
+        ) from error
+    hashes = binary_hashes()
+    print(f"benchmark campaign: {campaign_identifier}")
+    published_results: list[BenchmarkRunResult] = []
+    for position, (target, (transport, peer_wire_security)) in enumerate(target_matrix, start=1):
+        emission = V4EmissionContext(
+            target=target,
+            campaign_id=campaign_identifier,
+            os_name=os_name,
+            baseline=target_baselines[target],
+            binary_hashes=hashes,
+        )
         if args.atm_home is None:
             with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temporary:
                 run = run_capacity(
@@ -2124,8 +2192,8 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
                     raw_evidence_directory=args.raw_evidence_dir,
                     peer_wire_security=peer_wire_security,
                     benchmark_target=target,
-                    comparison_required=False,
-                    campaign_id=campaign_id,
+                    campaign_id=campaign_identifier,
+                    v4_emission=emission,
                 )
         else:
             run = run_capacity(
@@ -2139,99 +2207,42 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
                 raw_evidence_directory=args.raw_evidence_dir,
                 peer_wire_security=peer_wire_security,
                 benchmark_target=target,
-                comparison_required=False,
-                campaign_id=campaign_id,
+                campaign_id=campaign_identifier,
+                v4_emission=emission,
             )
-        codes.append(run.code)
-        try:
-            result = suite_target_result(target, run)
-        except SmokeError as error:
-            codes.append(1)
-            print(
-                f"FAIL required f8 target {target}: no ledger-safe measurement; {error}; "
-                f"compact={run.compact_evidence_path} raw={run.raw_evidence_path}"
-            )
+        if run.result is None:
+            print(f"FAIL required f8 target {target}: direct v4 publication failed")
             continue
+        result = run.result
+        published_results.append(result)
+        metrics = result.metrics
         print(
-            f"{'PASS' if run.code == 0 else 'FAIL'} required f8 target {target}: "
-            f"p50={result.median_msg_per_second:.2f} msg/s "
-            f"p95={result.p95_msg_per_second:.2f} msg/s "
-            f"p99={result.p99_msg_per_second:.2f} msg/s "
-            f"accepted={result.accepted}/{result.requested} "
-            f"compact={run.compact_evidence_path} raw={result.raw_artifact}"
+            f"{result.status} required f8 target {target}: "
+            f"p50={'n/a' if metrics is None else f'{metrics.admissions_per_second.p50:.2f}'} msg/s "
+            f"accepted={result.messages_admitted}/{result.messages_requested} "
+            f"evidence={run.compact_evidence_path} raw={run.raw_evidence_path}"
         )
-    return 0 if all(code == 0 for code in codes) else 1
-
-
-def run_default_f8_matrix(args: argparse.Namespace) -> int:
-    """Run the ordinary four-target f8 suite in its fixed, comparable order."""
-    codes: list[int] = []
-    for position, (target, (transport, peer_wire_security)) in enumerate(
-        BENCHMARK_TARGETS.items(), start=1,
-    ):
-        if args.atm_home is None:
-            with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temporary:
-                home = Path(temporary) / f"{CAPACITY_ROOT_PREFIX}{position}"
-                code, evidence = run_capacity(
-                    home, args.evidence_dir, transport, 8,
-                    workers=args.workers,
-                    comparison_required=False,
-                    raw_evidence_directory=args.raw_evidence_dir,
-                    peer_wire_security=peer_wire_security,
-                    benchmark_target=target,
-                )
-        else:
-            home = args.atm_home / f"{CAPACITY_ROOT_PREFIX}{position}"
-            code, evidence = run_capacity(
-                home, args.evidence_dir, transport, 8,
-                workers=args.workers,
-                comparison_required=False,
-                raw_evidence_directory=args.raw_evidence_dir,
-                peer_wire_security=peer_wire_security,
-                benchmark_target=target,
-            )
-        codes.append(code)
-        print(f"{'PASS' if code == 0 else 'FAIL'} f8 target {target}: {evidence}")
-    return 0 if all(code == 0 for code in codes) else 1
-
-
-def run_plaintext_baseline_bootstrap(args: argparse.Namespace) -> int:
-    """Establish the explicit six-frame TCP baseline for a clean benchmark account.
-
-    This is deliberately a one-time, opt-in bootstrap.  Ordinary focused TCP
-    runs continue to require this accepted same-host evidence; otherwise the
-    first new benchmark account could never create the complete comparison set
-    that the gate requires.
-    """
-    codes: list[int] = []
-    for position, frames_per_connection in enumerate(TCP_COMPARISON_FRAMES, start=1):
-        if args.atm_home is None:
-            with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temporary:
-                home = Path(temporary) / f"{CAPACITY_ROOT_PREFIX}{position}"
-                code, evidence = run_capacity(
-                    home, args.evidence_dir, "tcp", frames_per_connection,
-                    workers=args.workers,
-                    comparison_required=False,
-                    raw_evidence_directory=args.raw_evidence_dir,
-                    peer_wire_security="plaintext-test",
-                    benchmark_target="tcp",
-                )
-        else:
-            home = args.atm_home / f"{CAPACITY_ROOT_PREFIX}{position}"
-            code, evidence = run_capacity(
-                home, args.evidence_dir, "tcp", frames_per_connection,
-                workers=args.workers,
-                comparison_required=False,
-                raw_evidence_directory=args.raw_evidence_dir,
-                peer_wire_security="plaintext-test",
-                benchmark_target="tcp",
-            )
-        codes.append(code)
-        print(
-            f"{'PASS' if code == 0 else 'FAIL'} plaintext baseline "
-            f"f{frames_per_connection}: {evidence}"
-        )
-    return 0 if all(code == 0 for code in codes) else 1
+    campaign_status = classify_status(
+        required_targets=required_targets(os_name),
+        observed_targets=tuple(result.target for result in published_results),
+        target_statuses=tuple(result.status for result in published_results),
+    )
+    campaign = BenchmarkCampaign(
+        campaign_id=campaign_identifier,
+        host_label=host_label,
+        os=os_name,
+        phase="ao2",
+        started_at=started_at,
+        completed_at=datetime.now(timezone.utc),
+        source_revision=source,
+        results=tuple(published_results),
+        status=campaign_status,
+    )
+    atomic_json(
+        args.evidence_dir / f"{campaign_identifier}.campaign.json",
+        campaign.model_dump(mode="json"),
+    )
+    return 0 if campaign.status == "PASS" else 1
 
 
 def main() -> int:
@@ -2240,14 +2251,6 @@ def main() -> int:
         "--bootstrap-benchmark-account",
         action="store_true",
         help="create the account-local benchmark manifest; refuses an account with existing ATM state",
-    )
-    parser.add_argument(
-        "--bootstrap-plaintext-baseline",
-        action="store_true",
-        help=(
-            "one-time dedicated-account bootstrap for the complete six-frame "
-            "same-host plaintext TCP comparison set"
-        ),
     )
     parser.add_argument("--atm-home", type=Path)
     parser.add_argument(
@@ -2276,11 +2279,6 @@ def main() -> int:
     parser.add_argument("--transport")
     parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
     parser.add_argument(
-        "--baseline",
-        type=Path,
-        help="compatible prior evidence artifact whose median this profile must meet",
-    )
-    parser.add_argument(
         "--frames-per-connection",
         type=int,
         action="append",
@@ -2302,14 +2300,8 @@ def main() -> int:
             raise SmokeError(f"benchmark-account bootstrap failed: {error}") from error
         print(f"benchmark-account manifest created: {account.manifest_path}")
         return 0
-    if args.bootstrap_plaintext_baseline:
-        if any((
-            args.target, args.transport, args.frames_per_connection, args.sustained, args.baseline,
-        )):
-            parser.error("--bootstrap-plaintext-baseline cannot be combined with target/profile options")
-        return run_plaintext_baseline_bootstrap(args)
     selected_profile = any(
-        (args.target, args.transport, args.frames_per_connection, args.sustained, args.baseline)
+        (args.target, args.transport, args.frames_per_connection, args.sustained)
     )
     if not selected_profile:
         if args.diagnostic_only:
@@ -2324,104 +2316,27 @@ def main() -> int:
     sustained_profiles = tuple(args.sustained or ())
     profiles = selected_profiles(sparse_profiles, sustained_profiles)
     codes: list[int] = []
-    current_revision = source_revision()
-    host_label = os.environ.get("ATM_CAPACITY_HOST_LABEL", "local")
-    comparison_host_label = os.environ.get(
-        "ATM_CAPACITY_COMPARISON_HOST_LABEL",
-        "mac-arm64-01" if os.name == "nt" else host_label,
-    )
-    uds_one_frame_median: float | None = None
     for position, (frames_per_connection, requested_messages) in enumerate(profiles, start=1):
-        comparison_median: float | None = None
-        comparison_source_revision: str | None = None
-        comparison_ratio = 1.0
-        comparison_strict = False
-        comparison_required = True
-        preflight_failure_code: str | None = None
-        preflight_failure: str | None = None
-        profile_baseline = None
-        if transport == "uds":
-            if frames_per_connection == 1:
-                profile_baseline = args.baseline
-                comparison_median, comparison_source_revision = baseline_comparison_reference(
-                    profile_baseline,
-                )
-                if comparison_source_revision is not None:
-                    comparison_host_label = host_label
-            else:
-                if uds_one_frame_median is None:
-                    raise SmokeError("UDS multi-frame profile requires the current UDS one-frame reference")
-                comparison_median = uds_one_frame_median
-                comparison_strict = True
-        elif transport == "tcp":
-            # Connection setup dominates one/two-frame TCP.  Keep an explicit
-            # short-frame floor instead of hiding it, while retaining the
-            # stricter batching-parity floor where frames amortize setup.
-            comparison_ratio = 0.9 if frames_per_connection >= 8 else 0.75
-            comparison_required = os.name != "nt"
-            try:
-                comparison_median, comparison_source_revision = matching_profile_reference(
-                    args.evidence_dir,
-                    comparison_host_label,
-                    transport,
-                    frames_per_connection,
-                    current_revision,
-                    peer_wire_security,
-                )
-            except SmokeError:
-                # The first accepted mutual-TLS campaign establishes its own
-                # same-mode baseline. Plaintext cannot use that exception:
-                # its pre-AO direct-TCP baseline is the regression gate.
-                if peer_wire_security == "mutual-tls":
-                    comparison_required = False
-                else:
-                    preflight_failure_code = MISSING_PLAINTEXT_BASELINE
-                    preflight_failure = (
-                        "missing a complete passed same-host plaintext baseline; "
-                        "this run is retained as bounded benchmark evidence rather than "
-                        "being discarded before publication"
-                    )
         if args.atm_home is None:
             with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temp:
                 home = Path(temp) / f"{CAPACITY_ROOT_PREFIX}{position}"
                 code, evidence = run_capacity(
                     home, args.evidence_dir, transport,
                     frames_per_connection, requested_messages, workers=args.workers,
-                    baseline_path=profile_baseline,
-                    comparison_median=comparison_median,
-                    comparison_source_revision=comparison_source_revision,
-                    comparison_host_label=comparison_host_label,
-                    comparison_ratio=comparison_ratio,
-                    comparison_strict=comparison_strict,
-                    comparison_required=comparison_required,
                     raw_evidence_directory=args.raw_evidence_dir,
                     peer_wire_security=peer_wire_security,
                     benchmark_target=benchmark_target,
-                    preflight_failure_code=preflight_failure_code,
-                    preflight_failure=preflight_failure,
                 )
         else:
             home = args.atm_home / f"{CAPACITY_ROOT_PREFIX}{position}"
             code, evidence = run_capacity(
                     home, args.evidence_dir, transport,
                     frames_per_connection, requested_messages, workers=args.workers,
-                    baseline_path=profile_baseline,
-                    comparison_median=comparison_median,
-                    comparison_source_revision=comparison_source_revision,
-                    comparison_host_label=comparison_host_label,
-                    comparison_ratio=comparison_ratio,
-                    comparison_strict=comparison_strict,
-                    comparison_required=comparison_required,
                     raw_evidence_directory=args.raw_evidence_dir,
                     peer_wire_security=peer_wire_security,
                     benchmark_target=benchmark_target,
-                    preflight_failure_code=preflight_failure_code,
-                    preflight_failure=preflight_failure,
                 )
         codes.append(code)
-        if transport == "uds" and frames_per_connection == 1 and code == 0:
-            payload = json.loads(evidence.read_text(encoding="utf-8"))
-            uds_one_frame_median = validated_profile_median(payload, "current UDS evidence")
         print(f"{'PASS' if code == 0 else 'FAIL'} admission-capacity evidence: {evidence}")
     return 0 if all(code == 0 for code in codes) else 1
 

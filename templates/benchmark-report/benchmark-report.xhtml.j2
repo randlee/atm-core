@@ -33,13 +33,13 @@ required_variables:
     <p class="meta">Historical import: {{ panel.provenance_note | e }} Raw artifact host label: <code>{{ panel.raw_host_label | e }}</code>.</p>
 {% endif %}
     <table>
-      <thead><tr><th>Test</th><th>Result msg/sec</th><th>Target msg/sec</th><th>Pass/Fail</th><th>Evidence</th></tr></thead>
+      <thead><tr><th>Test</th><th>Result msg/sec</th><th>Baseline msg/sec</th><th>Pass/Fail</th><th>Evidence</th></tr></thead>
       <tbody>
 {% for row in panel.rows %}
         <tr>
           <td>{{ row.test | e }}</td>
           <td>{{ 'n/a' if row.result_msg_per_second is none else '%.2f' | format(row.result_msg_per_second) }}</td>
-          <td>{{ '%.2f' | format(row.target_msg_per_second) }}</td>
+          <td>{{ 'unreviewed' if row.baseline_msg_per_second is none else '%.2f' | format(row.baseline_msg_per_second) }}</td>
           <td class="{{ 'pass' if row.passed else 'fail' }}">{{ 'PASS' if row.passed else 'FAIL' }}</td>
           <td>{% if row.artifact_id %}<a href="{{ row.json_href | e }}">JSON</a> · <a href="{{ row.xhtml_href | e }}">panel</a>{% else %}missing{% endif %}</td>
         </tr>
