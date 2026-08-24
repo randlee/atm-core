@@ -1574,7 +1574,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             mock.patch.object(
                 RUNNER,
                 "submit_connection",
-                side_effect=lambda _endpoint, requests: [
+                side_effect=lambda _endpoint, requests, _tls_context=None: [
                     RUNNER.AdmissionResult(201, 0.1) for _request in requests
                 ],
             ) as submit_connection,
@@ -1600,6 +1600,72 @@ class AdmissionCapacityTests(unittest.TestCase):
             ],
             [b"body-0", b"body-1", b"body-2", b"body-3"],
         )
+
+    def test_profile_prepares_one_mtls_context_outside_all_timed_connections(self):
+        endpoint = RUNNER.LocalEndpoint(
+            "tcp",
+            ("127.0.0.1", 43_101),
+            direct_peer=True,
+            tls_server_name="capacity.example.test",
+            tls_certificate_bundle=Path("/tmp/capacity-identity.pem"),
+        )
+        context = mock.Mock(spec=RUNNER.ssl.SSLContext)
+
+        def timed_interval(submit, _interval, _frames, _workers, _messages, **_kwargs):
+            responses = submit(0, 2) + submit(2, 2)
+            self.assertEqual([response.status for response in responses], [201] * 4)
+            return {"passed": True, "error_free": True, "elapsed_seconds": 0.1}
+
+        with (
+            mock.patch.object(RUNNER, "tls_client_context", return_value=context) as prepare,
+            mock.patch.object(
+                RUNNER,
+                "submit_connection",
+                side_effect=lambda _endpoint, requests, _tls_context=None: [
+                    RUNNER.AdmissionResult(201, 0.1) for _request in requests
+                ],
+            ) as submit_connection,
+            mock.patch.object(RUNNER, "run_interval", side_effect=timed_interval),
+        ):
+            profile = RUNNER.run_profile(
+                endpoint,
+                Path("/tmp/atm-capacity-test"),
+                2,
+                4,
+                1,
+                2,
+                target_duration_seconds=0.1,
+            )
+
+        self.assertTrue(profile["passed"])
+        prepare.assert_called_once_with(endpoint)
+        self.assertEqual(submit_connection.call_count, 2)
+        self.assertTrue(all(call.args[2] is context for call in submit_connection.call_args_list))
+
+    def test_tls_client_context_configures_the_explicit_benchmark_identity(self):
+        endpoint = RUNNER.LocalEndpoint(
+            "tcp",
+            ("127.0.0.1", 43_101),
+            tls_server_name="capacity.example.test",
+            tls_certificate_bundle=Path("/tmp/capacity-identity.pem"),
+        )
+        context = mock.Mock(spec=RUNNER.ssl.SSLContext)
+        with mock.patch.object(RUNNER.ssl, "create_default_context", return_value=context) as create:
+            actual = RUNNER.tls_client_context(endpoint)
+
+        self.assertIs(actual, context)
+        create.assert_called_once_with(
+            RUNNER.ssl.Purpose.SERVER_AUTH,
+            cafile="/tmp/capacity-identity.pem",
+        )
+        context.load_cert_chain.assert_called_once_with("/tmp/capacity-identity.pem")
+
+    def test_tls_client_context_rejects_missing_identity_bundle(self):
+        endpoint = RUNNER.LocalEndpoint(
+            "tcp", ("127.0.0.1", 43_101), tls_server_name="capacity.example.test"
+        )
+        with self.assertRaisesRegex(RUNNER.SmokeError, "omitted its benchmark identity bundle"):
+            RUNNER.tls_client_context(endpoint)
 
     def test_evidence_filename_matches_the_published_benchmark_convention(self):
         evidence = complete_evidence(host_label="rand-m5", frames_per_connection=16)
