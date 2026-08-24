@@ -20,7 +20,9 @@ import platform
 import plistlib
 from queue import Empty, Queue
 import re
+import shutil
 import socket
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -35,7 +37,13 @@ DEFAULT_RAW_EVIDENCE_DIR = ROOT / "artifacts" / "benchmark" / "send-message-benc
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.smoke.benchmark_schema import BenchmarkSchemaError, compact_evidence, distribution
+from scripts.smoke import benchmark_suite as SUITE
+from scripts.smoke.benchmark_schema import (
+    BenchmarkSchemaError,
+    BenchmarkSummary,
+    compact_evidence,
+    distribution,
+)
 from scripts.smoke.benchmark_policy import (
     baseline_reference,
     evaluate_profile_thresholds,
@@ -89,7 +97,12 @@ SUSTAINED_MESSAGE_COUNTS = (10_000, 100_000)
 DAEMON_OUTPUT_TAIL_LINES = 200
 GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
 PEER_WIRE_SECURITY_MODES = ("mutual-tls", "plaintext-test")
+DIRECT_PEER_TCP_PORT = 43_101
+CAPACITY_DIRECT_PEER_PORT_ENV = "ATM_CAPACITY_DIRECT_PEER_PORT"
+CROCKFORD_BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 BENCHMARK_TARGETS = {
+    # SQLite is a direct-storage target, so it does not select a peer-wire
+    # mode. The daemon itself still starts in its normal secure default.
     "sqlite": ("sqlite", None),
     "uds": ("uds", "mutual-tls"),
     "tcp": ("tcp", "plaintext-test"),
@@ -133,11 +146,29 @@ class HttpRequest:
 
 @dataclass(frozen=True)
 class LocalEndpoint:
-    """One authenticated public local daemon endpoint."""
+    """One public daemon endpoint, with peer-wire facts when applicable."""
 
     kind: str
     address: str | tuple[str, int]
     capability: str | None = None
+    direct_peer: bool = False
+    tls_server_name: str | None = None
+    tls_certificate_bundle: Path | None = None
+
+
+@dataclass(frozen=True)
+class DisposableMtlsIdentity:
+    """One benchmark-only identity installed before an mTLS daemon starts.
+
+    The PEM bundle is created below the runner's disposable state and is never
+    copied into evidence.  It is used both by the daemon's configured local
+    identity and by the physical benchmark client, which therefore proves the
+    actual mTLS listener rather than a plaintext lookalike.
+    """
+
+    host: str
+    certificate_bundle: Path
+    fingerprint: str
 
 
 @dataclass(frozen=True)
@@ -166,6 +197,84 @@ DEFAULT_CAPACITY_ROSTER = CapacityRoster(
     agent="capacity-agent",
     recipient="capacity-recipient",
 )
+
+
+@dataclass(frozen=True)
+class CapacityRunResult:
+    """One target's exit status plus both immutable evidence references.
+
+    Iteration preserves the historical two-value ``code, compact_path`` call
+    sites while a complete-suite ledger can retain the raw trace hash too.
+    """
+
+    code: int
+    compact_evidence_path: Path
+    raw_evidence_path: Path
+
+    def __iter__(self):
+        yield self.code
+        yield self.compact_evidence_path
+
+
+def suite_target_result(
+    target: str,
+    run: CapacityRunResult,
+    *,
+    artifact_root: Path = ROOT,
+) -> SUITE.TargetResult:
+    """Turn one completed target's real artifacts into ledger-safe evidence.
+
+    A nonzero benchmark exit may still have a complete measured profile (for
+    example, a below-floor result).  That evidence belongs in the suite ledger
+    for remediation.  A setup failure without metrics does not: it remains a
+    visible failed intent rather than being represented with invented rates.
+    """
+    if target not in BENCHMARK_TARGETS:
+        raise SmokeError(f"unknown required f8 target {target!r}")
+    if not run.compact_evidence_path.is_file() or not run.raw_evidence_path.is_file():
+        raise SmokeError("complete suite target requires both compact and raw evidence files")
+    try:
+        compact = BenchmarkSummary.model_validate_json(
+            run.compact_evidence_path.read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError) as error:
+        raise SmokeError(f"could not load compact target evidence: {error}") from error
+    expected_transport, expected_security = BENCHMARK_TARGETS[target]
+    if (
+        compact.benchmark_target != target
+        or compact.transport != expected_transport
+        or compact.peer_wire_security != expected_security
+    ):
+        raise SmokeError(
+            f"compact evidence does not match required target {target}: "
+            f"got target={compact.benchmark_target!r}, transport={compact.transport!r}, "
+            f"security={compact.peer_wire_security!r}"
+        )
+    if compact.metrics is None:
+        raise SmokeError(
+            f"target {target} did not reach a measured interval; retain its failed suite intent "
+            "and repair the ordinary runner before retrying"
+        )
+    try:
+        raw_relative = run.raw_evidence_path.resolve().relative_to(artifact_root.resolve())
+    except ValueError as error:
+        raise SmokeError("raw target evidence must remain below the benchmark artifact root") from error
+    metrics = compact.metrics
+    return SUITE.TargetResult(
+        target=target,
+        median_msg_per_second=metrics.admissions_per_second.p50,
+        p95_msg_per_second=metrics.admissions_per_second.p95,
+        p99_msg_per_second=(
+            metrics.admissions_per_second.p99
+            if metrics.admissions_per_second.p99 is not None
+            else metrics.admissions_per_second.p95
+        ),
+        requested=metrics.requested_count,
+        accepted=metrics.accepted_count,
+        errors=metrics.requested_count - metrics.accepted_count,
+        raw_artifact=raw_relative.as_posix(),
+        raw_artifact_sha256=SUITE.raw_file_sha256(run.raw_evidence_path),
+    )
 
 
 @dataclass
@@ -708,6 +817,22 @@ def runtime_environment(
     return environment
 
 
+def allocate_direct_peer_port() -> int:
+    """Select an unoccupied loopback port for one benchmark daemon launch.
+
+    A physical benchmark account may share its host with a live daemon, whose
+    durable direct-peer listener uses the protocol default port.  The harness
+    must therefore select its own explicit listener rather than silently
+    continue after a port-bind failure and exercise another account's daemon.
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    if port == DIRECT_PEER_TCP_PORT:
+        raise SmokeError("benchmark direct-peer port collided with the protocol default")
+    return port
+
+
 def host_runtime_client_environment(environment: dict[str, str]) -> dict[str, str]:
     """Use the OS-user runtime record, never the disposable config root, for doctor."""
     result = dict(environment)
@@ -780,11 +905,12 @@ def start_capacity_daemon(
 ) -> tuple[subprocess.Popen[str], DaemonOutputCapture]:
     """Start the shipped daemon with its ordinary explicit peer-wire mode."""
     peer_wire_security = validate_peer_wire_security(peer_wire_security)
+    direct_peer_port = env.get(CAPACITY_DIRECT_PEER_PORT_ENV)
+    command = [str(daemon), "--peer-wire-security", peer_wire_security]
+    if direct_peer_port is not None:
+        command.extend(("--direct-peer-port", direct_peer_port))
     process = subprocess.Popen(
-        [
-            str(daemon),
-            "--peer-wire-security", peer_wire_security,
-        ],
+        command,
         cwd=home,
         env=env,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
@@ -792,10 +918,20 @@ def start_capacity_daemon(
     output = DaemonOutputCapture.start(process)
     try:
         await_daemon_ready(process, output)
-    except (OSError, SmokeError):
+    except (OSError, SmokeError) as error:
         reap_owned_daemon(process)
         output.join()
-        raise
+        tails = output.evidence()
+        if isinstance(tails, dict):
+            stdout_lines = tails.get("stdout_tail", [])
+            stderr_lines = tails.get("stderr_tail", [])
+        else:
+            stdout_lines, stderr_lines = [], []
+        stdout_tail = " | ".join(str(line) for line in stdout_lines[-8:]) or "<unavailable>"
+        stderr_tail = " | ".join(str(line) for line in stderr_lines[-8:]) or "<unavailable>"
+        raise SmokeError(
+            f"{error}; daemon stdout tail: {stdout_tail}; daemon stderr tail: {stderr_tail}"
+        ) from error
     return process, output
 
 
@@ -825,6 +961,8 @@ def http_request_body(
     home: Path,
     sequence: int,
     roster: CapacityRoster = DEFAULT_CAPACITY_ROSTER,
+    *,
+    peer_origin: bool = False,
 ) -> bytes:
     """Build the documented /v1/atm/messages request; no dispatcher shortcut."""
     payload = {
@@ -842,7 +980,22 @@ def http_request_body(
         "expires_at": None,
         "dry_run": False,
     }
+    if peer_origin:
+        payload.update(benchmark_origin_metadata(sequence))
     return json.dumps(payload, separators=(",", ":")).encode("utf-8")
+
+
+def benchmark_origin_metadata(sequence: int) -> dict[str, str]:
+    """Return the immutable provenance pair required by direct-peer ingress."""
+    milliseconds = int(time.time() * 1_000)
+    entropy = (uuid.uuid4().int ^ sequence) & ((1 << 80) - 1)
+    value = (milliseconds << 80) | entropy
+    encoded = "".join(
+        CROCKFORD_BASE32[(value >> (5 * offset)) & 0x1F]
+        for offset in range(25, -1, -1)
+    )
+    timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return {"origin_message_id": encoded, "origin_timestamp": timestamp}
 
 
 def cached_roster_heartbeat_body(
@@ -891,9 +1044,11 @@ def resolve_benchmark_target(
     """Resolve public targets without inventing a benchmark-only transport.
 
     `tcp` deliberately selects the existing direct plaintext pipeline and
-    `tcp-tls` selects the same daemon with its ordinary mutual-TLS launch
-    argument.  Legacy `--transport` remains available for historical UDS
-    evidence, but it defaults to the secure daemon mode.
+    `tcp-tls` selects the same direct-peer listener with its ordinary mTLS
+    stream wrapper.  SQLite and UDS are local boundaries, so their target map
+    never asks the daemon to construct an mTLS adapter.  Legacy
+    ``--transport`` remains diagnostic-only and defaults to plaintext because
+    it has no target-level peer-wire claim.
     """
     if target is not None:
         selected_transport, peer_wire_security = BENCHMARK_TARGETS[target]
@@ -902,26 +1057,150 @@ def resolve_benchmark_target(
                 f"benchmark target {target!r} requires transport {selected_transport!r}"
             )
         return selected_transport, peer_wire_security, target
-    return validate_transport(transport or ("uds" if os.name != "nt" else "tcp")), "mutual-tls", None
+    return validate_transport(transport or ("uds" if os.name != "nt" else "tcp")), "plaintext-test", None
 
 
 def local_endpoint(transport: str) -> LocalEndpoint:
-    """Resolve the documented UDS/TCP public API without a dispatcher seam."""
+    """Resolve an ordinary same-host UDS endpoint without a dispatcher seam."""
     runtime = os_account_home() / ".atm" / "daemon"
     if transport == "sqlite":
         raise SmokeError("sqlite capacity target has no public socket endpoint")
     if transport == "uds":
         return LocalEndpoint("uds", str(runtime / "atm-daemon.sock"))
+    raise SmokeError("TCP benchmark targets must use the direct-peer listener, not local-http.json")
+
+
+def direct_peer_endpoint(
+    port: int,
+    identity: DisposableMtlsIdentity | None = None,
+) -> LocalEndpoint:
+    """Return the fixed direct-peer listener rather than the local HTTP record.
+
+    The direct listener is deliberately separate from the capability-authenticated
+    loopback listener.  Pinning this address makes a TCP result prove the
+    DirectPeerTcpConfig path (and, when supplied, the mTLS stream adapter).
+    """
+    return LocalEndpoint(
+        "tcp",
+        ("127.0.0.1", port),
+        direct_peer=True,
+        tls_server_name=identity.host if identity is not None else None,
+        tls_certificate_bundle=identity.certificate_bundle if identity is not None else None,
+    )
+
+
+def disposable_peer_host(roster: CapacityRoster) -> str:
+    """Resolve one durable authority for a local disposable mTLS peer.
+
+    A literal address is intentionally forbidden: the same durable hostname is
+    stored in peer configuration, checked by the TLS client, and used by the
+    server-side pin map.  An operator may supply a host only through the
+    explicit benchmark variable; no machine name is embedded in the runner.
+    """
+    host = os.environ.get("ATM_CAPACITY_PEER_HOST", socket.getfqdn()).strip().rstrip(".")
     try:
-        record = json.loads((runtime / "local-http.json").read_text(encoding="utf-8"))
-        address = record["ipv4_loopback"]
-        capability = record["capability_base64url"]
-        if not isinstance(address, str) or not isinstance(capability, str):
-            raise ValueError("missing loopback endpoint or capability")
-        host, port = address.rsplit(":", 1)
-        return LocalEndpoint("tcp", (host, int(port)), capability)
-    except (OSError, ValueError, json.JSONDecodeError, KeyError) as error:
-        raise SmokeError(f"could not read daemon local HTTP endpoint record: {error}") from error
+        socket.inet_pton(socket.AF_INET, host)
+        raise SmokeError("benchmark mTLS authority must be a durable hostname, not an IPv4 address")
+    except OSError:
+        pass
+    if "." not in host or host.startswith(".") or host.endswith("."):
+        raise SmokeError(
+            "benchmark mTLS authority must be a durable DNS or mDNS hostname; "
+            "set ATM_CAPACITY_PEER_HOST explicitly when local DNS is incomplete"
+        )
+    return f"capacity-{roster.run_id}.{host}"
+
+
+def _required_command(command: list[str], env: dict[str, str], description: str) -> None:
+    result = command_result(command, timeout=20.0, env=env)
+    if result["exit_code"] == 0:
+        return
+    detail = result["stderr"].strip() or result["stdout"].strip() or "no diagnostic output"
+    raise SmokeError(f"could not {description}: {detail}")
+
+
+def provision_disposable_mtls_identity(
+    atm: Path,
+    env: dict[str, str],
+    home: Path,
+    roster: CapacityRoster,
+    direct_peer_port: int,
+) -> DisposableMtlsIdentity:
+    """Install a self-contained, short-lived peer configuration before launch.
+
+    This is benchmark control-plane setup, not a transport shortcut: the
+    daemon reads the normal persisted interface/certificate/trust records at
+    startup and the client validates the same certificate and hostname over
+    the fixed direct-peer listener.
+    """
+    openssl = shutil.which("openssl")
+    if openssl is None:
+        raise SmokeError("mTLS benchmark setup requires the system `openssl` executable")
+    host = disposable_peer_host(roster)
+    tls_directory = home / "benchmark-mtls"
+    tls_directory.mkdir(mode=0o700)
+    config = tls_directory / "openssl.cnf"
+    private_key = tls_directory / "identity.key"
+    certificate = tls_directory / "identity.crt"
+    bundle = tls_directory / "identity.pem"
+    config.write_text(
+        "[req]\n"
+        "prompt = no\n"
+        "distinguished_name = subject\n"
+        "x509_extensions = extensions\n"
+        "[subject]\n"
+        f"CN = {host}\n"
+        "[extensions]\n"
+        f"subjectAltName = DNS:{host}\n"
+        # This short-lived self-signed certificate is the benchmark's local
+        # trust anchor as well as its mTLS identity.  CA:TRUE is required for
+        # standard TLS verification to accept that explicit local anchor; it
+        # is retained only inside the disposable benchmark account.
+        "basicConstraints = critical,CA:TRUE\n"
+        "keyUsage = critical,digitalSignature,keyEncipherment,keyCertSign\n"
+        "extendedKeyUsage = serverAuth,clientAuth\n",
+        encoding="utf-8",
+    )
+    _required_command(
+        [
+            openssl, "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+            "-keyout", str(private_key), "-out", str(certificate), "-days", "2",
+            "-config", str(config),
+        ],
+        env,
+        "generate disposable mTLS identity",
+    )
+    bundle.write_bytes(certificate.read_bytes() + private_key.read_bytes())
+    try:
+        der = ssl.PEM_cert_to_DER_cert(certificate.read_text(encoding="ascii"))
+    except (OSError, ValueError) as error:
+        raise SmokeError(f"could not calculate disposable mTLS certificate fingerprint: {error}") from error
+    fingerprint = hashlib.sha256(der).hexdigest()
+    _required_command(
+        [
+            str(atm), "peer", "interface", "set", "--bind", f"127.0.0.1:{direct_peer_port}",
+            "--advertise-host", host, "--enabled",
+        ],
+        env,
+        "save disposable mTLS interface",
+    )
+    _required_command(
+        [
+            str(atm), "peer", "certificate", "init", "--fingerprint", fingerprint,
+            "--private-key-ref", str(bundle), "--yes",
+        ],
+        env,
+        "save disposable mTLS local identity",
+    )
+    _required_command(
+        [
+            str(atm), "peer", "trust", "add", "--host", host,
+            "--fingerprint", fingerprint, "--https-port", str(direct_peer_port), "--yes",
+        ],
+        env,
+        "save disposable mTLS trusted peer",
+    )
+    return DisposableMtlsIdentity(host, bundle, fingerprint)
 
 
 def read_http_response(
@@ -962,7 +1241,7 @@ def read_http_response(
 
 
 def submit_connection(endpoint: LocalEndpoint, requests: list[HttpRequest]) -> list[AdmissionResult]:
-    """Submit consecutive real requests over one public local connection."""
+    """Submit consecutive real requests over one selected public connection."""
     started = time.perf_counter()
     capability = (
         f"X-ATM-Local-Capability: {endpoint.capability}\r\n".encode("ascii")
@@ -972,17 +1251,34 @@ def submit_connection(endpoint: LocalEndpoint, requests: list[HttpRequest]) -> l
     results: list[AdmissionResult] = []
     try:
         family = socket.AF_UNIX if endpoint.kind == "uds" else socket.AF_INET
-        with socket.socket(family, socket.SOCK_STREAM) as stream:
-            stream.settimeout(3.5)
+        with socket.socket(family, socket.SOCK_STREAM) as raw_stream:
+            raw_stream.settimeout(3.5)
             if endpoint.kind == "tcp":
-                stream.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-            stream.connect(endpoint.address)
+                raw_stream.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            raw_stream.connect(endpoint.address)
+            if endpoint.tls_server_name is not None:
+                if endpoint.tls_certificate_bundle is None:
+                    raise SmokeError("direct mTLS endpoint omitted its benchmark identity bundle")
+                context = ssl.create_default_context(
+                    ssl.Purpose.SERVER_AUTH,
+                    cafile=str(endpoint.tls_certificate_bundle),
+                )
+                context.load_cert_chain(str(endpoint.tls_certificate_bundle))
+                stream = context.wrap_socket(raw_stream, server_hostname=endpoint.tls_server_name)
+            else:
+                stream = raw_stream
             frames = []
+            if endpoint.kind == "tcp":
+                host = endpoint.tls_server_name or str(endpoint.address[0])
+                authority = f"Host: {host}:{endpoint.address[1]}\r\n".encode("ascii")
+            else:
+                authority = b"Host: localhost\r\n"
             for index, request in enumerate(requests):
                 connection = "close" if index + 1 == len(requests) else "keep-alive"
                 frames.append(
                     f"POST {request.path} HTTP/1.1\r\n".encode("ascii")
                     + b"Content-Type: application/json\r\n"
+                    + authority
                     + capability
                     + f"Content-Length: {len(request.body)}\r\nConnection: {connection}\r\n\r\n".encode("ascii")
                     + request.body
@@ -1007,6 +1303,8 @@ def submit_connection(endpoint: LocalEndpoint, requests: list[HttpRequest]) -> l
                         response_bytes=response_bytes,
                         response_summary=response_summary,
                     ))
+            if stream is not raw_stream:
+                stream.close()
         return results
     except (OSError, SmokeError) as error:
         return results + [AdmissionResult(
@@ -1136,7 +1434,12 @@ def run_profile(
             requests = [
                 HttpRequest(
                     "/v1/atm/messages",
-                    http_request_body(home, sequence + offset, roster),
+                    http_request_body(
+                        home,
+                        sequence + offset,
+                        roster,
+                        peer_origin=endpoint.direct_peer,
+                    ),
                     201,
                 )
                 for offset in range(message_count)
@@ -1463,7 +1766,8 @@ def run_capacity(
     managed_daemon: ManagedDaemonOptions | None = None,
     preflight_failure_code: str | None = None,
     preflight_failure: str | None = None,
-) -> tuple[int, Path]:
+    campaign_id: str | None = None,
+) -> CapacityRunResult:
     """Start one branch daemon, exercise public UDS API, retain evidence, then clean up."""
     if managed_daemon is not None:
         raise SmokeError(
@@ -1494,6 +1798,8 @@ def run_capacity(
     direct_writer = canonical_writer_probe() if transport == "sqlite" else None
     roster = CapacityRoster.unique()
     env = runtime_environment(home, roster)
+    direct_peer_port = allocate_direct_peer_port()
+    env[CAPACITY_DIRECT_PEER_PORT_ENV] = str(direct_peer_port)
     target_command = (
         f"just benchmark --target {benchmark_target}"
         if benchmark_target is not None
@@ -1503,9 +1809,11 @@ def run_capacity(
     daemon_output: DaemonOutputCapture | None = None
     before: list[int] | None = None
     snapshot: VerifiedSnapshot | None = None
+    mtls_identity: DisposableMtlsIdentity | None = None
     evidence: dict[str, Any] = {
         "schema_version": 2,
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "campaign_id": campaign_id,
         "host_label": os.environ.get("ATM_CAPACITY_HOST_LABEL", "local"),
         "transport": transport,
         "peer_wire_security": peer_wire_security,
@@ -1519,6 +1827,7 @@ def run_capacity(
         "sample_count": None,
         "target_duration_s": TARGET_PROFILE_DURATION_SECONDS,
         "worker_limit": workers,
+        "direct_peer_port": direct_peer_port,
         "source_revision": source_revision(),
         "daemon_version": None,
         "host_os": platform.system().lower(),
@@ -1565,12 +1874,10 @@ def run_capacity(
         process = None
         daemon_output = None
 
-    def start_and_doctor() -> None:
+    def start_and_doctor(mode: str = launch_peer_wire_security) -> None:
         """Start the exact released daemon and require its public ready response."""
         nonlocal process, daemon_output
-        process, daemon_output = start_capacity_daemon(
-            daemon, home, env, launch_peer_wire_security,
-        )
+        process, daemon_output = start_capacity_daemon(daemon, home, env, mode)
         doctor = command_result(
             [str(atm), "doctor", "--json"],
             timeout=10.0,
@@ -1588,13 +1895,29 @@ def run_capacity(
         )
         before = count_atm_daemon_processes()
         home.mkdir(parents=True, exist_ok=False)
-        if launch_peer_wire_security == "mutual-tls":
-            fingerprint = run_lifecycle_phase(
+        if benchmark_target == "tcp-tls":
+            # Peer configuration uses the daemon's ordinary local API.  It
+            # must exist before the mTLS runtime validates that configuration,
+            # so a bounded plaintext control-plane daemon persists the
+            # disposable state and is stopped before the measured mTLS launch.
+            run_lifecycle_phase(evidence, "snapshot", lambda: start_and_doctor("plaintext-test"))
+            mtls_identity = run_lifecycle_phase(
                 evidence,
                 "snapshot",
-                lambda: regenerate_mtls_identity(benchmark_account, atm),
+                lambda: provision_disposable_mtls_identity(
+                    atm, env, home, roster, direct_peer_port,
+                ),
             )
-            evidence["benchmark_mtls_identity"] = {"fingerprint": fingerprint, "path": "account-local"}
+            evidence["disposable_mtls"] = {
+                "authority": mtls_identity.host,
+                "fingerprint_sha256": mtls_identity.fingerprint,
+                "direct_peer_port": direct_peer_port,
+            }
+            run_lifecycle_phase(
+                evidence,
+                "stop",
+                lambda: stop_owned_daemon(output_key="mtls_setup_daemon_output"),
+            )
         # The pre-roster daemon is deliberately short-lived: it initializes
         # the account database, then is quiesced before the public snapshot
         # owner copies the clean baseline.
@@ -1630,20 +1953,30 @@ def run_capacity(
                 )
             }
         else:
-            endpoint = local_endpoint(transport)
+            endpoint = (
+                direct_peer_endpoint(
+                    direct_peer_port,
+                    mtls_identity if peer_wire_security == "mutual-tls" else None,
+                )
+                if transport == "tcp"
+                else local_endpoint(transport)
+            )
             evidence["endpoint"] = {
                 "transport": endpoint.kind,
                 "address": endpoint.address,
+                "direct_peer": endpoint.direct_peer,
+                "tls_server_name": endpoint.tls_server_name,
             }
             if endpoint.kind == "uds" and not Path(str(endpoint.address)).exists():
                 raise SmokeError(f"daemon did not publish public local socket {endpoint.address}")
-            evidence["operational_checks"]["cached_roster_heartbeat"] = run_lifecycle_phase(
-                evidence,
-                "profile",
-                lambda: run_cached_roster_heartbeat_probe(
-                    endpoint, home, frames_per_connection, workers, roster,
-                ),
-            )
+            if not endpoint.direct_peer:
+                evidence["operational_checks"]["cached_roster_heartbeat"] = run_lifecycle_phase(
+                    evidence,
+                    "profile",
+                    lambda: run_cached_roster_heartbeat_probe(
+                        endpoint, home, frames_per_connection, workers, roster,
+                    ),
+                )
             profile = run_lifecycle_phase(
                 evidence,
                 "profile",
@@ -1750,7 +2083,84 @@ def run_capacity(
         raw_evidence_path = write_raw_evidence(raw_evidence_directory, evidence)
         evidence_path = write_evidence(evidence_directory, evidence)
         print(f"local benchmark trace: {raw_evidence_path}")
-    return (0 if evidence.get("passed") else 1), evidence_path
+    return CapacityRunResult(
+        0 if evidence.get("passed") else 1,
+        evidence_path,
+        raw_evidence_path,
+    )
+
+
+def run_required_f8_suite(args: argparse.Namespace) -> int:
+    """Run the ordinary command's unskippable sqlite/UDS/TCP/TLS matrix.
+
+    AO2.7 keeps target selection out of the ordinary ``just benchmark`` path:
+    its one result is a complete f8-v1 suite.  The legacy selectors below are
+    retained only for focused diagnostic tests and cannot represent the
+    default release benchmark command.
+    """
+    if any((args.target, args.transport, args.frames_per_connection, args.sustained, args.baseline)):
+        raise SmokeError("the required f8 suite does not permit target, transport, profile, or baseline selection")
+    source = source_revision()
+    supplied_campaign = os.environ.get("ATM_BENCHMARK_CAMPAIGN_ID")
+    if supplied_campaign is not None and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", supplied_campaign):
+        raise SmokeError("ATM_BENCHMARK_CAMPAIGN_ID must be a safe opaque campaign label")
+    campaign_id = supplied_campaign or (
+        f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{source[:12]}"
+    )
+    print(f"benchmark campaign: {campaign_id}")
+    codes: list[int] = []
+    for position, target in enumerate(BENCHMARK_TARGETS, start=1):
+        transport, peer_wire_security = BENCHMARK_TARGETS[target]
+        if args.atm_home is None:
+            with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temporary:
+                run = run_capacity(
+                    Path(temporary) / f"{CAPACITY_ROOT_PREFIX}{position}",
+                    args.evidence_dir,
+                    transport,
+                    8,
+                    ADMISSIONS_PER_INTERVAL,
+                    INTERVALS,
+                    args.workers,
+                    raw_evidence_directory=args.raw_evidence_dir,
+                    peer_wire_security=peer_wire_security,
+                    benchmark_target=target,
+                    comparison_required=False,
+                    campaign_id=campaign_id,
+                )
+        else:
+            run = run_capacity(
+                args.atm_home / f"{CAPACITY_ROOT_PREFIX}{position}",
+                args.evidence_dir,
+                transport,
+                8,
+                ADMISSIONS_PER_INTERVAL,
+                INTERVALS,
+                args.workers,
+                raw_evidence_directory=args.raw_evidence_dir,
+                peer_wire_security=peer_wire_security,
+                benchmark_target=target,
+                comparison_required=False,
+                campaign_id=campaign_id,
+            )
+        codes.append(run.code)
+        try:
+            result = suite_target_result(target, run)
+        except SmokeError as error:
+            codes.append(1)
+            print(
+                f"FAIL required f8 target {target}: no ledger-safe measurement; {error}; "
+                f"compact={run.compact_evidence_path} raw={run.raw_evidence_path}"
+            )
+            continue
+        print(
+            f"{'PASS' if run.code == 0 else 'FAIL'} required f8 target {target}: "
+            f"p50={result.median_msg_per_second:.2f} msg/s "
+            f"p95={result.p95_msg_per_second:.2f} msg/s "
+            f"p99={result.p99_msg_per_second:.2f} msg/s "
+            f"accepted={result.accepted}/{result.requested} "
+            f"compact={run.compact_evidence_path} raw={result.raw_artifact}"
+        )
+    return 0 if all(code == 0 for code in codes) else 1
 
 
 def run_default_f8_matrix(args: argparse.Namespace) -> int:
@@ -1841,6 +2251,11 @@ def main() -> int:
     )
     parser.add_argument("--atm-home", type=Path)
     parser.add_argument(
+        "--diagnostic-only",
+        action="store_true",
+        help="permit a selected historical profile; its output is not a complete benchmark suite",
+    )
+    parser.add_argument(
         "--evidence-dir", type=Path,
         default=DEFAULT_EVIDENCE_DIR,
         help="committed compact benchmark summary directory (default: site/reports/send-message-benchmark)",
@@ -1893,8 +2308,15 @@ def main() -> int:
         )):
             parser.error("--bootstrap-plaintext-baseline cannot be combined with target/profile options")
         return run_plaintext_baseline_bootstrap(args)
-    if not any((args.target, args.transport, args.frames_per_connection, args.sustained, args.baseline)):
-        return run_default_f8_matrix(args)
+    selected_profile = any(
+        (args.target, args.transport, args.frames_per_connection, args.sustained, args.baseline)
+    )
+    if not selected_profile:
+        if args.diagnostic_only:
+            raise SmokeError("diagnostic-only requires an explicit selected profile")
+        return run_required_f8_suite(args)
+    if not args.diagnostic_only:
+        raise SmokeError("selected benchmark profiles require --diagnostic-only and cannot be suite evidence")
     transport, peer_wire_security, benchmark_target = resolve_benchmark_target(
         args.target, args.transport,
     )

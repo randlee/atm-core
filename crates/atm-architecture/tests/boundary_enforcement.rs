@@ -188,11 +188,6 @@ fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
     let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
     let policy = read_source(&root.join("crates/atm-core/src/peer_wire.rs"));
 
-    let bootstrap_direct_setup = bootstrap
-        .split("fn replacement_runtime_config")
-        .nth(1)
-        .and_then(|source| source.split("fn record_peer_wire_mode_selection").next())
-        .expect("replacement bootstrap direct-peer setup");
     let direct_listener = runtime
         .split("async fn bind_configured_direct_peer_listener")
         .nth(1)
@@ -204,8 +199,9 @@ fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
         .and_then(|source| source.split("impl LoopbackTcpConnector").next())
         .expect("direct-peer connector implementation");
     assert!(
-        bootstrap_direct_setup.contains("DirectPeerTcpConfig::standard()"),
-        "AO2 plaintext characterization must retain the existing standard direct-peer configuration"
+        bootstrap.contains("let direct_peer_port = parse_direct_peer_port(std::env::args_os())?;")
+            && bootstrap.contains("DirectPeerTcpConfig::configured(direct_peer_port),"),
+        "AO2 plaintext characterization must retain the configured direct-peer listener: its default remains the standard protocol port, while an isolated benchmark account may select one explicit non-zero port without changing the pipeline"
     );
     let plaintext_adapter_arm = bootstrap
         .split("fn peer_stream_adapter_for_mode")

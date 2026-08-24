@@ -1,0 +1,52 @@
+---
+metadata:
+  name: benchmark-report
+  description: One versioned ATM benchmark campaign with host result panels
+required_variables:
+  - title
+  - campaign_id
+  - generated_at
+  - host_panels
+---
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+  <title>{{ title | e }}</title>
+  <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
+  <style type="text/css">
+    body { font-family: sans-serif; color: #1f2937; margin: 2rem auto; max-width: 75rem; padding: 0 1rem; }
+    table { border-collapse: collapse; margin: 1rem 0 2rem; width: 100%; }
+    th, td { border: 1px solid #cbd5e1; padding: .55rem; text-align: left; }
+    th { background: #f1f5f9; } .pass { color: #065f46; font-weight: bold; } .fail { color: #991b1b; font-weight: bold; }
+    .meta { color: #475569; } code { font-family: ui-monospace, monospace; }
+  </style>
+</head>
+<body>
+  <h1>{{ title | e }}</h1>
+  <p class="meta">Campaign <code>{{ campaign_id | e }}</code> · rendered {{ generated_at | e }}.</p>
+{% for panel in host_panels %}
+  <section>
+    <h2>{{ panel.host_label | e }}</h2>
+    <p class="meta">{{ panel.host_os | e }} / {{ panel.host_arch | e }} · daemon {{ panel.daemon_version | e }} · source <code>{{ panel.source_revision | e }}</code></p>
+{% if panel.provenance_note %}
+    <p class="meta">Historical import: {{ panel.provenance_note | e }} Raw artifact host label: <code>{{ panel.raw_host_label | e }}</code>.</p>
+{% endif %}
+    <table>
+      <thead><tr><th>Test</th><th>Result msg/sec</th><th>Target msg/sec</th><th>Pass/Fail</th><th>Evidence</th></tr></thead>
+      <tbody>
+{% for row in panel.rows %}
+        <tr>
+          <td>{{ row.test | e }}</td>
+          <td>{{ 'n/a' if row.result_msg_per_second is none else '%.2f' | format(row.result_msg_per_second) }}</td>
+          <td>{{ '%.2f' | format(row.target_msg_per_second) }}</td>
+          <td class="{{ 'pass' if row.passed else 'fail' }}">{{ 'PASS' if row.passed else 'FAIL' }}</td>
+          <td>{% if row.artifact_id %}<a href="{{ row.json_href | e }}">JSON</a> · <a href="{{ row.xhtml_href | e }}">panel</a>{% else %}missing{% endif %}</td>
+        </tr>
+{% endfor %}
+      </tbody>
+    </table>
+  </section>
+{% endfor %}
+</body>
+</html>
