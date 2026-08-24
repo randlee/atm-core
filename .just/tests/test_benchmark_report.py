@@ -1,13 +1,25 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 import importlib.util
 import json
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from unittest import mock
+import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.smoke.benchmark_schema import (
+    BaselineRef, BenchmarkCampaign, BenchmarkMetrics, BenchmarkRunResult,
+    DurabilityAfterRestart, MetricDistribution, WireBytes,
+)
+
+
 SCRIPT = ROOT / "scripts/smoke/benchmark_report.py"
 spec = importlib.util.spec_from_file_location("benchmark_report", SCRIPT)
 assert spec and spec.loader
@@ -15,377 +27,143 @@ REPORT = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(REPORT)
 
 
+UTC = timezone.utc
+
+
+def distribution(value: float) -> MetricDistribution:
+    spread = min(300, value / 2)
+    return MetricDistribution(min=value - spread, p50=value, p95=value + spread, p99=value + spread * 1.25, max=value + spread * 1.5)
+
+
+def result(target: str, stamp: datetime, *, identifier: str, status: str = "PASS", host: str = "rand-m5", floor: float = 16_000) -> BenchmarkRunResult:
+    network = target != "sqlite"
+    metrics = BenchmarkMetrics(
+        interval_count=2, passed_interval_count=2, accepted_count=10, requested_count=10,
+        response_count=10, admissions_per_second=distribution(18_000),
+        time_to_send_1k_s=distribution(1), interval_latency_ms=distribution(1),
+        **({"connection_count": 2, "application_wire_bytes": WireBytes(request=1, response=1, total=2),
+            "request_frames_per_second": distribution(1), "connections_per_second": distribution(1),
+            "application_wire_bytes_per_second": distribution(2)} if network else {}),
+    )
+    complete = status != "INCOMPLETE"
+    effective_floor = 19_000 if status == "FAIL" else floor
+    return BenchmarkRunResult(
+        campaign_id=identifier, host_label=host, os="macos", target=target,
+        status=status, incomplete_reason=None if complete else "daemon did not become ready",
+        generated_at=stamp, source_revision="a" * 40, binary_hashes={"atm-daemon": "b" * 64},
+        frames_per_connection=0 if target == "sqlite" else 8, messages_requested=10,
+        messages_admitted=10, messages_durable=10, metrics=metrics if complete else None,
+        baseline=BaselineRef(revision=1, p50_floor=effective_floor),
+        durability_after_restart=DurabilityAfterRestart(expected_accepted_count=10, observed_mailbox_count=10, passed=True) if complete else None,
+    )
+
+
+def campaign(stamp: datetime, *, identifier: str, host: str = "rand-m5", status: str = "PASS", phase: str = "AO2") -> BenchmarkCampaign:
+    results = tuple(result(target, stamp, identifier=identifier, host=host, status=status) for target in ("sqlite", "uds", "tcp", "tcp-tls"))
+    return BenchmarkCampaign(
+        campaign_id=identifier, host_label=host, os="macos", phase=phase, started_at=stamp,
+        completed_at=stamp + timedelta(minutes=1), source_revision="a" * 40,
+        results=results, status=status,
+    )
+
+
+def write_inputs(directory: Path, campaigns: list[BenchmarkCampaign]) -> None:
+    directory.mkdir(parents=True, exist_ok=True)
+    for item in campaigns:
+        (directory / f"{item.campaign_id}.campaign.json").write_text(item.model_dump_json(indent=2), encoding="utf-8")
+    entries = [
+        {"host_label": host, "target": target, "p50_floor": 16_000, "approved_by": "quality-mgr", "effective_from": "2026-08-01T00:00:00Z"}
+        for host in sorted({item.host_label for item in campaigns}) for target in ("sqlite", "uds", "tcp", "tcp-tls")
+    ]
+    (directory / "baselines.json").write_text(json.dumps({"schema_version": 1, "revision": 1, "entries": entries}), encoding="utf-8")
+
+
 class BenchmarkReportTests(unittest.TestCase):
-    def fixture(self, name: str) -> Path:
-        return ROOT / ".just/fixtures/benchmark" / name
+    def test_time_view_is_pacific_with_utc_machine_value(self) -> None:
+        rendered = REPORT.time_view(datetime(2026, 8, 24, 7, 59, tzinfo=UTC))
+        self.assertEqual(rendered["datetime"], "2026-08-24T07:59:00Z")
+        self.assertEqual(rendered["text"], "Aug 24, 2026 · 00:59 PDT")
 
-    def test_migrates_v1_and_strips_private_fields(self) -> None:
-        result = REPORT.load_result(self.fixture("legacy-v1.json"))
-        self.assertEqual(result["migration"], {"from_schema_version": 1})
-        self.assertEqual(result["schema_version"], 3)
-        self.assertEqual(result["metrics"]["accepted_count"], 1_000)
-        encoded = json.dumps(REPORT.load_result(self.fixture("success-uds-f1.json")))
-        self.assertNotIn("/Users/", encoded)
-        self.assertNotIn("peer_host", encoded)
+    def test_empty_historical_record_is_the_shared_model(self) -> None:
+        self.assertEqual(REPORT.empty_historical_record().campaigns, ())
+        self.assertEqual(REPORT.empty_historical_record().schema_version, 1)
 
-    def test_transport_and_profile_are_preserved(self) -> None:
-        uds = REPORT.load_result(self.fixture("success-uds-f1.json"))
-        tcp = REPORT.load_result(self.fixture("failed-tcp-f8.json"))
-        self.assertEqual((uds["transport"], uds["frames_per_connection"]), ("uds", 1))
-        self.assertEqual((tcp["transport"], tcp["frames_per_connection"]), ("tcp", 8))
-
-    def test_direct_sqlite_measurement_is_retained_and_rendered(self) -> None:
-        payload = json.loads(self.fixture("success-uds-f1.json").read_text(encoding="utf-8"))
-        payload["direct_sqlite_message_write"] = {
-            "kind": "async_storage_admission",
-            "requested_count": 10_000,
-            "accepted_count": 10_000,
-            "worker_count": 64,
-            "elapsed_seconds": 0.2,
-            "admissions_per_second": 50_000.0,
-        }
-        payload["campaign_id"] = "20260822T200000Z-aaaaaaaaaaaa"
+    def test_rebuild_renders_panels_phases_index_and_is_byte_identical(self) -> None:
+        # Filename order is deliberately newest, oldest, middle: rendering
+        # must use the UTC values rather than filenames or Pacific dates.
+        first = campaign(datetime(2026, 8, 24, 7, tzinfo=UTC), identifier="20260824T070000Z-rand-m5")
+        second = campaign(datetime(2026, 8, 24, 8, tzinfo=UTC), identifier="20260824T080000Z-rand-m5")
+        third = campaign(datetime(2026, 8, 24, 9, tzinfo=UTC), identifier="20260824T090000Z-rand-m5")
         with tempfile.TemporaryDirectory() as directory:
-            source = Path(directory) / "result.json"
-            source.write_text(json.dumps(payload), encoding="utf-8")
-            result = REPORT.load_result(source)
+            root, report_dir = Path(directory), Path(directory) / "site/reports/send-message-benchmark"
+            write_inputs(report_dir, [third, first, second])
             with mock.patch.object(REPORT, "ROOT", ROOT):
-                panel = REPORT.render_run(result, "sqlite-probe", Path(directory))
-                aggregate = REPORT.render_aggregate([result], Path(directory))
-                campaign = REPORT.render_campaign(result["campaign_id"], [result], Path(directory) / "send-message-benchmark")
+                outputs = REPORT.rebuild(report_dir, root / "site/reports", invoke_index=False)
+                before = {path.name: path.read_bytes() for path in outputs}
+                REPORT.rebuild(report_dir, root / "site/reports", invoke_index=False)
+                after = {path.name: path.read_bytes() for path in outputs}
+            self.assertEqual(before, after)
+            self.assertTrue((report_dir / "phase-ao2.html").is_file())
+            self.assertTrue((report_dir / "index.html").is_file())
+            self.assertTrue((root / "site/reports/send-message-benchmark.json").is_file())
+            phase = (report_dir / "phase-ao2.html").read_text(encoding="utf-8")
+            index = (report_dir / "index.html").read_text(encoding="utf-8")
+            panel = (report_dir / f"{first.campaign_id}.xhtml").read_text(encoding="utf-8")
+        self.assertLess(phase.index(third.campaign_id), phase.index(second.campaign_id))
+        self.assertLess(phase.index(second.campaign_id), phase.index(first.campaign_id))
+        self.assertNotIn("<script src=", phase)
+        for page in (panel, phase, index):
+            self.assertEqual(page.count("<script"), 1)
+            self.assertNotIn('src="http', page)
+            self.assertNotIn('href="http', page)
+        self.assertIn("TCP + TLS", phase)
+        self.assertIn('data-target="tcp-tls"', phase)
+
+    def test_incomplete_panel_xml_and_chart_exclusion(self) -> None:
+        incomplete = campaign(datetime(2026, 8, 24, 7, tzinfo=UTC), identifier="20260824T070000Z-rand-m5", status="INCOMPLETE")
+        passing = campaign(datetime(2026, 8, 24, 8, tzinfo=UTC), identifier="20260824T080000Z-rand-m5")
+        with tempfile.TemporaryDirectory() as directory:
+            root, report_dir = Path(directory), Path(directory) / "site/reports/send-message-benchmark"
+            write_inputs(report_dir, [incomplete, passing])
+            with mock.patch.object(REPORT, "ROOT", ROOT):
+                REPORT.rebuild(report_dir, root / "site/reports", invoke_index=False)
+            panel = report_dir / f"{incomplete.campaign_id}.xhtml"
+            ET.parse(panel)
             panel_text = panel.read_text(encoding="utf-8")
-            aggregate_text = aggregate.read_text(encoding="utf-8")
-            campaign_text = campaign.read_text(encoding="utf-8")
-        self.assertEqual(result["direct_sqlite_message_write"]["accepted_count"], 10_000)
-        self.assertIn("50000.00", panel_text)
-        self.assertIn("20260822T200000Z-aaaaaaaaaaaa", aggregate_text)
-        self.assertIn("Result msg/sec", campaign_text)
+            phase = (report_dir / "phase-ao2.html").read_text(encoding="utf-8")
+        self.assertIn("Incomplete campaign:", panel_text)
+        self.assertLess(panel_text.index("Incomplete campaign:"), panel_text.index("<script"))
+        self.assertEqual(phase.count('class="candle PASS"'), 4)
+        self.assertNotIn('class="candle INCOMPLETE"', phase)
 
-    def test_source_revision_is_retained_only_when_it_is_a_git_revision(self) -> None:
-        payload = json.loads(self.fixture("success-uds-f1.json").read_text(encoding="utf-8"))
-        payload["source_revision"] = "a" * 40
+    def test_chart_geometry_has_all_candles_series_fail_outline_and_baselines(self) -> None:
+        one = campaign(datetime(2026, 8, 24, 7, tzinfo=UTC), identifier="20260824T070000Z-rand-m5")
+        two = campaign(datetime(2026, 8, 24, 8, tzinfo=UTC), identifier="20260824T080000Z-rand-m4", host="rand-m4", status="FAIL")
         with tempfile.TemporaryDirectory() as directory:
-            source = Path(directory) / "result.json"
-            source.write_text(json.dumps(payload), encoding="utf-8")
-            self.assertEqual(REPORT.load_result(source)["source_revision"], "a" * 40)
-            payload["source_revision"] = "not-a-revision"
-            source.write_text(json.dumps(payload), encoding="utf-8")
-            with self.assertRaisesRegex(REPORT.BenchmarkReportError, "source_revision"):
-                REPORT.load_result(source)
+            report_dir = Path(directory)
+            write_inputs(report_dir, [one, two])
+            charts = REPORT.candlestick_series(REPORT.TARGET_ORDER, REPORT.empty_historical_record(), [one, two], REPORT.load_baselines(report_dir))
+        self.assertEqual(len(charts["tcp"]["candles"]), 2)
+        self.assertEqual(len(charts["tcp"]["series"]), 2)
+        self.assertEqual(len(charts["tcp"]["baseline_lines"]), 2)
+        self.assertEqual(charts["tcp"]["candles"][1]["status"], "FAIL")
 
-    def test_hash_bound_historical_import_is_rendered_without_rewriting_raw_artifact(self) -> None:
-        payload = json.loads(self.fixture("success-uds-f1.json").read_text(encoding="utf-8"))
-        payload.update({
-            "benchmark_target": "uds",
-            "source_revision": "a" * 40,
-            "host_label": "local",
-        })
+    def test_preview_copies_the_newest_panel_without_opening_wyvern(self) -> None:
+        item = campaign(datetime(2026, 8, 24, 7, tzinfo=UTC), identifier="20260824T070000Z-rand-m5")
         with tempfile.TemporaryDirectory() as directory:
-            report_dir = Path(directory) / "send-message-benchmark"
-            report_dir.mkdir()
-            artifact = report_dir / "historical.json"
-            artifact.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-            manifest = {
-                "schema_version": 1,
-                "imports": [{
-                    "filename": "historical.json",
-                    "sha256": REPORT.file_sha256(artifact),
-                    "campaign_id": "historical-20260823-aaaaaaaaaaaa",
-                    "display_host_label": "m5-atmbench",
-                    "provenance_note": "Exact imported source artifact.",
-                }],
-            }
-            (report_dir / REPORT.HISTORICAL_IMPORTS_NAME).write_text(json.dumps(manifest), encoding="utf-8")
-            records = REPORT.evidence_records(report_dir)
-            self.assertEqual(REPORT.campaign_id(records[0]), "historical-20260823-aaaaaaaaaaaa")
-            self.assertEqual(records[0]["_report_display_host_label"], "m5-atmbench")
+            root, report_dir = Path(directory), Path(directory) / "site/reports/send-message-benchmark"
+            write_inputs(report_dir, [item])
             with mock.patch.object(REPORT, "ROOT", ROOT):
-                output = REPORT.render_aggregate(records, Path(directory))
-            text = output.read_text(encoding="utf-8")
-        self.assertIn("m5-atmbench", text)
-        self.assertIn("Exact imported source artifact.", text)
+                REPORT.rebuild(report_dir, root / "site/reports", invoke_index=False)
+                preview = REPORT.preview_latest(report_dir, root / "preview", open_viewer=False)
+            self.assertEqual(preview.name, "latest.html")
+            self.assertEqual(preview.read_text(), (report_dir / f"{item.campaign_id}.xhtml").read_text())
 
-    def test_failed_run_is_retained(self) -> None:
-        result = REPORT.load_result(self.fixture("failed-tcp-f8.json"))
-        self.assertFalse(result["passed"])
-        self.assertEqual(result["metrics"]["accepted_count"], 999)
-        self.assertEqual(result["failure"], "one admission failed")
-
-    def test_v4_result_uses_the_reviewed_host_target_floor(self) -> None:
-        payload = {
-            "schema_version": 4,
-            "campaign_id": "20260824T000000Z-rand-m5",
-            "host_label": "rand-m5",
-            "os": "macos",
-            "target": "tcp",
-            "status": "PASS",
-            "incomplete_reason": None,
-            "generated_at": "2026-08-24T00:00:00Z",
-            "source_revision": "a" * 40,
-            "binary_hashes": {"atm-daemon": "b" * 64},
-            "frames_per_connection": 8,
-            "messages_requested": 10,
-            "messages_admitted": 10,
-            "messages_durable": 10,
-            "metrics": {
-                "interval_count": 1, "passed_interval_count": 1,
-                "accepted_count": 10, "requested_count": 10, "response_count": 10,
-                "connection_count": 1,
-                "application_wire_bytes": {"request": 1, "response": 1, "total": 2},
-                "admissions_per_second": {"min": 18000, "p50": 18000, "p95": 18000, "p99": 18000, "max": 18000},
-                "request_frames_per_second": {"min": 1, "p50": 1, "p95": 1, "p99": 1, "max": 1},
-                "connections_per_second": {"min": 1, "p50": 1, "p95": 1, "p99": 1, "max": 1},
-                "application_wire_bytes_per_second": {"min": 2, "p50": 2, "p95": 2, "p99": 2, "max": 2},
-                "time_to_send_1k_s": {"min": 1, "p50": 1, "p95": 1, "p99": 1, "max": 1},
-                "interval_latency_ms": {"min": 1, "p50": 1, "p95": 1, "p99": 1, "max": 1},
-            },
-            "baseline": {"revision": 1, "p50_floor": 17500},
-            "durability_after_restart": {
-                "expected_accepted_count": 10, "observed_mailbox_count": 10, "passed": True,
-            },
-        }
-        with tempfile.TemporaryDirectory() as directory:
-            source = Path(directory) / "v4.json"
-            source.write_text(json.dumps(payload), encoding="utf-8")
-            record = REPORT.load_result(source)
-        tcp = next(row for row in REPORT.campaign_target_rows([record]) if row["test"] == "tcp")
-        self.assertEqual(tcp["baseline_msg_per_second"], 17_500)
-        self.assertTrue(tcp["passed"])
-        self.assertEqual(REPORT.result_id(record), "20260824T000000Z-rand-m5-tcp")
-
-    def test_v4_rendering_uses_stored_verdict_after_live_baseline_ratchets(self) -> None:
-        """A later reviewed floor cannot rewrite an immutable campaign result."""
-        payload = {
-            "schema_version": 4,
-            "campaign_id": "20260824T000000Z-rand-m5",
-            "host_label": "rand-m5",
-            "os": "macos",
-            "target": "tcp",
-            "status": "PASS",
-            "incomplete_reason": None,
-            "generated_at": "2026-08-24T00:00:00Z",
-            "source_revision": "a" * 40,
-            "binary_hashes": {"atm-daemon": "b" * 64},
-            "frames_per_connection": 8,
-            "messages_requested": 10,
-            "messages_admitted": 10,
-            "messages_durable": 10,
-            "metrics": {
-                "interval_count": 1, "passed_interval_count": 1,
-                "accepted_count": 10, "requested_count": 10, "response_count": 10,
-                "connection_count": 1,
-                "application_wire_bytes": {"request": 1, "response": 1, "total": 2},
-                "admissions_per_second": {"min": 18000, "p50": 18000, "p95": 18000, "p99": 18000, "max": 18000},
-                "request_frames_per_second": {"min": 1, "p50": 1, "p95": 1, "p99": 1, "max": 1},
-                "connections_per_second": {"min": 1, "p50": 1, "p95": 1, "p99": 1, "max": 1},
-                "application_wire_bytes_per_second": {"min": 2, "p50": 2, "p95": 2, "p99": 2, "max": 2},
-                "time_to_send_1k_s": {"min": 1, "p50": 1, "p95": 1, "p99": 1, "max": 1},
-                "interval_latency_ms": {"min": 1, "p50": 1, "p95": 1, "p99": 1, "max": 1},
-            },
-            "baseline": {"revision": 1, "p50_floor": 17500},
-            "durability_after_restart": {
-                "expected_accepted_count": 10, "observed_mailbox_count": 10, "passed": True,
-            },
-        }
-        with tempfile.TemporaryDirectory() as directory:
-            source = Path(directory) / "v4.json"
-            source.write_text(json.dumps(payload), encoding="utf-8")
-            record = REPORT.load_result(source)
-            # This intentionally higher current floor models a later ratchet.
-            (Path(directory) / "baselines.json").write_text(
-                json.dumps({"revision": 2, "entries": [{"p50_floor": 99999}]}),
-                encoding="utf-8",
-            )
-            row = next(row for row in REPORT.campaign_target_rows([record]) if row["test"] == "tcp")
-        self.assertEqual(row["baseline_msg_per_second"], 17_500)
-        self.assertTrue(row["passed"])
-
-    def test_campaign_table_renders_an_incomplete_target_without_metrics(self) -> None:
-        failed = REPORT.load_result(self.fixture("failed-tcp-f8.json"))
-        failed["campaign_id"] = "20260822T200000Z-aaaaaaaaaaaa"
-        failed["benchmark_target"] = "tcp"
-        failed["metrics"] = None
-        rows = REPORT.campaign_target_rows([failed])
-        tcp = next(row for row in rows if row["test"] == "tcp")
-        self.assertIsNone(tcp["result_msg_per_second"])
-        self.assertFalse(tcp["passed"])
-
-    def test_immutable_write_rejects_mutation(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "artifact.json"
-            self.assertTrue(REPORT.immutable_write(path, "one\n"))
-            self.assertFalse(REPORT.immutable_write(path, "one\n"))
-            with self.assertRaisesRegex(REPORT.BenchmarkReportError, "immutable"):
-                REPORT.immutable_write(path, "two\n")
-
-    def test_persist_writes_ai46_envelope_sidecar(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            report_dir = Path(directory) / "report"
-            with mock.patch.object(REPORT, "REPORT_DIR", report_dir):
-                result, artifact_id = REPORT.persist(self.fixture("success-uds-f1.json"))
-            artifact = json.loads((report_dir / f"{artifact_id}.json").read_text())
-            envelope = json.loads((report_dir / f"{artifact_id}.envelope.json").read_text())
-            self.assertEqual(artifact["host_label"], "mac-arm64-01")
-            self.assertEqual(set(envelope), {"schema_version", "report_type", "generated_at", "host_label", "report_html"})
-            self.assertEqual(envelope["report_type"], "benchmark")
-
-    def test_rebuild_does_not_rewrite_existing_raw_evidence(self) -> None:
-        """A rendering rebuild must not normalize or replace immutable raw JSON."""
-        payload = json.loads(self.fixture("failed-tcp-f8.json").read_text(encoding="utf-8"))
-        payload.update({
-            "campaign_id": "20260822T200000Z-aaaaaaaaaaaa",
-            "benchmark_target": "tcp-tls",
-            "peer_wire_security": "mutual-tls",
-        })
-        with tempfile.TemporaryDirectory() as directory:
-            report_dir = Path(directory) / "send-message-benchmark"
-            report_dir.mkdir()
-            (report_dir / "legacy-run.json").write_text(json.dumps(payload), encoding="utf-8")
-            result = REPORT.load_result(report_dir / "legacy-run.json")
-            original = (report_dir / "legacy-run.json").read_text(encoding="utf-8")
-            with (
-                mock.patch.object(REPORT, "REPORT_DIR", report_dir),
-                mock.patch.object(REPORT, "evidence_records", return_value=[result]),
-                mock.patch.object(REPORT, "render_run"),
-                mock.patch.object(REPORT, "render_campaign"),
-                mock.patch.object(REPORT, "render_aggregate"),
-                mock.patch.object(REPORT, "regenerate_index"),
-            ):
-                self.assertEqual(REPORT.process([]), 0)
-            self.assertEqual((report_dir / "legacy-run.json").read_text(encoding="utf-8"), original)
-
-    def test_envelope_for_uses_the_validated_result_identity(self) -> None:
-        result = REPORT.load_result(self.fixture("success-uds-f1.json"))
-        envelope = json.loads(REPORT.envelope_for(result))
-        self.assertEqual(envelope["generated_at"], result["generated_at"])
-        self.assertEqual(envelope["host_label"], result["host_label"])
-        self.assertEqual(envelope["report_html"], "send-message-benchmark.html")
-
-    def test_rebuild_fails_closed_when_index_publication_fails(self) -> None:
-        with (
-            mock.patch.object(REPORT, "evidence_records", return_value=[]),
-            mock.patch.object(REPORT, "render_aggregate"),
-            mock.patch.object(
-                REPORT, "regenerate_index",
-                side_effect=REPORT.BenchmarkReportError("injected index failure"),
-            ),
-        ):
-            self.assertEqual(REPORT.process([]), 1)
-
-    def test_rebuild_writes_an_envelope_for_each_existing_result(self) -> None:
-        result = REPORT.load_result(self.fixture("success-uds-f1.json"))
-        with tempfile.TemporaryDirectory() as directory:
-            report_dir = Path(directory) / "send-message-benchmark"
-            with (
-                mock.patch.object(REPORT, "REPORT_DIR", report_dir),
-                mock.patch.object(REPORT, "evidence_records", return_value=[result]),
-                mock.patch.object(REPORT, "render_run"),
-                mock.patch.object(REPORT, "render_aggregate"),
-                mock.patch.object(REPORT, "regenerate_index"),
-            ):
-                self.assertEqual(REPORT.process([]), 0)
-            envelope = report_dir / f"{REPORT.result_id(result)}.envelope.json"
-            self.assertTrue(envelope.is_file())
-            self.assertEqual(json.loads(envelope.read_text())["report_type"], "benchmark")
-
-    def test_aggregate_orders_utc_history_and_separates_transports(self) -> None:
-        records = [
-            {**REPORT.load_result(self.fixture("success-uds-f1.json")), "campaign_id": "20260822T010000Z-aaaaaaaaaaaa"},
-            {**REPORT.load_result(self.fixture("failed-tcp-f8.json")), "campaign_id": "20260822T020000Z-bbbbbbbbbbbb"},
-        ]
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            with mock.patch.object(REPORT, "ROOT", ROOT):
-                output = REPORT.render_aggregate(records, root)
-            text = output.read_text(encoding="utf-8")
-        self.assertIn("mac-arm64-01", text)
-        self.assertIn("20260822T010000Z-aaaaaaaaaaaa", text)
-        self.assertIn("20260822T020000Z-bbbbbbbbbbbb", text)
-
-    def test_latest_profile_state_supersedes_older_failed_history(self) -> None:
-        failed = REPORT.load_result(self.fixture("failed-tcp-f8.json"))
-        recovered = {
-            **failed, "generated_at": "2026-08-01T02:00:00Z", "passed": True,
-            "campaign_id": "20260801T020000Z-aaaaaaaaaaaa",
-        }
-        latest = REPORT.latest_profile_results([failed, recovered])
-        self.assertEqual(latest, [recovered])
-        with tempfile.TemporaryDirectory() as directory:
-            output = REPORT.render_aggregate([failed, recovered], Path(directory))
-            text = output.read_text(encoding="utf-8")
-        self.assertIn("20260801T020000Z-aaaaaaaaaaaa", text)
-        self.assertIn("1 pre-campaign artifacts", text)
-
-    def test_current_campaign_keeps_one_revision_homogeneous(self) -> None:
-        base = REPORT.load_result(self.fixture("success-uds-f1.json"))
-        revision = "b" * 40
-        campaign = [
-            {
-                **base,
-                "generated_at": f"2026-08-01T02:{index:02d}:00Z",
-                "transport": "tcp",
-                "frames_per_connection": frame,
-                "source_revision": revision,
-            }
-            for index, frame in enumerate(sorted(REPORT.SUPPORTED_FRAMES))
-        ]
-        self.assertEqual(REPORT.current_campaign_results(campaign), campaign)
-
-    def test_peer_wire_mode_is_rendered_and_separates_campaigns(self) -> None:
-        plain = REPORT.load_result(self.fixture("failed-tcp-f8.json"))
-        mutual_tls = {
-            **plain,
-            "generated_at": "2026-08-01T03:00:00Z",
-            "peer_wire_security": "mutual-tls",
-            "benchmark_target": "tcp-tls",
-            "hook_mode": "active",
-            "passed": True,
-            "campaign_id": "20260801T030000Z-aaaaaaaaaaaa",
-        }
-        self.assertEqual(REPORT.campaign_groups([plain, mutual_tls]), {
-            "20260801T030000Z-aaaaaaaaaaaa": [mutual_tls],
-        })
-        with tempfile.TemporaryDirectory() as directory:
-            output = REPORT.render_aggregate([plain, mutual_tls], Path(directory))
-            text = output.read_text(encoding="utf-8")
-        self.assertIn("20260801T030000Z-aaaaaaaaaaaa", text)
-        self.assertIn("1 pre-campaign artifacts", text)
-
-    def test_campaign_xhtml_has_the_required_four_target_table(self) -> None:
-        base = REPORT.load_result(self.fixture("success-uds-f1.json"))
-        campaign_id = "20260822T200000Z-aaaaaaaaaaaa"
-        targets = [
-            {**base, "campaign_id": campaign_id, "benchmark_target": "sqlite", "transport": "sqlite", "peer_wire_security": "plaintext-test"},
-            {**base, "campaign_id": campaign_id, "benchmark_target": "uds", "transport": "uds", "peer_wire_security": "plaintext-test"},
-            {**base, "campaign_id": campaign_id, "benchmark_target": "tcp", "transport": "tcp", "peer_wire_security": "plaintext-test"},
-            {**base, "campaign_id": campaign_id, "benchmark_target": "tcp-tls", "transport": "tcp", "peer_wire_security": "mutual-tls"},
-        ]
-        with tempfile.TemporaryDirectory() as directory:
-            output = REPORT.render_campaign(campaign_id, targets, Path(directory))
-            text = output.read_text(encoding="utf-8")
-        self.assertIn("Result msg/sec", text)
-        self.assertIn("Baseline msg/sec", text)
-        self.assertIn("tcp-tls", text)
-
-    def test_campaign_table_refuses_to_mix_source_revisions(self) -> None:
-        base = REPORT.load_result(self.fixture("success-uds-f1.json"))
-        records = [
-            {**base, "benchmark_target": "tcp", "source_revision": "a" * 40},
-            {**base, "benchmark_target": "tcp-tls", "source_revision": "b" * 40},
-        ]
-        with self.assertRaisesRegex(REPORT.BenchmarkReportError, "mix source revisions"):
-            REPORT.campaign_target_rows(records)
-
-    def test_bounded_benchmark_failure_code_is_rendered(self) -> None:
-        failed = {
-            **REPORT.load_result(self.fixture("failed-tcp-f8.json")),
-            "benchmark_evidence_failure_code": "missing_compatible_plaintext_baseline",
-        }
-        with tempfile.TemporaryDirectory() as directory:
-            output = REPORT.render_run(failed, "bounded-failure", Path(directory))
-            text = output.read_text(encoding="utf-8")
-        self.assertIn("Evidence failure code", text)
-        self.assertIn("missing_compatible_plaintext_baseline", text)
+    def test_no_retired_aggregate_template_or_render_path_remains(self) -> None:
+        self.assertFalse((ROOT / "templates/benchmark-report/benchmark-report.xhtml.j2").exists())
+        self.assertFalse((ROOT / "templates/benchmark-report/benchmark-report.html.j2").exists())
+        self.assertNotIn("--input", SCRIPT.read_text(encoding="utf-8"))
+        self.assertNotIn("send-message-benchmark.html", SCRIPT.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

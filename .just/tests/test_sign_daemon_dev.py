@@ -105,7 +105,17 @@ class SignDaemonDevTests(unittest.TestCase):
             "    # records the attempt before returning its non-zero status.\n"
             "    {{python_cmd}} scripts/smoke/run_admission_capacity.py {{args}} || benchmark_status=$?\n"
             "    {{python_cmd}} scripts/smoke/benchmark_report.py --rebuild || exit $?\n"
+            "    echo 'View the newest campaign panel: just benchmark-show'\n"
             "    exit ${benchmark_status:-0}",
+            justfile,
+        )
+
+    def test_benchmark_show_rebuilds_then_opens_the_html_preview(self) -> None:
+        justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
+        self.assertIn(
+            "benchmark-show:\n"
+            "    {{python_cmd}} scripts/smoke/benchmark_report.py --rebuild\n"
+            "    {{python_cmd}} scripts/smoke/benchmark_show.py",
             justfile,
         )
 

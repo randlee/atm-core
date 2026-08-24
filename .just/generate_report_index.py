@@ -160,7 +160,15 @@ def parse_envelope(source: Path, reports_root: Path) -> Envelope:
     host_label = _safe_host_label(payload["host_label"], source)
     report_html = _safe_relative_html(payload["report_html"], source)
     html_path = reports_root / report_html
-    evidence_dir = reports_root / Path(report_html).stem
+    # A report producer may publish an index inside its evidence directory
+    # (for example ``send-message-benchmark/index.html``).  Flat legacy
+    # reports retain the original same-stem convention.
+    relative_report = Path(report_html)
+    evidence_dir = (
+        reports_root / relative_report.parent
+        if relative_report.parent != Path(".")
+        else reports_root / relative_report.stem
+    )
     _ensure_inside(html_path, reports_root, "report HTML")
     _ensure_inside(evidence_dir, reports_root, "evidence directory")
     if not html_path.is_file():
@@ -222,6 +230,15 @@ def discover_envelopes(reports_root: Path) -> list[Envelope]:
             continue
         is_root_envelope = source.parent == reports_root
         is_explicit_envelope = source.name.endswith(".envelope.json")
+        # AO2.11 replaces benchmark's former many-per-run discovery sidecars
+        # with one canonical directory index.  Preserve the sidecars as
+        # historical evidence, but do not publish stale links from them.
+        if (
+            is_explicit_envelope
+            and source.parent.name == "send-message-benchmark"
+            and (reports_root / "send-message-benchmark.json").is_file()
+        ):
+            continue
         try:
             payload = json.loads(source.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError):

@@ -1,60 +1,49 @@
 ---
 metadata:
   name: benchmark-run
-  description: One ATM local transport benchmark evidence panel
+  description: One immutable ATM benchmark campaign panel
 required_variables:
   - title
-  - artifact_id
-  - generated_at
+  - campaign_id
   - host_label
-  - transport
-  - peer_wire_security
-  - benchmark_target
-  - hook_mode
-  - daemon_version
-  - host_os
-  - host_arch
-  - command
-  - execution_daemon
-  - frames_per_connection
-  - run_duration_s
-  - passed
-  - benchmark_evidence_failure_code
-  - failure
-  - cleanup_failure
-  - sample_html
-  - direct_sqlite_html
+  - phase
+  - source_revision
+  - status
+  - started_at
+  - completed_at
+  - rows
+  - incomplete_reason
 ---
 <?xml version="1.0" encoding="UTF-8"?>
-<section xmlns="http://www.w3.org/1999/xhtml" class="benchmark-run">
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+  <title>{{ title | e }}</title>
+  <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
+  <style type="text/css">
+    body { font-family: sans-serif; color: #1f2937; margin: 2rem auto; max-width: 75rem; padding: 0 1rem; }
+    table { border-collapse: collapse; margin: 1rem 0; width: 100%; } th, td { border: 1px solid #cbd5e1; padding: .55rem; text-align: left; }
+    th { background: #f1f5f9; } .PASS { color: #065f46; font-weight: bold; } .FAIL { color: #991b1b; font-weight: bold; } .INCOMPLETE { color: #92400e; font-weight: bold; }
+    .meta { color: #475569; } code { font-family: ui-monospace, monospace; } .incomplete { margin-top: 2rem; border: 2px solid #f59e0b; padding: 1rem; background: #fffbeb; }
+  </style>
+</head>
+<body>
   <h1>{{ title | e }}</h1>
-  <p><strong>Status:</strong> {{ 'PASS' if passed else 'FAIL' }}</p>
-  <dl>
-    <dt>Generated</dt><dd>{{ generated_at | e }}</dd>
-    <dt>Host label</dt><dd>{{ host_label | e }}</dd>
-    <dt>Transport</dt><dd>{{ transport | e }}</dd>
-    <dt>Peer-wire security</dt><dd>{{ peer_wire_security | e }}</dd>
-    <dt>Benchmark target</dt><dd>{{ benchmark_target | e }}</dd>
-    <dt>Hook mode</dt><dd>{{ hook_mode | e }}</dd>
-    <dt>Daemon/client version</dt><dd>{{ daemon_version | e }}</dd>
-    <dt>Host profile</dt><dd>{{ host_os | e }} / {{ host_arch | e }}</dd>
-    <dt>Command</dt><dd>{{ command | e }}</dd>
-    <dt>Execution daemon</dt><dd>{{ execution_daemon | e }}</dd>
-    <dt>Frames per connection</dt><dd>{{ frames_per_connection }}</dd>
-    <dt>Run duration (seconds)</dt><dd>{{ run_duration_s }}</dd>
-    <dt>Artifact</dt><dd>{{ artifact_id | e }}.json</dd>
-{% if benchmark_evidence_failure_code %}
-    <dt>Evidence failure code</dt><dd>{{ benchmark_evidence_failure_code | e }}</dd>
+  <p class="meta"><code>{{ campaign_id | e }}</code> · {{ host_label | e }} · phase {{ phase | e }} · source <code>{{ source_revision | e }}</code></p>
+  <p>Status: <strong class="{{ status | e }}">{{ status | e }}</strong> · started <time datetime="{{ started_at.datetime | e }}">{{ started_at.text | e }}</time>{% if completed_at %} · completed <time datetime="{{ completed_at.datetime | e }}">{{ completed_at.text | e }}</time>{% endif %}</p>
+  <table>
+    <thead><tr><th>Test</th><th>p50 msg/sec</th><th>p95</th><th>p99</th><th>Durable write proof</th><th>Baseline floor</th><th>Margin</th><th>Verdict</th></tr></thead>
+    <tbody>
+{% for row in rows %}
+      <tr data-target="{{ row.target | e }}"><td>{{ row.label | e }}</td><td>{{ 'n/a' if row.p50 is none else '%.2f' | format(row.p50) }}</td><td>{{ 'n/a' if row.p95 is none else '%.2f' | format(row.p95) }}</td><td>{{ 'n/a' if row.p99 is none else '%.2f' | format(row.p99) }}</td><td>{{ row.durable_counts | e }}</td><td>{{ 'n/a' if row.baseline is none else '%.2f' | format(row.baseline) }}</td><td>{{ 'n/a' if row.margin is none else '%+.2f' | format(row.margin) }}</td><td class="{{ row.status | e }}">{{ row.status | e }}</td></tr>
+{% endfor %}
+    </tbody>
+  </table>
+{% if incomplete_reason %}
+  <aside class="incomplete"><strong>Incomplete campaign:</strong> {{ incomplete_reason | e }}</aside>
 {% endif %}
-  </dl>
-{% if failure %}
-  <h2>Failure diagnostics</h2><pre>{{ failure | e }}</pre>
-{% endif %}
-{% if cleanup_failure %}
-  <h2>Cleanup diagnostics</h2><pre>{{ cleanup_failure | e }}</pre>
-{% endif %}
-  <h2>Samples</h2>
-{{ sample_html | safe }}
-  <h2>Direct SQLite message-write ceiling</h2>
-{{ direct_sqlite_html | safe }}
-</section>
+  <script type="application/ecmascript"><![CDATA[
+(() => { const f = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", hourCycle: "h23", timeZoneName: "short" }); document.querySelectorAll("time[datetime]").forEach((node) => { node.textContent = f.format(new Date(node.dateTime)); }); })();
+  ]]></script>
+</body>
+</html>
