@@ -50,6 +50,7 @@ from scripts.smoke.benchmark_schema import (
     campaign_id as derive_campaign_id,
     compact_evidence,
     distribution,
+    required_targets,
 )
 from scripts.smoke.benchmark_policy import classify_status, profile_median_admissions_per_second
 from scripts.smoke.benchmark_account import (
@@ -2137,13 +2138,19 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
     started_at = datetime.now(timezone.utc)
     campaign_identifier = derive_campaign_id(started_at=started_at, host_label=host_label)
     baselines = load_baselines()
+    os_name = benchmark_os()
+    target_matrix = tuple(
+        (target, configuration)
+        for target, configuration in BENCHMARK_TARGETS.items()
+        if target in required_targets(os_name)
+    )
     # Fail before exercising any target when the reviewed policy has no floor;
     # this makes an accidental local/default run explicit rather than publish a
     # result with a silent or caller-selected baseline.
     try:
         target_baselines = {
             target: baselines.entry_for(host_label, target)
-            for target in BENCHMARK_TARGETS
+            for target, _configuration in target_matrix
         }
     except BenchmarkSchemaError as error:
         raise SmokeError(
@@ -2151,12 +2158,10 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
             f"{error}"
         ) from error
     hashes = binary_hashes()
-    os_name = benchmark_os()
     print(f"benchmark campaign: {campaign_identifier}")
     codes: list[int] = []
     published_results: list[BenchmarkRunResult] = []
-    for position, target in enumerate(BENCHMARK_TARGETS, start=1):
-        transport, peer_wire_security = BENCHMARK_TARGETS[target]
+    for position, (target, (transport, peer_wire_security)) in enumerate(target_matrix, start=1):
         if args.atm_home is None:
             with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temporary:
                 run = run_capacity(
@@ -2214,7 +2219,7 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
             f"compact={run.compact_evidence_path} raw={result.raw_artifact}"
         )
     campaign_status = (
-        "INCOMPLETE" if len(published_results) != len(BENCHMARK_TARGETS)
+        "INCOMPLETE" if len(published_results) != len(target_matrix)
         else "FAIL" if any(result.status == "FAIL" for result in published_results)
         else "INCOMPLETE" if any(result.status == "INCOMPLETE" for result in published_results)
         else "PASS"

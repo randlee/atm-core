@@ -589,6 +589,7 @@ def process(inputs: list[Path]) -> int:
                 # branch below before they enter this path.
                 artifact_id = result_id(result)
                 render_run(result, artifact_id)
+                immutable_write(REPORT_DIR / f"{artifact_id}.envelope.json", envelope_for(result))
             for identifier, campaign in campaign_groups(records).items():
                 render_campaign(identifier, campaign)
             render_aggregate(records)

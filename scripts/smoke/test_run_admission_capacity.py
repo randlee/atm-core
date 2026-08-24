@@ -109,6 +109,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             mock.patch.object(RUNNER, "binary_hashes", return_value={"atm": "a" * 64}),
             mock.patch.object(RUNNER, "publish_v4_target", return_value=mock.Mock(status="PASS")),
             mock.patch.object(RUNNER, "BenchmarkCampaign", return_value=mock.Mock(status="PASS", model_dump=mock.Mock(return_value={}))),
+            mock.patch.object(RUNNER, "atomic_json"),
             contextlib.redirect_stdout(stdout := io.StringIO()),
         ):
             self.assertEqual(RUNNER.main(), 0)
@@ -151,12 +152,39 @@ class AdmissionCapacityTests(unittest.TestCase):
             mock.patch.object(RUNNER, "binary_hashes", return_value={"atm": "a" * 64}),
             mock.patch.object(RUNNER, "publish_v4_target", return_value=mock.Mock(status="PASS")),
             mock.patch.object(RUNNER, "BenchmarkCampaign", return_value=mock.Mock(status="FAIL", model_dump=mock.Mock(return_value={}))),
+            mock.patch.object(RUNNER, "atomic_json"),
             contextlib.redirect_stdout(stdout := io.StringIO()),
         ):
             self.assertEqual(RUNNER.main(), 1)
 
         self.assertEqual(captured, ["sqlite", "uds", "tcp", "tcp-tls"])
         self.assertIn("FAIL required f8 target tcp", stdout.getvalue())
+
+    def test_windows_ordinary_benchmark_excludes_uds(self):
+        captured: list[str] = []
+
+        def run_capacity(*_args, **kwargs):
+            captured.append(kwargs["benchmark_target"])
+            return RUNNER.CapacityRunResult(0, Path("sentinel.evidence"), Path("sentinel.raw"))
+
+        measured = mock.Mock(
+            median_msg_per_second=45_000.0, p95_msg_per_second=45_100.0,
+            p99_msg_per_second=45_200.0, accepted=10_000, requested=10_000,
+            raw_artifact="artifacts/raw.json",
+        )
+        with (
+            mock.patch.object(sys, "argv", ["run_admission_capacity.py"]),
+            mock.patch.object(RUNNER, "benchmark_os", return_value="windows"),
+            mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity),
+            mock.patch.object(RUNNER, "suite_target_result", return_value=measured),
+            mock.patch.object(RUNNER, "load_baselines", return_value=mock.Mock(entry_for=mock.Mock())),
+            mock.patch.object(RUNNER, "binary_hashes", return_value={"atm": "a" * 64}),
+            mock.patch.object(RUNNER, "publish_v4_target", return_value=mock.Mock(status="PASS")),
+            mock.patch.object(RUNNER, "BenchmarkCampaign", return_value=mock.Mock(status="PASS", model_dump=mock.Mock(return_value={}))),
+            mock.patch.object(RUNNER, "atomic_json"),
+        ):
+            self.assertEqual(RUNNER.main(), 0)
+        self.assertEqual(captured, ["sqlite", "tcp", "tcp-tls"])
 
     def test_ordinary_benchmark_refuses_before_running_when_a_target_has_no_baseline(self):
         baselines = RUNNER.BaselineSet(

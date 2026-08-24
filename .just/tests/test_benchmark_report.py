@@ -217,6 +217,33 @@ class BenchmarkReportTests(unittest.TestCase):
         self.assertEqual(envelope["host_label"], result["host_label"])
         self.assertEqual(envelope["report_html"], "send-message-benchmark.html")
 
+    def test_rebuild_fails_closed_when_index_publication_fails(self) -> None:
+        with (
+            mock.patch.object(REPORT, "evidence_records", return_value=[]),
+            mock.patch.object(REPORT, "render_aggregate"),
+            mock.patch.object(
+                REPORT, "regenerate_index",
+                side_effect=REPORT.BenchmarkReportError("injected index failure"),
+            ),
+        ):
+            self.assertEqual(REPORT.process([]), 1)
+
+    def test_rebuild_writes_an_envelope_for_each_existing_result(self) -> None:
+        result = REPORT.load_result(self.fixture("success-uds-f1.json"))
+        with tempfile.TemporaryDirectory() as directory:
+            report_dir = Path(directory) / "send-message-benchmark"
+            with (
+                mock.patch.object(REPORT, "REPORT_DIR", report_dir),
+                mock.patch.object(REPORT, "evidence_records", return_value=[result]),
+                mock.patch.object(REPORT, "render_run"),
+                mock.patch.object(REPORT, "render_aggregate"),
+                mock.patch.object(REPORT, "regenerate_index"),
+            ):
+                self.assertEqual(REPORT.process([]), 0)
+            envelope = report_dir / f"{REPORT.result_id(result)}.envelope.json"
+            self.assertTrue(envelope.is_file())
+            self.assertEqual(json.loads(envelope.read_text())["report_type"], "benchmark")
+
     def test_aggregate_orders_utc_history_and_separates_transports(self) -> None:
         records = [
             {**REPORT.load_result(self.fixture("success-uds-f1.json")), "campaign_id": "20260822T010000Z-aaaaaaaaaaaa"},
