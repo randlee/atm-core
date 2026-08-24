@@ -47,8 +47,12 @@ Result: connect + TLS-handshake cost on every peer write.
    `with_shared_direct_peer_client(client: reqwest::Client) -> Self`
    (builder style of `with_peer_stream_adapter`), and
    `build_replacement_handler` in `atm-daemon-bootstrap` constructs the one
-   shared client at daemon scope and injects it — `DirectPeerTcpConnector`
-   borrows it instead of building its own.
+   shared client at daemon scope and injects it —
+   `DirectPeerTcpConnector::new(client: reqwest::Client, ...)` takes the
+   shared client as a parameter instead of building its own (constructor
+   signature change, call sites updated). The bootstrap edits for this
+   deliverable and deliverable 4's pool wiring land as ONE coordinated
+   change to `build_replacement_handler`, not two conflicting edits.
 3. **Router integration**: `StorageAndNudgeRouter` gains a pool handle
    (builder method mirroring `with_peer_stream_adapter`);
    `dispatch_resolved_peer_write` changes to acquire → execute → release,
@@ -148,15 +152,28 @@ pub struct PooledPeerConnection {
     pool: Weak<PoolShared>,
 }
 
-// Counter discipline (all under the slot-map mutex, never across .await):
-// - Pooled origin: counters increment at reservation (pre-dial); Drop
-//   decrements on BOTH paths — healthy (sender re-enters the slot map)
-//   and failed/incomplete (sender dropped, slot freed). A failed dial
-//   also releases its reservation before surfacing the error.
+// Counter discipline (all under the slot-map mutex, never across .await).
+// The reservation is PER-CONNECTION-LIFETIME, not per-borrow:
+// - Pooled origin: the counter increments exactly once, at reservation
+//   (pre-dial). Re-acquiring an idle entry from the slot map touches NO
+//   counter — the connection still holds its original reservation. Drop
+//   decrements ONLY when the sender is actually closed/discarded (failed
+//   exchange, incomplete exchange, idle eviction, pool teardown); a
+//   healthy return-to-pool never decrements. A failed dial releases its
+//   reservation before surfacing the error. Invariant: across a pooled
+//   connection's full lifetime, total increments == total decrements ==
+//   1, regardless of borrow-cycle count. The one transparent redial
+//   replaces the connection UNDER THE SAME reservation — no counter
+//   change.
 // - Overflow origin: counters are never touched, and Drop NEVER pushes an
 //   overflow sender into the slot map — healthy or not, it is closed on
 //   Drop. Overflow connections exist for exactly one exchange, preserving
 //   AC #5's ceiling invariant even when slots free mid-flight.
+//
+// Pool teardown: dropping/shutting down PeerConnectionPool closes every
+// pooled sender and drains their driver tasks (bounded await on the
+// pool's own shutdown path — never inside a Drop impl of the guard),
+// so daemon shutdown/reconfig leaks no tasks (AC #9).
 
 impl PooledPeerConnection {
     /// One request/response cycle over the pooled sender, preserving the
@@ -237,9 +254,19 @@ layered on top of, and never replaces, that config reuse.
    task actually complete — via a completion signal (e.g. the driver task
    resolving a oneshot/notify observed with a bounded `tokio::time::timeout`,
    never an unbounded join) — for each of: idle eviction, Drop after a
-   failed exchange, Drop with no completed exchange, and overflow-Drop
-   after a successful exchange.
-10. **Benchmark gate (standing no-regression constraint + D1/D3)**: live
+   failed exchange, Drop with no completed exchange, overflow-Drop after a
+   successful exchange, overflow-Drop after a FAILED exchange (distinct
+   branch per the never-pushes rule), and pool teardown with healthy
+   still-pooled connections (daemon shutdown/reconfig drains every driver
+   task). A counter-lifetime test runs N borrow/return cycles on one
+   pooled connection and asserts the retained-count and reservation
+   counters are unchanged (no per-borrow drift), then closes it and
+   asserts exactly one decrement.
+10. ADR delivery gate: the ADR file from deliverable 7 exists, is listed
+   in `docs/adr/INDEX.md`, and contains the redial/delivery-attempt
+   invariant, the per-connection-lifetime counter rule, and the teardown
+   drain semantics (grep-gated on those phrases — a stub ADR fails).
+11. **Benchmark gate (standing no-regression constraint + D1/D3)**: live
    `just benchmark` on rand-m5 before/after on the same revision pair; tcp
    and tcp-tls f8 p50 must not regress below `baselines.json` floors, and
    the after-run is expected to improve tcp/tcp-tls p50 (pooling removes
@@ -252,7 +279,7 @@ layered on top of, and never replaces, that config reuse.
 
 - Unit/integration tests above; full workspace test + clippy; both CI lanes.
 - Live-verify gate before quality-mgr dispatch: the m5 before/after
-  benchmark pair from AC #10, plus one real cross-host mTLS dispatch burst
+  benchmark pair from AC #11, plus one real cross-host mTLS dispatch burst
   demonstrating reuse in daemon logs.
 - Reviewers: standard set plus `boundary-guard` (deliverable 8) and
   `rust-service-hardening` lens (pool lifecycle, timeouts, backpressure —
@@ -278,6 +305,7 @@ layered on top of, and never replaces, that config reuse.
 | 2 | plan-scope-reviewer (sonnet) | `82252f3b` | FAIL — round-1 closures confirmed; 1 Important (live-verify gate cited stale AC #8 after renumbering), 1 minor (ADR lacked path/number convention) | Fixed in round-2 commit: gate re-pointed to AC #9; ADR path + INDEX.md convention stated. |
 | 2 | critical-plan-reviewer (sonnet) | `82252f3b` | FAIL — round-1 closures verified against real code; 2 new Blocking (contract used undefined types `RuntimeBody`/`HttpRuntimeRequest`/`HttpRuntimeResponse`; no `RequestDeadline` threaded through `acquire`/`exchange`, silently dropping the per-write timeout contract deliverable 6 claims unchanged), 1 minor (liveness check vs mutex-across-await) | Fixed in round-2 commit: real types (`axum::body::Body`, `atm_core::api::HttpRequest`, `axum::http::Response<Vec<u8>>`); `RequestDeadline` threaded through both `acquire` and `exchange` with today's Timeout/PeerConnectTimeout trigger conditions stated; pop-entry-then-check-outside-the-lock rule added. |
 | 3 | both reviewers (sonnet) | `21241a01` | **PASS** — all round-2 closures verified against real code (types, deadline semantics incl. RequestDeadline being Copy over a fixed Instant, lock discipline); zero findings | Hardening complete; ready for quality-mgr gate. |
+| 5 | quality-mgr gate round 2 (PR #1018) | `1be4a46b`+r4 fixes | FAIL — 1 Blocking (counter discipline contradictory: "Drop decrements on BOTH paths" vs one-time reservation — reuse cycles would monotonically drain the counter), 3 Important (pool-teardown driver drain untested; ADR deliverable had no AC; overflow-Drop-after-failure branch missing from AC #9), 3 minor | Fixed in round-5 commit: reservation defined as per-connection-lifetime (reuse-acquire touches no counter; Drop decrements only on actual close/discard; increments == decrements == 1 per lifetime; redial replaces under the same reservation); teardown drain semantics in contract + AC #9; new AC #10 ADR non-stub grep gate (benchmark gate → #11); AC #9 gains overflow-Drop-after-failure and N-cycle counter-drift test; DirectPeerTcpConnector signature spelled out; deliverables 2+4 declared one coordinated bootstrap edit. |
 | 4 | quality-mgr gate (PR #1018) | `1be4a46b` | FAIL — 1 Blocking (AC #5 unimplementable: no Pooled/Overflow origin distinction, so a healthy overflow dial would re-enter the slot map on Drop and breach the ceiling), 2 Important (deliverable-1 "no task leaks; asserted in tests" had no observing AC — sync Drop can't join; deliverable 2 lacked a composition-root wiring contract) | Fixed in round-4 commit: `ConnectionOrigin { Pooled, Overflow }` set pre-await under the mutex with explicit counter increment (pre-dial reservation) / decrement (both Drop paths) discipline and overflow-never-re-enters rule + mid-flight slot-free test in AC #5; new AC #9 (driver-task completion via bounded-timeout signal for eviction/failed/incomplete/overflow Drop paths, benchmark gate renumbered #10); `with_shared_direct_peer_client` builder + bootstrap injection point for the shared reqwest::Client. Discarded false positive (nonexistent-seam claim from a plan-doc-only worktree) noted, no action. |
 
 ## Dependencies
