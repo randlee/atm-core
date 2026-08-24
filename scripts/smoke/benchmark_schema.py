@@ -328,12 +328,8 @@ class BenchmarkCampaign(BaseModel):
         return self
 
 
-# The historical-record contract is owned by AO2.12's plan, but these models
-# deliberately live here so AO2.11 can consume an empty record without
-# inventing a second, incompatible wire shape.  See
-# docs/plans/phase-ao2/sprint-AO2-12-historical-data-migration.md.
 class RatchetPoint(BaseModel):
-    """One immutable, UTC-effective reviewed historical baseline point."""
+    """AO2.12 HistoricalRecord ratchet point; see the sprint's normative contract."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -350,7 +346,7 @@ class RatchetPoint(BaseModel):
 
 
 class HistoricalResultEntry(BaseModel):
-    """An unmodified v4 result plus migration-only display provenance."""
+    """AO2.12 HistoricalRecord result wrapper; preserves its v4 result verbatim."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -368,7 +364,7 @@ class HistoricalResultEntry(BaseModel):
 
 
 class HistoricalCampaignEntry(BaseModel):
-    """A migrated campaign and the result records that came from it."""
+    """AO2.12 HistoricalRecord campaign entry; see its normative contract."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -384,7 +380,7 @@ class HistoricalCampaignEntry(BaseModel):
 
 
 class UnattributedEntry(BaseModel):
-    """A legacy source that migration could not safely assign to a campaign."""
+    """AO2.12 HistoricalRecord entry for a source with no safe campaign mapping."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -400,7 +396,7 @@ class UnattributedEntry(BaseModel):
 
 
 class HistoricalRecord(BaseModel):
-    """AO2.12-normalized historical benchmark record consumed by AO2.11."""
+    """AO2.12 normative historical-record contract, consumed unchanged by AO2.11."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
