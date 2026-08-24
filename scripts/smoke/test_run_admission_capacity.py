@@ -255,6 +255,14 @@ class AdmissionCapacityTests(unittest.TestCase):
             with self.assertRaisesRegex(RUNNER.SmokeError, "require --diagnostic-only"):
                 RUNNER.main()
 
+    def test_disposable_mtls_identity_uses_rustls_compatible_named_p256_parameters(self):
+        """LibreSSL's explicit EC parameters are rejected by the Rustls provider."""
+        source = inspect.getsource(RUNNER.provision_disposable_mtls_identity)
+        self.assertIn("genpkey", source)
+        self.assertIn("ec_paramgen_curve:prime256v1", source)
+        self.assertIn("ec_param_enc:named_curve", source)
+        self.assertNotIn("rsa:2048", source)
+
     def test_direct_production_writer_profile_keeps_real_interval_counts(self):
         stdout = json.dumps(
             {

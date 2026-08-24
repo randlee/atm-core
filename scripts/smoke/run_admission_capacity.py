@@ -1281,12 +1281,25 @@ def provision_disposable_mtls_identity(
     )
     _required_command(
         [
-            openssl, "req", "-x509", "-newkey", "rsa:2048", "-nodes",
-            "-keyout", str(private_key), "-out", str(certificate), "-days", "2",
+            # The disposable benchmark identity is P-256, the standard
+            # modern TLS signing key.  Explicit named-curve encoding matters:
+            # macOS' LibreSSL otherwise serializes explicit EC parameters that
+            # Rustls deliberately rejects.
+            openssl, "genpkey", "-algorithm", "EC", "-pkeyopt",
+            "ec_paramgen_curve:prime256v1", "-pkeyopt", "ec_param_enc:named_curve",
+            "-out", str(private_key),
+        ],
+        env,
+        "generate disposable P-256 mTLS private key",
+    )
+    _required_command(
+        [
+            openssl, "req", "-x509", "-new", "-key", str(private_key),
+            "-out", str(certificate), "-days", "2",
             "-config", str(config),
         ],
         env,
-        "generate disposable mTLS identity",
+        "generate disposable P-256 mTLS certificate",
     )
     bundle.write_bytes(certificate.read_bytes() + private_key.read_bytes())
     try:
