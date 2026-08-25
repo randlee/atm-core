@@ -39,6 +39,10 @@ preflight:  whoami == atmbench (or ATM_OFFICIAL_ACCOUNT override);
             the push first, else exit 2 naming the stranded commit —
             NEVER reset it away; only then hard-sync to origin/<branch>
             (arg, default the current integrate/phase-*); clean tree.
+build:      cargo build --release -p agent-team-mail -p atm-daemon,
+            then .just/sign_daemon_dev.py — both fatal on nonzero
+            (exit 2): an official run must measure freshly built, signed
+            binaries of the synced HEAD, never leftovers.
 run:        ATM_CAPACITY_HOST_LABEL=m5-atmbench — invoking
             run_admission_capacity.py DIRECTLY and interpreting ITS exit
             status (not `just benchmark`'s aggregate: the Justfile's
@@ -82,7 +86,10 @@ verdict:    exit 0 = all floors green
    a FAIL still exits 1 — verdict precedence test); preflight failures
    (wrong account, dirty tree, unhealthy daemon-switch, stranded-commit
    with unreachable remote) → 2 with actionable messages; stranded
-   commit with reachable remote is pushed, then the run proceeds.
+   commit with reachable remote is pushed, then the run proceeds;
+   missing/stale release binaries relative to synced HEAD fail closed at
+   the build step (fixture: binaries absent → exit 2 before any
+   measurement).
 3. (D2) Unattended-safety: full script under stdin=/dev/null completes
    without hang; static scan finds no tty-read call sites on the path.
 4. (D2) Push auth: the push succeeds via the explicit
@@ -120,3 +127,4 @@ verdict:    exit 0 = all floors green
 | Round | Reviewer | Commit | Result | Disposition |
 |-------|----------|--------|--------|-------------|
 | 1 | critical-plan-reviewer (sonnet, combined pass) | `3c6bd2ec6` | FAIL — 2 Blocking (signing "fix" duplicated already-landed dedupe code — live re-verification proved the real cause is a stale clone, no signing work needed at all; `just benchmark-publish` assumed to exist but was never implemented), 3 Important (Justfile rebuild step can mask a recorded FAIL's exit status; hard-sync could silently discard a stranded evidence commit; no SSH auth contract for launchd's non-login push), 2 minor (tty-test mechanism; "daemon-switch sane" undefined) | Fixed in round-1 rewrite: signing deliverable deleted with live evidence recorded (current resolver passes with/without override on the atmbench keychain); `benchmark-publish` promoted to deliverable 1; glue invokes the runner directly with verdict-precedence rule + fixture; stranded-commit push-first/fail-closed preflight; explicit `GIT_SSH_COMMAND` IdentityFile contract carried by the plist; stdin=/dev/null + static-scan tty test; `daemon-switch.py status --doctor` healthy named. |
+| 2 | critical-plan-reviewer (sonnet) | `de8eb1d25` | FAIL — 6/7 round-1 items verified resolved (incl. the empirical signing deletion); 1 new Important: the direct-runner rewrite dropped the cargo-build + sign steps, risking measurement of stale binaries | Fixed in round-2 commit: explicit build stage (cargo build --release + sign_daemon_dev.py, fatal exit 2) restored ahead of the runner, with a missing-binaries fail-closed fixture in AC #2. |
