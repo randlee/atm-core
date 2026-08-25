@@ -577,7 +577,7 @@
       "result_from": "quality-mgr",
       "result_shared_path": null,
       "result_temp_path": null,
-      "verdict": "PASS (6/6 findings confirmed fixed; merged despite tcp/tcp-tls benchmark floor misses under an explicit one-day waiver)",
+      "verdict": "PASS",
       "blockers": 0,
       "important": 0,
       "minor": 0,
