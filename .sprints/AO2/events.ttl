@@ -182,3 +182,18 @@ triage:r26 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AO210-C
 # closures until a corrected Resolution is recorded here after the real fix
 # commit is verified via `git merge-base --is-ancestor <fix-sha> HEAD` against
 # this exact branch. See feedback_verify_resolution_ancestry_before_recording.
+
+triage:c18 a triage:Completion ; triage:ofSprint triage:AO2.14 ; triage:at "2026-08-25T02:57:07Z"^^xsd:dateTime .
+triage:r27 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/ARCH-QA-AO214-RULE003> ; triage:resolvedAt "2026-08-25T02:57:07Z"^^xsd:dateTime .
+triage:r28 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RBQA-AO214-F001> ; triage:resolvedAt "2026-08-25T02:57:07Z"^^xsd:dateTime .
+triage:r29 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RBQA-AO214-F002> ; triage:resolvedAt "2026-08-25T02:57:07Z"^^xsd:dateTime .
+triage:r30 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RBQA-AO214-F003> ; triage:resolvedAt "2026-08-25T02:57:07Z"^^xsd:dateTime .
+triage:r31 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RSH-AO214-001> ; triage:resolvedAt "2026-08-25T02:57:07Z"^^xsd:dateTime .
+triage:r32 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RUST-QA-AO214-001> ; triage:resolvedAt "2026-08-25T02:57:07Z"^^xsd:dateTime .
+
+# NOTE (team-lead): all 6 verified fixed by quality-mgr against fix commit
+# 1823207ca (PR #1020), confirmed ancestor of merge commit 3b050422d before
+# recording. RSH-AO214-001 closes as hardening/test-coverage (original defect
+# premise did not hold; code was already correct) per quality-mgr's report.
+# PR #1020 merged despite tcp/tcp-tls benchmark floor misses (17371/17500,
+# 13642/17500 on isolated m5-atmbench) -- merge explicitly authorized by Rand.
