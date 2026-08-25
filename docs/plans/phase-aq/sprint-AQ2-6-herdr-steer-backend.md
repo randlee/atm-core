@@ -79,6 +79,20 @@ submission or identify a particular turn.
    backend dispatch. Round-trip fixtures cover both variants and a legacy
    backup.
 
+   **Doctor roster-consistency error (required):** in that same doctor
+   threading change, group only members with an explicit local backend by team.
+   Members with no backend are transient/adhoc and are skipped. If a team has
+   at least one `Tmux` member **and** at least one `Herdr` member, emit one
+   `DoctorFinding` with `DoctorSeverity::Error` (not Warning or Info), a stable
+   backend-consistency code, and a message naming the team plus its tmux and
+   Herdr member lists. Its remediation names
+   `atm teams update-member --backend <tmux|herdr> --target <target>` and
+   directs the operator to correct the affected members. The finding must flow
+   through the existing `DoctorStatus::Error` / `has_errors()` path so normal
+   doctor output and `atm doctor`'s exit status are nonzero. A uniform tmux
+   team, a uniform Herdr team, and a team with only one explicit backend plus
+   backend-less members produce no mixed-backend finding.
+
    **Cross-backend mismatch warning (required):** target syntax is a useful
    operator signal, not a capability check. When a tmux-shaped `%N` target is
    supplied with `--backend herdr`, or a Herdr-shaped `wN:pN` target is
@@ -154,23 +168,29 @@ submission or identify a particular turn.
    structured output. The warning names the team/member/backend/target; a
    plain Herdr agent-name target does not warn. Tests cover a mixed tmux/Herdr
    roster so a wrong local backend is never silently accepted.
-4. A migrated tmux roster row selects the unchanged `TokioTmuxReceivedHook`;
+4. `atm doctor` emits exactly one Error-severity backend-consistency finding
+   for a team containing both explicit tmux and Herdr members; the finding
+   names the team and both member sets, supplies the exact update-member
+   remediation, sets `DoctorStatus::Error` / `has_errors()`, and makes the
+   command exit nonzero. Members with no backend are skipped: they do not
+   create an error alone or alter the mixed-backend result.
+5. A migrated tmux roster row selects the unchanged `TokioTmuxReceivedHook`;
    its argv, two-Enter delay, and successful emission path are regression
    tested byte-for-byte against the pre-AQ2.6 behavior.
-5. A Herdr-selected row resolves to `LocalHerdr` and selects only
+6. A Herdr-selected row resolves to `LocalHerdr` and selects only
    `HerdrReceivedHook`; a graft lease cannot override an explicit local
    backend, and a backend-less row preserves the existing graft/bare-CLI
    classification.
-6. The exact Herdr argv is `agent prompt`, target, fixed mailbox-read text,
+7. The exact Herdr argv is `agent prompt`, target, fixed mailbox-read text,
    and `--wait`; no message body, rendered XML, shell interpolation, tmux, or
    raw-key fallback appears in the Herdr path.
-7. An `agent_blocked` fixture proves the command exits with its structured
+8. An `agent_blocked` fixture proves the command exits with its structured
    rejection before any input reaches the fixture terminal, records
    `blocked_before_input`, and leaves the durable mail readable through
    `atm read`.
-8. Deadline/cancellation tests prove no child process or background task
+9. Deadline/cancellation tests prove no child process or background task
    survives the request; post-commit hook errors remain advisory.
-9. Boundary-manifest freshness, `cargo test -p atm-architecture`, and
+10. Boundary-manifest freshness, `cargo test -p atm-architecture`, and
    `just test` pass on all three lanes. Herdr command fixtures run on
    macOS/ubuntu; Windows verifies selection and command construction only
    until a supported Windows Herdr deployment is explicitly added.
@@ -185,6 +205,10 @@ submission or identify a particular turn.
   demonstrate coexistence, not migration-by-replacement.
 - Add/update a mixed roster with intentionally cross-shaped targets and retain
   the operator-facing roster-wide backend-verification warning in evidence.
+- Run `atm doctor --json` and human `atm doctor` over a mixed explicit
+  tmux/Herdr team plus an unconfigured member: retain the Error finding's
+  member lists/remediation and the nonzero exit, then prove that a uniform
+  backend team and a backend-less-only team do not report it.
 
 ## Non-closure / out of scope
 
