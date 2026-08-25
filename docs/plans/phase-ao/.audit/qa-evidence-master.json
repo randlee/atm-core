@@ -583,6 +583,31 @@
       "minor": 0,
       "count_basis": "headline/reviewer",
       "evidence": "PR #1020, fix commit 1823207ca (confirmed ancestor of merge commit 3b050422d before recording). 6 findings closed: ARCH-QA-AO214-RULE003, RBQA-AO214-F001, RBQA-AO214-F002, RBQA-AO214-F003, RSH-AO214-001 (closes as hardening/test-coverage -- original defect premise did not hold, code was already correct), RUST-QA-AO214-001. Merged despite tcp (17371/17500) and tcp-tls (13642/17500) benchmark floor misses on the isolated m5-atmbench account -- merge explicitly authorized by Rand (\"complete the pr w/ it failing\"; waiver framed against historical >22k uds/tcp precedent, not a floor change)."
+    },
+    {
+      "run_id": "AO215-QA2",
+      "aich_sprint": "AO2.15",
+      "phase_sprint": "AO2.15",
+      "pass": "QA-2",
+      "run_type": "qa",
+      "assignment_time_utc": null,
+      "assignment_time_pst": null,
+      "assignment_message_id": null,
+      "assignment_from": null,
+      "assignment_shared_path": null,
+      "assignment_summary": null,
+      "result_time_utc": "2026-08-25T18:20:25Z",
+      "result_time_pst": null,
+      "result_message_id": "01M0X2DW62Y9JW1RR2EYV9TSKF",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "FAIL",
+      "blockers": 0,
+      "important": 1,
+      "minor": 0,
+      "count_basis": "headline/reviewer",
+      "evidence": "PR #1024 re-verify @ 43efcbd4b: B001/I001/I002/I004/I005/I006/M001/M002/M003 confirmed fixed (SSH-trigger transcript closes B001; commit 5f3a3be60 evidence doc). I003 (AC4/AC5 live-run evidence) only half-closed -- ssh one-liner trigger done, launchd trigger run/transcript still missing, confirmed by direct branch search. Not yet mergeable: launchd live trigger is the one remaining item."
     }
   ],
   "coverage_gaps": [

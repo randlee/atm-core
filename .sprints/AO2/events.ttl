@@ -211,3 +211,20 @@ triage:c20 a triage:Completion ; triage:ofSprint triage:AO2.15 ; triage:at "2026
 # never rewrite past events) to close /sprint-report's TTL.ORPHAN_COMPLETION
 # gap against c18.
 triage:a20 a triage:Assignment ; triage:ofSprint triage:AO2.14 ; triage:assignedTo "arch-ctm" ; triage:assignedAt "2026-08-24T06:05:00Z"^^xsd:dateTime .
+
+# NOTE (team-lead, 2026-08-25): quality-mgr independently re-verified PR #1024
+# @ 43efcbd4b (confirmed ancestor - is current branch HEAD, not yet merged),
+# message 01M0X2DW62Y9JW1RR2EYV9TSKF: B001/I001/I002/I004/I005/I006/M001/M002/M003
+# all confirmed fixed (SSH-trigger transcript closes B001's unattended-safety
+# gap plus the prior fix round for the others). I003 (AC4/AC5 live-run
+# evidence -- specifically the launchd trigger transcript) remains open:
+# ssh-trigger half done, launchd trigger run/transcript still missing.
+triage:r33 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-B001> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .
+triage:r34 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-I001> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .
+triage:r35 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-I002> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .
+triage:r36 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-I004> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .
+triage:r37 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-I005> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .
+triage:r38 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-I006> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .
+triage:r39 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-M001> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .
+triage:r40 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-M002> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .
+triage:r41 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-M003> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .

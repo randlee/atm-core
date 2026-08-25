@@ -12,7 +12,7 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-25T03:19:55Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.15 ;
@@ -25,8 +25,8 @@
   triage:file "scripts/smoke/test_benchmark_official.py" ;
   triage:line 1 ;
   triage:snippet "missing-binaries fixture" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ao2-15-benchmark-official-trigger" ;
   triage:headSha "a003b6950e2a3efa632c425261218ea7eb4e1c73" ;
   triage:occursIn <urn:atm:triage:worktree/AO215/a003b69> .
