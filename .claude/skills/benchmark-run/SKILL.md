@@ -157,6 +157,10 @@ produced because of an infrastructure error.
 
 `just benchmark-official` runs the repository's pinned `just bootstrap` first,
 so the dedicated account needs no pre-existing Python virtual environment.
+It clears the disposable account database and daemon before measurement, again
+before it pushes evidence, and once more in final cleanup. A successful push
+also requires a clean checkout; an official runner never leaves staged or
+modified report files behind.
 
 On-demand from M4:
 

@@ -73,6 +73,10 @@ class OfficialBenchmark:
             branch = self.preflight()
             self.build_and_sign()
             outcome = self.measure()
+            # The matrix has finished using its disposable daemon and database
+            # before evidence is committed or pushed. This keeps the account
+            # clear while the network-only publication step runs.
+            self.reset_disposable_account()
             post_run_error = self.render_publish_and_push(branch)
             if post_run_error is not None:
                 raise OfficialBenchmarkError(post_run_error)
@@ -215,6 +219,7 @@ class OfficialBenchmark:
         pushed = self.command(["git", "push", "origin", branch], env=self.push_environment(), allow_failure=True)
         if pushed.returncode:
             return self.detail("benchmark evidence push", pushed)
+        self.require_clean_tree("after report push")
         return None
 
     def push_stranded_commit_if_needed(self, branch: str) -> None:

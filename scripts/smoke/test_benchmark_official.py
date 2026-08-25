@@ -290,6 +290,49 @@ class OfficialBenchmarkTests(unittest.TestCase):
         ):
             self.assertEqual(runner.execute(), 2)
 
+    def test_execute_cleans_disposable_state_before_and_after_publication(self) -> None:
+        runner = self.runner(lambda command, **kwargs: completed(command))
+        runner.account_verified = True
+        cleanup = mock.Mock()
+        with (
+            mock.patch.object(runner, "preflight", return_value="integrate/phase-ao2"),
+            mock.patch.object(runner, "build_and_sign"),
+            mock.patch.object(runner, "measure", return_value=OFFICIAL.OfficialOutcome(False, "green")),
+            mock.patch.object(runner, "reset_disposable_account", cleanup),
+            mock.patch.object(runner, "render_publish_and_push", return_value=None) as publish,
+        ):
+            self.assertEqual(runner.execute(), 0)
+        self.assertEqual(cleanup.call_count, 2)
+        self.assertEqual(publish.call_args_list, [mock.call("integrate/phase-ao2")])
+
+    def test_publication_refuses_a_dirty_checkout_after_push(self) -> None:
+        commands: list[list[str]] = []
+
+        def run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            commands.append(command)
+            if command in (
+                [sys.executable, str(self.root / "scripts/smoke/benchmark_report.py"), "--rebuild"],
+                ["just", "benchmark-publish"],
+                ["git", "commit", "-m", "evidence(benchmark): official m5-atmbench revision"],
+                ["git", "push", "origin", "integrate/phase-ao2"],
+            ):
+                return completed(command)
+            if command == ["git", "diff", "--cached", "--quiet"]:
+                return completed(command, 1)
+            if command == ["git", "rev-parse", "--short", "HEAD"]:
+                return completed(command, stdout="revision\n")
+            if command == ["git", "status", "--porcelain"]:
+                return completed(command, stdout=" M unexpected.txt\n")
+            self.fail(f"unexpected command: {command}")
+
+        runner = self.runner(run)
+        with self.assertRaisesRegex(OFFICIAL.OfficialBenchmarkError, "dirty after report push"):
+            runner.render_publish_and_push("integrate/phase-ao2")
+        self.assertLess(
+            commands.index(["git", "push", "origin", "integrate/phase-ao2"]),
+            commands.index(["git", "status", "--porcelain"]),
+        )
+
     def test_measured_fail_keeps_exit_one_when_rebuild_or_publish_fails(self) -> None:
         runner = self.runner(lambda command, **kwargs: completed(command))
         with (
