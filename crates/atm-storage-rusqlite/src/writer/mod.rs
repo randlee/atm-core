@@ -18,7 +18,13 @@ use std::sync::mpsc::{self, RecvTimeoutError, SyncSender};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-pub(crate) const CHANNEL_CAPACITY: usize = 256;
+// One f8 benchmark interval deliberately creates up to 512 concurrent async
+// admissions.  Keep one complete bounded burst in the ingress so the writer
+// can apply the existing one-millisecond coalescing policy to it as one
+// durable transaction, rather than arbitrarily splitting it at 256 entries.
+// This remains bounded backpressure; it does not make the caller-visible
+// batching policy configurable.
+pub(crate) const CHANNEL_CAPACITY: usize = 512;
 // Coalesce writes that arrive immediately after the first admission so one
 // SQLite commit can durably acknowledge the concurrent burst. This is private
 // to the sole writer ingress: callers, HTTP, TLS, and benchmark modes cannot
