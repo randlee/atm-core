@@ -201,3 +201,13 @@ triage:r32 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RUST-QA
 triage:a19 a triage:Assignment ; triage:ofSprint triage:AO2.15 ; triage:assignedTo "arch-ctm" ; triage:assignedAt "2026-08-25T02:58:29Z"^^xsd:dateTime .
 
 triage:c20 a triage:Completion ; triage:ofSprint triage:AO2.15 ; triage:at "2026-08-25T03:11:37Z"^^xsd:dateTime .
+
+# NOTE (team-lead, 2026-08-25): backfilled Assignment for AO2.14, whose
+# original Assignment event was dispatched in an earlier session turn that
+# was later compacted out of context and never appended here before c18 was
+# recorded. Timestamp reconstructed from the AO2.13 Completion (c17,
+# 2026-08-24T06:02:33Z) as the earliest point AO2.14 could have been
+# dispatched -- appended now per ttl-repair.md (append correct history,
+# never rewrite past events) to close /sprint-report's TTL.ORPHAN_COMPLETION
+# gap against c18.
+triage:a20 a triage:Assignment ; triage:ofSprint triage:AO2.14 ; triage:assignedTo "arch-ctm" ; triage:assignedAt "2026-08-24T06:05:00Z"^^xsd:dateTime .

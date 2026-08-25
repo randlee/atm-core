@@ -533,6 +533,31 @@
       "minor": 2,
       "count_basis": "headline/reviewer",
       "evidence": "PR #1015 QA-1 @ bf522d879, reviewed from an isolated detached worktree pinned to PR head to avoid contamination from arch-ctm's concurrent AO212-MIGRATE fix round: AC4 dry-run transcript evidence missing (1 blocking, AO213-BENCH-F001), sprint-doc draft-status header + 648-vs-649 test-count discrepancy (2 minor, F002/F003). AC1-AC3/AC5 all independently confirmed closed. Still the authoritative/open run as of this repair -- AC4 transcript not yet produced."
+    },
+    {
+      "run_id": "AO215-QA1",
+      "aich_sprint": "AO2.15",
+      "phase_sprint": "AO2.15",
+      "pass": "QA-1",
+      "run_type": "qa",
+      "assignment_time_utc": null,
+      "assignment_time_pst": null,
+      "assignment_message_id": null,
+      "assignment_from": null,
+      "assignment_shared_path": null,
+      "assignment_summary": null,
+      "result_time_utc": "2026-08-25T03:19:55Z",
+      "result_time_pst": null,
+      "result_message_id": null,
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "FAIL",
+      "blockers": 1,
+      "important": 6,
+      "minor": 3,
+      "count_basis": "headline/reviewer",
+      "evidence": "PR #1024, QA-1 on feature/ao2-15-benchmark-official-trigger @ a003b6950: 10 findings (1 blocking QA-AO215-B001 AC3 unattended-safety test row falsely marked complete; 6 important I001-I006; 3 minor M001-M003). Fix round dispatched to arch-ctm; re-verify confirmed 9/10 fixed (commits 83efd5f07, d2f355405, 5f3a3be60) -- I003 (AC#5 second live-unattended-run via launchd) remains open, blocked on an OS-level launchd GUI-domain provisioning gap on the atmbench account (gui/502 error 125, user/502 error 5), not a code defect. PR #1024 not yet merged pending resolution of that infra blocker."
     }
   ],
   "coverage_gaps": [

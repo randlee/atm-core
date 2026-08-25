@@ -24,7 +24,7 @@
   a triage:Occurrence ;
   triage:file "scripts/smoke/test_benchmark_official.py" ;
   triage:line 196 ;
-  triage:snippet "self.assertNotIn("getpass", source)" ;
+  triage:snippet "self.assertNotIn('getpass', source)" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/ao2-15-benchmark-official-trigger" ;
