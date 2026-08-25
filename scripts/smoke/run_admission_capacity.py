@@ -1888,7 +1888,9 @@ def run_capacity(
         "command": target_command,
         "release": {"atm": str(atm), "atm_daemon": str(daemon)},
         "execution_daemon": (
-            "direct_async_storage_writer" if transport == "sqlite" else "shipped_atm_daemon"
+            # This legacy v3 schema label denotes the direct benchmark writer;
+            # the measurement kind below makes the async-storage seam explicit.
+            "direct_production_writer" if transport == "sqlite" else "shipped_atm_daemon"
         ),
         "atm_home": str(home),
         "host_state_isolation": isolation_mode,
