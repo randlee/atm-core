@@ -58,6 +58,18 @@ class AppleDevelopmentSigningTests(unittest.TestCase):
             with self.assertRaisesRegex(signing.SigningIdentityError, "exactly one"):
                 signing.resolve_apple_development_identity()
 
+    def test_default_resolution_accepts_duplicate_keychain_rows_for_one_fingerprint(self) -> None:
+        duplicate = signing.SigningIdentity("A" * 40, "Apple Development: duplicate")
+        with (
+            mock.patch.object(signing, "_valid_identities", return_value=(duplicate, duplicate, duplicate)),
+            mock.patch.object(signing, "_certificate_team_identifier", return_value=signing.DEFAULT_TEAM_IDENTIFIER),
+            mock.patch.dict(signing.os.environ, {}, clear=True),
+        ):
+            self.assertEqual(
+                signing.resolve_apple_development_identity(),
+                signing.SigningIdentity(duplicate.fingerprint, duplicate.common_name, signing.DEFAULT_TEAM_IDENTIFIER),
+            )
+
     def test_override_selects_the_matching_valid_identity(self) -> None:
         selected = signing.SigningIdentity("A" * 40, "Apple Development: alternate", "OTHERTEAM")
         with (
@@ -70,6 +82,18 @@ class AppleDevelopmentSigningTests(unittest.TestCase):
             mock.patch.dict(signing.os.environ, {signing.SIGNING_IDENTITY_ENVIRONMENT_VARIABLE: selected.fingerprint}),
         ):
             self.assertEqual(signing.resolve_apple_development_identity(), selected)
+
+    def test_override_accepts_duplicate_rows_for_the_selected_fingerprint(self) -> None:
+        duplicate = signing.SigningIdentity("A" * 40, "Apple Development: alternate")
+        with (
+            mock.patch.object(signing, "_valid_identities", return_value=(duplicate, duplicate)),
+            mock.patch.object(signing, "_certificate_team_identifier", return_value="OTHERTEAM"),
+            mock.patch.dict(signing.os.environ, {signing.SIGNING_IDENTITY_ENVIRONMENT_VARIABLE: duplicate.fingerprint}),
+        ):
+            self.assertEqual(
+                signing.resolve_apple_development_identity(),
+                signing.SigningIdentity(duplicate.fingerprint, duplicate.common_name, "OTHERTEAM"),
+            )
 
     def test_invalid_identity_reports_wwdr_recovery(self) -> None:
         with (

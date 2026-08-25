@@ -76,7 +76,7 @@ class SignDaemonDevTests(unittest.TestCase):
 
     def test_build_recipe_runs_signing_hook_after_cargo(self) -> None:
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
-        self.assertIn("build:\n    cargo build --workspace\n    {{python_cmd}} .just/sign_daemon_dev.py", justfile)
+        self.assertIn("build:\n    {{cargo_cmd}} build --workspace\n    {{python_cmd}} .just/sign_daemon_dev.py", justfile)
 
     def test_test_recipe_re_signs_debug_artifacts_after_tests(self) -> None:
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
@@ -91,9 +91,9 @@ class SignDaemonDevTests(unittest.TestCase):
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
         self.assertIn(
             "benchmark *args:\n"
-            "    cargo build --release -p agent-team-mail -p atm-daemon\n"
+            "    {{cargo_cmd}} build --release -p agent-team-mail -p atm-daemon\n"
             "    # The isolated capacity runner launches this feature-gated bootstrap binary.\n"
-            "    cargo build --release -p atm-daemon-bootstrap --features benchmark-harness --bin atm-daemon-benchmark\n"
+            "    {{cargo_cmd}} build --release -p atm-daemon-bootstrap --features benchmark-harness --bin atm-daemon-benchmark\n"
             "    {{python_cmd}} .just/sign_daemon_dev.py",
             justfile,
         )

@@ -85,6 +85,20 @@ def _identity_with_team_identifier(identity: SigningIdentity) -> SigningIdentity
     return SigningIdentity(identity.fingerprint, identity.common_name, team_identifier)
 
 
+def _deduplicate_fingerprints(identities: Sequence[SigningIdentity]) -> tuple[SigningIdentity, ...]:
+    """Collapse repeated keychain rows for the same signing certificate.
+
+    ``security find-identity`` can return the same certificate once for each
+    keychain search-list entry. A fingerprint identifies the certificate, so
+    repeated rows are not ambiguous identities. Distinct fingerprints remain
+    distinct and must still be rejected by the resolver below.
+    """
+    unique: dict[str, SigningIdentity] = {}
+    for identity in identities:
+        unique.setdefault(identity.fingerprint, identity)
+    return tuple(unique.values())
+
+
 def _identity_exists_but_is_not_valid() -> bool:
     result = _run(["security", "find-identity", "-p", "codesigning"])
     return result.returncode == 0 and any(
@@ -98,25 +112,25 @@ def resolve_apple_development_identity() -> SigningIdentity:
     override = os.environ.get(SIGNING_IDENTITY_ENVIRONMENT_VARIABLE, "").strip()
     valid_identities = _valid_identities()
     if override:
-        candidates = tuple(
+        candidates = _deduplicate_fingerprints(tuple(
             resolved
             for identity in valid_identities
             if override in {identity.fingerprint, identity.common_name}
             if (resolved := _identity_with_team_identifier(identity)) is not None
-        )
+        ))
         if len(candidates) == 1:
             return candidates[0]
         raise SigningIdentityError(
             f"{SIGNING_IDENTITY_ENVIRONMENT_VARIABLE} must identify exactly one valid signing identity."
         )
 
-    candidates = tuple(
+    candidates = _deduplicate_fingerprints(tuple(
         resolved
         for identity in valid_identities
         if identity.common_name.startswith(APPLE_DEVELOPMENT_PREFIX)
         if (resolved := _identity_with_team_identifier(identity)) is not None
         if resolved.team_identifier == DEFAULT_TEAM_IDENTIFIER
-    )
+    ))
     if len(candidates) == 1:
         return candidates[0]
     if not candidates and _identity_exists_but_is_not_valid():
