@@ -15,14 +15,16 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-25T00:00:00Z"^^xsd:dateTime ;
+  triage:closureNote "Fixed by commit 8788090d6 (docs(benchmark): clarify historical model ownership), merged to integrate/phase-ao2. scripts/smoke/benchmark_schema.py now carries per-class docstrings naming the AO2.12 contract (RatchetPoint, result wrapper, campaign entry, and HistoricalRecord itself all say \"AO2.12 ... contract\" directly in their docstrings) rather than a single module-level comment. quality-mgr independently re-verified against current code at HEAD." ;
   triage:triagedAt "2026-08-24T05:20:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.11 ;
   triage:foundAt "2026-08-24T05:14:31Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AO211-RENDER-F005/AO211-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AO211-RENDER-F005/AO212-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AO211-RENDER-F005/AO211-1>
   a triage:Occurrence ;

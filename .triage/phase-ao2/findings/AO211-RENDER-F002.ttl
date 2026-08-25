@@ -15,14 +15,16 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-25T00:00:00Z"^^xsd:dateTime ;
+  triage:closureNote "Fixed by commit 599ca2225 (test(benchmark): prove UTC campaign ordering), merged to integrate/phase-ao2. test_rebuild_renders_panels_phases_index_and_is_byte_identical in .just/tests/test_benchmark_report.py now uses two fixture campaigns (first/second) that share the same Pacific calendar date but differ in UTC value, with explicit assertions on UTC-based ordering (assertGreater on started_at, phase-index ordering) -- exactly the AC7 UTC-vs-Pacific-date proof this finding required. quality-mgr independently re-verified against current code at HEAD." ;
   triage:triagedAt "2026-08-24T05:20:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.11 ;
   triage:foundAt "2026-08-24T05:14:31Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AO211-RENDER-F002/AO211-OCC-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AO211-RENDER-F002/AO212-OCC-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AO211-RENDER-F002/AO211-OCC-1>
   a triage:Occurrence ;
