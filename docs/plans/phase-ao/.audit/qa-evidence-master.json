@@ -558,6 +558,31 @@
       "minor": 3,
       "count_basis": "headline/reviewer",
       "evidence": "PR #1024, QA-1 on feature/ao2-15-benchmark-official-trigger @ a003b6950: 10 findings (1 blocking QA-AO215-B001 AC3 unattended-safety test row falsely marked complete; 6 important I001-I006; 3 minor M001-M003). Fix round dispatched to arch-ctm; re-verify confirmed 9/10 fixed (commits 83efd5f07, d2f355405, 5f3a3be60) -- I003 (AC#5 second live-unattended-run via launchd) remains open, blocked on an OS-level launchd GUI-domain provisioning gap on the atmbench account (gui/502 error 125, user/502 error 5), not a code defect. PR #1024 not yet merged pending resolution of that infra blocker."
+    },
+    {
+      "run_id": "AO214-QA1",
+      "aich_sprint": "AO2.14",
+      "phase_sprint": "AO2.14",
+      "pass": "QA-1",
+      "run_type": "qa",
+      "assignment_time_utc": "2026-08-24T06:05:00Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": null,
+      "assignment_from": "team-lead",
+      "assignment_shared_path": null,
+      "assignment_summary": null,
+      "result_time_utc": "2026-08-25T02:57:07Z",
+      "result_time_pst": null,
+      "result_message_id": null,
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "PASS (6/6 findings confirmed fixed; merged despite tcp/tcp-tls benchmark floor misses under an explicit one-day waiver)",
+      "blockers": 0,
+      "important": 0,
+      "minor": 0,
+      "count_basis": "headline/reviewer",
+      "evidence": "PR #1020, fix commit 1823207ca (confirmed ancestor of merge commit 3b050422d before recording). 6 findings closed: ARCH-QA-AO214-RULE003, RBQA-AO214-F001, RBQA-AO214-F002, RBQA-AO214-F003, RSH-AO214-001 (closes as hardening/test-coverage -- original defect premise did not hold, code was already correct), RUST-QA-AO214-001. Merged despite tcp (17371/17500) and tcp-tls (13642/17500) benchmark floor misses on the isolated m5-atmbench account -- merge explicitly authorized by Rand (\"complete the pr w/ it failing\"; waiver framed against historical >22k uds/tcp precedent, not a floor change)."
     }
   ],
   "coverage_gaps": [
