@@ -199,3 +199,5 @@ triage:r32 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RUST-QA
 # 13642/17500 on isolated m5-atmbench) -- merge explicitly authorized by Rand.
 
 triage:a19 a triage:Assignment ; triage:ofSprint triage:AO2.15 ; triage:assignedTo "arch-ctm" ; triage:assignedAt "2026-08-25T02:58:29Z"^^xsd:dateTime .
+
+triage:c20 a triage:Completion ; triage:ofSprint triage:AO2.15 ; triage:at "2026-08-25T03:11:37Z"^^xsd:dateTime .
