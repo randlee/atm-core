@@ -1334,6 +1334,34 @@ path without SSH tunneling, localhost simulation, raw-IP substitution, or a
 third-party relay. No AP product implementation begins if that physical proof
 does not pass. The authoritative outline is
 [Phase AP plan](./plans/phase-ap/plan-phase-ap.md).
+## 48. Phase AQ — ATM Send-To Shell Integration [PROPOSED]
+
+Phase AQ delivers PRD Phase 1 of ATM "Send To": one gesture from the OS file
+manager (Finder / Explorer / Nautilus) to a delivered message whose text
+names files landed under the recipient host's `$ATM_TEMP`. Cross-host bytes
+move via user-configured per-host transfer scripts (sftp default over fleet
+SSH; unconfigured hosts fail closed with a setup-doc error) — no envelope
+change, no daemon transfer machinery. ADR-055 defines the system-level
+`ATM_TEMP` contract (mandatory env var, 30-day TTL sweep) and the
+transfer-script seam; thin per-OS shell glue drives the pipeline
+`atm teams --json --members | <picker> | atm send --attach "$@" --from-json`.
+Phase 1 also delivers `atm queue` — `atm send` with the nudge deferred until
+the recipient harness is ready (nudge taxonomy: steer = immediate, queue =
+deferred; ADR-054) — via a `nudge_pending_at` marker, a `PendingNudgeStore`
+storage capability, graft dual-channel wiring (harness owns landing; Hermes
+`/steer`+`/queue` complete), and a tmux idle-drain, under the ADR-054 nudge
+taxonomy (nudge = umbrella; steer/queue = kinds) with its code-rename
+inventory. Queue ships first. Six sprints: AQ1 `atm queue` CLI verb +
+ADR-054 taxonomy + `PendingNudgeStore`, AQ2 graft dual-channel, AQ3 tmux
+idle-drain, AQ4 Send-To core (ATM_TEMP ADR-055, CLI surface, transfer
+scripts, sweeper), AQ5 surface + phase evidence, AQ6 sc-ecosystem
+dependency preflight (pin-latest Wyvern/sc-compose/sc-observability +
+integration tests) + Wyvern contract-test issue. Branches `feature/aq-N-<slug>` off
+`integrate/phase-aq`, all PRs target `integrate/phase-aq`. The authoritative
+plan is [Phase AQ plan](./plans/phase-aq/plan-phase-aq.md); source PRD is
+[prd-atm-send-to](./plans/phase-aq/prd-atm-send-to.md). PRD Phase 2
+(agent-assisted drafting, Wyvern chat sessions) is explicitly deferred.
+
 ## Publishing Improvements
 
 Implementation Branches:

@@ -1324,6 +1324,8 @@ Dry-run JSON output must include:
 
 ## 7. Queue Inspection Surfaces (`atm list`, `atm peek`, and `atm read`)
 
+('queue' here = the mailbox/query surface, unrelated to queue-kind nudges)
+
 Product requirement IDs:
 - `REQ-P-LIST-001` `atm list` must satisfy the bounded queue/search contract.
 - `REQ-P-READ-001` `atm read` must satisfy the documented single-message
@@ -3955,8 +3957,10 @@ mail correctness.
     is adapter work before that resource, never a second write endpoint,
     persistence path, ACK path, or nudge path
   - every canonical write orders idempotent persistence, optional receiver-side
-    acknowledgement mutation, and exactly one post-write router dispatch;
-    nudge or peer delivery must never occur before persistence
+    acknowledgement mutation, and exactly one post-write router dispatch:
+    persist, then emit the steer nudge; queue-kind nudges defer emission
+    until harness readiness (ADR-054); neither kind ever precedes
+    persistence
   - a destination host is consumed as an origin-side routing selector before
     an authenticated peer request reaches receiver-side routing; source host is
     durable provenance shown by read/nudge/ack projections
@@ -4367,14 +4371,25 @@ mail correctness.
     not replay mail, mutate mail, create a retry loop, or persist recovery
     state outside the ATM mailbox
 
+> **Nudge taxonomy (Phase AQ).** "nudge" is the umbrella term for any
+> post-delivery recipient notification. "steer" (steer nudge) is the
+> immediate kind, emitted right after durable persistence — this is the
+> only kind that existed before Phase AQ, so legacy text below that says
+> plain "nudge" for the immediate case means steer nudge. "queue" (queue
+> nudge) is the deferred kind, introduced by Phase AQ, delivered when the
+> recipient harness is ready. Persistence ordering is unchanged for both
+> kinds: neither kind ever precedes durable persistence.
+
 - `REQ-CORE-COMPAT-003` Post-send behavior must use one direct post-persist
   emitter seam.
 
   Required behavior:
   - `atm send` persists the message to durable ATM state
   - `atm ack` persists the reply to durable ATM state
-  - after successful persistence, ATM emits post-send behavior only when the
-    recipient exposes that capability
+  - after successful persistence, ATM emits the steer nudge only when the
+    recipient exposes that capability; queue-kind nudges defer emission
+    until harness readiness (ADR-054), and neither kind ever precedes
+    persistence
   - the shipped default post-send path is the built-in in-process
     implementation
   - teams may override any subset of the six built-in nudge template bodies
@@ -4407,7 +4422,8 @@ mail correctness.
   `recipient_pane_id` payload/roster data or an explicit operator-provided
   `--pane`; they must not revive committed `.atm.toml` pane lookup
 
-- `REQ-CORE-COMPAT-005` `NotificationSink`, queued notifier runtimes, and
+- `REQ-CORE-COMPAT-005` `NotificationSink`, queued notifier runtimes
+  (retired internal worker queue — unrelated to queue-kind nudges), and
   typed delivery-plan execution are not the governing send-path contract.
 
   Required behavior:

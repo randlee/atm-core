@@ -7,6 +7,8 @@
 | Scope | Repository-wide |
 | Relates to | ADR-033, ADR-035, Phase AI |
 
+*Terminology note (Phase AQ): 'nudge' below means the steer (immediate) kind; see the nudge taxonomy in docs/requirements.md.*
+
 ## Context
 
 One logical ATM agent can have several independent live contexts. For example,

@@ -11,6 +11,8 @@
 | Scope | Repository-wide |
 | Relates to | ADR-018, ADR-028, ADR-029, ADR-030, ADR-033, Phase AI |
 
+*Terminology note (Phase AQ): 'nudge' below means the steer (immediate) kind; see the nudge taxonomy in docs/requirements.md.*
+
 ## Decision
 
 Cross-host communication is HTTPS requests to the same daemon HTTP router used

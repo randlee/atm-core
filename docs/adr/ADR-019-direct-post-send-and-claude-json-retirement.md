@@ -9,6 +9,8 @@
 | Relates to | REQ-P-SEND-001, REQ-P-READ-001, REQ-P-RUNTIME-001, REQ-CORE-BOUNDARY-001, REQ-CORE-DAEMON-002 |
 | Supersedes | ADR-010, ADR-013, ADR-018 §7 |
 
+*Terminology note (Phase AQ): 'nudge' below means the steer (immediate) kind; see the nudge taxonomy in docs/requirements.md.*
+
 ---
 
 ## Context

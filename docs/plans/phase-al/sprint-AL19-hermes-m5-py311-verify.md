@@ -30,6 +30,8 @@ CPython 3.11 extension is compatible.
 | `atm-graft` | Generic PyO3 receiver/client bindings and typed `PyNudge` delivery | Hermes imports, Telegram session policy, chat IDs, gateway lifecycle, or source-checkout coupling |
 | `hermes-atm` | Installed pure-Python composition: explicit profile configuration, receiver activation, event-loop handoff, visible notice, and selected-session delivery through the deployed `GatewayRunner.inject_internal_message(...)` contract | Direct storage/socket access, ATM-owned session, second receiver, retry/replay state, private PyO3 import, hard-coded profile, session-key construction, or direct adapter `handle_message` calls |
 
+(Hermes `mode="queue"|"steer"` is Hermes's session-dispatch mode; ATM's Phase-AQ queue/steer *nudge kinds* align with but are distinct from it.)
+
 The current MVP mode is Hermes's internal-event **queue** seam. It is the
 first supported delivery mode, not a permanent product preference. An active
 matching Telegram session queues an event; it does not interrupt or invoke
