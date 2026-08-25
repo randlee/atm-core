@@ -237,8 +237,8 @@ benchmark-publish:
 # Run the complete, unattended official benchmark contract from the dedicated
 # benchmark account. It synchronizes an integrate/phase-* checkout, builds,
 # measures, renders, publishes, and pushes public evidence with exit 0/1/2.
-benchmark-official:
-    {{python_cmd}} scripts/smoke/benchmark_official.py
+benchmark-official *args:
+    {{python_cmd}} scripts/smoke/benchmark_official.py {{args}}
 
 # Generate architecture visualization artifacts.
 view target='all':

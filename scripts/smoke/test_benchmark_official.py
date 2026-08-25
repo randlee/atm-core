@@ -354,6 +354,15 @@ class OfficialBenchmarkTests(unittest.TestCase):
         self.assertIn("launchctl bootstrap", runbook)
         self.assertIn("launchctl bootout", runbook)
 
+    def test_just_recipe_forwards_branch_override(self) -> None:
+        justfile = (Path(__file__).resolve().parents[2] / "Justfile").read_text(encoding="utf-8")
+        runbook = (Path(__file__).resolve().parents[2] / ".claude/skills/benchmark-run/SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("benchmark-official *args:", justfile)
+        self.assertIn("benchmark_official.py {{args}}", justfile)
+        self.assertIn("just benchmark-official --branch", runbook)
+
 
 if __name__ == "__main__":
     unittest.main()
