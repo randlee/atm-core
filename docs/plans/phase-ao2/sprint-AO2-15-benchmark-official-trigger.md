@@ -33,7 +33,9 @@ AO2.13's plan but never implemented — it is built here.
 
 ```
 preflight:  whoami == atmbench (or ATM_OFFICIAL_ACCOUNT override);
-            daemon-switch.py status --doctor reports healthy;
+            daemon-switch.py status --doctor: NOTE it always exits 0 —
+            health must be read from its JSON output (healthy field /
+            absence of the error key), never exit-code-gated;
             git fetch; if local HEAD is AHEAD of origin/<branch>
             (stranded evidence commit from a prior failed push): attempt
             the push first, else exit 2 naming the stranded commit —
@@ -74,7 +76,13 @@ verdict:    exit 0 = all floors green
    a `com.atm.benchmark-official.plist` launchd template under `tools/`
    carrying the `GIT_SSH_COMMAND`/`PYO3_PYTHON`/`ATM_SIGNING_IDENTITY`
    environment, with install/uninstall one-liners (scheduling is an ops
-   action); note that a future CI-runner job is this same command.
+   action). Install steps include a one-time host-key pre-trust
+   (`ssh-keyscan github.com >> ~/.ssh/known_hosts`, idempotent) so the
+   first unattended push cannot fail closed on an unknown host. The
+   plist's `<deploy-key>` IdentityFile placeholder is resolved at INSTALL
+   time by the install one-liner (sed against the account's actual key
+   filename) — the committed template carries the placeholder, never a
+   real path; note that a future CI-runner job is this same command.
 
 ## Acceptance criteria
 
@@ -87,6 +95,12 @@ verdict:    exit 0 = all floors green
    (wrong account, dirty tree, unhealthy daemon-switch, stranded-commit
    with unreachable remote) → 2 with actionable messages; stranded
    commit with reachable remote is pushed, then the run proceeds;
+   stranded commit whose push is REJECTED (diverged remote) → exit 2
+   naming both shas, never a reset;
+   publish- or push-step failure AFTER a measured FAIL still exits 1
+   (verdict precedence, same rule as rebuild); a GREEN campaign followed
+   by publish/push failure exits 2 (measured PASS is not a verdict until
+   published);
    missing/stale release binaries relative to synced HEAD fail closed at
    the build step (fixture: binaries absent → exit 2 before any
    measurement).
@@ -117,7 +131,9 @@ verdict:    exit 0 = all floors green
 
 ## Dependencies
 
-- must_follow: none — touches `Justfile`,
+- must_follow: AO2.13 (deliverable 3 amends its benchmark-run skill
+  doc; PR-completion trigger — AO2.13 is already merged via the
+  #1013–#1015 chain, so this is satisfied). Otherwise touches `Justfile`,
   `scripts/smoke/benchmark_official.py` (new), `tools/`, the skill doc;
   no runtime crates. Dispatchable immediately; parallel_safe with all
   open work.
@@ -129,3 +145,4 @@ verdict:    exit 0 = all floors green
 | 1 | critical-plan-reviewer (sonnet, combined pass) | `3c6bd2ec6` | FAIL — 2 Blocking (signing "fix" duplicated already-landed dedupe code — live re-verification proved the real cause is a stale clone, no signing work needed at all; `just benchmark-publish` assumed to exist but was never implemented), 3 Important (Justfile rebuild step can mask a recorded FAIL's exit status; hard-sync could silently discard a stranded evidence commit; no SSH auth contract for launchd's non-login push), 2 minor (tty-test mechanism; "daemon-switch sane" undefined) | Fixed in round-1 rewrite: signing deliverable deleted with live evidence recorded (current resolver passes with/without override on the atmbench keychain); `benchmark-publish` promoted to deliverable 1; glue invokes the runner directly with verdict-precedence rule + fixture; stranded-commit push-first/fail-closed preflight; explicit `GIT_SSH_COMMAND` IdentityFile contract carried by the plist; stdin=/dev/null + static-scan tty test; `daemon-switch.py status --doctor` healthy named. |
 | 2 | critical-plan-reviewer (sonnet) | `de8eb1d25` | FAIL — 6/7 round-1 items verified resolved (incl. the empirical signing deletion); 1 new Important: the direct-runner rewrite dropped the cargo-build + sign steps, risking measurement of stale binaries | Fixed in round-2 commit: explicit build stage (cargo build --release + sign_daemon_dev.py, fatal exit 2) restored ahead of the runner, with a missing-binaries fail-closed fixture in AC #2. |
 | 3 | critical-plan-reviewer (sonnet) | `47e6d4d59` | **PASS** — build-stage restoration verified; zero findings; hardening complete | Ready for quality-mgr final QA. |
+| 4 | quality-mgr gate (PR #1022) | pre-fix head | **PASS**, 0 Blocking — 6 doc-level pre-merge fixes (must_follow AO2.13; two missing verdict-precedence AC rows; SSH host-key pre-trust; daemon-switch --doctor always exits 0 so preflight must be a JSON-content check; rejected-push stranded fixture; plist placeholder timing) + 1 refuted req-qa false positive (wrong-branch signing claim) | All six applied in this commit; no new QA round required per team-lead. |
