@@ -184,7 +184,7 @@ pub(crate) async fn serve_unix_http1(
     drain_connections(connections).await
 }
 
-async fn serve_connection<I, S>(
+pub(crate) async fn serve_connection<I, S>(
     io: TokioIo<I>,
     service: S,
     header_read_timeout: Duration,
