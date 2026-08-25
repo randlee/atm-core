@@ -93,9 +93,12 @@ approvers = ["randlee", "quality-mgr-bot"]
    and passes outside; unbalanced/removed sentinel without manifest change
    fails; manifest region naming a missing file/sentinel fails; sentinel
    span survives `cargo fmt --check` (fixture).
-2. (D2) The clippy deny attributes exist in every module the manifest
-   lists, verified by the lint test; a fixture holding a `MutexGuard`
-   across `.await` in a sentinel module fails workspace clippy.
+2. (D2) The clippy deny attributes exist on every function the
+   manifest's regions bracket, verified by the lint test; a fixture
+   holding a `MutexGuard` across `.await` in a sentinel function fails
+   workspace clippy; a two-regions-in-one-file fixture with different
+   `clippy_denies` sets is enforced per-function (the case the
+   item-level switch exists to support).
 3. (D4) Job-registration semantics: on a synthetic PR not touching any
    region, the job registers and passes as a no-op (never left pending);
    touching a region without evidence fails; with a campaign id passes;
@@ -123,5 +126,7 @@ approvers = ["randlee", "quality-mgr-bot"]
 
 - must_follow: AO2.14 (PR #1020) merge — sentinel placement lands on the
   post-pooling shape of the router/client files. PR-completion trigger.
-- parallel_safe: AO2.16, AO2.17 (disjoint files; AO2.16 touches only the
-  Python benchmark pipeline + benches/, AO2.17 only docs/sc-lint proposal).
+- parallel_safe: AO2.16 deliverables 1–2 and AO2.17 (disjoint files).
+  AO2.16 deliverable 3 consumes THIS sprint's `scripts/ci/diff_scope.py`
+  and manifest path and carries its own must_follow on this sprint —
+  AO2.16's Dependencies section is authoritative for that relation.

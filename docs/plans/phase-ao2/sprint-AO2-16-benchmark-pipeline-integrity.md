@@ -112,8 +112,10 @@ def contract_hash(contract: dict) -> str:
      `crates/atm-http-runtime/`, `crates/atm-storage*/`, `benches/`, and
      the literal manifest path
      `boundaries/atm-core/hot-path-admission.toml` (quoted here verbatim
-     from AO2.15's normative sample — the shared fixture test in both
-     sprints asserts this exact string so the docs cannot drift).
+     from AO2.15's normative sample for the reader; the IMPLEMENTATION
+     hardcodes no second copy — since D3 must_follow AO2.15's merge, its
+     CI wiring and fixture read the manifest path from AO2.15's landed
+     constant/file directly, making drift structurally impossible).
 
 ## Acceptance criteria
 
