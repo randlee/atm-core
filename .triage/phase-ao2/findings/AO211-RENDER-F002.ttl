@@ -31,8 +31,8 @@
   triage:file ".just/tests/test_benchmark_report.py" ;
   triage:line 109 ;
   triage:snippet "first = campaign(datetime(2026, 8, 24, 7, tzinfo=UTC), identifier=...)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/ao2-11-benchmark-rendering-pipeline" ;
   triage:headSha "77681d4669e20ca631e9f2f42c08ff2d3efbed91" ;
   triage:occursIn <urn:atm:triage:worktree/ao211/77681d466> .
@@ -42,8 +42,8 @@
   triage:file ".just/tests/test_benchmark_report.py" ;
   triage:line 109 ;
   triage:snippet "first = campaign(datetime(2026, 8, 24, 7, tzinfo=UTC), identifier=...)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/ao2-12-historical-data-migration" ;
   triage:headSha "5f40e9fee5f1481fb98523f974828d526022ce58" ;
   triage:occursIn <urn:atm:triage:worktree/ao212/5f40e9fee> .

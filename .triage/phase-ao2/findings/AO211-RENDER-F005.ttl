@@ -31,8 +31,8 @@
   triage:file "scripts/smoke/benchmark_schema.py" ;
   triage:line 331 ;
   triage:snippet "# The historical-record contract is owned by AO2.12\'s plan, but these models" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/ao2-11-benchmark-rendering-pipeline" ;
   triage:headSha "3249c4460d255f73b1c59b002a2d3a98b39eae67" ;
   triage:occursIn <urn:atm:triage:worktree/AO211/3249c44> .
@@ -42,8 +42,8 @@
   triage:file "scripts/smoke/benchmark_schema.py" ;
   triage:line 331 ;
   triage:snippet "# The historical-record contract is owned by AO2.12\'s plan, but these models" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/ao2-12-historical-data-migration" ;
   triage:headSha "5f40e9fee5f1481fb98523f974828d526022ce58" ;
   triage:occursIn <urn:atm:triage:worktree/AO212/5f40e9f> .
