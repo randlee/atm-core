@@ -133,3 +133,56 @@ python .claude/skills/daemon-switch/scripts/daemon-switch.py status --doctor
 After the campaign, restore the installed pair through daemon-switch and run
 `atm doctor --json` again. Do not create a second service or point the service
 directly at a worktree executable.
+
+## 8. Official unattended M5 trigger
+
+Use this only from the pre-provisioned `atmbench` account on M5. It is the
+headless counterpart to sections 1–4: it verifies account and daemon health,
+syncs the current `integrate/phase-*` branch, builds and signs fresh release
+binaries, runs the complete matrix, rebuilds reports, stages only public
+artifacts, commits, and pushes. Its exit code is the machine-readable result:
+`0` means all target floors passed, `1` means a measured campaign was published
+with one or more FAIL targets, and `2` means no publishable official result was
+produced because of an infrastructure error.
+
+On-demand from M4:
+
+```sh
+ssh atmbench@rand-m5.local 'cd ~/github/atm-core && just benchmark-official'
+```
+
+For a LaunchAgent, first set the two account-local values without committing
+them: `ATM_BENCHMARK_DEPLOY_KEY` must name the deploy key that has write access
+to the repository, and `ATM_SIGNING_IDENTITY` must be the installed Apple
+Development identity. Pre-trust GitHub once so the first launchd push cannot
+wait for a host-key prompt; the command is idempotent:
+
+```sh
+ssh-keygen -F github.com >/dev/null || ssh-keyscan -H github.com >> ~/.ssh/known_hosts
+```
+
+Install the committed template with concrete paths substituted only in the
+account-local copy, then invoke it. The template deliberately contains no key
+path, identity fingerprint, account secret, or repository-specific home path.
+
+```sh
+key="${ATM_BENCHMARK_DEPLOY_KEY:?set the account-local deploy-key path}"
+identity="${ATM_SIGNING_IDENTITY:?set the Apple Development identity}"
+repo="$HOME/github/atm-core"
+mkdir -p "$HOME/Library/LaunchAgents" "$HOME/benchmark-logs"
+sed -e "s|__ATM_REPO__|$repo|g" -e "s|__ATM_DEPLOY_KEY__|$key|g" \
+  -e "s|__ATM_SIGNING_IDENTITY__|$identity|g" -e "s|__ATM_HOME__|$HOME|g" \
+  "$repo/tools/com.atm.benchmark-official.plist" \
+  > "$HOME/Library/LaunchAgents/com.atm.benchmark-official.plist"
+launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.atm.benchmark-official.plist"
+launchctl kickstart -k "gui/$(id -u)/com.atm.benchmark-official"
+```
+
+Inspect the timestamped `~/benchmark-logs/benchmark-official-*.log` log and
+the launchd stdout/stderr logs after it completes. Remove the trigger without
+touching its benchmark evidence via:
+
+```sh
+launchctl bootout "gui/$(id -u)/com.atm.benchmark-official" || true
+rm -f "$HOME/Library/LaunchAgents/com.atm.benchmark-official.plist"
+```

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.atm.benchmark-official</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/env</string>
+    <string>just</string>
+    <string>benchmark-official</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>__ATM_REPO__</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>ATM_OFFICIAL_ACCOUNT</key>
+    <string>atmbench</string>
+    <key>ATM_BENCHMARK_DEPLOY_KEY</key>
+    <string>__ATM_DEPLOY_KEY__</string>
+    <key>GIT_SSH_COMMAND</key>
+    <string>ssh -i __ATM_DEPLOY_KEY__ -o IdentitiesOnly=yes -o BatchMode=yes</string>
+    <key>PYO3_PYTHON</key>
+    <string>/opt/homebrew/bin/python3</string>
+    <key>ATM_SIGNING_IDENTITY</key>
+    <string>__ATM_SIGNING_IDENTITY__</string>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>__ATM_HOME__/benchmark-logs/launchd.stdout.log</string>
+  <key>StandardErrorPath</key>
+  <string>__ATM_HOME__/benchmark-logs/launchd.stderr.log</string>
+  <key>RunAtLoad</key>
+  <false/>
+</dict>
+</plist>

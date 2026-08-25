@@ -205,6 +205,16 @@ class OfficialBenchmarkTests(unittest.TestCase):
         self.assertIn("PYO3_PYTHON", template)
         self.assertIn("ATM_SIGNING_IDENTITY", template)
 
+    def test_runbook_documents_ssh_and_safe_launchd_installation(self) -> None:
+        runbook = (Path(__file__).resolve().parents[2] / ".claude/skills/benchmark-run/SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("ssh atmbench@rand-m5.local", runbook)
+        self.assertIn("just benchmark-official", runbook)
+        self.assertIn("ssh-keyscan -H github.com", runbook)
+        self.assertIn("launchctl bootstrap", runbook)
+        self.assertIn("launchctl bootout", runbook)
+
 
 if __name__ == "__main__":
     unittest.main()
