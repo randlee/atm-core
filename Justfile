@@ -234,6 +234,12 @@ benchmark-show:
 benchmark-publish:
     {{python_cmd}} scripts/smoke/benchmark_publish.py
 
+# Run the complete, unattended official benchmark contract from the dedicated
+# benchmark account. It synchronizes an integrate/phase-* checkout, builds,
+# measures, renders, publishes, and pushes public evidence with exit 0/1/2.
+benchmark-official:
+    {{python_cmd}} scripts/smoke/benchmark_official.py
+
 # Generate architecture visualization artifacts.
 view target='all':
     {{python_cmd}} .just/run_view.py {{target}}
