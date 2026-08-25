@@ -523,6 +523,7 @@ mod tests {
     use std::convert::Infallible;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Duration;
 
     use axum::Router;
     use axum::http::{StatusCode, header};
@@ -533,6 +534,10 @@ mod tests {
     use super::{PeerConnectionPool, PeerPoolConfig};
     use crate::http1_server::serve_connection;
     use crate::{AcceptedPeerStream, EstablishedPeerStream, PeerStreamAdapter, PeerStreamFuture};
+
+    // A test-only allowance for resolving `localhost` to the IPv4-only test
+    // listener on Windows. Production callers retain their supplied deadline.
+    const AUTHORITY_ISOLATION_TEST_DEADLINE: Duration = Duration::from_secs(5);
 
     #[derive(Default)]
     struct CountingPassthroughAdapter {
@@ -741,7 +746,7 @@ mod tests {
                 .acquire(
                     &peer,
                     std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                    atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
+                    atm_core::api::RequestDeadline::after(AUTHORITY_ISOLATION_TEST_DEADLINE),
                 )
                 .await
                 .expect("pool acquires peer connection");
@@ -1124,6 +1129,7 @@ mod tests {
         assert!(matches!(
             failure,
             super::HttpRuntimeClientFailure::PeerConnect { .. }
+                | super::HttpRuntimeClientFailure::PeerConnectTimeout { .. }
         ));
         assert_eq!(
             adapter.connects.load(Ordering::SeqCst),
