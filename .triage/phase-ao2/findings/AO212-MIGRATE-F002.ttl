@@ -4,6 +4,15 @@
 # Persisted file/path values are repository-relative. Runtime checkout paths
 # belong in the agent input only and must not be copied into this record.
 
+# REFUTED (team-lead, 2026-08-25): independent adversarial code review found
+# the cited line "floor = max(prior, observed) if eligible ... else prior"
+# does not exist in migrate_benchmark_history.py (grep, zero hits). Current
+# logic (lines 243-268) computes `prior = best.get(key, 0.0)` and classifies
+# the result against it BEFORE updating `best[key]` -- exactly the
+# non-self-referential order the finding recommends as the fix -- with an
+# inline comment explicitly guarding against this exact bug. Closed as
+# false_positive; no fix dispatched.
+
 <urn:atm:triage:finding/AO212-MIGRATE-F002>
   a triage:Finding ;
   triage:findingId "AO212-MIGRATE-F002" ;
@@ -15,8 +24,8 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "false_positive" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-23T23:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.12 ;
   triage:foundAt "2026-08-24T05:50:00Z"^^xsd:dateTime ;
@@ -29,8 +38,8 @@
   triage:file "scripts/smoke/migrate_benchmark_history.py" ;
   triage:line 234 ;
   triage:snippet "floor = max(prior, observed) if eligible and observed is not None else prior" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "false_positive" ;
+  triage:closed true ;
   triage:branch "feature/ao2-12-historical-data-migration" ;
   triage:headSha "8788090d6" ;
   triage:occursIn <urn:atm:triage:worktree/AO212/8788090d6> .
@@ -40,8 +49,8 @@
   triage:file "scripts/smoke/migrate_benchmark_history.py" ;
   triage:line 234 ;
   triage:snippet "floor = max(prior, observed) if eligible and observed is not None else prior" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "false_positive" ;
+  triage:closed true ;
   triage:branch "feature/ao2-13-benchmark-run-skill" ;
   triage:headSha "beaec158e" ;
   triage:occursIn <urn:atm:triage:worktree/AO213/beaec158e> .
