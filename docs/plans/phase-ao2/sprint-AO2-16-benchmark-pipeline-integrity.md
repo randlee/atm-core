@@ -73,16 +73,23 @@ def contract_hash(contract: dict) -> str:
    cannot retroactively orphan the audit trail; the recorded sha proves
    what was checked). Rejection error names the revision, the refs tried,
    and the remediation ("merge the branch or re-measure on an ancestor").
+   Implemented by reusing/promoting the existing `is_ancestor_revision()`
+   helper (`scripts/smoke/run_admission_capacity.py:508`, already used at
+   line 1187 for comparison-evidence acceptance) rather than
+   reimplementing the ancestry check — same one-shared-helper discipline
+   already applied to `diff_scope.py` elsewhere in this plan.
 3. **CI micro-bench tripwire** — an early-warning gate honest about shared
    runners:
    - The bench calls the ONE canonical write pipeline:
      `CanonicalWriteHandler::commit_write` on a `StorageAndNudgeRouter`
      built by the normal constructor with a mock transport adapter —
-     never a parallel writer. The existing
-     `ao4_benchmark_targets_cannot_introduce_an_alternate_daemon_pipeline`
-     literal-scan is extended to cover `benches/` (the bench file is
-     allowed to reference the canonical constructor, forbidden to
-     construct a second pipeline).
+     never a parallel writer. A NEW literal-scan test covering `benches/`
+     is added, modeled on the existing idiom at
+     `acknowledgement_cannot_restore_a_second_write_pipeline`
+     (crates/atm-architecture/tests/boundary_enforcement.rs:132) — no
+     pre-existing `benches/`-scoped test is being extended, since none
+     exists yet. The bench file is allowed to reference the canonical
+     constructor, forbidden to construct a second pipeline.
    - Methodology (round-1 flake finding): criterion with fixed
      `sample_size`, gate computed on the MEDIAN of 5 criterion runs
      in-job, compared against `benches/admission-baseline.json`:
