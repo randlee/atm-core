@@ -31,8 +31,8 @@
   triage:file "crates/peer-tls/src/lib.rs" ;
   triage:line 178 ;
   triage:snippet "peer.fingerprint.as_str().to_ascii_lowercase()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s2-isolated-mtls-stream-adapter" ;
   triage:headSha "c30d24442e177b9b63ef245abdffd6aa6fd8f911" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s2/c30d24442e177b9b63ef245abdffd6aa6fd8f911> .

@@ -31,8 +31,8 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 285 ;
   triage:snippet "let benchmark_entrypoint = root.join(...);" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s4-peer-wire-proof" ;
   triage:headSha "d9fb74917a804d2068684db40a28bc4ce636f283" ;
   triage:occursIn <urn:atm:triage:worktree/AO24-S4/d9fb74917a804d2068684db40a28bc4ce636f283> .

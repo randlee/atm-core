@@ -31,8 +31,8 @@
   triage:file "crates/peer-tls/src/lib.rs" ;
   triage:line "84, 99, 123-156" ;
   triage:snippet "ClientConfig/ServerConfig rebuilt on every connect()/accept() call" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s2-isolated-mtls-stream-adapter" ;
   triage:headSha "c30d24442e177b9b63ef245abdffd6aa6fd8f911" ;
   triage:occursIn <urn:atm:triage:worktree/AO2-pao-s2/c30d24442e177b9b63ef245abdffd6aa6fd8f911> .

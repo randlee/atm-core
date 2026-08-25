@@ -31,8 +31,8 @@
   triage:file "docs/atm-storage/boundaries.md" ;
   triage:line 89 ;
   triage:snippet "Phase AO records the sole proposed second consumer: `peer-tls` may consume these helpers only after its AO.1 boundary-TOML, manifest, and architecture-guard transition is reviewed and merged." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s2-isolated-mtls-stream-adapter" ;
   triage:headSha "c30d24442e177b9b63ef245abdffd6aa6fd8f911" ;
   triage:occursIn <urn:atm:triage:worktree/AO2.2/c30d24442> .

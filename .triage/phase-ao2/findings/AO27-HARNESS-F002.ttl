@@ -15,24 +15,37 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-22T21:10:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.7 ;
   triage:foundAt "2026-08-22T21:09:45Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AO27-HARNESS-F002/ao2-7-1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO27-HARNESS-F002/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-25T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "test_ordinary_benchmark_fails_when_one_required_target_fails (scripts/smoke/test_run_admission_capacity.py) mocks tcp as FAIL and the other three targets as PASS, asserts RUNNER.main() returns 1, and asserts 'FAIL required f8 target tcp' appears in stdout -- directly covers the suite-fails-closed-on-partial-target-failure gap. Fixed in commit 652711fe3." ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AO27-HARNESS-F002/ao2-7-1>
   a triage:Occurrence ;
   triage:file "scripts/smoke/test_benchmark_suite.py" ;
   triage:line 1 ;
   triage:snippet "Test suite missing failure-path coverage for partial target results" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/ao2-7-direct-peer-benchmark-harness" ;
   triage:headSha "934caaaa7fef7803740be228a1276d552ea29db5" ;
   triage:occursIn <urn:atm:triage:worktree/ao2-7/934caaaa7fef7803740be228a1276d552ea29db5> .
+
+<urn:atm:triage:occurrence/AO27-HARNESS-F002/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_admission_capacity.py" ;
+  triage:snippet "quality-mgr independent re-verification confirmed fixed via commit 652711fe3" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "652711fe3" .
 
 <urn:atm:triage:worktree/ao2-7/934caaaa7fef7803740be228a1276d552ea29db5>
   a triage:WorktreeSnapshot ;
