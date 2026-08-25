@@ -14,6 +14,8 @@
   <string>__ATM_REPO__</string>
   <key>EnvironmentVariables</key>
   <dict>
+    <key>PATH</key>
+    <string>__ATM_HOME__/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     <key>ATM_OFFICIAL_ACCOUNT</key>
     <string>atmbench</string>
     <key>ATM_BENCHMARK_DEPLOY_KEY</key>

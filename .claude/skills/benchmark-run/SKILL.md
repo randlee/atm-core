@@ -151,7 +151,7 @@ produced because of an infrastructure error.
 On-demand from M4:
 
 ```sh
-ssh atmbench@rand-m5.local 'cd ~/github/atm-core && just benchmark-official'
+ssh atmbench@rand-m5.local 'export PATH="$HOME/.local/bin:/opt/homebrew/bin:$PATH"; cd ~/github/atm-core && just benchmark-official'
 ```
 
 To live-validate a reviewed PR before it is merged, name that remote branch
@@ -159,7 +159,7 @@ explicitly. This is the only supported exception to the ordinary
 `integrate/phase-*` default and retains all evidence on the reviewed branch:
 
 ```sh
-ssh atmbench@rand-m5.local 'cd ~/github/atm-core && just benchmark-official --branch feature/<reviewed-branch>'
+ssh atmbench@rand-m5.local 'export PATH="$HOME/.local/bin:/opt/homebrew/bin:$PATH"; cd ~/github/atm-core && just benchmark-official --branch feature/<reviewed-branch>'
 ```
 
 For a LaunchAgent, first set the two account-local values without committing

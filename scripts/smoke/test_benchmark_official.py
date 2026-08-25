@@ -323,6 +323,7 @@ class OfficialBenchmarkTests(unittest.TestCase):
         )
         self.assertNotIn("GIT_SSH_COMMAND", template)
         self.assertIn("ATM_BENCHMARK_DEPLOY_KEY", template)
+        self.assertIn("__ATM_HOME__/.local/bin:/opt/homebrew/bin", template)
         self.assertIn("PYO3_PYTHON", template)
         self.assertIn("ATM_SIGNING_IDENTITY", template)
 
@@ -331,6 +332,7 @@ class OfficialBenchmarkTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("ssh atmbench@rand-m5.local", runbook)
+        self.assertIn("$HOME/.local/bin:/opt/homebrew/bin", runbook)
         self.assertIn("just benchmark-official", runbook)
         self.assertIn("ssh-keyscan -H github.com", runbook)
         self.assertIn("launchctl bootstrap", runbook)
