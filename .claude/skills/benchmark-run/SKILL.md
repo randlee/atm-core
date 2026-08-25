@@ -140,7 +140,10 @@ Use this only from the pre-provisioned `atmbench` account on M5. It is the
 headless counterpart to sections 1–4: it verifies account and daemon health,
 syncs the current `integrate/phase-*` branch, builds and signs fresh release
 binaries, runs the complete matrix, rebuilds reports, stages only public
-artifacts, commits, and pushes. Its exit code is the machine-readable result:
+artifacts, commits, and pushes. The runner derives `GIT_SSH_COMMAND` at
+runtime from the account-local `ATM_BENCHMARK_DEPLOY_KEY`, so the LaunchAgent
+does not carry a duplicate static SSH command. Its exit code is the
+machine-readable result:
 `0` means all target floors passed, `1` means a measured campaign was published
 with one or more FAIL targets, and `2` means no publishable official result was
 produced because of an infrastructure error.
@@ -149,6 +152,14 @@ On-demand from M4:
 
 ```sh
 ssh atmbench@rand-m5.local 'cd ~/github/atm-core && just benchmark-official'
+```
+
+To live-validate a reviewed PR before it is merged, name that remote branch
+explicitly. This is the only supported exception to the ordinary
+`integrate/phase-*` default and retains all evidence on the reviewed branch:
+
+```sh
+ssh atmbench@rand-m5.local 'cd ~/github/atm-core && just benchmark-official --branch feature/<reviewed-branch>'
 ```
 
 For a LaunchAgent, first set the two account-local values without committing

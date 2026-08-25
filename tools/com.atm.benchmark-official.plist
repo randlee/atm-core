@@ -18,8 +18,6 @@
     <string>atmbench</string>
     <key>ATM_BENCHMARK_DEPLOY_KEY</key>
     <string>__ATM_DEPLOY_KEY__</string>
-    <key>GIT_SSH_COMMAND</key>
-    <string>ssh -i __ATM_DEPLOY_KEY__ -o IdentitiesOnly=yes -o BatchMode=yes</string>
     <key>PYO3_PYTHON</key>
     <string>/opt/homebrew/bin/python3</string>
     <key>ATM_SIGNING_IDENTITY</key>

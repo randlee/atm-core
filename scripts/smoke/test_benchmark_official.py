@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import inspect
 import json
+import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -73,6 +75,20 @@ class OfficialBenchmarkTests(unittest.TestCase):
         runner, _ = self.preflight_run(doctor=json.dumps({"doctor": {"error": "offline"}}))
         self.assertEqual(runner.execute(), 2)
 
+    def test_preflight_names_pre_json_daemon_switch_failure(self) -> None:
+        runner, _ = self.preflight_run()
+        with mock.patch.object(
+            runner,
+            "command",
+            side_effect=[
+                completed(["whoami"], stdout="atmbench\n"),
+                completed(["git", "status", "--porcelain"]),
+                completed(["daemon-switch", "status", "--doctor"], 1, stderr="selector missing"),
+            ],
+        ):
+            with self.assertRaisesRegex(OFFICIAL.OfficialBenchmarkError, "could not produce doctor JSON"):
+                runner.preflight()
+
     def test_preflight_refuses_dirty_tree_before_sync(self) -> None:
         runner, calls = self.preflight_run(dirty=" M unrelated.txt\n")
         self.assertEqual(runner.execute(), 2)
@@ -137,6 +153,57 @@ class OfficialBenchmarkTests(unittest.TestCase):
         push_kwargs = calls[commands.index(["git", "push", "origin", "integrate/phase-ao2"])][1]
         self.assertIn("-i /home/atmbench/.ssh/deploy", push_kwargs["env"]["GIT_SSH_COMMAND"])
 
+    def test_stranded_unreachable_remote_is_distinct_and_never_resets(self) -> None:
+        calls: list[list[str]] = []
+
+        def run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            calls.append(command)
+            if command == ["whoami"]:
+                return completed(command, stdout="atmbench\n")
+            if command[:2] == ["git", "status"]:
+                return completed(command)
+            if Path(command[0]).name.startswith("python"):
+                return completed(command, stdout=self.healthy_doctor())
+            if command == ["git", "branch", "--show-current"]:
+                return completed(command, stdout="integrate/phase-ao2\n")
+            if command == ["git", "fetch", "origin"]:
+                return completed(command)
+            if command == ["git", "rev-list", "origin/integrate/phase-ao2..HEAD"]:
+                return completed(command, stdout="stranded-sha\n")
+            if command == ["git", "rev-parse", "origin/integrate/phase-ao2"]:
+                return completed(command, stdout="remote-sha\n")
+            if command == ["git", "push", "origin", "integrate/phase-ao2"]:
+                return completed(command, 128, stderr="Could not resolve host: github.com")
+            self.fail(f"unexpected command: {command}")
+
+        with self.assertRaisesRegex(OFFICIAL.OfficialBenchmarkError, "stranded-sha.*Could not resolve host"):
+            self.runner(run).preflight()
+        self.assertFalse(any(command[:3] == ["git", "reset", "--hard"] for command in calls))
+
+    def test_explicit_branch_override_is_used_for_premerge_validation(self) -> None:
+        calls: list[list[str]] = []
+
+        def run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            calls.append(command)
+            if command == ["whoami"]:
+                return completed(command, stdout="atmbench\n")
+            if command[:2] == ["git", "status"]:
+                return completed(command)
+            if Path(command[0]).name.startswith("python"):
+                return completed(command, stdout=self.healthy_doctor())
+            if command == ["git", "fetch", "origin"]:
+                return completed(command)
+            if command == ["git", "rev-list", "origin/feature/review..HEAD"]:
+                return completed(command)
+            if command == ["git", "reset", "--hard", "origin/feature/review"]:
+                return completed(command)
+            self.fail(f"unexpected command: {command}")
+
+        runner = self.runner(run)
+        runner.branch_override = "feature/review"
+        self.assertEqual(runner.preflight(), "feature/review")
+        self.assertNotIn(["git", "branch", "--show-current"], calls)
+
     def test_build_refuses_missing_release_binaries_before_measurement(self) -> None:
         runner = self.runner(lambda command, **kwargs: completed(command))
         with self.assertRaisesRegex(OFFICIAL.OfficialBenchmarkError, "did not produce required"):
@@ -156,6 +223,22 @@ class OfficialBenchmarkTests(unittest.TestCase):
         runner.build_and_sign()
         self.assertEqual(calls[0], ["cargo", "build", "--release", "-p", "agent-team-mail", "-p", "atm-daemon"])
         self.assertTrue(calls[1][-1].endswith(".just/sign_daemon_dev.py"))
+
+    def test_execute_exercises_real_build_failure_before_measurement(self) -> None:
+        calls: list[list[str]] = []
+
+        def run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            calls.append(command)
+            return completed(command)
+
+        runner = self.runner(run)
+        with (
+            mock.patch.object(runner, "preflight", return_value="integrate/phase-ao2"),
+            mock.patch.object(runner, "measure") as measure,
+        ):
+            self.assertEqual(runner.execute(), 2)
+        self.assertEqual(calls[0], ["cargo", "build", "--release", "-p", "agent-team-mail", "-p", "atm-daemon"])
+        measure.assert_not_called()
 
     def test_green_campaign_with_publish_failure_is_infrastructure_error(self) -> None:
         runner = self.runner(lambda command, **kwargs: completed(command))
@@ -177,6 +260,28 @@ class OfficialBenchmarkTests(unittest.TestCase):
         ):
             self.assertEqual(runner.execute(), 1)
 
+    def test_measured_fail_keeps_exit_one_when_post_measurement_step_raises(self) -> None:
+        runner = self.runner(lambda command, **kwargs: completed(command))
+        with (
+            mock.patch.object(runner, "preflight", return_value="integrate/phase-ao2"),
+            mock.patch.object(runner, "build_and_sign"),
+            mock.patch.object(runner, "measure", return_value=OFFICIAL.OfficialOutcome(True, "tcp p50=1 floor=2")),
+            mock.patch.object(runner, "render_publish_and_push", side_effect=OFFICIAL.OfficialBenchmarkError("push failed")),
+            mock.patch.object(runner, "notify_team_lead") as notify,
+        ):
+            self.assertEqual(runner.execute(), 1)
+        notify.assert_called_once_with("tcp p50=1 floor=2")
+
+    def test_measured_fail_notifies_team_lead_but_notification_cannot_change_exit_one(self) -> None:
+        runner = self.runner(lambda command, **kwargs: completed(command, 1, stderr="offline"))
+        with (
+            mock.patch.object(runner, "preflight", return_value="integrate/phase-ao2"),
+            mock.patch.object(runner, "build_and_sign"),
+            mock.patch.object(runner, "measure", return_value=OFFICIAL.OfficialOutcome(True, "tcp p50=1.00 floor=2.00")),
+            mock.patch.object(runner, "render_publish_and_push", return_value=None),
+        ):
+            self.assertEqual(runner.execute(), 1)
+
     def test_failure_summary_names_target_p50_and_floor(self) -> None:
         campaign = {
             "results": [{
@@ -195,13 +300,29 @@ class OfficialBenchmarkTests(unittest.TestCase):
         self.assertNotIn("input(", source)
         self.assertNotIn("getpass", source)
 
+    def test_actual_script_completes_with_stdin_at_dev_null(self) -> None:
+        environment = dict(os.environ)
+        environment.update({"HOME": self.temporary.name, "ATM_OFFICIAL_ACCOUNT": "not-the-current-user"})
+        result = subprocess.run(
+            [sys.executable, str(Path(OFFICIAL.__file__))],
+            cwd=self.root,
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("official runs require account", result.stdout)
+        self.assertTrue((self.root / "benchmark-logs").is_dir())
+
     def test_launchd_template_carries_non_login_push_environment(self) -> None:
         template = (Path(__file__).resolve().parents[2] / "tools/com.atm.benchmark-official.plist").read_text(
             encoding="utf-8"
         )
-        self.assertIn("GIT_SSH_COMMAND", template)
-        self.assertIn("IdentitiesOnly=yes", template)
-        self.assertIn("BatchMode=yes", template)
+        self.assertNotIn("GIT_SSH_COMMAND", template)
+        self.assertIn("ATM_BENCHMARK_DEPLOY_KEY", template)
         self.assertIn("PYO3_PYTHON", template)
         self.assertIn("ATM_SIGNING_IDENTITY", template)
 

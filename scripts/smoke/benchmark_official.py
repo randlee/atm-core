@@ -7,6 +7,7 @@ runner creates its disposable account-scoped daemon and ATM home itself.
 """
 from __future__ import annotations
 
+import argparse
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
@@ -52,32 +53,40 @@ class OfficialBenchmark:
         run: Run = subprocess.run,
         environ: Mapping[str, str] | None = None,
         write: Write = print,
+        branch_override: str | None = None,
     ) -> None:
         self.root = root
         self.run = run
         self.environ = dict(os.environ if environ is None else environ)
         self.write = write
+        self.branch_override = branch_override
 
     def execute(self) -> int:
         """Run the complete contract, preserving a measured FAIL as exit 1."""
         outcome: OfficialOutcome | None = None
+        infrastructure_error: str | None = None
         try:
             branch = self.preflight()
             self.build_and_sign()
             outcome = self.measure()
             post_run_error = self.render_publish_and_push(branch)
             if post_run_error is not None:
-                if outcome.measured_failure:
-                    self.emit(f"benchmark-official: retained measured FAIL despite {post_run_error}")
-                    return 1
                 raise OfficialBenchmarkError(post_run_error)
-            return 1 if outcome.measured_failure else 0
         except OfficialBenchmarkError as error:
-            if outcome is not None and outcome.measured_failure:
-                self.emit(f"benchmark-official: retained measured FAIL despite infrastructure error: {error}")
-                return 1
-            self.emit(f"benchmark-official: infrastructure error: {error}")
+            infrastructure_error = str(error)
+        return self.finalize(outcome, infrastructure_error)
+
+    def finalize(self, outcome: OfficialOutcome | None, infrastructure_error: str | None) -> int:
+        """Apply verdict precedence exactly once after every control-flow path."""
+        if outcome is not None and outcome.measured_failure:
+            if infrastructure_error is not None:
+                self.emit(f"benchmark-official: retained measured FAIL despite infrastructure error: {infrastructure_error}")
+            self.notify_team_lead(outcome.detail)
+            return 1
+        if infrastructure_error is not None:
+            self.emit(f"benchmark-official: infrastructure error: {infrastructure_error}")
             return 2
+        return 0
 
     def preflight(self) -> str:
         """Prove account/daemon/git readiness before any build or measurement."""
@@ -88,15 +97,26 @@ class OfficialBenchmark:
                 f"official runs require account {expected_account!r}; current account is {account!r}"
             )
         self.require_clean_tree("before sync")
-        doctor = self.command([sys.executable, str(self.root / DAEMON_SWITCH.relative_to(ROOT)), "status", "--doctor"])
+        doctor = self.command(
+            [sys.executable, str(self.root / DAEMON_SWITCH.relative_to(ROOT)), "status", "--doctor"],
+            allow_failure=True,
+        )
+        if doctor.returncode:
+            raise OfficialBenchmarkError(
+                "daemon-switch preflight could not produce doctor JSON: "
+                + self.detail("daemon-switch status", doctor)
+            )
         try:
             status = json.loads(doctor.stdout)
         except json.JSONDecodeError as error:
             raise OfficialBenchmarkError(f"daemon-switch status returned invalid JSON: {error}") from error
         self.require_healthy_doctor(status)
 
-        branch = self.current_branch()
-        self.require_integrate_branch(branch)
+        branch = self.branch_override or self.current_branch()
+        if self.branch_override is None:
+            self.require_integrate_branch(branch)
+        else:
+            self.require_valid_override(branch)
         self.command(["git", "fetch", "origin"])
         self.push_stranded_commit_if_needed(branch)
         self.command(["git", "reset", "--hard", f"origin/{branch}"])
@@ -180,6 +200,11 @@ class OfficialBenchmark:
                 f"official run requires an integrate/phase-* branch; current branch is {branch!r}"
             )
 
+    @staticmethod
+    def require_valid_override(branch: str) -> None:
+        if not branch or branch.startswith("-") or any(character.isspace() for character in branch):
+            raise OfficialBenchmarkError(f"invalid official branch override: {branch!r}")
+
     def require_clean_tree(self, stage: str) -> None:
         dirty = self.command(["git", "status", "--porcelain"]).stdout.strip()
         if dirty:
@@ -207,6 +232,17 @@ class OfficialBenchmark:
             **self.environ,
             "GIT_SSH_COMMAND": f"ssh -i {deploy_key} -o IdentitiesOnly=yes -o BatchMode=yes",
         }
+
+    def notify_team_lead(self, detail: str) -> None:
+        """Best-effort only: a notification never changes the measured verdict."""
+        message = f"official benchmark FAIL on {HOST_LABEL}: {detail}"
+        try:
+            sent = self.command(["atm", "send", "team-lead@atm-dev", message], allow_failure=True)
+        except OfficialBenchmarkError as error:
+            self.emit(f"benchmark-official: team-lead notification unavailable: {error}")
+            return
+        if sent.returncode:
+            self.emit(f"benchmark-official: team-lead notification unavailable: {self.detail('atm send', sent)}")
 
     def release_binaries(self) -> tuple[Path, ...]:
         return tuple(self.root / path.relative_to(ROOT) for path in RELEASE_BINARIES)
@@ -274,14 +310,20 @@ def _log_writer(stream: TextIO, log: TextIO) -> Write:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    if argv:
-        print("benchmark-official: no arguments are accepted", file=sys.stderr)
-        return 2
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--branch",
+        help=(
+            "reviewed remote branch to synchronize before a pre-merge validation; "
+            "ordinary official runs omit this and require the current integrate/phase-* branch"
+        ),
+    )
+    args = parser.parse_args(argv)
     LOG_DIRECTORY.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     log_path = LOG_DIRECTORY / f"benchmark-official-{timestamp}.log"
     with log_path.open("x", encoding="utf-8") as log:
-        runner = OfficialBenchmark(write=_log_writer(sys.stdout, log))
+        runner = OfficialBenchmark(write=_log_writer(sys.stdout, log), branch_override=args.branch)
         runner.emit(f"benchmark-official log: {log_path}")
         return runner.execute()
 
