@@ -83,6 +83,7 @@ class OfficialBenchmarkTests(unittest.TestCase):
 
     def test_reset_kills_a_remaining_account_daemon_before_database_cleanup(self) -> None:
         calls: list[list[str]] = []
+        current_uid = "1000"
         pgrep_results = iter((
             completed(["pgrep"], stdout="42\n"),
             completed(["pgrep"], 1),
@@ -96,11 +97,14 @@ class OfficialBenchmarkTests(unittest.TestCase):
             if command == ["pgrep", "-x", "atm-daemon"]:
                 return next(pgrep_results)
             if command == ["ps", "-o", "uid=", "-p", "42"]:
-                return completed(command, stdout=f"{os.geteuid()}\n")
+                return completed(command, stdout=f"{current_uid}\n")
             self.fail(f"unexpected command: {command}")
 
         runner = self.runner(run)
-        with mock.patch.object(OFFICIAL, "clear_benchmark_database_state") as clear:
+        with (
+            mock.patch.object(OFFICIAL, "clear_benchmark_database_state") as clear,
+            mock.patch.object(OFFICIAL.os, "geteuid", return_value=int(current_uid), create=True),
+        ):
             runner.reset_disposable_account()
         self.assertEqual(
             calls,
@@ -116,17 +120,21 @@ class OfficialBenchmarkTests(unittest.TestCase):
 
     def test_reset_leaves_other_accounts_daemons_untouched(self) -> None:
         calls: list[list[str]] = []
+        current_uid = "1000"
 
         def run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
             calls.append(command)
             if command == ["pgrep", "-x", "atm-daemon"]:
                 return completed(command, stdout="1816\n")
             if command == ["ps", "-o", "uid=", "-p", "1816"]:
-                return completed(command, stdout=f"{os.geteuid() + 1}\n")
+                return completed(command, stdout=f"{int(current_uid) + 1}\n")
             self.fail(f"unexpected command: {command}")
 
         runner = self.runner(run)
-        with mock.patch.object(OFFICIAL, "clear_benchmark_database_state") as clear:
+        with (
+            mock.patch.object(OFFICIAL, "clear_benchmark_database_state") as clear,
+            mock.patch.object(OFFICIAL.os, "geteuid", return_value=int(current_uid), create=True),
+        ):
             runner.reset_disposable_account()
         self.assertFalse(any(command[:1] == ["kill"] for command in calls))
         clear.assert_called_once_with()
@@ -262,7 +270,9 @@ class OfficialBenchmarkTests(unittest.TestCase):
         runner = self.runner(run)
         runner.build_and_sign()
         self.assertEqual(calls[0], ["cargo", "build", "--release", "-p", "agent-team-mail", "-p", "atm-daemon"])
-        self.assertTrue(calls[1][-1].endswith(".just/sign_daemon_dev.py"))
+        signing_script = Path(calls[1][-1])
+        self.assertEqual(signing_script.parent.name, ".just")
+        self.assertEqual(signing_script.name, "sign_daemon_dev.py")
 
     def test_execute_exercises_real_build_failure_before_measurement(self) -> None:
         calls: list[list[str]] = []
@@ -385,7 +395,13 @@ class OfficialBenchmarkTests(unittest.TestCase):
 
     def test_actual_script_completes_with_stdin_at_dev_null(self) -> None:
         environment = dict(os.environ)
-        environment.update({"HOME": self.temporary.name, "ATM_OFFICIAL_ACCOUNT": "not-the-current-user"})
+        environment.update(
+            {
+                "HOME": self.temporary.name,
+                "USERPROFILE": self.temporary.name,
+                "ATM_OFFICIAL_ACCOUNT": "not-the-current-user",
+            }
+        )
         result = subprocess.run(
             [sys.executable, str(Path(OFFICIAL.__file__))],
             cwd=self.root,
@@ -398,7 +414,7 @@ class OfficialBenchmarkTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 2)
         self.assertIn("official runs require account", result.stdout)
-        self.assertTrue((self.root / "benchmark-logs").is_dir())
+        self.assertTrue((Path(self.temporary.name) / "benchmark-logs").is_dir())
 
     def test_launchd_template_carries_non_login_push_environment(self) -> None:
         template = (Path(__file__).resolve().parents[2] / "tools/com.atm.benchmark-official.plist").read_text(
