@@ -124,11 +124,25 @@ class BootstrapTests(unittest.TestCase):
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
         self.assertIn("$PWD/.bootstrap-venv/bin:$PATH", justfile)
         self.assertIn("PYO3_PYTHON", justfile)
+        self.assertIn("cargo_cmd :=", justfile)
+        self.assertIn("{{cargo_cmd}} build --workspace", justfile)
+        self.assertIn("{{cargo_cmd}} build --release -p agent-team-mail -p atm-daemon", justfile)
+        self.assertIn("{{cargo_cmd}} build --release -p atm-daemon-bootstrap", justfile)
         self.assertIn(
             "test-admission-capacity:\n"
             "    {{python_cmd}} -m unittest scripts/smoke/test_run_admission_capacity.py",
             justfile,
         )
+
+    def test_benchmark_host_bootstrap_is_manifest_driven_and_never_selects_latest(self) -> None:
+        script = (SCRIPT.parents[1] / "scripts" / "bootstrap-benchmark-host.sh").read_text(encoding="utf-8")
+        self.assertTrue(script.startswith("#!/usr/bin/env bash"))
+        self.assertIn("tools/bootstrap.toml", script)
+        self.assertIn("rustup toolchain install", script)
+        self.assertIn('"$brew_just" bootstrap', script)
+        self.assertIn('"$brew_just" build', script)
+        self.assertIn('if [[ "$python_matches" != true || "$just_matches" != true ]]', script)
+        self.assertNotIn("latest", script.lower())
 
     def test_ci_uses_bootstrap_python_and_requirements_for_all_pydantic_consumers(self) -> None:
         workflow = (SCRIPT.parents[1] / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")

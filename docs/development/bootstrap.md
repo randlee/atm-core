@@ -44,6 +44,23 @@ That makes the same command work from a non-interactive account whose shell
 does not source the interactive Homebrew PATH setup; the bootstrap still
 rejects any patch release other than the manifest's exact Python version.
 
+## Deterministic macOS benchmark host
+
+On the dedicated macOS benchmark account, use one repository command rather
+than a host-local runbook:
+
+```sh
+scripts/bootstrap-benchmark-host.sh
+```
+
+It reads [`tools/bootstrap.toml`](../../tools/bootstrap.toml), synchronizes
+only the manifest-derived Homebrew Python formula and `just`, installs the
+exact Rust toolchain with `clippy` and `rustfmt`, runs the shared bootstrap,
+and performs a signed workspace build with the bootstrap venv selected for
+PyO3. It refuses a missing or mismatched exact version; it never picks an
+unbounded version. The command does not launch a daemon, mutate an ATM
+database, or run a benchmark.
+
 For review without changing tools, run:
 
 ```sh

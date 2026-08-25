@@ -9,6 +9,10 @@ seed_python_cmd := if os_family() == "windows" { "python" } else { "env PATH=\"$
 # directly. The path is absolute so helpers remain pinned after changing cwd;
 # PyO3 additionally receives its interpreter explicitly.
 python_cmd := if os_family() == "windows" { "$env:PATH = \"$PWD\\.bootstrap-venv\\Scripts;\" + $env:PATH; & \"$PWD\\.bootstrap-venv\\Scripts\\python.exe\"" } else { "env PATH=\"$PWD/.bootstrap-venv/bin:$PATH\" \"$PWD/.bootstrap-venv/bin/python\"" }
+# Cargo builds that include the PyO3 extension must use the same interpreter
+# as the repository-local bootstrap venv.  Otherwise macOS may choose the
+# system Python (currently 3.9) even after `just bootstrap` has succeeded.
+cargo_cmd := if os_family() == "windows" { "$env:PATH = \"$PWD\\.bootstrap-venv\\Scripts;\" + $env:PATH; $env:PYO3_PYTHON = \"$PWD\\.bootstrap-venv\\Scripts\\python.exe\"; cargo" } else { "env PATH=\"$PWD/.bootstrap-venv/bin:$PATH\" PYO3_PYTHON=\"$PWD/.bootstrap-venv/bin/python\" cargo" }
 clippy_cmd := if os_family() == "windows" { "$env:PATH = \"$PWD\\.bootstrap-venv\\Scripts;\" + $env:PATH; $env:PYO3_PYTHON = \"$PWD\\.bootstrap-venv\\Scripts\\python.exe\"; cargo clippy --workspace --all-targets --target x86_64-pc-windows-msvc -- -D warnings" } else { "env PATH=\"$PWD/.bootstrap-venv/bin:$PATH\" PYO3_PYTHON=\"$PWD/.bootstrap-venv/bin/python\" cargo clippy --workspace --all-targets -- -D warnings" }
 
 # Show the curated repo task help.
@@ -145,7 +149,7 @@ _lint-same-host-portability:
 
 # Build the full workspace.
 build:
-    cargo build --workspace
+    {{cargo_cmd}} build --workspace
     {{python_cmd}} .just/sign_daemon_dev.py
 
 # Run the full workspace test suite or explicit coverage reporting.
@@ -205,9 +209,9 @@ smoke feature='normal' *args:
 # UDS or loopback TCP; Windows accepts TCP only. The runner rejects ambient
 # daemon/database state and writes one report-compatible JSON artifact per run.
 benchmark *args:
-    cargo build --release -p agent-team-mail -p atm-daemon
+    {{cargo_cmd}} build --release -p agent-team-mail -p atm-daemon
     # The isolated capacity runner launches this feature-gated bootstrap binary.
-    cargo build --release -p atm-daemon-bootstrap --features benchmark-harness --bin atm-daemon-benchmark
+    {{cargo_cmd}} build --release -p atm-daemon-bootstrap --features benchmark-harness --bin atm-daemon-benchmark
     {{python_cmd}} .just/sign_daemon_dev.py
     {{python_cmd}} scripts/smoke/run_admission_capacity.py {{args}}
     # Publish all captured variants into the canonical report site.
