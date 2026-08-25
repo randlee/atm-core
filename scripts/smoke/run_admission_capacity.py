@@ -89,7 +89,11 @@ from scripts.smoke.smoke_common import SmokeError, command_result
 INTERVALS = 10
 ADMISSIONS_PER_INTERVAL = 1_000
 TARGET_PROFILE_DURATION_SECONDS = 20.0
-DEFAULT_WORKERS = 64
+# An f8 sample issues ceil(1_000 / 8) = 125 independent connections.  The
+# ordinary benchmark needs enough client workers to occupy all of them; 64
+# underdrives every lane and makes the result incomparable with the reviewed
+# f8/512 physical baselines.
+DEFAULT_WORKERS = 512
 # Keep the benchmark's HTTP/1.1 pipeline below the local socket's bidirectional
 # buffer capacity. The sender writes one bounded batch, then the reader drains
 # every matching response before the next batch.
@@ -849,13 +853,14 @@ def release_binary(name: str) -> Path:
     return path
 
 
-def canonical_writer_probe() -> Path:
-    """Build the existing direct canonical-writer probe when sqlite needs it.
+def sqlite_writer_probe() -> Path:
+    """Build the existing direct async-writer probe when sqlite needs it.
 
-    The normal benchmark recipe still starts only the shipped Tokio/Axum
-    daemon.  This feature-gated helper does not create a second daemon: its
-    sole invocation is ``--direct-core-write``, which measures the existing
-    async admission/writer/commit path without an HTTP codec.
+    The SQLite target measures the existing Tokio async durable-admission
+    seam: the bounded writer ingress, one-millisecond coalescing window, and
+    committed SQLite transaction.  It deliberately excludes HTTP framing,
+    request parsing, and canonical-send preparation, which are measured by
+    the UDS/TCP/TCP+TLS targets and the explicit canonical-core diagnostic.
     """
     suffix = ".exe" if os.name == "nt" else ""
     probe = ROOT / "target" / "release" / f"atm-daemon-benchmark{suffix}"
@@ -1615,7 +1620,7 @@ def run_profile(
     }
 
 
-def run_direct_production_writer_profile(
+def run_direct_sqlite_writer_profile(
     benchmark_binary: Path,
     environment: dict[str, str],
     roster: CapacityRoster,
@@ -1623,25 +1628,25 @@ def run_direct_production_writer_profile(
     sample_count: int,
     workers: int,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Measure the canonical Tokio admission writer without raw SQL or HTTP.
+    """Measure the timed Tokio durable-admission writer without raw SQL or HTTP.
 
     The benchmark-owned daemon first creates the disposable roster and is then
-    stopped.  The direct binary calls ``prepare_write_with_async_runtime`` so
-    this lane includes the canonical write preparation, writer queue, batch
-    transaction, commit, and post-commit response decision; it excludes only
-    the public socket/codec measured by UDS and TCP.
+    stopped.  The direct binary calls ``save_message_if_absent_async`` so this
+    lane includes the bounded writer queue, one-millisecond batch transaction,
+    and durable commit.  It excludes the public socket/codec measured by UDS
+    and TCP, and the canonical preparation path retained as a diagnostic.
     """
     direct_environment = dict(environment)
     direct_environment.update(
         {
-            "ATM_CAPACITY_CORE_TEAM": roster.team,
-            "ATM_CAPACITY_CORE_AGENT": roster.agent,
-            "ATM_CAPACITY_CORE_RECIPIENT": roster.recipient,
+            "ATM_CAPACITY_STORAGE_TEAM": roster.team,
+            "ATM_CAPACITY_STORAGE_SENDER": roster.agent,
+            "ATM_CAPACITY_STORAGE_RECIPIENT": roster.recipient,
         }
     )
     result = subprocess.run(
         [
-            str(benchmark_binary), "--direct-core-write", str(requested_messages),
+            str(benchmark_binary), "--direct-storage-admission", str(requested_messages),
             "--workers", str(workers), "--intervals", str(sample_count),
             "--seconds", str(int(TARGET_PROFILE_DURATION_SECONDS)),
         ],
@@ -1654,26 +1659,26 @@ def run_direct_production_writer_profile(
     )
     if result.returncode != 0:
         detail = result.stderr.strip() or result.stdout.strip() or "no diagnostic output"
-        raise SmokeError(f"direct production-writer benchmark failed: {detail}")
+        raise SmokeError(f"direct sqlite-writer benchmark failed: {detail}")
     try:
         payload = json.loads(result.stdout)
     except json.JSONDecodeError as error:
-        raise SmokeError("direct production-writer benchmark returned malformed JSON") from error
-    if not isinstance(payload, dict) or payload.get("kind") != "canonical_core_write":
-        raise SmokeError("direct production-writer benchmark returned the wrong measurement kind")
+        raise SmokeError("direct sqlite-writer benchmark returned malformed JSON") from error
+    if not isinstance(payload, dict) or payload.get("kind") != "async_storage_admission":
+        raise SmokeError("direct sqlite-writer benchmark returned the wrong measurement kind")
     direct_intervals = payload.get("intervals")
     if not isinstance(direct_intervals, list) or len(direct_intervals) < sample_count:
-        raise SmokeError("direct production-writer benchmark returned too few intervals")
+        raise SmokeError("direct sqlite-writer benchmark returned too few intervals")
     intervals: list[dict[str, Any]] = []
     for index, item in enumerate(direct_intervals, start=1):
         if not isinstance(item, dict):
-            raise SmokeError("direct production-writer interval is malformed")
+            raise SmokeError("direct sqlite-writer interval is malformed")
         accepted = int(item.get("accepted_count", -1))
         requested = int(item.get("requested_count", -1))
         elapsed = float(item.get("elapsed_seconds", 0.0))
         rate = float(item.get("admissions_per_second", 0.0))
         if requested != requested_messages or accepted < 0 or accepted > requested or elapsed <= 0 or rate < 0:
-            raise SmokeError("direct production-writer interval has invalid counts or timing")
+            raise SmokeError("direct sqlite-writer interval has invalid counts or timing")
         intervals.append(
             {
                 "interval": index,
@@ -1843,7 +1848,7 @@ def run_capacity(
     home = validate_capacity_home(atm_home)
     atm = release_binary("atm")
     daemon = release_binary("atm-daemon")
-    direct_writer = canonical_writer_probe() if transport == "sqlite" else None
+    direct_writer = sqlite_writer_probe() if transport == "sqlite" else None
     roster = CapacityRoster.unique()
     env = runtime_environment(home, roster)
     direct_peer_port = allocate_direct_peer_port()
@@ -1883,7 +1888,7 @@ def run_capacity(
         "command": target_command,
         "release": {"atm": str(atm), "atm_daemon": str(daemon)},
         "execution_daemon": (
-            "direct_production_writer" if transport == "sqlite" else "shipped_atm_daemon"
+            "direct_async_storage_writer" if transport == "sqlite" else "shipped_atm_daemon"
         ),
         "atm_home": str(home),
         "host_state_isolation": isolation_mode,
@@ -1897,9 +1902,12 @@ def run_capacity(
         "runs": [],
         "stages": {
             "runtime_view_validation": "daemon-owned; no peer/store/network work is requested by this client before response",
-            "sqlite_transaction": "measured by each public admission response latency",
+            "sqlite_transaction": (
+                "measured by the SQLite target's direct durable-admission completion "
+                "and by public target response latency"
+            ),
             "post_commit_received_hook": "active in the shipped daemon; any hook failure is returned as a successful write warning",
-            "response_write": "included in each public admission response latency",
+            "response_write": "included only in public UDS/TCP/TCP+TLS admission response latency",
         },
         "operational_checks": {},
     }
@@ -1985,7 +1993,7 @@ def run_capacity(
             profile, direct_measurement = run_lifecycle_phase(
                 evidence,
                 "profile",
-                lambda: run_direct_production_writer_profile(
+                lambda: run_direct_sqlite_writer_profile(
                     direct_writer, env, roster, requested_messages, sample_count, workers,
                 ),
             )
