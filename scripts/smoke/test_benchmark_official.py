@@ -360,6 +360,7 @@ class OfficialBenchmarkTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("benchmark-official *args:", justfile)
+        self.assertIn("benchmark-official *args:\n    just bootstrap\n", justfile)
         self.assertIn("benchmark_official.py {{args}}", justfile)
         self.assertIn("just benchmark-official --branch", runbook)
 

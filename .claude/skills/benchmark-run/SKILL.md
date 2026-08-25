@@ -155,6 +155,9 @@ machine-readable result:
 with one or more FAIL targets, and `2` means no publishable official result was
 produced because of an infrastructure error.
 
+`just benchmark-official` runs the repository's pinned `just bootstrap` first,
+so the dedicated account needs no pre-existing Python virtual environment.
+
 On-demand from M4:
 
 ```sh

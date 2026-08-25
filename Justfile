@@ -238,6 +238,7 @@ benchmark-publish:
 # benchmark account. It synchronizes an integrate/phase-* checkout, builds,
 # measures, renders, publishes, and pushes public evidence with exit 0/1/2.
 benchmark-official *args:
+    just bootstrap
     {{python_cmd}} scripts/smoke/benchmark_official.py {{args}}
 
 # Generate architecture visualization artifacts.
