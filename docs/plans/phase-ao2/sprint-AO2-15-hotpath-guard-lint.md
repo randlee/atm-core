@@ -41,11 +41,14 @@ clippy_denies = ["await_holding_lock"]
    quality-mgr signs off the manifest contents (Required validation).
 2. **Semantic classes via clippy, not a hand-rolled scanner** (honesty
    about what literal scans can prove — plan-crit finding 008): guard-
-   across-await detection uses `#![deny(clippy::await_holding_lock)]` /
-   `await_holding_invalid_type` module-level attributes on the modules
-   containing sentinel regions; the manifest's `clippy_denies` list is
-   cross-checked by the lint test (attribute present in the named module).
-   Literal scanning makes no guard-liveness claims.
+   across-await detection uses **function-scoped**
+   `#[deny(clippy::await_holding_lock)]` / `await_holding_invalid_type`
+   attributes on the specific hot-path function(s) each region brackets —
+   item-level, matching the sentinel model's granularity, so two regions
+   in one file may carry different `clippy_denies` sets without conflict.
+   The lint test cross-checks that every function inside a sentinel span
+   carries its region's deny attributes. Literal scanning makes no
+   guard-liveness claims.
 3. **Lexical classes via literal-scan test** (new test in
    `crates/atm-architecture/tests/`, same idiom as
    `boundary_enforcement.rs`): inside each `BEGIN…END` sentinel span, any
@@ -59,15 +62,29 @@ clippy_denies = ["await_holding_lock"]
 4. **Touch-triggers-evidence CI gate**: a job using the repo's existing
    `ci-scope`-style pattern — the job ALWAYS registers (required-check
    safe; workflow-level `on.paths:` filtering is explicitly forbidden for
-   this job) and its steps no-op unless `git diff --name-only` against the
-   base sha intersects a manifest region. When it triggers, the PR must
+   this job) and its steps no-op unless the diff intersects a manifest
+   region. The base-sha diff-scoping logic is implemented ONCE as a
+   shared, path-list-parameterized helper
+   (`scripts/ci/diff_scope.py`, owned by THIS sprint) — AO2.16's
+   micro-bench job consumes the same helper rather than reimplementing
+   the idiom (single place for base-sha edge-case fixes). When it triggers, the PR must
    carry either a `benchmark-evidence: <v4-campaign-id>` line in the PR
    description, or a **waiver that CI attributes to a real actor**: a PR
    comment exactly matching `benchmark-evidence-waiver: <reason>` whose
-   `user.login` (fetched via the GitHub API in the job) is in the
+   `user.login` (fetched via the GitHub API issue-comments endpoint —
+   `GET /repos/{owner}/{repo}/issues/{pr}/comments`, the surface PR
+   conversation comments live on) is in the
    repo-committed approver list `boundaries/atm-core/evidence-waivers.toml`
-   (initially quality-mgr's bot/operator login and Rand). A
-   description-embedded waiver token is NOT accepted — self-service
+   (initially quality-mgr's bot/operator login and Rand):
+
+```toml
+schema_version = 1
+# GitHub logins whose PR comment `benchmark-evidence-waiver: <reason>`
+# satisfies the evidence gate. Changes to this list are quality-mgr-gated.
+approvers = ["randlee", "quality-mgr-bot"]
+```
+
+   A description-embedded waiver token is NOT accepted — self-service
    waivers were the round-1 blocking hole.
 
 ## Acceptance criteria

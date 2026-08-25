@@ -9,9 +9,10 @@ Second guardrail sprint (see AO2.15 header for motivation). This sprint
 fences the **measurement and the comparison** — the classes that caused the
 2026-08-24 incidents (64-vs-512 worker harness drift; 22k numbers quoted
 from non-ancestor candidate branches; TLS evidence that never measured
-TLS). **Deliberately `parallel_safe` against AO2.14 and AO2.15** (resolves
-round-1's deferred split: this doc IS the early-dispatchable comparison
-guardrail; no MAY-clauses remain).
+TLS). Deliverables 1–2 are **deliberately `parallel_safe` and
+immediately dispatchable** (resolving round-1's deferred split: they ARE
+the early comparison guardrail); deliverable 3 alone carries must_follow
+triggers — see Dependencies, which is authoritative.
 
 ## Deliverables
 
@@ -56,7 +57,9 @@ def contract_hash(contract: dict) -> str:
      `harness_contract_hash: "pre-contract"` — a defined rendering state
      (panel badge "pre-contract evidence"), comparable only with other
      `"pre-contract"` entries, never silently dropped and never erroring
-     the pipeline.
+     the pipeline. Backfill classification is one-time and one-way:
+     `"pre-contract"` is permanent for that artifact (historical params
+     are never retro-completed; a corrected measurement is a new run).
    - `baselines.json` v-next records the contract hash its floors were set
      under; the runner warns-and-FAILs a run whose live hash differs from
      the baseline's (a floor is only meaningful under its contract).
@@ -103,9 +106,14 @@ def contract_hash(contract: dict) -> str:
      request to quality-mgr, not a gate fight; baseline updates follow
      the D3 quality-mgr-approval pattern.
    - CI wiring uses the `ci-scope`-style always-register job-level `if:`
-     diff pattern (required-check safe; `on.paths:` forbidden), running
-     only when `crates/atm-http-runtime/`, `crates/atm-storage*/`,
-     `benches/`, or the hot-path manifest change.
+     diff pattern (required-check safe; `on.paths:` forbidden) via
+     AO2.15's shared `scripts/ci/diff_scope.py` helper (this sprint does
+     NOT reimplement the diff idiom), with the path list:
+     `crates/atm-http-runtime/`, `crates/atm-storage*/`, `benches/`, and
+     the literal manifest path
+     `boundaries/atm-core/hot-path-admission.toml` (quoted here verbatim
+     from AO2.15's normative sample — the shared fixture test in both
+     sprints asserts this exact string so the docs cannot drift).
 
 ## Acceptance criteria
 
@@ -151,11 +159,16 @@ def contract_hash(contract: dict) -> str:
 
 ## Dependencies
 
-- parallel_safe: AO2.14, AO2.15, AO2.17 — touch set is
-  `scripts/smoke/*`, `benches/`, `crates/atm-architecture` (one new/
-  extended test), CI workflow; no intersection with AO2.14's runtime
-  crates beyond the read-only bench, and none with AO2.15's manifest
-  files (this sprint only READS the manifest path list for CI scoping).
-- Dispatchable immediately (this doc deliberately resolves round-1's
-  "early mini-PR MAY" ambiguity: AO2.16 IS the early-dispatchable
-  comparison guardrail).
+- parallel_safe: AO2.14, AO2.15, AO2.17 **for deliverables 1–2** (pure
+  Python pipeline/tooling: `scripts/smoke/*`, report/compare, baselines —
+  zero Rust surface). Deliverables 1–2 are dispatchable immediately
+  (this resolves round-1's "early mini-PR MAY" ambiguity: they ARE the
+  early comparison guardrail).
+- **Deliverable 3 alone**: must_follow AO2.14 (PR-completion trigger) —
+  the bench constructs `StorageAndNudgeRouter` and calls `commit_write`,
+  a tighter binding to the pooling-scoped constructor/API than AO2.15's
+  sentinel comments, so it takes the SAME dependency posture (this
+  corrects round-2's contradictory risk assessment); and must_follow
+  AO2.15 (PR-completion) for the shared `diff_scope.py` helper it
+  consumes. D3's dev may draft against a stub while waiting; its PR
+  lands only after both.

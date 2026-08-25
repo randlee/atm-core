@@ -26,8 +26,15 @@ and the proven in-repo lint design is proposed to sc-lint for reuse.
 3. **Isolated-account allowlist**
    `tools/benchmark-hosts.toml` (revives the AO2.9 idea in minimal form):
    the manifest of host_labels whose evidence counts as official
-   (`m5-atmbench`, future windows equivalent). `benchmark_report.py`
-   badges non-listed-host evidence "unofficial environment" (rendered,
+   (`m5-atmbench`, future windows equivalent):
+
+```toml
+schema_version = 1
+# host_labels whose evidence is official; changes quality-mgr-gated.
+host_labels = ["m5-atmbench"]
+```
+
+   `benchmark_report.py` badges non-listed-host evidence "unofficial environment" (rendered,
    retained, never candlestick-plotted against official floors —
    mirroring AO2.16's `"pre-contract"` state).
 4. **sc-lint extraction proposal**: file the generalized hot-path-guard
@@ -72,8 +79,7 @@ and the proven in-repo lint design is proposed to sc-lint for reuse.
 
 - must_follow: AO2.16 (alert hook and badges build on the contract-hash /
   baselines plumbing). Merge-forward trigger: AO2.16 dev push.
-- parallel_safe: AO2.14, AO2.15 (docs/tools/report-layer only; no runtime
-  crates, no manifest files).
-- D4 additionally waits on AO2.15's dev completing enough to reference as
-  proving ground (PR-completion trigger for filing the proposal; the
-  skeleton may draft earlier).
+- parallel_safe: AO2.14, AO2.15 **for deliverables 1–3** (docs/tools/
+  report-layer only; no runtime crates, no manifest files). Deliverable 4
+  alone carries a PR-completion trigger on AO2.15 (the proposal FILES only
+  once AO2.15's PR completes; its skeleton may draft earlier).
