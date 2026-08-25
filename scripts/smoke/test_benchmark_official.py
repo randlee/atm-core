@@ -83,14 +83,20 @@ class OfficialBenchmarkTests(unittest.TestCase):
 
     def test_reset_kills_a_remaining_account_daemon_before_database_cleanup(self) -> None:
         calls: list[list[str]] = []
-        pgrep_results = iter((completed(["pgrep"], stdout="42\n"), completed(["pgrep"], 1)))
+        pgrep_results = iter((
+            completed(["pgrep"], stdout="42\n"),
+            completed(["pgrep"], 1),
+            completed(["pgrep"], 1),
+        ))
 
         def run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
             calls.append(command)
-            if command[:1] == ["pkill"]:
+            if command[:1] == ["kill"]:
                 return completed(command)
             if command == ["pgrep", "-x", "atm-daemon"]:
                 return next(pgrep_results)
+            if command == ["ps", "-o", "uid=", "-p", "42"]:
+                return completed(command, stdout=f"{os.geteuid()}\n")
             self.fail(f"unexpected command: {command}")
 
         runner = self.runner(run)
@@ -99,12 +105,30 @@ class OfficialBenchmarkTests(unittest.TestCase):
         self.assertEqual(
             calls,
             [
-                ["pkill", "-TERM", "-x", "atm-daemon"],
                 ["pgrep", "-x", "atm-daemon"],
-                ["pkill", "-KILL", "-x", "atm-daemon"],
+                ["ps", "-o", "uid=", "-p", "42"],
+                ["kill", "-TERM", "42"],
+                ["pgrep", "-x", "atm-daemon"],
                 ["pgrep", "-x", "atm-daemon"],
             ],
         )
+        clear.assert_called_once_with()
+
+    def test_reset_leaves_other_accounts_daemons_untouched(self) -> None:
+        calls: list[list[str]] = []
+
+        def run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            calls.append(command)
+            if command == ["pgrep", "-x", "atm-daemon"]:
+                return completed(command, stdout="1816\n")
+            if command == ["ps", "-o", "uid=", "-p", "1816"]:
+                return completed(command, stdout=f"{os.geteuid() + 1}\n")
+            self.fail(f"unexpected command: {command}")
+
+        runner = self.runner(run)
+        with mock.patch.object(OFFICIAL, "clear_benchmark_database_state") as clear:
+            runner.reset_disposable_account()
+        self.assertFalse(any(command[:1] == ["kill"] for command in calls))
         clear.assert_called_once_with()
 
     def test_preflight_refuses_dirty_tree_before_sync(self) -> None:

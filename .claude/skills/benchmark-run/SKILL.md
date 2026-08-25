@@ -37,7 +37,7 @@ The working tree must be clean before the run. Bootstrap only when the account
 manifest is absent; an existing manifest is the expected state for a reusable
 dedicated account. The ordinary benchmark harness uses its own temporary ATM
 home and daemon. The official runner first terminates any `atm-daemon` owned
-by the disposable benchmark account, then removes only that manifest-verified
+by the disposable benchmark account—never a different OS user's daemon—then removes only that manifest-verified
 account's `.atm/db` and `.atm/benchmark-snapshots` directories. It retains the
 manifest and published evidence. `daemon-switch status --doctor` and `atm
 doctor --json` are useful account-health diagnostics, not a prerequisite for

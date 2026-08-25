@@ -134,21 +134,39 @@ class OfficialBenchmark:
 
     def stop_account_daemon(self) -> None:
         """Ensure the disposable account begins and ends with no atm-daemon."""
-        terminated = self.command(["pkill", "-TERM", "-x", "atm-daemon"], allow_failure=True)
-        if terminated.returncode not in (0, 1):
-            raise OfficialBenchmarkError(self.detail("benchmark-account daemon termination", terminated))
-        remaining = self.command(["pgrep", "-x", "atm-daemon"], allow_failure=True)
-        if remaining.returncode == 1:
-            return
-        if remaining.returncode != 0:
-            raise OfficialBenchmarkError(self.detail("benchmark-account daemon inspection", remaining))
-        forced = self.command(["pkill", "-KILL", "-x", "atm-daemon"], allow_failure=True)
-        if forced.returncode not in (0, 1):
-            raise OfficialBenchmarkError(self.detail("benchmark-account daemon forced termination", forced))
-        remaining = self.command(["pgrep", "-x", "atm-daemon"], allow_failure=True)
-        if remaining.returncode != 1:
-            detail = self.detail("benchmark-account daemon post-kill inspection", remaining)
-            raise OfficialBenchmarkError(f"benchmark-account daemon remained running after termination: {detail}")
+        pids = self.account_daemon_pids()
+        for pid in pids:
+            terminated = self.command(["kill", "-TERM", pid], allow_failure=True)
+            if terminated.returncode:
+                raise OfficialBenchmarkError(self.detail("benchmark-account daemon termination", terminated))
+        remaining = self.account_daemon_pids()
+        for pid in remaining:
+            forced = self.command(["kill", "-KILL", pid], allow_failure=True)
+            if forced.returncode:
+                raise OfficialBenchmarkError(self.detail("benchmark-account daemon forced termination", forced))
+        remaining = self.account_daemon_pids()
+        if remaining:
+            raise OfficialBenchmarkError(
+                "benchmark-account daemon remained running after termination: " + ", ".join(remaining)
+            )
+
+    def account_daemon_pids(self) -> tuple[str, ...]:
+        """Return only matching daemons owned by this OS account, never peers'."""
+        observed = self.command(["pgrep", "-x", "atm-daemon"], allow_failure=True)
+        if observed.returncode == 1:
+            return ()
+        if observed.returncode != 0:
+            raise OfficialBenchmarkError(self.detail("benchmark-account daemon inspection", observed))
+        owned: list[str] = []
+        for pid in observed.stdout.splitlines():
+            if not pid.isdecimal():
+                raise OfficialBenchmarkError(f"benchmark-account daemon inspection returned invalid PID: {pid!r}")
+            owner = self.command(["ps", "-o", "uid=", "-p", pid], allow_failure=True)
+            if owner.returncode:
+                raise OfficialBenchmarkError(self.detail(f"benchmark-account daemon owner {pid}", owner))
+            if owner.stdout.strip().isdecimal() and int(owner.stdout.strip()) == os.geteuid():
+                owned.append(pid)
+        return tuple(owned)
 
     def build_and_sign(self) -> None:
         """Measure only fresh, signed release binaries from the synced commit."""
