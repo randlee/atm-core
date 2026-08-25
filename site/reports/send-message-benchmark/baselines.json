@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "revision": 2,
+  "revision": 3,
   "entries": [
     {
       "host_label": "rand-m5",
@@ -28,6 +28,34 @@
       "target": "tcp-tls",
       "p50_floor": 17500.0,
       "approved_by": "quality-mgr: AO2.10 seed review",
+      "effective_from": "2026-08-24T00:00:00Z"
+    },
+    {
+      "host_label": "m5-atmbench",
+      "target": "sqlite",
+      "p50_floor": 35000.0,
+      "approved_by": "quality-mgr: AO2.10 seed review (isolated M5 benchmark account)",
+      "effective_from": "2026-08-24T00:00:00Z"
+    },
+    {
+      "host_label": "m5-atmbench",
+      "target": "uds",
+      "p50_floor": 18000.0,
+      "approved_by": "quality-mgr: AO2.10 seed review (isolated M5 benchmark account)",
+      "effective_from": "2026-08-24T00:00:00Z"
+    },
+    {
+      "host_label": "m5-atmbench",
+      "target": "tcp",
+      "p50_floor": 17500.0,
+      "approved_by": "quality-mgr: AO2.10 seed review (isolated M5 benchmark account)",
+      "effective_from": "2026-08-24T00:00:00Z"
+    },
+    {
+      "host_label": "m5-atmbench",
+      "target": "tcp-tls",
+      "p50_floor": 17500.0,
+      "approved_by": "quality-mgr: AO2.10 seed review (isolated M5 benchmark account)",
       "effective_from": "2026-08-24T00:00:00Z"
     },
     {
