@@ -197,3 +197,5 @@ triage:r32 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RUST-QA
 # premise did not hold; code was already correct) per quality-mgr's report.
 # PR #1020 merged despite tcp/tcp-tls benchmark floor misses (17371/17500,
 # 13642/17500 on isolated m5-atmbench) -- merge explicitly authorized by Rand.
+
+triage:a19 a triage:Assignment ; triage:ofSprint triage:AO2.15 ; triage:assignedTo "arch-ctm" ; triage:assignedAt "2026-08-25T02:58:29Z"^^xsd:dateTime .
