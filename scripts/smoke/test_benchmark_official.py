@@ -39,21 +39,17 @@ class OfficialBenchmarkTests(unittest.TestCase):
             write=lambda _: None,
         )
 
-    @staticmethod
-    def healthy_doctor() -> str:
-        return json.dumps({"doctor": {"summary": {"status": "healthy"}}})
-
-    def preflight_run(self, *, account: str = "atmbench", doctor: str | None = None, dirty: str = "", ahead: str = ""):
+    def preflight_run(self, *, account: str = "atmbench", dirty: str = "", ahead: str = ""):
         calls: list[tuple[list[str], dict[str, object]]] = []
 
         def run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
             calls.append((command, kwargs))
             if command == ["whoami"]:
                 return completed(command, stdout=account)
+            if command[:1] in (["pkill"], ["pgrep"]):
+                return completed(command, 1)
             if command[:2] == ["git", "status"]:
                 return completed(command, stdout=dirty)
-            if Path(command[0]).name.startswith("python") and command[-2:] == ["status", "--doctor"]:
-                return completed(command, stdout=doctor or self.healthy_doctor())
             if command == ["git", "branch", "--show-current"]:
                 return completed(command, stdout="integrate/phase-ao2\n")
             if command == ["git", "fetch", "origin"]:
@@ -64,30 +60,52 @@ class OfficialBenchmarkTests(unittest.TestCase):
                 return completed(command)
             self.fail(f"unexpected command: {command}")
 
-        return self.runner(run), calls
+        runner = self.runner(run)
+        runner.reset_disposable_account = mock.Mock()
+        return runner, calls
 
     def test_preflight_rejects_wrong_account_before_touching_git(self) -> None:
         runner, calls = self.preflight_run(account="randlee")
         self.assertEqual(runner.execute(), 2)
         self.assertEqual([command for command, _ in calls], [["whoami"]])
 
-    def test_preflight_reads_doctor_json_instead_of_its_zero_exit_status(self) -> None:
-        runner, _ = self.preflight_run(doctor=json.dumps({"doctor": {"error": "offline"}}))
-        self.assertEqual(runner.execute(), 2)
+    def test_preflight_does_not_require_or_inspect_an_ambient_daemon(self) -> None:
+        runner, calls = self.preflight_run()
+        self.assertEqual(runner.preflight(), "integrate/phase-ao2")
+        self.assertFalse(any("daemon-switch.py" in " ".join(command) for command, _ in calls))
 
-    def test_preflight_names_pre_json_daemon_switch_failure(self) -> None:
-        runner, _ = self.preflight_run()
-        with mock.patch.object(
-            runner,
-            "command",
-            side_effect=[
-                completed(["whoami"], stdout="atmbench\n"),
-                completed(["git", "status", "--porcelain"]),
-                completed(["daemon-switch", "status", "--doctor"], 1, stderr="selector missing"),
+    def test_preflight_resets_the_disposable_account_before_git_sync(self) -> None:
+        runner, calls = self.preflight_run()
+        runner.preflight()
+        runner.reset_disposable_account.assert_called_once_with()
+        commands = [command for command, _ in calls]
+        self.assertLess(commands.index(["whoami"]), commands.index(["git", "status", "--porcelain"]))
+
+    def test_reset_kills_a_remaining_account_daemon_before_database_cleanup(self) -> None:
+        calls: list[list[str]] = []
+        pgrep_results = iter((completed(["pgrep"], stdout="42\n"), completed(["pgrep"], 1)))
+
+        def run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            calls.append(command)
+            if command[:1] == ["pkill"]:
+                return completed(command)
+            if command == ["pgrep", "-x", "atm-daemon"]:
+                return next(pgrep_results)
+            self.fail(f"unexpected command: {command}")
+
+        runner = self.runner(run)
+        with mock.patch.object(OFFICIAL, "clear_benchmark_database_state") as clear:
+            runner.reset_disposable_account()
+        self.assertEqual(
+            calls,
+            [
+                ["pkill", "-TERM", "-x", "atm-daemon"],
+                ["pgrep", "-x", "atm-daemon"],
+                ["pkill", "-KILL", "-x", "atm-daemon"],
+                ["pgrep", "-x", "atm-daemon"],
             ],
-        ):
-            with self.assertRaisesRegex(OFFICIAL.OfficialBenchmarkError, "could not produce doctor JSON"):
-                runner.preflight()
+        )
+        clear.assert_called_once_with()
 
     def test_preflight_refuses_dirty_tree_before_sync(self) -> None:
         runner, calls = self.preflight_run(dirty=" M unrelated.txt\n")
@@ -103,8 +121,6 @@ class OfficialBenchmarkTests(unittest.TestCase):
                 return completed(command, stdout="atmbench\n")
             if command[:2] == ["git", "status"]:
                 return completed(command)
-            if Path(command[0]).name.startswith("python"):
-                return completed(command, stdout=self.healthy_doctor())
             if command == ["git", "branch", "--show-current"]:
                 return completed(command, stdout="integrate/phase-ao2\n")
             if command == ["git", "fetch", "origin"]:
@@ -118,6 +134,7 @@ class OfficialBenchmarkTests(unittest.TestCase):
             self.fail(f"unexpected command: {command}")
 
         runner = self.runner(run)
+        runner.reset_disposable_account = mock.Mock()
         with self.assertRaisesRegex(OFFICIAL.OfficialBenchmarkError, "abcdef012345.*fedcba987654"):
             runner.preflight()
         self.assertNotIn(["git", "reset", "--hard", "origin/integrate/phase-ao2"], calls)
@@ -131,8 +148,6 @@ class OfficialBenchmarkTests(unittest.TestCase):
                 return completed(command, stdout="atmbench\n")
             if command[:2] == ["git", "status"]:
                 return completed(command)
-            if Path(command[0]).name.startswith("python"):
-                return completed(command, stdout=self.healthy_doctor())
             if command == ["git", "branch", "--show-current"]:
                 return completed(command, stdout="integrate/phase-ao2\n")
             if command == ["git", "fetch", "origin"]:
@@ -147,7 +162,9 @@ class OfficialBenchmarkTests(unittest.TestCase):
                 return completed(command)
             self.fail(f"unexpected command: {command}")
 
-        self.assertEqual(self.runner(run).preflight(), "integrate/phase-ao2")
+        runner = self.runner(run)
+        runner.reset_disposable_account = mock.Mock()
+        self.assertEqual(runner.preflight(), "integrate/phase-ao2")
         commands = [command for command, _ in calls]
         self.assertLess(commands.index(["git", "push", "origin", "integrate/phase-ao2"]), commands.index(["git", "reset", "--hard", "origin/integrate/phase-ao2"]))
         push_kwargs = calls[commands.index(["git", "push", "origin", "integrate/phase-ao2"])][1]
@@ -162,8 +179,6 @@ class OfficialBenchmarkTests(unittest.TestCase):
                 return completed(command, stdout="atmbench\n")
             if command[:2] == ["git", "status"]:
                 return completed(command)
-            if Path(command[0]).name.startswith("python"):
-                return completed(command, stdout=self.healthy_doctor())
             if command == ["git", "branch", "--show-current"]:
                 return completed(command, stdout="integrate/phase-ao2\n")
             if command == ["git", "fetch", "origin"]:
@@ -176,8 +191,10 @@ class OfficialBenchmarkTests(unittest.TestCase):
                 return completed(command, 128, stderr="Could not resolve host: github.com")
             self.fail(f"unexpected command: {command}")
 
+        runner = self.runner(run)
+        runner.reset_disposable_account = mock.Mock()
         with self.assertRaisesRegex(OFFICIAL.OfficialBenchmarkError, "stranded-sha.*Could not resolve host"):
-            self.runner(run).preflight()
+            runner.preflight()
         self.assertFalse(any(command[:3] == ["git", "reset", "--hard"] for command in calls))
 
     def test_explicit_branch_override_is_used_for_premerge_validation(self) -> None:
@@ -189,8 +206,6 @@ class OfficialBenchmarkTests(unittest.TestCase):
                 return completed(command, stdout="atmbench\n")
             if command[:2] == ["git", "status"]:
                 return completed(command)
-            if Path(command[0]).name.startswith("python"):
-                return completed(command, stdout=self.healthy_doctor())
             if command == ["git", "fetch", "origin"]:
                 return completed(command)
             if command == ["git", "rev-list", "origin/feature/review..HEAD"]:
@@ -200,6 +215,7 @@ class OfficialBenchmarkTests(unittest.TestCase):
             self.fail(f"unexpected command: {command}")
 
         runner = self.runner(run)
+        runner.reset_disposable_account = mock.Mock()
         runner.branch_override = "feature/review"
         self.assertEqual(runner.preflight(), "feature/review")
         self.assertNotIn(["git", "branch", "--show-current"], calls)

@@ -36,9 +36,12 @@ if (-not (Test-Path (Join-Path ($env:ATM_HOME ?? "$HOME\\.atm") "benchmark-accou
 The working tree must be clean before the run. Bootstrap only when the account
 manifest is absent; an existing manifest is the expected state for a reusable
 dedicated account. The ordinary benchmark harness uses its own temporary ATM
-home and daemon; it never selects, stops, or writes an ambient daemon or its
-database. Therefore `daemon-switch status --doctor` and `atm doctor --json`
-are useful account-health diagnostics, not a prerequisite for the harness.
+home and daemon. The official runner first terminates any `atm-daemon` owned
+by the disposable benchmark account, then removes only that manifest-verified
+account's `.atm/db` and `.atm/benchmark-snapshots` directories. It retains the
+manifest and published evidence. `daemon-switch status --doctor` and `atm
+doctor --json` are useful account-health diagnostics, not a prerequisite for
+the harness.
 On macOS, `just benchmark` signs its fresh release binaries first. A dedicated
 benchmark account with a locked Apple Development keychain must be provisioned
 with its account-local, untracked keychain secret; the signing helper unlocks
@@ -136,11 +139,15 @@ directly at a worktree executable.
 
 ## 8. Official unattended M5 trigger
 
-Use this only from the pre-provisioned `atmbench` account on M5. It is the
-headless counterpart to sections 1–4: it verifies account and daemon health,
+Use this only from the dedicated `atmbench` account on M5. It is the
+headless counterpart to sections 1–4: it verifies the account and checkout,
 syncs the current `integrate/phase-*` branch, builds and signs fresh release
-binaries, runs the complete matrix, rebuilds reports, stages only public
-artifacts, commits, and pushes. The runner derives `GIT_SSH_COMMAND` at
+binaries, then lets the ordinary matrix runner create and tear down its
+isolated temporary daemon and ATM home. It never requires, checks, selects,
+or preserves an ambient account daemon: it terminates one belonging to
+`atmbench` before and after the run, and deletes the account's disposable
+database plus benchmark snapshots after use. It rebuilds reports, stages only
+public artifacts, commits, and pushes. The runner derives `GIT_SSH_COMMAND` at
 runtime from the account-local `ATM_BENCHMARK_DEPLOY_KEY`, so the LaunchAgent
 does not carry a duplicate static SSH command. Its exit code is the
 machine-readable result:

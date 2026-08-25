@@ -111,6 +111,39 @@ class BenchmarkAccountTests(unittest.TestCase):
                     ACCOUNT.require_benchmark_account()
             self.assertFalse((home / ".atm" / ACCOUNT.MANIFEST_NAME).exists())
 
+    def test_clear_removes_only_disposable_databases_and_keeps_manifest(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            account = self._bootstrap(home)
+            snapshot = home / ".atm" / "benchmark-snapshots" / "snapshot-test"
+            snapshot.mkdir(parents=True)
+            (snapshot / "mail.db").write_bytes(b"snapshot")
+            account.durable_state_root.mkdir()
+            (account.durable_state_root / "mail.db").write_bytes(b"benchmark")
+            retained = home / ".atm" / "benchmark-account.json"
+            with (
+                mock.patch.object(ACCOUNT, "account_home", return_value=home),
+                mock.patch.object(ACCOUNT, "current_account_id", return_value="uid:4242"),
+            ):
+                self.assertEqual(ACCOUNT.clear_benchmark_database_state(), account)
+            self.assertTrue(retained.is_file())
+            self.assertFalse(account.durable_state_root.exists())
+            self.assertFalse(snapshot.parent.exists())
+
+    def test_clear_refuses_a_symlinked_disposable_database_root(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            account = self._bootstrap(home)
+            replacement = home / "replacement"
+            replacement.mkdir()
+            account.durable_state_root.symlink_to(replacement, target_is_directory=True)
+            with (
+                mock.patch.object(ACCOUNT, "account_home", return_value=home),
+                mock.patch.object(ACCOUNT, "current_account_id", return_value="uid:4242"),
+            ):
+                with self.assertRaisesRegex(ACCOUNT.BenchmarkAccountError, "must not be a symlink"):
+                    ACCOUNT.clear_benchmark_database_state()
+
 
 if __name__ == "__main__":
     unittest.main()

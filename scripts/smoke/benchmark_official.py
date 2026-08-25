@@ -17,9 +17,12 @@ import subprocess
 import sys
 from typing import Callable, Mapping, Sequence, TextIO
 
-
 ROOT = Path(__file__).resolve().parents[2]
-DAEMON_SWITCH = ROOT / ".claude/skills/daemon-switch/scripts/daemon-switch.py"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.smoke.benchmark_account import BenchmarkAccountError, clear_benchmark_database_state
+
 CAPACITY_RUNNER = ROOT / "scripts/smoke/run_admission_capacity.py"
 DEFAULT_ACCOUNT = "atmbench"
 HOST_LABEL = "m5-atmbench"
@@ -60,6 +63,7 @@ class OfficialBenchmark:
         self.environ = dict(os.environ if environ is None else environ)
         self.write = write
         self.branch_override = branch_override
+        self.account_verified = False
 
     def execute(self) -> int:
         """Run the complete contract, preserving a measured FAIL as exit 1."""
@@ -74,6 +78,15 @@ class OfficialBenchmark:
                 raise OfficialBenchmarkError(post_run_error)
         except OfficialBenchmarkError as error:
             infrastructure_error = str(error)
+        finally:
+            if self.account_verified:
+                try:
+                    self.reset_disposable_account()
+                except OfficialBenchmarkError as error:
+                    if infrastructure_error is None:
+                        infrastructure_error = str(error)
+                    else:
+                        self.emit(f"benchmark-official: cleanup error: {error}")
         return self.finalize(outcome, infrastructure_error)
 
     def finalize(self, outcome: OfficialOutcome | None, infrastructure_error: str | None) -> int:
@@ -89,28 +102,16 @@ class OfficialBenchmark:
         return 0
 
     def preflight(self) -> str:
-        """Prove account/daemon/git readiness before any build or measurement."""
+        """Prove account and checkout readiness before isolated measurement."""
         expected_account = self.environ.get("ATM_OFFICIAL_ACCOUNT", DEFAULT_ACCOUNT)
         account = self.command(["whoami"]).stdout.strip()
         if account != expected_account:
             raise OfficialBenchmarkError(
                 f"official runs require account {expected_account!r}; current account is {account!r}"
             )
+        self.account_verified = True
+        self.reset_disposable_account()
         self.require_clean_tree("before sync")
-        doctor = self.command(
-            [sys.executable, str(self.root / DAEMON_SWITCH.relative_to(ROOT)), "status", "--doctor"],
-            allow_failure=True,
-        )
-        if doctor.returncode:
-            raise OfficialBenchmarkError(
-                "daemon-switch preflight could not produce doctor JSON: "
-                + self.detail("daemon-switch status", doctor)
-            )
-        try:
-            status = json.loads(doctor.stdout)
-        except json.JSONDecodeError as error:
-            raise OfficialBenchmarkError(f"daemon-switch status returned invalid JSON: {error}") from error
-        self.require_healthy_doctor(status)
 
         branch = self.branch_override or self.current_branch()
         if self.branch_override is None:
@@ -122,6 +123,32 @@ class OfficialBenchmark:
         self.command(["git", "reset", "--hard", f"origin/{branch}"])
         self.require_clean_tree("after sync")
         return branch
+
+    def reset_disposable_account(self) -> None:
+        """Kill only this account's daemon, then remove all disposable DB state."""
+        self.stop_account_daemon()
+        try:
+            clear_benchmark_database_state()
+        except BenchmarkAccountError as error:
+            raise OfficialBenchmarkError(f"benchmark-account database cleanup failed: {error}") from error
+
+    def stop_account_daemon(self) -> None:
+        """Ensure the disposable account begins and ends with no atm-daemon."""
+        terminated = self.command(["pkill", "-TERM", "-x", "atm-daemon"], allow_failure=True)
+        if terminated.returncode not in (0, 1):
+            raise OfficialBenchmarkError(self.detail("benchmark-account daemon termination", terminated))
+        remaining = self.command(["pgrep", "-x", "atm-daemon"], allow_failure=True)
+        if remaining.returncode == 1:
+            return
+        if remaining.returncode != 0:
+            raise OfficialBenchmarkError(self.detail("benchmark-account daemon inspection", remaining))
+        forced = self.command(["pkill", "-KILL", "-x", "atm-daemon"], allow_failure=True)
+        if forced.returncode not in (0, 1):
+            raise OfficialBenchmarkError(self.detail("benchmark-account daemon forced termination", forced))
+        remaining = self.command(["pgrep", "-x", "atm-daemon"], allow_failure=True)
+        if remaining.returncode != 1:
+            detail = self.detail("benchmark-account daemon post-kill inspection", remaining)
+            raise OfficialBenchmarkError(f"benchmark-account daemon remained running after termination: {detail}")
 
     def build_and_sign(self) -> None:
         """Measure only fresh, signed release binaries from the synced commit."""
@@ -209,18 +236,6 @@ class OfficialBenchmark:
         dirty = self.command(["git", "status", "--porcelain"]).stdout.strip()
         if dirty:
             raise OfficialBenchmarkError(f"working tree is dirty {stage}; commit or remove local changes first")
-
-    @staticmethod
-    def require_healthy_doctor(status: object) -> None:
-        if not isinstance(status, dict):
-            raise OfficialBenchmarkError("daemon-switch status returned a non-object response")
-        doctor = status.get("doctor")
-        if not isinstance(doctor, dict) or "error" in doctor:
-            detail = doctor.get("error") if isinstance(doctor, dict) else "missing doctor result"
-            raise OfficialBenchmarkError(f"daemon-switch doctor is unavailable: {detail}")
-        summary = doctor.get("summary")
-        if not isinstance(summary, dict) or summary.get("status") != "healthy":
-            raise OfficialBenchmarkError("daemon-switch doctor is not healthy")
 
     def push_environment(self) -> dict[str, str]:
         deploy_key = self.environ.get(DEPLOY_KEY_ENVIRONMENT_VARIABLE, "").strip()
