@@ -15,7 +15,7 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-24T22:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.14 ;
@@ -29,8 +29,8 @@
   triage:file "crates/atm-http-runtime/src/client.rs" ;
   triage:line 181 ;
   triage:snippet "pub fn peer_stream_write_client(...) -> Result<Arc<dyn DaemonApiClient + Send + Sync>>" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ao2-14-peer-connection-pooling" ;
   triage:headSha "36c6c95d8b6bddc63654819434d3c2a14a0f94eb" ;
   triage:occursIn <urn:atm:triage:worktree/AO214/36c6c95> .
@@ -40,8 +40,8 @@
   triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 254 ;
   triage:snippet "(None, Some(adapter)) => crate::client::peer_stream_write_client(...)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ao2-14-peer-connection-pooling" ;
   triage:headSha "36c6c95d8b6bddc63654819434d3c2a14a0f94eb" ;
   triage:occursIn <urn:atm:triage:worktree/AO214/36c6c95> .
