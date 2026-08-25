@@ -94,6 +94,9 @@ def healthy_managed_status() -> dict[str, object]:
 
 
 class AdmissionCapacityTests(unittest.TestCase):
+    def test_default_workers_match_the_reviewed_f8_load_shape(self):
+        self.assertEqual(RUNNER.DEFAULT_WORKERS, 512)
+
     def test_ordinary_benchmark_runs_required_f8_targets_in_fixed_order(self):
         captured: list[dict[str, object]] = []
 
@@ -252,10 +255,10 @@ class AdmissionCapacityTests(unittest.TestCase):
             with self.assertRaisesRegex(RUNNER.SmokeError, "require --diagnostic-only"):
                 RUNNER.main()
 
-    def test_direct_production_writer_profile_keeps_real_interval_counts(self):
+    def test_direct_sqlite_writer_profile_keeps_real_interval_counts(self):
         stdout = json.dumps(
             {
-                "kind": "canonical_core_write",
+                "kind": "async_storage_admission",
                 "requested_count": 2_000,
                 "accepted_count": 2_000,
                 "worker_count": 64,
@@ -277,15 +280,21 @@ class AdmissionCapacityTests(unittest.TestCase):
         with mock.patch.object(
             RUNNER.subprocess, "run", return_value=mock.Mock(returncode=0, stdout=stdout, stderr=""),
         ) as run:
-            profile, direct = RUNNER.run_direct_production_writer_profile(
+            profile, direct = RUNNER.run_direct_sqlite_writer_profile(
                 Path("/bin/benchmark"), {"ATM_HOME": "/tmp/atm-capacity-test"}, roster,
                 1_000, 2, 64,
             )
 
         self.assertEqual(profile["sample_count"], 2)
         self.assertEqual(profile["intervals"][0]["accepted_count"], 1_000)
-        self.assertEqual(direct["kind"], "canonical_core_write")
+        self.assertEqual(direct["kind"], "async_storage_admission")
+        self.assertIn("--direct-storage-admission", run.call_args.args[0])
         self.assertIn("--seconds", run.call_args.args[0])
+        self.assertEqual(run.call_args.kwargs["env"]["ATM_CAPACITY_STORAGE_TEAM"], roster.team)
+        self.assertEqual(run.call_args.kwargs["env"]["ATM_CAPACITY_STORAGE_SENDER"], roster.agent)
+        self.assertEqual(
+            run.call_args.kwargs["env"]["ATM_CAPACITY_STORAGE_RECIPIENT"], roster.recipient,
+        )
 
     def test_sqlite_probe_build_is_separate_from_the_released_daemon_pair(self):
         suffix = ".exe" if os.name == "nt" else ""
@@ -295,10 +304,31 @@ class AdmissionCapacityTests(unittest.TestCase):
             mock.patch.object(RUNNER.Path, "is_file", side_effect=[False, True]),
             mock.patch.object(RUNNER.subprocess, "run", return_value=completed) as command,
         ):
-            self.assertEqual(RUNNER.canonical_writer_probe(), probe)
+            self.assertEqual(RUNNER.sqlite_writer_probe(), probe)
         command.assert_called_once()
         self.assertIn("atm-daemon-bootstrap", command.call_args.args[0])
         self.assertIn("benchmark-harness", command.call_args.args[0])
+
+    def test_direct_sqlite_writer_profile_rejects_canonical_core_measurement(self):
+        payload = json.dumps(
+            {
+                "kind": "canonical_core_write",
+                "requested_count": 1_000,
+                "accepted_count": 1_000,
+                "worker_count": 64,
+                "elapsed_seconds": 0.1,
+                "admissions_per_second": 10_000.0,
+                "intervals": [],
+            }
+        )
+        completed = mock.Mock(returncode=0, stdout=payload, stderr="")
+        with mock.patch.object(RUNNER.subprocess, "run", return_value=completed):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "wrong measurement kind"):
+                RUNNER.run_direct_sqlite_writer_profile(
+                    Path("/tmp/atm-daemon-benchmark"), {},
+                    RUNNER.CapacityRoster("test", "team", "agent", "recipient"),
+                    1_000, 1, 64,
+                )
 
     def test_capacity_run_result_preserves_compact_and_raw_evidence(self):
         result = RUNNER.CapacityRunResult(0, Path("compact.json"), Path("raw.json"))
@@ -1502,9 +1532,9 @@ class AdmissionCapacityTests(unittest.TestCase):
             50_000.0,
         )
 
-    def test_direct_writer_profile_requires_and_preserves_real_intervals(self):
+    def test_direct_sqlite_writer_profile_requires_and_preserves_real_intervals(self):
         payload = {
-            "kind": "canonical_core_write",
+            "kind": "async_storage_admission",
             "requested_count": 2_000,
             "accepted_count": 2_000,
             "worker_count": 64,
@@ -1528,13 +1558,13 @@ class AdmissionCapacityTests(unittest.TestCase):
         completed = mock.Mock(returncode=0, stdout=json.dumps(payload), stderr="")
         roster = RUNNER.CapacityRoster("test", "team", "agent", "recipient")
         with mock.patch.object(RUNNER.subprocess, "run", return_value=completed) as run:
-            profile, measurement = RUNNER.run_direct_production_writer_profile(
+            profile, measurement = RUNNER.run_direct_sqlite_writer_profile(
                 Path("/tmp/atm-daemon-benchmark"), {}, roster, 1_000, 2, 64,
             )
         self.assertEqual(measurement, payload)
         self.assertEqual(profile["sample_count"], 2)
         self.assertEqual(profile["intervals"][0]["admissions_per_second"], 20_000.0)
-        self.assertIn("--direct-core-write", run.call_args.args[0])
+        self.assertIn("--direct-storage-admission", run.call_args.args[0])
         self.assertIn("--intervals", run.call_args.args[0])
 
     def test_profile_schema_distinguishes_minimum_from_actual_sample_count(self):
