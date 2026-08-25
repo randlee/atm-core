@@ -97,6 +97,14 @@ class AdmissionCapacityTests(unittest.TestCase):
     def test_default_workers_match_the_reviewed_f8_load_shape(self):
         self.assertEqual(RUNNER.DEFAULT_WORKERS, 512)
 
+    def test_sqlite_writer_execution_label_remains_valid_v3_provenance(self):
+        summary = compact_evidence(complete_evidence(
+            transport="sqlite",
+            benchmark_target="sqlite",
+            execution_daemon="direct_production_writer",
+        ))
+        self.assertEqual(summary.execution_daemon, "direct_production_writer")
+
     def test_ordinary_benchmark_runs_required_f8_targets_in_fixed_order(self):
         captured: list[dict[str, object]] = []
 
