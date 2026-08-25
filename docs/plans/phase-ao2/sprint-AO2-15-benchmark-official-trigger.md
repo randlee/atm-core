@@ -19,15 +19,21 @@ account's clone is simply stale (`develop @ 53916e49c`, predating
 resolves the identity cleanly both with and without
 `ATM_SIGNING_IDENTITY` (fingerprint `80670DBD…`, team `4869P2ZYC6`).
 There is no signing deliverable; preflight's sync-to-origin cures the
-staleness. What IS missing: `just benchmark-publish` was described in
-AO2.13's plan but never implemented — it is built here.
+staleness. **Correction (team-lead, post-AO2.14-merge)**: `just
+benchmark-publish` is NOT missing — AO2.13 (merged via #1013–#1015) already
+implemented it (`Justfile:234`, `scripts/smoke/benchmark_publish.py`). This
+sprint's scope is Deliverables 2 and 3 only; Deliverable 1 below is retained
+purely as a fixture/hardening check against the existing recipe, not new
+implementation.
 
 ## Deliverables
 
-1. **`just benchmark-publish` recipe** (closing the AO2.13 gap): stages
-   ONLY `site/reports/**` artifacts, runs `just reports-index --check`
-   (already exists and exits nonzero on staleness), fails without
-   staging anything if the check fails. No other paths are ever staged.
+1. **`just benchmark-publish` fixture/hardening pass** (already implemented
+   by AO2.13 — this sprint only adds the D1 fixture tests below against the
+   existing recipe; no new recipe is written): confirm it stages ONLY
+   `site/reports/**` artifacts, runs `just reports-index --check` (already
+   exists and exits nonzero on staleness), and fails without staging
+   anything if the check fails. No other paths are ever staged.
 2. **`scripts/smoke/benchmark_official.py` + `just benchmark-official`
    recipe** — one headless command:
 
@@ -146,3 +152,4 @@ verdict:    exit 0 = all floors green
 | 2 | critical-plan-reviewer (sonnet) | `de8eb1d25` | FAIL — 6/7 round-1 items verified resolved (incl. the empirical signing deletion); 1 new Important: the direct-runner rewrite dropped the cargo-build + sign steps, risking measurement of stale binaries | Fixed in round-2 commit: explicit build stage (cargo build --release + sign_daemon_dev.py, fatal exit 2) restored ahead of the runner, with a missing-binaries fail-closed fixture in AC #2. |
 | 3 | critical-plan-reviewer (sonnet) | `47e6d4d59` | **PASS** — build-stage restoration verified; zero findings; hardening complete | Ready for quality-mgr final QA. |
 | 4 | quality-mgr gate (PR #1022) | pre-fix head | **PASS**, 0 Blocking — 6 doc-level pre-merge fixes (must_follow AO2.13; two missing verdict-precedence AC rows; SSH host-key pre-trust; daemon-switch --doctor always exits 0 so preflight must be a JSON-content check; rejected-push stranded fixture; plist placeholder timing) + 1 refuted req-qa false positive (wrong-branch signing claim) | All six applied in this commit; no new QA round required per team-lead. |
+| 5 | team-lead doc correction (post-AO2.14-merge, pre-dev-dispatch) | this commit | N/A (doc-only correction, not a QA round) | Deliverable 1's framing was stale: `just benchmark-publish` was described as "not yet implemented... built here," but AO2.13 (#1013–#1015) already shipped it (`Justfile:234`, `scripts/smoke/benchmark_publish.py`), flagged by quality-mgr at round 4. Corrected: D1 is now scoped as a fixture/hardening pass against the existing recipe, not new implementation. Dev dispatch scope is D2 + D3 (+ D1 fixtures). |
