@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ARCH-QA-AO214-RULE003>
+  a triage:Finding ;
+  triage:findingId "ARCH-QA-AO214-RULE003" ;
+  triage:title "File line-count ceiling exceeded" ;
+  triage:description "crates/atm-http-runtime/src/client.rs (1078 non-test lines) and crates/atm-http-runtime/src/lib.rs (1079 non-test lines) both exceed the 1000-line ceiling (ARCH-QA-RULE003). Verified directly by quality-mgr via line counts. Fix: split each file along an existing seam." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture-fitness" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-http-runtime/src/client.rs, crates/atm-http-runtime/src/lib.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-24T22:16:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.14 ;
+  triage:foundAt "2026-08-24T22:15:50Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-QA-AO214-RULE003/AO214-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-QA-AO214-RULE003/AO214-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ARCH-QA-AO214-RULE003/AO214-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 1078 ;
+  triage:snippet "File exceeds 1000-line ceiling" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ao2-14-peer-connection-pooling" ;
+  triage:headSha "36c6c95d8b6bddc63654819434d3c2a14a0f94eb" ;
+  triage:occursIn <urn:atm:triage:worktree/AO214/36c6c95> .
+
+<urn:atm:triage:occurrence/ARCH-QA-AO214-RULE003/AO214-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 1079 ;
+  triage:snippet "File exceeds 1000-line ceiling" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ao2-14-peer-connection-pooling" ;
+  triage:headSha "36c6c95d8b6bddc63654819434d3c2a14a0f94eb" ;
+  triage:occursIn <urn:atm:triage:worktree/AO214/36c6c95> .
+
+<urn:atm:triage:worktree/AO214/36c6c95>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ao2-14-peer-connection-pooling" ;
+  triage:branch "feature/ao2-14-peer-connection-pooling" ;
+  triage:headSha "36c6c95d8b6bddc63654819434d3c2a14a0f94eb" ;
+  triage:orderIndex 1 .

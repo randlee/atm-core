@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RSH-AO214-001>
+  a triage:Finding ;
+  triage:findingId "RSH-AO214-001" ;
+  triage:title "Acquire-time liveness probe unbounded by request deadline" ;
+  triage:description "peer_connection_pool.rs:167 -- acquire-time liveness probe is not bounded by the caller's request deadline. Important, non-blocking." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "runtime-hardening" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/peer_connection_pool.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-24T22:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.14 ;
+  triage:foundAt "2026-08-24T22:15:50Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-AO214-001/AO214-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RSH-AO214-001/AO214-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/peer_connection_pool.rs" ;
+  triage:line 167 ;
+  triage:snippet "tokio::time::timeout(remaining, idle.sender.ready()).await" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ao2-14-peer-connection-pooling" ;
+  triage:headSha "36c6c95d8b6bddc63654819434d3c2a14a0f94eb" ;
+  triage:occursIn <urn:atm:triage:worktree/AO214/36c6c95d> .
+
+<urn:atm:triage:worktree/AO214/36c6c95d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ao2-14-peer-connection-pooling" ;
+  triage:branch "feature/ao2-14-peer-connection-pooling" ;
+  triage:headSha "36c6c95d8b6bddc63654819434d3c2a14a0f94eb" ;
+  triage:orderIndex 1 .
