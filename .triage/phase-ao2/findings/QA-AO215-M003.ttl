@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/QA-AO215-M003>
+  a triage:Finding ;
+  triage:findingId "QA-AO215-M003" ;
+  triage:title "Plist static GIT_SSH_COMMAND is inert/duplicate vs runtime-computed value" ;
+  triage:description "The plist's static GIT_SSH_COMMAND environment entry is inert and duplicates the runtime-computed one; cosmetic only since both carry the same placeholder and cannot drift." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "cosmetic" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-25T03:19:55Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.15 ;
+  triage:foundAt "2026-08-25T03:19:55Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-AO215-M003/occ-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QA-AO215-M003/occ-1>
+  a triage:Occurrence ;
+  triage:file "tools/com.atm.benchmark-official.plist" ;
+  triage:line 1 ;
+  triage:snippet "GIT_SSH_COMMAND" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ao2-15-benchmark-official-trigger" ;
+  triage:headSha "a003b6950e2a3efa632c425261218ea7eb4e1c73" ;
+  triage:occursIn <urn:atm:triage:worktree/AO215/a003b69> .
+
+<urn:atm:triage:worktree/AO215/a003b69>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ao2-15-benchmark-official-trigger" ;
+  triage:branch "feature/ao2-15-benchmark-official-trigger" ;
+  triage:headSha "a003b6950e2a3efa632c425261218ea7eb4e1c73" ;
+  triage:orderIndex 1 .

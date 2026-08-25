@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/QA-AO215-I005>
+  a triage:Finding ;
+  triage:findingId "QA-AO215-I005" ;
+  triage:title "Doctor-health check can be bypassed by pre-JSON exit-code gating" ;
+  triage:description "daemon-switch.py's command_path() can raise SwitchError before producing any JSON output; in that case the JSON-content health check cannot run, and the failure is instead surfaced via an implicit exit-code gate -- reintroducing exactly the exit-code gating the doc forbids, for a different failure class (early SwitchError vs an unhealthy-but-running daemon)." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "spec-violation" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-25T03:19:55Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.15 ;
+  triage:foundAt "2026-08-25T03:19:55Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-AO215-I005/occ-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QA-AO215-I005/occ-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/benchmark_official.py" ;
+  triage:line 98 ;
+  triage:snippet "branch = self.current_branch()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ao2-15-benchmark-official-trigger" ;
+  triage:headSha "a003b6950e2a3efa632c425261218ea7eb4e1c73" ;
+  triage:occursIn <urn:atm:triage:worktree/AO215/a003b69> .
+
+<urn:atm:triage:worktree/AO215/a003b69>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ao2-15-benchmark-official-trigger" ;
+  triage:branch "feature/ao2-15-benchmark-official-trigger" ;
+  triage:headSha "a003b6950e2a3efa632c425261218ea7eb4e1c73" ;
+  triage:orderIndex 1 .
