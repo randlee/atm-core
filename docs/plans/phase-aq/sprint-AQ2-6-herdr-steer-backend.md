@@ -29,8 +29,9 @@ submission or identify a particular turn.
 
 ## Deliverables
 
-1. **Explicit, exclusive local backend selection.** Add a roster-owned,
-   validated representation whose local choices are:
+1. **Explicit, exclusive local backend selection — complete CLI-to-doctor
+   path.** Add a roster-owned, validated representation whose local choices
+   are:
 
    ```rust
    pub enum LocalMessageReceivedBackend {
@@ -40,14 +41,59 @@ submission or identify a particular turn.
    ```
 
    `HerdrAgentTarget` is a validated Herdr live-agent name or pane target;
-   it is not inferred from an ATM `AgentName`. Existing persisted
-   `recipient_pane_id` rows migrate/read as `Tmux` with the same pane and
-   retain their current behavior. A Herdr row requires a target and may not
-   ambiguously select a tmux pane. The resolved delivery policy is total and
-   ordered once: explicit local backend (`Tmux` or `Herdr`), otherwise graft
-   lease, otherwise AQ2.5 bare-CLI. Neither the planner nor emitters may
-   reimplement that match. Team-admin add/update/list/backup/restore schemas,
-   redaction/doctor output, and compatibility fixtures change together.
+   it is not inferred from an ATM `AgentName`. The public command surface is
+   paired and explicit on **both** operations:
+
+   ```text
+   atm teams add-member <team> <member> --backend <tmux|herdr> --target <target>
+   atm teams update-member <team> <member> --backend <tmux|herdr> --target <target>
+   ```
+
+   `--backend` and `--target` are accepted together or omitted together. The
+   current `--pane-id` option is retained only as a deprecated compatibility
+   spelling for `--backend tmux --target <value>`; it cannot be combined with
+   either new option. Help, clap parsing, request DTOs, and errors must use
+   backend-neutral wording — neither command may expose a tmux-only
+   `Option<String>` as its primary path.
+
+   A single backend-aware target parser replaces
+   `normalize_tmux_pane_id`: it returns the declared backend, typed target,
+   and target-shape classification together. Tmux uses its canonical
+   `PaneId::from_cli` normalization; Herdr accepts a live-agent name or a
+   Herdr pane target such as `w1:p1`. No CLI target is first normalized and
+   then rejected by a second, divergent validator. `PaneId::from_cli` already
+   permits `:` while the current tmux normalizer rejects it; the new parser is
+   the one source of truth and carries the declared backend with the target
+   through every subsequent layer. A cross-backend shape is admitted with the
+   required warning below, not silently reclassified or rejected by an
+   inconsistent second parser.
+
+   Replace persisted `recipient_pane_id` with the tagged backend/target
+   representation in member mutation and projection. Existing rows migrate
+   and read as `Tmux` with the same target, retaining behavior. Thread the
+   tagged value through add/update persistence, member list/projection and
+   JSON output, backup encoding/versioning, restore decoding/migration,
+   roster redaction, and `atm doctor --json` / human output in the same PR.
+   Retain a derived/deprecated `tmux_pane_id` compatibility field only where
+   existing consumers require it; it must never be the source used for
+   backend dispatch. Round-trip fixtures cover both variants and a legacy
+   backup.
+
+   **Cross-backend mismatch warning (required):** target syntax is a useful
+   operator signal, not a capability check. When a tmux-shaped `%N` target is
+   supplied with `--backend herdr`, or a Herdr-shaped `wN:pN` target is
+   supplied with `--backend tmux`, add-member/update-member succeeds but emits
+   a warning to stderr (and the structured command result) naming the member,
+   selected backend, and target. The warning must say: `verify --backend
+   (herdr|tmux) for every member in team <team>; mixed-backend rosters require
+   an explicit correct backend`. It is intentionally not silent and not a
+   per-target probe: backend ownership is environment-derived, so the CLI
+   cannot prove that a currently entered target belongs to the intended local
+   backend. A plain Herdr agent name does not trigger a format warning.
+
+   The resolved delivery policy is total and ordered once: explicit local
+   backend (`Tmux` or `Herdr`), otherwise graft lease, otherwise AQ2.5
+   bare-CLI. Neither the planner nor emitters may reimplement that match.
 
 2. **Shared planner and selector seam.** AQ2.5's classifier gains
    `DeliveryChannel::HerdrSteer`; its existing `TmuxSteer` arm remains. Core
@@ -92,23 +138,39 @@ submission or identify a particular turn.
 
 ## Acceptance criteria
 
-1. A migrated tmux roster row selects the unchanged `TokioTmuxReceivedHook`;
+1. `teams add-member` and `teams update-member` both round-trip explicit tmux
+   and Herdr `--backend` / `--target` values through their clap surface,
+   request DTO, persistence, member list/JSON projection, backup, restore,
+   and doctor output. A legacy `--pane-id` input and legacy backup migrate to
+   the same explicit `Tmux` record with no behavior change.
+2. A `w1:p1` Herdr target is accepted and carried as a Herdr target; parser
+   tests prove the old `PaneId::from_cli` versus `normalize_tmux_pane_id`
+   disagreement cannot recur because no second normalizer validates the same
+   CLI target. Cross-backend-shaped input takes the warning path, while the
+   declared backend/target tag — not target punctuation — is the sole routing
+   input.
+3. Supplying `%12` with `--backend herdr` and `w1:p1` with `--backend tmux`
+   succeeds with the exact roster-wide verification warning on stderr and in
+   structured output. The warning names the team/member/backend/target; a
+   plain Herdr agent-name target does not warn. Tests cover a mixed tmux/Herdr
+   roster so a wrong local backend is never silently accepted.
+4. A migrated tmux roster row selects the unchanged `TokioTmuxReceivedHook`;
    its argv, two-Enter delay, and successful emission path are regression
    tested byte-for-byte against the pre-AQ2.6 behavior.
-2. A Herdr-selected row resolves to `LocalHerdr` and selects only
+5. A Herdr-selected row resolves to `LocalHerdr` and selects only
    `HerdrReceivedHook`; a graft lease cannot override an explicit local
    backend, and a backend-less row preserves the existing graft/bare-CLI
    classification.
-3. The exact Herdr argv is `agent prompt`, target, fixed mailbox-read text,
+6. The exact Herdr argv is `agent prompt`, target, fixed mailbox-read text,
    and `--wait`; no message body, rendered XML, shell interpolation, tmux, or
    raw-key fallback appears in the Herdr path.
-4. An `agent_blocked` fixture proves the command exits with its structured
+7. An `agent_blocked` fixture proves the command exits with its structured
    rejection before any input reaches the fixture terminal, records
    `blocked_before_input`, and leaves the durable mail readable through
    `atm read`.
-5. Deadline/cancellation tests prove no child process or background task
+8. Deadline/cancellation tests prove no child process or background task
    survives the request; post-commit hook errors remain advisory.
-6. Boundary-manifest freshness, `cargo test -p atm-architecture`, and
+9. Boundary-manifest freshness, `cargo test -p atm-architecture`, and
    `just test` pass on all three lanes. Herdr command fixtures run on
    macOS/ubuntu; Windows verifies selection and command construction only
    until a supported Windows Herdr deployment is explicitly added.
@@ -121,6 +183,8 @@ submission or identify a particular turn.
   no injection and leaves the tmux backend unused.
 - Retained tmux and Herdr rows are exercised in the same roster fixture to
   demonstrate coexistence, not migration-by-replacement.
+- Add/update a mixed roster with intentionally cross-shaped targets and retain
+  the operator-facing roster-wide backend-verification warning in evidence.
 
 ## Non-closure / out of scope
 
