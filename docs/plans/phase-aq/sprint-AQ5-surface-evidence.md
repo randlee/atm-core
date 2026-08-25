@@ -73,8 +73,9 @@ linked artifact.
    AN8/AN12 pattern): per requirement R1–R8 + R13–R15, the closing
    test/artifact with links (PASS/OPEN, 40-hex SHA). Live scenarios: US-2
    cross-host over a configured transfer script + the unconfigured-host
-   canonical error; `atm queue` drain observed live (AQ3's transcript
-   referenced); residue check with a short-TTL sweep config. Open-item
+   canonical error; retained-tmux and Herdr `atm queue` wake paths observed
+   live (AQ3 and AQ2.7 transcripts referenced); residue check with a
+   short-TTL sweep config. Open-item
    register: Phase 2 (drafting/chat/attachments-metadata/note_source),
    team addressing, Share Extension/MSIX, the accepted queued-attachment
    TTL interaction.
@@ -119,5 +120,6 @@ None.
 ## Dependencies
 
 - must_follow: AQ4 (consumes the CLI surface and staging behavior; queue
-  evidence consumes AQ1–AQ3) — merge-forward before every dev/fix round.
+  evidence consumes AQ1–AQ3 and AQ2.6–AQ2.7) — merge-forward before every
+  dev/fix round.
 - parallel_safe: none remaining.

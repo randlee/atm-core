@@ -121,6 +121,13 @@ pub trait PendingNudgeStore {
     /// signal in ADR-054 (f)).
     fn requeue_pending(&self, member: &MemberKey, claim: &NudgeClaim)
         -> Result<(), StorageError>;
+    /// Restores a claim when the selected delivery mechanism refused to
+    /// attempt input for a lifecycle reason (AQ2.7's `agent_blocked`
+    /// result). Restores the marker for exactly this claimed message without
+    /// incrementing `nudge_attempts`: no input was injected, so this is not a
+    /// delivery retry. Conditional/idempotent on the claim identity.
+    fn release_pending(&self, member: &MemberKey, claim: &NudgeClaim)
+        -> Result<(), StorageError>;
     /// Read-path clear (same state update that sets read = 1).
     fn clear_pending_on_read(&self, member: &MemberKey, msg: &AtmMessageId)
         -> Result<(), StorageError>;
@@ -164,6 +171,9 @@ most once.
 4a. `claim_next_pending`/`requeue_pending` round-trip: a failed dispatch
    requeues with an incremented attempt; at the ADR-054 (f) max the row
    becomes auto-retry-ineligible and flags stuck (no unbounded retry).
+   `release_pending` restores only the same claim without changing its
+   attempt count; AQ2.7 proves an `agent_blocked` Herdr rejection uses this
+   release path rather than consuming retry budget.
 5. Kind-aware dispatch test: Steer and Queue dispatches route through the
    selector; tmux emitter receives Steer only.
 6. Boundary governance: ADR-018 §3 amendment + pending-nudge-store TOML +

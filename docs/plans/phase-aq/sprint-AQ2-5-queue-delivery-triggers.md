@@ -26,9 +26,9 @@ and that is accepted — the mail itself is always durably in the mailbox.
 
 **Naming rule (Rand, 2026-08-24)**: channels are named by their
 **mechanism** (tmux steer, graft, bare-CLI), never by negation
-("non-tmux") — a future harness channel (e.g. a tmux replacement) must
-slot in as one new classifier arm + target variant + emitter impl with
-no renames.
+("non-tmux") — an alternate harness channel slots in as one new classifier
+arm + target variant + emitter impl with no renames. AQ2.6 exercises this
+seam by adding `HerdrSteer`; it retains `TmuxSteer` as a coexisting backend.
 
 **Verified baseline (2026-08-24, fenix)**: a production Codex hook
 implementation already exists machine-globally (`~/.codex/hooks.json` →
@@ -59,14 +59,16 @@ nothing — denied, never raced against AQ3.
 | Member's classified channel (inputs: roster row + graft lease) | Trigger | Delivery |
 |---|---|---|
 | **tmux steer** — roster `pane_id` set (Claude or Codex — identical) | AQ3 idle-transition drain (fed by this sprint's heartbeats) | existing steer selector (tmux send-keys) |
+| **Herdr steer** — explicit local `backend = herdr` configuration (AQ2.6) | AQ2.7 lifecycle-gated wake pump for queue; immediate for steer | Herdr `agent prompt`; mailbox remains authoritative |
 | **graft** — no `pane_id`, graft lease registered (AQ1.5 store) | AQ2 queue channel | graft queue-kind wire message |
 | **bare-CLI** — no `pane_id`, no graft lease (Claude or Codex) | message arrival appends to the member's RAM FIFO; drain at the member's next Stop-pull get | queue-kind: one item per get · steer-kind: all items at once. Claude injects via Stop-hook block-with-reason. **Codex has no injection surface yet** — its FIFO accumulates bounded (drop-oldest ages out stale nudges) until Codex gains one or the member adopts graft; disclosed, not silent. |
 
-The pending-marker machinery (AQ1 store, AQ3 sweep) applies **only** to
-tmux-steer and graft members. For bare-CLI members the FIFO **is** the
-mechanism: the emitter's append is the handoff (marker cleared, exactly
-AQ2's handoff-clears-marker semantics), so the sweep never has bare-CLI
-work and the false-stuck problem cannot arise.
+The pending-marker machinery (AQ1 store) applies to tmux-steer, Herdr-steer,
+and graft members. AQ3 schedules only tmux/graft; AQ2.7 is the sole
+Herdr-marker claimant. For bare-CLI members the FIFO **is** the mechanism:
+the emitter's append is the handoff (marker cleared, exactly AQ2's
+handoff-clears-marker semantics), so neither scheduler has bare-CLI work and
+the false-stuck problem cannot arise.
 
 ## Deliverables
 
@@ -313,9 +315,9 @@ work and the false-stuck problem cannot arise.
    //   benchmark semantics (the benchmark roster has no bare-CLI
    //   members), and the harness keeps compiling with no compat shim.
    ```
-   - Extensibility (naming rule above): a future harness channel adds
-     one classifier arm + one target variant + one emitter impl — no
-     renames anywhere.
+   - Extensibility (naming rule above): AQ2.6 adds `HerdrSteer`, one local
+     target variant, and one emitter impl after this sprint lands. It does
+     not rename or remove `TmuxSteer`; later channels use the same seam.
 
 5. **ADR-054 addendum**: one clarifying sentence that 'steer = immediate'
    describes the KIND's delivery intent, while the bare-CLI mechanism may
@@ -414,8 +416,9 @@ work and the false-stuck problem cannot arise.
   Codex has no injection surface; drain waits for one (or graft
   adoption via AQ1.5–AQ1.9/AQ2). Bounded drop-oldest ages out stale
   nudges meanwhile. Disclosed in the trigger table.
-- Additional harness channels (e.g. a tmux replacement) — designed-for
-  via the classifier/target/emitter extension seam, not delivered here.
+- Additional harness channels beyond the retained tmux and the AQ2.6 Herdr
+  backend — designed-for via the classifier/target/emitter extension seam,
+  not delivered here.
 - Claude Stop-pull **live evidence** on Windows (unit tests run there
   per AC 10; the committed live transcript is macOS/ubuntu — disclosed
   platform bound, revisited if a Windows deployment materializes).
@@ -454,3 +457,5 @@ work and the false-stuck problem cannot arise.
   sweep pre-check calls, and its **live-evidence validation** requires
   this sprint's heartbeat producer (both recorded in AQ3; AQ3's other
   deliverables and its parallel_safe AQ2 claim are unaffected).
+- Downstream: AQ2.6 takes `must_follow AQ2.5`; it extends the classifier,
+  target, and selector after this sprint's single-owner creation diff lands.

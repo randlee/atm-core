@@ -65,6 +65,17 @@ path: a RAM-only bounded FIFO drained by a simple Stop-pull get
 The trigger-policy matrix is normative in sprint-AQ2-5 and lands as an
 ADR-054 addendum; AQ3's sweep pre-check consumes the classifier seam.
 
+Herdr alternate-backend insertion (per Rand, 2026-08-25, sprints AQ2.6–AQ2.7):
+the existing Tokio tmux received-message emitter is retained. AQ2.6 makes
+the local message-received backend an explicit `tmux | herdr` selection behind
+the existing sealed `AsyncMessageReceivedHookEmitter` boundary and adds the
+Herdr implementation; it does not remove, emulate, or fall back to tmux.
+AQ2.7 supplies the Herdr-aware deferred-wake wrapper for `atm queue`. Herdr
+has no server-side queue: ATM's durable mailbox and AQ1 pending marker remain
+the queue, and every Herdr invocation is only a wake-up prompt directing the
+agent to `atm read`. The wrapper's wait→prompt sequence has an acknowledged
+race and must never be represented as an atomic "deliver when idle" primitive.
+
 | Sprint | Title | Depends |
 |---|---|---|
 | AQ1 | `atm queue`: CLI verb, taxonomy (ADR-054), kind-aware dispatch + renames, `PendingNudgeStore` | — |
@@ -75,9 +86,11 @@ ADR-054 addendum; AQ3's sweep pre-check consumes the classifier seam.
 | AQ1.9 | hermes-atm wheel bump + live restart-matrix verification on m5 | must_follow AQ1.7 · parallel_safe AQ1.8 |
 | AQ2 | Queue: atm-graft dual-channel | must_follow AQ1, AQ1.7 · parallel_safe AQ3 (AQ2 owns the graft channel's send-and-report; AQ3 owns kind-agnostic claim/dispatch scheduling; retry state lives only in AQ1's store — neither calls the other's code) |
 | AQ2.5 | Queue delivery triggers: heartbeat producer (harness idle hooks), channel classifier, bare-CLI RAM FIFO + Stop-pull get (ADR-054 addendum) | must_follow AQ1, AQ1.7, AQ2 (shared `received_hook_selector.rs` — AQ2 lands first) |
-| AQ3 | Queue: tmux idle-drain | must_follow AQ1, AQ2.5 (classifier seam for the sweep pre-check; heartbeat producer for live evidence) · parallel_safe AQ2 |
-| AQ4 | Send-To core: ATM_TEMP (ADR-055), CLI surface, transfer scripts, sweeper | must_follow AQ1–AQ3 |
-| AQ5 | Send-To surface + phase evidence | must_follow AQ4 |
+| AQ2.6 | Local steer backends: retained tmux + alternate Herdr message-received emitter | must_follow AQ1, AQ2.5 (extends its classifier/selector seam after AQ2.5) |
+| AQ3 | Queue: tmux/graft idle-drain | must_follow AQ1, AQ2.5, AQ2.6 (classifier seam; it explicitly skips Herdr) · parallel_safe AQ2 |
+| AQ2.7 | Queue: Herdr lifecycle-gated mailbox wake-up | must_follow AQ1, AQ2.5, AQ2.6, AQ3 (separate Herdr-only pump; no shared claim owner) |
+| AQ4 | Send-To core: ATM_TEMP (ADR-055), CLI surface, transfer scripts, sweeper | must_follow AQ1–AQ3, AQ2.6–AQ2.7 |
+| AQ5 | Send-To surface + phase evidence | must_follow AQ4; Herdr/tmux evidence consumes AQ2.6–AQ2.7 |
 | AQ6 | SC-ecosystem dependency preflight (pin-latest + integration tests) + Wyvern contract issue | must_follow AQ5 |
 
 The table is an ownership map, not a second requirements list; each sprint
@@ -98,7 +111,7 @@ Branch pattern: `feature/aq-N-<slug>` off `integrate/phase-aq`, PR target
 
 - PRD Phase 2 (atm draft, chat sessions, "Open with agent", structured
   `attachments` envelope metadata, `note_source`).
-- `atm spawn` shell entries (`atm queue` is in scope: AQ1-AQ3; its
+- `atm spawn` shell entries (`atm queue` is in scope: AQ1-AQ3 and AQ2.7; its
   dedicated shell entry, if any, is a follow-on).
 - Durable heartbeat history / member-state subscription APIs beyond the
   internal transition sink (AQ3).
