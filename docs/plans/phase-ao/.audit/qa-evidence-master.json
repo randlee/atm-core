@@ -333,6 +333,31 @@
       "minor": 0,
       "count_basis": "headline/reviewer",
       "evidence": "QA-1 verdict, PR #983 (fix/benchmark-snapshot-restore-mandatory, commit 56b1166a). Reviewers: req-qa, arch-qa, ruthless-boundary-qa, flaky-test-qa (no Rust in scope). No blocking findings gate the PR (arch-qa's RULE-003 file-length flag confirmed pre-existing/not worsened, tracked separately as decomposition debt). 2 IMPORTANT: ATM-QA-001 (req-qa -- orphaned verify_durable_admissions() dead code + stale comment) and RBQA-F001 (ruthless-boundary-qa -- fault-injection tests fully mock benchmark_snapshot, no unmocked integration proof of interactive-root isolation). Both independently re-verified fixed by quality-mgr via fresh worktree + real test runs in result 01M0KZXYRCNSF4693HCDCDE4TZ (\"That closes both Important findings on PR #983 ... No blocking findings remain\"). A separate live-CI-only regression, CI-AO254-F009 (this branch never received PR #978's a74615f82 Windows owner-SID fix, since the two branches are siblings off integrate/phase-ao2 not stacked), was found post-QA-1 via GH API job inspection, triaged, corrected, and independently confirmed fixed on live Windows CI in 01M0M37AX0M34YMSHWZ1KCXGEX (\"fully green -- 19/19 checks PASS\"). PR #983 merged to integrate/phase-ao2 2026-08-22T06:41:18Z."
+    },
+    {
+      "run_id": "AO214-QA1",
+      "aich_sprint": "AO2.14",
+      "phase_sprint": "AO2.14",
+      "pass": "QA-1",
+      "run_type": "qa",
+      "assignment_time_utc": "2026-08-24T06:05:00Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": null,
+      "assignment_from": "team-lead",
+      "assignment_shared_path": null,
+      "assignment_summary": null,
+      "result_time_utc": "2026-08-25T02:57:07Z",
+      "result_time_pst": null,
+      "result_message_id": null,
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "PASS (6/6 findings confirmed fixed; merged despite tcp/tcp-tls benchmark floor misses under an explicit one-day waiver)",
+      "blockers": 0,
+      "important": 0,
+      "minor": 0,
+      "count_basis": "headline/reviewer",
+      "evidence": "PR #1020, fix commit 1823207ca (confirmed ancestor of merge commit 3b050422d before recording). 6 findings closed: ARCH-QA-AO214-RULE003, RBQA-AO214-F001, RBQA-AO214-F002, RBQA-AO214-F003, RSH-AO214-001 (closes as hardening/test-coverage -- original defect premise did not hold, code was already correct), RUST-QA-AO214-001. Merged despite tcp (17371/17500) and tcp-tls (13642/17500) benchmark floor misses on the isolated m5-atmbench account -- merge explicitly authorized by Rand (\"complete the pr w/ it failing\"; waiver framed against historical >22k uds/tcp precedent, not a floor change)."
     }
   ],
   "coverage_gaps": [
