@@ -539,20 +539,19 @@ mod tests {
     #[derive(Clone, Default)]
     struct SharedLogBuffer(Arc<Mutex<Vec<u8>>>);
 
-    struct SharedLogWriter(SharedLogBuffer);
+    struct SharedLogWriter(Arc<Mutex<Vec<u8>>>);
 
     impl<'a> MakeWriter<'a> for SharedLogBuffer {
         type Writer = SharedLogWriter;
 
         fn make_writer(&'a self) -> Self::Writer {
-            SharedLogWriter(self.clone())
+            SharedLogWriter(Arc::clone(&self.0))
         }
     }
 
     impl Write for SharedLogWriter {
         fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
             self.0
-                .0
                 .lock()
                 .expect("log buffer lock")
                 .extend_from_slice(buf);

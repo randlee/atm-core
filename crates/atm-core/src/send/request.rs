@@ -7,7 +7,7 @@ use crate::types::TeamName;
 
 use super::{SendMessageSource, file_policy, input};
 
-pub(super) fn resolve_message_body(
+pub(crate) fn resolve_message_body(
     source: &SendMessageSource,
     current_dir: &Path,
     home_dir: &Path,
