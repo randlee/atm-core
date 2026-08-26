@@ -51,14 +51,17 @@ pub trait MemberStateTransitionSink: Send + Sync {
    `PendingNudgeStore::claim_next_pending` and re-dispatches through the
    ordinary `MessageReceivedHookSelector`, which routes by recipient kind
    (graft → AQ2's queue channel, tmux → steer). The sweep contains **no
-   graft-specific logic and calls no AQ2 code** — that is why AQ2/AQ3 stay
-   parallel-safe — and a failed dispatch is requeued via
+   graft-specific logic in its own diff** (it dispatches through the
+   selector, whose graft arm is AQ2 code — critical review I2; this sprint
+   lands after AQ2, so that is fine) and a failed dispatch is requeued via
    `requeue_pending`, so retry bounds and the stuck flag are enforced by
    AQ1's store, not here. **Channel pre-check (owned HERE; consumes
    AQ2.5's classifier seam)**: before claiming for member M, the sweep
-   calls AQ2.5's `DeliveryChannel` classifier and claims **only** when
-   M is classified `TmuxSteer` or `Graft` — the channels this sweep can
-   dispatch through. Bare-CLI members never have sweep work by
+   calls AQ2.5's `DeliveryChannel` classifier (extended with `HerdrSteer`
+   by AQ2.6) and claims **only** when M is classified `TmuxSteer` or
+   `Graft` — the channels this sweep can dispatch through. Herdr members
+   are owned solely by AQ2.7's lifecycle-gated pump; this sweep never
+   claims them. Bare-CLI members never have sweep work by
    construction (AQ2.5's emitter clears their pending marker on FIFO
    append — handoff semantics), and the pre-check is the belt to that
    suspender: no claim, no dispatch failure, no attempt increment for
@@ -87,12 +90,12 @@ pub trait MemberStateTransitionSink: Send + Sync {
    (atomic-claim test).
 5. No transition, no tick → no nudge. Shutdown mid-pass cancels and joins
    within the deadline.
-6. Sweep channel pre-check (owned here): the sweep claims only for
-   members the AQ2.5 classifier resolves to `TmuxSteer` or `Graft`; for
-   a bare-CLI member the sweep performs no claim and no attempt
-   increment (test double over the classifier seam), and a pending
-   marker for such a member — should one exist — is never driven to a
-   stuck flag by this sweep.
+6. Sweep channel pre-check (owned here): the sweep claims only for members
+   the AQ2.5/AQ2.6 classifier resolves to `TmuxSteer` or `Graft`; for a
+   `HerdrSteer` or bare-CLI member the sweep performs no claim and no attempt
+   increment (test double over the classifier seam), and a pending marker for
+   either member — should one exist — is never driven to a stuck flag by this
+   sweep. AQ2.7 is the sole Herdr claimant.
 7. `just test` + daemon integration suite, all three lanes.
 
 ## Paths to delete
@@ -122,4 +125,16 @@ None.
 - must_follow: AQ2.5 (the sweep pre-check consumes its `DeliveryChannel`
   classifier seam; the live-evidence validation additionally requires
   its heartbeat producer). Merge-forward trigger: AQ2.5 dev push.
-- parallel_safe: AQ2 (tmux drain vs graft channel — disjoint emitters).
+- must_follow: AQ2.6 (the classifier gains the retained-tmux/alternate-Herdr
+  distinction; this sprint owns the corresponding "skip Herdr" pre-check
+  diff). Merge-forward trigger: AQ2.6 dev push.
+- parallel_safe: none — the former `parallel_safe: AQ2` was dead text
+  (this sprint transitively follows AQ2 via AQ2.5; critical review I1,
+  removed 2026-08-26).
+- Added 2026-08-26 (critical review B8): the skip-Herdr / channel pre-check
+  in deliverable 3 applies to the **idle-transition drain (deliverable 2)
+  as well as the sweep** — heartbeat hooks are roster-blind, so a Herdr
+  member's Stop hook would otherwise trigger an unguarded drain claim
+  racing AQ2.7's pump. Member discovery for the sweep uses AQ1's
+  `list_pending_members`; AC text for the drain-side guard is still to be
+  hardened in the rewrite round.

@@ -205,7 +205,8 @@ paths unchanged.
 
 ## Dependencies
 
-- must_follow: AQ1–AQ3 (queue ships first per Rand; shares the send
-  surface with AQ1's `NudgeMode` seam) — merge-forward before every
-  dev/fix round.
+- must_follow: AQ1–AQ3 and AQ2.6–AQ2.7 (queue ships first per Rand; the
+  retained-tmux/alternate-Herdr backend chain must land before this sprint
+  changes the shared send surface with AQ1's `NudgeMode` seam) —
+  merge-forward before every dev/fix round.
 - parallel_safe: none at start; AQ5 follows.

@@ -1,4 +1,4 @@
-# Sprint AQ1 — `atm queue`: CLI Verb, Taxonomy, and Storage Contract
+# Sprint AQ1 — Trait Foundation + `atm queue`: CLI Verb, Taxonomy, and Storage Contract
 
 Status: draft · Branch: `feature/aq-1-queue-cli` off `integrate/phase-aq`
 (created from `develop` at phase start; mechanical precondition on the cut
@@ -6,8 +6,13 @@ head: `test -f docs/adr/ADR-047-*.md && test -f docs/adr/ADR-053-*.md`) ·
 PR target: `integrate/phase-aq`
 recommended_agent: arch-ctm · recommended_model: deep-reasoning
 
-Adds `atm queue` — `atm send` with the nudge deferred until the recipient
-harness is ready — together with the taxonomy and code refactor it rests on.
+**Re-scoped 2026-08-26 (per Rand, critical review B2/B5/B6/B7): this is the
+trait-change sprint.** It lands every contract the Herdr (AQ2.6/AQ2.7),
+graft (AQ1.5–AQ1.9, AQ2), delivery-trigger (AQ2.5) and drain (AQ3) sprints
+build on — see "Trait-foundation scope" below — so that later sprints are
+implementers, never definers. Adds `atm queue` — `atm send` with the nudge
+deferred until the recipient harness is ready — together with the taxonomy
+and code refactor it rests on.
 **Nudge** is the umbrella term for post-delivery recipient notification;
 **steer** (immediate — today's only kind) and **queue** (deferred) are its
 two kinds, used consistently through daemon code.
@@ -94,6 +99,16 @@ no deferral surface exists. `mail_message_states` migrates via
    `spawn_blocking`):
 
 ```rust
+/// THE canonical public member key for nudge/queue surfaces, defined in
+/// atm-core (per ruthless-boundary-qa direction: one canonical key type,
+/// not a per-feature sprawl). Distinct from the PRIVATE
+/// runtime_health::MemberKey (runtime_health.rs:43), which is
+/// intentionally untouched here; a non-blocking follow-up may migrate it
+/// onto this type. AQ2.5's BareCliMemberKey has the identical shape and
+/// is superseded by this type — AQ2.5 uses THIS key (see its deliverable
+/// 3 note and the derivation at PullPendingReceivedHook::emit).
+pub struct MemberKey { pub team: TeamName, pub agent: AgentName }
+
 pub enum NudgeMode { Immediate, Deferred }
 
 pub trait PendingNudgeStore {
@@ -111,9 +126,34 @@ pub trait PendingNudgeStore {
     /// signal in ADR-054 (f)).
     fn requeue_pending(&self, member: &MemberKey, claim: &NudgeClaim)
         -> Result<(), StorageError>;
+    /// Restores a claim when the selected delivery mechanism refused to
+    /// attempt input for a lifecycle reason (AQ2.7's `agent_blocked`
+    /// result). Restores the marker for exactly this claimed message without
+    /// incrementing `nudge_attempts`: no input was injected, so this is not a
+    /// delivery retry. Conditional/idempotent on the claim identity.
+    fn release_pending(&self, member: &MemberKey, claim: &NudgeClaim)
+        -> Result<(), StorageError>;
     /// Read-path clear (same state update that sets read = 1).
     fn clear_pending_on_read(&self, member: &MemberKey, msg: &AtmMessageId)
         -> Result<(), StorageError>;
+    /// Synchronous-handoff clear for ONE named message: the caller has
+    /// just handed exactly this message to its channel (AQ2 graft
+    /// queue-kind wire handoff; AQ2.5 bare-CLI FIFO append) and clears
+    /// exactly its marker — unconditional, idempotent (clearing an
+    /// already-clear marker is Ok). Distinct from `claim_next_pending`
+    /// (oldest-select for drain/sweep) and `clear_pending_on_read`
+    /// (read path); with a backlog present, the just-handed-off message
+    /// is NOT necessarily the oldest, so oldest-select must never be
+    /// used for handoff clears.
+    fn clear_pending_on_handoff(&self, member: &MemberKey, msg: &AtmMessageId)
+        -> Result<(), StorageError>;
+    /// Enumerate members that currently hold at least one eligible pending
+    /// marker (unread, marker set). Consumed by AQ3's recovery sweep and
+    /// AQ2.7's Herdr pump, which otherwise have no way to discover WHICH
+    /// members to claim for (critical review B7). Order unspecified; callers
+    /// apply their own channel pre-check before claiming.
+    fn list_pending_members(&self)
+        -> Result<Vec<MemberKey>, StorageError>;
 }
 
 pub struct NudgeClaim { pub msg: AtmMessageId, pub attempt: u32 }
@@ -121,6 +161,47 @@ pub struct NudgeClaim { pub msg: AtmMessageId, pub attempt: u32 }
 
 No raw SQL above the backend crate (`no_backend_specific_message_contract`
 gate; `message-store.toml`'s closed contract list unaffected).
+
+## Trait-foundation scope (added 2026-08-26)
+
+These contracts are AQ1 deliverables; no later sprint may define or widen
+them (they may only implement them):
+
+- **Crate placement of `PendingNudgeStore` + `MemberKey` — one crate, no
+  cycle (B2).** `atm-core` depends on `atm-storage` (`atm-core/Cargo.toml:24`),
+  so a trait "owned by atm-storage" cannot be keyed on an atm-core type.
+  ADR-054 must decide one of: (i) `MemberKey` in `atm-storage::types` beside
+  `TeamName`/`AgentName`, re-exported by atm-core; (ii) the trait in
+  `atm-core::boundary` beside `RosterStore`/`MailStore`. The sample above
+  also must carry the real error type (`AtmError` — `StorageError` does not
+  exist) and the `sealed::Sealed + Send + Sync` supertrait bound.
+- **`list_pending_members`** (above; B7).
+- **Dispatch-from-message-id (B6).** A `BuiltInPostSendDispatch` today is
+  built only from in-memory `PreparedWrite` planning data
+  (`send/hook.rs:17`, `send/mod.rs:391-417`, "never reloads the committed
+  record"). AQ3's drain/sweep and AQ2.7's pump re-dispatch a persisted
+  `NudgeClaim { msg, attempt }`. This sprint defines the atm-core function
+  that rebuilds a dispatch from an `AtmMessageId` (reload envelope, resolve
+  recipient's current backend/lease, re-render template) and names its
+  owner module; drain/sweep/pump call it and never re-implement it.
+- **`LocalMessageReceivedBackend` + `DeliveryChannel` classifier seam,
+  owned once (B5).** The roster-owned
+  `enum LocalMessageReceivedBackend { Tmux { pane_id: PaneId }, Herdr }`
+  and the pure `classify_delivery_channel(local_backend:
+  Option<&LocalMessageReceivedBackend>, graft_lease: Option<&GraftReceiverLease>)
+  -> DeliveryChannel { TmuxSteer, HerdrSteer, Graft, BareCli }` are defined
+  HERE, together with the `PostSendBuiltInTarget::LocalSteer` rename and
+  the backend→channel mapping in exactly one function. AQ2.6 implements the
+  Herdr emitter + CLI/doctor surface for the enum; AQ2.5 implements the
+  `BareCli` arm's FIFO/pull; neither adds variants. (The graft-lease input is
+  `Option` so this sprint compiles before AQ1.5 exists; AQ2/AQ2.5 wire the
+  real `GraftReceiverEndpointStore::lookup` after AQ1.7.)
+- **Sealed `AsyncMessageReceivedHookEmitter` extension point (I13).** The
+  boundary manifest `boundaries/atm-core/message-received-hook-emitter.toml`
+  is brought current (it names `GraftReceiveHook`, a sync impl, and omits
+  `PublishedGraftReceivedHook`) and its implementer list becomes the
+  authoritative count later sprints' manifest ACs (AQ2.5 AC 11, AQ2.6)
+  extend.
 
 Invariants: a queued message is readable immediately; reading clears its
 marker; markers survive daemon restart; a message is deferred-nudged at
@@ -143,11 +224,22 @@ most once.
 4a. `claim_next_pending`/`requeue_pending` round-trip: a failed dispatch
    requeues with an incremented attempt; at the ADR-054 (f) max the row
    becomes auto-retry-ineligible and flags stuck (no unbounded retry).
+   `release_pending` restores only the same claim without changing its
+   attempt count; AQ2.7 proves an `agent_blocked` Herdr rejection uses this
+   release path rather than consuming retry budget.
 5. Kind-aware dispatch test: Steer and Queue dispatches route through the
    selector; tmux emitter receives Steer only.
 6. Boundary governance: ADR-018 §3 amendment + pending-nudge-store TOML +
    `cargo test -p atm-architecture` green + `boundary-guard` review.
 7. Terminology grep-gate enumerated in CI. `just test` all three lanes.
+8. Trait-foundation: `PendingNudgeStore`/`MemberKey` compile in one crate
+   with no atm-core↔atm-storage cycle (`cargo tree` shows no new edge);
+   `list_pending_members` round-trips against seeded rows; the
+   dispatch-from-message-id function rebuilds a dispatch equal to the
+   write-time one for a fixture message; `classify_delivery_channel` is
+   table-tested over all four channels (`HerdrSteer` via the enum variant,
+   no emitter required); emitter boundary manifest matches the real
+   implementer set.
 
 ## Paths to delete
 
@@ -168,5 +260,9 @@ None beyond identifier renames; no behavior change to `atm send`.
 
 ## Dependencies
 
-- must_follow: none — AQ1 is the phase root.
-- parallel_safe: none (AQ2/AQ3 consume the taxonomy, kinds, and store).
+- must_follow: none — AQ1 is the phase root and the trait-change sprint.
+- parallel_safe: none (every later sprint implements contracts defined
+  here). Plan-doc lanes A/B/C/D (see plan "Parallel lanes") may run
+  alongside because they touch none of this sprint's files.
+- Downstream: AQ2.6/AQ2.7 are the first implementers (Herdr, most urgent
+  per Rand 2026-08-26); AQ1.5–AQ1.9 follow in parallel with them.

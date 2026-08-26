@@ -72,6 +72,6 @@ the file is written but no longer read by anything in-tree.
 
 - must_follow: AQ1.6 (leases must be populated before consumers depend on
   them). Merge-forward trigger: AQ1.6 dev push.
-- parallel_safe: none claimed.
+- parallel_safe: AQ2.6, AQ2.7 (Herdr — disjoint files; 2026-08-26 reorder).
 - Downstream: AQ2 must_follow this sprint (queue-graft channel resolves
   endpoints via the registry; recorded in AQ2's Dependencies).

@@ -27,8 +27,11 @@ message), NOT a background task.
    the `GraftPostSendRequest` contract per ADR-054 (g) — both sides move
    together; the receiver process compat concern is addressed explicitly).
    The steer channel is untouched. Marker cleared on successful handoff
-   (`PendingNudgeStore::claim_pending` semantics — handoff is the graft
-   recipient's drain).
+   via `PendingNudgeStore::clear_pending_on_handoff(member, msg)` — the
+   specific-message clear AQ1's contract defines for synchronous
+   handoffs (never `claim_next_pending`, which selects the OLDEST
+   pending message and would clear the wrong marker when a backlog
+   exists). Handoff is the graft recipient's drain.
 2. **Handoff failure policy** per ADR-054 (f): on failure,
    `nudge_pending_at` stays set, a structured failure event
    (`subsystem`/`action`/`outcome` + `{member, msg_id}`) is emitted, and a
@@ -85,5 +88,11 @@ None.
   file record. Merge-forward trigger: AQ1.7 dev push.
 - must_follow: AQ1 (taxonomy, kinds, `PendingNudgeStore`) — merge-forward
   before every dev/fix round.
-- parallel_safe: AQ3 (graft channel vs tmux drain — disjoint emitters; both
-  consume, never redefine, AQ1's store and kinds).
+- parallel_safe: none. (The former `parallel_safe: AQ3` was dead text —
+  AQ3 must_follow AQ2.5 which must_follow this sprint, so AQ3 transitively
+  follows AQ2; critical review I1, removed 2026-08-26. Emitters are still
+  disjoint files.)
+- Downstream: AQ2.5 must_follow this sprint — it adds
+  `PullPendingReceivedHook` and a selector match arm to the same
+  `received_hook_selector.rs` this sprint's queue-channel changes touch;
+  this sprint's diff lands first (recorded in AQ2.5's Dependencies).

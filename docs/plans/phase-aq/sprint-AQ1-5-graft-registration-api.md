@@ -207,6 +207,6 @@ never look displaceable (see AQ1.6's every-iteration refresh rule).
 
 - must_follow: AQ1 (shared files: `protocol.rs`, router, storage traits are
   also in AQ1's touch set). Merge-forward trigger: AQ1 dev push.
-- parallel_safe: none claimed.
+- parallel_safe: AQ2.6, AQ2.7 (Herdr — disjoint files; 2026-08-26 reorder).
 - AQ2 must_follow AQ1.7 (recorded in AQ2's own Dependencies section, which
   is authoritative).
