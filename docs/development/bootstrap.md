@@ -8,9 +8,22 @@ closure is in [`tools/bootstrap-requirements.txt`](../../tools/bootstrap-require
 
 The recipe deliberately does not select a latest release, a version range, or
 an M5-specific installation path. It installs the manifest's exact Cargo tools
-and source revision, creates a repository-local `.bootstrap-venv`, installs the
-exact Python packages there with `--no-deps`,
-then verifies every reported version.
+from verified prebuilt artifacts when `cargo-binstall` is available, falls back
+to locked crates.io installs when an artifact is unavailable, and installs the
+released `sc-compose` CLI from its platform-matching GitHub release archive
+(never Cargo source or a Git revision). The release archive SHA256 is pinned in
+`tools/bootstrap.toml` and checked against the release `checksums.txt`; a mismatch
+or missing asset is a hard failure. It creates a
+repository-local `.bootstrap-venv`, installs the exact Python packages there
+with `--no-deps`, then verifies every reported version against Cargo or
+Binstall's installation receipt; the sc-compose release binary is verified by
+its pinned SHA256 and its `--version` output.
+
+CI restores the bootstrap outputs (`~/.cargo/bin`, Cargo/Binstall receipts, and
+`.bootstrap-venv`) with a key derived from this manifest and the Python
+requirements before invoking `just bootstrap`. The test jobs restore their
+Cargo registry/index/build caches first as well, so a genuine registry
+fallback remains bounded and never runs ahead of a warm workspace cache.
 
 ## Seed contract
 
@@ -56,8 +69,7 @@ binary, run `daemon-switch`, start a daemon, or touch an ATM database.
 ## Version-selection policy
 
 Every manifest entry pins the newest stable release compatible with the
-repository's pinned Rust and Python baselines. The current exceptions are
-`cargo-shear` `1.12.0` (upstream `1.13.4` requires Rust `1.95.0`) and
+repository's pinned Rust and Python baselines. The current exception is
 `cargo-modules` `0.26.0` (upstream `0.27.0` requires Rust `1.95.0`), while this
 repository deliberately pins Rust `1.94.1`. Compatibility exceptions must be
 documented here and re-evaluated whenever the seed Rust version changes.

@@ -62,10 +62,28 @@ jobs:
       - name: Expose Cargo binaries on PATH
         run: python -c "import os; cargo_bin = os.path.expanduser('~/.cargo/bin'); open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8').write(cargo_bin + os.linesep)"
 
+      - name: Cache bootstrap outputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+            ~/.cargo/binstall
+            .bootstrap-venv
+          key: ${{ runner.os }}-bootstrap-${{ hashFiles('tools/bootstrap.toml', 'tools/bootstrap-requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-bootstrap-
+
       - name: Install just
         uses: taiki-e/install-action@v2
         with:
           tool: just@1.58.0
+
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@75b4bfae1b2c753a6806bbce6e6cb89b602de33c # v1.22.0
+        with:
+          version: "1.22.0"
 
       - name: Bootstrap exact repository tools
         run: just bootstrap
@@ -183,10 +201,6 @@ jobs:
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         run: python -c "import os; cargo_bin = os.path.expanduser('~/.cargo/bin'); open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8').write(cargo_bin + os.linesep)"
 
-      - name: Bootstrap exact repository tools
-        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
-        run: just bootstrap
-
       - name: Cache cargo registry
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         uses: actions/cache@v4
@@ -207,6 +221,30 @@ jobs:
         with:
           path: target
           key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache bootstrap outputs
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+            ~/.cargo/binstall
+            .bootstrap-venv
+          key: ${{ runner.os }}-bootstrap-${{ hashFiles('tools/bootstrap.toml', 'tools/bootstrap-requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-bootstrap-
+
+      - name: Install cargo-binstall
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        uses: cargo-bins/cargo-binstall@75b4bfae1b2c753a6806bbce6e6cb89b602de33c # v1.22.0
+        with:
+          version: "1.22.0"
+
+      - name: Bootstrap exact repository tools
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        run: just bootstrap
 
       - name: Build workspace
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
