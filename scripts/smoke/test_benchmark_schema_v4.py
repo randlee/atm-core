@@ -224,12 +224,15 @@ class BenchmarkSchemaV4Tests(unittest.TestCase):
         baselines = load_baselines(
             ROOT / "site/reports/send-message-benchmark/baselines.json"
         )
-        self.assertEqual(baselines.revision, 4)
+        self.assertEqual(baselines.revision, 5)
         self.assertEqual(baselines.entry_for("m5-atmbench", "tcp").p50_floor, 17_000)
         tls = baselines.entry_for("m5-atmbench", "tcp-tls")
         self.assertEqual(tls.p50_floor, 13_500)
         self.assertEqual(tls.approved_by, "Rand via D3 ratchet exception")
         self.assertIn("mis-seeded", tls.rationale or "")
+        windows_sqlite = baselines.entry_for("windows-x64-01", "sqlite")
+        self.assertEqual(windows_sqlite.p50_floor, 16_035.345045815106)
+        self.assertIn("pending quality review", windows_sqlite.approved_by)
 
     def test_campaign_and_target_ids_are_utc_safe_and_shared(self) -> None:
         identifier = campaign_id(started_at=NOW, host_label="rand-m5")
