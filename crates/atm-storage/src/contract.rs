@@ -8,7 +8,9 @@ use std::sync::Arc;
 
 use crate::error::AtmError;
 use crate::schema::{AtmMessageId, InboxMessage, MessageEnvelope};
-use crate::types::{AgentName, HostName, IsoTimestamp, ModelName, PaneId, TaskId, TeamName};
+use crate::types::{
+    AgentName, HostName, IsoTimestamp, MemberKey, ModelName, PaneId, TaskId, TeamName,
+};
 
 #[doc(hidden)]
 pub mod sealed {
@@ -769,19 +771,117 @@ pub trait NudgeTemplateOverrideStore: sealed::Sealed + Send + Sync {
     ) -> Result<bool, AtmError>;
 }
 
+/// Maximum automatic delivery attempts for one deferred (queue-kind) nudge.
+///
+/// At or above this count the marker stays set but becomes auto-retry
+/// ineligible and the row is reported stuck (ADR-054 (f)).
+pub const MAX_NUDGE_ATTEMPTS: u32 = 5;
+
+/// One claimed deferred nudge: the message and the failed-attempt count that
+/// preceded this claim.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NudgeClaim {
+    pub msg: AtmMessageId,
+    /// Value of `nudge_attempts` when the claim was taken. `requeue_pending`
+    /// stores `attempt + 1`; `release_pending` leaves it unchanged.
+    pub attempt: u32,
+}
+
+/// Durable at-most-once delivery state for deferred (`atm queue`) nudges.
+///
+/// The store owns one marker column pair on `mail_message_states`; no caller
+/// above the backend crate writes SQL. All methods are synchronous.
+pub trait PendingNudgeStore: sealed::Sealed + Send + Sync {
+    /// Marks one just-admitted message as awaiting a deferred nudge.
+    ///
+    /// Conditional on the row still being unread and not deleted. Returns
+    /// whether the marker was set.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] if the underlying storage operation fails.
+    fn mark_pending(
+        &self,
+        member: &MemberKey,
+        msg: &AtmMessageId,
+        at: IsoTimestamp,
+    ) -> Result<bool, AtmError>;
+
+    /// Atomically selects and claims the oldest eligible pending message.
+    ///
+    /// Eligibility requires the row to be unread, marker set, not deleted,
+    /// and `nudge_attempts < MAX_NUDGE_ATTEMPTS`. Selection order is FIFO via
+    /// `message_key` (ULID order). `None` means nothing was eligible, or the
+    /// claim lost a race to another caller. This is THE at-most-once
+    /// mechanism: one conditional `UPDATE … RETURNING`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] if the underlying storage operation fails.
+    fn claim_next_pending(&self, member: &MemberKey) -> Result<Option<NudgeClaim>, AtmError>;
+
+    /// Restores the marker after a failed dispatch.
+    ///
+    /// Sets `nudge_attempts = claim.attempt + 1`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] if the underlying storage operation fails.
+    fn requeue_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError>;
+
+    /// Restores a claim refused for a lifecycle reason (AQ2.7 `agent_blocked`).
+    ///
+    /// Leaves `nudge_attempts` unchanged. Conditional and idempotent on claim
+    /// identity.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] if the underlying storage operation fails.
+    fn release_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError>;
+
+    /// Clears the marker for one message on the read path.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] if the underlying storage operation fails.
+    fn clear_pending_on_read(&self, member: &MemberKey, msg: &AtmMessageId)
+    -> Result<(), AtmError>;
+
+    /// Clears the marker for exactly one just-handed-off message.
+    ///
+    /// Unconditional and idempotent.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] if the underlying storage operation fails.
+    fn clear_pending_on_handoff(
+        &self,
+        member: &MemberKey,
+        msg: &AtmMessageId,
+    ) -> Result<(), AtmError>;
+
+    /// Enumerates members holding at least one eligible pending marker.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] if the underlying storage operation fails.
+    fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        AckRequirementState, BuiltInNudgeTemplateKind, CertificateFingerprint, Message, MessageKey,
-        MessageQuery, MessageReceivedEvent, MessageStore, NudgeTemplateOverrideStore,
-        PrivateKeyRef, RosterChangedEvent, RosterHarness, RosterMember, RosterMemberKind,
-        RosterSnapshot, RosterStore, StorageNotifier, TeamNudgeTemplateOverrideMode,
-        TeamNudgeTemplateOverrideRow, derive_ack_requirement, sealed,
+        AckRequirementState, AtmMessageId, BuiltInNudgeTemplateKind, CertificateFingerprint,
+        Message, MessageKey, MessageQuery, MessageReceivedEvent, MessageStore, NudgeClaim,
+        NudgeTemplateOverrideStore, PendingNudgeStore, PrivateKeyRef, RosterChangedEvent,
+        RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore,
+        StorageNotifier, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
+        derive_ack_requirement, sealed,
     };
     use crate::ROLE_WORKER;
     use crate::error::AtmError;
     use crate::schema::MessageEnvelope;
-    use crate::types::{AgentName, IsoTimestamp, ModelName, TeamName};
+    use crate::types::{AgentName, IsoTimestamp, MemberKey, ModelName, TeamName};
     use chrono::Utc;
     use serde_json::Map;
 
@@ -892,17 +992,75 @@ mod tests {
         }
     }
 
+    #[derive(Default)]
+    struct DummyPendingNudgeStore;
+
+    impl sealed::Sealed for DummyPendingNudgeStore {}
+
+    impl PendingNudgeStore for DummyPendingNudgeStore {
+        fn mark_pending(
+            &self,
+            _member: &MemberKey,
+            _msg: &AtmMessageId,
+            _at: IsoTimestamp,
+        ) -> Result<bool, AtmError> {
+            Ok(true)
+        }
+
+        fn claim_next_pending(&self, _member: &MemberKey) -> Result<Option<NudgeClaim>, AtmError> {
+            Ok(None)
+        }
+
+        fn requeue_pending(
+            &self,
+            _member: &MemberKey,
+            _claim: &NudgeClaim,
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn release_pending(
+            &self,
+            _member: &MemberKey,
+            _claim: &NudgeClaim,
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn clear_pending_on_read(
+            &self,
+            _member: &MemberKey,
+            _msg: &AtmMessageId,
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn clear_pending_on_handoff(
+            &self,
+            _member: &MemberKey,
+            _msg: &AtmMessageId,
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError> {
+            Ok(Vec::new())
+        }
+    }
+
     #[test]
     fn storage_traits_are_object_safe() {
         let store = DummyStore;
         let message_store: &dyn MessageStore = &store;
         let roster_store: &dyn RosterStore = &store;
         let notifier: &dyn StorageNotifier = &store;
+        let pending_nudge_store: &dyn PendingNudgeStore = &DummyPendingNudgeStore;
         let override_store: &dyn NudgeTemplateOverrideStore = &DummyNudgeTemplateOverrideStore;
 
         let team: TeamName = "test-team".parse().expect("team");
         let agent: AgentName = ROLE_WORKER.parse().expect("agent");
         let key = MessageKey::new("atm:test-1").expect("key");
+        let member = MemberKey::new(team.clone(), agent.clone());
 
         let message = Message {
             team: team.clone(),
@@ -994,6 +1152,38 @@ mod tests {
             )
             .expect("save override");
         assert_eq!(override_row.kind, BuiltInNudgeTemplateKind::DeliveryAck);
+
+        let msg = AtmMessageId::new();
+        assert!(
+            pending_nudge_store
+                .mark_pending(&member, &msg, IsoTimestamp::from_datetime(Utc::now()))
+                .expect("mark pending")
+        );
+        assert!(
+            pending_nudge_store
+                .claim_next_pending(&member)
+                .expect("claim next pending")
+                .is_none()
+        );
+        let claim = NudgeClaim { msg, attempt: 0 };
+        pending_nudge_store
+            .requeue_pending(&member, &claim)
+            .expect("requeue pending");
+        pending_nudge_store
+            .release_pending(&member, &claim)
+            .expect("release pending");
+        pending_nudge_store
+            .clear_pending_on_read(&member, &msg)
+            .expect("clear pending on read");
+        pending_nudge_store
+            .clear_pending_on_handoff(&member, &msg)
+            .expect("clear pending on handoff");
+        assert!(
+            pending_nudge_store
+                .list_pending_members()
+                .expect("list pending members")
+                .is_empty()
+        );
     }
 
     #[test]

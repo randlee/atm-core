@@ -842,3 +842,51 @@ impl fmt::Display for PaneId {
         f.write_str(self.as_str())
     }
 }
+
+/// The canonical durable-mailbox member key for nudge and queue surfaces.
+///
+/// One team-scoped agent identity. This is the key every pending-nudge,
+/// drain, sweep, and pump surface uses; features must not define their own
+/// per-surface member key. Distinct from the private
+/// `atm_http_runtime::runtime_health::MemberKey`, whose migration onto this
+/// type is a non-blocking follow-up.
+///
+/// # Examples
+///
+/// ```
+/// use atm_storage::types::{AgentName, MemberKey, TeamName};
+///
+/// let team: TeamName = "atm-dev".parse().expect("team");
+/// let agent: AgentName = "worker".parse().expect("agent");
+/// let member = MemberKey::new(team, agent);
+///
+/// assert_eq!(member.to_string(), "worker@atm-dev");
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct MemberKey {
+    pub team: TeamName,
+    pub agent: AgentName,
+}
+
+impl MemberKey {
+    #[must_use]
+    pub fn new(team: TeamName, agent: AgentName) -> Self {
+        Self { team, agent }
+    }
+
+    #[must_use]
+    pub fn team(&self) -> &TeamName {
+        &self.team
+    }
+
+    #[must_use]
+    pub fn agent(&self) -> &AgentName {
+        &self.agent
+    }
+}
+
+impl fmt::Display for MemberKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}@{}", self.agent.as_str(), self.team.as_str())
+    }
+}
