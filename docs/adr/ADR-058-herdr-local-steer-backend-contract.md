@@ -98,13 +98,23 @@ expressible on the Herdr argv. The launch convention in AQ2.6 becomes:
 > passes the daemon's environment through to the `herdr` child unchanged and
 > does not synthesise either variable.
 
-**Decision (Rand, 2026-08-26, via team-lead `01M1022DWAJDFEVX07SMYSTE17`):**
-the **default deployment is ONE shared Herdr session/server across all
-teams on a host**, and server-global unique member names are accepted as
-the common case. `HERDR_SESSION` / `HERDR_SOCKET_PATH` env inheritance is
-retained only as the **escape hatch** for a team that needs its own
-session; it is not the default, atm-core never sets it, and no AQ sprint
-may require it. AQ2.6 is cleared to dispatch on this basis once AQ1 lands.
+**Decision (Rand, 2026-08-26, refined in discussion):** the daemon never
+launches Herdr sessions — the team launcher does — so the session an agent
+lives in is **roster data per member**, exactly as `recipient_pane_id` is for
+tmux: `LocalMessageReceivedBackend::Herdr { session: Option<HerdrSession> }`,
+set at `atm teams add-member … --backend herdr [--session <name>]` (AQ2.6),
+`None` meaning Herdr's default server. The Herdr emitter sets
+`HERDR_SESSION=<session>` on the **child process environment per
+invocation**; the daemon's own environment is never consulted and atm-core
+never synthesises a session name. Consequences: one daemon serves teams in
+different sessions; name uniqueness is per session, so same-named members in
+different teams are fine when their teams run in different sessions; a
+member whose stored session does not match where its agent actually runs
+surfaces as `agent_not_found`, which `atm doctor` (AQ2.6) must report as
+"agent not visible in the member's configured Herdr session" via
+`herdr agent get <name>` under that env. The earlier "one shared session
+default / `HERDR_SESSION` escape hatch" framing is superseded by this
+per-member field.
 
 The "workspace equals `ATM_TEAM`" clause in AQ2.6 is advisory operator
 practice only; atm-core neither checks nor depends on it.
