@@ -1,6 +1,6 @@
 # Sprint AO2.15 — `just benchmark-official`: Unattended, CI-Triggerable Benchmark Runs
 
-Status: draft · Branch: `feature/ao2-15-benchmark-official-trigger` off
+Status: complete · Branch: `feature/ao2-15-benchmark-official-trigger` off
 `integrate/phase-ao2` · PR target: `integrate/phase-ao2`
 recommended_agent: Cipher-311d · recommended_model: fast
 
