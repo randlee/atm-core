@@ -26,10 +26,16 @@ chat-window integration exists.
   docs/cross-host-file-transfer.md to set up cross-host file transfer.` The
   daemon carries only ordinary messages — **no fetch/push endpoints, no
   transfer state machine, no envelope change, no new storage traits.**
-- **`ATM_TEMP` is a system-level contract.** A mandatory environment
-  variable naming the ATM scratch root for all features, validated at
-  daemon/CLI startup. One TTL-only sweeper (30 days) covers everything under
-  it; `<known-temp>/atm/` per-feature layouts are a non-issue.
+- **`ATM_TEMP` is a system-level contract.** One environment variable names
+  the ATM scratch root for all features. **Resolved 2026-08-26 (critical
+  review B10, ADR-055 / AQ4 decision (a)):** it is *not* mandatory — when
+  unset, daemon and CLI fall back to a per-user `<temp_dir()>/atm-<uid>`
+  (Windows `<temp_dir()>\atm`) created `0700`, with exactly one startup
+  warning; when set-but-invalid, or when the resolved directory is owned by
+  another uid or has group/world bits (`AtmTempInsecure`), resolution fails
+  closed. Validation runs at daemon boot and at the CLI's first scratch use.
+  One TTL-only sweeper (30 days) covers everything under it;
+  `<known-temp>/atm/` per-feature layouts are a non-issue.
 - **R13 chaining invariant.** Every pipeline stage is side-effect-free
   except the final `atm send`; any staging/transfer failure aborts the whole
   invocation with zero sends and the reason on stderr.
@@ -127,7 +133,8 @@ later sprint may redefine an earlier contract.
 
 ADR numbering: ADR-054 = nudge taxonomy + queue mechanism (AQ1); ADR-055 =
 ATM_TEMP + transfer seam (AQ4); ADR-056 = graft receiver registration and
-lease semantics (AQ1.5). ADR-047 (phase-AO AO.1) and ADR-053 are on
+lease semantics (AQ1.5); ADR-058 = Herdr local steer backend contract (lane
+A, PR #1039 → `integrate/phase-aq`; ADR-057 is already taken on `develop`). ADR-047 (phase-AO AO.1) and ADR-053 are on
 `integrate/phase-ao2`, which merges to `develop` before `integrate/phase-aq`
 is cut — verified mechanically on the cut head:
 `test -f docs/adr/ADR-047-*.md && test -f docs/adr/ADR-053-*.md`.

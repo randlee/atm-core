@@ -236,6 +236,13 @@ them (they may only implement them):
 - **`LocalMessageReceivedBackend` + `DeliveryChannel` classifier seam,
   owned once (B5).** The roster-owned
   `enum LocalMessageReceivedBackend { Tmux { pane_id: PaneId }, Herdr { session: Option<HerdrSession> } }`
+  where **`HerdrSession` is defined HERE** (`crates/atm-core/src/delivery_channel.rs`):
+  `pub struct HerdrSession(String)` — validated newtype (non-empty, no
+  whitespace/control characters), `new(impl Into<String>) -> Result<Self, AtmError>`,
+  `as_str()`, `Display`, derives `Debug/Clone/PartialEq/Eq/Hash`,
+  `#[serde(transparent)]`; derived from `metadata_json["herdrSession"]`
+  (invalid/empty → `None` with a `tracing::warn`). AQ2.6 and ADR-058
+  consume this type; neither defines it.
   (`session` sets `HERDR_SESSION` on the Herdr emitter's child process
   environment per invocation, `None` = Herdr's default server — the daemon
   never launches Herdr sessions, so which session a member's agent lives in
