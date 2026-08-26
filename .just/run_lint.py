@@ -29,6 +29,7 @@ if sys.platform == "win32":
 PYTHON_LINT_ORDER = (
     "version",
     "boundaries",
+    "adr-index",
     "unix-gating",
     "same-host-portability",
     "runtime-waits",
@@ -117,6 +118,7 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         ),
         "lines": LintTask("lines", [*python_command, str(repo_root / ".just/check_line_counts.py")]),
         "boundaries": LintTask("boundaries", [*python_command, str(repo_root / ".just/lint_boundaries.py")]),
+        "adr-index": LintTask("adr-index", [*python_command, str(repo_root / ".just/check_adr_index.py")]),
         "unix-gating": LintTask(
             "unix-gating", [*python_command, str(repo_root / ".just/lint_unix_gating.py")]
         ),

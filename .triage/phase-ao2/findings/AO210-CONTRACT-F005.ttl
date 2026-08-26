@@ -15,24 +15,37 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-24T03:30:24Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.10 ;
   triage:foundAt "2026-08-24T03:28:59Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AO210-CONTRACT-F005/AO210-CONTRACT-F005-1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO210-CONTRACT-F005/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-25T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "site/reports/send-message-benchmark/20260824T030844Z-rand-m5.evidence-note.md now stands alone as an explicit evidence note documenting the deliberate host_label=rand-m5 seeding and its reviewed macOS baseline floors. Fixed in commit a4cf6f894." ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AO210-CONTRACT-F005/AO210-CONTRACT-F005-1>
   a triage:Occurrence ;
   triage:file "scripts/smoke/benchmark_report.py" ;
   triage:line 1 ;
   triage:snippet "no standalone evidence-note documenting host_label=rand-m5 seeding intent" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ao2-10-benchmark-data-contract" ;
   triage:headSha "b207dd097a34a2b954c76a43b12e416ace1875f3" ;
   triage:occursIn <urn:atm:triage:worktree/AO2-10/b207dd097a34a2b954c76a43b12e416ace1875f3> .
+
+<urn:atm:triage:occurrence/AO210-CONTRACT-F005/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "site/reports/send-message-benchmark/20260824T030844Z-rand-m5.evidence-note.md" ;
+  triage:snippet "quality-mgr independent re-verification confirmed fixed via commit a4cf6f894" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "a4cf6f894" .
 
 <urn:atm:triage:worktree/AO2-10/b207dd097a34a2b954c76a43b12e416ace1875f3>
   a triage:WorktreeSnapshot ;

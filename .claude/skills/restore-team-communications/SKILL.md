@@ -63,20 +63,21 @@ Repair is not complete until all checks pass:
    ATM acknowledgement.
 2. `atm send` to `quality-mgr` when that teammate is active, and verify ATM
    mailbox routing.
-3. `atm send` to `arch-ctm` (Codex) and verify the nudge fires. The recipient's
-   `.atm.toml` `post_send_hooks` fires this automatically on send — no manual
-   `tmux send-keys` nudge is needed. See `atm help hooks` if it doesn't fire.
+3. `atm send` to `arch-ctm` (Codex) and verify the steer nudge fires. The
+   recipient's `.atm.toml` `post_send_hooks` fires this automatically
+   (steer-kind, immediate) on send — no manual `tmux send-keys` nudge is
+   needed. See `atm help hooks` if it doesn't fire.
 
-For Codex-directed ATM sends, the nudge must include a clear call to action,
-not just a passive unread-mail announcement. Preferred structured nudge
-payload:
+For Codex-directed ATM sends, the steer nudge must include a clear call to
+action, not just a passive unread-mail announcement. Preferred structured
+nudge payload:
 
 ```text
 <atm><action>read atm</action><action>ack <TASK-ID></action><action>execute assigned task</action><when idle="immediate" busy="after-current-task"/><console announce="concise" pause="false"/></atm>
 ```
 
-If the task is queued behind active work, use a queued-task nudge instead of
-an interruptive one.
+If the task is queued behind active work, use a nudge about the deferred task
+instead of an interruptive one.
 
 ## Step 4 — Resume Work Quietly
 

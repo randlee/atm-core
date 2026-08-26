@@ -149,16 +149,20 @@ class MigrateBenchmarkHistoryTests(unittest.TestCase):
         entries = [entry for campaign in record.campaigns for entry in campaign.results]
         later_entry = next(entry for entry in entries if entry.result.generated_at.isoformat().endswith("06:01:00+00:00"))
         self.assertEqual(later_entry.displayed_status, "PASS")
+        self.assertEqual(later_entry.result.status, "PASS")
+        self.assertEqual(later_entry.result.baseline.p50_floor, earlier_rate)
         self.assertEqual(record.ratchet[0].p50_floor, earlier_rate)
         self.assertLess(record.ratchet[0].p50_floor, later_entry.result.metrics.admissions_per_second.p50)
 
-    def test_original_status_and_d8_display_can_diverge(self) -> None:
+    def test_legacy_failure_does_not_invent_a_higher_source_floor(self) -> None:
         source_name = "20260801-063351.969883-mac-arm64-01-uds-f1.json"
         with tempfile.TemporaryDirectory() as temp:
             reports = Path(temp)
             source = json.loads((self.fixture_dir() / source_name).read_text(encoding="utf-8"))
-            # Preserve a legacy source FAIL while its D8 comparison against
-            # the empty ratchet should display PASS.
+            # The legacy ``passed`` bit is not an input to the v4 ratchet
+            # contract.  With no recorded historical floor, this complete
+            # observation is classified against the factual prior floor (0),
+            # rather than a fabricated value just above its p50.
             source["passed"] = False
             (reports / "original-fail.json").write_text(json.dumps(source), encoding="utf-8")
             (reports / "baselines.json").write_text(
@@ -166,9 +170,9 @@ class MigrateBenchmarkHistoryTests(unittest.TestCase):
             )
             record, _audit = MIGRATE.migrated_record(reports, "0" * 40)
         entry = record.campaigns[0].results[0]
-        self.assertEqual(entry.result.status, "FAIL")
+        self.assertEqual(entry.result.status, "PASS")
         self.assertEqual(entry.displayed_status, "PASS")
-        self.assertGreater(entry.result.baseline.p50_floor, entry.result.metrics.admissions_per_second.p50)
+        self.assertEqual(entry.result.baseline.p50_floor, 0.0)
 
     def test_updated_baselines_adds_only_a_passing_windows_seed(self) -> None:
         source_name = "20260801-063351.969883-mac-arm64-01-uds-f1.json"

@@ -26,6 +26,7 @@ from scripts.smoke.benchmark_schema import (
     BenchmarkSchemaError,
     HistoricalRecord,
     artifact_id,
+    classify_status,
 )
 
 
@@ -63,9 +64,11 @@ def time_view(value: datetime) -> dict[str, str]:
     """Shared UTC/Pacific presentation helper used by every template context."""
     utc_value = value.astimezone(timezone.utc)
     local = utc_value.astimezone(PACIFIC)
+    # `%-d` is a glibc/macOS strftime extension rejected by Windows' CRT;
+    # interpolate the day number portably instead.
     return {
         "datetime": utc_text(utc_value),
-        "text": local.strftime("%b %-d, %Y · %H:%M %Z"),
+        "text": local.strftime(f"%b {local.day}, %Y · %H:%M %Z"),
     }
 
 
@@ -87,7 +90,7 @@ def compose(template: Path, variables: dict[str, Any], output: Path) -> None:
         completed = subprocess.run(
             ["sc-compose", "render", "--root", str(ROOT), "--file", str(template),
              "--var-file", str(variables_path), "--output", str(output)],
-            cwd=ROOT, capture_output=True, text=True, check=False,
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False,
         )
         if completed.returncode != 0:
             raise BenchmarkReportError(
@@ -210,6 +213,36 @@ def incomplete_reason(campaign: BenchmarkCampaign) -> str | None:
     return "; ".join(reasons) if reasons else "Required target results are missing."
 
 
+def current_historical_display_status(
+    result: BenchmarkRunResult, historical: HistoricalRecord,
+) -> str:
+    """Reclassify a historical point against the ratchet's current high-water mark.
+
+    ``result.status`` and its baseline are immutable ingest-time evidence.  A
+    phase chart instead answers the distinct, present-tense question: does this
+    older point meet the best durable result subsequently observed for this
+    host/target?  The distinction is temporal, never a manufactured floor.
+    """
+    current_floor = max(
+        (
+            point.p50_floor
+            for point in historical.ratchet
+            if point.host_label == result.host_label and point.target == result.target
+        ),
+        default=result.baseline.p50_floor,
+    )
+    return classify_status(
+        lifecycle_complete=result.metrics is not None and result.durability_after_restart is not None,
+        messages_requested=result.messages_requested,
+        messages_admitted=result.messages_admitted,
+        messages_durable=result.messages_durable,
+        p50_admissions_per_second=(
+            None if result.metrics is None else result.metrics.admissions_per_second.p50
+        ),
+        baseline_p50_floor=current_floor,
+    )
+
+
 def panel_variables(campaign: BenchmarkCampaign) -> dict[str, Any]:
     return {
         "title": f"ATM benchmark campaign — {campaign.campaign_id}",
@@ -243,10 +276,11 @@ def _chart_points(
             continue
         for historical_result in entry.results:
             result = historical_result.result
-            if result.target == target and result.metrics is not None and historical_result.displayed_status != "INCOMPLETE":
+            status = current_historical_display_status(result, historical)
+            if result.target == target and result.metrics is not None and status != "INCOMPLETE":
                 points.append({
                     "host_label": result.host_label, "timestamp": result.generated_at,
-                    "status": historical_result.displayed_status,
+                    "status": status,
                     "distribution": result.metrics.admissions_per_second,
                 })
     for campaign in phase_campaigns:
@@ -375,7 +409,10 @@ def render_envelope(campaigns: Sequence[BenchmarkCampaign], report_root: Path = 
 
 
 def regenerate_index() -> None:
-    completed = subprocess.run(["just", "reports-index"], cwd=ROOT, capture_output=True, text=True, check=False)
+    completed = subprocess.run(
+        ["just", "reports-index"], cwd=ROOT, capture_output=True, text=True,
+        encoding="utf-8", errors="replace", check=False,
+    )
     if completed.returncode != 0:
         raise BenchmarkReportError(f"reports-index failed: {completed.stderr.strip() or completed.stdout.strip()}")
 

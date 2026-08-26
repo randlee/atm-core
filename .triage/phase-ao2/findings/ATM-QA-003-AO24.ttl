@@ -31,8 +31,8 @@
   triage:file ".ao2.4-checklist.md" ;
   triage:line 19 ;
   triage:snippet "the AO evidence ledger records M5 and FastPC4 as blocked rather than PASS." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s4-peer-wire-proof" ;
   triage:headSha "d9fb74917a804d2068684db40a28bc4ce636f283" ;
   triage:occursIn <urn:atm:triage:worktree/S4/d9fb74917a804d2068684db40a28bc4ce636f283> .

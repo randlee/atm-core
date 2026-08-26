@@ -32,8 +32,8 @@
   triage:file "scripts/smoke/run_admission_capacity.py" ;
   triage:line 1639 ;
   triage:snippet "File exceeds 1000-line threshold (1639 lines)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "absent" ;
+  triage:closed true ;
   triage:branch "feature/pao-s3-runtime-peer-wire-mode" ;
   triage:headSha "b2ce7a26" ;
   triage:occursIn <urn:atm:triage:worktree/S3/b2ce7a26> .
@@ -43,8 +43,8 @@
   triage:file "scripts/smoke/run_admission_capacity.py" ;
   triage:line 1620 ;
   triage:snippet "File exceeds 1000-line threshold (1620 lines)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "absent" ;
+  triage:closed true ;
   triage:branch "feature/pao-s4-peer-wire-proof" ;
   triage:headSha "d9fb7491" ;
   triage:occursIn <urn:atm:triage:worktree/S4/d9fb7491> .

@@ -106,12 +106,18 @@ class SignDaemonDevTests(unittest.TestCase):
         run.assert_not_called()
 
     def test_configured_secret_file_overrides_benchmark_account_default(self) -> None:
-        with mock.patch.dict(
-            sign_daemon_dev.os.environ,
-            {sign_daemon_dev.KEYCHAIN_SECRET_FILE_ENVIRONMENT_VARIABLE: "~/custom-secret"},
-            clear=True,
-        ):
-            self.assertEqual(sign_daemon_dev.keychain_secret_file(), Path.home() / "custom-secret")
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            home = Path(temporary_directory)
+            with mock.patch.dict(
+                sign_daemon_dev.os.environ,
+                {
+                    sign_daemon_dev.KEYCHAIN_SECRET_FILE_ENVIRONMENT_VARIABLE: "~/custom-secret",
+                    "HOME": str(home),
+                    "USERPROFILE": str(home),
+                },
+                clear=True,
+            ):
+                self.assertEqual(sign_daemon_dev.keychain_secret_file(), home / "custom-secret")
 
     def test_build_recipe_runs_signing_hook_after_cargo(self) -> None:
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")

@@ -53,6 +53,7 @@ mod client;
 mod http1_server;
 mod loopback_tcp;
 mod message_handler;
+mod peer_connection_pool;
 mod peer_stream;
 mod private_staging;
 mod runtime_health;
@@ -82,11 +83,13 @@ pub use client::unix_socket_client;
 pub use client::{
     DIRECT_PEER_TCP_PORT, SAME_HOST_REQUEST_DEADLINE, direct_peer_port, direct_peer_tcp_client,
     loopback_tcp_client, preferred_local_client, selected_write_transport,
+    shared_direct_peer_client,
 };
 pub use loopback_tcp::LoopbackTcpConfig;
 pub use message_handler::{
     AuthenticatedConnector, CanonicalWriteHandler, canonical_api_router, canonical_message_router,
 };
+pub use peer_connection_pool::{PeerConnectionPool, PeerPoolConfig};
 pub use peer_stream::{
     AcceptedPeerStream, AuthenticatedPeerStream, EstablishedPeerStream, PeerStreamAdapter,
     PeerStreamFuture,
@@ -104,6 +107,7 @@ pub struct HttpRuntimeConfig {
     unix_socket: Option<UnixSocketConfig>,
     direct_peer_tcp: Option<DirectPeerTcpConfig>,
     peer_stream_adapter: Option<Arc<dyn PeerStreamAdapter>>,
+    peer_pool: PeerPoolConfig,
     limits: RuntimeLimits,
     timeouts: RuntimeTimeouts,
 }
@@ -119,6 +123,7 @@ impl std::fmt::Debug for HttpRuntimeConfig {
                 "peer_stream_adapter",
                 &self.peer_stream_adapter.as_ref().map(|_| "configured"),
             )
+            .field("peer_pool", &self.peer_pool)
             .field("limits", &self.limits)
             .field("timeouts", &self.timeouts)
             .finish()
@@ -140,6 +145,7 @@ impl HttpRuntimeConfig {
             unix_socket,
             direct_peer_tcp: None,
             peer_stream_adapter: None,
+            peer_pool: PeerPoolConfig::default(),
             limits,
             timeouts,
         }
@@ -163,6 +169,14 @@ impl HttpRuntimeConfig {
     #[must_use]
     pub fn with_peer_stream_adapter(mut self, adapter: Arc<dyn PeerStreamAdapter>) -> Self {
         self.peer_stream_adapter = Some(adapter);
+        self
+    }
+
+    /// Selects daemon-owned outbound peer pool bounds. The adapter remains
+    /// opaque; bootstrap constructs the pool with this validated value.
+    #[must_use]
+    pub fn with_peer_pool_config(mut self, config: PeerPoolConfig) -> Self {
+        self.peer_pool = config;
         self
     }
 }
@@ -1001,6 +1015,7 @@ fn validate_config(config: &HttpRuntimeConfig) -> Result<(), AtmError> {
     debug_assert!(config.limits.max_body_bytes > 0);
     debug_assert!(config.limits.max_connections > 0);
     debug_assert!(!config.timeouts.request.is_zero());
+    config.peer_pool.validate()?;
     debug_assert!(!config.timeouts.shutdown.is_zero());
     validate_loopback_config(&config.loopback_tcp)?;
     if let Some(peer) = &config.direct_peer_tcp

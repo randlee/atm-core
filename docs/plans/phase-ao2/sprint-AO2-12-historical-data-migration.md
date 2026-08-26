@@ -91,6 +91,19 @@ Notes on the contract:
   `displayed_status` (the D8 ratchet re-derivation) and `evidence_gap` live
   on the wrapper, never inside the v4 result. No amendment to the AO2.10
   contract is required.
+- **Disclosed consequence of "status is derived, never stored" (per
+  AO212-MIGRATE-F003 review):** a migrated `result.status` is the honest
+  `classify_status()` output against the pre-run ratchet value (`prior`),
+  computed with no synthetic or fabricated baseline values — so it may
+  differ from the legacy artifact's self-reported `passed` boolean, and for
+  migrated records `result.status` may equal `displayed_status`. The legacy
+  verdict is never reproduced by manufacturing data inside the v4 result
+  (in particular, `baseline.p50_floor` must always be a real reviewed or
+  ratchet floor, never a value derived from the observation under test).
+- **Ratchet bootstrap (D8):** the first observation for a fresh
+  (host, target) key classifies against `prior = 0.0`, so any positive,
+  complete, durable p50 passes on first appearance. This is intentional —
+  no floor exists yet; the run itself establishes it.
 - **Implementation ownership:** these model classes are *implemented* in
   `scripts/smoke/benchmark_schema.py` during **AO2.11** (which needs them to
   type and test `candlestick_series()`), exactly as specified here; AO2.11

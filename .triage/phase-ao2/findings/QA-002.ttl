@@ -32,8 +32,8 @@
   triage:file "docs/plans/phase-ao/sprint-AO1-policy-and-plain-baseline.md" ;
   triage:line 105 ;
   triage:snippet "cargo test -p atm-core -p atm-http-runtime -p atm-daemon-bootstrap" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s1-peer-wire-policy" ;
   triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s1/d137ab8d980e09365628c7454df1e0531698cfd3> .
@@ -43,8 +43,8 @@
   triage:file "docs/plans/phase-ao/sprint-AO2-isolated-mtls-stream-adapter.md" ;
   triage:line 110 ;
   triage:snippet "cargo test -p peer-tls -p atm-core -p atm-storage" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s1-peer-wire-policy" ;
   triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s1/d137ab8d980e09365628c7454df1e0531698cfd3> .
