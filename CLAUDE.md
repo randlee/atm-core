@@ -202,25 +202,21 @@ atm read
 atm inbox
 ```
 
-**Nudge ARCH-CTM to check inbox** (when he hasn't replied):
+**Re-dispatch ARCH-CTM** (when he hasn't replied):
 
-This manual tmux nudge is a steer-kind nudge (immediate, out-of-band prompt
-injection) — it is not a queue-kind nudge and does not wait for harness
-readiness.
-
-ARCH-CTM runs in a tmux pane. Discover the pane, then send-keys:
-```bash
-# Find arch-ctm's pane
-tmux list-panes -a -F '#{session_name}:#{window_index}.#{pane_index} #{pane_title} #{pane_current_command}'
-
-# Send nudge (use the correct pane ID from above)
-tmux send-keys -t <pane-id> -l "You have unread ATM messages. Run: atm read --team atm-dev" && sleep 0.5 && tmux send-keys -t <pane-id> Enter
-```
+- Never `tmux send-keys`. Resend via `atm send`, including the current j2
+  template task assignment (same rendered content).
+- ⚠️ **A codex agent-idle nudge is not informational — it is a stop condition.**
+  A codex agent (e.g. arch-ctm) WILL NOT resume or restart work on its own
+  after going idle. Do not treat idle as "still working" or defer action —
+  the ONLY way it does more work is if team-lead sends a task assignment via
+  `atm send`. Ignoring or deferring on an idle nudge stalls the agent
+  indefinitely.
 
 ### Communication Rules
 
 1. **No broadcast messages** — all communications are direct (team-lead ↔ specific agent)
-2. **Poll for replies** — after sending to arch-ctm, wait 30-60s then `atm read`. If no reply after 2 minutes, nudge via tmux send-keys
+2. **Poll for replies** — after sending to arch-ctm, wait 30-60s then `atm read`. If no reply after 2 minutes, resend the task assignment via `atm send`
 3. **arch-ctm is async** — he processes messages on his next turn. Do not block waiting; continue other work and check back
 
 ### ATM CLI Quick Reference
