@@ -1,6 +1,6 @@
 # Sprint AU.2 — sc-lint-boundary Calibration (mid wave)
 
-status: proposed
+status: complete
 assignee: arch-ctm
 difficulty: mid
 branch: feature/pau-s2-lint-calibration (off integrate/phase-au)
@@ -95,3 +95,19 @@ sanctioned suppression mechanism, now at exactly three instances workspace-wide
 allowlists remain rejected (§4.3). Triage record:
 `.triage/phase-au/findings/AU2-QA-VISITOR-CYCLE-001.ttl` (integrate/phase-au).
 Fix dispatched to arch-ctm as AU2-FIX-VISITOR-CYCLE-R1.
+
+## QA history
+
+- **QA-AU2-R1** (2026-08-26, quality-mgr msgs 01M1012DG7QR9D12JW9174X0Y1 →
+  01M101ANTGY0BAV3KJBS2Q540F): consolidated verdict **PASS contingent on
+  AU2-QA-VISITOR-CYCLE-001**, converted to **unconditional PASS** after targeted
+  re-verification. All 7 reviewers; §4.1–4.3 work confirmed correct with zero
+  dissent; ack↔send #1 correctly retained; all 11 AU.1/AU.2-owned findings absent by
+  identity; no trait-wide/workspace-allowlist mechanisms. Mid-round the
+  graph-reachability fix (AU2-RBQA-F001) surfaced the two visitor-cycle true
+  positives (see Addendum); fix @ ad98e74f6 verified independently (diff scope
+  exactly 2 sanctioned per-type allows, live payload exactly 1 finding, 69/69 tests,
+  clippy/fmt clean). Minor: ATM-QA-002 sprint-doc staleness (fixed by the Addendum);
+  RBP-F001/RBP-F002 tracked as non-blocking debt. Reports: PR #1035 comments
+  5431564451, 5431604167. Merged to integrate/phase-au @ 26927bdff; triage record
+  closed @ d1410704e.

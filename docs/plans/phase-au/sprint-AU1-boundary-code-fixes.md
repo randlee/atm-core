@@ -1,6 +1,6 @@
 # Sprint AU.1 — Boundary Code Fixes (easy wave)
 
-status: proposed
+status: complete
 assignee: cipher
 difficulty: easy
 branch: feature/pau-s1-boundary-code-fixes (off integrate/phase-au)
@@ -70,3 +70,15 @@ Work items (master-plan section → finding index #):
 
 `just test`; `just lint`; sc-boundary full-payload diff against the 22-finding baseline
 showing exactly the owned findings removed.
+
+## QA history
+
+- **QA-AU1-R1** (2026-08-26, quality-mgr msg 01M1009YE73X77FWNKA831CFCE): **PASS**,
+  0 blocking / 1 important / 2 minor. Deliverables 18/18; all 10 owned sc-boundary
+  findings fixed + 8 mandated tests confirmed by independent reviewers and
+  quality-mgr's direct sc-lint-boundary run (baseline 22 → 13, zero added, exactly 9
+  removed, identity match to owned scope). First reviewer round was terminated by a
+  session-wide API usage limit and re-dispatched in full; partial notes were treated
+  as non-evidence. Deferred debt: RBQA-F001 (duplicate `reload_runtime_view` impls,
+  pre-existing on develop), RSH-001, RBP-F001 (both pre-existing). Report: PR #1034
+  comment 5431447685. Merged to integrate/phase-au @ cf232d8b7.

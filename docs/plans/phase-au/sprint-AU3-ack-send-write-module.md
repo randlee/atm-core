@@ -1,6 +1,6 @@
 # Sprint AU.3 — ack/send Shared Write Module (hard wave)
 
-status: proposed
+status: complete
 assignee: fenix (team-lead)
 difficulty: hard
 branch: feature/pau-s3-ack-send-write-module (off integrate/phase-au)
@@ -97,3 +97,18 @@ Step 0 closed — work items 2–4 unblocked.
 
 `just test`; `just lint`; sc-boundary full-payload diff (exactly #1 removed);
 tripwire test green; benchmark campaign report linked in the PR.
+
+## QA history
+
+- **QA-AU3-R1** (2026-08-26, quality-mgr msg 01M0ZYPBRNDDDAF1XTJJH2K14B final):
+  interim **FAIL** (ARCH-001: write/mod.rs 1059 prod lines > RULE-003 cap) → fix
+  @ 4f9c47590 (mechanical split into write/pipeline.rs + write/acknowledgement.rs,
+  facade mod.rs; byte-identical bodies, sc-boundary identity 21/21) → **PASS** →
+  **PASS retracted** (ARCH-002: live CI runtime-observation-boundary failure — the
+  relocation moved AckRequest/ActivityObservation into write/mod.rs, absent from
+  .just/lint-config.toml allowed_paths) → config fix @ 83b85e492 → **final PASS**,
+  0 blocking; quality-mgr verified via live CI job log (run 33013969060) and direct
+  sc-boundary re-run (21 findings, exact identity match to cross-sprint residuals).
+  Benchmark gate satisfied (all 4 transports @ fc997927b). Deferred debt:
+  RBQA-AU3-F003, RBP-F002. Merged to integrate/phase-au @ 0e1a8b8e0 after AU.1/AU.2
+  merge-forward produced the first fully lint-green CI run of the phase.
