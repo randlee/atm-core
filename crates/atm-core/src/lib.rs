@@ -15,6 +15,9 @@ pub mod caller_context;
 pub mod clear;
 /// Internal configuration discovery and resolution helpers.
 pub(crate) mod config;
+/// Recipient delivery-channel classification (tmux/Herdr/Graft/bare) derived
+/// from durable roster data, used by the queue-aware nudge dispatch seam.
+pub mod delivery_channel;
 /// Internal shared delivery-plan execution helpers for message-path unification.
 pub(crate) mod delivery_execution;
 /// Internal typed delivery-plan contracts owned by the message state machines.
@@ -123,6 +126,10 @@ pub use boundary::{
 pub use config::AtmConfig;
 pub use config::load_config as load_atm_config;
 pub use config::types::GraftConfig;
+pub use delivery_channel::{
+    DeliveryChannel, GraftLeaseState, HerdrSession, LocalMessageReceivedBackend,
+    classify_delivery_channel, local_message_received_backend,
+};
 /// Canonical stable import path for the retained thin graft-facing client
 /// boundary. Shared advisory/session protocol DTOs are not part of the
 /// accepted `atm-core` surface.

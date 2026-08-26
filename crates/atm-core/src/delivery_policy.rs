@@ -74,6 +74,12 @@ impl DeliveryRecipientSnapshot {
         }
     }
 
+    /// Historical AQ0-era backend-selection flags kept for existing send/nudge
+    /// callers. [`crate::delivery_channel::classify_delivery_channel`] and
+    /// [`crate::delivery_channel::local_message_received_backend`] (AQ1) derive
+    /// an equivalent, more general `DeliveryChannel` from the same roster
+    /// fields (`recipient_pane_id`, `metadata_json`) for the queue-aware
+    /// classifier seam; they are additive and do not replace this snapshot.
     fn from_roster(member: RosterEntry) -> Self {
         let local_tmux_post_send = member.recipient_pane_id.is_some()
             || member
