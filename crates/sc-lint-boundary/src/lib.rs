@@ -391,6 +391,23 @@ pub struct GraphEdge {
     pub kind: &'static str,
     pub from: NodeId,
     pub to: NodeId,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub call_callee: Option<CallCallee>,
+}
+
+/// Expression-call information retained on a reference edge so cycle analysis
+/// can distinguish an owner reference from a delegation call.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+pub struct CallCallee {
+    pub ident: String,
+    pub kind: CallCalleeKind,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "snake_case")]
+pub enum CallCalleeKind {
+    Associated,
+    Receiver,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -428,6 +445,7 @@ impl ImplKind {
 struct CollectedReference {
     path: String,
     kind: ReferenceKind,
+    call_callee: Option<CallCallee>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -482,6 +500,25 @@ impl GraphBuilder {
             kind,
             from: from.into(),
             to: to.into(),
+            call_callee: None,
+        };
+        if !self.edges.contains(&edge) {
+            self.edges.push(edge);
+        }
+    }
+
+    fn add_reference_edge(
+        &mut self,
+        kind: &'static str,
+        from: impl Into<NodeId>,
+        to: impl Into<NodeId>,
+        call_callee: Option<CallCallee>,
+    ) {
+        let edge = GraphEdge {
+            kind,
+            from: from.into(),
+            to: to.into(),
+            call_callee,
         };
         if !self.edges.contains(&edge) {
             self.edges.push(edge);

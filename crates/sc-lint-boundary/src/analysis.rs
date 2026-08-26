@@ -114,7 +114,7 @@ fn classify_self_cycle_edges(
         if self_cycle_edges_are_allowed(&source_edges, node_map) {
             continue;
         }
-        if is_type_method_self_loop(&source_edges) {
+        if is_type_method_self_loop(&source_edges, node_map) {
             collect_inherent_self_loop_nodes(&mut classified.inherent_nodes, source_edges);
             continue;
         }
@@ -146,13 +146,18 @@ fn self_cycle_edges_are_allowed(
     })
 }
 
-fn is_type_method_self_loop(source_edges: &[&OwnerRefEdge]) -> bool {
-    let is_type_method_self_loop = source_edges.iter().all(|edge| {
-        edge.source_kind == "method"
-            && edge.owner_kind == "type"
-            && edge.target_owner_id == edge.source_owner_id
-            && edge.source_impl_kind != Some(ImplKind::Trait)
-    });
+fn is_type_method_self_loop(
+    source_edges: &[&OwnerRefEdge],
+    node_map: &BTreeMap<NodeId, &GraphNode>,
+) -> bool {
+    let source_edges = non_delegating_self_loop_edges(source_edges, Some(node_map));
+    let is_type_method_self_loop = !source_edges.is_empty()
+        && source_edges.iter().all(|edge| {
+            edge.source_kind == "method"
+                && edge.owner_kind == "type"
+                && edge.target_owner_id == edge.source_owner_id
+                && edge.source_impl_kind != Some(ImplKind::Trait)
+        });
     if !is_type_method_self_loop {
         return false;
     }
@@ -181,12 +186,13 @@ fn classify_trait_impl_self_loop(
     source_edges: &[&OwnerRefEdge],
     node_map: &BTreeMap<NodeId, &GraphNode>,
 ) -> Option<String> {
-    let is_trait_impl_self_loop = source_edges.iter().all(|edge| {
-        edge.source_kind == "method"
-            && edge.owner_kind == "type"
-            && edge.target_owner_id == edge.source_owner_id
-            && edge.source_impl_kind == Some(ImplKind::Trait)
-    });
+    let is_trait_impl_self_loop = !source_edges.is_empty()
+        && source_edges.iter().all(|edge| {
+            edge.source_kind == "method"
+                && edge.owner_kind == "type"
+                && edge.target_owner_id == edge.source_owner_id
+                && edge.source_impl_kind == Some(ImplKind::Trait)
+        });
     if !is_trait_impl_self_loop {
         return None;
     }
@@ -195,6 +201,36 @@ fn classify_trait_impl_self_loop(
         .and_then(|node| node.impl_trait.clone())
         .unwrap_or_else(|| "unknown_trait".to_string());
     (!is_non_architectural_trait_impl_self_loop(&trait_name)).then_some(trait_name)
+}
+
+fn non_delegating_self_loop_edges<'a>(
+    source_edges: &[&'a OwnerRefEdge],
+    node_map: Option<&BTreeMap<NodeId, &GraphNode>>,
+) -> Vec<&'a OwnerRefEdge> {
+    source_edges
+        .iter()
+        .copied()
+        .filter(|edge| !is_delegating_call(edge, node_map))
+        .collect()
+}
+
+fn is_delegating_call(
+    edge: &OwnerRefEdge,
+    node_map: Option<&BTreeMap<NodeId, &GraphNode>>,
+) -> bool {
+    let Some(callee) = &edge.call_callee else {
+        return false;
+    };
+    if edge.reference_kind != ReferenceKind::Expr || edge.source_owner_id != edge.target_owner_id {
+        return false;
+    }
+    let Some(source_method) = node_map
+        .and_then(|nodes| nodes.get(&edge.source_node_id))
+        .map(|node| node.label.as_str())
+    else {
+        return false;
+    };
+    source_method != callee.ident
 }
 
 fn component_allows_recursive_value_container(
@@ -373,6 +409,7 @@ struct OwnerRefEdge {
     source_node_id: NodeId,
     source_impl_kind: Option<ImplKind>,
     reference_kind: ReferenceKind,
+    call_callee: Option<CallCallee>,
     node_ids: Vec<NodeId>,
 }
 
@@ -420,6 +457,7 @@ fn build_owner_graph<'a>(
                 "references_expr" => ReferenceKind::Expr,
                 _ => continue,
             },
+            call_callee: edge.call_callee.clone(),
             node_ids: vec![source_node.id.clone(), target_node.id.clone()],
         };
 

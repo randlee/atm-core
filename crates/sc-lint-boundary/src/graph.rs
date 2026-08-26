@@ -189,10 +189,11 @@ fn add_reference_edges(
         } else {
             target_node_id
         };
-        builder.add_edge(
+        builder.add_reference_edge(
             referenced.kind.edge_kind(),
             source_node_id.clone(),
             target_node_id.clone(),
+            referenced.call_callee,
         );
         builder.add_edge("references", source_node_id.clone(), target_node_id);
     }

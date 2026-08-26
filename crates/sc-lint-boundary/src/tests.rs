@@ -939,6 +939,97 @@ fn reports_type_method_self_loop_as_non_fatal_signal() {
 }
 
 #[test]
+fn excludes_associated_helper_calls_but_keeps_recursion_and_value_uses() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_source(
+        "example",
+        "lib.rs",
+        r#"
+                pub struct Loop;
+
+                impl Loop {
+                    fn helper() {}
+
+                    fn delegated() {
+                        Self::helper();
+                    }
+
+                    fn qualified() {
+                        Loop::helper();
+                    }
+
+                    fn recursive() {
+                        Self::recursive();
+                    }
+
+                    fn value_use() {
+                        let _ = Loop;
+                    }
+                }
+            "#,
+    );
+
+    let graph = export_workspace_graph(&ExportGraphOptions {
+        root: fixture.root().to_path_buf(),
+    })
+    .unwrap();
+    assert!(graph.edges.iter().any(|edge| {
+        edge.kind == "references_expr"
+            && edge.from.ends_with("::delegated")
+            && edge.to == "crate::example::example::module::crate::Loop"
+            && edge.call_callee.as_ref().is_some_and(|callee| {
+                callee.ident == "helper" && callee.kind == CallCalleeKind::Associated
+            })
+    }));
+    assert!(graph.edges.iter().any(|edge| {
+        edge.kind == "references_expr"
+            && edge.from.ends_with("::qualified")
+            && edge.to == "crate::example::example::module::crate::Loop"
+            && edge.call_callee.as_ref().is_some_and(|callee| {
+                callee.ident == "helper" && callee.kind == CallCalleeKind::Associated
+            })
+    }));
+
+    let report = analyze_workspace(&AnalyzeOptions {
+        root: fixture.root().to_path_buf(),
+        format: OutputFormat::Json,
+        rule: Some(RuleFilter::Cycles),
+    })
+    .unwrap();
+    let self_loop = report
+        .findings
+        .iter()
+        .find(|finding| finding.rule_id == RuleId::ScbCycle002)
+        .unwrap();
+    assert!(
+        self_loop
+            .node_ids
+            .iter()
+            .any(|node_id| node_id.ends_with("::recursive"))
+    );
+    assert!(
+        self_loop
+            .node_ids
+            .iter()
+            .any(|node_id| node_id.ends_with("::value_use"))
+    );
+    assert!(
+        !self_loop
+            .node_ids
+            .iter()
+            .any(|node_id| node_id.ends_with("::delegated"))
+    );
+    assert!(
+        !self_loop
+            .node_ids
+            .iter()
+            .any(|node_id| node_id.ends_with("::qualified"))
+    );
+}
+
+#[test]
 fn does_not_flag_constructor_factory_self_loop() {
     let fixture = WorkspaceFixture::new();
     fixture.write_workspace_root();
