@@ -17,7 +17,7 @@ mail. It does not carry the message body, decide whether mail is read, or
 create a delivery queue. The authoritative delivery instruction is exactly:
 
 ```text
-herdr agent prompt <agent> "You have unread ATM messages. Run: atm read"
+herdr agent prompt <AgentName> "You have unread ATM messages. Run: atm read"
 ```
 
 Herdr performs text-plus-Enter atomically and rejects a target already at an
@@ -38,50 +38,59 @@ AQ2.7's Tokio pump and must never block the send path.
    ```rust
    pub enum LocalMessageReceivedBackend {
        Tmux { pane_id: PaneId },
-       Herdr { target: HerdrAgentTarget },
+       Herdr,
    }
    ```
 
-   `HerdrAgentTarget` is a validated Herdr live-agent name or pane target;
-   it is not inferred from an ATM `AgentName`. The public command surface is
-   paired and explicit on **both** operations:
+   Herdr persists **mode only**. Its target is always the member's ATM
+   `AgentName`, resolved live by Herdr at nudge time; `HerdrAgentTarget` does
+   not exist and no Herdr target is stored, projected, backed up, restored, or
+   doctored. This relies on the established launch convention: the Herdr agent
+   MUST be started or renamed so its live agent name equals `ATM_IDENTITY`,
+   while its workspace equals `ATM_TEAM` — for example,
+   `herdr agent start <AgentName> --kind ...` or `herdr agent rename`. The
+   resulting `herdr agent prompt <AgentName> ...` resolves the live agent, and
+   queue-work not-found/unavailable is handled by AQ2.7's held path rather
+   than a stale persisted target.
+
+   The public command surface is conditional and explicit on **both**
+   operations:
 
    ```text
-   atm teams add-member <team> <member> --backend <tmux|herdr> --target <target>
-   atm teams update-member <team> <member> --backend <tmux|herdr> --target <target>
+   atm teams add-member <team> <member> --backend tmux --target %N
+   atm teams add-member <team> <member> --backend herdr
+   atm teams update-member <team> <member> --backend tmux --target %N
+   atm teams update-member <team> <member> --backend herdr
    ```
 
-   `--backend` and `--target` are accepted together or omitted together. The
-   current `--pane-id` option is retained only as a deprecated compatibility
-   spelling for `--backend tmux --target <value>`; it cannot be combined with
-   either new option. Help, clap parsing, request DTOs, and errors must use
-   backend-neutral wording — neither command may expose a tmux-only
-   `Option<String>` as its primary path.
+   `--backend tmux` requires `--target`; `--backend herdr` rejects `--target`
+   because the `<member>` AgentName is the target. The current `--pane-id`
+   option is retained only as a deprecated compatibility spelling for
+   `--backend tmux --target <value>`; it cannot be combined with either new
+   option. Help, clap parsing, request DTOs, and errors must describe these
+   conditional rules — neither command may expose a tmux-only `Option<String>`
+   as its primary path.
 
    **Mutual exclusivity is a storage invariant.** `teams update-member` is
-   the backend-environment/target-type check path: setting a Herdr target
-   atomically clears the member's persisted tmux pane target, and setting a
-   tmux pane target atomically clears the persisted Herdr target. Add follows
-   the same one-backend representation. There is never a row, projection,
-   backup entry, restore result, or doctor record with both targets stored;
-   update must not append a second target or preserve a stale one.
+   the backend-environment/target-type check path: setting Herdr mode
+   atomically clears the member's persisted tmux pane-id; setting a tmux pane
+   target atomically replaces Herdr mode with `Tmux`. Add follows the same
+   one-backend representation. There is never a row, projection, backup entry,
+   restore result, or doctor record with both a pane-id and Herdr mode stored;
+   update must not append a second target or preserve a stale pane-id.
 
    A single backend-aware target parser replaces
-   `normalize_tmux_pane_id`: it returns the declared backend, typed target,
-   and target-shape classification together. Tmux uses its canonical
-   `PaneId::from_cli` normalization; Herdr accepts a live-agent name or a
-   Herdr pane target such as `w1:p1`. No CLI target is first normalized and
-   then rejected by a second, divergent validator. `PaneId::from_cli` already
-   permits `:` while the current tmux normalizer rejects it; the new parser is
-   the one source of truth and carries the declared backend with the target
-   through every subsequent layer. A cross-backend shape is admitted with the
-   required warning below, not silently reclassified or rejected by an
-   inconsistent second parser.
+   `normalize_tmux_pane_id`: it validates only the tmux branch and returns a
+   typed pane-id plus target-shape classification. No Herdr parser exists.
+   `PaneId::from_cli` already permits `:` while the current tmux normalizer
+   rejects it; the new tmux parser is the one source of truth, so a non-`%N`
+   tmux target follows the warning path below instead of a divergent second
+   validator.
 
-   Replace persisted `recipient_pane_id` with the tagged backend/target
-   representation in member mutation and projection. Existing rows migrate
-   and read as `Tmux` with the same target, retaining behavior. Thread the
-   tagged value through add/update persistence, member list/projection and
+   Replace persisted `recipient_pane_id` with the tagged backend representation
+   in member mutation and projection. Existing rows migrate and read as
+   `Tmux` with the same pane-id, retaining behavior. Thread the tagged mode
+   through add/update persistence, member list/projection and
    JSON output, backup encoding/versioning, restore decoding/migration,
    roster redaction, and `atm doctor --json` / human output in the same PR.
    Retain a derived/deprecated `tmux_pane_id` compatibility field only where
@@ -96,25 +105,25 @@ AQ2.7's Tokio pump and must never block the send path.
    `DoctorFinding` with `DoctorSeverity::Error` (not Warning or Info), a stable
    backend-consistency code, and a message naming the team plus its tmux and
    Herdr member lists. Its remediation names
-   `atm teams update-member --backend <tmux|herdr> --target <target>` and
-   directs the operator to correct the affected members. The finding must flow
+   either `atm teams update-member <member> --backend herdr` or
+   `atm teams update-member <member> --backend tmux --target %N` and directs
+   the operator to correct the affected members. The finding must flow
    through the existing `DoctorStatus::Error` / `has_errors()` path so normal
    doctor output and `atm doctor`'s exit status are nonzero. A uniform tmux
    team, a uniform Herdr team, and a team with only one explicit backend plus
    backend-less members produce no mixed-backend finding.
 
-   **Cross-backend mismatch warning (required):** target syntax is a useful
-   operator signal, not a capability check. This is the `teams update-member`
-   backend-environment/target-type check: when a tmux-shaped `%N` target is
-   supplied with `--backend herdr`, or a Herdr-shaped `wN:pN` target is
-   supplied with `--backend tmux`, update succeeds but emits a warning to
-   stderr (and the structured command result) naming the member, selected
-   backend, and target. The warning must say: `verify --backend
+   **Tmux target-type warning (required):** this is the
+   `teams update-member` backend-environment/target-type check. A non-`%N`
+   target supplied with `--backend tmux` is accepted with a warning to stderr
+   (and the structured command result) naming the member, selected backend,
+   and target. `--backend herdr --target <value>` is instead a clap/validation
+   error: Herdr has no user-configurable target. The warning must say: `verify --backend
    (herdr|tmux) for every member in team <team>; mixed-backend rosters require
    an explicit correct backend`. It is intentionally not silent and not a
    per-target probe: backend ownership is environment-derived, so the CLI
-   cannot prove that a currently entered target belongs to the intended local
-   backend. A plain Herdr agent name does not trigger a format warning.
+   cannot prove that a non-`%N` pane target belongs to the intended tmux
+   environment.
 
    The resolved delivery policy is total and ordered once: explicit local
    backend (`Tmux` or `Herdr`), otherwise graft lease, otherwise AQ2.5
@@ -131,8 +140,8 @@ AQ2.7's Tokio pump and must never block the send path.
    `tmux | herdr`, inspect target syntax, or implement a fallback. The
    classifier obtains its channel from the tagged backend's one central
    `delivery_channel()` mapping rather than matching variants itself.
-   Tmux/Herdr mechanics (target interpretation, the tmux two-Enter sequence,
-   Herdr argv, and lifecycle errors) are known only to their respective
+   Tmux/Herdr mechanics (the tmux two-Enter sequence, Herdr's live AgentName
+   lookup, argv, and lifecycle errors) are known only to their respective
    emitter implementations. The template remains the existing ATM
    message-received template for tmux and graft; the Herdr implementation
    deliberately uses the fixed mailbox-read wake-up text above, so untrusted
@@ -168,29 +177,29 @@ AQ2.7's Tokio pump and must never block the send path.
 
 ## Acceptance criteria
 
-1. `teams add-member` and `teams update-member` both round-trip explicit tmux
-   and Herdr `--backend` / `--target` values through their clap surface,
+1. `teams add-member` and `teams update-member` both round-trip
+   `--backend tmux --target %N` and mode-only `--backend herdr` through their
+   clap surface,
    request DTO, persistence, member list/JSON projection, backup, restore,
    and doctor output. A legacy `--pane-id` input and legacy backup migrate to
    the same explicit `Tmux` record with no behavior change. An update from
-   tmux to Herdr clears the tmux target atomically; an update from Herdr to
-   tmux clears the Herdr target atomically. Persistence, projection, backup,
-   restore, and doctor fixtures prove no member can retain both targets.
-2. A `w1:p1` Herdr target is accepted and carried as a Herdr target; parser
+   tmux to Herdr clears the tmux pane-id atomically; an update from Herdr to
+   tmux replaces Herdr mode atomically. Persistence, projection, backup,
+   restore, and doctor fixtures prove no member can retain both a pane-id and
+   Herdr mode, and no Herdr target field is present anywhere.
+2. The launch fixture starts or renames the Herdr agent to the member's exact
+   `AgentName` under its `ATM_TEAM` workspace. Herdr mode persists no target;
+   the emitter invokes Herdr with that AgentName and an unavailable live agent
+   follows AQ2.7's held path for queued work rather than any persisted-target
+   retry.
+3. `teams update-member --backend herdr --target <value>` is rejected. A
+   non-`%N` `--target` with `--backend tmux` succeeds with the exact
+   roster-wide verification warning on stderr and in structured output. Parser
    tests prove the old `PaneId::from_cli` versus `normalize_tmux_pane_id`
-   disagreement cannot recur because no second normalizer validates the same
-   CLI target. Cross-backend-shaped input takes the warning path, while the
-   declared backend/target tag — not target punctuation — is the sole routing
-   input.
-3. `teams update-member` with `%12` plus `--backend herdr`, and with `w1:p1`
-   plus `--backend tmux`, succeeds with the exact roster-wide verification
-   warning on stderr and in structured output. The warning names the
-   team/member/backend/target; a plain Herdr agent-name target does not warn.
-   Tests cover a mixed tmux/Herdr roster so a wrong local backend is never
-   silently accepted.
+   disagreement cannot recur because the single tmux parser owns that path.
 4. `atm doctor` emits exactly one Error-severity backend-consistency finding
    for a team containing both explicit tmux and Herdr members; the finding
-   names the team and both member sets, supplies the exact update-member
+   names the team and both member sets, supplies the conditional update-member
    remediation, sets `DoctorStatus::Error` / `has_errors()`, and makes the
    command exit nonzero. Members with no backend are skipped: they do not
    create an error alone or alter the mixed-backend result.
@@ -203,11 +212,11 @@ AQ2.7's Tokio pump and must never block the send path.
    fallback exists outside the two emitter implementations. A graft lease
    cannot override an explicit local backend, and a backend-less row preserves
    the existing graft/bare-CLI classification.
-7. The exact immediate Herdr argv is `agent prompt`, target, and fixed
-   mailbox-read text — **no `--wait`**. The send path returns after bounded
-   submission/rejection rather than awaiting lifecycle settlement; no message
-   body, rendered XML, shell interpolation, tmux, or raw-key fallback appears
-   in the Herdr path.
+7. The exact immediate Herdr argv is `agent prompt`, the member `AgentName`,
+   and fixed mailbox-read text — **no `--wait`**. The send path returns after
+   bounded submission/rejection rather than awaiting lifecycle settlement; no
+   message body, rendered XML, shell interpolation, tmux, raw-key fallback,
+   or persisted Herdr target appears in the Herdr path.
 8. An `agent_blocked` fixture proves the command exits with its structured
    rejection before any input reaches the fixture terminal, records
    `blocked_before_input`, and leaves the durable mail readable through
@@ -227,8 +236,11 @@ AQ2.7's Tokio pump and must never block the send path.
   no injection and leaves the tmux backend unused.
 - Retained tmux and Herdr rows are exercised in the same roster fixture to
   demonstrate coexistence, not migration-by-replacement.
-- Update a mixed roster with intentionally cross-shaped targets and retain the
-  operator-facing roster-wide backend-verification warning in evidence.
+- Update a tmux member with a non-`%N` target and retain the operator-facing
+  roster-wide backend-verification warning; prove that Herdr mode with a
+  supplied `--target` is rejected.
+- Start/rename a live Herdr agent to its ATM member `AgentName`, then prove the
+  prompt uses that name and an unavailable name enters AQ2.7's held path.
 - Run `atm doctor --json` and human `atm doctor` over a mixed explicit
   tmux/Herdr team plus an unconfigured member: retain the Error finding's
   member lists/remediation and the nonzero exit, then prove that a uniform

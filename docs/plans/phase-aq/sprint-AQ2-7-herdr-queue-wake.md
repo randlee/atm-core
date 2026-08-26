@@ -7,18 +7,19 @@ recommended_agent: arch-ctm · recommended_model: deep-reasoning
 Implement deferred queue wake-ups for AQ2.6's `HerdrSteer` members without
 pretending that Herdr supplies a queue. The durable ATM mailbox is the queue:
 mail remains immediately readable through `atm read`, while AQ1's pending
-marker says that a wake-up is deferred. This sprint adds one bounded,
+marker says that a wake-up is deferred. This sprint adds one detached,
 Herdr-only Tokio pump that waits for an acceptable lifecycle observation and
-then asks the existing Herdr emitter to send the same mailbox-read prompt.
+then asks the existing Herdr emitter to send the same mailbox-read prompt by
+the member `AgentName`.
 Tmux and graft remain AQ3's sole claim paths; AQ3 explicitly skips Herdr, so
 two workers never claim a Herdr message.
 
 The best available Herdr composition is a gate, not an atomic primitive:
 
 ```text
-herdr agent wait <agent> --until idle --until done --until blocked --timeout <bounded>
+herdr agent wait <AgentName> --until idle --until done --until blocked --timeout <bounded>
 # only idle/done continues
-herdr agent prompt <agent> "You have unread ATM messages. Run: atm read"
+herdr agent prompt <AgentName> "You have unread ATM messages. Run: atm read"
 ```
 
 There is a race between `wait` returning and `prompt` reaching the terminal:
@@ -42,12 +43,15 @@ turn-correlated queueing.
    daemon deadline. The legacy synchronous daemon is out of scope and must
    not be touched.
 
-2. **Lifecycle gate and claim order.** For a member with pending work, invoke
-   AQ2.6's Herdr process adapter for `agent wait` with the detached pump's
+2. **Lifecycle gate and claim order.** For a member with pending work, derive
+   the Herdr target directly from the member's `AgentName` (AQ2.6's launch
+   convention); do not load, resolve, or retry a persisted Herdr target.
+   Invoke AQ2.6's Herdr process adapter for `agent wait` with that AgentName
+   and the detached pump's
    long configured timeout and accept only returned `idle` or `done`. A
    returned `blocked`, timeout (including an agent that remains
    unclassifiable/`unknown`, because this gate does not accept `--until
-   unknown`), unavailable agent, or malformed output produces a structured
+   unknown`), unavailable/not-found live agent, or malformed output produces a structured
    held/deferred observation and performs **no claim and no prompt**. On
    `idle`/`done`, atomically call AQ1's `claim_next_pending`, then dispatch
    that exact claim through the normal message-received selector to
@@ -84,6 +88,8 @@ turn-correlated queueing.
    retry-attempt change. Because the gate does not accept `--until unknown`,
    an unclassifiable/`unknown` agent reaches the held timeout path and is
    never accepted as completion or prompted.
+   An unavailable/not-found Herdr `AgentName` takes the same held path; it is
+   not retried through a stored target or an alternate backend.
 3. A deterministic race fixture has the agent enter a blocked dialog after
    wait succeeds but before prompt. Herdr returns `agent_blocked`; the exact
    claim is released, its attempt count is unchanged, and the fixture records

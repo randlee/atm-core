@@ -319,9 +319,10 @@ the false-stuck problem cannot arise.
    //   benchmark semantics (the benchmark roster has no bare-CLI
    //   members), and the harness keeps compiling with no compat shim.
    ```
-   - Extensibility (naming rule above): AQ2.6 adds `HerdrSteer`, one local
-     target variant, and one emitter impl after this sprint lands. It does
-     not rename or remove `TmuxSteer`; later channels use the same seam.
+   - Extensibility (naming rule above): AQ2.6 adds mode-only `HerdrSteer` and
+     one emitter impl after this sprint lands. Herdr derives its live target
+     from the member `AgentName`; it adds no persisted target field and does
+     not rename or remove `TmuxSteer`. Later channels use the same seam.
 
 5. **ADR-054 addendum**: one clarifying sentence that 'steer = immediate'
    describes the KIND's delivery intent, while the bare-CLI mechanism may
