@@ -1694,9 +1694,9 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertIs(actual, context)
         create.assert_called_once_with(
             RUNNER.ssl.Purpose.SERVER_AUTH,
-            cafile="/tmp/capacity-identity.pem",
+            cafile=str(endpoint.tls_certificate_bundle),
         )
-        context.load_cert_chain.assert_called_once_with("/tmp/capacity-identity.pem")
+        context.load_cert_chain.assert_called_once_with(str(endpoint.tls_certificate_bundle))
 
     def test_tls_client_context_rejects_missing_identity_bundle(self):
         endpoint = RUNNER.LocalEndpoint(
