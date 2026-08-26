@@ -363,8 +363,17 @@ fn ao4_benchmark_targets_cannot_introduce_an_alternate_daemon_pipeline() {
 #[test]
 fn acknowledgement_cannot_restore_a_second_write_pipeline() {
     let root = workspace_root();
+    // The canonical write module is split across its facade and submodules
+    // (RULE-003 line cap); the tripwire scans the whole module surface.
+    let write = ["mod.rs", "pipeline.rs", "acknowledgement.rs"]
+        .iter()
+        .map(|file| {
+            fs::read_to_string(root.join("crates/atm-core/src/write").join(file))
+                .expect("canonical write module must be readable")
+        })
+        .collect::<String>();
     let send = fs::read_to_string(root.join("crates/atm-core/src/send/mod.rs"))
-        .expect("canonical write module must be readable");
+        .expect("send facade module must be readable");
     let acknowledgement = fs::read_to_string(root.join("crates/atm-core/src/ack/mod.rs"))
         .expect("acknowledgement module must be readable");
     let api = fs::read_to_string(root.join("crates/atm-core/src/api.rs"))
@@ -374,23 +383,32 @@ fn acknowledgement_cannot_restore_a_second_write_pipeline() {
             .expect("canonical HTTP write router must be readable");
 
     assert!(
-        send.contains("fn write_mail_with_runtime_impl"),
-        "AI.7 requires one canonical write pipeline"
+        write.contains("fn write_mail_with_runtime_impl"),
+        "AI.7 requires one canonical write pipeline in `crate::write`"
     );
     assert!(
-        send.contains("crate::ack::admit_acknowledgement_write"),
-        "AI.31 acknowledgement admission must enter the canonical write pipeline"
+        !send.contains("fn write_mail_with_runtime_impl")
+            && send.contains("pub use crate::write::"),
+        "AU.3 forbids a second write pipeline in `crate::send`; send only re-exports `crate::write`"
     );
     assert!(
-        acknowledgement.contains("runtime.acknowledge_message_atomically"),
-        "AI.31 acknowledgement source resolution and paired commit must stay behind the sealed storage boundary"
+        write.contains("fn admit_acknowledgement_write")
+            && !send.contains("fn admit_acknowledgement_write")
+            && !acknowledgement.contains("fn admit_acknowledgement_write"),
+        "AI.31 acknowledgement admission must enter the canonical write pipeline through `crate::write` only"
     );
     assert!(
-        !acknowledgement.contains("resolve_acknowledgement_source"),
+        write.contains("runtime.acknowledge_message_atomically")
+            && !acknowledgement.contains("runtime.acknowledge_message_atomically"),
+        "AI.31 acknowledgement source resolution and paired commit must stay behind the sealed storage boundary inside `crate::write`"
+    );
+    assert!(
+        !acknowledgement.contains("resolve_acknowledgement_source")
+            && !write.contains("resolve_acknowledgement_source"),
         "AI.31 forbids restoring an application-layer acknowledgement source read"
     );
     assert!(
-        acknowledgement.contains("crate::send::write_mail_with_runtime("),
+        acknowledgement.contains("crate::write::write_mail_with_runtime("),
         "the ack command must invoke the canonical write entry point"
     );
     for retired in [
@@ -2829,13 +2847,23 @@ fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
     let root = workspace_root();
     let router = read_source(&root.join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"));
     let send_module = read_source(&root.join("crates/atm-core/src/send/mod.rs"));
+    // Scan the full split write module (facade + submodules) so no
+    // prohibited construct can hide in a submodule file.
+    let write_module = ["mod.rs", "pipeline.rs", "acknowledgement.rs"]
+        .iter()
+        .map(|file| read_source(&root.join("crates/atm-core/src/write").join(file)))
+        .collect::<String>();
     let received_hook_selector =
         read_source(&root.join("crates/atm-daemon-bootstrap/src/received_hook_selector.rs"));
-    let send_module_code = send_module
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n");
+    let strip_comments = |source: &str| {
+        source
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("//"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let send_module_code = strip_comments(&send_module);
+    let write_module_code = strip_comments(&write_module);
 
     let finish = router
         .find("prepared.finish(&self.service_runtime, self.observability.as_ref())")
@@ -2874,12 +2902,17 @@ fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
             "the canonical core write planner must not create detached receiver-hook `{prohibited}` work"
         );
         assert!(
+            !write_module_code.contains(prohibited),
+            "the canonical core write planner must not create detached receiver-hook `{prohibited}` work"
+        );
+        assert!(
             !received_hook_selector.contains(prohibited),
             "the replacement receiver selector must not create detached receiver-hook `{prohibited}` work"
         );
     }
     assert!(
-        send_module_code.contains("pub fn build_received_hook_dispatches")
+        write_module_code.contains("pub fn build_received_hook_dispatches")
+            && !write_module_code.contains("load_message_record")
             && !send_module_code.contains("load_message_record"),
         "the canonical PreparedWrite seam must retain in-memory received-hook planning without reloading a committed record"
     );

@@ -74,16 +74,16 @@ pub(super) fn build_send_delivery_plan(
     ))
 }
 
-pub(super) struct SendExecutionContext {
-    pub(super) recipient: ResolvedRecipient,
-    pub(super) canonical_sender: AgentName,
-    pub(super) inbox_path: PathBuf,
-    pub(super) delivery_snapshot: DeliveryRecipientSnapshot,
-    pub(super) delivery_family: DeliveryEventFamily,
-    pub(super) warnings: Vec<WarningEntry>,
+pub(crate) struct SendExecutionContext {
+    pub(crate) recipient: ResolvedRecipient,
+    pub(crate) canonical_sender: AgentName,
+    pub(crate) inbox_path: PathBuf,
+    pub(crate) delivery_snapshot: DeliveryRecipientSnapshot,
+    pub(crate) delivery_family: DeliveryEventFamily,
+    pub(crate) warnings: Vec<WarningEntry>,
 }
 
-pub(super) fn prepare_send_context<
+pub(crate) fn prepare_send_context<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(
     runtime: &R,
