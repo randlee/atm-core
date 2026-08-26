@@ -50,7 +50,6 @@ use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
 mod client;
-pub mod herdr_process;
 mod http1_server;
 mod loopback_tcp;
 mod message_handler;

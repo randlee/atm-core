@@ -2248,8 +2248,8 @@ fn al1_http_runtime_is_core_contract_only_and_excludes_retired_transport_shapes(
         .expect("AL.1 HTTP runtime package must exist");
     assert_eq!(
         actual,
-        &BTreeSet::from(["agent-team-mail-core".to_string()]),
-        "atm-http-runtime may depend on ATM core contracts only"
+        &BTreeSet::from(["agent-team-mail-core".to_string(), "atm-herdr".to_string(),]),
+        "atm-http-runtime may depend on ATM core contracts and the Herdr process adapter"
     );
 
     let root = workspace_root();

@@ -1,0 +1,72 @@
+boundary_id = "BOUNDARY-HerdrProcessAdapter"
+owner_package = "atm-herdr"
+owner_crate_path = "atm_herdr"
+name = "HerdrProcessAdapter"
+
+[public]
+facade = "HerdrProcessAdapter"
+
+[implementation]
+type = "HerdrProcessInvoker"
+module = "atm_herdr"
+visibility = "public"
+constructor = "public"
+
+[composition]
+roots = ["atm_herdr::HerdrProcessInvoker::new"]
+
+[ownership]
+io_owns = [
+  "tokio_process_spawn",
+  "herdr_argv_construction",
+  "herdr_json_error_parsing",
+  "herdr_spawn_breaker",
+]
+io_forbidden = [
+  "shell_interpolation",
+  "tmux_send_keys",
+  "sqlite",
+  "daemon_request_dispatch",
+]
+
+[dependencies]
+allowed_dependents = ["atm-http-runtime", "atm-daemon-bootstrap"]
+allowed_dependencies = ["atm-core", "tokio", "serde_json"]
+forbidden_edges = [
+  "atm-herdr -> atm-daemon",
+  "atm-herdr -> atm-daemon-bootstrap",
+  "atm-herdr -> atm-http-runtime",
+  "atm-herdr -> atm-storage-rusqlite",
+]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = [
+  "std::process::Command",
+  "tokio::process::Command::new(\"sh\")",
+  "tmux",
+]
+
+[contracts]
+request_types = ["HerdrPromptOutcome", "HerdrWaitOutcome", "HerdrGetOutcome"]
+response_types = ["HerdrAgentStatus"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = ["atm_herdr::testing::FakeHerdrProcessAdapter"]
+forbidden_test_bypasses = ["std::process::Command", "tokio::process::Command"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-HERDR-PROCESS-ADAPTER"]
+review_gates = [
+  "tokio-native-process-only",
+  "no-shell-or-terminal-fallback",
+  "per-member-session-child-environment",
+]
+
+[status]
+state = "active"
+notes = [
+  "AQ2.6 owns the immediate steer adapter contract; AQ2.7 reuses the same adapter for wait/get queue wake behavior",
+  "HerdrSession remains owned by AQ1 delivery_channel.rs; this crate consumes the session string only for child HERDR_SESSION",
+]

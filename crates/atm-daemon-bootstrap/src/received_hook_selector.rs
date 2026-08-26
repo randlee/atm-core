@@ -17,9 +17,7 @@ use atm_core::boundary::{
     TMUX_NUDGE_CONFIRM_KEY,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
-use atm_http_runtime::herdr_process::{
-    HerdrProcessAdapter, HerdrProcessInvoker, HerdrPromptOutcome,
-};
+use atm_herdr::{HerdrProcessAdapter, HerdrProcessInvoker, HerdrPromptOutcome};
 
 /// Builds the selector injected into every production replacement daemon.
 ///
@@ -78,7 +76,7 @@ struct ReplacementReceivedHookSelector {
 impl ReplacementReceivedHookSelector {
     #[must_use]
     fn new(service_runtime: LocalServiceRuntime) -> Self {
-        Self::new_with_herdr_process(service_runtime, Arc::new(HerdrProcessInvoker))
+        Self::new_with_herdr_process(service_runtime, Arc::new(HerdrProcessInvoker::default()))
     }
 
     #[must_use]
@@ -387,7 +385,7 @@ mod tests {
                 .expect("assemble isolated selector runtime");
         let selector = ReplacementReceivedHookSelector::new_with_herdr_process(
             assembly.service_runtime,
-            Arc::new(HerdrProcessInvoker),
+            Arc::new(HerdrProcessInvoker::default()),
         );
 
         assert!(selector.select_emitter(&tmux_dispatch()).is_some());
