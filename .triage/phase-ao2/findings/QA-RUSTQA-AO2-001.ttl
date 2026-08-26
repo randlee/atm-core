@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QA-RUSTQA-AO2-001>
+  a triage:Finding ;
+  triage:findingId "QA-RUSTQA-AO2-001" ;
+  triage:title "sc-portability/sc-boundary lint rules excluded from resolve_task_names(all), never run by just validate/lint all" ;
+  triage:description "sc-portability and sc-boundary lint rule names from .just/run_lint.py lines 56 and 199-201 exclude from resolve_task_names(all), so just validate / just lint all silently never runs them, hiding real portability/boundary violations from the standard validation gate. Confirmed by independent QA sweep finding 5 real PORT-001 hits. Required fix: include sc-portability and sc-boundary in the all task-name resolution in .just/run_lint.py." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "tooling" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-26T05:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.15 ;
+  triage:foundAt "2026-08-26T04:57:42Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-RUSTQA-AO2-001/ao2-15-001> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-RUSTQA-AO2-001/ao2-15-002> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QA-RUSTQA-AO2-001/ao2-15-001>
+  a triage:Occurrence ;
+  triage:file ".just/run_lint.py" ;
+  triage:line 56 ;
+  triage:snippet "EXTRA_LINTS = (sc-boundary, sc-portability)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "4d661e2600d33ea129b36e55c5adebacd92b211f" ;
+  triage:occursIn <urn:atm:triage:worktree/ao2-integration-1> .
+
+<urn:atm:triage:occurrence/QA-RUSTQA-AO2-001/ao2-15-002>
+  a triage:Occurrence ;
+  triage:file ".just/run_lint.py" ;
+  triage:line 199 ;
+  triage:snippet "if target == all: return [*CARGO_LINT_ORDER, *PYTHON_LINT_ORDER]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "4d661e2600d33ea129b36e55c5adebacd92b211f" ;
+  triage:occursIn <urn:atm:triage:worktree/ao2-integration-1> .
+
+<urn:atm:triage:worktree/ao2-integration-1>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ao2" ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "4d661e2600d33ea129b36e55c5adebacd92b211f" ;
+  triage:orderIndex 1 .

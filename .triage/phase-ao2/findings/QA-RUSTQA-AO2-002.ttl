@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QA-RUSTQA-AO2-002>
+  a triage:Finding ;
+  triage:findingId "QA-RUSTQA-AO2-002" ;
+  triage:title "Hardcoded Unix path /tmp/atm-capacity in benchmark test — not portable" ;
+  triage:description "crates/atm-daemon-bootstrap/src/bin/atm-daemon-benchmark.rs:548 hardcodes the Unix-only path /tmp/atm-capacity, which will not work on Windows (violates cross-platform-guidelines.md). Required fix: replace with a platform-appropriate temp-directory construction." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "portability" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-26T05:22:12Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.15 ;
+  triage:foundAt "2026-08-26T04:57:42Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-RUSTQA-AO2-002/ao2-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QA-RUSTQA-AO2-002/ao2-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/bin/atm-daemon-benchmark.rs" ;
+  triage:line 548 ;
+  triage:snippet "let home = std::path::Path::new(\\\"/tmp/atm-capacity\\\");" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "4d661e2600d33ea129b36e55c5adebacd92b211f" ;
+  triage:occursIn <urn:atm:triage:worktree/ao2/4d661e2600d33ea129b36e55c5adebacd92b211f> .
+
+<urn:atm:triage:worktree/ao2/4d661e2600d33ea129b36e55c5adebacd92b211f>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ao2" ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "4d661e2600d33ea129b36e55c5adebacd92b211f" ;
+  triage:orderIndex 1 .
