@@ -30,7 +30,7 @@ agent for 45 minutes; that detached, long-lived observation belongs only to
 AQ2.7's Tokio pump and must never block the send path.
 
 This sprint's Herdr behaviour claims are governed by
-[ADR-058](./ADR-058-draft.md) (`herdr` 0.8.2, derived from source at
+[ADR-058](docs/adr/ADR-058-herdr-local-steer-backend-contract.md) (`herdr` 0.8.2, derived from source at
 `d79fd746`). Where this doc and ADR-058 disagree, ADR-058 is authoritative;
 this doc cites it by decision id (`D1`–`D8`).
 
@@ -589,7 +589,7 @@ this doc cites it by decision id (`D1`–`D8`).
   **This sprint is the first implementer of AQ1's seam** (reordered
   2026-08-26 per Rand — Herdr is the phase's most urgent deliverable; the
   former `must_follow AQ2.5` is removed, AQ2.5 now follows this sprint).
-- **Dispatch precondition (critical review B9):** [ADR-058](./ADR-058-draft.md)
+- **Dispatch precondition (critical review B9):** [ADR-058](docs/adr/ADR-058-herdr-local-steer-backend-contract.md)
   is merged (PR #1039) — pinned version (herdr 0.8.2 / protocol 20), CLI
   argv including session selection (D1/I16), stderr codes and exit-code
   contract (D3/D8), fixture transcript (`herdr-cli-contract-fixture.md`).
