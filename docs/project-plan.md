@@ -1363,8 +1363,11 @@ bare-CLI FIFO); AQ3 tmux idle-drain + recovery sweep; AQ4 Send-To core
 (ATM_TEMP ADR-055, CLI surface, transfer scripts, sweeper); AQ5 surface +
 phase evidence; AQ6 sc-ecosystem dependency preflight (pin-latest
 Wyvern/sc-compose/sc-observability + integration tests) + Wyvern
-contract-test issue. Plan status: re-hardening after the 2026-08-26
-critical review (FAIL, 10 blocking); the earlier plan-QA PASS is retracted. Branches `feature/aq-N-<slug>` off
+contract-test issue. Plan status (2026-08-26): the earlier plan-QA PASS was
+retracted after a whole-tree critical review (FAIL, 10 blocking); all
+findings were closed in a finalization pass and the re-entry critical review
+PASSed on round 3 (`ea990a8dd`); quality-mgr gate on PR #1019 in progress.
+ADR-058 (Herdr local steer backend contract) is the phase's fourth ADR. Branches `feature/aq-N-<slug>` off
 `integrate/phase-aq`, all PRs target `integrate/phase-aq`. The authoritative
 plan is [Phase AQ plan](./plans/phase-aq/plan-phase-aq.md); source PRD is
 [prd-atm-send-to](./plans/phase-aq/prd-atm-send-to.md). PRD Phase 2
