@@ -1,0 +1,90 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QA-AO2-R4-001>
+  a triage:Finding ;
+  triage:findingId "QA-AO2-R4-001" ;
+  triage:title "just validate fails — 5 real-time-sleep-in-test-scope violations now caught by FTQ-003's widened lint (tokio::time::sleep coverage)" ;
+  triage:description "FTQ-003 (already fixed and closed) widened .just/check_fixed_sleep_hygiene.py's SLEEP_RE to also match tokio::time::sleep, not just std::thread::sleep. That widened lint now correctly fails `just validate` because it found 5 real, pre-existing/unremediated real-time-sleep-in-test-scope call sites in this phase's touched files, none of which are in lint-config.toml's allowed_paths and none of which have a waiver filed. This blocks the phase gate per docs/plans/phase-ao2/readiness.md's requirement that `just validate` be green. For each, the fix is: convert the enclosing test to `#[tokio::test(start_paused = true)]` and use `tokio::time::advance(Duration::from_millis(...))` instead of a real `tokio::time::sleep(...)`, matching the exact pattern already used to fix FTQ-002 in peer_connection_pool.rs (a different test in that same file, already fixed and closed). Note: crates/atm-http-runtime/src/message_handler.rs:1760 (originally listed as occurrence #2) is already fixed as part of FTQ-004 and therefore not included in this sweep." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-26T08:00:43Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.15 ;
+  triage:foundAt "2026-08-26T07:58:38Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-AO2-R4-001/QA-AO2-R4-001-occ-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-AO2-R4-001/QA-AO2-R4-001-occ-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-AO2-R4-001/QA-AO2-R4-001-occ-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-AO2-R4-001/QA-AO2-R4-001-occ-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-AO2-R4-001/QA-AO2-R4-001-occ-5> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QA-AO2-R4-001/QA-AO2-R4-001-occ-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 1414 ;
+  triage:snippet "tokio::time::sleep(Duration::from_secs(60)).await;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "b3b8638dd" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-ao2/b3b8638dd> .
+
+<urn:atm:triage:occurrence/QA-AO2-R4-001/QA-AO2-R4-001-occ-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/peer_connection_pool.rs" ;
+  triage:line 704 ;
+  triage:snippet "tokio::time::sleep(std::time::Duration::from_millis(1)).await;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "b3b8638dd" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-ao2/b3b8638dd> .
+
+<urn:atm:triage:occurrence/QA-AO2-R4-001/QA-AO2-R4-001-occ-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 1319 ;
+  triage:snippet "tokio::time::sleep(Duration::from_millis(30)).await;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "b3b8638dd" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-ao2/b3b8638dd> .
+
+<urn:atm:triage:occurrence/QA-AO2-R4-001/QA-AO2-R4-001-occ-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/workflow_telemetry.rs" ;
+  triage:line 282 ;
+  triage:snippet "tokio::time::sleep(DIAGNOSTIC_POLL_INTERVAL).await;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "b3b8638dd" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-ao2/b3b8638dd> .
+
+<urn:atm:triage:occurrence/QA-AO2-R4-001/QA-AO2-R4-001-occ-5>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 685 ;
+  triage:snippet "tokio::time::sleep(Duration::from_millis(50)).await;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "b3b8638dd" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-ao2/b3b8638dd> .
+
+<urn:atm:triage:worktree/integrate-ao2/b3b8638dd>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ao2" ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "b3b8638dd" ;
+  triage:orderIndex 16 .
