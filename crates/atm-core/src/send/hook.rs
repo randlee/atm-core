@@ -7,6 +7,7 @@ use crate::boundary::{
 };
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
+use crate::send::NudgeMode;
 use crate::service_runtime::RetainedServiceRuntime;
 
 /// Builds the built-in receiver dispatch planned after a durable write.
@@ -19,10 +20,12 @@ pub(crate) fn build_built_in_dispatch<R>(
     delivery_snapshot: &DeliveryRecipientSnapshot,
     event: &PostSendHookEvent,
     message_body: &str,
+    nudge_mode: NudgeMode,
 ) -> Option<BuiltInPostSendDispatch>
 where
     R: RetainedServiceRuntime + ?Sized,
 {
+    let kind = nudge_kind_for_mode(nudge_mode);
     if delivery_snapshot.local_tmux_post_send {
         let pane_id = event
             .recipient_pane_id
@@ -35,9 +38,7 @@ where
                 pane_id,
                 rendered_nudge,
             }),
-            // The mode-driven kind decision lands in L2.2; every dispatch
-            // built here is a Steer for now.
-            kind: NudgeKind::Steer,
+            kind,
         });
     }
     if delivery_snapshot.graft_post_send {
@@ -50,12 +51,22 @@ where
                 rendered_nudge,
                 message_body: message_body.to_owned(),
             }),
-            // The mode-driven kind decision lands in L2.2; every dispatch
-            // built here is a Steer for now.
-            kind: NudgeKind::Steer,
+            kind,
         });
     }
     None
+}
+
+/// Maps the write-time delivery mode to the dispatch's `NudgeKind`.
+///
+/// `Immediate` writes always build a `Steer` dispatch; `Deferred` writes are
+/// suppressed before reaching this helper except when the caller (queue
+/// rebuild, L2.4) explicitly rebuilds a `Queue` dispatch for durable replay.
+const fn nudge_kind_for_mode(nudge_mode: NudgeMode) -> NudgeKind {
+    match nudge_mode {
+        NudgeMode::Immediate => NudgeKind::Steer,
+        NudgeMode::Deferred => NudgeKind::Queue,
+    }
 }
 
 /// Render the database-resolved built-in nudge once for every first-party
