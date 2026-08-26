@@ -74,6 +74,7 @@ impl AckRequest {
             expires_at: None,
             acknowledges_message_id: Some(self.message_id),
             dry_run: false,
+            nudge_mode: crate::send::NudgeMode::default(),
         }
     }
 

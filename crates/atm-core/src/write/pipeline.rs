@@ -144,6 +144,7 @@ impl PreparedWrite {
                 &post_write.delivery_snapshot,
                 &event,
                 &message.envelope.text,
+                crate::send::NudgeMode::Immediate,
             ) {
                 dispatches.push(dispatch);
             }

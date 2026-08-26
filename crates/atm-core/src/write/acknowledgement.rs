@@ -428,6 +428,7 @@ pub(crate) fn canonical_ack_write_request(
         expires_at: None,
         acknowledges_message_id: Some(request.message_id),
         dry_run: false,
+        nudge_mode: crate::send::NudgeMode::default(),
     })
 }
 
