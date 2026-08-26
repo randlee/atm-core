@@ -438,6 +438,11 @@ def cargo_binstall_available() -> bool:
     return shutil.which("cargo-binstall") is not None
 
 
+def running_in_ci() -> bool:
+    """Return whether bootstrap is running in a CI environment."""
+    return os.environ.get("CI", "").strip().lower() in {"1", "true", "yes"}
+
+
 def run(command: Sequence[str], *, dry_run: bool, allow_failure: bool = False) -> bool:
     """Execute one deterministic installation step or render it for review."""
     print("+", " ".join(command))
@@ -484,6 +489,7 @@ def bootstrap(manifest: BootstrapManifest, *, dry_run: bool) -> None:
     if not dry_run:
         verify_seed_tools(manifest)
     python = ensure_bootstrap_venv(manifest, dry_run=dry_run)
+    ci = running_in_ci()
     for name, version in manifest.cargo_tools:
         if registry_tool_matches(name, version, manifest.rust) or binstall_tool_matches(name, version):
             continue
@@ -492,9 +498,11 @@ def bootstrap(manifest: BootstrapManifest, *, dry_run: bool) -> None:
             installed = run(
                 cargo_binstall_command(name, version, force=True),
                 dry_run=dry_run,
-                allow_failure=True,
+                allow_failure=not ci,
             )
         if not installed:
+            if ci:
+                raise BootstrapError(f"cargo-binstall could not install the exact prebuilt {name} {version} in CI.")
             run(cargo_install_command(name, version, force=True), dry_run=dry_run)
     if not sc_compose_matches(manifest):
         install_sc_compose_release(manifest, dry_run=dry_run)

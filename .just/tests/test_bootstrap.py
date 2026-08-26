@@ -129,6 +129,54 @@ class BootstrapTests(unittest.TestCase):
             self.assertTrue(bootstrap.binstall_tool_matches("cargo-audit", "0.22.2"))
             self.assertFalse(bootstrap.binstall_tool_matches("cargo-audit", "0.22.3"))
 
+    def test_ci_rejects_registry_compile_fallback(self) -> None:
+        manifest = bootstrap.load_manifest()
+        calls: list[tuple[list[str], bool]] = []
+
+        def failed_binstall(command: list[str], *, dry_run: bool, allow_failure: bool = False) -> bool:
+            calls.append((command, allow_failure))
+            return False
+
+        with (
+            mock.patch.dict("os.environ", {"CI": "true"}),
+            mock.patch.object(bootstrap, "synchronize_macos_seed_tools"),
+            mock.patch.object(bootstrap, "verify_seed_tools"),
+            mock.patch.object(bootstrap, "ensure_bootstrap_venv", return_value=Path("/tmp/bootstrap-python")),
+            mock.patch.object(bootstrap, "registry_tool_matches", return_value=False),
+            mock.patch.object(bootstrap, "binstall_tool_matches", return_value=False),
+            mock.patch.object(bootstrap, "cargo_binstall_available", return_value=True),
+            mock.patch.object(bootstrap, "run", side_effect=failed_binstall),
+        ):
+            with self.assertRaisesRegex(bootstrap.BootstrapError, "could not install the exact prebuilt cargo-deny"):
+                bootstrap.bootstrap(manifest, dry_run=False)
+        self.assertEqual(len(calls), 1)
+        self.assertFalse(calls[0][1])
+
+    def test_local_bootstrap_keeps_registry_fallback(self) -> None:
+        manifest = bootstrap.load_manifest()
+        calls: list[tuple[list[str], bool]] = []
+
+        def failed_binstall(command: list[str], *, dry_run: bool, allow_failure: bool = False) -> bool:
+            calls.append((command, allow_failure))
+            return False
+
+        with (
+            mock.patch.dict("os.environ", {"CI": ""}),
+            mock.patch.object(bootstrap, "synchronize_macos_seed_tools"),
+            mock.patch.object(bootstrap, "verify_seed_tools"),
+            mock.patch.object(bootstrap, "ensure_bootstrap_venv", return_value=Path("/tmp/bootstrap-python")),
+            mock.patch.object(bootstrap, "registry_tool_matches", return_value=False),
+            mock.patch.object(bootstrap, "binstall_tool_matches", return_value=False),
+            mock.patch.object(bootstrap, "cargo_binstall_available", return_value=True),
+            mock.patch.object(bootstrap, "sc_compose_matches", return_value=True),
+            mock.patch.object(bootstrap, "verify_installed_tools"),
+            mock.patch.object(bootstrap, "run", side_effect=failed_binstall),
+        ):
+            bootstrap.bootstrap(manifest, dry_run=False)
+        self.assertEqual(calls[0][0][1], "binstall")
+        self.assertTrue(calls[0][1])
+        self.assertEqual(calls[1][0][:2], ["cargo", "install"])
+
     def test_ci_uses_the_shared_bootstrap_recipe(self) -> None:
         workflow = (SCRIPT.parents[1] / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
         self.assertIn('python-version: "3.14.7"', workflow)
