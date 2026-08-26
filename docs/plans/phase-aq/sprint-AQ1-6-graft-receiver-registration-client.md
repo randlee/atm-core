@@ -91,4 +91,5 @@ written (dual-write) so nothing downstream changes until AQ1.7's cutover.
 
 - must_follow: AQ1.5 (wire contract + store). Merge-forward trigger: AQ1.5
   dev push.
-- parallel_safe: none claimed (same files as AQ1.7/AQ1.8 later touch).
+- parallel_safe: AQ2.6, AQ2.7 (Herdr — disjoint files; 2026-08-26 reorder).
+  None claimed within the graft chain (same files as AQ1.7/AQ1.8 later touch).

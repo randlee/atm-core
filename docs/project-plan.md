@@ -1351,12 +1351,18 @@ deferred; ADR-054) — via a `nudge_pending_at` marker, a `PendingNudgeStore`
 storage capability, graft dual-channel wiring (harness owns landing; Hermes
 `/steer`+`/queue` complete), and a tmux idle-drain, under the ADR-054 nudge
 taxonomy (nudge = umbrella; steer/queue = kinds) with its code-rename
-inventory. Queue ships first. Six sprints: AQ1 `atm queue` CLI verb +
-ADR-054 taxonomy + `PendingNudgeStore`, AQ2 graft dual-channel, AQ3 tmux
-idle-drain, AQ4 Send-To core (ATM_TEMP ADR-055, CLI surface, transfer
-scripts, sweeper), AQ5 surface + phase evidence, AQ6 sc-ecosystem
-dependency preflight (pin-latest Wyvern/sc-compose/sc-observability +
-integration tests) + Wyvern contract-test issue. Branches `feature/aq-N-<slug>` off
+inventory. Queue ships first; trait foundation first, Herdr second
+(reordered 2026-08-26 per Rand). Fourteen sprints: AQ1 trait foundation +
+`atm queue` CLI verb + ADR-054 taxonomy + `PendingNudgeStore`; AQ2.6/AQ2.7
+Herdr local-steer backend + lifecycle-gated queue wake (most urgent);
+AQ1.5–AQ1.9 graft push-registration (ADR-056), parallel with Herdr; AQ2
+graft dual-channel; AQ2.5 queue delivery triggers (heartbeat hooks,
+bare-CLI FIFO); AQ3 tmux idle-drain + recovery sweep; AQ4 Send-To core
+(ATM_TEMP ADR-055, CLI surface, transfer scripts, sweeper); AQ5 surface +
+phase evidence; AQ6 sc-ecosystem dependency preflight (pin-latest
+Wyvern/sc-compose/sc-observability + integration tests) + Wyvern
+contract-test issue. Plan status: re-hardening after the 2026-08-26
+critical review (FAIL, 10 blocking); the earlier plan-QA PASS is retracted. Branches `feature/aq-N-<slug>` off
 `integrate/phase-aq`, all PRs target `integrate/phase-aq`. The authoritative
 plan is [Phase AQ plan](./plans/phase-aq/plan-phase-aq.md); source PRD is
 [prd-atm-send-to](./plans/phase-aq/prd-atm-send-to.md). PRD Phase 2

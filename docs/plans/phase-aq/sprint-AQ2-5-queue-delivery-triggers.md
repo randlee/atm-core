@@ -204,10 +204,13 @@ the false-stuck problem cannot arise.
    **never block when the get returned nothing.** No hook-side counters
    or state. **Fail-open**: any error path exits 0 without blocking.
 
-4. **Channel classifier + received-hook selector extension** — the
-   trigger table's single code owner, deliberately small (one enum, one
-   function, one trivial emitter):
-   - A `DeliveryChannel` classification function in core: inputs are the
+4. **Bare-CLI arm of AQ1's channel classifier + received-hook selector
+   extension** — **ownership moved 2026-08-26 (critical review B5):** the
+   `DeliveryChannel` enum, `classify_delivery_channel`, the
+   `LocalMessageReceivedBackend` input, and the `LocalSteer` target are AQ1
+   trait-foundation deliverables; this sprint implements the `BareCli`
+   consequences (QueuePull target, FIFO, emitter) and adds no variants:
+   - (Reference — defined in AQ1) the classification function in core: inputs are the
      roster row's `LocalMessageReceivedBackend` (not a pane-id shape) and
      `GraftReceiverEndpointStore::lookup` for the graft lease — the
      AQ1.5 registry, **never** the retired file record, mirroring AQ2's
@@ -459,9 +462,11 @@ the false-stuck problem cannot arise.
   single owner per diff, sequenced, mirroring the AQ2.5→AQ3 classifier
   seam resolution). Merge-forward trigger: AQ2 dev push. The resulting
   sprint chain is AQ2 → AQ2.5 → AQ3.
-- Downstream: AQ3 takes `must_follow AQ2.5` for the classifier seam its
-  sweep pre-check calls, and its **live-evidence validation** requires
-  this sprint's heartbeat producer (both recorded in AQ3; AQ3's other
-  deliverables and its parallel_safe AQ2 claim are unaffected).
-- Downstream: AQ2.6 takes `must_follow AQ2.5`; it extends the classifier,
-  target, and selector after this sprint's single-owner creation diff lands.
+- must_follow: AQ2.6 (2026-08-26 reorder: Herdr lands before this sprint;
+  the selector already carries the Herdr arm and this sprint adds the
+  bare-CLI arm beside it). Merge-forward trigger: AQ2.6 dev push.
+- Downstream: AQ3 takes `must_follow AQ2.5` for its live-evidence
+  validation (heartbeat producer) and the bare-CLI "never sweep" rule;
+  the classifier seam itself is AQ1's.
+- Removed 2026-08-26: "AQ2.6 takes must_follow AQ2.5" — inverted; AQ2.6
+  is now upstream and neither sprint owns the classifier (AQ1 does).

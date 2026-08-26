@@ -11,8 +11,14 @@ marker says that a wake-up is deferred. This sprint adds one detached,
 Herdr-only Tokio pump that waits for an acceptable lifecycle observation and
 then asks the existing Herdr emitter to send the same mailbox-read prompt by
 the member `AgentName`.
-Tmux and graft remain AQ3's sole claim paths; AQ3 explicitly skips Herdr, so
-two workers never claim a Herdr message.
+Tmux and graft remain AQ3's claim paths. **This pump owns its own
+Herdr-only guard** (claims only members AQ1's classifier reports as
+`HerdrSteer`, discovered via `list_pending_members`), and AQ3 — which lands
+later in the 2026-08-26 order — adds the mirror-image skip-Herdr pre-check on
+**both** its idle drain and its recovery sweep (critical review B8: the drain
+was previously unguarded). Two workers never claim a Herdr message only when
+both guards exist; until AQ3 lands, this pump is the only claimant for any
+member and the risk is nil.
 
 The best available Herdr composition is a gate, not an atomic primitive:
 
@@ -144,13 +150,15 @@ turn-correlated queueing.
 
 ## Dependencies
 
-- must_follow: AQ1 (`PendingNudgeStore`, including this sprint's
-  `release_pending` lifecycle-release contract).
-- must_follow: AQ2.5 (delivery classifier and queue taxonomy).
-- must_follow: AQ2.6 (explicit `HerdrSteer` selection and the shared Herdr
-  process/emitter adapter). Merge-forward trigger: AQ2.6 dev push.
-- must_follow: AQ3 (AQ3 owns the shared recovery-sweep pre-check and lands
-  the "skip Herdr" protection before this pump is enabled). Merge-forward
-  trigger: AQ3 dev push.
-- parallel_safe: none claimed; the new pump deliberately starts only after
-  the existing scheduler's ownership boundary is in place.
+- must_follow: AQ1 (trait foundation: `PendingNudgeStore` incl.
+  `release_pending`, `list_pending_members`, dispatch-from-message-id;
+  `DeliveryChannel` classifier).
+- must_follow: AQ2.6 (Herdr emitter + the named Herdr process adapter this
+  pump invokes for `agent wait`). Merge-forward trigger: AQ2.6 dev push.
+- Removed 2026-08-26 (reorder per Rand): `must_follow AQ2.5` (classifier now
+  AQ1's) and `must_follow AQ3` (this pump carries its own Herdr-only guard;
+  AQ3 lands after and adds its own skip-Herdr pre-check — see above).
+- parallel_safe: AQ1.5–AQ1.9 (disjoint files).
+- Open for the rewrite round (critical review): pump concurrency model /
+  head-of-line blocking behind a 45-min `agent wait` (I17); adapter crate
+  placement (I18).

@@ -88,8 +88,10 @@ None.
   file record. Merge-forward trigger: AQ1.7 dev push.
 - must_follow: AQ1 (taxonomy, kinds, `PendingNudgeStore`) — merge-forward
   before every dev/fix round.
-- parallel_safe: AQ3 (graft channel vs tmux drain — disjoint emitters; both
-  consume, never redefine, AQ1's store and kinds).
+- parallel_safe: none. (The former `parallel_safe: AQ3` was dead text —
+  AQ3 must_follow AQ2.5 which must_follow this sprint, so AQ3 transitively
+  follows AQ2; critical review I1, removed 2026-08-26. Emitters are still
+  disjoint files.)
 - Downstream: AQ2.5 must_follow this sprint — it adds
   `PullPendingReceivedHook` and a selector match arm to the same
   `received_hook_selector.rs` this sprint's queue-channel changes touch;

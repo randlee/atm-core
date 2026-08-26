@@ -69,7 +69,9 @@ regression-tested inside Wyvern's own CI.
    deliverable 3, and its URL is recorded in the phase evidence register.
 4. `just test` unaffected; all three CI lanes green.
 5. **Phase closure**: the `integrate/phase-aq` → `develop` merge PR is
-   opened from the final integrate head (all six sprints merged) with the
+   opened from the final integrate head (**every sprint row in the plan
+   table merged — fourteen as of 2026-08-26, including all AQ1.x/AQ2.x
+   insertion sprints**; closure is not declarable with any row unmerged) with the
    AQ5 evidence file and this sprint's issue URL linked; full `just test` +
    integration suites green on that head.
 

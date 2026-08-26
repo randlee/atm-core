@@ -225,9 +225,10 @@ not a hard failure at the picker-selection stage: the pipeline falls back to
 the native picker (AQ5 deliverable 3a). Additive evolution happens by
 incrementing `schema_version`, never by silently widening this shape. `atm send
 --from-json` performs client-side fan-out through the existing canonical write
-path, one immutable message per recipient. The AQ1 ADR owns message-id
-allocation versus staging; AQ2 tests that order rather than inventing a
-second rule.
+path, one immutable message per recipient. AQ4 (ADR-055) owns message-id
+allocation versus staging order and tests it rather than inventing a
+second rule (corrected 2026-08-26: previously mis-attributed to AQ1/AQ2,
+which are queue sprints).
 
 All attachment bytes remain outside the message bus. The message carries the
 landed path in its text; staging (local copy or transfer-script invocation)
@@ -245,8 +246,9 @@ same-host and cross-host paths.
 4. Team-level addressing in atm-core, or stay with client-side fan-out?
 5. Wyvern cold-start latency — is it under the ~1 s context-menu tolerance? **Measure before committing Wyvern as the picker.**
 6. Which registration fields supply member `cwd`? Host sourcing is no longer
-   open: AQ1 decision (h) owns the explicit roster `host` binding and AQ2
-   implements its projection/resolution without heartbeat changes.
+   open: AQ4 decision (e) owns the explicit roster `host` binding and AQ4
+   implements its projection/resolution without heartbeat changes
+   (corrected 2026-08-26: "AQ1 decision (h)" did not exist).
 7. (P2) Which local model is the drafter default, and what is "Luna"? Does it run on the Mac Studio via Ollama/MLX?
 8. (P2) Does `fork` in the Wyvern chat integration fork the *session transcript* or the *agent process*? Send-To only needs transcript.
 9. (P2) Byte cap for the drafter — and does a directory get a tree listing or nothing?

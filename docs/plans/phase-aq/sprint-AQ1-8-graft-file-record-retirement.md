@@ -78,5 +78,6 @@ AI3133 TOCTOU class rather than patching it.
 
 - must_follow: AQ1.7 (nothing may still read the file). Merge-forward
   trigger: AQ1.7 dev push.
-- parallel_safe: AQ1.9 (disjoint: Rust deletion vs Python wheel
+- parallel_safe: AQ2.6, AQ2.7 (Herdr — disjoint files; 2026-08-26 reorder);
+  AQ1.9 (disjoint: Rust deletion vs Python wheel
   bump/smoke; no shared files).

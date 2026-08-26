@@ -32,8 +32,9 @@ AQ2.7's Tokio pump and must never block the send path.
 ## Deliverables
 
 1. **Explicit, exclusive local backend selection — complete CLI-to-doctor
-   path.** Add a roster-owned, validated representation whose local choices
-   are:
+   path.** The roster-owned, validated representation is **defined by AQ1's
+   trait foundation** (2026-08-26 reorder; critical review B5) — this sprint
+   implements its CLI, persistence, and doctor surface and adds no variants:
 
    ```rust
    pub enum LocalMessageReceivedBackend {
@@ -127,17 +128,21 @@ AQ2.7's Tokio pump and must never block the send path.
    backend (`Tmux` or `Herdr`), otherwise graft lease, otherwise AQ2.5
    bare-CLI. Neither the planner nor emitters may reimplement that match.
 
-2. **Full-parity, sealed delivery seam.** AQ2.5's classifier input widens
-   from `pane_id: Option<&str>` to `Option<&LocalMessageReceivedBackend>`, so
-   its single central mapping can make `DeliveryChannel::HerdrSteer` reachable
-   alongside retained `TmuxSteer`. The CLI, daemon, and SQLite/store paths
+2. **Full-parity, sealed delivery seam.** AQ1's classifier already takes
+   `Option<&LocalMessageReceivedBackend>` and already returns
+   `DeliveryChannel::HerdrSteer`; this sprint makes that channel *deliverable*
+   by supplying the emitter (deliverable 3) — it does not widen, redefine, or
+   re-own the classifier (that was the AQ2.5↔AQ2.6 circular ownership,
+   critical review B5, resolved by moving the seam to AQ1). The CLI, daemon, and SQLite/store paths
    carry that same tagged value with no backend-specific side channel.
    `build_built_in_dispatch` and `ReplacementReceivedHookSelector` operate on
    one backend-neutral local-steer target and the sealed
    `AsyncMessageReceivedHookEmitter` contract; they do not branch on
    `tmux | herdr`, inspect target syntax, or implement a fallback. The
    classifier obtains its channel from the tagged backend's one central
-   `delivery_channel()` mapping rather than matching variants itself.
+   `delivery_channel()` mapping rather than matching variants itself —
+   where that mapping is AQ1's single classifier function, not a second
+   method (critical review I19: exactly one mapping owner).
    Tmux/Herdr mechanics (the tmux two-Enter sequence, Herdr's live AgentName
    lookup, argv, and lifecycle errors) are known only to their respective
    emitter implementations. The template remains the existing ATM
@@ -270,11 +275,21 @@ AQ2.7's Tokio pump and must never block the send path.
 
 ## Dependencies
 
-- must_follow: AQ1 (kind-aware dispatch and `PendingNudgeStore` taxonomy).
-- must_follow: AQ2.5 (it owns the initial classifier/target/selector seam;
-  AQ2.6 extends it only after AQ2.5 lands). Merge-forward trigger: AQ2.5 dev
-  push.
-- downstream: AQ3 updates its pre-check to skip `HerdrSteer`; AQ2.7 consumes
-  this backend's command adapter for deferred queue wake-ups.
-- parallel_safe: none claimed; this sprint touches the selector and planner
-  seams after AQ2.5.
+- must_follow: AQ1 (trait foundation: `LocalMessageReceivedBackend`,
+  `DeliveryChannel` classifier, sealed emitter extension point, kind-aware
+  dispatch, `PendingNudgeStore`). Merge-forward trigger: AQ1 dev push.
+  **This sprint is the first implementer of AQ1's seam** (reordered
+  2026-08-26 per Rand — Herdr is the phase's most urgent deliverable; the
+  former `must_follow AQ2.5` is removed, AQ2.5 now follows this sprint).
+- **Dispatch precondition (critical review B9):** a Herdr contract exists
+  in-repo — pinned version, CLI argv including workspace/team selection
+  (I16), stderr codes `agent_blocked`/`agent_not_found`, fixture transcript
+  (plan "Parallel lanes", lane A). No dev dispatch before it merges.
+- downstream: AQ2.7 consumes this backend's emitter and a **named** Herdr
+  process adapter that this sprint must deliver in a crate AQ2.7's pump can
+  reach (critical review I18 — currently unspecified); AQ2.5 adds the
+  bare-CLI arm beside the Herdr arm; AQ3 adds the skip-Herdr pre-check on
+  drain and sweep.
+- parallel_safe: AQ1.5–AQ1.9 (graft registration — disjoint files: this
+  sprint touches roster/member-mutation/selector/emitter; graft touches
+  `graft.rs`, atm-graft, registration store/routes).

@@ -44,4 +44,5 @@ an atm-graft API change notification, not a Python code change request.
 
 - must_follow: AQ1.7 (cutover must be live before verification proves it).
   PR-completion trigger: AQ1.7 PR merges first.
-- parallel_safe: AQ1.8 (disjoint files; see AQ1.8).
+- parallel_safe: AQ1.8 (disjoint files; see AQ1.8); AQ2.6, AQ2.7 (Herdr —
+  disjoint files; 2026-08-26 reorder).
