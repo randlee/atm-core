@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ARCH-QA-AO2-R3-001>
+  a triage:Finding ;
+  triage:findingId "ARCH-QA-AO2-R3-001" ;
+  triage:title "crates/atm-storage-rusqlite/src/writer/ops.rs exceeds 1000-line ceiling with zero test code (RULE-003)" ;
+  triage:description "crates/atm-storage-rusqlite/src/writer/ops.rs is 1023 lines (confirmed via wc -l) with zero test code (confirmed: zero #[cfg(test)]/#[test] matches), exceeding the project's RULE-003 1000-line ceiling for files without accompanying test code. This file is in this phase's changed-file diff — part of the AO2.6 admission-writer WriteOp/WriteOpResult dispatch path, not untouched pre-existing code. Same RULE-003 pattern as the already-fixed AO2.14 finding on client.rs/lib.rs (split code and/or move tests out), but a different, still-oversized file in the same writer module. Fix: split ops.rs into smaller modules and/or move test coverage in, bringing it under the 1000-line ceiling, following whatever split pattern was used to resolve the AO2.14 client.rs/lib.rs RULE-003 finding (check that resolution for precedent)." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-26T06:25:53Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.15 ;
+  triage:foundAt "2026-08-26T06:25:53Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-QA-AO2-R3-001/ao2-15-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ARCH-QA-AO2-R3-001/ao2-15-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
+  triage:line 1 ;
+  triage:snippet "1023 lines, zero #[test]/#[cfg(test)] items" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "91b0b272e" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-ao2/91b0b272e> .
+
+<urn:atm:triage:worktree/integrate-ao2/91b0b272e>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ao2" ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "91b0b272e" ;
+  triage:orderIndex 16 .
