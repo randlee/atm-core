@@ -254,3 +254,10 @@ triage:r55 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RBQA-F0
 triage:r56 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/FTQ-002> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
 triage:r57 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/FTQ-003> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
 triage:r58 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/ARCH-QA-AO2-R3-001> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+
+# quality-mgr independently verified QA-AO2-R4-001 (5/6-site sleep-hygiene
+# sweep) and FTQ-004 (same underlying site) fixed together at
+# integrate/phase-ao2@1508ef61c19ab5e77d054c0e1f2590ba49de9f74, message
+# 01M0YJ3Q8WKNGTQFMMS1RVBET2. Ancestry verified before recording.
+triage:r59 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO2-R4-001> ; triage:resolvedAt "2026-08-26T08:20:00Z"^^xsd:dateTime .
+triage:r60 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/FTQ-004> ; triage:resolvedAt "2026-08-26T08:20:00Z"^^xsd:dateTime .

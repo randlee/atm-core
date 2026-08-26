@@ -15,7 +15,7 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-26T08:00:43Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.15 ;
@@ -32,8 +32,8 @@
   triage:file "crates/atm-http-runtime/src/client.rs" ;
   triage:line 1414 ;
   triage:snippet "tokio::time::sleep(Duration::from_secs(60)).await;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ao2" ;
   triage:headSha "b3b8638dd" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-ao2/b3b8638dd> .
@@ -43,8 +43,8 @@
   triage:file "crates/atm-http-runtime/src/peer_connection_pool.rs" ;
   triage:line 704 ;
   triage:snippet "tokio::time::sleep(std::time::Duration::from_millis(1)).await;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ao2" ;
   triage:headSha "b3b8638dd" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-ao2/b3b8638dd> .
@@ -54,8 +54,8 @@
   triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 1319 ;
   triage:snippet "tokio::time::sleep(Duration::from_millis(30)).await;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ao2" ;
   triage:headSha "b3b8638dd" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-ao2/b3b8638dd> .
@@ -65,8 +65,8 @@
   triage:file "crates/atm-runtime/src/workflow_telemetry.rs" ;
   triage:line 282 ;
   triage:snippet "tokio::time::sleep(DIAGNOSTIC_POLL_INTERVAL).await;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ao2" ;
   triage:headSha "b3b8638dd" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-ao2/b3b8638dd> .
@@ -76,8 +76,8 @@
   triage:file "crates/peer-tls/src/lib.rs" ;
   triage:line 685 ;
   triage:snippet "tokio::time::sleep(Duration::from_millis(50)).await;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ao2" ;
   triage:headSha "b3b8638dd" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-ao2/b3b8638dd> .
