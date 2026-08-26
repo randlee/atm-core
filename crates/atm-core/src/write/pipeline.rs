@@ -3,7 +3,6 @@
 
 use super::*;
 use crate::send::NudgeMode;
-use crate::send::NudgeMode;
 
 /// Result of the one canonical write operation.
 ///

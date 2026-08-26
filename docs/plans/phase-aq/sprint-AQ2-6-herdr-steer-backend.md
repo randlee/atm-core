@@ -320,28 +320,60 @@ this doc cites it by decision id (`D1`–`D8`).
    private runtime, `spawn_blocking`, shell, or detached child; every command
    and delay is awaited against the inherited `RequestDeadline`.
 
-   **Adapter placement and name.** `crates/atm-daemon-bootstrap/Cargo.toml`
-   depends on `atm-http-runtime` (`:19` — verified), and AQ2.7's pump is
-   composed inside `atm-http-runtime` itself (AQ2.7 deliverable 1). The
-   shared adapter therefore belongs in `atm-http-runtime`, **not**
-   `atm-core`: a new module `crates/atm-http-runtime/src/herdr_process.rs`,
-   exported as `atm_http_runtime::herdr_process`, consumed directly by
-   AQ2.7's pump (same crate) and by `HerdrReceivedHook` in
-   `atm-daemon-bootstrap/src/received_hook_selector.rs` over the existing
-   `atm-daemon-bootstrap -> atm-http-runtime` dependency edge — no new crate
-   edge, no common-ancestor detour through `atm-core`. `atm-core` stays
-   tokio-free (its existing async boundary already expresses itself as
-   `Pin<Box<dyn Future>>` without needing tokio, e.g.
-   `AsyncMessageReceivedHookEmitter`); `atm-http-runtime` already depends on
-   `tokio` (`Cargo.toml:16` allowed-dependency row already lists it,
-   `.just/lint-config.toml:149`), so **no manifest or lint-allowlist change
-   is needed anywhere** — only the new source file. Trait
-   **`HerdrProcessAdapter`**, real implementation **`HerdrProcessInvoker`**
-   (the test-double point — a fake `HerdrProcessAdapter` implementation
-   records calls without spawning a process, satisfying the `[testing]
-   forbidden_test_bypasses = ["std::process::Command"]` rule in
-   `boundaries/atm-core/message-received-hook-emitter.toml` for any test
-   that is not exercising the real adapter):
+   **Adapter placement and name — dedicated crate (structural change, Rand
+   2026-08-26).** The Herdr process adapter is its own crate,
+   `crates/atm-herdr` (precedent: `crates/atm-graft` — a thin embedded
+   client crate with a narrow, named dependency set), **not** a module in
+   `atm-http-runtime` and **not** `atm-core`. `atm-herdr` depends only on
+   `atm-core` (for `HerdrSession`, the public `boundary::MemberKey`, and
+   `AtmError`), `tokio`, and `serde_json` — no `atm-storage`, no
+   `atm-storage-rusqlite`, no `atm-http-runtime`. Its two dependents are
+   exactly `atm-http-runtime` (AQ2.7's poll pump,
+   `sprint-AQ2-7-herdr-queue-wake.md` deliverable 1) and
+   `atm-daemon-bootstrap` (this sprint's `HerdrReceivedHook`, over a new
+   `atm-daemon-bootstrap -> atm-herdr` edge added beside its existing
+   `-> atm-http-runtime` edge in `crates/atm-daemon-bootstrap/Cargo.toml`).
+   `atm-core` stays tokio-free (its existing async boundary already
+   expresses itself as `Pin<Box<dyn Future>>` without needing tokio, e.g.
+   `AsyncMessageReceivedHookEmitter`).
+
+   **Deliverables this paragraph owns:**
+
+   - Workspace `Cargo.toml` gains `"crates/atm-herdr"` as a new member
+     (alongside the existing `"crates/atm-graft"` row).
+   - `crates/atm-herdr/Cargo.toml`: `[dependencies] atm-core, tokio,
+     serde_json`; `[features] test-utils = []` gating the fake adapter (the
+     test-double point — a fake `HerdrProcessAdapter` implementation
+     records calls without spawning a process, satisfying the `[testing]
+     forbidden_test_bypasses = ["std::process::Command"]` rule below and
+     the equivalent rule in the new boundary manifest).
+   - `boundaries/atm-herdr/herdr-process-adapter.toml` (new manifest,
+     `boundaries/<owner-crate>/<name>.toml` convention, precedent
+     `boundaries/atm-graft/message-received-hook.toml`):
+     `owner_package = "atm-herdr"`; `[dependencies] allowed_dependents =
+     ["atm-http-runtime", "atm-daemon-bootstrap"]` (exactly the two above);
+     `forbidden_edges = ["atm-core -> atm-herdr", "atm-storage -> atm-herdr",
+     "atm-storage-rusqlite -> atm-herdr"]`, enforced by the boundaries
+     lint's live-Cargo-edge check.
+   - `docs/atm-herdr/{requirements.md,architecture.md,boundaries.md}`
+     (atm-graft-style crate docs, authored in planning; this sprint updates
+     them only if its implementation deviates from what planning already
+     recorded). `boundaries.md`'s section is the normative source the
+     boundaries lint matches the manifest against.
+   - **Source-audit gate (extends the `check-nudge-taxonomy.py` pattern
+     already used for `"backendType"` elsewhere in this sprint):** a new
+     rule, `herdr_string_containment_gate`, asserting that every literal
+     `herdr` argv token, JSON field name (`agent_status`, `agent_blocked`,
+     `error.code`, …), and Herdr error-code string appears **only** inside
+     `crates/atm-herdr` — any occurrence of an `herdr agent …` argv literal
+     or a Herdr `error.code` string constant outside that crate fails CI.
+     This is the mechanical enforcement of "one crate owns the Herdr wire
+     format," the same pattern the existing `"backendType"`-occurrence rule
+     uses for roster backend routing.
+
+   Trait **`HerdrProcessAdapter`**, real implementation
+   **`HerdrProcessInvoker`** (the test-double point, `test-utils`-gated as
+   above):
 
    ```rust
    pub trait HerdrProcessAdapter: Send + Sync {
@@ -357,10 +389,16 @@ this doc cites it by decision id (`D1`–`D8`).
    impl HerdrProcessAdapter for HerdrProcessInvoker { /* tokio::process::Command, ADR-058 D2/D3 argv+parsing */ }
    ```
 
-   `wait` and `get` exist on the trait now (AQ2.7's `agent wait` and this
-   sprint's doctor `agent get`, deliverable 1) even though `HerdrReceivedHook`
-   itself calls only `prompt`, so AQ2.7 does not need a second adapter or a
-   trait-widening PR.
+   `wait` and `get` exist on the trait now — `get` for this sprint's doctor
+   probe, `wait` because ADR-058 D2 documents `agent wait`'s argv as part of
+   the Herdr contract this crate owns. **`wait` is not called by any sprint
+   in Phase AQ** (ADR-058 D2: documented, not emitted): AQ2.7's poll-based
+   queue pump (`sprint-AQ2-7-herdr-queue-wake.md`, rewritten 2026-08-26)
+   uses `agent list` instead and adds a fourth trait method, `list`, in its
+   own deliverable 1 (this sprint's PR does not add it). `HerdrReceivedHook`
+   itself calls only `prompt`. Keeping `wait` on the trait rather than
+   deleting it preserves the ADR-058 D2 argv contract as a compiled,
+   documented shape even though nothing in this phase invokes it.
 
    `HerdrProcessInvoker` implements ADR-058 D2's exact argv, one `execve`
    per call, no shell:
@@ -442,12 +480,15 @@ this doc cites it by decision id (`D1`–`D8`).
    ```
 
    `active_received_hook_selector` (`received_hook_selector.rs:22-29`)
-   constructs one `Arc<HerdrProcessInvoker>` (from
-   `atm_http_runtime::herdr_process`) and passes a clone (as `Arc<dyn
+   constructs one `Arc<HerdrProcessInvoker>` (from `atm_herdr`, the new
+   dedicated crate — not `atm_http_runtime::herdr_process`, superseded by
+   the structural change above) and passes a clone (as `Arc<dyn
    HerdrProcessAdapter>`) into `HerdrReceivedHook::new`;
-   `build_replacement_handler` (`atm-daemon-bootstrap/src/lib.rs:178-201`) is
-   where AQ2.7's pump receives the same adapter clone at daemon composition
-   time (see AQ2.7 Dependencies).
+   `build_replacement_handler` (`atm-daemon-bootstrap/src/lib.rs:179-202`) is
+   where AQ2.7's pump receives its own `atm_herdr` adapter instance at
+   daemon composition time (see AQ2.7 Dependencies) — both consumers
+   construct/receive an `atm-herdr` type over their own existing or newly
+   added dependency edge, never through a shared `atm-http-runtime` module.
 
 ## Acceptance criteria
 
@@ -526,19 +567,26 @@ this doc cites it by decision id (`D1`–`D8`).
 11. Deadline/cancellation tests prove no child process or background task
     survives the request; post-commit hook errors remain advisory.
     **(deliverable 3)**
-12. A fake implementation of `HerdrProcessAdapter` (not the real
-    `HerdrProcessInvoker`, not `std::process::Command`) is the only test
-    double used to exercise `HerdrReceivedHook` and doctor logic below the
-    real adapter boundary, per `message-received-hook-emitter.toml`'s
-    `forbidden_test_bypasses`. **(deliverable 3, I18)**
+12. A fake implementation of `HerdrProcessAdapter`, gated behind
+    `atm-herdr`'s `test-utils` feature (not the real `HerdrProcessInvoker`,
+    not `std::process::Command`), is the only test double used to exercise
+    `HerdrReceivedHook` and doctor logic below the real adapter boundary,
+    per `message-received-hook-emitter.toml`'s `forbidden_test_bypasses`
+    and the equivalent rule in `boundaries/atm-herdr/herdr-process-adapter.toml`.
+    **(deliverable 3, I18)**
 13. `select_emitter` routes `(Steer, LocalSteer(Herdr(_)))` **and**
     `(Queue, LocalSteer(Herdr(_)))` to `HerdrReceivedHook`; `(Queue, Tmux(_)
     | Graft(_))` still routes to `None`. **(deliverable 4)**
-14. Boundary-manifest freshness, `cargo test -p atm-architecture`, and
-    `just test` pass on all three lanes. Herdr command fixtures run on
-    macOS/ubuntu; Windows verifies selection and command construction only
-    until a supported Windows Herdr deployment is explicitly added.
-    **(deliverable 4)**
+14. Boundary-manifest freshness for **both** `message-received-hook-emitter.toml`
+    and the new `boundaries/atm-herdr/herdr-process-adapter.toml`
+    (`allowed_dependents` exactly `["atm-http-runtime", "atm-daemon-bootstrap"]`,
+    `forbidden_edges` covering `atm-core`/`atm-storage`/`atm-storage-rusqlite`
+    -> `atm-herdr`), the `herdr_string_containment_gate` source-audit rule,
+    `docs/atm-herdr/{requirements.md,architecture.md,boundaries.md}` present
+    and current, `cargo test -p atm-architecture`, and `just test` pass on
+    all three lanes. Herdr command fixtures run on macOS/ubuntu; Windows
+    verifies selection and command construction only until a supported
+    Windows Herdr deployment is explicitly added. **(deliverable 4)**
 
 ## Required validation
 
@@ -595,13 +643,18 @@ this doc cites it by decision id (`D1`–`D8`).
   contract (D3/D8), fixture transcript (`herdr-cli-contract-fixture.md`).
   No dev dispatch before it merges.
 - downstream: AQ2.7 consumes this backend's emitter and the **named**
-  `HerdrProcessAdapter`/`HerdrProcessInvoker` this sprint delivers in
-  `atm-http-runtime` (critical review I18 — resolved: `atm-daemon-bootstrap`
-  already depends on `atm-http-runtime`, and AQ2.7's pump is composed in
-  `atm-http-runtime` itself, so both consumers reach the adapter without a
-  new crate edge and without any change to `atm-core`), plus the extended
-  `select_emitter` Queue+Herdr arm; AQ2.5 adds the bare-CLI arm beside the
-  Herdr arm; AQ3 adds the skip-Herdr pre-check on drain and sweep.
+  `HerdrProcessAdapter`/`HerdrProcessInvoker` this sprint delivers in the
+  new dedicated `atm-herdr` crate (critical review I18 — resolved: not
+  `atm-http-runtime`, and not `atm-core`; `atm-daemon-bootstrap` and
+  `atm-http-runtime` each depend on `atm-herdr` directly, so both consumers
+  reach the adapter without a shared intermediate module), plus the
+  extended `select_emitter` Queue+Herdr arm; see `docs/atm-herdr/
+  {requirements.md,architecture.md,boundaries.md}` for the crate's own
+  normative surface. **`wait` stays defined on the `HerdrProcessAdapter`
+  trait (ADR-058 D2) but AQ2.7's rewritten poll-based pump does not call
+  it** — AQ2.7 uses `list` instead (a fourth trait method AQ2.7 itself
+  adds, not this sprint). AQ2.5 adds the bare-CLI arm beside the Herdr arm;
+  AQ3 adds the skip-Herdr pre-check on drain and sweep.
 - parallel_safe: AQ1.5–AQ1.9 (graft registration — disjoint files: this
   sprint touches roster/member-mutation/selector/emitter/`delivery_policy.rs`;
   graft touches `graft.rs`, atm-graft, registration store/routes).
