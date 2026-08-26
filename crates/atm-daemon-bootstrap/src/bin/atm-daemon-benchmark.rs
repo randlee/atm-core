@@ -545,8 +545,8 @@ mod tests {
 
     #[test]
     fn direct_core_writes_use_the_canonical_capacity_address() {
-        let home = std::path::Path::new("/tmp/atm-capacity");
-        let request = direct_core_write_request(home, 7).expect("core request");
+        let home = std::env::temp_dir().join("atm-capacity");
+        let request = direct_core_write_request(&home, 7).expect("core request");
         assert_eq!(request.caller_identity.as_str(), "capacity-core-agent");
         assert_eq!(request.caller_team.as_str(), "capacity-core-team");
         assert_eq!(

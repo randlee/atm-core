@@ -91,6 +91,22 @@ class DaemonSwitchTests(unittest.TestCase):
         service.assert_not_called()
         signatures.assert_called_once_with(self.old_cli, self.old_daemon)
 
+    def test_signature_gate_rejects_signed_cli_with_unsigned_daemon(self) -> None:
+        identity = type("Identity", (), {"team_identifier": "TEAMID"})()
+        with (
+            mock.patch.object(self.module.platform, "system", return_value="Darwin"),
+            mock.patch.object(self.module, "resolve_apple_development_identity", return_value=identity),
+            mock.patch.object(
+                self.module,
+                "macos_binary_has_development_signature",
+                side_effect=[True, False],
+            ) as verify,
+        ):
+            with self.assertRaisesRegex(self.module.SwitchError, "daemon target is not strictly signed"):
+                self.module.require_macos_development_signatures(self.new_cli, self.new_daemon)
+
+        self.assertEqual(verify.call_count, 2)
+
     def test_switch_pair_stops_then_replaces_both_selectors_then_starts(self) -> None:
         with self.patch_switch_inputs() as patched:
             patched["selected_links"].return_value = (self.cli_link, self.daemon_link)

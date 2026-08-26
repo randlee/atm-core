@@ -1008,8 +1008,8 @@ mod tests {
     async fn cli_graft_daemon_and_read_preserve_one_chat_identity_contract() {
         let chat_id = "chat-42".parse::<ChatId>().expect("chat id");
         let send_request = SendRequest::new(
-            std::path::PathBuf::from("/tmp/home"),
-            std::path::PathBuf::from("/tmp/current"),
+            std::env::temp_dir().join("atm-test-home"),
+            std::env::temp_dir().join("atm-test-current"),
             TEST_SENDER.parse().expect("caller"),
             "recipient:target-chat@test-team",
             TEST_TEAM.parse().expect("team"),
@@ -1096,8 +1096,8 @@ mod tests {
         );
 
         let read = ReadQuery::new(
-            std::path::PathBuf::from("/tmp/home"),
-            std::path::PathBuf::from("/tmp/current"),
+            std::env::temp_dir().join("atm-test-home"),
+            std::env::temp_dir().join("atm-test-current"),
             TEST_SENDER.parse().expect("caller"),
             None,
             TEST_TEAM.parse().expect("team"),
