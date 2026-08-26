@@ -5,7 +5,7 @@ requires:
 
 | Dependency | Minimum | Purpose |
 |---|---:|---|
-| `sc-compose` CLI | **released v1.4.0 source revision `6a8af1f`** | Render canonical Turtle records |
+| `sc-compose` CLI | **released v1.5.0 prebuilt release binary** | Render canonical Turtle records |
 | Python `sc_compose` binding | **1.2.0** | Native Python rendering/API tests |
 | `oxigraph` | supported installed release | Parse/validate rendered Turtle |
 | `rg` | installed | Sweep source worktrees |
@@ -29,8 +29,10 @@ macOS (one-time per-machine setup):
 ```bash
 python3 -m pip install --user --break-system-packages 'sc-compose>=1.2.0'
 # The CLI pin below is required for the current report/template contract.
-cargo install --git https://github.com/randlee/sc-compose.git \
-  --rev 6a8af1ff46ccd64ae9cc40d7d5c815aa9b0a4661 --locked --bin sc-compose
+Download the platform-matching `sc-compose` v1.5.0 release archive from
+`randlee/sc-compose`, verify its SHA256 against the release `checksums.txt`,
+and unpack the executable into the bootstrap tools directory. `just bootstrap`
+performs this verification automatically; do not compile it with Cargo.
 cargo install oxigraph-cli
 ```
 
@@ -39,16 +41,16 @@ The `--user` target avoids Homebrew-managed site-packages and
 user-owned wheel. Do not create or activate a venv for this setup. The PyPI
 package supplies the `sc_compose` Python binding (Python 3.11+; prebuilt
 platform wheels); it does not replace the standalone `sc-compose` CLI. On
-Linux without Homebrew, install the CLI from the pinned source revision
+Linux without Homebrew, install the CLI from the pinned release
 shown above.
 
 Linux:
 
 ```bash
 python3 -m pip install --user --break-system-packages 'sc-compose>=1.2.0'
-# Install the standalone CLI from the pinned source revision:
-cargo install --git https://github.com/randlee/sc-compose.git \
-  --rev 6a8af1ff46ccd64ae9cc40d7d5c815aa9b0a4661 --locked --bin sc-compose
+# Install the pinned released standalone CLI:
+Download and verify the platform-matching v1.5.0 release archive as described
+above; do not compile the CLI with Cargo.
 cargo install oxigraph-cli
 ```
 
@@ -96,7 +98,7 @@ host-specific absolute checkout path in a canonical Turtle record.
 ## Validate after setup
 
 ```bash
-sc-compose --version       # CLI must be the pinned released v1.4.0 build
+sc-compose --version       # CLI must be the pinned released v1.5.0 build
 oxigraph --version
 rg --version
 python3 -c 'import rdflib; print(rdflib.__version__)'
@@ -107,7 +109,7 @@ python3 .claude/skills/triaging-findings/scripts/check_dependencies.py
 ## Known issues
 
 - The v1.3.0 CLI is insufficient for the current templates. Install the pinned
-  source revision above; do not lower the requirement or substitute a release
+  v1.5.0 prebuilt release above; do not lower the requirement or substitute an older release
   binary.
 - Installing with one Python and invoking the skill with another leaves
   `rdflib` unavailable. Compare `python3 -c 'import sys; print(sys.executable)'`

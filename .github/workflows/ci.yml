@@ -81,7 +81,7 @@ jobs:
           tool: just@1.58.0
 
       - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@main
+        uses: cargo-bins/cargo-binstall@7eefb2120c193890ad0a44c3714f73a1f621b35a # v1.15.0
         with:
           version: "1.22.0"
 
@@ -238,7 +238,7 @@ jobs:
 
       - name: Install cargo-binstall
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
-        uses: cargo-bins/cargo-binstall@main
+        uses: cargo-bins/cargo-binstall@7eefb2120c193890ad0a44c3714f73a1f621b35a # v1.15.0
         with:
           version: "1.22.0"
 

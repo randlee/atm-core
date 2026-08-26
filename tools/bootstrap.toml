@@ -10,7 +10,15 @@ cargo-deny = "0.20.2"
 cargo-audit = "0.22.2"
 cargo-shear = "1.12.0"
 cargo-modules = "0.26.0"
-sc-compose = "1.4.0"
+
+[sc-compose]
+version = "1.5.0"
+
+[sc-compose.checksums]
+aarch64-apple-darwin = "7751631cd86e6644e88cfcf3dd80f352779350f9f24f891f52983c8da0ed4620"
+x86_64-apple-darwin = "618bf0d856aa00dcdfb271ca098db6c5a4c228c6778b2cf2c7d7dbc7ff70966e"
+x86_64-pc-windows-msvc = "d1dcabae4f429483ce52d6821b293f4a4f40dd3884f99879e3c01c08d5b0a3ab"
+x86_64-unknown-linux-gnu = "1830bd70194832c5a6ef310c555e575a38922c6bb03141b51a2ab5ca1f3a509e"
 
 [python]
 codespell = "2.4.3"

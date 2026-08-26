@@ -23,11 +23,25 @@ class BootstrapTests(unittest.TestCase):
         versions.extend(version for _, version in manifest.python_packages)
         self.assertTrue(all("*" not in version and ">" not in version and "<" not in version for version in versions))
 
-    def test_sc_compose_uses_the_exact_released_registry_version(self) -> None:
+    def test_sc_compose_uses_the_exact_prebuilt_release_asset(self) -> None:
         manifest = bootstrap.load_manifest()
-        command = bootstrap.sc_compose_install_command(manifest.sc_compose, force=True)
-        self.assertEqual(command, ["cargo", "install", "--locked", "--force", "--version", "1.4.0", "sc-compose"])
-        self.assertIn("--locked", command)
+        asset, url = bootstrap.sc_compose_install_command(manifest.sc_compose, "aarch64-apple-darwin")
+        self.assertEqual(asset, "sc-compose_1.5.0_aarch64-apple-darwin.tar.gz")
+        self.assertEqual(url, "https://github.com/randlee/sc-compose/releases/download/v1.5.0/" + asset)
+        self.assertEqual(dict(manifest.sc_compose_checksums)["aarch64-apple-darwin"], "7751631cd86e6644e88cfcf3dd80f352779350f9f24f891f52983c8da0ed4620")
+
+    def test_sc_compose_install_never_uses_cargo(self) -> None:
+        source = (SCRIPT.parents[1] / "tools" / "bootstrap.py").read_text(encoding="utf-8")
+        self.assertNotIn('cargo", "install", "--locked", "--version", version, "sc-compose"', source)
+
+    def test_sc_compose_checksum_mismatch_is_a_hard_failure(self) -> None:
+        manifest = bootstrap.load_manifest()
+        with (
+            mock.patch.object(bootstrap, "sc_compose_target", return_value="aarch64-apple-darwin"),
+            mock.patch.object(bootstrap, "_download_release", return_value=b"tampered"),
+        ):
+            with self.assertRaisesRegex(bootstrap.BootstrapError, "checksum mismatch"):
+                bootstrap.install_sc_compose_release(manifest, dry_run=False)
 
     def test_binstall_uses_prebuilt_only_and_exact_version(self) -> None:
         command = bootstrap.cargo_binstall_command("cargo-audit", "0.22.2", force=True)
@@ -60,7 +74,7 @@ class BootstrapTests(unittest.TestCase):
             "cargo-shear": "1.12.0",
             "cargo-modules": "0.26.0",
         })
-        self.assertEqual(manifest.sc_compose, "1.4.0")
+        self.assertEqual(manifest.sc_compose, "1.5.0")
         self.assertEqual(dict(manifest.python_packages)["maturin"], "1.14.1")
 
     def test_macos_homebrew_seed_formula_is_derived_from_the_exact_python_pin(self) -> None:

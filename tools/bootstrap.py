@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -13,8 +14,13 @@ import re
 import shutil
 import subprocess
 import sys
+import tarfile
+import tempfile
 import tomllib
 from typing import Sequence
+import urllib.error
+import urllib.request
+import zipfile
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -34,6 +40,7 @@ class BootstrapManifest:
     just: str
     cargo_tools: tuple[tuple[str, str], ...]
     sc_compose: str
+    sc_compose_checksums: tuple[tuple[str, str], ...]
     python_packages: tuple[tuple[str, str], ...]
 
 
@@ -42,6 +49,7 @@ def load_manifest(path: Path = MANIFEST_PATH) -> BootstrapManifest:
     raw = tomllib.loads(path.read_text(encoding="utf-8"))
     toolchain = raw["toolchain"]
     cargo = raw["cargo"]
+    sc_compose = raw["sc-compose"]
     python = raw["python"]
     return BootstrapManifest(
         rust=toolchain["rust"],
@@ -53,7 +61,8 @@ def load_manifest(path: Path = MANIFEST_PATH) -> BootstrapManifest:
             ("cargo-shear", cargo["cargo-shear"]),
             ("cargo-modules", cargo["cargo-modules"]),
         ),
-        sc_compose=cargo["sc-compose"],
+        sc_compose=sc_compose["version"],
+        sc_compose_checksums=tuple(sorted(sc_compose["checksums"].items())),
         python_packages=tuple(sorted(python.items())),
     )
 
@@ -150,12 +159,40 @@ def cargo_install_command(name: str, version: str, *, force: bool) -> list[str]:
     return [*command, "--version", version, name]
 
 
-def sc_compose_install_command(version: str, *, force: bool) -> list[str]:
-    """Return the registry install command for the released sc-compose CLI."""
-    command = ["cargo", "install", "--locked"]
-    if force:
-        command.append("--force")
-    return [*command, "--version", version, "sc-compose"]
+SC_COMPOSE_RELEASE_REPOSITORY = "randlee/sc-compose"
+
+
+def sc_compose_target() -> str:
+    """Map the runner to a release target with a published prebuilt asset."""
+    system = platform.system().lower()
+    machine = platform.machine().lower()
+    if system == "darwin":
+        if machine in {"arm64", "aarch64"}:
+            return "aarch64-apple-darwin"
+        if machine in {"x86_64", "amd64"}:
+            return "x86_64-apple-darwin"
+    elif system == "linux" and machine in {"x86_64", "amd64"}:
+        return "x86_64-unknown-linux-gnu"
+    elif system == "windows" and machine in {"x86_64", "amd64"}:
+        return "x86_64-pc-windows-msvc"
+    raise BootstrapError(f"sc-compose has no prebuilt release asset for {platform.system()} {platform.machine()}.")
+
+
+def sc_compose_asset_name(version: str, target: str) -> str:
+    """Return the exact release asset filename for a target triple."""
+    suffix = ".zip" if "windows" in target else ".tar.gz"
+    return f"sc-compose_{version}_{target}{suffix}"
+
+
+def sc_compose_release_url(version: str, asset: str) -> str:
+    """Return the immutable GitHub release URL for one pinned asset."""
+    return f"https://github.com/{SC_COMPOSE_RELEASE_REPOSITORY}/releases/download/v{version}/{asset}"
+
+
+def sc_compose_install_command(version: str, target: str) -> tuple[str, str]:
+    """Describe the pinned prebuilt release install for dry-run/tests."""
+    asset = sc_compose_asset_name(version, target)
+    return (asset, sc_compose_release_url(version, asset))
 
 
 def cargo_binstall_command(name: str, version: str, *, force: bool) -> list[str]:
@@ -218,6 +255,86 @@ def cargo_bin_path(name: str) -> Path:
     cargo_home = Path(os.environ.get("CARGO_HOME", Path.home() / ".cargo"))
     suffix = ".exe" if sys.platform == "win32" else ""
     return cargo_home / "bin" / f"{name}{suffix}"
+
+
+def _release_checksum(manifest: BootstrapManifest, target: str) -> str:
+    checksums = dict(manifest.sc_compose_checksums)
+    try:
+        return checksums[target]
+    except KeyError as error:
+        raise BootstrapError(f"sc-compose manifest has no checksum for release target {target}.") from error
+
+
+def _download_release(url: str) -> bytes:
+    """Download one release asset without invoking a shell or package manager."""
+    try:
+        with urllib.request.urlopen(url, timeout=120) as response:
+            return response.read()
+    except (OSError, urllib.error.URLError) as error:
+        raise BootstrapError(f"unable to download pinned sc-compose release asset {url}: {error}") from error
+
+
+def _safe_member_name(name: str) -> str:
+    path = Path(name)
+    if path.is_absolute() or ".." in path.parts:
+        raise BootstrapError(f"sc-compose release archive contains unsafe path {name!r}.")
+    return path.as_posix()
+
+
+def _extract_sc_compose(archive: bytes, asset: str, destination: Path) -> None:
+    """Extract only the expected executable from a verified release archive."""
+    executable_name = "sc-compose.exe" if asset.endswith(".zip") else "sc-compose"
+    with tempfile.TemporaryDirectory(prefix="atm-sc-compose-") as temp_dir:
+        archive_path = Path(temp_dir) / asset
+        archive_path.write_bytes(archive)
+        if asset.endswith(".zip"):
+            with zipfile.ZipFile(archive_path) as package:
+                members = { _safe_member_name(name): name for name in package.namelist() }
+                member = next((original for safe, original in members.items() if Path(safe).name == executable_name), None)
+                if member is None:
+                    raise BootstrapError(f"verified sc-compose archive does not contain {executable_name}.")
+                binary = package.read(member)
+        else:
+            with tarfile.open(archive_path, mode="r:gz") as package:
+                member = next(
+                    (item for item in package.getmembers() if Path(_safe_member_name(item.name)).name == executable_name),
+                    None,
+                )
+                if member is None or not member.isfile():
+                    raise BootstrapError(f"verified sc-compose archive does not contain {executable_name}.")
+                extracted = package.extractfile(member)
+                if extracted is None:
+                    raise BootstrapError("verified sc-compose executable could not be read from the archive.")
+                binary = extracted.read()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(f".{destination.name}.tmp-{os.getpid()}")
+    temporary.write_bytes(binary)
+    if sys.platform != "win32":
+        temporary.chmod(0o755)
+    os.replace(temporary, destination)
+
+
+def install_sc_compose_release(manifest: BootstrapManifest, *, dry_run: bool) -> None:
+    """Install the pinned GitHub release asset; never compile or fall back."""
+    target = sc_compose_target()
+    asset, url = sc_compose_install_command(manifest.sc_compose, target)
+    expected = _release_checksum(manifest, target)
+    destination = cargo_bin_path("sc-compose")
+    print(f"+ download {url} -> {destination}")
+    if dry_run:
+        return
+    archive = _download_release(url)
+    actual = hashlib.sha256(archive).hexdigest()
+    if actual != expected:
+        raise BootstrapError(
+            f"sc-compose release checksum mismatch for {asset}: expected {expected}, found {actual}."
+        )
+    checksums_url = sc_compose_release_url(manifest.sc_compose, "checksums.txt")
+    checksums = _download_release(checksums_url).decode("utf-8", errors="strict")
+    listed = next((parts[0] for line in checksums.splitlines() if (parts := line.split()) and len(parts) >= 2 and parts[-1] == asset), None)
+    if listed != expected:
+        raise BootstrapError(f"checksums.txt does not confirm the pinned checksum for {asset}.")
+    _extract_sc_compose(archive, asset, destination)
 
 
 def cargo_receipts() -> dict[str, object]:
@@ -307,8 +424,12 @@ def registry_tool_matches(name: str, version: str, rust: str) -> bool:
 
 
 def sc_compose_matches(manifest: BootstrapManifest) -> bool:
-    """Prove the released sc-compose CLI is installed from the registry."""
-    return registry_tool_matches("sc-compose", manifest.sc_compose, manifest.rust)
+    """Prove the installed release binary reports the exact pinned version."""
+    try:
+        require_version("sc-compose", command_output([str(cargo_bin_path("sc-compose")), "--version"]), manifest.sc_compose)
+    except (BootstrapError, OSError):
+        return False
+    return True
 
 
 def cargo_binstall_available() -> bool:
@@ -346,7 +467,7 @@ def verify_installed_tools(manifest: BootstrapManifest, python: Path) -> None:
     sc_compose = cargo_bin_path("sc-compose")
     command_output([str(sc_compose), "--version"])
     if not sc_compose_matches(manifest):
-        raise BootstrapError(f"sc-compose is not the exact released registry version {manifest.sc_compose}.")
+        raise BootstrapError(f"sc-compose is not the exact pinned prebuilt release version {manifest.sc_compose}.")
     for package, version in manifest.python_packages:
         try:
             actual = python_package_version(python, package)
@@ -375,7 +496,7 @@ def bootstrap(manifest: BootstrapManifest, *, dry_run: bool) -> None:
         if not installed:
             run(cargo_install_command(name, version, force=True), dry_run=dry_run)
     if not sc_compose_matches(manifest):
-        run(sc_compose_install_command(manifest.sc_compose, force=True), dry_run=dry_run)
+        install_sc_compose_release(manifest, dry_run=dry_run)
     run(pip_install_command(python), dry_run=dry_run)
     if not dry_run:
         verify_installed_tools(manifest, python)
