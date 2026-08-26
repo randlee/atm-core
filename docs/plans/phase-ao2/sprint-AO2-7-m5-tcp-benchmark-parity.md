@@ -4,7 +4,7 @@ sprint: AO2.7
 title: Full benchmark-matrix harness and M5 artifact contract
 branch: future-dev-worktree
 integration_branch: integrate/phase-ao2
-status: draft_for_review
+status: complete
 depends_on:
   - AO2.5.4-mandatory-benchmark-snapshot-restore
   - AO2.6-admission-writer-batching-regression

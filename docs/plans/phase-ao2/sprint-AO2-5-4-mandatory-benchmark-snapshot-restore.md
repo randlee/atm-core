@@ -4,7 +4,7 @@ sprint: AO2.5.4
 title: Mandatory clean-baseline snapshot and restore for physical benchmarks
 branch: future-dev-worktree
 integration_branch: integrate/phase-ao2
-status: draft_for_review
+status: complete
 depends_on:
   - AO2.5.1-benchmark-account-contract
   - AO2.5.2-benchmark-account-preflight
