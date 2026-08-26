@@ -107,9 +107,11 @@ class AdmissionCapacityTests(unittest.TestCase):
 
     def test_ordinary_benchmark_runs_required_f8_targets_in_fixed_order(self):
         captured: list[dict[str, object]] = []
+        captured_workers: list[int] = []
 
-        def run_capacity(*_args, **kwargs):
+        def run_capacity(*args, **kwargs):
             captured.append(kwargs)
+            captured_workers.append(args[6])
             metrics = mock.Mock(admissions_per_second=mock.Mock(p50=45_000.0))
             result = mock.Mock(
                 status="PASS", metrics=metrics,
@@ -139,6 +141,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertTrue(all("benchmark_target" in item for item in captured))
         self.assertTrue(all("v4_emission" in item for item in captured))
         self.assertTrue(all(item["raw_evidence_directory"] == RUNNER.DEFAULT_RAW_EVIDENCE_DIR for item in captured))
+        self.assertEqual(captured_workers, [512] * len(expected_targets))
         self.assertEqual(stdout.getvalue().count("p50=45000.00 msg/s"), len(expected_targets))
 
     def test_ordinary_benchmark_exit_code_uses_the_stored_v4_result_status(self):
@@ -262,6 +265,14 @@ class AdmissionCapacityTests(unittest.TestCase):
         with mock.patch.object(sys, "argv", ["run_admission_capacity.py", "--target", "tcp"]):
             with self.assertRaisesRegex(RUNNER.SmokeError, "require --diagnostic-only"):
                 RUNNER.main()
+
+    def test_disposable_mtls_identity_uses_rustls_compatible_named_p256_parameters(self):
+        """LibreSSL's explicit EC parameters are rejected by the Rustls provider."""
+        source = inspect.getsource(RUNNER.provision_disposable_mtls_identity)
+        self.assertIn("genpkey", source)
+        self.assertIn("ec_paramgen_curve:prime256v1", source)
+        self.assertIn("ec_param_enc:named_curve", source)
+        self.assertNotIn("rsa:2048", source)
 
     def test_direct_sqlite_writer_profile_keeps_real_interval_counts(self):
         stdout = json.dumps(
