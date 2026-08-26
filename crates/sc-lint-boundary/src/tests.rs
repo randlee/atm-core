@@ -140,7 +140,8 @@ fn exports_graph_for_inline_and_file_modules_and_attributes() {
         .nodes
         .iter()
         .find(|node| {
-            node.id == "crate::example::example::module::crate::inline_mod::InlineType::helper"
+            node.id
+                == "crate::example::example::module::crate::inline_mod::InlineType::impl::inherent::helper"
         })
         .unwrap();
     assert_eq!(helper_method.kind, "method");
@@ -155,22 +156,194 @@ fn exports_graph_for_inline_and_file_modules_and_attributes() {
     assert!(graph.edges.iter().any(|edge| {
         edge.kind == "declares"
             && edge.from == "crate::example::example::module::crate::inline_mod::InlineType"
-            && edge.to == "crate::example::example::module::crate::inline_mod::InlineType::helper"
+            && edge.to
+                == "crate::example::example::module::crate::inline_mod::InlineType::impl::inherent::helper"
     }));
     assert!(graph.edges.iter().any(|edge| {
         edge.kind == "references"
-            && edge.from == "crate::example::example::module::crate::inline_mod::InlineType::helper"
+            && edge.from
+                == "crate::example::example::module::crate::inline_mod::InlineType::impl::inherent::helper"
             && edge.to == "crate::example::example::module::crate::inline_mod::InlineType"
     }));
     assert!(graph.edges.iter().any(|edge| {
         edge.kind == "references_expr"
-            && edge.from == "crate::example::example::module::crate::inline_mod::InlineType::helper"
+            && edge.from
+                == "crate::example::example::module::crate::inline_mod::InlineType::impl::inherent::helper"
             && edge.to == "crate::example::example::module::crate::inline_mod::InlineType"
     }));
     assert!(!graph.edges.iter().any(|edge| {
-        edge.from == "crate::example::example::module::crate::inline_mod::InlineType::helper"
+        edge.from
+                == "crate::example::example::module::crate::inline_mod::InlineType::impl::inherent::helper"
             && edge.to == "crate::example::example::module::crate::inline_mod::self"
     }));
+}
+
+#[test]
+fn preserves_forward_cross_module_call_targets() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_source(
+        "example",
+        "lib.rs",
+        r#"
+                mod first;
+                mod later;
+            "#,
+    );
+    fixture.write_source(
+        "example",
+        "first.rs",
+        r#"
+                pub fn call_later() {
+                    crate::later::target();
+                }
+            "#,
+    );
+    fixture.write_source("example", "later.rs", "pub fn target() {}");
+
+    let graph = export_workspace_graph(&ExportGraphOptions {
+        root: fixture.root().to_path_buf(),
+    })
+    .unwrap();
+
+    assert!(graph.edges.iter().any(|edge| {
+        edge.kind == "references_expr"
+            && edge.from == "crate::example::example::module::crate::first::call_later"
+            && edge.to == "crate::example::example::module::crate::later::target"
+            && edge.call_callee.as_ref().is_some_and(|callee| {
+                callee.ident == "target" && callee.kind == CallCalleeKind::Associated
+            })
+    }));
+}
+
+#[test]
+fn resolves_enum_variant_values_without_creating_self_cycles() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_source(
+        "example",
+        "lib.rs",
+        r#"
+                pub enum Mode {
+                    Ready,
+                }
+
+                impl Mode {
+                    pub fn label() -> &'static str {
+                        let _ = Self::Ready;
+                        "ready"
+                    }
+                }
+            "#,
+    );
+
+    let graph = export_workspace_graph(&ExportGraphOptions {
+        root: fixture.root().to_path_buf(),
+    })
+    .unwrap();
+    assert!(graph.edges.iter().any(|edge| {
+        edge.kind == "references_expr"
+            && edge.from == "crate::example::example::module::crate::Mode::impl::inherent::label"
+            && edge.to == "crate::example::example::module::crate::Mode::variant::Ready"
+    }));
+
+    let report = analyze_workspace(&AnalyzeOptions {
+        root: fixture.root().to_path_buf(),
+        format: OutputFormat::Json,
+        rule: Some(RuleFilter::Cycles),
+    })
+    .unwrap();
+    assert!(report.findings.is_empty());
+}
+
+#[test]
+fn keeps_same_named_inherent_and_trait_methods_distinct() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_source(
+        "example",
+        "lib.rs",
+        r#"
+                pub struct Loop;
+
+                pub trait Retained {
+                    fn load(&self) -> usize;
+                }
+
+                impl Loop {
+                    pub fn load(&self) -> usize {
+                        1
+                    }
+                }
+
+                impl Retained for Loop {
+                    fn load(&self) -> usize {
+                        Self::load(self)
+                    }
+                }
+            "#,
+    );
+
+    let graph = export_workspace_graph(&ExportGraphOptions {
+        root: fixture.root().to_path_buf(),
+    })
+    .unwrap();
+    let load_methods: Vec<_> = graph
+        .nodes
+        .iter()
+        .filter(|node| node.kind == "method" && node.label == "load")
+        .collect();
+    assert_eq!(load_methods.len(), 2);
+
+    let inherent = load_methods
+        .iter()
+        .find(|node| node.impl_kind == Some(ImplKind::Inherent))
+        .unwrap();
+    let trait_method = load_methods
+        .iter()
+        .find(|node| node.impl_kind == Some(ImplKind::Trait))
+        .unwrap();
+    assert_ne!(inherent.id, trait_method.id);
+    assert!(inherent.id.ends_with("::impl::inherent::load"));
+    assert!(trait_method.id.contains("::impl::"));
+    assert!(trait_method.id.ends_with("::load"));
+    assert!(graph.edges.iter().any(|edge| {
+        edge.kind == "contains" && edge.from.ends_with("::impl::inherent") && edge.to == inherent.id
+    }));
+    assert!(graph.edges.iter().any(|edge| {
+        edge.kind == "contains"
+            && edge.from.contains("::impl::")
+            && edge.from != "crate::example::example::module::crate::Loop::impl::inherent"
+            && edge.to == trait_method.id
+    }));
+    assert!(graph.edges.iter().any(|edge| {
+        edge.kind == "references_expr"
+            && edge.from == trait_method.id
+            && edge.to == "crate::example::example::module::crate::Loop"
+    }));
+
+    let report = analyze_workspace(&AnalyzeOptions {
+        root: fixture.root().to_path_buf(),
+        format: OutputFormat::Json,
+        rule: Some(RuleFilter::Cycles),
+    })
+    .unwrap();
+    assert!(!report.findings.iter().any(|finding| {
+        finding.rule_id == RuleId::ScbCycle002
+            && finding
+                .node_ids
+                .iter()
+                .any(|node_id| node_id == &trait_method.id)
+    }));
+    assert!(
+        !report
+            .findings
+            .iter()
+            .any(|finding| finding.rule_id == RuleId::ScbCycle003)
+    );
 }
 
 #[test]
@@ -843,6 +1016,97 @@ fn reports_type_method_self_loop_as_non_fatal_signal() {
 }
 
 #[test]
+fn excludes_associated_helper_calls_but_keeps_recursion_and_value_uses() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_source(
+        "example",
+        "lib.rs",
+        r#"
+                pub struct Loop;
+
+                impl Loop {
+                    fn helper() {}
+
+                    fn delegated() {
+                        Self::helper();
+                    }
+
+                    fn qualified() {
+                        Loop::helper();
+                    }
+
+                    fn recursive() {
+                        Self::recursive();
+                    }
+
+                    fn value_use() {
+                        let _ = Loop;
+                    }
+                }
+            "#,
+    );
+
+    let graph = export_workspace_graph(&ExportGraphOptions {
+        root: fixture.root().to_path_buf(),
+    })
+    .unwrap();
+    assert!(graph.edges.iter().any(|edge| {
+        edge.kind == "references_expr"
+            && edge.from.ends_with("::delegated")
+            && edge.to == "crate::example::example::module::crate::Loop"
+            && edge.call_callee.as_ref().is_some_and(|callee| {
+                callee.ident == "helper" && callee.kind == CallCalleeKind::Associated
+            })
+    }));
+    assert!(graph.edges.iter().any(|edge| {
+        edge.kind == "references_expr"
+            && edge.from.ends_with("::qualified")
+            && edge.to == "crate::example::example::module::crate::Loop"
+            && edge.call_callee.as_ref().is_some_and(|callee| {
+                callee.ident == "helper" && callee.kind == CallCalleeKind::Associated
+            })
+    }));
+
+    let report = analyze_workspace(&AnalyzeOptions {
+        root: fixture.root().to_path_buf(),
+        format: OutputFormat::Json,
+        rule: Some(RuleFilter::Cycles),
+    })
+    .unwrap();
+    let self_loop = report
+        .findings
+        .iter()
+        .find(|finding| finding.rule_id == RuleId::ScbCycle002)
+        .unwrap();
+    assert!(
+        self_loop
+            .node_ids
+            .iter()
+            .any(|node_id| node_id.ends_with("::recursive"))
+    );
+    assert!(
+        self_loop
+            .node_ids
+            .iter()
+            .any(|node_id| node_id.ends_with("::value_use"))
+    );
+    assert!(
+        !self_loop
+            .node_ids
+            .iter()
+            .any(|node_id| node_id.ends_with("::delegated"))
+    );
+    assert!(
+        !self_loop
+            .node_ids
+            .iter()
+            .any(|node_id| node_id.ends_with("::qualified"))
+    );
+}
+
+#[test]
 fn does_not_flag_constructor_factory_self_loop() {
     let fixture = WorkspaceFixture::new();
     fixture.write_workspace_root();
@@ -945,9 +1209,12 @@ fn suppresses_type_method_self_loop_when_allowed() {
                 pub struct Loop;
 
                 impl Loop {
-                    pub fn metric() -> usize {
-                        let _ = Loop;
-                        1
+                    pub fn visit_items() {
+                        Self::visit_item();
+                    }
+
+                    fn visit_item() {
+                        Self::visit_items();
                     }
                 }
             "#,
@@ -1127,6 +1394,160 @@ fn downgrades_trait_impl_self_loop() {
     assert_eq!(report.findings.len(), 1);
     assert_eq!(report.findings[0].rule_id, RuleId::ScbCycle003);
     assert_eq!(report.findings[0].kind, "trait_impl_self_loop");
+}
+
+#[test]
+fn excludes_trait_method_delegation_and_private_associated_helpers() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_source(
+        "example",
+        "lib.rs",
+        r#"
+                pub struct Loop;
+
+                pub trait Adapter {
+                    fn delegated(&self) -> usize;
+                    fn associated(&self) -> usize;
+                    fn helper(&self) -> usize;
+                }
+
+                impl Loop {
+                    pub(crate) fn private_helper() -> usize {
+                        1
+                    }
+                }
+
+                impl Adapter for Loop {
+                    fn delegated(&self) -> usize {
+                        self.helper()
+                    }
+
+                    fn associated(&self) -> usize {
+                        Loop::private_helper()
+                    }
+
+                    fn helper(&self) -> usize {
+                        1
+                    }
+                }
+            "#,
+    );
+
+    let report = analyze_workspace(&AnalyzeOptions {
+        root: fixture.root().to_path_buf(),
+        format: OutputFormat::Json,
+        rule: Some(RuleFilter::Cycles),
+    })
+    .unwrap();
+    assert!(
+        !report
+            .findings
+            .iter()
+            .any(|finding| finding.rule_id == RuleId::ScbCycle003)
+    );
+}
+
+#[test]
+fn retains_same_owner_multi_method_cycles() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_source(
+        "example",
+        "lib.rs",
+        r#"
+                pub struct Loop;
+
+                impl Loop {
+                    fn first() {
+                        Self::second();
+                    }
+
+                    fn second() {
+                        Self::first();
+                    }
+                }
+
+                pub trait Adapter {
+                    fn delegated_first(&self);
+                    fn delegated_second(&self);
+                }
+
+                impl Adapter for Loop {
+                    fn delegated_first(&self) {
+                        self.delegated_second();
+                    }
+
+                    fn delegated_second(&self) {
+                        self.delegated_first();
+                    }
+                }
+            "#,
+    );
+
+    let report = analyze_workspace(&AnalyzeOptions {
+        root: fixture.root().to_path_buf(),
+        format: OutputFormat::Json,
+        rule: Some(RuleFilter::Cycles),
+    })
+    .unwrap();
+
+    assert!(report.findings.iter().any(|finding| {
+        finding.rule_id == RuleId::ScbCycle002
+            && finding.node_ids.iter().any(|id| id.ends_with("::first"))
+            && finding.node_ids.iter().any(|id| id.ends_with("::second"))
+    }));
+    assert!(report.findings.iter().any(|finding| {
+        finding.rule_id == RuleId::ScbCycle003
+            && finding
+                .node_ids
+                .iter()
+                .any(|id| id.ends_with("::delegated_first"))
+            && finding
+                .node_ids
+                .iter()
+                .any(|id| id.ends_with("::delegated_second"))
+    }));
+}
+
+#[test]
+fn keeps_type_position_self_reference_in_trait_impl_positive() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_source(
+        "example",
+        "lib.rs",
+        r#"
+                pub struct Loop;
+
+                pub trait Adapter {
+                    fn make() -> Loop;
+                }
+
+                impl Adapter for Loop {
+                    fn make() -> Loop {
+                        Loop
+                    }
+                }
+            "#,
+    );
+
+    let report = analyze_workspace(&AnalyzeOptions {
+        root: fixture.root().to_path_buf(),
+        format: OutputFormat::Json,
+        rule: Some(RuleFilter::Cycles),
+    })
+    .unwrap();
+    assert!(report.findings.iter().any(|finding| {
+        finding.rule_id == RuleId::ScbCycle003
+            && finding
+                .node_ids
+                .iter()
+                .any(|node_id| node_id.ends_with("::make"))
+    }));
 }
 
 #[test]
