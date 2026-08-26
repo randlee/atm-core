@@ -14,6 +14,12 @@ from unittest import mock
 from scripts.smoke import benchmark_official as OFFICIAL
 
 
+# This subprocess starts a fresh Python interpreter and imports the complete
+# official-runner module. Keep the smoke timeout generous so normal macOS CI
+# startup variance cannot be misclassified as an official-runner failure.
+OFFICIAL_SCRIPT_SMOKE_TIMEOUT_SECONDS = 30
+
+
 def completed(command: list[str], code: int = 0, stdout: str = "", stderr: str = "") -> subprocess.CompletedProcess[str]:
     return subprocess.CompletedProcess(command, code, stdout, stderr)
 
@@ -409,12 +415,15 @@ class OfficialBenchmarkTests(unittest.TestCase):
             stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
-            timeout=5,
+            timeout=OFFICIAL_SCRIPT_SMOKE_TIMEOUT_SECONDS,
             check=False,
         )
         self.assertEqual(result.returncode, 2)
         self.assertIn("official runs require account", result.stdout)
         self.assertTrue((Path(self.temporary.name) / "benchmark-logs").is_dir())
+
+    def test_actual_script_smoke_timeout_allows_process_startup_variance(self) -> None:
+        self.assertGreaterEqual(OFFICIAL_SCRIPT_SMOKE_TIMEOUT_SECONDS, 30)
 
     def test_launchd_template_carries_non_login_push_environment(self) -> None:
         template = (Path(__file__).resolve().parents[2] / "tools/com.atm.benchmark-official.plist").read_text(
