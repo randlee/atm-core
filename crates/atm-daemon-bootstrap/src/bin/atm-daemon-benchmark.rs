@@ -5,6 +5,7 @@
 //! an explicit subcommand on its command line.
 
 use std::num::NonZeroUsize;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
@@ -206,7 +207,7 @@ async fn run_direct_storage_admission(
         .for_daemon()
         .service_runtime;
     let run_id = env::var("ATM_CAPACITY_RUN_ID").unwrap_or_else(|_| process::id().to_string());
-    let target = DirectStorageTarget::from_environment();
+    let target = DirectStorageTarget::from_environment()?;
     let started = Instant::now();
     let mut accepted = 0_usize;
     let mut intervals = Vec::new();
@@ -316,19 +317,30 @@ struct DirectStorageTarget {
 }
 
 impl DirectStorageTarget {
-    fn from_environment() -> Self {
+    fn from_environment() -> Result<Self, AtmError> {
         let team = env::var("ATM_CAPACITY_STORAGE_TEAM")
             .unwrap_or_else(|_| DIRECT_STORAGE_TEAM.to_owned());
         let recipient = env::var("ATM_CAPACITY_STORAGE_RECIPIENT")
             .unwrap_or_else(|_| DIRECT_STORAGE_RECIPIENT.to_owned());
         let sender = env::var("ATM_CAPACITY_STORAGE_SENDER")
             .unwrap_or_else(|_| DIRECT_STORAGE_SENDER.to_owned());
-        Self {
-            team: TeamName::from_validated(&team),
-            recipient: AgentName::from_validated(&recipient),
-            sender: AgentName::from_validated(&sender),
-        }
+        Ok(Self {
+            team: parse_capacity_team("ATM_CAPACITY_STORAGE_TEAM", &team)?,
+            recipient: parse_capacity_agent("ATM_CAPACITY_STORAGE_RECIPIENT", &recipient)?,
+            sender: parse_capacity_agent("ATM_CAPACITY_STORAGE_SENDER", &sender)?,
+        })
     }
+}
+
+fn parse_capacity_team(variable: &str, value: &str) -> Result<TeamName, AtmError> {
+    TeamName::from_str(value)
+        .map_err(|error| AtmError::config(format!("{variable} must be a valid team name: {error}")))
+}
+
+fn parse_capacity_agent(variable: &str, value: &str) -> Result<AgentName, AtmError> {
+    AgentName::from_str(value).map_err(|error| {
+        AtmError::config(format!("{variable} must be a valid agent name: {error}"))
+    })
 }
 
 fn direct_storage_message(target: &DirectStorageTarget, run_id: &str, sequence: usize) -> Message {
@@ -475,12 +487,15 @@ fn direct_core_write_request(
         env::var("ATM_CAPACITY_CORE_AGENT").unwrap_or_else(|_| CORE_WRITE_SENDER.to_owned());
     let recipient =
         env::var("ATM_CAPACITY_CORE_RECIPIENT").unwrap_or_else(|_| CORE_WRITE_RECIPIENT.to_owned());
+    let team = parse_capacity_team("ATM_CAPACITY_CORE_TEAM", &team)?;
+    let sender = parse_capacity_agent("ATM_CAPACITY_CORE_AGENT", &sender)?;
+    let recipient = parse_capacity_agent("ATM_CAPACITY_CORE_RECIPIENT", &recipient)?;
     WriteRequest::new(
         home.to_path_buf(),
         home.to_path_buf(),
-        AgentName::from_validated(&sender),
+        sender,
         &format!("{recipient}@{team}"),
-        TeamName::from_validated(&team),
+        team,
         SendMessageSource::Inline(format!("capacity-core-{sequence}")),
         None,
         false,
@@ -501,7 +516,8 @@ fn replacement_exit_code(error: &AtmError) -> i32 {
 mod tests {
     use super::{
         BenchmarkHookMode, BenchmarkInvocation, DirectStorageTarget, direct_core_write_request,
-        direct_storage_message, parse_benchmark_invocation, parse_nonzero_argument,
+        direct_storage_message, parse_benchmark_invocation, parse_capacity_agent,
+        parse_capacity_team, parse_nonzero_argument,
     };
     use atm_core::types::{AgentName, TeamName};
 
@@ -538,6 +554,39 @@ mod tests {
             "capacity-core-recipient@capacity-core-team"
         );
         assert_eq!(request.home_dir, home);
+    }
+
+    #[test]
+    fn capacity_environment_identifiers_reject_path_like_values() {
+        let storage_team = parse_capacity_team("ATM_CAPACITY_STORAGE_TEAM", "../outside")
+            .expect_err("storage team must preserve the TeamName path invariant");
+        assert!(storage_team.message().contains("ATM_CAPACITY_STORAGE_TEAM"));
+        assert!(storage_team.message().contains("valid team name"));
+
+        let storage_recipient =
+            parse_capacity_agent("ATM_CAPACITY_STORAGE_RECIPIENT", "bad recipient")
+                .expect_err("storage recipient must preserve the AgentName path invariant");
+        assert!(
+            storage_recipient
+                .message()
+                .contains("ATM_CAPACITY_STORAGE_RECIPIENT")
+        );
+
+        let core_team = parse_capacity_team("ATM_CAPACITY_CORE_TEAM", "team/escape")
+            .expect_err("core team must preserve the TeamName path invariant");
+        assert!(core_team.message().contains("ATM_CAPACITY_CORE_TEAM"));
+
+        let core_agent = parse_capacity_agent("ATM_CAPACITY_CORE_AGENT", "..")
+            .expect_err("core agent must preserve the AgentName path invariant");
+        assert!(core_agent.message().contains("ATM_CAPACITY_CORE_AGENT"));
+
+        let core_recipient = parse_capacity_agent("ATM_CAPACITY_CORE_RECIPIENT", "bad/recipient")
+            .expect_err("core recipient must preserve the AgentName path invariant");
+        assert!(
+            core_recipient
+                .message()
+                .contains("ATM_CAPACITY_CORE_RECIPIENT")
+        );
     }
 
     #[test]
