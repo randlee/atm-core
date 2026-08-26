@@ -1,8 +1,10 @@
 # Boundary Regression Fix Plan — the 22 sc-boundary Findings
 
-status: revised_after_review_round_1
-branch: plan/boundary-regression (off develop @ c94d544fe)
+status: adopted_as_phase_au_master_analysis (revised after review round 1)
+branch: plan/boundary-regression (off develop @ c94d544fe; develop merged forward post-#966)
 tracking: GitHub issue #1028; triage waiver AO2-SCBOUNDARY-DEBT-001 (phase-ao2)
+execution: Phase AU — see [plans/phase-au/plan-phase-au.md](./phase-au/plan-phase-au.md)
+  (AU.1 easy/Cipher = §1+§2, AU.2 mid/arch-ctm = §4, AU.3 hard/fenix = §3.1; fully parallel)
 author: fenix (team-lead), from 4 independent code/lint analyses, 2026-08-26
 
 ## Context
