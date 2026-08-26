@@ -276,3 +276,12 @@ triage:r62 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RSH-AO2
 # direct-peer construction/config validation split. Ancestry verified
 # (6c5c68728 is-ancestor-of current HEAD).
 triage:r63 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/ARCH-QA-AO2-R5-001> ; triage:resolvedAt "2026-08-26T08:33:00Z"^^xsd:dateTime .
+
+# QA-R5-CLIPPY-001 and QA-R5-FMT-001 (round-5 minor mechanical findings)
+# confirmed fixed and independently verified by quality-mgr at
+# integrate/phase-ao2@0ced659def5bf74cb03ac383d34170034944a2b1: dead-code
+# const removed (grep confirms no match), clippy -D warnings clean, cargo fmt
+# --check clean; fixed-sleep and sc-boundary sanity re-checks both clean, no
+# regression. Ancestry verified (commit is-ancestor-of current HEAD).
+triage:r64 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-R5-CLIPPY-001> ; triage:resolvedAt "2026-08-26T08:37:00Z"^^xsd:dateTime .
+triage:r65 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-R5-FMT-001> ; triage:resolvedAt "2026-08-26T08:37:00Z"^^xsd:dateTime .
