@@ -7,6 +7,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -127,6 +128,30 @@ class MigrateBenchmarkHistoryTests(unittest.TestCase):
                 encoding="utf-8",
             )
             self.assertEqual(MIGRATE.main(["--reports-dir", str(reports), "--check"]), 0)
+
+    def test_second_migration_run_is_a_byte_identical_noop(self) -> None:
+        """The documented rerun path neither changes reports nor audit output."""
+        source_name = "20260801-063351.969883-mac-arm64-01-uds-f1.json"
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            reports = root / "reports"
+            reports.mkdir()
+            shutil.copy2(self.fixture_dir() / source_name, reports / source_name)
+            (reports / "baselines.json").write_text(
+                json.dumps({"schema_version": 1, "revision": 1, "entries": []}), encoding="utf-8"
+            )
+            with mock.patch.object(MIGRATE, "ARTIFACT_DIR", root / "artifacts"):
+                self.assertEqual(MIGRATE.main(["--reports-dir", str(reports)]), 0)
+                first = {
+                    path.relative_to(root): path.read_bytes()
+                    for path in sorted(root.rglob("*")) if path.is_file()
+                }
+                self.assertEqual(MIGRATE.main(["--reports-dir", str(reports)]), 0)
+                second = {
+                    path.relative_to(root): path.read_bytes()
+                    for path in sorted(root.rglob("*")) if path.is_file()
+                }
+        self.assertEqual(second, first)
 
     def test_record_setting_run_is_classified_against_the_prior_ratchet_floor(self) -> None:
         source_name = "20260801-063351.969883-mac-arm64-01-uds-f1.json"

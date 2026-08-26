@@ -28,6 +28,7 @@ from scripts.smoke.benchmark_schema import (
     artifact_id,
     classify_status,
 )
+from scripts.smoke.benchmark_baselines import load_baselines
 
 
 REPORTS_ROOT = ROOT / "site" / "reports"
@@ -172,14 +173,6 @@ def load_historical_record(report_dir: Path = REPORT_DIR) -> HistoricalRecord:
         return HistoricalRecord.model_validate(load_json(path))
     except (BenchmarkSchemaError, ValueError) as exc:
         raise BenchmarkReportError(f"{path}: invalid historical record: {exc}") from exc
-
-
-def load_baselines(report_dir: Path = REPORT_DIR) -> BaselineSet:
-    path = report_dir / BASELINES_FILENAME
-    try:
-        return BaselineSet.model_validate(load_json(path))
-    except (BenchmarkSchemaError, ValueError) as exc:
-        raise BenchmarkReportError(f"{path}: invalid baseline set: {exc}") from exc
 
 
 def campaign_rows(campaign: BenchmarkCampaign) -> list[dict[str, Any]]:
@@ -422,7 +415,9 @@ def rebuild(report_dir: Path = REPORT_DIR, report_root: Path = REPORTS_ROOT, *, 
     campaigns = load_campaigns(report_dir)
     if not campaigns:
         raise BenchmarkReportError(f"{report_dir}: no validated *.campaign.json files to render")
-    historical, baselines = load_historical_record(report_dir), load_baselines(report_dir)
+    historical, baselines = load_historical_record(report_dir), load_baselines(
+        report_dir / BASELINES_FILENAME
+    )
     phase_groups: dict[str, list[BenchmarkCampaign]] = {}
     for campaign in campaigns:
         phase_groups.setdefault(campaign.phase, []).append(campaign)

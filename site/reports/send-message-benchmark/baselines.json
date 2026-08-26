@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "revision": 3,
+  "revision": 4,
   "entries": [
     {
       "host_label": "rand-m5",
@@ -47,16 +47,18 @@
     {
       "host_label": "m5-atmbench",
       "target": "tcp",
-      "p50_floor": 17500.0,
-      "approved_by": "quality-mgr: AO2.10 seed review (isolated M5 benchmark account)",
-      "effective_from": "2026-08-24T00:00:00Z"
+      "p50_floor": 17000.0,
+      "approved_by": "Rand via D3 ratchet exception",
+      "effective_from": "2026-08-26T00:00:00Z",
+      "rationale": "Three-run m5-atmbench dataset (20260825T045840Z, 20260826T001441Z, 20260826T002410Z) and Rand sign-off; the original floor was above the observed range."
     },
     {
       "host_label": "m5-atmbench",
       "target": "tcp-tls",
-      "p50_floor": 17500.0,
-      "approved_by": "quality-mgr: AO2.10 seed review (isolated M5 benchmark account)",
-      "effective_from": "2026-08-24T00:00:00Z"
+      "p50_floor": 13500.0,
+      "approved_by": "Rand via D3 ratchet exception",
+      "effective_from": "2026-08-26T00:00:00Z",
+      "rationale": "Three-run m5-atmbench dataset (20260825T045840Z, 20260826T001441Z, 20260826T002410Z) and Rand sign-off; the original TCP+TLS floor was mis-seeded equal to TCP and had never been achieved."
     },
     {
       "host_label": "windows-x64-01",

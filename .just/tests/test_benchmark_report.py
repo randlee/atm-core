@@ -158,17 +158,30 @@ class BenchmarkReportTests(unittest.TestCase):
         self.assertEqual(phase.count('class="candle PASS"'), 4)
         self.assertNotIn('class="candle INCOMPLETE"', phase)
 
-    def test_chart_geometry_has_all_candles_series_fail_outline_and_baselines(self) -> None:
+    def test_rendered_svg_has_full_two_host_four_target_grid(self) -> None:
+        """Exercise rendered markup, not just one target's geometry dictionary."""
         one = campaign(datetime(2026, 8, 24, 7, tzinfo=UTC), identifier="20260824T070000Z-rand-m5")
         two = campaign(datetime(2026, 8, 24, 8, tzinfo=UTC), identifier="20260824T080000Z-rand-m4", host="rand-m4", status="FAIL")
         with tempfile.TemporaryDirectory() as directory:
-            report_dir = Path(directory)
+            root, report_dir = Path(directory), Path(directory) / "site/reports/send-message-benchmark"
             write_inputs(report_dir, [one, two])
-            charts = REPORT.candlestick_series(REPORT.TARGET_ORDER, REPORT.empty_historical_record(), [one, two], REPORT.load_baselines(report_dir))
-        self.assertEqual(len(charts["tcp"]["candles"]), 2)
-        self.assertEqual(len(charts["tcp"]["series"]), 2)
-        self.assertEqual(len(charts["tcp"]["baseline_lines"]), 2)
-        self.assertEqual(charts["tcp"]["candles"][1]["status"], "FAIL")
+            with mock.patch.object(REPORT, "ROOT", ROOT):
+                REPORT.rebuild(report_dir, root / "site/reports", invoke_index=False)
+            phase = (report_dir / "phase-ao2.html").read_text(encoding="utf-8")
+        self.assertEqual(phase.count('<article class="chart"'), 4)
+        for target in ("sqlite", "uds", "tcp", "tcp-tls"):
+            start = phase.index(f'<article class="chart" data-target="{target}">')
+            end = phase.find('<article class="chart"', start + 1)
+            chart = phase[start:] if end < 0 else phase[start:end]
+            self.assertEqual(chart.count('class="candle PASS"'), 1)
+            self.assertEqual(chart.count('class="candle FAIL"'), 1)
+            self.assertEqual(chart.count('class="baseline"'), 2)
+            self.assertIn('data-host="rand-m5"', chart)
+            self.assertIn('data-host="rand-m4"', chart)
+        self.assertEqual(phase.count('class="candle PASS"'), 4)
+        self.assertEqual(phase.count('class="candle FAIL"'), 4)
+        self.assertEqual(phase.count('class="baseline"'), 8)
+        self.assertIn(".candle.FAIL rect", phase)
 
     def test_historical_display_uses_current_ratchet_not_frozen_ingest_floor(self) -> None:
         older = result(

@@ -1,6 +1,6 @@
 # Sprint AO2.13 — Canonical Benchmark-Run Skill and Operator Workflow
 
-Status: draft · Branch: `feature/ao2-13-benchmark-run-skill` off
+Status: complete · Branch: `feature/ao2-13-benchmark-run-skill` off
 `integrate/phase-ao2` (after AO2.11 merge-forward) · PR target:
 `integrate/phase-ao2`
 recommended_agent: Cipher-311d · recommended_model: fast

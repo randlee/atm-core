@@ -36,9 +36,12 @@ if (-not (Test-Path (Join-Path ($env:ATM_HOME ?? "$HOME\\.atm") "benchmark-accou
 The working tree must be clean before the run. Bootstrap only when the account
 manifest is absent; an existing manifest is the expected state for a reusable
 dedicated account. The ordinary benchmark harness uses its own temporary ATM
-home and daemon; it never selects, stops, or writes an ambient daemon or its
-database. Therefore `daemon-switch status --doctor` and `atm doctor --json`
-are useful account-health diagnostics, not a prerequisite for the harness.
+home and daemon. The official runner first terminates any `atm-daemon` owned
+by the disposable benchmark account—never a different OS user's daemon—then removes only that manifest-verified
+account's `.atm/db` and `.atm/benchmark-snapshots` directories. It retains the
+manifest and published evidence. `daemon-switch status --doctor` and `atm
+doctor --json` are useful account-health diagnostics, not a prerequisite for
+the harness.
 On macOS, `just benchmark` signs its fresh release binaries first. A dedicated
 benchmark account with a locked Apple Development keychain must be provisioned
 with its account-local, untracked keychain secret; the signing helper unlocks
@@ -66,6 +69,27 @@ just benchmark
 The runner writes per-target JSON, envelopes, campaign JSON, and raw local
 traces. A measured below-baseline campaign returns non-zero, but its complete
 result is still rendered and must be published.
+
+### Official-attempt visibility
+
+Every invocation of `just benchmark-official` must leave committed, pushed
+evidence on the selected branch. A measured invocation leaves its immutable
+per-target JSON and `.campaign.json`; an invocation that cannot reach
+measurement (including a trigger that never starts the runner) leaves a
+timestamped failed-attempt note under `docs/plans/phase-ao2/evidence/`.
+The note records the trigger, selected branch and SHA when known, failure
+boundary, whether measurement started, and cleanup state. It is not a
+campaign, never supplies performance data, and must not be used to overwrite
+or alter an existing campaign. Publish the note before retrying after the
+infrastructure cause is understood.
+
+Any future change to a reviewed floor in `baselines.json` requires at least
+three clean, published official runs for the same host and target under the
+same benchmark contract. A clean run has a complete target result, byte-exact
+restore/cleanup evidence, and no infrastructure, trigger, or harness error.
+The three-run evidence and its rationale accompany the reviewed baseline
+revision; failed attempts and partial runs do not count. Existing campaign
+snapshots remain immutable when a later revision is approved.
 
 ## 3. Review
 
@@ -133,3 +157,82 @@ python .claude/skills/daemon-switch/scripts/daemon-switch.py status --doctor
 After the campaign, restore the installed pair through daemon-switch and run
 `atm doctor --json` again. Do not create a second service or point the service
 directly at a worktree executable.
+
+## 8. Official unattended M5 trigger
+
+Use this only from the dedicated `atmbench` account on M5. It is the
+headless counterpart to sections 1–4: it verifies the account and checkout,
+syncs the current `integrate/phase-*` branch, builds and signs fresh release
+binaries, then lets the ordinary matrix runner create and tear down its
+isolated temporary daemon and ATM home. It never requires, checks, selects,
+or preserves an ambient account daemon: it terminates one belonging to
+`atmbench` before and after the run, and deletes the account's disposable
+database plus benchmark snapshots after use. It rebuilds reports, stages only
+public artifacts, commits, and pushes. The runner derives `GIT_SSH_COMMAND` at
+runtime from the account-local `ATM_BENCHMARK_DEPLOY_KEY`, so the LaunchAgent
+does not carry a duplicate static SSH command. Its exit code is the
+machine-readable result:
+`0` means all target floors passed, `1` means a measured campaign was published
+with one or more FAIL targets, and `2` means no publishable official result was
+produced because of an infrastructure error.
+
+The exit code does not remove the attempt-visibility obligation. For exit `2`,
+commit and push the failed-attempt note described above once the failure is
+observed; for exit `0` or `1`, the published campaign is that evidence.
+
+`just benchmark-official` runs the repository's pinned `just bootstrap` first,
+so the dedicated account needs no pre-existing Python virtual environment.
+It clears the disposable account database and daemon before measurement, again
+before it pushes evidence, and once more in final cleanup. A successful push
+also requires a clean checkout; an official runner never leaves staged or
+modified report files behind.
+
+On-demand from M4:
+
+```sh
+ssh atmbench@rand-m5.local 'export PATH="$HOME/.local/bin:/opt/homebrew/bin:$PATH"; cd ~/github/atm-core && just benchmark-official'
+```
+
+To live-validate a reviewed PR before it is merged, name that remote branch
+explicitly. This is the only supported exception to the ordinary
+`integrate/phase-*` default and retains all evidence on the reviewed branch:
+
+```sh
+ssh atmbench@rand-m5.local 'export PATH="$HOME/.local/bin:/opt/homebrew/bin:$PATH"; cd ~/github/atm-core && just benchmark-official --branch feature/<reviewed-branch>'
+```
+
+For a LaunchAgent, first set the two account-local values without committing
+them: `ATM_BENCHMARK_DEPLOY_KEY` must name the deploy key that has write access
+to the repository, and `ATM_SIGNING_IDENTITY` must be the installed Apple
+Development identity. Pre-trust GitHub once so the first launchd push cannot
+wait for a host-key prompt; the command is idempotent:
+
+```sh
+ssh-keygen -F github.com >/dev/null || ssh-keyscan -H github.com >> ~/.ssh/known_hosts
+```
+
+Install the committed template with concrete paths substituted only in the
+account-local copy, then invoke it. The template deliberately contains no key
+path, identity fingerprint, account secret, or repository-specific home path.
+
+```sh
+key="${ATM_BENCHMARK_DEPLOY_KEY:?set the account-local deploy-key path}"
+identity="${ATM_SIGNING_IDENTITY:?set the Apple Development identity}"
+repo="$HOME/github/atm-core"
+mkdir -p "$HOME/Library/LaunchAgents" "$HOME/benchmark-logs"
+sed -e "s|__ATM_REPO__|$repo|g" -e "s|__ATM_DEPLOY_KEY__|$key|g" \
+  -e "s|__ATM_SIGNING_IDENTITY__|$identity|g" -e "s|__ATM_HOME__|$HOME|g" \
+  "$repo/tools/com.atm.benchmark-official.plist" \
+  > "$HOME/Library/LaunchAgents/com.atm.benchmark-official.plist"
+launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.atm.benchmark-official.plist"
+launchctl kickstart -k "gui/$(id -u)/com.atm.benchmark-official"
+```
+
+Inspect the timestamped `~/benchmark-logs/benchmark-official-*.log` log and
+the launchd stdout/stderr logs after it completes. Remove the trigger without
+touching its benchmark evidence via:
+
+```sh
+launchctl bootout "gui/$(id -u)/com.atm.benchmark-official" || true
+rm -f "$HOME/Library/LaunchAgents/com.atm.benchmark-official.plist"
+```

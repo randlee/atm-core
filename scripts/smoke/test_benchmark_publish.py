@@ -5,7 +5,7 @@ from pathlib import Path
 import subprocess
 import unittest
 
-from scripts.smoke.benchmark_publish import REPORT_ARTIFACTS, publish
+from scripts.smoke.benchmark_publish import REPORT_ARTIFACTS, main, publish
 
 
 class BenchmarkPublishTests(unittest.TestCase):
@@ -35,6 +35,13 @@ class BenchmarkPublishTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "index stale"):
             publish(Path("/repo"), run)
         self.assertEqual(calls, [["just", "reports-index", "--check"]])
+
+    def test_public_recipe_delegates_only_to_the_bounded_publisher(self) -> None:
+        justfile = (Path(__file__).resolve().parents[2] / "Justfile").read_text(encoding="utf-8")
+        self.assertIn("benchmark-publish:\n    {{python_cmd}} scripts/smoke/benchmark_publish.py", justfile)
+
+    def test_publisher_rejects_arguments_without_any_staging(self) -> None:
+        self.assertEqual(main(["unexpected"]), 2)
 
 
 if __name__ == "__main__":

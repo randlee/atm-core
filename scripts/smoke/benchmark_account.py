@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import shutil
 import stat
 import subprocess
 from typing import Any
@@ -22,6 +23,7 @@ from typing import Any
 MANIFEST_NAME = "benchmark-account.json"
 MANIFEST_SCHEMA_VERSION = 1
 TOKEN_LENGTH = 43
+BENCHMARK_STATE_DIRECTORY_NAMES = ("db", "benchmark-snapshots")
 
 
 class BenchmarkAccountError(RuntimeError):
@@ -263,6 +265,33 @@ def require_benchmark_account() -> BenchmarkAccount:
     manifest_parent = home / ".atm"
     _verify_directory(manifest_parent, "manifest directory")
     return _parse_manifest(manifest_path(home))
+
+
+def clear_benchmark_database_state() -> BenchmarkAccount:
+    """Remove only the manifest-verified account's disposable database state.
+
+    The benchmark manifest intentionally survives so this does not bootstrap or
+    alter an ambient user account.  A caller must first stop the sole daemon
+    owned by this disposable OS account; this function deliberately has no
+    process-control surface of its own.
+    """
+    account = require_benchmark_account()
+    parent = account.manifest_path.parent
+    paths = tuple(parent / name for name in BENCHMARK_STATE_DIRECTORY_NAMES)
+    for path in paths:
+        if not path.exists() and not path.is_symlink():
+            continue
+        metadata = _verify_no_symlink(path, f"disposable state {path.name}")
+        if not stat.S_ISDIR(metadata.st_mode):
+            raise BenchmarkAccountError(f"benchmark-account disposable state is not a directory: {path}")
+    for path in paths:
+        if not path.exists():
+            continue
+        try:
+            shutil.rmtree(path)
+        except OSError as error:
+            raise BenchmarkAccountError(f"could not remove benchmark-account disposable state {path}: {error}") from error
+    return account
 
 
 def bootstrap_benchmark_account() -> BenchmarkAccount:
