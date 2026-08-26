@@ -18,7 +18,7 @@ The best available Herdr composition is a gate, not an atomic primitive:
 ```text
 herdr agent wait <agent> --until idle --until done --until blocked --timeout <bounded>
 # only idle/done continues
-herdr agent prompt <agent> "You have unread ATM messages. Run: atm read" --wait
+herdr agent prompt <agent> "You have unread ATM messages. Run: atm read"
 ```
 
 There is a race between `wait` returning and `prompt` reaching the terminal:
@@ -30,19 +30,24 @@ turn-correlated queueing.
 
 ## Deliverables
 
-1. **One bounded Tokio pump, no hidden queue.** Compose
-   `HerdrQueueWakePump` in the replacement Tokio/Axum runtime beside AQ3's
-   joined maintenance work. It considers only `DeliveryChannel::HerdrSteer`
-   and only queue-kind pending markers. It owns no mailbox rows, FIFO, retry
-   count, long-lived child, or per-message detached task. At each bounded
-   pass it handles at most one oldest pending message per member; shutdown
-   cancels and joins it under the daemon deadline. The legacy synchronous
-   daemon is out of scope and must not be touched.
+1. **Detached Tokio pump, no hidden queue.** Compose `HerdrQueueWakePump` in
+   the replacement Tokio/Axum runtime beside AQ3's joined maintenance work.
+   The sender detaches after durable queue admission; its request deadline is
+   never inherited by this pump. The idle gate may wait for a long configured
+   period (including 45 minutes) without blocking the send path. It considers
+   only `DeliveryChannel::HerdrSteer` and only queue-kind pending markers. It
+   owns no mailbox rows, FIFO, retry count, or per-message detached task. At
+   each pass it handles at most one oldest pending message per member;
+   shutdown cancels/reaps an active wait child and joins the pump under the
+   daemon deadline. The legacy synchronous daemon is out of scope and must
+   not be touched.
 
 2. **Lifecycle gate and claim order.** For a member with pending work, invoke
-   AQ2.6's Herdr process adapter for `agent wait` with finite timeout and
-   accept only returned `idle` or `done`. A returned `blocked`, timeout,
-   unavailable agent, malformed output, or `unknown` produces a structured
+   AQ2.6's Herdr process adapter for `agent wait` with the detached pump's
+   long configured timeout and accept only returned `idle` or `done`. A
+   returned `blocked`, timeout (including an agent that remains
+   unclassifiable/`unknown`, because this gate does not accept `--until
+   unknown`), unavailable agent, or malformed output produces a structured
    held/deferred observation and performs **no claim and no prompt**. On
    `idle`/`done`, atomically call AQ1's `claim_next_pending`, then dispatch
    that exact claim through the normal message-received selector to
@@ -70,12 +75,15 @@ turn-correlated queueing.
 
 ## Acceptance criteria
 
-1. With a queued Herdr member that is working, the pump sends no prompt until
-   its bounded wait observes `idle` or `done`; mail is nevertheless immediately
-   obtainable with `atm read` throughout.
+1. With a queued Herdr member that is working, the detached pump sends no
+   prompt until its long configured idle gate observes `idle` or `done`; mail
+   is nevertheless immediately obtainable with `atm read` throughout. A
+   sender completes queue admission while that gate is held (including a
+   45-minute fixture), proving the send path never awaits it.
 2. A `blocked` lifecycle result produces no claim, no terminal input, and no
-   retry-attempt change. An `unknown` result is never accepted as completion
-   and has the same no-claim behavior.
+   retry-attempt change. Because the gate does not accept `--until unknown`,
+   an unclassifiable/`unknown` agent reaches the held timeout path and is
+   never accepted as completion or prompted.
 3. A deterministic race fixture has the agent enter a blocked dialog after
    wait succeeds but before prompt. Herdr returns `agent_blocked`; the exact
    claim is released, its attempt count is unchanged, and the fixture records
@@ -103,8 +111,9 @@ turn-correlated queueing.
 
 ## Non-closure / out of scope
 
-- A Herdr-native queue, atomic idle-and-send operation, per-turn tracking,
-  priority/re-nudge policy, or any claim that `--wait` delays prompt sending.
+- A Herdr-native queue, atomic idle-and-send operation, per-turn tracking, or
+  priority/re-nudge policy. `agent prompt` is fire-and-forget; only this
+  detached pump waits for lifecycle observation.
 - Changing immediate steer behavior from AQ2.6: immediate Herdr steer may
   prompt a working agent; queue is the lifecycle-gated policy.
 - Any tmux removal, legacy-daemon work, mailbox persistence redesign, or

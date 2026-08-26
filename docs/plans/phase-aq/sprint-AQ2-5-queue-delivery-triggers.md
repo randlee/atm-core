@@ -58,10 +58,10 @@ nothing — denied, never raced against AQ3.
 
 | Member's classified channel (inputs: roster row + graft lease) | Trigger | Delivery |
 |---|---|---|
-| **tmux steer** — roster `pane_id` set (Claude or Codex — identical) | AQ3 idle-transition drain (fed by this sprint's heartbeats) | existing steer selector (tmux send-keys) |
+| **tmux steer** — explicit local `backend = tmux` configuration (Claude or Codex — identical) | AQ3 idle-transition drain (fed by this sprint's heartbeats) | retained tmux emitter |
 | **Herdr steer** — explicit local `backend = herdr` configuration (AQ2.6) | AQ2.7 lifecycle-gated wake pump for queue; immediate for steer | Herdr `agent prompt`; mailbox remains authoritative |
-| **graft** — no `pane_id`, graft lease registered (AQ1.5 store) | AQ2 queue channel | graft queue-kind wire message |
-| **bare-CLI** — no `pane_id`, no graft lease (Claude or Codex) | message arrival appends to the member's RAM FIFO; drain at the member's next Stop-pull get | queue-kind: one item per get · steer-kind: all items at once. Claude injects via Stop-hook block-with-reason. **Codex has no injection surface yet** — its FIFO accumulates bounded (drop-oldest ages out stale nudges) until Codex gains one or the member adopts graft; disclosed, not silent. |
+| **graft** — no local backend, graft lease registered (AQ1.5 store) | AQ2 queue channel | graft queue-kind wire message |
+| **bare-CLI** — no local backend, no graft lease (Claude or Codex) | message arrival appends to the member's RAM FIFO; drain at the member's next Stop-pull get | queue-kind: one item per get · steer-kind: all items at once. Claude injects via Stop-hook block-with-reason. **Codex has no injection surface yet** — its FIFO accumulates bounded (drop-oldest ages out stale nudges) until Codex gains one or the member adopts graft; disclosed, not silent. |
 
 The pending-marker machinery (AQ1 store) applies to tmux-steer, Herdr-steer,
 and graft members. AQ3 schedules only tmux/graft; AQ2.7 is the sole
@@ -207,12 +207,12 @@ the false-stuck problem cannot arise.
 4. **Channel classifier + received-hook selector extension** — the
    trigger table's single code owner, deliberately small (one enum, one
    function, one trivial emitter):
-   - A `DeliveryChannel` classification function in core: inputs are
-     the roster row (`pane_id`) and
+   - A `DeliveryChannel` classification function in core: inputs are the
+     roster row's `LocalMessageReceivedBackend` (not a pane-id shape) and
      `GraftReceiverEndpointStore::lookup` for the graft lease — the
      AQ1.5 registry, **never** the retired file record, mirroring AQ2's
      `must_follow AQ1.7` reasoning — returning
-     `TmuxSteer | Graft | BareCli`. The handler obtains the store
+     `TmuxSteer | HerdrSteer | Graft | BareCli`. The handler obtains the store
      handle exactly as AQ2's queue channel wires it into
      `storage_and_nudge_router.rs`.
    - `PostSendBuiltInTarget::QueuePull` — a third variant in core's
@@ -228,8 +228,9 @@ the false-stuck problem cannot arise.
      sequenced single ownership, mirroring the `received_hook_selector.rs`
      seam with AQ2.
    - `PostSendEmissionPath::QueuePull` — a matching variant in
-     `atm-core/src/boundary/mod.rs`'s emission-path enum
-     (`ExternalHook | LocalTmux | GraftPort` today);
+     `atm-core/src/boundary/mod.rs`'s emission-path enum. AQ2.6 replaces the
+     local execution label with backend-neutral `LocalSteer`, so planners and
+     selectors do not encode tmux-vs-Herdr branching;
      `PullPendingReceivedHook::emit_received_message` returns it, so the
      impl is fully specified.
    - `PullPendingReceivedHook` — a third `AsyncMessageReceivedHookEmitter`
@@ -253,19 +254,22 @@ the false-stuck problem cannot arise.
    // atm-core (beside the existing delivery-policy/dispatch planning;
    // exact module placement follows DeliveryHarnessPath's home):
    /// Single code owner of the delivery-trigger table.
-   pub enum DeliveryChannel { TmuxSteer, Graft, BareCli }
+   pub enum DeliveryChannel { TmuxSteer, HerdrSteer, Graft, BareCli }
 
    /// Pure decision over already-fetched inputs — the caller performs
    /// the roster read and the GraftReceiverEndpointStore::lookup; the
    /// classifier itself does no I/O (trivially unit-testable).
    pub fn classify_delivery_channel(
-       pane_id: Option<&str>,                     // roster row
+       local_backend: Option<&LocalMessageReceivedBackend>, // roster row
        graft_lease: Option<&GraftReceiverLease>,  // AQ1.5 lookup result
    ) -> DeliveryChannel
 
    // core's post-persistence dispatch-target planning gains:
    pub enum PostSendBuiltInTarget {
-       LocalTmux(/* existing payload, unchanged */),
+       /// Backend-neutral opaque local-steer target. AQ2.6 binds this to
+       /// either retained tmux or Herdr through the sealed emitter contract;
+       /// planner/selector code does not match on that choice.
+       LocalSteer(/* target + sealed backend handle */),
        Graft(/* existing payload, unchanged */),
        /// NEW: bare-CLI members — emitter appends to the RAM FIFO.
        QueuePull(QueuePullTarget), // { team, agent, kind, msg_id, body }
@@ -360,14 +364,15 @@ the false-stuck problem cannot arise.
    threat model, identical to every other Local-ingress command (test:
    the clap surface rejects any attempt to pass a member argument; a
    crafted envelope for a non-roster member is rejected by validation).
-6. Classifier totality, selector, and gating: every classification
-   outcome resolves through the single classifier function (test over
-   all three member shapes); `QueuePull` targets select
+6. Classifier totality, selector, and gating: every classification outcome
+   resolves through the single classifier function (test over all four member
+   shapes); its local input is the backend enum, never `pane_id` syntax.
+   `QueuePull` targets select
    `PullPendingReceivedHook` whose emit is bounded and synchronous (al3
-   stays green); a get for a member classified `TmuxSteer` or `Graft`
-   returns empty and touches no FIFO/store state; the roster-shape →
-   channel mapping exists in exactly one function (review gate: no
-   duplicate match on pane-id/lease outside the classifier).
+   stays green); a get for a member classified `TmuxSteer`, `HerdrSteer`, or
+   `Graft` returns empty and touches no FIFO/store state; the backend/lease →
+   channel mapping exists in exactly one function (review gate: no duplicate
+   backend or lease match outside the classifier).
 7. Marker handoff: for a bare-CLI member, message arrival appends to
    the FIFO and clears the pending marker in the same dispatch (AQ2
    handoff semantics) — the AQ3 sweep subsequently finds nothing for
