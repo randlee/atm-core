@@ -92,29 +92,44 @@ expressible on the Herdr argv. The launch convention in AQ2.6 becomes:
 > The Herdr agent MUST be started or renamed so its live agent name equals
 > `ATM_IDENTITY`. Because Herdr names are unique per server, two teams on one
 > Herdr server cannot both have a member named `team-lead`; operators who
-> need that must run each team in its own Herdr session
-> (`HERDR_SESSION=<team>`), and the atm daemon that emits the nudge must
-> inherit the same `HERDR_SESSION`/`HERDR_SOCKET_PATH` environment. atm-core
-> passes the daemon's environment through to the `herdr` child unchanged and
-> does not synthesise either variable.
+> need that must run each team in its own Herdr session and record that
+> session on the affected members' roster rows (below) — the session is
+> never read from, or exported into, the atm daemon's own process
+> environment.
 
-**Decision (Rand, 2026-08-26, refined in discussion):** the daemon never
-launches Herdr sessions — the team launcher does — so the session an agent
-lives in is **roster data per member**, exactly as `recipient_pane_id` is for
-tmux: `LocalMessageReceivedBackend::Herdr { session: Option<HerdrSession> }`,
-set at `atm teams add-member … --backend herdr [--session <name>]` (AQ2.6),
-`None` meaning Herdr's default server. The Herdr emitter sets
-`HERDR_SESSION=<session>` on the **child process environment per
-invocation**; the daemon's own environment is never consulted and atm-core
-never synthesises a session name. Consequences: one daemon serves teams in
-different sessions; name uniqueness is per session, so same-named members in
-different teams are fine when their teams run in different sessions; a
-member whose stored session does not match where its agent actually runs
-surfaces as `agent_not_found`, which `atm doctor` (AQ2.6) must report as
-"agent not visible in the member's configured Herdr session" via
-`herdr agent get <name>` under that env. The earlier "one shared session
-default / `HERDR_SESSION` escape hatch" framing is superseded by this
-per-member field.
+**Session sourcing — one model.** `HerdrSession` and the field that carries
+it, `LocalMessageReceivedBackend::Herdr { session: Option<HerdrSession> }`,
+are owned and defined by AQ1
+(`docs/plans/phase-aq/sprint-AQ1-queue-cli.md`, "Trait-foundation scope";
+landed at `crates/atm-core/src/delivery_channel.rs`), **not** by this ADR.
+ADR-058 does not define, redefine, or widen that type; it only fixes how the
+Herdr emitter *consumes* the `session` field on each invocation. Because the
+daemon never launches Herdr sessions — the external team launcher does — the
+session an agent lives in is **roster data per member**, exactly as
+`recipient_pane_id` is for tmux, set at `atm teams add-member … --backend
+herdr [--session <name>]` (AQ2.6), `None` meaning Herdr's default server.
+The Herdr emitter sets `HERDR_SESSION=<session>` on the **child process
+environment, per invocation**, only when the member's stored `session` is
+`Some`; when it is `None`, `HERDR_SESSION` is left unset on the child. The
+daemon's own environment is never consulted for this value, and atm-core
+never synthesises a session name from any other source. AQ2.6's sprint doc
+(`docs/plans/phase-aq/sprint-AQ2-6-herdr-steer-backend.md`) already reflects
+this exact type and per-invocation rule.
+
+Consequences: one daemon serves teams in different sessions; name uniqueness
+is per session, so same-named members in different teams are fine when their
+teams run in different sessions; a member whose stored session does not
+match where its agent actually runs surfaces as `agent_not_found`, which
+`atm doctor` (AQ2.6) reports as "agent not visible in the member's
+configured Herdr session" by calling `herdr agent get <name>` under that
+same per-invocation env (D9).
+
+**History (2026-08-26).** An earlier draft of this section had the daemon
+inherit a shared `HERDR_SESSION`/`HERDR_SOCKET_PATH` from its own process
+environment ("one shared session default / escape hatch"). That framing
+contradicted the per-member model above and was never a design this ADR
+should have carried forward; it is superseded in full by the per-member
+`HerdrSession` roster field, which is the only model this ADR states.
 
 The "workspace equals `ATM_TEAM`" clause in AQ2.6 is advisory operator
 practice only; atm-core neither checks nor depends on it.
@@ -125,6 +140,14 @@ practice only; atm-core neither checks nor depends on it.
 reject (or at least warn on) an `ATM_IDENTITY` outside this grammar at
 `add-member`/`update-member` time, because such a member can never be
 targeted.
+
+This grammar recurs across D1/D2/D4-D8 and the fixture as bare, ad hoc
+prose. AQ2.6, which owns the `add-member`/`update-member` validation call
+site, SHOULD wrap it in a validated newtype (`HerdrAgentName`, precedent:
+`HerdrSession::new` in `delivery_channel.rs`) rather than re-validating a
+raw `String`/`&str` at each call site; this ADR does not itself define that
+type (AQ1 owns `delivery_channel.rs`), it only records the recommendation so
+AQ2.6 does not have to re-derive it.
 
 ### D2. Exact argv atm-core emits
 
@@ -303,19 +326,106 @@ record this in events and the ADR-054 addendum.
 
 ### D8. Error-code contract atm-core parses
 
-| `error.code` | Emitting command(s) | atm-core outcome |
-| --- | --- | --- |
-| `agent_blocked` | prompt | `blocked_before_input` (AQ2.6) / `release_pending` (AQ2.7) |
-| `agent_not_found` | prompt, wait (initial), rename | `target_not_present` / `held_target_not_present` |
-| `agent_not_running` | wait (mid-wait) | treated as `held_target_not_present` |
-| `agent_target_ambiguous` | prompt, wait, rename | advisory failure, no retry (operator must fix names) |
-| `agent_not_ready` | prompt | advisory failure (`requeue_pending` path in AQ2.7) |
-| `timeout` | wait | `held_unknown_or_timeout` |
-| `agent_prompt_failed`, `empty_agent_prompt`, `internal_error`, `server_unavailable` | prompt/wait | advisory failure (`requeue_pending`) |
-| `server_not_running`, `protocol_mismatch` | any | advisory failure, health counter `herdr_unavailable` |
-| (exit 2, no JSON) | any | atm-core bug: argv construction error, must be impossible by construction |
+| `error.code` | Emitting command(s) | atm-core outcome | Cause | Recovery |
+| --- | --- | --- | --- | --- |
+| `agent_blocked` | prompt | `blocked_before_input` (AQ2.6) / `release_pending` (AQ2.7) | target agent is at an approval/question UI; Herdr rejected before writing any input | no retry on this path; durable mail stays readable via `atm read`; operator/agent clears the blocking UI, a later nudge (or manual `atm read`) delivers |
+| `agent_not_found` | prompt, wait (initial), rename | `target_not_present` / `held_target_not_present` | no live agent named `<AgentName>` on the resolved Herdr server/session (renamed, exited, wrong session) | mail already persisted and stays readable; operator runs `atm doctor` / `herdr agent list`, fixes the member's `--session` or restarts the agent under its configured name |
+| `agent_not_running` | wait (mid-wait) | treated as `held_target_not_present` | agent exited, its pane closed, or it was renamed away while the wait was outstanding | same as `agent_not_found`; AQ2.7's recovery sweep re-attempts on the next pending scan |
+| `agent_target_ambiguous` | prompt, wait, rename | advisory failure, no retry (operator must fix names) | two or more terminals resolve to the same name (stale/duplicate `agent_name`) | operator renames the duplicate agent(s); atm-core has no automatic disambiguation |
+| `agent_not_ready` | prompt | advisory failure (`requeue_pending` path in AQ2.7) | agent still launching, or no longer the pane foreground process | AQ2.7 requeues for the next pump tick; Steer has no retry mechanism and only logs a warning |
+| `timeout` | wait | `held_unknown_or_timeout` | agent never reached `idle`/`done`/`blocked` within `--timeout` | AQ2.7 requeues for another wait cycle, bounded by `MAX_NUDGE_ATTEMPTS` |
+| `agent_prompt_failed`, `empty_agent_prompt`, `internal_error`, `server_unavailable` | prompt/wait | advisory failure (`requeue_pending`) | PTY write failed; fixed prompt text was empty (should be impossible by construction); Herdr-internal error; server mid-shutdown | requeue and retry; `empty_agent_prompt` specifically indicates an atm-core defect (D2's fixed text is never empty) and must also be logged as a bug, not only requeued |
+| `server_not_running`, `protocol_mismatch` | any | advisory failure, health counter `herdr_unavailable` | no Herdr server at the resolved socket; or client/server `PROTOCOL_VERSION` mismatch | operator starts/restarts the Herdr server (restart required after a Herdr upgrade for `protocol_mismatch`); `atm doctor` surfaces the `herdr_unavailable` health counter |
+| (exit 2, no JSON) | any | atm-core bug: argv construction error, must be impossible by construction | malformed argv (missing/extra positional, disallowed flag combination) | not operator-recoverable; a fixture/unit-test regression that must fail CI before reaching a real invocation |
 
 Unknown codes are advisory failures; atm-core never matches on `message`.
+
+### D9. `agent get` semantics (doctor probe)
+
+CLI `src/cli/agent.rs:20` (dispatch), `:450-465` (`fn agent_get`); server
+`handle_agent_get`, `src/app/api/agents.rs:25-32`.
+
+```text
+herdr agent get <AgentName>
+```
+
+- Exactly one positional `<target>`; zero, or two-or-more, args is a usage
+  error, plain text on stderr, exit `2` (`src/cli/agent.rs:450-457`).
+- Request id `cli:agent:get`, `Method::AgentGet(AgentTarget { target })`
+  (`src/cli/agent.rs:459-465`, `src/api/schema.rs:109`).
+- Target resolution is the **same** `App::resolve_agent_target` as D1
+  (`src/app/terminal_targets.rs:75-106`) via `agent_info_for_target`
+  (`src/app/agents.rs:64-73`) — there is no separate resolution rule for
+  `get`.
+- Success: stdout `{"id":"cli:agent:get","result":{"type":"agent_info","agent":{…}}}`,
+  exit `0` (`handle_agent_get` returns `ResponseResult::AgentInfo`, printed
+  by `src/cli.rs:738-746`). `AgentInfo` fields are D1's cited struct
+  (`src/api/schema/agents.rs:184-223`, including `agent_status` and
+  `workspace_id`); atm-core's doctor probe reads only `agent_status` — the
+  "Explicitly NOT relied upon" exclusion of other `AgentInfo` fields and
+  key ordering applies here too.
+- Errors reachable from `get` are exactly the two `TerminalTargetError`
+  variants mapped by `agent_target_error_body`
+  (`src/app/agents.rs:288-317`): `agent_not_found` (no match) and
+  `agent_target_ambiguous` (multiple matches), both stderr JSON, exit `1`.
+  `agent_blocked`, `agent_not_ready`, and the other `agent prompt`-only
+  codes (D4) **cannot** be returned by `get` — it performs no write and no
+  PTY/foreground check. The universal transport codes
+  (`server_not_running`, `protocol_mismatch`, D3) apply exactly as for
+  every other command.
+- `agent get` is Herdr's only true read-only agent probe: it has no
+  `--wait`/`--timeout` of its own, so the doctor call site is bound solely
+  by atm-core's own D10 child-process deadline, never by anything
+  Herdr-side.
+
+Any doctor-probe claim not sourced above (for example, a relationship
+between `agent get` and `agent_session`/`state_labels`/`tokens`) is **not
+contracted**; atm-core must not assert on it.
+
+### D10. Child-process bound (external timeout, independent of Herdr)
+
+Herdr's own client applies **no** read/connect timeout on `send_request`
+(D3): a `prompt` waits on the socket until the server answers the write
+request, and a `wait` without `--timeout` blocks indefinitely. Even with
+`--timeout` supplied (D2, always), that value bounds only Herdr's
+*server-side* state-matching loop — not the client's ping/handshake, and
+not however long the OS takes to schedule and run the child at all. Every
+`herdr` child spawn is therefore wrapped in an **external,
+atm-core-owned deadline**, independent of and in addition to any
+`--timeout` argv value:
+
+- **Mechanism:** `tokio::time::timeout` around the child's wait-for-exit
+  (the `Child::wait`/`Command::status` future), never around the spawn
+  call itself. On elapse: kill the child (`Child::kill`) and reap it
+  (await the kill's own wait) before returning `HerdrTimedOut` — a
+  killed-but-unreaped child is a defect, not an acceptable outcome.
+- **Steer bound (`prompt`, AQ2.6, `HerdrReceivedHook`):** 5 s. `agent
+  prompt` without `--wait` returns as soon as the server schedules the
+  text write (D3, D4) — there is no legitimate reason for the round trip
+  (ping plus one request/response) to exceed low single-digit seconds.
+  This bound is applied to the `herdr` child specifically and sits inside
+  the inherited `RequestDeadline` the emitter already awaits everything
+  against (sprint-AQ2-6-herdr-steer-backend.md deliverable 3); it does not
+  replace that deadline.
+- **Wait bound (`wait`, AQ2.7, `HerdrQueueWakePump`):** the pump's own
+  per-member deadline — the same `--timeout` value already passed on the
+  `agent wait` argv (D2; up to 45 minutes) — plus a small fixed grace (low
+  single-digit seconds) so Herdr's own `timeout` response can arrive and
+  be parsed before atm-core's external deadline fires first. The external
+  deadline is the backstop for a child that neither errors nor exits
+  (a hung Herdr server, a wedged socket) and would otherwise leak; under
+  normal operation it does not race Herdr's own `timeout` semantics (D5).
+- Cancellation (SIGTERM/SIGKILL) on either bound is a clean cancel from
+  Herdr's side (D5, D7's cancellation note): no input is ever written by a
+  killed `wait`, and a killed `prompt` before its write has landed leaves
+  no partial state (the write is one server-side atomic step, D4).
+- **Required evidence.** A fake `HerdrProcessAdapter` implementation whose
+  future never resolves (never exits) proves the emitter returns a
+  distinct `HerdrTimedOut` outcome within the bound above and that the
+  child is killed, asserted via the fake's own call record — this is the
+  concrete shape of sprint-AQ2-6-herdr-steer-backend.md AC 11 ("Deadline/
+  cancellation tests prove no child process or background task survives
+  the request"). AQ2.7 owns the equivalent test for `wait`.
 
 ## Consequences
 
@@ -323,8 +433,9 @@ Unknown codes are advisory failures; atm-core never matches on `message`.
   `ATM_IDENTITY` and nothing else. The doctor/CLI must validate the name
   grammar `^[a-z][a-z0-9_-]{0,31}$`.
 - `ATM_TEAM` cannot be selected on the Herdr argv; per-team isolation on a
-  shared host requires per-team Herdr sessions via inherited environment.
-  This is a documented operator constraint, not an atm-core feature.
+  shared host requires per-team Herdr sessions, recorded per member on the
+  roster (D1) — never via the daemon's own process environment. This is a
+  documented operator constraint, not an atm-core feature.
 - Both sprints parse one JSON line from stderr and switch on `error.code`;
   exit code 1 alone is not sufficient to classify.
 - A Herdr upgrade that changes `PROTOCOL_VERSION` (already 21 at `d79fd746`)
@@ -370,9 +481,12 @@ Unknown codes are advisory failures; atm-core never matches on `message`.
   derived-from-source until AQ2.6's live macOS/Linux validation replaces it
   with captured output.
 - AQ2.6 tests: argv equality for the steer command; stderr parse of each row
-  in D8; exit 2 impossible-by-construction test.
+  in D8; exit 2 impossible-by-construction test; the D10 fake-adapter
+  never-exits test proving `HerdrTimedOut` within the 5 s steer bound and a
+  killed child (sprint-AQ2-6-herdr-steer-backend.md AC 11).
 - AQ2.7 tests: argv equality for the wait command; `timeout`,
   `agent_not_found`, `agent_not_running`, `blocked` gating; child kill cleans
-  up with no prompt emitted.
+  up with no prompt emitted; the D10 fake-adapter never-exits test for
+  `wait`'s per-member bound.
 - AQ6: `herdr --version` and `herdr status` protocol recorded in the pin
   table; preflight fails on binary/server protocol mismatch.

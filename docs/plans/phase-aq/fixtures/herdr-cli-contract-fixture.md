@@ -12,12 +12,29 @@ stderr), and exit code — never on `message` text or key order.
 Conventions:
 
 - `argv` is the literal `execve` vector; no shell.
-- `<sock>` = `~/.config/herdr/herdr.sock` unless `HERDR_SOCKET_PATH` or
-  `HERDR_SESSION` is set in the daemon environment (`src/session.rs:173-180`).
-- `AgentInfo` bodies are abbreviated `{…}`; fields present on every success:
-  `terminal_id, name, agent, agent_status, workspace_id, tab_id, pane_id,
-  focused, state_change_seq, revision` (`src/api/schema/agents.rs:184-223`).
-- Placeholder member name: `arch-ctm` (valid under `^[a-z][a-z0-9_-]{0,31}$`).
+- **Environment (per ADR-058 D1, one model only).** `HERDR_SESSION` is set
+  on the `herdr` **child process, per invocation**, only when the emitting
+  member's roster row carries `LocalMessageReceivedBackend::Herdr { session:
+  Some(_) }` — the value comes from that per-member roster field (AQ1's
+  `HerdrSession`, `crates/atm-core/src/delivery_channel.rs`), never from the
+  atm daemon's own process environment, which is never consulted. When the
+  member's `session` is `None`, `HERDR_SESSION` is left unset on the child
+  and `<sock>` resolves to Herdr's default `~/.config/herdr/herdr.sock`
+  (`src/session.rs:96-101`, `:161-171`, `:173-180`). `HERDR_SOCKET_PATH`, if
+  present in the daemon's own environment, is inherited unchanged (it is not
+  member-specific and this ADR does not change that).
+- `AgentInfo` bodies are abbreviated `{…}`. Fields marked required in the
+  schema and therefore present on every success: `terminal_id, agent_status,
+  workspace_id, tab_id, pane_id, focused, state_change_seq, revision`. `name`
+  and `agent` are `Option<String>` with `skip_serializing_if =
+  "Option::is_none"` and are **omitted**, not `null`, for an unnamed or
+  undetected agent (`src/api/schema/agents.rs:184-223`); the transcripts
+  below show them only because the fixture's placeholder agent is named and
+  detected.
+- Placeholder member name: `agent-a` (valid under `^[a-z][a-z0-9_-]{0,31}$`,
+  neutral — not a real ATM team member). Placeholder Herdr session name where
+  one is shown: `session-a`. Placeholder team name: `team-x`. Placeholder
+  pane/workspace id: `ws1:p1`.
 
 ---
 
@@ -26,7 +43,7 @@ Conventions:
 argv:
 
 ```text
-["herdr","agent","prompt","arch-ctm","You have unread ATM messages. Run: atm read"]
+["herdr","agent","prompt","agent-a","You have unread ATM messages. Run: atm read"]
 ```
 
 Request id: `cli:agent:prompt` (`src/cli/agent.rs:833`).
@@ -35,7 +52,7 @@ Request id: `cli:agent:prompt` (`src/cli/agent.rs:833`).
 
 | stream | content |
 | --- | --- |
-| stdout | `{"id":"cli:agent:prompt","result":{"type":"agent_prompted","agent":{"terminal_id":"…","name":"arch-ctm","agent":"codex","agent_status":"working","workspace_id":"…","tab_id":"…:t1","pane_id":"…:p1","focused":false,"state_change_seq":42,"revision":…}}}` |
+| stdout | `{"id":"cli:agent:prompt","result":{"type":"agent_prompted","agent":{"terminal_id":"…","name":"agent-a","agent":"codex","agent_status":"working","workspace_id":"…","tab_id":"…:t1","pane_id":"…:p1","focused":false,"state_change_seq":42,"revision":…}}}` |
 | stderr | (empty) |
 | exit | `0` |
 
@@ -47,17 +64,17 @@ Note: `agent_status` in the response is the status *at submission*; it may still
 | stream | content |
 | --- | --- |
 | stdout | (empty) |
-| stderr | `{"id":"cli:agent:prompt","error":{"code":"agent_blocked","message":"agent arch-ctm is blocked and requires interactive input"}}` |
+| stderr | `{"id":"cli:agent:prompt","error":{"code":"agent_blocked","message":"agent agent-a is blocked and requires interactive input"}}` |
 | exit | `1` |
 
 Source: `src/app/api/agents.rs:82-91` (check precedes `try_send_bytes` at `:123`), `src/cli.rs:739-742`.
 
-### F1.3 `agent_not_found` (no agent named `arch-ctm` on this server)
+### F1.3 `agent_not_found` (no agent named `agent-a` on this server)
 
 | stream | content |
 | --- | --- |
 | stdout | (empty) |
-| stderr | `{"id":"cli:agent:prompt","error":{"code":"agent_not_found","message":"agent target arch-ctm not found"}}` |
+| stderr | `{"id":"cli:agent:prompt","error":{"code":"agent_not_found","message":"agent target agent-a not found"}}` |
 | exit | `1` |
 
 Source: `src/app/terminal_targets.rs:103-105`, `src/app/agents.rs:290-293`.
@@ -67,7 +84,7 @@ Variant (pane exists but terminal/runtime gone): same code, same message, `src/a
 
 | stream | content |
 | --- | --- |
-| stderr | `{"id":"cli:agent:prompt","error":{"code":"agent_target_ambiguous","message":"agent target arch-ctm is ambiguous; candidates: terminal_id=… pane_id=…:p1 workspace_id=… tab_id=…:t1 cwd=/… status=Idle; terminal_id=… …"}}` |
+| stderr | `{"id":"cli:agent:prompt","error":{"code":"agent_target_ambiguous","message":"agent target agent-a is ambiguous; candidates: terminal_id=… pane_id=…:p1 workspace_id=… tab_id=…:t1 cwd=/… status=Idle; terminal_id=… …"}}` |
 | exit | `1` |
 
 Source: `src/app/agents.rs:294-318`. Reachable only if name uniqueness is bypassed (e.g. session restore of stale names); atm-core treats as advisory failure.
@@ -76,7 +93,7 @@ Source: `src/app/agents.rs:294-318`. Reachable only if name uniqueness is bypass
 
 | stream | content |
 | --- | --- |
-| stderr | `{"id":"cli:agent:prompt","error":{"code":"agent_not_ready","message":"agent arch-ctm is not an active named agent"}}` or `…"message":"agent arch-ctm is no longer the pane foreground process"}}` |
+| stderr | `{"id":"cli:agent:prompt","error":{"code":"agent_not_ready","message":"agent agent-a is not an active named agent"}}` or `…"message":"agent agent-a is no longer the pane foreground process"}}` |
 | exit | `1` |
 
 Source: `src/app/api/agents.rs:92-97`, `:101-110`, `:291-297`.
@@ -105,10 +122,10 @@ Source: `src/cli/protocol_guard.rs:16-43`, `src/cli.rs:777-797`, `src/main.rs:57
 
 | argv | stderr (plain text) | exit |
 | --- | --- | --- |
-| `["herdr","agent","prompt","arch-ctm"]` | `agent prompt requires text` | `2` |
-| `["herdr","agent","prompt","arch-ctm","x","--timeout","1000"]` | `--timeout requires --wait` | `2` |
-| `["herdr","agent","prompt","arch-ctm","x","--until","idle"]` | `--until requires --wait` | `2` |
-| `["herdr","agent","prompt","arch-ctm",""]` | `{"id":"cli:agent:prompt","error":{"code":"empty_agent_prompt","message":"agent prompt must not be empty"}}` | `1` |
+| `["herdr","agent","prompt","agent-a"]` | `agent prompt requires text` | `2` |
+| `["herdr","agent","prompt","agent-a","x","--timeout","1000"]` | `--timeout requires --wait` | `2` |
+| `["herdr","agent","prompt","agent-a","x","--until","idle"]` | `--until requires --wait` | `2` |
+| `["herdr","agent","prompt","agent-a",""]` | `{"id":"cli:agent:prompt","error":{"code":"empty_agent_prompt","message":"agent prompt must not be empty"}}` | `1` |
 
 Source: `src/cli/agent.rs:778-781`, `:824-831`, `src/app/api/agents.rs:63-65`.
 
@@ -129,7 +146,7 @@ is the closest Herdr-emitted equivalent; exit 1.
 argv (example bound: 45 min = 2 700 000 ms):
 
 ```text
-["herdr","agent","wait","arch-ctm","--until","idle","--until","done","--until","blocked","--timeout","2700000"]
+["herdr","agent","wait","agent-a","--until","idle","--until","done","--until","blocked","--timeout","2700000"]
 ```
 
 Request id: `cli:agent:wait` (`src/cli/agent.rs:553`).
@@ -138,7 +155,7 @@ Request id: `cli:agent:wait` (`src/cli/agent.rs:553`).
 
 | stream | content |
 | --- | --- |
-| stdout | `{"id":"cli:agent:wait","result":{"type":"agent_info","agent":{"terminal_id":"…","name":"arch-ctm","agent":"codex","agent_status":"idle",…}}}` |
+| stdout | `{"id":"cli:agent:wait","result":{"type":"agent_info","agent":{"terminal_id":"…","name":"agent-a","agent":"codex","agent_status":"idle",…}}}` |
 | exit | `0` |
 
 Source: `src/api/wait.rs:150-152` (immediate), `:465-467`/`:489-491` (observed), `:600-609`.
@@ -163,11 +180,11 @@ Note: `blocked` is a *matched* state, so this is exit 0 on stdout, not an error.
 
 Source: `src/api/wait.rs:470-495`, `:616-619`. Deadline check re-probes once; a match exactly at deadline still returns F2.1.
 
-### F2.4 `agent_not_found` at start (no live agent named `arch-ctm`)
+### F2.4 `agent_not_found` at start (no live agent named `agent-a`)
 
 | stream | content |
 | --- | --- |
-| stderr | `{"id":"cli:agent:wait","error":{"code":"agent_not_found","message":"agent target arch-ctm not found"}}` |
+| stderr | `{"id":"cli:agent:wait","error":{"code":"agent_not_found","message":"agent target agent-a not found"}}` |
 | exit | `1` |
 
 Source: `src/api/wait.rs:141-148` → `agent_get` → `src/app/agents.rs:290-293`. AQ2.7 outcome `held_target_not_present`.
@@ -199,23 +216,96 @@ reaped, no stdout, no subsequent prompt.
 | --- | --- | --- |
 | `[…,"--until","ready"]` | `invalid agent status: ready (expected idle, working, blocked, done, or unknown)` (plain text, `src/cli.rs:897-908`) | `2` |
 | `[…,"--timeout","abc"]` | `invalid value for --timeout: abc` | `2` |
-| `[…,"--workspace","atm-dev"]` | `unknown option: --workspace` | `2` |
+| `[…,"--workspace","team-x"]` | `unknown option: --workspace` | `2` |
 
 ---
 
-## F3. Launch convention only (never emitted by the daemon)
+## F3. Doctor probe — `agent get` (AQ2.6 `atm doctor`, ADR-058 D9)
 
-### F3.1 `agent start`
+argv:
 
 ```text
-["herdr","agent","start","arch-ctm","--kind","codex","--pane","<workspace_id>:p1"]
+["herdr","agent","get","agent-a"]
+```
+
+Request id: `cli:agent:get` (`src/cli/agent.rs:459-465`). Same target
+resolution as F1/F2 (`App::resolve_agent_target`); no PTY write, no
+foreground check — read-only.
+
+### F3.1 success
+
+| stream | content |
+| --- | --- |
+| stdout | `{"id":"cli:agent:get","result":{"type":"agent_info","agent":{"terminal_id":"…","name":"agent-a","agent":"codex","agent_status":"idle","workspace_id":"…","tab_id":"…:t1","pane_id":"ws1:p1","focused":false,"state_change_seq":42,"revision":…}}}` |
+| stderr | (empty) |
+| exit | `0` |
+
+Source: `src/app/api/agents.rs:25-32` (`handle_agent_get`), `src/cli.rs:738-746`.
+`atm doctor` reads only `result.agent.agent_status`; all other `AgentInfo`
+fields are advisory-only, per ADR-058 D9 / "Explicitly NOT relied upon".
+
+### F3.2 `agent_not_found` — reported by `atm doctor` as "agent not visible
+in the member's configured Herdr session"
+
+| stream | content |
+| --- | --- |
+| stdout | (empty) |
+| stderr | `{"id":"cli:agent:get","error":{"code":"agent_not_found","message":"agent target agent-a not found"}}` |
+| exit | `1` |
+
+Source: `src/app/agents.rs:64-73`, `:288-296`. Emitted when the member's
+stored `HerdrSession` (or lack of one) does not match the Herdr session the
+agent actually runs in — the child is still spawned with
+`HERDR_SESSION=<member.session>` per the Conventions above, only unset when
+the member has none.
+
+### F3.3 `agent_target_ambiguous`
+
+| stream | content |
+| --- | --- |
+| stderr | `{"id":"cli:agent:get","error":{"code":"agent_target_ambiguous","message":"agent target agent-a is ambiguous; candidates: terminal_id=… pane_id=ws1:p1 workspace_id=… tab_id=…:t1 cwd=/… status=Idle; terminal_id=… …"}}` |
+| exit | `1` |
+
+Source: `src/app/agents.rs:297-317`.
+
+### F3.4 server down / protocol skew
+
+Identical to F1.6/F1.7 with `"id":"cli:agent:get"`. exit `1`.
+
+### F3.5 argv construction bug (must be unreachable from atm-core)
+
+| argv | stderr (plain text) | exit |
+| --- | --- | --- |
+| `["herdr","agent","get"]` | `usage: herdr agent get <target>` | `2` |
+| `["herdr","agent","get","agent-a","extra"]` | `usage: herdr agent get <target>` | `2` |
+
+Source: `src/cli/agent.rs:450-457`.
+
+### F3.6 child-process bound (ADR-058 D10)
+
+`agent get` has no `--wait`/`--timeout` of its own; the doctor call site is
+bound solely by atm-core's own external deadline around the child's
+wait-for-exit, independent of anything Herdr-side. A fixture test doubles
+`HerdrProcessAdapter::get` with a future that never resolves and asserts the
+call returns `HerdrTimedOut` and the child is killed, mirroring F1's steer
+bound (5 s) rather than F2's per-member wait bound, since a doctor probe is
+a synchronous, bounded read like `prompt`, not a long-lived wait.
+
+---
+
+## F4. Launch convention only (never emitted by the daemon)
+
+### F4.1 `agent start`
+
+```text
+["herdr","agent","start","agent-a","--kind","codex","--pane","ws1:p1"]
 ```
 
 | outcome | stream / content | exit |
 | --- | --- | --- |
-| success | stdout `{"id":"cli:agent:start","result":{"type":"agent_started","agent":{…,"name":"arch-ctm","agent":"codex","agent_status":"idle","interactive_ready":true,…},"argv":["codex"]}}` | 0 |
-| name in use | stderr `{"id":"cli:agent:start","error":{"code":"agent_name_taken","message":"agent name arch-ctm is already used; candidates: …"}}` | 1 |
-| bad name (`Arch-CTM`) | stderr `{…"code":"invalid_agent_name","message":"agent name must start with a lowercase letter and contain only lowercase letters, digits, '-' or '_' (1-32 characters)"}` | 1 |
+| success | stdout `{"id":"cli:agent:start","result":{"type":"agent_started","agent":{…,"name":"agent-a","agent":"codex","agent_status":"idle","interactive_ready":true,…},"argv":["codex"]}}` | 0 |
+| name in use | stderr `{"id":"cli:agent:start","error":{"code":"agent_name_taken","message":"agent name agent-a is already used; candidates: …"}}` | 1 |
+| bad name (`Agent-A`) | stderr `{…"code":"invalid_agent_name","message":"agent name must start with a lowercase letter and contain only lowercase letters, digits, '-' or '_' (1-32 characters)"}` | 1 |
 | pane not a shell | stderr `{…"code":"agent_pane_busy",…}` (after ≤2 s shell-readiness retry, `src/cli/agent.rs:355-404`) | 1 |
 | pane missing | stderr `{…"code":"agent_pane_not_found",…}` | 1 |
 | startup timeout | stderr `{"id":"cli:agent:start","error":{"code":"timeout","message":"timed out waiting for agent startup"}}` | 1 |
@@ -223,15 +313,15 @@ reaped, no stdout, no subsequent prompt.
 
 Source: `src/cli/agent.rs:289-436`, `:562-632`, `src/app/agents.rs:145-227`, `:229-289`.
 
-### F3.2 `agent rename`
+### F4.2 `agent rename`
 
 ```text
-["herdr","agent","rename","<workspace_id>:p1","arch-ctm"]
+["herdr","agent","rename","ws1:p1","agent-a"]
 ```
 
 | outcome | stderr / stdout | exit |
 | --- | --- | --- |
-| success | stdout `{"id":"cli:agent:rename","result":{"type":"agent_info","agent":{…,"name":"arch-ctm",…}}}` | 0 |
+| success | stdout `{"id":"cli:agent:rename","result":{"type":"agent_info","agent":{…,"name":"agent-a",…}}}` | 0 |
 | target not an agent | stderr `{…"code":"agent_not_found","message":"agent target does not currently host an agent"}` | 1 |
 | name taken elsewhere | stderr `{…"code":"agent_name_taken",…}` | 1 |
 | invalid name | stderr `{…"code":"invalid_agent_name",…}` | 1 |
@@ -241,7 +331,7 @@ Source: `src/cli/agent.rs:751-769`, `src/app/agents.rs:90-143`, `:320-360`.
 
 ---
 
-## F4. Read-only commands actually run for this fixture (live, 2026-08-26)
+## F5. Read-only commands actually run for this fixture (live, 2026-08-26)
 
 ```text
 $ herdr --version
@@ -249,13 +339,14 @@ herdr 0.8.2
 $ herdr status
 client:  version: 0.8.2  channel: stable  protocol: 20
 server:  status: running  version: 0.8.2  protocol: 20  compatible: yes
-         socket: /Users/randlee/.config/herdr/herdr.sock
+         socket: /Users/<u>/.config/herdr/herdr.sock
 update:  restart_needed: no
 (exit 0)
 $ herdr agent prompt --help    # confirms: TARGET, TEXT, --wait, --until, --timeout; 5000ms agent_prompt_stalled note
 $ herdr agent wait --help      # confirms: default idle/done/blocked; --until unknown explicit; no --timeout = indefinite
+$ herdr agent get --help       # confirms: "Show an agent", usage: herdr agent get <target>
 $ herdr agent start --help     # confirms: --kind required, --pane required; kinds include claude, codex, hermes
 $ herdr agent rename --help    # confirms: <TARGET> <NAME>|--clear
 ```
 
-No `herdr agent prompt/wait/start/rename` was executed against a target.
+No `herdr agent prompt/wait/get/start/rename` was executed against a target.
