@@ -195,13 +195,10 @@ impl TeamsCommand {
             Some(TeamsSubcommand::Restore(command)) => command.run(home_dir).await,
         }
     }
+}
 
-    /// Publish a durable roster mutation into the daemon's immutable admission
-    /// view before reporting the command complete. This uses the same
-    /// authenticated control-plane reload as peer-trust mutations.
-    async fn reload_runtime_view() -> Result<()> {
-        Ok(reload_running_runtime_view().await?)
-    }
+async fn reload_runtime_view() -> Result<()> {
+    Ok(reload_running_runtime_view().await?)
 }
 
 impl AddMemberCommand {
@@ -212,7 +209,7 @@ impl AddMemberCommand {
         let outcome = with_retained_roster_store(|roster_store| {
             team_admin::add_member_with_roster_store(roster_store, request)
         })?;
-        TeamsCommand::reload_runtime_view().await?;
+        reload_runtime_view().await?;
         output::print_add_member_result(&outcome, json)
     }
 
@@ -263,7 +260,7 @@ impl SetNudgeTemplateCommand {
         let outcome = with_default_nudge_template_override_store(|override_store| {
             team_admin::set_nudge_template_override_with_store(override_store, request)
         })?;
-        TeamsCommand::reload_runtime_view().await?;
+        reload_runtime_view().await?;
         output::print_set_nudge_template_override_result(&outcome, json)
     }
 
@@ -288,7 +285,7 @@ impl DisableNudgeTemplateCommand {
         let outcome = with_default_nudge_template_override_store(|override_store| {
             team_admin::disable_nudge_template_override_with_store(override_store, request)
         })?;
-        TeamsCommand::reload_runtime_view().await?;
+        reload_runtime_view().await?;
         output::print_disable_nudge_template_override_result(&outcome, json)
     }
 
@@ -308,7 +305,7 @@ impl ClearNudgeTemplateCommand {
         let outcome = with_default_nudge_template_override_store(|override_store| {
             team_admin::clear_nudge_template_override_with_store(override_store, request)
         })?;
-        TeamsCommand::reload_runtime_view().await?;
+        reload_runtime_view().await?;
         output::print_clear_nudge_template_override_result(&outcome, json)
     }
 
@@ -328,7 +325,7 @@ impl UpdateMemberCommand {
         let outcome = with_retained_roster_store(|roster_store| {
             team_admin::update_member_with_roster_store(roster_store, request)
         })?;
-        TeamsCommand::reload_runtime_view().await?;
+        reload_runtime_view().await?;
         output::print_update_member_result(&outcome, json)
     }
 
@@ -356,7 +353,7 @@ impl RemoveMemberCommand {
         let outcome = with_retained_roster_store(|roster_store| {
             team_admin::remove_member_with_roster_store(roster_store, request)
         })?;
-        TeamsCommand::reload_runtime_view().await?;
+        reload_runtime_view().await?;
         output::print_remove_member_result(&outcome, json)
     }
 
@@ -379,7 +376,7 @@ impl RestoreCommand {
             team_admin::restore_team_with_roster_store(roster_store, request)
         })? {
             RestoreResult::Applied(outcome) => {
-                TeamsCommand::reload_runtime_view().await?;
+                reload_runtime_view().await?;
                 output::print_restore_result(&outcome, json)
             }
             RestoreResult::DryRun(plan) => output::print_restore_plan(&plan, json),
@@ -903,6 +900,124 @@ mod tests {
                         team: TEST_TEAM.to_string(),
                         from: Some(backup_dir),
                         dry_run: true,
+                        json: true,
+                    }
+                    .run(fixture.home_dir.clone()),
+                )
+                .expect("restore run");
+        });
+    }
+
+    #[test]
+    #[serial(env)]
+    fn add_member_run_executes_successfully_without_daemon() {
+        let fixture = Fixture::new();
+        let command = AddMemberCommand {
+            team: TEST_TEAM.to_string(),
+            member: "new-member".to_string(),
+            agent_type: "worker".to_string(),
+            model: "gpt-5".to_string(),
+            home_dir: Some(fixture.current_dir.clone()),
+            pane_id: Some("21".to_string()),
+            json: true,
+        };
+
+        fixture.with_env_and_cwd(|| {
+            test_runtime()
+                .block_on(command.run(fixture.home_dir.clone()))
+                .expect("add-member run");
+            assert!(
+                fixture
+                    .home_dir
+                    .join(".claude/teams")
+                    .join(TEST_TEAM)
+                    .join("inboxes/new-member.json")
+                    .exists()
+            );
+        });
+    }
+
+    #[test]
+    #[serial(env)]
+    fn update_member_run_executes_successfully_without_daemon() {
+        let fixture = Fixture::new();
+        let command = UpdateMemberCommand {
+            team: TEST_TEAM.to_string(),
+            member: TEST_SENDER.to_string(),
+            home_dir: Some(fixture.current_dir.clone()),
+            workspace_root: None,
+            harness: Some("codex-cli".to_string()),
+            agent_type: Some("worker".to_string()),
+            model: Some("gpt-5".to_string()),
+            pane_id: Some("%19".to_string()),
+            json: true,
+        };
+
+        fixture.with_env_and_cwd(|| {
+            test_runtime()
+                .block_on(command.run(
+                    fixture.home_dir.clone(),
+                    CallerContext {
+                        caller_identity: TEST_SENDER.parse().expect("caller"),
+                        caller_chat_id: None,
+                        caller_team: TEST_TEAM.parse().expect("team"),
+                        activity_observation: None,
+                    },
+                ))
+                .expect("update-member run");
+        });
+    }
+
+    #[test]
+    #[serial(env)]
+    fn remove_member_run_executes_successfully_without_daemon() {
+        let fixture = Fixture::new();
+        let command = RemoveMemberCommand {
+            team: TEST_TEAM.to_string(),
+            member: TEST_SENDER.to_string(),
+            json: true,
+        };
+
+        fixture.with_env_and_cwd(|| {
+            test_runtime()
+                .block_on(command.run(CallerContext {
+                    caller_identity: TEST_SENDER.parse().expect("caller"),
+                    caller_chat_id: None,
+                    caller_team: TEST_TEAM.parse().expect("team"),
+                    activity_observation: None,
+                }))
+                .expect("remove-member run");
+        });
+    }
+
+    #[test]
+    #[serial(env)]
+    fn restore_run_executes_successfully_without_daemon() {
+        let fixture = Fixture::new();
+
+        fixture.with_env_and_cwd(|| {
+            BackupCommand {
+                team: TEST_TEAM.to_string(),
+                json: true,
+            }
+            .run(fixture.home_dir.clone())
+            .expect("backup run");
+            let backup_root = fixture
+                .home_dir
+                .join(".claude/teams/.backups")
+                .join(TEST_TEAM);
+            let backup_dir = fs::read_dir(backup_root)
+                .expect("backup root")
+                .next()
+                .expect("backup entry")
+                .expect("backup dir")
+                .path();
+            test_runtime()
+                .block_on(
+                    RestoreCommand {
+                        team: TEST_TEAM.to_string(),
+                        from: Some(backup_dir),
+                        dry_run: false,
                         json: true,
                     }
                     .run(fixture.home_dir.clone()),

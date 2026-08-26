@@ -73,27 +73,6 @@ impl BoundaryMailStoreView {
         }
     }
 
-    fn mailbox_row(message: SharedMessage) -> MailStoreMailboxMetadataRow {
-        let ack_requirement = derive_ack_requirement(&message.envelope);
-        MailStoreMailboxMetadataRow {
-            message_key: message.message_key.clone(),
-            message_id: message.envelope.message_id,
-            parent_message_id: message.envelope.parent_message_id,
-            thread_mode: message.envelope.thread_mode,
-            from_agent: message.envelope.from,
-            source_chat_id: message.envelope.source_chat_id,
-            destination_chat_id: message.envelope.destination_chat_id,
-            summary: message.envelope.summary,
-            message_at: message.envelope.timestamp,
-            read: message.envelope.read,
-            requires_ack: !matches!(ack_requirement, AckRequirementState::NotRequired),
-            pending_ack: matches!(ack_requirement, AckRequirementState::RequiredPending),
-            acknowledged_at: message.envelope.acknowledged_at,
-            expires_at: message.envelope.expires_at,
-            task_id: message.envelope.task_id,
-        }
-    }
-
     fn load_matching_message(
         &self,
         team: &TeamName,
@@ -159,7 +138,7 @@ impl MailStore for BoundaryMailStoreView {
     ) -> Result<Vec<MailStoreMailboxMetadataRow>, AtmError> {
         self.store
             .list_messages(&Self::shared_query(team, agent, limit))
-            .map(|messages| messages.into_iter().map(Self::mailbox_row).collect())
+            .map(|messages| messages.into_iter().map(mailbox_row).collect())
     }
 
     fn query_mailbox_metadata_counts(
@@ -242,6 +221,27 @@ impl MailStore for BoundaryMailStoreView {
             read_message_count: rows.iter().filter(|row| row.read).count() as u64,
             latest_message_timestamp,
         })
+    }
+}
+
+fn mailbox_row(message: SharedMessage) -> MailStoreMailboxMetadataRow {
+    let ack_requirement = derive_ack_requirement(&message.envelope);
+    MailStoreMailboxMetadataRow {
+        message_key: message.message_key.clone(),
+        message_id: message.envelope.message_id,
+        parent_message_id: message.envelope.parent_message_id,
+        thread_mode: message.envelope.thread_mode,
+        from_agent: message.envelope.from,
+        source_chat_id: message.envelope.source_chat_id,
+        destination_chat_id: message.envelope.destination_chat_id,
+        summary: message.envelope.summary,
+        message_at: message.envelope.timestamp,
+        read: message.envelope.read,
+        requires_ack: !matches!(ack_requirement, AckRequirementState::NotRequired),
+        pending_ack: matches!(ack_requirement, AckRequirementState::RequiredPending),
+        acknowledged_at: message.envelope.acknowledged_at,
+        expires_at: message.envelope.expires_at,
+        task_id: message.envelope.task_id,
     }
 }
 
