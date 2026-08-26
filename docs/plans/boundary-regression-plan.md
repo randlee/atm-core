@@ -1,6 +1,6 @@
 # Boundary Regression Fix Plan — the 22 sc-boundary Findings
 
-status: draft_for_review
+status: revised_after_review_round_1
 branch: plan/boundary-regression (off develop @ c94d544fe)
 tracking: GitHub issue #1028; triage waiver AO2-SCBOUNDARY-DEBT-001 (phase-ao2)
 author: fenix (team-lead), from 4 independent code/lint analyses, 2026-08-26
@@ -63,6 +63,9 @@ fix worktree. Estimated total: ~half a day including test runs.
   `impl From<SearchInput> for SearchRequest { fn from(query: SearchInput) -> Self { Self { query, lifecycle: None } } }`.
   Update 2 call sites: `crates/atm-core/src/search.rs:894` and
   `crates/atm/src/commands/search.rs:185` (`x.into_request()` → `SearchRequest::from(x)`).
+- *(review r1)* `into_request` is on a `pub` type in a library crate: run a public-API audit
+  (grep downstream crates + `cargo doc` surface) for external callers before deleting; if any
+  exist outside the workspace surface, deprecate-and-delegate for one release instead.
 
 ### 1.2 Teams command family 9-type cycle [SCB-CYCLE-001]
 - Cycle: `TeamsSubcommand` wraps 7 command structs (`crates/atm/src/commands/teams.rs:38-45`),
@@ -97,6 +100,9 @@ fix worktree. Estimated total: ~half a day including test runs.
 - **Change**: inline the inherent `inject_nudge` body into the trait method; delete the
   inherent method. Field accesses (`self.helper_budget`, `self.injector`) do not create
   self-loop edges.
+- *(review r1)* add/keep tests that invoke the behavior **through the trait path**
+  (`<BoundedHostNudgeInjector as HostNudgeInjector>::inject_nudge` / dyn dispatch), since the
+  inherent path the existing tests may use is being deleted.
 
 ### 1.6 `LogFieldMap` ↔ `LogFieldValue` — genuine recursive value container [SCB-CYCLE-001]
 - Cause: `crates/atm-core/src/observability.rs:343` (`LogFieldValue::Object(LogFieldMap)`) and
@@ -133,6 +139,12 @@ fix worktree. Estimated total: ~half a day including test runs.
   Call sites (`runtime.rs:245,289,323`) unaffected (`Arc<T>` deref). Behavior identical, but
   this is concurrency-sensitive code: requires a careful review pass plus the existing
   helper-budget tests. **MEDIUM.**
+- *(review r1)* correctness condition: the permit must clone **the same counter instance the
+  successful CAS/increment was performed on** — clone `Arc` inside the success branch of
+  `try_acquire`, never construct a fresh counter. Required tests: failed-acquire leaves
+  `inflight` unchanged; N concurrent acquires never exceed `max_inflight`; permit drop
+  releases exactly one slot; dropping the `HelperThreadBudget` while permits are live must
+  not invalidate outstanding permits (counter `Arc` keeps it alive).
 
 ### 2.2 `ScComposeTemplateComposer` — hoist stateless helpers to free functions
     [clears both SCB-CYCLE-002 #10 and SCB-CYCLE-003 T5]
@@ -146,6 +158,10 @@ fix worktree. Estimated total: ~half a day including test runs.
   to private module-level free functions — none takes `&self`, so this is a mechanical
   `Self::x(...)` → `x(...)` sweep within one file. Visibility unchanged (all private to the
   adapter module). **MEDIUM (size), LOW (risk).** Clears 2 findings with zero suppressions.
+- *(review r1)* the helper list above was incomplete: `source_text` (lib.rs:183) and
+  `hash_api_error` (lib.rs:345) are also `Self::` associated helpers. Implementation step 1
+  is an exhaustive `Self::` sweep of the file — hoist **every** associated helper (or record
+  why an omission cannot contribute a self-loop edge) before declaring the findings cleared.
 
 ### 2.3 `SendCommand` — hoist error-builder helpers to free functions [SCB-CYCLE-002 #5]
 - Cause: `message_validation_error`/`template_load_error` are pure `AtmError` builders called
@@ -174,17 +190,20 @@ fix worktree. Estimated total: ~half a day including test runs.
 - `send` owns the single canonical write pipeline that intentionally branches into
   Sent/Acknowledged outcomes; it structurally needs ack's outcome/request shadow types. This
   is the intended "one write, two outcome shapes" design — a real module cycle, not lint noise.
-- **Proposed direction** (needs sign-off before dispatch): relocate the write-pipeline-shaped
-  ack types — `AckOutcome`, `AckReplyDisposition`, `ResolvedAcknowledgement`,
-  `AtomicAcknowledgementWrite`, `ReplyTarget` — into `send` (or a `send::ack_outcome`
-  submodule), with `pub use` re-exports from `ack` to preserve the public path surface.
-  `ack` retains `AckRequest`, `ack_mail[_with_runtime]`, and
-  `admit_acknowledgement_write[_async]`, importing the moved types — making the dependency
-  one-way (`ack → send`).
-- Open questions for the design discussion: (a) do ack-outcome types *belong* to the write
-  pipeline (send) or should a third module own the shared write/outcome contract with both
-  `ack` and `send` depending on it one-way? (b) serde/public-API compatibility of the moved
-  types (re-exports should preserve paths, but verify against atm-graft/daemon consumers).
+- **Proposed direction** (revised per review r1; needs sign-off before dispatch): introduce a
+  narrow sibling module (e.g. `atm_core::write`) owning the generic canonical-write /
+  ack-admission contract — the shared shapes (`AckOutcome`, `AckReplyDisposition`,
+  `ResolvedAcknowledgement`, `AtomicAcknowledgementWrite`, `ReplyTarget`, plus the admission
+  entry points both sides call) — with **both** `ack` and `send` depending on it one-way.
+  `ack` keeps `pub use` re-exports so its public path surface is unchanged.
+- Rationale for rejecting the draft's original "move ack types into send" option: the calls
+  are genuinely bidirectional — `ack/mod.rs:194` calls send's writer while
+  `send/mod.rs:538,579` call ack's admission — so relocating types into `send` would produce
+  a *misleading* one-way `ack → send` picture while the admission control flow still runs the
+  other way. A third owner models the real contract honestly.
+- Remaining open questions: exact member set of the new module (types only vs types +
+  admission fns); serde/public-API compatibility of moved types (re-exports should preserve
+  paths — verify against atm-graft/daemon consumers). Full design review required.
 - **HARD.** Do not dispatch until the direction is agreed (per standing rule: architectural
   findings get discussed before any fix dispatch).
 
@@ -209,8 +228,12 @@ pinning tests for the newly excluded shapes.
   self-loop. No source-code restructure fixes this correctly.
 - **Change**: include the impl discriminator (`impl_kind` + `impl_trait` path) in the method
   `NodeId` at `graph/ingest.rs:676`, and derive `source_impl_kind` per-edge from the actual
-  originating impl. Add a regression test: inherent method + same-named trait-impl forwarder
-  must not self-loop.
+  originating impl. *(review r1)* the change is wider than ingest: `owner_id_for_node_id`
+  (`analysis.rs:472-480`) must be updated to recover the type owner from the new
+  impl-qualified method IDs, or every method silently becomes its own owner. Regression tests
+  must pin **graph identity** (two distinct method nodes with correct owners, edges attributed
+  to the originating impl) **and classification** (no self-loop for the forwarder shape) —
+  not merely the absence of the finding.
 
 ### 4.2 SCB-CYCLE-002 heuristic — helper delegation is not architectural recursion [7 findings]
 - Findings: `LocalCapability` (`local_http.rs:57`), `LocalHttpEndpointRecord`
@@ -224,12 +247,16 @@ pinning tests for the newly excluded shapes.
   `has_expr_ref && !has_type_ref` split (`analysis.rs:149-166`) was already patched
   shape-by-shape (constructor-factory, newtype-factory, signature-only tests) — evidence of
   a known-leaky heuristic.
-- **Change**: in the reference collector / classifier, treat an expression reference that is a
-  **call to an associated function of the same owner** (path of the form
-  `Self::ident(...)` / `OwnType::ident(...)` in call position) as helper delegation, not a
-  self-loop trigger. Keep flagging non-call expression uses (bare `Loop;` value uses, the
-  original motivating case). Pin with tests for each of the 7 shapes above plus the existing
-  negative tests.
+- **Change** (tightened per review r1): a blanket "associated call ⇒ exclude" rule is not
+  implementable or safe as-is — the collector records only Expr/Type reference metadata
+  (`reference_collector.rs:23-76`, `lib.rs:397-431`) with no call/callee structure. The fix is
+  to **add call-callee metadata** to collected expression references (callee ident + whether
+  the path is call-position `Self::`/`OwnType::`), then exclude only *delegation to a
+  different associated function of the same owner*. **Direct recursion
+  (`Self::same_method()`) must remain a positive.** Required pinning tests: helper-call
+  delegation (excluded), bare value use (still positive, existing `tests.rs:809-843` shape),
+  direct recursion (still positive), and fully-qualified `OwnType::helper(...)` call
+  (excluded).
 - Interim (only if the lint fix is deferred): the scoped per-method
   `#[sc_lint(boundary.allow("cycle.type_method_self_loop"))]` attribute exists — but prefer
   fixing the heuristic; 7 attributes on idiomatic code is noise that dilutes the rule.
@@ -247,16 +274,16 @@ pinning tests for the newly excluded shapes.
   legitimate pattern for every storage/composer/client trait in this workspace. The rule's
   only escape hatch is the global std-traits ignore list in `config/defaults.toml`, which
   cannot express "this crate's own port trait".
-- **Change** (design decision, pick one — recommend (a)):
-  - (a) Exclude from SCB-CYCLE-003 the self-references that are *trait-method-to-trait-method
-    composition on `self`* and *calls to private associated helpers* (same delegation logic
-    as 4.2), leaving the rule to fire on type-position self-references in trait impls that
-    indicate genuine layering violations.
-  - (b) Add a workspace-config (not embedded-defaults) ignored-traits extension so a repo can
-    declare its own port traits (`MessageStore`, `TemplateComposer`, `AtmGraftClient`,
-    `MailStore`, `HostNudgeInjector`) — more explicit, but is a per-trait allowlist and
-    needs governance to avoid becoming a dumping ground.
-- Pin with tests either way.
+- **Change** (settled per review r1 — the draft's per-trait allowlist option is REJECTED as a
+  boundary loosening): reuse 4.2's call-callee metadata and exclude from SCB-CYCLE-003 only
+  the self-references that are *proven call-callee delegation* — trait-method-to-trait-method
+  composition on `self` and calls to private associated helpers. **Type-position self-edges
+  in trait impls remain positives** (they are the genuine layering signal). No trait-wide
+  exclusion, no workspace allowlist.
+- Pinning tests: the existing inherent+trait dual positives (`tests.rs:1050-1097`) and
+  ignored-conversion shape (`tests.rs:1133-1162`) stay as-is; add new tests for the classifier
+  boundaries introduced here (delegating trait method excluded; trait method with
+  type-position self-reference still positive).
 
 **§4 clears 11 findings.**
 
@@ -276,6 +303,30 @@ pinning tests for the newly excluded shapes.
    sc-boundary armed; remove/close AO2-SCBOUNDARY-DEBT-001 waiver and close GH #1028.
 4. Throughout: no rule is removed from `just lint all`; no baseline file is introduced; the
    only attributes added are §1.6's two purpose-built recursive-container markers.
+
+## Review history
+
+### Round 1 — arch-ctm critical review (2026-08-26, msg 01M0ZEJN8YY7MAK27JDVA93R43, on 4df997334)
+Verdict: **NEEDS PLAN REVISION** — classification agreed, corrections required. All folded
+into this revision:
+- §1: agreed; added public-API audit for `SearchInput::into_request` (1.1) and
+  trait-path tests for `BoundedHostNudgeInjector` (1.5).
+- §2.1: agreed conditionally; added the same-counter-after-CAS correctness condition and the
+  four required tests (failed-acquire / concurrent-cap / drop-release / budget-drop).
+- §2.2: helper list was incomplete (`source_text` lib.rs:183, `hash_api_error` lib.rs:345);
+  added exhaustive `Self::` sweep requirement.
+- §3.1: **direction changed** — original "move ack types into send" rejected (calls are
+  bidirectional: ack/mod.rs:194 vs send/mod.rs:538,579; the move would fake a one-way
+  dependency). New direction: narrow sibling write module owning the canonical-write/
+  ack-admission contract, both `ack` and `send` depend on it one-way; design review still
+  required before dispatch.
+- §4.1: root cause confirmed; scope widened to `owner_id_for_node_id` (analysis.rs:472-480)
+  and test bar raised to graph-identity + classification pinning.
+- §4.2: blanket associated-call exclusion **rejected** (collector lacks call metadata,
+  reference_collector.rs:23-76, lib.rs:397-431); replaced with call-callee metadata addition;
+  direct recursion `Self::same_method()` stays positive; four classifier-boundary tests added.
+- §4.3: trait-wide exclusion and workspace allowlist both **rejected**; narrowed to proven
+  call-callee delegation/private helpers only, type-position edges retained as positives.
 
 ## Finding-to-section index
 
