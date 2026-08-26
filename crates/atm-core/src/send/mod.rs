@@ -1187,8 +1187,6 @@ fn emit_send_command_event(
 }
 
 #[cfg(test)]
-mod nudge_mode_tests;
-#[cfg(test)]
 mod post_write_tests;
 #[cfg(test)]
 mod tests;
