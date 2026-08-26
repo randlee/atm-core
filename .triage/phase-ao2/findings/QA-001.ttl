@@ -31,8 +31,8 @@
   triage:file ".just/lint-config.toml" ;
   triage:line 158 ;
   triage:snippet "missing [[boundaries.manifest_dependency_allowlists]] entry for crates/atm-error/Cargo.toml" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s1-peer-wire-policy" ;
   triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s1/d137ab8d980e09365628c7454df1e0531698cfd3> .

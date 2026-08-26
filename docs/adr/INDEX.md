@@ -59,6 +59,7 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-051 — Permissive Declared Sender Identity and Roster Advisory](./ADR-051-permissive-declared-sender-identity.md)
 - [ADR-052 — Benchmark Account Isolation and Snapshot Policy](./ADR-052-benchmark-account-isolation-and-snapshot-policy.md)
 - [ADR-053 — Typed Temporary Daemon-Service Launch Overlay](./ADR-053-typed-temporary-daemon-service-launch-overlay.md)
+- [ADR-057 — Peer-Write Redial and Delivery-Attempt Invariant](./ADR-057-peer-write-redial-and-delivery-attempt-invariant.md)
 
 ## Extracted Crate-Local ADRs
 

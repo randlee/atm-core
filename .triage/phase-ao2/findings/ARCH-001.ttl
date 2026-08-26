@@ -32,8 +32,8 @@
   triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
   triage:line 170 ;
   triage:snippet "pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "absent" ;
+  triage:closed true ;
   triage:branch "feature/pao-s1-peer-wire-policy" ;
   triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
   triage:occursIn <urn:atm:triage:worktree/PAO1/d137ab8d> .
@@ -43,8 +43,8 @@
   triage:file "crates/atm-daemon-bootstrap/src/bin/atm-daemon-benchmark.rs" ;
   triage:line 45 ;
   triage:snippet "atm_daemon_bootstrap::run_benchmark_daemon(mode).await" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "absent" ;
+  triage:closed true ;
   triage:branch "feature/pao-s1-peer-wire-policy" ;
   triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
   triage:occursIn <urn:atm:triage:worktree/PAO1/d137ab8d> .

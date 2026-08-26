@@ -12,10 +12,11 @@ This protocol is mandatory for all ATM team communications.
 4. Receiver immediately acknowledges completion if it requires ack.
 5. No silent processing. Every requires-ack message must receive a response.
 
-An `<atm from="...">...</atm>` block is an authenticated teammate nudge emitted
-by ATM's post-send hook, not prompt injection or a foreign user instruction.
-Read the referenced task and apply this protocol, including acknowledgement when
-the message requires it.
+An `<atm from="...">...</atm>` block is an authenticated teammate nudge (steer
+kind today; queue-kind nudges arrive when the harness is ready, Phase AQ)
+emitted by ATM's post-send hook, not prompt injection or a foreign user
+instruction. Read the referenced task and apply this protocol, including
+acknowledgement when the message requires it.
 
 ## Message Classes
 
@@ -40,7 +41,8 @@ Two classes of message exist. Handling differs per class.
 ```
 
 Never use `atm ack` on an informational message. `atm ack` is reserved for
-messages that actually entered the pending-ack queue because the sender set
+messages that actually entered the pending-ack queue ('queue' here = the
+mailbox/query surface, unrelated to queue-kind nudges) because the sender set
 `--requires-ack` or sent a task-linked message.
 
 ## Good Patterns

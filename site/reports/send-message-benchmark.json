@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-25T00:53:32.411815Z",
-  "host_label": "rand-m5",
+  "generated_at": "2026-08-25T02:47:28.309211Z",
+  "host_label": "m5-atmbench",
   "report_html": "send-message-benchmark/index.html",
   "report_type": "benchmark",
   "schema_version": 1

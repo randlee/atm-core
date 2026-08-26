@@ -41,8 +41,8 @@
   triage:file "docs/adr/ADR-040-peer-authority-resolution.md" ;
   triage:line 1 ;
   triage:snippet "# ADR-040 — Peer Authority Resolution" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s1-peer-wire-policy" ;
   triage:headSha "d137ab8d980e09365628c7454df1e0531698cfd3" ;
   triage:occursIn <urn:atm:triage:worktree/S1/d137ab8d> .

@@ -27,7 +27,7 @@ use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::{WarningEntry, WriteOutcome, prepare_write_with_async_runtime};
 
 use crate::CanonicalWriteHandler;
-use crate::PeerStreamAdapter;
+use crate::PeerConnectionPool;
 use crate::RuntimeHealth;
 
 /// Bounded bridge for a synchronous core operation that is not a storage-writer
@@ -100,7 +100,8 @@ pub struct StorageAndNudgeRouter {
     doctor_ports: Option<atm_core::doctor::RuntimeDoctorPorts>,
     daemon_context: Option<atm_core::doctor::DoctorExecutionContext>,
     direct_peer_port: NonZeroU16,
-    peer_stream_adapter: Option<Arc<dyn PeerStreamAdapter>>,
+    peer_connection_pool: Option<PeerConnectionPool>,
+    shared_direct_peer_client: Option<reqwest::Client>,
 }
 
 impl StorageAndNudgeRouter {
@@ -123,7 +124,8 @@ impl StorageAndNudgeRouter {
             doctor_ports: None,
             daemon_context: None,
             direct_peer_port: crate::direct_peer_port(),
-            peer_stream_adapter: None,
+            peer_connection_pool: None,
+            shared_direct_peer_client: None,
         }
     }
 
@@ -159,13 +161,31 @@ impl StorageAndNudgeRouter {
         self
     }
 
-    /// Installs the bootstrap-selected opaque peer-stream adapter for remote
-    /// writes. Absence is explicit plaintext-test mode and preserves the
-    /// existing direct TCP connector unchanged.
+    /// Installs the daemon-owned outbound pool paired with the selected
+    /// authenticated stream adapter. The pool is a transport implementation
+    /// detail; canonical request routing remains in this router.
     #[must_use]
-    pub fn with_peer_stream_adapter(mut self, adapter: Arc<dyn PeerStreamAdapter>) -> Self {
-        self.peer_stream_adapter = Some(adapter);
+    pub fn with_peer_connection_pool(mut self, pool: PeerConnectionPool) -> Self {
+        self.peer_connection_pool = Some(pool);
         self
+    }
+
+    /// Injects the daemon-lifetime reqwest client for direct plaintext peers.
+    /// Clones share reqwest's built-in connection pool; this router never
+    /// creates a second plaintext pooling mechanism.
+    #[must_use]
+    pub fn with_shared_direct_peer_client(mut self, client: reqwest::Client) -> Self {
+        self.shared_direct_peer_client = Some(client);
+        self
+    }
+
+    /// Drains retained authenticated peer connections after HTTP request
+    /// admission has stopped. Individual request guards remain non-blocking
+    /// on drop; only this daemon lifecycle path awaits driver termination.
+    pub async fn shutdown_peer_connections(&self, deadline: std::time::Duration) {
+        if let Some(pool) = &self.peer_connection_pool {
+            pool.shutdown(deadline).await;
+        }
     }
 
     async fn commit_write(
@@ -201,7 +221,8 @@ impl StorageAndNudgeRouter {
     /// Delivers one locally admitted host-qualified write using the daemon's
     /// selected peer-wire mode. The record is already durable at this point;
     /// this method creates neither a second application route nor delivery
-    /// recovery state.
+    /// recovery state. Per ADR-057, connection reuse can redial only before
+    /// exchange; it never retries a request after handing it to the sender.
     async fn dispatch_resolved_peer_write(
         &self,
         request: &atm_core::send::WriteRequest,
@@ -218,18 +239,26 @@ impl StorageAndNudgeRouter {
                 "request deadline expired before cross-host acknowledgement delivery",
             )
         })?;
-        let client = match self.peer_stream_adapter.as_ref() {
-            Some(adapter) => crate::client::peer_stream_write_client(
+        let client = match self.peer_connection_pool.as_ref() {
+            Some(pool) => crate::client::pooled_peer_stream_write_client(
                 host.clone(),
                 self.direct_peer_port,
                 remaining,
-                Arc::clone(adapter),
+                pool.clone(),
             )?,
-            None => crate::client::direct_peer_tcp_client(
-                host.clone(),
-                self.direct_peer_port,
-                remaining,
-            )?,
+            None => match self.shared_direct_peer_client.as_ref() {
+                Some(client) => crate::client::direct_peer_tcp_client_with_shared_client(
+                    host.clone(),
+                    self.direct_peer_port,
+                    remaining,
+                    client.clone(),
+                )?,
+                None => crate::client::direct_peer_tcp_client(
+                    host.clone(),
+                    self.direct_peer_port,
+                    remaining,
+                )?,
+            },
         };
         let request = request.clone().with_origin_metadata(message_id, timestamp);
         match client
@@ -673,7 +702,7 @@ mod tests {
     use std::pin::Pin;
     use std::sync::Arc;
     use std::sync::Mutex;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::time::Duration;
 
     use atm_core::boundary::{
@@ -707,10 +736,14 @@ mod tests {
 
     use super::{BlockingCoreBridge, StorageAndNudgeRouter};
     use crate::{
+        AcceptedPeerStream, EstablishedPeerStream, HttpRuntimeBuilder, HttpRuntimeConfig,
+        LoopbackTcpConfig, PeerConnectionPool, PeerPoolConfig, PeerStreamAdapter, PeerStreamFuture,
+        direct_peer_tcp_client,
+    };
+    use crate::{
         AuthenticatedConnector, CanonicalWriteHandler, NonZeroDuration, RuntimeHealth,
         RuntimeLimits, RuntimeTimeouts, canonical_message_router,
     };
-    use crate::{HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig, direct_peer_tcp_client};
     #[cfg(unix)]
     use crate::{UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid};
 
@@ -886,6 +919,37 @@ mod tests {
         database_path: PathBuf,
         home_dir: PathBuf,
         current_dir: PathBuf,
+    }
+
+    /// Test-only opaque adapter: it preserves the selected authenticated-peer
+    /// seam while counting outbound establishments. It is deliberately not a
+    /// TLS substitute; physical mTLS remains covered by the live peer gate.
+    #[derive(Default)]
+    struct CountingPassthroughPeerAdapter {
+        outbound_connects: AtomicUsize,
+    }
+
+    impl PeerStreamAdapter for CountingPassthroughPeerAdapter {
+        fn connect<'a>(
+            &'a self,
+            stream: tokio::net::TcpStream,
+            _peer: &'a atm_core::types::HostName,
+        ) -> PeerStreamFuture<'a, EstablishedPeerStream> {
+            self.outbound_connects.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async move { Ok(Box::new(stream) as EstablishedPeerStream) })
+        }
+
+        fn accept<'a>(
+            &'a self,
+            stream: tokio::net::TcpStream,
+        ) -> PeerStreamFuture<'a, AcceptedPeerStream> {
+            Box::pin(async move {
+                Ok(AcceptedPeerStream {
+                    source_host: "127.0.0.1".parse().expect("loopback source host"),
+                    stream: Box::new(stream),
+                })
+            })
+        }
     }
 
     fn fixture(
@@ -2167,6 +2231,83 @@ mod tests {
             1,
             "the peer listener receives exactly the locally admitted canonical write"
         );
+        remote_runtime
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("remote runtime drains");
+    }
+
+    #[tokio::test]
+    async fn selected_router_reuses_one_opaque_peer_connection_across_three_loopback_writes() {
+        let adapter = Arc::new(CountingPassthroughPeerAdapter::default());
+        let remote = fixture(true, None, None);
+        let remote_runtime = HttpRuntimeBuilder::new(
+            direct_peer_runtime_config(&remote, crate::DirectPeerTcpConfig::ephemeral_for_test()),
+            Arc::new(remote.router.clone()),
+        )
+        .build()
+        .expect("valid authenticated remote direct peer configuration")
+        .start()
+        .await
+        .expect("authenticated remote direct peer runtime starts");
+        let remote_port = remote_runtime
+            .direct_peer_address()
+            .expect("ephemeral remote direct peer listener is bound")
+            .port();
+
+        let pool = PeerConnectionPool::new(PeerPoolConfig::default(), adapter.clone());
+        let mut local = fixture(true, None, None);
+        local.router = local
+            .router
+            .clone()
+            .with_direct_peer_port(NonZeroU16::new(remote_port).expect("non-zero port"))
+            .with_peer_connection_pool(pool.clone());
+
+        for _ in 0..3 {
+            let mut outbound = write_request(local.home_dir.clone(), local.current_dir.clone());
+            outbound.to = Some(
+                "recipient@test-team.127.0.0.1"
+                    .parse()
+                    .expect("host-qualified loopback recipient"),
+            );
+            let response = local
+                .router
+                .dispatch(
+                    ApiRequest::new(RequestEnvelope::Write(Box::new(outbound))),
+                    AuthenticatedIngress::Local,
+                    RequestDeadline::after(Duration::from_secs(1)),
+                )
+                .await
+                .expect("selected router forwards the local write");
+            assert!(matches!(
+                response.into_inner(),
+                ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
+            ));
+        }
+
+        assert_eq!(
+            adapter.outbound_connects.load(Ordering::SeqCst),
+            1,
+            "three sequential router dispatches establish one opaque peer stream"
+        );
+        assert_eq!(
+            remote
+                .message_store
+                .list_messages(&MessageQuery {
+                    team: "test-team".parse().expect("team"),
+                    agent: "recipient".parse().expect("agent"),
+                    sender: None,
+                    task_id: None,
+                    limit: None,
+                })
+                .expect("read remote recipient mailbox")
+                .len(),
+            3,
+            "every dispatched write crosses the canonical remote peer listener"
+        );
+
+        pool.shutdown(Duration::from_secs(1)).await;
         remote_runtime
             .begin_shutdown()
             .finish()

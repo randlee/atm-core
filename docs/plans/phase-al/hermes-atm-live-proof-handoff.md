@@ -43,7 +43,9 @@ separate ATM sender durable write
 This preserves the intended “incoming nudge for SkillRX” behavior while
 protecting user-session semantics:
 
-- The ATM nudge is input to the correct SkillRX profile's existing Telegram
+- (Hermes `mode="queue"|"steer"` is Hermes's session-dispatch mode; ATM's
+  Phase-AQ queue/steer *nudge kinds* align with but are distinct from it.)
+  The ATM nudge is input to the correct SkillRX profile's existing Telegram
   session and starts the normal model turn when idle. If the session is busy,
   its internal event queues silently behind the active turn; it must not
   inherit normal Telegram input's disruptive `interrupt` default or call

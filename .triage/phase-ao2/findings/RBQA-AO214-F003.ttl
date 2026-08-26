@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-AO214-F003>
+  a triage:Finding ;
+  triage:findingId "RBQA-AO214-F003" ;
+  triage:title "Duplicate ADR-053 numbering" ;
+  triage:description "docs/adr/ADR-053-peer-write-redial-and-delivery-attempt-invariant.md duplicates docs/adr/ADR-053-typed-temporary-daemon-service-launch-overlay.md -- both listed as ADR-053 at docs/adr/INDEX.md:61-62. Confirmed by req-qa, arch-qa, ruthless-boundary-qa, rust-qa-agent, rust-best-practices-agent, and quality-mgr directly on disk. Fix: renumber the new ADR, rename file, update INDEX.md and storage_and_nudge_router.rs citations." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation-consistency" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "docs/adr/*.md and docs/adr/INDEX.md" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-24T23:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.14 ;
+  triage:foundAt "2026-08-24T22:15:50Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AO214-F003/AO214-F003-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AO214-F003/AO214-F003-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-AO214-F003/AO214-F003-1>
+  a triage:Occurrence ;
+  triage:file "docs/adr/INDEX.md" ;
+  triage:line 62 ;
+  triage:snippet "[ADR-053 — Typed Temporary Daemon-Service Launch Overlay]" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ao2-14-peer-connection-pooling" ;
+  triage:headSha "36c6c95d8b6bddc63654819434d3c2a14a0f94eb" ;
+  triage:occursIn <urn:atm:triage:worktree/AO214/36c6c95d8b6bddc> .
+
+<urn:atm:triage:occurrence/RBQA-AO214-F003/AO214-F003-2>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-053-typed-temporary-daemon-service-launch-overlay.md" ;
+  triage:line 1 ;
+  triage:snippet "# ADR-053 — Typed Temporary Daemon-Service Launch Overlay" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ao2-14-peer-connection-pooling" ;
+  triage:headSha "36c6c95d8b6bddc63654819434d3c2a14a0f94eb" ;
+  triage:occursIn <urn:atm:triage:worktree/AO214/36c6c95d8b6bddc> .
+
+<urn:atm:triage:worktree/AO214/36c6c95d8b6bddc>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ao2-14-peer-connection-pooling" ;
+  triage:branch "feature/ao2-14-peer-connection-pooling" ;
+  triage:headSha "36c6c95d8b6bddc63654819434d3c2a14a0f94eb" ;
+  triage:orderIndex 1 .

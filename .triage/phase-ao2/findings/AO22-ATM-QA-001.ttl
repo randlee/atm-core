@@ -32,8 +32,8 @@
   triage:file "crates/peer-tls/src/lib.rs" ;
   triage:line 75 ;
   triage:snippet "pub async fn connect(tcp: TcpStream, peer: HostName) -> Result<TlsStream<TcpStream>, AtmError>" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s2-isolated-mtls-stream-adapter" ;
   triage:headSha "c30d24442e177b9b63ef245abdffd6aa6fd8f911" ;
   triage:occursIn <urn:atm:triage:worktree/AO2.2/c30d244> .
@@ -43,8 +43,8 @@
   triage:file "crates/peer-tls/src/lib.rs" ;
   triage:line 98 ;
   triage:snippet "pub async fn accept(tcp: TcpStream) -> Result<TlsStream<TcpStream>, AtmError>" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s2-isolated-mtls-stream-adapter" ;
   triage:headSha "c30d24442e177b9b63ef245abdffd6aa6fd8f911" ;
   triage:occursIn <urn:atm:triage:worktree/AO2.2/c30d244> .

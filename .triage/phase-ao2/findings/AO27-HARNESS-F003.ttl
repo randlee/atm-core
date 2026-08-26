@@ -15,24 +15,37 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-22T21:10:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.7 ;
   triage:foundAt "2026-08-22T21:09:45Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AO27-HARNESS-F003/ao2-7-1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO27-HARNESS-F003/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-25T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "scripts/smoke/benchmark_mtls.py now calls os.chmod(private_key, 0o600) and os.chmod(published, 0o600) after writing the mTLS key material, with a dedicated permission-assertion test in test_benchmark_mtls.py (lines 52-55). Fixed in commit 6415aa126." ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AO27-HARNESS-F003/ao2-7-1>
   a triage:Occurrence ;
   triage:file "scripts/smoke/run_admission_capacity.py" ;
   triage:line 1 ;
   triage:snippet "Certificate/key file creation lacks explicit permission setting" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/ao2-7-direct-peer-benchmark-harness" ;
   triage:headSha "934caaaa7fef7803740be228a1276d552ea29db5" ;
   triage:occursIn <urn:atm:triage:worktree/ao2-7/934caaaa7fef7803740be228a1276d552ea29db5> .
+
+<urn:atm:triage:occurrence/AO27-HARNESS-F003/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/benchmark_mtls.py" ;
+  triage:snippet "quality-mgr independent re-verification confirmed fixed via commit 6415aa126" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "6415aa126" .
 
 <urn:atm:triage:worktree/ao2-7/934caaaa7fef7803740be228a1276d552ea29db5>
   a triage:WorktreeSnapshot ;

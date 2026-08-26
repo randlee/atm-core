@@ -15,21 +15,22 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "deferred" ;
+  triage:dispatchReady false ;
+  triage:deferredNote "Rand confirmed 2026-08-25: live-benchmark validation work for early Phase AO2 sprints (AO2.10-AO2.13) was deliberately deferred, not skipped or forgotten. Not a blocker and not something to keep surfacing as an open question -- do not dispatch a fix or treat this as an active QA failure. Re-evaluate only if the user asks for the deferred dry-run transcript to be produced." ;
   triage:triagedAt "2026-08-24T06:23:58Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.13 ;
   triage:foundAt "2026-08-24T06:21:45Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AO213-BENCH-F001/AO213-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AO213-BENCH-F001/AO213-1>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-ao2/sprint-AO2-13-benchmark-run-skill.md" ;
   triage:line 73 ;
   triage:snippet "4. A dry-run transcript of the full skill executed on macOS" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "deferred" ;
+  triage:closed true ;
   triage:branch "feature/ao2-13-benchmark-run-skill" ;
   triage:headSha "bf522d879ab6d0fd32760ee58e683a26607b5c7c" ;
   triage:occursIn <urn:atm:triage:worktree/AO213/bf522d879ab6d0fd32760ee58e683a26607b5c7c> .

@@ -609,6 +609,15 @@ Architectural rules:
 
 ## 3.3 Current Mail And Roster Ownership
 
+> **Nudge taxonomy (Phase AQ).** "nudge" is the umbrella term for any
+> post-delivery recipient notification. "steer" (steer nudge) is the
+> immediate kind, emitted right after durable persistence — this is the
+> only kind that existed before Phase AQ, so legacy text below that says
+> plain "nudge" for the immediate case means steer nudge. "queue" (queue
+> nudge) is the deferred kind, introduced by Phase AQ, delivered when the
+> recipient harness is ready. Persistence ordering is unchanged for both
+> kinds: neither kind ever precedes durable persistence.
+
 `atm-core` must structure the mail system around these ownership rules:
 
 - SQLite is the durable source of truth for:
@@ -623,8 +632,10 @@ Architectural rules:
 - if a retained Claude mailbox compatibility export helper survives
   temporarily, it is explicit obsolete-only scaffolding rather than the
   governing delivery contract
-- write-affecting mail events persist first, then emit direct post-send
-  behavior only when the recipient exposes that capability
+- write-affecting mail events persist first, then emit the steer nudge only
+  when the recipient exposes that capability; queue-kind nudges defer
+  emission until harness readiness (ADR-054), and neither kind ever precedes
+  persistence
 - `atm-core` owns the direct post-send seam through
   `MessageReceivedHookEmitter`, not through `DeliveryPlan` or `NotificationSink`
 - `atm-core` owns one canonical post-send event model carrying sender/team,
