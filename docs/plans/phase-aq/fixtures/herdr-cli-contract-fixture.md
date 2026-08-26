@@ -3,11 +3,16 @@
 **Provenance: derived-from-source, not live-captured.** Every transcript below
 is reconstructed from the Herdr source at `d79fd746` (identical to tag
 `v0.8.2` for all cited surfaces) against the installed binary `herdr 0.8.2`
-(wire protocol 20). No live Herdr agent was prompted, waited on, started, or
-renamed to produce this file. AQ2.6's required live validation replaces these
-rows with captured output; until then fixture tests must assert on
-`error.code`, `result.type`, `result.agent.agent_status`, stream (stdout vs
-stderr), and exit code — never on `message` text or key order.
+(wire protocol 20). No live Herdr agent was prompted, listed, waited on,
+started, or renamed to produce this file. AQ2.6's required live validation
+replaces these rows with captured output; until then fixture tests must
+assert on `error.code`, `result.type`, `result.agent.agent_status` (or, for
+`agent list`, each entry's `agent_status` and `name`), stream (stdout vs
+stderr), and exit code — never on `message` text or key order. F2's primary
+rows (`agent list`) are what AQ2.7's rewritten poll-based pump actually
+exercises; F2's reference-only `agent wait` rows document ADR-058 D2's
+retained-but-unemitted contract and are not asserted against by any Phase AQ
+fixture test.
 
 Conventions:
 
@@ -141,7 +146,106 @@ is the closest Herdr-emitted equivalent; exit 1.
 
 ---
 
-## F2. Queue wake gate — `agent wait` (AQ2.7 `HerdrQueueWakePump`)
+## F2. Queue wake gate — `agent list` polling (AQ2.7 `HerdrQueueWakePump`)
+
+**Rewritten 2026-08-26 (Rand): the pump polls, it does not `wait`.** Every
+tick, AQ2.7 calls `agent list` once per distinct Herdr session and prompts
+whichever pending members it observes `idle`/`done`. The `agent wait`
+fixtures that governed the prior per-member-wait design are retained
+below, relabeled reference-only (ADR-058 D2: documented, not emitted by
+atm-core in Phase AQ) — nothing in this sprint's fixture tests exercises
+them.
+
+argv:
+
+```text
+["herdr","agent","list"]
+```
+
+Request id: `cli:agent:list` (`src/cli/agent.rs:445`). No target, no
+`--session`/`--workspace` argument — session selection is env-mediated only
+(Conventions above), identically to every other `herdr agent` subcommand.
+
+### F2.1 success — multiple agents, mixed status, one session
+
+| stream | content |
+| --- | --- |
+| stdout | `{"id":"cli:agent:list","result":{"type":"agent_list","agents":[{"terminal_id":"…","name":"agent-a","agent":"codex","agent_status":"idle","workspace_id":"…","tab_id":"…:t1","pane_id":"…:p1","focused":false,"state_change_seq":42,"revision":…},{"terminal_id":"…","name":"agent-b","agent":"claude","agent_status":"working","workspace_id":"…","tab_id":"…:t2","pane_id":"…:p2","focused":true,"state_change_seq":7,"revision":…},{"terminal_id":"…","agent_status":"idle","workspace_id":"…","tab_id":"…:t3","pane_id":"…:p3","focused":false,"state_change_seq":1,"revision":…}]}}` |
+| stderr | (empty) |
+| exit | `0` |
+
+Source: `src/app/api/agents.rs:16-22` (`handle_agent_list` →
+`collect_agent_infos`), `src/app/agents.rs:22-35`, `src/cli.rs:744-745`.
+Note the third entry has no `name` (`Option<String>`, omitted not `null`,
+`src/api/schema/agents.rs:187`) — an unnamed/undetected agent the pump can
+never match to a member; `agent-a` is `idle` (pump claims/prompts),
+`agent-b` is `working` (pump makes no claim this tick).
+
+### F2.2 success — target member absent from the list (no error)
+
+| stream | content |
+| --- | --- |
+| stdout | `{"id":"cli:agent:list","result":{"type":"agent_list","agents":[]}}` (or a non-empty array containing no entry named `agent-a`) |
+| exit | `0` |
+
+There is no `agent_not_found` here — `list` has no target to fail to
+resolve. AQ2.7 treats a pending member's absence from `agents[]` as
+`held_target_not_present`, pre-claim: no claim is taken, the marker is
+retained, and the member is re-evaluated on the next tick
+(ADR-058 D8's new absent-from-list row, D9.1).
+
+### F2.3 server down
+
+Identical to F1.6 with `"id":"cli:agent:list"`. exit `1`. Triggers the
+D10.1 breaker exactly as a `prompt` failure does — one breaker, shared.
+
+### F2.4 protocol skew
+
+Identical to F1.7 with `"id":"cli:agent:list"`. exit `1`. Also a D10.1
+breaker trigger.
+
+### F2.5 argv construction bug (must be unreachable)
+
+| argv | stderr (plain text) | exit |
+| --- | --- | --- |
+| `["herdr","agent","list","extra"]` | `usage: herdr agent list` | `2` |
+
+Source: `src/cli/agent.rs:439-442`.
+
+### F2.6 child-process bound (ADR-058 D10)
+
+`agent list` has no `--wait`/`--timeout` of its own; the pump's call site is
+bound solely by atm-core's own external deadline around the child's
+wait-for-exit — the same 5 s steer/list bound `prompt` uses (D10), not a
+per-member wait bound (removed). A fixture test doubles
+`HerdrProcessAdapter::list` with a future that never resolves and asserts
+the call returns `HerdrTimedOut`, the child is killed, and the D10.1
+breaker opens.
+
+### F2.7 session grouping (two sessions, two children)
+
+Two eligible Herdr members configured with `session-a` and `session-b`
+respectively produce two `agent list` invocations in one tick:
+
+```text
+["herdr","agent","list"]   # HERDR_SESSION=session-a
+["herdr","agent","list"]   # HERDR_SESSION=session-b
+```
+
+A member with no configured session produces a third bucket with
+`HERDR_SESSION` unset (Herdr's default server). The fixture asserts exactly
+one `list` child per distinct session value present among that tick's
+eligible members — never one per member.
+
+---
+
+### Reference only — `agent wait` (ADR-058 D2: documented, not emitted by atm-core in Phase AQ)
+
+The rows below describe the prior per-member `agent wait` design
+(superseded 2026-08-26). `HerdrProcessAdapter::wait` stays defined
+(`atm-herdr`) and this remains its accurate contract — retained here so a
+future phase reviving a lifecycle-blocking gate has a ready fixture — but
+no Phase AQ sprint's tests construct or assert against this argv.
 
 argv (example bound: 45 min = 2 700 000 ms):
 
@@ -151,7 +255,7 @@ argv (example bound: 45 min = 2 700 000 ms):
 
 Request id: `cli:agent:wait` (`src/cli/agent.rs:553`).
 
-### F2.1 success — agent reached (or already was) `idle`
+**Reference: success — agent reached (or already was) `idle`**
 
 | stream | content |
 | --- | --- |
@@ -159,18 +263,18 @@ Request id: `cli:agent:wait` (`src/cli/agent.rs:553`).
 | exit | `0` |
 
 Source: `src/api/wait.rs:150-152` (immediate), `:465-467`/`:489-491` (observed), `:600-609`.
-`agent_status` may equally be `"done"` → pump proceeds; `"blocked"` → see F2.2.
+`agent_status` may equally be `"done"` → pump proceeds; `"blocked"` → see below.
 
-### F2.2 success with `agent_status: "blocked"` — gate holds, **no prompt**
+**Reference: success with `agent_status: "blocked"` — gate holds, no prompt**
 
 | stream | content |
 | --- | --- |
 | stdout | `{"id":"cli:agent:wait","result":{"type":"agent_info","agent":{…,"agent_status":"blocked",…}}}` |
 | exit | `0` |
 
-Note: `blocked` is a *matched* state, so this is exit 0 on stdout, not an error. The pump must switch on `result.agent.agent_status`, not on exit code (AQ2.7 `held_blocked`).
+Note: `blocked` is a *matched* state, so this is exit 0 on stdout, not an error.
 
-### F2.3 timeout (agent stayed `working`/`unknown` for the whole bound)
+**Reference: timeout (agent stayed `working`/`unknown` for the whole bound)**
 
 | stream | content |
 | --- | --- |
@@ -178,39 +282,38 @@ Note: `blocked` is a *matched* state, so this is exit 0 on stdout, not an error.
 | stderr | `{"id":"cli:agent:wait","error":{"code":"timeout","message":"timed out waiting for agent status"}}` |
 | exit | `1` |
 
-Source: `src/api/wait.rs:470-495`, `:616-619`. Deadline check re-probes once; a match exactly at deadline still returns F2.1.
+Source: `src/api/wait.rs:470-495`, `:616-619`. Deadline check re-probes once; a match exactly at deadline still returns the success row above.
 
-### F2.4 `agent_not_found` at start (no live agent named `agent-a`)
+**Reference: `agent_not_found` at start (no live agent named `agent-a`)**
 
 | stream | content |
 | --- | --- |
 | stderr | `{"id":"cli:agent:wait","error":{"code":"agent_not_found","message":"agent target agent-a not found"}}` |
 | exit | `1` |
 
-Source: `src/api/wait.rs:141-148` → `agent_get` → `src/app/agents.rs:290-293`. AQ2.7 outcome `held_target_not_present`.
+Source: `src/api/wait.rs:141-148` → `agent_get` → `src/app/agents.rs:290-293`.
 
-### F2.5 `agent_not_running` (agent exited / pane closed / renamed away during the wait)
+**Reference: `agent_not_running` (agent exited / pane closed / renamed away during the wait)**
 
 | stream | content |
 | --- | --- |
 | stderr | `{"id":"cli:agent:wait","error":{"code":"agent_not_running","message":"agent is no longer running in the target pane"}}` |
 | exit | `1` |
 
-Source: `src/api/wait.rs:396-436`, `:450-459`, `:643-659`. AQ2.7 treats as `held_target_not_present`.
+Source: `src/api/wait.rs:396-436`, `:450-459`, `:643-659`.
 
-### F2.6 server down
+**Reference: server down**
 
 Identical to F1.6 with `"id":"cli:agent:wait"`. exit `1`.
 
-### F2.7 cancellation (pump shutdown / daemon deadline)
+**Reference: cancellation (would-be pump shutdown / daemon deadline)**
 
 atm-core sends SIGTERM then SIGKILL to the `herdr` child. No output is
 produced by the client; the server notices the closed socket within 100 ms
 (`src/api/wait.rs:371`, `src/api/server.rs:782-791`) and abandons the wait.
-No input is written by `wait` under any outcome. Fixture asserts: child
-reaped, no stdout, no subsequent prompt.
+No input is written by `wait` under any outcome.
 
-### F2.8 argv construction bug (must be unreachable)
+**Reference: argv construction bug (must be unreachable)**
 
 | argv | stderr | exit |
 | --- | --- | --- |
@@ -343,10 +446,12 @@ server:  status: running  version: 0.8.2  protocol: 20  compatible: yes
 update:  restart_needed: no
 (exit 0)
 $ herdr agent prompt --help    # confirms: TARGET, TEXT, --wait, --until, --timeout; 5000ms agent_prompt_stalled note
-$ herdr agent wait --help      # confirms: default idle/done/blocked; --until unknown explicit; no --timeout = indefinite
+$ herdr agent list --help      # confirms: no arguments; lists every detected agent on the connected server
+$ herdr agent wait --help      # (reference only, D2) confirms: default idle/done/blocked; --until unknown explicit; no --timeout = indefinite
 $ herdr agent get --help       # confirms: "Show an agent", usage: herdr agent get <target>
 $ herdr agent start --help     # confirms: --kind required, --pane required; kinds include claude, codex, hermes
 $ herdr agent rename --help    # confirms: <TARGET> <NAME>|--clear
 ```
 
-No `herdr agent prompt/wait/get/start/rename` was executed against a target.
+No `herdr agent prompt/list/wait/get/start/rename` was executed against a
+target.
