@@ -687,7 +687,9 @@ mod tests {
             std::future::pending::<()>().await;
         });
         let (tcp, _) = listener.accept().await.expect("accept tcp");
-        connected_rx.await.expect("client connects before handshake");
+        connected_rx
+            .await
+            .expect("client connects before handshake");
         let server_accept = tokio::spawn(async move { server.accept(tcp).await });
         tokio::task::yield_now().await;
         tokio::time::advance(Duration::from_millis(50)).await;
