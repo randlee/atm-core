@@ -29,10 +29,7 @@ use atm_http_runtime::herdr_process::{
 pub fn active_received_hook_selector(
     service_runtime: LocalServiceRuntime,
 ) -> Arc<dyn MessageReceivedHookSelector> {
-    Arc::new(ReplacementReceivedHookSelector::new(
-        service_runtime,
-        Arc::new(HerdrProcessInvoker),
-    ))
+    Arc::new(ReplacementReceivedHookSelector::new(service_runtime))
 }
 
 /// Mode accepted exclusively by the separately compiled benchmark binary.
@@ -80,7 +77,12 @@ struct ReplacementReceivedHookSelector {
 
 impl ReplacementReceivedHookSelector {
     #[must_use]
-    fn new(
+    fn new(service_runtime: LocalServiceRuntime) -> Self {
+        Self::new_with_herdr_process(service_runtime, Arc::new(HerdrProcessInvoker))
+    }
+
+    #[must_use]
+    fn new_with_herdr_process(
         service_runtime: LocalServiceRuntime,
         herdr_process: Arc<dyn HerdrProcessAdapter>,
     ) -> Self {
@@ -383,7 +385,7 @@ mod tests {
         let assembly =
             atm_runtime_test_support::open_isolated_sqlite_boundary(temporary_root.path())
                 .expect("assemble isolated selector runtime");
-        let selector = ReplacementReceivedHookSelector::new(
+        let selector = ReplacementReceivedHookSelector::new_with_herdr_process(
             assembly.service_runtime,
             Arc::new(HerdrProcessInvoker),
         );
