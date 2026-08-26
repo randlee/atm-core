@@ -12,13 +12,14 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "deferred" ;
+  triage:dispatchReady false ;
+  triage:deferredNote "Formal phase-gate waiver, Rand, 2026-08-26: only the SSH unattended-run leg reached measurement in the AO2.15 evidence; the launchd leg never did. Rand ruled waiver-not-fix-now at QA-PHASE-AO2-FINAL-GATE -- do not dispatch a fix or block the integrate/phase-ao2 -> develop merge on this. Re-evaluate only if the user asks for the launchd-leg measurement to be produced." ;
   triage:triagedAt "2026-08-25T03:19:55Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.15 ;
   triage:foundAt "2026-08-25T03:19:55Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/QA-AO215-I003/occ-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/QA-AO215-I003/occ-1>
   a triage:Occurrence ;

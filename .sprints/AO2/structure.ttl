@@ -11,6 +11,9 @@ triage:AO2.5 a triage:Sprint ; triage:inPhase triage:PhaseAO2 ; triage:order 5 ;
 triage:AO2.5.4 a triage:Sprint ; triage:inPhase triage:PhaseAO2 ; triage:order 6 ; triage:branch "fix/benchmark-snapshot-restore-mandatory" ; triage:criteria "docs/plans/phase-ao2/sprint-AO2-5-4-mandatory-benchmark-snapshot-restore.md" .
 triage:AO2.6 a triage:Sprint ; triage:inPhase triage:PhaseAO2 ; triage:order 7 ; triage:branch "fix/admission-writer-batching-regression" ; triage:criteria "docs/plans/phase-ao2/sprint-AO2-6-admission-writer-batching-regression.md" .
 triage:AO2.7 a triage:Sprint ; triage:inPhase triage:PhaseAO2 ; triage:order 8 ; triage:branch "fix/ao2-7-direct-peer-benchmark-harness" ; triage:criteria "docs/plans/phase-ao2/sprint-AO2-7-m5-tcp-benchmark-parity.md" .
+# AO2.8 descoped from phase-ao2 by Rand 2026-08-26 (QA-PHASE-AO2-FINAL-GATE
+# finding ATM-QA2-004: not-verifiable, never landed on this branch). Sprint
+# node retained for history; excluded from phase completion criteria.
 triage:AO2.8 a triage:Sprint ; triage:inPhase triage:PhaseAO2 ; triage:order 9 ; triage:branch "future-evidence-worktree" ; triage:criteria "docs/plans/phase-ao2/sprint-AO2-8-windows-tcp-benchmark-parity.md" .
 triage:AO2.9 a triage:Sprint ; triage:inPhase triage:PhaseAO2 ; triage:order 10 ; triage:branch "plan/ao2-9-benchmark-report-template" ; triage:criteria "docs/plans/phase-ao2/sprint-AO2-9-benchmark-report-template-and-procedure.md" .
 triage:AO2.10 a triage:Sprint ; triage:inPhase triage:PhaseAO2 ; triage:order 11 ; triage:branch "feature/ao2-10-benchmark-data-contract" ; triage:criteria "docs/plans/phase-ao2/sprint-AO2-10-benchmark-data-contract.md" .

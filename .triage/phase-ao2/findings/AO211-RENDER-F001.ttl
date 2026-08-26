@@ -17,12 +17,12 @@
   triage:sweepScope "file_only" ;
   triage:status "deferred" ;
   triage:dispatchReady false ;
-  triage:deferredNote "Rand confirmed 2026-08-25: live-benchmark validation work for early Phase AO2 sprints (AO2.10/AO2.11) was deliberately deferred, not skipped or forgotten. Not a blocker and not something to keep surfacing as an open question -- do not dispatch a fix or treat this as an active QA failure. Re-evaluate only if the user asks for the deferred live-benchmark evidence to be produced." ;
+  triage:deferredNote "Rand confirmed 2026-08-25: live-benchmark validation work for early Phase AO2 sprints (AO2.10/AO2.11) was deliberately deferred, not skipped or forgotten. Not a blocker and not something to keep surfacing as an open question -- do not dispatch a fix or treat this as an active QA failure. Re-evaluate only if the user asks for the deferred live-benchmark evidence to be produced. FORMAL PHASE-GATE WAIVER (Rand, 2026-08-26, in response to QA-PHASE-AO2-FINAL-GATE): the 2026-08-25 deferral is confirmed to also cover the phase-end gate itself, not only dev-dispatch. Do not block integrate/phase-ao2 -> develop on this finding." ;
   triage:triagedAt "2026-08-24T05:20:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.11 ;
   triage:foundAt "2026-08-24T05:14:31Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AO211-RENDER-F001/AO211-1> ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/AO211-RENDER-F001/AO211-1>
   a triage:Occurrence ;

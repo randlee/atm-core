@@ -4,7 +4,7 @@ sprint: AO2.8
 title: M5 full-matrix performance remediation and Windows parity
 branch: future-dev-worktree
 integration_branch: integrate/phase-ao2
-status: draft_for_review
+status: descoped
 depends_on:
   - AO2.7-m5-benchmark-harness-contract
 dependency_relations:
@@ -14,6 +14,15 @@ parallel_safe_with: []
 ---
 
 # AO2.8 — M5 full-matrix performance remediation and Windows parity
+
+## Descoped
+
+Rand ruled this deliverable out of scope for `phase-ao2` on 2026-08-26, in
+response to `QA-PHASE-AO2-FINAL-GATE`'s finding `ATM-QA2-004` (not-verifiable:
+no triage records, no sprint-doc QA history, no evidence this deliverable
+ever landed on `integrate/phase-ao2`). This sprint is not counted toward
+phase-ao2's completion criteria. Revisit as its own future work item if
+Windows/fastpc4 tcp parity is still wanted.
 
 ## Decision
 
