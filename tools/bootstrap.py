@@ -195,21 +195,28 @@ def sc_compose_install_command(version: str, target: str) -> tuple[str, str]:
     return (asset, sc_compose_release_url(version, asset))
 
 
-def cargo_binstall_command(name: str, version: str, *, force: bool) -> list[str]:
+def cargo_binstall_command(
+    name: str,
+    version: str,
+    *,
+    force: bool,
+    allow_quick_install: bool = False,
+) -> list[str]:
     """Return a non-compiling cargo-binstall command for one registry tool.
 
-    Disable Binstall's compile strategy so an unavailable artifact takes the
-    explicit Cargo registry fallback below instead of silently rebuilding from
-    source.  The quick-install strategy is also disabled: CI must consume the
-    tool's own release artifact or use the verified registry fallback.
+    Disable Binstall's compile strategy so an unavailable artifact cannot
+    silently rebuild from source.  The quick-install strategy is disabled for
+    tools with first-party release assets; cargo-modules explicitly enables it
+    because its upstream project publishes tags but no GitHub releases.
     """
+    disabled_strategies = "compile" if allow_quick_install else "quick-install,compile"
     command = [
         "cargo",
         "binstall",
         "--no-confirm",
         "--disable-telemetry",
         "--disable-strategies",
-        "quick-install,compile",
+        disabled_strategies,
     ]
     if force:
         command.append("--force")
@@ -495,8 +502,15 @@ def bootstrap(manifest: BootstrapManifest, *, dry_run: bool) -> None:
             continue
         installed = False
         if cargo_binstall_available():
+            # cargo-modules has no first-party release assets; permit only
+            # Binstall's third-party quick-install archive, never compilation.
             installed = run(
-                cargo_binstall_command(name, version, force=True),
+                cargo_binstall_command(
+                    name,
+                    version,
+                    force=True,
+                    allow_quick_install=name == "cargo-modules",
+                ),
                 dry_run=dry_run,
                 allow_failure=not ci,
             )

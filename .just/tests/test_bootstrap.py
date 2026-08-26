@@ -50,6 +50,15 @@ class BootstrapTests(unittest.TestCase):
             "--disable-strategies", "quick-install,compile", "--force", "cargo-audit@0.22.2",
         ])
 
+    def test_cargo_modules_uses_quick_install_without_compile(self) -> None:
+        command = bootstrap.cargo_binstall_command(
+            "cargo-modules", "0.26.0", force=True, allow_quick_install=True
+        )
+        self.assertEqual(command, [
+            "cargo", "binstall", "--no-confirm", "--disable-telemetry",
+            "--disable-strategies", "compile", "--force", "cargo-modules@0.26.0",
+        ])
+
     def test_registry_tools_are_exact_and_locked(self) -> None:
         command = bootstrap.cargo_install_command("cargo-audit", "0.22.2", force=True)
         self.assertEqual(command, ["cargo", "install", "--locked", "--force", "--version", "0.22.2", "cargo-audit"])
