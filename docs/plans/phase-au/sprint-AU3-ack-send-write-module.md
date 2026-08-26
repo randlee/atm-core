@@ -32,6 +32,12 @@ from the master plan: types only, or types + admission functions. Working positi
 in `ack` while `write_mail_with_runtime` moves would keep one leg of the cycle. Record
 the confirmed member list in this doc before starting step 2.
 
+**CONFIRMED (arch-ctm, 2026-08-26, msg 01M0ZSY6C6KXNPFXV1JP5KR00M)**: move
+`write_mail_with_runtime`, `admit_acknowledgement_write`,
+`admit_acknowledgement_write_async`, **and their shared types together** into
+`atm_core::write` verbatim; retain public/serde paths with `ack`/`send` re-exports.
+Step 0 closed — work items 2–4 unblocked.
+
 ## Work items (in order)
 
 1. **Entry tests first** — the admission flow currently has exactly one end-to-end test
