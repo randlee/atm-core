@@ -15,24 +15,25 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crates/sc-lint-boundary/src/portability.rs (PortabilityCollector), crates/sc-lint-boundary/src/runtime.rs (RuntimeCollector)" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-26T21:50:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AU2 ;
   triage:foundAt "2026-08-26T21:44:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AU2-QA-VISITOR-CYCLE-001/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AU2-QA-VISITOR-CYCLE-001/2> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" ;
+  triage:closedNote "Fixed by arch-ctm on feature/pau-s2-lint-calibration @ ad98e74f6 ('allow-recursive-visitor-cycles' + 'lock-visitor-allow-macro'): added exactly the two sanctioned #[sc_lint(boundary.allow(\"cycle.type_method_self_loop\"))] attributes on PortabilityCollector and RuntimeCollector, each with a justification comment identifying the recursive-descent-visitor shape. No classifier change, no trait-wide or workspace-level mechanism introduced. quality-mgr independently re-ran `cargo run -q -p sc-lint-boundary -- analyze --root . --format json` against ad98e74f6: payload dropped from 3 findings to exactly 1 (ack<->send SCB-CYCLE-001, correctly retained as AU.3-owned proof of no over-exclusion); both PortabilityCollector/RuntimeCollector findings confirmed absent. Also independently verified via `git diff`: change scope is exactly the two allow attributes plus one pinning-test update, nothing else. cargo test -p sc-lint-boundary (69/69), cargo clippy --all-targets -- -D warnings, and cargo fmt --check all pass; arch-ctm separately reported full-workspace `just test` (714 passed, 9 skipped) and `just lint` green. PR #1035 merged to integrate/phase-au at merge commit 26927bdff (2026-08-26T22:20:17Z); ad98e74f6 confirmed an ancestor of integrate/phase-au via `git merge-base --is-ancestor` before this closure was recorded. QA-AU2-R1 verdict converted from PASS-contingent to unconditional PASS." .
 
 <urn:atm:triage:occurrence/AU2-QA-VISITOR-CYCLE-001/1>
   a triage:Occurrence ;
   triage:file "crates/sc-lint-boundary/src/portability.rs" ;
   triage:line 133 ;
   triage:snippet "struct PortabilityCollector<'a> { ... } -- SCB-CYCLE-002 type_method_self_loop across visit_items/visit_item/visit_item_mod/visit_item_impl/visit_item_fn/visit_block_for_portability/visit_expr_for_portability/visit_stmt_for_portability" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pau-s2-lint-calibration" ;
-  triage:headSha "93d3d7949" ;
+  triage:headSha "ad98e74f6" ;
   triage:occursIn <urn:atm:triage:worktree/pau-s2-lint-calibration> .
 
 <urn:atm:triage:occurrence/AU2-QA-VISITOR-CYCLE-001/2>
@@ -40,15 +41,15 @@
   triage:file "crates/sc-lint-boundary/src/runtime.rs" ;
   triage:line 96 ;
   triage:snippet "struct RuntimeCollector<'a> { ... } -- SCB-CYCLE-002 type_method_self_loop across visit_items/visit_item/visit_item_mod/visit_item_impl/visit_item_fn/visit_block/visit_expr/visit_stmt" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pau-s2-lint-calibration" ;
-  triage:headSha "93d3d7949" ;
+  triage:headSha "ad98e74f6" ;
   triage:occursIn <urn:atm:triage:worktree/pau-s2-lint-calibration> .
 
 <urn:atm:triage:worktree/pau-s2-lint-calibration>
   a triage:WorktreeSnapshot ;
   triage:path "feature/pau-s2-lint-calibration" ;
   triage:branch "feature/pau-s2-lint-calibration" ;
-  triage:headSha "93d3d7949" ;
+  triage:headSha "ad98e74f6" ;
   triage:orderIndex 1 .
