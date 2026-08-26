@@ -2,6 +2,8 @@
 //! entry family, and persisted-write preparation.
 
 use super::*;
+use crate::send::NudgeMode;
+use crate::send::NudgeMode;
 
 /// Result of the one canonical write operation.
 ///
@@ -77,8 +79,7 @@ impl PreparedWrite {
     }
 
     /// Sets the durable at-most-once queue marker for a newly persisted
-    /// deferred write. Marker persistence is advisory and never invalidates
-    /// an already successful durable write.
+    /// `NudgeMode::Deferred` write.
     fn mark_pending_if_deferred(&self, runtime: &LocalServiceRuntime) {
         if !self.is_newly_persisted() || self.outbound_request.nudge_mode != NudgeMode::Deferred {
             return;
@@ -90,7 +91,7 @@ impl PreparedWrite {
                 action = "queue_marker_set",
                 outcome = "failed",
                 message_id = %message_id,
-                "deferred write has no retained recipient for a queue marker"
+                "deferred write has no retained recipient to resolve a queue marker for"
             );
             return;
         };
@@ -108,7 +109,7 @@ impl PreparedWrite {
                     message_id = %message_id,
                     member = %member,
                     %error,
-                    "deferred write has no pending-nudge store installed"
+                    "deferred write has no pending-nudge store installed in this runtime"
                 );
                 return;
             }

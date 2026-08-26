@@ -2917,8 +2917,9 @@ fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
         "the canonical PreparedWrite seam must retain in-memory received-hook planning without reloading a committed record"
     );
     assert!(
-        send_module.contains("NudgeMode::Deferred"),
-        "the canonical send module must define the deferred queue nudge mode"
+        send_module.contains("pub enum NudgeMode")
+            && write_module_code.contains("NudgeMode::Deferred"),
+        "the canonical send/write modules must define and apply the deferred queue nudge mode"
     );
     assert!(
         received_hook_selector.contains("impl MessageReceivedHookSelector"),
