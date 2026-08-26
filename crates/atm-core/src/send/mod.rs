@@ -1091,7 +1091,7 @@ fn emit_send_command_event(
 #[cfg(test)]
 mod post_write_tests;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 #[cfg(test)]
 mod path_body_tests {

@@ -691,6 +691,9 @@ fn record_ack_telemetry(
 }
 
 #[cfg(test)]
+mod admission_tests;
+
+#[cfg(test)]
 mod tests {
     use std::path::PathBuf;
 
