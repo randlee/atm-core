@@ -12,7 +12,7 @@ share one owner and one contract — the `ATM_TEMP` root and the staging
 convention — so splitting them buys four dispatch/QA cycles for work that
 is sequential inside one owner's context, and the finer-grained split
 already went through this phase's QA rounds (its hardened acceptance
-criteria are preserved verbatim below). **Decision (Rand to confirm):
+criteria are preserved verbatim below). **Decision (approved by Rand 2026-08-26):
 one PR, not two.** The prior "the PR opens once deliverables 1–4 are
 pushed" line named a timing convention, not a QA gate, and PLAN-CRIT-015
 correctly flagged it as unfalsifiable. The real mechanism: deliverables
@@ -67,7 +67,14 @@ baseline.
    calls at startup and the CLI calls lazily at first scratch-space use
    (commands touching no scratch space are unaffected either way).
    **Unset is not a startup failure**: `resolve_atm_temp` defaults to
-   `<std::env::temp_dir()>/atm` (created if missing). `std::env::temp_dir()`
+   `<std::env::temp_dir()>/atm-<uid>` on Unix (`<temp_dir()>\atm` on Windows,
+   where `%TEMP%` is already per-user), created with mode `0700` if missing.
+   **Shared-host safety (critical review F7):** if the directory already
+   exists and is not owned by the current uid, or has any group/world
+   permission bits, resolution fails closed with `AtmTempInsecure` — the
+   fallback never adopts a directory another user could have pre-created.
+   The same ownership/mode check applies to an explicitly set `ATM_TEMP`.
+   `std::env::temp_dir()`
    is not yet a *production* repo idiom — grepped repo-wide, every existing
    call site is a test fixture (e.g. `crates/atm-core/src/ack/mod.rs:779`,
    `crates/atm-runtime/src/composition.rs:311`) or inside the `identity`
@@ -163,7 +170,7 @@ baseline.
    the ATM home *directory*, not a routable `HostName`; no `AtmConfig`
    field, env var, or `gethostname`-style dependency exists — verified
    grep, zero hits). This sprint adds one: a new optional
-   `AtmConfig.local_host: Option<HostName>` field (same file that already
+   `AtmConfig.local_host: Option<HostName>` field (approved by Rand 2026-08-26; same file that already
    has no temp key, `crates/atm-core/src/config/types.rs:54`), sourced
    from `.atm.toml`, set once per machine by the operator (documented in
    `docs/cross-host-file-transfer.md`) with the **same value** they'd
@@ -232,6 +239,7 @@ fn resolve_picker_recipient(
 | `NotAbsolute` | `ATM_TEMP` set to a relative path | use an absolute path |
 | `Unresolvable` | canonicalization failed | check broken symlinks / missing parents |
 | `NotWritable` | not writable/creatable | fix permissions or pick another dir |
+| `AtmTempInsecure { path, reason }` | the resolved directory (fallback or explicit `ATM_TEMP`) exists but is not owned by the current uid, or has group/world permission bits (decision (a), critical review F7) | remove/chown the directory or set `ATM_TEMP` to a private path |
 | `TransferScriptUnsafe { host, reason }` | script at `~/.atm/transfer/<host>` exists but fails the executable-bit/owner-UID/not-group-or-world-writable check (decision (c)) | `chmod 700 ~/.atm/transfer/<host>` and confirm ownership |
 
 `Unset` is intentionally not a variant: an unset `ATM_TEMP` resolves to the
@@ -315,7 +323,11 @@ default scratch root (decision (a)), it does not error.
 ## Acceptance criteria
 
 1. Validation: `ATM_TEMP` unset → daemon boots and CLI's first scratch use
-   both resolve `<std::env::temp_dir()>/atm`, create it if missing, and
+   both resolve `<std::env::temp_dir()>/atm-<uid>` (Unix; `<temp_dir()>\atm`
+   on Windows), create it with mode `0700` if missing, refuse with
+   `AtmTempInsecure` when it pre-exists owned by another uid or with any
+   group/world bits (test: pre-create as `0755` → refused; `0700` own uid →
+   accepted), apply the same check to an explicit `ATM_TEMP`, and
    emit exactly one startup `tracing::warn!` naming the default and the
    override variable — daemon boot is not blocked and exit code is 0;
    `ATM_TEMP` set to a relative/unresolvable/unwritable path fails daemon

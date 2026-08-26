@@ -1,6 +1,6 @@
 # Plan — Phase AQ: ATM Send-To Shell Integration
 
-Status: **re-hardening — critical review FAIL (fenix, 2026-08-26: 10 blocking / 22 important / 17 minor)**. The prior "hardened — plan-QA PASS (2026-08-24, queue-first 6-sprint structure)" header is **retracted**: the AQ2.6/AQ2.7 insertion (2026-08-25, `47a26c90f`…`e2d886c91`) was never reviewed and rewrote already-PASSed docs (AQ1, AQ2.5, AQ3, AQ4, AQ5), so those PASS rows no longer describe the text on disk (see "Critical review 2026-08-26" and "Insertion QA history (AQ2.6–AQ2.7)" below). Reordered 2026-08-26 per Rand: trait foundation first, Herdr second. ·
+Status: **re-hardened — whole-tree critical review PASS (round 3, 2026-08-26, `ea990a8dd`); quality-mgr gate pending.** The original critical review (fenix, 2026-08-26: 10 blocking / 22 important / 17 minor) and its closure are recorded below. The prior "hardened — plan-QA PASS (2026-08-24, queue-first 6-sprint structure)" header is **retracted**: the AQ2.6/AQ2.7 insertion (2026-08-25, `47a26c90f`…`e2d886c91`) was never reviewed and rewrote already-PASSed docs (AQ1, AQ2.5, AQ3, AQ4, AQ5), so those PASS rows no longer describe the text on disk (see "Critical review 2026-08-26" and "Insertion QA history (AQ2.6–AQ2.7)" below). Reordered 2026-08-26 per Rand: trait foundation first, Herdr second. ·
 Source PRD: [prd-atm-send-to.md](./prd-atm-send-to.md)
 Reference code: `integrate/phase-ao2` (CLI at
 `crates/atm/src/commands/{teams,send}.rs`, daemon maintenance-worker
@@ -170,7 +170,7 @@ disposition:
 | B6 | No dispatch-from-message-id path for drain/sweep/pump | **structurally closed** — AQ1 trait-foundation deliverable; contract text still to be authored in AQ1 |
 | B7 | No `list_pending_members` — sweep/pump cannot enumerate | **structurally closed** — added to AQ1's `PendingNudgeStore` contract |
 | B8 | AQ3 idle drain (not just sweep) can claim Herdr messages | **plan-level closed** — AQ2.7 owns its own Herdr-only guard; AQ3 pre-check applies to both drain and sweep (AQ3 doc updated); AC text still to be hardened |
-| B9 | Herdr has no contract anywhere in repo | **closed** — ADR-058 + fixture on PR #1039 (lane A); AQ2.6/AQ2.7 rewritten against it |
+| B9 | Herdr has no contract anywhere in repo | **closed at doc level** — ADR-058 + fixture authored on PR #1039 (open, doc-only, targets integrate/phase-aq); AQ2.6/AQ2.7 rewritten against it; **PR #1039 merge is AQ2.6's dispatch precondition** |
 | B10 | `ATM_TEMP` eager daemon boot-fail is fleet-breaking with no rollout story | **plan-level closed** — unset falls back to `<temp_dir>/atm` with a startup warning; set-but-invalid fails closed; PRD §4.5 aligned |
 
 Finalization pass (2026-08-26, five Sonnet doc agents + coordinator): every
@@ -183,8 +183,9 @@ aligned to the blueprint (D1 crate placement, `mark_pending`,
 `GraftLeaseState`, `HerdrSession`, deferred renames). Re-entry rule: scope +
 critical + quality-mgr run on the **whole tree**, not per-insertion.
 
-Decisions surfaced by the finalization agents for Rand to confirm (all
-recorded inline in the respective docs as "Rand to confirm"): (1) AQ1.5
+Decisions surfaced by the finalization agents — **all eight approved by Rand
+2026-08-26** (decision 1 explicitly discussed; each sprint doc now carries an inline
+"approved by Rand 2026-08-26" marker at the decision — critical review F3): (1) AQ1.5
 `register` displaces unconditionally on generation mismatch (flock proves
 same-host exclusivity) — revises a 4-round-hardened contract element; (2)
 AQ1.7 dials present-but-expired leases rather than refusing; (3) AQ2.6
@@ -195,6 +196,14 @@ mixed-backend doctor finding is Warning, not Error; (4) AQ2.6
 sequential commits and a single QA gate (not AQ4a/AQ4b); (7) AQ4
 `AtmConfig.local_host` as the sender's own host identity; (8) AQ6 Wyvern
 issue target repo `randlee/wyvern`.
+
+## Re-entry critical review (whole tree, 2026-08-26)
+
+| Round | Reviewer | Commit | Verdict | Notes |
+|---|---|---|---|---|
+| 1 | critical-plan-reviewer (sonnet, whole tree) | `9827dfb1e` | FAIL — 3 Blocking (F1 AQ2.6 `Herdr.session` typed `Option<String>` vs AQ1's `HerdrSession`; F2 AQ2.5 classifier signature still `Option<&GraftReceiverLease>`; F3 "Rand to confirm" markers absent inline in 6/8 docs), 4 Important (F4 AQ3 attributed the classifier to AQ2.5; F5 no owner for the lease→`GraftLeaseState` mapping; F6 B9 "closed" while PR #1039 unmerged; F7 fallback `ATM_TEMP` had no shared-host permission story), 1 minor | Fixed `ab74477b6`/`cb0747be7`: types aligned to landed code; inline approval markers; AQ1.7 owns `graft_lease_state`; B9 reworded with PR #1039 as AQ2.6 precondition; per-uid `0700` fallback dir with `AtmTempInsecure`. |
+| 2 | same | `cb0747be7` | FAIL — 0 Blocking, 2 Important (AQ1.7 AC 8 referenced but missing; AQ4 `AtmTempInsecure` not in error table/AC 1), 1 minor (AQ3 pronoun) | Fixed `ea990a8dd`. |
+| 3 | same | `ea990a8dd` | **PASS** — zero Blocking/Important; no regressions | Ready for quality-mgr gate. |
 
 ## Insertion QA history (AQ2.6–AQ2.7)
 

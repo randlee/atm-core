@@ -98,7 +98,7 @@ pub trait MemberStateTransitionSink: atm_core::boundary::sealed::Sealed + Send +
    Read rows never appear (markers cleared by AQ1's read hook).
    **Channel pre-check (shared helper, defined here, called from both
    deliverable 2 and deliverable 3 — critical review B8)**: before
-   calling `claim_next_pending`, the pre-check calls AQ2.5/AQ2.6's
+   calling `claim_next_pending`, the pre-check calls AQ1's
    `DeliveryChannel` classifier and admits the claim **only** when M is
    classified `TmuxSteer` or `Graft`. Heartbeat hooks are roster-blind,
    so without this the drain-side call site would claim for `HerdrSteer`
@@ -110,7 +110,7 @@ pub trait MemberStateTransitionSink: atm_core::boundary::sealed::Sealed + Send +
    on FIFO append — handoff semantics; the pre-check is the belt to that
    suspender). Implemented as one function called from both call sites so
    the two pre-checks cannot drift apart; this sprint authors the
-   pre-check helper, AQ2.5 authors the classifier it calls — exactly one
+   pre-check helper, AQ1 authors the classifier it calls — exactly one
    owner per file.
 3. **Recovery sweep** — **kind-agnostic**: a low-frequency periodic pass
    (maintenance-cadence precedent) that enumerates candidate members via
@@ -153,7 +153,7 @@ pub trait MemberStateTransitionSink: atm_core::boundary::sealed::Sealed + Send +
 5. No transition, no tick → no nudge. Shutdown mid-pass cancels and joins
    within the deadline.
 6. Sweep channel pre-check: the sweep claims only for members the
-   AQ2.5/AQ2.6 classifier resolves to `TmuxSteer` or `Graft`; for a
+   AQ1 classifier resolves to `TmuxSteer` or `Graft`; for a
    `HerdrSteer` or bare-CLI member the sweep performs no claim and no attempt
    increment (test double over the classifier seam), and a pending marker for
    either member — should one exist — is never driven to a stuck flag by this
@@ -195,9 +195,9 @@ None.
 
 - must_follow: AQ1 (kinds, store, suppression) — merge-forward before every
   dev/fix round.
-- must_follow: AQ2.5 (the sweep pre-check consumes its `DeliveryChannel`
-  classifier seam; the live-evidence validation additionally requires
-  its heartbeat producer). Merge-forward trigger: AQ2.5 dev push.
+- must_follow: AQ2.5 (the sweep pre-check consumes AQ1's `DeliveryChannel`
+  classifier via the bare-CLI "never sweep" rule AQ2.5 establishes; the
+  live-evidence validation additionally requires AQ2.5's heartbeat producer). Merge-forward trigger: AQ2.5 dev push.
 - must_follow: AQ2.6 (the classifier gains the retained-tmux/alternate-Herdr
   distinction; this sprint owns the corresponding "skip Herdr" pre-check
   diff). Merge-forward trigger: AQ2.6 dev push.

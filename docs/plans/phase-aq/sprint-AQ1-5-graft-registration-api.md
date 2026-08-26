@@ -53,7 +53,7 @@ receivers refresh their lease on a timer; liveness is validated at use.
    register/unregister, returning `GraftReceiverEndpointStore::lookup`'s
    result verbatim — a miss is `Ok(None)`, not an error.
 4. **Displacement rule (AI3133-HERMES-GRAFT-RECEIVER-SINGLETON-UNSAFE
-   property (c); revised 2026-08-26, critical review I10)**: `register` is
+   property (c); revised 2026-08-26, critical review I10; approved by Rand 2026-08-26)**: `register` is
    `AuthenticatedIngress::Local`-only, and its sole in-tree caller
    (`GraftReceiverListener::bind`'s post-flock registration, now in
    `atm-graft`) has already OS-proven same-host exclusivity via the flock
@@ -217,9 +217,11 @@ never look displaceable (see AQ1.6's every-iteration refresh rule).
 collision (AQ1 compiles before this sprint's `GraftReceiverLease` exists).
 AQ1.7's consumer-cutover call site is the mapping point: it calls
 `GraftReceiverEndpointStore::lookup` and maps the result to
-`GraftLeaseState::Active` using this sprint's read-side liveness derivation
-(above) — lease exists AND `last_seen_at` within `ACTIVE_LEASE_WINDOW` AND
-`unreachable_at IS NULL` — else `Absent`.
+`GraftLeaseState::Active` **iff a lease row exists for the member** (any
+`last_seen_at`/`unreachable_at` — expiry is advisory and AQ1.7 dials
+expired leases anyway, I11; the read-side liveness derivation above is for
+doctor/health reporting, not channel selection) — else `Absent`. The
+mapping deliverable and its AC live in AQ1.7 (deliverable 2).
 
 ## Acceptance criteria
 
