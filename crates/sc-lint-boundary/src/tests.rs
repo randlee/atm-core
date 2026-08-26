@@ -1317,6 +1317,97 @@ fn downgrades_trait_impl_self_loop() {
 }
 
 #[test]
+fn excludes_trait_method_delegation_and_private_associated_helpers() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_source(
+        "example",
+        "lib.rs",
+        r#"
+                pub struct Loop;
+
+                pub trait Adapter {
+                    fn delegated(&self) -> usize;
+                    fn associated(&self) -> usize;
+                    fn helper(&self) -> usize;
+                }
+
+                impl Loop {
+                    fn private_helper() -> usize {
+                        1
+                    }
+                }
+
+                impl Adapter for Loop {
+                    fn delegated(&self) -> usize {
+                        self.helper()
+                    }
+
+                    fn associated(&self) -> usize {
+                        Loop::private_helper()
+                    }
+
+                    fn helper(&self) -> usize {
+                        1
+                    }
+                }
+            "#,
+    );
+
+    let report = analyze_workspace(&AnalyzeOptions {
+        root: fixture.root().to_path_buf(),
+        format: OutputFormat::Json,
+        rule: Some(RuleFilter::Cycles),
+    })
+    .unwrap();
+    assert!(
+        !report
+            .findings
+            .iter()
+            .any(|finding| finding.rule_id == RuleId::ScbCycle003)
+    );
+}
+
+#[test]
+fn keeps_type_position_self_reference_in_trait_impl_positive() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_source(
+        "example",
+        "lib.rs",
+        r#"
+                pub struct Loop;
+
+                pub trait Adapter {
+                    fn make() -> Loop;
+                }
+
+                impl Adapter for Loop {
+                    fn make() -> Loop {
+                        Loop
+                    }
+                }
+            "#,
+    );
+
+    let report = analyze_workspace(&AnalyzeOptions {
+        root: fixture.root().to_path_buf(),
+        format: OutputFormat::Json,
+        rule: Some(RuleFilter::Cycles),
+    })
+    .unwrap();
+    assert!(report.findings.iter().any(|finding| {
+        finding.rule_id == RuleId::ScbCycle003
+            && finding
+                .node_ids
+                .iter()
+                .any(|node_id| node_id.ends_with("::make"))
+    }));
+}
+
+#[test]
 fn does_not_flag_conversion_like_trait_impl_self_loop() {
     let fixture = WorkspaceFixture::new();
     fixture.write_workspace_root();

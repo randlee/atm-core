@@ -186,6 +186,11 @@ fn classify_trait_impl_self_loop(
     source_edges: &[&OwnerRefEdge],
     node_map: &BTreeMap<NodeId, &GraphNode>,
 ) -> Option<String> {
+    let source_edges: Vec<_> = source_edges
+        .iter()
+        .copied()
+        .filter(|edge| !is_trait_impl_delegating_call(edge, node_map))
+        .collect();
     let is_trait_impl_self_loop = !source_edges.is_empty()
         && source_edges.iter().all(|edge| {
             edge.source_kind == "method"
@@ -201,6 +206,44 @@ fn classify_trait_impl_self_loop(
         .and_then(|node| node.impl_trait.clone())
         .unwrap_or_else(|| "unknown_trait".to_string());
     (!is_non_architectural_trait_impl_self_loop(&trait_name)).then_some(trait_name)
+}
+
+fn is_trait_impl_delegating_call(
+    edge: &OwnerRefEdge,
+    node_map: &BTreeMap<NodeId, &GraphNode>,
+) -> bool {
+    let Some(callee) = &edge.call_callee else {
+        return false;
+    };
+    if edge.reference_kind != ReferenceKind::Expr || edge.source_owner_id != edge.target_owner_id {
+        return false;
+    }
+    let Some(source_method) = node_map
+        .get(&edge.source_node_id)
+        .map(|node| node.label.as_str())
+    else {
+        return false;
+    };
+    if source_method == callee.ident {
+        return false;
+    }
+    match callee.kind {
+        CallCalleeKind::Receiver => true,
+        CallCalleeKind::Associated => is_private_associated_helper(edge, callee, node_map),
+    }
+}
+
+fn is_private_associated_helper(
+    edge: &OwnerRefEdge,
+    callee: &CallCallee,
+    node_map: &BTreeMap<NodeId, &GraphNode>,
+) -> bool {
+    node_map.values().any(|node| {
+        node.kind == "method"
+            && node.label == callee.ident
+            && node.visibility == Some("private")
+            && owner_id_for_node_id(&node.id, node.kind).as_ref() == Some(&edge.target_owner_id)
+    })
 }
 
 fn non_delegating_self_loop_edges<'a>(
