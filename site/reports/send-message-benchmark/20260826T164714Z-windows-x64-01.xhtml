@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+  <title>ATM benchmark campaign — 20260826T164714Z-windows-x64-01</title>
+  <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
+  <style type="text/css">
+    body { font-family: sans-serif; color: #1f2937; margin: 2rem auto; max-width: 75rem; padding: 0 1rem; }
+    table { border-collapse: collapse; margin: 1rem 0; width: 100%; } th, td { border: 1px solid #cbd5e1; padding: .55rem; text-align: left; }
+    th { background: #f1f5f9; } .PASS { color: #065f46; font-weight: bold; } .FAIL { color: #991b1b; font-weight: bold; } .INCOMPLETE { color: #92400e; font-weight: bold; }
+    .meta { color: #475569; } code { font-family: ui-monospace, monospace; } .incomplete { margin-top: 2rem; border: 2px solid #f59e0b; padding: 1rem; background: #fffbeb; }
+  </style>
+</head>
+<body>
+  <h1>ATM benchmark campaign — 20260826T164714Z-windows-x64-01</h1>
+  <p class="meta"><code>20260826T164714Z-windows-x64-01</code> · windows-x64-01 · phase ao2 · source <code>c387a45d1e6740fae28649fca6d60dd951c70653</code></p>
+  <p>Status: <strong class="FAIL">FAIL</strong> · started <time datetime="2026-08-26T16:47:14.294923Z">Aug 26, 2026 · 09:47 PDT</time> · completed <time datetime="2026-08-26T16:48:22.444523Z">Aug 26, 2026 · 09:48 PDT</time></p>
+  <table>
+    <thead><tr><th>Test</th><th>p50 msg/sec</th><th>p95</th><th>p99</th><th>Durable write proof</th><th>Baseline floor</th><th>Margin</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr data-target="tcp"><td>TCP</td><td>6012.47</td><td>6722.61</td><td>6859.28</td><td>118000 / 118000 after restart</td><td>8793.91</td><td>-2781.45</td><td class="FAIL">FAIL</td></tr>
+      <tr data-target="tcp-tls"><td>TCP + TLS</td><td>5614.01</td><td>6211.82</td><td>6251.00</td><td>114000 / 114000 after restart</td><td>6891.68</td><td>-1277.67</td><td class="FAIL">FAIL</td></tr>
+      <tr data-target="uds"><td>UDS</td><td>n/a</td><td>n/a</td><td>n/a</td><td>not captured</td><td>n/a</td><td>n/a</td><td class="INCOMPLETE">INCOMPLETE</td></tr>
+      <tr data-target="sqlite"><td>SQLite</td><td>16022.88</td><td>20019.18</td><td>20699.82</td><td>318000 / 318000 after restart</td><td>16035.35</td><td>-12.46</td><td class="FAIL">FAIL</td></tr>
+    </tbody>
+  </table>
+  <script type="application/ecmascript"><![CDATA[
+(() => { const f = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", hourCycle: "h23", timeZoneName: "short" }); document.querySelectorAll("time[datetime]").forEach((node) => { node.textContent = f.format(new Date(node.dateTime)); }); })();
+  ]]></script>
+</body>
+</html>

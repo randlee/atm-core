@@ -390,6 +390,24 @@ def _assert_restore_sidecars_absent(database: Path) -> None:
         )
 
 
+def checkpoint_closed_database(database: Path) -> None:
+    """Checkpoint a stopped daemon's WAL before enforcing a clean snapshot."""
+    if not database.exists():
+        return
+    try:
+        with closing(sqlite3.connect(database, timeout=5.0)) as connection:
+            result = connection.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+    except (OSError, sqlite3.Error) as error:
+        raise BenchmarkSnapshotError(
+            f"could not checkpoint stopped benchmark database {database}: {error}"
+        ) from error
+    if result is not None and result[0] != 0:
+        raise BenchmarkSnapshotError(
+            f"could not checkpoint stopped benchmark database {database}: checkpoint busy"
+        )
+    _assert_restore_sidecars_absent(database)
+
+
 def restore_verified_snapshot(snapshot_id: str) -> VerifiedSnapshot:
     """Atomically activate a previously verified account-local SQLite snapshot.
 

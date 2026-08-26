@@ -146,13 +146,9 @@ class SignDaemonDevTests(unittest.TestCase):
     def test_benchmark_recipe_publishes_the_canonical_report(self) -> None:
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
         self.assertIn(
-            "    # Retain the complete campaign report even when a target fails; the runner\n"
-            "    # records the attempt before returning its non-zero status.\n"
-            "    {{python_cmd}} scripts/smoke/run_admission_capacity.py {{args}} || benchmark_status=$?\n"
-            "    {{python_cmd}} scripts/smoke/benchmark_report.py --rebuild || exit $?\n"
-            "    {{python_cmd}} .just/generate_report_index.py --check || exit $?\n"
-            "    echo 'View the newest campaign panel: just benchmark-show'\n"
-            "    exit ${benchmark_status:-0}",
+            "    # The wrapper preserves the runner verdict while rebuilding reports on\n"
+            "    # both POSIX shells and PowerShell.\n"
+            "    {{python_cmd}} .just/run_benchmark.py {{args}}",
             justfile,
         )
 

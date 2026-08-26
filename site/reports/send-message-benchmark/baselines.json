@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "revision": 4,
+  "revision": 5,
   "entries": [
     {
       "host_label": "rand-m5",
@@ -59,6 +59,14 @@
       "approved_by": "Rand via D3 ratchet exception",
       "effective_from": "2026-08-26T00:00:00Z",
       "rationale": "Three-run m5-atmbench dataset (20260825T045840Z, 20260826T001441Z, 20260826T002410Z) and Rand sign-off; the original TCP+TLS floor was mis-seeded equal to TCP and had never been achieved."
+    },
+    {
+      "host_label": "windows-x64-01",
+      "target": "sqlite",
+      "p50_floor": 16035.345045815106,
+      "approved_by": "historical migration seed; pending quality review",
+      "effective_from": "2026-08-26T16:42:49.272003Z",
+      "rationale": "First clean Windows f8 diagnostic on the current AO2 integration revision; provisional floor pending quality review and replacement by three clean official runs."
     },
     {
       "host_label": "windows-x64-01",

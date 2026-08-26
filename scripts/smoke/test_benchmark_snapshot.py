@@ -74,6 +74,20 @@ class BenchmarkSnapshotTests(unittest.TestCase):
             self.assertFalse(database.with_name(f"{database.name}-wal").exists())
             self.assertFalse(database.with_name(f"{database.name}-shm").exists())
 
+    def test_checkpoint_closed_database_removes_wal_sidecars_before_snapshot(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            account = self._account(Path(temporary))
+            database = self._database(account, 1)
+            with closing(sqlite3.connect(database)) as connection:
+                self.assertEqual(connection.execute("PRAGMA journal_mode = WAL").fetchone(), ("wal",))
+                connection.execute("INSERT INTO entries(value) VALUES (99)")
+                connection.commit()
+
+            SNAPSHOT.checkpoint_closed_database(database)
+
+            self.assertFalse(database.with_name(f"{database.name}-wal").exists())
+            self.assertFalse(database.with_name(f"{database.name}-shm").exists())
+
     def test_tampered_completed_snapshot_is_not_a_restore_candidate(self):
         with tempfile.TemporaryDirectory() as temporary:
             account = self._account(Path(temporary))
