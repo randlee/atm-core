@@ -390,9 +390,10 @@ def _version_text(value: object) -> str:
 def binstall_tool_matches(name: str, version: str) -> bool:
     """Prove a prebuilt tool came from Binstall at the exact requested version."""
     for record in binstall_receipts():
-        info = record.get("crate_info")
-        if not isinstance(info, dict):
-            continue
+        # `crates-v1.json` serializes `CrateInfo` with flattened fields; accept
+        # the nested shape too so older locally retained receipts remain usable.
+        nested = record.get("crate_info")
+        info = nested if isinstance(nested, dict) else record
         if info.get("name") == name and _version_text(info.get("current_version")) == version:
             return True
     return False

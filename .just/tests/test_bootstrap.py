@@ -123,7 +123,8 @@ class BootstrapTests(unittest.TestCase):
                 bootstrap.verify_seed_tools(manifest)
 
     def test_binstall_receipt_proves_exact_prebuilt_version(self) -> None:
-        receipt = [{"crate_info": {"name": "cargo-audit", "current_version": "0.22.2"}}]
+        # Binstall's crates-v1.json flattens CrateInfo fields into each record.
+        receipt = [{"name": "cargo-audit", "current_version": "0.22.2"}]
         with mock.patch.object(bootstrap, "binstall_receipts", return_value=receipt):
             self.assertTrue(bootstrap.binstall_tool_matches("cargo-audit", "0.22.2"))
             self.assertFalse(bootstrap.binstall_tool_matches("cargo-audit", "0.22.3"))
