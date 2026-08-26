@@ -153,7 +153,7 @@ pub trait MemberStateTransitionSink: atm_core::boundary::sealed::Sealed + Send +
 5. No transition, no tick → no nudge. Shutdown mid-pass cancels and joins
    within the deadline.
 6. Sweep channel pre-check: the sweep claims only for members the
-   AQ2.5/AQ2.6 classifier resolves to `TmuxSteer` or `Graft`; for a
+   AQ1 classifier resolves to `TmuxSteer` or `Graft`; for a
    `HerdrSteer` or bare-CLI member the sweep performs no claim and no attempt
    increment (test double over the classifier seam), and a pending marker for
    either member — should one exist — is never driven to a stuck flag by this
