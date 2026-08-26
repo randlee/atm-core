@@ -179,6 +179,86 @@ fn exports_graph_for_inline_and_file_modules_and_attributes() {
 }
 
 #[test]
+fn preserves_forward_cross_module_call_targets() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_source(
+        "example",
+        "lib.rs",
+        r#"
+                mod first;
+                mod later;
+            "#,
+    );
+    fixture.write_source(
+        "example",
+        "first.rs",
+        r#"
+                pub fn call_later() {
+                    crate::later::target();
+                }
+            "#,
+    );
+    fixture.write_source("example", "later.rs", "pub fn target() {}");
+
+    let graph = export_workspace_graph(&ExportGraphOptions {
+        root: fixture.root().to_path_buf(),
+    })
+    .unwrap();
+
+    assert!(graph.edges.iter().any(|edge| {
+        edge.kind == "references_expr"
+            && edge.from == "crate::example::example::module::crate::first::call_later"
+            && edge.to == "crate::example::example::module::crate::later::target"
+            && edge.call_callee.as_ref().is_some_and(|callee| {
+                callee.ident == "target" && callee.kind == CallCalleeKind::Associated
+            })
+    }));
+}
+
+#[test]
+fn resolves_enum_variant_values_without_creating_self_cycles() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_source(
+        "example",
+        "lib.rs",
+        r#"
+                pub enum Mode {
+                    Ready,
+                }
+
+                impl Mode {
+                    pub fn label() -> &'static str {
+                        let _ = Self::Ready;
+                        "ready"
+                    }
+                }
+            "#,
+    );
+
+    let graph = export_workspace_graph(&ExportGraphOptions {
+        root: fixture.root().to_path_buf(),
+    })
+    .unwrap();
+    assert!(graph.edges.iter().any(|edge| {
+        edge.kind == "references_expr"
+            && edge.from == "crate::example::example::module::crate::Mode::impl::inherent::label"
+            && edge.to == "crate::example::example::module::crate::Mode::variant::Ready"
+    }));
+
+    let report = analyze_workspace(&AnalyzeOptions {
+        root: fixture.root().to_path_buf(),
+        format: OutputFormat::Json,
+        rule: Some(RuleFilter::Cycles),
+    })
+    .unwrap();
+    assert!(report.findings.is_empty());
+}
+
+#[test]
 fn keeps_same_named_inherent_and_trait_methods_distinct() {
     let fixture = WorkspaceFixture::new();
     fixture.write_workspace_root();
@@ -1364,6 +1444,69 @@ fn excludes_trait_method_delegation_and_private_associated_helpers() {
             .iter()
             .any(|finding| finding.rule_id == RuleId::ScbCycle003)
     );
+}
+
+#[test]
+fn retains_same_owner_multi_method_cycles() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_source(
+        "example",
+        "lib.rs",
+        r#"
+                pub struct Loop;
+
+                impl Loop {
+                    fn first() {
+                        Self::second();
+                    }
+
+                    fn second() {
+                        Self::first();
+                    }
+                }
+
+                pub trait Adapter {
+                    fn delegated_first(&self);
+                    fn delegated_second(&self);
+                }
+
+                impl Adapter for Loop {
+                    fn delegated_first(&self) {
+                        self.delegated_second();
+                    }
+
+                    fn delegated_second(&self) {
+                        self.delegated_first();
+                    }
+                }
+            "#,
+    );
+
+    let report = analyze_workspace(&AnalyzeOptions {
+        root: fixture.root().to_path_buf(),
+        format: OutputFormat::Json,
+        rule: Some(RuleFilter::Cycles),
+    })
+    .unwrap();
+
+    assert!(report.findings.iter().any(|finding| {
+        finding.rule_id == RuleId::ScbCycle002
+            && finding.node_ids.iter().any(|id| id.ends_with("::first"))
+            && finding.node_ids.iter().any(|id| id.ends_with("::second"))
+    }));
+    assert!(report.findings.iter().any(|finding| {
+        finding.rule_id == RuleId::ScbCycle003
+            && finding
+                .node_ids
+                .iter()
+                .any(|id| id.ends_with("::delegated_first"))
+            && finding
+                .node_ids
+                .iter()
+                .any(|id| id.ends_with("::delegated_second"))
+    }));
 }
 
 #[test]

@@ -71,7 +71,7 @@ fn analyze_self_cycle_component(
             .or_default()
             .push(edge);
     }
-    let classified = classify_self_cycle_edges(per_source, node_map);
+    let classified = classify_self_cycle_edges(per_source, node_map, owner_graph);
     let mut findings = Vec::new();
     if !classified.inherent_nodes.is_empty() {
         findings.push(Finding {
@@ -105,6 +105,7 @@ struct ClassifiedSelfCycles {
 fn classify_self_cycle_edges(
     per_source: BTreeMap<NodeId, Vec<&OwnerRefEdge>>,
     node_map: &BTreeMap<NodeId, &GraphNode>,
+    owner_graph: &OwnerGraph,
 ) -> ClassifiedSelfCycles {
     let mut classified = ClassifiedSelfCycles {
         inherent_nodes: BTreeSet::new(),
@@ -114,12 +115,12 @@ fn classify_self_cycle_edges(
         if self_cycle_edges_are_allowed(&source_edges, node_map) {
             continue;
         }
-        if is_type_method_self_loop(&source_edges, node_map) {
+        if is_type_method_self_loop(&source_edges, node_map, owner_graph) {
             collect_inherent_self_loop_nodes(&mut classified.inherent_nodes, source_edges);
             continue;
         }
         if let Some(trait_name) =
-            classify_trait_impl_self_loop(&source_node_id, &source_edges, node_map)
+            classify_trait_impl_self_loop(&source_node_id, &source_edges, node_map, owner_graph)
         {
             let entry = classified.trait_nodes.entry(trait_name).or_default();
             for edge in source_edges {
@@ -149,8 +150,12 @@ fn self_cycle_edges_are_allowed(
 fn is_type_method_self_loop(
     source_edges: &[&OwnerRefEdge],
     node_map: &BTreeMap<NodeId, &GraphNode>,
+    owner_graph: &OwnerGraph,
 ) -> bool {
-    let source_edges = non_delegating_self_loop_edges(source_edges, Some(node_map));
+    let source_edges: Vec<_> = non_delegating_self_loop_edges(source_edges, node_map, owner_graph)
+        .into_iter()
+        .filter(|edge| !is_enum_variant_expression(edge))
+        .collect();
     let is_type_method_self_loop = !source_edges.is_empty()
         && source_edges.iter().all(|edge| {
             edge.source_kind == "method"
@@ -185,11 +190,13 @@ fn classify_trait_impl_self_loop(
     source_node_id: &NodeId,
     source_edges: &[&OwnerRefEdge],
     node_map: &BTreeMap<NodeId, &GraphNode>,
+    owner_graph: &OwnerGraph,
 ) -> Option<String> {
     let source_edges: Vec<_> = source_edges
         .iter()
         .copied()
-        .filter(|edge| !is_trait_impl_delegating_call(edge, node_map))
+        .filter(|edge| !is_enum_variant_expression(edge))
+        .filter(|edge| !is_trait_impl_delegating_call(edge, node_map, owner_graph))
         .collect();
     let is_trait_impl_self_loop = !source_edges.is_empty()
         && source_edges.iter().all(|edge| {
@@ -211,6 +218,7 @@ fn classify_trait_impl_self_loop(
 fn is_trait_impl_delegating_call(
     edge: &OwnerRefEdge,
     node_map: &BTreeMap<NodeId, &GraphNode>,
+    owner_graph: &OwnerGraph,
 ) -> bool {
     let Some(callee) = &edge.call_callee else {
         return false;
@@ -230,12 +238,13 @@ fn is_trait_impl_delegating_call(
     if source_method == callee.ident && !same_name_inherent_forwarder {
         return false;
     }
-    match callee.kind {
+    let is_delegating_shape = match callee.kind {
         CallCalleeKind::Receiver => true,
         CallCalleeKind::Associated => {
             same_name_inherent_forwarder || is_non_public_associated_helper(edge, callee, node_map)
         }
-    }
+    };
+    is_delegating_shape && !call_edge_participates_in_cycle(edge, node_map, owner_graph)
 }
 
 fn has_inherent_method(
@@ -266,18 +275,20 @@ fn is_non_public_associated_helper(
 
 fn non_delegating_self_loop_edges<'a>(
     source_edges: &[&'a OwnerRefEdge],
-    node_map: Option<&BTreeMap<NodeId, &GraphNode>>,
+    node_map: &BTreeMap<NodeId, &GraphNode>,
+    owner_graph: &OwnerGraph,
 ) -> Vec<&'a OwnerRefEdge> {
     source_edges
         .iter()
         .copied()
-        .filter(|edge| !is_delegating_call(edge, node_map))
+        .filter(|edge| !is_delegating_call(edge, node_map, owner_graph))
         .collect()
 }
 
 fn is_delegating_call(
     edge: &OwnerRefEdge,
-    node_map: Option<&BTreeMap<NodeId, &GraphNode>>,
+    node_map: &BTreeMap<NodeId, &GraphNode>,
+    owner_graph: &OwnerGraph,
 ) -> bool {
     let Some(callee) = &edge.call_callee else {
         return false;
@@ -286,12 +297,101 @@ fn is_delegating_call(
         return false;
     }
     let Some(source_method) = node_map
-        .and_then(|nodes| nodes.get(&edge.source_node_id))
+        .get(&edge.source_node_id)
         .map(|node| node.label.as_str())
     else {
         return false;
     };
-    source_method != callee.ident
+    source_method != callee.ident && !call_edge_participates_in_cycle(edge, node_map, owner_graph)
+}
+
+fn is_enum_variant_expression(edge: &OwnerRefEdge) -> bool {
+    edge.reference_kind == ReferenceKind::Expr && edge.target_kind == "variant"
+}
+
+/// A same-owner helper call is safe to suppress only when it cannot take part
+/// in a method-call cycle. This prevents the convenience-delegation classifier
+/// from hiding indirect recursion such as `first -> second -> first`.
+fn call_edge_participates_in_cycle(
+    edge: &OwnerRefEdge,
+    node_map: &BTreeMap<NodeId, &GraphNode>,
+    owner_graph: &OwnerGraph,
+) -> bool {
+    let targets = call_target_methods(edge, node_map);
+    if targets.is_empty() {
+        return false;
+    }
+    let adjacency = owner_method_call_adjacency(&edge.source_owner_id, node_map, owner_graph);
+    targets
+        .into_iter()
+        .any(|target| method_path_exists(&adjacency, &target, &edge.source_node_id))
+}
+
+fn owner_method_call_adjacency(
+    owner_id: &OwnerId,
+    node_map: &BTreeMap<NodeId, &GraphNode>,
+    owner_graph: &OwnerGraph,
+) -> BTreeMap<NodeId, BTreeSet<NodeId>> {
+    let mut adjacency = BTreeMap::new();
+    for edge in owner_graph.self_refs.get(owner_id).into_iter().flatten() {
+        for target in call_target_methods(edge, node_map) {
+            adjacency
+                .entry(edge.source_node_id.clone())
+                .or_insert_with(BTreeSet::new)
+                .insert(target);
+        }
+    }
+    adjacency
+}
+
+fn call_target_methods(
+    edge: &OwnerRefEdge,
+    node_map: &BTreeMap<NodeId, &GraphNode>,
+) -> BTreeSet<NodeId> {
+    let Some(callee) = &edge.call_callee else {
+        return BTreeSet::new();
+    };
+    let Some(source) = node_map.get(&edge.source_node_id) else {
+        return BTreeSet::new();
+    };
+    if source.kind != "method" || edge.source_owner_id != edge.target_owner_id {
+        return BTreeSet::new();
+    }
+    let same_name_inherent_forwarder = callee.kind == CallCalleeKind::Associated
+        && source.label == callee.ident
+        && has_inherent_method(edge, callee, node_map);
+
+    node_map
+        .values()
+        .filter(|node| {
+            node.kind == "method"
+                && node.label == callee.ident
+                && owner_id_for_node_id(&node.id, node.kind).as_ref() == Some(&edge.target_owner_id)
+                && (!same_name_inherent_forwarder || node.impl_kind == Some(ImplKind::Inherent))
+        })
+        .map(|node| node.id.clone())
+        .collect()
+}
+
+fn method_path_exists(
+    adjacency: &BTreeMap<NodeId, BTreeSet<NodeId>>,
+    start: &NodeId,
+    goal: &NodeId,
+) -> bool {
+    let mut pending = vec![start.clone()];
+    let mut visited = BTreeSet::new();
+    while let Some(node) = pending.pop() {
+        if !visited.insert(node.clone()) {
+            continue;
+        }
+        if &node == goal {
+            return true;
+        }
+        if let Some(targets) = adjacency.get(&node) {
+            pending.extend(targets.iter().cloned());
+        }
+    }
+    false
 }
 
 fn component_allows_recursive_value_container(
@@ -467,6 +567,7 @@ struct OwnerRefEdge {
     target_owner_id: OwnerId,
     owner_kind: &'static str,
     source_kind: &'static str,
+    target_kind: &'static str,
     source_node_id: NodeId,
     source_impl_kind: Option<ImplKind>,
     reference_kind: ReferenceKind,
@@ -511,6 +612,7 @@ fn build_owner_graph<'a>(
             target_owner_id: target_owner_id.clone(),
             owner_kind: owner_kind_for_node_id(&source_owner_id, node_map).unwrap_or("module"),
             source_kind: source_node.kind,
+            target_kind: target_node.kind,
             source_node_id: source_node.id.clone(),
             source_impl_kind: source_node.impl_kind,
             reference_kind: match edge.kind {

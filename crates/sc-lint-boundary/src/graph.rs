@@ -199,14 +199,26 @@ fn add_reference_edges(
     }
 }
 
-/// Associated item paths resolve at the owner level when the graph does not
-/// model the item itself.  In particular, methods are impl-qualified nodes,
-/// while `Self::helper` resolves to the enclosing type owner rather than to a
-/// specific impl block.
+/// Associated item paths resolve at their enclosing concrete owner when the
+/// graph does not model the item itself. Methods are impl-qualified nodes, so
+/// `Self::helper` resolves to its enclosing type. Do not fall back to a module
+/// or crate target:
+/// module ingestion is ordered, and reducing a forward `crate::send::write()`
+/// reference to `crate` would permanently erase its cross-module edge.
 fn resolve_existing_expression_target(builder: &GraphBuilder, target_node_id: NodeId) -> NodeId {
     let mut candidate = target_node_id.clone();
     loop {
-        if builder.nodes.iter().any(|node| node.id == candidate) {
+        if let Some((parent, label)) = candidate.rsplit_once("::") {
+            let variant = NodeId::new(format!("{parent}::variant::{label}"));
+            if builder.nodes.iter().any(|node| node.id == variant) {
+                return variant;
+            }
+        }
+        if builder
+            .nodes
+            .iter()
+            .any(|node| node.id == candidate && !matches!(node.kind, "module" | "crate"))
+        {
             return candidate;
         }
         let Some((parent, _)) = candidate.rsplit_once("::") else {
