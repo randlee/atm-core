@@ -183,8 +183,9 @@ aligned to the blueprint (D1 crate placement, `mark_pending`,
 `GraftLeaseState`, `HerdrSession`, deferred renames). Re-entry rule: scope +
 critical + quality-mgr run on the **whole tree**, not per-insertion.
 
-Decisions surfaced by the finalization agents for Rand to confirm (all
-recorded inline in the respective docs as "Rand to confirm"): (1) AQ1.5
+Decisions surfaced by the finalization agents — **all eight approved by Rand
+2026-08-26** (decision 1 explicitly discussed; the inline "Rand to confirm"
+markers in the sprint docs are therefore resolved): (1) AQ1.5
 `register` displaces unconditionally on generation mismatch (flock proves
 same-host exclusivity) — revises a 4-round-hardened contract element; (2)
 AQ1.7 dials present-but-expired leases rather than refusing; (3) AQ2.6
