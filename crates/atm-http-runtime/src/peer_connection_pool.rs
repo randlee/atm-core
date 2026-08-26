@@ -906,7 +906,7 @@ mod tests {
         pool.shutdown(std::time::Duration::from_secs(1)).await;
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn expired_idle_connection_is_evicted_and_redialed() {
         let port = start_keep_alive_peer().await;
         let adapter = std::sync::Arc::new(CountingPassthroughAdapter::default());
@@ -929,7 +929,7 @@ mod tests {
         complete_one_request(&mut connection).await;
         drop(connection);
         let completed_before_eviction = pool.completed_driver_count();
-        tokio::time::sleep(std::time::Duration::from_millis(15)).await;
+        tokio::time::advance(std::time::Duration::from_millis(15)).await;
         pool.evict_idle_now();
         assert_eq!(pool.pooled_count(), 0);
         assert_driver_completions(&pool, completed_before_eviction + 1, "idle eviction").await;

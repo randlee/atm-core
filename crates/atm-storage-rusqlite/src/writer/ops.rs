@@ -1021,3 +1021,13 @@ impl<'a> StorageEnvelope<'a> {
 fn rfc3339(value: IsoTimestamp) -> String {
     value.into_inner().to_rfc3339()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::MAX_ENVELOPE_JSON_BYTES;
+
+    #[test]
+    fn envelope_limit_matches_the_writer_lane_contract() {
+        assert_eq!(MAX_ENVELOPE_JSON_BYTES, 1_048_576);
+    }
+}
