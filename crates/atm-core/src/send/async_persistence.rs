@@ -13,68 +13,7 @@ type TemplateAdmissionParts = (
     Option<atm_storage::WorkflowSnapshot>,
 );
 
-/// Prepares the canonical write after its one asynchronous durable admission.
-pub(super) async fn prepare_persisted_write_async(
-    mut request: SendRequest,
-    observability: &(dyn ObservabilityPort + Send + Sync),
-    runtime: &LocalServiceRuntime,
-    acknowledgement: Option<crate::ack::ResolvedAcknowledgement>,
-) -> Result<PreparedWrite, AtmError> {
-    let mut context = prepare_send_context(runtime, &request)?;
-    let task_id = request.task_id.clone();
-    let requires_ack = request_requires_ack(&request, &task_id);
-    let verified_template = verify_template_request(runtime, &request)?;
-    let body = resolve_async_body(&request, &context, verified_template.as_ref())?;
-    super::annotate_path_only_body(&mut request, &mut context, &body);
-    let summary = summary::build_summary(&body, request.summary_override.clone());
-    let message_id = request.origin_message_id.unwrap_or_default();
-    let timestamp = request.origin_timestamp.unwrap_or_else(IsoTimestamp::now);
-    let persistence = persist_send_message_async(
-        runtime,
-        &request,
-        &context,
-        &body,
-        &summary,
-        message_id,
-        timestamp,
-        requires_ack,
-        task_id.clone(),
-        verified_template.as_ref(),
-    )
-    .await?;
-    let received_hook = prepare_received_hook(
-        runtime,
-        &context,
-        &persistence,
-        requires_ack,
-        acknowledgement.is_some(),
-    );
-    let outcome = finalize_send_outcome(
-        runtime,
-        observability,
-        &request,
-        &context,
-        &body,
-        &summary,
-        message_id,
-        requires_ack,
-        task_id,
-        &persistence,
-        DeliveryExecutionMode::Deferred,
-    )?;
-    Ok(PreparedWrite {
-        outcome,
-        outbound_request: request,
-        persisted_timestamp: timestamp,
-        post_write_needed: persistence.requires_post_write(),
-        same_store_peer_receipt: persistence.duplicate_disposition
-            == DuplicateWriteDisposition::SameStorePeerReceipt,
-        received_hook,
-        acknowledgement,
-    })
-}
-
-fn verify_template_request(
+pub(crate) fn verify_template_request(
     runtime: &LocalServiceRuntime,
     request: &SendRequest,
 ) -> Result<Option<template::VerifiedTemplateSend>, AtmError> {
@@ -87,7 +26,7 @@ fn verify_template_request(
     verify_template_send(composer.as_ref(), source, request.max_message_bytes).map(Some)
 }
 
-fn resolve_async_body(
+pub(crate) fn resolve_async_body(
     request: &SendRequest,
     context: &SendExecutionContext,
     verified_template: Option<&template::VerifiedTemplateSend>,
@@ -109,7 +48,7 @@ fn resolve_async_body(
     clippy::too_many_arguments,
     reason = "Send persistence keeps the canonical request/body/message envelope fields explicit at the async seam."
 )]
-async fn persist_send_message_async(
+pub(crate) async fn persist_send_message_async(
     runtime: &LocalServiceRuntime,
     request: &SendRequest,
     context: &SendExecutionContext,

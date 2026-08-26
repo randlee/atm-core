@@ -47,6 +47,7 @@ allowed_paths = [
   "crates/atm-core/src/read/mod.rs",
   "crates/atm-core/src/read/request.rs",
   "crates/atm-core/src/send/mod.rs",
+  "crates/atm-core/src/write/mod.rs",
   "crates/atm-http-runtime/src/runtime_health.rs",
   "crates/atm/src/commands/members.rs",
 ]
