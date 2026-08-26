@@ -31,6 +31,15 @@ Work items (master-plan section → finding index #):
 9. §2.3 (optional) `SendCommand` error-builder hoist (#12) — do it if convenient;
    otherwise #12 is owned by AU.2's classifier fix. State which in the completion
    report.
+10. **#20 residual (added 2026-08-26, routed from AU.2)** — AU.2's accepted §4.3
+    classifier clears #20's call-callee edges, but one edge survives:
+    `atm-runtime/src/legacy_storage_adapters.rs:162` passes `Self::mailbox_row` as a
+    *function value* to `Iterator::map` (a `references_expr` edge with no call_callee;
+    broad non-call exclusion was reviewed and REJECTED). Fix in app code: hoist
+    `mailbox_row` to a free fn (arch-ctm's recommendation, same pattern as item 8).
+    File verified NOT a Phase-AM deletion target (master plan §4.3 note). This adds
+    the atm-runtime crate to this sprint's file set — still disjoint from AU.2
+    (lint crate only) and AU.3 (ack/send/write + tripwire).
 
 ## Test deliverables (from the 2026-08-26 coverage audit — write BEFORE or WITH the fix)
 
@@ -49,7 +58,7 @@ Work items (master-plan section → finding index #):
 
 ## Acceptance criteria
 
-- The 10 owned findings (index #2,3,4,5,6,7,17,19,22 and #12 if item 9 done) are absent
+- The owned findings (index #2,3,4,5,6,7,17,19,20,22 and #12 if item 9 done) are absent
   from the sc-boundary JSON payload (`.just/lint_sc_boundary.py` underlying command,
   full `findings[]` — not the 3-line preview), verified by finding identity.
 - **No new sc-boundary findings introduced**; findings owned by AU.2/AU.3 untouched.

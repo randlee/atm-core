@@ -31,12 +31,17 @@ identity that their tests reference — implement 4.1 first):
    references (`reference_collector.rs:23-76`, `lib.rs:397-431`); SCB-CYCLE-002 then
    excludes only *delegation to a different associated function of the same owner*.
    **Direct recursion `Self::same_method()` remains a positive.**
-3. **§4.3 narrowed trait-impl classifier (clears #18, #20, #21)** — reuse the call-callee
-   metadata; SCB-CYCLE-003 excludes only proven call-callee delegation
+3. **§4.3 narrowed trait-impl classifier (clears #18, #21; partially #20)** — reuse the
+   call-callee metadata; SCB-CYCLE-003 excludes only proven call-callee delegation
    (trait-method-to-trait-method composition on `self`, calls to private associated
    helpers). **Type-position self-edges in trait impls remain positives.** The
    trait-wide exclusion and workspace allowlist options were reviewed and REJECTED —
    do not implement either.
+   *Update 2026-08-26 (arch-ctm, implementation @ 649faa888)*: #20 retains one edge the
+   accepted classifier correctly does not exclude — `legacy_storage_adapters.rs:162`
+   passes `Self::mailbox_row` as a function value to `Iterator::map` (`references_expr`,
+   no call_callee). Correctly NOT masked; the residual is routed to AU.1 as an app-code
+   hoist (AU.1 work item 10). #20's identity gate now lives with AU.1.
 
 ## Test deliverables (from the 2026-08-26 coverage audit)
 

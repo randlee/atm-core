@@ -49,8 +49,15 @@ and are assigned for **fully parallel execution**:
 
 | Sprint | Difficulty | Assignee | Master-plan sections | Findings owned | Crates touched |
 |---|---|---|---|---|---|
-| AU.1 code fixes | easy | Cipher | §1 + §2.1 + §2.2 | 10 (index #2-5,6,7,17,19,22 + optional #12) | atm (incl. composition.rs), atm-core (search/observability), atm-graft, atm-storage, atm-template-sc-compose |
-| AU.2 lint calibration | mid | arch-ctm | §4.1 + §4.2 + §4.3 | 11 (index #8-11,13-16,18,20,21) | sc-lint-boundary only |
+| AU.1 code fixes | easy | Cipher | §1 + §2.1 + §2.2 (+ #20 residual) | 11 (index #2-5,6,7,17,19,20,22 + optional #12) | atm (incl. composition.rs), atm-core (search/observability), atm-graft, atm-storage, atm-template-sc-compose, atm-runtime (legacy_storage_adapters.rs only) |
+| AU.2 lint calibration | mid | arch-ctm | §4.1 + §4.2 + §4.3 | 10 (index #8-11,13-16,18,21) | sc-lint-boundary only |
+
+*Ownership amendment (2026-08-26, mid-sprint)*: #20's identity gate moved AU.2 → AU.1.
+AU.2's accepted classifier clears #20's call-callee edges but one `references_expr`
+function-value edge (`legacy_storage_adapters.rs:162`, `Self::mailbox_row` passed to
+`Iterator::map`) is correctly not excludable without the rejected broad non-call
+exclusion; it is fixed as an app-code hoist in AU.1 (work item 10). File sets remain
+disjoint; parallelism unaffected.
 | AU.3 ack/send write module | hard | fenix (team-lead) | §3.1 | 1 (index #1) | atm-core (ack/send/new write), atm-architecture (tripwire test) |
 
 **Parallelism proof**: the three file sets are disjoint — AU.1 never touches
