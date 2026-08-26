@@ -25,8 +25,13 @@ phase gate (AO2-SCBOUNDARY-DEBT-001) and this plan is the follow-up.
 
 No finding is resolved by weakening a rule threshold, deleting a rule from `just validate`,
 or blanket-baselining. The only suppression used anywhere is the lint's own purpose-built
-`#[sc_lint(boundary.allow("cycle.recursive_value_container"))]` opt-in on one genuine
-recursive value container (§1.6) — the exact pattern that marker was designed for.
+`#[sc_lint(boundary.allow(...))]` per-type opt-in — the exact pattern that marker was
+designed for — on exactly three sanctioned instances: the genuine recursive value
+container (§1.6, LogFieldValue/LogFieldMap) and two genuine recursive-descent visitor
+cycles (`PortabilityCollector`, `RuntimeCollector` in `sc-lint-boundary` itself)
+surfaced as true positives once AU.2's graph-reachability fix removed the buggy
+pairwise name-inequality exclusion (finding AU2-QA-VISITOR-CYCLE-001; classifier
+refinement, trait-wide exclusion, and workspace allowlists all remain rejected).
 
 ### Lint semantics (basis for classification)
 

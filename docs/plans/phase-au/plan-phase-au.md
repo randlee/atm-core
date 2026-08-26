@@ -33,8 +33,14 @@ Details and side findings recorded in sprint-AU3 work item 1.
 **No boundary loosening.** No rule leaves `just lint all`/`validate`; no baseline or
 ignore file is introduced; no trait-wide or workspace allowlist. The only suppression
 used anywhere is the lint's own per-type
-`#[sc_lint(boundary.allow("cycle.recursive_value_container"))]` opt-in on one genuine
-recursive value container (master plan §1.6) — its designed purpose. Lint-side changes
+`#[sc_lint(boundary.allow(...))]` opt-in — its designed purpose — on exactly three
+sanctioned instances: one genuine recursive value container (master plan §1.6,
+LogFieldValue/LogFieldMap), plus two genuine recursive-descent visitor cycles
+surfaced by AU.2's graph-reachability fix (`PortabilityCollector`,
+`RuntimeCollector`; finding AU2-QA-VISITOR-CYCLE-001 — a true-positive
+`SCB-CYCLE-002` pair previously masked by the buggy pairwise name-inequality
+exclusion, dispositioned per this constraint rather than by classifier
+refinement or any broader mechanism). Lint-side changes
 make the rules *more precise* (narrowing verified false-positive classes with pinning
 tests), never weaker.
 
