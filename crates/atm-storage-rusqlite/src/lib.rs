@@ -13,6 +13,7 @@ mod mailbox_metadata;
 mod nudge_template_override_store;
 mod observability;
 mod peer_config_store;
+mod pending_nudge_store;
 mod roster_store;
 mod search_reader;
 mod search_schema;
@@ -251,6 +252,11 @@ struct SqliteRosterStore {
 
 #[derive(Debug)]
 struct SqliteNudgeTemplateOverrideStore {
+    db: Arc<SharedDb>,
+}
+
+#[derive(Debug)]
+struct SqlitePendingNudgeStore {
     db: Arc<SharedDb>,
 }
 
@@ -635,6 +641,7 @@ pub struct SqliteStorageBackend {
     message_store: Arc<SqliteMessageStore>,
     roster_store: Arc<SqliteRosterStore>,
     nudge_template_override_store: Arc<SqliteNudgeTemplateOverrideStore>,
+    pending_nudge_store: Arc<SqlitePendingNudgeStore>,
     peer_config_store: Arc<SqlitePeerConfigStore>,
     template_catalog_store: Arc<dyn TemplateCatalogStore>,
     message_search_store: Arc<dyn MessageSearchStore>,
@@ -683,6 +690,7 @@ impl StorageFactory for SqliteStorageFactory {
             async_message_store: backend.async_message_store(),
             roster_store: backend.roster_store(),
             nudge_template_override_store: backend.nudge_template_override_store(),
+            pending_nudge_store: backend.pending_nudge_store(),
             peer_config_store: backend.peer_config_store(),
             template_catalog_store: backend.template_catalog_store(),
             message_search_store: backend.message_search_store(),
@@ -707,6 +715,7 @@ impl SqliteStorageBackend {
             nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(
                 Arc::clone(&db),
             )),
+            pending_nudge_store: Arc::new(SqlitePendingNudgeStore::new(Arc::clone(&db))),
             peer_config_store: Arc::new(SqlitePeerConfigStore::new(Arc::clone(&db))),
             template_catalog_store: template_catalog_store(Arc::clone(&db)),
             message_search_store: search_store(Arc::clone(&db)),
@@ -723,6 +732,7 @@ impl SqliteStorageBackend {
             nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(
                 Arc::clone(&db),
             )),
+            pending_nudge_store: Arc::new(SqlitePendingNudgeStore::new(Arc::clone(&db))),
             peer_config_store: Arc::new(SqlitePeerConfigStore::new(Arc::clone(&db))),
             template_catalog_store: template_catalog_store(Arc::clone(&db)),
             message_search_store: search_store(Arc::clone(&db)),
@@ -761,6 +771,10 @@ impl SqliteStorageBackend {
         &self,
     ) -> Arc<dyn atm_storage::NudgeTemplateOverrideStore + Send + Sync> {
         self.nudge_template_override_store.clone()
+    }
+
+    pub fn pending_nudge_store(&self) -> Arc<dyn atm_storage::PendingNudgeStore + Send + Sync> {
+        self.pending_nudge_store.clone()
     }
 
     pub fn peer_config_store(&self) -> Arc<dyn PeerConfigStore + Send + Sync> {
