@@ -74,3 +74,24 @@ beyond a trivial `NodeId::new("")` panic test. Required new pinning tests:
 
 `cargo test -p sc-lint-boundary`; `just test`; sc-boundary full-payload diff against the
 22-finding baseline showing exactly the owned findings removed and #1 retained.
+
+## Addendum (2026-08-26) — AU2-QA-VISITOR-CYCLE-001
+
+The §4.2 graph-reachability fix (AU2-RBQA-F001) removed the buggy pairwise
+name-inequality exclusion and thereby surfaced two genuine, previously masked
+`SCB-CYCLE-002` type_method_self_loop true positives inside `sc-lint-boundary`
+itself: `PortabilityCollector` (`portability.rs:133`) and `RuntimeCollector`
+(`runtime.rs:96`) — real recursive-descent visitor cycles
+(`visit_items → visit_item → visit_item_mod → visit_items`, plus the
+`visit_item_impl` path).
+
+This is a sanctioned amendment to the "no new findings introduced" acceptance
+criterion, not a violation: per the master plan's non-negotiable constraint
+(amended same day), both types receive the lint's own narrow per-type
+`#[sc_lint(boundary.allow(...))]` opt-in with justification comments — the sole
+sanctioned suppression mechanism, now at exactly three instances workspace-wide
+(with §1.6's LogFieldValue/LogFieldMap). Classifier refinement remains rejected
+(§4.2: direct recursion stays a positive); trait-wide exclusion and workspace
+allowlists remain rejected (§4.3). Triage record:
+`.triage/phase-au/findings/AU2-QA-VISITOR-CYCLE-001.ttl` (integrate/phase-au).
+Fix dispatched to arch-ctm as AU2-FIX-VISITOR-CYCLE-R1.
