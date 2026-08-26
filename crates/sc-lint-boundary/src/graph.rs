@@ -184,12 +184,47 @@ fn add_reference_edges(
     for referenced in referenced_paths {
         let target_node_id =
             resolve_reference_target(source_node_id, module_path, &referenced.path);
-        builder.add_edge(
+        let target_node_id = if referenced.kind == ReferenceKind::Expr {
+            resolve_existing_expression_target(builder, target_node_id)
+        } else {
+            target_node_id
+        };
+        builder.add_reference_edge(
             referenced.kind.edge_kind(),
             source_node_id.clone(),
             target_node_id.clone(),
+            referenced.call_callee,
         );
         builder.add_edge("references", source_node_id.clone(), target_node_id);
+    }
+}
+
+/// Associated item paths resolve at their enclosing concrete owner when the
+/// graph does not model the item itself. Methods are impl-qualified nodes, so
+/// `Self::helper` resolves to its enclosing type. Do not fall back to a module
+/// or crate target:
+/// module ingestion is ordered, and reducing a forward `crate::send::write()`
+/// reference to `crate` would permanently erase its cross-module edge.
+fn resolve_existing_expression_target(builder: &GraphBuilder, target_node_id: NodeId) -> NodeId {
+    let mut candidate = target_node_id.clone();
+    loop {
+        if let Some((parent, label)) = candidate.rsplit_once("::") {
+            let variant = NodeId::new(format!("{parent}::variant::{label}"));
+            if builder.nodes.iter().any(|node| node.id == variant) {
+                return variant;
+            }
+        }
+        if builder
+            .nodes
+            .iter()
+            .any(|node| node.id == candidate && !matches!(node.kind, "module" | "crate"))
+        {
+            return candidate;
+        }
+        let Some((parent, _)) = candidate.rsplit_once("::") else {
+            return target_node_id;
+        };
+        candidate = NodeId::new(parent);
     }
 }
 

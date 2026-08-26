@@ -11,13 +11,13 @@ use super::{
 
 /// Post-commit data retained by the replacement runtime without reloading the
 /// just-persisted SQLite record.
-pub(super) struct PreparedReceivedHook {
-    pub(super) recipient: ResolvedRecipient,
-    pub(super) delivery_snapshot: DeliveryRecipientSnapshot,
-    pub(super) messages: Vec<LogicalMessage>,
+pub(crate) struct PreparedReceivedHook {
+    pub(crate) recipient: ResolvedRecipient,
+    pub(crate) delivery_snapshot: DeliveryRecipientSnapshot,
+    pub(crate) messages: Vec<LogicalMessage>,
 }
 
-pub(super) fn prepare_received_hook<R: RetainedServiceRuntime + ?Sized>(
+pub(crate) fn prepare_received_hook<R: RetainedServiceRuntime + ?Sized>(
     runtime: &R,
     context: &SendExecutionContext,
     persistence: &DeliveryPersistenceResult,
