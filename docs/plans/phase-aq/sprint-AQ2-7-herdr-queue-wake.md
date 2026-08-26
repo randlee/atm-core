@@ -38,10 +38,13 @@ turn-correlated queueing.
    period (including 45 minutes) without blocking the send path. It considers
    only `DeliveryChannel::HerdrSteer` and only queue-kind pending markers. It
    owns no mailbox rows, FIFO, retry count, or per-message detached task. At
-   each pass it handles at most one oldest pending message per member;
-   shutdown cancels/reaps an active wait child and joins the pump under the
-   daemon deadline. The legacy synchronous daemon is out of scope and must
-   not be touched.
+   each pass it handles at most one oldest pending message per member. After
+   one observed live-agent-not-found result, retain the marker but move that
+   member to a distinct, longer target-presence recheck interval instead of
+   repeatedly running the normal blocked/timeout loop; surface the state on
+   health as target-not-present. Shutdown cancels/reaps an active wait child
+   and joins the pump under the daemon deadline. The legacy synchronous daemon
+   is out of scope and must not be touched.
 
 2. **Lifecycle gate and claim order.** For a member with pending work, derive
    the Herdr target directly from the member's `AgentName` (AQ2.6's launch
@@ -51,8 +54,11 @@ turn-correlated queueing.
    long configured timeout and accept only returned `idle` or `done`. A
    returned `blocked`, timeout (including an agent that remains
    unclassifiable/`unknown`, because this gate does not accept `--until
-   unknown`), unavailable/not-found live agent, or malformed output produces a structured
-   held/deferred observation and performs **no claim and no prompt**. On
+   unknown`) or malformed output produces a structured held/deferred
+   observation and performs **no claim and no prompt**. An unavailable/not-found
+   live `AgentName` is a distinct `held_target_not_present` result: retain the
+   marker, perform no claim/prompt, and enter deliverable 1's longer
+   target-presence recheck interval. On
    `idle`/`done`, atomically call AQ1's `claim_next_pending`, then dispatch
    that exact claim through the normal message-received selector to
    `HerdrReceivedHook`. The sender's original body is never passed to Herdr;
@@ -71,8 +77,10 @@ turn-correlated queueing.
 4. **Honest lifecycle observability.** Emit backend-qualified events with
    `{member, msg_id when claimed, queue_kind, observed_state, outcome}` for
    `wait_idle`, `wait_done`, `held_blocked`, `held_unknown_or_timeout`,
-   `prompted`, `blocked_before_input_released`, and `dispatch_failed_requeued`.
-   Add health counters for held, released, and requeued work. No event calls
+   `held_target_not_present`, `prompted`, `blocked_before_input_released`,
+   and `dispatch_failed_requeued`. Add health counters for held, released,
+   requeued, and target-not-present work, with target-not-present distinct
+   from blocked/timeout rechecks. No event calls
    a mailbox message delivered or read merely because Herdr returned `done`;
    `done` is only an admissible gate state. Publish the wait→prompt race and
    the absence of a native Herdr queue in ADR-054's addendum.
@@ -88,8 +96,10 @@ turn-correlated queueing.
    retry-attempt change. Because the gate does not accept `--until unknown`,
    an unclassifiable/`unknown` agent reaches the held timeout path and is
    never accepted as completion or prompted.
-   An unavailable/not-found Herdr `AgentName` takes the same held path; it is
-   not retried through a stored target or an alternate backend.
+   An unavailable/not-found Herdr `AgentName` instead emits
+   `held_target_not_present`, retains the marker without claim/prompt, and
+   uses the longer target-presence recheck interval rather than the
+   blocked/timeout loop, a stored target, or an alternate backend.
 3. A deterministic race fixture has the agent enter a blocked dialog after
    wait succeeds but before prompt. Herdr returns `agent_blocked`; the exact
    claim is released, its attempt count is unchanged, and the fixture records
@@ -103,6 +113,10 @@ turn-correlated queueing.
 6. Cancellation while a wait child is live reaps the child and joins the pump
    under the daemon deadline. `just test`, daemon integration tests,
    boundary-manifest checks, and the ADR-054 addendum gate pass.
+7. A not-found fixture proves the pump does one live AgentName lookup, emits
+   `held_target_not_present` (not `held_blocked`), retains the marker without
+   claim/prompt, and schedules the distinct longer recheck/health state rather
+   than indefinitely retrying the normal loop.
 
 ## Required validation
 
@@ -112,6 +126,9 @@ turn-correlated queueing.
   accepted limitation rather than an idle-delivery guarantee.
 - Blocked-dialog transcript or deterministic Herdr fixture: prove rejected
   prompt, zero injected bytes, and marker release without retry debt.
+- Missing-agent fixture: prove no queue dispatch occurs, the marker remains,
+  `held_target_not_present` is observable, and the next lookup uses the longer
+  target-presence recheck interval.
 - Regression test: AQ3 continues to drain tmux/graft only, while Herdr queue
   work is owned only by this pump.
 

@@ -79,13 +79,11 @@ AQ2.7's Tokio pump and must never block the send path.
    restore result, or doctor record with both a pane-id and Herdr mode stored;
    update must not append a second target or preserve a stale pane-id.
 
-   A single backend-aware target parser replaces
-   `normalize_tmux_pane_id`: it validates only the tmux branch and returns a
-   typed pane-id plus target-shape classification. No Herdr parser exists.
-   `PaneId::from_cli` already permits `:` while the current tmux normalizer
-   rejects it; the new tmux parser is the one source of truth, so a non-`%N`
-   tmux target follows the warning path below instead of a divergent second
-   validator.
+   **Tmux-only target parsing.** `normalize_tmux_pane_id` remains tmux-only:
+   it parses `--target` only for `--backend tmux` and returns the typed pane-id
+   plus target-shape classification. No unified parser and no Herdr target
+   parser exists. A non-`%N` tmux target follows the warning path below; Herdr
+   receives no CLI target string at all.
 
    Replace persisted `recipient_pane_id` with the tagged backend representation
    in member mutation and projection. Existing rows migrate and read as
@@ -157,9 +155,18 @@ AQ2.7's Tokio pump and must never block the send path.
    future. It does not use a private runtime, `spawn_blocking`, a shell, or a
    detached child. The implementation parses Herdr's structured stderr error:
 
+   - Every emission invokes `herdr agent prompt <AgentName>` and therefore
+     looks the agent up live; persisted Herdr mode is never treated as a
+     target-exists guarantee.
    - `agent_blocked` becomes a dedicated, structured advisory outcome with
      `{member, backend=herdr, outcome=blocked_before_input}`. No byte was
      injected and no alternate backend is tried.
+   - Herdr's structured `agent_not_found` / agent-not-running result becomes
+     the distinct `{member, backend=herdr, outcome=target_not_present}`
+     pre-emission outcome. It is not `agent_blocked`: no live agent existed,
+     no input was attempted, and no nudge or queue dispatch occurs. The mail
+     has already persisted, so the caller receives normal success plus a
+     warning that the Herdr target (the member `AgentName`) is not present.
    - start/timeout/protocol errors are distinct advisory outcomes; durable ATM
      persistence remains successful, matching the existing post-commit hook
      contract.
@@ -190,7 +197,8 @@ AQ2.7's Tokio pump and must never block the send path.
 2. The launch fixture starts or renames the Herdr agent to the member's exact
    `AgentName` under its `ATM_TEAM` workspace. Herdr mode persists no target;
    the emitter invokes Herdr with that AgentName and an unavailable live agent
-   follows AQ2.7's held path for queued work rather than any persisted-target
+   is a distinct immediate `target_not_present` advisory warning; queued work
+   follows AQ2.7's held target-not-present path rather than any persisted-target
    retry.
 3. `teams update-member --backend herdr --target <value>` is rejected. A
    non-`%N` `--target` with `--backend tmux` succeeds with the exact
@@ -221,9 +229,13 @@ AQ2.7's Tokio pump and must never block the send path.
    rejection before any input reaches the fixture terminal, records
    `blocked_before_input`, and leaves the durable mail readable through
    `atm read`.
-9. Deadline/cancellation tests prove no child process or background task
+9. An `agent_not_found` / agent-not-running fixture proves that live lookup
+   occurs on every immediate nudge, records `target_not_present` separately
+   from `blocked_before_input`, injects no input, persists the message, and
+   returns normal CLI success with the target-not-present warning.
+10. Deadline/cancellation tests prove no child process or background task
    survives the request; post-commit hook errors remain advisory.
-10. Boundary-manifest freshness, `cargo test -p atm-architecture`, and
+11. Boundary-manifest freshness, `cargo test -p atm-architecture`, and
    `just test` pass on all three lanes. Herdr command fixtures run on
    macOS/ubuntu; Windows verifies selection and command construction only
    until a supported Windows Herdr deployment is explicitly added.
@@ -240,7 +252,9 @@ AQ2.7's Tokio pump and must never block the send path.
   roster-wide backend-verification warning; prove that Herdr mode with a
   supplied `--target` is rejected.
 - Start/rename a live Herdr agent to its ATM member `AgentName`, then prove the
-  prompt uses that name and an unavailable name enters AQ2.7's held path.
+  prompt uses that name; prove a missing name produces immediate success plus
+  the distinct target-not-present warning, while queued work enters AQ2.7's
+  held target-not-present path.
 - Run `atm doctor --json` and human `atm doctor` over a mixed explicit
   tmux/Herdr team plus an unconfigured member: retain the Error finding's
   member lists/remediation and the nonzero exit, then prove that a uniform
