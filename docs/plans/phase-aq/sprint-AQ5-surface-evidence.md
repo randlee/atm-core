@@ -38,23 +38,34 @@ linked artifact.
      back, records why).
    - **Pin-latest version policy (Rand, 2026-08-23)**: the minimum Wyvern
      version is pinned to the **most recent Wyvern release** at the time of
-     each atm release, recorded as a single constant in
+     each atm release, recorded as a single **exact-version constant**
+     (e.g. `WYVERN_PIN="1.7.2"`, never a range or a caret/`>=` bound — the
+     same exact-pin discipline the repo already applies to its Cargo-level
+     sc-ecosystem dependency, `sc-composer = "=1.4.1"` at
+     `crates/atm-template-sc-compose/Cargo.toml:18`, which AQ6 deliverable
+     1 extends to `sc-observability`/`sc-observability-types`) in
      `scripts/send-to/atm-send-to.{sh,ps1}` and documented alongside the
      install steps. We always demand the most recent Wyvern — the pin is
      bumped to latest as part of every atm release preflight (AQ6), never
      left to accumulate a "supports everything after X" range that grows
-     the integration surface. The script probes `wyvern --version` and
-     uses Wyvern only when the binary is on `PATH`, parses a version `>=`
-     the pin, and the page asset resolves. Consequently the schema
-     compatibility question is always "does the pinned (latest) Wyvern
-     support the expected `schema_version`?" — verified by AQ6's preflight
-     integration test, not assumed. **The probe runs under a short bounded
-     deadline** (1–2 s, well inside the cold-start budget) with the child
-     killed on expiry — `wyvern` is an arbitrary environment-provided
-     executable resolved from `PATH`, the same trust tier as a transfer
-     script, so it gets the same bounded-execution guarantee as ADR-055
-     (c). A hang is not a fallback. The floor is set to the Wyvern commit
-     that lands `pick-member.html` (recorded with its PR).
+     the integration surface; if the latest Wyvern release regresses the
+     picker contract, AQ6's fix-forward escape hatch (a recorded, linked
+     GH issue plus an explicit pinned-back constant, never a silent stale
+     pin) is what keeps this policy from making an atm release hostage to
+     an upstream break — the mechanics live in AQ6 deliverable 1, this
+     sprint only consumes the resulting pin. The script probes `wyvern
+     --version` and uses Wyvern only when the binary is on `PATH`, parses
+     a version `>=` the pin, and the page asset resolves. Consequently the
+     schema compatibility question is always "does the pinned (latest)
+     Wyvern support the expected `schema_version`?" — verified by AQ6's
+     preflight integration test, not assumed. **The probe runs under a
+     short bounded deadline** (1–2 s, well inside the cold-start budget)
+     with the child killed on expiry — `wyvern` is an arbitrary
+     environment-provided executable resolved from `PATH`, the same trust
+     tier as a transfer script, so it gets the same bounded-execution
+     guarantee as ADR-055 (c). A hang is not a fallback. The floor is set
+     to the Wyvern commit that lands `pick-member.html` (recorded with its
+     PR).
    - **Degradation is silent-but-logged, never a failure**: absent,
      too-old, unparsable-version, probe-timeout, or missing-asset →
      native fallback picker with a one-line note on stderr. A Wyvern problem must never
