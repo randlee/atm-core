@@ -15,7 +15,7 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-26T08:42:24Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.15 ;
@@ -28,8 +28,8 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 236 ;
   triage:snippet "test ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline - assertion failure checking peer_socket() in lib.rs" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ao2" ;
   triage:headSha "56c75da16" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-ao2/56c75da16> .

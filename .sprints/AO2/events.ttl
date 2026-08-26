@@ -285,3 +285,11 @@ triage:r63 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/ARCH-QA
 # regression. Ancestry verified (commit is-ancestor-of current HEAD).
 triage:r64 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-R5-CLIPPY-001> ; triage:resolvedAt "2026-08-26T08:37:00Z"^^xsd:dateTime .
 triage:r65 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-R5-FMT-001> ; triage:resolvedAt "2026-08-26T08:37:00Z"^^xsd:dateTime .
+
+# QA-R6-TEST-001 (boundary test regression from ARCH-QA-AO2-R5-001's lib.rs
+# split) confirmed fixed and independently verified by quality-mgr at
+# integrate/phase-ao2@36b755aa857e93263ee234bf74973e21af1515fe: boundary test
+# now reads both lib.rs and runtime_setup.rs combined source, passes; full
+# workspace cargo test 0 failed; cargo fmt --check clean; sc-boundary still
+# exactly 22 waived cycles, no regression. Ancestry verified.
+triage:r66 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-R6-TEST-001> ; triage:resolvedAt "2026-08-26T15:46:00Z"^^xsd:dateTime .
