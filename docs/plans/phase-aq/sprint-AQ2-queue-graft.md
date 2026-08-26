@@ -31,19 +31,39 @@ message), NOT a background task.
    specific-message clear AQ1's contract defines for synchronous
    handoffs (never `claim_next_pending`, which selects the OLDEST
    pending message and would clear the wrong marker when a backlog
-   exists). Handoff is the graft recipient's drain.
-2. **Handoff failure policy** per ADR-054 (f): on failure,
-   `nudge_pending_at` stays set, a structured failure event
-   (`subsystem`/`action`/`outcome` + `{member, msg_id}`) is emitted, and a
-   cumulative failed-handoff counter appears on the health report
+   exists). Handoff is the graft recipient's drain. **Store handle**:
+   `PublishedGraftReceivedHook` already carries the whole
+   `LocalServiceRuntime` as a struct field (real code today,
+   `received_hook_selector.rs:78`, `graft: PublishedGraftReceivedHook {
+   service_runtime }`), so `clear_pending_on_handoff`/failure reporting
+   just calls `self.service_runtime.pending_nudge_store()?` — no new
+   composition-root plumbing needed.
+2. **Handoff failure policy** per ADR-054 (f) — two distinct failure
+   paths, because only one of them ever holds a claim:
+   - **Write-time handoff** (a `Graft`-classified recipient's dispatch
+     reaches this sprint's emitter directly out of `PreparedWrite::finish`,
+     with no claim taken): on failure `nudge_pending_at` simply stays set
+     — `mark_pending` already ran, and there is no `NudgeClaim` to pass to
+     `requeue_pending`, so nothing is requeued and no attempt is
+     incremented. AQ3's kind-agnostic sweep (`claim_next_pending`) is what
+     retries it later. This sprint calls no `PendingNudgeStore` mutation
+     on this path.
+   - **Sweep-dispatched handoff** (AQ3 already called `claim_next_pending`
+     and routed the resulting claim through the selector to this sprint's
+     emitter): on failure this sprint reports the failure to its caller
+     (AQ3), which holds the `NudgeClaim` and calls
+     `PendingNudgeStore::requeue_pending`. This sprint's own code never
+     calls `requeue_pending` — it has no claim to pass.
+   Both paths emit the same structured failure event
+   (`subsystem`/`action`/`outcome` + `{member, msg_id}`) and increment the
+   same cumulative failed-handoff counter on the health report
    (`queue_full_drops_total` precedent) — a queued graft message never
-   silently loses its nudge. **Ownership**: this sprint owns only the graft
-   channel's send-and-report behavior — on failure it reports the failure
-   to its caller, which calls AQ1's `PendingNudgeStore::requeue_pending`.
-   AQ2 implements no retry scheduling and keeps no attempt state of its
-   own; retry eligibility, the attempt count, and the stuck flag all live
-   in AQ1's store, and re-dispatch scheduling is AQ3's kind-agnostic sweep.
-   That is what keeps AQ2 and AQ3 genuinely parallel-safe.
+   silently loses its nudge either way. **Ownership**: this sprint owns
+   only the graft channel's send-and-report behavior and keeps no attempt
+   state of its own; retry eligibility, the attempt count, and the stuck
+   flag all live in AQ1's store, and re-dispatch scheduling is AQ3's
+   kind-agnostic sweep. That is what keeps AQ2 and AQ3 genuinely
+   parallel-safe — AQ2's own code never calls `requeue_pending`.
 3. **Python surface**: `PyNudge` (and the hermes-atm runtime callback)
    carries the kind — additive, backward-compatible field per ADR-054 (g);
    `hermes-atm` routes queue-kind to Hermes `/queue` and steer-kind to
@@ -60,8 +80,11 @@ message), NOT a background task.
 
 1. Graft recipient: queue-kind handoff on the queue channel, marker cleared
    on success; steer path byte-identical for `atm send`.
-2. Failure path: marker retained + structured event + health counter
-   (induced-failure test).
+2. Failure path, both flavors: write-time (no claim — marker retained,
+   nothing requeued, no attempt increment) and sweep-dispatched (claim
+   held by the caller — caller calls `requeue_pending`, AQ2 never does);
+   both emit the structured event + health counter (induced-failure test
+   for each).
 3. hermes-atm green with the additive `PyNudge` kind; channel contract
    linked in the PR (M5 coordination recorded).
 4. `just test` all three lanes; no detached work introduced (al3 stays
