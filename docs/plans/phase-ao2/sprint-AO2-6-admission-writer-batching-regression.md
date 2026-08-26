@@ -4,7 +4,7 @@ sprint: AO2.6
 title: Restore bounded admission-writer transaction coalescing
 branch: future-dev-worktree
 integration_branch: integrate/phase-ao2
-status: draft_for_review
+status: complete
 depends_on:
   - AO2.5.4-mandatory-benchmark-snapshot-restore
 blocks:

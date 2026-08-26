@@ -1,6 +1,6 @@
 # Sprint AO2.14 — Daemon-Owned Peer Connection Pooling
 
-Status: draft · Branch: `feature/ao2-14-peer-connection-pooling` off
+Status: complete · Branch: `feature/ao2-14-peer-connection-pooling` off
 `integrate/phase-ao2` (after the AO2.10–AO2.13 chain merges) · PR target:
 `integrate/phase-ao2`
 recommended_agent: arch-ctm · recommended_model: deep-reasoning

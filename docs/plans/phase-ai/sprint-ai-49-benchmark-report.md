@@ -55,3 +55,8 @@ shows its dated history without hand-maintained index edits.
 ## Non-goals
 
 No admission-path optimization, fuzz tooling, or Pages deployment.
+
+## Current operator procedure
+
+For any new benchmark run, follow the canonical
+[`benchmark-run` skill](../../../.claude/skills/benchmark-run/SKILL.md).

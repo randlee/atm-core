@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-AO2END-F001>
+  a triage:Finding ;
+  triage:findingId "RBP-AO2END-F001" ;
+  triage:title "Operator env vars fed into AgentName/TeamName::from_validated escape hatch, bypassing FromStr validation" ;
+  triage:description "rust-best-practices-agent (practice RBP-004) found DirectStorageTarget::from_environment() (crates/atm-daemon-bootstrap/src/bin/atm-daemon-benchmark.rs:319-332) reads ATM_CAPACITY_STORAGE_TEAM/_RECIPIENT/_SENDER env vars and passes them straight into TeamName::from_validated/AgentName::from_validated -- the #[doc(hidden)] escape hatch intended only for values already known-valid at the call site (e.g. compile-time constants). direct_core_write_request() (lines 469-490) repeats the identical pattern for ATM_CAPACITY_CORE_TEAM/_AGENT/_RECIPIENT. This bypasses the FromStr/validate_path_segment invariant (rejects '/', '\\', '..', whitespace, other reserved chars) that the AgentName/TeamName newtypes exist to enforce -- operator-supplied env vars should go through AgentName::from_str/TeamName::from_str (propagating a config error via AtmError::config), not from_validated. Scope note from reviewer: confined to an operator-only capacity-benchmark binary reading trusted local env vars, not a production/attacker-facing surface -- hence important not blocking. crates/atm-storage-rusqlite/src/writer/mod.rs (the other in-scope Rust file) reviewed clean against all 10 RBP practices. Overlaps in subject matter with RSH-AO2-001/RSH-AO2-002 (same env vars, same file, flagged separately by rust-service-hardening-agent as 'unvalidated') but is a distinct violation: RSH flags absence of bounds/sanity checking, this finding flags the specific from_validated/FromStr bypass mechanism." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-26T04:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.15 ;
+  triage:foundAt "2026-08-26T02:55:37Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-AO2END-F001/occ-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-AO2END-F001/occ-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBP-AO2END-F001/occ-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/bin/atm-daemon-benchmark.rs" ;
+  triage:line 327 ;
+  triage:snippet "team: TeamName::from_validated(&team), recipient: AgentName::from_validated(&recipient), sender: AgentName::from_validated(&sender)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "ac5a8c041" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ao2/ac5a8c041> .
+
+<urn:atm:triage:occurrence/RBP-AO2END-F001/occ-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/bin/atm-daemon-benchmark.rs" ;
+  triage:line 480 ;
+  triage:snippet "direct_core_write_request(): identical from_validated pattern for ATM_CAPACITY_CORE_TEAM/_AGENT/_RECIPIENT" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "ac5a8c041" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ao2/ac5a8c041> .
+
+<urn:atm:triage:worktree/integrate-phase-ao2/ac5a8c041>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ao2" ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "ac5a8c041" ;
+  triage:orderIndex 1 .

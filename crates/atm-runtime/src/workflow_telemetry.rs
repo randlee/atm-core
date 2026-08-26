@@ -270,7 +270,6 @@ mod tests {
     use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
     const DIAGNOSTIC_WAIT_TIMEOUT: Duration = Duration::from_secs(1);
-    const DIAGNOSTIC_POLL_INTERVAL: Duration = Duration::from_millis(2);
 
     async fn wait_for_diagnostic_count(counter: &AtomicU64, expected: u64, counter_name: &str) {
         let observed = tokio::time::timeout(DIAGNOSTIC_WAIT_TIMEOUT, async {
@@ -279,7 +278,7 @@ mod tests {
                 if observed >= expected {
                     return observed;
                 }
-                tokio::time::sleep(DIAGNOSTIC_POLL_INTERVAL).await;
+                tokio::task::yield_now().await;
             }
         })
         .await

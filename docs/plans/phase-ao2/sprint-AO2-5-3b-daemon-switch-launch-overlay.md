@@ -4,7 +4,7 @@ sprint: AO2.5.3b
 title: Daemon-switch typed temporary launch overlay
 branch: pending-worktree-provisioning
 integration_branch: integrate/phase-ao2
-status: draft_for_review
+status: complete
 depends_on:
   - ADR-047-layered-peer-wire-security
   - ADR-052-benchmark-account-isolation-and-snapshot-policy

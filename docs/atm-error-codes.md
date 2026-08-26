@@ -68,6 +68,21 @@ Error codes should describe the failure class, not a specific prose message.
 - `ATM_TEAM_NOT_FOUND`
 - `ATM_AGENT_NOT_FOUND`
 
+### 5.2.1 Peer-Wire Policy
+
+- `ATM_PEER_WIRE_MODE_INVALID` — `--peer-wire-security` did not name
+  `mutual-tls` or `plaintext-test`; correct the daemon launch argument and
+  restart.
+- `ATM_PEER_WIRE_MODE_SOURCE_FORBIDDEN` — an environment variable or durable
+  setting attempted to select peer-wire mode; remove it and use the one daemon
+  launch argument.
+- `ATM_PEER_WIRE_PLAINTEXT_AUTHENTICATION_REQUIRED` — untrusted
+  `plaintext-test` was asked to satisfy authenticated peer work; restart in
+  normal mutual-TLS mode and verify peer configuration.
+- `ATM_PEER_AUTHENTICATION_FAILED` — the selected mTLS peer did not satisfy
+  its exact configured hostname or certificate pin. Correct the durable peer
+  record; never use `plaintext-test` as recovery.
+
 ### 5.3 Mailbox And Message Validation
 
 - `ATM_MAILBOX_READ_FAILED`
@@ -557,6 +572,7 @@ Classification rules:
 | `REMOTE_DELIVERY_UNCONFIRMED` | `retryable` |
 | `ATM_PEER_CONFIG_VALIDATION_FAILED` | `operator_actionable` |
 | `ATM_CERTIFICATE_OPERATION_FAILED` | `operator_actionable` |
+| `ATM_PEER_AUTHENTICATION_FAILED` | `fail_closed` |
 | `ATM_BIND_PREFLIGHT_FAILED` | `operator_actionable` |
 | `ATM_CLIENT_DAEMON_VERSION_INCOMPATIBLE` | `operator_actionable` |
 | `ATM_TEAM_INVALID` | `operator_actionable` |

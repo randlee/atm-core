@@ -1,0 +1,30 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA2-007>
+  a triage:Finding ;
+  triage:findingId "ATM-QA2-007" ;
+  triage:title "docs/project-plan.md has no traceable Phase AO2 section" ;
+  triage:description "req-qa found docs/project-plan.md has no section documenting Phase AO2 (its sprints, scope, or completion), unlike how earlier completed phases are traceable there." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "docs-hygiene" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-25T21:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.15 ;
+  triage:foundAt "2026-08-26T02:55:37Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:worktree/integrate-phase-ao2>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ao2" ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "ac5a8c041" ;
+  triage:orderIndex 1 .

@@ -1,6 +1,11 @@
 @prefix triage: <urn:atm:triage:> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
+# Historical provenance only: the source paths, lines, and snippets below
+# describe the Phase-AI worktree snapshots named by each occurrence. They do
+# not assert that those locations exist on the current branch. Current
+# peer-wire diagnostic typing is tracked by the later AO2 finding records.
+
 <urn:atm:triage:finding/AI21-IMPORTANT-002>
   a triage:Finding ;
   triage:findingId "AI21-IMPORTANT-002" ;

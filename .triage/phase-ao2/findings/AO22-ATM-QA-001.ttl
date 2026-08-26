@@ -1,0 +1,82 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO22-ATM-QA-001>
+  a triage:Finding ;
+  triage:findingId "AO22-ATM-QA-001" ;
+  triage:title "connect()/accept() return concrete tokio_rustls::TlsStream instead of documented opaque AsyncRead+AsyncWrite type" ;
+  triage:description "Deliverable AO2.2 requires connect()/accept() to return impl AsyncRead + AsyncWrite + Send + Unpin specifically so no consumer ever names a Rustls type. The shipped code (crates/peer-tls/src/lib.rs:75-79,98-101) instead returns the concrete tokio_rustls::TlsStream<TcpStream>. The boundary record's own declared contract (boundaries/peer-tls/mtls-peer-stream-adapter.toml:34, response_types = AsyncRead+AsyncWrite byte stream) is not honored by the actual signature. Currently inert (no consumer exists yet) but a real widening of the public boundary surface ahead of AO2.3 wiring. Independently flagged convergently by req-qa (as ATM-QA-AO2.2-001) and ruthless-boundary-qa (as RBQA-F002). Remediation: change both connect()/accept() signatures to Result<impl AsyncRead + AsyncWrite + Send + Unpin, AtmError>." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture-boundary" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/peer-tls/src/lib.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-20T16:50:00+00:00"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.2 ;
+  triage:foundAt "2026-08-20T16:45:46+00:00"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO22-ATM-QA-001/AO22-001> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO22-ATM-QA-001/AO22-002> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO22-ATM-QA-001/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-20T22:53:43Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AO22-ATM-QA-001/AO22-001>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 75 ;
+  triage:snippet "pub async fn connect(tcp: TcpStream, peer: HostName) -> Result<TlsStream<TcpStream>, AtmError>" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s2-isolated-mtls-stream-adapter" ;
+  triage:headSha "c30d24442e177b9b63ef245abdffd6aa6fd8f911" ;
+  triage:occursIn <urn:atm:triage:worktree/AO2.2/c30d244> .
+
+<urn:atm:triage:occurrence/AO22-ATM-QA-001/AO22-002>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 98 ;
+  triage:snippet "pub async fn accept(tcp: TcpStream) -> Result<TlsStream<TcpStream>, AtmError>" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s2-isolated-mtls-stream-adapter" ;
+  triage:headSha "c30d24442e177b9b63ef245abdffd6aa6fd8f911" ;
+  triage:occursIn <urn:atm:triage:worktree/AO2.2/c30d244> .
+
+<urn:atm:triage:occurrence/AO22-ATM-QA-001/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 75 ;
+  triage:snippet "quality-mgr independent re-verification confirmed fixed" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s2" ;
+  triage:headSha "03bf9e4742763fd40667e19cfdf3381ec58a006c" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pao-s2/03bf9e4742763fd40667e19cfdf3381ec58a006c> .
+
+<urn:atm:triage:worktree/AO2.1/57c5334>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s1-peer-wire-policy" ;
+  triage:branch "feature/pao-s1-peer-wire-policy" ;
+  triage:headSha "57c53349efaed059bdefc9a2092190ea8ad5830d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AO2.2/c30d244>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s2-isolated-mtls-stream-adapter" ;
+  triage:branch "feature/pao-s2-isolated-mtls-stream-adapter" ;
+  triage:headSha "c30d24442e177b9b63ef245abdffd6aa6fd8f911" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/feature-pao-s2/03bf9e4742763fd40667e19cfdf3381ec58a006c>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s2" ;
+  triage:branch "feature/pao-s2" ;
+  triage:headSha "03bf9e4742763fd40667e19cfdf3381ec58a006c" ;
+  triage:orderIndex 3 .

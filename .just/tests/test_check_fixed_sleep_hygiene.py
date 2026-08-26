@@ -79,6 +79,29 @@ mod tests {
             self.assertEqual(len(violations), 1)
             self.assertEqual(violations[0].line_number, 5)
 
+    def test_flags_tokio_sleep_inside_cfg_test_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            (repo_root / "crates/atm-daemon/src/lib.rs").write_text(
+                """\
+#[cfg(test)]
+mod tests {
+    #[tokio::test]
+    async fn waits() {
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    }
+}
+""",
+                encoding="utf-8",
+            )
+            violations = collect_fixed_sleep_violations(
+                repo_root,
+                allowed_paths=load_allowed_paths(repo_root),
+            )
+            self.assertEqual(len(violations), 1)
+            self.assertEqual(violations[0].line_number, 5)
+
     def test_ignores_production_sleep(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)

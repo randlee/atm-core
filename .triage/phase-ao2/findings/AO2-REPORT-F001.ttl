@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO2-REPORT-F001>
+  a triage:Finding ;
+  triage:findingId "AO2-REPORT-F001" ;
+  triage:title "triage_report.py blocker dedup silently excludes deferred findings with open occurrences" ;
+  triage:description "TERMINAL_FINDING_STATUSES in .claude/skills/triage-report/scripts/triage_report.py (line 38) includes 'deferred', and the dedup/blocker-count pass (lines ~633-643) treats any finding whose triage:status intersects that set as terminal, skipping its occurrences entirely. A finding whose status is flipped to 'deferred' therefore vanishes from the blocker count even when every occurrence is still open (triage:closed false). Concrete case: AO27-HARNESS-F001 (severity blocking, 2 open occurrences) reports 0 in the dedup blocker count because status=deferred was set prematurely without sign-off. Consequence: a single status flip can hide a blocking finding from the phase merge gate. Deferred-with-open-occurrences findings must still be counted, or at minimum surfaced as a distinct 'deferred-open' bucket in the report." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "REPORTING" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "promoted_branch" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-26T00:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.15 ;
+  triage:foundAt "2026-08-26T00:05:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO2-REPORT-F001/AO2-REPORT-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO2-REPORT-F001/AO2-REPORT-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO2-REPORT-F001/AO2-REPORT-1>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/triage-report/scripts/triage_report.py" ;
+  triage:line 38 ;
+  triage:snippet "TERMINAL_FINDING_STATUSES includes 'deferred'" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "0f55160109bd4e55e5c58e0cef888047d9b5749e" ;
+  triage:occursIn <urn:atm:triage:worktree/AO2-REPORT-INTEGRATE-1> .
+
+<urn:atm:triage:occurrence/AO2-REPORT-F001/AO2-REPORT-2>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/triage-report/scripts/triage_report.py" ;
+  triage:line 634 ;
+  triage:snippet "is_terminal = bool(statuses & TERMINAL_FINDING_STATUSES) short-circuits occurrence counting" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "0f55160109bd4e55e5c58e0cef888047d9b5749e" ;
+  triage:occursIn <urn:atm:triage:worktree/AO2-REPORT-INTEGRATE-1> .
+
+<urn:atm:triage:worktree/AO2-REPORT-INTEGRATE-1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ao2" ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "0f55160109bd4e55e5c58e0cef888047d9b5749e" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QA-001>
+  a triage:Finding ;
+  triage:findingId "QA-001" ;
+  triage:title "peer-tls crate missing [[crates]] entry in release/publish-artifacts.toml" ;
+  triage:description "rust-qa-agent found this via a real (non-simulated) `just validate` execution that failed with exit 1 -- manifest-coverage check failed because the peer-tls crate has no [[crates]] entry in release/publish-artifacts.toml." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "release-manifest" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-26T03:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.15 ;
+  triage:foundAt "2026-08-26T02:55:37Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-001/QA-001-AO2-15> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QA-001/QA-001-AO2-15>
+  a triage:Occurrence ;
+  triage:file "release/publish-artifacts.toml" ;
+  triage:line 140 ;
+  triage:snippet "[[crates]] entry missing for peer-tls (should follow atm-graft-python, before [[release_binaries]])" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "ac5a8c041" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-ao2/ac5a8c041> .
+
+<urn:atm:triage:worktree/integrate-ao2/ac5a8c041>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-ao2" ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "ac5a8c041" ;
+  triage:orderIndex 1 .

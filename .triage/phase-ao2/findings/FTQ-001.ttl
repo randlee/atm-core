@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FTQ-001>
+  a triage:Finding ;
+  triage:findingId "FTQ-001" ;
+  triage:title "Hardcoded 5s subprocess timeout in official benchmark smoke test" ;
+  triage:description "flaky-test-qa found test_actual_script_completes_with_stdin_at_dev_null in scripts/smoke/test_benchmark_official.py uses a hardcoded 5-second subprocess.run() timeout against the official benchmark orchestrator subprocess (unmocked, real path construction). On slower systems or under resource contention, the subprocess's startup checks (account validation, environment setup) can exceed 5s, causing the test to flake. Correction: replace the literal timeout with a generous, documented constant or make it configurable/skip-safe for constrained CI runners." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "flaky-test" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-26T04:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.15 ;
+  triage:foundAt "2026-08-26T02:55:37Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/occ-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/FTQ-001/occ-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_benchmark_official.py" ;
+  triage:line 411 ;
+  triage:snippet "subprocess.run(..., timeout=5)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "ac5a8c041" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ao2/ac5a8c041> .
+
+<urn:atm:triage:worktree/integrate-phase-ao2/ac5a8c041>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ao2" ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "ac5a8c041" ;
+  triage:orderIndex 1 .

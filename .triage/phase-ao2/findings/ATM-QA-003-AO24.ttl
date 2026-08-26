@@ -1,0 +1,70 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-003-AO24>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-003-AO24" ;
+  triage:title "AO2.4 closure checklist under-discloses M4-local pending gap" ;
+  triage:description "The dev's own closure checklist (.ao2.4-checklist.md:13-19) accurately describes M5/FastPC4 as correctly blocked, but omits that the M4-local row is separately recorded pending (neither a completed comparison nor a valid blocked-host record), reading as though only remote-host unavailability blocks closure. Remediation: update the checklist to explicitly disclose the M4-local pending gap as a distinct, unresolved item, not folded into the M5/FastPC4 host-unavailability narrative." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "req-qa" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-20T21:40:00+00:00"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.4 ;
+  triage:foundAt "2026-08-20T21:33:56+00:00"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003-AO24/S4-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003-AO24/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-20T22:53:43Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/ATM-QA-003-AO24/S4-1>
+  a triage:Occurrence ;
+  triage:file ".ao2.4-checklist.md" ;
+  triage:line 19 ;
+  triage:snippet "the AO evidence ledger records M5 and FastPC4 as blocked rather than PASS." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s4-peer-wire-proof" ;
+  triage:headSha "d9fb74917a804d2068684db40a28bc4ce636f283" ;
+  triage:occursIn <urn:atm:triage:worktree/S4/d9fb74917a804d2068684db40a28bc4ce636f283> .
+
+<urn:atm:triage:occurrence/ATM-QA-003-AO24/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file ".ao2.4-checklist.md" ;
+  triage:line 19 ;
+  triage:snippet "quality-mgr independent re-verification confirmed fixed" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s4-peer-wire-proof" ;
+  triage:headSha "aedd04beabaa555343a8d32bc8870c79390a4deb" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pao-s4-peer-wire-proof/aedd04beabaa555343a8d32bc8870c79390a4deb> .
+
+<urn:atm:triage:worktree/S3/e6a428355253de23a428bac2f047180ec95dfc7c>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-pao-s3-runtime-peer-wire-mode" ;
+  triage:branch "feature/pao-s3-runtime-peer-wire-mode" ;
+  triage:headSha "e6a428355253de23a428bac2f047180ec95dfc7c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/S4/d9fb74917a804d2068684db40a28bc4ce636f283>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-pao-s4-peer-wire-proof" ;
+  triage:branch "feature/pao-s4-peer-wire-proof" ;
+  triage:headSha "d9fb74917a804d2068684db40a28bc4ce636f283" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/feature-pao-s4-peer-wire-proof/aedd04beabaa555343a8d32bc8870c79390a4deb>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s4-peer-wire-proof" ;
+  triage:branch "feature/pao-s4-peer-wire-proof" ;
+  triage:headSha "aedd04beabaa555343a8d32bc8870c79390a4deb" ;
+  triage:orderIndex 5 .

@@ -57,6 +57,19 @@ def parse_identities(output: str) -> tuple[SigningIdentity, ...]:
     )
 
 
+def unique_identities(identities: Sequence[SigningIdentity]) -> tuple[SigningIdentity, ...]:
+    """Return one identity per certificate fingerprint in stable order.
+
+    ``security find-identity`` can enumerate one usable certificate more than
+    once.  A signing decision is about the certificate fingerprint, not the
+    number of rows emitted by that command.
+    """
+    selected: dict[str, SigningIdentity] = {}
+    for identity in identities:
+        selected.setdefault(identity.fingerprint, identity)
+    return tuple(selected.values())
+
+
 def _certificate_team_identifier(common_name: str) -> str | None:
     certificate = _run(["security", "find-certificate", "-c", common_name, "-p"])
     if certificate.returncode != 0 or not certificate.stdout:
@@ -75,7 +88,7 @@ def _valid_identities() -> tuple[SigningIdentity, ...]:
     result = _run(["security", "find-identity", "-v", "-p", "codesigning"])
     if result.returncode != 0:
         return ()
-    return parse_identities(result.stdout)
+    return unique_identities(parse_identities(result.stdout))
 
 
 def _identity_with_team_identifier(identity: SigningIdentity) -> SigningIdentity | None:
@@ -83,6 +96,20 @@ def _identity_with_team_identifier(identity: SigningIdentity) -> SigningIdentity
     if team_identifier is None:
         return None
     return SigningIdentity(identity.fingerprint, identity.common_name, team_identifier)
+
+
+def _distinct_fingerprints(identities: Sequence[SigningIdentity]) -> tuple[SigningIdentity, ...]:
+    """Return identities once per certificate fingerprint, preserving keychain order.
+
+    ``security find-identity`` may emit the same certificate once for every
+    keychain in the active search list.  Those rows are aliases for one signing
+    identity, not an ambiguous choice.  Different fingerprints deliberately
+    remain distinct so the caller continues to fail closed.
+    """
+    selected: dict[str, SigningIdentity] = {}
+    for identity in identities:
+        selected.setdefault(identity.fingerprint, identity)
+    return tuple(selected.values())
 
 
 def _identity_exists_but_is_not_valid() -> bool:
@@ -98,25 +125,25 @@ def resolve_apple_development_identity() -> SigningIdentity:
     override = os.environ.get(SIGNING_IDENTITY_ENVIRONMENT_VARIABLE, "").strip()
     valid_identities = _valid_identities()
     if override:
-        candidates = tuple(
+        candidates = _distinct_fingerprints(tuple(
             resolved
             for identity in valid_identities
             if override in {identity.fingerprint, identity.common_name}
             if (resolved := _identity_with_team_identifier(identity)) is not None
-        )
+        ))
         if len(candidates) == 1:
             return candidates[0]
         raise SigningIdentityError(
             f"{SIGNING_IDENTITY_ENVIRONMENT_VARIABLE} must identify exactly one valid signing identity."
         )
 
-    candidates = tuple(
+    candidates = _distinct_fingerprints(tuple(
         resolved
         for identity in valid_identities
         if identity.common_name.startswith(APPLE_DEVELOPMENT_PREFIX)
         if (resolved := _identity_with_team_identifier(identity)) is not None
         if resolved.team_identifier == DEFAULT_TEAM_IDENTIFIER
-    )
+    ))
     if len(candidates) == 1:
         return candidates[0]
     if not candidates and _identity_exists_but_is_not_valid():

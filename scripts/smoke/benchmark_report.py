@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-"""Persist and render public-safe AI.40 local-transport benchmark evidence."""
+"""Deterministically render the public benchmark report site from v4 JSON."""
 from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
-from html import escape
 import json
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
-from typing import Any, Iterable
+from typing import Any, Iterable, Literal, Sequence
+from zoneinfo import ZoneInfo
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -19,365 +20,448 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.smoke.benchmark_schema import (
+    BaselineSet,
+    BenchmarkCampaign,
+    BenchmarkRunResult,
     BenchmarkSchemaError,
-    BenchmarkSummary,
-    SUMMARY_SCHEMA_VERSION,
-    compact_evidence,
+    HistoricalRecord,
+    artifact_id,
+    classify_status,
 )
+from scripts.smoke.benchmark_baselines import load_baselines
 
 
 REPORTS_ROOT = ROOT / "site" / "reports"
 REPORT_NAME = "send-message-benchmark"
-REPORT_HTML = f"{REPORT_NAME}.html"
 REPORT_DIR = REPORTS_ROOT / REPORT_NAME
-ENVELOPE_SCHEMA_VERSION = 1
-AI40_SCHEMA_VERSION = SUMMARY_SCHEMA_VERSION
-SUPPORTED_TRANSPORTS = frozenset({"uds", "tcp"})
-SUPPORTED_FRAMES = frozenset({1, 2, 4, 8, 16, 64})
-SAFE_LABEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+HISTORICAL_RECORD_NAME = "historical-record.json"
+BASELINES_FILENAME = "baselines.json"
+TARGET_ORDER: tuple[Literal["sqlite", "uds", "tcp", "tcp-tls"], ...] = (
+    "tcp", "tcp-tls", "uds", "sqlite",
+)
+TARGET_LABELS = {"sqlite": "SQLite", "uds": "UDS", "tcp": "TCP", "tcp-tls": "TCP + TLS"}
+SERIES_COLORS = ("#2563eb", "#9333ea", "#0f766e", "#c2410c", "#475569")
+PACIFIC = ZoneInfo("America/Los_Angeles")
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
-GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
 
 
 class BenchmarkReportError(ValueError):
-    """The benchmark result cannot be published as public evidence."""
+    """The public benchmark evidence cannot be deterministically rendered."""
 
 
-def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
-
-def parse_utc(value: Any, source: Path) -> str:
-    if not isinstance(value, str) or not value:
-        raise BenchmarkReportError(f"{source}: generated_at must be a non-empty UTC timestamp")
-    normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
-    try:
-        parsed = datetime.fromisoformat(normalized)
-    except ValueError as error:
-        raise BenchmarkReportError(f"{source}: generated_at is not ISO-8601") from error
-    if parsed.tzinfo is None or parsed.utcoffset() != timezone.utc.utcoffset(parsed):
-        raise BenchmarkReportError(f"{source}: generated_at must include UTC timezone")
-    return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-
-
-def safe_label(value: Any, field: str, source: Path) -> str:
-    if not isinstance(value, str) or not SAFE_LABEL.fullmatch(value):
-        raise BenchmarkReportError(f"{source}: {field} is not a safe opaque label")
-    return value
-
-
-def safe_artifact_id(value: str) -> str:
+def _safe_artifact_id(value: str) -> str:
     candidate = re.sub(r"[^A-Za-z0-9._-]+", "-", value).strip("-")[:128]
     if not candidate or not SAFE_ID.fullmatch(candidate):
         raise BenchmarkReportError(f"unsafe benchmark artifact id: {value!r}")
     return candidate
 
 
-def migrate_result(payload: dict[str, Any], source: Path) -> dict[str, Any]:
-    """Convert legacy interval traces into the current compact schema."""
-    version = payload.get("schema_version")
-    if version == AI40_SCHEMA_VERSION:
-        return payload
-    if version not in {1, 2} or isinstance(version, bool):
-        raise BenchmarkReportError(f"{source}: expected benchmark schema version 1, 2, or {AI40_SCHEMA_VERSION}")
-    samples = payload.get("samples", payload.get("runs", []))
-    if not isinstance(samples, list):
-        raise BenchmarkReportError(f"{source}: legacy samples must be a list")
-    legacy = {
-        **payload,
-        "schema_version": 2,
-        "run_duration_s": payload.get("run_duration_s", payload.get("duration_seconds", 0)),
-        "runs": samples if samples and isinstance(samples[0], dict) and "intervals" in samples[0] else [{"intervals": samples}],
-        "minimum_sample_count": payload.get("minimum_sample_count", len(samples)),
-        "sample_count": payload.get("sample_count", len(samples)),
-        "target_duration_s": payload.get("target_duration_s", payload.get("run_duration_s", payload.get("duration_seconds", 0))),
+def utc_text(value: datetime) -> str:
+    """Serialize an already-validated UTC timestamp in the public wire form."""
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def time_view(value: datetime) -> dict[str, str]:
+    """Shared UTC/Pacific presentation helper used by every template context."""
+    utc_value = value.astimezone(timezone.utc)
+    local = utc_value.astimezone(PACIFIC)
+    # `%-d` is a glibc/macOS strftime extension rejected by Windows' CRT;
+    # interpolate the day number portably instead.
+    return {
+        "datetime": utc_text(utc_value),
+        "text": local.strftime(f"%b {local.day}, %Y · %H:%M %Z"),
     }
+
+
+def target_label(target: str) -> str:
     try:
-        result = compact_evidence(legacy).model_dump(mode="json")
-    except BenchmarkSchemaError as error:
-        raise BenchmarkReportError(f"{source}: cannot compact legacy interval evidence: {error}") from error
-    result["migration"] = {"from_schema_version": version}
-    return result
-
-
-def validate_result(payload: dict[str, Any], source: Path) -> dict[str, Any]:
-    payload = migrate_result(payload, source)
-    migration = payload.pop("migration", None)
-    try:
-        result = BenchmarkSummary.model_validate(payload).model_dump(mode="json")
-    except Exception as error:
-        raise BenchmarkReportError(f"{source}: invalid benchmark summary: {error}") from error
-    if migration is not None:
-        result["migration"] = migration
-    return result
-
-
-def load_result(source: Path) -> dict[str, Any]:
-    try:
-        payload = json.loads(source.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise BenchmarkReportError(f"{source}: invalid JSON") from error
-    if not isinstance(payload, dict):
-        raise BenchmarkReportError(f"{source}: result must be a JSON object")
-    return validate_result(payload, source)
-
-
-def immutable_write(path: Path, content: str) -> bool:
-    """Write once; repeated identical writes are idempotent, mutations fail."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists():
-        if path.read_text(encoding="utf-8") != content:
-            raise BenchmarkReportError(f"immutable artifact already exists with different content: {path}")
-        return False
-    path.write_text(content, encoding="utf-8")
-    return True
-
-
-def result_id(result: dict[str, Any], _source: Path | None = None) -> str:
-    stamp = result["generated_at"].replace("-", "").replace(":", "").replace("T", "-").replace("Z", "")
-    return safe_artifact_id(f"{stamp}-{result['host_label']}-{result['transport']}-f{result['frames_per_connection']}")
+        return TARGET_LABELS[target]
+    except KeyError as exc:
+        raise BenchmarkReportError(f"unknown benchmark target: {target!r}") from exc
 
 
 def compose(template: Path, variables: dict[str, Any], output: Path) -> None:
+    """Render a checked-in sc-compose template without network dependencies."""
+    output.parent.mkdir(parents=True, exist_ok=True)
     variables_path: Path | None = None
     try:
         with tempfile.NamedTemporaryFile("w", suffix=".json", encoding="utf-8", delete=False) as handle:
             json.dump(variables, handle, sort_keys=True)
             variables_path = Path(handle.name)
         completed = subprocess.run(
-            ["sc-compose", "render", "--root", str(ROOT), "--file", str(template), "--var-file", str(variables_path), "--output", str(output)],
-            cwd=ROOT, capture_output=True, text=True, check=False,
+            ["sc-compose", "render", "--root", str(ROOT), "--file", str(template),
+             "--var-file", str(variables_path), "--output", str(output)],
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False,
         )
         if completed.returncode != 0:
-            raise BenchmarkReportError(f"sc-compose render failed: {completed.stderr.strip() or completed.stdout.strip()}")
+            raise BenchmarkReportError(
+                f"sc-compose render failed: {completed.stderr.strip() or completed.stdout.strip()}"
+            )
     finally:
         if variables_path is not None:
             variables_path.unlink(missing_ok=True)
 
 
-def evidence_records(report_dir: Path = REPORT_DIR) -> list[dict[str, Any]]:
-    records: list[dict[str, Any]] = []
-    if not report_dir.is_dir():
-        return records
-    for path in sorted(report_dir.glob("*.json")):
-        if path.name.endswith(".envelope.json"):
-            continue
+def load_json(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise BenchmarkReportError(f"{path}: invalid JSON") from exc
+    if not isinstance(payload, dict):
+        raise BenchmarkReportError(f"{path}: JSON root must be an object")
+    return payload
+
+
+def load_result(source: Path) -> dict[str, Any]:
+    """Read one strict v4 benchmark result; historical loading is retired."""
+    payload = load_json(source)
+    try:
+        result = BenchmarkRunResult.model_validate(payload).model_dump(mode="json")
+    except Exception as exc:  # pydantic reports structured validation details.
+        raise BenchmarkReportError(f"{source}: invalid v4 benchmark result: {exc}") from exc
+    target = result["target"]
+    return {
+        **result,
+        "transport": "sqlite" if target == "sqlite" else ("uds" if target == "uds" else "tcp"),
+        "peer_wire_security": (
+            None if target == "sqlite" else ("plaintext-test" if target == "tcp" else "mutual-tls")
+        ),
+        "benchmark_target": target,
+        "passed": result["status"] == "PASS",
+    }
+
+
+def result_id(result: dict[str, Any], _source: Path | None = None) -> str:
+    """Return the existing immutable artifact identifier without creating output."""
+    if result.get("schema_version") == 4:
         try:
-            records.append(load_result(path))
-        except BenchmarkReportError:
-            continue
-    return sorted(records, key=lambda item: (item["generated_at"], item["host_label"], item["transport"], item["frames_per_connection"]))
-
-
-def render_run(result: dict[str, Any], artifact_id: str, report_dir: Path = REPORT_DIR) -> Path:
-    output = report_dir / f"{artifact_id}.xhtml"
-    template = ROOT / "templates" / "benchmark-report" / "benchmark-run.xhtml.j2"
-    metrics = result.get("metrics")
-    sample_html = "<p>No interval completed.</p>"
-    if metrics is not None:
-        rates = metrics["admissions_per_second"]
-        sample_html = (
-            "<table><thead><tr><th>Intervals</th><th>Accepted</th><th>Responses</th>"
-            "<th>Admissions/s (min / p50 / p95 / p99 / max)</th><th>Status</th></tr></thead><tbody>"
-            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{:.2f} / {:.2f} / {:.2f} / {} / {:.2f}</td><td>{}</td></tr>"
-            "</tbody></table>"
-        ).format(
-            metrics["interval_count"], metrics["accepted_count"], metrics["response_count"],
-            rates["min"], rates["p50"], rates["p95"],
-            "n/a" if rates.get("p99") is None else f'{rates["p99"]:.2f}', rates["max"],
-            "PASS" if result["passed"] else "FAIL",
-        )
-    direct_sqlite = result.get("direct_sqlite_message_write")
-    direct_sqlite_html = "<p>Not captured by this historical run.</p>"
-    if direct_sqlite is not None:
-        direct_sqlite_html = (
-            "<table><thead><tr><th>Requested</th><th>Accepted</th><th>Workers</th>"
-            "<th>Elapsed seconds</th><th>Messages/second</th></tr></thead><tbody>"
-            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{:.3f}</td><td>{:.2f}</td></tr>"
-            "</tbody></table>"
-        ).format(
-            direct_sqlite["requested_count"], direct_sqlite["accepted_count"],
-            direct_sqlite["worker_count"], direct_sqlite["elapsed_seconds"],
-            direct_sqlite["admissions_per_second"],
-        )
-    compose(
-        template,
-        {
-            "title": f"ATM benchmark run — {artifact_id}",
-            "artifact_id": artifact_id,
-            "generated_at": result["generated_at"],
-            "host_label": result["host_label"],
-            "transport": result["transport"],
-            "frames_per_connection": result["frames_per_connection"],
-            "run_duration_s": result["run_duration_s"],
-            "passed": result["passed"],
-            "failure": result.get("failure", ""),
-            "cleanup_failure": result.get("cleanup_failure", ""),
-            "sample_html": sample_html,
-            "direct_sqlite_html": direct_sqlite_html,
-        },
-        output,
+            return artifact_id(campaign_id=str(result["campaign_id"]), target=str(result["target"]))
+        except BenchmarkSchemaError as exc:
+            raise BenchmarkReportError(f"invalid v4 artifact identity: {exc}") from exc
+    stamp = str(result["generated_at"]).replace("-", "").replace(":", "").replace("T", "-").replace("Z", "")
+    security = result.get("peer_wire_security")
+    suffix = f"-{security}" if security is not None else ""
+    return _safe_artifact_id(
+        f"{stamp}-{result['host_label']}-{result['transport']}{suffix}-f{result['frames_per_connection']}"
     )
+
+
+def load_campaigns(report_dir: Path = REPORT_DIR) -> list[BenchmarkCampaign]:
+    """Read only validated immutable v4 campaign JSON, ordered by UTC start."""
+    campaigns: list[BenchmarkCampaign] = []
+    for path in sorted(report_dir.glob("*.campaign.json")):
+        try:
+            campaigns.append(BenchmarkCampaign.model_validate(load_json(path)))
+        except (BenchmarkSchemaError, ValueError) as exc:
+            raise BenchmarkReportError(f"{path}: invalid benchmark campaign: {exc}") from exc
+    return sorted(campaigns, key=lambda campaign: campaign.started_at)
+
+
+def empty_historical_record() -> HistoricalRecord:
+    """The pre-AO2.12 fixture shape; no special-case ad-hoc historical data."""
+    return HistoricalRecord(
+        schema_version=1, generated_from_commit="0" * 40,
+        campaigns=(), ratchet=(), unattributed=(),
+    )
+
+
+def load_historical_record(report_dir: Path = REPORT_DIR) -> HistoricalRecord:
+    path = report_dir / HISTORICAL_RECORD_NAME
+    if not path.exists():
+        return empty_historical_record()
+    try:
+        return HistoricalRecord.model_validate(load_json(path))
+    except (BenchmarkSchemaError, ValueError) as exc:
+        raise BenchmarkReportError(f"{path}: invalid historical record: {exc}") from exc
+
+
+def campaign_rows(campaign: BenchmarkCampaign) -> list[dict[str, Any]]:
+    """Create the fixed target matrix directly from immutable result snapshots."""
+    by_target = {result.target: result for result in campaign.results}
+    rows: list[dict[str, Any]] = []
+    for target in TARGET_ORDER:
+        result = by_target.get(target)
+        p50 = None if result is None or result.metrics is None else result.metrics.admissions_per_second.p50
+        p95 = None if result is None or result.metrics is None else result.metrics.admissions_per_second.p95
+        p99 = None if result is None or result.metrics is None else result.metrics.admissions_per_second.p99
+        durable = None if result is None else result.durability_after_restart
+        rows.append({
+            "target": target, "label": target_label(target),
+            "p50": p50, "p95": p95, "p99": p99,
+            "baseline": None if result is None else result.baseline.p50_floor,
+            "margin": None if p50 is None or result is None else p50 - result.baseline.p50_floor,
+            "status": "INCOMPLETE" if result is None else result.status,
+            "durable": None if durable is None else durable.passed,
+            "durable_counts": "not captured" if durable is None else (
+                f"{durable.observed_mailbox_count} / {durable.expected_accepted_count} after restart"
+            ),
+        })
+    return rows
+
+
+def incomplete_reason(campaign: BenchmarkCampaign) -> str | None:
+    if campaign.status != "INCOMPLETE":
+        return None
+    reasons = [result.incomplete_reason for result in campaign.results if result.incomplete_reason]
+    return "; ".join(reasons) if reasons else "Required target results are missing."
+
+
+def current_historical_display_status(
+    result: BenchmarkRunResult, historical: HistoricalRecord,
+) -> str:
+    """Reclassify a historical point against the ratchet's current high-water mark.
+
+    ``result.status`` and its baseline are immutable ingest-time evidence.  A
+    phase chart instead answers the distinct, present-tense question: does this
+    older point meet the best durable result subsequently observed for this
+    host/target?  The distinction is temporal, never a manufactured floor.
+    """
+    current_floor = max(
+        (
+            point.p50_floor
+            for point in historical.ratchet
+            if point.host_label == result.host_label and point.target == result.target
+        ),
+        default=result.baseline.p50_floor,
+    )
+    return classify_status(
+        lifecycle_complete=result.metrics is not None and result.durability_after_restart is not None,
+        messages_requested=result.messages_requested,
+        messages_admitted=result.messages_admitted,
+        messages_durable=result.messages_durable,
+        p50_admissions_per_second=(
+            None if result.metrics is None else result.metrics.admissions_per_second.p50
+        ),
+        baseline_p50_floor=current_floor,
+    )
+
+
+def panel_variables(campaign: BenchmarkCampaign) -> dict[str, Any]:
+    return {
+        "title": f"ATM benchmark campaign — {campaign.campaign_id}",
+        "campaign_id": campaign.campaign_id,
+        "host_label": campaign.host_label,
+        "phase": campaign.phase,
+        "source_revision": campaign.source_revision,
+        "status": campaign.status,
+        "started_at": time_view(campaign.started_at),
+        "completed_at": None if campaign.completed_at is None else time_view(campaign.completed_at),
+        "rows": campaign_rows(campaign),
+        "incomplete_reason": incomplete_reason(campaign),
+    }
+
+
+def phase_slug(phase: str) -> str:
+    clean = "".join(character.lower() if character.isalnum() else "-" for character in phase).strip("-")
+    if not clean:
+        raise BenchmarkReportError(f"unsafe empty phase label: {phase!r}")
+    return f"phase-{clean}.html"
+
+
+def _chart_points(
+    target: str,
+    historical: HistoricalRecord,
+    phase_campaigns: Sequence[BenchmarkCampaign],
+) -> list[dict[str, Any]]:
+    points: list[dict[str, Any]] = []
+    for entry in historical.campaigns:
+        if not entry.final_best:
+            continue
+        for historical_result in entry.results:
+            result = historical_result.result
+            status = current_historical_display_status(result, historical)
+            if result.target == target and result.metrics is not None and status != "INCOMPLETE":
+                points.append({
+                    "host_label": result.host_label, "timestamp": result.generated_at,
+                    "status": status,
+                    "distribution": result.metrics.admissions_per_second,
+                })
+    for campaign in phase_campaigns:
+        if campaign.status == "INCOMPLETE":
+            continue
+        for result in campaign.results:
+            if result.target == target and result.metrics is not None:
+                points.append({
+                    "host_label": result.host_label, "timestamp": campaign.started_at,
+                    "status": result.status, "distribution": result.metrics.admissions_per_second,
+                })
+    return sorted(points, key=lambda point: (point["timestamp"], point["host_label"]))
+
+
+def candlestick_series(
+    charts: Sequence[Literal["tcp", "tcp-tls", "uds", "sqlite"]],
+    historical: HistoricalRecord,
+    phase_campaigns: Sequence[BenchmarkCampaign],
+    baselines: BaselineSet,
+) -> dict[str, dict[str, Any]]:
+    """Return pure JSON-serializable SVG geometry; templates never do chart math."""
+    result: dict[str, dict[str, Any]] = {}
+    for target in charts:
+        points = _chart_points(target, historical, phase_campaigns)
+        labels = sorted({point["host_label"] for point in points})
+        colors = {label: SERIES_COLORS[index % len(SERIES_COLORS)] for index, label in enumerate(labels)}
+        floors = {
+            label: entry.p50_floor
+            for label in labels
+            for entry in baselines.entries
+            if entry.host_label == label and entry.target == target
+        }
+        values = [value for point in points for value in (
+            point["distribution"].min, point["distribution"].max,
+        )] + list(floors.values())
+        lower, upper = (min(values), max(values)) if values else (0.0, 1.0)
+        if lower == upper:
+            lower, upper = 0.0, upper + 1.0
+        y = lambda value: round(200 - ((value - lower) / (upper - lower) * 160), 3)
+        count = max(len(points), 1)
+        candles: list[dict[str, Any]] = []
+        for index, point in enumerate(points):
+            distribution = point["distribution"]
+            candles.append({
+                "host_label": point["host_label"], "color": colors[point["host_label"]],
+                "status": point["status"], "x": round(50 + (index + 0.5) * (500 / count), 3),
+                "low": y(distribution.min), "high": y(distribution.max),
+                "p50": y(distribution.p50), "p95": y(distribution.p95),
+                "timestamp": time_view(point["timestamp"]),
+            })
+        result[target] = {
+            "target": target, "label": target_label(target), "series": [
+                {"host_label": label, "color": colors[label]} for label in labels
+            ], "candles": candles,
+            "baseline_lines": [
+                {"host_label": label, "y": y(floor), "floor": floor, "color": colors[label]}
+                for label, floor in sorted(floors.items())
+            ],
+            "axis_min": lower, "axis_max": upper,
+        }
+    return result
+
+
+def phase_variables(
+    phase: str,
+    campaigns: Sequence[BenchmarkCampaign],
+    historical: HistoricalRecord,
+    baselines: BaselineSet,
+) -> dict[str, Any]:
+    charts = candlestick_series(TARGET_ORDER, historical, campaigns, baselines)
+    return {
+        "title": f"ATM benchmark phase report — {phase}", "phase": phase,
+        "charts": [charts[target] for target in TARGET_ORDER],
+        "campaigns": [panel_variables(campaign) for campaign in sorted(campaigns, key=lambda item: item.started_at, reverse=True)],
+    }
+
+
+def render_panel(campaign: BenchmarkCampaign, report_dir: Path = REPORT_DIR) -> Path:
+    output = report_dir / f"{campaign.campaign_id}.xhtml"
+    compose(ROOT / "templates/benchmark-report/benchmark-run.xhtml.j2", panel_variables(campaign), output)
     return output
 
 
-def latest_profile_results(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Return the newest evidence for each host/transport/frame profile."""
-    latest: dict[tuple[str, str, int], dict[str, Any]] = {}
-    for result in records:
-        key = (result["host_label"], result["transport"], result["frames_per_connection"])
-        previous = latest.get(key)
-        if previous is None or result["generated_at"] > previous["generated_at"]:
-            latest[key] = result
-    return list(latest.values())
+def render_phase(
+    phase: str, campaigns: Sequence[BenchmarkCampaign], historical: HistoricalRecord,
+    baselines: BaselineSet, report_dir: Path = REPORT_DIR,
+) -> Path:
+    output = report_dir / phase_slug(phase)
+    compose(ROOT / "templates/benchmark-report/benchmark-phase-report.html.j2",
+            phase_variables(phase, campaigns, historical, baselines), output)
+    return output
 
 
-def current_campaign_results(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Return the newest host/transport/revision evidence campaign.
-
-    A benchmark campaign is one candidate build exercised on one host and one
-    transport.  Keeping the source revision in the key prevents an older
-    failing profile from changing the status of a newer candidate, while the
-    aggregate table continues to retain every immutable result.
-    """
-    records = list(records)
-    if not records:
-        return []
-    newest = max(records, key=lambda result: result["generated_at"])
-    revision = newest.get("source_revision")
-    if revision is None:
-        # Legacy records did not carry a candidate revision.  For them, retain
-        # the pre-existing newest-profile interpretation rather than allowing
-        # a stale failure to poison a later recovery run.
-        return [
-            result
-            for result in latest_profile_results(records)
-            if (result["host_label"], result["transport"])
-            == (newest["host_label"], newest["transport"])
-        ]
-    key = (newest["host_label"], newest["transport"], revision)
-    return [
-        result
-        for result in records
-        if (result["host_label"], result["transport"], result.get("source_revision")) == key
-    ]
-
-
-def campaign_status(results: Iterable[dict[str, Any]]) -> str:
-    """Report PASS only for a complete, passing six-profile candidate."""
-    results = list(results)
-    if not results:
-        return "INFO"
-    if any(not result["passed"] for result in results):
-        return "FAIL"
-    frames = {result["frames_per_connection"] for result in results}
-    return "PASS" if frames == SUPPORTED_FRAMES else "INFO"
-
-
-def render_aggregate(records: Iterable[dict[str, Any]], report_root: Path = REPORTS_ROOT) -> Path:
-    records = list(records)
-    rows = []
-    for result in records:
-        artifact_id = result_id(result)
-        rows.append({
-            "artifact_id": artifact_id,
-            "generated_at": result["generated_at"],
-            "host_label": result["host_label"],
-            "transport": result["transport"],
-            "frames_per_connection": result["frames_per_connection"],
-            "passed": result["passed"],
-            "direct_sqlite_admissions_per_second": (
-                result["direct_sqlite_message_write"]["admissions_per_second"]
-                if result.get("direct_sqlite_message_write") is not None
-                else None
-            ),
-            "json_href": f"{REPORT_NAME}/{artifact_id}.json",
-            "xhtml_href": f"{REPORT_NAME}/{artifact_id}.xhtml",
-        })
-    output = report_root / REPORT_HTML
-    template = ROOT / "templates" / "benchmark-report" / "benchmark-report.html.j2"
-    campaign = current_campaign_results(records)
-    campaign_frames = {result["frames_per_connection"] for result in campaign}
-    campaign_missing_frames = sorted(SUPPORTED_FRAMES - campaign_frames)
-    campaign_reference = campaign[-1] if campaign else None
-    compose(template, {
-        "title": "ATM local transport benchmark", "generated_at": utc_now(),
-        "status": campaign_status(campaign),
-        "rows": rows,
-        "campaign_host_label": campaign_reference["host_label"] if campaign_reference else "none",
-        "campaign_transport": campaign_reference["transport"] if campaign_reference else "none",
-        "campaign_source_revision": campaign_reference.get("source_revision") if campaign_reference else None,
-        "campaign_profile_count": len(campaign),
-        "campaign_passed_count": sum(result["passed"] for result in campaign),
-        "campaign_failed_count": sum(not result["passed"] for result in campaign),
-        "campaign_missing_frames": ", ".join(str(frame) for frame in campaign_missing_frames) or "none",
-        "history_count": len(rows),
+def render_index(
+    phase_groups: dict[str, list[BenchmarkCampaign]], historical: HistoricalRecord,
+    baselines: BaselineSet, report_dir: Path = REPORT_DIR,
+) -> Path:
+    latest_phase, latest_campaigns = max(
+        phase_groups.items(), key=lambda item: max(campaign.started_at for campaign in item[1]),
+    )
+    latest = phase_variables(latest_phase, latest_campaigns, historical, baselines)
+    phases = sorted(
+        ((phase, campaigns) for phase, campaigns in phase_groups.items()),
+        key=lambda item: max(campaign.started_at for campaign in item[1]), reverse=True,
+    )
+    output = report_dir / "index.html"
+    compose(ROOT / "templates/benchmark-report/benchmark-index.html.j2", {
+        "title": "ATM benchmark reports", "latest": latest,
+        "phases": [{"phase": phase, "href": phase_slug(phase),
+                    "started_at": time_view(max(campaign.started_at for campaign in campaigns))}
+                   for phase, campaigns in phases],
     }, output)
     return output
 
 
+def render_envelope(campaigns: Sequence[BenchmarkCampaign], report_root: Path = REPORTS_ROOT) -> None:
+    latest = max(campaigns, key=lambda campaign: campaign.started_at)
+    payload = {
+        "schema_version": 1, "report_type": "benchmark",
+        "generated_at": utc_text(latest.started_at), "host_label": latest.host_label,
+        "report_html": f"{REPORT_NAME}/index.html",
+    }
+    (report_root / f"{REPORT_NAME}.json").write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+
 def regenerate_index() -> None:
-    completed = subprocess.run(["just", "reports-index"], cwd=ROOT, capture_output=True, text=True, check=False)
+    completed = subprocess.run(
+        ["just", "reports-index"], cwd=ROOT, capture_output=True, text=True,
+        encoding="utf-8", errors="replace", check=False,
+    )
     if completed.returncode != 0:
         raise BenchmarkReportError(f"reports-index failed: {completed.stderr.strip() or completed.stdout.strip()}")
 
 
-def envelope_for(result: dict[str, Any]) -> str:
-    """Return the AI.46 discovery envelope for one immutable benchmark run."""
-    return json.dumps({
-        "schema_version": ENVELOPE_SCHEMA_VERSION, "report_type": "benchmark",
-        "generated_at": result["generated_at"], "host_label": result["host_label"],
-        "report_html": REPORT_HTML,
-    }, indent=2, sort_keys=True) + "\n"
+def rebuild(report_dir: Path = REPORT_DIR, report_root: Path = REPORTS_ROOT, *, invoke_index: bool = True) -> list[Path]:
+    """The sole render flow: validated JSON → panels → phases → index → indexer."""
+    campaigns = load_campaigns(report_dir)
+    if not campaigns:
+        raise BenchmarkReportError(f"{report_dir}: no validated *.campaign.json files to render")
+    historical, baselines = load_historical_record(report_dir), load_baselines(
+        report_dir / BASELINES_FILENAME
+    )
+    phase_groups: dict[str, list[BenchmarkCampaign]] = {}
+    for campaign in campaigns:
+        phase_groups.setdefault(campaign.phase, []).append(campaign)
+    outputs = [render_panel(campaign, report_dir) for campaign in campaigns]
+    outputs.extend(render_phase(phase, group, historical, baselines, report_dir) for phase, group in phase_groups.items())
+    outputs.append(render_index(phase_groups, historical, baselines, report_dir))
+    # The prior aggregate is generated output, not immutable evidence.  Keep
+    # historical per-run envelopes untouched; the indexer recognizes the new
+    # canonical directory index and ignores those superseded sidecars.
+    (report_root / f"{REPORT_NAME}.html").unlink(missing_ok=True)
+    render_envelope(campaigns, report_root)
+    if invoke_index:
+        regenerate_index()
+    return outputs
 
 
-def persist(source: Path) -> tuple[dict[str, Any], str]:
-    result = load_result(source)
-    artifact_id = result_id(result, source)
-    artifact = json.dumps(result, indent=2, sort_keys=True) + "\n"
-    immutable_write(REPORT_DIR / f"{artifact_id}.json", artifact)
-    immutable_write(REPORT_DIR / f"{artifact_id}.envelope.json", envelope_for(result))
-    return result, artifact_id
-
-
-def process(inputs: list[Path]) -> int:
-    errors: list[str] = []
-    if not inputs:
-        try:
-            records = evidence_records()
-            for result in records:
-                artifact_id = result_id(result)
-                immutable_write(REPORT_DIR / f"{artifact_id}.envelope.json", envelope_for(result))
-                render_run(result, artifact_id)
-            render_aggregate(records)
-            regenerate_index()
-        except (BenchmarkReportError, OSError) as error:
-            errors.append(str(error))
-    for source in inputs:
-        try:
-            result, artifact_id = persist(source)
-            render_run(result, artifact_id)
-            render_aggregate(evidence_records())
-        except (BenchmarkReportError, OSError) as error:
-            errors.append(str(error))
-        finally:
-            try:
-                regenerate_index()
-            except BenchmarkReportError as error:
-                errors.append(str(error))
-    for error in errors:
-        print(f"benchmark-report: {error}", file=sys.stderr)
-    return 1 if errors else 0
+def preview_latest(report_dir: Path = REPORT_DIR, preview_root: Path = ROOT / "artifacts/benchmark/preview", *, open_viewer: bool = True) -> Path:
+    campaigns = load_campaigns(report_dir)
+    if not campaigns:
+        raise BenchmarkReportError(f"{report_dir}: no campaign available for preview")
+    newest = max(campaigns, key=lambda campaign: campaign.started_at)
+    source = report_dir / f"{newest.campaign_id}.xhtml"
+    if not source.is_file():
+        raise BenchmarkReportError(f"{source}: rebuild reports before previewing")
+    preview_root.mkdir(parents=True, exist_ok=True)
+    output = preview_root / "latest.html"
+    shutil.copyfile(source, output)
+    if open_viewer:
+        completed = subprocess.run(["wyvern", str(output)], cwd=ROOT, check=False)
+        if completed.returncode != 0:
+            raise BenchmarkReportError(f"wyvern failed with exit code {completed.returncode}")
+    return output
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", type=Path, action="append", default=[], help="AI.40 result JSON (repeatable)")
-    parser.add_argument("--rebuild", action="store_true", help="re-render existing evidence without adding input")
+    parser.add_argument("--rebuild", action="store_true", help="rebuild report output from validated JSON (default)")
     args = parser.parse_args(argv)
-    if not args.input and not args.rebuild:
-        parser.error("provide --input PATH or --rebuild")
-    return process(args.input)
+    try:
+        rebuild()
+    except (BenchmarkReportError, OSError) as exc:
+        print(f"benchmark-report: {exc}", file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

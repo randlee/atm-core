@@ -1,0 +1,70 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+# REFUTED (team-lead, 2026-08-25): independent adversarial code review found
+# the cited line "floor = max(prior, observed) if eligible ... else prior"
+# does not exist in migrate_benchmark_history.py (grep, zero hits). Current
+# logic (lines 243-268) computes `prior = best.get(key, 0.0)` and classifies
+# the result against it BEFORE updating `best[key]` -- exactly the
+# non-self-referential order the finding recommends as the fix -- with an
+# inline comment explicitly guarding against this exact bug. Closed as
+# false_positive; no fix dispatched.
+
+<urn:atm:triage:finding/AO212-MIGRATE-F002>
+  a triage:Finding ;
+  triage:findingId "AO212-MIGRATE-F002" ;
+  triage:title "Self-referential ratchet floor defeats acceptance gate for record-setting runs" ;
+  triage:description "In migrate_benchmark_history.py (lines 234-235), the D8 ratchet floor is computed as floor = max(prior, observed) BEFORE the run is classified via classify_status(..., baseline_p50_floor=floor). For runs setting a new best, this self-referential comparison defeats the acceptance gate (observed >= observed always true). Fix: classify against prior floor first, update best map only after classification." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "MIGRATE" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "false_positive" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-23T23:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.12 ;
+  triage:foundAt "2026-08-24T05:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO212-MIGRATE-F002/AO212-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO212-MIGRATE-F002/AO213-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO212-MIGRATE-F002/AO212-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/migrate_benchmark_history.py" ;
+  triage:line 234 ;
+  triage:snippet "floor = max(prior, observed) if eligible and observed is not None else prior" ;
+  triage:status "false_positive" ;
+  triage:closed true ;
+  triage:branch "feature/ao2-12-historical-data-migration" ;
+  triage:headSha "8788090d6" ;
+  triage:occursIn <urn:atm:triage:worktree/AO212/8788090d6> .
+
+<urn:atm:triage:occurrence/AO212-MIGRATE-F002/AO213-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/migrate_benchmark_history.py" ;
+  triage:line 234 ;
+  triage:snippet "floor = max(prior, observed) if eligible and observed is not None else prior" ;
+  triage:status "false_positive" ;
+  triage:closed true ;
+  triage:branch "feature/ao2-13-benchmark-run-skill" ;
+  triage:headSha "beaec158e" ;
+  triage:occursIn <urn:atm:triage:worktree/AO213/beaec158e> .
+
+<urn:atm:triage:worktree/AO212/8788090d6>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-ao2-12" ;
+  triage:branch "feature/ao2-12-historical-data-migration" ;
+  triage:headSha "8788090d6" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/AO213/beaec158e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-ao2-13" ;
+  triage:branch "feature/ao2-13-benchmark-run-skill" ;
+  triage:headSha "beaec158e" ;
+  triage:orderIndex 14 .

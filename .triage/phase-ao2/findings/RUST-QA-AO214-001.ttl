@@ -1,0 +1,114 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RUST-QA-AO214-001>
+  a triage:Finding ;
+  triage:findingId "RUST-QA-AO214-001" ;
+  triage:title "Retired Peer*Transport construct family reintroduced" ;
+  triage:description "cargo test -p atm-architecture --test boundary_enforcement workspace_source_must_not_reintroduce_retired_peer_delivery_constructs FAILS -- crates/atm-daemon-bootstrap/src/lib.rs:62 (struct SelectedPeerTransport) + lib.rs:480,500,504,645,908,1151 (peer_transport field) reintroduce the retired Peer*Transport/peer_*transport construct family." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture-boundary" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-24T22:18:58Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.14 ;
+  triage:foundAt "2026-08-24T22:15:50Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RUST-QA-AO214-001/AO214-L62> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RUST-QA-AO214-001/AO214-L480> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RUST-QA-AO214-001/AO214-L500> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RUST-QA-AO214-001/AO214-L504> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RUST-QA-AO214-001/AO214-L645> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RUST-QA-AO214-001/AO214-L908> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RUST-QA-AO214-001/AO214-L1151> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RUST-QA-AO214-001/AO214-L62>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 62 ;
+  triage:snippet "struct SelectedPeerTransport { adapter: Option<Arc<dyn PeerStreamAdapter>>, pool_config: PeerPoolConfig }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ao2-14-peer-connection-pooling" ;
+  triage:headSha "36c6c95d8b6bddc63654819434d3c2a14a0f94eb" ;
+  triage:occursIn <urn:atm:triage:worktree/ao2-14-peer-connection-pooling/36c6c95d8b6bddc63654819434d3c2a14a0f94eb> .
+
+<urn:atm:triage:occurrence/RUST-QA-AO214-001/AO214-L480>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 480 ;
+  triage:snippet "peer_transport: SelectedPeerTransport" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ao2-14-peer-connection-pooling" ;
+  triage:headSha "36c6c95d8b6bddc63654819434d3c2a14a0f94eb" ;
+  triage:occursIn <urn:atm:triage:worktree/ao2-14-peer-connection-pooling/36c6c95d8b6bddc63654819434d3c2a14a0f94eb> .
+
+<urn:atm:triage:occurrence/RUST-QA-AO214-001/AO214-L500>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 500 ;
+  triage:snippet "let handler = match peer_transport.adapter" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ao2-14-peer-connection-pooling" ;
+  triage:headSha "36c6c95d8b6bddc63654819434d3c2a14a0f94eb" ;
+  triage:occursIn <urn:atm:triage:worktree/ao2-14-peer-connection-pooling/36c6c95d8b6bddc63654819434d3c2a14a0f94eb> .
+
+<urn:atm:triage:occurrence/RUST-QA-AO214-001/AO214-L504>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 504 ;
+  triage:snippet "peer_transport.pool_config" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ao2-14-peer-connection-pooling" ;
+  triage:headSha "36c6c95d8b6bddc63654819434d3c2a14a0f94eb" ;
+  triage:occursIn <urn:atm:triage:worktree/ao2-14-peer-connection-pooling/36c6c95d8b6bddc63654819434d3c2a14a0f94eb> .
+
+<urn:atm:triage:occurrence/RUST-QA-AO214-001/AO214-L645>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 645 ;
+  triage:snippet "SelectedPeerTransport { adapter: peer_stream_adapter.clone(), pool_config: peer_pool_config }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ao2-14-peer-connection-pooling" ;
+  triage:headSha "36c6c95d8b6bddc63654819434d3c2a14a0f94eb" ;
+  triage:occursIn <urn:atm:triage:worktree/ao2-14-peer-connection-pooling/36c6c95d8b6bddc63654819434d3c2a14a0f94eb> .
+
+<urn:atm:triage:occurrence/RUST-QA-AO214-001/AO214-L908>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 908 ;
+  triage:snippet "DaemonLaunchIdentity, REPLACEMENT_DRAIN_DEADLINE, SelectedPeerTransport, ShutdownSignal" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ao2-14-peer-connection-pooling" ;
+  triage:headSha "36c6c95d8b6bddc63654819434d3c2a14a0f94eb" ;
+  triage:occursIn <urn:atm:triage:worktree/ao2-14-peer-connection-pooling/36c6c95d8b6bddc63654819434d3c2a14a0f94eb> .
+
+<urn:atm:triage:occurrence/RUST-QA-AO214-001/AO214-L1151>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 1151 ;
+  triage:snippet "SelectedPeerTransport { adapter: peer_stream_adapter.clone(), pool_config: PeerPoolConfig::default() }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ao2-14-peer-connection-pooling" ;
+  triage:headSha "36c6c95d8b6bddc63654819434d3c2a14a0f94eb" ;
+  triage:occursIn <urn:atm:triage:worktree/ao2-14-peer-connection-pooling/36c6c95d8b6bddc63654819434d3c2a14a0f94eb> .
+
+<urn:atm:triage:worktree/ao2-14-peer-connection-pooling/36c6c95d8b6bddc63654819434d3c2a14a0f94eb>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-ao2-14-peer-connection-pooling" ;
+  triage:branch "feature/ao2-14-peer-connection-pooling" ;
+  triage:headSha "36c6c95d8b6bddc63654819434d3c2a14a0f94eb" ;
+  triage:orderIndex 1 .

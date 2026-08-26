@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-AO2END-004>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AO2END-004" ;
+  triage:title "Committed benchmark evidence ambiguity - rand-m5 campaigns alongside canonical m5-atmbench evidence, no accepted-campaign manifest" ;
+  triage:description "site/reports/send-message-benchmark/ contains 4 campaign JSON files with host_label rand-m5 committed at commit b207dd097, sitting in the same canonical evidence directory as the 4 correct m5-atmbench campaigns, with no document naming which campaign_id satisfies the AO2.5.4 accepted-line requirement. This directly implicates the standing project rule that official benchmark/gate evidence must come only from the isolated m5-atmbench account, never rand-m5, even as a fallback." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-26T04:57:42Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.15 ;
+  triage:foundAt "2026-08-26T04:57:42Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AO2END-004/AO2END-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AO2END-004/AO2END-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AO2END-004/AO2END-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AO2END-004/AO2END-4> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-AO2END-004/AO2END-1>
+  a triage:Occurrence ;
+  triage:file "site/reports/send-message-benchmark/20260824T030844Z-rand-m5.campaign.json" ;
+  triage:line 4 ;
+  triage:snippet "host_label: rand-m5" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "4d661e26" ;
+  triage:occursIn <urn:atm:triage:worktree/AO2END/4d661e26> .
+
+<urn:atm:triage:occurrence/ATM-QA-AO2END-004/AO2END-2>
+  a triage:Occurrence ;
+  triage:file "site/reports/send-message-benchmark/20260824T055736Z-rand-m5.campaign.json" ;
+  triage:line 4 ;
+  triage:snippet "host_label: rand-m5" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "4d661e26" ;
+  triage:occursIn <urn:atm:triage:worktree/AO2END/4d661e26> .
+
+<urn:atm:triage:occurrence/ATM-QA-AO2END-004/AO2END-3>
+  a triage:Occurrence ;
+  triage:file "site/reports/send-message-benchmark/20260824T064025Z-rand-m5.campaign.json" ;
+  triage:line 4 ;
+  triage:snippet "host_label: rand-m5" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "4d661e26" ;
+  triage:occursIn <urn:atm:triage:worktree/AO2END/4d661e26> .
+
+<urn:atm:triage:occurrence/ATM-QA-AO2END-004/AO2END-4>
+  a triage:Occurrence ;
+  triage:file "site/reports/send-message-benchmark/20260825T005332Z-rand-m5.campaign.json" ;
+  triage:line 4 ;
+  triage:snippet "host_label: rand-m5" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "4d661e26" ;
+  triage:occursIn <urn:atm:triage:worktree/AO2END/4d661e26> .
+
+<urn:atm:triage:worktree/AO2END/4d661e26>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AO2END" ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "4d661e26" ;
+  triage:orderIndex 1 .

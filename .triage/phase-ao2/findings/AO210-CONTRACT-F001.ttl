@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO210-CONTRACT-F001>
+  a triage:Finding ;
+  triage:findingId "AO210-CONTRACT-F001" ;
+  triage:title "classify_status roll-up precedence mismatch between run_admission_capacity.py and BenchmarkCampaign validator" ;
+  triage:description "run_admission_capacity.py:2230 locally computes campaign_status with precedence [missing->INCOMPLETE, any FAIL->FAIL, any INCOMPLETE->INCOMPLETE, else PASS] -- the OPPOSITE order from BenchmarkCampaign.complete_matrix_has_derived_status in benchmark_schema.py:310-329 [missing->INCOMPLETE, any INCOMPLETE->INCOMPLETE, any FAIL->FAIL, else PASS], which matches the sprint doc's stated rule. Since the 4 targets run as independent subprocesses, a real run with one FAIL target + one INCOMPLETE target is reachable, and the mismatch crashes BenchmarkCampaign(...) construction with an unhandled ValueError before the campaign file is ever written. Masked from CI: test_ordinary_benchmark_fails_when_one_required_target_fails mocks BenchmarkCampaign entirely, so the real validator never runs in that test. Confirmed independently by req-qa (ATM-QA-001), arch-qa (ARCH-002), ruthless-boundary-qa (RBQA-F003), and quality-mgr's own direct read." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "CONTRACT" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-23T18:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.10 ;
+  triage:foundAt "2026-08-24T03:28:59Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO210-CONTRACT-F001/AO210-CONTRACT-F001-OCC-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO210-CONTRACT-F001/AO210-CONTRACT-F001-OCC-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO210-CONTRACT-F001/AO210-CONTRACT-F001-OCC-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 2230 ;
+  triage:snippet "local campaign_status precedence diverges from BenchmarkCampaign validator" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ao2-10-benchmark-data-contract" ;
+  triage:headSha "b207dd097a34a2b954c76a43b12e416ace1875f3" ;
+  triage:occursIn <urn:atm:triage:worktree/AO210/b207dd097a34a2b954c76a43b12e416ace1875f3> .
+
+<urn:atm:triage:occurrence/AO210-CONTRACT-F001/AO210-CONTRACT-F001-OCC-2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/benchmark_schema.py" ;
+  triage:line 310 ;
+  triage:snippet "complete_matrix_has_derived_status is the canonical precedence, not consulted by run_admission_capacity.py" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ao2-10-benchmark-data-contract" ;
+  triage:headSha "b207dd097a34a2b954c76a43b12e416ace1875f3" ;
+  triage:occursIn <urn:atm:triage:worktree/AO210/b207dd097a34a2b954c76a43b12e416ace1875f3> .
+
+<urn:atm:triage:worktree/AO210/b207dd097a34a2b954c76a43b12e416ace1875f3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ao2-10" ;
+  triage:branch "feature/ao2-10-benchmark-data-contract" ;
+  triage:headSha "b207dd097a34a2b954c76a43b12e416ace1875f3" ;
+  triage:orderIndex 11 .
