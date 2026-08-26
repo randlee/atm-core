@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO2-SCBOUNDARY-DEBT-001>
+  a triage:Finding ;
+  triage:findingId "AO2-SCBOUNDARY-DEBT-001" ;
+  triage:title "Pre-existing sc-boundary architectural cycles surfaced by lint-gate fix, waived for AO2 phase gate" ;
+  triage:description "Wiring sc-boundary into the `.just/run_lint.py` gate (QA-RUSTQA-AO2-001 fix, commit 9b7f022e4) surfaced 22 genuine, pre-existing architectural-cycle violations that had never previously run in the gate. These are not AO2-introduced regressions but rather debt inherited from earlier phases. The violations break down as: 7x SCB-CYCLE-001 multi-owner architectural cycles (spanning atm_core::ack/send, observability LogFieldMap/LogFieldValue, search SearchInput/SearchRequest; atm commands::teams multi-owner; atm composition::tests SharedLogBuffer/Writer; atm-graft runtime HelperThreadBudget/Permit; atm-storage schema inbox_message MessageEnvelope/RawMessageEnvelope); 10x SCB-CYCLE-002 type/method self-loops (atm_core local_http LocalCapability, LocalHttpEndpointRecord, service_runtime LocalServiceRuntime; atm commands PeerCommand, SendCommand; atm-graft runtime ReceiverRecoveryCircuit; atm-http-runtime unix_socket FileIdentity; atm-storage-rusqlite SqliteMessageStore; atm-storage template_catalog DecomposedMessageAdmission; atm-template-sc-compose ScComposeTemplateComposer); 5x SCB-CYCLE-003 trait-impl self-loops (atm composition CliComposition, atm-graft runtime BoundedHostNudgeInjector, atm-runtime legacy_storage_adapters BoundaryMailStoreView, atm-storage-rusqlite SqliteMessageStore, atm-template-sc-compose ScComposeTemplateComposer). These cycles are pre-existing debt exposed by (not caused by) the sc-boundary lint-gate integration." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "deferred" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-26T06:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.15 ;
+  triage:foundAt "2026-08-26T06:04:55Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO2-SCBOUNDARY-DEBT-001/AO2-SCBOUNDARY-1> ;
+  triage:deferredNote "FORMAL PHASE-GATE WAIVER (Rand, 2026-08-26): 22 pre-existing architectural-cycle violations surfaced by sc-boundary lint-gate integration are not AO2-introduced regressions. Waived for AO2 phase gate purposes only — do not dispatch a fix for individual cycles this phase, do not treat as an active QA failure. The violations are valid debt to be addressed in a dedicated future finding/phase for architectural boundary cleanup. just validate and just lint all are considered passing as long as the ONLY sc-boundary failures present are these 22 known cycles (no new ones). Do not block integrate/phase-ao2 -> develop on this finding. Independently corroborated by fenix (peer team-lead), who confirmed all 22 reproduce identically on develop (zero phase delta) and filed GitHub issue #1028 tracking the follow-up assessment/cleanup; per fenix's breakdown, 15 of the 22 look like sc-boundary rule miscalibration (self-loop findings) rather than genuine cross-module debt, with only atm_core ack<->send plausibly a real cycle. Future work on this finding should track through GH #1028." ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AO2-SCBOUNDARY-DEBT-001/AO2-SCBOUNDARY-1>
+  a triage:Occurrence ;
+  triage:file ".just/logs/20260826060534-sc-boundary.log" ;
+  triage:line 5 ;
+  triage:snippet "22 findings: 7x SCB-CYCLE-001, 10x SCB-CYCLE-002, 5x SCB-CYCLE-003" ;
+  triage:status "deferred" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "9b7f022e4" ;
+  triage:occursIn <urn:atm:triage:worktree/AO2/9b7f022e4> .
+
+<urn:atm:triage:worktree/AO2/9b7f022e4>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate/phase-ao2" ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "9b7f022e4" ;
+  triage:orderIndex 15 .
