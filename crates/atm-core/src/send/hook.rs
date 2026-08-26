@@ -2,8 +2,8 @@ use tracing::warn;
 
 use super::{ResolvedRecipient, nudge_template};
 use crate::boundary::{
-    BuiltInPostSendDispatch, GraftNudgeTarget, LocalTmuxNudgeTarget, PostSendBuiltInTarget,
-    PostSendHookEvent, built_in_nudge_template_kind_from_post_send_event,
+    BuiltInPostSendDispatch, GraftNudgeTarget, LocalTmuxNudgeTarget, NudgeKind,
+    PostSendBuiltInTarget, PostSendHookEvent, built_in_nudge_template_kind_from_post_send_event,
 };
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
@@ -31,10 +31,13 @@ where
         let rendered_nudge = render_built_in_nudge_for_dispatch(runtime, event)?;
         return Some(BuiltInPostSendDispatch {
             event: event.clone(),
-            target: PostSendBuiltInTarget::LocalTmux(LocalTmuxNudgeTarget {
+            target: PostSendBuiltInTarget::LocalSteer(LocalTmuxNudgeTarget {
                 pane_id,
                 rendered_nudge,
             }),
+            // The mode-driven kind decision lands in L2.2; every dispatch
+            // built here is a Steer for now.
+            kind: NudgeKind::Steer,
         });
     }
     if delivery_snapshot.graft_post_send {
@@ -47,6 +50,9 @@ where
                 rendered_nudge,
                 message_body: message_body.to_owned(),
             }),
+            // The mode-driven kind decision lands in L2.2; every dispatch
+            // built here is a Steer for now.
+            kind: NudgeKind::Steer,
         });
     }
     None

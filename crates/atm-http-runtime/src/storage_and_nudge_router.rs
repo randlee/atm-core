@@ -707,7 +707,7 @@ mod tests {
 
     use atm_core::boundary::{
         AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, GraftNudgeTarget,
-        LocalTmuxNudgeTarget, MessageReceivedHookSelector, PostSendBuiltInTarget,
+        LocalTmuxNudgeTarget, MessageReceivedHookSelector, NudgeKind, PostSendBuiltInTarget,
         PostSendEmissionPath, PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
     };
     use atm_core::observability::NullObservability;
@@ -905,7 +905,7 @@ mod tests {
             dispatch: &BuiltInPostSendDispatch,
         ) -> Option<&dyn AsyncMessageReceivedHookEmitter> {
             match &dispatch.target {
-                PostSendBuiltInTarget::LocalTmux(_) => Some(self.tmux.as_ref()),
+                PostSendBuiltInTarget::LocalSteer(_) => Some(self.tmux.as_ref()),
                 PostSendBuiltInTarget::Graft(_) => Some(self.graft.as_ref()),
             }
         }
@@ -1267,10 +1267,11 @@ mod tests {
         };
         let tmux_dispatch = BuiltInPostSendDispatch {
             event: hook_event(),
-            target: PostSendBuiltInTarget::LocalTmux(LocalTmuxNudgeTarget {
+            target: PostSendBuiltInTarget::LocalSteer(LocalTmuxNudgeTarget {
                 pane_id: PaneId::from_cli("%1").expect("pane"),
                 rendered_nudge: "tmux nudge".to_owned(),
             }),
+            kind: NudgeKind::Steer,
         };
         let graft_dispatch = BuiltInPostSendDispatch {
             event: hook_event(),
@@ -1280,6 +1281,7 @@ mod tests {
                 rendered_nudge: "<atm kind=\"nudge\"/>".to_owned(),
                 message_body: "message body".to_owned(),
             }),
+            kind: NudgeKind::Steer,
         };
 
         let selected_tmux = selector
@@ -2824,6 +2826,7 @@ mod tests {
                 rendered_nudge: "<atm kind=\"nudge\"/>".to_owned(),
                 message_body: "message body".to_owned(),
             }),
+            kind: NudgeKind::Steer,
         };
 
         let warnings = fixture

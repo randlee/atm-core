@@ -108,6 +108,20 @@ pub struct MessageClassification {
     pub content_format: Option<String>,
 }
 
+/// Selects when a committed write's receiver nudge is emitted.
+///
+/// `Immediate` is the historical best-effort steer emitted inline with the
+/// post-write hook path (`atm send`). `Deferred` instead marks the message
+/// for durable, at-most-once delivery via `PendingNudgeStore` (`atm queue`);
+/// no immediate steer dispatch is produced for that write.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NudgeMode {
+    #[default]
+    Immediate,
+    Deferred,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WriteRequest {
     pub home_dir: PathBuf,
@@ -153,6 +167,10 @@ pub struct WriteRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub acknowledges_message_id: Option<AtmMessageId>,
     pub dry_run: bool,
+    /// Whether this write's receiver nudge is emitted immediately or
+    /// deferred to durable at-most-once queue delivery.
+    #[serde(default)]
+    pub nudge_mode: NudgeMode,
 }
 
 impl WriteRequest {
@@ -191,6 +209,7 @@ impl WriteRequest {
             expires_at: None,
             acknowledges_message_id: None,
             dry_run,
+            nudge_mode: NudgeMode::default(),
         })
     }
 
@@ -237,6 +256,14 @@ impl WriteRequest {
         self.to = None;
         self.requires_ack = false;
         self.acknowledges_message_id = Some(message_id);
+        self
+    }
+
+    /// Select whether this write's receiver nudge is emitted immediately
+    /// (default) or deferred to durable at-most-once queue delivery.
+    #[must_use]
+    pub fn with_nudge_mode(mut self, nudge_mode: NudgeMode) -> Self {
+        self.nudge_mode = nudge_mode;
         self
     }
 

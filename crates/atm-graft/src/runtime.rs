@@ -10,7 +10,8 @@ use std::sync::mpsc::TrySendError;
 
 use atm_core::GraftConfig;
 use atm_core::boundary::{
-    BuiltInPostSendDispatch, GraftNudgeTarget, MessageReceivedHookEmitter, PostSendBuiltInTarget,
+    BuiltInPostSendDispatch, GraftNudgeTarget, MessageReceivedHookEmitter, NudgeKind,
+    PostSendBuiltInTarget,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::{
@@ -743,6 +744,7 @@ fn handle_graft_receiver_connection(
             message_body,
         }),
         event,
+        kind: NudgeKind::Steer,
     };
     let response = match (GraftReceiveHook {
         injector,

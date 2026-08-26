@@ -104,7 +104,7 @@ mod tests {
     use std::sync::{Arc, Mutex, RwLock};
 
     use atm_core::boundary::{
-        BuiltInPostSendDispatch, GraftNudgeTarget, MessageReceivedHookEmitter,
+        BuiltInPostSendDispatch, GraftNudgeTarget, MessageReceivedHookEmitter, NudgeKind,
         PostSendBuiltInTarget, PostSendHookEvent,
     };
     use atm_core::error::{AtmError, AtmErrorCode};
@@ -205,6 +205,7 @@ mod tests {
                 rendered_nudge: "<atm><action>read atm</action></atm>".to_string(),
                 message_body: "full immutable body".to_string(),
             }),
+            kind: NudgeKind::Steer,
         };
 
         sink.emit_received_message(
