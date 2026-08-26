@@ -39,7 +39,11 @@ the confirmed member list in this doc before starting step 2.
    dedicated atm-core test. BEFORE any relocation, add direct atm-core unit tests for
    both `admit_acknowledgement_write` and `admit_acknowledgement_write_async` pinning
    current behavior (admit, reject-reacknowledge, and error paths). These are the
-   refactor's regression net.
+   refactor's regression net. Precondition: the known Windows CI panic in the existing
+   async e2e test (`local_ack_routes_to_the_received_peer_and_peer_receipt_does_not_reacknowledge`,
+   see phase plan "Why now" carve-out) must be understood — root-caused or confirmed
+   pre-existing/platform-scoped — before pinning behavior, so the entry tests don't
+   enshrine a bug.
 2. **Create `atm_core::write`** with the step-0-confirmed member set, moved verbatim.
 3. **Re-point `ack` and `send`** to depend on `write`; remove all `crate::ack::` refs
    from send and `crate::send::` refs from ack. Add `pub use` re-exports in `ack`/`send`
@@ -51,8 +55,14 @@ the confirmed member list in this doc before starting step 2.
    `crate::ack::admit_…` cross-calls reappear). It stays a tripwire — never delete or
    weaken it.
 5. **Benchmark campaign** — official campaign on the isolated **m5-atmbench** account
-   (never rand-m5) against the standing `baselines.json` floors. Results committed to
-   `site/reports/` per the ledger policy.
+   (never rand-m5) against the standing `baselines.json` floors. Required target matrix:
+   **all four transports — sqlite, uds, tcp, tcp-tls** (the write pipeline underlies all
+   of them). Results committed to `site/reports/` per the ledger policy. Marginal-miss
+   policy (per plan-QA): because this change is performance-neutral by construction
+   (mechanical relocation, identical codegen), a floor miss triggers
+   **investigation-before-block**, not automatic block — first rule out harness/host
+   noise (cf. the windows-x64-01 floor-noise precedent, PR #1029) with a rerun; only a
+   reproduced, explained regression blocks the merge. A confirmed miss is never waived.
 
 ## Acceptance criteria
 

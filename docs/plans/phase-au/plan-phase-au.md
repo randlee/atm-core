@@ -12,8 +12,17 @@ master_analysis: [boundary-regression-plan.md](../boundary-regression-plan.md)
 PR #966 merged phase-ao2 to `develop` on 2026-08-26. Because that merge carries the
 QA-RUSTQA-AO2-001 lint-wiring fix, `just validate` on `develop` now runs the sc-boundary
 lint and reports the 22 pre-existing findings waived at the AO2 gate — **CI on `develop`
-is red today** on exactly those findings and nothing else. Phase AU exists to retire that
-debt and turn CI green again, permanently.
+is red today** on those findings. Phase AU exists to retire that debt and turn CI green
+again, permanently.
+
+Note (plan-QA 2026-08-26): the merge-commit CI run (job 33002585446, commit 9923ef6c)
+also shows two failures **separate from** the sc-boundary debt: (1) macOS Test —
+`cargo binstall` bootstrap-tooling failure (infra); (2) Windows Test — a genuine test
+panic in `storage_and_nudge_router.rs`
+(`local_ack_routes_to_the_received_peer_and_peer_receipt_does_not_reacknowledge`).
+These are tracked outside Phase AU's scope but are carved out below so the interim-CI
+check remains applicable. The Windows panic is in the ack-routing flow AU.3 touches —
+AU.3's entry tests must pin behavior with that failure understood first.
 
 ## Constraint (non-negotiable)
 
@@ -36,7 +45,7 @@ and are assigned for **fully parallel execution**:
 
 | Sprint | Difficulty | Assignee | Master-plan sections | Findings owned | Crates touched |
 |---|---|---|---|---|---|
-| AU.1 code fixes | easy | Cipher | §1 + §2.1 + §2.2 | 10 (index #2-5,6,7,17,19,22 + optional #12) | atm, atm-core (search/observability/composition), atm-graft, atm-storage, atm-template-sc-compose |
+| AU.1 code fixes | easy | Cipher | §1 + §2.1 + §2.2 | 10 (index #2-5,6,7,17,19,22 + optional #12) | atm (incl. composition.rs), atm-core (search/observability), atm-graft, atm-storage, atm-template-sc-compose |
 | AU.2 lint calibration | mid | arch-ctm | §4.1 + §4.2 + §4.3 | 11 (index #8-11,13-16,18,20,21) | sc-lint-boundary only |
 | AU.3 ack/send write module | hard | fenix (team-lead) | §3.1 | 1 (index #1) | atm-core (ack/send/new write), atm-architecture (tripwire test) |
 
@@ -105,7 +114,10 @@ method's own unit test.
   baselines.json floors; waiver AO2-SCBOUNDARY-DEBT-001 closed; GH #1028 closed.
 - Interim-CI note: `develop` stays red until AU.1+AU.2 merge back. If an unrelated PR
   must merge to develop mid-phase, its CI failure set must be verified to be exactly
-  the known sc-boundary findings (count and identity), nothing else.
+  the known sc-boundary findings (count and identity) plus, at most, the two
+  known-separate failures carved out in "Why now" (macOS binstall infra failure;
+  Windows `storage_and_nudge_router.rs` ack-routing panic) — until those two are
+  resolved, at which point the carve-out shrinks accordingly. Anything else is new.
 
 ## Benchmark protection (AU.3)
 
@@ -123,3 +135,11 @@ rule that no fix may regress achieved benchmark numbers applies.
   docs are the post-review versions.
 - 2026-08-26 — test-coverage audit (background agent, develop @ 9923ef6cb) folded in as
   the coverage-baseline section above; gaps became explicit sprint deliverables.
+- 2026-08-26 — quality-mgr plan-QA round 1 @ 9a9ebb0a5: verdict **PASS** (findings
+  non-blocking). (a) decomposition completeness PASS (all 22 traced, #12 single-owner in
+  both conditional branches); (b) parallelism PASS, cosmetic crate mislabel fixed
+  (composition.rs is the atm crate); (c) test deliverables PASS; (d) benchmark gate PASS
+  with note — target matrix + marginal-miss policy added to sprint AU.3; (e) important:
+  "Why now" overstated CI purity — develop's merge-commit CI also has a macOS binstall
+  infra failure and a Windows ack-routing test panic; premise corrected and interim-CI
+  carve-out added. All findings folded this commit.
