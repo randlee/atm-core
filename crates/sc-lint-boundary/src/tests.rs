@@ -258,14 +258,11 @@ fn keeps_same_named_inherent_and_trait_methods_distinct() {
                 .iter()
                 .any(|node_id| node_id == &trait_method.id)
     }));
-    let trait_finding = report
-        .findings
-        .iter()
-        .find(|finding| finding.rule_id == RuleId::ScbCycle003)
-        .unwrap();
-    assert_eq!(
-        trait_finding.owner_ids,
-        vec!["crate::example::example::module::crate::Loop".to_string()]
+    assert!(
+        !report
+            .findings
+            .iter()
+            .any(|finding| finding.rule_id == RuleId::ScbCycle003)
     );
 }
 
@@ -1334,7 +1331,7 @@ fn excludes_trait_method_delegation_and_private_associated_helpers() {
                 }
 
                 impl Loop {
-                    fn private_helper() -> usize {
+                    pub(crate) fn private_helper() -> usize {
                         1
                     }
                 }

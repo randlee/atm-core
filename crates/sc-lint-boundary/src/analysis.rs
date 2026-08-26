@@ -224,16 +224,21 @@ fn is_trait_impl_delegating_call(
     else {
         return false;
     };
-    if source_method == callee.ident {
+    let same_name_inherent_forwarder = callee.kind == CallCalleeKind::Associated
+        && source_method == callee.ident
+        && has_inherent_method(edge, callee, node_map);
+    if source_method == callee.ident && !same_name_inherent_forwarder {
         return false;
     }
     match callee.kind {
         CallCalleeKind::Receiver => true,
-        CallCalleeKind::Associated => is_private_associated_helper(edge, callee, node_map),
+        CallCalleeKind::Associated => {
+            same_name_inherent_forwarder || is_non_public_associated_helper(edge, callee, node_map)
+        }
     }
 }
 
-fn is_private_associated_helper(
+fn has_inherent_method(
     edge: &OwnerRefEdge,
     callee: &CallCallee,
     node_map: &BTreeMap<NodeId, &GraphNode>,
@@ -241,7 +246,20 @@ fn is_private_associated_helper(
     node_map.values().any(|node| {
         node.kind == "method"
             && node.label == callee.ident
-            && node.visibility == Some("private")
+            && node.impl_kind == Some(ImplKind::Inherent)
+            && owner_id_for_node_id(&node.id, node.kind).as_ref() == Some(&edge.target_owner_id)
+    })
+}
+
+fn is_non_public_associated_helper(
+    edge: &OwnerRefEdge,
+    callee: &CallCallee,
+    node_map: &BTreeMap<NodeId, &GraphNode>,
+) -> bool {
+    node_map.values().any(|node| {
+        node.kind == "method"
+            && node.label == callee.ident
+            && node.visibility != Some("public")
             && owner_id_for_node_id(&node.id, node.kind).as_ref() == Some(&edge.target_owner_id)
     })
 }
