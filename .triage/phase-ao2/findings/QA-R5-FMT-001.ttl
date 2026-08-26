@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QA-R5-FMT-001>
+  a triage:Finding ;
+  triage:findingId "QA-R5-FMT-001" ;
+  triage:title "unformatted code at peer-tls/src/lib.rs:687 (rustfmt diff)" ;
+  triage:description "rust-qa/fmt check flagged crates/peer-tls/src/lib.rs:687 as having an outstanding cargo fmt diff, still present as of integrate/phase-ao2@917e8678d. Fix: run cargo fmt scoped to this file/crate and commit the formatting-only diff." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "code-quality" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-26T08:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.15 ;
+  triage:foundAt "2026-08-26T08:31:30Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-R5-FMT-001/AO2-15-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QA-R5-FMT-001/AO2-15-1>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 687 ;
+  triage:snippet "connected_tx.send(()).expect(\"signal connected client\");" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "917e8678d" ;
+  triage:occursIn <urn:atm:triage:worktree/AO2-15/917e8678d> .
+
+<urn:atm:triage:worktree/AO2-15/917e8678d>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ao2" ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "917e8678d" ;
+  triage:orderIndex 16 .
