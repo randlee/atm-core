@@ -53,8 +53,8 @@ resolver = "2"
         self.assertIn("daemon-singleton", names)
         self.assertIn("hermes-adapter", names)
         self.assertIn("pytests", names)
-        self.assertNotIn("sc-boundary", names)
-        self.assertNotIn("sc-portability", names)
+        self.assertIn("sc-boundary", names)
+        self.assertIn("sc-portability", names)
 
     def test_resolve_task_names_rejects_unknown_target(self) -> None:
         with self.assertRaises(ValueError):
