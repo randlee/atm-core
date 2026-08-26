@@ -71,7 +71,7 @@ class BootstrapTests(unittest.TestCase):
     def test_registry_receipt_rejects_an_unpinned_release(self) -> None:
         receipt = {"cargo-shear 1.13.2 (registry+https://example.test/index)": {"rustc": "release: 1.94.1"}}
         with mock.patch.object(bootstrap, "cargo_receipts", return_value=receipt):
-            self.assertFalse(bootstrap.registry_tool_matches("cargo-shear", "1.12.0", "1.94.1"))
+            self.assertFalse(bootstrap.registry_tool_matches("cargo-shear", "1.13.3", "1.94.1"))
 
     def test_manifest_uses_current_compatible_stable_releases(self) -> None:
         manifest = bootstrap.load_manifest()
@@ -80,7 +80,7 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(dict(manifest.cargo_tools), {
             "cargo-deny": "0.20.2",
             "cargo-audit": "0.22.2",
-            "cargo-shear": "1.12.0",
+            "cargo-shear": "1.13.3",
             "cargo-modules": "0.26.0",
         })
         self.assertEqual(dict(manifest.cargo_allowed_strategies), {

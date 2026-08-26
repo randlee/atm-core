@@ -69,8 +69,7 @@ binary, run `daemon-switch`, start a daemon, or touch an ATM database.
 ## Version-selection policy
 
 Every manifest entry pins the newest stable release compatible with the
-repository's pinned Rust and Python baselines. The current exceptions are
-`cargo-shear` `1.12.0` (upstream `1.13.4` requires Rust `1.95.0`) and
+repository's pinned Rust and Python baselines. The current exception is
 `cargo-modules` `0.26.0` (upstream `0.27.0` requires Rust `1.95.0`), while this
 repository deliberately pins Rust `1.94.1`. Compatibility exceptions must be
 documented here and re-evaluated whenever the seed Rust version changes.
