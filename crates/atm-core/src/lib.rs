@@ -97,7 +97,9 @@ pub mod types;
 pub mod workflow_analytics;
 /// First-party-only telemetry contract for workflow lifecycle projections.
 pub mod workflow_telemetry;
-pub mod write;
+/// Canonical write pipeline shared by `ack` and `send`; consumed only
+/// through their facades, so the module itself stays crate-private.
+pub(crate) mod write;
 
 pub use api::{
     ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, DaemonApiClient,

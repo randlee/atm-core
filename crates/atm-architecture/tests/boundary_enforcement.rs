@@ -363,8 +363,15 @@ fn ao4_benchmark_targets_cannot_introduce_an_alternate_daemon_pipeline() {
 #[test]
 fn acknowledgement_cannot_restore_a_second_write_pipeline() {
     let root = workspace_root();
-    let write = fs::read_to_string(root.join("crates/atm-core/src/write/mod.rs"))
-        .expect("canonical write module must be readable");
+    // The canonical write module is split across its facade and submodules
+    // (RULE-003 line cap); the tripwire scans the whole module surface.
+    let write = ["mod.rs", "pipeline.rs", "acknowledgement.rs"]
+        .iter()
+        .map(|file| {
+            fs::read_to_string(root.join("crates/atm-core/src/write").join(file))
+                .expect("canonical write module must be readable")
+        })
+        .collect::<String>();
     let send = fs::read_to_string(root.join("crates/atm-core/src/send/mod.rs"))
         .expect("send facade module must be readable");
     let acknowledgement = fs::read_to_string(root.join("crates/atm-core/src/ack/mod.rs"))
@@ -2840,7 +2847,12 @@ fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
     let root = workspace_root();
     let router = read_source(&root.join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"));
     let send_module = read_source(&root.join("crates/atm-core/src/send/mod.rs"));
-    let write_module = read_source(&root.join("crates/atm-core/src/write/mod.rs"));
+    // Scan the full split write module (facade + submodules) so no
+    // prohibited construct can hide in a submodule file.
+    let write_module = ["mod.rs", "pipeline.rs", "acknowledgement.rs"]
+        .iter()
+        .map(|file| read_source(&root.join("crates/atm-core/src/write").join(file)))
+        .collect::<String>();
     let received_hook_selector =
         read_source(&root.join("crates/atm-daemon-bootstrap/src/received_hook_selector.rs"));
     let strip_comments = |source: &str| {
