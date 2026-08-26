@@ -23,6 +23,10 @@ panic in `storage_and_nudge_router.rs`
 These are tracked outside Phase AU's scope but are carved out below so the interim-CI
 check remains applicable. The Windows panic is in the ack-routing flow AU.3 touches —
 AU.3's entry tests must pin behavior with that failure understood first.
+Triage update (2026-08-26): the Windows panic is classified **flaky/timing, one-off**
+(hard-coded 1 s test budget expired on a degraded runner; test died in setup before any
+ack assertion; same tree passed the four preceding Windows runs) — not a product bug.
+Details and side findings recorded in sprint-AU3 work item 1.
 
 ## Constraint (non-negotiable)
 

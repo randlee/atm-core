@@ -44,6 +44,16 @@ the confirmed member list in this doc before starting step 2.
    see phase plan "Why now" carve-out) must be understood — root-caused or confirmed
    pre-existing/platform-scoped — before pinning behavior, so the entry tests don't
    enshrine a bug.
+   **Precondition RESOLVED (triage 2026-08-26): flaky/timing one-off, not a product
+   bug.** The panic is a wall-clock expiry of the test's hard-coded 1 s whole-exchange
+   client budget (`storage_and_nudge_router.rs:2361`) on a visibly degraded Windows
+   runner (install-action bash-startup retry warning in the same job log); the test died
+   in setup at `:2368` before any ack assertion ran; the identical tree passed Windows
+   on the four immediately preceding runs. Two side findings routed to quality-mgr:
+   (i) the test retains a real-time 1 s budget while neighbors moved to paused time
+   (candidate flake fix, out of AU.3 scope); (ii) `client.rs:926-929`/`:581-591` map a
+   whole-exchange timeout to a "could not connect / did not resolve" message —
+   misleading diagnostics. Entry tests may proceed pinning current behavior.
 2. **Create `atm_core::write`** with the step-0-confirmed member set, moved verbatim.
 3. **Re-point `ack` and `send`** to depend on `write`; remove all `crate::ack::` refs
    from send and `crate::send::` refs from ack. Add `pub use` re-exports in `ack`/`send`
