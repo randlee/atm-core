@@ -57,6 +57,24 @@ jobs:
       - name: Expose Cargo binaries on PATH
         run: python -c "import os; cargo_bin = os.path.expanduser('~/.cargo/bin'); open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8').write(cargo_bin + os.linesep)"
 
+      - name: Cache bootstrap outputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+            ~/.cargo/binstall
+            .bootstrap-venv
+          key: ${{ runner.os }}-bootstrap-${{ hashFiles('tools/bootstrap.toml', 'tools/bootstrap-requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-bootstrap-
+
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@main
+        with:
+          version: "1.22.0"
+
       - name: Bootstrap exact repository tools
         run: just bootstrap
 

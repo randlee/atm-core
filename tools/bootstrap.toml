@@ -10,7 +10,7 @@ cargo-deny = "0.20.2"
 cargo-audit = "0.22.2"
 cargo-shear = "1.12.0"
 cargo-modules = "0.26.0"
-sc-compose-rev = "6a8af1ff46ccd64ae9cc40d7d5c815aa9b0a4661"
+sc-compose = "1.4.0"
 
 [python]
 codespell = "2.4.3"

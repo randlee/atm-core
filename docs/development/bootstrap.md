@@ -8,9 +8,18 @@ closure is in [`tools/bootstrap-requirements.txt`](../../tools/bootstrap-require
 
 The recipe deliberately does not select a latest release, a version range, or
 an M5-specific installation path. It installs the manifest's exact Cargo tools
-and source revision, creates a repository-local `.bootstrap-venv`, installs the
-exact Python packages there with `--no-deps`,
-then verifies every reported version.
+from verified prebuilt artifacts when `cargo-binstall` is available, falls back
+to locked crates.io installs when an artifact is unavailable, and installs the
+released `sc-compose` CLI from crates.io (never a Git revision). It creates a
+repository-local `.bootstrap-venv`, installs the exact Python packages there
+with `--no-deps`, then verifies every reported version against Cargo or
+Binstall's installation receipt.
+
+CI restores the bootstrap outputs (`~/.cargo/bin`, Cargo/Binstall receipts, and
+`.bootstrap-venv`) with a key derived from this manifest and the Python
+requirements before invoking `just bootstrap`. The test jobs restore their
+Cargo registry/index/build caches first as well, so a genuine registry
+fallback remains bounded and never runs ahead of a warm workspace cache.
 
 ## Seed contract
 

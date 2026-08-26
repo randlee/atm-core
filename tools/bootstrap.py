@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import shutil
 import subprocess
 import sys
 import tomllib
@@ -20,7 +21,6 @@ ROOT = Path(__file__).resolve().parent.parent
 MANIFEST_PATH = ROOT / "tools" / "bootstrap.toml"
 REQUIREMENTS_PATH = ROOT / "tools" / "bootstrap-requirements.txt"
 VENV_PATH = ROOT / ".bootstrap-venv"
-SC_COMPOSE_REPOSITORY = "https://github.com/randlee/sc-compose.git"
 
 
 class BootstrapError(RuntimeError):
@@ -33,7 +33,7 @@ class BootstrapManifest:
     python: str
     just: str
     cargo_tools: tuple[tuple[str, str], ...]
-    sc_compose_rev: str
+    sc_compose: str
     python_packages: tuple[tuple[str, str], ...]
 
 
@@ -53,7 +53,7 @@ def load_manifest(path: Path = MANIFEST_PATH) -> BootstrapManifest:
             ("cargo-shear", cargo["cargo-shear"]),
             ("cargo-modules", cargo["cargo-modules"]),
         ),
-        sc_compose_rev=cargo["sc-compose-rev"],
+        sc_compose=cargo["sc-compose"],
         python_packages=tuple(sorted(python.items())),
     )
 
@@ -150,20 +150,33 @@ def cargo_install_command(name: str, version: str, *, force: bool) -> list[str]:
     return [*command, "--version", version, name]
 
 
-def sc_compose_install_command(revision: str, *, force: bool) -> list[str]:
-    """Return the authoritative sc-compose source-revision install command."""
+def sc_compose_install_command(version: str, *, force: bool) -> list[str]:
+    """Return the registry install command for the released sc-compose CLI."""
+    command = ["cargo", "install", "--locked"]
+    if force:
+        command.append("--force")
+    return [*command, "--version", version, "sc-compose"]
+
+
+def cargo_binstall_command(name: str, version: str, *, force: bool) -> list[str]:
+    """Return a non-compiling cargo-binstall command for one registry tool.
+
+    Disable Binstall's compile strategy so an unavailable artifact takes the
+    explicit Cargo registry fallback below instead of silently rebuilding from
+    source.  The quick-install strategy is also disabled: CI must consume the
+    tool's own release artifact or use the verified registry fallback.
+    """
     command = [
         "cargo",
-        "install",
-        "--git",
-        SC_COMPOSE_REPOSITORY,
-        "--rev",
-        revision,
-        "--locked",
+        "binstall",
+        "--no-confirm",
+        "--disable-telemetry",
+        "--disable-strategies",
+        "quick-install,compile",
     ]
     if force:
         command.append("--force")
-    return [*command, "--bin", "sc-compose"]
+    return [*command, f"{name}@{version}"]
 
 
 def venv_python_path() -> Path:
@@ -208,7 +221,7 @@ def cargo_bin_path(name: str) -> Path:
 
 
 def cargo_receipts() -> dict[str, object]:
-    """Load Cargo's installation receipt for exact Git-source verification."""
+    """Load Cargo's installation receipt for exact registry verification."""
     receipt = Path(os.environ.get("CARGO_HOME", Path.home() / ".cargo")) / ".crates2.json"
     try:
         raw = json.loads(receipt.read_text(encoding="utf-8"))
@@ -218,6 +231,54 @@ def cargo_receipts() -> dict[str, object]:
     if not isinstance(installs, dict):
         raise BootstrapError(f"Cargo installation receipt has no installs map: {receipt}")
     return installs
+
+
+def binstall_receipts() -> list[dict[str, object]]:
+    """Load Binstall's concatenated JSON installation receipt records."""
+    path = Path(os.environ.get("CARGO_HOME", Path.home() / ".cargo")) / "binstall" / "crates-v1.json"
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return []
+    decoder = json.JSONDecoder()
+    records: list[dict[str, object]] = []
+    offset = 0
+    while offset < len(text):
+        while offset < len(text) and text[offset].isspace():
+            offset += 1
+        if offset == len(text):
+            break
+        try:
+            record, offset = decoder.raw_decode(text, offset)
+        except json.JSONDecodeError:
+            return []
+        if isinstance(record, dict):
+            records.append(record)
+    return records
+
+
+def _version_text(value: object) -> str:
+    """Normalize Binstall's string or structured SemVer receipt value."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        base = ".".join(str(value.get(part, 0)) for part in ("major", "minor", "patch"))
+        pre = value.get("pre")
+        if isinstance(pre, str) and pre:
+            base += f"-{pre}"
+        return base
+    return ""
+
+
+def binstall_tool_matches(name: str, version: str) -> bool:
+    """Prove a prebuilt tool came from Binstall at the exact requested version."""
+    for record in binstall_receipts():
+        info = record.get("crate_info")
+        if not isinstance(info, dict):
+            continue
+        if info.get("name") == name and _version_text(info.get("current_version")) == version:
+            return True
+    return False
 
 
 def receipt_matches(key_prefix: str, *, required_fragments: Sequence[str]) -> bool:
@@ -245,35 +306,28 @@ def registry_tool_matches(name: str, version: str, rust: str) -> bool:
     )
 
 
-def verify_sc_compose_receipt(revision: str) -> None:
-    """Prove Cargo installed sc-compose from the manifest's exact Git revision."""
-    if not receipt_matches(
-        "sc-compose ",
-        required_fragments=(f"git+{SC_COMPOSE_REPOSITORY}", revision),
-    ):
-        raise BootstrapError(f"sc-compose was not installed from the exact source revision {revision}.")
-
-
 def sc_compose_matches(manifest: BootstrapManifest) -> bool:
-    """Prove the Git source and compiler match before omitting a rebuild."""
-    return receipt_matches(
-        "sc-compose ",
-        required_fragments=(
-            f"git+{SC_COMPOSE_REPOSITORY}",
-            manifest.sc_compose_rev,
-            f"release: {manifest.rust}",
-        ),
-    )
+    """Prove the released sc-compose CLI is installed from the registry."""
+    return registry_tool_matches("sc-compose", manifest.sc_compose, manifest.rust)
 
 
-def run(command: Sequence[str], *, dry_run: bool) -> None:
+def cargo_binstall_available() -> bool:
+    """Return whether the CI/local environment has the prebuilt installer."""
+    return shutil.which("cargo-binstall") is not None
+
+
+def run(command: Sequence[str], *, dry_run: bool, allow_failure: bool = False) -> bool:
     """Execute one deterministic installation step or render it for review."""
     print("+", " ".join(command))
     if dry_run:
-        return
+        return True
     result = subprocess.run(command, check=False, cwd=ROOT)
     if result.returncode != 0:
+        if allow_failure:
+            print(f"bootstrap: {' '.join(command)} unavailable; using registry fallback", file=sys.stderr)
+            return False
         raise BootstrapError(f"bootstrap install command failed with exit {result.returncode}: {' '.join(command)}")
+    return True
 
 
 def python_package_version(python: Path, package: str) -> str:
@@ -287,13 +341,12 @@ def verify_installed_tools(manifest: BootstrapManifest, python: Path) -> None:
     for name, version in manifest.cargo_tools:
         binary = cargo_bin_path(name)
         command_output([str(binary), "--version"])
-        if not registry_tool_matches(name, version, manifest.rust):
-            raise BootstrapError(f"{name} is not the exact pinned version built by Rust {manifest.rust}.")
+        if not (registry_tool_matches(name, version, manifest.rust) or binstall_tool_matches(name, version)):
+            raise BootstrapError(f"{name} is not the exact pinned registry/prebuilt version {version}.")
     sc_compose = cargo_bin_path("sc-compose")
     command_output([str(sc_compose), "--version"])
-    verify_sc_compose_receipt(manifest.sc_compose_rev)
     if not sc_compose_matches(manifest):
-        raise BootstrapError(f"sc-compose was not built by the pinned Rust {manifest.rust} toolchain.")
+        raise BootstrapError(f"sc-compose is not the exact released registry version {manifest.sc_compose}.")
     for package, version in manifest.python_packages:
         try:
             actual = python_package_version(python, package)
@@ -310,8 +363,19 @@ def bootstrap(manifest: BootstrapManifest, *, dry_run: bool) -> None:
         verify_seed_tools(manifest)
     python = ensure_bootstrap_venv(manifest, dry_run=dry_run)
     for name, version in manifest.cargo_tools:
-        run(cargo_install_command(name, version, force=not registry_tool_matches(name, version, manifest.rust)), dry_run=dry_run)
-    run(sc_compose_install_command(manifest.sc_compose_rev, force=not sc_compose_matches(manifest)), dry_run=dry_run)
+        if registry_tool_matches(name, version, manifest.rust) or binstall_tool_matches(name, version):
+            continue
+        installed = False
+        if cargo_binstall_available():
+            installed = run(
+                cargo_binstall_command(name, version, force=True),
+                dry_run=dry_run,
+                allow_failure=True,
+            )
+        if not installed:
+            run(cargo_install_command(name, version, force=True), dry_run=dry_run)
+    if not sc_compose_matches(manifest):
+        run(sc_compose_install_command(manifest.sc_compose, force=True), dry_run=dry_run)
     run(pip_install_command(python), dry_run=dry_run)
     if not dry_run:
         verify_installed_tools(manifest, python)

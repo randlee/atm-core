@@ -23,11 +23,18 @@ class BootstrapTests(unittest.TestCase):
         versions.extend(version for _, version in manifest.python_packages)
         self.assertTrue(all("*" not in version and ">" not in version and "<" not in version for version in versions))
 
-    def test_sc_compose_uses_the_repository_authoritative_revision(self) -> None:
+    def test_sc_compose_uses_the_exact_released_registry_version(self) -> None:
         manifest = bootstrap.load_manifest()
-        command = bootstrap.sc_compose_install_command(manifest.sc_compose_rev, force=True)
-        self.assertIn(manifest.sc_compose_rev, command)
+        command = bootstrap.sc_compose_install_command(manifest.sc_compose, force=True)
+        self.assertEqual(command, ["cargo", "install", "--locked", "--force", "--version", "1.4.0", "sc-compose"])
         self.assertIn("--locked", command)
+
+    def test_binstall_uses_prebuilt_only_and_exact_version(self) -> None:
+        command = bootstrap.cargo_binstall_command("cargo-audit", "0.22.2", force=True)
+        self.assertEqual(command, [
+            "cargo", "binstall", "--no-confirm", "--disable-telemetry",
+            "--disable-strategies", "quick-install,compile", "--force", "cargo-audit@0.22.2",
+        ])
 
     def test_registry_tools_are_exact_and_locked(self) -> None:
         command = bootstrap.cargo_install_command("cargo-audit", "0.22.2", force=True)
@@ -53,6 +60,7 @@ class BootstrapTests(unittest.TestCase):
             "cargo-shear": "1.12.0",
             "cargo-modules": "0.26.0",
         })
+        self.assertEqual(manifest.sc_compose, "1.4.0")
         self.assertEqual(dict(manifest.python_packages)["maturin"], "1.14.1")
 
     def test_macos_homebrew_seed_formula_is_derived_from_the_exact_python_pin(self) -> None:
@@ -100,19 +108,11 @@ class BootstrapTests(unittest.TestCase):
             with self.assertRaisesRegex(bootstrap.BootstrapError, "Python must be exactly"):
                 bootstrap.verify_seed_tools(manifest)
 
-    def test_sc_compose_receipt_requires_the_exact_git_revision(self) -> None:
-        manifest = bootstrap.load_manifest()
-        expected_key = (
-            "sc-compose 1.4.0 "
-            f"(git+{bootstrap.SC_COMPOSE_REPOSITORY}?rev={manifest.sc_compose_rev}#{manifest.sc_compose_rev})"
-        )
-        with mock.patch.object(bootstrap, "cargo_receipts", return_value={expected_key: {"rustc": "release: 1.94.1"}}):
-            bootstrap.verify_sc_compose_receipt(manifest.sc_compose_rev)
-
-    def test_sc_compose_receipt_rejects_a_different_revision(self) -> None:
-        with mock.patch.object(bootstrap, "cargo_receipts", return_value={"sc-compose 1.4.0": {"rustc": "release: 1.94.1"}}):
-            with self.assertRaisesRegex(bootstrap.BootstrapError, "exact source revision"):
-                bootstrap.verify_sc_compose_receipt("expected-revision")
+    def test_binstall_receipt_proves_exact_prebuilt_version(self) -> None:
+        receipt = [{"crate_info": {"name": "cargo-audit", "current_version": "0.22.2"}}]
+        with mock.patch.object(bootstrap, "binstall_receipts", return_value=receipt):
+            self.assertTrue(bootstrap.binstall_tool_matches("cargo-audit", "0.22.2"))
+            self.assertFalse(bootstrap.binstall_tool_matches("cargo-audit", "0.22.3"))
 
     def test_ci_uses_the_shared_bootstrap_recipe(self) -> None:
         workflow = (SCRIPT.parents[1] / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
@@ -135,7 +135,7 @@ class BootstrapTests(unittest.TestCase):
         self.assertIn("run: just test-admission-capacity", workflow)
         self.assertNotIn("run: python -m unittest scripts/smoke/test_run_admission_capacity.py", workflow)
         self.assertNotIn("pydantic>=2,<3", workflow)
-        self.assertEqual(workflow.count("tools/bootstrap-requirements.txt"), 3)
+        self.assertGreaterEqual(workflow.count("tools/bootstrap-requirements.txt"), 3)
 
     def test_seed_python_preserves_ci_python_precedence(self) -> None:
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
