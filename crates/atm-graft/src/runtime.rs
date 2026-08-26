@@ -104,14 +104,14 @@ impl ReceiverRecoveryCircuit {
 #[derive(Debug)]
 struct HelperThreadBudget {
     max_inflight: usize,
-    inflight: AtomicUsize,
+    inflight: Arc<AtomicUsize>,
 }
 
 impl HelperThreadBudget {
-    const fn new(max_inflight: usize) -> Self {
+    fn new(max_inflight: usize) -> Self {
         Self {
             max_inflight,
-            inflight: AtomicUsize::new(0),
+            inflight: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -137,7 +137,7 @@ impl HelperThreadBudget {
             ) {
                 Ok(_) => {
                     return Some(HelperThreadPermit {
-                        budget: Arc::clone(self),
+                        inflight: Arc::clone(&self.inflight),
                     });
                 }
                 Err(observed) => current = observed,
@@ -147,12 +147,12 @@ impl HelperThreadBudget {
 }
 
 struct HelperThreadPermit {
-    budget: Arc<HelperThreadBudget>,
+    inflight: Arc<AtomicUsize>,
 }
 
 impl Drop for HelperThreadPermit {
     fn drop(&mut self) {
-        self.budget.inflight.fetch_sub(1, Ordering::SeqCst);
+        self.inflight.fetch_sub(1, Ordering::SeqCst);
     }
 }
 
@@ -217,19 +217,6 @@ struct BoundedHostNudgeInjector {
 
 impl crate::HostNudgeInjector for BoundedHostNudgeInjector {
     fn inject_nudge(&self, nudge: &HostNudge) -> Result<(), AtmError> {
-        Self::inject_nudge(self, nudge)
-    }
-}
-
-impl BoundedHostNudgeInjector {
-    fn spawn(injector: Arc<dyn HostNudgeInjector>) -> Self {
-        Self {
-            injector,
-            helper_budget: Arc::new(HelperThreadBudget::new(MAX_HOST_NUDGE_HELPERS)),
-        }
-    }
-
-    fn inject_nudge(&self, nudge: &HostNudge) -> Result<(), AtmError> {
         let helper_permit = acquire_host_nudge_helper_permit(&self.helper_budget)?;
         let (result_tx, result_rx) = mpsc::sync_channel(1);
         spawn_host_nudge_helper(
@@ -239,6 +226,15 @@ impl BoundedHostNudgeInjector {
             result_tx,
         )?;
         receive_host_nudge_result(result_rx, &self.helper_budget)
+    }
+}
+
+impl BoundedHostNudgeInjector {
+    fn spawn(injector: Arc<dyn HostNudgeInjector>) -> Self {
+        Self {
+            injector,
+            helper_budget: Arc::new(HelperThreadBudget::new(MAX_HOST_NUDGE_HELPERS)),
+        }
     }
 }
 
@@ -776,7 +772,7 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc;
-    use std::sync::{Arc, Mutex, RwLock};
+    use std::sync::{Arc, Barrier, Mutex, RwLock};
     use std::time::{Duration, Instant};
     use tempfile::TempDir;
 
@@ -784,7 +780,7 @@ mod tests {
 
     use super::{
         BoundedHostNudgeInjector, GRAFT_RECEIVER_RECOVERY_MAX_DURATION,
-        GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY, GraftReceiverLoopContext,
+        GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY, GraftReceiverLoopContext, HelperThreadBudget,
         MAX_HOST_NUDGE_HELPERS, RECEIVE_LOOP_READY_DEADLINE, ReceiverReadyLatch,
         ReceiverRecoveryCircuit, handle_graft_receiver_connection, join_receive_loop_with_deadline,
         load_graft_config, read_snapshot, recover_after_poll_accept_error, recover_graft_receiver,
@@ -1041,6 +1037,71 @@ mod tests {
             .expect("second delivery should use a fresh helper thread");
 
         gate_tx.send(()).expect("release blocked first helper");
+    }
+
+    #[test]
+    fn helper_budget_failed_acquire_leaves_inflight_unchanged() {
+        let budget = Arc::new(HelperThreadBudget::new(0));
+        assert!(budget.try_acquire().is_none());
+        assert_eq!(budget.inflight(), 0);
+    }
+
+    #[test]
+    fn helper_budget_concurrent_acquires_never_exceed_limit() {
+        let budget = Arc::new(HelperThreadBudget::new(MAX_HOST_NUDGE_HELPERS));
+        let workers = MAX_HOST_NUDGE_HELPERS * 4;
+        let start = Arc::new(Barrier::new(workers + 1));
+        let release = Arc::new(Barrier::new(workers + 1));
+        let (result_tx, result_rx) = mpsc::channel();
+        let mut handles = Vec::with_capacity(workers);
+        for _ in 0..workers {
+            let budget = Arc::clone(&budget);
+            let start = Arc::clone(&start);
+            let release = Arc::clone(&release);
+            let result_tx = result_tx.clone();
+            handles.push(std::thread::spawn(move || {
+                start.wait();
+                let permit = budget.try_acquire();
+                result_tx
+                    .send(permit.is_some())
+                    .expect("send acquire result");
+                release.wait();
+                drop(permit);
+            }));
+        }
+        start.wait();
+        drop(result_tx);
+        let acquired = (0..workers)
+            .map(|_| result_rx.recv().expect("receive acquire result"))
+            .filter(|acquired| *acquired)
+            .count();
+        assert!(acquired <= MAX_HOST_NUDGE_HELPERS);
+        assert_eq!(budget.inflight(), acquired);
+        release.wait();
+        for handle in handles {
+            handle.join().expect("join acquire worker");
+        }
+        assert_eq!(budget.inflight(), 0);
+    }
+
+    #[test]
+    fn helper_permit_drop_releases_exactly_one_slot() {
+        let budget = Arc::new(HelperThreadBudget::new(2));
+        let permit = budget.try_acquire().expect("first permit");
+        assert_eq!(budget.inflight(), 1);
+        drop(permit);
+        assert_eq!(budget.inflight(), 0);
+    }
+
+    #[test]
+    fn helper_permit_survives_budget_drop() {
+        let budget = Arc::new(HelperThreadBudget::new(1));
+        let inflight = Arc::clone(&budget.inflight);
+        let permit = budget.try_acquire().expect("permit");
+        drop(budget);
+        assert_eq!(inflight.load(Ordering::SeqCst), 1);
+        drop(permit);
+        assert_eq!(inflight.load(Ordering::SeqCst), 0);
     }
 
     #[test]

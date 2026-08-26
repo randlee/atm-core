@@ -156,13 +156,14 @@ pub fn local_message_received_backend(
 mod tests {
     use super::*;
     use crate::boundary::{RosterEntry, RosterHarness, RosterMemberKind};
+    use crate::test_support::{TEST_ARCH_CTM, TEST_TEAM};
     use crate::types::{AgentName, ModelName, TeamName};
     use atm_storage::AgentType;
 
     fn roster_entry() -> RosterEntry {
         RosterEntry {
-            team_name: "test-team".parse::<TeamName>().expect("team"),
-            agent_name: "arch-ctm".parse::<AgentName>().expect("agent"),
+            team_name: TEST_TEAM.parse::<TeamName>().expect("team"),
+            agent_name: TEST_ARCH_CTM.parse::<AgentName>().expect("agent"),
             member_kind: RosterMemberKind::Permanent,
             harness: RosterHarness::CodexCli,
             agent_type: AgentType::default(),

@@ -33,7 +33,7 @@ use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
 use crate::types::{AgentName, CommandAction, IsoTimestamp, TeamName};
 
-pub(super) fn message(
+pub(crate) fn message(
     from: &str,
     message_id: AtmMessageId,
     parent_message_id: Option<AtmMessageId>,
@@ -88,21 +88,21 @@ fn warning_render_keeps_catalog_recovery_singleton() {
     assert_eq!(warning.render().matches("Recovery:").count(), 1);
 }
 
-pub(super) struct TestRuntime {
+pub(crate) struct TestRuntime {
     commit_error_message: Option<&'static str>,
     recipient_harness: DeliveryHarnessPath,
     claude_roster_members: Vec<AgentName>,
-    pub(super) roster_member_missing: bool,
+    pub(crate) roster_member_missing: bool,
     pub(super) appended_messages: Mutex<Vec<InboxMessage>>,
     pub(super) non_claude_deliveries: Mutex<Vec<NonClaudeOutboundDeliveryRequest>>,
-    pub(super) persisted_records: Mutex<Vec<Message>>,
+    pub(crate) persisted_records: Mutex<Vec<Message>>,
     pub(super) mailbox_rows: Mutex<Vec<MailStoreMailboxMetadataRow>>,
     pub(super) mailbox_metadata_queries: AtomicUsize,
     pub(super) persisted_states: Mutex<Vec<MailMessageState>>,
 }
 
 impl TestRuntime {
-    pub(super) fn new(
+    pub(crate) fn new(
         commit_error_message: Option<&'static str>,
         recipient_harness: DeliveryHarnessPath,
     ) -> Self {
