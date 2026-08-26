@@ -3,9 +3,9 @@
   "timezone": "UTC (result_time_pst/assignment_time_pst omitted; source ATM messages carry UTC timestamps only)",
   "audit_window": {
     "start": "2026-08-26T20:01:39Z",
-    "end": "2026-08-26T20:37:13Z"
+    "end": "2026-08-26T20:50:56Z"
   },
-  "scope": "phase-au sprints AU1-AU3, all dev-complete with round-1 QA dispatched to quality-mgr and in flight. No round-1 verdict has been issued yet for any sprint; verdict fields are null (pending), not omitted evidence. This master will be extended with each authoritative verdict message as quality-mgr reports it.",
+  "scope": "phase-au sprints AU1-AU3, all dev-complete with round-1 QA dispatched to quality-mgr. QA-AU3-R1 has an authoritative FAIL verdict (recorded below); AU1/AU2 round-1 verdicts are still in flight (null = pending, not omitted evidence). This master will be extended with each authoritative verdict message as quality-mgr reports it.",
   "count_basis": "headline/reviewer",
   "path_notes": "Built directly from ATM messages read this session (fenix mailbox, team atm-dev). Every assignment_message_id below is a real ATM message_id located via `atm list --team atm-dev quality-mgr --all --contains <task-id> --json`. No verdict, run, or message id was fabricated; null means the event has not happened yet.",
   "runs": [
@@ -71,18 +71,18 @@
       "assignment_from": "fenix",
       "assignment_shared_path": null,
       "assignment_summary": "Round-1 QA for AU.3 ack/send shared write module (hard wave), PR #1036, feature/pau-s3-ack-send-write-module @ fa385f6cc; scope work items 1-4 (benchmark gate and sprint-doc status excluded per addendum msg 01M0ZWGXNY0F5KC3FZRN6KV6EY)",
-      "result_time_utc": null,
+      "result_time_utc": "2026-08-26T20:50:56Z",
       "result_time_pst": null,
-      "result_message_id": null,
-      "result_from": null,
+      "result_message_id": "01M0ZXE63NKQFV5GWVBBMV9W4E",
+      "result_from": "quality-mgr",
       "result_shared_path": null,
       "result_temp_path": null,
-      "verdict": null,
-      "blockers": null,
+      "verdict": "FAIL",
+      "blockers": 1,
       "important": null,
       "minor": null,
       "count_basis": "headline/reviewer",
-      "evidence": "QA-AU3-R1 dispatched 2026-08-26T20:32:42Z (msg 01M0ZWCT87A601MF922Q1P6STW); quality-mgr ack 20:33:57Z (msg 01M0ZWF335D29VYV106WFBJ2C8); in-flight update 20:37:13Z (msg 01M0ZWN32WH0E77SEWE4Q33YYG) reports all 7 round-1 reviewers dispatched against fa385f6cc. No verdict message exists yet."
+      "evidence": "QA-AU3-R1 dispatched 2026-08-26T20:32:42Z (msg 01M0ZWCT87A601MF922Q1P6STW); quality-mgr ack 20:33:57Z (msg 01M0ZWF335D29VYV106WFBJ2C8); all 7 round-1 reviewers dispatched against fa385f6cc (msg 01M0ZWN32WH0E77SEWE4Q33YYG). Verdict FAIL 20:50:56Z (msg 01M0ZXE63NKQFV5GWVBBMV9W4E), reaffirmed after benchmark-evidence-commit verification (msg 01M0ZXEX66RA27VF8QN0VBV386): sole blocking finding ARCH-001 (write/mod.rs 1059 prod lines > RULE-003 1000-line cap); mechanical relocation otherwise confirmed byte-identical with zero new sc-boundary findings. Fix pushed @ 4f9c47590 (file split into write/pipeline.rs + write/acknowledgement.rs + RBQA-AU3-F002 pub(crate) mod write); fix notice msg 01M0ZXW134N0FXAMG01Z1RF801; round-2 re-verify pending."
     }
   ]
 }
