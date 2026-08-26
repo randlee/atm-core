@@ -476,8 +476,15 @@ fn owner_id_for_node_id(node_id: &NodeId, node_kind: &str) -> Option<OwnerId> {
             .rsplit_once("::")
             .map(|(parent, _)| OwnerId::new(parent)),
         "method" => node_id
-            .rsplit_once("::")
-            .map(|(parent, _)| OwnerId::new(parent)),
+            .split_once("::impl::")
+            .map(|(owner, _)| OwnerId::new(owner))
+            // Keep reading older graph fixtures while all producers converge
+            // on impl-qualified method identities.
+            .or_else(|| {
+                node_id
+                    .rsplit_once("::")
+                    .map(|(parent, _)| OwnerId::new(parent))
+            }),
         "variant" => node_id
             .rsplit_once("::variant::")
             .map(|(parent, _)| OwnerId::new(parent)),

@@ -673,7 +673,7 @@ fn add_impl_method_node(
     args: ImplMethodNodeArgs<'_>,
     method: syn::ImplItemFn,
 ) -> Result<()> {
-    let method_id = NodeId::new(format!("{}::{}", args.owner_node_id, method.sig.ident));
+    let method_id = NodeId::new(format!("{}::{}", args.impl_node_id, method.sig.ident));
     builder.add_node(GraphNode {
         id: method_id.clone(),
         kind: NodeKind::Method.as_str(),

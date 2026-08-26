@@ -140,7 +140,8 @@ fn exports_graph_for_inline_and_file_modules_and_attributes() {
         .nodes
         .iter()
         .find(|node| {
-            node.id == "crate::example::example::module::crate::inline_mod::InlineType::helper"
+            node.id
+                == "crate::example::example::module::crate::inline_mod::InlineType::impl::inherent::helper"
         })
         .unwrap();
     assert_eq!(helper_method.kind, "method");
@@ -155,22 +156,117 @@ fn exports_graph_for_inline_and_file_modules_and_attributes() {
     assert!(graph.edges.iter().any(|edge| {
         edge.kind == "declares"
             && edge.from == "crate::example::example::module::crate::inline_mod::InlineType"
-            && edge.to == "crate::example::example::module::crate::inline_mod::InlineType::helper"
+            && edge.to
+                == "crate::example::example::module::crate::inline_mod::InlineType::impl::inherent::helper"
     }));
     assert!(graph.edges.iter().any(|edge| {
         edge.kind == "references"
-            && edge.from == "crate::example::example::module::crate::inline_mod::InlineType::helper"
+            && edge.from
+                == "crate::example::example::module::crate::inline_mod::InlineType::impl::inherent::helper"
             && edge.to == "crate::example::example::module::crate::inline_mod::InlineType"
     }));
     assert!(graph.edges.iter().any(|edge| {
         edge.kind == "references_expr"
-            && edge.from == "crate::example::example::module::crate::inline_mod::InlineType::helper"
+            && edge.from
+                == "crate::example::example::module::crate::inline_mod::InlineType::impl::inherent::helper"
             && edge.to == "crate::example::example::module::crate::inline_mod::InlineType"
     }));
     assert!(!graph.edges.iter().any(|edge| {
-        edge.from == "crate::example::example::module::crate::inline_mod::InlineType::helper"
+        edge.from
+                == "crate::example::example::module::crate::inline_mod::InlineType::impl::inherent::helper"
             && edge.to == "crate::example::example::module::crate::inline_mod::self"
     }));
+}
+
+#[test]
+fn keeps_same_named_inherent_and_trait_methods_distinct() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_source(
+        "example",
+        "lib.rs",
+        r#"
+                pub struct Loop;
+
+                pub trait Retained {
+                    fn load(&self) -> usize;
+                }
+
+                impl Loop {
+                    pub fn load(&self) -> usize {
+                        1
+                    }
+                }
+
+                impl Retained for Loop {
+                    fn load(&self) -> usize {
+                        Self::load(self)
+                    }
+                }
+            "#,
+    );
+
+    let graph = export_workspace_graph(&ExportGraphOptions {
+        root: fixture.root().to_path_buf(),
+    })
+    .unwrap();
+    let load_methods: Vec<_> = graph
+        .nodes
+        .iter()
+        .filter(|node| node.kind == "method" && node.label == "load")
+        .collect();
+    assert_eq!(load_methods.len(), 2);
+
+    let inherent = load_methods
+        .iter()
+        .find(|node| node.impl_kind == Some(ImplKind::Inherent))
+        .unwrap();
+    let trait_method = load_methods
+        .iter()
+        .find(|node| node.impl_kind == Some(ImplKind::Trait))
+        .unwrap();
+    assert_ne!(inherent.id, trait_method.id);
+    assert!(inherent.id.ends_with("::impl::inherent::load"));
+    assert!(trait_method.id.contains("::impl::"));
+    assert!(trait_method.id.ends_with("::load"));
+    assert!(graph.edges.iter().any(|edge| {
+        edge.kind == "contains" && edge.from.ends_with("::impl::inherent") && edge.to == inherent.id
+    }));
+    assert!(graph.edges.iter().any(|edge| {
+        edge.kind == "contains"
+            && edge.from.contains("::impl::")
+            && edge.from != "crate::example::example::module::crate::Loop::impl::inherent"
+            && edge.to == trait_method.id
+    }));
+    assert!(graph.edges.iter().any(|edge| {
+        edge.kind == "references_expr"
+            && edge.from == trait_method.id
+            && edge.to == "crate::example::example::module::crate::Loop"
+    }));
+
+    let report = analyze_workspace(&AnalyzeOptions {
+        root: fixture.root().to_path_buf(),
+        format: OutputFormat::Json,
+        rule: Some(RuleFilter::Cycles),
+    })
+    .unwrap();
+    assert!(!report.findings.iter().any(|finding| {
+        finding.rule_id == RuleId::ScbCycle002
+            && finding
+                .node_ids
+                .iter()
+                .any(|node_id| node_id == &trait_method.id)
+    }));
+    let trait_finding = report
+        .findings
+        .iter()
+        .find(|finding| finding.rule_id == RuleId::ScbCycle003)
+        .unwrap();
+    assert_eq!(
+        trait_finding.owner_ids,
+        vec!["crate::example::example::module::crate::Loop".to_string()]
+    );
 }
 
 #[test]

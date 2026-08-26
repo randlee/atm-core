@@ -184,12 +184,34 @@ fn add_reference_edges(
     for referenced in referenced_paths {
         let target_node_id =
             resolve_reference_target(source_node_id, module_path, &referenced.path);
+        let target_node_id = if referenced.kind == ReferenceKind::Expr {
+            resolve_existing_expression_target(builder, target_node_id)
+        } else {
+            target_node_id
+        };
         builder.add_edge(
             referenced.kind.edge_kind(),
             source_node_id.clone(),
             target_node_id.clone(),
         );
         builder.add_edge("references", source_node_id.clone(), target_node_id);
+    }
+}
+
+/// Associated item paths resolve at the owner level when the graph does not
+/// model the item itself.  In particular, methods are impl-qualified nodes,
+/// while `Self::helper` resolves to the enclosing type owner rather than to a
+/// specific impl block.
+fn resolve_existing_expression_target(builder: &GraphBuilder, target_node_id: NodeId) -> NodeId {
+    let mut candidate = target_node_id.clone();
+    loop {
+        if builder.nodes.iter().any(|node| node.id == candidate) {
+            return candidate;
+        }
+        let Some((parent, _)) = candidate.rsplit_once("::") else {
+            return target_node_id;
+        };
+        candidate = NodeId::new(parent);
     }
 }
 
