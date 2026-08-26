@@ -197,6 +197,14 @@ sequential commits and a single QA gate (not AQ4a/AQ4b); (7) AQ4
 `AtmConfig.local_host` as the sender's own host identity; (8) AQ6 Wyvern
 issue target repo `randlee/wyvern`.
 
+## Re-entry critical review (whole tree, 2026-08-26)
+
+| Round | Reviewer | Commit | Verdict | Notes |
+|---|---|---|---|---|
+| 1 | critical-plan-reviewer (sonnet, whole tree) | `9827dfb1e` | FAIL — 3 Blocking (F1 AQ2.6 `Herdr.session` typed `Option<String>` vs AQ1's `HerdrSession`; F2 AQ2.5 classifier signature still `Option<&GraftReceiverLease>`; F3 "Rand to confirm" markers absent inline in 6/8 docs), 4 Important (F4 AQ3 attributed the classifier to AQ2.5; F5 no owner for the lease→`GraftLeaseState` mapping; F6 B9 "closed" while PR #1039 unmerged; F7 fallback `ATM_TEMP` had no shared-host permission story), 1 minor | Fixed `ab74477b6`/`cb0747be7`: types aligned to landed code; inline approval markers; AQ1.7 owns `graft_lease_state`; B9 reworded with PR #1039 as AQ2.6 precondition; per-uid `0700` fallback dir with `AtmTempInsecure`. |
+| 2 | same | `cb0747be7` | FAIL — 0 Blocking, 2 Important (AQ1.7 AC 8 referenced but missing; AQ4 `AtmTempInsecure` not in error table/AC 1), 1 minor (AQ3 pronoun) | Fixed `ea990a8dd`. |
+| 3 | same | `ea990a8dd` | **PASS** — zero Blocking/Important; no regressions | Ready for quality-mgr gate. |
+
 ## Insertion QA history (AQ2.6–AQ2.7)
 
 | Round | Reviewer(s) | Commit | Verdict | Notes |
