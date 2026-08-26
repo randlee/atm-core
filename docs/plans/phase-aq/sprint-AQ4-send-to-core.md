@@ -239,6 +239,7 @@ fn resolve_picker_recipient(
 | `NotAbsolute` | `ATM_TEMP` set to a relative path | use an absolute path |
 | `Unresolvable` | canonicalization failed | check broken symlinks / missing parents |
 | `NotWritable` | not writable/creatable | fix permissions or pick another dir |
+| `AtmTempInsecure { path, reason }` | the resolved directory (fallback or explicit `ATM_TEMP`) exists but is not owned by the current uid, or has group/world permission bits (decision (a), critical review F7) | remove/chown the directory or set `ATM_TEMP` to a private path |
 | `TransferScriptUnsafe { host, reason }` | script at `~/.atm/transfer/<host>` exists but fails the executable-bit/owner-UID/not-group-or-world-writable check (decision (c)) | `chmod 700 ~/.atm/transfer/<host>` and confirm ownership |
 
 `Unset` is intentionally not a variant: an unset `ATM_TEMP` resolves to the
@@ -322,7 +323,11 @@ default scratch root (decision (a)), it does not error.
 ## Acceptance criteria
 
 1. Validation: `ATM_TEMP` unset → daemon boots and CLI's first scratch use
-   both resolve `<std::env::temp_dir()>/atm`, create it if missing, and
+   both resolve `<std::env::temp_dir()>/atm-<uid>` (Unix; `<temp_dir()>\atm`
+   on Windows), create it with mode `0700` if missing, refuse with
+   `AtmTempInsecure` when it pre-exists owned by another uid or with any
+   group/world bits (test: pre-create as `0755` → refused; `0700` own uid →
+   accepted), apply the same check to an explicit `ATM_TEMP`, and
    emit exactly one startup `tracing::warn!` naming the default and the
    override variable — daemon boot is not blocked and exit code is 0;
    `ATM_TEMP` set to a relative/unresolvable/unwritable path fails daemon

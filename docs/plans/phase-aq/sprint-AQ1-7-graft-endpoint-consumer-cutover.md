@@ -137,6 +137,12 @@ the file is written but no longer read by anything in-tree.
    involved), mirroring the existing heartbeat handler test style AQ1.5
    uses.
 
+8. **`graft_lease_state` mapping (deliverable 2b)**: unit test — `Some(lease)`
+   → `GraftLeaseState::Active` even when `last_seen_at` is older than
+   `ACTIVE_LEASE_WINDOW` or `unreachable_at` is set; `None` → `Absent`;
+   grep gate: exactly one definition of `graft_lease_state` in the workspace
+   and AQ2/AQ2.5 call it rather than re-deriving.
+
 ## Required validation
 
 - `cargo test` workspace green on both CI lanes.

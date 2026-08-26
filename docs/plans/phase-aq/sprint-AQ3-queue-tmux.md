@@ -195,9 +195,9 @@ None.
 
 - must_follow: AQ1 (kinds, store, suppression) — merge-forward before every
   dev/fix round.
-- must_follow: AQ2.5 (the sweep pre-check consumes its `DeliveryChannel`
-  classifier seam; the live-evidence validation additionally requires
-  its heartbeat producer). Merge-forward trigger: AQ2.5 dev push.
+- must_follow: AQ2.5 (the sweep pre-check consumes AQ1's `DeliveryChannel`
+  classifier via the bare-CLI "never sweep" rule AQ2.5 establishes; the
+  live-evidence validation additionally requires AQ2.5's heartbeat producer). Merge-forward trigger: AQ2.5 dev push.
 - must_follow: AQ2.6 (the classifier gains the retained-tmux/alternate-Herdr
   distinction; this sprint owns the corresponding "skip Herdr" pre-check
   diff). Merge-forward trigger: AQ2.6 dev push.
