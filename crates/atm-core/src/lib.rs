@@ -46,6 +46,9 @@ pub mod log;
 pub(crate) mod mailbox;
 /// Internal model-registry plumbing reserved for follow-on work.
 pub(crate) mod model_registry;
+/// Rebuilds a receiver-hook dispatch from durable message-store state for a
+/// deferred (`atm queue`) claim replay; the write-time planner never reloads.
+pub mod nudge_dispatch;
 /// Observability adapter traits and event payload types.
 pub mod observability;
 /// Transport-neutral peer-wire policy vocabulary selected at daemon launch.
