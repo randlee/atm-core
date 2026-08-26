@@ -1,6 +1,6 @@
 # Sprint AO2.12 — Historical Data Migration and Single Historical Record
 
-Status: draft · Branch: `feature/ao2-12-benchmark-history-migration` off
+Status: complete · Branch: `feature/ao2-12-benchmark-history-migration` off
 `integrate/phase-ao2` (after AO2.10+AO2.11 merge-forward) · PR target:
 `integrate/phase-ao2`
 recommended_agent: Cipher-311d · recommended_model: fast

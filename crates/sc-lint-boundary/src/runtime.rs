@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use anyhow::Result;
+use sc_lint_attributes::sc_lint;
 use syn::Block;
 use syn::Expr;
 use syn::ExprMethodCall;
@@ -93,6 +94,9 @@ pub(crate) fn analyze_runtime_liveness(root: &Path) -> Result<Vec<Finding>> {
         .collect())
 }
 
+// Recursive-descent visitor: visit_items -> visit_item -> visit_item_mod -> visit_items;
+// visit_item_impl follows the same recursive descent.
+#[sc_lint(boundary.allow("cycle.type_method_self_loop"))]
 struct RuntimeCollector<'a> {
     file_context: &'a FileContext,
     findings: Vec<RuntimeFinding>,

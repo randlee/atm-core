@@ -1,0 +1,70 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO22-RBQA-F003>
+  a triage:Finding ;
+  triage:findingId "AO22-RBQA-F003" ;
+  triage:title "new AO2.2 boundary guard uses substring matching instead of AST-based check" ;
+  triage:description "ao2_mtls_stream_adapter_is_the_only_authorized_production_tls_consumer (boundary_enforcement.rs:1319-1330) uses raw str::contains substring matching to assert peer-tls never references RequestEnvelope/canonical_api_router/MessageStore/PeerWireMode, rather than the AST-based (syn::visit) pattern already used elsewhere in the same file for this exact defect class. Substring guards in this codebase have previously proven to be false-positive/false-negative-prone landmines (see AO.1's RBQA-F001, a previously-fixed finding from the AO2.1 QA round -- this is a distinct new occurrence in AO2.2's own new guard, not a regression of that earlier finding). Remediation: replace with an AST-based import/path check consistent with the file's stronger enforcement style." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture-boundary" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-20T16:52:30+00:00"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.2 ;
+  triage:foundAt "2026-08-20T16:45:46+00:00"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO22-RBQA-F003/AO2S2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO22-RBQA-F003/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-20T22:53:43Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AO22-RBQA-F003/AO2S2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 1327 ;
+  triage:snippet "!source.contains(forbidden)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s2-isolated-mtls-stream-adapter" ;
+  triage:headSha "c30d24442e177b9b63ef245abdffd6aa6fd8f911" ;
+  triage:occursIn <urn:atm:triage:worktree/AO2S2/c30d244> .
+
+<urn:atm:triage:occurrence/AO22-RBQA-F003/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 1327 ;
+  triage:snippet "quality-mgr independent re-verification confirmed fixed" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s2" ;
+  triage:headSha "03bf9e4742763fd40667e19cfdf3381ec58a006c" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pao-s2/03bf9e4742763fd40667e19cfdf3381ec58a006c> .
+
+<urn:atm:triage:worktree/AO2S1/57c5334>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s1-peer-wire-policy" ;
+  triage:branch "feature/pao-s1-peer-wire-policy" ;
+  triage:headSha "57c53349efaed059bdefc9a2092190ea8ad5830d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AO2S2/c30d244>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s2-isolated-mtls-stream-adapter" ;
+  triage:branch "feature/pao-s2-isolated-mtls-stream-adapter" ;
+  triage:headSha "c30d24442e177b9b63ef245abdffd6aa6fd8f911" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/feature-pao-s2/03bf9e4742763fd40667e19cfdf3381ec58a006c>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s2" ;
+  triage:branch "feature/pao-s2" ;
+  triage:headSha "03bf9e4742763fd40667e19cfdf3381ec58a006c" ;
+  triage:orderIndex 3 .

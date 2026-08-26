@@ -5,18 +5,12 @@ from __future__ import annotations
 import re
 
 
-SC_COMPOSE_SOURCE_REV = "6a8af1ff46ccd64ae9cc40d7d5c815aa9b0a4661"
-MIN_SC_COMPOSE = (1, 4, 0)
-MIN_SC_COMPOSE_TEXT = (
-    ">= 1.4.0 (released v1.4.0 source revision "
-    f"{SC_COMPOSE_SOURCE_REV})"
-)
+SC_COMPOSE_PIN = "1.5.0"
+MIN_SC_COMPOSE = (1, 5, 0)
+MIN_SC_COMPOSE_TEXT = ">= 1.5.0 (pinned prebuilt release binary)"
 MIN_SC_COMPOSE_BINDING = (1, 2, 0)
 MIN_SC_COMPOSE_BINDING_TEXT = ">= 1.2.0"
-SC_COMPOSE_INSTALL = (
-    "cargo install --git https://github.com/randlee/sc-compose.git "
-    f"--rev {SC_COMPOSE_SOURCE_REV} --locked --bin sc-compose"
-)
+SC_COMPOSE_INSTALL = f"download sc-compose v{SC_COMPOSE_PIN} prebuilt release asset and verify SHA256"
 SC_COMPOSE_BINDING_INSTALL = (
     "python3 -m pip install --user --break-system-packages "
     "'sc-compose>=1.2.0'"

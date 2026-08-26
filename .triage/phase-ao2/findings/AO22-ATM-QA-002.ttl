@@ -1,0 +1,70 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO22-ATM-QA-002>
+  a triage:Finding ;
+  triage:findingId "AO22-ATM-QA-002" ;
+  triage:title "post-handshake failures collapse onto single ATM_PEER_AUTHENTICATION_FAILED, violating sprint's Error Inventory table" ;
+  triage:description "The sprint's own Error Inventory table requires handshake-deadline/handshake-protocol failure to map to a distinct code (reuse ATM_TRANSPORT_TIMEOUT or register a new one), kept separate from hostname/pin-mismatch. The implementation instead collapses handshake-deadline expiry, generic handshake/protocol failure, hostname mismatch, and pin mismatch all onto a single ATM_PEER_AUTHENTICATION_FAILED code via blanket .map_err in connect()/accept() (lib.rs:85-95,100-110). That code's registry description is scoped to hostname/pin mismatch only, so its recovery guidance is inaccurate for a deadline/protocol failure. Remediation: route deadline failures through ATM_TRANSPORT_TIMEOUT (or a newly registered code) as the sprint's own Error Inventory instructs." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements-compliance" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/peer-tls/src/lib.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-20T16:45:46+00:00"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.2 ;
+  triage:foundAt "2026-08-20T16:45:46+00:00"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO22-ATM-QA-002/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO22-ATM-QA-002/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-20T22:53:43Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AO22-ATM-QA-002/1>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 89 ;
+  triage:snippet ".map_err in connect() handshake protocol failure handler" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s2-isolated-mtls-stream-adapter" ;
+  triage:headSha "c30d24442e177b9b63ef245abdffd6aa6fd8f911" ;
+  triage:occursIn <urn:atm:triage:worktree/pao-s2/c30d24442e177b9b63ef245abdffd6aa6fd8f911> .
+
+<urn:atm:triage:occurrence/AO22-ATM-QA-002/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "crates/peer-tls/src/lib.rs" ;
+  triage:line 89 ;
+  triage:snippet "quality-mgr independent re-verification confirmed fixed" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pao-s2" ;
+  triage:headSha "03bf9e4742763fd40667e19cfdf3381ec58a006c" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pao-s2/03bf9e4742763fd40667e19cfdf3381ec58a006c> .
+
+<urn:atm:triage:worktree/pao-s1/57c53349efaed059bdefc9a2092190ea8ad5830d>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s1-peer-wire-policy" ;
+  triage:branch "feature/pao-s1-peer-wire-policy" ;
+  triage:headSha "57c53349efaed059bdefc9a2092190ea8ad5830d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pao-s2/c30d24442e177b9b63ef245abdffd6aa6fd8f911>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s2-isolated-mtls-stream-adapter" ;
+  triage:branch "feature/pao-s2-isolated-mtls-stream-adapter" ;
+  triage:headSha "c30d24442e177b9b63ef245abdffd6aa6fd8f911" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/feature-pao-s2/03bf9e4742763fd40667e19cfdf3381ec58a006c>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pao-s2" ;
+  triage:branch "feature/pao-s2" ;
+  triage:headSha "03bf9e4742763fd40667e19cfdf3381ec58a006c" ;
+  triage:orderIndex 3 .

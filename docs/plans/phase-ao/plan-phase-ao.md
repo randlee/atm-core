@@ -124,6 +124,18 @@ merge first.
 - M4, M5, and FastPC4 proof is required only in AO.4. An unavailable host is a
   retained blocked artifact, never a pass for physical-host evidence.
 
+## AO.4 Physical-Host Evidence Ledger
+
+| Campaign | Status | Evidence boundary | Recovery |
+| --- | --- | --- | --- |
+| M4 local `tcp` / `tcp-tls` | blocked | Both public target commands were invoked at `f40440d7bd370168ce41bf76ae486210df14b18d` and retained compact failure artifacts. `tcp` reports the stable `missing_compatible_plaintext_baseline` code (for example `20260820-220233.418717-local-tcp-plaintext-test-f1.json`); `tcp-tls` records that this active OS user already owns an ambient daemon, so it is not an isolated host. The live mTLS-negative lane was also invoked, but its preflight correctly rejected the mismatched active pair (candidate 1.4.4; CLI/daemon 1.4.3), retained at `site/reports/smoke/macos/rand-m4.local/20260820T222412780815Z-pid97059-crosshost-curl-tls/`; no M5 authentication or throughput result is claimed. | Establish a complete, provenance-qualified pre-AO plaintext baseline, switch a matched candidate CLI/daemon pair, and run the targets from a dedicated clean OS user; retain the resulting comparison artifacts. |
+| M5 bidirectional `tcp` / `tcp-tls` | blocked | M5 was unavailable during the AO.4 implementation window; no send/read/ack/reply or benchmark result is claimed. | Restore M5 availability, run both directions/modes, and attach the retained evidence. |
+| FastPC4 `tcp` / `tcp-tls` | blocked | FastPC4 was not available to this AO.4 session; no Windows benchmark result is claimed. | Restore approved remote access, run the Windows pair of campaigns, and attach the retained evidence. |
+
+These entries are intentionally not performance outcomes. They prevent an
+unavailable physical host from being mistaken for a successful proof while
+leaving the functional and performance acceptance gates intact.
+
 ## Phase Non-Goals
 
 - Repairing, merging, deleting, or reverting the archived predecessor.

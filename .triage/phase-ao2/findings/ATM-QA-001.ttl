@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-001" ;
+  triage:title "Orphaned dead code and stale comment after snapshot/restore lifecycle rewrite" ;
+  triage:description "In run_admission_capacity.py, verify_durable_admissions() (around line 1191) is now orphaned dead code -- never called from run_capacity's actual lifecycle after the AO2.5.4 snapshot/restore rewrite. The adjacent comment at lines 1505-1506 ('Preserve the measured run and durability proof, then fail closed') is now factually stale/misleading: no durability-of-writes proof exists anymore, since the new snapshot/restore flow only proves the pre-roster clean-baseline snapshot's own internal integrity, not that the profiled run's accepted writes persisted. This is NOT a regression against the AO2.5.4 sprint doc's acceptance criteria (which explicitly scopes post-restore proof to baseline-cleanliness, not write durability) -- it is a cleanliness/clarity issue: a future reader could be misled. Fix: delete verify_durable_admissions() and its 3 orphaned unit tests, and correct the stale comment." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "dead-code" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "scripts/smoke/run_admission_capacity.py" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-08-22T07:00:00Z"^^xsd:dateTime ;
+  triage:closureNote "Fixed on fix/benchmark-snapshot-restore-mandatory commit 892d1fb31 (fix(smoke): remove stale capacity durability proof): removed the orphaned verify_durable_admissions() function and its 3 dead unit tests, corrected the stale 'durability proof' comment to reference the clean-baseline snapshot proof. PR #983 merged to integrate/phase-ao2 at 82270cb26 (2026-08-22T06:41:18Z). quality-mgr independently re-verified via fresh worktree, confirmed zero remaining references to verify_durable_admissions/durability; PR #983 CI fully green (19/19 checks) confirmed via gh CLI." ;
+  triage:triagedAt "2026-08-22T05:25:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.5.4 ;
+  triage:foundAt "2026-08-22T05:22:27Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/AO2.5.4-orphaned-verify> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-001/AO2.5.4-orphaned-verify>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 1191 ;
+  triage:snippet "def verify_durable_admissions(...): orphaned function; stale comment at lines 1505-1506" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "fix/benchmark-snapshot-restore-mandatory" ;
+  triage:headSha "56b1166a" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-benchmark-snapshot-restore-mandatory/56b1166a> .
+
+<urn:atm:triage:worktree/fix-benchmark-snapshot-restore-mandatory/56b1166a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-benchmark-snapshot-restore-mandatory" ;
+  triage:branch "fix/benchmark-snapshot-restore-mandatory" ;
+  triage:headSha "56b1166a" ;
+  triage:orderIndex 6 .

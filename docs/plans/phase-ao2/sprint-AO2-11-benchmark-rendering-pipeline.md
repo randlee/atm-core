@@ -1,6 +1,6 @@
 # Sprint AO2.11 — Rendering Pipeline: Panels, Phase Report, Candlestick, Index
 
-Status: draft · Branch: `feature/ao2-11-benchmark-rendering` off
+Status: complete · Branch: `feature/ao2-11-benchmark-rendering` off
 `integrate/phase-ao2` (after AO2.10 merge-forward) · PR target:
 `integrate/phase-ao2`
 recommended_agent: arch-ctm · recommended_model: deep-reasoning

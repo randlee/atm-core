@@ -45,6 +45,8 @@ pub(crate) mod mailbox;
 pub(crate) mod model_registry;
 /// Observability adapter traits and event payload types.
 pub mod observability;
+/// Transport-neutral peer-wire policy vocabulary selected at daemon launch.
+pub mod peer_wire;
 /// Internal atomic persistence helpers for shared mutable state files.
 pub(crate) mod persistence;
 /// Hidden process-liveness helpers shared across lock implementations.
@@ -95,6 +97,9 @@ pub mod types;
 pub mod workflow_analytics;
 /// First-party-only telemetry contract for workflow lifecycle projections.
 pub mod workflow_telemetry;
+/// Canonical write pipeline shared by `ack` and `send`; consumed only
+/// through their facades, so the module itself stays crate-private.
+pub(crate) mod write;
 
 pub use api::{
     ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, DaemonApiClient,

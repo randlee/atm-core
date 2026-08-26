@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import io
 from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
 JUST_DIR = Path(__file__).resolve().parents[1]
@@ -12,6 +14,7 @@ if str(JUST_DIR) not in sys.path:
 
 from run_lint import build_tasks
 from run_lint import build_transcript
+from run_lint import console_safe_text
 from run_lint import extract_count
 from run_lint import failure_preview
 from run_lint import LintResult
@@ -19,6 +22,7 @@ from run_lint import LintTask
 from run_lint import partition_python_tasks
 from run_lint import preview_lines_for_task
 from run_lint import prioritize_error_lines
+from run_lint import print_result
 from run_lint import resolve_task_names
 from run_lint import strip_ansi
 
@@ -49,8 +53,8 @@ resolver = "2"
         self.assertIn("daemon-singleton", names)
         self.assertIn("hermes-adapter", names)
         self.assertIn("pytests", names)
-        self.assertNotIn("sc-boundary", names)
-        self.assertNotIn("sc-portability", names)
+        self.assertIn("sc-boundary", names)
+        self.assertIn("sc-portability", names)
 
     def test_resolve_task_names_rejects_unknown_target(self) -> None:
         with self.assertRaises(ValueError):
@@ -64,6 +68,27 @@ resolver = "2"
 
     def test_extract_count_understands_total_violations(self) -> None:
         self.assertEqual(extract_count(["total violations: 58"]), 58)
+
+    def test_console_safe_text_escapes_characters_missing_from_windows_code_pages(self) -> None:
+        self.assertEqual(console_safe_text("replacement: \ufffd", "cp1252"), r"replacement: \ufffd")
+        self.assertEqual(console_safe_text("replacement: \ufffd", "utf-8"), "replacement: \ufffd")
+
+    def test_failed_lint_report_does_not_crash_on_windows_console_encoding(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            result = LintResult(
+                task=LintTask("pytests", ["python", "tests.py"]),
+                returncode=1,
+                stdout="FAIL: replacement: \ufffd",
+                stderr="",
+                duration_seconds=0.1,
+                log_path=repo_root / ".just/logs/pytests.log",
+            )
+            output = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
+            with mock.patch("sys.stdout", output):
+                print_result(result, repo_root)
+            output.flush()
+            self.assertIn(br"replacement: \ufffd", output.buffer.getvalue())
 
     def test_prioritize_error_lines_prefers_actual_failures(self) -> None:
         lines = [
