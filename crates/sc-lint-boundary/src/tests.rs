@@ -1209,9 +1209,12 @@ fn suppresses_type_method_self_loop_when_allowed() {
                 pub struct Loop;
 
                 impl Loop {
-                    pub fn metric() -> usize {
-                        let _ = Loop;
-                        1
+                    pub fn visit_items() {
+                        Self::visit_item();
+                    }
+
+                    fn visit_item() {
+                        Self::visit_items();
                     }
                 }
             "#,
