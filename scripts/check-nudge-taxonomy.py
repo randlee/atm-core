@@ -20,6 +20,11 @@ Two checks, mirroring `scripts/check-legacy-mailbox-paths.py`:
    introduced outside this inventory must be kind-qualified (`Steer`/`Queue`)
    per ADR-054 (a); growing the inventory requires an ADR-054 amendment or a
    follow-on ADR (see ADR-054 appendix, deferred rename inventory).
+
+Test-only Rust sources are exempt from the frozen nudge identifier inventory:
+integration-test files, `_tests.rs` files, and inline `#[cfg(test)]` modules
+are not production vocabulary surfaces. Identifiers ending in `_tests` are
+also exempt so test module declarations remain readable.
 """
 from __future__ import annotations
 
@@ -139,6 +144,8 @@ ALLOWED_NUDGE_IDENTIFIERS = frozenset(
 
 # Same shape as the `rg` inventory-generation command in the module docstring.
 NUDGE_IDENTIFIER_PATTERN = re.compile(r"[A-Za-z_]*[Nn]udge[A-Za-z_]*")
+CFG_TEST_ATTRIBUTE = re.compile(r"^\s*#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]\s*$")
+TEST_MODULE_DECLARATION = re.compile(r"\bmod\s+[A-Za-z_][A-Za-z0-9_]*\s*\{")
 
 
 def iter_rust_sources(repo_root: Path) -> tuple[Path, ...]:
@@ -153,15 +160,58 @@ def is_allowed_forbidden_literal(relative_path: str, line: str) -> bool:
     )
 
 
+def is_test_source(relative_path: Path) -> bool:
+    """Return whether a Rust source is conventionally test-only."""
+    return "tests" in relative_path.parts or relative_path.name.endswith("_tests.rs")
+
+
+def iter_rust_lines(path: Path):
+    """Yield Rust lines with whether they are inside an inline test module."""
+    brace_depth = 0
+    test_module_start_depth: int | None = None
+    pending_cfg_test = False
+    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        stripped = line.strip()
+        cfg_test_attribute = bool(CFG_TEST_ATTRIBUTE.fullmatch(line))
+        starts_test_module = bool(
+            (pending_cfg_test or cfg_test_attribute)
+            and TEST_MODULE_DECLARATION.search(line)
+        )
+        in_test_module = test_module_start_depth is not None or starts_test_module
+        yield line_number, line, in_test_module
+
+        if starts_test_module:
+            test_module_start_depth = brace_depth
+        brace_depth += line.count("{") - line.count("}")
+        if (
+            test_module_start_depth is not None
+            and brace_depth <= test_module_start_depth
+        ):
+            test_module_start_depth = None
+
+        if cfg_test_attribute:
+            pending_cfg_test = True
+        elif starts_test_module:
+            pending_cfg_test = False
+        elif pending_cfg_test and stripped and not stripped.startswith("//"):
+            pending_cfg_test = False
+
+
 def find_violations(repo_root: Path) -> tuple[Violation, ...]:
     violations: list[Violation] = []
     for path in iter_rust_sources(repo_root):
         relative_path = path.relative_to(repo_root).as_posix()
-        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        relative = Path(relative_path)
+        test_source = is_test_source(relative)
+        for line_number, line, in_test_module in iter_rust_lines(path):
             for label, pattern in FORBIDDEN_PATTERNS:
                 if pattern.search(line) and not is_allowed_forbidden_literal(relative_path, line):
                     violations.append(Violation(Path(relative_path), line_number, label, line.strip()))
+            if test_source or in_test_module:
+                continue
             for match in NUDGE_IDENTIFIER_PATTERN.findall(line):
+                if match.endswith("_tests"):
+                    continue
                 if match not in ALLOWED_NUDGE_IDENTIFIERS:
                     violations.append(
                         Violation(
