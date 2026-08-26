@@ -39,6 +39,7 @@ async-trait.workspace = true
 
 [dev-dependencies]
 atm-runtime-test-support = { path = "../atm-runtime-test-support" }
+atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.4" }
 serial_test = "3"
 tempfile = "3"
 tracing-subscriber.workspace = true

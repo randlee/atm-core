@@ -38,6 +38,7 @@ dependencies = [
  "atm-error",
  "atm-runtime-test-support",
  "atm-storage",
+ "atm-storage-rusqlite",
  "base64",
  "chrono",
  "fs4",
