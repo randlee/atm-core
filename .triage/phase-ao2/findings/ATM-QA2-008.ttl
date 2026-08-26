@@ -15,7 +15,7 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-25T21:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.15 ;
@@ -28,8 +28,8 @@
   triage:file "docs/plans/phase-ao2/readiness.md" ;
   triage:line 0 ;
   triage:snippet "missing file" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ao2" ;
   triage:headSha "ac5a8c041" ;
   triage:occursIn <urn:atm:triage:worktree/AO2-int/ac5a8c041> .

@@ -15,7 +15,7 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-26T02:55:37Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.15 ;
@@ -37,8 +37,8 @@
   triage:file "docs/user-documents/nudge-templates.md" ;
   triage:line 4 ;
   triage:snippet "reviewed_for_release: 1.4.3" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ao2" ;
   triage:headSha "ac5a8c041" ;
   triage:occursIn <urn:atm:triage:worktree/AO2-1/ac5a8c041> .
@@ -48,8 +48,8 @@
   triage:file "docs/user-documents/hooks.md" ;
   triage:line 4 ;
   triage:snippet "reviewed_for_release: 1.4.3" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ao2" ;
   triage:headSha "ac5a8c041" ;
   triage:occursIn <urn:atm:triage:worktree/AO2-2/ac5a8c041> .
@@ -59,8 +59,8 @@
   triage:file "docs/user-documents/troubleshooting.md" ;
   triage:line 4 ;
   triage:snippet "reviewed_for_release: 1.4.3" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ao2" ;
   triage:headSha "ac5a8c041" ;
   triage:occursIn <urn:atm:triage:worktree/AO2-3/ac5a8c041> .
@@ -70,8 +70,8 @@
   triage:file "docs/user-documents/hermes-atm.md" ;
   triage:line 4 ;
   triage:snippet "reviewed_for_release: 1.4.3" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ao2" ;
   triage:headSha "ac5a8c041" ;
   triage:occursIn <urn:atm:triage:worktree/AO2-4/ac5a8c041> .
@@ -81,8 +81,8 @@
   triage:file "docs/user-documents/mailbox-workflows.md" ;
   triage:line 4 ;
   triage:snippet "reviewed_for_release: 1.4.3" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ao2" ;
   triage:headSha "ac5a8c041" ;
   triage:occursIn <urn:atm:triage:worktree/AO2-5/ac5a8c041> .
@@ -92,8 +92,8 @@
   triage:file "docs/user-documents/install-layout.md" ;
   triage:line 4 ;
   triage:snippet "reviewed_for_release: 1.4.3" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ao2" ;
   triage:headSha "ac5a8c041" ;
   triage:occursIn <urn:atm:triage:worktree/AO2-6/ac5a8c041> .
@@ -103,8 +103,8 @@
   triage:file "docs/user-documents/doctor-and-log.md" ;
   triage:line 4 ;
   triage:snippet "reviewed_for_release: 1.4.3" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ao2" ;
   triage:headSha "ac5a8c041" ;
   triage:occursIn <urn:atm:triage:worktree/AO2-7/ac5a8c041> .
@@ -114,8 +114,8 @@
   triage:file "docs/user-documents/quickstart.md" ;
   triage:line 4 ;
   triage:snippet "reviewed_for_release: 1.4.3" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ao2" ;
   triage:headSha "ac5a8c041" ;
   triage:occursIn <urn:atm:triage:worktree/AO2-8/ac5a8c041> .
@@ -125,8 +125,8 @@
   triage:file "docs/user-documents/identity-and-team.md" ;
   triage:line 4 ;
   triage:snippet "reviewed_for_release: 1.4.3" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ao2" ;
   triage:headSha "ac5a8c041" ;
   triage:occursIn <urn:atm:triage:worktree/AO2-9/ac5a8c041> .
@@ -136,8 +136,8 @@
   triage:file "docs/user-documents/README.md" ;
   triage:line 4 ;
   triage:snippet "reviewed_for_release: 1.4.3" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ao2" ;
   triage:headSha "ac5a8c041" ;
   triage:occursIn <urn:atm:triage:worktree/AO2-10/ac5a8c041> .

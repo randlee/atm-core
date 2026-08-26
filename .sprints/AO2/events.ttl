@@ -228,3 +228,29 @@ triage:r38 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO21
 triage:r39 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-M001> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .
 triage:r40 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-M002> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .
 triage:r41 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-M003> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .
+
+# NOTE (team-lead, 2026-08-26): ATM-QA-R4-001 (round-4, Important) flagged that
+# ~17 findings across rounds 1-4 had been independently re-verified fixed by
+# quality-mgr but their .ttl records/events.ttl had not been reconciled.
+# Each fix commit below was verified as an ancestor of
+# integrate/phase-ao2@3612715f1 via `git merge-base --is-ancestor` before this
+# Resolution pass. ATM-QA2-007 resolves jointly with ATM-QA2-008 (the missing
+# readiness.md link target ATM-QA2-007's own fix introduced was created by
+# ATM-QA2-008's fix, per quality-mgr message 01M0Y5FX8GY993H1841P7KS6VF).
+triage:r42 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-001> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r43 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-002> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r44 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-003> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r45 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/ATM-QA2-006> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r46 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/ATM-QA2-007> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r47 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/ATM-QA2-008> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r48 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/FTQ-001> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r49 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RBP-AO2END-F001> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r50 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/ATM-QA-AO2END-004> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r51 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/ATM-QA-AO2END-005> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r52 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/ATM-QA-AO2END-006> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r53 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-RUSTQA-AO2-001> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r54 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-RUSTQA-AO2-002> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r55 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RBQA-F002> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r56 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/FTQ-002> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r57 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/FTQ-003> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r58 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/ARCH-QA-AO2-R3-001> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .

@@ -15,7 +15,7 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-21T16:52:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.4 ;
@@ -28,8 +28,8 @@
   triage:file ".just/tests/test_daemon_switch.py" ;
   triage:line 56 ;
   triage:snippet "test_switch_rejects_unsigned_target missing asymmetric case verification" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/daemon-switch-signing-gate" ;
   triage:headSha "bafe79d1f" ;
   triage:occursIn <urn:atm:triage:worktree/fix-daemon-switch/bafe79d1f> .
