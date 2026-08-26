@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 import unittest
 
 from pydantic import ValidationError
@@ -26,9 +27,11 @@ from scripts.smoke.benchmark_schema import (
     campaign_id,
     require_non_decreasing_baselines,
 )
+from scripts.smoke.benchmark_baselines import load_baselines
 
 
 NOW = datetime(2026, 8, 24, tzinfo=timezone.utc)
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def distribution() -> MetricDistribution:
@@ -189,6 +192,44 @@ class BenchmarkSchemaV4Tests(unittest.TestCase):
         ),))
         with self.assertRaisesRegex(ValueError, "may not lower"):
             require_non_decreasing_baselines(old, lowered)
+
+    def test_reviewed_baseline_exception_allows_a_provenanced_lower_floor(self) -> None:
+        old = BaselineSet(revision=1, entries=(BaselineEntry(
+            host_label="m5-atmbench", target="tcp-tls", p50_floor=17_500,
+            approved_by="quality-mgr", effective_from=NOW,
+        ),))
+        reviewed = BaselineSet(revision=2, entries=(BaselineEntry(
+            host_label="m5-atmbench", target="tcp-tls", p50_floor=13_500,
+            approved_by="Rand via D3 ratchet exception",
+            effective_from=datetime(2026, 8, 26, tzinfo=timezone.utc),
+            rationale="The original TLS floor was mis-seeded from TCP and never achieved.",
+        ),))
+        require_non_decreasing_baselines(old, reviewed)
+        self.assertEqual(reviewed.entry_for("m5-atmbench", "tcp-tls").p50_floor, 13_500)
+
+    def test_unapproved_lower_floor_cannot_claim_reviewed_provenance(self) -> None:
+        old = BaselineSet(revision=1, entries=(BaselineEntry(
+            host_label="m5-atmbench", target="tcp", p50_floor=17_500,
+            approved_by="quality-mgr", effective_from=NOW,
+        ),))
+        unapproved = BaselineSet(revision=2, entries=(BaselineEntry(
+            host_label="m5-atmbench", target="tcp", p50_floor=17_000,
+            approved_by="quality-mgr", effective_from=datetime(2026, 8, 26, tzinfo=timezone.utc),
+            rationale="No reviewed exception.",
+        ),))
+        with self.assertRaisesRegex(ValueError, "reviewed D3 exception"):
+            require_non_decreasing_baselines(old, unapproved)
+
+    def test_reviewed_m5_atmbench_revision_loads_with_immutable_result_snapshots(self) -> None:
+        baselines = load_baselines(
+            ROOT / "site/reports/send-message-benchmark/baselines.json"
+        )
+        self.assertEqual(baselines.revision, 4)
+        self.assertEqual(baselines.entry_for("m5-atmbench", "tcp").p50_floor, 17_000)
+        tls = baselines.entry_for("m5-atmbench", "tcp-tls")
+        self.assertEqual(tls.p50_floor, 13_500)
+        self.assertEqual(tls.approved_by, "Rand via D3 ratchet exception")
+        self.assertIn("mis-seeded", tls.rationale or "")
 
     def test_campaign_and_target_ids_are_utc_safe_and_shared(self) -> None:
         identifier = campaign_id(started_at=NOW, host_label="rand-m5")

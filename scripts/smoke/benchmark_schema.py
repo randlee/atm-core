@@ -131,6 +131,7 @@ class BaselineEntry(BaseModel):
     p50_floor: float = Field(ge=0)
     approved_by: str = Field(min_length=1)
     effective_from: datetime
+    rationale: str | None = Field(default=None, min_length=1)
 
     @field_validator("effective_from")
     @classmethod
@@ -163,8 +164,11 @@ class BaselineSet(BaseModel):
         )
 
 
+REVIEWED_RATCHET_EXCEPTION_APPROVER = "Rand via D3 ratchet exception"
+
+
 def require_non_decreasing_baselines(previous: BaselineSet, current: BaselineSet) -> None:
-    """Reject a baseline revision that lowers any already-reviewed floor."""
+    """Reject lowered floors unless an explicitly reviewed exception explains one."""
     if current.revision <= previous.revision:
         raise BenchmarkSchemaError("baseline revision must increase")
     current_entries = {(entry.host_label, entry.target): entry for entry in current.entries}
@@ -174,9 +178,13 @@ def require_non_decreasing_baselines(previous: BaselineSet, current: BaselineSet
             raise BenchmarkSchemaError(
                 f"baseline revision may not remove {(entry.host_label, entry.target)!r}"
             )
-        if replacement.p50_floor < entry.p50_floor:
+        if replacement.p50_floor < entry.p50_floor and not (
+            replacement.approved_by == REVIEWED_RATCHET_EXCEPTION_APPROVER
+            and replacement.rationale is not None
+        ):
             raise BenchmarkSchemaError(
-                f"baseline revision may not lower {(entry.host_label, entry.target)!r}"
+                "baseline revision may not lower "
+                f"{(entry.host_label, entry.target)!r} without the reviewed D3 exception"
             )
 
 
