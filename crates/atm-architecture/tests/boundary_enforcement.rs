@@ -185,6 +185,8 @@ fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
     let root = workspace_root();
     let bootstrap = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
     let runtime = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
+    let runtime_setup = read_source(&root.join("crates/atm-http-runtime/src/runtime_setup.rs"));
+    let runtime_sources = format!("{runtime}\n{runtime_setup}");
     let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
     let policy = read_source(&root.join("crates/atm-core/src/peer_wire.rs"));
 
@@ -235,8 +237,8 @@ fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
     );
     assert!(
         direct_listener.contains("TcpListener::bind")
-            && runtime.contains("canonical_api_router(")
-            && runtime.contains("AuthenticatedConnector::peer_socket()"),
+            && runtime_sources.contains("canonical_api_router(")
+            && runtime_sources.contains("AuthenticatedConnector::peer_socket()"),
         "AO2 plaintext listener must enter the ordinary canonical router"
     );
     for (scope, source) in [
