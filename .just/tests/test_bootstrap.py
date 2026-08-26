@@ -132,6 +132,7 @@ class BootstrapTests(unittest.TestCase):
         workflow = (SCRIPT.parents[1] / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
         self.assertIn('python-version: "3.14.7"', workflow)
         self.assertIn("tool: just@1.58.0", workflow)
+        self.assertIn("cargo-bins/cargo-binstall@75b4bfae1b2c753a6806bbce6e6cb89b602de33c", workflow)
         self.assertGreaterEqual(workflow.count("run: just bootstrap"), 2)
 
     def test_just_recipes_propagate_the_bootstrap_python_to_children(self) -> None:
