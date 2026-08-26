@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AU2-QA-VISITOR-CYCLE-001>
+  a triage:Finding ;
+  triage:findingId "AU2-QA-VISITOR-CYCLE-001" ;
+  triage:title "AU2-RBQA-F001 fix correctly surfaces two genuine same-type recursive-descent visitor cycles requiring sanctioned per-type allow" ;
+  triage:description "quality-mgr independently ran `cargo run -q -p sc-lint-boundary -- analyze --root . --format json` against feature/pau-s2-lint-calibration @ 93d3d794917949c6289ab67ba9c4897af6c4693a (the AU2-RBQA-F001 fix commit d4a90bf12, merge-forwarded past AU.1) and diffed the payload against the true pre-AU 22-finding baseline (commit 9923ef6cbe71c65381efbc717f0ddb85abe62e38). Result: ack<->send SCB-CYCLE-001 (finding #1, AU.3-owned) correctly reappears -- proof the graph-reachability fix works -- and all AU.1/AU.2-owned findings are correctly absent. But 2 findings exist beyond the 22-finding baseline: SCB-CYCLE-002 type_method_self_loop on crate::sc-lint-boundary::sc_lint_boundary::module::crate::portability::PortabilityCollector (struct declared crates/sc-lint-boundary/src/portability.rs:133) and on crate::sc-lint-boundary::sc_lint_boundary::module::crate::runtime::RuntimeCollector (struct declared crates/sc-lint-boundary/src/runtime.rs:96). Both are sc-lint-boundary's own AST-visitor types analyzing their own crate (dogfooding). quality-mgr read both impl blocks and confirmed the cycle is a genuine same-type mutual-call shape: visit_items -> visit_item -> visit_item_mod -> visit_items (and the analogous visit_item_impl -> visit_items path), i.e. the standard recursive-descent tree-walk idiom, not a coupling/architecture smell. This was previously masked by the AU2-RBQA-F001 bug (pairwise same-owner/different-name exclusion with no cycle-reachability check) and is now correctly surfaced by the fix -- it is not a regression introduced by a defect in the fix itself, but a true positive the old classifier was wrongly hiding. fenix (team-lead delegate) reviewed the disposition options and selected option (b) per the master plan's own non-negotiable constraint text: the sprint doc explicitly states 'Direct recursion Self::same_method() remains a positive' and both a trait-wide exclusion and a workspace allowlist were 'reviewed and REJECTED -- do not implement either' (docs/plans/phase-au/sprint-AU2-lint-calibration.md §4.3). Structurally excluding same-type tree recursion via further classifier refinement (option a) would reopen exactly the over-exclusion risk AU2-RBQA-F001 just closed, and leaving this open/tracked as terminal debt (option c) defeats phase-AU's goal of CI-green sc-boundary on develop (GH #1028). The sanctioned remediation is the lint's own designed-for-this-purpose per-type opt-in: `#[sc_lint(boundary.allow(\"cycle.recursive_value_container\"))]` (or the correct existing allow key for a self-loop class -- confirm exact attribute/value against crates/sc-lint-boundary's own allow-attribute schema), applied narrowly to PortabilityCollector and RuntimeCollector only, each with a justification comment identifying the recursive-descent-visitor shape -- the same precedent already used once for LogFieldValue/LogFieldMap (AU.1 §1.6). No trait-wide or workspace-level suppression mechanism is authorized. The master boundary-regression-plan.md's current text describing this allow mechanism as a single sanctioned instance will need a doc amendment (fenix's action, alongside this record) to reflect two additional narrow instances. Fix verification: re-run the sc-boundary full JSON payload after the allow attributes land and confirm exactly these 2 findings are absent, ack<->send #1 remains present, no other findings change, and no third+ allow attribute or broader mechanism was introduced." ;
+  triage:phaseId "phase-au" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "cycle-detection-true-positive-needs-sanctioned-allow" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/sc-lint-boundary/src/portability.rs (PortabilityCollector), crates/sc-lint-boundary/src/runtime.rs (RuntimeCollector)" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-26T21:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AU2 ;
+  triage:foundAt "2026-08-26T21:44:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AU2-QA-VISITOR-CYCLE-001/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AU2-QA-VISITOR-CYCLE-001/2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AU2-QA-VISITOR-CYCLE-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/sc-lint-boundary/src/portability.rs" ;
+  triage:line 133 ;
+  triage:snippet "struct PortabilityCollector<'a> { ... } -- SCB-CYCLE-002 type_method_self_loop across visit_items/visit_item/visit_item_mod/visit_item_impl/visit_item_fn/visit_block_for_portability/visit_expr_for_portability/visit_stmt_for_portability" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pau-s2-lint-calibration" ;
+  triage:headSha "93d3d7949" ;
+  triage:occursIn <urn:atm:triage:worktree/pau-s2-lint-calibration> .
+
+<urn:atm:triage:occurrence/AU2-QA-VISITOR-CYCLE-001/2>
+  a triage:Occurrence ;
+  triage:file "crates/sc-lint-boundary/src/runtime.rs" ;
+  triage:line 96 ;
+  triage:snippet "struct RuntimeCollector<'a> { ... } -- SCB-CYCLE-002 type_method_self_loop across visit_items/visit_item/visit_item_mod/visit_item_impl/visit_item_fn/visit_block/visit_expr/visit_stmt" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pau-s2-lint-calibration" ;
+  triage:headSha "93d3d7949" ;
+  triage:occursIn <urn:atm:triage:worktree/pau-s2-lint-calibration> .
+
+<urn:atm:triage:worktree/pau-s2-lint-calibration>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pau-s2-lint-calibration" ;
+  triage:branch "feature/pau-s2-lint-calibration" ;
+  triage:headSha "93d3d7949" ;
+  triage:orderIndex 1 .
