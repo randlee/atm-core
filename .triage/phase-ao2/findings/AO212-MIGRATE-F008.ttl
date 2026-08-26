@@ -1,0 +1,77 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO212-MIGRATE-F008>
+  a triage:Finding ;
+  triage:findingId "AO212-MIGRATE-F008" ;
+  triage:title "Documented idempotency claim ('second run is a no-op') has no test" ;
+  triage:description "quality-mgr QA-1 on PR #1014, req-qa M1: the tool's documented idempotency claim ('second run is a no-op') has no test exercising main() twice." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "MIGRATE" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-08-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closureNote "Fixed by commit b5ab6f5d54506ffc6b3f18cc037e7d88e8562351 (test(benchmark): prove migration rerun is a no-op) on feature/ao2-15-benchmark-official-trigger, merged to integrate/phase-ao2. New test_second_migration_run_is_a_byte_identical_noop calls MIGRATE.main() twice against the same isolated reports/artifact tree and asserts every file's bytes are identical between runs -- exercising main() twice as this finding required, not a single no-op-seeded call. quality-mgr independently re-verified by rerunning the test in an isolated worktree pinned to the fix commit; passes." ;
+  triage:triagedAt "2026-08-23T23:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.12 ;
+  triage:foundAt "2026-08-24T05:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO212-MIGRATE-F008/AO212-F008-AO12> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO212-MIGRATE-F008/AO212-F008-AO13> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AO212-MIGRATE-F008/AO212-F008-AO12>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_migrate_benchmark_history.py" ;
+  triage:line 82 ;
+  triage:snippet "Missing test: idempotent_second_run_is_noop (repeatable documented claim)" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/ao2-12-historical-data-migration" ;
+  triage:headSha "8788090d6" ;
+  triage:occursIn <urn:atm:triage:worktree/AO212/8788090d6> .
+
+<urn:atm:triage:occurrence/AO212-MIGRATE-F008/AO212-F008-AO13>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_migrate_benchmark_history.py" ;
+  triage:line 82 ;
+  triage:snippet "Missing test: idempotent_second_run_is_noop (repeatable documented claim)" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/ao2-13-benchmark-run-skill" ;
+  triage:headSha "dccd103db" ;
+  triage:occursIn <urn:atm:triage:worktree/AO213/dccd103db> .
+
+<urn:atm:triage:worktree/AO210/1d668e269>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ao2-10-benchmark-data-contract" ;
+  triage:branch "feature/ao2-10-benchmark-data-contract" ;
+  triage:headSha "1d668e269" ;
+  triage:orderIndex 11 .
+
+<urn:atm:triage:worktree/AO211/77681d466>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ao2-11-benchmark-rendering-pipeline" ;
+  triage:branch "feature/ao2-11-benchmark-rendering-pipeline" ;
+  triage:headSha "77681d466" ;
+  triage:orderIndex 12 .
+
+<urn:atm:triage:worktree/AO212/8788090d6>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ao2-12-historical-data-migration" ;
+  triage:branch "feature/ao2-12-historical-data-migration" ;
+  triage:headSha "8788090d6" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/AO213/dccd103db>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ao2-13-benchmark-run-skill" ;
+  triage:branch "feature/ao2-13-benchmark-run-skill" ;
+  triage:headSha "dccd103db" ;
+  triage:orderIndex 14 .

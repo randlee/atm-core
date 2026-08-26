@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 
 
 LINT_NAME = "fixed-sleep"
-SLEEP_RE = re.compile(r"\b(?:std::)?thread::sleep\s*\(")
+SLEEP_RE = re.compile(r"\b(?:(?:std::)?thread|tokio::time)::sleep\s*\(")
 
 
 @dataclass(frozen=True)

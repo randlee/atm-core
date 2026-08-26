@@ -9,8 +9,10 @@ use std::sync::RwLock;
 
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, UnixTime, pem::PemObject};
 use rustls::server::danger::{ClientCertVerified, ClientCertVerifier};
-use rustls::{DigitallySignedStruct, Error, ServerConnection, SignatureScheme};
+use rustls::{CertificateError, DigitallySignedStruct, Error, ServerConnection, SignatureScheme};
 use sha2::{Digest, Sha256};
+use x509_parser::prelude::parse_x509_certificate;
+use zeroize::Zeroizing;
 
 use crate::contract::{LocalCertificate, TrustedPeer};
 use crate::error::AtmError;
@@ -43,12 +45,15 @@ impl TlsIdentity {
     /// Parse and validate a durable certificate/key bundle.
     pub fn load(certificate: &LocalCertificate) -> Result<Self, AtmError> {
         let path = Path::new(certificate.private_key_ref.as_str());
-        let pem = std::fs::read(path).map_err(|source| {
+        // The certificate chain is copied into rustls-owned DER values and the
+        // private key into `PrivateKeyDer`; the source PEM must not remain in
+        // process memory after this parser scope exits.
+        let pem = Zeroizing::new(std::fs::read(path).map_err(|source| {
             AtmError::daemon_unavailable_with_cause(
                 "failed to open the configured TLS certificate/key PEM bundle",
                 source,
             )
-        })?;
+        })?);
         let certificates = CertificateDer::pem_slice_iter(&pem)
             .collect::<Result<Vec<_>, _>>()
             .map_err(|source| {
@@ -65,6 +70,9 @@ impl TlsIdentity {
         }
         let private_key = PrivateKeyDer::from_pem_slice(&pem).map_err(|source| {
             AtmError::validation("configured TLS private key PEM is invalid").with_cause(source)
+        })?;
+        certificate_valid_now(first).map_err(|_| {
+            AtmError::validation("configured TLS certificate is expired or not yet valid")
         })?;
         Ok(Self {
             certificates,
@@ -151,7 +159,9 @@ impl ClientCertVerifier for PinnedClientVerifier {
         _intermediates: &[CertificateDer<'_>],
         _now: UnixTime,
     ) -> Result<ClientCertVerified, Error> {
-        if self.host_for_certificate(end_entity).is_some() {
+        if certificate_valid_now(end_entity).is_err() {
+            Err(CertificateError::Expired.into())
+        } else if self.host_for_certificate(end_entity).is_some() {
             Ok(ClientCertVerified::assertion())
         } else {
             Err(rustls::CertificateError::UnknownIssuer.into())
@@ -178,6 +188,18 @@ impl ClientCertVerifier for PinnedClientVerifier {
 
     fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
         self.algorithms.supported_schemes()
+    }
+}
+
+/// Reject a malformed, expired, or not-yet-valid certificate before a stream
+/// wrapper can expose application bytes.
+pub fn certificate_valid_now(certificate: &CertificateDer<'_>) -> Result<(), Error> {
+    let (_, parsed) = parse_x509_certificate(certificate.as_ref())
+        .map_err(|_| Error::InvalidCertificate(CertificateError::BadEncoding))?;
+    if parsed.validity().is_valid() {
+        Ok(())
+    } else {
+        Err(CertificateError::Expired.into())
     }
 }
 

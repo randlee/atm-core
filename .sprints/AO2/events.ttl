@@ -1,0 +1,295 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:a1 a triage:Assignment ;
+    triage:ofSprint triage:AO2.1 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-20T08:28:20Z"^^xsd:dateTime .
+
+triage:c1 a triage:Completion ;
+    triage:ofSprint triage:AO2.1 ;
+    triage:at "2026-08-20T08:45:54Z"^^xsd:dateTime .
+
+triage:a2 a triage:Assignment ;
+    triage:ofSprint triage:AO2.1 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-20T09:09:24Z"^^xsd:dateTime .
+
+triage:c2 a triage:Completion ;
+    triage:ofSprint triage:AO2.1 ;
+    triage:at "2026-08-20T09:32:59Z"^^xsd:dateTime .
+
+triage:a3 a triage:Assignment ;
+    triage:ofSprint triage:AO2.2 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-20T16:09:59Z"^^xsd:dateTime .
+
+triage:c3 a triage:Completion ;
+    triage:ofSprint triage:AO2.2 ;
+    triage:at "2026-08-20T16:37:10Z"^^xsd:dateTime .
+
+triage:r1 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AO22-ATM-QA-001> ;
+    triage:resolvedAt "2026-08-20T18:29:30Z"^^xsd:dateTime .
+
+triage:r2 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AO22-ATM-QA-002> ;
+    triage:resolvedAt "2026-08-20T18:29:30Z"^^xsd:dateTime .
+
+triage:r3 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AO22-ATM-QA-003> ;
+    triage:resolvedAt "2026-08-20T18:29:30Z"^^xsd:dateTime .
+
+triage:r4 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AO22-ATM-QA-004> ;
+    triage:resolvedAt "2026-08-20T18:29:30Z"^^xsd:dateTime .
+
+triage:r5 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AO22-ATM-QA-005> ;
+    triage:resolvedAt "2026-08-20T18:29:30Z"^^xsd:dateTime .
+
+triage:r6 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AO22-RBQA-F001> ;
+    triage:resolvedAt "2026-08-20T18:29:30Z"^^xsd:dateTime .
+
+triage:r7 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AO22-RBQA-F003> ;
+    triage:resolvedAt "2026-08-20T18:29:30Z"^^xsd:dateTime .
+
+triage:r8 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AO22-RSH-001> ;
+    triage:resolvedAt "2026-08-20T18:29:30Z"^^xsd:dateTime .
+
+triage:r9 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AO22-RSH-002> ;
+    triage:resolvedAt "2026-08-20T18:29:30Z"^^xsd:dateTime .
+triage:a4 a triage:Assignment ;
+    triage:ofSprint triage:AO2.3 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-20T19:18:28Z"^^xsd:dateTime .
+triage:c4 a triage:Completion ;
+    triage:ofSprint triage:AO2.3 ;
+    triage:at "2026-08-20T20:18:52Z"^^xsd:dateTime .
+triage:a5 a triage:Assignment ;
+    triage:ofSprint triage:AO2.4 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-20T20:19:17Z"^^xsd:dateTime .
+triage:r10 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/RBP-F001> ;
+    triage:resolvedAt "2026-08-20T21:55:00Z"^^xsd:dateTime .
+triage:r11 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/RBQA-F001> ;
+    triage:resolvedAt "2026-08-20T21:55:00Z"^^xsd:dateTime .
+triage:a6 a triage:Assignment ;
+    triage:ofSprint triage:AO2.5 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-22T00:43:00Z"^^xsd:dateTime .
+triage:a7 a triage:Assignment ;
+    triage:ofSprint triage:AO2.3 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-20T20:40:00Z"^^xsd:dateTime .
+triage:c5 a triage:Completion ;
+    triage:ofSprint triage:AO2.3 ;
+    triage:at "2026-08-20T22:36:00Z"^^xsd:dateTime .
+triage:r12 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/ATM-QA-104> ;
+    triage:resolvedAt "2026-08-22T04:35:20Z"^^xsd:dateTime .
+triage:r13 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/ATM-QA-105> ;
+    triage:resolvedAt "2026-08-22T04:35:20Z"^^xsd:dateTime .
+triage:a8 a triage:Assignment ;
+    triage:ofSprint triage:AO2.6 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-22T04:36:00Z"^^xsd:dateTime .
+triage:c6 a triage:Completion ;
+    triage:ofSprint triage:AO2.6 ;
+    triage:at "2026-08-22T04:46:36Z"^^xsd:dateTime .
+triage:a9 a triage:Assignment ;
+    triage:ofSprint triage:AO2.5.4 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-22T05:10:00Z"^^xsd:dateTime .
+triage:c7 a triage:Completion ;
+    triage:ofSprint triage:AO2.5.4 ;
+    triage:at "2026-08-22T05:12:00Z"^^xsd:dateTime .
+triage:a10 a triage:Assignment ;
+    triage:ofSprint triage:AO2.7 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-22T20:34:39Z"^^xsd:dateTime .
+triage:a11 a triage:Assignment ;
+    triage:ofSprint triage:AO2.9 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-22T20:38:14Z"^^xsd:dateTime .
+
+triage:c8 a triage:Completion ;
+    triage:ofSprint triage:AO2.4 ;
+    triage:at "2026-08-20T23:29:50Z"^^xsd:dateTime .
+
+triage:c9 a triage:Completion ;
+    triage:ofSprint triage:AO2.5 ;
+    triage:at "2026-08-22T06:15:47Z"^^xsd:dateTime .
+triage:a12 a triage:Assignment ;
+    triage:ofSprint triage:AO2.10 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-24T00:52:02Z"^^xsd:dateTime .
+
+triage:c12 a triage:Completion ;
+    triage:ofSprint triage:AO2.10 ;
+    triage:at "2026-08-24T03:17:18Z"^^xsd:dateTime .
+
+triage:a13 a triage:Assignment ;
+    triage:ofSprint triage:AO2.10 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-24T03:33:09Z"^^xsd:dateTime .
+
+triage:c13 a triage:Completion ;
+    triage:ofSprint triage:AO2.10 ;
+    triage:at "2026-08-24T03:56:17Z"^^xsd:dateTime .
+
+triage:a14 a triage:Assignment ;
+    triage:ofSprint triage:AO2.11 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-24T04:35:00Z"^^xsd:dateTime .
+
+triage:c14 a triage:Completion ;
+    triage:ofSprint triage:AO2.11 ;
+    triage:at "2026-08-24T04:57:32Z"^^xsd:dateTime .
+triage:a17 a triage:Assignment ; triage:ofSprint triage:AO2.12 ; triage:assignedTo "arch-ctm" ; triage:assignedAt "2026-08-24T05:09:36Z"^^xsd:dateTime .
+triage:c15 a triage:Completion ; triage:ofSprint triage:AO2.12 ; triage:at "2026-08-24T05:36:03Z"^^xsd:dateTime .
+triage:a15 a triage:Assignment ; triage:ofSprint triage:AO2.13 ; triage:assignedTo "arch-ctm" ; triage:assignedAt "2026-08-24T05:36:32Z"^^xsd:dateTime .
+triage:a16 a triage:Assignment ; triage:ofSprint triage:AO2.6 ; triage:assignedTo "arch-ctm" ; triage:assignedAt "2026-08-22T05:01:51Z"^^xsd:dateTime .
+triage:c16 a triage:Completion ; triage:ofSprint triage:AO2.6 ; triage:at "2026-08-22T06:15:50Z"^^xsd:dateTime .
+triage:r14 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/ARCH-AO26-F002> ; triage:resolvedAt "2026-08-22T07:39:42Z"^^xsd:dateTime .
+triage:r15 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RBP-AO26-F003> ; triage:resolvedAt "2026-08-22T07:39:42Z"^^xsd:dateTime .
+triage:r16 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/REQ-AO26-F004> ; triage:resolvedAt "2026-08-22T07:39:42Z"^^xsd:dateTime .
+triage:r17 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RSH-AO26-F005> ; triage:resolvedAt "2026-08-22T07:39:42Z"^^xsd:dateTime .
+triage:r18 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RBQA-AO26-F006> ; triage:resolvedAt "2026-08-22T07:39:42Z"^^xsd:dateTime .
+triage:r19 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/ARCH-AO26-F007> ; triage:resolvedAt "2026-08-22T07:39:42Z"^^xsd:dateTime .
+triage:c17 a triage:Completion ; triage:ofSprint triage:AO2.13 ; triage:at "2026-08-24T06:02:33Z"^^xsd:dateTime .
+triage:r20 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AO212-MIGRATE-F001> ; triage:resolvedAt "2026-08-24T07:17:23Z"^^xsd:dateTime .
+triage:r21 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AO212-MIGRATE-F002> ; triage:resolvedAt "2026-08-24T07:17:23Z"^^xsd:dateTime .
+triage:r22 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AO212-MIGRATE-F003> ; triage:resolvedAt "2026-08-24T07:17:23Z"^^xsd:dateTime .
+triage:r23 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AO212-MIGRATE-F004> ; triage:resolvedAt "2026-08-24T07:17:23Z"^^xsd:dateTime .
+triage:r24 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AO212-MIGRATE-F005> ; triage:resolvedAt "2026-08-24T07:17:23Z"^^xsd:dateTime .
+triage:r25 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AO212-MIGRATE-F006> ; triage:resolvedAt "2026-08-24T07:17:23Z"^^xsd:dateTime .
+triage:r26 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/AO210-CONTRACT-F001> ; triage:resolvedAt "2026-08-23T20:50:00Z"^^xsd:dateTime .
+
+# NOTE (team-lead, 2026-08-24): r20-r23, r25 (AO212-MIGRATE-F001, F002, F003,
+# F004, F006) were appended without verifying the referenced fix commits were
+# ancestors of this branch; they were not (see PR #1017 for the query-level
+# fix, and .triage/phase-ao2/findings/AO212-MIGRATE-F00{1,2,3,4,6}.ttl for
+# per-finding status, which was never changed from "open"). These events are
+# left in place per the append-only rule but must not be treated as valid
+# closures until a corrected Resolution is recorded here after the real fix
+# commit is verified via `git merge-base --is-ancestor <fix-sha> HEAD` against
+# this exact branch. See feedback_verify_resolution_ancestry_before_recording.
+
+triage:c18 a triage:Completion ; triage:ofSprint triage:AO2.14 ; triage:at "2026-08-25T02:57:07Z"^^xsd:dateTime .
+triage:r27 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/ARCH-QA-AO214-RULE003> ; triage:resolvedAt "2026-08-25T02:57:07Z"^^xsd:dateTime .
+triage:r28 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RBQA-AO214-F001> ; triage:resolvedAt "2026-08-25T02:57:07Z"^^xsd:dateTime .
+triage:r29 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RBQA-AO214-F002> ; triage:resolvedAt "2026-08-25T02:57:07Z"^^xsd:dateTime .
+triage:r30 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RBQA-AO214-F003> ; triage:resolvedAt "2026-08-25T02:57:07Z"^^xsd:dateTime .
+triage:r31 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RSH-AO214-001> ; triage:resolvedAt "2026-08-25T02:57:07Z"^^xsd:dateTime .
+triage:r32 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RUST-QA-AO214-001> ; triage:resolvedAt "2026-08-25T02:57:07Z"^^xsd:dateTime .
+
+# NOTE (team-lead): all 6 verified fixed by quality-mgr against fix commit
+# 1823207ca (PR #1020), confirmed ancestor of merge commit 3b050422d before
+# recording. RSH-AO214-001 closes as hardening/test-coverage (original defect
+# premise did not hold; code was already correct) per quality-mgr's report.
+# PR #1020 merged despite tcp/tcp-tls benchmark floor misses (17371/17500,
+# 13642/17500 on isolated m5-atmbench) -- merge explicitly authorized by Rand.
+
+triage:a19 a triage:Assignment ; triage:ofSprint triage:AO2.15 ; triage:assignedTo "arch-ctm" ; triage:assignedAt "2026-08-25T02:58:29Z"^^xsd:dateTime .
+
+triage:c20 a triage:Completion ; triage:ofSprint triage:AO2.15 ; triage:at "2026-08-25T03:11:37Z"^^xsd:dateTime .
+
+# NOTE (team-lead, 2026-08-25): backfilled Assignment for AO2.14, whose
+# original Assignment event was dispatched in an earlier session turn that
+# was later compacted out of context and never appended here before c18 was
+# recorded. Timestamp reconstructed from the AO2.13 Completion (c17,
+# 2026-08-24T06:02:33Z) as the earliest point AO2.14 could have been
+# dispatched -- appended now per ttl-repair.md (append correct history,
+# never rewrite past events) to close /sprint-report's TTL.ORPHAN_COMPLETION
+# gap against c18.
+triage:a20 a triage:Assignment ; triage:ofSprint triage:AO2.14 ; triage:assignedTo "arch-ctm" ; triage:assignedAt "2026-08-24T06:05:00Z"^^xsd:dateTime .
+
+# NOTE (team-lead, 2026-08-25): quality-mgr independently re-verified PR #1024
+# @ 43efcbd4b (confirmed ancestor - is current branch HEAD, not yet merged),
+# message 01M0X2DW62Y9JW1RR2EYV9TSKF: B001/I001/I002/I004/I005/I006/M001/M002/M003
+# all confirmed fixed (SSH-trigger transcript closes B001's unattended-safety
+# gap plus the prior fix round for the others). I003 (AC4/AC5 live-run
+# evidence -- specifically the launchd trigger transcript) remains open:
+# ssh-trigger half done, launchd trigger run/transcript still missing.
+triage:r33 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-B001> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .
+triage:r34 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-I001> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .
+triage:r35 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-I002> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .
+triage:r36 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-I004> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .
+triage:r37 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-I005> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .
+triage:r38 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-I006> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .
+triage:r39 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-M001> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .
+triage:r40 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-M002> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .
+triage:r41 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-M003> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .
+
+# NOTE (team-lead, 2026-08-26): ATM-QA-R4-001 (round-4, Important) flagged that
+# ~17 findings across rounds 1-4 had been independently re-verified fixed by
+# quality-mgr but their .ttl records/events.ttl had not been reconciled.
+# Each fix commit below was verified as an ancestor of
+# integrate/phase-ao2@3612715f1 via `git merge-base --is-ancestor` before this
+# Resolution pass. ATM-QA2-007 resolves jointly with ATM-QA2-008 (the missing
+# readiness.md link target ATM-QA2-007's own fix introduced was created by
+# ATM-QA2-008's fix, per quality-mgr message 01M0Y5FX8GY993H1841P7KS6VF).
+triage:r42 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-001> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r43 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-002> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r44 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-003> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r45 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/ATM-QA2-006> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r46 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/ATM-QA2-007> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r47 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/ATM-QA2-008> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r48 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/FTQ-001> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r49 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RBP-AO2END-F001> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r50 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/ATM-QA-AO2END-004> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r51 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/ATM-QA-AO2END-005> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r52 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/ATM-QA-AO2END-006> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r53 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-RUSTQA-AO2-001> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r54 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-RUSTQA-AO2-002> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r55 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RBQA-F002> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r56 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/FTQ-002> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r57 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/FTQ-003> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+triage:r58 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/ARCH-QA-AO2-R3-001> ; triage:resolvedAt "2026-08-26T08:15:00Z"^^xsd:dateTime .
+
+# quality-mgr independently verified QA-AO2-R4-001 (5/6-site sleep-hygiene
+# sweep) and FTQ-004 (same underlying site) fixed together at
+# integrate/phase-ao2@1508ef61c19ab5e77d054c0e1f2590ba49de9f74, message
+# 01M0YJ3Q8WKNGTQFMMS1RVBET2. Ancestry verified before recording.
+triage:r59 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO2-R4-001> ; triage:resolvedAt "2026-08-26T08:20:00Z"^^xsd:dateTime .
+triage:r60 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/FTQ-004> ; triage:resolvedAt "2026-08-26T08:20:00Z"^^xsd:dateTime .
+
+# req-qa caught (ATM-QA-AO2END-R5-001, round 5) that the r42-r60 reconciliation
+# pass missed RSH-AO2-001/RSH-AO2-002 -- both independently confirmed fixed at
+# integrate/phase-ao2@15c9ad73b (same commit as RBP-AO2END-F001, already
+# resolved via r49) alongside RBP-AO2END-F001's fix. Ancestry re-verified here.
+triage:r61 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RSH-AO2-001> ; triage:resolvedAt "2026-08-26T08:25:00Z"^^xsd:dateTime .
+triage:r62 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RSH-AO2-002> ; triage:resolvedAt "2026-08-26T08:25:00Z"^^xsd:dateTime .
+
+# ARCH-QA-AO2-R5-001 (RULE-003, lib.rs regrowth) confirmed fixed and
+# independently verified by quality-mgr at integrate/phase-ao2@6c5c68728:
+# lib.rs 2829 total lines, #[cfg(test)] at line 992 -> 991 non-test lines
+# (under 1000 ceiling); extracted runtime_setup.rs (93 lines) holds the
+# direct-peer construction/config validation split. Ancestry verified
+# (6c5c68728 is-ancestor-of current HEAD).
+triage:r63 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/ARCH-QA-AO2-R5-001> ; triage:resolvedAt "2026-08-26T08:33:00Z"^^xsd:dateTime .
+
+# QA-R5-CLIPPY-001 and QA-R5-FMT-001 (round-5 minor mechanical findings)
+# confirmed fixed and independently verified by quality-mgr at
+# integrate/phase-ao2@0ced659def5bf74cb03ac383d34170034944a2b1: dead-code
+# const removed (grep confirms no match), clippy -D warnings clean, cargo fmt
+# --check clean; fixed-sleep and sc-boundary sanity re-checks both clean, no
+# regression. Ancestry verified (commit is-ancestor-of current HEAD).
+triage:r64 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-R5-CLIPPY-001> ; triage:resolvedAt "2026-08-26T08:37:00Z"^^xsd:dateTime .
+triage:r65 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-R5-FMT-001> ; triage:resolvedAt "2026-08-26T08:37:00Z"^^xsd:dateTime .
+
+# QA-R6-TEST-001 (boundary test regression from ARCH-QA-AO2-R5-001's lib.rs
+# split) confirmed fixed and independently verified by quality-mgr at
+# integrate/phase-ao2@36b755aa857e93263ee234bf74973e21af1515fe: boundary test
+# now reads both lib.rs and runtime_setup.rs combined source, passes; full
+# workspace cargo test 0 failed; cargo fmt --check clean; sc-boundary still
+# exactly 22 waived cycles, no regression. Ancestry verified.
+triage:r66 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-R6-TEST-001> ; triage:resolvedAt "2026-08-26T15:46:00Z"^^xsd:dateTime .

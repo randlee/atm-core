@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F002>
+  a triage:Finding ;
+  triage:findingId "RBQA-F002" ;
+  triage:title "No test pins the asymmetric CLI-signed/daemon-unsigned case" ;
+  triage:description "The new daemon-switch signing gate (require_macos_development_signatures in .just/daemon-switch.py, verification logic in .just/sign_daemon_dev.py) requires BOTH the atm CLI and atm-daemon binaries to pass codesign --verify --strict with the atm-daemon-dev authority before allowing switch_pair/restart lifecycle mutation. Test coverage confirms the fully-signed pass case and the fully-unsigned disposable-pair block case, but no test specifically pins the asymmetric case -- CLI signed correctly but daemon unsigned (or vice versa) -- to confirm the gate still blocks correctly when only one of the two binaries fails verification." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-qa" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-21T16:52:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.4 ;
+  triage:foundAt "2026-08-21T16:51:10Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/signing-gate-asymmetric-test-gap> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F002/signing-gate-asymmetric-test-gap>
+  a triage:Occurrence ;
+  triage:file ".just/tests/test_daemon_switch.py" ;
+  triage:line 56 ;
+  triage:snippet "test_switch_rejects_unsigned_target missing asymmetric case verification" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/daemon-switch-signing-gate" ;
+  triage:headSha "bafe79d1f" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-daemon-switch/bafe79d1f> .
+
+<urn:atm:triage:worktree/fix-daemon-switch/bafe79d1f>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/daemon-switch-signing-gate" ;
+  triage:branch "fix/daemon-switch-signing-gate" ;
+  triage:headSha "bafe79d1f" ;
+  triage:orderIndex 1 .

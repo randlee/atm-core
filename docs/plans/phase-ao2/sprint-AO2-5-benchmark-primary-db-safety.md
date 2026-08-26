@@ -4,7 +4,7 @@ sprint: AO2.5
 title: Physical benchmark primary-database safety
 branch: fix/benchmark-primary-db-safety
 integration_branch: integrate/phase-ao2
-status: draft_for_review
+status: complete
 depends_on:
   - PR-977-scoped-live-database-guard
 blocks:

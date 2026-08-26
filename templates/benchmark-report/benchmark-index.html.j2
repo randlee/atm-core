@@ -1,0 +1,16 @@
+---
+metadata:
+  name: benchmark-index
+  description: Offline benchmark report index
+required_variables:
+  - title
+  - latest
+  - phases
+---
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>{{ title | e }}</title><style>body{font:16px system-ui,sans-serif;max-width:90rem;margin:2rem auto;padding:0 1rem}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}.chart{border:1px solid #cbd5e1;padding:.5rem}.baseline{stroke-dasharray:4 3}.candle.FAIL rect{fill:none;stroke:#dc2626;stroke-width:3}table{border-collapse:collapse;width:100%}th,td{border:1px solid #cbd5e1;padding:.45rem;text-align:left}</style></head><body>
+<h1>{{ title | e }}</h1><h2>Latest phase: {{ latest.phase | e }}</h2><section class="grid">
+{% for chart in latest.charts %}<article class="chart" data-target="{{ chart.target | e }}"><h3>{{ chart.label | e }}</h3><svg viewBox="0 0 560 230" role="img" aria-label="{{ chart.label | e }} candlestick chart"><line x1="50" y1="200" x2="550" y2="200" stroke="#475569" />{% for line in chart.baseline_lines %}<line class="baseline" x1="50" y1="{{ line.y }}" x2="550" y2="{{ line.y }}" stroke="{{ line.color | e }}" />{% endfor %}{% for candle in chart.candles %}<g class="candle {{ candle.status | e }}" data-target="{{ chart.target | e }}"><line x1="{{ candle.x }}" y1="{{ candle.low }}" x2="{{ candle.x }}" y2="{{ candle.high }}" stroke="{{ candle.color | e }}" /><rect x="{{ candle.x - 6 }}" y="{{ candle.p95 }}" width="12" height="{{ candle.p50 - candle.p95 }}" fill="{{ candle.color | e }}" /></g>{% endfor %}</svg><ol>{% for candle in chart.candles %}<li><time datetime="{{ candle.timestamp.datetime | e }}">{{ candle.timestamp.text | e }}</time> · {{ candle.host_label | e }}</li>{% endfor %}</ol></article>{% endfor %}
+</section><h2>Historical phase reports</h2><table><thead><tr><th>Phase</th><th>Latest campaign</th><th>Report</th></tr></thead><tbody>{% for phase in phases %}<tr><td>{{ phase.phase | e }}</td><td><time datetime="{{ phase.started_at.datetime | e }}">{{ phase.started_at.text | e }}</time></td><td><a href="{{ phase.href | e }}">{{ phase.href | e }}</a></td></tr>{% endfor %}</tbody></table>
+<script>(() => { const f = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", hourCycle: "h23", timeZoneName: "short" }); document.querySelectorAll("time[datetime]").forEach((node) => { node.textContent = f.format(new Date(node.dateTime)); }); })();</script>
+</body></html>

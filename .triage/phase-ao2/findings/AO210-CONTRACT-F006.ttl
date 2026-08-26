@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO210-CONTRACT-F006>
+  a triage:Finding ;
+  triage:findingId "AO210-CONTRACT-F006" ;
+  triage:title "Grep-identifier single-owner gate (AC4) is lexical-only and cannot catch renamed recomputation duplicates" ;
+  triage:description "ruthless-boundary-qa (RBQA-F004): the grep-identifier gate for AC4 (single decision owner) is lexical only and can't catch a freshly-named recomputation like the three blocking findings in this batch. Recommend a behavioral single-owner test as a follow-up hardening item: mutate baselines.json between artifact write and report render, assert rendered verdict unchanged." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "TEST-COVERAGE" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-08-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closureNote "Does not reproduce as of commit 2e45ccda59560fd41f859d2e35aafbb0321a3021 (AO210-CONTRACT-F004 fix), verified by arch-ctm and independently re-verified by quality-mgr. That fix eliminated the two independently-named loader implementations this finding warned would evade a lexical-only grep gate, and added test_runner_and_report_share_the_single_baseline_loader (scripts/smoke/test_run_admission_capacity.py) asserting object identity (RUNNER.load_baselines is report.load_baselines). An object-identity assertion structurally catches exactly the renamed-recomputation-duplicate scenario this finding described -- any reintroduced second implementation, however named, fails the identity check even if functionally equivalent. No speculative behavioral-mutation test was added since the identity check already forecloses the failure mode. quality-mgr independently reran this test in a worktree pinned to the fix commit; passes." ;
+  triage:triagedAt "2026-08-24T03:30:26Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.10 ;
+  triage:foundAt "2026-08-24T03:28:59Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO210-CONTRACT-F006/AO210-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AO210-CONTRACT-F006/AO210-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/benchmark_report.py" ;
+  triage:line 1 ;
+  triage:snippet "grep-only AC4 gate cannot detect renamed decision recomputation; recommend behavioral single-owner test" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/ao2-10-benchmark-data-contract" ;
+  triage:headSha "b207dd097a34a2b954c76a43b12e416ace1875f3" ;
+  triage:occursIn <urn:atm:triage:worktree/ao2-10/b207dd097a34a2b954c76a43b12e416ace1875f3> .
+
+<urn:atm:triage:worktree/ao2-10/b207dd097a34a2b954c76a43b12e416ace1875f3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ao2-10" ;
+  triage:branch "feature/ao2-10-benchmark-data-contract" ;
+  triage:headSha "b207dd097a34a2b954c76a43b12e416ace1875f3" ;
+  triage:orderIndex 11 .

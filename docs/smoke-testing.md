@@ -27,6 +27,29 @@ replacement for functional smoke coverage. Each successful run writes its
 immutable JSON, its XHTML panel, and the aggregate report beneath
 `site/reports/`; the recipe rebuilds the report automatically. Use
 `just benchmark-report` only to rebuild or inspect already-published evidence.
+Use its public peer-wire targets, not a Cargo feature or a private harness:
+
+```bash
+just benchmark --target tcp       # direct TCP, explicit plaintext-test daemon
+just benchmark --target tcp-tls   # same daemon, ordinary mutual-TLS launch mode
+```
+
+Both targets build the same shipped daemon and differ only by the documented
+`--peer-wire-security` launch argument. Every result records candidate commit,
+binary version, selected mode, host OS/architecture, hook mode,
+frames-per-connection, sample count, sanitized command, and compatible
+baseline identity. `tcp` may compare only with a same-host plaintext baseline;
+the first accepted `tcp-tls` campaign establishes its own same-mode baseline.
+Peer-wire evidence must record the active ADR-047 security mode. Normal
+benchmark and release evidence is mutual TLS; `plaintext-test` is explicit
+diagnostic evidence only and cannot satisfy mTLS or peer-allowlist criteria.
+
+The daemon selects this mode only at process launch. Verify the selected value
+with `atm doctor --json` before a peer-wire smoke. A disposable
+`--peer-wire-security plaintext-test` daemon uses the preserved direct TCP
+pipeline for connectivity diagnostics; a normal restart without that argument
+returns to the mTLS default. A failed mTLS configuration or handshake is a
+failure to repair, never a reason to retry the same run in plaintext.
 
 The routed smoke implementations are deliberately not independent public
 commands:

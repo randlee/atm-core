@@ -5,7 +5,7 @@ name = "HttpRuntime"
 
 [public]
 facade = "HttpRuntime"
-notes = "Tokio/Axum lifecycle facade. HttpRuntimeClient is the one connector-neutral async client translation; AL.9 adds an optional explicit plain-TCP direct-peer adapter that retains the canonical WriteRequest route and handler. TLS remains isolated and deferred."
+notes = "Tokio/Axum lifecycle facade. HttpRuntimeClient is the one connector-neutral async client translation; the explicit plain-TCP direct-peer adapter retains the canonical WriteRequest route and handler. AO2 keeps TLS as an outer stream adapter, so selected plaintext remains the preserved direct path."
 
 [implementation]
 type = "HttpRuntimeClient"
@@ -27,7 +27,7 @@ io_forbidden = ["direct_sqlite_io", "daemon_request_dispatch", "raw_http_framing
 
 [dependencies]
 allowed_dependents = ["atm-daemon-bootstrap", "atm", "atm-daemon-client", "atm-graft"]
-allowed_dependencies = ["atm-core", "tokio", "axum", "hyper", "hyper-util", "reqwest", "tower", "ulid", "windows-sys"]
+allowed_dependencies = ["atm-core", "tokio", "axum", "http-body-util", "hyper", "hyper-util", "reqwest", "tower", "ulid", "windows-sys"]
 forbidden_edges = ["atm-http-runtime -> atm-storage-rusqlite", "atm-http-runtime -> atm-graft", "atm-http-runtime -> atm", "atm-http-runtime -> atm-daemon-bootstrap"]
 
 [references]
@@ -41,7 +41,7 @@ error_types = ["AtmError"]
 notes = ["No runtime-private request, response, error, or persistence type is authorized.", "Received-message hooks cross only the sealed core selector/emitter boundary after a newly durable write; their failure is a response warning, never a write failure."]
 
 [testing]
-allowed_test_double_paths = ["crate::tests::TestRouter"]
+allowed_test_double_paths = ["crate::tests::TestRouter", "crate::tests::PassthroughPeerAdapter"]
 forbidden_test_bypasses = ["listener_bind", "endpoint_publication"]
 
 [enforcement]
@@ -50,4 +50,4 @@ review_gates = ["core_contracts_only", "typestate_lifecycle", "all_routes_from_c
 
 [status]
 state = "active"
-notes = ["AL.1 introduced the construction facade and its dependency boundary.", "AL.8 makes this the active daemon runtime with framework-managed UDS and loopback adapters; the legacy daemon server is reference-only until AM deletion.", "AL.9 permits atm and atm-graft to consume the runtime-owned preferred local client for write paths only; the runtime remains independent of both consumers.", "AL.9's optional direct-peer adapter is an explicit plain-TCP connector/listener pair for documented M5 evidence reruns only; it shares the existing WriteRequest encoder, POST route, canonical router, storage boundary, and received-hook path, and authorizes no peer DTO, peer route, resend, replay, or TLS surface."]
+notes = ["AL.1 introduced the construction facade and its dependency boundary.", "AL.8 makes this the active daemon runtime with framework-managed UDS and loopback adapters; the legacy daemon server is reference-only until AM deletion.", "AL.9 permits atm and atm-graft to consume the runtime-owned preferred local client for write paths only; the runtime remains independent of both consumers.", "The direct-peer adapter is one plain-TCP connector/listener pair for explicitly selected plaintext-test evidence only; it shares the existing WriteRequest encoder, POST route, canonical router, storage boundary, and received-hook path, and authorizes no peer DTO, peer route, resend, replay, or TLS surface.", "ADR-047 requires any later mTLS stream adapter to preserve this direct pipeline when plaintext-test is selected."]

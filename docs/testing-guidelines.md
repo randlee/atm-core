@@ -170,6 +170,23 @@ Minor local blockers discovered during an active smoke sprint may be fixed
 inside that sprint. Larger rework must be promoted into the smoke findings
 review artifact rather than silently widening the smoke sprint.
 
+### 4.5.1 Physical Benchmark Account Preflight
+
+Physical performance benchmarking is a separate operator workflow governed by
+ADR-052. It must run under a dedicated disposable OS account, never through a
+temporary `ATM_HOME` or an alternate runtime root for the interactive account.
+
+The operator bootstraps that account once with:
+
+```text
+just benchmark-bootstrap
+```
+
+The command writes only the account-local benchmark manifest and refuses an
+account that already owns ATM durable state. `just benchmark` then validates
+that manifest before release-binary lookup, daemon startup, SQLite access, or
+temporary benchmark setup. The interactive account must fail this preflight.
+
 ### 4.6 Coverage Reporting
 
 Coverage reporting is a separate reporting surface.

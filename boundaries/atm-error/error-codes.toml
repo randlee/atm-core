@@ -1,0 +1,47 @@
+boundary_id = "BOUNDARY-AtmErrorCodes"
+owner_package = "atm-error"
+owner_crate_path = "atm_error"
+name = "AtmErrorCodes"
+
+[public]
+facade = "AtmErrorCode"
+notes = "Single dependency-light registry for stable ATM-owned error identities."
+
+[implementation]
+type = "AtmErrorCode"
+module = "atm_error::error_codes"
+visibility = "public"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["stable_error_code_registry"]
+io_forbidden = ["socket_io", "tls_adapter", "sqlite", "process_spawn", "daemon_lifecycle"]
+
+[dependencies]
+allowed_dependents = ["atm-storage", "atm-core"]
+allowed_dependencies = ["serde", "serde_json"]
+forbidden_edges = ["atm-error -> atm-core", "atm-error -> atm-storage-rusqlite"]
+
+[references]
+scope = "global"
+forbidden = []
+
+[contracts]
+request_types = ["stable wire-code string"]
+response_types = ["AtmErrorCode"]
+error_types = ["UnknownAtmErrorCode"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["local_error_enum", "ad_hoc_error_code_string"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-ATM-ERROR-CODES"]
+review_gates = ["one_registry", "stable_wire_round_trip"]
+
+[status]
+state = "concrete_landed"
+notes = ["AO2.1 adds peer-wire policy errors here so later adapter work cannot mint local transport error enums."]

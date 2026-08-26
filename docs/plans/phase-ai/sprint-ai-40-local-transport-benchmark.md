@@ -160,3 +160,8 @@ the public report artifact.
 No production-database benchmark, site/report rendering, OS tuning to mask
 software faults, or throughput claim based on mock/direct-dispatch results.
 This sprint closes local admission only, not remote HTTPS capacity.
+
+## Current operator procedure
+
+For any new benchmark run, follow the canonical
+[`benchmark-run` skill](../../../.claude/skills/benchmark-run/SKILL.md).

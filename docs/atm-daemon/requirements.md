@@ -181,7 +181,8 @@ Initial crate requirement IDs:
   changing HTTP routing, canonical writes, persistence, or post-write routing;
   declared source-host data is untrusted smoke provenance. Normal startup is
   mTLS, never falls back to plaintext, and doctor/logs must expose the active
-  mode. Satisfies: `REQ-CORE-TRANSPORT-002B1`.
+  mode. ADR-047 owns the typed launch-mode selection and isolated stream
+  layering. Satisfies: `REQ-CORE-TRANSPORT-002B1`.
 - `REQ-DAEMON-TRANSPORT-002C` localhost and a daemon's own advertised address
   are ordinary HTTPS peer targets; no loopback-only transport branch exists.
   Satisfies:

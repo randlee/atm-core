@@ -1,6 +1,6 @@
 # Sprint AO2.10 — Benchmark Data Contract and Runner Emission
 
-Status: draft · Branch: `feature/ao2-10-benchmark-data-contract` off
+Status: complete · Branch: `feature/ao2-10-benchmark-data-contract` off
 `integrate/phase-ao2` · PR target: `integrate/phase-ao2`
 recommended_agent: arch-ctm · recommended_model: deep-reasoning
 

@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ARCH-QA-AO2-R5-001>
+  a triage:Finding ;
+  triage:findingId "ARCH-QA-AO2-R5-001" ;
+  triage:title "crates/atm-http-runtime/src/lib.rs exceeds 1000-line ceiling with zero test code (RULE-003), round 5" ;
+  triage:description "crates/atm-http-runtime/src/lib.rs has regrown past the RULE-003 1000-line non-test ceiling. Confirmed live by quality-mgr (arch-qa reviewer, round 5 of QA-PHASE-AO2-FINAL-GATE): wc -l = 2917 total lines, #[cfg(test)] module starts at line 1080, so non-test code = 1079 lines, exceeding the 1000-line ceiling. Not covered by any prior round's waiver or fix -- this is new growth discovered at round 5. Same RULE-003 pattern as the already-fixed ARCH-QA-AO2-R3-001 (writer/ops.rs split). Fix: extract a cohesive section into a sibling module -- arch-qa suggests either the AO2.14 server-task lifecycle plumbing (ServerTaskInputs/DirectPeerServer/ServerTaskTerminationGuard) or the preflight/validate_* config helpers. Follow the same split pattern/verification precedent used for ARCH-QA-AO2-R3-001 (check that resolution's git history, commit 837c14dd997f5c180a4666d7594eba7a3b22313f, for precedent -- verify via wc -l AND the #[cfg(test)]-start-line, not just total file length, since a prior attempt on a similar finding this phase made the defect worse by adding tests instead of splitting)." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-26T08:20:01Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.15 ;
+  triage:foundAt "2026-08-26T08:20:01Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-QA-AO2-R5-001/ao2-15-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ARCH-QA-AO2-R5-001/ao2-15-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 1 ;
+  triage:snippet "2917 lines total, #[cfg(test)] at line 1080, non-test code = 1079 lines" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "70a61d6fa" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-ao2/70a61d6fa> .
+
+<urn:atm:triage:worktree/integrate-ao2/70a61d6fa>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ao2" ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "70a61d6fa" ;
+  triage:orderIndex 16 .

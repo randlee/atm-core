@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QA-R6-TEST-001>
+  a triage:Finding ;
+  triage:findingId "QA-R6-TEST-001" ;
+  triage:title "Architecture boundary characterization test regressed by ARCH-QA-AO2-R5-001's lib.rs module split" ;
+  triage:description "rust-qa-agent flagged, and quality-mgr independently reproduced live: crates/atm-architecture/tests/boundary_enforcement.rs:236, test `ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline` FAILS deterministically on integrate/phase-ao2@56c75da16. Root cause: the round-5 ARCH-QA-AO2-R5-001 fix (commit 6c5c68728, the lib.rs RULE-003 line-count split) moved `AuthenticatedConnector::peer_socket()` out of crates/atm-http-runtime/src/lib.rs into the new crates/atm-http-runtime/src/runtime_setup.rs, but this boundary characterization test still only reads lib.rs source text and asserts that the `peer_socket()` literal appears in it. Confirmed: grep shows `peer_socket()` now only in runtime_setup.rs:21 (not lib.rs), and `cargo test -p atm-architecture --test boundary_enforcement ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline` fails with that exact panic on live HEAD. This is a genuine regression introduced by the round-5 structural fix (the fix's own line-count reduction was correct; it broke an unrelated architecture-boundary test that hardcoded lib.rs as the source location). Fix: update boundary_enforcement.rs's test to also read runtime_setup.rs (or whichever module now owns listener/peer-socket construction) so the assertion checks the combined source across both files, rather than only lib.rs. Full-workspace cargo fmt/clippy are otherwise clean; coverage could not run because this same panic aborts cargo llvm-cov." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-regression" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-26T08:42:24Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.15 ;
+  triage:foundAt "2026-08-26T08:42:24Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-R6-TEST-001/ao2-r6-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QA-R6-TEST-001/ao2-r6-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 236 ;
+  triage:snippet "test ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline - assertion failure checking peer_socket() in lib.rs" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "56c75da16" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-ao2/56c75da16> .
+
+<urn:atm:triage:worktree/integrate-ao2/56c75da16>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ao2" ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "56c75da16" ;
+  triage:orderIndex 16 .

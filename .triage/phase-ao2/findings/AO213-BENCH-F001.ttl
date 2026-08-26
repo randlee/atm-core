@@ -1,0 +1,64 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO213-BENCH-F001>
+  a triage:Finding ;
+  triage:findingId "AO213-BENCH-F001" ;
+  triage:title "AC4 dry-run transcript missing" ;
+  triage:description "Sprint doc docs/plans/phase-ao2/sprint-AO2-13-benchmark-run-skill.md:73-74 acceptance criterion 4 requires a dry-run transcript of the full skill executed on macOS (steps 1-4 against a real run) committed as sprint evidence. No such artifact exists in the repo (confirmed via repo-wide grep for 'transcript' by quality-mgr and independently by req-qa and arch-qa). The two committed campaign.json files under site/reports/send-message-benchmark/ are raw benchmark measurement data, not a transcript of an operator following the skill's steps 1-4 verbatim (including the just benchmark-show / wyvern review step). Required correction: commit a dry-run transcript (terminal session log or narrated walkthrough) showing steps 1-4 executed on macOS, linked from the sprint doc." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "deferred" ;
+  triage:dispatchReady false ;
+  triage:deferredNote "Rand confirmed 2026-08-25: live-benchmark validation work for early Phase AO2 sprints (AO2.10-AO2.13) was deliberately deferred, not skipped or forgotten. Not a blocker and not something to keep surfacing as an open question -- do not dispatch a fix or treat this as an active QA failure. Re-evaluate only if the user asks for the deferred dry-run transcript to be produced. FORMAL PHASE-GATE WAIVER (Rand, 2026-08-26, in response to QA-PHASE-AO2-FINAL-GATE): the 2026-08-25 deferral is confirmed to also cover the phase-end gate itself, not only dev-dispatch. Do not block integrate/phase-ao2 -> develop on this finding." ;
+  triage:triagedAt "2026-08-24T06:23:58Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.13 ;
+  triage:foundAt "2026-08-24T06:21:45Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO213-BENCH-F001/AO213-1> ;
+  triage:triageRecordVersion "3" .
+
+<urn:atm:triage:occurrence/AO213-BENCH-F001/AO213-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ao2/sprint-AO2-13-benchmark-run-skill.md" ;
+  triage:line 73 ;
+  triage:snippet "4. A dry-run transcript of the full skill executed on macOS" ;
+  triage:status "deferred" ;
+  triage:closed true ;
+  triage:branch "feature/ao2-13-benchmark-run-skill" ;
+  triage:headSha "bf522d879ab6d0fd32760ee58e683a26607b5c7c" ;
+  triage:occursIn <urn:atm:triage:worktree/AO213/bf522d879ab6d0fd32760ee58e683a26607b5c7c> .
+
+<urn:atm:triage:worktree/AO210/ea953ac44>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ao2-10-benchmark-data-contract" ;
+  triage:branch "feature/ao2-10-benchmark-data-contract" ;
+  triage:headSha "ea953ac44" ;
+  triage:orderIndex 11 .
+
+<urn:atm:triage:worktree/AO211/77681d466>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ao2-11-benchmark-rendering-pipeline" ;
+  triage:branch "feature/ao2-11-benchmark-rendering-pipeline" ;
+  triage:headSha "77681d466" ;
+  triage:orderIndex 12 .
+
+<urn:atm:triage:worktree/AO212/8788090d6>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ao2-12-historical-data-migration" ;
+  triage:branch "feature/ao2-12-historical-data-migration" ;
+  triage:headSha "8788090d6" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/AO213/bf522d879ab6d0fd32760ee58e683a26607b5c7c>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ao2-13-benchmark-run-skill" ;
+  triage:branch "feature/ao2-13-benchmark-run-skill" ;
+  triage:headSha "bf522d879ab6d0fd32760ee58e683a26607b5c7c" ;
+  triage:orderIndex 14 .

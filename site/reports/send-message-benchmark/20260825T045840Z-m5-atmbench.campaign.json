@@ -1,0 +1,342 @@
+{
+  "campaign_id": "20260825T045840Z-m5-atmbench",
+  "completed_at": "2026-08-25T05:00:22.420792Z",
+  "host_label": "m5-atmbench",
+  "os": "macos",
+  "phase": "ao2",
+  "results": [
+    {
+      "baseline": {
+        "p50_floor": 35000.0,
+        "revision": 1
+      },
+      "binary_hashes": {
+        "atm": "69e43059af1cfccd99c972fcccdffc93995ff90159508780930c4f809e56ac5e",
+        "atm-daemon": "98784ffc33dad1b86ced53375a7c0f6c3f88eaf6ec478e458807e93bea406109"
+      },
+      "campaign_id": "20260825T045840Z-m5-atmbench",
+      "direct_sqlite_message_write": {
+        "accepted_count": 803000,
+        "admissions_per_second": 40111.00241283099,
+        "elapsed_seconds": 20.019444833,
+        "kind": "async_storage_admission",
+        "requested_count": 803000,
+        "worker_count": 512
+      },
+      "durability_after_restart": {
+        "expected_accepted_count": 803000,
+        "method": "isolated_sqlite_exact_count_after_restart",
+        "observed_mailbox_count": 803000,
+        "passed": true
+      },
+      "frames_per_connection": 0,
+      "generated_at": "2026-08-25T04:58:51.135488Z",
+      "host_label": "m5-atmbench",
+      "incomplete_reason": null,
+      "messages_admitted": 803000,
+      "messages_durable": 803000,
+      "messages_requested": 803000,
+      "metrics": {
+        "accepted_count": 803000,
+        "admissions_per_second": {
+          "max": 50037.73846234831,
+          "min": 12719.086260843022,
+          "p50": 40754.70873791552,
+          "p95": 46202.180742931065,
+          "p99": 48879.338517867014
+        },
+        "application_wire_bytes": null,
+        "application_wire_bytes_per_second": null,
+        "connection_count": null,
+        "connections_per_second": null,
+        "first_failure": null,
+        "interval_count": 803,
+        "interval_latency_ms": {
+          "max": 0.0,
+          "min": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0
+        },
+        "passed_interval_count": 803,
+        "request_frames_per_second": null,
+        "requested_count": 803000,
+        "response_count": 803000,
+        "time_to_send_1k_s": {
+          "max": 0.078622,
+          "min": 0.019984916,
+          "p50": 0.024537042,
+          "p95": 0.028183833,
+          "p99": 0.04291225
+        }
+      },
+      "os": "macos",
+      "schema_version": 4,
+      "source_revision": "9542f41cc7fe1d1d38639767226ab4f5ec6133fa",
+      "status": "PASS",
+      "target": "sqlite"
+    },
+    {
+      "baseline": {
+        "p50_floor": 18000.0,
+        "revision": 1
+      },
+      "binary_hashes": {
+        "atm": "69e43059af1cfccd99c972fcccdffc93995ff90159508780930c4f809e56ac5e",
+        "atm-daemon": "98784ffc33dad1b86ced53375a7c0f6c3f88eaf6ec478e458807e93bea406109"
+      },
+      "campaign_id": "20260825T045840Z-m5-atmbench",
+      "direct_sqlite_message_write": null,
+      "durability_after_restart": {
+        "expected_accepted_count": 392000,
+        "method": "isolated_sqlite_exact_count_after_restart",
+        "observed_mailbox_count": 392000,
+        "passed": true
+      },
+      "frames_per_connection": 8,
+      "generated_at": "2026-08-25T04:59:12.562539Z",
+      "host_label": "m5-atmbench",
+      "incomplete_reason": null,
+      "messages_admitted": 392000,
+      "messages_durable": 392000,
+      "messages_requested": 392000,
+      "metrics": {
+        "accepted_count": 392000,
+        "admissions_per_second": {
+          "max": 21729.36780279329,
+          "min": 13171.788719975986,
+          "p50": 19649.05954766534,
+          "p95": 20880.059426414227,
+          "p99": 21557.531656478714
+        },
+        "application_wire_bytes": {
+          "request": 281883890,
+          "response": 161539890,
+          "total": 443423780
+        },
+        "application_wire_bytes_per_second": {
+          "max": 24592212.010811307,
+          "min": 14907171.883832822,
+          "p50": 22232167.87281282,
+          "p95": 23631007.2558443,
+          "p99": 24360923.327550035
+        },
+        "connection_count": 49000,
+        "connections_per_second": {
+          "max": 2716.1709753491614,
+          "min": 1646.4735899969983,
+          "p50": 2456.1324434581675,
+          "p95": 2610.0074283017784,
+          "p99": 2694.691457059839
+        },
+        "first_failure": null,
+        "interval_count": 392,
+        "interval_latency_ms": {
+          "max": 70.97383300424553,
+          "min": 1.098458975320682,
+          "p50": 23.445822502253577,
+          "p95": 45.40033300872892,
+          "p99": 52.4385420139879
+        },
+        "passed_interval_count": 392,
+        "request_frames_per_second": {
+          "max": 21729.36780279329,
+          "min": 13171.788719975986,
+          "p50": 19649.05954766534,
+          "p95": 20880.059426414227,
+          "p99": 21557.531656478714
+        },
+        "requested_count": 392000,
+        "response_count": 392000,
+        "time_to_send_1k_s": {
+          "max": 0.07591983300517313,
+          "min": 0.0460206670104526,
+          "p50": 0.05089302099077031,
+          "p95": 0.05442775000119582,
+          "p99": 0.05902041698573157
+        }
+      },
+      "os": "macos",
+      "schema_version": 4,
+      "source_revision": "9542f41cc7fe1d1d38639767226ab4f5ec6133fa",
+      "status": "PASS",
+      "target": "uds"
+    },
+    {
+      "baseline": {
+        "p50_floor": 17500.0,
+        "revision": 1
+      },
+      "binary_hashes": {
+        "atm": "69e43059af1cfccd99c972fcccdffc93995ff90159508780930c4f809e56ac5e",
+        "atm-daemon": "98784ffc33dad1b86ced53375a7c0f6c3f88eaf6ec478e458807e93bea406109"
+      },
+      "campaign_id": "20260825T045840Z-m5-atmbench",
+      "direct_sqlite_message_write": null,
+      "durability_after_restart": {
+        "expected_accepted_count": 342000,
+        "method": "isolated_sqlite_exact_count_after_restart",
+        "observed_mailbox_count": 342000,
+        "passed": true
+      },
+      "frames_per_connection": 8,
+      "generated_at": "2026-08-25T04:59:37.390700Z",
+      "host_label": "m5-atmbench",
+      "incomplete_reason": null,
+      "messages_admitted": 342000,
+      "messages_durable": 342000,
+      "messages_requested": 342000,
+      "metrics": {
+        "accepted_count": 342000,
+        "admissions_per_second": {
+          "max": 18856.732169880856,
+          "min": 11223.087470459966,
+          "p50": 17180.408710945812,
+          "p95": 18186.83311306852,
+          "p99": 18606.59836244312
+        },
+        "application_wire_bytes": {
+          "request": 281483140,
+          "response": 140921140,
+          "total": 422404280
+        },
+        "application_wire_bytes_per_second": {
+          "max": 23264493.314590506,
+          "min": 13868930.341620903,
+          "p50": 21227032.828172475,
+          "p95": 22461426.238329798,
+          "p99": 22993103.926389083
+        },
+        "connection_count": 42750,
+        "connections_per_second": {
+          "max": 2357.091521235107,
+          "min": 1402.8859338074958,
+          "p50": 2147.5510888682265,
+          "p95": 2273.354139133565,
+          "p99": 2325.82479530539
+        },
+        "first_failure": null,
+        "interval_count": 342,
+        "interval_latency_ms": {
+          "max": 80.15754199004732,
+          "min": 0.8859169902279973,
+          "p50": 24.303916747157928,
+          "p95": 50.10766600025818,
+          "p99": 60.17520898603834
+        },
+        "passed_interval_count": 342,
+        "request_frames_per_second": {
+          "max": 18856.732169880856,
+          "min": 11223.087470459966,
+          "p50": 17180.408710945812,
+          "p95": 18186.83311306852,
+          "p99": 18606.59836244312
+        },
+        "requested_count": 342000,
+        "response_count": 342000,
+        "time_to_send_1k_s": {
+          "max": 0.08910204100538976,
+          "min": 0.05303145799553022,
+          "p50": 0.05820583298918791,
+          "p95": 0.06351675000041723,
+          "p99": 0.07027404199470766
+        }
+      },
+      "os": "macos",
+      "schema_version": 4,
+      "source_revision": "9542f41cc7fe1d1d38639767226ab4f5ec6133fa",
+      "status": "FAIL",
+      "target": "tcp"
+    },
+    {
+      "baseline": {
+        "p50_floor": 17500.0,
+        "revision": 1
+      },
+      "binary_hashes": {
+        "atm": "69e43059af1cfccd99c972fcccdffc93995ff90159508780930c4f809e56ac5e",
+        "atm-daemon": "98784ffc33dad1b86ced53375a7c0f6c3f88eaf6ec478e458807e93bea406109"
+      },
+      "campaign_id": "20260825T045840Z-m5-atmbench",
+      "direct_sqlite_message_write": null,
+      "durability_after_restart": {
+        "expected_accepted_count": 272000,
+        "method": "isolated_sqlite_exact_count_after_restart",
+        "observed_mailbox_count": 272000,
+        "passed": true
+      },
+      "frames_per_connection": 8,
+      "generated_at": "2026-08-25T05:00:00.127476Z",
+      "host_label": "m5-atmbench",
+      "incomplete_reason": null,
+      "messages_admitted": 272000,
+      "messages_durable": 272000,
+      "messages_requested": 272000,
+      "metrics": {
+        "accepted_count": 272000,
+        "admissions_per_second": {
+          "max": 14910.444218864639,
+          "min": 10355.450849978999,
+          "p50": 13666.783939255614,
+          "p95": 14478.257950569512,
+          "p99": 14812.428367988678
+        },
+        "application_wire_bytes": {
+          "request": 233366890,
+          "response": 112054890,
+          "total": 345421780
+        },
+        "application_wire_bytes_per_second": {
+          "max": 18917626.102684513,
+          "min": 13159189.167610813,
+          "p50": 17358811.884293124,
+          "p95": 18394945.82634176,
+          "p99": 18822893.34862161
+        },
+        "connection_count": 34000,
+        "connections_per_second": {
+          "max": 1863.8055273580799,
+          "min": 1294.4313562473749,
+          "p50": 1708.3479924069518,
+          "p95": 1809.782243821189,
+          "p99": 1851.5535459985847
+        },
+        "first_failure": null,
+        "interval_count": 272,
+        "interval_latency_ms": {
+          "max": 68.32466699415818,
+          "min": 0.7311669760383666,
+          "p50": 22.351323008479085,
+          "p95": 47.169041994493455,
+          "p99": 56.92062500747852
+        },
+        "passed_interval_count": 272,
+        "request_frames_per_second": {
+          "max": 14910.444218864639,
+          "min": 10355.450849978999,
+          "p50": 13666.783939255614,
+          "p95": 14478.257950569512,
+          "p99": 14812.428367988678
+        },
+        "requested_count": 272000,
+        "response_count": 272000,
+        "time_to_send_1k_s": {
+          "max": 0.09656750000431202,
+          "min": 0.06706708300043829,
+          "p50": 0.07317010400583968,
+          "p95": 0.07811195799149573,
+          "p99": 0.09043958398979157
+        }
+      },
+      "os": "macos",
+      "schema_version": 4,
+      "source_revision": "9542f41cc7fe1d1d38639767226ab4f5ec6133fa",
+      "status": "FAIL",
+      "target": "tcp-tls"
+    }
+  ],
+  "schema_version": 4,
+  "source_revision": "9542f41cc7fe1d1d38639767226ab4f5ec6133fa",
+  "started_at": "2026-08-25T04:58:40.135641Z",
+  "status": "FAIL"
+}

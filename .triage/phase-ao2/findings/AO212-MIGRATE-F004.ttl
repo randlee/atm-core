@@ -1,0 +1,88 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO212-MIGRATE-F004>
+  a triage:Finding ;
+  triage:findingId "AO212-MIGRATE-F004" ;
+  triage:title "unattributed code path is dead; orphan files hard-crash instead of being recorded" ;
+  triage:description "quality-mgr QA-1 on PR #1014, ruthless-boundary-qa RBQA-F006 (verified): the 'unattributed' code path is dead. migrated_record() hardcodes unattributed=() and unattributed_count: 0; UnattributedEntry is never instantiated anywhere outside its own class definition. Every unclassifiable file hard-crashes via MigrationError instead of ever landing in 'unattributed', contradicting the sprint doc's explicit requirement that orphaned files either join a campaign or are recorded under unattributed with a reason. No test proves AC4's orphan-reachability requirement either." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "MIGRATE" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-24T16:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.12 ;
+  triage:foundAt "2026-08-24T05:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO212-MIGRATE-F004/AO212-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO212-MIGRATE-F004/AO213-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO212-MIGRATE-F004/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-25T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "migrated_record() now catches MigrationError per-source (line 244) and appends a real UnattributedEntry instead of hard-crashing; test_valid_but_unclassifiable_source_is_retained_as_unattributed exercises this exact orphan-reachability path. Fixed in commit 3e0ee2643." ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AO212-MIGRATE-F004/AO212-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/migrate_benchmark_history.py" ;
+  triage:line 290 ;
+  triage:snippet "unattributed=()" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ao2-12-historical-data-migration" ;
+  triage:headSha "8788090d6" ;
+  triage:occursIn <urn:atm:triage:worktree/ao2-12/8788090d6> .
+
+<urn:atm:triage:occurrence/AO212-MIGRATE-F004/AO213-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/migrate_benchmark_history.py" ;
+  triage:line 290 ;
+  triage:snippet "unattributed=()" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ao2-13-benchmark-run-skill" ;
+  triage:headSha "dccd103db" ;
+  triage:occursIn <urn:atm:triage:worktree/ao2-13/dccd103db> .
+
+<urn:atm:triage:occurrence/AO212-MIGRATE-F004/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/migrate_benchmark_history.py" ;
+  triage:snippet "quality-mgr independent re-verification confirmed fixed via commit 3e0ee2643" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "3e0ee2643" .
+
+<urn:atm:triage:worktree/ao2-10/1d668e269>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ao2-10-benchmark-data-contract" ;
+  triage:branch "feature/ao2-10-benchmark-data-contract" ;
+  triage:headSha "1d668e269" ;
+  triage:orderIndex 11 .
+
+<urn:atm:triage:worktree/ao2-11/77681d466>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ao2-11-benchmark-rendering-pipeline" ;
+  triage:branch "feature/ao2-11-benchmark-rendering-pipeline" ;
+  triage:headSha "77681d466" ;
+  triage:orderIndex 12 .
+
+<urn:atm:triage:worktree/ao2-12/8788090d6>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ao2-12-historical-data-migration" ;
+  triage:branch "feature/ao2-12-historical-data-migration" ;
+  triage:headSha "8788090d6" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/ao2-13/dccd103db>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ao2-13-benchmark-run-skill" ;
+  triage:branch "feature/ao2-13-benchmark-run-skill" ;
+  triage:headSha "dccd103db" ;
+  triage:orderIndex 14 .

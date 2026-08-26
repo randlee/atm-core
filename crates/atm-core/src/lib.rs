@@ -45,6 +45,8 @@ pub(crate) mod mailbox;
 pub(crate) mod model_registry;
 /// Observability adapter traits and event payload types.
 pub mod observability;
+/// Transport-neutral peer-wire policy vocabulary selected at daemon launch.
+pub mod peer_wire;
 /// Internal atomic persistence helpers for shared mutable state files.
 pub(crate) mod persistence;
 /// Hidden process-liveness helpers shared across lock implementations.

@@ -1,0 +1,88 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AO212-MIGRATE-F006>
+  a triage:Finding ;
+  triage:findingId "AO212-MIGRATE-F006" ;
+  triage:title "Windows-seed ratchet generator untested; no quality-mgr sign-off artifact for migration-audit.json" ;
+  triage:description "QA-1 on PR #1014: (a) Windows-seed ratchet generator (updated_baselines()) is never called from any test against this sprint's code path. (b) No quality-mgr sign-off artifact for migration-audit.json in diff, despite sprint doc marking this a merge gate. Note: item (b) requires verification—may be legitimately expected post-QA-1 per sprint-doc merge-gate ordering." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "MIGRATE" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-23T22:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.12 ;
+  triage:foundAt "2026-08-24T05:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO212-MIGRATE-F006/AO212-12> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO212-MIGRATE-F006/AO212-13> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO212-MIGRATE-F006/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-25T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "(a) test_migrate_benchmark_history.py now exercises updated_baselines() against a windows-x64-02/tcp source and asserts the generated Windows seed's p50_floor/effective_from/approved_by, closing the untested-generator gap (commit ea5a3b016). (b) artifacts/benchmark/migration-audit.json and migration-audit.html now exist as the sign-off artifact." ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AO212-MIGRATE-F006/AO212-12>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_migrate_benchmark_history.py" ;
+  triage:line 85 ;
+  triage:snippet "missing test for updated_baselines() Windows seed generation" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ao2-12-historical-data-migration" ;
+  triage:headSha "8788090d6" ;
+  triage:occursIn <urn:atm:triage:worktree/AO212/8788090d6> .
+
+<urn:atm:triage:occurrence/AO212-MIGRATE-F006/AO212-13>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_migrate_benchmark_history.py" ;
+  triage:line 85 ;
+  triage:snippet "missing test for updated_baselines() Windows seed generation" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ao2-13-benchmark-run-skill" ;
+  triage:headSha "dccd103db" ;
+  triage:occursIn <urn:atm:triage:worktree/AO213/dccd103db> .
+
+<urn:atm:triage:occurrence/AO212-MIGRATE-F006/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_migrate_benchmark_history.py" ;
+  triage:snippet "quality-mgr independent re-verification confirmed fixed via commit ea5a3b016" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "ea5a3b016" .
+
+<urn:atm:triage:worktree/AO210/ea953ac44>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ao2-10-benchmark-data-contract" ;
+  triage:branch "feature/ao2-10-benchmark-data-contract" ;
+  triage:headSha "ea953ac44" ;
+  triage:orderIndex 11 .
+
+<urn:atm:triage:worktree/AO211/77681d466>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ao2-11-benchmark-rendering-pipeline" ;
+  triage:branch "feature/ao2-11-benchmark-rendering-pipeline" ;
+  triage:headSha "77681d466" ;
+  triage:orderIndex 12 .
+
+<urn:atm:triage:worktree/AO212/8788090d6>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ao2-12-historical-data-migration" ;
+  triage:branch "feature/ao2-12-historical-data-migration" ;
+  triage:headSha "8788090d6" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/AO213/dccd103db>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ao2-13-benchmark-run-skill" ;
+  triage:branch "feature/ao2-13-benchmark-run-skill" ;
+  triage:headSha "dccd103db" ;
+  triage:orderIndex 14 .

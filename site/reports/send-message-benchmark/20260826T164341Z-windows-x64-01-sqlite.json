@@ -1,0 +1,71 @@
+{
+  "baseline": {
+    "p50_floor": 16035.345045815106,
+    "revision": 1
+  },
+  "binary_hashes": {
+    "atm": "7a588502e626181411a768dbad119c80e2e636456a982add4268c705e9933b20",
+    "atm-daemon": "5f64931a8e6108774c3e47baf5661f981940f1706587f938395d5231dcf4889a"
+  },
+  "campaign_id": "20260826T164341Z-windows-x64-01",
+  "direct_sqlite_message_write": {
+    "accepted_count": 316000,
+    "admissions_per_second": 15793.276170603127,
+    "elapsed_seconds": 20.0085148,
+    "kind": "async_storage_admission",
+    "requested_count": 316000,
+    "worker_count": 512
+  },
+  "durability_after_restart": {
+    "expected_accepted_count": 316000,
+    "method": "isolated_sqlite_exact_count_after_restart",
+    "observed_mailbox_count": 316000,
+    "passed": true
+  },
+  "frames_per_connection": 0,
+  "generated_at": "2026-08-26T16:43:41.985411Z",
+  "host_label": "windows-x64-01",
+  "incomplete_reason": null,
+  "messages_admitted": 316000,
+  "messages_durable": 316000,
+  "messages_requested": 316000,
+  "metrics": {
+    "accepted_count": 316000,
+    "admissions_per_second": {
+      "max": 21901.918827108442,
+      "min": 8626.892093108321,
+      "p50": 15989.741149635476,
+      "p95": 19906.59824105298,
+      "p99": 20260.099152925253
+    },
+    "application_wire_bytes": null,
+    "application_wire_bytes_per_second": null,
+    "connection_count": null,
+    "connections_per_second": null,
+    "first_failure": null,
+    "interval_count": 316,
+    "interval_latency_ms": {
+      "max": 0.0,
+      "min": 0.0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "p99": 0.0
+    },
+    "passed_interval_count": 316,
+    "request_frames_per_second": null,
+    "requested_count": 316000,
+    "response_count": 316000,
+    "time_to_send_1k_s": {
+      "max": 0.1159166,
+      "min": 0.0456581,
+      "p50": 0.0625401,
+      "p95": 0.076143,
+      "p99": 0.0811093
+    }
+  },
+  "os": "windows",
+  "schema_version": 4,
+  "source_revision": "098bd7afa0e1c04ad195f11274abef7a7da0bdca",
+  "status": "FAIL",
+  "target": "sqlite"
+}

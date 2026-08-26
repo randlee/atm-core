@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FTQ-002>
+  a triage:Finding ;
+  triage:findingId "FTQ-002" ;
+  triage:title "Flaky real-wall-clock sleep race in peer-connection-pool eviction test instead of paused-clock pattern" ;
+  triage:description "Test `expired_idle_connection_is_evicted_and_redialed` in crates/atm-http-runtime/src/peer_connection_pool.rs:909-940 is declared `#[tokio::test]` (not `#[tokio::test(start_paused = true)]`), configures `idle_timeout=5ms`, then does a real `tokio::time::sleep(15ms)` (a fixed 3x race margin) before calling `evict_idle_now()` and asserting eviction counts. This is a real-wall-clock timing race, not the deterministic `start_paused = true` + `tokio::time::advance()` pattern already used elsewhere in this same AO2 phase's code (e.g. client.rs's `request_deadline_bounds_the_connector_once`). Under CI contention/slow runners the 3x margin can still flake. Fix: convert the test to `#[tokio::test(start_paused = true)]` and use `tokio::time::advance(Duration::from_millis(...))` instead of a real sleep, matching the existing pattern in this codebase." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "flaky-test" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-26T07:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.15 ;
+  triage:foundAt "2026-08-26T06:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-002/FTQ-002-occ-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/FTQ-002/FTQ-002-occ-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/peer_connection_pool.rs" ;
+  triage:line 909 ;
+  triage:snippet "#[tokio::test] async fn expired_idle_connection_is_evicted_and_redialed() { ... tokio::time::sleep(std::time::Duration::from_millis(15)).await; pool.evict_idle_now(); ..." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "91b0b272e" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-ao2/91b0b272e> .
+
+<urn:atm:triage:worktree/integrate-ao2/91b0b272e>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ao2" ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "91b0b272e" ;
+  triage:orderIndex 16 .
