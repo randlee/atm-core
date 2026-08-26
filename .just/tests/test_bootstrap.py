@@ -52,7 +52,7 @@ class BootstrapTests(unittest.TestCase):
 
     def test_cargo_modules_uses_quick_install_without_compile(self) -> None:
         command = bootstrap.cargo_binstall_command(
-            "cargo-modules", "0.26.0", force=True, allow_quick_install=True
+            "cargo-modules", "0.26.0", force=True, allowed_strategies=("quick-install",)
         )
         self.assertEqual(command, [
             "cargo", "binstall", "--no-confirm", "--disable-telemetry",
@@ -82,6 +82,12 @@ class BootstrapTests(unittest.TestCase):
             "cargo-audit": "0.22.2",
             "cargo-shear": "1.12.0",
             "cargo-modules": "0.26.0",
+        })
+        self.assertEqual(dict(manifest.cargo_allowed_strategies), {
+            "cargo-deny": (),
+            "cargo-audit": ("quick-install",),
+            "cargo-shear": (),
+            "cargo-modules": ("quick-install",),
         })
         self.assertEqual(manifest.sc_compose, "1.5.0")
         self.assertEqual(dict(manifest.python_packages)["maturin"], "1.14.1")

@@ -11,6 +11,15 @@ cargo-audit = "0.22.2"
 cargo-shear = "1.12.0"
 cargo-modules = "0.26.0"
 
+# Binstall strategies allowed for each cargo tool.  `compile` is never allowed
+# in CI; cargo-audit and cargo-modules need Binstall's third-party quick-install
+# archives because their upstream release layouts are not resolvable uniformly.
+[cargo-allowed-strategies]
+cargo-deny = []
+cargo-audit = ["quick-install"]
+cargo-shear = []
+cargo-modules = ["quick-install"]
+
 [sc-compose]
 version = "1.5.0"
 

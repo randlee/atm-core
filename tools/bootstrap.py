@@ -39,6 +39,7 @@ class BootstrapManifest:
     python: str
     just: str
     cargo_tools: tuple[tuple[str, str], ...]
+    cargo_allowed_strategies: tuple[tuple[str, tuple[str, ...]], ...]
     sc_compose: str
     sc_compose_checksums: tuple[tuple[str, str], ...]
     python_packages: tuple[tuple[str, str], ...]
@@ -49,17 +50,30 @@ def load_manifest(path: Path = MANIFEST_PATH) -> BootstrapManifest:
     raw = tomllib.loads(path.read_text(encoding="utf-8"))
     toolchain = raw["toolchain"]
     cargo = raw["cargo"]
+    cargo_allowed = raw["cargo-allowed-strategies"]
     sc_compose = raw["sc-compose"]
     python = raw["python"]
+    cargo_tools = (
+        ("cargo-deny", cargo["cargo-deny"]),
+        ("cargo-audit", cargo["cargo-audit"]),
+        ("cargo-shear", cargo["cargo-shear"]),
+        ("cargo-modules", cargo["cargo-modules"]),
+    )
+    if set(cargo_allowed) != {name for name, _version in cargo_tools}:
+        raise BootstrapError("cargo-allowed-strategies must name every cargo tool exactly once.")
+    if any(
+        not isinstance(strategies, list)
+        or any(strategy != "quick-install" for strategy in strategies)
+        for strategies in cargo_allowed.values()
+    ):
+        raise BootstrapError("cargo-allowed-strategies may contain only quick-install.")
     return BootstrapManifest(
         rust=toolchain["rust"],
         python=toolchain["python"],
         just=toolchain["just"],
-        cargo_tools=(
-            ("cargo-deny", cargo["cargo-deny"]),
-            ("cargo-audit", cargo["cargo-audit"]),
-            ("cargo-shear", cargo["cargo-shear"]),
-            ("cargo-modules", cargo["cargo-modules"]),
+        cargo_tools=cargo_tools,
+        cargo_allowed_strategies=tuple(
+            sorted((name, tuple(strategies)) for name, strategies in cargo_allowed.items())
         ),
         sc_compose=sc_compose["version"],
         sc_compose_checksums=tuple(sorted(sc_compose["checksums"].items())),
@@ -200,7 +214,7 @@ def cargo_binstall_command(
     version: str,
     *,
     force: bool,
-    allow_quick_install: bool = False,
+    allowed_strategies: Sequence[str] = (),
 ) -> list[str]:
     """Return a non-compiling cargo-binstall command for one registry tool.
 
@@ -209,7 +223,7 @@ def cargo_binstall_command(
     tools with first-party release assets; cargo-modules explicitly enables it
     because its upstream project publishes tags but no GitHub releases.
     """
-    disabled_strategies = "compile" if allow_quick_install else "quick-install,compile"
+    disabled_strategies = "compile" if "quick-install" in allowed_strategies else "quick-install,compile"
     command = [
         "cargo",
         "binstall",
@@ -497,19 +511,18 @@ def bootstrap(manifest: BootstrapManifest, *, dry_run: bool) -> None:
         verify_seed_tools(manifest)
     python = ensure_bootstrap_venv(manifest, dry_run=dry_run)
     ci = running_in_ci()
+    allowed_strategies = dict(manifest.cargo_allowed_strategies)
     for name, version in manifest.cargo_tools:
         if registry_tool_matches(name, version, manifest.rust) or binstall_tool_matches(name, version):
             continue
         installed = False
         if cargo_binstall_available():
-            # cargo-modules has no first-party release assets; permit only
-            # Binstall's third-party quick-install archive, never compilation.
             installed = run(
                 cargo_binstall_command(
                     name,
                     version,
                     force=True,
-                    allow_quick_install=name == "cargo-modules",
+                    allowed_strategies=allowed_strategies[name],
                 ),
                 dry_run=dry_run,
                 allow_failure=not ci,
