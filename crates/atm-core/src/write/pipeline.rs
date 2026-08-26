@@ -71,7 +71,59 @@ impl PreparedWrite {
         runtime: &LocalServiceRuntime,
         observability: &dyn ObservabilityPort,
     ) -> Result<WriteOutcome, AtmError> {
-        self.finish_with_runtime(runtime, observability)
+        let outcome = self.finish_with_runtime(runtime, observability)?;
+        self.mark_pending_if_deferred(runtime);
+        Ok(outcome)
+    }
+
+    /// Sets the durable at-most-once queue marker for a newly persisted
+    /// deferred write. Marker persistence is advisory and never invalidates
+    /// an already successful durable write.
+    fn mark_pending_if_deferred(&self, runtime: &LocalServiceRuntime) {
+        if !self.is_newly_persisted() || self.outbound_request.nudge_mode != NudgeMode::Deferred {
+            return;
+        }
+        let message_id = self.persisted_message_id();
+        let Ok(Some(post_write)) = &self.received_hook else {
+            tracing::warn!(
+                subsystem = "atm_core.queue",
+                action = "queue_marker_set",
+                outcome = "failed",
+                message_id = %message_id,
+                "deferred write has no retained recipient for a queue marker"
+            );
+            return;
+        };
+        let member = boundary::MemberKey::new(
+            post_write.recipient.team.clone(),
+            post_write.recipient.agent.clone(),
+        );
+        let store = match runtime.pending_nudge_store() {
+            Ok(store) => store,
+            Err(error) => {
+                tracing::warn!(
+                    subsystem = "atm_core.queue",
+                    action = "queue_marker_set",
+                    outcome = "failed",
+                    message_id = %message_id,
+                    member = %member,
+                    %error,
+                    "deferred write has no pending-nudge store installed"
+                );
+                return;
+            }
+        };
+        if let Err(error) = store.mark_pending(&member, &message_id, self.persisted_timestamp) {
+            tracing::warn!(
+                subsystem = "atm_core.queue",
+                action = "queue_marker_set",
+                outcome = "failed",
+                message_id = %message_id,
+                member = %member,
+                %error,
+                "failed to set the deferred-nudge queue marker"
+            );
+        }
     }
 
     fn finish_with_runtime<R>(
@@ -127,6 +179,16 @@ impl PreparedWrite {
         &self,
         runtime: &LocalServiceRuntime,
     ) -> Result<Vec<BuiltInPostSendDispatch>, AtmError> {
+        if self.outbound_request.nudge_mode == NudgeMode::Deferred {
+            tracing::info!(
+                subsystem = "atm_core.queue",
+                action = "steer_suppressed",
+                outcome = "ok",
+                message_id = %self.persisted_message_id(),
+                "deferred write suppresses its immediate receiver steer"
+            );
+            return Ok(Vec::new());
+        }
         let post_write = match &self.received_hook {
             Ok(Some(post_write)) => post_write,
             Ok(None) => return Ok(Vec::new()),
@@ -144,7 +206,7 @@ impl PreparedWrite {
                 &post_write.delivery_snapshot,
                 &event,
                 &message.envelope.text,
-                crate::send::NudgeMode::Immediate,
+                self.outbound_request.nudge_mode,
             ) {
                 dispatches.push(dispatch);
             }

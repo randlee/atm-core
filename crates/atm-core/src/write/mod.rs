@@ -23,10 +23,11 @@ use crate::provenance::{
 };
 use crate::schema::{AtmMessageId, InboxMessage, authenticated_source_host, peer_delivery_target};
 use crate::send::{
-    DeliveryExecutionMode, DuplicateWriteDisposition, PreparedReceivedHook, ResolvedRecipient,
-    SendCommandOutcome, SendMessageSource, SendOutcome, SendRequest, WriteRequest,
-    annotate_path_only_body, emit_send_command_event, finalize_send_outcome, persist_send_message,
-    prepare_received_hook, prepare_send_context, request_requires_ack, resolve_message_body,
+    DeliveryExecutionMode, DuplicateWriteDisposition, NudgeMode, PreparedReceivedHook,
+    ResolvedRecipient, SendCommandOutcome, SendMessageSource, SendOutcome, SendRequest,
+    WriteRequest, annotate_path_only_body, emit_send_command_event, finalize_send_outcome,
+    persist_send_message, prepare_received_hook, prepare_send_context, request_requires_ack,
+    resolve_message_body,
 };
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};

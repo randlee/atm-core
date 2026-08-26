@@ -69,6 +69,7 @@ pub use crate::write::{
 pub(crate) use crate::write::{send_mail_with_runtime_impl, write_mail_with_runtime_impl};
 
 /// Selects when a committed write's receiver nudge is emitted.
+/// `NudgeMode::Deferred` is persisted as a queue marker for later delivery.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NudgeMode {

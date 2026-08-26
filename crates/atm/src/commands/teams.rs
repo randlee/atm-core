@@ -996,6 +996,9 @@ mod tests {
             model: "gpt-5".to_string(),
             home_dir: Some(fixture.current_dir.clone()),
             pane_id: Some("21".to_string()),
+            backend: None,
+            target: None,
+            session: None,
             json: true,
         };
 
@@ -1027,6 +1030,9 @@ mod tests {
             agent_type: Some("worker".to_string()),
             model: Some("gpt-5".to_string()),
             pane_id: Some("%19".to_string()),
+            backend: None,
+            target: None,
+            session: None,
             json: true,
         };
 
