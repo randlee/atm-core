@@ -77,6 +77,7 @@ ALLOWED_FORBIDDEN_LITERALS = (
 # need a second pass over the AQ1 contract surface.
 ALLOWED_NUDGE_IDENTIFIERS = frozenset(
     {
+        "HerdrNudgeTarget",
         "_enqueue_nudge", "_nudge", "_on_nudge", "acquire_host_nudge_helper_permit",
         "bounded_host_nudge_injector_caps_helper_growth_under_repeated_hangs",
         "bounded_host_nudge_injector_timeout_does_not_wedge_future_delivery",
@@ -199,6 +200,21 @@ def iter_rust_lines(path: Path):
 
 def find_violations(repo_root: Path) -> tuple[Violation, ...]:
     violations: list[Violation] = []
+    backend_type_paths = {
+        "crates/atm-core/src/team_admin/member_mutation.rs",
+        "crates/atm-core/src/delivery_channel.rs",
+    }
+    actual_backend_type_paths = {
+        path.relative_to(repo_root).as_posix()
+        for path in iter_rust_sources(repo_root)
+        if '"backendType"' in path.read_text(encoding="utf-8")
+    }
+    if actual_backend_type_paths != backend_type_paths:
+        violations.append(Violation(
+            Path("crates/atm-core"), 0,
+            'the roster backendType mapping must be owned by exactly member_mutation.rs and delivery_channel.rs',
+            ", ".join(sorted(actual_backend_type_paths)),
+        ))
     for path in iter_rust_sources(repo_root):
         relative_path = path.relative_to(repo_root).as_posix()
         relative = Path(relative_path)

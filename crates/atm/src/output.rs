@@ -535,6 +535,9 @@ pub fn print_add_member_result(outcome: &AddMemberOutcome, json: bool) -> Result
             outcome.member, outcome.team, outcome.created_inbox
         );
     }
+    for warning in &outcome.warnings {
+        eprintln!("warning: {warning}");
+    }
     Ok(())
 }
 
@@ -544,6 +547,9 @@ pub fn print_update_member_result(outcome: &UpdateMemberOutcome, json: bool) -> 
         println!("{}", serde_json::to_string_pretty(outcome)?);
     } else {
         println!("Updated member {} in {}", outcome.member, outcome.team);
+    }
+    for warning in &outcome.warnings {
+        eprintln!("warning: {warning}");
     }
     Ok(())
 }

@@ -59,9 +59,18 @@ struct AddMemberCommand {
     #[arg(long = "home-dir")]
     home_dir: Option<PathBuf>,
 
+    #[arg(long, help = "local receiver backend: tmux or herdr")]
+    backend: Option<String>,
+
+    #[arg(long, help = "tmux pane target; required for --backend tmux")]
+    target: Option<String>,
+
+    #[arg(long, help = "Herdr session name; only valid with --backend herdr")]
+    session: Option<String>,
+
     #[arg(
         long = "pane-id",
-        help = "tmux pane id in '%<number>' form or a bare numeric pane id"
+        help = "deprecated compatibility spelling for --backend tmux --target"
     )]
     pane_id: Option<String>,
 
@@ -89,9 +98,18 @@ struct UpdateMemberCommand {
     #[arg(long)]
     model: Option<String>,
 
+    #[arg(long, help = "local receiver backend: tmux or herdr")]
+    backend: Option<String>,
+
+    #[arg(long, help = "tmux pane target; required for --backend tmux")]
+    target: Option<String>,
+
+    #[arg(long, help = "Herdr session name; only valid with --backend herdr")]
+    session: Option<String>,
+
     #[arg(
         long = "pane-id",
-        help = "tmux pane id in '%<number>' form or a bare numeric pane id"
+        help = "deprecated compatibility spelling for --backend tmux --target"
     )]
     pane_id: Option<String>,
 
@@ -228,15 +246,34 @@ impl AddMemberCommand {
         atm_home_dir: PathBuf,
         member_home_dir: PathBuf,
     ) -> Result<AddMemberRequest> {
-        AddMemberRequest::new(
-            atm_home_dir,
-            &self.team,
-            &self.member,
-            self.agent_type,
-            self.model,
-            member_home_dir,
-            self.pane_id,
-        )
+        if self.backend.is_some() || self.target.is_some() || self.session.is_some() {
+            if self.pane_id.is_some() {
+                return Err(anyhow::anyhow!(
+                    "--pane-id cannot be combined with --backend, --target, or --session"
+                ));
+            }
+            AddMemberRequest::new_with_backend(
+                atm_home_dir,
+                &self.team,
+                &self.member,
+                self.agent_type,
+                self.model,
+                member_home_dir,
+                self.backend.as_deref(),
+                self.target.as_deref(),
+                self.session.as_deref(),
+            )
+        } else {
+            AddMemberRequest::new(
+                atm_home_dir,
+                &self.team,
+                &self.member,
+                self.agent_type,
+                self.model,
+                member_home_dir,
+                self.pane_id,
+            )
+        }
         .map_err(Into::into)
     }
 }
@@ -333,18 +370,40 @@ impl UpdateMemberCommand {
     }
 
     fn build_request(self, caller_context: CallerContext) -> Result<UpdateMemberRequest> {
-        UpdateMemberRequest::new(
-            caller_context.caller_identity,
-            caller_context.caller_team,
-            &self.team,
-            &self.member,
-            self.home_dir,
-            self.workspace_root,
-            self.harness,
-            self.agent_type,
-            self.model,
-            self.pane_id,
-        )
+        if self.backend.is_some() || self.target.is_some() || self.session.is_some() {
+            if self.pane_id.is_some() {
+                return Err(anyhow::anyhow!(
+                    "--pane-id cannot be combined with --backend, --target, or --session"
+                ));
+            }
+            UpdateMemberRequest::new_with_backend(
+                caller_context.caller_identity,
+                caller_context.caller_team,
+                &self.team,
+                &self.member,
+                self.home_dir,
+                self.workspace_root,
+                self.harness,
+                self.agent_type,
+                self.model,
+                self.backend.as_deref(),
+                self.target.as_deref(),
+                self.session.as_deref(),
+            )
+        } else {
+            UpdateMemberRequest::new(
+                caller_context.caller_identity,
+                caller_context.caller_team,
+                &self.team,
+                &self.member,
+                self.home_dir,
+                self.workspace_root,
+                self.harness,
+                self.agent_type,
+                self.model,
+                self.pane_id,
+            )
+        }
         .map_err(Into::into)
     }
 }
@@ -458,6 +517,9 @@ mod tests {
                 harness: Some("codex-cli".to_string()),
                 agent_type: Some("worker".to_string()),
                 model: Some("gpt-5".to_string()),
+                backend: None,
+                target: None,
+                session: None,
                 pane_id: Some("%19".to_string()),
                 json,
             })),
@@ -615,6 +677,9 @@ mod tests {
             agent_type: "worker".to_string(),
             model: "gpt-5".to_string(),
             home_dir: None,
+            backend: None,
+            target: None,
+            session: None,
             pane_id: None,
             json: false,
         };
@@ -635,6 +700,9 @@ mod tests {
             agent_type: "worker".to_string(),
             model: "gpt-5".to_string(),
             home_dir: None,
+            backend: None,
+            target: None,
+            session: None,
             pane_id: None,
             json: false,
         };
@@ -699,6 +767,9 @@ mod tests {
             agent_type: "worker".to_string(),
             model: "gpt-5".to_string(),
             home_dir: None,
+            backend: None,
+            target: None,
+            session: None,
             pane_id: Some("17".to_string()),
             json: false,
         };
@@ -724,6 +795,9 @@ mod tests {
             agent_type: "worker".to_string(),
             model: "gpt-5".to_string(),
             home_dir: None,
+            backend: None,
+            target: None,
+            session: None,
             pane_id: None,
             json: false,
         };
@@ -761,6 +835,9 @@ mod tests {
             harness: Some("codex-cli".to_string()),
             agent_type: Some("worker".to_string()),
             model: Some("gpt-5".to_string()),
+            backend: None,
+            target: None,
+            session: None,
             pane_id: Some("17".to_string()),
             json: true,
         };

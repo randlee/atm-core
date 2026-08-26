@@ -707,8 +707,9 @@ mod tests {
 
     use atm_core::boundary::{
         AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, GraftNudgeTarget,
-        LocalTmuxNudgeTarget, MessageReceivedHookSelector, NudgeKind, PostSendBuiltInTarget,
-        PostSendEmissionPath, PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
+        LocalSteerTarget, LocalTmuxNudgeTarget, MessageReceivedHookSelector, NudgeKind,
+        PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEvent, RosterEntry, RosterHarness,
+        RosterMemberKind,
     };
     use atm_core::observability::NullObservability;
     use atm_core::protocol::{
@@ -905,7 +906,10 @@ mod tests {
             dispatch: &BuiltInPostSendDispatch,
         ) -> Option<&dyn AsyncMessageReceivedHookEmitter> {
             match &dispatch.target {
-                PostSendBuiltInTarget::LocalSteer(_) => Some(self.tmux.as_ref()),
+                PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Tmux(_)) => {
+                    Some(self.tmux.as_ref())
+                }
+                PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Herdr(_)) => None,
                 PostSendBuiltInTarget::Graft(_) => Some(self.graft.as_ref()),
             }
         }
@@ -1267,10 +1271,12 @@ mod tests {
         };
         let tmux_dispatch = BuiltInPostSendDispatch {
             event: hook_event(),
-            target: PostSendBuiltInTarget::LocalSteer(LocalTmuxNudgeTarget {
-                pane_id: PaneId::from_cli("%1").expect("pane"),
-                rendered_nudge: "tmux nudge".to_owned(),
-            }),
+            target: PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Tmux(
+                LocalTmuxNudgeTarget {
+                    pane_id: PaneId::from_cli("%1").expect("pane"),
+                    rendered_nudge: "tmux nudge".to_owned(),
+                },
+            )),
             kind: NudgeKind::Steer,
         };
         let graft_dispatch = BuiltInPostSendDispatch {

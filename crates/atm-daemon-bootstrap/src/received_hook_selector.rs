@@ -17,6 +17,9 @@ use atm_core::boundary::{
     TMUX_NUDGE_CONFIRM_KEY,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
+use atm_http_runtime::herdr_process::{
+    HerdrProcessAdapter, HerdrProcessInvoker, HerdrPromptOutcome,
+};
 
 /// Builds the selector injected into every production replacement daemon.
 ///
@@ -26,7 +29,10 @@ use atm_core::error::{AtmError, AtmErrorCode};
 pub fn active_received_hook_selector(
     service_runtime: LocalServiceRuntime,
 ) -> Arc<dyn MessageReceivedHookSelector> {
-    Arc::new(ReplacementReceivedHookSelector::new(service_runtime))
+    Arc::new(ReplacementReceivedHookSelector::new(
+        service_runtime,
+        Arc::new(HerdrProcessInvoker),
+    ))
 }
 
 /// Mode accepted exclusively by the separately compiled benchmark binary.
@@ -68,14 +74,21 @@ pub fn benchmark_received_hook_selector(
 #[derive(Clone)]
 struct ReplacementReceivedHookSelector {
     tmux: TokioTmuxReceivedHook,
+    herdr: HerdrReceivedHook,
     graft: PublishedGraftReceivedHook,
 }
 
 impl ReplacementReceivedHookSelector {
     #[must_use]
-    fn new(service_runtime: LocalServiceRuntime) -> Self {
+    fn new(
+        service_runtime: LocalServiceRuntime,
+        herdr_process: Arc<dyn HerdrProcessAdapter>,
+    ) -> Self {
         Self {
             tmux: TokioTmuxReceivedHook,
+            herdr: HerdrReceivedHook {
+                process: herdr_process,
+            },
             graft: PublishedGraftReceivedHook { service_runtime },
         }
     }
@@ -89,9 +102,20 @@ impl MessageReceivedHookSelector for ReplacementReceivedHookSelector {
         dispatch: &BuiltInPostSendDispatch,
     ) -> Option<&dyn AsyncMessageReceivedHookEmitter> {
         match (dispatch.kind, &dispatch.target) {
-            (NudgeKind::Steer, PostSendBuiltInTarget::LocalSteer(_)) => Some(&self.tmux),
+            (
+                NudgeKind::Steer,
+                PostSendBuiltInTarget::LocalSteer(boundary::LocalSteerTarget::Tmux(_)),
+            ) => Some(&self.tmux),
+            (
+                NudgeKind::Steer,
+                PostSendBuiltInTarget::LocalSteer(boundary::LocalSteerTarget::Herdr(_)),
+            ) => Some(&self.herdr),
             (NudgeKind::Steer, PostSendBuiltInTarget::Graft(_)) => Some(&self.graft),
-            (NudgeKind::Queue, _) => None, // AQ2/AQ3 own queue-kind emitters
+            (
+                NudgeKind::Queue,
+                PostSendBuiltInTarget::LocalSteer(boundary::LocalSteerTarget::Herdr(_)),
+            ) => Some(&self.herdr),
+            (NudgeKind::Queue, _) => None, // AQ3 owns tmux/graft queue-kind emitters
         }
     }
 }
@@ -130,7 +154,9 @@ impl AsyncMessageReceivedHookEmitter for TokioTmuxReceivedHook {
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<PostSendEmissionPath, AtmError>> + Send + '_>> {
         Box::pin(async move {
-            let PostSendBuiltInTarget::LocalSteer(target) = dispatch.target else {
+            let PostSendBuiltInTarget::LocalSteer(boundary::LocalSteerTarget::Tmux(target)) =
+                dispatch.target
+            else {
                 return Err(AtmError::validation(
                     "tmux receiver hook received a non-tmux dispatch",
                 ));
@@ -172,6 +198,56 @@ impl AsyncMessageReceivedHookEmitter for TokioTmuxReceivedHook {
             )
             .await?;
             Ok(PostSendEmissionPath::LocalTmux)
+        })
+    }
+}
+
+/// Tokio-native Herdr receiver. Herdr performs live agent resolution and its
+/// own pre-input blocked-dialog guard; this emitter never falls back to tmux.
+#[derive(Clone)]
+struct HerdrReceivedHook {
+    process: Arc<dyn HerdrProcessAdapter>,
+}
+
+impl boundary::sealed::Sealed for HerdrReceivedHook {}
+
+impl AsyncMessageReceivedHookEmitter for HerdrReceivedHook {
+    fn emit_received_message(
+        &self,
+        dispatch: BuiltInPostSendDispatch,
+        deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Result<PostSendEmissionPath, AtmError>> + Send + '_>> {
+        let process = Arc::clone(&self.process);
+        Box::pin(async move {
+            let PostSendBuiltInTarget::LocalSteer(boundary::LocalSteerTarget::Herdr(target)) =
+                dispatch.target
+            else {
+                return Err(AtmError::validation(
+                    "Herdr receiver hook received a non-Herdr dispatch",
+                ));
+            };
+            let outcome = process
+                .prompt(
+                    &dispatch.event.recipient,
+                    target.session.as_deref(),
+                    deadline,
+                )
+                .await?;
+            match outcome {
+                HerdrPromptOutcome::Accepted => {
+                    tracing::info!(backend = "herdr", member = %dispatch.event.recipient, outcome = "accepted", "Herdr wake-up submitted");
+                }
+                HerdrPromptOutcome::BlockedBeforeInput => {
+                    tracing::warn!(backend = "herdr", member = %dispatch.event.recipient, outcome = "blocked_before_input", "Herdr rejected wake-up before input");
+                }
+                HerdrPromptOutcome::TargetNotPresent => {
+                    tracing::warn!(backend = "herdr", member = %dispatch.event.recipient, outcome = "target_not_present", "Herdr agent target is not present");
+                }
+                HerdrPromptOutcome::AdvisoryFailure { code } => {
+                    tracing::warn!(backend = "herdr", member = %dispatch.event.recipient, %code, outcome = "advisory_failure", "Herdr wake-up was not accepted");
+                }
+            }
+            Ok(PostSendEmissionPath::LocalHerdr)
         })
     }
 }
@@ -254,19 +330,20 @@ impl AsyncMessageReceivedHookEmitter for PublishedGraftReceivedHook {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
     use std::time::Duration;
 
     use atm_core::RequestDeadline;
     use atm_core::boundary::MessageReceivedHookSelector;
     use atm_core::boundary::{
-        AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, LocalTmuxNudgeTarget, NudgeKind,
-        PostSendBuiltInTarget, PostSendHookEvent,
+        AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, LocalSteerTarget,
+        LocalTmuxNudgeTarget, NudgeKind, PostSendBuiltInTarget, PostSendHookEvent,
     };
     use atm_core::types::{AgentName, PaneId, TeamName};
 
     #[cfg(feature = "benchmark-harness")]
     use super::{BenchmarkHookMode, DisabledReceivedHookSelector};
-    use super::{ReplacementReceivedHookSelector, TokioTmuxReceivedHook};
+    use super::{HerdrProcessInvoker, ReplacementReceivedHookSelector, TokioTmuxReceivedHook};
 
     fn tmux_dispatch() -> BuiltInPostSendDispatch {
         BuiltInPostSendDispatch {
@@ -284,10 +361,12 @@ mod tests {
                 task_id: None,
                 recipient_pane_id: Some(PaneId::from_cli("%1").expect("pane")),
             },
-            target: PostSendBuiltInTarget::LocalSteer(LocalTmuxNudgeTarget {
-                pane_id: PaneId::from_cli("%1").expect("pane"),
-                rendered_nudge: "test".to_owned(),
-            }),
+            target: PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Tmux(
+                LocalTmuxNudgeTarget {
+                    pane_id: PaneId::from_cli("%1").expect("pane"),
+                    rendered_nudge: "test".to_owned(),
+                },
+            )),
             kind: NudgeKind::Steer,
         }
     }
@@ -304,7 +383,10 @@ mod tests {
         let assembly =
             atm_runtime_test_support::open_isolated_sqlite_boundary(temporary_root.path())
                 .expect("assemble isolated selector runtime");
-        let selector = ReplacementReceivedHookSelector::new(assembly.service_runtime);
+        let selector = ReplacementReceivedHookSelector::new(
+            assembly.service_runtime,
+            Arc::new(HerdrProcessInvoker),
+        );
 
         assert!(selector.select_emitter(&tmux_dispatch()).is_some());
         assert!(selector.select_emitter(&queue_dispatch()).is_none());

@@ -56,6 +56,14 @@ pub struct MemberSummary {
     pub model: ModelName,
     pub joined_at: Option<u64>,
     pub tmux_pane_id: Option<PaneId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backend: Option<String>,
+    #[serde(
+        rename = "herdrSession",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub herdr_session: Option<String>,
     pub home_dir: HomeDirPath,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub live_cwd: Option<String>,
@@ -682,6 +690,77 @@ mod tests {
     }
 
     #[test]
+    fn explicit_herdr_backend_validates_identity_and_session() {
+        let tempdir = tempdir().expect("tempdir");
+        let request = AddMemberRequest::new_with_backend(
+            tempdir.path().to_path_buf(),
+            TEST_TEAM,
+            "arch-ctm",
+            "worker".into(),
+            "gpt-5".into(),
+            tempdir.path().to_path_buf(),
+            Some("herdr"),
+            None,
+            Some("team-a"),
+        )
+        .expect("Herdr request");
+        assert!(request.tmux_pane_id.is_none());
+        assert!(matches!(
+            request.local_backend,
+            Some(crate::delivery_channel::LocalMessageReceivedBackend::Herdr { .. })
+        ));
+
+        let error = AddMemberRequest::new_with_backend(
+            tempdir.path().to_path_buf(),
+            TEST_TEAM,
+            "Team-Lead",
+            "worker".into(),
+            "gpt-5".into(),
+            tempdir.path().to_path_buf(),
+            Some("herdr"),
+            None,
+            None,
+        )
+        .expect_err("Herdr grammar must be strict");
+        assert!(error.message().contains("^[a-z][a-z0-9_-]{0,31}$"));
+    }
+
+    #[test]
+    fn explicit_herdr_add_persists_mode_without_a_tmux_target() {
+        let tempdir = tempdir().expect("tempdir");
+        let roster_store = RecordingRosterStore::default();
+        let request = AddMemberRequest::new_with_backend(
+            tempdir.path().to_path_buf(),
+            TEST_TEAM,
+            "arch-ctm",
+            "worker".into(),
+            "gpt-5".into(),
+            tempdir.path().to_path_buf(),
+            Some("herdr"),
+            None,
+            Some("team-a"),
+        )
+        .expect("Herdr request");
+        add_member_with_roster_store(&roster_store, request).expect("add Herdr member");
+        let roster = roster_store
+            .load_roster(&TEST_TEAM.parse().expect("team"))
+            .expect("roster");
+        let member = roster
+            .iter()
+            .find(|member| member.agent_name.as_str() == "arch-ctm")
+            .expect("member");
+        assert!(member.recipient_pane_id.is_none());
+        assert_eq!(
+            member.metadata_json.get(concat!("backend", "Type")),
+            Some(&serde_json::json!("herdr"))
+        );
+        assert_eq!(
+            member.metadata_json.get("herdrSession"),
+            Some(&serde_json::json!("team-a"))
+        );
+    }
+
+    #[test]
     fn add_member_rejects_invalid_team_segment() {
         let tempdir = tempdir().expect("tempdir");
         let error = AddMemberRequest::new(
@@ -714,6 +793,8 @@ mod tests {
                 model: crate::types::ModelName::new("gpt-5").expect("model"),
                 member_home_dir: tempdir.path().to_path_buf().into(),
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("7").expect("pane")),
+                local_backend: None,
+                backend_warning: None,
             },
         )
         .expect("add member");
@@ -751,6 +832,8 @@ mod tests {
                 model: crate::types::ModelName::new("gpt-5").expect("model"),
                 member_home_dir: tempdir.path().to_path_buf().into(),
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("session:1.2").expect("pane")),
+                local_backend: None,
+                backend_warning: None,
             },
         )
         .expect("add member");
@@ -876,6 +959,8 @@ mod tests {
                 model: crate::types::ModelName::new("gpt-5").expect("model"),
                 member_home_dir: tempdir.path().to_path_buf().into(),
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("%12").expect("pane")),
+                local_backend: None,
+                backend_warning: None,
             },
         )
         .expect("add member");
@@ -924,6 +1009,8 @@ mod tests {
                 agent_type: Some(crate::schema::AgentType::from("worker".to_string())),
                 model: Some(crate::types::ModelName::new("gpt-5").expect("model")),
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("22").expect("pane")),
+                local_backend: None,
+                backend_warning: None,
             },
         )
         .expect("update member");
@@ -984,6 +1071,8 @@ mod tests {
                 agent_type: None,
                 model: None,
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("%0").expect("pane")),
+                local_backend: None,
+                backend_warning: None,
             },
         )
         .expect("repair team-lead pane");
@@ -1001,6 +1090,8 @@ mod tests {
                 agent_type: None,
                 model: None,
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("%1").expect("pane")),
+                local_backend: None,
+                backend_warning: None,
             },
         )
         .expect("repair secondary member pane");
@@ -1047,6 +1138,8 @@ mod tests {
                 agent_type: None,
                 model: None,
                 tmux_pane_id: None,
+                local_backend: None,
+                backend_warning: None,
             },
         )
         .expect_err("caller team mismatch");
@@ -1075,6 +1168,8 @@ mod tests {
                 agent_type: None,
                 model: None,
                 tmux_pane_id: None,
+                local_backend: None,
+                backend_warning: None,
             },
         )
         .expect_err("missing caller");
@@ -1103,6 +1198,8 @@ mod tests {
                 agent_type: None,
                 model: None,
                 tmux_pane_id: None,
+                local_backend: None,
+                backend_warning: None,
             },
         )
         .expect_err("missing member");

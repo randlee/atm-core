@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 
 use crate::boundary::{ConfigDoctor, MailStoreDoctor, RosterStoreDoctor};
 use crate::config;
+use crate::delivery_channel::local_message_received_backend;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::ObservabilityPort;
 #[cfg(test)]
@@ -544,7 +545,10 @@ fn load_member_roster(
         return None;
     }
     let members = match runtime.load_team_roster(team) {
-        Ok(roster) => ordered_roster_member_summaries(&roster, caller_identity, live_cwd),
+        Ok(roster) => {
+            push_mixed_local_backend_warning(team, &roster, findings);
+            ordered_roster_member_summaries(&roster, caller_identity, live_cwd)
+        }
         Err(error) => {
             push_doctor_error(findings, DoctorSeverity::Error, error);
             return None;
@@ -555,6 +559,40 @@ fn load_member_roster(
         team: team.clone(),
         members,
     })
+}
+
+fn push_mixed_local_backend_warning(
+    team: &TeamName,
+    roster: &[crate::boundary::RosterEntry],
+    findings: &mut Vec<DoctorFinding>,
+) {
+    let mut tmux = Vec::new();
+    let mut herdr = Vec::new();
+    for member in roster {
+        match local_message_received_backend(member) {
+            Some(crate::delivery_channel::LocalMessageReceivedBackend::Tmux { .. }) => {
+                tmux.push(member.agent_name.to_string())
+            }
+            Some(crate::delivery_channel::LocalMessageReceivedBackend::Herdr { .. }) => {
+                herdr.push(member.agent_name.to_string())
+            }
+            None => {}
+        }
+    }
+    if tmux.is_empty() || herdr.is_empty() {
+        return;
+    }
+    findings.push(DoctorFinding {
+        severity: DoctorSeverity::Warning,
+        code: AtmErrorCode::RosterMixedLocalBackend,
+        message: format!(
+            "team {team} has mixed local backends; tmux members: [{}]; Herdr members: [{}]",
+            tmux.join(", "), herdr.join(", ")
+        ),
+        remediation: Some(format!(
+            "Use `atm teams update-member {team} <member> --backend herdr` or `atm teams update-member {team} <member> --backend tmux --target %N` to select the intended backend."
+        )),
+    });
 }
 
 fn push_doctor_error(
@@ -626,6 +664,8 @@ fn member_summary(
         model: member.model.clone(),
         joined_at: member.joined_at,
         tmux_pane_id: member.tmux_pane_id.clone(),
+        backend: None,
+        herdr_session: None,
         home_dir: member.home_dir.clone(),
         live_cwd: match (caller_identity, live_cwd) {
             (Some(identity), Some(path)) if member.name == identity.as_str() => {
@@ -916,6 +956,8 @@ mod tests {
                 model: Default::default(),
                 joined_at: None,
                 tmux_pane_id: None,
+                backend: None,
+                herdr_session: None,
                 home_dir: PathBuf::from("/workspace").into(),
                 live_cwd: None,
                 extra: serde_json::Map::new(),
