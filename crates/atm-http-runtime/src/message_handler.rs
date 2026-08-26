@@ -1010,7 +1010,7 @@ mod tests {
         (slot, AN15_HTTP_CASE_SHAPES[probe_index][slot])
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[tokio::test]
     async fn error_response_redacts_diagnostic_causes_at_the_http_boundary() {
         let diagnostic_secret = "Bearer test-only-http-error-secret";
         let response = super::error_response(
@@ -1737,7 +1737,7 @@ mod tests {
         );
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[tokio::test(start_paused = true)]
     async fn started_dispatch_returns_its_actual_response_after_the_advisory_deadline() {
         let gate = Arc::new(Gate::default());
         let app = canonical_message_router(
@@ -1757,7 +1757,7 @@ mod tests {
         tokio::task::spawn_blocking(move || entered.wait_until_entered())
             .await
             .expect("wait for blocking handler");
-        tokio::time::sleep(Duration::from_millis(25)).await;
+        tokio::time::advance(Duration::from_millis(25)).await;
         assert!(
             !response.is_finished(),
             "the adapter must not synthesize a timeout while a started route owns the durable outcome"
