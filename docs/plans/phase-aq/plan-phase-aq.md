@@ -1,6 +1,6 @@
 # Plan — Phase AQ: ATM Send-To Shell Integration
 
-Status: **re-hardening — critical review FAIL (fenix, 2026-08-26: 10 blocking / 22 important / 17 minor)**. The prior "hardened — plan-QA PASS (2026-08-24, queue-first 6-sprint structure)" header is **retracted**: the AQ2.6/AQ2.7 insertion (2026-08-25, `47a26c90f`…`e2d886c91`) was never reviewed and rewrote already-PASSed docs (AQ1, AQ2.5, AQ3, AQ4, AQ5), so those PASS rows no longer describe the text on disk (see "Critical review 2026-08-26" and "Insertion QA history (AQ2.6–AQ2.7)" below). Reordered 2026-08-26 per Rand: trait foundation first, Herdr second. ·
+Status: **re-hardened — whole-tree critical review PASS (round 3, 2026-08-26, `ea990a8dd`); quality-mgr gate pending.** The original critical review (fenix, 2026-08-26: 10 blocking / 22 important / 17 minor) and its closure are recorded below. The prior "hardened — plan-QA PASS (2026-08-24, queue-first 6-sprint structure)" header is **retracted**: the AQ2.6/AQ2.7 insertion (2026-08-25, `47a26c90f`…`e2d886c91`) was never reviewed and rewrote already-PASSed docs (AQ1, AQ2.5, AQ3, AQ4, AQ5), so those PASS rows no longer describe the text on disk (see "Critical review 2026-08-26" and "Insertion QA history (AQ2.6–AQ2.7)" below). Reordered 2026-08-26 per Rand: trait foundation first, Herdr second. ·
 Source PRD: [prd-atm-send-to.md](./prd-atm-send-to.md)
 Reference code: `integrate/phase-ao2` (CLI at
 `crates/atm/src/commands/{teams,send}.rs`, daemon maintenance-worker
