@@ -15,8 +15,10 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closureNote "Fixed by commit 16b874d325ab47445ce987caf8c25f42c766d81c (docs(ao2): mark benchmark-run sprint complete) on feature/ao2-15-benchmark-official-trigger, merged to integrate/phase-ao2. Header now reads 'Status: complete' at docs/plans/phase-ao2/sprint-AO2-13-benchmark-run-skill.md:3. AC4's dry-run-transcript evidence remains deliberately deferred per Rand's standing 2026-08-25 decision (AO213-BENCH-F001) -- that deferral is not a blocker to marking the sprint doc's status accurate, so this pure documentation-drift finding is independently closed. quality-mgr independently re-verified against current file content at HEAD." ;
   triage:triagedAt "2026-08-24T06:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.13 ;
   triage:foundAt "2026-08-24T06:21:45Z"^^xsd:dateTime ;
@@ -24,15 +26,15 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AO213-BENCH-F002/AO211-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AO213-BENCH-F002/AO212-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AO213-BENCH-F002/AO213-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AO213-BENCH-F002/AO210-1>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-ao2/sprint-AO2-13-benchmark-run-skill.md" ;
   triage:line 3 ;
   triage:snippet "Status: draft ·" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/ao2-10-benchmark-data-contract" ;
   triage:headSha "ea953ac44" ;
   triage:occursIn <urn:atm:triage:worktree/AO210/ea953ac44> .
@@ -42,8 +44,8 @@
   triage:file "docs/plans/phase-ao2/sprint-AO2-13-benchmark-run-skill.md" ;
   triage:line 3 ;
   triage:snippet "Status: draft ·" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/ao2-11-benchmark-rendering-pipeline" ;
   triage:headSha "77681d466" ;
   triage:occursIn <urn:atm:triage:worktree/AO211/77681d466> .
@@ -53,8 +55,8 @@
   triage:file "docs/plans/phase-ao2/sprint-AO2-13-benchmark-run-skill.md" ;
   triage:line 3 ;
   triage:snippet "Status: draft ·" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/ao2-12-historical-data-migration" ;
   triage:headSha "8788090d6" ;
   triage:occursIn <urn:atm:triage:worktree/AO212/8788090d6> .
@@ -64,8 +66,8 @@
   triage:file "docs/plans/phase-ao2/sprint-AO2-13-benchmark-run-skill.md" ;
   triage:line 3 ;
   triage:snippet "Status: draft ·" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/ao2-13-benchmark-run-skill" ;
   triage:headSha "bf522d879ab6d0fd32760ee58e683a26607b5c7c" ;
   triage:occursIn <urn:atm:triage:worktree/AO213/bf522d879ab6d0fd32760ee58e683a26607b5c7c> .
