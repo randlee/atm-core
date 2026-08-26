@@ -22,7 +22,7 @@ both guards exist; until AQ3 lands, this pump is the only claimant for any
 member and the risk is nil.
 
 This sprint's Herdr behaviour claims are governed by
-[ADR-058](./ADR-058-draft.md) (`herdr` 0.8.2, derived from source at
+[ADR-058](docs/adr/ADR-058-herdr-local-steer-backend-contract.md) (`herdr` 0.8.2, derived from source at
 `d79fd746`). Where this doc and ADR-058 disagree, ADR-058 is authoritative;
 this doc cites it by decision id (`D1`–`D8`).
 
