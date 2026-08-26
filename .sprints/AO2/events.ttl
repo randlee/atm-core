@@ -261,3 +261,10 @@ triage:r58 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/ARCH-QA
 # 01M0YJ3Q8WKNGTQFMMS1RVBET2. Ancestry verified before recording.
 triage:r59 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO2-R4-001> ; triage:resolvedAt "2026-08-26T08:20:00Z"^^xsd:dateTime .
 triage:r60 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/FTQ-004> ; triage:resolvedAt "2026-08-26T08:20:00Z"^^xsd:dateTime .
+
+# req-qa caught (ATM-QA-AO2END-R5-001, round 5) that the r42-r60 reconciliation
+# pass missed RSH-AO2-001/RSH-AO2-002 -- both independently confirmed fixed at
+# integrate/phase-ao2@15c9ad73b (same commit as RBP-AO2END-F001, already
+# resolved via r49) alongside RBP-AO2END-F001's fix. Ancestry re-verified here.
+triage:r61 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RSH-AO2-001> ; triage:resolvedAt "2026-08-26T08:25:00Z"^^xsd:dateTime .
+triage:r62 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RSH-AO2-002> ; triage:resolvedAt "2026-08-26T08:25:00Z"^^xsd:dateTime .
