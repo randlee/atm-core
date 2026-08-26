@@ -97,6 +97,7 @@ pub mod types;
 pub mod workflow_analytics;
 /// First-party-only telemetry contract for workflow lifecycle projections.
 pub mod workflow_telemetry;
+pub mod write;
 
 pub use api::{
     ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, DaemonApiClient,

@@ -238,11 +238,7 @@ fn already_acknowledged_source_is_rejected() {
         "re-acknowledgement must be rejected",
     );
 
-    assert!(
-        error
-            .message()
-            .contains("not pending acknowledgement")
-    );
+    assert!(error.message().contains("not pending acknowledgement"));
     assert_eq!(
         runtime
             .persisted_records
@@ -327,10 +323,7 @@ impl atm_storage::MessageStore for InMemoryAsyncStore {
             .cloned())
     }
 
-    fn list_messages(
-        &self,
-        _query: &atm_storage::MessageQuery,
-    ) -> Result<Vec<Message>, AtmError> {
+    fn list_messages(&self, _query: &atm_storage::MessageQuery) -> Result<Vec<Message>, AtmError> {
         Ok(Vec::new())
     }
 
@@ -353,10 +346,7 @@ impl atm_storage::contract::sealed::Sealed for SingleMemberRoster {}
     reason = "admission entry tests intentionally exercise the transitional shared storage traits"
 )]
 impl atm_storage::RosterStore for SingleMemberRoster {
-    fn load_roster(
-        &self,
-        team: &TeamName,
-    ) -> Result<atm_storage::RosterSnapshot, AtmError> {
+    fn load_roster(&self, team: &TeamName) -> Result<atm_storage::RosterSnapshot, AtmError> {
         Ok(atm_storage::RosterSnapshot {
             team_name: team.clone(),
             members: vec![RosterEntry {
