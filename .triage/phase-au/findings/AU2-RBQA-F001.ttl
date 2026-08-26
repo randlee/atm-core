@@ -15,24 +15,25 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crates/sc-lint-boundary/src/analysis.rs (SCB-CYCLE-002 and SCB-CYCLE-003 classifier paths)" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-26T20:35:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AU2 ;
   triage:foundAt "2026-08-26T20:25:55Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AU2-RBQA-F001/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AU2-RBQA-F001/2> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" ;
+  triage:closedNote "Fixed on feature/pau-s2-lint-calibration @ d4a90bf12 ('retain real delegation cycles'): is_delegating_call/is_trait_impl_delegating_call (crates/sc-lint-boundary/src/analysis.rs:288,218) now each additionally require '&& !call_edge_participates_in_cycle(edge, node_map, owner_graph)' (lines 305, 247) -- a real graph-reachability check (analysis.rs:315-328), not the prior pairwise name-inequality/same-owner-only exclusion. quality-mgr independently re-verified this closure during the Phase-AU phase-end gate review (2026-08-26): confirmed the guard is present at both call sites in the current integrate/phase-au head, applied uniformly (not special-cased to pre-AU.3 code shapes); confirmed via live `cargo run -q -p sc-lint-boundary -- analyze --root . --format json` (run by rust-qa-agent, independently spot-checked) that the ack<->send SCB-CYCLE-001 finding correctly reappeared post-fix (proving the reachability check works) and was then correctly retired again by AU.3's write-module fix, with 0 residual findings against the 22-finding baseline; confirmed by arch-qa and req-qa via independent static read of the same guard. This record's triage:status was stale (left at \"open\"/dispatchReady=true after the code fix landed) -- corrected here now that the fix's own governing doc amendment (docs/plans/boundary-regression-plan.md, merged via PR #1032 @ 08c079b76, merge-forwarded into integrate/phase-au @ 68c10f702) is confirmed present on the integrate branch." .
 
 <urn:atm:triage:occurrence/AU2-RBQA-F001/1>
   a triage:Occurrence ;
   triage:file "crates/sc-lint-boundary/src/analysis.rs" ;
   triage:line 278 ;
   triage:snippet "fn is_delegating_call(...) { ... source_method != callee.ident }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pau-s2-lint-calibration" ;
-  triage:headSha "8a8292e9d" ;
+  triage:headSha "d4a90bf12" ;
   triage:occursIn <urn:atm:triage:worktree/pau-s2-lint-calibration> .
 
 <urn:atm:triage:occurrence/AU2-RBQA-F001/2>
@@ -40,15 +41,15 @@
   triage:file "crates/sc-lint-boundary/src/analysis.rs" ;
   triage:line 211 ;
   triage:snippet "fn is_trait_impl_delegating_call(...) { ... same_name_inherent_forwarder / non_public_associated_helper ... }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pau-s2-lint-calibration" ;
-  triage:headSha "8a8292e9d" ;
+  triage:headSha "d4a90bf12" ;
   triage:occursIn <urn:atm:triage:worktree/pau-s2-lint-calibration> .
 
 <urn:atm:triage:worktree/pau-s2-lint-calibration>
   a triage:WorktreeSnapshot ;
   triage:path "feature/pau-s2-lint-calibration" ;
   triage:branch "feature/pau-s2-lint-calibration" ;
-  triage:headSha "8a8292e9d" ;
+  triage:headSha "d4a90bf12" ;
   triage:orderIndex 1 .
