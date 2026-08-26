@@ -261,7 +261,11 @@ plus `#[serde(default)] pub nudge_mode: NudgeMode` on `WriteRequest` and `with_n
 **L2.3 — classifier seam.** New `atm-core/src/delivery_channel.rs`:
 ```rust
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum LocalMessageReceivedBackend { Tmux { pane_id: PaneId }, Herdr }
+/// `session`: the Herdr session the member's agent lives in (sets
+/// `HERDR_SESSION` on the emitter's child env per invocation); `None` =
+/// Herdr's default server. Roster data, like `pane_id` — the daemon never
+/// launches sessions and its own env is irrelevant (Rand, 2026-08-26).
+pub enum LocalMessageReceivedBackend { Tmux { pane_id: PaneId }, Herdr { session: Option<String> } }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GraftLeaseState { Absent, Active }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -270,13 +274,13 @@ pub enum DeliveryChannel { TmuxSteer, HerdrSteer, Graft, BareCli }
 pub fn classify_delivery_channel(local_backend: Option<&LocalMessageReceivedBackend>, graft_lease: GraftLeaseState) -> DeliveryChannel {
     match (local_backend, graft_lease) {
         (Some(LocalMessageReceivedBackend::Tmux { .. }), _) => DeliveryChannel::TmuxSteer,
-        (Some(LocalMessageReceivedBackend::Herdr), _) => DeliveryChannel::HerdrSteer,
+        (Some(LocalMessageReceivedBackend::Herdr { .. }), _) => DeliveryChannel::HerdrSteer,
         (None, GraftLeaseState::Active) => DeliveryChannel::Graft,
         (None, GraftLeaseState::Absent) => DeliveryChannel::BareCli,
     }
 }
 /// Derives the local backend from durable roster data, no schema change:
-/// `recipient_pane_id` → Tmux; `metadata_json["backendType"] == "herdr"` → Herdr; else None.
+/// `recipient_pane_id` → Tmux; `metadata_json["backendType"] == "herdr"` → Herdr { session: metadata_json["herdrSession"] as Option<String> }; else None.
 #[must_use]
 pub fn local_message_received_backend(member: &crate::boundary::RosterEntry) -> Option<LocalMessageReceivedBackend>
 ```
