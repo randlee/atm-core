@@ -241,31 +241,6 @@ struct RawMessageEnvelope {
     extra: Map<String, Value>,
 }
 
-impl From<MessageEnvelope> for RawMessageEnvelope {
-    fn from(value: MessageEnvelope) -> Self {
-        Self {
-            from: value.from,
-            source_chat_id: value.source_chat_id,
-            text: value.text,
-            timestamp: value.timestamp,
-            read: value.read,
-            source_team: value.source_team,
-            destination_chat_id: value.destination_chat_id,
-            summary: value.summary,
-            message_id: value.message_id,
-            requires_ack: Some(value.requires_ack),
-            pending_ack_at: value.pending_ack_at,
-            acknowledged_at: value.acknowledged_at,
-            acknowledges_message_id: value.acknowledges_message_id,
-            parent_message_id: value.parent_message_id,
-            thread_mode: value.thread_mode,
-            expires_at: value.expires_at,
-            task_id: value.task_id,
-            extra: value.extra,
-        }
-    }
-}
-
 impl From<RawMessageEnvelope> for MessageEnvelope {
     fn from(value: RawMessageEnvelope) -> Self {
         let requires_ack = value

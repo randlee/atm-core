@@ -1,0 +1,8 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:PhaseAU a triage:Phase .
+
+triage:AU1 a triage:Sprint ; triage:inPhase triage:PhaseAU ; triage:order 1 ; triage:branch "feature/pau-s1-boundary-code-fixes" ; triage:criteria "docs/plans/phase-au/sprint-AU1-boundary-code-fixes.md" .
+triage:AU2 a triage:Sprint ; triage:inPhase triage:PhaseAU ; triage:order 2 ; triage:branch "feature/pau-s2-lint-calibration" ; triage:criteria "docs/plans/phase-au/sprint-AU2-lint-calibration.md" .
+triage:AU3 a triage:Sprint ; triage:inPhase triage:PhaseAU ; triage:order 3 ; triage:branch "feature/pau-s3-ack-send-write-module" ; triage:criteria "docs/plans/phase-au/sprint-AU3-ack-send-write-module.md" .

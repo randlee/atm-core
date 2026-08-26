@@ -45,6 +45,7 @@ dependencies = [
  "interprocess",
  "libc",
  "parking_lot",
+ "sc-lint-attributes",
  "semver",
  "serde",
  "serde_json",
