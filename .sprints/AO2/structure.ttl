@@ -18,3 +18,4 @@ triage:AO2.11 a triage:Sprint ; triage:inPhase triage:PhaseAO2 ; triage:order 12
 triage:AO2.12 a triage:Sprint ; triage:inPhase triage:PhaseAO2 ; triage:order 13 ; triage:branch "feature/ao2-12-historical-data-migration" ; triage:criteria "docs/plans/phase-ao2/sprint-AO2-12-historical-data-migration.md" .
 triage:AO2.13 a triage:Sprint ; triage:inPhase triage:PhaseAO2 ; triage:order 14 ; triage:branch "feature/ao2-13-benchmark-run-skill" ; triage:criteria "docs/plans/phase-ao2/sprint-AO2-13-benchmark-run-skill.md" .
 triage:AO2.14 a triage:Sprint ; triage:inPhase triage:PhaseAO2 ; triage:order 15 ; triage:branch "feature/ao2-14-peer-connection-pooling" ; triage:criteria "docs/plans/phase-ao2/sprint-AO2-14-peer-connection-pooling.md" .
+triage:AO2.15 a triage:Sprint ; triage:inPhase triage:PhaseAO2 ; triage:order 16 ; triage:branch "feature/ao2-15-benchmark-official-trigger" ; triage:criteria "docs/plans/phase-ao2/sprint-AO2-15-benchmark-official-trigger.md" .

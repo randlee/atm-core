@@ -31,8 +31,8 @@
   triage:file "crates/atm-daemon-bootstrap/src/received_hook_selector.rs" ;
   triage:line 240 ;
   triage:snippet "blank line (cargo fmt)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s4-peer-wire-proof" ;
   triage:headSha "d9fb74917a804d2068684db40a28bc4ce636f283" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s4-peer-wire-proof/d9fb74917a804d2068684db40a28bc4ce636f283> .

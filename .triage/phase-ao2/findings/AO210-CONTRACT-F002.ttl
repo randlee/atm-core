@@ -4,6 +4,15 @@
 # Persisted file/path values are repository-relative. Runtime checkout paths
 # belong in the agent input only and must not be copied into this record.
 
+# REFUTED (team-lead, 2026-08-25): independent adversarial code review found
+# `minimum_admissions_per_second` does not exist anywhere in scripts/smoke/
+# (repo-wide grep, zero hits). The ordinary-suite exit code
+# (run_admission_capacity.py:2296) is `return 0 if campaign.status == "PASS"
+# else 1` -- solely classify_status()'s output, no secondary gate ANDed in.
+# The interval-level `passed` field the finding cites is `error_free`, an
+# explicitly-documented factual completion marker, not a throughput
+# threshold. Closed as false_positive; no fix dispatched.
+
 <urn:atm:triage:finding/AO210-CONTRACT-F002>
   a triage:Finding ;
   triage:findingId "AO210-CONTRACT-F002" ;
@@ -15,8 +24,8 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "false_positive" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-23T20:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.10 ;
   triage:foundAt "2026-08-24T03:28:59Z"^^xsd:dateTime ;
@@ -28,8 +37,8 @@
   triage:file "scripts/smoke/run_admission_capacity.py" ;
   triage:line 1520 ;
   triage:snippet "minimum_admissions_per_second hardcoded interval gate feeds exit code independent of classify_status" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "false_positive" ;
+  triage:closed true ;
   triage:branch "feature/ao2-10-benchmark-data-contract" ;
   triage:headSha "b207dd097a34a2b954c76a43b12e416ace1875f3" ;
   triage:occursIn <urn:atm:triage:worktree/ao2-10/b207dd097a34a2b954c76a43b12e416ace1875f3> .

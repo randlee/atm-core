@@ -197,3 +197,34 @@ triage:r32 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/RUST-QA
 # premise did not hold; code was already correct) per quality-mgr's report.
 # PR #1020 merged despite tcp/tcp-tls benchmark floor misses (17371/17500,
 # 13642/17500 on isolated m5-atmbench) -- merge explicitly authorized by Rand.
+
+triage:a19 a triage:Assignment ; triage:ofSprint triage:AO2.15 ; triage:assignedTo "arch-ctm" ; triage:assignedAt "2026-08-25T02:58:29Z"^^xsd:dateTime .
+
+triage:c20 a triage:Completion ; triage:ofSprint triage:AO2.15 ; triage:at "2026-08-25T03:11:37Z"^^xsd:dateTime .
+
+# NOTE (team-lead, 2026-08-25): backfilled Assignment for AO2.14, whose
+# original Assignment event was dispatched in an earlier session turn that
+# was later compacted out of context and never appended here before c18 was
+# recorded. Timestamp reconstructed from the AO2.13 Completion (c17,
+# 2026-08-24T06:02:33Z) as the earliest point AO2.14 could have been
+# dispatched -- appended now per ttl-repair.md (append correct history,
+# never rewrite past events) to close /sprint-report's TTL.ORPHAN_COMPLETION
+# gap against c18.
+triage:a20 a triage:Assignment ; triage:ofSprint triage:AO2.14 ; triage:assignedTo "arch-ctm" ; triage:assignedAt "2026-08-24T06:05:00Z"^^xsd:dateTime .
+
+# NOTE (team-lead, 2026-08-25): quality-mgr independently re-verified PR #1024
+# @ 43efcbd4b (confirmed ancestor - is current branch HEAD, not yet merged),
+# message 01M0X2DW62Y9JW1RR2EYV9TSKF: B001/I001/I002/I004/I005/I006/M001/M002/M003
+# all confirmed fixed (SSH-trigger transcript closes B001's unattended-safety
+# gap plus the prior fix round for the others). I003 (AC4/AC5 live-run
+# evidence -- specifically the launchd trigger transcript) remains open:
+# ssh-trigger half done, launchd trigger run/transcript still missing.
+triage:r33 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-B001> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .
+triage:r34 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-I001> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .
+triage:r35 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-I002> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .
+triage:r36 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-I004> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .
+triage:r37 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-I005> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .
+triage:r38 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-I006> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .
+triage:r39 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-M001> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .
+triage:r40 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-M002> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .
+triage:r41 a triage:Resolution ; triage:resolves <urn:atm:triage:finding/QA-AO215-M003> ; triage:resolvedAt "2026-08-25T18:20:25Z"^^xsd:dateTime .

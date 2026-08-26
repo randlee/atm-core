@@ -15,21 +15,23 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closureNote "Fixed by commit 5d8458a889f112d4c841820506fc1a1b3dd2a419 (test(benchmark): cover rendered chart grid) on feature/ao2-15-benchmark-official-trigger, merged to integrate/phase-ao2. test_chart_geometry_has_all_candles_series_fail_outline_and_baselines replaced by test_rendered_svg_has_full_two_host_four_target_grid, which invokes the real rebuild() pipeline and asserts against rendered HTML markup for all 4 targets (sqlite, uds, tcp, tcp-tls) x 2 hosts, each with 1 PASS + 1 FAIL candle and 2 baselines -- the golden 2x2-grid AC4 requirement this finding cited as missing. quality-mgr independently re-verified: read the diff and reran the test in an isolated worktree pinned to the fix commit; passes." ;
   triage:triagedAt "2026-08-24T05:20:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.11 ;
   triage:foundAt "2026-08-24T05:14:31Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AO211-RENDER-F003/AO211-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AO211-RENDER-F003/AO211-1>
   a triage:Occurrence ;
   triage:file ".just/tests/test_benchmark_report.py" ;
   triage:line 154 ;
   triage:snippet "def test_chart_geometry_has_all_candles_series_fail_outline_and_baselines(self)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/ao2-11-benchmark-rendering-pipeline" ;
   triage:headSha "77681d4669e20ca631e9f2f42c08ff2d3efbed91" ;
   triage:occursIn <urn:atm:triage:worktree/AO211/77681d4669e20ca631e9f2f42c08ff2d3efbed91> .

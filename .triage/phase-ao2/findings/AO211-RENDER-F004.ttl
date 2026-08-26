@@ -15,21 +15,23 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closureNote "Fixed by commit 210d14019248982743b9a16c290f1c31ce28cd26 (docs(benchmark): retain Wyvern render transcript) on feature/ao2-15-benchmark-official-trigger, merged to integrate/phase-ao2. New evidence file 20260824T030844Z-rand-m5.ao2-11-wyvern-render-20260826.md retains the actual `WYVERN_VIEWER=none just benchmark-show` invocation and its real stdout (WYVERN_DIALOG_URL=..., exit status 0), satisfying AC5's 'wyvern stdout log' evidence option (the original prose-only file remains alongside it, not replaced). quality-mgr independently re-verified WYVERN_VIEWER/WYVERN_DIALOG_URL are genuine, documented behavior of the externally-installed wyvern binary (confirmed via `wyvern --help` and a live repro run producing the identical output shape with a different random port) -- initially suspected fabrication, disproven by direct reproduction." ;
   triage:triagedAt "2026-08-24T05:20:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.11 ;
   triage:foundAt "2026-08-24T05:14:31Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AO211-RENDER-F004/ao211-wyvern-evidence> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AO211-RENDER-F004/ao211-wyvern-evidence>
   a triage:Occurrence ;
   triage:file "site/reports/send-message-benchmark/20260824T030844Z-rand-m5.ao2-11-wyvern-preview.md" ;
   triage:line 1 ;
   triage:snippet "prose attestation instead of screenshot/stdout" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/ao2-11-benchmark-rendering-pipeline" ;
   triage:headSha "9625d2450a90b505f114e65f96ce1f2b9978da46" ;
   triage:occursIn <urn:atm:triage:worktree/ao2-11/9625d2450a90b505f114e65f96ce1f2b9978da46> .

@@ -15,23 +15,27 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "deferred" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-08-22T21:10:00Z"^^xsd:dateTime ;
-  triage:deferredNote "Fixing as originally scoped (wiring M5AttemptLedger into current entry points) is throwaway: AO2.10 (docs/plans/phase-ao2/sprint-AO2-10-benchmark-data-contract.md) replaces this PASS/FAIL derivation path with a single-owner classify_status() model and deletes the unused ledger module outright (AO2.10 deliverable 8) rather than wiring it in. AO2.10/AO2.11 are infrastructure sprints (v4 schema/runner emission, then rendering) and do not themselves restore an equivalent acceptance safety net. Re-promoted 2026-08-24 from 'pending AO2.10' to 'pending AO2.12/AO2.13': neither sprint doc currently names a replacement for the deleted 3-consecutive-attempt/crash-safe acceptance discipline, so this finding stays open and must be explicitly re-evaluated once AO2.10+AO2.11 land -- either as an AO2.13 (canonical benchmark-run workflow, docs/plans/phase-ao2/sprint-AO2-13-benchmark-run-skill.md) deliverable addition enforcing an equivalent safety gate, or closed with an explicit team-lead/quality-mgr rationale for why no replacement is required." ;
+  triage:deferredNote "Fixing as originally scoped (wiring M5AttemptLedger into current entry points) is throwaway: AO2.10 (docs/plans/phase-ao2/sprint-AO2-10-benchmark-data-contract.md) replaces this PASS/FAIL derivation path with a single-owner classify_status() model and deletes the unused ledger module outright (AO2.10 deliverable 8) rather than wiring it in. AO2.10/AO2.11 are infrastructure sprints (v4 schema/runner emission, then rendering) and do not themselves restore an equivalent acceptance safety net. Re-promoted 2026-08-24 from 'pending AO2.10' to 'pending AO2.12/AO2.13': neither sprint doc currently names a replacement for the deleted 3-consecutive-attempt/crash-safe acceptance discipline, so this finding stays open and must be explicitly re-evaluated once AO2.10+AO2.11 land -- either as an AO2.13 (canonical benchmark-run workflow, docs/plans/phase-ao2/sprint-AO2-13-benchmark-run-skill.md) deliverable addition enforcing an equivalent safety gate, or closed with an explicit team-lead/quality-mgr rationale for why no replacement is required. 2026-08-25/26 re-evaluation (fenix, acting under Rand's 'make any calls on my behalf' delegation; quality-mgr independent review; both flagged for Rand's ratification on return): of the ledger's four original guarantees, restore-verified (durability_after_restart, expected-vs-observed post-restart mailbox count) and candidate-lineage (per-attempt binary_hashes, SHA256 of atm/atm-daemon) are covered by the shipped AO2.10-AO2.13 contract as-is -- quality-mgr confirmed both present in real m5-atmbench campaign JSON. The remaining two guarantees -- crash-safe intent/completion pairing, and the 3-consecutive-clean-run acceptance bar for a baseline change -- are NOT replaced by any shipped code, and quality-mgr found live evidence of both gaps during the tcp/tls floor review on the same date: an AO2.15 launchd trigger attempt that never reached measurement left no artifact at all until arch-ctm manually reported it (the crash-visibility gap), and the floor revision under review at that point relied on only 2 real runs, not 3 clean ones (the acceptance-bar gap). Per Rand's standing benchmark-infra freeze ('behavioral rules over machinery'), no new ledger component is being built. Instead, commit 73e243fec (docs(benchmark): retain official trigger attempts, on feature/ao2-15-benchmark-official-trigger) amends .claude/skills/benchmark-run/SKILL.md and the AO2.15 sprint doc with two behavioral rules quality-mgr independently verified: (1) every `just benchmark-official` invocation must leave a committed, pushed artifact -- a campaign JSON when measurement completes, or a timestamped failed-attempt note under docs/plans/phase-ao2/evidence/ when it cannot reach measurement -- and the AO2.15 launchd non-start already has its retroactive note (AO2-15-launchd-trigger-nonstart-20260826.md, includes trigger, branch/SHA, failure boundary, and cleanup proof); (2) any future baselines.json floor change requires >= 3 clean, published official runs for the same host/target/contract, with failed or partial attempts explicitly excluded from the count, and existing campaign snapshots remain immutable under a later revision. quality-mgr additionally confirmed the just-approved revision 4 (tcp/tls floors) in fact has 3 real runs (20260825T045840Z, 20260826T001441Z, 20260826T002410Z) all clearing the new floors, satisfying rule (2) retroactively as well as being grandfathered by Rand's direct D3 sign-off. Disposition: guarantees 1+4 covered by the shipped contract; guarantees 2+3 replaced by the above behavioral rules rather than new machinery per the infra freeze." ;
   triage:foundIn triage:AO2.7 ;
   triage:foundAt "2026-08-22T21:09:45Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AO27-HARNESS-F001/ao2-7-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AO27-HARNESS-F001/ao2-7-2> ;
-  triage:triageRecordVersion "2" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO27-HARNESS-F001/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-26T01:50:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Rand ratified the 2026-08-25/26 disposition on return ('if we covered both findings, f001 is fine to close'): guarantees 1 (restore-verified) and 4 (candidate-lineage) are covered by the shipped AO2.10-AO2.13 contract; guarantees 2 (crash-safe intent/completion pairing) and 3 (3-consecutive-clean-run acceptance bar) are covered by the two behavioral rules added in commit 73e243fec (committed-artifact-per-attempt, >=3 clean runs for any baseline floor change) rather than new ledger machinery, per the benchmark-infra freeze. No replacement ledger component required." ;
+  triage:triageRecordVersion "4" .
 
 <urn:atm:triage:occurrence/AO27-HARNESS-F001/ao2-7-1>
   a triage:Occurrence ;
   triage:file "scripts/smoke/run_admission_capacity.py" ;
   triage:line 1 ;
   triage:snippet "Entry point does not instantiate M5AttemptLedger" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/ao2-7-direct-peer-benchmark-harness" ;
   triage:headSha "934caaaa7fef7803740be228a1276d552ea29db5" ;
   triage:occursIn <urn:atm:triage:worktree/ao2-7/934caaaa7fef7803740be228a1276d552ea29db5> .
@@ -41,11 +45,20 @@
   triage:file "scripts/smoke/benchmark_report.py" ;
   triage:line 1 ;
   triage:snippet "Campaign XHTML renderer bypasses ledger" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/ao2-7-direct-peer-benchmark-harness" ;
   triage:headSha "934caaaa7fef7803740be228a1276d552ea29db5" ;
   triage:occursIn <urn:atm:triage:worktree/ao2-7/934caaaa7fef7803740be228a1276d552ea29db5> .
+
+<urn:atm:triage:occurrence/AO27-HARNESS-F001/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/benchmark-run/SKILL.md" ;
+  triage:snippet "Rand-ratified disposition: guarantees 1+4 covered by shipped AO2.10-AO2.13 contract, guarantees 2+3 covered by behavioral rules in commit 73e243fec, no new ledger component required" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "73e243fec" .
 
 <urn:atm:triage:worktree/ao2-7/934caaaa7fef7803740be228a1276d552ea29db5>
   a triage:WorktreeSnapshot ;

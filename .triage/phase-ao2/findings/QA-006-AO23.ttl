@@ -31,8 +31,8 @@
   triage:file "boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml" ;
   triage:line 25 ;
   triage:snippet "allowed_dependencies = [...missing atm-runtime-test-support...]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pao-s4-peer-wire-proof" ;
   triage:headSha "f40440d7bd370168ce41bf76ae486210df14b18d" ;
   triage:occursIn <urn:atm:triage:worktree/pao-s4/f40440d7bd370168ce41bf76ae486210df14b18d> .

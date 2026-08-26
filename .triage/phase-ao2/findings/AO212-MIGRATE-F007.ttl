@@ -15,22 +15,26 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-24T05:47:10Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.12 ;
   triage:foundAt "2026-08-24T05:50:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AO212-MIGRATE-F007/AO212-gate-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AO212-MIGRATE-F007/AO213-gate-1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AO212-MIGRATE-F007/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-25T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "test_record_setting_run_is_classified_against_the_prior_ratchet_floor now exists in test_migrate_benchmark_history.py, a durable property test asserting a run's classification never depends on its own contribution to the ratchet floor -- exactly the recommended machine-gate hardening. Fixed in commit 22a97a027." ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AO212-MIGRATE-F007/AO212-gate-1>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-ao2/sprint-AO2-12-historical-data-migration.md" ;
   triage:line 123 ;
   triage:snippet "grep gate: no class redefinition outside `benchmark_schema.py`" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ao2-12-historical-data-migration" ;
   triage:headSha "8788090d6" ;
   triage:occursIn <urn:atm:triage:worktree/AO212/8788090d6> .
@@ -40,11 +44,20 @@
   triage:file "docs/plans/phase-ao2/sprint-AO2-12-historical-data-migration.md" ;
   triage:line 123 ;
   triage:snippet "grep gate: no class redefinition outside `benchmark_schema.py`" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ao2-13-benchmark-run-skill" ;
   triage:headSha "beaec158e" ;
   triage:occursIn <urn:atm:triage:worktree/AO213/beaec158e> .
+
+<urn:atm:triage:occurrence/AO212-MIGRATE-F007/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_migrate_benchmark_history.py" ;
+  triage:snippet "quality-mgr independent re-verification confirmed fixed via commit 22a97a027" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "22a97a027" .
 
 <urn:atm:triage:worktree/AO210/1d668e269>
   a triage:WorktreeSnapshot ;

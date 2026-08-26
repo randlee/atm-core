@@ -15,22 +15,24 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-25T00:00:00Z"^^xsd:dateTime ;
+  triage:closureNote "Fixed by commit 8788090d6 (docs(benchmark): clarify historical model ownership), merged to integrate/phase-ao2. scripts/smoke/benchmark_schema.py now carries per-class docstrings naming the AO2.12 contract (RatchetPoint, result wrapper, campaign entry, and HistoricalRecord itself all say \"AO2.12 ... contract\" directly in their docstrings) rather than a single module-level comment. quality-mgr independently re-verified against current code at HEAD." ;
   triage:triagedAt "2026-08-24T05:20:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AO2.11 ;
   triage:foundAt "2026-08-24T05:14:31Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AO211-RENDER-F005/AO211-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AO211-RENDER-F005/AO212-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AO211-RENDER-F005/AO211-1>
   a triage:Occurrence ;
   triage:file "scripts/smoke/benchmark_schema.py" ;
   triage:line 331 ;
   triage:snippet "# The historical-record contract is owned by AO2.12\'s plan, but these models" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/ao2-11-benchmark-rendering-pipeline" ;
   triage:headSha "3249c4460d255f73b1c59b002a2d3a98b39eae67" ;
   triage:occursIn <urn:atm:triage:worktree/AO211/3249c44> .
@@ -40,8 +42,8 @@
   triage:file "scripts/smoke/benchmark_schema.py" ;
   triage:line 331 ;
   triage:snippet "# The historical-record contract is owned by AO2.12\'s plan, but these models" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/ao2-12-historical-data-migration" ;
   triage:headSha "5f40e9fee5f1481fb98523f974828d526022ce58" ;
   triage:occursIn <urn:atm:triage:worktree/AO212/5f40e9f> .
