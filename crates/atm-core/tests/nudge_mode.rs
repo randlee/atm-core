@@ -6,18 +6,15 @@
 
 use std::sync::{Arc, Mutex};
 
-use atm_storage_rusqlite::SqliteStorageBackend;
-
-use crate::boundary::{
-    MAX_NUDGE_ATTEMPTS, MemberKey, NudgeClaim, PendingNudgeStore, PostSendBuiltInTarget,
-    RosterHarness, RosterMemberKind,
+use atm_core::boundary::{
+    MemberKey, NudgeClaim, PendingNudgeStore, PostSendBuiltInTarget, RosterHarness,
+    RosterMemberKind,
 };
-use crate::error::AtmError;
-use crate::observability::NullObservability;
-use crate::schema::AtmMessageId;
-use crate::send::{NudgeMode, SendMessageSource, WriteRequest, prepare_write_with_runtime};
-use crate::service_runtime::LocalFileNonClaudeOutbound;
-use crate::types::{AgentName, IsoTimestamp, ModelName, PaneId, TeamName};
+use atm_core::error::AtmError;
+use atm_core::observability::NullObservability;
+use atm_core::schema::AtmMessageId;
+use atm_core::send::{NudgeMode, SendMessageSource, WriteRequest, prepare_write_with_runtime};
+use atm_core::types::{AgentName, IsoTimestamp, ModelName, PaneId, TeamName};
 
 /// Records every `mark_pending` call; every other method is a trivial no-op
 /// since this suite never exercises the durable claim/requeue lifecycle.
@@ -84,30 +81,22 @@ impl PendingNudgeStore for RecordingPendingNudgeStore {
     }
 }
 
-// Referenced only to keep the workspace-shared constant's import live for
-// documentation cross-linking; this suite does not exercise the retry cap.
-const _: u32 = MAX_NUDGE_ATTEMPTS;
-
 fn setup() -> (
     tempfile::TempDir,
-    crate::service_runtime::LocalServiceRuntime,
+    atm_core::LocalServiceRuntime,
     Arc<RecordingPendingNudgeStore>,
     TeamName,
 ) {
     let root = tempfile::tempdir().expect("temp root");
-    let database_path = root.path().join("mail.sqlite3");
-    let backend = SqliteStorageBackend::new(&database_path).expect("sqlite backend");
+    let assembly = atm_runtime_test_support::open_isolated_sqlite_boundary(root.path())
+        .expect("sqlite runtime");
     let recording_store = Arc::new(RecordingPendingNudgeStore::default());
-    let runtime = crate::service_runtime::LocalServiceRuntime::new_with_delivery_boundaries(
-        backend.message_store(),
-        backend.roster_store(),
-        backend.nudge_template_override_store(),
-        Arc::new(LocalFileNonClaudeOutbound::new()),
-    )
-    .with_pending_nudge_store(recording_store.clone());
+    let runtime = assembly
+        .service_runtime
+        .with_pending_nudge_store(recording_store.clone());
     let team: TeamName = "test-team".parse().expect("team");
     runtime
-        .roster_store
+        .shared_roster_store_arc()
         .save_roster(&atm_storage::RosterSnapshot {
             team_name: team.clone(),
             members: vec![
@@ -128,13 +117,13 @@ fn roster_member(
     team: &TeamName,
     agent: &str,
     pane_id: Option<PaneId>,
-) -> crate::boundary::RosterEntry {
-    crate::boundary::RosterEntry {
+) -> atm_core::boundary::RosterEntry {
+    atm_core::boundary::RosterEntry {
         team_name: team.clone(),
         agent_name: agent.parse().expect("agent"),
         member_kind: RosterMemberKind::Permanent,
         harness: RosterHarness::PythonGraft,
-        agent_type: crate::schema::AgentType::default(),
+        agent_type: atm_core::schema::AgentType::default(),
         model: ModelName::default(),
         recipient_pane_id: pane_id,
         metadata_json: serde_json::Map::new(),

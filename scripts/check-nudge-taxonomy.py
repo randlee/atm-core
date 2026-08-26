@@ -110,7 +110,7 @@ ALLOWED_NUDGE_IDENTIFIERS = frozenset(
         "listen_for_graft_nudges", "load_nudge_template_override", "local_nudge",
         "LocalTmuxNudgeTarget", "mark_pending", "MAX_NUDGE_ATTEMPTS", "MemberKey", "nnudge",
         "NoopNudgeTemplateOverrideStore", "nudge", "Nudge", "nudge_attempts", "nudge_count",
-        "nudge_delivered", "nudge_dispatch", "nudge_message_id", "nudge_mode", "nudge_pending_at",
+        "nudge_delivered", "nudge_dispatch", "nudge_kind_for_mode", "nudge_message_id", "nudge_mode", "nudge_pending_at",
         "nudge_preserves_typed_source_chat_id", "nudge_sink", "nudge_template",
         "nudge_template_override_store", "nudge_timeout_secs", "NudgeClaim", "NudgeKind", "NudgeMode",
         "nudges", "NudgeTemplateOverrideStore", "on_nudge", "pending_nudge_store", "PendingNudgeStore",
