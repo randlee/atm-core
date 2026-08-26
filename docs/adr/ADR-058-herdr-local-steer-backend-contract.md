@@ -409,9 +409,10 @@ atm-core-owned deadline**, independent of and in addition to any
   replace that deadline.
 - **Wait bound (`wait`, AQ2.7, `HerdrQueueWakePump`):** the pump's own
   per-member deadline — the same `--timeout` value already passed on the
-  `agent wait` argv (D2; up to 45 minutes) — plus a small fixed grace (low
-  single-digit seconds) so Herdr's own `timeout` response can arrive and
-  be parsed before atm-core's external deadline fires first. The external
+  `agent wait` argv (D2; up to 45 minutes) — plus a fixed grace of
+  **exactly 5 000 ms** (`HERDR_WAIT_GRACE_MS = 5_000`, a named constant
+  beside the 5 s steer bound; RSH-004) so Herdr's own `timeout` response
+  can arrive and be parsed before atm-core's external deadline fires first. The external
   deadline is the backstop for a child that neither errors nor exits
   (a hung Herdr server, a wedged socket) and would otherwise leak; under
   normal operation it does not race Herdr's own `timeout` semantics (D5).
@@ -490,3 +491,31 @@ atm-core-owned deadline**, independent of and in addition to any
   `wait`'s per-member bound.
 - AQ6: `herdr --version` and `herdr status` protocol recorded in the pin
   table; preflight fails on binary/server protocol mismatch.
+
+
+#### D10.1 Spawn backoff when Herdr is unavailable (RSH-003)
+
+`server_not_running`, `protocol_mismatch`, and an external-timeout kill are
+*infrastructure* outcomes: retrying the spawn immediately cannot succeed and
+burns a child process per attempt. atm-core applies one **per-host circuit
+breaker** shared by every Herdr member (the Herdr server is host-wide):
+
+- State lives beside the adapter in `atm-http-runtime` (`HerdrSpawnBreaker`,
+  composition-root singleton; never in the roster or SQLite).
+- On any of the three outcomes the breaker opens for `backoff = min(1 s ×
+  2^consecutive_failures, 30 s)`; while open, `prompt`/`wait`/`get` return
+  `HerdrUnavailable { retry_after }` **without spawning**. Steer-kind nudges
+  are dropped with a structured event (`subsystem="atm_core.herdr"
+  action="steer_skipped_breaker_open"`); queue-kind claims are released via
+  `release_pending` (no retry-budget consumption — nothing was injected).
+- The first successful spawn after `retry_after` closes the breaker and
+  resets the counter; a single probe is allowed through when `retry_after`
+  elapses (half-open), so recovery is detected within one backoff window.
+- `atm doctor` reports the breaker state (`herdr_breaker: closed | open
+  {retry_after_ms, consecutive_failures}`) as a Warning while open.
+- Bounds are named constants (`HERDR_BACKOFF_BASE_MS = 1_000`,
+  `HERDR_BACKOFF_CAP_MS = 30_000`); no config surface in Phase AQ.
+- Required evidence (AQ2.6 AC 11 extension): with a fake adapter returning
+  `server_not_running` three times, exactly three spawns occur across ≥ 7 s
+  of wall-clock attempts and the fourth attempt after `retry_after` succeeds
+  and closes the breaker.
