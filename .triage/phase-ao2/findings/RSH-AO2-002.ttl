@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RSH-AO2-002>
+  a triage:Finding ;
+  triage:findingId "RSH-AO2-002" ;
+  triage:title "unvalidated ATM_CAPACITY_CORE_* env vars feeding the canonical WriteRequest path" ;
+  triage:description "rust-service-hardening-agent found ATM_CAPACITY_CORE_* environment variables feeding the canonical WriteRequest path are not validated." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-25T20:58:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.15 ;
+  triage:foundAt "2026-08-26T02:55:37Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-AO2-002/RSH-AO2-002-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RSH-AO2-002/RSH-AO2-002-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/bin/atm-daemon-benchmark.rs" ;
+  triage:line 473 ;
+  triage:snippet "env::var(\"ATM_CAPACITY_CORE_TEAM\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "ac5a8c041" ;
+  triage:occursIn <urn:atm:triage:worktree/ao2/ac5a8c041> .
+
+<urn:atm:triage:worktree/ao2/ac5a8c041>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ao2" ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "ac5a8c041" ;
+  triage:orderIndex 1 .

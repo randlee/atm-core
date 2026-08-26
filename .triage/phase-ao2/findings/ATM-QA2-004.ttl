@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA2-004>
+  a triage:Finding ;
+  triage:findingId "ATM-QA2-004" ;
+  triage:title "AO2.8 Windows/fastpc4 tcp parity not-verifiable" ;
+  triage:description "req-qa found AO2.8 (M5 full-matrix performance remediation and Windows parity) not-verifiable: no triage records, no updated sprint-doc QA history, sprint-doc frontmatter still placeholder (future-dev-worktree), and no evidence this deliverable ever landed on integrate/phase-ao2." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "deferred" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-26T02:55:37Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.15 ;
+  triage:foundAt "2026-08-26T02:55:37Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA2-004/occ-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA2-004/occ-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ao2/sprint-AO2-8-windows-tcp-benchmark-parity.md" ;
+  triage:line 7 ;
+  triage:snippet "status: descoped" ;
+  triage:status "deferred" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "ac5a8c041" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ao2/ac5a8c041> .
+
+<urn:atm:triage:worktree/integrate-phase-ao2/ac5a8c041>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ao2" ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "ac5a8c041" ;
+  triage:orderIndex 1 .

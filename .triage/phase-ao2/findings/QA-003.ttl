@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QA-003>
+  a triage:Finding ;
+  triage:findingId "QA-003" ;
+  triage:title "tools/bootstrap-requirements.txt missing jinja2, breaking `just test coverage` on a clean bootstrap" ;
+  triage:description "rust-qa-agent found that tools/bootstrap-requirements.txt does not list jinja2, so `just test coverage` fails on a genuinely clean bootstrap (dependency required by the coverage tooling is not installed)." ;
+  triage:phaseId "phase-ao2" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "bootstrap-dependency" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-25T20:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AO2.15 ;
+  triage:foundAt "2026-08-26T02:55:37Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-003/QA-003-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QA-003/QA-003-1>
+  a triage:Occurrence ;
+  triage:file "tools/bootstrap-requirements.txt" ;
+  triage:line 1 ;
+  triage:snippet "missing jinja2 dependency entry" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "ac5a8c041" ;
+  triage:occursIn <urn:atm:triage:worktree/QA-003-INTEGRATE> .
+
+<urn:atm:triage:worktree/QA-003-INTEGRATE>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ao2" ;
+  triage:branch "integrate/phase-ao2" ;
+  triage:headSha "ac5a8c041" ;
+  triage:orderIndex 1 .
