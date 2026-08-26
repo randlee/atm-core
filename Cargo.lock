@@ -1927,6 +1927,7 @@ dependencies = [
  "clap",
  "proc-macro2",
  "quote",
+ "sc-lint-attributes",
  "sc-lint-directives",
  "serde",
  "serde_json",
