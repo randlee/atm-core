@@ -98,6 +98,14 @@ expressible on the Herdr argv. The launch convention in AQ2.6 becomes:
 > passes the daemon's environment through to the `herdr` child unchanged and
 > does not synthesise either variable.
 
+**Decision (Rand, 2026-08-26, via team-lead `01M1022DWAJDFEVX07SMYSTE17`):**
+the **default deployment is ONE shared Herdr session/server across all
+teams on a host**, and server-global unique member names are accepted as
+the common case. `HERDR_SESSION` / `HERDR_SOCKET_PATH` env inheritance is
+retained only as the **escape hatch** for a team that needs its own
+session; it is not the default, atm-core never sets it, and no AQ sprint
+may require it. AQ2.6 is cleared to dispatch on this basis once AQ1 lands.
+
 The "workspace equals `ATM_TEAM`" clause in AQ2.6 is advisory operator
 practice only; atm-core neither checks nor depends on it.
 
