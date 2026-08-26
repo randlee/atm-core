@@ -213,13 +213,9 @@ benchmark-bootstrap:
 benchmark *args:
     cargo build --release -p agent-team-mail -p atm-daemon
     {{python_cmd}} .just/sign_daemon_dev.py
-    # Retain the complete campaign report even when a target fails; the runner
-    # records the attempt before returning its non-zero status.
-    {{python_cmd}} scripts/smoke/run_admission_capacity.py {{args}} || benchmark_status=$?
-    {{python_cmd}} scripts/smoke/benchmark_report.py --rebuild || exit $?
-    {{python_cmd}} .just/generate_report_index.py --check || exit $?
-    echo 'View the newest campaign panel: just benchmark-show'
-    exit ${benchmark_status:-0}
+    # The wrapper preserves the runner verdict while rebuilding reports on
+    # both POSIX shells and PowerShell.
+    {{python_cmd}} .just/run_benchmark.py {{args}}
 
 # Rebuild immutable benchmark panels, phase reports, and the report index from JSON.
 benchmark-report:

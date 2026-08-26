@@ -67,6 +67,7 @@ from scripts.smoke.benchmark_mtls import BenchmarkMtlsError, regenerate_mtls_ide
 from scripts.smoke.benchmark_snapshot import (
     BenchmarkSnapshotError,
     VerifiedSnapshot,
+    checkpoint_closed_database,
     create_verified_snapshot,
     restore_verified_snapshot,
     verify_active_snapshot,
@@ -1952,6 +1953,7 @@ def run_capacity(
         if process is None:
             return
         reap_owned_daemon(process)
+        checkpoint_closed_database(benchmark_account.durable_state_root / "mail.db")
         if daemon_output is not None:
             daemon_output.join()
             if output_key is not None:
