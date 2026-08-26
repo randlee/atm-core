@@ -1298,7 +1298,7 @@ mod tests {
         ));
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn started_write_retains_its_actual_result_after_the_advisory_deadline() {
         let admission = BlockingCoreBridge::new(NonZeroUsize::new(1).expect("non-zero capacity"));
         let (started_tx, started_rx) = tokio::sync::oneshot::channel();
@@ -1316,7 +1316,7 @@ mod tests {
                 .await
         });
         started_rx.await.expect("job starts");
-        tokio::time::sleep(Duration::from_millis(30)).await;
+        tokio::time::advance(Duration::from_millis(30)).await;
         release_tx.send(()).expect("release started job");
         assert_eq!(
             task.await.expect("task joins").expect("actual result"),

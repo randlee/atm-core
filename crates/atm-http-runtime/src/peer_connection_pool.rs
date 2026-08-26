@@ -701,7 +701,7 @@ mod tests {
     async fn assert_driver_completions(pool: &PeerConnectionPool, minimum: usize, context: &str) {
         tokio::time::timeout(std::time::Duration::from_secs(1), async {
             while pool.completed_driver_count() < minimum {
-                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+                tokio::task::yield_now().await;
             }
         })
         .await

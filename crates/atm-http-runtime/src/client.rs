@@ -1411,7 +1411,7 @@ mod tests {
                 _request: HttpRequest,
                 _deadline: RequestDeadline,
             ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
-                tokio::time::sleep(Duration::from_secs(60)).await;
+                std::future::pending::<()>().await;
                 unreachable!("deadline must cancel the connector")
             }
         }

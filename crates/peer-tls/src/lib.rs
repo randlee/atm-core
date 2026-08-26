@@ -664,7 +664,7 @@ mod tests {
         // handed to application protocol code, so no opaque bytes can flow.
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn handshake_deadline_fails_before_any_application_protocol_can_start() {
         let directory = tempfile::tempdir().expect("directory");
         let server_identity = identity(&directory, "server");
@@ -680,17 +680,23 @@ mod tests {
             .await
             .expect("bind");
         let address = listener.local_addr().expect("address");
+        let (connected_tx, connected_rx) = tokio::sync::oneshot::channel();
         let raw_client = tokio::spawn(async move {
             let _tcp = TcpStream::connect(address).await.expect("connect tcp");
-            tokio::time::sleep(Duration::from_millis(50)).await;
+            connected_tx.send(()).expect("signal connected client");
+            std::future::pending::<()>().await;
         });
         let (tcp, _) = listener.accept().await.expect("accept tcp");
-        let error = match server.accept(tcp).await {
+        connected_rx.await.expect("client connects before handshake");
+        let server_accept = tokio::spawn(async move { server.accept(tcp).await });
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_millis(50)).await;
+        let error = match server_accept.await.expect("server accept task joins") {
             Err(error) => error,
             Ok(_) => panic!("handshake deadline must fail"),
         };
         assert_eq!(error.code().as_str(), "ATM_TRANSPORT_TIMEOUT");
-        raw_client.await.expect("raw client");
+        raw_client.abort();
     }
 
     #[tokio::test]

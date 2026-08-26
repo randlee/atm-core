@@ -279,7 +279,7 @@ mod tests {
                 if observed >= expected {
                     return observed;
                 }
-                tokio::time::sleep(DIAGNOSTIC_POLL_INTERVAL).await;
+                tokio::task::yield_now().await;
             }
         })
         .await
