@@ -70,6 +70,27 @@ The runner writes per-target JSON, envelopes, campaign JSON, and raw local
 traces. A measured below-baseline campaign returns non-zero, but its complete
 result is still rendered and must be published.
 
+### Official-attempt visibility
+
+Every invocation of `just benchmark-official` must leave committed, pushed
+evidence on the selected branch. A measured invocation leaves its immutable
+per-target JSON and `.campaign.json`; an invocation that cannot reach
+measurement (including a trigger that never starts the runner) leaves a
+timestamped failed-attempt note under `docs/plans/phase-ao2/evidence/`.
+The note records the trigger, selected branch and SHA when known, failure
+boundary, whether measurement started, and cleanup state. It is not a
+campaign, never supplies performance data, and must not be used to overwrite
+or alter an existing campaign. Publish the note before retrying after the
+infrastructure cause is understood.
+
+Any future change to a reviewed floor in `baselines.json` requires at least
+three clean, published official runs for the same host and target under the
+same benchmark contract. A clean run has a complete target result, byte-exact
+restore/cleanup evidence, and no infrastructure, trigger, or harness error.
+The three-run evidence and its rationale accompany the reviewed baseline
+revision; failed attempts and partial runs do not count. Existing campaign
+snapshots remain immutable when a later revision is approved.
+
 ## 3. Review
 
 Immediately after every run, display the newest panel for the operator:
@@ -154,6 +175,10 @@ machine-readable result:
 `0` means all target floors passed, `1` means a measured campaign was published
 with one or more FAIL targets, and `2` means no publishable official result was
 produced because of an infrastructure error.
+
+The exit code does not remove the attempt-visibility obligation. For exit `2`,
+commit and push the failed-attempt note described above once the failure is
+observed; for exit `0` or `1`, the published campaign is that evidence.
 
 `just benchmark-official` runs the repository's pinned `just bootstrap` first,
 so the dedicated account needs no pre-existing Python virtual environment.

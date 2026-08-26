@@ -70,6 +70,16 @@ verdict:    exit 0 = all floors green
             exit 2 = infra error (preflight, rebuild, publish, or push
                      failure) — measured-and-published FAILs are NEVER
                      reclassified as infra errors or vice versa.
+
+evidence:   every official invocation leaves a committed artifact on the
+            selected branch: a measured invocation publishes immutable
+            per-target JSON and one campaign JSON; an invocation that cannot
+            reach measurement (including a trigger non-start) publishes a
+            timestamped failed-attempt note under
+            docs/plans/phase-ao2/evidence/. The note records trigger, branch
+            and SHA when known, failure boundary, measurement-start status,
+            and cleanup state. A failed-attempt note is not a benchmark
+            result and cannot alter any existing campaign.
 ```
 
    No wyvern step, no prompts; unattended-safety is tested by running
@@ -121,6 +131,14 @@ verdict:    exit 0 = all floors green
    evidence. The launchd transcript explicitly shows zero
    interactive/keychain prompts.
 6. All suites green on all three CI lanes.
+7. (D3) Every official invocation leaves committed attempt evidence: measured
+   invocations publish their campaign JSON; pre-measurement failures publish a
+   timestamped failed-attempt note. Future `baselines.json` revisions require
+   at least three clean, published official runs for the same host, target,
+   and benchmark contract. A clean run has a complete target result,
+   byte-exact restore/cleanup evidence, and no trigger, infrastructure, or
+   harness error; failed attempts and partial runs do not count. A later
+   baseline revision never rewrites older campaign snapshots.
 
 ## Required validation
 
