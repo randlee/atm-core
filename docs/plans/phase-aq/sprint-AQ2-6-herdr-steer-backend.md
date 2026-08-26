@@ -44,7 +44,7 @@ this doc cites it by decision id (`D1`–`D8`).
    ```rust
    pub enum LocalMessageReceivedBackend {
        Tmux { pane_id: PaneId },
-       Herdr { session: Option<String> },
+       Herdr { session: Option<HerdrSession> },  // HerdrSession: validated newtype, AQ1 delivery_channel.rs
    }
    ```
 
@@ -162,7 +162,7 @@ this doc cites it by decision id (`D1`–`D8`).
    pre-existing "old `PaneId::from_cli` versus `normalize_tmux_pane_id`
    disagreement" this sprint's AC 3 closes, and it is critical review M11's
    flagged reject→accept-with-warning change — stated explicitly, not
-   dropped, because AC 3 depends on it. New contract: `normalize_tmux_pane_id`
+   dropped, because AC 3 depends on it (approved by Rand 2026-08-26). New contract: `normalize_tmux_pane_id`
    returns `Result<Option<(PaneId, TmuxTargetShape)>, AtmError>` where
    `TmuxTargetShape` is `Strict` (matches `%<digits>`/bare digits) or
    `NonStandard` (anything else `PaneId::from_cli` still accepts — it still
@@ -184,7 +184,7 @@ this doc cites it by decision id (`D1`–`D8`).
    `crates/atm-error/src/error_codes.rs`), naming the team plus its tmux and
    Herdr member lists, with the same conditional remediation
    (`atm teams update-member <member> --backend herdr` or
-   `--backend tmux --target %N`). **Rationale (why Warning, not the
+   `--backend tmux --target %N`). **Decision approved by Rand 2026-08-26. Rationale (why Warning, not the
    originally planned Error):** ADR-058 D1 explicitly anticipates operators
    running a team split across Herdr sessions and, transitively, migrating a
    team's members from tmux to Herdr one at a time — a mixed team is a
@@ -254,7 +254,7 @@ this doc cites it by decision id (`D1`–`D8`).
    `graft_post_send = true` and get dispatched to graft, not Herdr. Fix, in
    the same PR: `from_roster` calls `local_message_received_backend(&member)`
    once and derives `local_tmux_post_send` / a new `local_herdr_post_send`
-   bool (plus a stored `herdr_session: Option<String>`) from its result;
+   bool (plus a stored `herdr_session: Option<HerdrSession>`) from its result;
    `graft_post_send` becomes `harness_is_graft_eligible &&
    local_message_received_backend(&member).is_none()`. `build_built_in_dispatch`
    (`crates/atm-core/src/send/hook.rs:17-49`) gains a third arm using
@@ -295,7 +295,7 @@ this doc cites it by decision id (`D1`–`D8`).
        /// The member's stored Herdr session (roster data); `None` = Herdr's
        /// default server. The target agent name is `event.recipient` — not
        /// duplicated here.
-       pub session: Option<String>,
+       pub session: Option<HerdrSession>,
    }
    pub enum PostSendBuiltInTarget {
        LocalSteer(LocalSteerTarget),

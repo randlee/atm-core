@@ -170,7 +170,7 @@ disposition:
 | B6 | No dispatch-from-message-id path for drain/sweep/pump | **structurally closed** — AQ1 trait-foundation deliverable; contract text still to be authored in AQ1 |
 | B7 | No `list_pending_members` — sweep/pump cannot enumerate | **structurally closed** — added to AQ1's `PendingNudgeStore` contract |
 | B8 | AQ3 idle drain (not just sweep) can claim Herdr messages | **plan-level closed** — AQ2.7 owns its own Herdr-only guard; AQ3 pre-check applies to both drain and sweep (AQ3 doc updated); AC text still to be hardened |
-| B9 | Herdr has no contract anywhere in repo | **closed** — ADR-058 + fixture on PR #1039 (lane A); AQ2.6/AQ2.7 rewritten against it |
+| B9 | Herdr has no contract anywhere in repo | **closed at doc level** — ADR-058 + fixture authored on PR #1039 (open, doc-only, targets integrate/phase-aq); AQ2.6/AQ2.7 rewritten against it; **PR #1039 merge is AQ2.6's dispatch precondition** |
 | B10 | `ATM_TEMP` eager daemon boot-fail is fleet-breaking with no rollout story | **plan-level closed** — unset falls back to `<temp_dir>/atm` with a startup warning; set-but-invalid fails closed; PRD §4.5 aligned |
 
 Finalization pass (2026-08-26, five Sonnet doc agents + coordinator): every
@@ -184,8 +184,8 @@ aligned to the blueprint (D1 crate placement, `mark_pending`,
 critical + quality-mgr run on the **whole tree**, not per-insertion.
 
 Decisions surfaced by the finalization agents — **all eight approved by Rand
-2026-08-26** (decision 1 explicitly discussed; the inline "Rand to confirm"
-markers in the sprint docs are therefore resolved): (1) AQ1.5
+2026-08-26** (decision 1 explicitly discussed; each sprint doc now carries an inline
+"approved by Rand 2026-08-26" marker at the decision — critical review F3): (1) AQ1.5
 `register` displaces unconditionally on generation mismatch (flock proves
 same-host exclusivity) — revises a 4-round-hardened contract element; (2)
 AQ1.7 dials present-but-expired leases rather than refusing; (3) AQ2.6

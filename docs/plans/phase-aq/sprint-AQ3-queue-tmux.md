@@ -98,7 +98,7 @@ pub trait MemberStateTransitionSink: atm_core::boundary::sealed::Sealed + Send +
    Read rows never appear (markers cleared by AQ1's read hook).
    **Channel pre-check (shared helper, defined here, called from both
    deliverable 2 and deliverable 3 — critical review B8)**: before
-   calling `claim_next_pending`, the pre-check calls AQ2.5/AQ2.6's
+   calling `claim_next_pending`, the pre-check calls AQ1's
    `DeliveryChannel` classifier and admits the claim **only** when M is
    classified `TmuxSteer` or `Graft`. Heartbeat hooks are roster-blind,
    so without this the drain-side call site would claim for `HerdrSteer`
@@ -110,7 +110,7 @@ pub trait MemberStateTransitionSink: atm_core::boundary::sealed::Sealed + Send +
    on FIFO append — handoff semantics; the pre-check is the belt to that
    suspender). Implemented as one function called from both call sites so
    the two pre-checks cannot drift apart; this sprint authors the
-   pre-check helper, AQ2.5 authors the classifier it calls — exactly one
+   pre-check helper, AQ1 authors the classifier it calls — exactly one
    owner per file.
 3. **Recovery sweep** — **kind-agnostic**: a low-frequency periodic pass
    (maintenance-cadence precedent) that enumerates candidate members via

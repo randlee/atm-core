@@ -338,7 +338,7 @@ the false-stuck problem cannot arise.
    /// classifier itself does no I/O (trivially unit-testable).
    pub fn classify_delivery_channel(
        local_backend: Option<&LocalMessageReceivedBackend>, // roster row
-       graft_lease: Option<&GraftReceiverLease>,  // AQ1.5 lookup result
+       graft_lease: GraftLeaseState,  // AQ1 D7: Absent | Active; AQ1.7 maps the AQ1.5 lookup result onto it
    ) -> DeliveryChannel
 
    // core's post-persistence dispatch-target planning gains:

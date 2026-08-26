@@ -86,7 +86,7 @@ turn-correlated queueing.
    }
    ```
 
-   **Flag to Rand for confirmation:** the bound of **8** concurrent waits and
+   **Decision (approved by Rand 2026-08-26):** the bound of **8** concurrent waits and
    the **10-minute** target-not-present recheck interval are this sprint's
    proposed production defaults, not derived from any existing repo
    precedent — there is no prior Herdr fleet-size or wait-concurrency data to

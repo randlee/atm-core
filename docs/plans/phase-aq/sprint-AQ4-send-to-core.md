@@ -12,7 +12,7 @@ share one owner and one contract — the `ATM_TEMP` root and the staging
 convention — so splitting them buys four dispatch/QA cycles for work that
 is sequential inside one owner's context, and the finer-grained split
 already went through this phase's QA rounds (its hardened acceptance
-criteria are preserved verbatim below). **Decision (Rand to confirm):
+criteria are preserved verbatim below). **Decision (approved by Rand 2026-08-26):
 one PR, not two.** The prior "the PR opens once deliverables 1–4 are
 pushed" line named a timing convention, not a QA gate, and PLAN-CRIT-015
 correctly flagged it as unfalsifiable. The real mechanism: deliverables
@@ -67,7 +67,14 @@ baseline.
    calls at startup and the CLI calls lazily at first scratch-space use
    (commands touching no scratch space are unaffected either way).
    **Unset is not a startup failure**: `resolve_atm_temp` defaults to
-   `<std::env::temp_dir()>/atm` (created if missing). `std::env::temp_dir()`
+   `<std::env::temp_dir()>/atm-<uid>` on Unix (`<temp_dir()>\atm` on Windows,
+   where `%TEMP%` is already per-user), created with mode `0700` if missing.
+   **Shared-host safety (critical review F7):** if the directory already
+   exists and is not owned by the current uid, or has any group/world
+   permission bits, resolution fails closed with `AtmTempInsecure` — the
+   fallback never adopts a directory another user could have pre-created.
+   The same ownership/mode check applies to an explicitly set `ATM_TEMP`.
+   `std::env::temp_dir()`
    is not yet a *production* repo idiom — grepped repo-wide, every existing
    call site is a test fixture (e.g. `crates/atm-core/src/ack/mod.rs:779`,
    `crates/atm-runtime/src/composition.rs:311`) or inside the `identity`
@@ -163,7 +170,7 @@ baseline.
    the ATM home *directory*, not a routable `HostName`; no `AtmConfig`
    field, env var, or `gethostname`-style dependency exists — verified
    grep, zero hits). This sprint adds one: a new optional
-   `AtmConfig.local_host: Option<HostName>` field (same file that already
+   `AtmConfig.local_host: Option<HostName>` field (approved by Rand 2026-08-26; same file that already
    has no temp key, `crates/atm-core/src/config/types.rs:54`), sourced
    from `.atm.toml`, set once per machine by the operator (documented in
    `docs/cross-host-file-transfer.md`) with the **same value** they'd

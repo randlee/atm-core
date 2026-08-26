@@ -265,7 +265,7 @@ plus `#[serde(default)] pub nudge_mode: NudgeMode` on `WriteRequest` and `with_n
 /// `HERDR_SESSION` on the emitter's child env per invocation); `None` =
 /// Herdr's default server. Roster data, like `pane_id` — the daemon never
 /// launches sessions and its own env is irrelevant (Rand, 2026-08-26).
-pub enum LocalMessageReceivedBackend { Tmux { pane_id: PaneId }, Herdr { session: Option<String> } }
+pub enum LocalMessageReceivedBackend { Tmux { pane_id: PaneId }, Herdr { session: Option<HerdrSession> } }  // HerdrSession = validated newtype over String, defined in delivery_channel.rs
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GraftLeaseState { Absent, Active }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

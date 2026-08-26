@@ -36,7 +36,7 @@ regression-tested inside Wyvern's own CI.
    here as the ecosystem grows), (a) look up the most recent release,
    (b) bump the recorded pin to it, (c) run that dependency's named
    integration-test target against the bumped release:
-   - **Wyvern**: looked up via `gh release list --repo randlee/wyvern
+   - **Wyvern** (target repo approved by Rand 2026-08-26): looked up via `gh release list --repo randlee/wyvern
      --limit 1` (the real Wyvern repo — confirmed via existing cross-repo
      references, e.g. `randlee/wyvern#115` cited in
      `docs/plans/phase-ao2/benchmark-reporting-plan-overview.md:36` and

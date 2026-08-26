@@ -53,13 +53,22 @@ the file is written but no longer read by anything in-tree.
    callers call deliverable 1's `mark_graft_receiver_unreachable`
    (staleness is data, never a wedge), then surface today's delivery error
    unchanged — no retry-semantics change, no new error shape.
-   **Present-but-expired lease (closes I11)**: a lease that exists but
+   **Present-but-expired lease (closes I11; approved by Rand 2026-08-26)**: a lease that exists but
    whose `last_seen_at` is beyond `ACTIVE_LEASE_WINDOW` is dialed anyway —
    delivery does not consult `unreachable_at`/window staleness before
    connecting (mirrors today's file-based behavior, which never checked
    staleness either before dialing). Only an *absent* lease (no row at
    all) is treated as not-registered. Staleness/expiry is display-only
    (doctor, deliverable 4), never a delivery gate.
+2b. **Classifier mapping (closes critical review F5)**: the same delivery
+   path owns the one place that turns `GraftReceiverEndpointStore::lookup`
+   into AQ1's `GraftLeaseState` for `classify_delivery_channel`:
+   `fn graft_lease_state(lookup: Option<&GraftReceiverLease>) -> GraftLeaseState`
+   in `crates/atm-core/src/delivery_channel.rs`'s consumer module (not the
+   classifier itself) — `Some(_)` → `Active`, `None` → `Absent`, regardless
+   of `last_seen_at`/`unreachable_at` (expiry is advisory; the dial-anyway
+   rule above applies). AQ2/AQ2.5 route `Graft`-classified dispatches
+   through this mapping and never re-derive it. AC 8 covers it.
 3. **CLI**: `atm _internal-nudge`'s `GraftNudgeSink::deliver`
    (`crates/atm/src/commands/internal_nudge.rs`) drops
    `graft_receiver_record_path_from_home` and instead queries a new daemon
