@@ -38,19 +38,6 @@ pub struct ScComposeTemplateComposer {
 }
 
 impl ScComposeTemplateComposer {
-    const fn to_sc_output_format(format: TemplateOutputFormat) -> OutputFormat {
-        match format {
-            TemplateOutputFormat::Text => OutputFormat::Text,
-            TemplateOutputFormat::Json => OutputFormat::Json,
-        }
-    }
-
-    const fn from_sc_output_format(format: OutputFormat) -> TemplateOutputFormat {
-        match format {
-            OutputFormat::Text => TemplateOutputFormat::Text,
-            OutputFormat::Json => TemplateOutputFormat::Json,
-        }
-    }
     /// Builds the production adapter.
     #[must_use]
     pub fn new() -> Self {
@@ -61,171 +48,184 @@ impl ScComposeTemplateComposer {
     pub fn root_render_calls(&self) -> usize {
         self.root_render_calls.load(Ordering::Relaxed)
     }
+}
 
-    fn source_text(source: &TemplateSource) -> Result<&str, AtmError> {
-        std::str::from_utf8(&source.raw_file_bytes)
-            .map_err(|_| AtmError::template_content_not_utf8())
+const fn to_sc_output_format(format: TemplateOutputFormat) -> OutputFormat {
+    match format {
+        TemplateOutputFormat::Text => OutputFormat::Text,
+        TemplateOutputFormat::Json => OutputFormat::Json,
     }
+}
 
-    fn template_load_error(cause: impl std::fmt::Display) -> AtmError {
-        AtmError::new(
-            atm_storage::AtmErrorCode::TemplateLoadFailed,
-            "template source could not be read",
-        )
-        .with_cause(cause)
+const fn from_sc_output_format(format: OutputFormat) -> TemplateOutputFormat {
+    match format {
+        OutputFormat::Text => TemplateOutputFormat::Text,
+        OutputFormat::Json => TemplateOutputFormat::Json,
     }
+}
 
-    fn composition_error(error: ComposeError) -> AtmError {
-        match error {
-            ComposeError::Include(error) => AtmError::template_include_unresolved(error),
-            ComposeError::Resolve(error) => AtmError::template_include_unresolved(error),
-            ComposeError::Validation(error) => AtmError::template_render_verification_failed(error),
-            ComposeError::Render(error) => AtmError::template_render_verification_failed(error),
-            ComposeError::Config(error) => Self::inspection_parse_error(error),
-        }
+fn source_text(source: &TemplateSource) -> Result<&str, AtmError> {
+    std::str::from_utf8(&source.raw_file_bytes).map_err(|_| AtmError::template_content_not_utf8())
+}
+
+fn template_load_error(cause: impl std::fmt::Display) -> AtmError {
+    AtmError::new(
+        atm_storage::AtmErrorCode::TemplateLoadFailed,
+        "template source could not be read",
+    )
+    .with_cause(cause)
+}
+
+fn composition_error(error: ComposeError) -> AtmError {
+    match error {
+        ComposeError::Include(error) => AtmError::template_include_unresolved(error),
+        ComposeError::Resolve(error) => AtmError::template_include_unresolved(error),
+        ComposeError::Validation(error) => AtmError::template_render_verification_failed(error),
+        ComposeError::Render(error) => AtmError::template_render_verification_failed(error),
+        ComposeError::Config(error) => inspection_parse_error(error),
     }
+}
 
-    fn inspection_parse_error(cause: impl std::fmt::Display) -> AtmError {
-        AtmError::new(
-            atm_storage::AtmErrorCode::TemplateInspectionParseFailed,
-            "template inspection parser rejected frontmatter or body/directive syntax",
-        )
-        .with_cause(cause)
+fn inspection_parse_error(cause: impl std::fmt::Display) -> AtmError {
+    AtmError::new(
+        atm_storage::AtmErrorCode::TemplateInspectionParseFailed,
+        "template inspection parser rejected frontmatter or body/directive syntax",
+    )
+    .with_cause(cause)
+}
+
+fn inspection_error(error: ComposeError) -> AtmError {
+    match error {
+        ComposeError::Include(error) => AtmError::template_include_unresolved(error),
+        ComposeError::Resolve(error) => AtmError::template_include_unresolved(error),
+        ComposeError::Validation(error) => AtmError::template_render_verification_failed(error),
+        ComposeError::Render(error) => AtmError::template_render_verification_failed(error),
+        ComposeError::Config(error) => inspection_parse_error(error),
     }
+}
 
-    fn inspection_error(error: ComposeError) -> AtmError {
-        match error {
-            ComposeError::Include(error) => AtmError::template_include_unresolved(error),
-            ComposeError::Resolve(error) => AtmError::template_include_unresolved(error),
-            ComposeError::Validation(error) => AtmError::template_render_verification_failed(error),
-            ComposeError::Render(error) => AtmError::template_render_verification_failed(error),
-            ComposeError::Config(error) => Self::inspection_parse_error(error),
-        }
-    }
+fn hash_api_error(cause: impl std::fmt::Display) -> AtmError {
+    AtmError::new(
+        atm_storage::AtmErrorCode::TemplateHashApiFailed,
+        "template SHA/hash identity API failed to produce a valid identity",
+    )
+    .with_cause(cause)
+}
 
-    fn hash_api_error(cause: impl std::fmt::Display) -> AtmError {
-        AtmError::new(
-            atm_storage::AtmErrorCode::TemplateHashApiFailed,
-            "template SHA/hash identity API failed to produce a valid identity",
-        )
-        .with_cause(cause)
-    }
-
-    fn upstream_frontmatter(
-        raw_file_bytes: &[u8],
-    ) -> Result<atm_storage::TemplateFrontmatter, AtmError> {
-        let source = std::str::from_utf8(raw_file_bytes)
-            .map_err(|_| AtmError::template_content_not_utf8())?;
-        let document = parse_template_document(source).map_err(Self::inspection_error)?;
-        let Some(frontmatter) = document.frontmatter() else {
-            return Ok(atm_storage::TemplateFrontmatter::default());
-        };
-        let required_variables = frontmatter
-            .required_variables()
-            .iter()
-            .map(|name| atm_storage::TemplateVariableName::new(name.as_str()))
-            .collect::<Result<Vec<_>, _>>()?;
-        let defaults = frontmatter
-            .defaults()
-            .iter()
-            .map(|(name, value)| (name.as_str().to_owned(), value.clone()))
-            .collect();
-        let metadata = frontmatter
-            .metadata()
-            .iter()
-            .map(|(name, value)| {
-                value
-                    .to_json_value()
-                    .map(|value| (name.clone(), value))
-                    .map_err(Self::inspection_parse_error)
-            })
-            .collect::<Result<_, _>>()?;
-        Ok(atm_storage::TemplateFrontmatter {
-            required_variables,
-            defaults,
-            metadata,
-            ..atm_storage::TemplateFrontmatter::default()
+fn upstream_frontmatter(
+    raw_file_bytes: &[u8],
+) -> Result<atm_storage::TemplateFrontmatter, AtmError> {
+    let source =
+        std::str::from_utf8(raw_file_bytes).map_err(|_| AtmError::template_content_not_utf8())?;
+    let document = parse_template_document(source).map_err(inspection_error)?;
+    let Some(frontmatter) = document.frontmatter() else {
+        return Ok(atm_storage::TemplateFrontmatter::default());
+    };
+    let required_variables = frontmatter
+        .required_variables()
+        .iter()
+        .map(|name| atm_storage::TemplateVariableName::new(name.as_str()))
+        .collect::<Result<Vec<_>, _>>()?;
+    let defaults = frontmatter
+        .defaults()
+        .iter()
+        .map(|(name, value)| (name.as_str().to_owned(), value.clone()))
+        .collect();
+    let metadata = frontmatter
+        .metadata()
+        .iter()
+        .map(|(name, value)| {
+            value
+                .to_json_value()
+                .map(|value| (name.clone(), value))
+                .map_err(inspection_parse_error)
         })
-    }
+        .collect::<Result<_, _>>()?;
+    Ok(atm_storage::TemplateFrontmatter {
+        required_variables,
+        defaults,
+        metadata,
+        ..atm_storage::TemplateFrontmatter::default()
+    })
+}
 
-    fn upstream_references(raw_file_bytes: &[u8]) -> Result<Vec<TemplateReference>, AtmError> {
-        inspect_template_directives(raw_file_bytes)
-            .map_err(Self::inspection_error)?
-            .into_iter()
-            .map(|reference| {
-                let directive = match reference.directive {
-                    TemplateDirectiveKind::Include => TemplateReferenceKind::Include,
-                    TemplateDirectiveKind::Import => TemplateReferenceKind::Import,
-                    TemplateDirectiveKind::FromImport => TemplateReferenceKind::FromImport,
-                };
-                Ok(TemplateReference {
-                    directive,
-                    source_span: SourceSpan {
-                        byte_start: reference.source_span.byte_start,
-                        byte_end: reference.source_span.byte_end,
-                    },
-                })
+fn upstream_references(raw_file_bytes: &[u8]) -> Result<Vec<TemplateReference>, AtmError> {
+    inspect_template_directives(raw_file_bytes)
+        .map_err(inspection_error)?
+        .into_iter()
+        .map(|reference| {
+            let directive = match reference.directive {
+                TemplateDirectiveKind::Include => TemplateReferenceKind::Include,
+                TemplateDirectiveKind::Import => TemplateReferenceKind::Import,
+                TemplateDirectiveKind::FromImport => TemplateReferenceKind::FromImport,
+            };
+            Ok(TemplateReference {
+                directive,
+                source_span: SourceSpan {
+                    byte_start: reference.source_span.byte_start,
+                    byte_end: reference.source_span.byte_end,
+                },
             })
-            .collect()
-    }
-
-    fn inspect_raw_file(
-        raw_file_bytes: &[u8],
-        output_format: TemplateOutputFormat,
-    ) -> Result<TemplateInspection, AtmError> {
-        let sha = calculate_hash(HashInput::TextFileBytes {
-            utf8_file_bytes: raw_file_bytes,
         })
-        .map_err(|_| AtmError::template_content_not_utf8())?
-        .template()
-        .to_hex();
-        Ok(TemplateInspection {
-            sha: atm_storage::TemplateSha::new(sha).map_err(Self::hash_api_error)?,
-            frontmatter: Self::upstream_frontmatter(raw_file_bytes)?,
-            include_references: Self::upstream_references(raw_file_bytes)?,
-            output_format,
+        .collect()
+}
+
+fn inspect_raw_file(
+    raw_file_bytes: &[u8],
+    output_format: TemplateOutputFormat,
+) -> Result<TemplateInspection, AtmError> {
+    let sha = calculate_hash(HashInput::TextFileBytes {
+        utf8_file_bytes: raw_file_bytes,
+    })
+    .map_err(|_| AtmError::template_content_not_utf8())?
+    .template()
+    .to_hex();
+    Ok(TemplateInspection {
+        sha: atm_storage::TemplateSha::new(sha).map_err(hash_api_error)?,
+        frontmatter: upstream_frontmatter(raw_file_bytes)?,
+        include_references: upstream_references(raw_file_bytes)?,
+        output_format,
+    })
+}
+
+/// Reject a source file that changed after ATM captured its immutable
+/// admission bytes. Both confined render entry points share this check.
+fn verify_unchanged(source_path: &Path, expected: &[u8]) -> Result<(), AtmError> {
+    let actual = std::fs::read(source_path).map_err(template_load_error)?;
+    if actual == expected {
+        return Ok(());
+    }
+    Err(AtmError::template_render_verification_failed(format!(
+        "template source changed after it was loaded: '{}' no longer matches the verified raw bytes",
+        source_path.display()
+    )))
+}
+
+/// The only ATM production checked-emission seam.  The checker consumes
+/// the complete body, so invalid JSON can never reach a send or read path.
+fn checked_body(
+    text: &str,
+    format: TemplateOutputFormat,
+    template_path: &Path,
+    failing_pass: Option<u8>,
+) -> Result<RenderedBody, AtmError> {
+    let format = to_sc_output_format(format);
+    let meta = RenderCheckMeta::for_template_with_format(template_path, format);
+    check_rendered_output_with_meta(meta, text)
+        .map(|checked| RenderedBody {
+            text: checked.body().to_owned(),
         })
-    }
-
-    /// Reject a source file that changed after ATM captured its immutable
-    /// admission bytes. Both confined render entry points share this check.
-    fn verify_unchanged(source_path: &Path, expected: &[u8]) -> Result<(), AtmError> {
-        let actual = std::fs::read(source_path).map_err(Self::template_load_error)?;
-        if actual == expected {
-            return Ok(());
-        }
-        Err(AtmError::template_render_verification_failed(format!(
-            "template source changed after it was loaded: '{}' no longer matches the verified raw bytes",
-            source_path.display()
-        )))
-    }
-
-    /// The only ATM production checked-emission seam.  The checker consumes
-    /// the complete body, so invalid JSON can never reach a send or read path.
-    fn checked_body(
-        text: &str,
-        format: TemplateOutputFormat,
-        template_path: &Path,
-        failing_pass: Option<u8>,
-    ) -> Result<RenderedBody, AtmError> {
-        let format = Self::to_sc_output_format(format);
-        let meta = RenderCheckMeta::for_template_with_format(template_path, format);
-        check_rendered_output_with_meta(meta, text)
-            .map(|checked| RenderedBody {
-                text: checked.body().to_owned(),
-            })
-            .map_err(|error| {
-                let error = error.with_failing_pass(failing_pass);
-                let cause = failing_pass.map_or_else(
-                    || error.to_string(),
-                    |pass| format!("{error}; final output rejected after render pass {pass}"),
-                );
-                match format {
-                    OutputFormat::Json => AtmError::template_json_escape_migration_required(cause),
-                    OutputFormat::Text => AtmError::template_render_verification_failed(cause),
-                }
-            })
-    }
+        .map_err(|error| {
+            let error = error.with_failing_pass(failing_pass);
+            let cause = failing_pass.map_or_else(
+                || error.to_string(),
+                |pass| format!("{error}; final output rejected after render pass {pass}"),
+            );
+            match format {
+                OutputFormat::Json => AtmError::template_json_escape_migration_required(cause),
+                OutputFormat::Text => AtmError::template_render_verification_failed(cause),
+            }
+        })
 }
 
 impl sealed::Sealed for ScComposeTemplateComposer {}
@@ -240,9 +240,9 @@ impl TemplateComposer for ScComposeTemplateComposer {
         })?;
         // This is the sole format classification site. Core and storage only
         // carry the small ATM-owned enum persisted with the immutable row.
-        Self::inspect_raw_file(
+        inspect_raw_file(
             &source.raw_file_bytes,
-            Self::from_sc_output_format(OutputFormat::from_template_path(canonical_path)),
+            from_sc_output_format(OutputFormat::from_template_path(canonical_path)),
         )
     }
 
@@ -259,16 +259,16 @@ impl TemplateComposer for ScComposeTemplateComposer {
                 "root-constrained rendering requires a canonical source-file path; stored templates must render without includes",
             )
         })?;
-        Self::verify_unchanged(source_path, &template.raw_file_bytes)?;
+        verify_unchanged(source_path, &template.raw_file_bytes)?;
         let confining_root = ConfiningRoot::from_path_buf(root.canonical_path.clone());
         let expanded = expand_includes(source_path, &confining_root, &ComposePolicy::default())
             .map_err(AtmError::template_include_unresolved)?;
         let text = render_template(&expanded.text, vars)
             .map_err(AtmError::template_render_verification_failed)?;
 
-        Self::checked_body(
+        checked_body(
             &text,
-            Self::from_sc_output_format(OutputFormat::from_template_path(source_path)),
+            from_sc_output_format(OutputFormat::from_template_path(source_path)),
             source_path,
             None,
         )
@@ -286,7 +286,7 @@ impl TemplateComposer for ScComposeTemplateComposer {
                 "composition requires a canonical source-file path",
             )
         })?;
-        Self::verify_unchanged(source_path, &template.raw_file_bytes)?;
+        verify_unchanged(source_path, &template.raw_file_bytes)?;
 
         let vars_input = vars
             .iter()
@@ -319,10 +319,10 @@ impl TemplateComposer for ScComposeTemplateComposer {
                 ..sc_composer::ComposePolicy::default()
             },
         };
-        let result = sc_composer::compose(&request).map_err(Self::composition_error)?;
-        Self::checked_body(
+        let result = sc_composer::compose(&request).map_err(composition_error)?;
+        checked_body(
             &result.rendered_text,
-            Self::from_sc_output_format(OutputFormat::from_template_path(source_path)),
+            from_sc_output_format(OutputFormat::from_template_path(source_path)),
             source_path,
             result.failing_pass,
         )
@@ -338,18 +338,18 @@ impl TemplateComposer for ScComposeTemplateComposer {
                 "stored template has legacy/unverified output_format; re-register the source through the current adapter before claiming checked-render compatibility",
             )
         })?;
-        let inspection = Self::inspect_raw_file(&source.raw_file_bytes, output_format)?;
+        let inspection = inspect_raw_file(&source.raw_file_bytes, output_format)?;
         if !inspection.include_references.is_empty() {
             return Err(AtmError::decomposed_template_include_forbidden());
         }
-        let source_text = Self::source_text(source)?;
+        let source_text = source_text(source)?;
         let text = render_template(source_text, vars)
             .map_err(AtmError::template_render_verification_failed)?;
         let path = match output_format {
             TemplateOutputFormat::Text => Path::new("stored-template.txt"),
             TemplateOutputFormat::Json => Path::new("stored-template.json"),
         };
-        Self::checked_body(&text, output_format, path, None)
+        checked_body(&text, output_format, path, None)
     }
 }
 
@@ -1023,7 +1023,7 @@ mod tests {
             ))
             .expect_err("malformed Jinja must fail inspection");
         let hash_error = atm_storage::TemplateSha::new("not-a-sha")
-            .map_err(ScComposeTemplateComposer::hash_api_error)
+            .map_err(super::hash_api_error)
             .expect_err("invalid storage identity must fail the hash adapter seam");
 
         assert_eq!(

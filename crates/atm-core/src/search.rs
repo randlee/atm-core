@@ -259,12 +259,12 @@ impl SearchInput {
             cursor: self.cursor.clone().map(SearchCursor::new).transpose()?,
         })
     }
+}
 
-    /// Wraps this public input for a CLI or HTTP transport hop.
-    #[must_use]
-    pub fn into_request(self) -> SearchRequest {
-        SearchRequest {
-            query: self,
+impl From<SearchInput> for SearchRequest {
+    fn from(query: SearchInput) -> Self {
+        Self {
+            query,
             lifecycle: None,
         }
     }
@@ -891,7 +891,7 @@ mod tests {
         };
         let cli_query = input.compile_query().expect("CLI compiler");
         let http_request: SearchRequest =
-            serde_json::from_slice(&serde_json::to_vec(&input.into_request()).expect("JSON"))
+            serde_json::from_slice(&serde_json::to_vec(&SearchRequest::from(input)).expect("JSON"))
                 .expect("HTTP request JSON");
         assert_eq!(
             http_request.compile_query().expect("HTTP compiler"),
