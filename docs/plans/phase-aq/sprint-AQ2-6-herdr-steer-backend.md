@@ -177,7 +177,7 @@ AQ2.7's Tokio pump and must never block the send path.
 4. **Boundary and observability governance.** Update
    `boundaries/atm-core/message-received-hook-emitter.toml` and the matching
    boundary tests in the same PR so the permitted implementation inventory
-   names `HerdrReceivedHook` as well as the retained tmux/graft implementors.
+   names `HerdrReceivedHook` as well as the retained tmux/graft implementers.
    Add backend-qualified structured events and health counters for accepted,
    pre-input-blocked, failed, and deadline-cancelled wake-ups. Do not modify
    `sealed`, its visibility, or the trait's crate boundary.

@@ -390,9 +390,9 @@ the false-stuck problem cannot arise.
 11. Boundary-manifest freshness: `boundaries/atm-core/
    message-received-hook-emitter.toml` is updated in the same PR that
    lands `PullPendingReceivedHook` as the third
-   `AsyncMessageReceivedHookEmitter` implementor — the `[status].notes`
-   implementor list names it, and a test (or the boundary suite) fails if
-   the manifest's implementor count disagrees with the code's.
+   `AsyncMessageReceivedHookEmitter` implementer — the `[status].notes`
+   implementer list names it, and a test (or the boundary suite) fails if
+   the manifest's implementer count disagrees with the code's.
 
 ## Required validation
 
