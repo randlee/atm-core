@@ -1362,6 +1362,30 @@ plan is [Phase AQ plan](./plans/phase-aq/plan-phase-aq.md); source PRD is
 [prd-atm-send-to](./plans/phase-aq/prd-atm-send-to.md). PRD Phase 2
 (agent-assisted drafting, Wyvern chat sessions) is explicitly deferred.
 
+## 49. Phase AO2 — Benchmark Safety, Evidence, And Transport Performance [IMPLEMENTATION COMPLETE — FINAL GATE OPEN]
+
+Phase AO2 made physical admission benchmarks safe and repeatable, restored
+the bounded writer transaction-coalescing path, and established the benchmark
+data, rendering, history, and operator-workflow contracts. It retains the
+Tokio/Axum `atm-http-runtime` as the sole daemon path: snapshot/restore,
+reporting, and benchmark tooling do not create or preserve a legacy transport
+path.
+
+The accepted implementation line includes dedicated benchmark-account
+snapshot/restore safety (AO2.5/AO2.5.4), the typed temporary daemon-switch
+overlay (AO2.5.3b), writer batching (AO2.6), the four-target benchmark matrix
+(AO2.7), versioned JSON/report contracts and historical migration
+(AO2.10–AO2.13), peer connection pooling (AO2.14), and the headless official
+benchmark trigger (AO2.15). AO2.8 is explicitly descoped; it is not evidence
+of Windows coverage.
+
+The canonical operator procedure is the repository
+[`benchmark-run` skill](../.claude/skills/benchmark-run/SKILL.md). The phase is
+not release-closed until its proof matrix and accepted-line evidence are
+recorded in [Phase AO2 readiness](./plans/phase-ao2/readiness.md), including
+the required four-target macOS campaign and the separately required Windows
+TCP/TLS evidence.
+
 ## Publishing Improvements
 
 Implementation Branches:
