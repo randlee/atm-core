@@ -37,6 +37,16 @@ def load_runner():
 RUNNER = load_runner()
 
 
+def test_runner_and_report_share_the_single_baseline_loader() -> None:
+    """Both benchmark entrypoints import, rather than reimplement, baseline loading."""
+    report_path = Path(__file__).with_name("benchmark_report.py")
+    spec = importlib.util.spec_from_file_location("benchmark_report_shared_loader", report_path)
+    assert spec and spec.loader
+    report = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(report)
+    assert RUNNER.load_baselines is report.load_baselines
+
+
 def expected_ordinary_targets() -> list[str]:
     """Return the platform-specific target order exercised by the runner."""
     return [

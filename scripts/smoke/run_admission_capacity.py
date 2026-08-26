@@ -62,6 +62,7 @@ from scripts.smoke.benchmark_account import (
     bootstrap_benchmark_account,
     require_benchmark_account,
 )
+from scripts.smoke.benchmark_baselines import load_baselines
 from scripts.smoke.benchmark_mtls import BenchmarkMtlsError, regenerate_mtls_identity
 from scripts.smoke.benchmark_snapshot import (
     BenchmarkSnapshotError,
@@ -243,14 +244,6 @@ def benchmark_os() -> str:
     if sys.platform == "darwin":
         return "macos"
     return "linux"
-
-
-def load_baselines(path: Path = BASELINES_PATH) -> BaselineSet:
-    """Load the single reviewed source of per-host/per-target acceptance floors."""
-    try:
-        return BaselineSet.model_validate_json(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as error:
-        raise SmokeError(f"could not load benchmark baselines {path}: {error}") from error
 
 
 def binary_hashes() -> dict[str, str]:
@@ -2199,7 +2192,7 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
     host_label = os.environ.get("ATM_CAPACITY_HOST_LABEL", "local")
     started_at = datetime.now(timezone.utc)
     campaign_identifier = derive_campaign_id(started_at=started_at, host_label=host_label)
-    baselines = load_baselines()
+    baselines = load_baselines(BASELINES_PATH)
     os_name = benchmark_os()
     target_matrix = tuple(
         (target, configuration)

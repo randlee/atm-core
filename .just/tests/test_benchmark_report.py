@@ -164,7 +164,12 @@ class BenchmarkReportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             report_dir = Path(directory)
             write_inputs(report_dir, [one, two])
-            charts = REPORT.candlestick_series(REPORT.TARGET_ORDER, REPORT.empty_historical_record(), [one, two], REPORT.load_baselines(report_dir))
+            charts = REPORT.candlestick_series(
+                REPORT.TARGET_ORDER,
+                REPORT.empty_historical_record(),
+                [one, two],
+                REPORT.load_baselines(report_dir / REPORT.BASELINES_FILENAME),
+            )
         self.assertEqual(len(charts["tcp"]["candles"]), 2)
         self.assertEqual(len(charts["tcp"]["series"]), 2)
         self.assertEqual(len(charts["tcp"]["baseline_lines"]), 2)
