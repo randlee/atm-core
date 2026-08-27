@@ -5,6 +5,7 @@
 //! hook. The enclosing HTTP route remains async and awaits both operations.
 
 use std::future::Future;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::num::NonZeroU16;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
@@ -555,7 +556,11 @@ impl StorageAndNudgeRouter {
         self.blocking_core_bridge
             .run(deadline, move || {
                 validate_graft_receiver_member(&runtime, &request.team, &request.agent)?;
-                if !request.endpoint.ip().is_loopback() {
+                let local_endpoint = match request.endpoint.ip() {
+                    IpAddr::V4(address) => address == Ipv4Addr::LOCALHOST,
+                    IpAddr::V6(address) => address == Ipv6Addr::LOCALHOST,
+                };
+                if !local_endpoint {
                     return Err(AtmError::local_http_endpoint_non_loopback(
                         "graft receiver endpoint must be loopback",
                     ));
@@ -831,7 +836,7 @@ mod tests {
     use std::fs;
     use std::future::Future;
     use std::num::{NonZeroU16, NonZeroUsize};
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::pin::Pin;
     use std::sync::Arc;
     use std::sync::Mutex;
@@ -854,6 +859,7 @@ mod tests {
         MessageClassification, NudgeMode, SendMessageSource, TemplateSendSource, WriteRequest,
     };
     use atm_core::types::{AgentName, ModelName, PaneId, TeamName};
+    use atm_core::LocalServiceRuntime;
     use atm_core::{AuthenticatedIngress, RequestDeadline, api::ApiRequest, error::AtmError};
     use atm_runtime_test_support::{
         inspect_template_admission_for_test, install_sqlite_message_write_failure,
@@ -1180,11 +1186,8 @@ mod tests {
         let service_runtime = match template_composer {
             Some(composer) => assembly.service_runtime.with_template_composer(composer),
             None => assembly.service_runtime,
-        }
-        .with_graft_receiver_endpoint_store(
-            open_graft_receiver_endpoint_store(&database_path)
-                .expect("sqlite graft receiver endpoint store"),
-        );
+        };
+        let service_runtime = attach_graft_receiver_store(service_runtime, &database_path);
         let router = StorageAndNudgeRouter::new(
             service_runtime,
             Arc::new(NullObservability),
@@ -1202,6 +1205,16 @@ mod tests {
             home_dir,
             current_dir,
         }
+    }
+
+    fn attach_graft_receiver_store(
+        service_runtime: LocalServiceRuntime,
+        database_path: &Path,
+    ) -> LocalServiceRuntime {
+        service_runtime.with_graft_receiver_endpoint_store(
+            open_graft_receiver_endpoint_store(database_path)
+                .expect("sqlite graft receiver endpoint store"),
+        )
     }
 
     fn write_request(home_dir: PathBuf, current_dir: PathBuf) -> WriteRequest {

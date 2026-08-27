@@ -32,7 +32,6 @@ toml = "0.8"
 parking_lot = "0.12"
 ulid.workspace = true
 base64.workspace = true
-getrandom.workspace = true
 semver.workspace = true
 fs4 = "0.13"
 async-trait.workspace = true
