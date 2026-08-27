@@ -15,8 +15,8 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-27T02:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AT1 ;
   triage:foundAt "2026-08-27T01:31:34Z"^^xsd:dateTime ;
@@ -24,15 +24,18 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AT1-QA-003/at1-qa-003-integrate-ph-2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AT1-QA-003/at1-qa-003-feature-ph-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AT1-QA-003/at1-qa-003-feature-ph-2> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AT1-QA-003/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-27T02:12:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AT1-QA-003/at1-qa-003-integrate-ph-1>
   a triage:Occurrence ;
   triage:file ".just/check_version_sync.py" ;
   triage:line 89 ;
   triage:snippet "def normalized_version_base(version: str, label: str) -> str:" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-at" ;
   triage:headSha "2bad2812a" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-at/2bad2812a> .
@@ -42,8 +45,8 @@
   triage:file ".just/check_version_sync.py" ;
   triage:line 98 ;
   triage:snippet "def validate_python_release_versions(repo_root: Path, workspace_version: str, manifests: tuple)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-at" ;
   triage:headSha "2bad2812a" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-at/2bad2812a> .
@@ -53,8 +56,8 @@
   triage:file ".just/check_version_sync.py" ;
   triage:line 89 ;
   triage:snippet "def normalized_version_base(version: str, label: str) -> str:" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pat-s1-install-and-publish" ;
   triage:headSha "7df74a28b" ;
   triage:occursIn <urn:atm:triage:worktree/pat-s1/7df74a28b> .
@@ -64,11 +67,29 @@
   triage:file ".just/check_version_sync.py" ;
   triage:line 98 ;
   triage:snippet "def validate_python_release_versions(repo_root: Path, workspace_version: str, manifests: tuple)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pat-s1-install-and-publish" ;
   triage:headSha "7df74a28b" ;
   triage:occursIn <urn:atm:triage:worktree/pat-s1/7df74a28b> .
+
+<urn:atm:triage:occurrence/AT1-QA-003/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file ".just/check_version_sync.py" ;
+  triage:line 71 ;
+  triage:snippet "quality-mgr independent re-verification: validate_release_version_lockstep now delegates to the kit's verify-version-lockstep subcommand, confirmed live on the merged fix" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "2b1dbaeed" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-at/2b1dbaeed> .
+
+<urn:atm:triage:worktree/integrate-phase-at/2b1dbaeed>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-at" ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "2b1dbaeed" ;
+  triage:orderIndex 0 .
 
 <urn:atm:triage:worktree/integrate-phase-at/2bad2812a>
   a triage:WorktreeSnapshot ;

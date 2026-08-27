@@ -15,8 +15,8 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-27T01:40:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AT1 ;
   triage:foundAt "2026-08-27T01:31:34Z"^^xsd:dateTime ;
@@ -29,15 +29,18 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AT1-QA-001/pat-s1-7> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AT1-QA-001/pat-s1-8> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AT1-QA-001/pat-s1-9> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AT1-QA-001/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-27T02:12:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AT1-QA-001/pat-s1-1>
   a triage:Occurrence ;
   triage:file "scripts/validate_release.py" ;
   triage:line 28 ;
   triage:snippet "line 28: scripts/release_artifacts.py reference in REQUIRED_RELEASE_FILES" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pat-s1-install-and-publish" ;
   triage:headSha "7df74a28b" ;
   triage:occursIn <urn:atm:triage:worktree/pat-s1/7df74a28b> .
@@ -47,8 +50,8 @@
   triage:file "scripts/validate_release.py" ;
   triage:line 254 ;
   triage:snippet "line 254: scripts/release_artifacts.py invoked for validate-manifest" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pat-s1-install-and-publish" ;
   triage:headSha "7df74a28b" ;
   triage:occursIn <urn:atm:triage:worktree/pat-s1/7df74a28b> .
@@ -58,8 +61,8 @@
   triage:file "scripts/validate_release.py" ;
   triage:line 267 ;
   triage:snippet "line 267: scripts/release_artifacts.py invoked for validate-preflight-checks" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pat-s1-install-and-publish" ;
   triage:headSha "7df74a28b" ;
   triage:occursIn <urn:atm:triage:worktree/pat-s1/7df74a28b> .
@@ -69,8 +72,8 @@
   triage:file "scripts/validate_release.py" ;
   triage:line 280 ;
   triage:snippet "line 280: scripts/release_artifacts.py invoked for validate-publish-order" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pat-s1-install-and-publish" ;
   triage:headSha "7df74a28b" ;
   triage:occursIn <urn:atm:triage:worktree/pat-s1/7df74a28b> .
@@ -80,8 +83,8 @@
   triage:file "scripts/validate_release.py" ;
   triage:line 306 ;
   triage:snippet "line 306: scripts/release_artifacts.py invoked for validate-release-binaries" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pat-s1-install-and-publish" ;
   triage:headSha "7df74a28b" ;
   triage:occursIn <urn:atm:triage:worktree/pat-s1/7df74a28b> .
@@ -91,8 +94,8 @@
   triage:file "scripts/validate_release.py" ;
   triage:line 334 ;
   triage:snippet "line 334: scripts/release_artifacts.py invoked for check-version-unpublished" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pat-s1-install-and-publish" ;
   triage:headSha "7df74a28b" ;
   triage:occursIn <urn:atm:triage:worktree/pat-s1/7df74a28b> .
@@ -102,8 +105,8 @@
   triage:file "scripts/validate_release.py" ;
   triage:line 362 ;
   triage:snippet "line 362: scripts/release_artifacts.py invoked for list-preflight full mode" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pat-s1-install-and-publish" ;
   triage:headSha "7df74a28b" ;
   triage:occursIn <urn:atm:triage:worktree/pat-s1/7df74a28b> .
@@ -113,8 +116,8 @@
   triage:file "scripts/validate_release.py" ;
   triage:line 371 ;
   triage:snippet "line 371: scripts/release_artifacts.py invoked for list-preflight locked mode" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pat-s1-install-and-publish" ;
   triage:headSha "7df74a28b" ;
   triage:occursIn <urn:atm:triage:worktree/pat-s1/7df74a28b> .
@@ -124,11 +127,29 @@
   triage:file "scripts/validate_release.py" ;
   triage:line 439 ;
   triage:snippet "line 439: scripts/release_artifacts.py invoked for emit-inventory" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pat-s1-install-and-publish" ;
   triage:headSha "7df74a28b" ;
   triage:occursIn <urn:atm:triage:worktree/pat-s1/7df74a28b> .
+
+<urn:atm:triage:occurrence/AT1-QA-001/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "scripts/validate_release.py" ;
+  triage:line 254 ;
+  triage:snippet "quality-mgr independent re-verification: just validate exits 0 against release/publish-artifacts.toml on the merged fix" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "2b1dbaeed" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-at/2b1dbaeed> .
+
+<urn:atm:triage:worktree/integrate-phase-at/2b1dbaeed>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-at" ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "2b1dbaeed" ;
+  triage:orderIndex 0 .
 
 <urn:atm:triage:worktree/integrate-phase-at/2bad2812a>
   a triage:WorktreeSnapshot ;
