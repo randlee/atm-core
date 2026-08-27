@@ -6,7 +6,7 @@ phase: AT
 sprint: AT.1
 worktree: feature/pat-s1-install-and-publish
 branch: feature/pat-s1-install-and-publish
-status: complete
+status: in-progress
 estimated_scope: shared-package install, parity, and authorized 1.4.3 TestPyPI/PyPI publication
 ```
 
