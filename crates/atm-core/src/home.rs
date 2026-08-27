@@ -249,22 +249,44 @@ pub fn inbox_path_from_home(
 }
 
 pub fn resolve_user_home() -> Result<PathBuf, AtmError> {
-    env::var_os("HOME")
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .or_else(|| {
-            env::var_os("USERPROFILE")
-                .filter(|value| !value.is_empty())
-                .map(PathBuf::from)
-        })
+    resolve_user_home_via(&crate::atm_temp::ProcessEnvSource)
         .ok_or_else(AtmError::home_directory_unavailable)
+}
+
+/// The `$HOME`-then-`%USERPROFILE%` precedence [`resolve_user_home`]
+/// applies, read through the [`crate::atm_temp::EnvSource`] seam instead of
+/// `std::env` directly, so [`crate::transfer_script`]'s home-directory
+/// resolution (which needs the same precedence, testable with a fake
+/// `EnvSource`) delegates to this one function rather than reimplementing
+/// it (RBQA-F001: two independently-invented copies of the same
+/// precedence decision).
+///
+/// Pure precedence logic with no error-type opinion: returns `None`, not a
+/// `Result`, so each caller maps that to its own error type
+/// (`resolve_user_home` -> [`AtmError`]; `transfer_script::home_dir_from_env`
+/// -> `AtmTempError`).
+///
+/// Note this is a strictly Unicode-valid-only precedence check
+/// (`EnvSource::var` returns `Option<String>`, not `OsString`): a `$HOME`
+/// set to non-UTF-8 bytes is treated as unset and falls through to
+/// `%USERPROFILE%`, unlike the previous direct-`env::var_os` behavior this
+/// replaces. This is an accepted, deliberate narrowing that comes with
+/// reusing the `EnvSource` seam, which is `String`-typed by design.
+#[must_use]
+pub fn resolve_user_home_via(env: &dyn crate::atm_temp::EnvSource) -> Option<PathBuf> {
+    env.var("HOME")
+        .filter(|value| !value.is_empty())
+        .or_else(|| env.var("USERPROFILE").filter(|value| !value.is_empty()))
+        .map(PathBuf::from)
 }
 
 /// Resolve the profile home for the operating-system account that owns this
 /// process. Unlike [`resolve_user_home`], this never consults shell environment
-/// variables; it is reserved for host-wide runtime ownership.
+/// variables; it is reserved for host-wide runtime ownership and (on
+/// Windows) `crate::transfer_script`'s minimum-bar "is this path under the
+/// current user's profile" safety check.
 #[cfg(unix)]
-fn os_account_home() -> Result<PathBuf, AtmError> {
+pub(crate) fn os_account_home() -> Result<PathBuf, AtmError> {
     use std::ffi::CStr;
     use std::os::unix::ffi::OsStrExt;
 
@@ -287,7 +309,7 @@ fn os_account_home() -> Result<PathBuf, AtmError> {
 /// Resolve the Windows profile directory through the known-folder API rather
 /// than USERPROFILE, which a caller can redirect per process.
 #[cfg(windows)]
-fn os_account_home() -> Result<PathBuf, AtmError> {
+pub(crate) fn os_account_home() -> Result<PathBuf, AtmError> {
     use std::os::windows::ffi::OsStringExt;
     use windows_sys::Win32::Foundation::HANDLE;
     use windows_sys::Win32::System::Com::CoTaskMemFree;
