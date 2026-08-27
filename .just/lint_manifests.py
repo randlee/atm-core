@@ -14,7 +14,6 @@ from lint_common import print_report
 from lint_common import workspace_crate_section_lines
 from lint_common import workspace_manifest_paths
 from check_version_sync import expected_package_version
-from check_version_sync import validate_workspace_member_versions
 from check_version_sync import validate_workspace_version
 
 
@@ -78,11 +77,6 @@ def collect_manifest_violations(repo_root: Path) -> list[ManifestViolation]:
     except SystemExit as error:
         return [ManifestViolation("version sync", str(error))]
 
-    try:
-        validate_workspace_member_versions(repo_root, version)
-    except SystemExit as error:
-        violations.append(ManifestViolation("version sync", str(error)))
-
     manifests = member_manifests(repo_root)
     expected_versions: dict[Path, str] = {}
     publish_flags: dict[Path, bool] = {}
@@ -96,6 +90,14 @@ def collect_manifest_violations(repo_root: Path) -> list[ManifestViolation]:
             version,
             rel_manifest,
         )
+        if expected_versions[member_dir] != version:
+            violations.append(
+                ManifestViolation(
+                    "version sync",
+                    f"{rel_manifest} [package].version ({expected_versions[member_dir]}) "
+                    f"must equal expected workspace member version ({version})",
+                )
+            )
         package = manifest.get("package", {}) if isinstance(manifest.get("package"), dict) else {}
         publish_value = package.get("publish", True)
         # `publish = false` (bool) marks the crate as internal-only; treat any
