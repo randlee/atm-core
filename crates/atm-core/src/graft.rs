@@ -585,6 +585,45 @@ fn remove_legacy_endpoint_file(
     }
 }
 
+/// Test-only snapshot of a graft receiver endpoint record's persisted fields.
+///
+/// [`GraftReceiverEndpointRecord`] is private, so sibling crates' tests
+/// (e.g. `atm-graft`'s bind/announce acceptance test) cannot name it
+/// directly. This owned, public snapshot exists solely to let those tests
+/// literally diff what [`GraftReceiverListener::bind`] wrote to disk against
+/// its own in-memory accessors, rather than trusting they were populated
+/// from the same local variables.
+#[cfg(any(test, feature = "test-utils"))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[doc(hidden)]
+pub struct GraftReceiverEndpointRecordForTest {
+    pub loopback: SocketAddr,
+    pub capability_base64url: String,
+    pub owner_generation: String,
+}
+
+/// Read and decode the on-disk graft receiver endpoint record at `record_path`.
+///
+/// Test-only: exposes the record's raw persisted fields for literal equality
+/// assertions in sibling-crate tests. Production code must go through
+/// [`deliver_graft_post_send`] instead.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when the record cannot be read or decoded.
+#[cfg(any(test, feature = "test-utils"))]
+#[doc(hidden)]
+pub fn read_graft_receiver_endpoint_record_for_test(
+    record_path: &Path,
+) -> Result<GraftReceiverEndpointRecordForTest, AtmError> {
+    let record = read_receiver_record(record_path)?;
+    Ok(GraftReceiverEndpointRecordForTest {
+        loopback: record.loopback,
+        capability_base64url: record.capability_base64url,
+        owner_generation: record.owner_generation,
+    })
+}
+
 /// Open unary client surface for embedded ATM consumers.
 ///
 /// This trait is intentionally not sealed. `atm-graft` must be able to

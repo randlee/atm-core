@@ -778,6 +778,7 @@ mod tests {
     use atm_core::graft::{
         GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL, GraftPostSendRequest, GraftPostSendResponse,
         GraftReceiverListener, deliver_graft_post_send,
+        read_graft_receiver_endpoint_record_for_test,
     };
     use atm_core::protocol::{LocalCapability, OwnerGeneration, RequestEnvelope, ResponseEnvelope};
     use atm_core::schema::AtmMessageId;
@@ -1551,13 +1552,18 @@ mod tests {
         true
     }
 
-    // AC1 (ATM-QA-101): bind with a reachable daemon registers exactly one
-    // lease whose team/agent (via the registry's lookup key), endpoint,
-    // capability, and owner generation literally match the values
-    // `GraftReceiverListener::bind` produced for this receiver — not merely
-    // a registration count and a generation-equality check incidental to a
-    // different scenario (AC5's displacement test asserts inequality against
-    // a *stale* lease, never equality against the bind inputs themselves).
+    // AC1 (ATM-QA-101 / ATM-QA-AQ16-001): bind with a reachable daemon
+    // registers exactly one lease whose team/agent (via the registry's
+    // lookup key), endpoint, capability, and owner generation literally
+    // match both the bound listener's in-memory accessors *and* the record
+    // actually persisted to disk — not merely a registration count and a
+    // generation-equality check incidental to a different scenario (AC5's
+    // displacement test asserts inequality against a *stale* lease, never
+    // equality against the bind inputs themselves). This test reads and
+    // decodes the on-disk JSON record via
+    // `read_graft_receiver_endpoint_record_for_test` rather than trusting
+    // that the file was populated from the same local variables as the
+    // in-memory accessors.
     #[test]
     fn ac1_bind_with_reachable_daemon_registers_lease_matching_bind_inputs() {
         let paths = test_paths();
@@ -1574,6 +1580,27 @@ mod tests {
         let expected_endpoint = listener.local_addr().expect("bound endpoint");
         let expected_capability = listener.capability().clone();
         let expected_generation = listener.owner_generation().clone();
+
+        // Read the on-disk record `bind()` just wrote, before it can be
+        // mutated by anything else, so the assertions below diff the
+        // literal persisted bytes rather than a reconstructed value.
+        let record_path = receiver_record_path(&paths);
+        let on_disk_record = read_graft_receiver_endpoint_record_for_test(&record_path)
+            .expect("bind() must have published a decodable on-disk record");
+        assert_eq!(
+            on_disk_record.loopback, expected_endpoint,
+            "the on-disk record's endpoint must literally match the bound listener's endpoint"
+        );
+        assert_eq!(
+            on_disk_record.capability_base64url,
+            expected_capability.to_base64url(),
+            "the on-disk record's capability must literally match the bound listener's capability"
+        );
+        assert_eq!(
+            on_disk_record.owner_generation,
+            expected_generation.as_str(),
+            "the on-disk record's owner generation must literally match the bound listener's generation"
+        );
 
         let ctx = GraftReceiverLoopContext {
             graft_root: paths.workspace_root.clone(),
@@ -1610,6 +1637,24 @@ mod tests {
         assert_eq!(
             lease.owner_generation, expected_generation,
             "the registered lease's owner generation must literally match the bound listener's generation"
+        );
+
+        // Diff the daemon-registered lease against the literal on-disk
+        // record too: both must describe the exact same endpoint the file
+        // publishes, not just the same in-memory listener accessors.
+        assert_eq!(
+            lease.endpoint, on_disk_record.loopback,
+            "the registered lease's endpoint must match the on-disk record's endpoint"
+        );
+        assert_eq!(
+            lease.capability.to_base64url(),
+            on_disk_record.capability_base64url,
+            "the registered lease's capability must match the on-disk record's capability"
+        );
+        assert_eq!(
+            lease.owner_generation.as_str(),
+            on_disk_record.owner_generation,
+            "the registered lease's owner generation must match the on-disk record's owner generation"
         );
     }
 
