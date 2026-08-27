@@ -51,6 +51,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 async-trait.workspace = true
 tokio.workspace = true
+ulid.workspace = true
 
 [dev-dependencies]
 atm-graft = { path = "../atm-graft", version = "1.4.5", features = ["test-support"] }

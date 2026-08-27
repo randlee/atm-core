@@ -145,6 +145,24 @@ fn home_dir_from_env(env: &dyn EnvSource) -> Result<PathBuf, AtmTempError> {
     crate::home::resolve_user_home_via(env).ok_or(AtmTempError::HomeDirUnavailable)
 }
 
+/// Cross-crate test seam over [`resolve_transfer_script_in`]: lets the `atm`
+/// CLI crate's transfer-invocation tests build a real, resolver-validated
+/// [`ConfiguredTransferScript`] fixture against a throwaway directory,
+/// without touching the real `$HOME`/`~/.atm/transfer` and without this
+/// crate exposing `ConfiguredTransferScript`'s private fields.
+///
+/// # Errors
+///
+/// Returns [`AtmTempError`] under the same conditions as
+/// [`resolve_transfer_script`].
+#[cfg(any(test, feature = "test-utils"))]
+pub fn resolve_transfer_script_in_for_tests(
+    transfer_root: &Path,
+    host: &HostName,
+) -> Result<TransferScript, AtmTempError> {
+    resolve_transfer_script_in(transfer_root, host)
+}
+
 /// Testable core of [`resolve_transfer_script`]: resolves against an
 /// explicit transfer-script root instead of the real home directory, so
 /// tests never touch `$HOME`.
