@@ -53,6 +53,7 @@ pub enum RequestEnvelope {
     CompatibilityPreflight(CompatibilityPreflight),
     Heartbeat(TeamMemberHeartbeatRequest),
     GraftReceiverRegister(GraftReceiverRegistration),
+    GraftReceiverRefresh(GraftReceiverRefreshRequest),
     GraftReceiverUnregister(GraftReceiverUnregistration),
     GraftReceiverLookup {
         team: TeamName,
@@ -75,6 +76,7 @@ pub enum ResponseEnvelope {
     CompatibilityVerdict(CompatibilityVerdict),
     Heartbeat(TeamMemberHeartbeatResponse),
     GraftReceiverRegister,
+    GraftReceiverRefresh,
     GraftReceiverUnregister,
     GraftReceiverLookup(Option<GraftReceiverLease>),
     List(ListOutcome),
@@ -388,6 +390,18 @@ pub struct GraftReceiverUnregistration {
     pub owner_generation: OwnerGeneration,
 }
 
+/// Owner-checked liveness keepalive for one durable graft receiver lease.
+///
+/// Unlike [`GraftReceiverRegistration`], which unconditionally upserts, this
+/// request is rejected with `NotOwner` when the stored lease no longer
+/// matches `owner_generation` — see ADR-056.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GraftReceiverRefreshRequest {
+    pub team: TeamName,
+    pub agent: AgentName,
+    pub owner_generation: OwnerGeneration,
+}
+
 /// Runtime-owned live-state projection for one known team member.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -462,6 +476,19 @@ pub struct RuntimeStatusSnapshot {
     pub member_counts: RuntimeStatusCounts,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub members: Vec<RuntimeMemberObservation>,
+    /// Cumulative queue-kind graft handoff failures observed by this daemon.
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub graft_queue_handoff_failures_total: u64,
+    /// Cumulative failures clearing a queue marker after a successful handoff.
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub graft_queue_marker_clear_failures_total: u64,
+    /// Cumulative failures setting a deferred queue marker.
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub queue_marker_set_failures_total: u64,
+}
+
+fn is_zero_u64(value: &u64) -> bool {
+    *value == 0
 }
 #[cfg(test)]
 mod tests {
@@ -601,6 +628,9 @@ mod tests {
                 unknown_members: 3,
             },
             members: Vec::new(),
+            graft_queue_handoff_failures_total: 0,
+            graft_queue_marker_clear_failures_total: 0,
+            queue_marker_set_failures_total: 0,
         };
 
         let encoded = serde_json::to_vec(&snapshot).expect("encode runtime snapshot");
@@ -660,6 +690,9 @@ mod tests {
                 session_changed_by: None,
                 session_changed_at: None,
             }],
+            graft_queue_handoff_failures_total: 0,
+            graft_queue_marker_clear_failures_total: 0,
+            queue_marker_set_failures_total: 0,
         };
         let decoded: LegacyRuntimeStatusSnapshot =
             serde_json::from_value(serde_json::to_value(snapshot).expect("encode snapshot"))

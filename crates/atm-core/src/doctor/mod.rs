@@ -28,7 +28,8 @@ pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
     BootstrapTraceReport, ClosedHerdrBreakerDoctor, DaemonRuntimeDoctorReport,
     DoctorEnvironmentVisibility, DoctorExecutionContext, DoctorFinding, DoctorReport,
-    DoctorSeverity, DoctorStatus, DoctorSummary, HerdrBreakerDoctor, HerdrBreakerDoctorReport,
+    DoctorSeverity, DoctorStatus, DoctorSummary, GraftReceiverLeaseDoctorReport,
+    GraftReceiversDoctorReport, HerdrBreakerDoctor, HerdrBreakerDoctorReport,
     HerdrBreakerDoctorState, PeerAuthorityDoctorReport, PeerConfigDoctorReport,
     PeerWireSecurityStatus, PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport,
     RecipientDeliveryPath, RecipientDeliveryPathReport,
@@ -145,11 +146,18 @@ pub fn run_doctor_with_runtime(
             &mut findings,
         )
     });
+    let graft_receivers = doctor_context
+        .resolved_team
+        .as_ref()
+        .map_or_else(GraftReceiversDoctorReport::default, |team| {
+            graft_receivers_doctor_report(runtime, team, &mut findings)
+        });
     findings.push(finding);
     Ok(build_doctor_report(
         findings,
         doctor_context.environment,
         member_roster,
+        graft_receivers,
         PostSendDoctorReport::default(),
         crate::boundary::ConfigDoctorReport::default(),
         crate::boundary::MailStoreDoctorReport::default(),
@@ -186,6 +194,12 @@ pub fn run_doctor_with_runtime_ports(
             &mut drift_findings,
         )
     });
+    let graft_receivers = doctor_context
+        .resolved_team
+        .as_ref()
+        .map_or_else(GraftReceiversDoctorReport::default, |team| {
+            graft_receivers_doctor_report(runtime, team, &mut drift_findings)
+        });
     let findings = collect_doctor_findings(
         &reports,
         &drift_findings,
@@ -204,6 +218,7 @@ pub fn run_doctor_with_runtime_ports(
         findings,
         doctor_context.environment,
         member_roster,
+        graft_receivers,
         post_send,
         reports.config,
         reports.mail_store,
@@ -305,6 +320,7 @@ fn build_doctor_report(
     findings: Vec<DoctorFinding>,
     environment: DoctorEnvironmentVisibility,
     member_roster: Option<MembersList>,
+    graft_receivers: GraftReceiversDoctorReport,
     post_send: PostSendDoctorReport,
     config: crate::boundary::ConfigDoctorReport,
     mail_store: crate::boundary::MailStoreDoctorReport,
@@ -326,6 +342,7 @@ fn build_doctor_report(
         client_context: doctor_client_context(&environment),
         daemon_context: None,
         member_roster,
+        graft_receivers,
         observability: observability_health,
         herdr_breaker,
         post_send,
@@ -337,6 +354,49 @@ fn build_doctor_report(
         runtime_status,
         bootstrap_trace,
     }
+}
+
+const ACTIVE_LEASE_WINDOW_SECONDS: i64 = 15;
+
+fn graft_receivers_doctor_report(
+    runtime: &impl RetainedServiceRuntime,
+    team: &TeamName,
+    findings: &mut Vec<DoctorFinding>,
+) -> GraftReceiversDoctorReport {
+    let roster = match runtime.load_team_roster(team) {
+        Ok(roster) => roster,
+        Err(error) => {
+            push_doctor_error(findings, DoctorSeverity::Error, error);
+            return GraftReceiversDoctorReport::default();
+        }
+    };
+    let now = chrono::Utc::now();
+    let receivers = roster
+        .into_iter()
+        .filter_map(|member| {
+            let lease = match runtime.graft_receiver_lease(team, &member.agent_name) {
+                Ok(lease) => lease?,
+                Err(error) => {
+                    push_doctor_error(findings, DoctorSeverity::Error, error);
+                    return None;
+                }
+            };
+            let age = now.signed_duration_since(lease.last_seen_at);
+            let last_seen_age_seconds = age.num_seconds().max(0);
+            Some(GraftReceiverLeaseDoctorReport {
+                team: team.clone(),
+                agent: member.agent_name,
+                endpoint: lease.endpoint.to_string(),
+                registered_at: lease.registered_at,
+                last_seen_at: lease.last_seen_at,
+                last_seen_age_seconds,
+                reachable_at_last_use: age.num_seconds() >= 0
+                    && age.num_seconds() <= ACTIVE_LEASE_WINDOW_SECONDS
+                    && lease.unreachable_since.is_none(),
+            })
+        })
+        .collect();
+    GraftReceiversDoctorReport { receivers }
 }
 
 fn doctor_client_context(environment: &DoctorEnvironmentVisibility) -> DoctorExecutionContext {

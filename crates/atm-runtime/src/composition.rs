@@ -155,6 +155,7 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
     let template_catalog_store = storage.template_catalog_store();
     let nudge_template_override_store = storage.nudge_template_override_store();
     let pending_nudge_store = storage.pending_nudge_store();
+    let graft_receiver_endpoint_store = storage.graft_receiver_endpoint_store();
     let peer_config_store = storage.peer_config_store();
     let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
         storage_backends.messages.clone(),
@@ -165,6 +166,7 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
     .with_async_message_store(async_message_store)
     .with_async_message_search_store(async_message_search_store)
     .with_pending_nudge_store(pending_nudge_store)
+    .with_graft_receiver_endpoint_store(graft_receiver_endpoint_store)
     .with_template_rendering(template_catalog_store, template_composer.clone());
     let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor {
         config_current_dir: Some(inputs.config_current_dir),

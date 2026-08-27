@@ -1,4 +1,4 @@
-"""Minimal installed Hermes/ATM runtime for the AL16 Telegram-session MVP."""
+"""Installed Hermes/ATM runtime for typed steer and queue graft nudges."""
 
 from __future__ import annotations
 
@@ -122,6 +122,9 @@ class HermesAtmRuntime:
         body = str(nudge.body).strip()
         if not body:
             raise HermesAtmRuntimeError("ATM nudge body must not be blank")
+        kind = str(getattr(nudge, "kind", "steer")).strip().lower()
+        if kind not in {"steer", "queue"}:
+            raise HermesAtmRuntimeError("ATM nudge kind must be steer or queue")
         # Hermes owns session identity and busy-session queueing behind this
         # public runner seam. The graft receiver supplies only the explicit
         # profile, real Telegram platform, configured chat id, and body.
@@ -136,7 +139,7 @@ class HermesAtmRuntime:
             platform=self.platform,
             chat_id=self.chat_id,
             text=body,
-            mode="queue",
+            mode=kind,
             notice_text=visible_notice if self.notice_text is None else self.notice_text,
         )
 

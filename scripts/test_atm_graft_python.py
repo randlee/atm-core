@@ -16,25 +16,51 @@ from graft_receiver_reclaim import verify_cross_process_receiver_reclaim
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 CRATE = ROOT / "crates" / "atm-graft-python"
+HERMES_SOURCE = ROOT / "crates" / "hermes-atm" / "src" / "hermes_atm"
+
+
+def verify_hermes_import_boundary() -> None:
+    """Keep the Hermes package on the public PyO3 binding only."""
+    for name in ("runtime.py", "native_tools.py"):
+        source = (HERMES_SOURCE / name).read_text(encoding="utf-8")
+        if "import atm_graft" not in source:
+            raise AssertionError(f"{name} does not import the atm_graft binding")
+        forbidden = ("graft_receiver_record", ".atm/graft", "write_receiver_record")
+        if any(token in source for token in forbidden):
+            raise AssertionError(f"{name} reaches into the retired graft file-record surface")
 
 
 def main() -> None:
+    verify_hermes_import_boundary()
     with tempfile.TemporaryDirectory(prefix="atm-graft-python-") as temp:
         venv_dir = pathlib.Path(temp) / "venv"
+        wheel_dir = pathlib.Path(temp) / "wheel"
         venv.EnvBuilder(with_pip=True).create(venv_dir)
         python = venv_dir / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
         maturin = shutil.which("maturin")
         if maturin is None:
             raise RuntimeError("maturin is required for the ATM graft Python smoke test")
+        wheel_dir.mkdir()
         subprocess.run(
-            [maturin, "develop", "--manifest-path", str(CRATE / "Cargo.toml")],
+            [
+                maturin,
+                "build",
+                "--manifest-path",
+                str(CRATE / "Cargo.toml"),
+                "--release",
+                "--out",
+                str(wheel_dir),
+            ],
             check=True,
             cwd=ROOT,
-            env={
-                **os.environ,
-                "VIRTUAL_ENV": str(venv_dir),
-                "PATH": f"{python.parent}{os.pathsep}{os.environ['PATH']}",
-            },
+        )
+        wheels = sorted(wheel_dir.glob("atm_graft*.whl"))
+        if len(wheels) != 1:
+            raise RuntimeError(f"expected one atm-graft wheel, found {wheels}")
+        subprocess.run(
+            [str(python), "-m", "pip", "install", str(wheels[0])],
+            check=True,
+            cwd=ROOT,
         )
         subprocess.run(
             [

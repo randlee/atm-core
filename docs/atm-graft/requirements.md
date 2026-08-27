@@ -85,11 +85,11 @@ Initial crate requirement IDs:
   must not create a session header, daemon session, or transport-specific
   routing policy.
 - `REQ-GRAFT-RUNTIME-002` A graft receiver has exactly one active owner for a
-  `(canonical_graft_root, team, agent)` endpoint record. Activation must either
+  `(canonical_graft_root, team, agent)` registry lease. Activation must either
   acquire that ownership or fail with a typed conflict; it must never silently
-  replace a live receiver. Close may remove a record only when it still owns
-  the published generation. A crashed owner must be reclaimable without an
-  operator deleting a stale file.
+  replace a live receiver. Lifecycle updates require the published generation.
+  A crashed owner must be reclaimable through the ownership flock without an
+  operator deleting a stale artifact.
 - `REQ-GRAFT-NOTIFY-002` Graft steer nudges are bounded wake-up signals only.
   They are never mail storage, a durable retry queue, a conversation manager,
   or a second mailbox. The daemon mailbox remains the source of truth.
@@ -345,7 +345,7 @@ Scope-simplification rule for the first implementation pass:
     config loading
   - `atm_core::load_atm_config` is the public loader consumed by `atm-graft`
   - a bare workspace receiver either reaches `listening` and publishes its
-    endpoint record or returns an error; it never successfully no-ops
+    registry lease or returns an error; it never successfully no-ops
 - `REQ-GRAFT-RUNTIME-001`
   - the concrete `GraftSession` lifecycle type exists once `U.9` lands
   - embedded mode automatically surfaces post-send steer nudges to the host
@@ -379,8 +379,8 @@ Scope-simplification rule for the first implementation pass:
     `GraftObservability` and `HostNudgeInjector`
 - `REQ-GRAFT-RUNTIME-002`
   - a second simultaneous activation for the same canonical root/team/agent
-    fails without changing the current endpoint record
-  - closing an old receiver cannot remove a successor's endpoint record
+    fails without changing the current registry lease
+  - closing an old receiver cannot remove or unregister a successor's lease
   - an abandoned owner can be reclaimed after process death
 - `REQ-GRAFT-HERMES-002` and `REQ-GRAFT-HERMES-003`
   - an adapter test proves live graft notification invokes the configured steer
