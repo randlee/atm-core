@@ -982,7 +982,8 @@ mod tests {
         open_graft_receiver_endpoint_store, open_sqlite_boundary,
     };
     use atm_storage::{
-        MessageKey, MessageQuery, MessageStore, RosterSnapshot, TemplateFrontmatter, TemplateSha,
+        MessageKey, MessageQuery, MessageStore, RosterSnapshot, RosterStore as StorageRosterStore,
+        TemplateFrontmatter, TemplateSha,
     };
     use axum::body::{Body, to_bytes};
     use axum::http::header::{CONTENT_TYPE, LOCATION};
@@ -1347,40 +1348,15 @@ mod tests {
         let assembly = open_sqlite_boundary(&database_path).expect("assemble SQLite boundary");
         let team: TeamName = "test-team".parse().expect("team");
         if with_recipient {
-            assembly
-                .shared_roster_store_arc()
-                .save_roster(&RosterSnapshot {
-                    team_name: team.clone(),
-                    members: ["recipient", "sender"]
-                        .into_iter()
-                        .map(|agent_name| RosterEntry {
-                            team_name: team.clone(),
-                            agent_name: agent_name.parse().expect("agent"),
-                            member_kind: RosterMemberKind::Permanent,
-                            harness: RosterHarness::PythonGraft,
-                            agent_type: atm_core::schema::AgentType::default(),
-                            model: ModelName::default(),
-                            recipient_pane_id: None,
-                            metadata_json: serde_json::Map::new(),
-                        })
-                        .collect(),
-                    refreshed_at: None,
-                })
-                .expect("seed recipient roster");
+            seed_fixture_roster(&assembly.shared_roster_store_arc(), &team);
         }
         let message_store = assembly.message_store_arc();
         let pending_nudge_store = assembly
             .service_runtime
             .pending_nudge_store()
             .expect("sqlite pending-nudge store");
-        let pending_nudge_store_for_runtime: Arc<dyn PendingNudgeStore + Send + Sync> =
-            match pending_marker_failures {
-                Some(failures) => Arc::new(FailingMarkPendingStore {
-                    inner: Arc::clone(&pending_nudge_store),
-                    remaining_failures: AtomicUsize::new(failures),
-                }),
-                None => Arc::clone(&pending_nudge_store),
-            };
+        let pending_nudge_store_for_runtime =
+            pending_store_with_failures(&pending_nudge_store, pending_marker_failures);
         let received_hook = Arc::new(RecordingReceivedHook {
             message_store: Arc::clone(&message_store),
             emitted_ids: Mutex::new(Vec::new()),
@@ -1420,6 +1396,44 @@ mod tests {
             home_dir,
             current_dir,
         }
+    }
+
+    fn pending_store_with_failures(
+        store: &Arc<dyn PendingNudgeStore + Send + Sync>,
+        failures: Option<usize>,
+    ) -> Arc<dyn PendingNudgeStore + Send + Sync> {
+        match failures {
+            Some(failures) => Arc::new(FailingMarkPendingStore {
+                inner: Arc::clone(store),
+                remaining_failures: AtomicUsize::new(failures),
+            }),
+            None => Arc::clone(store),
+        }
+    }
+
+    fn seed_fixture_roster(
+        roster_store: &Arc<dyn StorageRosterStore + Send + Sync>,
+        team: &TeamName,
+    ) {
+        roster_store
+            .save_roster(&RosterSnapshot {
+                team_name: team.clone(),
+                members: ["recipient", "sender"]
+                    .into_iter()
+                    .map(|agent_name| RosterEntry {
+                        team_name: team.clone(),
+                        agent_name: agent_name.parse().expect("agent"),
+                        member_kind: RosterMemberKind::Permanent,
+                        harness: RosterHarness::PythonGraft,
+                        agent_type: atm_core::schema::AgentType::default(),
+                        model: ModelName::default(),
+                        recipient_pane_id: None,
+                        metadata_json: serde_json::Map::new(),
+                    })
+                    .collect(),
+                refreshed_at: None,
+            })
+            .expect("seed recipient roster");
     }
 
     fn attach_graft_receiver_store(
