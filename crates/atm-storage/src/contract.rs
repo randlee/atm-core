@@ -645,12 +645,38 @@ pub struct GraftReceiverLease {
 /// Errors returned by the durable graft receiver endpoint store.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GraftEndpointStoreError {
-    /// Reserved for a future caller that cannot prove same-host exclusivity.
+    /// Reserved for a future caller that cannot prove same-host exclusivity
+    /// (ADR-056): same-host callers instead prove exclusivity through the
+    /// receiver's flock and are never rejected by this variant today.
     AlreadyActive,
     /// The supplied owner generation does not own the stored lease.
     NotOwner,
     /// The backend could not complete the requested operation.
-    Storage(String),
+    ///
+    /// Preserves the originating [`AtmError`]'s code and cause chain (RBP-F001)
+    /// instead of flattening it into an opaque string, so callers can
+    /// distinguish e.g. a caller-input constraint violation from a true
+    /// backend outage rather than collapsing every failure into one generic
+    /// presentation.
+    Storage {
+        code: crate::error_codes::AtmErrorCode,
+        message: String,
+        cause: Option<String>,
+    },
+}
+
+impl GraftEndpointStoreError {
+    /// Wraps a structured backend [`AtmError`] as a [`Self::Storage`]
+    /// variant, preserving its code and cause instead of flattening it into
+    /// an opaque string.
+    #[must_use]
+    pub fn storage(error: &AtmError) -> Self {
+        Self::Storage {
+            code: error.code(),
+            message: error.message().to_string(),
+            cause: error.cause().map(ToOwned::to_owned),
+        }
+    }
 }
 
 impl fmt::Display for GraftEndpointStoreError {
@@ -660,12 +686,20 @@ impl fmt::Display for GraftEndpointStoreError {
             Self::NotOwner => {
                 formatter.write_str("graft receiver lease is owned by another generation")
             }
-            Self::Storage(message) => {
-                write!(
+            Self::Storage {
+                code,
+                message,
+                cause,
+            } => match cause {
+                Some(cause) => write!(
                     formatter,
-                    "graft receiver endpoint storage failed: {message}"
-                )
-            }
+                    "graft receiver endpoint storage failed ({code}): {message}: {cause}"
+                ),
+                None => write!(
+                    formatter,
+                    "graft receiver endpoint storage failed ({code}): {message}"
+                ),
+            },
         }
     }
 }
@@ -963,12 +997,12 @@ pub trait PendingNudgeStore: sealed::Sealed + Send + Sync {
 mod tests {
     use super::{
         AckRequirementState, AtmMessageId, BuiltInNudgeTemplateKind, CertificateFingerprint,
-        GraftEndpointStoreError, GraftReceiverEndpointStore, GraftReceiverLease,
-        GraftReceiverRegistration, Message, MessageKey, MessageQuery, MessageReceivedEvent,
-        MessageStore, NudgeClaim, NudgeTemplateOverrideStore, PendingNudgeStore, PrivateKeyRef,
-        RosterChangedEvent, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot,
-        RosterStore, StorageNotifier, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
-        derive_ack_requirement, sealed,
+        GraftReceiverEndpointStore, GraftReceiverRegistration, Message, MessageKey, MessageQuery,
+        MessageReceivedEvent, MessageStore, NudgeClaim, NudgeTemplateOverrideStore,
+        PendingNudgeStore, PrivateKeyRef, RosterChangedEvent, RosterHarness, RosterMember,
+        RosterMemberKind, RosterSnapshot, RosterStore, StorageNotifier,
+        TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, derive_ack_requirement,
+        sealed,
     };
     use crate::ROLE_WORKER;
     use crate::error::AtmError;
@@ -976,7 +1010,7 @@ mod tests {
     use crate::types::{
         AgentName, IsoTimestamp, LocalCapability, MemberKey, ModelName, OwnerGeneration, TeamName,
     };
-    use chrono::{DateTime, Utc};
+    use chrono::Utc;
     use serde_json::Map;
     use std::net::SocketAddr;
 
@@ -986,57 +1020,11 @@ mod tests {
     #[derive(Default)]
     struct DummyNudgeTemplateOverrideStore;
 
-    #[derive(Default)]
-    struct DummyGraftReceiverEndpointStore;
-
-    impl sealed::Sealed for DummyGraftReceiverEndpointStore {}
-
-    impl GraftReceiverEndpointStore for DummyGraftReceiverEndpointStore {
-        fn register(
-            &self,
-            _registration: &GraftReceiverRegistration,
-            _now: DateTime<Utc>,
-        ) -> Result<(), GraftEndpointStoreError> {
-            Ok(())
-        }
-
-        fn refresh(
-            &self,
-            _team: &TeamName,
-            _agent: &AgentName,
-            _owner_generation: &OwnerGeneration,
-            _now: DateTime<Utc>,
-        ) -> Result<(), GraftEndpointStoreError> {
-            Ok(())
-        }
-
-        fn unregister(
-            &self,
-            _team: &TeamName,
-            _agent: &AgentName,
-            _owner_generation: &OwnerGeneration,
-        ) -> Result<(), GraftEndpointStoreError> {
-            Ok(())
-        }
-
-        fn lookup(
-            &self,
-            _team: &TeamName,
-            _agent: &AgentName,
-        ) -> Result<Option<GraftReceiverLease>, GraftEndpointStoreError> {
-            Ok(None)
-        }
-
-        fn mark_unreachable(
-            &self,
-            _team: &TeamName,
-            _agent: &AgentName,
-            _owner_generation: &OwnerGeneration,
-            _now: DateTime<Utc>,
-        ) -> Result<(), GraftEndpointStoreError> {
-            Ok(())
-        }
-    }
+    // RBQA-F002/F003: the no-op `GraftReceiverEndpointStore` test double
+    // lives once in `crate::testing::NoopGraftReceiverEndpointStore`,
+    // shared with `atm-core`'s admission tests, instead of being duplicated
+    // here.
+    use crate::testing::NoopGraftReceiverEndpointStore as DummyGraftReceiverEndpointStore;
 
     impl sealed::Sealed for DummyStore {}
 
