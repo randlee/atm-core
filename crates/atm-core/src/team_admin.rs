@@ -12,6 +12,7 @@ use crate::boundary::{
     BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, RosterEntry, RosterHarness, RosterStore,
     TeamNudgeTemplateOverrideMode,
 };
+use crate::delivery_channel::LocalMessageReceivedBackend;
 use crate::error::AtmError;
 use crate::schema::HomeDirPath;
 use crate::types::{AgentName, ModelName, PaneId, TeamName};
@@ -64,10 +65,23 @@ pub struct MemberSummary {
         skip_serializing_if = "Option::is_none"
     )]
     pub herdr_session: Option<String>,
+    /// Canonical typed backend projection used by runtime doctor consumers.
+    /// This is an internal transport detail and never changes the JSON shape.
+    #[serde(skip)]
+    pub local_backend: Option<LocalMessageReceivedBackend>,
     pub home_dir: HomeDirPath,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub live_cwd: Option<String>,
     pub extra: serde_json::Map<String, Value>,
+}
+
+impl MemberSummary {
+    /// Returns the canonical typed backend projection used by runtime ports.
+    /// The compatibility-facing string fields remain unchanged in JSON.
+    #[must_use]
+    pub fn local_message_received_backend(&self) -> Option<&LocalMessageReceivedBackend> {
+        self.local_backend.as_ref()
+    }
 }
 
 /// Result of listing all current members for one team.
@@ -757,7 +771,9 @@ mod tests {
             .expect("member");
         assert!(member.recipient_pane_id.is_none());
         assert_eq!(
-            member.metadata_json.get(concat!("backend", "Type")),
+            member
+                .metadata_json
+                .get(crate::delivery_channel::BACKEND_TYPE_METADATA_KEY),
             Some(&serde_json::json!("herdr"))
         );
         assert_eq!(

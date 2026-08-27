@@ -162,7 +162,7 @@ pub struct LocalTmuxNudgeTarget {
 /// dispatch event; only the optional per-member session is persisted.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct HerdrNudgeTarget {
-    pub session: Option<String>,
+    pub session: Option<crate::HerdrSession>,
 }
 
 /// Backend-specific payload for a local steer.

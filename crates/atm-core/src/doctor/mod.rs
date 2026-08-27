@@ -644,11 +644,12 @@ fn push_doctor_error(
     severity: DoctorSeverity,
     error: crate::error::AtmError,
 ) {
-    let remediation = Some(error.message().to_owned());
+    let remediation = Some(error.remediation().to_owned());
+    let message = error.detail().to_owned();
     findings.push(DoctorFinding {
         severity,
         code: error.code(),
-        message: error.into_message(),
+        message,
         remediation,
     });
 }
@@ -710,6 +711,7 @@ fn member_summary(
         tmux_pane_id: member.tmux_pane_id.clone(),
         backend: None,
         herdr_session: None,
+        local_backend: None,
         home_dir: member.home_dir.clone(),
         live_cwd: match (caller_identity, live_cwd) {
             (Some(identity), Some(path)) if member.name == identity.as_str() => {
@@ -1002,6 +1004,7 @@ mod tests {
                 tmux_pane_id: None,
                 backend: None,
                 herdr_session: None,
+                local_backend: None,
                 home_dir: PathBuf::from("/workspace").into(),
                 live_cwd: None,
                 extra: serde_json::Map::new(),

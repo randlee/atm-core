@@ -129,17 +129,18 @@ async fn probe_herdr_presence(
 ) -> Vec<DoctorFinding> {
     let mut findings = Vec::new();
     let mut outage_reason = None;
-    for member in roster
-        .members
-        .iter()
-        .filter(|member| member.backend.as_deref() == Some("herdr"))
-    {
+    for member in roster.members.iter().filter(|member| {
+        matches!(
+            member.local_message_received_backend(),
+            Some(atm_core::LocalMessageReceivedBackend::Herdr { .. })
+        )
+    }) {
         match probe_herdr_member(process.as_ref(), member, caller_deadline).await {
             Ok(()) => {}
-            Err(error) if is_herdr_outage(&error) => {
+            Err(error) if error.is_infrastructure() => {
                 outage_reason.get_or_insert_with(|| format!("{error:?}"));
             }
-            Err(_) => findings.push(herdr_not_visible_finding()),
+            Err(error) => findings.push(herdr_presence_finding(error)),
         }
     }
     if let Some(reason) = outage_reason {
@@ -158,12 +159,11 @@ async fn probe_herdr_member(
     member: &atm_core::team_admin::MemberSummary,
     caller_deadline: RequestDeadline,
 ) -> Result<(), HerdrError> {
-    let session = member
-        .herdr_session
-        .as_deref()
-        .map(atm_core::HerdrSession::new)
-        .transpose()
-        .map_err(|_| HerdrError::ProtocolMismatch)?;
+    let Some(atm_core::LocalMessageReceivedBackend::Herdr { session }) =
+        member.local_message_received_backend()
+    else {
+        return Ok(());
+    };
     let deadline = caller_deadline
         .remaining()
         .map(|remaining| RequestDeadline::after(remaining.min(Duration::from_secs(2))))
@@ -179,25 +179,29 @@ async fn probe_herdr_member(
         .map(|_| ())
 }
 
-fn is_herdr_outage(error: &HerdrError) -> bool {
-    matches!(
-        error,
-        HerdrError::ServerNotRunning
-            | HerdrError::ProtocolMismatch
-            | HerdrError::ServerUnavailable
-            | HerdrError::TimedOut
-            | HerdrError::Timeout
-    )
-}
-
-fn herdr_not_visible_finding() -> DoctorFinding {
+fn herdr_presence_finding(error: HerdrError) -> DoctorFinding {
+    let outcome = error.emission_outcome();
+    if matches!(error, HerdrError::AgentNotFound) {
+        let error = AtmError::new(
+            atm_core::error_codes::AtmErrorCode::HerdrAgentNotVisible,
+            "agent not visible in the member's configured Herdr session",
+        );
+        return DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: error.code(),
+            message: error.detail().to_owned(),
+            remediation: Some(error.remediation().to_owned()),
+        };
+    }
+    let error: AtmError = error.into();
     DoctorFinding {
         severity: DoctorSeverity::Warning,
-        code: atm_core::error_codes::AtmErrorCode::HerdrAgentNotVisible,
-        message: "agent not visible in the member's configured Herdr session".to_owned(),
-        remediation: Some(
-            "Verify the member's configured Herdr session and agent name.".to_owned(),
+        code: error.code(),
+        message: format!(
+            "Herdr presence probe outcome `{outcome}`: {}",
+            error.detail()
         ),
+        remediation: Some(error.remediation().to_owned()),
     }
 }
 
@@ -1496,6 +1500,9 @@ mod replacement_runtime_tests {
                 tmux_pane_id: None,
                 backend: Some("herdr".to_owned()),
                 herdr_session: Some("team-a".to_owned()),
+                local_backend: Some(atm_core::LocalMessageReceivedBackend::Herdr {
+                    session: Some(atm_core::HerdrSession::new("team-a").expect("session")),
+                }),
                 home_dir: std::path::PathBuf::from("/tmp").into(),
                 live_cwd: None,
                 extra: serde_json::Map::new(),
@@ -1533,6 +1540,44 @@ mod replacement_runtime_tests {
                 .message
                 .starts_with("Herdr presence probe skipped:")
         );
+    }
+
+    #[test]
+    fn doctor_and_emitter_share_herdr_outcome_classification() {
+        let errors = [
+            atm_herdr::HerdrError::AgentBlocked,
+            atm_herdr::HerdrError::AgentNotFound,
+            atm_herdr::HerdrError::AgentNotReady,
+            atm_herdr::HerdrError::AgentTargetAmbiguous,
+            atm_herdr::HerdrError::AgentNotRunning,
+            atm_herdr::HerdrError::AgentPromptStalled,
+            atm_herdr::HerdrError::ServerNotRunning,
+            atm_herdr::HerdrError::ProtocolMismatch,
+            atm_herdr::HerdrError::Timeout,
+            atm_herdr::HerdrError::InvalidAgentName,
+            atm_herdr::HerdrError::EmptyAgentPrompt,
+            atm_herdr::HerdrError::ServerUnavailable,
+            atm_herdr::HerdrError::InternalError,
+            atm_herdr::HerdrError::TimedOut,
+            atm_herdr::HerdrError::Unavailable {
+                retry_after: Duration::from_secs(1),
+            },
+            atm_herdr::HerdrError::Advisory {
+                code: "future_code".to_owned(),
+            },
+        ];
+        for error in errors {
+            let outcome = error.emission_outcome();
+            let finding = super::herdr_presence_finding(error.clone());
+            if matches!(error, atm_herdr::HerdrError::AgentNotFound) {
+                assert_eq!(
+                    finding.code,
+                    atm_core::error_codes::AtmErrorCode::HerdrAgentNotVisible
+                );
+            } else {
+                assert!(finding.message.contains(outcome), "{outcome}");
+            }
+        }
     }
 
     #[cfg(unix)]

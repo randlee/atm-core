@@ -161,7 +161,7 @@ impl HerdrError {
         }
     }
 
-    fn is_infrastructure(&self) -> bool {
+    pub fn is_infrastructure(&self) -> bool {
         matches!(
             self,
             Self::ServerNotRunning
@@ -409,20 +409,14 @@ impl HerdrProcessAdapter for HerdrProcessInvoker {
         deadline: RequestDeadline,
         breaker_policy: BreakerPolicy,
     ) -> Pin<Box<dyn Future<Output = Result<HerdrGetOutcome, HerdrError>> + Send + 'a>> {
-        Box::pin(async move {
-            let args = get_args(agent);
-            let output =
-                run_command(&self.breaker, &args, session, deadline, breaker_policy).await?;
-            let result = if output.success {
-                parse_snapshot(&output.stdout).map(|snapshot| HerdrGetOutcome { snapshot })
-            } else {
-                Err(parse_error(&output.stderr))
-            };
-            if breaker_policy == BreakerPolicy::Shared {
-                record_result(&self.breaker, &result);
-            }
-            result
-        })
+        Box::pin(execute_get(
+            "herdr",
+            Arc::clone(&self.breaker),
+            agent,
+            session,
+            deadline,
+            breaker_policy,
+        ))
     }
 
     fn list<'a>(
@@ -430,29 +424,64 @@ impl HerdrProcessAdapter for HerdrProcessInvoker {
         session: Option<&'a HerdrSession>,
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<HerdrListOutcome, HerdrError>> + Send + 'a>> {
-        Box::pin(async move {
-            let args = list_args();
-            let output = run_command(
-                &self.breaker,
-                &args,
-                session,
-                deadline,
-                BreakerPolicy::Shared,
-            )
-            .await?;
-            let result = if output.success {
-                parse_list(&output.stdout)
-            } else {
-                Err(parse_error(&output.stderr))
-            };
-            if result.is_err() {
-                self.breaker.record_infrastructure_failure();
-            } else {
-                self.breaker.record_success();
-            }
-            result
-        })
+        Box::pin(execute_list(
+            "herdr",
+            Arc::clone(&self.breaker),
+            session,
+            deadline,
+        ))
     }
+}
+
+async fn execute_get(
+    binary: &str,
+    breaker: Arc<HerdrSpawnBreaker>,
+    agent: &AgentName,
+    session: Option<&HerdrSession>,
+    deadline: RequestDeadline,
+    breaker_policy: BreakerPolicy,
+) -> Result<HerdrGetOutcome, HerdrError> {
+    let args = get_args(agent);
+    let output =
+        run_command_with_binary(binary, &breaker, &args, session, deadline, breaker_policy).await?;
+    let result = if output.success {
+        parse_snapshot(&output.stdout).map(|snapshot| HerdrGetOutcome { snapshot })
+    } else {
+        Err(parse_error(&output.stderr))
+    };
+    if breaker_policy == BreakerPolicy::Shared {
+        record_result(&breaker, &result);
+    }
+    result
+}
+
+async fn execute_list(
+    binary: &str,
+    breaker: Arc<HerdrSpawnBreaker>,
+    session: Option<&HerdrSession>,
+    deadline: RequestDeadline,
+) -> Result<HerdrListOutcome, HerdrError> {
+    let args = list_args();
+    let output = run_command_with_binary(
+        binary,
+        &breaker,
+        &args,
+        session,
+        deadline,
+        BreakerPolicy::Shared,
+    )
+    .await?;
+    let result = if output.success {
+        parse_list(&output.stdout)
+    } else {
+        Err(parse_error(&output.stderr))
+    };
+    if result.is_err() {
+        breaker.record_infrastructure_failure();
+    } else {
+        breaker.record_success();
+    }
+    result
 }
 
 impl HerdrAgentStatus {
@@ -998,6 +1027,61 @@ mod tests {
         .await;
         assert!(result.is_ok());
         assert_eq!(breaker.consecutive_failures(), failures);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn failing_bypass_get_does_not_open_the_shared_breaker() {
+        let breaker = Arc::new(HerdrSpawnBreaker::default());
+        breaker.record_infrastructure_failure();
+        let failures = breaker.consecutive_failures();
+        let agent: AgentName = "alice".parse().expect("agent");
+        let result = execute_get(
+            "/usr/bin/false",
+            Arc::clone(&breaker),
+            &agent,
+            None,
+            RequestDeadline::after(Duration::from_secs(1)),
+            BreakerPolicy::Bypass,
+        )
+        .await;
+        assert!(result.is_err());
+        assert_eq!(breaker.consecutive_failures(), failures);
+        assert!(matches!(breaker.state(), HerdrBreakerState::Open { .. }));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn failing_list_opens_the_shared_breaker() {
+        let breaker = Arc::new(HerdrSpawnBreaker::default());
+        let result = execute_list(
+            "/usr/bin/false",
+            Arc::clone(&breaker),
+            None,
+            RequestDeadline::after(Duration::from_secs(1)),
+        )
+        .await;
+        assert!(result.is_err());
+        assert_eq!(breaker.consecutive_failures(), 1);
+        assert!(matches!(breaker.state(), HerdrBreakerState::Open { .. }));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn two_second_caller_deadline_preempts_the_five_second_process_cap() {
+        let started = Instant::now();
+        let breaker = HerdrSpawnBreaker::default();
+        let result = run_command_with_binary(
+            "/bin/sh",
+            &breaker,
+            &["-c".to_owned(), "trap '' TERM; sleep 30".to_owned()],
+            None,
+            RequestDeadline::after(Duration::from_secs(2)),
+            BreakerPolicy::Bypass,
+        )
+        .await;
+        assert!(matches!(result, Err(HerdrError::TimedOut)));
+        assert!(started.elapsed() < Duration::from_secs(5));
     }
 
     #[test]

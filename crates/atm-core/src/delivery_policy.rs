@@ -1,3 +1,4 @@
+use crate::HerdrSession;
 use crate::boundary::{RosterEntry, RosterHarness};
 use crate::delivery_channel::{
     DeliveryChannel, GraftLeaseState, classify_delivery_channel, local_message_received_backend,
@@ -60,7 +61,7 @@ pub(crate) struct DeliveryRecipientSnapshot {
     pub(crate) recipient_pane_id: Option<PaneId>,
     pub(crate) local_tmux_post_send: bool,
     pub(crate) local_herdr_post_send: bool,
-    pub(crate) herdr_session: Option<String>,
+    pub(crate) herdr_session: Option<HerdrSession>,
     pub(crate) graft_post_send: bool,
     pub(crate) roster_backed: bool,
 }
@@ -102,7 +103,7 @@ impl DeliveryRecipientSnapshot {
         let local_herdr_post_send = delivery_channel == DeliveryChannel::HerdrSteer;
         let herdr_session = match local_backend.as_ref() {
             Some(crate::delivery_channel::LocalMessageReceivedBackend::Herdr { session }) => {
-                session.as_ref().map(ToString::to_string)
+                session.clone()
             }
             _ => None,
         };

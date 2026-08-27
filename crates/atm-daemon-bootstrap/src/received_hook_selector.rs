@@ -9,6 +9,9 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
+#[cfg(feature = "benchmark-harness")]
+use atm_core::HerdrSession;
+use atm_core::LocalServiceRuntime;
 use atm_core::RequestDeadline;
 use atm_core::boundary::{
     self, AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, MessageReceivedHookSelector,
@@ -16,7 +19,6 @@ use atm_core::boundary::{
     TMUX_NUDGE_CONFIRM_KEY,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
-use atm_core::{HerdrSession, LocalServiceRuntime};
 #[cfg(feature = "benchmark-harness")]
 use atm_herdr::{AgentSnapshot, HerdrAgentStatus, HerdrError};
 use atm_herdr::{HerdrProcessAdapter, HerdrPromptOutcome};
@@ -302,13 +304,8 @@ impl AsyncMessageReceivedHookEmitter for HerdrReceivedHook {
                     "Herdr receiver hook received a non-Herdr dispatch",
                 ));
             };
-            let session = target
-                .session
-                .as_deref()
-                .map(HerdrSession::new)
-                .transpose()?;
             let result = process
-                .prompt(&dispatch.event.recipient, session.as_ref(), deadline)
+                .prompt(&dispatch.event.recipient, target.session.as_ref(), deadline)
                 .await;
             match result {
                 Ok(HerdrPromptOutcome::Accepted(_)) => {
@@ -463,7 +460,7 @@ mod tests {
         dispatch.kind = kind;
         dispatch.target =
             PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Herdr(HerdrNudgeTarget {
-                session: Some("team-a".to_owned()),
+                session: Some(atm_core::HerdrSession::new("team-a").expect("session")),
             }));
         dispatch
     }
