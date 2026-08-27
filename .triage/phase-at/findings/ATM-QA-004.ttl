@@ -15,14 +15,17 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "docs/project-plan.md Phase AT section" ;
-  triage:status "fixed_partial" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-27T19:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AT1 ;
   triage:foundAt "2026-08-27T18:40:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004/S1-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004/S3-1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-27T18:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/ATM-QA-004/S1-1>
   a triage:Occurrence ;
@@ -45,6 +48,24 @@
   triage:branch "integrate/phase-at" ;
   triage:headSha "cc32e21caf36097a0cd849fc3d19e49c0da9cdc2" ;
   triage:occursIn <urn:atm:triage:worktree/S3/cc32e21c> .
+
+<urn:atm:triage:occurrence/ATM-QA-004/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1451 ;
+  triage:snippet "quality-mgr fix-round re-verification (AT-PHASECLOSE-QA-R1-FIX1): Phase AT entry header now '[IN PROGRESS — AT.1 MERGED, AT.2 PENDING]', two-sprint reality, forward-only amendment paragraph; confirmed by req-qa and arch-qa on PR #1063" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "docs/at2-forward-only-gates" ;
+  triage:headSha "8641c19d63180803e3ea41aaf40a74c2d4ac5dbd" ;
+  triage:occursIn <urn:atm:triage:worktree/docs-at2-forward-only-gates/8641c19d> .
+
+<urn:atm:triage:worktree/docs-at2-forward-only-gates/8641c19d>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/docs-at2-forward-only-gates" ;
+  triage:branch "docs/at2-forward-only-gates" ;
+  triage:headSha "8641c19d63180803e3ea41aaf40a74c2d4ac5dbd" ;
+  triage:orderIndex 4 .
 
 <urn:atm:triage:worktree/S1/83c9965b>
   a triage:WorktreeSnapshot ;
