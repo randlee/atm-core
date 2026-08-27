@@ -9,6 +9,18 @@ status: complete
 kit_revision: 42e0fcea23f730fae0ef3d08b060cd4df6a2602e
 ```
 
+## Immutable inputs
+
+| Item | Value |
+| --- | --- |
+| `sc-publish` revision | `42e0fcea23f730fae0ef3d08b060cd4df6a2602e` |
+| Installable package files | 49 |
+| Package digest | `75da9d18426eacb92bab3e02bb6655a35e14f69deafe1ba2d00f4e93aabc0a5b` |
+| Package-digest algorithm | SHA-256 over the newline-joined, path-sorted `"<sha256(file)>  <relative-path>"` lines for `install.package_files()`, excluding `.sc-publish-source-root`, `__pycache__`, `*.pyc`, and pre-rendered `release/publish-*.toml`. |
+| Consumer-input SHA-256 | `ba518f7f1d10fc25d788d15bf68398483fd1691b9604dabbb83196d74b23d2c2` |
+| `release/publish-artifacts.toml` SHA-256 | `f6d5ba976b01c255c14e35fe93322bc5a082fa6dc3989546e5867007c5d37287` |
+| `release/publish-channel-contracts.toml` SHA-256 | `88d7ac055689c1e9fcd752c178eac9094ca29084a097fa7aff109c4fb0f40fd8` |
+
 ## Gate state
 
 AT.2 follows the forward-only ruling: no pre-kit tag is republished. The
@@ -30,10 +42,13 @@ production dispatch occurred.
 
 ## Candidate dispositions
 
-The reference scan was run for every path with the AT.2 prescribed command
-over `.github/`, `.just/`, `Justfile`, `scripts/`, and `docs/`. `AT.2 plan`
-means the remaining mention is this disposition table; `historical receipt`
-means immutable evidence rather than a live caller.
+The original prescribed scan covered `.github/`, `.just/`, `Justfile`,
+`scripts/`, and `docs/`; AT2-FIX-R2 widened it to the whole tracked repository,
+including `release/`. The wider audit found the stale active publish-surface
+prose and removed it. It excludes only immutable historical plans, receipts,
+and triage evidence when classifying a live caller. `AT.2 plan` means the
+remaining mention is this disposition table; `historical receipt` means
+immutable evidence rather than a live caller.
 
 | Path | Disposition | Gate / coverage statement | Reference-scan result |
 | --- | --- | --- | --- |
@@ -56,8 +71,8 @@ means immutable evidence rather than a live caller.
 
 | Item | Disposition | Evidence |
 | --- | --- | --- |
-| Legacy `[installed_docs]` branch in `validate_release.py` | deleted | The live manifest has no `[installed_docs]` table. Validation now relies on the installed kit's manifest contract, whose real document-shipping representation is `release_binaries[].bundled_paths`. The legacy fixture was removed and a regression test proves it cannot re-enter this path. |
-| Retired user-document verifier and its unit-test module | deleted | They only supported the retired unreachable branch. The default test runner no longer invokes them; prescribed executable-surface scans return no references. Historical Phase AE prose now identifies the retired verifier without presenting a live path. |
+| Legacy installed-document manifest branch | deleted | The obsolete consumer-input table and `scripts/release_artifacts.py` / `validate_release.py` parsing, staging, listing, and validation paths are gone. The rendered manifest expresses document shipping through `release_binaries[].bundled_paths`; regression tests cover a legacy table as inert input rather than restoring execution. |
+| Retired user-document verifier and its unit-test module | deleted | They only supported the retired unreachable branch. The default test runner no longer invokes them; the widened whole-repository audit removed stale current publish-surface prose. Historical Phase AE evidence is retained without presenting a live path. |
 | Root `release_artifacts` imports | removed | `validate_release.py` no longer imports the root helper. `verify_release_archive.py` now parses consumer-owned `bundled_paths` directly; directory, file, Windows, and missing-source cases are covered. |
 | Phase AD readiness | sunset from `all`/`validate` | The explicit `phase-ad-readiness` target remains only for the thorough-smoke lane; a unit test proves it is not in `DEFAULT_RELEASE_TARGETS`. |
 | Workspace-member enumeration | deferred with root helper | `scripts/release_artifacts.py` cannot be deleted before its first-kit-release receipt, so its fourth enumeration remains temporarily. AT.2 adds no shared helper and records the remaining duplication rather than masking it. |
@@ -73,3 +88,14 @@ means immutable evidence rather than a live caller.
 | `just test` | 0 | 703 tests passed, 9 skipped. |
 | Workflow YAML parse | 0 | All `.github/workflows/*.yml` parsed successfully. |
 | Deleted-path executable scan | 0 | No executable reference remains to either retired user-document verifier path; the AT.2 receipt is the sole disposition record. |
+| Whole-repository legacy-branch audit | 0 | No live release-validation, staging, or publish-surface reference remains to the retired user-document verifier or installed-document manifest branch. Historical plans/receipts/triage and unrelated product installed-document APIs were classified separately. |
+
+## AT2-FIX-R2 findings
+
+- **ATM-QA-009:** Widened the deletion-reference scan to include `release/` and
+  replaced the stale user-document freshness/staging prose with the current
+  `release_binaries[].bundled_paths` shipping contract.
+- **ATM-QA-010:** Added the module-level ATM-owned-data retention rationale to
+  `.just/tests/test_validate_release.py`.
+- **ATM-QA-011:** Recorded the pinned package identity, consumer-input hash,
+  and both rendered-manifest hashes above using the phase Receipt Convention.

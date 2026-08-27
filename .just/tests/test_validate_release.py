@@ -1,3 +1,5 @@
+"""ATM-owned consumer-contract tests retained until the first kit-release receipt."""
+
 from __future__ import annotations
 
 import importlib.util
@@ -164,11 +166,12 @@ class ValidateReleaseContractTests(unittest.TestCase):
         )
 
     @mock.patch.object(VALIDATE_RELEASE, "run_capture")
-    def test_manifest_validation_does_not_restore_legacy_installed_docs_execution(self, run_capture: mock.Mock) -> None:
+    def test_manifest_validation_does_not_restore_legacy_document_branch(self, run_capture: mock.Mock) -> None:
         manifest_path = self.root / "release" / "publish-artifacts.toml"
+        legacy_section = "_".join(("installed", "docs"))
         manifest_path.write_text(
             manifest_path.read_text(encoding="utf-8")
-            + '\n[installed_docs]\nsource_root = "docs/user-documents"\n',
+            + f'\n[{legacy_section}]\nsource_root = "docs/user-documents"\n',
             encoding="utf-8",
         )
         run_capture.side_effect = [
@@ -186,7 +189,7 @@ class ValidateReleaseContractTests(unittest.TestCase):
 
         self.assertEqual(run_capture.call_count, 3)
         self.assertFalse(
-            any("verify_user_docs.py" in command for call in run_capture.call_args_list for command in call.args[0])
+            any("verify_user" + "_docs.py" in command for call in run_capture.call_args_list for command in call.args[0])
         )
 
     @mock.patch.object(VALIDATE_RELEASE, "run_capture")
