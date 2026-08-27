@@ -227,6 +227,12 @@ struct BreakerState {
     half_open_probe: bool,
 }
 
+/// Supplies the current time to a [`HerdrSpawnBreaker`].
+///
+/// Production code always uses [`SystemBreakerClock`]. Tests that assert on
+/// the breaker's cooldown window inject a fixed or manually advanced clock
+/// instead, so assertions cannot be perturbed by scheduling delays under a
+/// loaded, parallel test run (see `TestBreakerClock` in this module's tests).
 trait BreakerClock: std::fmt::Debug + Send + Sync {
     fn now(&self) -> Instant;
 }
@@ -978,6 +984,10 @@ pub mod testing {
 mod tests {
     use super::*;
 
+    /// A manually controlled clock used by tests that assert on the
+    /// breaker's cooldown state. Keeping the instant behind a mutex allows
+    /// the same fixture to cover synchronous state transitions and async
+    /// process-backed calls without relying on scheduler timing.
     #[derive(Debug)]
     struct TestBreakerClock {
         now: Mutex<Instant>,
