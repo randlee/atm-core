@@ -166,6 +166,10 @@ impl UpdateMemberRequest {
     }
 
     /// Constructs an update request from explicit backend flags.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "retained update fields are a compatibility surface; backend flags are grouped"
+    )]
     pub fn new_with_backend(
         caller_identity: AgentName,
         caller_team: TeamName,

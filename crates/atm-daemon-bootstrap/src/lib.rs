@@ -114,88 +114,90 @@ impl HerdrPresenceDoctor for HerdrPresenceDoctorAdapter {
         roster: &'a MembersList,
         caller_deadline: RequestDeadline,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Vec<DoctorFinding>> + Send + 'a>> {
-        let process = Arc::clone(&self.process);
-        Box::pin(async move {
-            let mut findings = Vec::new();
-            let mut outage_reason = None;
-            for member in roster
-                .members
-                .iter()
-                .filter(|member| member.backend.as_deref() == Some("herdr"))
-            {
-                let session: Result<Option<atm_core::HerdrSession>, AtmError> = member
-                    .herdr_session
-                    .as_deref()
-                    .map(atm_core::HerdrSession::new)
-                    .transpose();
-                let Ok(session) = session else {
-                    findings.push(DoctorFinding {
-                        severity: DoctorSeverity::Warning,
-                        code: atm_core::error_codes::AtmErrorCode::HerdrAgentNotVisible,
-                        message: "agent not visible in the member's configured Herdr session"
-                            .to_owned(),
-                        remediation: Some(
-                            "Verify the member's configured Herdr session and agent name."
-                                .to_owned(),
-                        ),
-                    });
-                    continue;
-                };
-                let probe_deadline = caller_deadline
-                    .remaining()
-                    .map(|remaining| RequestDeadline::after(remaining.min(Duration::from_secs(2))))
-                    .unwrap_or_else(|| RequestDeadline::after(Duration::ZERO));
-                match process
-                    .get(
-                        &member.name,
-                        session.as_ref(),
-                        probe_deadline,
-                        BreakerPolicy::Bypass,
-                    )
-                    .await
-                {
-                    Ok(_) => {}
-                    Err(HerdrError::AgentNotFound) => findings.push(DoctorFinding {
-                        severity: DoctorSeverity::Warning,
-                        code: atm_core::error_codes::AtmErrorCode::HerdrAgentNotVisible,
-                        message: "agent not visible in the member's configured Herdr session"
-                            .to_owned(),
-                        remediation: Some(
-                            "Verify the member's configured Herdr session and agent name."
-                                .to_owned(),
-                        ),
-                    }),
-                    Err(
-                        error @ (HerdrError::ServerNotRunning
-                        | HerdrError::ProtocolMismatch
-                        | HerdrError::ServerUnavailable
-                        | HerdrError::TimedOut
-                        | HerdrError::Timeout),
-                    ) => {
-                        outage_reason.get_or_insert_with(|| format!("{error:?}"));
-                    }
-                    Err(_) => findings.push(DoctorFinding {
-                        severity: DoctorSeverity::Warning,
-                        code: atm_core::error_codes::AtmErrorCode::HerdrAgentNotVisible,
-                        message: "agent not visible in the member's configured Herdr session"
-                            .to_owned(),
-                        remediation: Some(
-                            "Verify the member's configured Herdr session and agent name."
-                                .to_owned(),
-                        ),
-                    }),
-                }
+        Box::pin(probe_herdr_presence(
+            Arc::clone(&self.process),
+            roster,
+            caller_deadline,
+        ))
+    }
+}
+
+async fn probe_herdr_presence(
+    process: Arc<dyn HerdrProcessAdapter>,
+    roster: &MembersList,
+    caller_deadline: RequestDeadline,
+) -> Vec<DoctorFinding> {
+    let mut findings = Vec::new();
+    let mut outage_reason = None;
+    for member in roster
+        .members
+        .iter()
+        .filter(|member| member.backend.as_deref() == Some("herdr"))
+    {
+        match probe_herdr_member(process.as_ref(), member, caller_deadline).await {
+            Ok(()) => {}
+            Err(error) if is_herdr_outage(&error) => {
+                outage_reason.get_or_insert_with(|| format!("{error:?}"));
             }
-            if let Some(reason) = outage_reason {
-                findings.push(DoctorFinding {
-                    severity: DoctorSeverity::Info,
-                    code: atm_core::error_codes::AtmErrorCode::HerdrUnavailable,
-                    message: format!("Herdr presence probe skipped: {reason}"),
-                    remediation: None,
-                });
-            }
-            findings
-        })
+            Err(_) => findings.push(herdr_not_visible_finding()),
+        }
+    }
+    if let Some(reason) = outage_reason {
+        findings.push(DoctorFinding {
+            severity: DoctorSeverity::Info,
+            code: atm_core::error_codes::AtmErrorCode::HerdrUnavailable,
+            message: format!("Herdr presence probe skipped: {reason}"),
+            remediation: None,
+        });
+    }
+    findings
+}
+
+async fn probe_herdr_member(
+    process: &dyn HerdrProcessAdapter,
+    member: &atm_core::team_admin::MemberSummary,
+    caller_deadline: RequestDeadline,
+) -> Result<(), HerdrError> {
+    let session = member
+        .herdr_session
+        .as_deref()
+        .map(atm_core::HerdrSession::new)
+        .transpose()
+        .map_err(|_| HerdrError::ProtocolMismatch)?;
+    let deadline = caller_deadline
+        .remaining()
+        .map(|remaining| RequestDeadline::after(remaining.min(Duration::from_secs(2))))
+        .unwrap_or_else(|| RequestDeadline::after(Duration::ZERO));
+    process
+        .get(
+            &member.name,
+            session.as_ref(),
+            deadline,
+            BreakerPolicy::Bypass,
+        )
+        .await
+        .map(|_| ())
+}
+
+fn is_herdr_outage(error: &HerdrError) -> bool {
+    matches!(
+        error,
+        HerdrError::ServerNotRunning
+            | HerdrError::ProtocolMismatch
+            | HerdrError::ServerUnavailable
+            | HerdrError::TimedOut
+            | HerdrError::Timeout
+    )
+}
+
+fn herdr_not_visible_finding() -> DoctorFinding {
+    DoctorFinding {
+        severity: DoctorSeverity::Warning,
+        code: atm_core::error_codes::AtmErrorCode::HerdrAgentNotVisible,
+        message: "agent not visible in the member's configured Herdr session".to_owned(),
+        remediation: Some(
+            "Verify the member's configured Herdr session and agent name.".to_owned(),
+        ),
     }
 }
 
@@ -1091,9 +1093,11 @@ mod replacement_runtime_tests {
     use std::time::Duration;
 
     use atm_core::api::ApiRequest;
+    use atm_core::api::RequestDeadline;
     use atm_core::boundary::{
         BuiltInPostSendDispatch, MessageReceivedHookSelector, RosterEntry, TemplateSource,
     };
+    use atm_core::doctor::{DoctorSeverity, HerdrPresenceDoctor};
     use atm_core::observability::NullObservability;
     use atm_core::peer_wire::PeerWireMode;
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
@@ -1109,11 +1113,12 @@ mod replacement_runtime_tests {
     use serde_json::Map;
 
     use super::{
-        DaemonLaunchIdentity, REPLACEMENT_DRAIN_DEADLINE, ReplacementHandlerConfig,
-        SelectedPeerAdapterSelection, ShutdownSignal, assemble_host_runtime_with_template_composer,
-        build_replacement_handler, parse_direct_peer_port, parse_peer_pool_config_with_environment,
-        parse_peer_wire_mode, peer_stream_adapter_for_mode,
-        replacement_runtime_config_with_direct_peer, write_ready_signal_if_requested,
+        DaemonLaunchIdentity, HerdrPresenceDoctorAdapter, REPLACEMENT_DRAIN_DEADLINE,
+        ReplacementHandlerConfig, SelectedPeerAdapterSelection, ShutdownSignal,
+        assemble_host_runtime_with_template_composer, build_replacement_handler,
+        parse_direct_peer_port, parse_peer_pool_config_with_environment, parse_peer_wire_mode,
+        peer_stream_adapter_for_mode, replacement_runtime_config_with_direct_peer,
+        write_ready_signal_if_requested,
     };
 
     /// Test-owned receiver selection prevents an external tmux/graft action
@@ -1472,6 +1477,61 @@ mod replacement_runtime_tests {
                 .expect("real render through port")
                 .text,
             "bootstrap adapter"
+        );
+    }
+
+    #[tokio::test]
+    async fn doctor_presence_probe_uses_bypass_and_degrades_outages() {
+        let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
+        fake.queue_get_result(Err(atm_herdr::HerdrError::AgentNotFound));
+        let roster = atm_core::team_admin::MembersList {
+            team: "team".parse().expect("team"),
+            members: vec![atm_core::team_admin::MemberSummary {
+                name: "receiver".parse().expect("agent"),
+                agent_id: "receiver".to_owned(),
+                agent_type: "worker".to_owned(),
+                harness: atm_core::boundary::RosterHarness::CodexCli,
+                model: ModelName::new("gpt-5").expect("model"),
+                joined_at: None,
+                tmux_pane_id: None,
+                backend: Some("herdr".to_owned()),
+                herdr_session: Some("team-a".to_owned()),
+                home_dir: std::path::PathBuf::from("/tmp").into(),
+                live_cwd: None,
+                extra: serde_json::Map::new(),
+            }],
+        };
+        let findings = HerdrPresenceDoctorAdapter {
+            process: fake.clone(),
+        }
+        .probe(&roster, RequestDeadline::after(Duration::from_secs(2)))
+        .await;
+        assert_eq!(findings.len(), 1);
+        assert_eq!(
+            findings[0].code,
+            atm_core::error_codes::AtmErrorCode::HerdrAgentNotVisible
+        );
+        assert!(matches!(
+            fake.calls().as_slice(),
+            [atm_herdr::testing::FakeHerdrCall::Get {
+                breaker_policy: atm_herdr::BreakerPolicy::Bypass,
+                ..
+            }]
+        ));
+
+        let outage_fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
+        outage_fake.queue_get_result(Err(atm_herdr::HerdrError::ServerUnavailable));
+        let outage_findings = HerdrPresenceDoctorAdapter {
+            process: outage_fake,
+        }
+        .probe(&roster, RequestDeadline::after(Duration::from_secs(2)))
+        .await;
+        assert_eq!(outage_findings.len(), 1);
+        assert_eq!(outage_findings[0].severity, DoctorSeverity::Info);
+        assert!(
+            outage_findings[0]
+                .message
+                .starts_with("Herdr presence probe skipped:")
         );
     }
 

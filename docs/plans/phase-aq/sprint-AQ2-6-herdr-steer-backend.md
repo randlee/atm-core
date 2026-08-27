@@ -1,6 +1,6 @@
 # Sprint AQ2.6 — Local Steer Backends: Retained Tmux + Alternate Herdr
 
-Status: draft · Branch: `feature/aq-2-6-herdr-steer-backend` off
+Status: complete · Branch: `feature/aq-2-6-herdr-steer-backend` off
 `integrate/phase-aq` · PR target: `integrate/phase-aq`
 recommended_agent: arch-ctm · recommended_model: deep-reasoning
 

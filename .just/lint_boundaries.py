@@ -72,6 +72,7 @@ PUBLIC_FUNCTION_RE = re.compile(r"^\s*pub(?:\([^)]*\))?\s+fn\s+[A-Za-z_][A-Za-z0
 # concrete implementation modules below; they are not searched through the
 # entire owner crate (which would conflate sibling boundaries).
 IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
+    "shell_interpolation": (r"\$\([^\n]+\)", r"`[^`\n]+`"),
     "ambient_singleton_lookup": (
         r"\bdefault_runtime\s*\(",
         r"\bget_default_runtime\s*\(",
@@ -213,6 +214,7 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
     "template_rendering": (r"\btemplate_rendering\b", r"\b(?:render|render_template)\s*\(", r"\bTemplateRenderer\b"),
     "tls_handshake": (r"\b(?:rustls|native_tls)::", r"\b(?:Client|Server)Connection\b", r"\b(?:tls|TLS)[^\n]*handshake\b"),
     "tmux_nudge_delivery": (r"\btmux_nudge_delivery\b", r"\btmux[^\n]*nudge\b", r"\b(?:send|emit)_tmux_nudge\s*\("),
+    "tmux_send_keys": (r"\btmux[^\n]*send-keys\b", r"\btmux[^\n]*send_keys\b"),
     "transport_dispatch": (r"\btransport_dispatch\b", r"\bdispatch_transport\s*\(", r"\bTransportDispatcher\b"),
     "transport": (
         r"\b(?:Tcp|Udp|Unix)(?:Stream|Listener|Socket)\b",

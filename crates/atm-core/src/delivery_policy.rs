@@ -756,10 +756,13 @@ mod tests {
     #[test]
     fn herdr_backend_wins_over_non_claude_graft_fallback() {
         let mut metadata = Map::new();
-        metadata.insert("backendType".to_owned(), serde_json::json!("herdr"));
+        metadata.insert(
+            crate::delivery_channel::BACKEND_TYPE_METADATA_KEY.to_owned(),
+            serde_json::json!("herdr"),
+        );
         let entry = RosterEntry {
             team_name: "team-a".parse().expect("team"),
-            agent_name: "arch-ctm".parse().expect("agent"),
+            agent_name: crate::test_support::TEST_SENDER.parse().expect("agent"),
             member_kind: RosterMemberKind::Permanent,
             harness: RosterHarness::CodexCli,
             agent_type: AgentType::Worker,

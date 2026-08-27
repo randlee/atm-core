@@ -695,7 +695,7 @@ mod tests {
         let request = AddMemberRequest::new_with_backend(
             tempdir.path().to_path_buf(),
             TEST_TEAM,
-            "arch-ctm",
+            TEST_ARCH_CTM,
             "worker".into(),
             "gpt-5".into(),
             tempdir.path().to_path_buf(),
@@ -736,7 +736,7 @@ mod tests {
         let request = AddMemberRequest::new_with_backend(
             tempdir.path().to_path_buf(),
             TEST_TEAM,
-            "arch-ctm",
+            TEST_ARCH_CTM,
             "worker".into(),
             "gpt-5".into(),
             tempdir.path().to_path_buf(),
@@ -753,7 +753,7 @@ mod tests {
             .expect("roster");
         let member = roster
             .iter()
-            .find(|member| member.agent_name.as_str() == "arch-ctm")
+            .find(|member| member.agent_name.as_str() == TEST_ARCH_CTM)
             .expect("member");
         assert!(member.recipient_pane_id.is_none());
         assert_eq!(

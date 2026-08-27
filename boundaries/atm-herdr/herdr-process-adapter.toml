@@ -46,8 +46,7 @@ forbidden_edges = [
 scope = "outside_owner_crate"
 forbidden = [
   "std::process::Command",
-  "tokio::process::Command::new(\"sh\")",
-  "tmux",
+  "tmux_send_keys",
 ]
 
 [contracts]

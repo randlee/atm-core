@@ -139,6 +139,28 @@ impl From<HerdrError> for AtmError {
 }
 
 impl HerdrError {
+    /// Stable backend-facing outcome classification. Wire error-code strings
+    /// remain private to this crate.
+    #[must_use]
+    pub fn emission_outcome(&self) -> &'static str {
+        match self {
+            Self::AgentBlocked => "blocked_before_input",
+            Self::AgentNotFound | Self::AgentNotRunning | Self::AgentTargetAmbiguous => {
+                "target_not_present"
+            }
+            Self::AgentNotReady => "not_ready",
+            Self::AgentPromptStalled => "prompt_stalled",
+            Self::ServerNotRunning | Self::ServerUnavailable => "server_outage",
+            Self::ProtocolMismatch => "protocol_incompatible",
+            Self::Timeout | Self::TimedOut => "timed_out",
+            Self::InvalidAgentName => "invalid_target",
+            Self::EmptyAgentPrompt => "invalid_prompt",
+            Self::InternalError => "internal_failure",
+            Self::Unavailable { .. } => "breaker_unavailable",
+            Self::Advisory { .. } => "advisory_failure",
+        }
+    }
+
     fn is_infrastructure(&self) -> bool {
         matches!(
             self,
@@ -333,9 +355,10 @@ impl HerdrProcessAdapter for HerdrProcessInvoker {
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<HerdrPromptOutcome, HerdrError>> + Send + 'a>> {
         Box::pin(async move {
+            let args = prompt_args(agent);
             let output = run_command(
                 &self.breaker,
-                &["agent", "prompt", agent.as_str(), HERDR_WAKE_TEXT],
+                &args,
                 session,
                 deadline,
                 BreakerPolicy::Shared,
@@ -360,14 +383,7 @@ impl HerdrProcessAdapter for HerdrProcessInvoker {
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<HerdrWaitOutcome, HerdrError>> + Send + 'a>> {
         Box::pin(async move {
-            let mut args = vec!["agent", "wait", agent.as_str()];
-            for status in until {
-                args.push("--until");
-                args.push(status.as_str());
-            }
-            let timeout_ms = timeout.as_millis().to_string();
-            args.push("--timeout");
-            args.push(&timeout_ms);
+            let args = wait_args(agent, until, timeout);
             let output = run_command(
                 &self.breaker,
                 &args,
@@ -394,14 +410,9 @@ impl HerdrProcessAdapter for HerdrProcessInvoker {
         breaker_policy: BreakerPolicy,
     ) -> Pin<Box<dyn Future<Output = Result<HerdrGetOutcome, HerdrError>> + Send + 'a>> {
         Box::pin(async move {
-            let output = run_command(
-                &self.breaker,
-                &["agent", "get", agent.as_str()],
-                session,
-                deadline,
-                breaker_policy,
-            )
-            .await?;
+            let args = get_args(agent);
+            let output =
+                run_command(&self.breaker, &args, session, deadline, breaker_policy).await?;
             let result = if output.success {
                 parse_snapshot(&output.stdout).map(|snapshot| HerdrGetOutcome { snapshot })
             } else {
@@ -420,9 +431,10 @@ impl HerdrProcessAdapter for HerdrProcessInvoker {
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<HerdrListOutcome, HerdrError>> + Send + 'a>> {
         Box::pin(async move {
+            let args = list_args();
             let output = run_command(
                 &self.breaker,
-                &["agent", "list"],
+                &args,
                 session,
                 deadline,
                 BreakerPolicy::Shared,
@@ -463,7 +475,18 @@ struct CommandOutput {
 
 async fn run_command(
     breaker: &HerdrSpawnBreaker,
-    args: &[&str],
+    args: &[String],
+    session: Option<&HerdrSession>,
+    deadline: RequestDeadline,
+    breaker_policy: BreakerPolicy,
+) -> Result<CommandOutput, HerdrError> {
+    run_command_with_binary("herdr", breaker, args, session, deadline, breaker_policy).await
+}
+
+async fn run_command_with_binary(
+    binary: &str,
+    breaker: &HerdrSpawnBreaker,
+    args: &[String],
     session: Option<&HerdrSession>,
     deadline: RequestDeadline,
     breaker_policy: BreakerPolicy,
@@ -482,14 +505,14 @@ async fn run_command(
         return Err(HerdrError::TimedOut);
     };
     let effective_timeout = remaining.min(HERDR_PROCESS_CAP);
-    let mut command = tokio::process::Command::new("herdr");
+    let mut command = tokio::process::Command::new(binary);
     command
         .args(args)
         .kill_on_drop(true)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    if let Some(session) = session {
-        command.env("HERDR_SESSION", session.as_str());
+    if let Some((name, value)) = session_environment(session) {
+        command.env(name, value);
     }
     let mut child = match command.spawn() {
         Ok(child) => child,
@@ -530,6 +553,38 @@ async fn run_command(
         stderr: String::from_utf8_lossy(&stderr).into_owned(),
         success: status.success(),
     })
+}
+
+fn session_environment(session: Option<&HerdrSession>) -> Option<(&'static str, &str)> {
+    session.map(|session| ("HERDR_SESSION", session.as_str()))
+}
+
+fn prompt_args(agent: &AgentName) -> Vec<String> {
+    vec![
+        "agent".to_owned(),
+        "prompt".to_owned(),
+        agent.to_string(),
+        HERDR_WAKE_TEXT.to_owned(),
+    ]
+}
+
+fn wait_args(agent: &AgentName, until: &[HerdrAgentStatus], timeout: Duration) -> Vec<String> {
+    let mut args = vec!["agent".to_owned(), "wait".to_owned(), agent.to_string()];
+    for status in until {
+        args.push("--until".to_owned());
+        args.push(status.as_str().to_owned());
+    }
+    args.push("--timeout".to_owned());
+    args.push(timeout.as_millis().to_string());
+    args
+}
+
+fn get_args(agent: &AgentName) -> Vec<String> {
+    vec!["agent".to_owned(), "get".to_owned(), agent.to_string()]
+}
+
+fn list_args() -> Vec<String> {
+    vec!["agent".to_owned(), "list".to_owned()]
 }
 
 fn record_result<T>(breaker: &HerdrSpawnBreaker, result: &Result<T, HerdrError>) {
@@ -864,6 +919,134 @@ mod tests {
             parse_error(r#"{"error":{"code":"agent_blocked"}}"#),
             HerdrError::AgentBlocked
         );
+    }
+
+    #[test]
+    fn every_adapter_argv_matches_the_herdr_contract() {
+        let agent: AgentName = "alice".parse().expect("agent");
+        assert_eq!(
+            prompt_args(&agent),
+            vec![
+                "agent",
+                "prompt",
+                "alice",
+                "You have unread ATM messages. Run: atm read"
+            ]
+        );
+        assert_eq!(
+            wait_args(
+                &agent,
+                &[HerdrAgentStatus::Idle, HerdrAgentStatus::Working],
+                Duration::from_millis(2500)
+            ),
+            vec![
+                "agent",
+                "wait",
+                "alice",
+                "--until",
+                "idle",
+                "--until",
+                "working",
+                "--timeout",
+                "2500"
+            ]
+        );
+        assert_eq!(get_args(&agent), vec!["agent", "get", "alice"]);
+        assert_eq!(list_args(), vec!["agent", "list"]);
+    }
+
+    #[test]
+    fn session_environment_is_only_present_for_an_explicit_session() {
+        assert_eq!(session_environment(None), None);
+        let session = HerdrSession::new("team-a").expect("session");
+        assert_eq!(
+            session_environment(Some(&session)),
+            Some(("HERDR_SESSION", "team-a"))
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn external_deadline_kills_and_reaps_a_never_exiting_child() {
+        let breaker = HerdrSpawnBreaker::default();
+        let result = run_command_with_binary(
+            "/bin/sh",
+            &breaker,
+            &["-c".to_owned(), "trap '' TERM; sleep 30".to_owned()],
+            None,
+            RequestDeadline::after(Duration::from_millis(50)),
+            BreakerPolicy::Bypass,
+        )
+        .await;
+        assert!(matches!(result, Err(HerdrError::TimedOut)));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn bypass_policy_spawns_even_when_the_shared_breaker_is_open() {
+        let breaker = HerdrSpawnBreaker::default();
+        breaker.record_infrastructure_failure();
+        let failures = breaker.consecutive_failures();
+        let result = run_command_with_binary(
+            "/usr/bin/true",
+            &breaker,
+            &[],
+            None,
+            RequestDeadline::after(Duration::from_secs(1)),
+            BreakerPolicy::Bypass,
+        )
+        .await;
+        assert!(result.is_ok());
+        assert_eq!(breaker.consecutive_failures(), failures);
+    }
+
+    #[test]
+    fn breaker_backoff_and_probe_policy_are_explicit() {
+        for (failures, seconds) in [(1, 1), (2, 2), (3, 4), (4, 8), (5, 16), (6, 30), (20, 30)] {
+            assert_eq!(breaker_backoff(failures), Duration::from_secs(seconds));
+        }
+        let breaker = HerdrSpawnBreaker::default();
+        for _ in 0..3 {
+            record_result::<()>(&breaker, &Err(HerdrError::ServerNotRunning));
+        }
+        assert_eq!(breaker.consecutive_failures(), 3);
+        assert!(!breaker.permits_spawn());
+        {
+            let mut state = breaker.state.lock().expect("breaker lock");
+            state.opened_at = Some(Instant::now() - Duration::from_secs(31));
+            state.half_open_probe = false;
+        }
+        assert!(breaker.permits_spawn(), "half-open allows one probe");
+        assert!(!breaker.permits_spawn(), "half-open rejects a second probe");
+        breaker.record_success();
+        assert_eq!(breaker.snapshot().consecutive_failures, 0);
+        assert_eq!(breaker.state(), HerdrBreakerState::Closed);
+    }
+
+    #[test]
+    fn all_structured_error_codes_have_typed_mappings() {
+        let cases = [
+            ("agent_blocked", HerdrError::AgentBlocked),
+            ("agent_not_found", HerdrError::AgentNotFound),
+            ("agent_not_ready", HerdrError::AgentNotReady),
+            ("agent_target_ambiguous", HerdrError::AgentTargetAmbiguous),
+            ("agent_not_running", HerdrError::AgentNotRunning),
+            ("agent_prompt_stalled", HerdrError::AgentPromptStalled),
+            ("server_not_running", HerdrError::ServerNotRunning),
+            ("protocol_mismatch", HerdrError::ProtocolMismatch),
+            ("timeout", HerdrError::Timeout),
+            ("invalid_agent_name", HerdrError::InvalidAgentName),
+            ("empty_agent_prompt", HerdrError::EmptyAgentPrompt),
+            ("server_unavailable", HerdrError::ServerUnavailable),
+            ("internal_error", HerdrError::InternalError),
+            ("agent_prompt_failed", HerdrError::InternalError),
+        ];
+        for (code, expected) in cases {
+            assert_eq!(
+                parse_error(&format!(r#"{{"error":{{"code":"{code}"}}}}"#)),
+                expected
+            );
+        }
     }
 
     #[test]
