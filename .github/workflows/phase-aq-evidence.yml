@@ -134,16 +134,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          venv_root="$GITHUB_WORKSPACE/.bootstrap-venv"
           if [[ "$RUNNER_OS" == "Windows" ]]; then
-            venv_python=".bootstrap-venv/Scripts/python.exe"
-            venv_maturin=".bootstrap-venv/Scripts/maturin.exe"
+            venv_python="$venv_root/Scripts/python.exe"
+            venv_bin="$venv_root/Scripts"
           else
-            venv_python=".bootstrap-venv/bin/python"
-            venv_maturin=".bootstrap-venv/bin/maturin"
+            venv_python="$venv_root/bin/python"
+            venv_bin="$venv_root/bin"
           fi
-          "$venv_maturin" develop --manifest-path crates/atm-graft-python/Cargo.toml
+          # maturin refuses to "develop" without an active virtualenv. The
+          # repository's .bootstrap-venv is never `source`d by CI, so mirror
+          # scripts/test_atm_graft_python.py's approach of setting VIRTUAL_ENV
+          # and prepending the venv's bin/Scripts dir to PATH for this
+          # command instead of relying on shell activation.
+          export VIRTUAL_ENV="$venv_root"
+          export PATH="$venv_bin:$PATH"
+          maturin develop --manifest-path crates/atm-graft-python/Cargo.toml
           "$venv_python" -c "import atm_graft; print('atm_graft import ok:', atm_graft.__file__)"
-          echo "PHASE_AQ_EVIDENCE_PYTHON=$(pwd)/$venv_python" >> "$GITHUB_ENV"
+          echo "PHASE_AQ_EVIDENCE_PYTHON=$venv_python" >> "$GITHUB_ENV"
 
       - name: Run available Phase AQ live-evidence harnesses
         shell: python
@@ -151,7 +159,6 @@ jobs:
           PHASE_AQ_EVIDENCE_PYTHON: ${{ env.PHASE_AQ_EVIDENCE_PYTHON }}
         run: |
           import os
-          import re
           import subprocess
           import sys
           from pathlib import Path
@@ -161,18 +168,24 @@ jobs:
           python_bin = os.environ["PHASE_AQ_EVIDENCE_PYTHON"]
           host_label = f"clean-runner-{os.environ.get('RUNNER_OS', 'unknown').lower()}"
 
+          # Explicit script -> evidence-subdirectory mapping. Deliberately
+          # not inferred by regex-scraping the harness source (fragile and
+          # implicit); add one entry here the moment a new Phase AQ
+          # live-evidence harness (for example an AQ3 drain/sweep transcript
+          # runner) lands on its branch.
+          EVIDENCE_DIR_BY_SCRIPT = {
+              "run_hermes_atm_restart_matrix.py": "AQ1.9",
+              "run_aq25_queue_delivery_trigger_evidence.py": "AQ2.5",
+          }
+
+          # A harness's eligibility is decided by its own --help output, not
+          # by substring-scraping its source text.
+          REQUIRED_HELP_FLAGS = ("--evidence-dir", "--daemon", "--atm")
+
           if not scripts_dir.is_dir():
               print(f"SKIP: {scripts_dir} is not present on this branch; no Phase AQ evidence harnesses to run.")
               sys.exit(0)
 
-          # Every known Phase AQ live-evidence harness (AQ1.9's
-          # run_hermes_atm_restart_matrix.py, AQ2.5's
-          # run_aq25_queue_delivery_trigger_evidence.py, and any future AQ3
-          # drain/sweep transcript runner) is a scripts/phase-aq/run_*.py
-          # module, is not a test_*.py unit test, and accepts --evidence-dir.
-          # Discover by that shape instead of a hardcoded filename list so a
-          # harness that has not landed yet (for example AQ3's) is picked up
-          # automatically once it exists on the checked-out branch.
           candidates = sorted(
               path for path in scripts_dir.glob("run_*.py") if not path.name.startswith("test_")
           )
@@ -180,21 +193,33 @@ jobs:
               print(f"SKIP: no run_*.py live-evidence harnesses found under {scripts_dir}.")
               sys.exit(0)
 
-          default_evidence_dir_re = re.compile(
-              r'ROOT\s*/\s*"docs"\s*/\s*"plans"\s*/\s*"phase-aq"\s*/\s*"evidence"\s*/\s*"([^"]+)"'
-          )
-
           failures: list[str] = []
           for script in candidates:
-              text = script.read_text(encoding="utf-8")
-              if "--evidence-dir" not in text:
-                  print(f"SKIP: {script} does not accept --evidence-dir; not a live-evidence harness, leaving it alone.")
+              help_result = subprocess.run(
+                  [python_bin, str(script), "--help"],
+                  cwd=root,
+                  capture_output=True,
+                  text=True,
+                  check=False,
+              )
+              help_text = help_result.stdout + help_result.stderr
+              if help_result.returncode != 0 or not all(flag in help_text for flag in REQUIRED_HELP_FLAGS):
+                  print(
+                      f"SKIP: {script.name} --help does not advertise {REQUIRED_HELP_FLAGS}; "
+                      "not a live-evidence harness, leaving it alone."
+                  )
                   continue
 
-              match = default_evidence_dir_re.search(text)
-              sprint = match.group(1) if match else script.stem
-              evidence_dir = root / "docs" / "plans" / "phase-aq" / "evidence" / sprint
+              sprint = EVIDENCE_DIR_BY_SCRIPT.get(script.name)
+              if sprint is None:
+                  print(
+                      f"SKIP: {script.name} looks like a live-evidence harness (advertises "
+                      f"{REQUIRED_HELP_FLAGS}) but has no entry in EVIDENCE_DIR_BY_SCRIPT in "
+                      "this workflow; add one to run it. Refusing to guess its evidence directory."
+                  )
+                  continue
 
+              evidence_dir = root / "docs" / "plans" / "phase-aq" / "evidence" / sprint
               print(f"::group::Running {script.relative_to(root)} -> {evidence_dir.relative_to(root)}")
               result = subprocess.run(
                   [

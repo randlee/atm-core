@@ -63,14 +63,24 @@ not preinstalled on the macOS runner image (the job installs it via
 
 1. The job builds the workspace in release mode, installs the `atm_graft`
    Python extension into the repository's `.bootstrap-venv` via
-   `maturin develop` (mirroring `scripts/test_atm_graft_python.py`), confirms
-   the runner has no ambient `atm-daemon`, and then runs every
-   `scripts/phase-aq/run_*.py` harness present on the checked-out branch that
-   accepts an `--evidence-dir` flag. A harness that has not landed yet on that
-   branch (for example, an AQ3 drain/sweep transcript runner that does not
-   exist at the time of writing) is skipped with a clear `SKIP:` log line —
-   the job does not hardcode a fixed script list, so a differently named
-   harness that lands later is picked up automatically.
+   `maturin develop` (mirroring `scripts/test_atm_graft_python.py`; the venv
+   is activated for that command via `VIRTUAL_ENV` + a `PATH` prepend, since
+   maturin refuses to run outside an active virtualenv), confirms the runner
+   has no ambient `atm-daemon`, and then considers every
+   `scripts/phase-aq/run_*.py` file present on the checked-out branch (except
+   `test_*.py` unit tests). Each candidate's *eligibility* is decided by
+   running it with `--help` and checking that the parsed help text advertises
+   `--evidence-dir`, `--daemon`, and `--atm` — never by scanning its source
+   text. Each eligible harness's *evidence directory* comes from an explicit
+   `EVIDENCE_DIR_BY_SCRIPT` mapping in the workflow (filename → sprint, for
+   example `run_hermes_atm_restart_matrix.py` → `AQ1.9`), never by
+   regex-reconstructing it from the harness's own source. A harness that is
+   eligible but has no mapping entry yet (for example, an AQ3 drain/sweep
+   transcript runner that does not exist at the time of writing) is skipped
+   with a clear `SKIP:` log line that says to add a mapping entry — the job
+   never guesses an evidence directory. When AQ3's harness lands, add its
+   filename and sprint slug to `EVIDENCE_DIR_BY_SCRIPT` in
+   `.github/workflows/phase-aq-evidence.yml`.
 2. Each harness writes its own JSON + Markdown transcript under
    `docs/plans/phase-aq/evidence/<sprint>/…` (for example `AQ1.9/` or
    `AQ2.5/`), exactly as it does when run locally.
