@@ -843,6 +843,7 @@ mod tests {
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::time::Duration;
 
+    use atm_core::LocalServiceRuntime;
     use atm_core::boundary::{
         AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, GraftNudgeTarget,
         LocalTmuxNudgeTarget, MemberKey, MessageReceivedHookSelector, NudgeKind, PendingNudgeStore,
@@ -859,7 +860,6 @@ mod tests {
         MessageClassification, NudgeMode, SendMessageSource, TemplateSendSource, WriteRequest,
     };
     use atm_core::types::{AgentName, ModelName, PaneId, TeamName};
-    use atm_core::LocalServiceRuntime;
     use atm_core::{AuthenticatedIngress, RequestDeadline, api::ApiRequest, error::AtmError};
     use atm_runtime_test_support::{
         inspect_template_admission_for_test, install_sqlite_message_write_failure,

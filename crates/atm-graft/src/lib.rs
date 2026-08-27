@@ -2,6 +2,7 @@
 //! Production embedded delivery uses a receiver-owned same-host listener that
 //! accepts one bounded nudge request per connection.
 use std::fmt;
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, RwLock};
@@ -13,7 +14,11 @@ use atm_core::boundary::PostSendHookEvent;
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::AtmGraftClient;
 use atm_core::list::{ListOutcome, ListQuery};
-use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
+use atm_core::local_http::LocalCapability;
+use atm_core::protocol::{
+    GraftReceiverRegistration, GraftReceiverUnregistration, RequestEnvelope, ResponseEnvelope,
+    SendResponseEnvelope,
+};
 use atm_core::read::{PeekQuery, ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest, WriteOutcome};
 use atm_core::types::{AgentName, ChatId, TeamName};
@@ -226,10 +231,11 @@ impl GraftClient {
         options: GraftSessionOptions,
         injector: Arc<dyn HostNudgeInjector>,
     ) -> Result<GraftSession, AtmError> {
-        GraftSession::activate_with_observability(
+        GraftSession::activate_with_client(
             options,
             injector,
             Arc::new(NoopGraftObservability),
+            Some(self.clone()),
         )
     }
 
@@ -245,6 +251,53 @@ impl GraftClient {
         {
             ResponseEnvelope::Error(error) => Err(error),
             response => Ok(response),
+        }
+    }
+
+    pub(crate) fn execute_request_sync(
+        &self,
+        request: RequestEnvelope,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        atm_daemon_client::execute_api_request(self.async_transport.clone(), request)
+    }
+
+    pub(crate) fn register_receiver_sync(
+        &self,
+        team: TeamName,
+        agent: AgentName,
+        endpoint: SocketAddr,
+        capability: LocalCapability,
+        owner_generation: String,
+    ) -> Result<(), AtmError> {
+        match self.execute_request_sync(RequestEnvelope::GraftReceiverRegister(
+            GraftReceiverRegistration {
+                team,
+                agent,
+                endpoint,
+                capability,
+                owner_generation,
+            },
+        ))? {
+            ResponseEnvelope::GraftReceiverRegister => Ok(()),
+            other => Err(unexpected_response("graft receiver register", other)),
+        }
+    }
+
+    pub(crate) fn unregister_receiver_sync(
+        &self,
+        team: TeamName,
+        agent: AgentName,
+        owner_generation: String,
+    ) -> Result<(), AtmError> {
+        match self.execute_request_sync(RequestEnvelope::GraftReceiverUnregister(
+            GraftReceiverUnregistration {
+                team,
+                agent,
+                owner_generation,
+            },
+        ))? {
+            ResponseEnvelope::GraftReceiverUnregister => Ok(()),
+            other => Err(unexpected_response("graft receiver unregister", other)),
         }
     }
 
@@ -379,6 +432,15 @@ impl GraftSession {
         injector: Arc<dyn HostNudgeInjector>,
         observability: Arc<dyn GraftObservability>,
     ) -> Result<Self, AtmError> {
+        Self::activate_with_client(options, injector, observability, None)
+    }
+
+    fn activate_with_client(
+        options: GraftSessionOptions,
+        injector: Arc<dyn HostNudgeInjector>,
+        observability: Arc<dyn GraftObservability>,
+        client: Option<GraftClient>,
+    ) -> Result<Self, AtmError> {
         // Retain ATM-owned configuration parsing so malformed configuration is
         // surfaced, but a missing config (or legacy graft.enabled setting)
         // never changes the receiver activation contract. A clean return from
@@ -387,17 +449,13 @@ impl GraftSession {
         let initial_snapshot = options.activation_state();
         let snapshot = Arc::new(RwLock::new(initial_snapshot));
 
-        let endpoint_path = atm_core::graft::graft_receiver_record_path_from_root(
-            options.workspace_root(),
-            options.team(),
-            options.agent(),
-        );
         let (stop_tx, join_handle) = Self::start_graft_receive_loop(
-            endpoint_path,
+            options.workspace_root().to_path_buf(),
             options,
             Arc::clone(&snapshot),
             injector,
             Arc::clone(&observability),
+            client,
         )?;
 
         set_session_state(
@@ -414,22 +472,26 @@ impl GraftSession {
     }
 
     fn start_graft_receive_loop(
-        endpoint_path: PathBuf,
+        graft_root: PathBuf,
         options: GraftSessionOptions,
         worker_snapshot: Arc<RwLock<SessionSnapshot>>,
         injector: Arc<dyn HostNudgeInjector>,
         worker_observability: Arc<dyn GraftObservability>,
+        client: Option<GraftClient>,
     ) -> Result<GraftReceiveLoopWorker, AtmError> {
         let (stop_tx, stop_rx) = mpsc::channel();
         let ready_latch = ReceiverReadyLatch::new();
         let join_handle = spawn_graft_receive_loop(
-            endpoint_path,
+            graft_root,
             options,
             worker_snapshot,
             injector,
             worker_observability,
-            ready_latch.notifier(),
-            stop_rx,
+            client,
+            ReceiveLoopChannels {
+                ready_tx: ready_latch.notifier(),
+                stop_rx,
+            },
         )?;
         match ready_latch.wait_until_listening(RECEIVE_LOOP_READY_DEADLINE) {
             Ok(()) => Ok((stop_tx, join_handle)),
@@ -484,27 +546,35 @@ impl GraftSession {
     }
 }
 
+struct ReceiveLoopChannels {
+    ready_tx: std::sync::mpsc::SyncSender<()>,
+    stop_rx: std::sync::mpsc::Receiver<()>,
+}
+
 fn spawn_graft_receive_loop(
-    endpoint_path: PathBuf,
+    graft_root: PathBuf,
     options: GraftSessionOptions,
     worker_snapshot: Arc<RwLock<SessionSnapshot>>,
     injector: Arc<dyn HostNudgeInjector>,
     worker_observability: Arc<dyn GraftObservability>,
-    ready_tx: std::sync::mpsc::SyncSender<()>,
-    stop_rx: std::sync::mpsc::Receiver<()>,
+    client: Option<GraftClient>,
+    channels: ReceiveLoopChannels,
 ) -> Result<std::thread::JoinHandle<Result<(), AtmError>>, AtmError> {
     let thread_name = format!("atm-graft-{}", options.agent());
     std::thread::Builder::new()
         .name(thread_name)
         .spawn(move || {
             run_graft_receiver_loop(GraftReceiverLoopContext {
-                endpoint_path,
+                graft_root,
+                team: options.team().clone(),
+                agent: options.agent().clone(),
                 owner_chat_id: options.owner_chat_id(),
+                client,
                 snapshot: worker_snapshot,
                 injector,
                 observability: worker_observability,
-                stop_rx,
-                ready_tx: Some(ready_tx),
+                stop_rx: channels.stop_rx,
+                ready_tx: Some(channels.ready_tx),
             })
         })
         .map_err(spawn_receive_loop_error)
@@ -538,7 +608,7 @@ impl Drop for GraftSession {
 mod tests {
     use std::fs;
     use std::path::PathBuf;
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
 
     use atm_core::protocol::{
         RequestEnvelope as CoreRequestEnvelope, ResponseEnvelope as CoreResponseEnvelope,
@@ -687,6 +757,52 @@ mod tests {
         client.read_message(read_query).await.expect("read");
     }
 
+    #[test]
+    fn receiver_registers_at_bind_and_unregisters_its_generation_on_drop() {
+        let paths = test_paths();
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let captured = Arc::clone(&requests);
+        let transport = Arc::new(FakeClientTransport::new(Box::new(move |request| {
+            let response = match &request {
+                CoreRequestEnvelope::GraftReceiverRegister(_) => {
+                    CoreResponseEnvelope::GraftReceiverRegister
+                }
+                CoreRequestEnvelope::GraftReceiverUnregister(_) => {
+                    CoreResponseEnvelope::GraftReceiverUnregister
+                }
+                other => panic!("unexpected receiver request: {other:?}"),
+            };
+            captured.lock().expect("request capture lock").push(request);
+            Ok(response)
+        })));
+        let client = GraftClient::from_fake_transport_for_test(transport);
+        let session = client
+            .activate_session(session_options(&paths), Arc::new(NoopInjector))
+            .expect("receiver activation");
+
+        let registration = {
+            let requests = requests.lock().expect("request capture lock");
+            assert_eq!(requests.len(), 1, "bind announces exactly one lease");
+            let CoreRequestEnvelope::GraftReceiverRegister(registration) = &requests[0] else {
+                panic!("bind must register the receiver")
+            };
+            registration.clone()
+        };
+        session.close().expect("receiver close");
+
+        let requests = requests.lock().expect("request capture lock");
+        assert_eq!(requests.len(), 2, "drop unregisters the receiver lease");
+        let CoreRequestEnvelope::GraftReceiverUnregister(unregistration) = &requests[1] else {
+            panic!("drop must unregister the receiver")
+        };
+        assert_eq!(unregistration.team, registration.team);
+        assert_eq!(unregistration.agent, registration.agent);
+        assert_eq!(
+            unregistration.owner_generation,
+            registration.owner_generation
+        );
+    }
+
     #[tokio::test]
     async fn mailbox_work_counts_projects_existing_non_mutating_read_buckets() {
         for (unread, pending_ack) in [(0, 0), (2, 0), (0, 3), (2, 3)] {
@@ -781,11 +897,12 @@ mod tests {
     #[test]
     fn session_activates_in_a_bare_workspace_without_atm_config() {
         let paths = test_paths();
-        let endpoint_path = atm_core::graft::graft_receiver_record_path_from_root(
-            &paths.workspace_root,
-            &TeamName::from_validated(TEST_TEAM),
-            &AgentName::from_validated("qa-a"),
-        );
+        let endpoint_path = paths
+            .workspace_root
+            .join(".atm")
+            .join("graft")
+            .join(TEST_TEAM)
+            .join("qa-a.json");
         let session = GraftSession::activate(session_options(&paths), Arc::new(NoopInjector))
             .expect("bare workspace must activate or return an error");
 

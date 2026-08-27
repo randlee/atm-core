@@ -253,6 +253,18 @@ pub fn graft_receiver_record_path_from_root(
         .join(format!("{agent}.json"))
 }
 
+/// Absolute path of the receiver ownership lock under the canonical graft root.
+///
+/// The lock remains adjacent to the legacy JSON record so existing ownership
+/// files stay valid while callers stop deriving the record path themselves.
+pub fn graft_receiver_lock_path_from_root(
+    graft_root: &Path,
+    team: &TeamName,
+    agent: &AgentName,
+) -> PathBuf {
+    graft_receiver_record_path_from_root(graft_root, team, agent).with_extension("lock")
+}
+
 pub fn write_graft_post_send_message<T: Serialize>(
     writer: &mut impl Write,
     value: &T,
@@ -315,14 +327,13 @@ struct ReceiverOwnershipGuard {
 }
 
 impl ReceiverOwnershipGuard {
-    fn acquire(record_path: &Path) -> Result<Self, AtmError> {
-        let lock_path = receiver_ownership_lock_path(record_path);
+    fn acquire(lock_path: &Path, record_path: &Path) -> Result<Self, AtmError> {
         let lock_file = OpenOptions::new()
             .create(true)
             .read(true)
             .write(true)
             .truncate(false)
-            .open(&lock_path)
+            .open(lock_path)
             .map_err(|source| {
                 AtmError::daemon_unavailable_with_cause(
                     format!(
@@ -368,9 +379,17 @@ impl GraftReceiverListener {
     ///
     /// Returns [`AtmError`] when the loopback socket cannot be bound or the
     /// endpoint record cannot be published for the owner.
-    pub fn bind(record_path: &Path, owner_chat_id: Option<ChatId>) -> Result<Self, AtmError> {
+    pub fn bind(
+        graft_root: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+        owner_chat_id: Option<ChatId>,
+    ) -> Result<Self, AtmError> {
+        let record_path_buf = graft_receiver_record_path_from_root(graft_root, team, agent);
+        let record_path = record_path_buf.as_path();
+        let lock_path = graft_receiver_lock_path_from_root(graft_root, team, agent);
         prepare_receiver_record_parent(record_path)?;
-        let ownership = ReceiverOwnershipGuard::acquire(record_path)?;
+        let ownership = ReceiverOwnershipGuard::acquire(&lock_path, record_path)?;
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).map_err(|source| {
             AtmError::daemon_unavailable(format!(
                 "failed to bind graft receiver endpoint for {}",
@@ -404,7 +423,7 @@ impl GraftReceiverListener {
         write_receiver_record(record_path, &record)?;
         Ok(Self {
             listener,
-            record_path: record_path.to_path_buf(),
+            record_path: record_path_buf,
             owner_generation,
             capability,
             record,
@@ -538,6 +557,16 @@ impl GraftReceiverListener {
                 .with_cause(source)
         })
     }
+
+    /// Return the capability used to authenticate this receiver's sender.
+    pub fn capability(&self) -> &LocalCapability {
+        &self.capability
+    }
+
+    /// Return the generation that owns this receiver binding.
+    pub fn owner_generation(&self) -> &str {
+        &self.owner_generation
+    }
 }
 
 impl Drop for GraftReceiverListener {
@@ -632,10 +661,6 @@ fn prepare_receiver_record_parent(record_path: &Path) -> Result<(), AtmError> {
         })?;
     }
     Ok(())
-}
-
-fn receiver_ownership_lock_path(record_path: &Path) -> PathBuf {
-    record_path.with_extension("lock")
 }
 
 fn graft_receiver_identity(record_path: &Path) -> String {
@@ -768,6 +793,7 @@ mod tests {
     use crate::types::{AgentName, ChatId, TeamName};
     use std::fs;
     use std::net::TcpStream;
+    use std::path::Path;
     use std::time::Duration;
     use tempfile::TempDir;
 
@@ -826,6 +852,15 @@ mod tests {
         }
     }
 
+    fn bind_listener(
+        graft_root: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+        owner_chat_id: Option<ChatId>,
+    ) -> Result<GraftReceiverListener, AtmError> {
+        GraftReceiverListener::bind(graft_root, team, agent, owner_chat_id)
+    }
+
     #[test]
     fn loopback_receiver_round_trips_a_capability_authenticated_request() {
         let tempdir = TempDir::new().expect("tempdir");
@@ -834,7 +869,13 @@ mod tests {
             &TeamName::from_validated(TEST_TEAM),
             &AgentName::from_validated(TEST_QA),
         );
-        let listener = GraftReceiverListener::bind(&record_path, None).expect("bind listener");
+        let listener = bind_listener(
+            tempdir.path(),
+            &TeamName::from_validated(TEST_TEAM),
+            &AgentName::from_validated(TEST_QA),
+            None,
+        )
+        .expect("bind listener");
 
         let request = GraftPostSendRequest {
             event: test_event(),
@@ -881,7 +922,13 @@ mod tests {
             &TeamName::from_validated(TEST_TEAM),
             &AgentName::from_validated(TEST_QA),
         );
-        let listener = GraftReceiverListener::bind(&record_path, None).expect("bind listener");
+        let listener = bind_listener(
+            tempdir.path(),
+            &TeamName::from_validated(TEST_TEAM),
+            &AgentName::from_validated(TEST_QA),
+            None,
+        )
+        .expect("bind listener");
         let expected = read_receiver_record(&record_path).expect("read published record");
 
         fs::remove_file(&record_path).expect("remove endpoint record");
@@ -904,12 +951,13 @@ mod tests {
     #[test]
     fn receiver_rejects_a_forged_capability() {
         let tempdir = TempDir::new().expect("tempdir");
-        let record_path = graft_receiver_record_path_from_home(
+        let listener = bind_listener(
             tempdir.path(),
             &TeamName::from_validated(TEST_TEAM),
             &AgentName::from_validated(TEST_QA),
-        );
-        let listener = GraftReceiverListener::bind(&record_path, None).expect("bind listener");
+            None,
+        )
+        .expect("bind listener");
         let endpoint = listener.local_addr().expect("local addr");
 
         let forger = std::thread::spawn(move || {
@@ -976,9 +1024,9 @@ mod tests {
         let record_path = graft_receiver_record_path_from_home(tempdir.path(), &team, &agent);
         let chat_id = "chat-1".parse::<ChatId>().expect("chat id");
         let first =
-            GraftReceiverListener::bind(&record_path, Some(chat_id.clone())).expect("first");
+            bind_listener(tempdir.path(), &team, &agent, Some(chat_id.clone())).expect("first");
         let before = fs::read(&record_path).expect("record bytes");
-        let error = match GraftReceiverListener::bind(&record_path, Some(chat_id)) {
+        let error = match bind_listener(tempdir.path(), &team, &agent, Some(chat_id)) {
             Ok(_) => panic!("second live owner must fail"),
             Err(error) => error,
         };
@@ -1001,7 +1049,13 @@ mod tests {
             &TeamName::from_validated(TEST_TEAM),
             &AgentName::from_validated(TEST_QA),
         );
-        let listener = GraftReceiverListener::bind(&record_path, None).expect("owner");
+        let listener = bind_listener(
+            tempdir.path(),
+            &TeamName::from_validated(TEST_TEAM),
+            &AgentName::from_validated(TEST_QA),
+            None,
+        )
+        .expect("owner");
         let current = read_receiver_record(&record_path).expect("current record");
         let successor = GraftReceiverEndpointRecord {
             owner_generation: ulid::Ulid::new().to_string(),
@@ -1021,18 +1075,20 @@ mod tests {
     fn distinct_receiver_identities_can_listen_concurrently() {
         let tempdir = TempDir::new().expect("tempdir");
         let team = TeamName::from_validated(TEST_TEAM);
-        let first_path = graft_receiver_record_path_from_home(
+        let first = bind_listener(
             tempdir.path(),
             &team,
             &AgentName::from_validated(TEST_QA),
-        );
-        let second_path = graft_receiver_record_path_from_home(
+            None,
+        )
+        .expect("first");
+        let second = bind_listener(
             tempdir.path(),
             &team,
             &AgentName::from_validated(TEST_LEAD),
-        );
-        let first = GraftReceiverListener::bind(&first_path, None).expect("first");
-        let second = GraftReceiverListener::bind(&second_path, None).expect("second");
+            None,
+        )
+        .expect("second");
         assert_ne!(
             first.local_addr().expect("first addr"),
             second.local_addr().expect("second addr")

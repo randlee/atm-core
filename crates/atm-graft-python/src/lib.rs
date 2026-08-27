@@ -1666,8 +1666,14 @@ mod tests {
         let session = PyGraftSession {
             caller: caller.to_typed().expect("typed caller"),
             client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(Arc::new(
-                FakeClientTransport::new(Box::new(|_| {
-                    panic!("receiver activation must not call the daemon transport")
+                FakeClientTransport::new(Box::new(|request| match request {
+                    RequestEnvelope::GraftReceiverRegister(_) => {
+                        Ok(ResponseEnvelope::GraftReceiverRegister)
+                    }
+                    RequestEnvelope::GraftReceiverUnregister(_) => {
+                        Ok(ResponseEnvelope::GraftReceiverUnregister)
+                    }
+                    _ => panic!("receiver activation sent an unexpected daemon request"),
                 })),
             )))),
             receiver: Mutex::new(None),
