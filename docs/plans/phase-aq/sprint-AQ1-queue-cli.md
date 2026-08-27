@@ -330,9 +330,13 @@ None beyond identifier renames; no behavior change to `atm send`.
   queued tmux message is nudged only via the AQ3 machinery (not yet built);
   the verb still ships because the message is durably readable.
 - Repo-doc terminology updates: landed on the plan branch during planning.
-- Blocking in `commit_write` accepted: `mark_pending` is a synchronous
-  SQLite write inside `PreparedWrite::finish` — same class as the existing
-  ack transition, not a QA finding.
+- Marker write placement (revised 2026-08-26, quality-mgr QM40-B1 — the
+  earlier "accepted blocking" note is withdrawn): `mark_pending` for a
+  Deferred write runs on the router's blocking lane (inside the same
+  `spawn_blocking` hop as the canonical state upsert, or an adjacent one
+  gated on `newly_persisted && Deferred`), never directly on a Tokio worker
+  from async `commit_write`; a Deferred-write test through the real async
+  router + SQLite is required (AC 3).
 
 ## Dependencies
 
