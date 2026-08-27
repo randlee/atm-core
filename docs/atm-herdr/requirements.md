@@ -126,8 +126,14 @@ The `atm-herdr` crate uses the `HR-*` namespace, grouped by category:
   for a possible future lifecycle-gated delivery mode and must remain
   argv/parsing-correct even though nothing calls it in Phase AQ.
 - `HR-CORE-004` `HerdrProcessInvoker::get` emits exactly
-  `herdr agent get <AgentName>` (ADR-058 D9) with no other argument. This
-  is the doctor/presence-probe read of one named agent.
+  `herdr agent get <AgentName>` (ADR-058 D9) with no other argument, and
+  takes an explicit `BreakerPolicy` (`Shared` or `Bypass`, `HR-SAFE-007`).
+  This is the doctor/presence-probe read of one named agent; the doctor
+  caller always passes `BreakerPolicy::Bypass` so a probe failure never
+  opens or is throttled by the breaker that governs live steer/queue
+  delivery for unrelated members. `Shared` is reserved for a possible
+  future caller that should participate in the shared breaker like
+  `prompt`/`list`; no Phase AQ caller passes it.
 - `HR-CORE-005` `HerdrProcessInvoker::list` emits exactly
   `herdr agent list` with no other argument, one child per distinct
   session (`HERDR_SESSION` set on that child's environment only when the
@@ -166,9 +172,14 @@ The `atm-herdr` crate uses the `HR-*` namespace, grouped by category:
   or JSON key order.
 - `HR-CORE-009` `HerdrSpawnBreaker` is constructed once per host process
   and shared by every `HerdrProcessInvoker` call across every member
-  (ADR-058 D10.1: "per-host circuit breaker shared by every Herdr member").
-  `atm-herdr` defines the type; the composition root (`atm-daemon-bootstrap`)
-  owns the single shared instance — see `architecture.md` §9.
+  (ADR-058 D10.1: "per-host circuit breaker shared by every Herdr member"),
+  for every command invoked under `BreakerPolicy::Shared` — `prompt`,
+  `list`, and (if ever added) a `Shared`-policy `get` caller. `atm-herdr`
+  defines the type; the composition root (`atm-daemon-bootstrap`) owns the
+  single shared instance — see `architecture.md` §9. Doctor's `get` probe
+  always runs under `BreakerPolicy::Bypass` (`HR-SAFE-007`) and is
+  therefore outside this sharing: it never opens, closes, or is blocked by
+  the breaker.
 
 ### 3.2 Safety Requirements
 
@@ -179,12 +190,17 @@ The `atm-herdr` crate uses the `HR-*` namespace, grouped by category:
   pre-write rejection (ADR-058 D4) is the only accepted safety gate; a
   rejected prompt is a terminal outcome for this crate, not a trigger for
   an alternate delivery mechanism.
-- `HR-SAFE-002` Every `herdr` child spawn is wrapped in an external,
-  `atm-herdr`-owned, flat **5 s** deadline, independent of any `--timeout`
-  argv value, because Herdr's own client applies no read/connect timeout
-  (ADR-058 D10). This bound is identical for `prompt`, `get`, and `list`
-  children — there is no per-command variance and no separate grace
-  period. On elapse the child is killed and reaped (never merely
+- `HR-SAFE-002` Every `herdr` child spawn is bounded by the **effective
+  bound `min(caller-supplied RequestDeadline remaining, 5 s)`**: the flat
+  **5 s** figure is `atm-herdr`'s own external ceiling, independent of any
+  `--timeout` argv value, because Herdr's own client applies no
+  read/connect timeout (ADR-058 D10); the caller's `RequestDeadline`
+  (already inherited from the inbound request for `prompt`, or synthesized
+  per-tick/per-probe for `list`/`get`) **may shorten this bound but never
+  lengthen it past 5 s**. This applies identically to `prompt`, `get`, and
+  `list` children — there is no per-command variance and no separate grace
+  period beyond the caller's own, tighter deadline. On elapse (whichever
+  bound is tighter) the child is killed and reaped (never merely
   killed-and-abandoned) before this crate returns `HerdrError::TimedOut`.
   (`wait` is contracted (`HR-CORE-003`) but not invoked by any Phase AQ
   caller, so its own external-bound question does not arise in this
@@ -202,19 +218,34 @@ The `atm-herdr` crate uses the `HR-*` namespace, grouped by category:
   closed breaker.
 - `HR-SAFE-005` `HerdrSpawnBreaker` opens only on the infrastructure-class
   outcomes named in `HR-CORE-009`'s citation (`server_not_running`,
-  `protocol_mismatch`, an external-timeout kill, a failed `agent list`
-  call, or a failed `agent get` probe) and never on a lifecycle/target-shaped
-  outcome (`agent_blocked`, `agent_not_found`, `agent_not_ready`,
-  `agent_target_ambiguous`) — those are per-target conditions a breaker
-  trip cannot help and must not suppress future attempts for unrelated
-  members.
-- `HR-SAFE-006` While the breaker is open, `prompt` / `wait` / `get` /
-  `list` return `HerdrError::Unavailable { retry_after }` without spawning
-  a child. This
+  `protocol_mismatch`, an external-timeout kill, or a failed `agent list`
+  call) and never on a lifecycle/target-shaped outcome (`agent_blocked`,
+  `agent_not_found`, `agent_not_ready`, `agent_target_ambiguous`) — those
+  are per-target conditions a breaker trip cannot help and must not
+  suppress future attempts for unrelated members. **A failed `agent get`
+  call under `BreakerPolicy::Bypass` (finding 108 — the doctor probe's
+  only mode, `HR-SAFE-007`) never opens the breaker**; only a hypothetical
+  future `BreakerPolicy::Shared` `get` caller would participate in this
+  list, and none exists in Phase AQ.
+- `HR-SAFE-006` While the breaker is open, `prompt` / `wait` / `list`, and
+  a `Shared`-policy `get`, return `HerdrError::Unavailable { retry_after }`
+  without spawning a child. This
   crate does not itself decide what a caller does with that outcome
   (dropped steer, released queue claim, or doctor warning are all
   caller-owned per `atm doctor` / `atm-http-runtime` / `atm-daemon-bootstrap`
-  policy) — it only refuses to spawn and reports the remaining backoff.
+  policy) — it only refuses to spawn and reports the remaining backoff. A
+  `Bypass`-policy `get` call is exempt from this refusal (`HR-SAFE-007`):
+  it always attempts its own bounded spawn regardless of breaker state.
+- `HR-SAFE-007` `get`'s `BreakerPolicy::Bypass` mode (`HR-CORE-004`) always
+  attempts the spawn regardless of `HerdrSpawnBreaker`'s current state, is
+  bounded by the same effective external deadline as every other call
+  (`HR-SAFE-002`), and neither consults `permits_spawn()` nor calls
+  `record_success()`/`record_infrastructure_failure()` on the shared
+  breaker — a doctor-only presence probe must never open, close, or be
+  suppressed by the breaker that gates live steer/queue delivery for
+  unrelated members. `BreakerPolicy::Shared` (unused by any Phase AQ
+  caller) behaves like `prompt`/`list`: it checks `permits_spawn()` first
+  and records its own outcome against the shared breaker.
 
 ### 3.3 Observability Requirements
 
@@ -262,11 +293,16 @@ The `atm-herdr` crate uses the `HR-*` namespace, grouped by category:
   order, matching the fixture's own "derived-from-source, not
   live-captured" parsing discipline.
 - `HR-TEST-004` A fake adapter implementation whose future never resolves
-  proves the single flat 5 s external deadline (`HR-SAFE-002`) for each
-  of `prompt`, `get`, and `list`: the crate returns
-  `HerdrError::TimedOut` within the bound and the child is killed and
-  reaped, asserted via the fake's own call record. This is the concrete
-  shape of ADR-058 "Required evidence" for D10's steer/get bound, applied
+  proves the effective bound `min(caller RequestDeadline, 5 s)`
+  (`HR-SAFE-002`) for each of `prompt`, `get`, and `list`: with no caller
+  deadline shorter than 5 s, the crate returns `HerdrError::TimedOut`
+  within the flat 5 s cap and the child is killed and reaped, asserted via
+  the fake's own call record. A second fixture supplies a 2 s caller
+  `RequestDeadline` (the shape of AQ2.6's doctor probe deadline) and proves
+  the child is killed and `HerdrError::TimedOut` returned before the flat
+  5 s cap would have elapsed — demonstrating that a caller may shorten but
+  never lengthen the effective bound. This is the concrete shape of
+  ADR-058 "Required evidence" for D10's steer/get bound, applied
   identically to `list`.
 - `HR-TEST-005` A breaker fixture proves: three consecutive
   infrastructure-class failures open the breaker with exponentially
@@ -372,17 +408,21 @@ The `atm-herdr` crate docs must remain aligned with:
   - no reference to `send-keys`, `send_input`, or `tmux` exists anywhere
     in `crates/atm-herdr`
 - `HR-SAFE-002`/`HR-TEST-004`
-  - the never-resolving fake-adapter fixture exists for the single flat
-    5 s bound and asserts it applies to `prompt`, `get`, and `list`
-    alike, and that the child is killed and reaped
+  - the never-resolving fake-adapter fixture exists for the effective
+    `min(caller RequestDeadline, 5 s)` bound and asserts it applies to
+    `prompt`, `get`, and `list` alike, and that the child is killed and
+    reaped; a second fixture with a 2 s caller deadline proves the bound
+    is shortened, never lengthened past 5 s
 - `HR-SAFE-003`
   - no function in this crate accepts a raw ATM message body as an
     argument to `prompt`
-- `HR-SAFE-005`/`HR-SAFE-006`/`HR-TEST-005`
+- `HR-SAFE-005`/`HR-SAFE-006`/`HR-SAFE-007`/`HR-TEST-005`
   - the breaker fixture in `HR-TEST-005` passes, `agent list` failure is
     exercised as an opening trigger, and a grep confirms no
     lifecycle-shaped `HerdrError` variant appears in
     `HerdrSpawnBreaker`'s open-triggering match arms
+  - a fixture proves a `BreakerPolicy::Bypass` `get` failure during a live
+    outage leaves the breaker `Closed` throughout (finding 108)
 - `HR-TEST-006`
   - `cargo test -p atm-herdr` and every consumer crate's suite run with
     no `herdr` binary on `PATH` in CI and still pass
