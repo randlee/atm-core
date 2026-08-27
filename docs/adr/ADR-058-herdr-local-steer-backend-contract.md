@@ -513,6 +513,12 @@ the adapter, `atm-herdr`) is normatively documented in
   that deadline. For `list`, AQ2.7's tick task synthesizes its own
   `RequestDeadline::after(<5 s>)` per call, since a background poll has no
   inbound request to inherit one from.
+- **Get bound (`get`, AQ2.6 doctor presence probe):** the same 5 s external
+  kill bound as steer/list; the effective per-call bound is
+  `min(caller RequestDeadline, 5 s)` (governing rule in
+  `docs/atm-herdr/requirements.md` HR-SAFE-002), so `atm doctor`'s 2 s probe
+  deadline shortens it and never lengthens it. `get` runs under
+  `BreakerPolicy::Bypass` (D10.1 carve-out).
 - **Wait bound — removed 2026-08-26 (Rand).** The prior draft's
   per-member `wait` deadline (`HERDR_WAIT_GRACE_MS = 5_000` beside the
   `--timeout` argv value, up to 45 minutes total) is deleted along with
@@ -535,7 +541,8 @@ the adapter, `atm-herdr`) is normatively documented in
 
 - AQ2.6's persisted representation stays mode-only; the live target is
   `ATM_IDENTITY` and nothing else. The doctor/CLI must validate the name
-  grammar `^[a-z][a-z0-9_-]{0,31}$`.
+  grammar owned by the `HerdrAgentName` newtype (AQ2.6 deliverable 1; the
+  regex is defined once there — D1 above cites Herdr's source for it).
 - `ATM_TEAM` cannot be selected on the Herdr argv; per-team isolation on a
   shared host requires per-team Herdr sessions, recorded per member on the
   roster (D1) — never via the daemon's own process environment. This is a
@@ -606,12 +613,15 @@ burns a child process per attempt. **An `agent list` failure is the same
 class of outcome as an `agent prompt` failure here** — both are single
 bounded child spawns behind the same socket (D9.1, D10) — so atm-core
 applies one **per-host circuit breaker** shared by every Herdr member and
+every Herdr command (the Herdr server is host-wide).
+
 **Carve-out (critical review PLAN-CRIT-108):** the `agent get` doctor/presence
 probe is invoked under `BreakerPolicy::Bypass` and neither opens nor is gated
 by this breaker — running `atm doctor` during a Herdr outage must never
 suppress live steer/queue delivery. All other commands use
 `BreakerPolicy::Shared`.
-every Herdr command (the Herdr server is host-wide):
+
+Breaker rules:
 
 - State lives beside the adapter in `atm-herdr` (structural change,
   2026-08-26: not `atm-http-runtime` — see D2/D9.1/D10 and
@@ -624,7 +634,7 @@ every Herdr command (the Herdr server is host-wide):
   **without spawning**. (`wait` would too, if it were ever invoked — it is
   defined on the trait per D2 but not called by atm-core in Phase AQ.)
   Steer-kind nudges are dropped with a structured event
-  (`subsystem="atm_core.herdr" action="steer_skipped_breaker_open"`);
+  (`subsystem="atm_core.herdr" action="steer_skipped_breaker_open" outcome="skipped"`);
   queue-kind claims — including every claim AQ2.7 took for a session whose
   `list` call fails this tick — are released via `release_pending` (no
   retry-budget consumption — nothing was injected).
