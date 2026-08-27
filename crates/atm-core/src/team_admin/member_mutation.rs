@@ -17,6 +17,14 @@ use super::{filesystem, projection};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MemberName(pub AgentName);
 
+/// Explicit local backend flags supplied by the CLI.
+#[derive(Debug, Clone, Copy)]
+pub struct BackendOptions<'a> {
+    pub backend: Option<&'a str>,
+    pub target: Option<&'a str>,
+    pub session: Option<&'a str>,
+}
+
 /// Parameters for adding one member to a team roster.
 #[derive(Debug, Clone)]
 pub struct AddMemberRequest {
@@ -64,13 +72,17 @@ impl AddMemberRequest {
         agent_type: String,
         model: String,
         member_home_dir: PathBuf,
-        backend: Option<&str>,
-        target: Option<&str>,
-        session: Option<&str>,
+        options: BackendOptions<'_>,
     ) -> Result<Self, AtmError> {
         let member_name: AgentName = member.parse()?;
-        let local_backend = parse_backend(&member_name, backend, target, session)?;
-        let backend_warning = nonstandard_tmux_warning(&member_name, backend, target)?;
+        let local_backend = parse_backend(
+            &member_name,
+            options.backend,
+            options.target,
+            options.session,
+        )?;
+        let backend_warning =
+            nonstandard_tmux_warning(&member_name, options.backend, options.target)?;
         let tmux_pane_id = match &local_backend {
             Some(LocalMessageReceivedBackend::Tmux { pane_id }) => Some(pane_id.clone()),
             _ => None,
@@ -154,7 +166,6 @@ impl UpdateMemberRequest {
     }
 
     /// Constructs an update request from explicit backend flags.
-    #[allow(clippy::too_many_arguments)]
     pub fn new_with_backend(
         caller_identity: AgentName,
         caller_team: TeamName,
@@ -165,13 +176,17 @@ impl UpdateMemberRequest {
         harness: Option<String>,
         agent_type: Option<String>,
         model: Option<String>,
-        backend: Option<&str>,
-        target: Option<&str>,
-        session: Option<&str>,
+        options: BackendOptions<'_>,
     ) -> Result<Self, AtmError> {
         let member_name: AgentName = member.parse()?;
-        let local_backend = parse_backend(&member_name, backend, target, session)?;
-        let backend_warning = nonstandard_tmux_warning(&member_name, backend, target)?;
+        let local_backend = parse_backend(
+            &member_name,
+            options.backend,
+            options.target,
+            options.session,
+        )?;
+        let backend_warning =
+            nonstandard_tmux_warning(&member_name, options.backend, options.target)?;
         let tmux_pane_id = match &local_backend {
             Some(LocalMessageReceivedBackend::Tmux { pane_id }) => Some(pane_id.clone()),
             _ => None,

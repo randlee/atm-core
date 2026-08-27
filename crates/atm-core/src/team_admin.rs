@@ -26,8 +26,8 @@ mod projection;
 mod restore;
 
 pub use member_mutation::{
-    AddMemberOutcome, AddMemberRequest, MemberName, RemoveMemberOutcome, RemoveMemberRequest,
-    UpdateMemberOutcome, UpdateMemberRequest, add_member_with_roster_store,
+    AddMemberOutcome, AddMemberRequest, BackendOptions, MemberName, RemoveMemberOutcome,
+    RemoveMemberRequest, UpdateMemberOutcome, UpdateMemberRequest, add_member_with_roster_store,
     remove_member_with_roster_store, update_member_with_roster_store,
 };
 
@@ -461,7 +461,7 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        AddMemberRequest, BackupRequest, ClearNudgeTemplateOverrideRequest,
+        AddMemberRequest, BackendOptions, BackupRequest, ClearNudgeTemplateOverrideRequest,
         DisableNudgeTemplateOverrideRequest, MemberName, MembersQuery, RemoveMemberRequest,
         RestoreRequest, SetNudgeTemplateOverrideRequest, UpdateMemberRequest,
         add_member_with_roster_store, backup_team_with_roster_store,
@@ -699,9 +699,11 @@ mod tests {
             "worker".into(),
             "gpt-5".into(),
             tempdir.path().to_path_buf(),
-            Some("herdr"),
-            None,
-            Some("team-a"),
+            BackendOptions {
+                backend: Some("herdr"),
+                target: None,
+                session: Some("team-a"),
+            },
         )
         .expect("Herdr request");
         assert!(request.tmux_pane_id.is_none());
@@ -717,9 +719,11 @@ mod tests {
             "worker".into(),
             "gpt-5".into(),
             tempdir.path().to_path_buf(),
-            Some("herdr"),
-            None,
-            None,
+            BackendOptions {
+                backend: Some("herdr"),
+                target: None,
+                session: None,
+            },
         )
         .expect_err("Herdr grammar must be strict");
         assert!(error.message().contains("^[a-z][a-z0-9_-]{0,31}$"));
@@ -736,9 +740,11 @@ mod tests {
             "worker".into(),
             "gpt-5".into(),
             tempdir.path().to_path_buf(),
-            Some("herdr"),
-            None,
-            Some("team-a"),
+            BackendOptions {
+                backend: Some("herdr"),
+                target: None,
+                session: Some("team-a"),
+            },
         )
         .expect("Herdr request");
         add_member_with_roster_store(&roster_store, request).expect("add Herdr member");

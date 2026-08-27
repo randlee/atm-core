@@ -756,10 +756,7 @@ mod tests {
     #[test]
     fn herdr_backend_wins_over_non_claude_graft_fallback() {
         let mut metadata = Map::new();
-        metadata.insert(
-            concat!("backend", "Type").to_owned(),
-            serde_json::json!("herdr"),
-        );
+        metadata.insert("backendType".to_owned(), serde_json::json!("herdr"));
         let entry = RosterEntry {
             team_name: "team-a".parse().expect("team"),
             agent_name: "arch-ctm".parse().expect("agent"),

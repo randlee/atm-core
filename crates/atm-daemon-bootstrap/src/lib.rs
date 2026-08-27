@@ -65,6 +65,16 @@ struct SelectedPeerAdapterSelection {
     pool_config: PeerPoolConfig,
 }
 
+struct ReplacementHandlerConfig<F> {
+    observability: Arc<dyn ObservabilityPort + Send + Sync>,
+    selector_factory: F,
+    daemon_launch_identity: DaemonLaunchIdentity,
+    peer_wire_mode: PeerWireMode,
+    peer_adapter_selection: SelectedPeerAdapterSelection,
+    runtime_health: RuntimeHealth,
+    herdr_process: Option<Arc<dyn HerdrProcessAdapter>>,
+}
+
 struct HerdrBreakerDoctorAdapter {
     breaker: Arc<HerdrSpawnBreaker>,
 }
@@ -495,6 +505,7 @@ pub async fn run_replacement_daemon_with_observability(
         peer_wire_mode,
         DirectPeerTcpConfig::configured(direct_peer_port),
         peer_pool_config,
+        None,
     )
     .await
 }
@@ -518,28 +529,43 @@ pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode) -> Result<(), At
         peer_wire_mode,
         DirectPeerTcpConfig::configured(direct_peer_port),
         peer_pool_config,
+        Some(Arc::new(
+            received_hook_selector::BenchmarkNoopHerdrProcessAdapter,
+        )),
     )
     .await
 }
 
 fn build_replacement_handler(
     mut assembly: RuntimeAssembly,
-    observability: Arc<dyn ObservabilityPort + Send + Sync>,
-    selector_factory: impl FnOnce(
-        atm_core::LocalServiceRuntime,
-        Arc<dyn HerdrProcessAdapter>,
-    ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
-    daemon_launch_identity: &DaemonLaunchIdentity,
-    peer_wire_mode: PeerWireMode,
-    peer_adapter_selection: SelectedPeerAdapterSelection,
-    runtime_health: RuntimeHealth,
+    config: ReplacementHandlerConfig<
+        impl FnOnce(
+            atm_core::LocalServiceRuntime,
+            Arc<dyn HerdrProcessAdapter>,
+        ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
+    >,
 ) -> Result<Arc<StorageAndNudgeRouter>, AtmError> {
-    let herdr_breaker = Arc::new(HerdrSpawnBreaker::new());
-    let herdr_process: Arc<dyn HerdrProcessAdapter> =
-        Arc::new(HerdrProcessInvoker::new(Arc::clone(&herdr_breaker)));
-    assembly.doctor_ports.herdr_breaker = Arc::new(HerdrBreakerDoctorAdapter {
-        breaker: Arc::clone(&herdr_breaker),
-    });
+    let ReplacementHandlerConfig {
+        observability,
+        selector_factory,
+        daemon_launch_identity,
+        peer_wire_mode,
+        peer_adapter_selection,
+        runtime_health,
+        herdr_process,
+    } = config;
+    let herdr_process = match herdr_process {
+        Some(process) => process,
+        None => {
+            let herdr_breaker = Arc::new(HerdrSpawnBreaker::new());
+            let process: Arc<dyn HerdrProcessAdapter> =
+                Arc::new(HerdrProcessInvoker::new(Arc::clone(&herdr_breaker)));
+            assembly.doctor_ports.herdr_breaker = Arc::new(HerdrBreakerDoctorAdapter {
+                breaker: Arc::clone(&herdr_breaker),
+            });
+            process
+        }
+    };
     let selector = selector_factory(assembly.service_runtime.clone(), herdr_process);
     let handler = StorageAndNudgeRouter::new(
         assembly.service_runtime,
@@ -679,6 +705,7 @@ async fn run_replacement_daemon_with_selector(
     peer_wire_mode: PeerWireMode,
     direct_peer_tcp: DirectPeerTcpConfig,
     peer_pool_config: PeerPoolConfig,
+    herdr_process: Option<Arc<dyn HerdrProcessAdapter>>,
 ) -> Result<(), AtmError> {
     install_sqlite_retained_runtime_factory();
     let scope = current_host_runtime_scope()?;
@@ -691,15 +718,18 @@ async fn run_replacement_daemon_with_selector(
     // Benchmark-only selection is available only from the separate binary.
     let handler = build_replacement_handler(
         assembly,
-        Arc::clone(&observability),
-        selector_factory,
-        &daemon_launch_identity,
-        peer_wire_mode,
-        SelectedPeerAdapterSelection {
-            adapter: peer_stream_adapter.clone(),
-            pool_config: peer_pool_config,
+        ReplacementHandlerConfig {
+            observability: Arc::clone(&observability),
+            selector_factory,
+            daemon_launch_identity: daemon_launch_identity.clone(),
+            peer_wire_mode,
+            peer_adapter_selection: SelectedPeerAdapterSelection {
+                adapter: peer_stream_adapter.clone(),
+                pool_config: peer_pool_config,
+            },
+            runtime_health: runtime_health.clone(),
+            herdr_process,
         },
-        runtime_health.clone(),
     )?;
     let config = replacement_runtime_config(
         &scope,
@@ -974,11 +1004,11 @@ mod replacement_runtime_tests {
     use serde_json::Map;
 
     use super::{
-        DaemonLaunchIdentity, REPLACEMENT_DRAIN_DEADLINE, SelectedPeerAdapterSelection,
-        ShutdownSignal, assemble_host_runtime_with_template_composer, build_replacement_handler,
-        parse_direct_peer_port, parse_peer_pool_config_with_environment, parse_peer_wire_mode,
-        peer_stream_adapter_for_mode, replacement_runtime_config_with_direct_peer,
-        write_ready_signal_if_requested,
+        DaemonLaunchIdentity, REPLACEMENT_DRAIN_DEADLINE, ReplacementHandlerConfig,
+        SelectedPeerAdapterSelection, ShutdownSignal, assemble_host_runtime_with_template_composer,
+        build_replacement_handler, parse_direct_peer_port, parse_peer_pool_config_with_environment,
+        parse_peer_wire_mode, peer_stream_adapter_for_mode,
+        replacement_runtime_config_with_direct_peer, write_ready_signal_if_requested,
     };
 
     /// Test-owned receiver selection prevents an external tmux/graft action
@@ -1213,15 +1243,18 @@ mod replacement_runtime_tests {
         let runtime_health = RuntimeHealth::with_owner(std::process::id());
         let handler = build_replacement_handler(
             assembly,
-            Arc::new(NullObservability),
-            |_, _| Arc::new(NoReceivedHookSelector),
-            &DaemonLaunchIdentity::default(),
-            PeerWireMode::plaintext_test(),
-            SelectedPeerAdapterSelection {
-                adapter: peer_stream_adapter.clone(),
-                pool_config: PeerPoolConfig::default(),
+            ReplacementHandlerConfig {
+                observability: Arc::new(NullObservability),
+                selector_factory: |_, _| Arc::new(NoReceivedHookSelector),
+                daemon_launch_identity: DaemonLaunchIdentity::default(),
+                peer_wire_mode: PeerWireMode::plaintext_test(),
+                peer_adapter_selection: SelectedPeerAdapterSelection {
+                    adapter: peer_stream_adapter.clone(),
+                    pool_config: PeerPoolConfig::default(),
+                },
+                runtime_health: runtime_health.clone(),
+                herdr_process: None,
             },
-            runtime_health.clone(),
         )
         .expect("compose the replacement daemon handler");
         let config = replacement_runtime_config_with_direct_peer(

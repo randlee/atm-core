@@ -18,6 +18,8 @@ use atm_core::boundary::{
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::{HerdrSession, LocalServiceRuntime};
 use atm_herdr::{HerdrError, HerdrProcessAdapter, HerdrPromptOutcome};
+#[cfg(feature = "benchmark-harness")]
+use atm_herdr::{AgentSnapshot, HerdrAgentStatus};
 
 /// Builds the selector injected into every production replacement daemon.
 ///
@@ -66,6 +68,71 @@ pub fn benchmark_received_hook_selector(
     match mode {
         BenchmarkHookMode::Active => active_received_hook_selector(service_runtime, herdr_process),
         BenchmarkHookMode::Disabled => Arc::new(DisabledReceivedHookSelector),
+    }
+}
+
+/// Benchmark-only adapter: active-hook capacity runs must not invoke Herdr or
+/// construct the real process invoker. It accepts the wake locally so the
+/// benchmark measures ATM admission and routing rather than an external CLI.
+#[cfg(feature = "benchmark-harness")]
+pub struct BenchmarkNoopHerdrProcessAdapter;
+
+#[cfg(feature = "benchmark-harness")]
+impl HerdrProcessAdapter for BenchmarkNoopHerdrProcessAdapter {
+    fn prompt<'a>(
+        &'a self,
+        agent: &'a atm_core::types::AgentName,
+        _session: Option<&'a HerdrSession>,
+        _deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Result<HerdrPromptOutcome, HerdrError>> + Send + 'a>> {
+        let snapshot = AgentSnapshot {
+            name: Some(agent.to_string()),
+            status: HerdrAgentStatus::Idle,
+            workspace_id: None,
+        };
+        Box::pin(async move { Ok(HerdrPromptOutcome::Accepted(snapshot)) })
+    }
+
+    fn wait<'a>(
+        &'a self,
+        agent: &'a atm_core::types::AgentName,
+        _session: Option<&'a HerdrSession>,
+        _until: &'a [HerdrAgentStatus],
+        _timeout: std::time::Duration,
+        _deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Result<atm_herdr::HerdrWaitOutcome, HerdrError>> + Send + 'a>>
+    {
+        let snapshot = AgentSnapshot {
+            name: Some(agent.to_string()),
+            status: HerdrAgentStatus::Idle,
+            workspace_id: None,
+        };
+        Box::pin(async move { Ok(atm_herdr::HerdrWaitOutcome { snapshot }) })
+    }
+
+    fn get<'a>(
+        &'a self,
+        agent: &'a atm_core::types::AgentName,
+        _session: Option<&'a HerdrSession>,
+        _deadline: RequestDeadline,
+        _breaker_policy: atm_herdr::BreakerPolicy,
+    ) -> Pin<Box<dyn Future<Output = Result<atm_herdr::HerdrGetOutcome, HerdrError>> + Send + 'a>>
+    {
+        let snapshot = AgentSnapshot {
+            name: Some(agent.to_string()),
+            status: HerdrAgentStatus::Idle,
+            workspace_id: None,
+        };
+        Box::pin(async move { Ok(atm_herdr::HerdrGetOutcome { snapshot }) })
+    }
+
+    fn list<'a>(
+        &'a self,
+        _session: Option<&'a HerdrSession>,
+        _deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Result<atm_herdr::HerdrListOutcome, HerdrError>> + Send + 'a>>
+    {
+        Box::pin(async { Ok(atm_herdr::HerdrListOutcome { agents: Vec::new() }) })
     }
 }
 

@@ -256,9 +256,11 @@ impl AddMemberCommand {
                 self.agent_type,
                 self.model,
                 member_home_dir,
-                self.backend.as_deref(),
-                self.target.as_deref(),
-                self.session.as_deref(),
+                atm_core::team_admin::BackendOptions {
+                    backend: self.backend.as_deref(),
+                    target: self.target.as_deref(),
+                    session: self.session.as_deref(),
+                },
             )
         } else {
             AddMemberRequest::new(
@@ -383,9 +385,11 @@ impl UpdateMemberCommand {
                 self.harness,
                 self.agent_type,
                 self.model,
-                self.backend.as_deref(),
-                self.target.as_deref(),
-                self.session.as_deref(),
+                atm_core::team_admin::BackendOptions {
+                    backend: self.backend.as_deref(),
+                    target: self.target.as_deref(),
+                    session: self.session.as_deref(),
+                },
             )
         } else {
             UpdateMemberRequest::new(
