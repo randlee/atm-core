@@ -67,12 +67,39 @@ impl PreparedWrite {
     /// Completes the canonical write before post-commit work is scheduled.
     /// For acknowledgements this records the source transition before the
     /// caller receives its local admission response.
+    ///
+    /// This deliberately does not set the `NudgeMode::Deferred` queue marker:
+    /// callers that route through an async boundary (e.g.
+    /// `StorageAndNudgeRouter`) must schedule [`PreparedWrite::mark_pending_if_deferred`]
+    /// on their own blocking task after this returns. Callers with no such
+    /// boundary should use [`PreparedWrite::finish_and_mark`] instead.
     pub fn finish(
         &mut self,
         runtime: &LocalServiceRuntime,
         observability: &dyn ObservabilityPort,
     ) -> Result<WriteOutcome, AtmError> {
         self.finish_with_runtime(runtime, observability)
+    }
+
+    /// Completes the canonical write and, for a newly persisted
+    /// `NudgeMode::Deferred` message, sets its durable queue marker in the
+    /// same call.
+    ///
+    /// This is the entry point for the synchronous public write API
+    /// (`write_mail_with_runtime`/`send_mail_with_runtime`/`ack_mail_with_runtime`):
+    /// those callers are already blocking, so performing the marker's
+    /// blocking SQLite transaction inline here never lands on an async
+    /// runtime worker. Callers that route through an async boundary must
+    /// instead call [`PreparedWrite::finish`] and schedule
+    /// [`PreparedWrite::mark_pending_if_deferred`] on their own blocking task.
+    pub fn finish_and_mark(
+        &mut self,
+        runtime: &LocalServiceRuntime,
+        observability: &dyn ObservabilityPort,
+    ) -> Result<WriteOutcome, AtmError> {
+        let outcome = self.finish(runtime, observability)?;
+        self.mark_pending_if_deferred(runtime);
+        Ok(outcome)
     }
 
     /// Sets the durable at-most-once queue marker for a newly persisted
@@ -277,7 +304,7 @@ pub fn write_mail_with_runtime(
         runtime,
         DeliveryExecutionMode::Inline,
     )?;
-    prepared.finish(runtime, observability)
+    prepared.finish_and_mark(runtime, observability)
 }
 
 pub fn send_mail_with_runtime(
@@ -291,7 +318,7 @@ pub fn send_mail_with_runtime(
         runtime,
         DeliveryExecutionMode::Inline,
     )?
-    .finish(runtime, observability)?
+    .finish_and_mark(runtime, observability)?
     {
         WriteOutcome::Sent(outcome) => Ok(outcome),
         WriteOutcome::Acknowledged(_) => Err(AtmError::validation(
