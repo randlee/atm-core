@@ -6,16 +6,12 @@ PR: #1056, target `integrate/phase-aq`
 
 ## Merge-forward checkpoint
 
-The branch was pulled before merge-forward. These merge commits were made
-without rebase or force push:
-
-| Input | Result |
-|---|---|
-| `origin/integrate/phase-aq` | merged into the branch before the AQ2.7 fixes |
-| `origin/feature/aq-1-6-graft-receiver-registration-client` | conflict resolved in `graft.rs`, `atm-graft/Cargo.toml`, and `atm-graft/src/runtime/mod.rs`; merge commit `4a8bd241d` |
-
-The checkpoint was pushed before further edits. The final fix commit is
-recorded in the completion message and PR.
+`origin/integrate/phase-aq` at `334e5ca89` is already an ancestor of the
+branch's `def0365ee` head, so no additional merge was made for this fix. The
+correction takes the integrate side wholesale for the three graft files named
+in `merge-forward.md`, plus the dependent CLI caller. This removes the
+retired file-record publication path while retaining the AQ2.7 implementation
+files in Herdr, HTTP runtime, and daemon bootstrap.
 
 ## Focused QA-2 run
 
@@ -37,16 +33,15 @@ exact `ac04_shutdown_send_stops_pump_before_drain_completes` test.
 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS |
 | `python3 .just/run_lint.py all` | PASS — all 32 checks, including `sc-boundary` |
 | `cargo test -p atm-herdr -p atm-daemon-bootstrap` | PASS — 13 + 30 tests |
-| `cargo test --workspace` | BLOCKED by an upstream merge inconsistency described below |
+| `cargo test -p atm-graft` | PASS — 36 tests, including bare-workspace activation |
+| `cargo test -p agent-team-mail` | PASS — 194 tests |
+| `cargo test --workspace` | PASS — all workspace tests, including the receiver registry retirement guard |
 
-The workspace run passed the CLI/core/storage suites and then failed at
-`atm-architecture::receiver_registry_ownership_has_one_flock_owner_and_no_file_publication`.
-The test is present in merge parent `842de908f` / `origin/integrate/phase-aq`
-and requires AQ1.8's file-record retirement, while the requested AQ1.6 merge
-parent `0736e8cf6` still supplies the file-record implementation. The failure
-reports three production file-publication references. Resolving that requires
-the separate AQ1.8 retirement merge; this AQ2.7 pass does not weaken or edit
-that architectural guard.
+The prior workspace failure in
+`atm-architecture::receiver_registry_ownership_has_one_flock_owner_and_no_file_publication`
+was caused by the sibling merge reintroducing file-record references. The
+integrate-side graft correction resolves that mismatch without weakening or
+editing the architectural guard.
 
 ## Scope and evidence notes
 

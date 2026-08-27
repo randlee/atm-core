@@ -1,4 +1,4 @@
-use std::net::TcpStream;
+use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender};
@@ -10,13 +10,13 @@ use std::sync::mpsc::TrySendError;
 
 use atm_core::GraftConfig;
 use atm_core::boundary::{
-    BuiltInPostSendDispatch, GraftNudgeTarget, MessageReceivedHookEmitter, NudgeKind,
-    PostSendBuiltInTarget,
+    BuiltInPostSendDispatch, GraftNudgeTarget, MessageReceivedHookEmitter, PostSendBuiltInTarget,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::{
     GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL, GraftPostSendResponse, GraftReceiverListener,
 };
+use atm_core::protocol::LocalCapability;
 use atm_core::types::{AgentName, ChatId, TeamName};
 
 use crate::nudge_sink::GraftReceiveHook;
@@ -40,9 +40,6 @@ pub(crate) const RECEIVE_LOOP_READY_DEADLINE: Duration = Duration::from_secs(3);
 
 const HOST_NUDGE_INJECTION_DEADLINE: Duration = Duration::from_millis(250);
 const GRAFT_RECEIVER_IO_DEADLINE: Duration = Duration::from_secs(3);
-/// A live listener checks its published record at this cadence so an external
-/// record deletion is repaired without adding filesystem work to every poll.
-const GRAFT_RECEIVER_RECORD_RECHECK_INTERVAL: Duration = Duration::from_secs(1);
 /// Each recovery cycle makes a small, bounded number of bind attempts before
 /// yielding to the slower re-arm cadence below.
 const GRAFT_RECEIVER_REBIND_MAX_ATTEMPTS: usize = 3;
@@ -503,6 +500,7 @@ pub(crate) struct GraftReceiverLoopContext {
     pub(crate) observability: Arc<dyn GraftObservability>,
     pub(crate) stop_rx: Receiver<()>,
     pub(crate) ready_tx: Option<SyncSender<()>>,
+    pub(crate) receiver_target_tx: Option<SyncSender<(SocketAddr, LocalCapability)>>,
 }
 
 pub(crate) fn run_graft_receiver_loop(ctx: GraftReceiverLoopContext) -> Result<(), AtmError> {
@@ -524,50 +522,24 @@ pub(crate) fn run_graft_receiver_loop(ctx: GraftReceiverLoopContext) -> Result<(
     result
 }
 
-/// Republishes the dual-write file record if an external actor deleted it,
-/// unchanged in effect from the pre-AQ1.6 behavior (refresh-only after
-/// AQ1.8 removes the file-record path).
-fn republish_record_if_missing(ctx: &GraftReceiverLoopContext, listener: &RegisteredGraftReceiver) {
-    match listener.listener.republish_if_missing() {
-        Ok(true) => {
-            if let Ok(snapshot) = read_snapshot(&ctx.snapshot) {
-                ctx.observability
-                    .receiver_ownership(&snapshot, "restore_receiver_record", "ok");
-            }
-        }
-        Ok(false) => {}
-        Err(error) => {
-            warn_runtime_error("restore_receiver_record", Some(&ctx.graft_root), &error);
-            if let Ok(snapshot) = read_snapshot(&ctx.snapshot) {
-                ctx.observability
-                    .receiver_ownership(&snapshot, "restore_receiver_record", "error");
-            }
-        }
-    }
-}
-
 fn listen_for_graft_nudges(
     ctx: &GraftReceiverLoopContext,
     injector: &BoundedHostNudgeInjector,
 ) -> Result<(), AtmError> {
     let mut listener = activate_graft_receiver(ctx)?;
+    publish_receiver_target(ctx, &listener.listener);
     if let Some(ready_tx) = ctx.ready_tx.as_ref() {
         signal_ready_sender(ready_tx)?;
     }
     // Non-blocking accept + poll: the loop re-checks its stop signal every
     // ACCEPT_POLL_INTERVAL instead of parking in a blocking accept, so no
     // wake-by-connect machinery is needed to unblock shutdown.
-    let mut last_record_recheck = Instant::now();
     let mut lease_backoff = LeaseRefreshBackoff::new(Instant::now());
     loop {
         if stop_requested(&ctx.stop_rx) {
             return Ok(());
         }
         tick_lease_refresh(ctx, &mut listener, &mut lease_backoff);
-        if last_record_recheck.elapsed() >= GRAFT_RECEIVER_RECORD_RECHECK_INTERVAL {
-            last_record_recheck = Instant::now();
-            republish_record_if_missing(ctx, &listener);
-        }
         match listener.listener.poll_accept() {
             Ok(Some(mut stream)) => {
                 if stop_requested(&ctx.stop_rx) {
@@ -584,14 +556,19 @@ fn listen_for_graft_nudges(
                 }
             }
             Ok(None) => thread::sleep(GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL),
-            Err(error) => {
-                match recover_after_poll_accept_error(ctx, listener, &error)? {
-                    Some(rebound_listener) => listener = rebound_listener,
-                    None => return Ok(()),
-                }
-                last_record_recheck = Instant::now();
-            }
+            Err(error) => match recover_after_poll_accept_error(ctx, listener, &error)? {
+                Some(rebound_listener) => listener = rebound_listener,
+                None => return Ok(()),
+            },
         }
+    }
+}
+
+fn publish_receiver_target(ctx: &GraftReceiverLoopContext, listener: &GraftReceiverListener) {
+    if let Some(target_tx) = &ctx.receiver_target_tx
+        && let Ok(endpoint) = listener.local_addr()
+    {
+        let _ = target_tx.send((endpoint, listener.capability().clone()));
     }
 }
 
@@ -718,6 +695,7 @@ fn rebind_graft_receiver(
         ) {
             Ok(listener) => {
                 let mut receiver = RegisteredGraftReceiver::new(listener, ctx);
+                publish_receiver_target(ctx, &receiver.listener);
                 if let Err(error) = receiver.announce() {
                     warn_runtime_error("register_graft_receiver", Some(&ctx.graft_root), &error);
                 }
@@ -765,6 +743,7 @@ fn handle_graft_receiver_connection(
 ) -> Result<(), AtmError> {
     let request = listener.read_request(stream, GRAFT_RECEIVER_IO_DEADLINE)?;
     let event = request.event;
+    let kind = request.kind;
     let rendered_nudge = request.rendered_nudge;
     let message_body = request.message_body;
     let dispatch = BuiltInPostSendDispatch {
@@ -775,7 +754,7 @@ fn handle_graft_receiver_connection(
             message_body,
         }),
         event,
-        kind: NudgeKind::Steer,
+        kind,
     };
     let response = match (GraftReceiveHook {
         injector,
@@ -799,10 +778,8 @@ mod tests {
     use atm_core::graft::{
         GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL, GraftPostSendRequest, GraftPostSendResponse,
         GraftReceiverListener, deliver_graft_post_send,
-        read_graft_receiver_endpoint_record_for_test,
     };
-    use atm_core::local_http::LocalCapability;
-    use atm_core::protocol::{OwnerGeneration, RequestEnvelope, ResponseEnvelope};
+    use atm_core::protocol::{LocalCapability, OwnerGeneration, RequestEnvelope, ResponseEnvelope};
     use atm_core::schema::AtmMessageId;
     use atm_core::test_support::{TEST_LEAD, TEST_QA, TEST_TEAM};
     use atm_core::transport::testing::FakeClientTransport;
@@ -810,7 +787,7 @@ mod tests {
     use std::collections::HashMap;
     use std::fs;
     use std::net::SocketAddr;
-    use std::path::{Path, PathBuf};
+    use std::path::PathBuf;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::mpsc;
     use std::sync::{Arc, Barrier, Mutex, RwLock};
@@ -916,6 +893,7 @@ mod tests {
         std::sync::mpsc::Sender<()>,
         std::thread::JoinHandle<Result<(), AtmError>>,
         Arc<RwLock<SessionSnapshot>>,
+        (SocketAddr, LocalCapability),
     );
 
     fn test_paths() -> TestPaths {
@@ -928,7 +906,7 @@ mod tests {
         }
     }
 
-    fn receiver_record_path(paths: &TestPaths) -> PathBuf {
+    fn legacy_endpoint_path(paths: &TestPaths) -> PathBuf {
         paths
             .workspace_root
             .join(".atm")
@@ -949,11 +927,17 @@ mod tests {
         )
     }
 
-    fn deliver_request(record_path: &Path, event: PostSendHookEvent) -> GraftPostSendResponse {
+    fn deliver_request(
+        endpoint: SocketAddr,
+        capability: &LocalCapability,
+        event: PostSendHookEvent,
+    ) -> GraftPostSendResponse {
         deliver_graft_post_send(
-            record_path,
+            endpoint,
+            capability,
             &GraftPostSendRequest {
                 event,
+                kind: NudgeKind::Steer,
                 rendered_nudge: "<atm>test nudge</atm>".to_string(),
                 message_body: "full immutable body".to_string(),
             },
@@ -983,10 +967,10 @@ mod tests {
     fn request_nudge() -> HostNudge {
         let event = request_event();
         HostNudge {
+            kind: NudgeKind::Steer,
             body: event.description.clone(),
             notice_text: format!("📬 from {}\n{}", event.source_address(), event.description),
             event,
-            kind: NudgeKind::Steer,
         }
     }
 
@@ -1004,6 +988,7 @@ mod tests {
     ) -> SpawnedReceiver {
         let (stop_tx, stop_rx) = mpsc::channel();
         let ready_latch = ReceiverReadyLatch::new();
+        let (target_tx, target_rx) = mpsc::sync_channel(1);
         let snapshot = Arc::new(RwLock::new(SessionSnapshot {
             team: TeamName::from_validated(TEST_TEAM),
             agent: AgentName::from_validated(TEST_QA),
@@ -1020,12 +1005,16 @@ mod tests {
             observability: Arc::new(NoopObservability),
             stop_rx,
             ready_tx: Some(ready_latch.notifier()),
+            receiver_target_tx: Some(target_tx),
         };
         let join = std::thread::spawn(move || run_graft_receiver_loop(ctx));
         ready_latch
             .wait_until_listening(RECEIVE_LOOP_READY_DEADLINE)
             .expect("receiver ready");
-        (stop_tx, join, snapshot)
+        let target = target_rx
+            .recv_timeout(RECEIVE_LOOP_READY_DEADLINE)
+            .expect("receiver target");
+        (stop_tx, join, snapshot, target)
     }
 
     fn stop_receiver(
@@ -1071,18 +1060,24 @@ mod tests {
     }
 
     #[test]
-    fn receiver_listener_binds_at_expected_endpoint() {
+    fn receiver_listener_removes_a_stale_legacy_endpoint_artifact() {
         let paths = test_paths();
-        let endpoint_path = receiver_record_path(&paths);
+        let endpoint_path = legacy_endpoint_path(&paths);
+        fs::create_dir_all(endpoint_path.parent().expect("legacy endpoint parent"))
+            .expect("create legacy endpoint parent");
+        fs::write(&endpoint_path, b"stale endpoint").expect("write stale endpoint");
         let listener = bind_receiver(&paths, None).expect("bind listener");
         assert!(
-            endpoint_path.exists(),
-            "endpoint record should be published"
+            !endpoint_path.exists(),
+            "bind should remove an obsolete endpoint artifact"
         );
         drop(listener);
         assert!(
-            !endpoint_path.exists(),
-            "endpoint record should be removed on drop"
+            paths
+                .workspace_root
+                .join(format!(".atm/graft/{TEST_TEAM}/{TEST_QA}.lock"))
+                .exists(),
+            "the ownership lock file remains after receiver shutdown"
         );
     }
 
@@ -1210,15 +1205,14 @@ mod tests {
     #[test]
     fn receiver_loop_delivers_direct_nudge_and_returns_ack_under_repeated_load() {
         let paths = test_paths();
-        let endpoint_path = receiver_record_path(&paths);
         let injector = Arc::new(RecordingInjector::default());
-        let (stop_tx, join, snapshot) = spawn_receiver(
+        let (stop_tx, join, snapshot, (endpoint, capability)) = spawn_receiver(
             paths.workspace_root.clone(),
             injector.clone() as Arc<dyn HostNudgeInjector>,
         );
 
         for _ in 0..100 {
-            let response = deliver_request(&endpoint_path, request_event());
+            let response = deliver_request(endpoint, &capability, request_event());
             assert_eq!(response, GraftPostSendResponse::Delivered);
         }
         let nudges = injector.nudges.lock().expect("nudges lock");
@@ -1236,41 +1230,8 @@ mod tests {
     }
 
     #[test]
-    fn receiver_loop_restores_a_missing_endpoint_record_before_the_next_delivery() {
-        let paths = test_paths();
-        let endpoint_path = receiver_record_path(&paths);
-        let injector = Arc::new(RecordingInjector::default());
-        let (stop_tx, join, _snapshot) = spawn_receiver(
-            paths.workspace_root.clone(),
-            injector.clone() as Arc<dyn HostNudgeInjector>,
-        );
-
-        fs::remove_file(&endpoint_path).expect("remove published endpoint record");
-        let deadline = std::time::Instant::now() + Duration::from_secs(3);
-        let (_poll_wait_tx, poll_wait_rx) = mpsc::channel();
-        while !endpoint_path.exists() && std::time::Instant::now() < deadline {
-            assert!(
-                !wait_for_stop_or_delay(&poll_wait_rx, GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL),
-                "test-only wait channel must remain open until the endpoint record is restored"
-            );
-        }
-        assert!(
-            endpoint_path.exists(),
-            "receiver must restore a record deleted by an external lifecycle event"
-        );
-
-        assert_eq!(
-            deliver_request(&endpoint_path, request_event()),
-            GraftPostSendResponse::Delivered
-        );
-        assert_eq!(injector.nudges.lock().expect("nudges lock").len(), 1);
-        stop_receiver(stop_tx, join);
-    }
-
-    #[test]
     fn hard_accept_failure_rebinds_and_resumes_authenticated_delivery() {
         let paths = test_paths();
-        let endpoint_path = receiver_record_path(&paths);
         let injector = Arc::new(RecordingInjector::default());
         let (_stop_tx, stop_rx) = mpsc::channel();
         let snapshot = Arc::new(RwLock::new(SessionSnapshot {
@@ -1289,10 +1250,10 @@ mod tests {
             observability: Arc::new(NoopObservability),
             stop_rx,
             ready_tx: None,
+            receiver_target_tx: None,
         };
         let listener = bind_receiver(&paths, None).expect("bind initial listener");
         let listener = RegisteredGraftReceiver::new(listener, &ctx);
-        let initial_record = fs::read_to_string(&endpoint_path).expect("read initial record");
 
         let listener = recover_after_poll_accept_error(
             &ctx,
@@ -1308,16 +1269,10 @@ mod tests {
             GraftSessionState::Listening,
             "only a successful rebind returns the session to Listening"
         );
-        assert_ne!(
-            fs::read_to_string(&endpoint_path).expect("read rebound record"),
-            initial_record,
-            "rebind must republish a fresh capability record"
-        );
-
-        let sender = std::thread::spawn({
-            let endpoint_path = endpoint_path.clone();
-            move || deliver_request(&endpoint_path, request_event())
-        });
+        let endpoint = listener.listener.local_addr().expect("rebound endpoint");
+        let capability = listener.listener.capability().clone();
+        let sender =
+            std::thread::spawn(move || deliver_request(endpoint, &capability, request_event()));
         let mut stream = loop {
             if let Some(stream) = listener
                 .listener
@@ -1362,6 +1317,7 @@ mod tests {
             observability: Arc::new(StateObservability { states: state_tx }),
             stop_rx,
             ready_tx: None,
+            receiver_target_tx: None,
         };
         let recovery = std::thread::spawn(move || recover_graft_receiver(&ctx));
 
@@ -1417,11 +1373,10 @@ mod tests {
     #[test]
     fn receiver_loop_returns_typed_error_when_injector_fails() {
         let paths = test_paths();
-        let endpoint_path = receiver_record_path(&paths);
-        let (stop_tx, join, snapshot) =
+        let (stop_tx, join, snapshot, (endpoint, capability)) =
             spawn_receiver(paths.workspace_root.clone(), Arc::new(FailingInjector));
 
-        let response = deliver_request(&endpoint_path, request_event());
+        let response = deliver_request(endpoint, &capability, request_event());
 
         match response {
             GraftPostSendResponse::Delivered => panic!("expected typed failure response"),
@@ -1598,18 +1553,13 @@ mod tests {
         true
     }
 
-    // AC1 (ATM-QA-101 / ATM-QA-AQ16-001): bind with a reachable daemon
-    // registers exactly one lease whose team/agent (via the registry's
-    // lookup key), endpoint, capability, and owner generation literally
-    // match both the bound listener's in-memory accessors *and* the record
-    // actually persisted to disk — not merely a registration count and a
-    // generation-equality check incidental to a different scenario (AC5's
-    // displacement test asserts inequality against a *stale* lease, never
-    // equality against the bind inputs themselves). This test reads and
-    // decodes the on-disk JSON record via
-    // `read_graft_receiver_endpoint_record_for_test` rather than trusting
-    // that the file was populated from the same local variables as the
-    // in-memory accessors.
+    // AC1 (ATM-QA-101): bind with a reachable daemon registers exactly one
+    // lease whose team/agent (via the registry's lookup key), endpoint,
+    // capability, and owner generation literally match the values
+    // `GraftReceiverListener::bind` produced for this receiver — not merely
+    // a registration count and a generation-equality check incidental to a
+    // different scenario (AC5's displacement test asserts inequality against
+    // a *stale* lease, never equality against the bind inputs themselves).
     #[test]
     fn ac1_bind_with_reachable_daemon_registers_lease_matching_bind_inputs() {
         let paths = test_paths();
@@ -1627,27 +1577,6 @@ mod tests {
         let expected_capability = listener.capability().clone();
         let expected_generation = listener.owner_generation().clone();
 
-        // Read the on-disk record `bind()` just wrote, before it can be
-        // mutated by anything else, so the assertions below diff the
-        // literal persisted bytes rather than a reconstructed value.
-        let record_path = receiver_record_path(&paths);
-        let on_disk_record = read_graft_receiver_endpoint_record_for_test(&record_path)
-            .expect("bind() must have published a decodable on-disk record");
-        assert_eq!(
-            on_disk_record.loopback, expected_endpoint,
-            "the on-disk record's endpoint must literally match the bound listener's endpoint"
-        );
-        assert_eq!(
-            on_disk_record.capability_base64url,
-            expected_capability.to_base64url(),
-            "the on-disk record's capability must literally match the bound listener's capability"
-        );
-        assert_eq!(
-            on_disk_record.owner_generation,
-            expected_generation.as_str(),
-            "the on-disk record's owner generation must literally match the bound listener's generation"
-        );
-
         let ctx = GraftReceiverLoopContext {
             graft_root: paths.workspace_root.clone(),
             team: team.clone(),
@@ -1659,6 +1588,7 @@ mod tests {
             observability: Arc::new(NoopObservability),
             stop_rx,
             ready_tx: None,
+            receiver_target_tx: None,
         };
         let mut receiver = RegisteredGraftReceiver::new(listener, &ctx);
         receiver.announce().expect("announce this generation");
@@ -1683,43 +1613,24 @@ mod tests {
             lease.owner_generation, expected_generation,
             "the registered lease's owner generation must literally match the bound listener's generation"
         );
-
-        // Diff the daemon-registered lease against the literal on-disk
-        // record too: both must describe the exact same endpoint the file
-        // publishes, not just the same in-memory listener accessors.
-        assert_eq!(
-            lease.endpoint, on_disk_record.loopback,
-            "the registered lease's endpoint must match the on-disk record's endpoint"
-        );
-        assert_eq!(
-            lease.capability.to_base64url(),
-            on_disk_record.capability_base64url,
-            "the registered lease's capability must match the on-disk record's capability"
-        );
-        assert_eq!(
-            lease.owner_generation.as_str(),
-            on_disk_record.owner_generation,
-            "the registered lease's owner generation must match the on-disk record's owner generation"
-        );
     }
 
-    // AC2: bind with the daemon down succeeds (the file record keeps the
-    // receiver functional), and the next tick after the daemon returns
-    // registers the lease with no manual step.
+    // AC2: bind with the daemon down succeeds (AQ1.8: the receiver has no
+    // file record to fall back on at all — the loopback bind and flock
+    // acquisition alone keep it functional), and the next tick after the
+    // daemon returns registers the lease with no manual step.
     #[test]
     fn ac2_bind_with_daemon_down_succeeds_and_registers_once_daemon_returns() {
         let paths = test_paths();
-        let endpoint_path = receiver_record_path(&paths);
         let registry = FakeGraftRegistry::new(false);
-        let (stop_tx, join, _snapshot) = spawn_receiver_with_client(
+        let (stop_tx, join, _snapshot, _target) = spawn_receiver_with_client(
             paths.workspace_root.clone(),
             Arc::new(RecordingInjector::default()),
             Some(registry.client()),
         );
-        assert!(
-            endpoint_path.exists(),
-            "file record must publish even though the daemon is down"
-        );
+        // Reaching here already proves the bind (loopback socket + flock)
+        // succeeded despite the daemon being unreachable: spawn_receiver_with_client
+        // blocks on both the ready latch and the receiver-target channel.
         assert_eq!(registry.registration_count(), 0);
 
         registry.set_online(true);
@@ -1781,7 +1692,7 @@ mod tests {
             },
         )));
 
-        let (stop_tx, join, _snapshot) = spawn_receiver_with_client(
+        let (stop_tx, join, _snapshot, _target) = spawn_receiver_with_client(
             paths.workspace_root.clone(),
             Arc::new(RecordingInjector::default()),
             Some(client),
@@ -1841,7 +1752,7 @@ mod tests {
         registry.seed_stale_lease(team.clone(), agent.clone(), stale_generation.clone());
         let stale_lease = registry.lease(&team, &agent).expect("seeded stale lease");
 
-        let (stop_tx, join, _snapshot) = spawn_receiver_with_client(
+        let (stop_tx, join, _snapshot, _target) = spawn_receiver_with_client(
             paths.workspace_root.clone(),
             Arc::new(RecordingInjector::default()),
             Some(registry.client()),
@@ -1883,11 +1794,10 @@ mod tests {
     #[test]
     fn refresh_tick_observing_notowner_on_a_live_receiver_sets_displaced_and_stops_refreshing() {
         let paths = test_paths();
-        let endpoint_path = receiver_record_path(&paths);
         let registry = FakeGraftRegistry::new(true);
         let team = TeamName::from_validated(TEST_TEAM);
         let agent = AgentName::from_validated(TEST_QA);
-        let (stop_tx, join, _snapshot) = spawn_receiver_with_client(
+        let (stop_tx, join, _snapshot, (endpoint, capability)) = spawn_receiver_with_client(
             paths.workspace_root.clone(),
             Arc::new(RecordingInjector::default()),
             Some(registry.client()),
@@ -1918,7 +1828,7 @@ mod tests {
         // The accept loop must never crash once displaced: deliver a nudge
         // through the still-running receiver.
         assert_eq!(
-            deliver_request(&endpoint_path, request_event()),
+            deliver_request(endpoint, &capability, request_event()),
             GraftPostSendResponse::Delivered,
             "the accept loop must keep delivering after its refresh path is displaced"
         );
@@ -1953,10 +1863,9 @@ mod tests {
     #[test]
     fn ac6_sustained_connection_load_never_starves_the_lease_refresh_cadence() {
         let paths = test_paths();
-        let endpoint_path = receiver_record_path(&paths);
         let registry = FakeGraftRegistry::new(true);
         let injector = Arc::new(RecordingInjector::default());
-        let (stop_tx, join, _snapshot) = spawn_receiver_with_client(
+        let (stop_tx, join, _snapshot, (endpoint, capability)) = spawn_receiver_with_client(
             paths.workspace_root.clone(),
             injector.clone() as Arc<dyn HostNudgeInjector>,
             Some(registry.client()),
@@ -1974,7 +1883,7 @@ mod tests {
         let mut delivered = 0usize;
         while Instant::now() < deadline {
             assert_eq!(
-                deliver_request(&endpoint_path, request_event()),
+                deliver_request(endpoint, &capability, request_event()),
                 GraftPostSendResponse::Delivered
             );
             delivered += 1;
@@ -2005,16 +1914,15 @@ mod tests {
     #[test]
     fn ac7_refresh_failure_injected_mid_loop_never_terminates_the_accept_loop() {
         let paths = test_paths();
-        let endpoint_path = receiver_record_path(&paths);
         let registry = FakeGraftRegistry::new(true);
         let injector = Arc::new(RecordingInjector::default());
-        let (stop_tx, join, snapshot) = spawn_receiver_with_client(
+        let (stop_tx, join, snapshot, (endpoint, capability)) = spawn_receiver_with_client(
             paths.workspace_root.clone(),
             injector.clone() as Arc<dyn HostNudgeInjector>,
             Some(registry.client()),
         );
         assert_eq!(
-            deliver_request(&endpoint_path, request_event()),
+            deliver_request(endpoint, &capability, request_event()),
             GraftPostSendResponse::Delivered
         );
 
@@ -2030,7 +1938,7 @@ mod tests {
             "an injected refresh failure must not crash or degrade the accept loop"
         );
         assert_eq!(
-            deliver_request(&endpoint_path, request_event()),
+            deliver_request(endpoint, &capability, request_event()),
             GraftPostSendResponse::Delivered,
             "the accept loop must keep accepting connections after an injected refresh failure"
         );
@@ -2079,7 +1987,7 @@ mod tests {
             },
         )));
 
-        let (stop_tx, join, _snapshot) = spawn_receiver_with_client(
+        let (stop_tx, join, _snapshot, _target) = spawn_receiver_with_client(
             paths.workspace_root.clone(),
             Arc::new(RecordingInjector::default()),
             Some(client),
@@ -2135,6 +2043,7 @@ mod tests {
             observability: Arc::new(NoopObservability),
             stop_rx,
             ready_tx: None,
+            receiver_target_tx: None,
         };
         let listener = bind_receiver(&paths, None).expect("bind listener");
         let mut receiver = RegisteredGraftReceiver::new(listener, &ctx);

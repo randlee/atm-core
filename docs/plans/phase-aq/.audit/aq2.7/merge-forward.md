@@ -1,15 +1,19 @@
 # AQ2.7 merge-forward record
 
-Before QA-2 implementation, the branch was current with its remote and then
-merged the requested upstream branches using merge commits:
+The branch contains the requested forward merges of `origin/integrate/phase-aq`
+through `334e5ca89` (`385422bf5`, then `bd9fb8c6d`). The later merge commit
+`def0365ee` brought in a sibling feature branch and reintroduced the retired
+file-record implementation into the graft boundary.
+
+The correction for this pass did not merge another branch. It takes
+`origin/integrate/phase-aq` wholesale for the file-record-free versions of:
 
 ```text
-git pull --no-rebase origin feature/aq-2-7-herdr-queue-wake
-git fetch origin integrate/phase-aq feature/aq-1-6-graft-receiver-registration-client
-git merge --no-edit origin/integrate/phase-aq
-git merge --no-edit origin/feature/aq-1-6-graft-receiver-registration-client
+crates/atm-core/src/graft.rs
+crates/atm-graft/src/runtime/mod.rs
+crates/atm-graft/src/lib.rs
 ```
 
-The AQ1.6 merge had conflicts in the graft boundary files listed in
-`qa2-validation.md`; they were resolved in merge commit `4a8bd241d` and
-pushed immediately. No rebase or force push was used.
+The dependent `crates/atm/src/commands/internal_nudge.rs` caller was aligned to
+the same registry-lease API. AQ2.7 Herdr, HTTP-runtime, and daemon-bootstrap
+files remain on this branch's versions. No rebase or force push was used.

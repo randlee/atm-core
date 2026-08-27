@@ -9,8 +9,8 @@
 
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
-use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
-use std::path::{Path, PathBuf};
+use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::path::Path;
 use std::time::Duration;
 
 use fs4::fs_std::FileExt;
@@ -20,23 +20,19 @@ use ulid::Ulid;
 
 use crate::api::RequestDeadline;
 use crate::boundary::{
-    BuiltInPostSendDispatch, GraftNudgeTarget, PostSendBuiltInTarget, PostSendEmissionPath,
-    PostSendHookEvent,
+    BuiltInPostSendDispatch, GraftNudgeTarget, NudgeKind, PostSendBuiltInTarget,
+    PostSendEmissionPath, PostSendHookEvent,
 };
 use crate::error::{AtmError, AtmErrorCode};
 use crate::list::{ListOutcome, ListQuery};
 use crate::local_http::LocalCapability;
 use crate::protocol::OwnerGeneration;
 use crate::read::{ReadOutcome, ReadQuery};
-use crate::schema::canonical_graft_root;
 use crate::send::{SendOutcome, SendRequest};
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::types::{AgentName, ChatId, TeamName};
 
 pub const MAX_GRAFT_POST_SEND_FRAME_BYTES: usize = 1024 * 1024;
-
-/// Schema version stamped into the graft receiver endpoint record.
-pub const GRAFT_RECEIVER_RECORD_SCHEMA_VERSION: u8 = 2;
 
 /// Interval between non-blocking accept polls in the receiver loop.
 pub const GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(25);
@@ -44,11 +40,20 @@ pub const GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GraftPostSendRequest {
     pub event: PostSendHookEvent,
+    /// The ATM nudge taxonomy kind carried over the graft channel. Missing
+    /// kind is the pre-AQ2 wire shape and is interpreted as the historical
+    /// immediate steer.
+    #[serde(default = "default_graft_kind")]
+    pub kind: NudgeKind,
     /// Canonical database-resolved `<atm …>` nudge text. The receiver must
     /// inject this text, never substitute the stored message description.
     pub rendered_nudge: String,
     /// Immutable message content associated with `rendered_nudge`.
     pub message_body: String,
+}
+
+const fn default_graft_kind() -> NudgeKind {
+    NudgeKind::Steer
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -98,32 +103,60 @@ where
             "published receiver transport received a non-graft target",
         ));
     };
-    let Some(member) = runtime.load_roster_member(recipient_team, recipient)? else {
+    if runtime
+        .load_roster_member(recipient_team, recipient)?
+        .is_none()
+    {
         return Err(AtmError::new(
             AtmErrorCode::PostSendGraftUnavailable,
             "receiver endpoint is unavailable because the recipient is absent from the roster",
         ));
     };
-    let root = canonical_graft_root(&member.metadata_json).ok_or_else(|| {
-        AtmError::new(
-            AtmErrorCode::PostSendGraftUnavailable,
-            "receiver endpoint is unavailable because the recipient has no published root",
-        )
-    })?;
-    let endpoint_record_path =
-        graft_receiver_record_path_from_root(root.as_path(), recipient_team, recipient);
-    match deliver_graft_post_send_with_deadline(
-        &endpoint_record_path,
+    let Some(lease) = runtime.graft_receiver_lease(recipient_team, recipient)? else {
+        return Err(graft_receiver_not_registered_error(
+            recipient_team,
+            recipient,
+        ));
+    };
+    let response = deliver_graft_post_send_with_deadline(
+        lease.endpoint,
+        &lease.capability,
         &GraftPostSendRequest {
             event: dispatch.event.clone(),
+            kind: dispatch.kind,
             rendered_nudge: rendered_nudge.clone(),
             message_body: message_body.clone(),
         },
         deadline,
-    )? {
+    );
+    if let Err(error) = &response
+        && error.code() == AtmErrorCode::PostSendGraftUnavailable
+        && let Err(mark_error) = runtime.mark_graft_receiver_unreachable(
+            recipient_team,
+            recipient,
+            &lease.owner_generation,
+            chrono::Utc::now(),
+        )
+    {
+        tracing::warn!(
+            recipient = %recipient,
+            recipient_team = %recipient_team,
+            error_code = %mark_error.code(),
+            error_message = %mark_error.message(),
+            "failed to record unreachable graft receiver"
+        );
+    }
+    match response? {
         GraftPostSendResponse::Delivered => Ok(PostSendEmissionPath::GraftPort),
         GraftPostSendResponse::Error(error) => Err(error),
     }
+}
+
+pub fn graft_receiver_not_registered_error(team: &TeamName, agent: &AgentName) -> AtmError {
+    AtmError::new(
+        AtmErrorCode::PostSendGraftUnavailable,
+        format!("graft receiver is not registered for {agent}@{team}"),
+    )
 }
 
 fn remaining_hook_budget(
@@ -144,12 +177,11 @@ fn remaining_hook_budget(
 }
 
 fn deliver_graft_post_send_with_deadline(
-    record_path: &Path,
+    endpoint: SocketAddr,
+    capability: &LocalCapability,
     request: &GraftPostSendRequest,
     deadline: RequestDeadline,
 ) -> Result<GraftPostSendResponse, AtmError> {
-    let record = read_receiver_record(record_path)?;
-    let endpoint = record.endpoint()?;
     let connect_deadline = remaining_hook_budget(deadline, RECEIVER_HOOK_CONNECT_DEADLINE)?;
     let mut stream = TcpStream::connect_timeout(&endpoint, connect_deadline).map_err(|source| {
         AtmError::new(
@@ -164,7 +196,7 @@ fn deliver_graft_post_send_with_deadline(
     let io_deadline = remaining_hook_budget(deadline, RECEIVER_HOOK_IO_DEADLINE)?;
     apply_stream_deadlines(&stream, io_deadline)?;
     let wire = GraftPostSendWireRequest {
-        capability_base64url: record.capability_base64url.clone(),
+        capability_base64url: capability.to_base64url(),
         request: request.clone(),
     };
     write_graft_post_send_message(
@@ -194,76 +226,21 @@ pub struct GraftPostSendWireRequest {
     pub request: GraftPostSendRequest,
 }
 
-/// Owner-readable publication describing where an embedded agent listens for
-/// post-send nudges.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-struct GraftReceiverEndpointRecord {
-    schema_version: u8,
-    owner_generation: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    owner_chat_id: Option<ChatId>,
-    loopback: SocketAddr,
-    capability_base64url: String,
-}
-
-impl GraftReceiverEndpointRecord {
-    fn endpoint(&self) -> Result<SocketAddr, AtmError> {
-        if self.schema_version != GRAFT_RECEIVER_RECORD_SCHEMA_VERSION {
-            return Err(AtmError::validation(format!(
-                "unsupported graft receiver endpoint record schema version {}",
-                self.schema_version
-            )));
-        }
-        if self.owner_generation.parse::<Ulid>().is_err() {
-            return Err(AtmError::validation(
-                "graft receiver endpoint record contains an invalid owner generation",
-            ));
-        }
-        if !self.loopback.ip().is_loopback() {
-            return Err(AtmError::validation(
-                "graft receiver endpoint record contains a non-loopback address",
-            ));
-        }
-        Ok(self.loopback)
-    }
-}
-
-/// Absolute path of the loopback endpoint record for an embedded agent.
-pub fn graft_receiver_record_path_from_home(
-    home_dir: &Path,
-    team: &TeamName,
-    agent: &AgentName,
-) -> PathBuf {
-    graft_receiver_record_path_from_root(home_dir, team, agent)
-}
-
-/// Absolute path of a loopback endpoint record under the canonical graft root.
-///
-/// The root is intentionally supplied by the caller so publishers and daemon
-/// resolvers share exactly the same path construction once roster metadata has
-/// selected the recipient's authoritative workspace root.
-pub fn graft_receiver_record_path_from_root(
-    graft_root: &Path,
-    team: &TeamName,
-    agent: &AgentName,
-) -> PathBuf {
-    graft_root
-        .join(".atm")
-        .join("graft")
-        .join(team.as_str())
-        .join(format!("{agent}.json"))
-}
-
 /// Absolute path of the receiver ownership lock under the canonical graft root.
 ///
-/// The lock remains adjacent to the legacy JSON record so existing ownership
-/// files stay valid while callers stop deriving the record path themselves.
+/// The lock retains the historical `.atm/graft/<team>/<agent>.lock` location
+/// so existing same-host ownership files remain valid after endpoint
+/// publication moved entirely into the daemon registry.
 pub fn graft_receiver_lock_path_from_root(
     graft_root: &Path,
     team: &TeamName,
     agent: &AgentName,
-) -> PathBuf {
-    graft_receiver_record_path_from_root(graft_root, team, agent).with_extension("lock")
+) -> std::path::PathBuf {
+    graft_root
+        .join(".atm")
+        .join("graft")
+        .join(team.as_str())
+        .join(format!("{agent}.lock"))
 }
 
 pub fn write_graft_post_send_message<T: Serialize>(
@@ -312,14 +289,12 @@ pub fn read_graft_post_send_message<T: DeserializeOwned>(
 /// not loopback are dropped without being served.
 pub struct GraftReceiverListener {
     listener: TcpListener,
-    record_path: PathBuf,
     owner_generation: OwnerGeneration,
     capability: LocalCapability,
-    record: GraftReceiverEndpointRecord,
     _ownership: ReceiverOwnershipGuard,
 }
 
-/// Process-lifetime exclusive ownership of one receiver record path.
+/// Process-lifetime exclusive ownership of one receiver identity.
 ///
 /// The OS releases this advisory lock when a crashed receiver exits, which is
 /// why endpoint-record existence is never treated as the ownership authority.
@@ -328,7 +303,7 @@ struct ReceiverOwnershipGuard {
 }
 
 impl ReceiverOwnershipGuard {
-    fn acquire(lock_path: &Path, record_path: &Path) -> Result<Self, AtmError> {
+    fn acquire(lock_path: &Path, team: &TeamName, agent: &AgentName) -> Result<Self, AtmError> {
         let lock_file = OpenOptions::new()
             .create(true)
             .read(true)
@@ -346,14 +321,14 @@ impl ReceiverOwnershipGuard {
             })?;
         match lock_file.try_lock_exclusive() {
             Ok(true) => {
-                tracing::info!(record_path = %record_path.display(), action = "receiver_ownership", outcome = "acquired", "graft receiver ownership acquired");
+                tracing::info!(team = %team, agent = %agent, action = "receiver_ownership", outcome = "acquired", "graft receiver ownership acquired");
                 Ok(Self { lock_file })
             }
             Ok(false) => {
-                tracing::warn!(record_path = %record_path.display(), action = "receiver_ownership", outcome = "conflict", "graft receiver ownership already active");
+                tracing::warn!(team = %team, agent = %agent, action = "receiver_ownership", outcome = "conflict", "graft receiver ownership already active");
                 Err(AtmError::new(
                     AtmErrorCode::GraftReceiverAlreadyActive,
-                    graft_receiver_identity(record_path),
+                    format!("receiver already active for {agent}@{team}"),
                 ))
             }
             Err(source) => Err(AtmError::daemon_unavailable_with_cause(
@@ -374,41 +349,31 @@ impl Drop for ReceiverOwnershipGuard {
 }
 
 impl GraftReceiverListener {
-    /// Bind the loopback receiver and publish its endpoint record.
+    /// Bind the loopback receiver and acquire its same-host ownership lock.
     ///
     /// # Errors
     ///
     /// Returns [`AtmError`] when the loopback socket cannot be bound or the
-    /// endpoint record cannot be published for the owner.
+    /// ownership lock or the loopback socket cannot be acquired.
     pub fn bind(
         graft_root: &Path,
         team: &TeamName,
         agent: &AgentName,
-        owner_chat_id: Option<ChatId>,
+        _owner_chat_id: Option<ChatId>,
     ) -> Result<Self, AtmError> {
-        let record_path_buf = graft_receiver_record_path_from_root(graft_root, team, agent);
-        let record_path = record_path_buf.as_path();
         let lock_path = graft_receiver_lock_path_from_root(graft_root, team, agent);
-        prepare_receiver_record_parent(record_path)?;
-        let ownership = ReceiverOwnershipGuard::acquire(&lock_path, record_path)?;
-        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).map_err(|source| {
+        prepare_receiver_lock_parent(&lock_path)?;
+        let ownership = ReceiverOwnershipGuard::acquire(&lock_path, team, agent)?;
+        remove_legacy_endpoint_file(graft_root, team, agent)?;
+        let listener = TcpListener::bind(("127.0.0.1", 0)).map_err(|source| {
             AtmError::daemon_unavailable(format!(
-                "failed to bind graft receiver endpoint for {}",
-                record_path.display()
+                "failed to bind graft receiver endpoint for {agent}@{team}"
             ))
             .with_cause(source)
         })?;
         listener.set_nonblocking(true).map_err(|source| {
             AtmError::daemon_unavailable(format!(
-                "failed to configure non-blocking graft receiver endpoint for {}",
-                record_path.display()
-            ))
-            .with_cause(source)
-        })?;
-        let loopback = listener.local_addr().map_err(|source| {
-            AtmError::daemon_unavailable(format!(
-                "failed to resolve graft receiver endpoint address for {}",
-                record_path.display()
+                "failed to configure non-blocking graft receiver endpoint for {agent}@{team}"
             ))
             .with_cause(source)
         })?;
@@ -419,58 +384,12 @@ impl GraftReceiverListener {
         // re-parse of a raw string on every ~1s refresh tick.
         let owner_generation = OwnerGeneration::new(Ulid::new().to_string())
             .expect("a freshly minted ULID is always a valid owner generation");
-        let record = GraftReceiverEndpointRecord {
-            schema_version: GRAFT_RECEIVER_RECORD_SCHEMA_VERSION,
-            owner_generation: owner_generation.as_str().to_string(),
-            owner_chat_id,
-            loopback,
-            capability_base64url: capability.to_base64url(),
-        };
-        write_receiver_record(record_path, &record)?;
         Ok(Self {
             listener,
-            record_path: record_path_buf,
             owner_generation,
             capability,
-            record,
             _ownership: ownership,
         })
-    }
-
-    /// Restore this listener's endpoint record when an external lifecycle
-    /// event removed it. A successor record is never overwritten: ownership
-    /// remains fail-closed and process-lifetime exclusive.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error when record publication fails or a different owner has
-    /// published a record at this path.
-    pub fn republish_if_missing(&self) -> Result<bool, AtmError> {
-        match fs::exists(&self.record_path).map_err(|source| {
-            AtmError::daemon_unavailable(format!(
-                "failed to inspect graft receiver record at {}",
-                self.record_path.display()
-            ))
-            .with_cause(source)
-        })? {
-            false => {
-                prepare_receiver_record_parent(&self.record_path)?;
-                write_receiver_record(&self.record_path, &self.record)?;
-                tracing::info!(record_path = %self.record_path.display(), action = "receiver_record_republish", outcome = "restored", "graft receiver restored its missing endpoint record");
-                Ok(true)
-            }
-            true => {
-                let current = read_receiver_record(&self.record_path)?;
-                if current.owner_generation == self.owner_generation.as_str() {
-                    Ok(false)
-                } else {
-                    Err(AtmError::new(
-                        AtmErrorCode::GraftReceiverAlreadyActive,
-                        graft_receiver_identity(&self.record_path),
-                    ))
-                }
-            }
-        }
     }
 
     /// Poll for one pending loopback connection without blocking.
@@ -501,10 +420,9 @@ impl GraftReceiverListener {
                 }
             }
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => Ok(None),
-            Err(source) => Err(AtmError::daemon_unavailable(format!(
-                "failed while accepting graft receiver connection at {}",
-                self.record_path.display()
-            ))
+            Err(source) => Err(AtmError::daemon_unavailable(
+                "failed while accepting graft receiver connection",
+            )
             .with_cause(source)),
         }
     }
@@ -575,40 +493,24 @@ impl GraftReceiverListener {
     }
 }
 
-impl Drop for GraftReceiverListener {
-    fn drop(&mut self) {
-        // Only the generation that published this record may remove it. This
-        // prevents an old listener from erasing a successor after a reclaim.
-        if let Ok(record) = read_receiver_record(&self.record_path)
-            && record.owner_generation == self.owner_generation.as_str()
-        {
-            let _ = fs::remove_file(&self.record_path);
-            tracing::info!(record_path = %self.record_path.display(), action = "receiver_record_cleanup", outcome = "removed", "graft receiver removed its owned endpoint record");
-        } else {
-            tracing::info!(record_path = %self.record_path.display(), action = "receiver_record_cleanup", outcome = "retained", "graft receiver retained successor or malformed endpoint record");
-        }
-    }
-}
-
 /// Deliver one post-send nudge to an embedded agent's loopback receiver.
 ///
 /// This is the shared sender used by both the CLI post-send hook and the
-/// daemon dispatcher. It reads the receiver's endpoint record, connects to the
-/// advertised loopback port within `connect_deadline`, and exchanges one
-/// capability-authenticated request/response within `io_deadline`.
+/// daemon dispatcher. It connects to the supplied loopback endpoint within
+/// `connect_deadline`, and exchanges one capability-authenticated
+/// request/response within `io_deadline`.
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] when the record is missing/invalid, the receiver cannot
-/// be reached, or the request/response exchange fails.
+/// Returns [`AtmError`] when the receiver cannot be reached or the
+/// request/response exchange fails.
 pub fn deliver_graft_post_send(
-    record_path: &Path,
+    endpoint: SocketAddr,
+    capability: &LocalCapability,
     request: &GraftPostSendRequest,
     connect_deadline: Duration,
     io_deadline: Duration,
 ) -> Result<GraftPostSendResponse, AtmError> {
-    let record = read_receiver_record(record_path)?;
-    let endpoint = record.endpoint()?;
     let mut stream = TcpStream::connect_timeout(&endpoint, connect_deadline).map_err(|source| {
         AtmError::new(
             AtmErrorCode::PostSendGraftUnavailable,
@@ -621,7 +523,7 @@ pub fn deliver_graft_post_send(
     })?;
     apply_stream_deadlines(&stream, io_deadline)?;
     let wire = GraftPostSendWireRequest {
-        capability_base64url: record.capability_base64url.clone(),
+        capability_base64url: capability.to_base64url(),
         request: request.clone(),
     };
     write_graft_post_send_message(
@@ -656,8 +558,8 @@ fn apply_stream_deadlines(stream: &TcpStream, io_deadline: Duration) -> Result<(
     Ok(())
 }
 
-fn prepare_receiver_record_parent(record_path: &Path) -> Result<(), AtmError> {
-    if let Some(parent) = record_path.parent() {
+fn prepare_receiver_lock_parent(lock_path: &Path) -> Result<(), AtmError> {
+    if let Some(parent) = lock_path.parent() {
         fs::create_dir_all(parent).map_err(|source| {
             AtmError::daemon_unavailable(format!(
                 "failed to prepare graft receiver directory {}",
@@ -669,121 +571,28 @@ fn prepare_receiver_record_parent(record_path: &Path) -> Result<(), AtmError> {
     Ok(())
 }
 
-fn graft_receiver_identity(record_path: &Path) -> String {
-    let agent = record_path
-        .file_stem()
-        .and_then(|value| value.to_str())
-        .unwrap_or("unknown-agent");
-    let team = record_path
-        .parent()
-        .and_then(Path::file_name)
-        .and_then(|value| value.to_str())
-        .unwrap_or("unknown-team");
-    format!(
-        "receiver already active for {agent}@{team} ({})",
-        record_path.display()
-    )
-}
-
-/// Restrict the endpoint record to the owner on Unix.
-///
-/// The record carries the capability token, so it must not be group/world
-/// readable. On Windows the record inherits the user profile ACL and the
-/// loopback bind plus per-connection capability remain the authenticating gate.
-#[cfg(unix)]
-fn apply_owner_only_record_mode(options: &mut fs::OpenOptions) {
-    use std::os::unix::fs::OpenOptionsExt;
-    options.mode(0o600);
-}
-
-#[cfg(not(unix))]
-fn apply_owner_only_record_mode(_options: &mut fs::OpenOptions) {}
-
-fn write_receiver_record(
-    record_path: &Path,
-    record: &GraftReceiverEndpointRecord,
+fn remove_legacy_endpoint_file(
+    graft_root: &Path,
+    team: &TeamName,
+    agent: &AgentName,
 ) -> Result<(), AtmError> {
-    let bytes = serde_json::to_vec(record)?;
-    let mut options = fs::OpenOptions::new();
-    options.write(true).create(true).truncate(true);
-    apply_owner_only_record_mode(&mut options);
-    let mut file = options.open(record_path).map_err(|source| {
-        AtmError::daemon_unavailable(format!(
-            "failed to publish graft receiver endpoint record at {}",
-            record_path.display()
+    let path = graft_root
+        .join(".atm")
+        .join("graft")
+        .join(team.as_str())
+        .join(format!("{agent}.json"));
+    match fs::remove_file(&path) {
+        Ok(()) => {
+            tracing::info!(path = %path.display(), action = "legacy_endpoint_cleanup", outcome = "removed", "removed obsolete graft endpoint artifact");
+            Ok(())
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(source) => Err(AtmError::daemon_unavailable(format!(
+            "failed to remove obsolete graft endpoint artifact at {}",
+            path.display()
         ))
-        .with_cause(source)
-    })?;
-    file.write_all(&bytes).map_err(|source| {
-        AtmError::daemon_unavailable(format!(
-            "failed to write graft receiver endpoint record at {}",
-            record_path.display()
-        ))
-        .with_cause(source)
-    })
-}
-
-fn read_receiver_record(record_path: &Path) -> Result<GraftReceiverEndpointRecord, AtmError> {
-    let bytes = fs::read(record_path).map_err(|source| {
-        AtmError::new(
-            AtmErrorCode::PostSendGraftUnavailable,
-            format!(
-                "graft receiver endpoint record is unavailable at {}",
-                record_path.display()
-            ),
-        )
-        .with_cause(source)
-    })?;
-    let record: GraftReceiverEndpointRecord = serde_json::from_slice(&bytes).map_err(|source| {
-        AtmError::validation(format!(
-            "failed to decode graft receiver endpoint record at {}",
-            record_path.display()
-        ))
-        .with_cause(source)
-    })?;
-    // Decode fail-closed: old schemas and malformed generations are never
-    // returned as an apparently usable receiver record.
-    record.endpoint()?;
-    Ok(record)
-}
-
-/// Test-only snapshot of a graft receiver endpoint record's persisted fields.
-///
-/// [`GraftReceiverEndpointRecord`] is private, so sibling crates' tests
-/// (e.g. `atm-graft`'s bind/announce acceptance test) cannot name it
-/// directly. This owned, public snapshot exists solely to let those tests
-/// literally diff what [`GraftReceiverListener::bind`] wrote to disk against
-/// its own in-memory accessors, rather than trusting they were populated
-/// from the same local variables.
-#[cfg(any(test, feature = "test-utils"))]
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[doc(hidden)]
-pub struct GraftReceiverEndpointRecordForTest {
-    pub loopback: SocketAddr,
-    pub capability_base64url: String,
-    pub owner_generation: String,
-}
-
-/// Read and decode the on-disk graft receiver endpoint record at `record_path`.
-///
-/// Test-only: exposes the record's raw persisted fields for literal equality
-/// assertions in sibling-crate tests. Production code must go through
-/// [`deliver_graft_post_send`] instead.
-///
-/// # Errors
-///
-/// Returns [`AtmError`] when the record cannot be read or decoded.
-#[cfg(any(test, feature = "test-utils"))]
-#[doc(hidden)]
-pub fn read_graft_receiver_endpoint_record_for_test(
-    record_path: &Path,
-) -> Result<GraftReceiverEndpointRecordForTest, AtmError> {
-    let record = read_receiver_record(record_path)?;
-    Ok(GraftReceiverEndpointRecordForTest {
-        loopback: record.loopback,
-        capability_base64url: record.capability_base64url,
-        owner_generation: record.owner_generation,
-    })
+        .with_cause(source)),
+    }
 }
 
 /// Open unary client surface for embedded ATM consumers.
@@ -822,23 +631,30 @@ pub trait AtmGraftClient: Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::{
-        AtmGraftClient, GRAFT_RECEIVER_RECORD_SCHEMA_VERSION, GraftPostSendRequest,
-        GraftPostSendResponse, GraftReceiverEndpointRecord, GraftReceiverListener,
-        RECEIVER_HOOK_RESULT_HANDOFF_GRACE, deliver_graft_post_send,
-        graft_receiver_record_path_from_home, read_receiver_record, remaining_hook_budget,
-        write_receiver_record,
+        AtmGraftClient, GraftPostSendRequest, GraftPostSendResponse, GraftPostSendWireRequest,
+        GraftReceiverListener, RECEIVER_HOOK_RESULT_HANDOFF_GRACE, deliver_graft_post_send,
+        deliver_published_receiver_hook, graft_receiver_lock_path_from_root, remaining_hook_budget,
     };
     use crate::api::RequestDeadline;
-    use crate::boundary::PostSendHookEvent;
+    use crate::boundary::{
+        BuiltInPostSendDispatch, GraftNudgeTarget, NudgeKind, PostSendBuiltInTarget,
+        PostSendEmissionPath, PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
+    };
+    use crate::config::AtmConfig;
+    use crate::delivery_policy::DeliveryRecipientSnapshot;
     use crate::error::AtmError;
+    use crate::protocol::OwnerGeneration;
     use crate::read::{ReadOutcome, ReadQuery};
-    use crate::schema::AtmMessageId;
+    use crate::schema::{AtmMessageId, InboxMessage};
     use crate::send::{SendOutcome, SendRequest};
+    use crate::service_runtime::RetainedServiceRuntime;
     use crate::test_support::{TEST_LEAD, TEST_QA, TEST_TEAM};
-    use crate::types::{AgentName, ChatId, TeamName};
+    use crate::types::{AgentName, ChatId, IsoTimestamp, ModelName, TeamName};
+    use atm_storage::AgentType;
     use std::fs;
     use std::net::TcpStream;
     use std::path::Path;
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tempfile::TempDir;
 
@@ -909,11 +725,6 @@ mod tests {
     #[test]
     fn loopback_receiver_round_trips_a_capability_authenticated_request() {
         let tempdir = TempDir::new().expect("tempdir");
-        let record_path = graft_receiver_record_path_from_home(
-            tempdir.path(),
-            &TeamName::from_validated(TEST_TEAM),
-            &AgentName::from_validated(TEST_QA),
-        );
         let listener = bind_listener(
             tempdir.path(),
             &TeamName::from_validated(TEST_TEAM),
@@ -921,17 +732,19 @@ mod tests {
             None,
         )
         .expect("bind listener");
-
         let request = GraftPostSendRequest {
             event: test_event(),
+            kind: NudgeKind::Steer,
             rendered_nudge: "<atm>test nudge</atm>".to_string(),
             message_body: "full immutable body".to_string(),
         };
+        let endpoint = listener.local_addr().expect("local addr");
+        let capability = listener.capability().clone();
         let sender = std::thread::spawn({
-            let record_path = record_path.clone();
             move || {
                 deliver_graft_post_send(
-                    &record_path,
+                    endpoint,
+                    &capability,
                     &request,
                     Duration::from_secs(1),
                     Duration::from_secs(3),
@@ -951,6 +764,7 @@ mod tests {
         assert_eq!(received.rendered_nudge, "<atm>test nudge</atm>");
         assert_eq!(received.message_body, "full immutable body");
         assert_eq!(received.event.description, "loopback graft transport");
+        assert_eq!(received.kind, NudgeKind::Steer);
         listener
             .write_response(&mut stream, &GraftPostSendResponse::Delivered)
             .expect("write response");
@@ -960,37 +774,37 @@ mod tests {
     }
 
     #[test]
-    fn receiver_republishes_its_record_after_external_removal() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let record_path = graft_receiver_record_path_from_home(
-            tempdir.path(),
-            &TeamName::from_validated(TEST_TEAM),
-            &AgentName::from_validated(TEST_QA),
-        );
-        let listener = bind_listener(
-            tempdir.path(),
-            &TeamName::from_validated(TEST_TEAM),
-            &AgentName::from_validated(TEST_QA),
-            None,
-        )
-        .expect("bind listener");
-        let expected = read_receiver_record(&record_path).expect("read published record");
+    fn pre_aq2_wire_request_defaults_to_steer_kind() {
+        let event = test_event();
+        let old_wire = serde_json::json!({
+            "capability_base64url": "capability",
+            "request": {
+                "event": event,
+                "rendered_nudge": "<atm>legacy</atm>",
+                "message_body": "legacy body"
+            }
+        });
+        let decoded: GraftPostSendWireRequest =
+            serde_json::from_value(old_wire).expect("old wire shape remains readable");
+        assert_eq!(decoded.request.kind, NudgeKind::Steer);
+    }
 
-        fs::remove_file(&record_path).expect("remove endpoint record");
-        assert!(
-            listener
-                .republish_if_missing()
-                .expect("restore missing endpoint record")
-        );
-        assert_eq!(
-            read_receiver_record(&record_path).expect("read restored record"),
-            expected
-        );
-        assert!(
-            !listener
-                .republish_if_missing()
-                .expect("existing owner record is unchanged")
-        );
+    #[test]
+    fn queue_kind_is_preserved_on_the_evolved_wire_request() {
+        let request = GraftPostSendRequest {
+            event: test_event(),
+            kind: NudgeKind::Queue,
+            rendered_nudge: "<atm>queued</atm>".to_owned(),
+            message_body: "queued body".to_owned(),
+        };
+        let wire = GraftPostSendWireRequest {
+            capability_base64url: "capability".to_owned(),
+            request,
+        };
+        let decoded: GraftPostSendWireRequest =
+            serde_json::from_slice(&serde_json::to_vec(&wire).expect("encode wire"))
+                .expect("decode wire");
+        assert_eq!(decoded.request.kind, NudgeKind::Queue);
     }
 
     #[test]
@@ -1011,6 +825,7 @@ mod tests {
                 capability_base64url: "not-the-real-capability".to_string(),
                 request: GraftPostSendRequest {
                     event: test_event(),
+                    kind: NudgeKind::Steer,
                     rendered_nudge: "<atm>test nudge</atm>".to_string(),
                     message_body: "full immutable body".to_string(),
                 },
@@ -1035,43 +850,20 @@ mod tests {
     }
 
     #[test]
-    fn receiver_record_rejects_old_schema_and_malformed_generation() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let record_path = graft_receiver_record_path_from_home(
-            tempdir.path(),
-            &TeamName::from_validated(TEST_TEAM),
-            &AgentName::from_validated(TEST_QA),
-        );
-        super::prepare_receiver_record_parent(&record_path).expect("record parent");
-        let old = GraftReceiverEndpointRecord {
-            schema_version: GRAFT_RECEIVER_RECORD_SCHEMA_VERSION - 1,
-            owner_generation: ulid::Ulid::new().to_string(),
-            owner_chat_id: None,
-            loopback: "127.0.0.1:7".parse().expect("address"),
-            capability_base64url: "capability".to_string(),
-        };
-        write_receiver_record(&record_path, &old).expect("write old record");
-        assert!(read_receiver_record(&record_path).is_err());
-        let malformed = GraftReceiverEndpointRecord {
-            schema_version: GRAFT_RECEIVER_RECORD_SCHEMA_VERSION,
-            owner_generation: "not-a-ulid".to_string(),
-            ..old
-        };
-        write_receiver_record(&record_path, &malformed).expect("write malformed record");
-        assert!(read_receiver_record(&record_path).is_err());
-    }
-
-    #[test]
-    fn live_owner_conflict_preserves_record_and_owner_metadata() {
+    fn bind_removes_stale_endpoint_artifact_and_keeps_ownership_lock() {
         let tempdir = TempDir::new().expect("tempdir");
         let team = TeamName::from_validated(TEST_TEAM);
         let agent = AgentName::from_validated(TEST_QA);
-        let record_path = graft_receiver_record_path_from_home(tempdir.path(), &team, &agent);
-        let chat_id = "chat-1".parse::<ChatId>().expect("chat id");
-        let first =
-            bind_listener(tempdir.path(), &team, &agent, Some(chat_id.clone())).expect("first");
-        let before = fs::read(&record_path).expect("record bytes");
-        let error = match bind_listener(tempdir.path(), &team, &agent, Some(chat_id)) {
+        let endpoint_path = tempdir
+            .path()
+            .join(".atm/graft")
+            .join(TEST_TEAM)
+            .join(format!("{TEST_QA}.json"));
+        fs::create_dir_all(endpoint_path.parent().expect("endpoint parent")).expect("parent");
+        fs::write(&endpoint_path, b"stale endpoint").expect("stale endpoint");
+        let first = bind_listener(tempdir.path(), &team, &agent, None).expect("first");
+        assert!(!endpoint_path.exists());
+        let error = match bind_listener(tempdir.path(), &team, &agent, None) {
             Ok(_) => panic!("second live owner must fail"),
             Err(error) => error,
         };
@@ -1080,40 +872,8 @@ mod tests {
             crate::error::AtmErrorCode::GraftReceiverAlreadyActive
         );
         assert!(error.message().contains(TEST_QA));
-        assert_eq!(fs::read(&record_path).expect("record bytes"), before);
-        let record = read_receiver_record(&record_path).expect("record");
-        assert!(record.owner_chat_id.is_some());
         drop(first);
-    }
-
-    #[test]
-    fn old_owner_cleanup_cannot_remove_successor_generation() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let record_path = graft_receiver_record_path_from_home(
-            tempdir.path(),
-            &TeamName::from_validated(TEST_TEAM),
-            &AgentName::from_validated(TEST_QA),
-        );
-        let listener = bind_listener(
-            tempdir.path(),
-            &TeamName::from_validated(TEST_TEAM),
-            &AgentName::from_validated(TEST_QA),
-            None,
-        )
-        .expect("owner");
-        let current = read_receiver_record(&record_path).expect("current record");
-        let successor = GraftReceiverEndpointRecord {
-            owner_generation: ulid::Ulid::new().to_string(),
-            ..current
-        };
-        write_receiver_record(&record_path, &successor).expect("publish successor");
-        drop(listener);
-        assert_eq!(
-            read_receiver_record(&record_path)
-                .expect("successor remains")
-                .owner_generation,
-            successor.owner_generation
-        );
+        assert!(graft_receiver_lock_path_from_root(tempdir.path(), &team, &agent).exists());
     }
 
     #[test]
@@ -1138,5 +898,376 @@ mod tests {
             first.local_addr().expect("first addr"),
             second.local_addr().expect("second addr")
         );
+    }
+
+    // ------------------------------------------------------------------
+    // AQ1.7 QA-1 fixes, ported forward through AQ1.8's file-record removal:
+    // AC1/AC3/AC5/AC6 coverage for deliver_published_receiver_hook against
+    // the registry lease alone (there is no legacy file record left to
+    // reference at all after this sprint).
+    // ------------------------------------------------------------------
+
+    fn roster_entry(team: &TeamName, agent: &AgentName) -> RosterEntry {
+        RosterEntry {
+            team_name: team.clone(),
+            agent_name: agent.clone(),
+            member_kind: RosterMemberKind::Permanent,
+            harness: RosterHarness::CodexCli,
+            agent_type: AgentType::default(),
+            model: ModelName::default(),
+            recipient_pane_id: None,
+            metadata_json: serde_json::Map::new(),
+        }
+    }
+
+    fn dispatch_for(event: PostSendHookEvent) -> BuiltInPostSendDispatch {
+        BuiltInPostSendDispatch {
+            target: PostSendBuiltInTarget::Graft(GraftNudgeTarget {
+                recipient: event.recipient.clone(),
+                recipient_team: event.recipient_team.clone(),
+                rendered_nudge: "<atm>test nudge</atm>".to_string(),
+                message_body: "full immutable body".to_string(),
+            }),
+            event,
+            kind: NudgeKind::Steer,
+        }
+    }
+
+    /// Shared backing state for [`GraftLeaseTestRuntime`]: multiple
+    /// independently constructed runtime instances can attach to the same
+    /// `Arc`, modeling a daemon process restart that reattaches to the same
+    /// persisted store (AC5's "daemon restart with a live receiver" cell).
+    #[derive(Clone, Default)]
+    struct SharedGraftLease(Arc<Mutex<Option<atm_storage::GraftReceiverLease>>>);
+
+    impl SharedGraftLease {
+        fn set(&self, lease: atm_storage::GraftReceiverLease) {
+            *self.0.lock().expect("shared lease") = Some(lease);
+        }
+
+        fn get(&self) -> Option<atm_storage::GraftReceiverLease> {
+            self.0.lock().expect("shared lease").clone()
+        }
+    }
+
+    /// Deterministic [`RetainedServiceRuntime`] test double exercising only
+    /// the graft-lease seam `deliver_published_receiver_hook` depends on: a
+    /// fixed roster member and a caller-controlled lease/mark-unreachable
+    /// recorder. All other trait methods use their harmless defaults.
+    struct GraftLeaseTestRuntime {
+        lease: SharedGraftLease,
+        marked_unreachable: Mutex<Vec<(TeamName, AgentName, OwnerGeneration)>>,
+    }
+
+    impl GraftLeaseTestRuntime {
+        fn with_lease(lease: Option<atm_storage::GraftReceiverLease>) -> Self {
+            let shared = SharedGraftLease::default();
+            if let Some(lease) = lease {
+                shared.set(lease);
+            }
+            Self::from_shared(shared)
+        }
+
+        /// Attaches a fresh runtime instance to an existing shared lease
+        /// cell, modeling a newly constructed daemon-runtime object that
+        /// reattaches to already-persisted state after a restart.
+        fn from_shared(lease: SharedGraftLease) -> Self {
+            Self {
+                lease,
+                marked_unreachable: Mutex::new(Vec::new()),
+            }
+        }
+    }
+
+    impl crate::boundary::sealed::Sealed for GraftLeaseTestRuntime {}
+
+    impl RetainedServiceRuntime for GraftLeaseTestRuntime {
+        fn load_config(&self, _current_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
+            Ok(None)
+        }
+
+        fn graft_receiver_lease(
+            &self,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<Option<atm_storage::GraftReceiverLease>, AtmError> {
+            Ok(self.lease.get())
+        }
+
+        fn mark_graft_receiver_unreachable(
+            &self,
+            team: &TeamName,
+            agent: &AgentName,
+            owner_generation: &OwnerGeneration,
+            _now: chrono::DateTime<chrono::Utc>,
+        ) -> Result<(), AtmError> {
+            self.marked_unreachable
+                .lock()
+                .expect("marked_unreachable")
+                .push((team.clone(), agent.clone(), owner_generation.clone()));
+            Ok(())
+        }
+
+        fn inbox_path(
+            &self,
+            home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<std::path::PathBuf, AtmError> {
+            Ok(home_dir.join("inbox.jsonl"))
+        }
+
+        fn load_seen_watermark(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<Option<IsoTimestamp>, AtmError> {
+            Ok(None)
+        }
+
+        fn save_seen_watermark(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _timestamp: IsoTimestamp,
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn deliver_non_claude_payloads(
+            &self,
+            _recipient: &DeliveryRecipientSnapshot,
+            _messages: &[InboxMessage],
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn load_roster_member(
+            &self,
+            team: &TeamName,
+            agent: &AgentName,
+        ) -> Result<Option<RosterEntry>, AtmError> {
+            Ok(Some(roster_entry(team, agent)))
+        }
+
+        fn load_team_roster(&self, team: &TeamName) -> Result<Vec<RosterEntry>, AtmError> {
+            Ok(vec![roster_entry(
+                team,
+                &AgentName::from_validated(TEST_QA),
+            )])
+        }
+    }
+
+    fn lease_for(listener: &GraftReceiverListener) -> atm_storage::GraftReceiverLease {
+        atm_storage::GraftReceiverLease {
+            endpoint: listener.local_addr().expect("endpoint"),
+            capability: listener.capability().clone(),
+            owner_generation: OwnerGeneration::new(listener.owner_generation().to_string())
+                .expect("owner generation"),
+            registered_at: chrono::Utc::now(),
+            last_seen_at: chrono::Utc::now(),
+            unreachable_since: None,
+        }
+    }
+
+    /// Runs one `deliver_published_receiver_hook` call concurrently with a
+    /// background thread that serves exactly one accepted connection with
+    /// `Delivered`, then joins that thread before returning. Borrows
+    /// `listener` rather than consuming it, so the same live listener can
+    /// serve multiple sequential deliveries (AC5's "receiver stays alive
+    /// across a daemon restart" matrix cell).
+    fn deliver_through_listener(
+        runtime: &GraftLeaseTestRuntime,
+        listener: &GraftReceiverListener,
+    ) -> Result<PostSendEmissionPath, AtmError> {
+        std::thread::scope(|scope| {
+            scope.spawn(|| {
+                let mut stream = loop {
+                    if let Some(stream) = listener.poll_accept().expect("poll accept") {
+                        break stream;
+                    }
+                    std::thread::yield_now();
+                };
+                listener
+                    .read_request(&mut stream, Duration::from_secs(3))
+                    .expect("read request");
+                listener
+                    .write_response(&mut stream, &GraftPostSendResponse::Delivered)
+                    .expect("write response");
+            });
+            deliver_published_receiver_hook(
+                runtime,
+                &dispatch_for(test_event()),
+                RequestDeadline::after(Duration::from_secs(3)),
+            )
+        })
+    }
+
+    // AC1 (PR #1048): delivery through a registered lease succeeds via the
+    // registry alone. AQ1.8 retires the legacy file record entirely, so
+    // there is no file left to reference — the registry is the only path.
+    #[test]
+    fn ac1_delivery_succeeds_through_the_registry_lease_alone() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let team = TeamName::from_validated(TEST_TEAM);
+        let agent = AgentName::from_validated(TEST_QA);
+        let listener = bind_listener(tempdir.path(), &team, &agent, None).expect("bind listener");
+
+        let runtime = GraftLeaseTestRuntime::with_lease(Some(lease_for(&listener)));
+        let outcome = deliver_through_listener(&runtime, &listener)
+            .expect("delivery must succeed via the registry lease alone");
+        assert_eq!(outcome, PostSendEmissionPath::GraftPort);
+    }
+
+    // AC3 (PR #1048): a dead endpoint records `mark_graft_receiver_unreachable`
+    // and surfaces today's delivery error unchanged (no new error shape).
+    #[test]
+    fn ac3_connect_failure_marks_the_lease_unreachable_and_surfaces_todays_delivery_error() {
+        let team = TeamName::from_validated(TEST_TEAM);
+        let agent = AgentName::from_validated(TEST_QA);
+        // A bound-then-dropped loopback listener yields a port nothing is
+        // listening on, deterministically producing a connect failure
+        // without depending on any particular unused-port convention.
+        let dead_port = {
+            let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("bind probe");
+            listener.local_addr().expect("probe addr")
+        };
+        let owner_generation =
+            OwnerGeneration::new("01J00000000000000000000030").expect("owner generation");
+        let lease = atm_storage::GraftReceiverLease {
+            endpoint: dead_port,
+            capability: crate::local_http::LocalCapability::generate().expect("capability"),
+            owner_generation: owner_generation.clone(),
+            registered_at: chrono::Utc::now(),
+            last_seen_at: chrono::Utc::now(),
+            unreachable_since: None,
+        };
+        let runtime = GraftLeaseTestRuntime::with_lease(Some(lease));
+
+        let error = deliver_published_receiver_hook(
+            &runtime,
+            &dispatch_for(test_event()),
+            RequestDeadline::after(Duration::from_secs(3)),
+        )
+        .expect_err("a dead endpoint must surface today's connect-failure error");
+        assert_eq!(
+            error.code(),
+            crate::error::AtmErrorCode::PostSendGraftUnavailable
+        );
+
+        let marked = runtime
+            .marked_unreachable
+            .lock()
+            .expect("marked_unreachable");
+        assert_eq!(
+            marked.as_slice(),
+            [(team, agent, owner_generation)],
+            "the connect failure must record exactly one mark_graft_receiver_unreachable call"
+        );
+    }
+
+    // AC6 (PR #1048, closes I11): a lease that exists but whose `last_seen_at`
+    // is far beyond `ACTIVE_LEASE_WINDOW` is still dialed — staleness never
+    // gates delivery, only an absent lease does.
+    #[test]
+    fn ac6_present_but_expired_lease_is_dialed_not_refused() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let team = TeamName::from_validated(TEST_TEAM);
+        let agent = AgentName::from_validated(TEST_QA);
+        let listener = bind_listener(tempdir.path(), &team, &agent, None).expect("bind listener");
+
+        // Far beyond ACTIVE_LEASE_WINDOW (15s); the receiver is actually
+        // alive (simulated clock skew), so delivery must still succeed.
+        let stale_lease = atm_storage::GraftReceiverLease {
+            registered_at: chrono::Utc::now() - chrono::Duration::hours(2),
+            last_seen_at: chrono::Utc::now() - chrono::Duration::hours(2),
+            unreachable_since: Some(chrono::Utc::now() - chrono::Duration::hours(1)),
+            ..lease_for(&listener)
+        };
+        let runtime = GraftLeaseTestRuntime::with_lease(Some(stale_lease));
+
+        let outcome = deliver_through_listener(&runtime, &listener)
+            .expect("a present-but-expired lease must still be dialed, not refused");
+        assert_eq!(outcome, PostSendEmissionPath::GraftPort);
+        assert!(
+            runtime
+                .marked_unreachable
+                .lock()
+                .expect("marked_unreachable")
+                .is_empty(),
+            "a successful dial must not record an unreachable observation"
+        );
+    }
+
+    // AC5 (PR #1048), matrix cell "daemon restart with a live receiver": the
+    // receiver's lease is served correctly by a freshly constructed runtime
+    // instance that reattaches to the same persisted state, with zero
+    // receiver-side action — this is the automated in-tree half of the
+    // restart matrix (AQ1.9 owns only the live multi-process evidence).
+    #[test]
+    fn ac5_daemon_restart_with_live_receiver_delivers_through_a_reattached_runtime() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let team = TeamName::from_validated(TEST_TEAM);
+        let agent = AgentName::from_validated(TEST_QA);
+        // One listener stays bound for the whole test: only the daemon-side
+        // runtime object "restarts" below, never the receiver.
+        let listener = bind_listener(tempdir.path(), &team, &agent, None).expect("bind listener");
+
+        let shared = SharedGraftLease::default();
+        shared.set(lease_for(&listener));
+        let before_restart = GraftLeaseTestRuntime::from_shared(shared.clone());
+        deliver_through_listener(&before_restart, &listener)
+            .expect("delivery must succeed before the simulated daemon restart");
+
+        // Simulate a daemon restart: a brand-new runtime object, sharing only
+        // the same persisted lease state and the still-live receiver, must
+        // still resolve delivery with no receiver-side action at all.
+        let after_restart = GraftLeaseTestRuntime::from_shared(shared);
+        let outcome = deliver_through_listener(&after_restart, &listener)
+            .expect("delivery must succeed through the reattached post-restart runtime");
+        assert_eq!(outcome, PostSendEmissionPath::GraftPort);
+    }
+
+    // AC5 (PR #1048), matrix cells "receiver restart with a live daemon" and
+    // "SIGKILL crash-within-window": the daemon-side runtime object never
+    // restarts here (same `GraftLeaseTestRuntime` throughout); only the
+    // receiver does. Dropping the first listener without any unregister call
+    // mirrors what a SIGKILL leaves behind (the OS releases the flock; no
+    // graceful cleanup ever runs) — the successor's registration must
+    // displace it immediately, not after any window elapses, and delivery
+    // must reach only the successor.
+    #[test]
+    fn ac5_receiver_restart_with_a_live_daemon_displaces_immediately_after_a_sigkill_style_exit() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let team = TeamName::from_validated(TEST_TEAM);
+        let agent = AgentName::from_validated(TEST_QA);
+        let runtime = GraftLeaseTestRuntime::with_lease(None);
+
+        let first = bind_listener(tempdir.path(), &team, &agent, None).expect("bind first");
+        let first_lease = lease_for(&first);
+        runtime.lease.set(first_lease.clone());
+        // No unregister call follows: this models a SIGKILL, which leaves
+        // the store's row exactly as `register` last wrote it.
+        drop(first);
+
+        let second = bind_listener(tempdir.path(), &team, &agent, None).expect(
+            "the successor must be able to bind immediately: the OS released the flock \
+             when the first process's file handle disappeared, exactly as it would after SIGKILL",
+        );
+        let second_lease = lease_for(&second);
+        assert_ne!(
+            second_lease.owner_generation, first_lease.owner_generation,
+            "the successor must mint its own generation, never reuse the crashed one"
+        );
+        // The successor's registration displaces the stale entry on its very
+        // first tick — no ACTIVE_LEASE_WINDOW wait, matching the daemon
+        // registry's real `register` semantics (ADR-056).
+        runtime.lease.set(second_lease);
+
+        let outcome = deliver_through_listener(&runtime, &second)
+            .expect("delivery must reach the successor immediately after displacement");
+        assert_eq!(outcome, PostSendEmissionPath::GraftPort);
     }
 }
