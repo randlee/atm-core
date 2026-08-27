@@ -67,6 +67,11 @@ impl AtmTempSweeperRuntime {
         let worker_cancelled = Arc::clone(&cancelled);
         let worker = tokio::spawn(async move {
             let mut ticker = tokio::time::interval(config.interval);
+            // M3: the default `Burst` catch-up behavior would fire the
+            // sweeper back-to-back after any stall (a slow pass, a paused
+            // process, system suspend) instead of resuming on its ordinary
+            // cadence; a maintenance task has no reason to burst.
+            ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
                 tokio::select! {
                     _ = ticker.tick() => {

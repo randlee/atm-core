@@ -151,6 +151,24 @@ error is only reachable once `ATM_TEMP` itself resolves (default or
 explicit); a zero-configured sweeper never blocks daemon boot on its own,
 because it is only constructed after `resolve_atm_temp` succeeds.
 
+**Documented deferral (QM43-I5, explicit non-closure).** `AtmConfig`'s
+`sweep_interval_seconds`/`sweep_ttl_days` fields fully parse from
+`.atm.toml` through `load_config` today, but the replacement daemon's
+composition path does not yet call `load_config` for this purpose —
+`start_atm_temp_sweeper` (`crates/atm-daemon-bootstrap/src/lib.rs`)
+constructs the sweeper from `AtmConfig::default()`'s compiled-in values
+(1 hour / 30 days) unconditionally, because `assemble_daemon_runtime`
+deliberately does not depend on a workspace-relative `.atm.toml` (a
+LaunchAgent may start with a `getcwd(2)`-blocking working directory; see
+that function's own doc comment). This is a known gap, not missed
+follow-through: threading a real operator-configured interval/TTL into the
+daemon requires resolving *which* `.atm.toml` a system daemon should read
+without a workspace context at all, a design question this ADR does not
+settle. It is deferred to AQ4 proper, alongside the CLI first-use call site
+(`resolve_atm_temp`'s lazy CLI path, decision (a)) that will need the same
+config resolution answer. Until then, every replacement daemon runs the
+sweeper at the compiled-in defaults regardless of `.atm.toml`.
+
 Per-entry removal failures are skipped and logged, not pass-fatal.
 `SweeperError` is reserved for root-condition failures (the scratch root
 itself missing or unreadable). Each completed pass emits one structured

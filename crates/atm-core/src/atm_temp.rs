@@ -13,6 +13,8 @@ use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use crate::types::HostName;
+
 /// Abstraction over environment-variable lookup.
 ///
 /// The entire justification for this trait is that [`EnvSource::var`] is a
@@ -84,7 +86,7 @@ pub enum AtmTempError {
     AtmTempInsecure { path: PathBuf, reason: String },
     /// A transfer script exists at `~/.atm/transfer/<host>` but failed the
     /// executable-bit / owner-uid / not-group-or-world-writable check.
-    TransferScriptUnsafe { host: String, reason: String },
+    TransferScriptUnsafe { host: HostName, reason: String },
     /// The user's home directory could not be resolved (neither `$HOME` nor
     /// `%USERPROFILE%` is set) while locating `~/.atm/transfer`. Distinct
     /// from [`Self::Unresolvable`], which names an `ATM_TEMP`-resolution
@@ -97,7 +99,7 @@ pub enum AtmTempError {
     /// [`TransferScript::NotConfigured`](crate::transfer_script::TransferScript::NotConfigured):
     /// collapsing an unreadable-but-present path into "not configured" would
     /// point the operator at the wrong recovery action.
-    TransferScriptUnreadable { host: String, reason: String },
+    TransferScriptUnreadable { host: HostName, reason: String },
 }
 
 impl fmt::Display for AtmTempError {

@@ -150,6 +150,7 @@ fn resolve_transfer_script_in(
     transfer_root: &Path,
     host: &HostName,
 ) -> Result<TransferScript, AtmTempError> {
+    check_transfer_root_safety(transfer_root, host)?;
     let (script_path, kind) = script_path_for(transfer_root, host);
     match std::fs::symlink_metadata(&script_path) {
         Ok(metadata) => {
@@ -174,11 +175,106 @@ fn resolve_transfer_script_in(
                 "failed to read transfer-script metadata; refusing to treat this the same as \"not configured\""
             );
             Err(AtmTempError::TransferScriptUnreadable {
-                host: host.as_str().to_string(),
+                host: host.clone(),
                 reason: error.to_string(),
             })
         }
     }
+}
+
+/// Safety-checks `~/.atm/transfer` itself (QM43-I8): the transfer-script
+/// safety check previously validated only the script file's own owner/mode,
+/// never the containing directory's -- combined with a check-by-path/
+/// exec-by-path pattern, that left a TOCTOU window if the directory itself
+/// were writable by another local principal (they could replace a script
+/// between this check and exec, or plant one under a host name that has
+/// never been configured yet). A missing directory is not an error here --
+/// see [`TransferScript::NotConfigured`] -- the subsequent script lookup
+/// reports that case.
+///
+/// # Errors
+///
+/// Returns [`AtmTempError::TransferScriptUnsafe`] when the directory exists
+/// but is not owned by the current uid, has any group/other permission bit
+/// set, or is not a directory at all -- with a reason distinct from the
+/// script-level checks so an operator is pointed at `~/.atm/transfer`
+/// itself, not a specific host's script.
+fn check_transfer_root_safety(transfer_root: &Path, host: &HostName) -> Result<(), AtmTempError> {
+    match std::fs::symlink_metadata(transfer_root) {
+        Ok(metadata) => check_transfer_root_metadata(transfer_root, host, &metadata),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => {
+            tracing::warn!(
+                subsystem = "transfer_script",
+                action = "resolve_root",
+                outcome = "metadata_read_failed",
+                host = host.as_str(),
+                path = %transfer_root.display(),
+                %error,
+                "failed to read the ~/.atm/transfer directory's metadata"
+            );
+            Err(AtmTempError::TransferScriptUnreadable {
+                host: host.clone(),
+                reason: format!("~/.atm/transfer metadata could not be read: {error}"),
+            })
+        }
+    }
+}
+
+#[cfg(unix)]
+fn check_transfer_root_metadata(
+    transfer_root: &Path,
+    host: &HostName,
+    metadata: &std::fs::Metadata,
+) -> Result<(), AtmTempError> {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+
+    if !metadata.is_dir() {
+        return Err(AtmTempError::TransferScriptUnsafe {
+            host: host.clone(),
+            reason: format!("{} is not a directory", transfer_root.display()),
+        });
+    }
+    let owner_uid = current_uid();
+    if !is_owned_by_uid(metadata, owner_uid) {
+        return Err(AtmTempError::TransferScriptUnsafe {
+            host: host.clone(),
+            reason: format!(
+                "~/.atm/transfer is owned by uid {} instead of the current uid {owner_uid}",
+                metadata.uid()
+            ),
+        });
+    }
+    let mode = metadata.permissions().mode();
+    if crate::atm_temp::has_group_or_world_bits(mode) {
+        return Err(AtmTempError::TransferScriptUnsafe {
+            host: host.clone(),
+            reason: format!(
+                "~/.atm/transfer permissions {:04o} grant group or other access; expected 0700 \
+                 (owner-only read/write/execute)",
+                mode & 0o777
+            ),
+        });
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn check_transfer_root_metadata(
+    transfer_root: &Path,
+    host: &HostName,
+    metadata: &std::fs::Metadata,
+) -> Result<(), AtmTempError> {
+    if !metadata.is_dir() {
+        return Err(AtmTempError::TransferScriptUnsafe {
+            host: host.clone(),
+            reason: format!("{} is not a directory", transfer_root.display()),
+        });
+    }
+    // Windows has no POSIX owner/mode model here; ADR-055 does not add a
+    // Windows-specific ACL check for the transfer-script directory, mirroring
+    // `check_script_safety`'s own Windows branch.
+    Ok(())
 }
 
 #[cfg(windows)]
@@ -207,21 +303,21 @@ fn check_script_safety(
 
     if !metadata.is_file() {
         return Err(AtmTempError::TransferScriptUnsafe {
-            host: host.as_str().to_string(),
+            host: host.clone(),
             reason: format!("{} is not a regular file", path.display()),
         });
     }
     let mode = metadata.permissions().mode();
     if !is_owner_executable(mode) {
         return Err(AtmTempError::TransferScriptUnsafe {
-            host: host.as_str().to_string(),
+            host: host.clone(),
             reason: "script is not owner-executable".to_string(),
         });
     }
     let owner_uid = current_uid();
     if !is_owned_by_uid(metadata, owner_uid) {
         return Err(AtmTempError::TransferScriptUnsafe {
-            host: host.as_str().to_string(),
+            host: host.clone(),
             reason: format!(
                 "script is owned by uid {} instead of the current uid {owner_uid}",
                 metadata.uid()
@@ -234,7 +330,7 @@ fn check_script_safety(
     // for the `ATM_TEMP` scratch root, reused here rather than reinvented.
     if crate::atm_temp::has_group_or_world_bits(mode) {
         return Err(AtmTempError::TransferScriptUnsafe {
-            host: host.as_str().to_string(),
+            host: host.clone(),
             reason: format!(
                 "script permissions {:04o} grant group or other access; expected 0700 \
                  (owner-only read/write/execute)",
@@ -253,7 +349,7 @@ fn check_script_safety(
 ) -> Result<(), AtmTempError> {
     if !metadata.is_file() {
         return Err(AtmTempError::TransferScriptUnsafe {
-            host: host.as_str().to_string(),
+            host: host.clone(),
             reason: format!("{} is not a regular file", path.display()),
         });
     }
@@ -280,9 +376,25 @@ mod tests {
     #[test]
     fn missing_script_is_not_configured() {
         let dir = tempfile::tempdir().expect("tempdir");
+        secure_dir_for_test(dir.path());
         let resolved = resolve_transfer_script_in(dir.path(), &host("m5")).expect("resolves");
         assert_eq!(resolved, TransferScript::NotConfigured { host: host("m5") });
     }
+
+    /// `tempfile::tempdir()` does not guarantee mode `0700` on every
+    /// platform/umask combination, but [`check_transfer_root_safety`]
+    /// requires it (QM43-I8); tests that expect a successful resolution
+    /// secure the directory explicitly first, exactly as a real
+    /// `~/.atm/transfer` must be secured by its owner.
+    #[cfg(unix)]
+    fn secure_dir_for_test(dir: &Path) {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
+            .expect("chmod test transfer root");
+    }
+
+    #[cfg(not(unix))]
+    fn secure_dir_for_test(_dir: &Path) {}
 
     #[cfg(not(windows))]
     #[test]
@@ -355,6 +467,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
 
         fn write_script(dir: &Path, name: &str, mode: u32) -> PathBuf {
+            secure_dir_for_test(dir);
             let path = dir.join(name);
             std::fs::write(&path, "#!/bin/sh\necho ok\n").expect("write script");
             std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).expect("chmod");
@@ -455,8 +568,52 @@ mod tests {
             let error =
                 error.expect_err("permission-denied ancestor must not read as NotConfigured");
             assert!(
-                matches!(&error, AtmTempError::TransferScriptUnreadable { host, .. } if host == "m5"),
+                matches!(&error, AtmTempError::TransferScriptUnreadable { host, .. } if host.as_str() == "m5"),
                 "{error:?}"
+            );
+        }
+
+        /// QM43-I8: `~/.atm/transfer` itself must be owned by the caller
+        /// and have no group/other permission bit, exactly like the
+        /// scripts under it -- not just the script file's own mode.
+        #[test]
+        fn group_writable_transfer_root_is_unsafe() {
+            let dir = tempfile::tempdir().expect("tempdir");
+            std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o770))
+                .expect("chmod transfer root group-writable");
+            write_script(dir.path(), "m5", 0o700);
+            // `write_script` re-secures the directory to 0700 as a side
+            // effect; put the insecure mode back after, so this test
+            // actually exercises the directory-level refusal.
+            std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o770))
+                .expect("chmod transfer root group-writable");
+
+            let error = resolve_transfer_script_in(dir.path(), &host("m5"))
+                .expect_err("group-writable transfer root must be refused");
+            assert!(
+                matches!(
+                    &error,
+                    AtmTempError::TransferScriptUnsafe { reason, .. }
+                        if reason.contains("~/.atm/transfer") && reason.contains("access")
+                ),
+                "{error:?}"
+            );
+        }
+
+        /// QM43-I8 acceptance case: a properly-secured `0700`, own-uid
+        /// transfer root with a safe script still resolves normally.
+        #[test]
+        fn owner_only_transfer_root_is_accepted() {
+            let dir = tempfile::tempdir().expect("tempdir");
+            write_script(dir.path(), "m5", 0o700);
+            std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700))
+                .expect("chmod transfer root owner-only");
+
+            let resolved = resolve_transfer_script_in(dir.path(), &host("m5"))
+                .expect("owner-only 0700 transfer root is accepted");
+            assert!(
+                matches!(resolved, TransferScript::Configured(_)),
+                "{resolved:?}"
             );
         }
     }
