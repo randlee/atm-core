@@ -14,6 +14,7 @@ use std::time::Duration;
 
 use atm_core::LocalFileNonClaudeOutbound;
 use atm_core::api::RequestDeadline;
+use atm_core::atm_temp::{ProcessEnvSource, is_atm_temp_unset};
 use atm_core::boundary::{NonClaudeOutbound, RosterStore, TemplateComposer};
 use atm_core::doctor::{DoctorFinding, DoctorSeverity, HerdrPresenceDoctor};
 use atm_core::error::AtmError;
@@ -29,6 +30,7 @@ use atm_core::send::input::DEFAULT_MESSAGE_MAX_BYTES;
 use atm_core::team_admin::MembersList;
 use atm_core::types::HostName;
 use atm_core::types::{AgentName, TeamName};
+use atm_core::{AtmConfig, resolve_atm_temp, validate_sweep_config};
 use atm_herdr::{
     BreakerPolicy, HerdrBreakerState, HerdrError, HerdrProcessAdapter, HerdrProcessInvoker,
     HerdrSpawnBreaker,
@@ -45,9 +47,12 @@ use atm_storage_rusqlite::SqliteStorageFactory;
 use peer_tls::MtlsPeerStreamAdapter;
 use tokio::net::TcpStream;
 
+mod atm_temp_sweeper_runtime;
 mod owner_gate;
 mod queue_drain;
 mod received_hook_selector;
+
+use atm_temp_sweeper_runtime::AtmTempSweeperRuntime;
 
 pub use owner_gate::DaemonOwnerGuard;
 pub use received_hook_selector::active_received_hook_selector;
@@ -907,6 +912,8 @@ async fn run_replacement_daemon_with_selector(
     let runtime_health = RuntimeHealth::with_owner(std::process::id());
     let bare_cli_fifo: BareCliFifo = Default::default();
     let bare_cli_queue_full_drops: BareCliQueueFullDrops = Default::default();
+    let atm_temp_sweeper =
+        start_atm_temp_sweeper(Arc::clone(&observability), daemon_launch_identity.clone())?;
     let assembly = assemble_daemon_runtime()?;
     let workflow_telemetry = assembly.workflow_telemetry.clone();
     let peer_stream_adapter = bootstrap_peer_stream_adapter(&assembly, peer_wire_mode)?;
@@ -941,6 +948,27 @@ async fn run_replacement_daemon_with_selector(
         &peer_stream_adapter,
     );
     let running = start_replacement_runtime(config, handler.clone(), runtime_health).await?;
+    run_until_shutdown(
+        running,
+        handler,
+        workflow_telemetry,
+        recovery_sweep,
+        atm_temp_sweeper,
+    )
+    .await
+}
+
+/// Advertises readiness, then waits for either a shutdown signal or an
+/// unexpected server stop, draining every supervised subsystem exactly once
+/// on every exit path (ready-signal failure, unexpected stop, or ordinary
+/// shutdown).
+async fn run_until_shutdown(
+    running: atm_http_runtime::HttpRuntime<atm_http_runtime::Running>,
+    handler: Arc<StorageAndNudgeRouter>,
+    workflow_telemetry: atm_runtime::WorkflowTelemetryRuntime,
+    recovery_sweep: queue_drain::RecoverySweepHandle,
+    atm_temp_sweeper: AtmTempSweeperRuntime,
+) -> Result<(), AtmError> {
     if let Err(error) = emit_ready_signal_if_requested() {
         // The process has not advertised readiness, so it must not retain an
         // otherwise-live listener when its supervisor handshake fails.
@@ -949,6 +977,7 @@ async fn run_replacement_daemon_with_selector(
             handler.as_ref(),
             workflow_telemetry,
             recovery_sweep,
+            atm_temp_sweeper,
         )
         .await;
         return Err(error);
@@ -958,6 +987,7 @@ async fn run_replacement_daemon_with_selector(
         handler.as_ref(),
         workflow_telemetry,
         recovery_sweep,
+        atm_temp_sweeper,
     )
     .await
 }
@@ -980,8 +1010,9 @@ async fn await_runtime_or_shutdown(
     handler: &StorageAndNudgeRouter,
     workflow_telemetry: atm_runtime::WorkflowTelemetryRuntime,
     recovery_sweep: queue_drain::RecoverySweepHandle,
+    atm_temp_sweeper: AtmTempSweeperRuntime,
 ) -> Result<(), AtmError> {
-    let server_stopped = tokio::select! {
+    tokio::select! {
         signal = wait_for_shutdown_signal() => {
             let signal = signal?;
             eprintln!("replacement ATM daemon received {}; starting graceful shutdown", signal.as_str());
@@ -989,17 +1020,68 @@ async fn await_runtime_or_shutdown(
         }
         _ = running.wait_for_server_stop() => {
             eprintln!("replacement ATM HTTP runtime server stopped unexpectedly; beginning cleanup");
-            true
+            let result = shutdown_replacement_daemon(
+                running,
+                handler,
+                workflow_telemetry,
+                recovery_sweep,
+                atm_temp_sweeper,
+            )
+            .await;
+            return match result {
+                Ok(()) => Err(AtmError::daemon_unavailable(
+                    "replacement HTTP runtime server stopped unexpectedly",
+                )),
+                Err(error) => Err(error),
+            };
         }
     };
-    if server_stopped {
-        let _ =
-            shutdown_replacement_daemon(running, handler, workflow_telemetry, recovery_sweep).await;
-        return Err(AtmError::daemon_unavailable(
-            "replacement HTTP runtime server stopped unexpectedly",
-        ));
+    shutdown_replacement_daemon(
+        running,
+        handler,
+        workflow_telemetry,
+        recovery_sweep,
+        atm_temp_sweeper,
+    )
+    .await
+}
+
+/// Resolves `$ATM_TEMP` (defaulting and emitting the one-time fallback
+/// warning when unset, per ADR-055 decision (a)) and starts its periodic
+/// TTL sweeper. A resolution or sweep-config failure fails daemon boot
+/// closed: an operator who explicitly set an invalid `ATM_TEMP`, or a zero
+/// sweep interval/TTL, gets an actionable error rather than a silently
+/// disabled sweeper.
+fn start_atm_temp_sweeper(
+    observability: Arc<dyn ObservabilityPort + Send + Sync>,
+    daemon_launch_identity: DaemonLaunchIdentity,
+) -> Result<AtmTempSweeperRuntime, AtmError> {
+    let env = ProcessEnvSource;
+    let atm_temp =
+        resolve_atm_temp(&env).map_err(|error| AtmError::config(format!("ATM_TEMP: {error}")))?;
+    if is_atm_temp_unset(&env) {
+        tracing::warn!(
+            default_path = %atm_temp.path().display(),
+            override_env = "ATM_TEMP",
+            "ATM_TEMP is unset; using the default scratch root (set ATM_TEMP to override)"
+        );
     }
-    shutdown_replacement_daemon(running, handler, workflow_telemetry, recovery_sweep).await
+    // Sweep interval/TTL configuration is not yet threaded from `.atm.toml`
+    // into daemon composition (the daemon's config doctor deliberately does
+    // not depend on a workspace-relative `.atm.toml` — see
+    // `assemble_daemon_runtime`'s doc comment); `AtmConfig::default()`'s
+    // sweep fields are the compiled-in ADR-055 defaults (1 hour / 30 days)
+    // until that threading lands.
+    let defaults = AtmConfig::default();
+    let sweep_config =
+        validate_sweep_config(defaults.sweep_interval_seconds, defaults.sweep_ttl_days)
+            .map_err(|error| AtmError::config(format!("$ATM_TEMP sweep config: {error}")))?;
+    Ok(AtmTempSweeperRuntime::start(
+        atm_temp.path().to_path_buf(),
+        sweep_config,
+        observability,
+        daemon_launch_identity,
+    ))
 }
 
 fn bootstrap_peer_stream_adapter(
@@ -1024,6 +1106,7 @@ async fn shutdown_replacement_daemon(
     handler: &StorageAndNudgeRouter,
     workflow_telemetry: atm_runtime::WorkflowTelemetryRuntime,
     recovery_sweep: queue_drain::RecoverySweepHandle,
+    atm_temp_sweeper: AtmTempSweeperRuntime,
 ) -> Result<(), AtmError> {
     let stopped = running.begin_shutdown().finish().await;
     recovery_sweep.shutdown(REPLACEMENT_DRAIN_DEADLINE).await;
@@ -1031,6 +1114,7 @@ async fn shutdown_replacement_daemon(
         .shutdown_peer_connections(REPLACEMENT_DRAIN_DEADLINE)
         .await;
     workflow_telemetry.shutdown().await;
+    atm_temp_sweeper.shutdown().await;
     let _stopped = stopped?;
     Ok(())
 }

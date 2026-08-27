@@ -332,7 +332,7 @@ async fn claim_next_dispatch(
     member: &MemberKey,
 ) -> Result<
     Option<(
-        ClaimedPendingNudge,
+        ClaimedQueueMessage,
         atm_core::boundary::BuiltInPostSendDispatch,
     )>,
     AtmError,
@@ -348,7 +348,7 @@ async fn claim_next_dispatch(
             return Ok(None);
         };
         let mut claim_guard =
-            ClaimedPendingNudge::new(runtime_for_claim.clone(), member_for_claim.clone(), claim);
+            ClaimedQueueMessage::new(runtime_for_claim.clone(), member_for_claim.clone(), claim);
         let message_id = claim_guard.message_id();
         let dispatch = match rebuild_received_hook_dispatch(
             &runtime_for_claim,
@@ -383,7 +383,7 @@ async fn claim_next_dispatch(
 async fn requeue_claim(
     runtime: &LocalServiceRuntime,
     member: &MemberKey,
-    claim_guard: &ClaimedPendingNudge,
+    claim_guard: &ClaimedQueueMessage,
 ) -> Result<(), AtmError> {
     let runtime_for_requeue = runtime.clone();
     let member_for_requeue = member.clone();
@@ -431,13 +431,13 @@ fn clear_delivered_marker<'a>(
     }
 }
 
-struct ClaimedPendingNudge {
+struct ClaimedQueueMessage {
     runtime: LocalServiceRuntime,
     member: MemberKey,
     claim: Option<NudgeClaim>,
 }
 
-impl ClaimedPendingNudge {
+impl ClaimedQueueMessage {
     fn new(runtime: LocalServiceRuntime, member: MemberKey, claim: NudgeClaim) -> Self {
         Self {
             runtime,
@@ -459,7 +459,7 @@ impl ClaimedPendingNudge {
     }
 }
 
-impl Drop for ClaimedPendingNudge {
+impl Drop for ClaimedQueueMessage {
     fn drop(&mut self) {
         let Some(claim) = self.claim.take() else {
             return;

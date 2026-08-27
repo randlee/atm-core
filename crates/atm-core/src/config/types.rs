@@ -17,6 +17,10 @@ pub const DEFAULT_MAX_MESSAGE_BYTES: u64 = 1_048_576;
 pub const MAX_MESSAGE_BYTES: u64 = DEFAULT_MAX_MESSAGE_BYTES;
 pub const MAX_POST_SEND_HOOKS: usize = 64;
 pub const MAX_POST_SEND_HOOK_COMMAND_PATH_BYTES: usize = 4096;
+/// Default `$ATM_TEMP` sweep interval (ADR-055 decision (b)): one hour.
+pub const DEFAULT_SWEEP_INTERVAL_SECONDS: u64 = 3600;
+/// Default `$ATM_TEMP` sweep TTL (ADR-055 decision (b)): 30 days.
+pub const DEFAULT_SWEEP_TTL_DAYS: u32 = 30;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ByteCount(u64);
@@ -77,6 +81,17 @@ pub struct AtmConfig {
     pub max_message_bytes: ByteCount,
     pub claude_jsonl_body_export_max_bytes: ByteCount,
     pub graft: GraftConfig,
+    /// `$ATM_TEMP` sweep interval in seconds (ADR-055 decision (b)).
+    ///
+    /// Zero is a config error, but — mirroring `resolve_atm_temp`'s "unset
+    /// is not a failure" rule — that error is only reachable once
+    /// `ATM_TEMP` itself resolves; this field is stored as parsed (even if
+    /// zero) and validated by the sweeper's own construction, not by config
+    /// parsing.
+    pub sweep_interval_seconds: u64,
+    /// `$ATM_TEMP` sweep TTL in days (ADR-055 decision (b)). Same
+    /// zero-validation timing as `sweep_interval_seconds`.
+    pub sweep_ttl_days: u32,
     pub config_root: PathBuf,
 }
 
@@ -93,6 +108,8 @@ impl Default for AtmConfig {
                 DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES,
             ),
             graft: GraftConfig::default(),
+            sweep_interval_seconds: DEFAULT_SWEEP_INTERVAL_SECONDS,
+            sweep_ttl_days: DEFAULT_SWEEP_TTL_DAYS,
             config_root: PathBuf::new(),
         }
     }
