@@ -1551,13 +1551,16 @@ mod tests {
         true
     }
 
-    // AC1 (ATM-QA-101): bind with a reachable daemon registers exactly one
-    // lease whose team/agent (via the registry's lookup key), endpoint,
-    // capability, and owner generation literally match the values
-    // `GraftReceiverListener::bind` produced for this receiver — not merely
-    // a registration count and a generation-equality check incidental to a
-    // different scenario (AC5's displacement test asserts inequality against
-    // a *stale* lease, never equality against the bind inputs themselves).
+    // AC1 (ATM-QA-101 / ATM-QA-AQ16-001): bind with a reachable daemon
+    // registers exactly one lease whose team/agent (via the registry's
+    // lookup key), endpoint, capability, and owner generation literally
+    // match the bound listener's in-memory accessors — not merely a
+    // registration count and a generation-equality check incidental to a
+    // different scenario (AC5's displacement test asserts inequality
+    // against a *stale* lease, never equality against the bind inputs
+    // themselves). AQ1.8 retires the on-disk endpoint record entirely, so
+    // the registry lease (asserted below) is now the only durable ground
+    // truth `bind()` publishes; there is no file left to cross-diff against.
     #[test]
     fn ac1_bind_with_reachable_daemon_registers_lease_matching_bind_inputs() {
         let paths = test_paths();
