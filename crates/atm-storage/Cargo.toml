@@ -9,6 +9,9 @@ repository.workspace = true
 homepage.workspace = true
 description = "Shared audited storage contract and canonical domain types for ATM."
 
+[features]
+test-utils = []
+
 [dependencies]
 atm-error = { path = "../atm-error", version = "1.4.5" }
 serde.workspace = true

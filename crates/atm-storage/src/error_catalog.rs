@@ -250,6 +250,9 @@ const fn post_send_guidance(code: AtmErrorCode) -> Option<&'static str> {
         | AtmErrorCode::PostSendAdvisoryDeliveryFailed => {
             Some("Repair the configured post-send target and retry if delivery is required.")
         }
+        AtmErrorCode::GraftReceiverNotOwner => Some(
+            "Another generation now owns this graft receiver lease; rebind to obtain a fresh generation.",
+        ),
         _ => None,
     }
 }
