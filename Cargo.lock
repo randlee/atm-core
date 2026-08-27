@@ -1910,11 +1910,13 @@ dependencies = [
 
 [[package]]
 name = "sc-lint-attributes"
-version = "1.4.4"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46de564becf8b5da1445d9b58c14807d8c2a2fec58fc23b597ddf48f354acd89"
 dependencies = [
  "proc-macro2",
  "quote",
- "sc-lint-directives",
+ "sc-lint-directives 0.5.0",
  "syn 2.0.119",
 ]
 
@@ -1928,12 +1930,21 @@ dependencies = [
  "proc-macro2",
  "quote",
  "sc-lint-attributes",
- "sc-lint-directives",
+ "sc-lint-directives 1.4.4",
  "serde",
  "serde_json",
  "syn 2.0.119",
  "tempfile",
  "toml",
+]
+
+[[package]]
+name = "sc-lint-directives"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad3306ff8f041d4c122cfac038aa1be7893c7b399f5e8f28b95d74362538c615"
+dependencies = [
+ "syn 2.0.119",
 ]
 
 [[package]]

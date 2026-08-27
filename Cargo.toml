@@ -16,7 +16,6 @@ members = [
     "crates/atm-graft",
     "crates/atm-graft-python",
     "crates/atm-query-python",
-    "crates/sc-lint-attributes",
     "crates/sc-lint-boundary",
     "crates/sc-lint-directives",
     "crates/atm-daemon",
