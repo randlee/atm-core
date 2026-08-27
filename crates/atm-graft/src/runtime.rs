@@ -17,6 +17,7 @@ use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::{
     GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL, GraftPostSendResponse, GraftReceiverListener,
 };
+use atm_core::protocol::OwnerGeneration;
 use atm_core::types::{AgentName, ChatId, TeamName};
 
 use crate::nudge_sink::GraftReceiveHook;
@@ -496,6 +497,14 @@ pub(crate) struct GraftReceiverLoopContext {
     pub(crate) ready_tx: Option<SyncSender<()>>,
 }
 
+/// The listener's owner generation is a freshly minted ULID (see
+/// `GraftReceiverListener::bind`), so this conversion into the storage-layer
+/// validated newtype can never fail in practice.
+fn owner_generation(listener: &GraftReceiverListener) -> OwnerGeneration {
+    OwnerGeneration::new(listener.owner_generation())
+        .expect("graft receiver listener owner generation is always a valid ULID")
+}
+
 /// Owns a listener together with its best-effort daemon lease lifecycle.
 struct RegisteredGraftReceiver {
     listener: GraftReceiverListener,
@@ -524,7 +533,7 @@ impl RegisteredGraftReceiver {
             self.agent.clone(),
             self.listener.local_addr()?,
             self.listener.capability().clone(),
-            self.listener.owner_generation().to_owned(),
+            owner_generation(&self.listener),
         );
         self.client = result.as_ref().ok().map(|_| client);
         result
@@ -539,7 +548,7 @@ impl Drop for RegisteredGraftReceiver {
         if let Err(error) = client.unregister_receiver_sync(
             self.team.clone(),
             self.agent.clone(),
-            self.listener.owner_generation().to_owned(),
+            owner_generation(&self.listener),
         ) {
             tracing::debug!(
                 subsystem = "atm_graft.receiver_loop",

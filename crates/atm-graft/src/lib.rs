@@ -16,8 +16,8 @@ use atm_core::graft::AtmGraftClient;
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::local_http::LocalCapability;
 use atm_core::protocol::{
-    GraftReceiverRegistration, GraftReceiverUnregistration, RequestEnvelope, ResponseEnvelope,
-    SendResponseEnvelope,
+    GraftReceiverRegistration, GraftReceiverUnregistration, OwnerGeneration, RequestEnvelope,
+    ResponseEnvelope, SendResponseEnvelope,
 };
 use atm_core::read::{PeekQuery, ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest, WriteOutcome};
@@ -267,7 +267,7 @@ impl GraftClient {
         agent: AgentName,
         endpoint: SocketAddr,
         capability: LocalCapability,
-        owner_generation: String,
+        owner_generation: OwnerGeneration,
     ) -> Result<(), AtmError> {
         match self.execute_request_sync(RequestEnvelope::GraftReceiverRegister(
             GraftReceiverRegistration {
@@ -287,7 +287,7 @@ impl GraftClient {
         &self,
         team: TeamName,
         agent: AgentName,
-        owner_generation: String,
+        owner_generation: OwnerGeneration,
     ) -> Result<(), AtmError> {
         match self.execute_request_sync(RequestEnvelope::GraftReceiverUnregister(
             GraftReceiverUnregistration {
