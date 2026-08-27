@@ -227,17 +227,42 @@ struct BreakerState {
     half_open_probe: bool,
 }
 
+/// Supplies the current time to a [`HerdrSpawnBreaker`].
+///
+/// Production code always uses [`SystemBreakerClock`]. Tests that assert on
+/// the breaker's cooldown window inject a fixed or manually advanced clock
+/// instead, so assertions cannot be perturbed by scheduling delays under a
+/// loaded, parallel test run (see `TestBreakerClock` in this module's tests).
+trait BreakerClock: std::fmt::Debug + Send + Sync {
+    fn now(&self) -> Instant;
+}
+
+#[derive(Debug, Default)]
+struct SystemBreakerClock;
+
+impl BreakerClock for SystemBreakerClock {
+    fn now(&self) -> Instant {
+        Instant::now()
+    }
+}
+
 /// Per-host, in-memory circuit breaker shared by all Herdr operations.
 #[derive(Debug, Clone)]
 pub struct HerdrSpawnBreaker {
     state: Arc<Mutex<BreakerState>>,
+    clock: Arc<dyn BreakerClock>,
 }
 
 impl HerdrSpawnBreaker {
     #[must_use]
     pub fn new() -> Self {
+        Self::with_clock(Arc::new(SystemBreakerClock))
+    }
+
+    fn with_clock(clock: Arc<dyn BreakerClock>) -> Self {
         Self {
             state: Arc::new(Mutex::new(BreakerState::default())),
+            clock,
         }
     }
 
@@ -248,7 +273,7 @@ impl HerdrSpawnBreaker {
                 retry_after: BREAKER_MAX_BACKOFF,
             };
         };
-        breaker_state(&state)
+        breaker_state(&state, self.clock.as_ref())
     }
 
     /// Reads the state and failure counter under one lock for coherent
@@ -264,7 +289,7 @@ impl HerdrSpawnBreaker {
             };
         };
         HerdrBreakerSnapshot {
-            state: breaker_state(&state),
+            state: breaker_state(&state, self.clock.as_ref()),
             consecutive_failures: state.consecutive_failures,
         }
     }
@@ -274,7 +299,7 @@ impl HerdrSpawnBreaker {
         let Ok(mut state) = self.state.lock() else {
             return false;
         };
-        match breaker_state(&state) {
+        match breaker_state(&state, self.clock.as_ref()) {
             HerdrBreakerState::Closed => true,
             HerdrBreakerState::HalfOpen if !state.half_open_probe => {
                 state.half_open_probe = true;
@@ -297,7 +322,7 @@ impl HerdrSpawnBreaker {
     pub fn record_infrastructure_failure(&self) {
         if let Ok(mut state) = self.state.lock() {
             state.consecutive_failures = state.consecutive_failures.saturating_add(1);
-            state.opened_at = Some(Instant::now());
+            state.opened_at = Some(self.clock.now());
             state.half_open_probe = false;
         }
     }
@@ -317,12 +342,12 @@ impl Default for HerdrSpawnBreaker {
     }
 }
 
-fn breaker_state(state: &BreakerState) -> HerdrBreakerState {
+fn breaker_state(state: &BreakerState, clock: &dyn BreakerClock) -> HerdrBreakerState {
     let Some(opened_at) = state.opened_at else {
         return HerdrBreakerState::Closed;
     };
-    let retry_after =
-        breaker_backoff(state.consecutive_failures).saturating_sub(opened_at.elapsed());
+    let retry_after = breaker_backoff(state.consecutive_failures)
+        .saturating_sub(clock.now().saturating_duration_since(opened_at));
     if retry_after.is_zero() || state.half_open_probe {
         HerdrBreakerState::HalfOpen
     } else {
@@ -928,6 +953,42 @@ pub mod testing {
 mod tests {
     use super::*;
 
+    /// A fixed-instant [`BreakerClock`] used by tests that assert on the
+    /// breaker's cooldown state immediately after a recorded failure.
+    ///
+    /// Without this, `Instant::now()` is sampled once when the failure is
+    /// recorded and again when the state is asserted a moment later. Under a
+    /// loaded, fully parallel `cargo test` run, real process spawn/wait
+    /// latency between those two samples can exceed the first-failure
+    /// backoff window (1s), flipping the breaker from `Open` to `HalfOpen`
+    /// and failing the assertion. Freezing the clock removes that race
+    /// without changing production breaker semantics.
+    ///
+    /// Only used by the `#[cfg(unix)]` tests below, which spawn a real
+    /// child process; gated the same way so it isn't dead code elsewhere
+    /// (e.g. on Windows).
+    #[cfg(unix)]
+    #[derive(Debug)]
+    struct TestBreakerClock {
+        now: Instant,
+    }
+
+    #[cfg(unix)]
+    impl TestBreakerClock {
+        fn frozen() -> Self {
+            Self {
+                now: Instant::now(),
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    impl BreakerClock for TestBreakerClock {
+        fn now(&self) -> Instant {
+            self.now
+        }
+    }
+
     #[test]
     fn prompt_text_is_fixed_and_non_empty() {
         assert_eq!(
@@ -1037,19 +1098,12 @@ mod tests {
     #[cfg(unix)]
     #[tokio::test]
     async fn failing_bypass_get_does_not_open_the_shared_breaker() {
-        let breaker = Arc::new(HerdrSpawnBreaker::default());
-        // Six consecutive failures saturate breaker_backoff's exponential
-        // schedule at its BREAKER_MAX_BACKOFF ceiling (30s) instead of the 1s
-        // window a single recorded failure would produce. Observed under
-        // `cargo test --workspace` running concurrently with a fresh
-        // workspace compile: OS scheduling contention can stall this test's
-        // real subprocess spawn + tokio::time::timeout wait by tens of
-        // seconds of wall-clock time even though the nominal deadline is 1s,
-        // so the window needs to be the widest the breaker design allows,
-        // not merely "comfortably larger than the nominal deadline".
-        for _ in 0..6 {
-            breaker.record_infrastructure_failure();
-        }
+        // Frozen clock: the final `Open` assertion below must not race real
+        // process spawn/wait latency under a loaded parallel test run.
+        let breaker = Arc::new(HerdrSpawnBreaker::with_clock(Arc::new(
+            TestBreakerClock::frozen(),
+        )));
+        breaker.record_infrastructure_failure();
         let failures = breaker.consecutive_failures();
         let agent: AgentName = "alice".parse().expect("agent");
         let result = execute_get(
@@ -1069,7 +1123,11 @@ mod tests {
     #[cfg(unix)]
     #[tokio::test]
     async fn failing_list_opens_the_shared_breaker() {
-        let breaker = Arc::new(HerdrSpawnBreaker::default());
+        // Frozen clock: the final `Open` assertion below must not race real
+        // process spawn/wait latency under a loaded parallel test run.
+        let breaker = Arc::new(HerdrSpawnBreaker::with_clock(Arc::new(
+            TestBreakerClock::frozen(),
+        )));
         let result = execute_list(
             "/usr/bin/false",
             Arc::clone(&breaker),

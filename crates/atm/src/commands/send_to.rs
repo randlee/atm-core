@@ -243,7 +243,11 @@ async fn read_capped(mut reader: impl tokio::io::AsyncRead + Unpin) -> Vec<u8> {
     buffer
 }
 
-#[cfg(test)]
+// Unix-only: every test below invokes a real `#!/bin/sh` transfer
+// script directly (shebang exec, `sleep`, `env | cut`), which has no
+// Windows equivalent, so the whole module is gated rather than each
+// test individually.
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt;
