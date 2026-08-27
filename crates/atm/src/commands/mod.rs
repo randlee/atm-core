@@ -145,7 +145,7 @@ impl Command {
             Self::Log(command) => command.run(observability),
             Self::Doctor(command) => command.run(observability).await,
             Self::Help(command) => command.run(observability),
-            Self::InternalNudge(command) => command.run(observability),
+            Self::InternalNudge(command) => command.run(observability).await,
             #[cfg(any(test, feature = "cli-surface-dump"))]
             Self::DumpCliSurface(command) => command.run(observability),
             Self::Teams(command) => command.run(observability).await,

@@ -1176,7 +1176,8 @@ mod tests {
             Some(composer) => assembly.service_runtime.with_template_composer(composer),
             None => assembly.service_runtime,
         };
-        let service_runtime = attach_graft_receiver_store(service_runtime, &database_path);
+        let service_runtime =
+            attach_graft_receiver_store(service_runtime, &database_path, with_recipient);
         let router = StorageAndNudgeRouter::new(
             service_runtime,
             Arc::new(NullObservability),
@@ -1199,11 +1200,27 @@ mod tests {
     fn attach_graft_receiver_store(
         service_runtime: LocalServiceRuntime,
         database_path: &Path,
+        with_recipient: bool,
     ) -> LocalServiceRuntime {
-        service_runtime.with_graft_receiver_endpoint_store(
-            open_graft_receiver_endpoint_store(database_path)
-                .expect("sqlite graft receiver endpoint store"),
-        )
+        let store = open_graft_receiver_endpoint_store(database_path)
+            .expect("sqlite graft receiver endpoint store");
+        if with_recipient {
+            store
+                .register(
+                    &GraftReceiverRegistration {
+                        team: "test-team".parse().expect("team"),
+                        agent: "recipient".parse().expect("agent"),
+                        endpoint: "127.0.0.1:9".parse().expect("endpoint"),
+                        capability: atm_core::local_http::LocalCapability::generate()
+                            .expect("capability"),
+                        owner_generation: OwnerGeneration::new("01J00000000000000000000000")
+                            .expect("owner generation"),
+                    },
+                    atm_core::types::IsoTimestamp::now().into_inner(),
+                )
+                .expect("register fixture graft receiver");
+        }
+        service_runtime.with_graft_receiver_endpoint_store(store)
     }
 
     fn write_request(home_dir: PathBuf, current_dir: PathBuf) -> WriteRequest {

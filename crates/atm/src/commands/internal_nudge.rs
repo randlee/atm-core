@@ -3,6 +3,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
+use atm_core::api::ApiRequest;
 use atm_core::boundary::{
     BuiltInNudgeSinkTarget, InternalNudgeEnvelope, PostSendHookEvent, ResolvedBuiltInNudgeTemplate,
     TMUX_DOUBLE_ENTER_DELAY, TMUX_NUDGE_CONFIRM_KEY,
@@ -10,12 +11,14 @@ use atm_core::boundary::{
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::{
     GraftPostSendRequest, GraftPostSendResponse, deliver_graft_post_send,
-    graft_receiver_record_path_from_home,
+    graft_receiver_not_registered_error,
 };
-use atm_core::home;
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 #[cfg(test)]
 use atm_core::send::qualified_nudge_sender_identity;
 use atm_core::send::render_resolved_built_in_nudge;
+use atm_daemon_client::{resolve_daemon_local_ipc_endpoint, unexpected_response};
+use atm_http_runtime::SAME_HOST_REQUEST_DEADLINE;
 use clap::Args;
 
 use crate::observability::CliObservability;
@@ -38,14 +41,16 @@ const TMUX_PROGRAM_ENV: &str = "ATM_TEST_TMUX_BIN";
 pub struct InternalNudgeCommand;
 
 impl InternalNudgeCommand {
-    pub fn run(self, _observability: &CliObservability) -> Result<()> {
+    pub async fn run(self, _observability: &CliObservability) -> Result<()> {
         let input = InternalNudgeInput::from_env()?;
         let Some(template) = render_resolved_built_in_nudge(&input.event, &input.template)? else {
             return Ok(());
         };
         match input.sink_target {
             BuiltInNudgeSinkTarget::Tmux => TmuxNudgeSink.deliver(&input.event, &template)?,
-            BuiltInNudgeSinkTarget::Graft => GraftNudgeSink.deliver(&input.event, &template)?,
+            BuiltInNudgeSinkTarget::Graft => {
+                GraftNudgeSink.deliver(&input.event, &template).await?
+            }
         }
         Ok(())
     }
@@ -165,13 +170,8 @@ impl TmuxNudgeSink {
 struct GraftNudgeSink;
 
 impl GraftNudgeSink {
-    fn deliver(&self, event: &PostSendHookEvent, rendered_nudge: &str) -> Result<()> {
-        let home_dir = home::atm_home()?;
-        let record_path = graft_receiver_record_path_from_home(
-            &home_dir,
-            &event.recipient_team,
-            &event.recipient,
-        );
+    async fn deliver(&self, event: &PostSendHookEvent, rendered_nudge: &str) -> Result<()> {
+        let lease = lookup_receiver(&event.recipient_team, &event.recipient).await?;
         let request = GraftPostSendRequest {
             event: event.clone(),
             rendered_nudge: rendered_nudge.to_string(),
@@ -179,7 +179,8 @@ impl GraftNudgeSink {
             message_body: String::new(),
         };
         let response = deliver_graft_post_send(
-            &record_path,
+            lease.endpoint,
+            &lease.capability,
             &request,
             GRAFT_POST_SEND_CONNECT_DEADLINE,
             GRAFT_POST_SEND_IO_DEADLINE,
@@ -195,6 +196,30 @@ impl GraftNudgeSink {
             GraftPostSendResponse::Delivered => Ok(()),
             GraftPostSendResponse::Error(error) => Err(error.into()),
         }
+    }
+}
+
+async fn lookup_receiver(
+    team: &atm_core::types::TeamName,
+    agent: &atm_core::types::AgentName,
+) -> Result<atm_storage::GraftReceiverLease, AtmError> {
+    let endpoint = resolve_daemon_local_ipc_endpoint()?;
+    let transport =
+        atm_http_runtime::preferred_local_client(endpoint.as_ref(), SAME_HOST_REQUEST_DEADLINE)?;
+    let response = transport
+        .execute(ApiRequest::new(RequestEnvelope::GraftReceiverLookup {
+            team: team.clone(),
+            agent: agent.clone(),
+        }))
+        .await?
+        .into_inner();
+    match response {
+        ResponseEnvelope::GraftReceiverLookup(Some(lease)) => Ok(lease),
+        ResponseEnvelope::GraftReceiverLookup(None) => {
+            Err(graft_receiver_not_registered_error(team, agent))
+        }
+        ResponseEnvelope::Error(error) => Err(error),
+        other => Err(unexpected_response("graft receiver lookup", other)),
     }
 }
 
@@ -437,9 +462,9 @@ mod tests {
         assert_eq!(input.template.body, None);
     }
 
-    #[test]
+    #[tokio::test]
     #[serial(env)]
-    fn internal_nudge_run_skips_delivery_when_template_is_explicitly_disabled() {
+    async fn internal_nudge_run_skips_delivery_when_template_is_explicitly_disabled() {
         let payload = serde_json::to_string(&InternalNudgeEnvelope {
             event: base_event(),
             sink_target: BuiltInNudgeSinkTarget::Tmux,
@@ -453,6 +478,7 @@ mod tests {
 
         InternalNudgeCommand
             .run(&crate::observability::CliObservability::fallback())
+            .await
             .expect("disabled template should short-circuit");
     }
 

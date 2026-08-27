@@ -27,7 +27,6 @@ use crate::error::{AtmError, AtmErrorCode};
 use crate::list::{ListOutcome, ListQuery};
 use crate::local_http::LocalCapability;
 use crate::read::{ReadOutcome, ReadQuery};
-use crate::schema::canonical_graft_root;
 use crate::send::{SendOutcome, SendRequest};
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::types::{AgentName, ChatId, TeamName};
@@ -97,32 +96,59 @@ where
             "published receiver transport received a non-graft target",
         ));
     };
-    let Some(member) = runtime.load_roster_member(recipient_team, recipient)? else {
+    if runtime
+        .load_roster_member(recipient_team, recipient)?
+        .is_none()
+    {
         return Err(AtmError::new(
             AtmErrorCode::PostSendGraftUnavailable,
             "receiver endpoint is unavailable because the recipient is absent from the roster",
         ));
     };
-    let root = canonical_graft_root(&member.metadata_json).ok_or_else(|| {
-        AtmError::new(
-            AtmErrorCode::PostSendGraftUnavailable,
-            "receiver endpoint is unavailable because the recipient has no published root",
-        )
-    })?;
-    let endpoint_record_path =
-        graft_receiver_record_path_from_root(root.as_path(), recipient_team, recipient);
-    match deliver_graft_post_send_with_deadline(
-        &endpoint_record_path,
+    let Some(lease) = runtime.graft_receiver_lease(recipient_team, recipient)? else {
+        return Err(graft_receiver_not_registered_error(
+            recipient_team,
+            recipient,
+        ));
+    };
+    let response = deliver_graft_post_send_with_deadline(
+        lease.endpoint,
+        &lease.capability,
         &GraftPostSendRequest {
             event: dispatch.event.clone(),
             rendered_nudge: rendered_nudge.clone(),
             message_body: message_body.clone(),
         },
         deadline,
-    )? {
+    );
+    if let Err(error) = &response
+        && error.code() == AtmErrorCode::PostSendGraftUnavailable
+        && let Err(mark_error) = runtime.mark_graft_receiver_unreachable(
+            recipient_team,
+            recipient,
+            &lease.owner_generation,
+            chrono::Utc::now(),
+        )
+    {
+        tracing::warn!(
+            recipient = %recipient,
+            recipient_team = %recipient_team,
+            error_code = %mark_error.code(),
+            error_message = %mark_error.message(),
+            "failed to record unreachable graft receiver"
+        );
+    }
+    match response? {
         GraftPostSendResponse::Delivered => Ok(PostSendEmissionPath::GraftPort),
         GraftPostSendResponse::Error(error) => Err(error),
     }
+}
+
+pub fn graft_receiver_not_registered_error(team: &TeamName, agent: &AgentName) -> AtmError {
+    AtmError::new(
+        AtmErrorCode::PostSendGraftUnavailable,
+        format!("graft receiver is not registered for {agent}@{team}"),
+    )
 }
 
 fn remaining_hook_budget(
@@ -143,12 +169,11 @@ fn remaining_hook_budget(
 }
 
 fn deliver_graft_post_send_with_deadline(
-    record_path: &Path,
+    endpoint: SocketAddr,
+    capability: &LocalCapability,
     request: &GraftPostSendRequest,
     deadline: RequestDeadline,
 ) -> Result<GraftPostSendResponse, AtmError> {
-    let record = read_receiver_record(record_path)?;
-    let endpoint = record.endpoint()?;
     let connect_deadline = remaining_hook_budget(deadline, RECEIVER_HOOK_CONNECT_DEADLINE)?;
     let mut stream = TcpStream::connect_timeout(&endpoint, connect_deadline).map_err(|source| {
         AtmError::new(
@@ -163,7 +188,7 @@ fn deliver_graft_post_send_with_deadline(
     let io_deadline = remaining_hook_budget(deadline, RECEIVER_HOOK_IO_DEADLINE)?;
     apply_stream_deadlines(&stream, io_deadline)?;
     let wire = GraftPostSendWireRequest {
-        capability_base64url: record.capability_base64url.clone(),
+        capability_base64url: capability.to_base64url(),
         request: request.clone(),
     };
     write_graft_post_send_message(
@@ -587,22 +612,21 @@ impl Drop for GraftReceiverListener {
 /// Deliver one post-send nudge to an embedded agent's loopback receiver.
 ///
 /// This is the shared sender used by both the CLI post-send hook and the
-/// daemon dispatcher. It reads the receiver's endpoint record, connects to the
-/// advertised loopback port within `connect_deadline`, and exchanges one
-/// capability-authenticated request/response within `io_deadline`.
+/// daemon dispatcher. It connects to the supplied loopback endpoint within
+/// `connect_deadline`, and exchanges one capability-authenticated
+/// request/response within `io_deadline`.
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] when the record is missing/invalid, the receiver cannot
-/// be reached, or the request/response exchange fails.
+/// Returns [`AtmError`] when the receiver cannot be reached or the
+/// request/response exchange fails.
 pub fn deliver_graft_post_send(
-    record_path: &Path,
+    endpoint: SocketAddr,
+    capability: &LocalCapability,
     request: &GraftPostSendRequest,
     connect_deadline: Duration,
     io_deadline: Duration,
 ) -> Result<GraftPostSendResponse, AtmError> {
-    let record = read_receiver_record(record_path)?;
-    let endpoint = record.endpoint()?;
     let mut stream = TcpStream::connect_timeout(&endpoint, connect_deadline).map_err(|source| {
         AtmError::new(
             AtmErrorCode::PostSendGraftUnavailable,
@@ -615,7 +639,7 @@ pub fn deliver_graft_post_send(
     })?;
     apply_stream_deadlines(&stream, io_deadline)?;
     let wire = GraftPostSendWireRequest {
-        capability_base64url: record.capability_base64url.clone(),
+        capability_base64url: capability.to_base64url(),
         request: request.clone(),
     };
     write_graft_post_send_message(
@@ -864,11 +888,6 @@ mod tests {
     #[test]
     fn loopback_receiver_round_trips_a_capability_authenticated_request() {
         let tempdir = TempDir::new().expect("tempdir");
-        let record_path = graft_receiver_record_path_from_home(
-            tempdir.path(),
-            &TeamName::from_validated(TEST_TEAM),
-            &AgentName::from_validated(TEST_QA),
-        );
         let listener = bind_listener(
             tempdir.path(),
             &TeamName::from_validated(TEST_TEAM),
@@ -876,17 +895,25 @@ mod tests {
             None,
         )
         .expect("bind listener");
+        let record_path = graft_receiver_record_path_from_home(
+            tempdir.path(),
+            &TeamName::from_validated(TEST_TEAM),
+            &AgentName::from_validated(TEST_QA),
+        );
+        fs::remove_file(record_path).expect("delete legacy record before delivery");
 
         let request = GraftPostSendRequest {
             event: test_event(),
             rendered_nudge: "<atm>test nudge</atm>".to_string(),
             message_body: "full immutable body".to_string(),
         };
+        let endpoint = listener.local_addr().expect("local addr");
+        let capability = listener.capability().clone();
         let sender = std::thread::spawn({
-            let record_path = record_path.clone();
             move || {
                 deliver_graft_post_send(
-                    &record_path,
+                    endpoint,
+                    &capability,
                     &request,
                     Duration::from_secs(1),
                     Duration::from_secs(3),

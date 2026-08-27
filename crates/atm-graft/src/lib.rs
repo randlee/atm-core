@@ -575,6 +575,7 @@ fn spawn_graft_receive_loop(
                 observability: worker_observability,
                 stop_rx: channels.stop_rx,
                 ready_tx: Some(channels.ready_tx),
+                receiver_target_tx: None,
             })
         })
         .map_err(spawn_receive_loop_error)

@@ -1,6 +1,7 @@
 use crate::boundary::{RosterEntry, RosterHarness};
 use crate::delivery_channel::{
-    DeliveryChannel, GraftLeaseState, classify_delivery_channel, local_message_received_backend,
+    DeliveryChannel, GraftLeaseState, classify_delivery_channel, graft_lease_state,
+    local_message_received_backend,
 };
 use crate::error::AtmError;
 use crate::provenance::ValidatedWriteProvenance;
@@ -79,20 +80,8 @@ impl DeliveryRecipientSnapshot {
     /// Historical AQ0-era backend-selection flags kept for existing send/nudge
     /// callers. They are projected from the canonical AQ1 delivery-channel
     /// classifier so immediate and deferred routing cannot diverge.
-    fn from_roster(member: RosterEntry) -> Self {
+    fn from_roster(member: RosterEntry, graft_lease: GraftLeaseState) -> Self {
         let local_backend = local_message_received_backend(&member);
-        let graft_lease = if matches!(
-            member.harness,
-            RosterHarness::CodexCli
-                | RosterHarness::GeminiCli
-                | RosterHarness::Opencode
-                | RosterHarness::Hermes
-                | RosterHarness::PythonGraft
-        ) {
-            GraftLeaseState::Active
-        } else {
-            GraftLeaseState::Absent
-        };
         let delivery_channel = classify_delivery_channel(local_backend.as_ref(), graft_lease);
         let local_tmux_post_send = delivery_channel == DeliveryChannel::TmuxSteer;
         let graft_post_send = delivery_channel == DeliveryChannel::Graft;
@@ -345,10 +334,14 @@ impl DeliveryPolicyCoordinator {
         team: &TeamName,
         agent: &AgentName,
     ) -> Result<DeliveryRecipientSnapshot, AtmError> {
-        runtime
+        let member = runtime
             .load_roster_member(team, agent)?
-            .map(DeliveryRecipientSnapshot::from_roster)
-            .ok_or_else(|| AtmError::agent_not_found(agent, team))
+            .ok_or_else(|| AtmError::agent_not_found(agent, team))?;
+        let lease = runtime.graft_receiver_lease(team, agent)?;
+        Ok(DeliveryRecipientSnapshot::from_roster(
+            member,
+            graft_lease_state(lease.as_ref()),
+        ))
     }
 
     /// Resolves the persistence-admission snapshot for the canonical writer.
@@ -597,9 +590,9 @@ pub(crate) fn restore_inbox_rebuild_transitions() -> &'static [RestoreInboxRebui
 mod tests {
     use super::{
         AckReplyStateMachine, DeliveryEventFamily, DeliveryHarnessPath, DeliveryPolicyCoordinator,
-        DeliveryRecipientSnapshot, InboxRepairStateMachine, NewMessageCoordinatorState,
-        RestoreInboxRebuildStateMachine, ack_reply_transitions, append_failure_transitions,
-        inbox_repair_transitions, new_message_success_transitions,
+        DeliveryRecipientSnapshot, GraftLeaseState, InboxRepairStateMachine,
+        NewMessageCoordinatorState, RestoreInboxRebuildStateMachine, ack_reply_transitions,
+        append_failure_transitions, inbox_repair_transitions, new_message_success_transitions,
         restore_inbox_rebuild_transitions, thread_update_transitions,
     };
     use crate::error::AtmError;
@@ -734,7 +727,7 @@ mod tests {
                 recipient_pane_id: None,
                 metadata_json: Map::new(),
             };
-            let snapshot = DeliveryRecipientSnapshot::from_roster(entry);
+            let snapshot = DeliveryRecipientSnapshot::from_roster(entry, GraftLeaseState::Active);
             assert_eq!(snapshot.harness, DeliveryHarnessPath::NonClaude);
             assert!(snapshot.graft_post_send);
         }
