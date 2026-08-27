@@ -5,6 +5,7 @@
 //! hook. The enclosing HTTP route remains async and awaits both operations.
 
 use std::future::Future;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::num::NonZeroU16;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
@@ -17,11 +18,12 @@ use atm_core::boundary::MessageReceivedHookSelector;
 use atm_core::clear::ClearQuery;
 use atm_core::doctor::DoctorQuery;
 use atm_core::error::AtmError;
+use atm_core::graft_store_error;
 use atm_core::list::ListQuery;
 use atm_core::observability::ObservabilityPort;
 use atm_core::protocol::{
-    CompatibilityVerdict, ReleaseVersion, RequestEnvelope, RequestId, ResponseEnvelope,
-    SendResponseEnvelope,
+    CompatibilityVerdict, GraftReceiverRegistration, GraftReceiverUnregistration, ReleaseVersion,
+    RequestEnvelope, RequestId, ResponseEnvelope, SendResponseEnvelope,
 };
 use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::{NudgeMode, WarningEntry, WriteOutcome, prepare_write_with_async_runtime};
@@ -366,6 +368,18 @@ impl StorageAndNudgeRouter {
                 ResponseEnvelope::CompatibilityVerdict(compatibility_verdict(preflight)),
             )),
             ApiRequest::Heartbeat(request) => self.heartbeat(request, ingress, deadline).await,
+            ApiRequest::GraftReceiverRegister(request) => {
+                self.graft_receiver_register(request, ingress, deadline)
+                    .await
+            }
+            ApiRequest::GraftReceiverUnregister(request) => {
+                self.graft_receiver_unregister(request, ingress, deadline)
+                    .await
+            }
+            ApiRequest::GraftReceiverLookup { team, agent } => {
+                self.graft_receiver_lookup(team, agent, ingress, deadline)
+                    .await
+            }
             ApiRequest::ReloadRuntimeView => self.reload_runtime_view(ingress),
         }
     }
@@ -466,8 +480,12 @@ impl StorageAndNudgeRouter {
         let home = self.daemon_home.clone();
         let runtime_health = self.runtime_health.clone();
         let doctor_ports = self.doctor_ports.clone();
+        let presence_doctor = doctor_ports
+            .as_ref()
+            .map(|ports| Arc::clone(&ports.herdr_presence));
         let daemon_context = self.daemon_context.clone();
-        self.blocking_core_bridge
+        let mut report = self
+            .blocking_core_bridge
             .run(deadline, move || {
                 let query = query.with_daemon_paths(home);
                 let mut report = match doctor_ports {
@@ -486,9 +504,16 @@ impl StorageAndNudgeRouter {
                 }?;
                 report.runtime_status = Some(runtime_health.snapshot());
                 report.daemon_context = daemon_context;
-                Ok(ApiResponse::new(ResponseEnvelope::Doctor(Box::new(report))))
+                Ok(report)
             })
-            .await
+            .await?;
+        if let (Some(presence_doctor), Some(roster)) =
+            (presence_doctor, report.member_roster.as_ref())
+        {
+            let findings = presence_doctor.probe(roster, deadline).await;
+            atm_core::doctor::append_doctor_findings(&mut report, findings);
+        }
+        Ok(ApiResponse::new(ResponseEnvelope::Doctor(Box::new(report))))
     }
 
     async fn search(
@@ -528,6 +553,76 @@ impl StorageAndNudgeRouter {
                     health.record_heartbeat(&request),
                 ))
             })
+    }
+
+    async fn graft_receiver_register(
+        &self,
+        request: GraftReceiverRegistration,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        require_local_graft_ingress(ingress)?;
+        let runtime = self.service_runtime.clone();
+        let store = runtime.graft_receiver_endpoint_store()?;
+        self.blocking_core_bridge
+            .run(deadline, move || {
+                validate_graft_receiver_member(&runtime, &request.team, &request.agent)?;
+                let local_endpoint = match request.endpoint.ip() {
+                    IpAddr::V4(address) => address == Ipv4Addr::LOCALHOST,
+                    IpAddr::V6(address) => address == Ipv6Addr::LOCALHOST,
+                };
+                if !local_endpoint {
+                    return Err(AtmError::local_http_endpoint_non_loopback(
+                        "graft receiver endpoint must be loopback",
+                    ));
+                }
+                store
+                    .register(&request, atm_core::types::IsoTimestamp::now().into_inner())
+                    .map_err(graft_store_error)?;
+                Ok(ApiResponse::new(ResponseEnvelope::GraftReceiverRegister))
+            })
+            .await
+    }
+
+    async fn graft_receiver_unregister(
+        &self,
+        request: GraftReceiverUnregistration,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        require_local_graft_ingress(ingress)?;
+        let runtime = self.service_runtime.clone();
+        let store = runtime.graft_receiver_endpoint_store()?;
+        self.blocking_core_bridge
+            .run(deadline, move || {
+                validate_graft_receiver_member(&runtime, &request.team, &request.agent)?;
+                store
+                    .unregister(&request.team, &request.agent, &request.owner_generation)
+                    .map_err(graft_store_error)?;
+                Ok(ApiResponse::new(ResponseEnvelope::GraftReceiverUnregister))
+            })
+            .await
+    }
+
+    async fn graft_receiver_lookup(
+        &self,
+        team: atm_core::types::TeamName,
+        agent: atm_core::types::AgentName,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        require_local_graft_ingress(ingress)?;
+        let runtime = self.service_runtime.clone();
+        let store = runtime.graft_receiver_endpoint_store()?;
+        self.blocking_core_bridge
+            .run(deadline, move || {
+                validate_graft_receiver_member(&runtime, &team, &agent)?;
+                let lease = store.lookup(&team, &agent).map_err(graft_store_error)?;
+                Ok(ApiResponse::new(ResponseEnvelope::GraftReceiverLookup(
+                    lease,
+                )))
+            })
+            .await
     }
 
     fn reload_runtime_view(&self, ingress: AuthenticatedIngress) -> Result<ApiResponse, AtmError> {
@@ -691,6 +786,26 @@ fn validate_heartbeat_member(
     Ok(())
 }
 
+fn require_local_graft_ingress(ingress: AuthenticatedIngress) -> Result<(), AtmError> {
+    if ingress != AuthenticatedIngress::Local {
+        return Err(AtmError::validation(
+            "graft receiver registration is available only through authenticated local HTTP adapters",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_graft_receiver_member(
+    runtime: &LocalServiceRuntime,
+    team: &atm_core::types::TeamName,
+    agent: &atm_core::types::AgentName,
+) -> Result<(), AtmError> {
+    if runtime.load_roster_member(team, agent)?.is_none() {
+        return Err(AtmError::agent_not_found(agent.as_str(), team.as_str()));
+    }
+    Ok(())
+}
+
 fn append_warnings(outcome: &mut WriteOutcome, warnings: Vec<WarningEntry>) {
     match outcome {
         WriteOutcome::Sent(outcome) => outcome.warnings.extend(warnings),
@@ -720,23 +835,25 @@ mod tests {
     use std::fs;
     use std::future::Future;
     use std::num::{NonZeroU16, NonZeroUsize};
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::pin::Pin;
     use std::sync::Arc;
     use std::sync::Mutex;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::time::Duration;
 
+    use atm_core::LocalServiceRuntime;
     use atm_core::boundary::{
         AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, GraftNudgeTarget,
-        LocalTmuxNudgeTarget, MemberKey, MessageReceivedHookSelector, NudgeKind, PendingNudgeStore,
-        PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEvent, RosterEntry, RosterHarness,
-        RosterMemberKind,
+        LocalSteerTarget, LocalTmuxNudgeTarget, MemberKey, MessageReceivedHookSelector, NudgeKind,
+        PendingNudgeStore, PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEvent,
+        RosterEntry, RosterHarness, RosterMemberKind,
     };
     use atm_core::observability::NullObservability;
     use atm_core::protocol::{
-        HeartbeatActivity, RequestEnvelope, ResponseEnvelope, RuntimeReadinessState,
-        SendResponseEnvelope, TeamMemberHeartbeatRequest,
+        GraftReceiverRegistration, GraftReceiverUnregistration, HeartbeatActivity, OwnerGeneration,
+        RequestEnvelope, ResponseEnvelope, RuntimeReadinessState, SendResponseEnvelope,
+        TeamMemberHeartbeatRequest,
     };
     use atm_core::schema::AtmMessageId;
     use atm_core::send::{
@@ -746,7 +863,7 @@ mod tests {
     use atm_core::{AuthenticatedIngress, RequestDeadline, api::ApiRequest, error::AtmError};
     use atm_runtime_test_support::{
         inspect_template_admission_for_test, install_sqlite_message_write_failure,
-        open_sqlite_boundary,
+        open_graft_receiver_endpoint_store, open_sqlite_boundary,
     };
     use atm_storage::{
         MessageKey, MessageQuery, MessageStore, RosterSnapshot, TemplateFrontmatter, TemplateSha,
@@ -928,7 +1045,10 @@ mod tests {
             dispatch: &BuiltInPostSendDispatch,
         ) -> Option<&dyn AsyncMessageReceivedHookEmitter> {
             match &dispatch.target {
-                PostSendBuiltInTarget::LocalSteer(_) => Some(self.tmux.as_ref()),
+                PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Tmux(_)) => {
+                    Some(self.tmux.as_ref())
+                }
+                PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Herdr(_)) => None,
                 PostSendBuiltInTarget::Graft(_) => Some(self.graft.as_ref()),
             }
         }
@@ -1070,6 +1190,8 @@ mod tests {
             Some(composer) => assembly.service_runtime.with_template_composer(composer),
             None => assembly.service_runtime,
         };
+        let service_runtime =
+            attach_graft_receiver_store(service_runtime, &database_path, with_recipient);
         let router = StorageAndNudgeRouter::new(
             service_runtime,
             Arc::new(NullObservability),
@@ -1087,6 +1209,32 @@ mod tests {
             home_dir,
             current_dir,
         }
+    }
+
+    fn attach_graft_receiver_store(
+        service_runtime: LocalServiceRuntime,
+        database_path: &Path,
+        with_recipient: bool,
+    ) -> LocalServiceRuntime {
+        let store = open_graft_receiver_endpoint_store(database_path)
+            .expect("sqlite graft receiver endpoint store");
+        if with_recipient {
+            store
+                .register(
+                    &GraftReceiverRegistration {
+                        team: "test-team".parse().expect("team"),
+                        agent: "recipient".parse().expect("agent"),
+                        endpoint: "127.0.0.1:9".parse().expect("endpoint"),
+                        capability: atm_core::local_http::LocalCapability::generate()
+                            .expect("capability"),
+                        owner_generation: OwnerGeneration::new("01J00000000000000000000000")
+                            .expect("owner generation"),
+                    },
+                    atm_core::types::IsoTimestamp::now().into_inner(),
+                )
+                .expect("register fixture graft receiver");
+        }
+        service_runtime.with_graft_receiver_endpoint_store(store)
     }
 
     fn write_request(home_dir: PathBuf, current_dir: PathBuf) -> WriteRequest {
@@ -1296,10 +1444,12 @@ mod tests {
         };
         let tmux_dispatch = BuiltInPostSendDispatch {
             event: hook_event(),
-            target: PostSendBuiltInTarget::LocalSteer(LocalTmuxNudgeTarget {
-                pane_id: PaneId::from_cli("%1").expect("pane"),
-                rendered_nudge: "tmux nudge".to_owned(),
-            }),
+            target: PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Tmux(
+                LocalTmuxNudgeTarget {
+                    pane_id: PaneId::from_cli("%1").expect("pane"),
+                    rendered_nudge: "tmux nudge".to_owned(),
+                },
+            )),
             kind: NudgeKind::Steer,
         };
         let graft_dispatch = BuiltInPostSendDispatch {
@@ -1475,6 +1625,272 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn graft_receiver_handlers_enforce_local_roster_and_loopback_contracts() {
+        let fixture = fixture(true, None, None);
+        let registration = GraftReceiverRegistration {
+            team: "test-team".parse().expect("team"),
+            agent: "recipient".parse().expect("agent"),
+            endpoint: "127.0.0.1:43101".parse().expect("endpoint"),
+            capability: atm_core::local_http::LocalCapability::generate().expect("capability"),
+            owner_generation: OwnerGeneration::new("01J00000000000000000000000")
+                .expect("owner generation"),
+        };
+        let response = fixture
+            .router
+            .clone()
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverRegister(registration.clone())),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("register response");
+        assert!(matches!(
+            response.into_inner(),
+            ResponseEnvelope::GraftReceiverRegister
+        ));
+
+        let lookup = fixture
+            .router
+            .clone()
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverLookup {
+                    team: registration.team.clone(),
+                    agent: registration.agent.clone(),
+                }),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("lookup response")
+            .into_inner();
+        assert!(matches!(
+            lookup,
+            ResponseEnvelope::GraftReceiverLookup(Some(lease))
+                if lease.endpoint == registration.endpoint
+                    && lease.owner_generation == registration.owner_generation
+        ));
+
+        let non_local = fixture
+            .router
+            .clone()
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverRegister(registration.clone())),
+                AuthenticatedIngress::Peer,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await;
+        assert!(
+            non_local.is_err(),
+            "peer ingress must not register receivers"
+        );
+
+        let unknown = fixture
+            .router
+            .clone()
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverLookup {
+                    team: registration.team.clone(),
+                    agent: "unknown".parse().expect("agent"),
+                }),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await;
+        assert!(unknown.is_err(), "unknown roster members must be rejected");
+
+        let mut non_loopback = registration;
+        non_loopback.endpoint = "192.0.2.1:43101".parse().expect("endpoint");
+        let rejected_endpoint = fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverRegister(non_loopback)),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await;
+        assert!(
+            rejected_endpoint.is_err(),
+            "non-loopback endpoint must be rejected"
+        );
+    }
+
+    // AC 4: register and unregister must both reject non-local ingress and an
+    // unknown roster member, independent of the register/lookup coverage
+    // above.
+    #[tokio::test]
+    async fn graft_receiver_register_and_unregister_reject_non_local_ingress_and_unknown_members() {
+        let fixture = fixture(true, None, None);
+        let team: TeamName = "test-team".parse().expect("team");
+        let known_agent: AgentName = "recipient".parse().expect("agent");
+        let unknown_agent: AgentName = "unknown".parse().expect("agent");
+        let generation = OwnerGeneration::new("01J00000000000000000000010").expect("generation");
+        let registration = GraftReceiverRegistration {
+            team: team.clone(),
+            agent: known_agent.clone(),
+            endpoint: "127.0.0.1:43105".parse().expect("endpoint"),
+            capability: atm_core::local_http::LocalCapability::generate().expect("capability"),
+            owner_generation: generation.clone(),
+        };
+        let unregistration = GraftReceiverUnregistration {
+            team: team.clone(),
+            agent: known_agent.clone(),
+            owner_generation: generation.clone(),
+        };
+
+        let non_local_register = fixture
+            .router
+            .clone()
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverRegister(registration.clone())),
+                AuthenticatedIngress::Peer,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await;
+        assert!(
+            non_local_register.is_err(),
+            "peer ingress must not register receivers"
+        );
+
+        let non_local_unregister = fixture
+            .router
+            .clone()
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverUnregister(
+                    unregistration.clone(),
+                )),
+                AuthenticatedIngress::Peer,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await;
+        assert!(
+            non_local_unregister.is_err(),
+            "peer ingress must not unregister receivers"
+        );
+
+        let mut unknown_registration = registration.clone();
+        unknown_registration.agent = unknown_agent.clone();
+        let unknown_member_register = fixture
+            .router
+            .clone()
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverRegister(unknown_registration)),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await;
+        assert!(
+            unknown_member_register.is_err(),
+            "an unknown roster member must not be registered"
+        );
+
+        let unknown_unregistration = GraftReceiverUnregistration {
+            team: team.clone(),
+            agent: unknown_agent,
+            owner_generation: generation,
+        };
+        let unknown_member_unregister = fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverUnregister(
+                    unknown_unregistration,
+                )),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await;
+        assert!(
+            unknown_member_unregister.is_err(),
+            "an unknown roster member must not be unregistered"
+        );
+    }
+
+    // AC 6: `GraftReceiverLookup` round-trips: hit, miss (`Ok(None)`, not an
+    // error), and non-local ingress rejected.
+    #[tokio::test]
+    async fn graft_receiver_lookup_round_trips_hit_miss_and_rejects_non_local_ingress() {
+        let fixture = fixture(true, None, None);
+        let team: TeamName = "test-team".parse().expect("team");
+        let registered_agent: AgentName = "recipient".parse().expect("agent");
+        let unleased_agent: AgentName = "sender".parse().expect("agent");
+        let registration = GraftReceiverRegistration {
+            team: team.clone(),
+            agent: registered_agent.clone(),
+            endpoint: "127.0.0.1:43106".parse().expect("endpoint"),
+            capability: atm_core::local_http::LocalCapability::generate().expect("capability"),
+            owner_generation: OwnerGeneration::new("01J00000000000000000000011")
+                .expect("generation"),
+        };
+        fixture
+            .router
+            .clone()
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverRegister(registration.clone())),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("register response");
+
+        // Hit: a registered member returns its lease.
+        let hit = fixture
+            .router
+            .clone()
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverLookup {
+                    team: team.clone(),
+                    agent: registered_agent,
+                }),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("lookup response")
+            .into_inner();
+        assert!(matches!(
+            hit,
+            ResponseEnvelope::GraftReceiverLookup(Some(lease))
+                if lease.endpoint == registration.endpoint
+        ));
+
+        // Miss: a known roster member with no registered lease is `Ok(None)`,
+        // not an error.
+        let miss = fixture
+            .router
+            .clone()
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverLookup {
+                    team: team.clone(),
+                    agent: unleased_agent,
+                }),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("lookup response for a member with no lease")
+            .into_inner();
+        assert!(
+            matches!(miss, ResponseEnvelope::GraftReceiverLookup(None)),
+            "a known member with no registered lease must be Ok(None), not an error"
+        );
+
+        // Non-local ingress is rejected with the same gating as
+        // register/unregister.
+        let non_local = fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverLookup {
+                    team,
+                    agent: "recipient".parse().expect("agent"),
+                }),
+                AuthenticatedIngress::Peer,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await;
+        assert!(non_local.is_err(), "peer ingress must not look up leases");
+    }
+
+    #[tokio::test]
     async fn axum_route_persists_before_emitting_one_received_hook() {
         let fixture = fixture(true, None, None);
         let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
@@ -1544,8 +1960,21 @@ mod tests {
                 .emitted_ids
                 .lock()
                 .expect("inspect deferred hook emissions")
-                .is_empty(),
-            "deferred write must suppress immediate receiver delivery"
+                .len()
+                == 1,
+            "a graft recipient receives its queue-shaped handoff at write time"
+        );
+        assert_eq!(
+            fixture
+                .received_hook
+                .dispatches
+                .lock()
+                .expect("inspect deferred dispatch")
+                .first()
+                .expect("queue dispatch")
+                .kind,
+            NudgeKind::Queue,
+            "the graft handoff is explicitly queue-kind"
         );
 
         let member = MemberKey::new(

@@ -1,6 +1,12 @@
+---
+status: complete
+branch: feature/aq-2-queue-graft
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/aq-2-queue-graft
+---
+
 # Sprint AQ2 — Queue: atm-graft Dual-Channel
 
-Status: draft · Branch: `feature/aq-2-queue-graft` off `integrate/phase-aq` ·
+Status: complete · Branch: `feature/aq-2-queue-graft` off `integrate/phase-aq` ·
 PR target: `integrate/phase-aq`
 recommended_agent: arch-ctm · recommended_model: deep-reasoning
 

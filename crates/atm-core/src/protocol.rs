@@ -25,6 +25,17 @@ use crate::search::{SearchRequest, SearchResponse};
 use crate::send::{SendOutcome, WriteRequest};
 use crate::types::{AgentName, IsoTimestamp, SessionId, TeamName, deserialize_optional_session_id};
 
+pub use atm_storage::{
+    GraftReceiverLease, GraftReceiverRegistration, LocalCapability, OwnerGeneration,
+};
+
+/// Body representation for the local graft receiver lookup route.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GraftReceiverLookupRequest {
+    pub team: TeamName,
+    pub agent: AgentName,
+}
+
 const DAEMON_SOCKET_FILENAME: &str = "atm-daemon.sock";
 const MAX_VERSION_LENGTH: usize = 256;
 
@@ -41,6 +52,12 @@ pub enum RequestEnvelope {
     Write(Box<WriteRequest>),
     CompatibilityPreflight(CompatibilityPreflight),
     Heartbeat(TeamMemberHeartbeatRequest),
+    GraftReceiverRegister(GraftReceiverRegistration),
+    GraftReceiverUnregister(GraftReceiverUnregistration),
+    GraftReceiverLookup {
+        team: TeamName,
+        agent: AgentName,
+    },
     List(ListQuery),
     Peek(PeekQuery),
     Receive(ReadQuery),
@@ -57,6 +74,9 @@ pub enum ResponseEnvelope {
     Send(SendResponseEnvelope),
     CompatibilityVerdict(CompatibilityVerdict),
     Heartbeat(TeamMemberHeartbeatResponse),
+    GraftReceiverRegister,
+    GraftReceiverUnregister,
+    GraftReceiverLookup(Option<GraftReceiverLease>),
     List(ListOutcome),
     Peek(Box<ReadOutcome>),
     Receive(Box<ReadOutcome>),
@@ -360,6 +380,14 @@ pub struct TeamMemberHeartbeatResponse {
     pub session_id: Option<SessionId>,
 }
 
+/// Owner-checked removal request for one durable graft receiver lease.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GraftReceiverUnregistration {
+    pub team: TeamName,
+    pub agent: AgentName,
+    pub owner_generation: OwnerGeneration,
+}
+
 /// Runtime-owned live-state projection for one known team member.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -434,6 +462,13 @@ pub struct RuntimeStatusSnapshot {
     pub member_counts: RuntimeStatusCounts,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub members: Vec<RuntimeMemberObservation>,
+    /// Cumulative queue-kind graft handoff failures observed by this daemon.
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub graft_queue_handoff_failures_total: u64,
+}
+
+fn is_zero_u64(value: &u64) -> bool {
+    *value == 0
 }
 #[cfg(test)]
 mod tests {
@@ -573,6 +608,7 @@ mod tests {
                 unknown_members: 3,
             },
             members: Vec::new(),
+            graft_queue_handoff_failures_total: 0,
         };
 
         let encoded = serde_json::to_vec(&snapshot).expect("encode runtime snapshot");
@@ -632,6 +668,7 @@ mod tests {
                 session_changed_by: None,
                 session_changed_at: None,
             }],
+            graft_queue_handoff_failures_total: 0,
         };
         let decoded: LegacyRuntimeStatusSnapshot =
             serde_json::from_value(serde_json::to_value(snapshot).expect("encode snapshot"))

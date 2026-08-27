@@ -112,22 +112,23 @@ pub use api::{
     MAX_HTTP_REQUEST_BODY_BYTES, RequestDeadline,
 };
 pub use atm_storage::derive_ack_requirement;
+pub use atm_storage::{GraftEndpointStoreError, GraftReceiverEndpointStore, GraftReceiverLease};
 pub use atm_storage::{TemplateFrontmatter, TemplateSha};
 #[allow(deprecated)]
 pub use boundary::{
     AckTransition, AsyncMessageReceivedHookEmitter, BuiltInNudgeSinkTarget,
     BuiltInNudgeTemplateKind, ConfigDoctor, ConfigDoctorReport, ConfigIngress, ConfigLoadRequest,
-    ConfigLoadResponse, DoctorFinding, InternalNudgeEnvelope, LoadMailMessageStateRequest,
-    LoadMailMessageStateResponse, MailMessageState, MailStore, MailStoreDoctor,
-    MailStoreDoctorReport, MailStoreHealthSnapshot, MailStoreMailboxMetadataCounts,
-    MailStoreMailboxMetadataRow, Message, MessageFingerprint, MessageKey,
-    MessageReceivedHookEmitter, NotificationEvent, NudgeTemplateOverrideStore, PostSendHookEvent,
-    RenderedBody, ResolvedBuiltInNudgeTemplate, RosterEntry, RosterHarness, RosterMemberKind,
-    RosterStore, RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot,
-    RuntimeStatusSnapshot, SourceSpan, StatusSource, TaskState, TeamNudgeTemplateOverrideMode,
-    TeamNudgeTemplateOverrideRow, TemplateComposer, TemplateInspection, TemplateReference,
-    TemplateReferenceKind, TemplateRoot, TemplateSource, UpsertMailMessageStateRequest,
-    UpsertMailMessageStateResponse,
+    ConfigLoadResponse, DoctorFinding, HerdrNudgeTarget, InternalNudgeEnvelope,
+    LoadMailMessageStateRequest, LoadMailMessageStateResponse, LocalSteerTarget, MailMessageState,
+    MailStore, MailStoreDoctor, MailStoreDoctorReport, MailStoreHealthSnapshot,
+    MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, Message, MessageFingerprint,
+    MessageKey, MessageReceivedHookEmitter, NotificationEvent, NudgeTemplateOverrideStore,
+    PostSendHookEvent, RenderedBody, ResolvedBuiltInNudgeTemplate, RosterEntry, RosterHarness,
+    RosterMemberKind, RosterStore, RosterStoreDoctor, RosterStoreDoctorReport,
+    RosterStoreHealthSnapshot, RuntimeStatusSnapshot, SourceSpan, StatusSource, TaskState,
+    TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, TemplateComposer,
+    TemplateInspection, TemplateReference, TemplateReferenceKind, TemplateRoot, TemplateSource,
+    UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
 };
 pub use config::AtmConfig;
 pub use config::load_config as load_atm_config;
@@ -142,6 +143,11 @@ pub use delivery_channel::{
 pub use graft::AtmGraftClient;
 pub use protocol::{RequestEnvelope, ResponseEnvelope};
 pub use search::{SearchAggregateInput, SearchHit, SearchInput, SearchRequest, SearchResponse};
+// The canonical `GraftEndpointStoreError` -> `AtmError` mapping. Every
+// dispatch path (HTTP handlers, the retained-runtime bridge) must produce the
+// same `AtmError` — and therefore the same HTTP status — for a given store
+// error; see the doc comment on `service_runtime::graft_store_error`.
+pub use service_runtime::graft_store_error;
 pub use service_runtime::{
     LocalFileNonClaudeOutbound, LocalServiceRuntime, with_default_local_service_runtime,
 };

@@ -32,6 +32,54 @@
         }
       }
     },
+    "/graft/receiver/lookup": {
+      "post": {
+        "operation_id": "lookupGraftReceiver",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/GraftReceiverLease"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
+    "/graft/receiver/register": {
+      "post": {
+        "operation_id": "registerGraftReceiver",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": null
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
+    "/graft/receiver/unregister": {
+      "post": {
+        "operation_id": "unregisterGraftReceiver",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": null
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
     "/heartbeat": {
       "post": {
         "operation_id": "teamMemberHeartbeat",
@@ -191,6 +239,61 @@
     "CompatibilityVerdict": {
       "properties": [],
       "required": []
+    },
+    "GraftReceiverLease": {
+      "properties": [
+        "capability",
+        "endpoint",
+        "last_seen_at",
+        "owner_generation",
+        "registered_at",
+        "unreachable_since"
+      ],
+      "required": [
+        "capability",
+        "endpoint",
+        "last_seen_at",
+        "owner_generation",
+        "registered_at"
+      ]
+    },
+    "GraftReceiverLookupRequest": {
+      "properties": [
+        "agent",
+        "team"
+      ],
+      "required": [
+        "agent",
+        "team"
+      ]
+    },
+    "GraftReceiverRegistration": {
+      "properties": [
+        "agent",
+        "capability",
+        "endpoint",
+        "owner_generation",
+        "team"
+      ],
+      "required": [
+        "agent",
+        "capability",
+        "endpoint",
+        "owner_generation",
+        "team"
+      ]
+    },
+    "GraftReceiverUnregistration": {
+      "properties": [
+        "agent",
+        "owner_generation",
+        "team"
+      ],
+      "required": [
+        "agent",
+        "owner_generation",
+        "team"
+      ]
     },
     "HeartbeatRequest": {
       "properties": [],

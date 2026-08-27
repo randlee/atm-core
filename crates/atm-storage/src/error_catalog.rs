@@ -14,7 +14,11 @@ pub(crate) fn render_code(code: AtmErrorCode) -> String {
     guidance(code).to_string()
 }
 
-const fn guidance(code: AtmErrorCode) -> &'static str {
+pub(crate) const fn guidance(code: AtmErrorCode) -> &'static str {
+    guidance_inner(code)
+}
+
+const fn guidance_inner(code: AtmErrorCode) -> &'static str {
     if let Some(message) = configuration_guidance(code) {
         return message;
     }
@@ -37,6 +41,9 @@ const fn guidance(code: AtmErrorCode) -> &'static str {
         return message;
     }
     if let Some(message) = warning_guidance(code) {
+        return message;
+    }
+    if let Some(message) = herdr_guidance(code) {
         return message;
     }
     if let Some(message) = post_send_guidance(code) {
@@ -237,6 +244,27 @@ const fn warning_guidance(code: AtmErrorCode) -> Option<&'static str> {
         | AtmErrorCode::WarningHookExecutionFailed => {
             Some("Inspect the warning context and correct the reported condition.")
         }
+        _ => None,
+    }
+}
+
+const fn herdr_guidance(code: AtmErrorCode) -> Option<&'static str> {
+    match code {
+        AtmErrorCode::RosterMixedLocalBackend => Some(
+            "Use `atm teams update-member` to select the intended local backend for each member.",
+        ),
+        AtmErrorCode::HerdrAgentNotVisible => Some(
+            "Start or rename the Herdr agent to the roster member name and verify its configured session.",
+        ),
+        AtmErrorCode::PostSendHerdrPromptFailed => {
+            Some("Verify the Herdr target is not blocked, then retry the post-send wake.")
+        }
+        AtmErrorCode::HerdrPromptFailed => Some(
+            "Inspect the Herdr command diagnostics and verify the Herdr server and session before retrying.",
+        ),
+        AtmErrorCode::HerdrUnavailable => Some(
+            "Start the Herdr server and verify its socket and session configuration before retrying.",
+        ),
         _ => None,
     }
 }

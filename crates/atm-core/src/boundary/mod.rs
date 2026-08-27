@@ -37,6 +37,16 @@ pub enum NudgeKind {
     Queue,
 }
 
+impl NudgeKind {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Steer => "steer",
+            Self::Queue => "queue",
+        }
+    }
+}
+
 /// The retained tmux receiver nudge confirms its literal payload with two
 /// `send-keys Enter` events separated by this bounded delay. The active Tokio
 /// runtime and CLI command share this contract; frozen legacy daemon source
@@ -158,6 +168,20 @@ pub struct LocalTmuxNudgeTarget {
     pub rendered_nudge: String,
 }
 
+/// Target metadata for a Herdr prompt. The live agent name is carried by the
+/// dispatch event; only the optional per-member session is persisted.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct HerdrNudgeTarget {
+    pub session: Option<crate::HerdrSession>,
+}
+
+/// Backend-specific payload for a local steer.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub enum LocalSteerTarget {
+    Tmux(LocalTmuxNudgeTarget),
+    Herdr(HerdrNudgeTarget),
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct GraftNudgeTarget {
     pub recipient: AgentName,
@@ -174,10 +198,8 @@ pub struct GraftNudgeTarget {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub enum PostSendBuiltInTarget {
-    /// Immediate local tmux `send-keys` steer. Renamed from `LocalTmux` to
-    /// pair with [`NudgeKind::Steer`]; the wrapped payload remains
-    /// tmux-shaped (`LocalTmuxNudgeTarget`) until a later sprint widens it.
-    LocalSteer(LocalTmuxNudgeTarget),
+    /// Local steer through the explicitly selected backend.
+    LocalSteer(LocalSteerTarget),
     Graft(GraftNudgeTarget),
 }
 
@@ -195,6 +217,7 @@ pub struct BuiltInPostSendDispatch {
 pub enum PostSendEmissionPath {
     ExternalHook,
     LocalTmux,
+    LocalHerdr,
     GraftPort,
 }
 
