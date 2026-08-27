@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use atm_storage::OwnerGeneration;
 use atm_storage::contract::{
     GraftEndpointStoreError, GraftReceiverEndpointStore, GraftReceiverLease,
     GraftReceiverRegistration, sealed,
@@ -53,7 +54,7 @@ impl GraftReceiverEndpointStore for SqliteGraftReceiverEndpointStore {
                             registration.agent.as_str(),
                             registration.endpoint.to_string(),
                             capability,
-                            registration.owner_generation,
+                            registration.owner_generation.as_str(),
                             now.to_rfc3339(),
                         ],
                     )
@@ -70,7 +71,7 @@ impl GraftReceiverEndpointStore for SqliteGraftReceiverEndpointStore {
         &self,
         team: &TeamName,
         agent: &AgentName,
-        owner_generation: &str,
+        owner_generation: &OwnerGeneration,
         now: DateTime<Utc>,
     ) -> Result<(), GraftEndpointStoreError> {
         let changed = self
@@ -85,7 +86,7 @@ impl GraftReceiverEndpointStore for SqliteGraftReceiverEndpointStore {
                             now.to_rfc3339(),
                             team.as_str(),
                             agent.as_str(),
-                            owner_generation
+                            owner_generation.as_str()
                         ],
                     )
                     .map_err(|error| {
@@ -104,23 +105,46 @@ impl GraftReceiverEndpointStore for SqliteGraftReceiverEndpointStore {
         &self,
         team: &TeamName,
         agent: &AgentName,
-        owner_generation: &str,
+        owner_generation: &OwnerGeneration,
     ) -> Result<(), GraftEndpointStoreError> {
         self.db
             .with_transaction(|transaction| {
-                transaction
-                    .execute(
-                        "DELETE FROM graft_receiver_endpoints
-                         WHERE team = ?1 AND agent = ?2 AND owner_generation = ?3;",
-                        params![team.as_str(), agent.as_str(), owner_generation],
+                let existing: Option<String> = transaction
+                    .query_row(
+                        "SELECT owner_generation FROM graft_receiver_endpoints
+                         WHERE team = ?1 AND agent = ?2;",
+                        params![team.as_str(), agent.as_str()],
+                        |row| row.get(0),
                     )
+                    .optional()
                     .map_err(|error| {
                         self.db
-                            .error("failed to unregister graft receiver endpoint", error)
+                            .error("failed to inspect graft receiver endpoint lease", error)
                     })?;
-                Ok(())
+                match existing {
+                    // Absent row: unregister is idempotent, per the sprint's
+                    // durable-lease semantics. Nothing to remove, no error.
+                    None => Ok(Ok(())),
+                    Some(stored) if stored == owner_generation.as_str() => {
+                        transaction
+                            .execute(
+                                "DELETE FROM graft_receiver_endpoints
+                                 WHERE team = ?1 AND agent = ?2 AND owner_generation = ?3;",
+                                params![team.as_str(), agent.as_str(), owner_generation.as_str()],
+                            )
+                            .map_err(|error| {
+                                self.db
+                                    .error("failed to unregister graft receiver endpoint", error)
+                            })?;
+                        Ok(Ok(()))
+                    }
+                    // A foreign generation owns the lease: leave the row
+                    // untouched and report the mismatch distinctly from an
+                    // absent row.
+                    Some(_) => Ok(Err(GraftEndpointStoreError::NotOwner)),
+                }
             })
-            .map_err(Self::storage_error)
+            .map_err(Self::storage_error)?
     }
 
     fn lookup(
@@ -157,7 +181,14 @@ impl GraftReceiverEndpointStore for SqliteGraftReceiverEndpointStore {
                             Ok(GraftReceiverLease {
                                 endpoint,
                                 capability,
-                                owner_generation: row.get(2)?,
+                                owner_generation: OwnerGeneration::new(row.get::<_, String>(2)?)
+                                    .map_err(|error| {
+                                        rusqlite::Error::FromSqlConversionFailure(
+                                            2,
+                                            rusqlite::types::Type::Text,
+                                            Box::new(std::io::Error::other(error.to_string())),
+                                        )
+                                    })?,
                                 registered_at: parse_timestamp(row.get::<_, String>(3)?)?,
                                 last_seen_at: parse_timestamp(row.get::<_, String>(4)?)?,
                                 unreachable_since: row
@@ -180,7 +211,7 @@ impl GraftReceiverEndpointStore for SqliteGraftReceiverEndpointStore {
         &self,
         team: &TeamName,
         agent: &AgentName,
-        owner_generation: &str,
+        owner_generation: &OwnerGeneration,
         now: DateTime<Utc>,
     ) -> Result<(), GraftEndpointStoreError> {
         let changed = self
@@ -195,7 +226,7 @@ impl GraftReceiverEndpointStore for SqliteGraftReceiverEndpointStore {
                             now.to_rfc3339(),
                             team.as_str(),
                             agent.as_str(),
-                            owner_generation
+                            owner_generation.as_str()
                         ],
                     )
                     .map_err(|error| {
@@ -240,14 +271,21 @@ mod tests {
         Utc.timestamp_opt(seconds, 0).single().expect("timestamp")
     }
 
-    fn registration(generation: &str, endpoint: &str) -> GraftReceiverRegistration {
+    fn generation(value: &str) -> OwnerGeneration {
+        OwnerGeneration::new(value).expect("owner generation")
+    }
+
+    const GENERATION_ONE: &str = "01J00000000000000000000001";
+    const GENERATION_TWO: &str = "01J00000000000000000000002";
+
+    fn registration(generation_value: &str, endpoint: &str) -> GraftReceiverRegistration {
         let (team, agent) = names();
         GraftReceiverRegistration {
             team,
             agent,
             endpoint: endpoint.parse().expect("endpoint"),
             capability: LocalCapability::generate().expect("capability"),
-            owner_generation: generation.to_owned(),
+            owner_generation: generation(generation_value),
         }
     }
 
@@ -261,7 +299,7 @@ mod tests {
     fn register_lookup_refresh_unreachable_and_unregister_round_trip() {
         let store = store();
         let (team, agent) = names();
-        let registration = registration("generation-1", "127.0.0.1:43101");
+        let registration = registration(GENERATION_ONE, "127.0.0.1:43101");
         let registered_at = timestamp(10);
         let refreshed_at = timestamp(20);
         let unreachable_at = timestamp(30);
@@ -272,13 +310,13 @@ mod tests {
         let lease = store.lookup(&team, &agent).expect("lookup").expect("lease");
         assert_eq!(lease.endpoint, registration.endpoint);
         assert_eq!(lease.capability, registration.capability);
-        assert_eq!(lease.owner_generation, "generation-1");
+        assert_eq!(lease.owner_generation, generation(GENERATION_ONE));
         assert_eq!(lease.registered_at, registered_at);
         assert_eq!(lease.last_seen_at, registered_at);
         assert_eq!(lease.unreachable_since, None);
 
         store
-            .mark_unreachable(&team, &agent, "generation-1", unreachable_at)
+            .mark_unreachable(&team, &agent, &generation(GENERATION_ONE), unreachable_at)
             .expect("mark unreachable");
         assert_eq!(
             store
@@ -289,14 +327,14 @@ mod tests {
             Some(unreachable_at)
         );
         store
-            .refresh(&team, &agent, "generation-1", refreshed_at)
+            .refresh(&team, &agent, &generation(GENERATION_ONE), refreshed_at)
             .expect("refresh");
         let lease = store.lookup(&team, &agent).expect("lookup").expect("lease");
         assert_eq!(lease.last_seen_at, refreshed_at);
         assert_eq!(lease.unreachable_since, None);
 
         store
-            .unregister(&team, &agent, "generation-1")
+            .unregister(&team, &agent, &generation(GENERATION_ONE))
             .expect("unregister");
         assert_eq!(store.lookup(&team, &agent).expect("lookup"), None);
     }
@@ -305,7 +343,7 @@ mod tests {
     fn register_refreshes_matching_generation_and_displaces_other_generations() {
         let store = store();
         let (team, agent) = names();
-        let first = registration("generation-1", "127.0.0.1:43101");
+        let first = registration(GENERATION_ONE, "127.0.0.1:43101");
         store.register(&first, timestamp(10)).expect("register");
 
         let mut refreshed = first.clone();
@@ -317,22 +355,81 @@ mod tests {
         assert_eq!(lease.endpoint, refreshed.endpoint);
         assert_eq!(lease.registered_at, timestamp(20));
 
-        let displaced = registration("generation-2", "127.0.0.1:43103");
+        let displaced = registration(GENERATION_TWO, "127.0.0.1:43103");
         store.register(&displaced, timestamp(30)).expect("displace");
         let lease = store.lookup(&team, &agent).expect("lookup").expect("lease");
         assert_eq!(lease.endpoint, displaced.endpoint);
-        assert_eq!(lease.owner_generation, "generation-2");
+        assert_eq!(lease.owner_generation, generation(GENERATION_TWO));
         assert_eq!(
-            store.refresh(&team, &agent, "generation-1", timestamp(40)),
+            store.refresh(&team, &agent, &generation(GENERATION_ONE), timestamp(40)),
             Err(GraftEndpointStoreError::NotOwner)
         );
+    }
+
+    // Truth table for `unregister` (QA-1 finding #1): the caller's
+    // owner_generation is checked against the stored lease before any row is
+    // touched. Matching generation removes the row; a foreign generation
+    // errors and leaves the row intact; an absent row is idempotent (no
+    // error), per the sprint's durable-lease semantics.
+    #[test]
+    fn unregister_with_matching_generation_removes_the_lease() {
+        let store = store();
+        let (team, agent) = names();
+        let registration = registration(GENERATION_ONE, "127.0.0.1:43101");
+        store
+            .register(&registration, timestamp(10))
+            .expect("register");
+
+        store
+            .unregister(&team, &agent, &generation(GENERATION_ONE))
+            .expect("matching generation unregisters");
+        assert_eq!(
+            store.lookup(&team, &agent).expect("lookup"),
+            None,
+            "the lease row must be removed"
+        );
+    }
+
+    #[test]
+    fn unregister_with_foreign_generation_errors_and_leaves_the_row_intact() {
+        let store = store();
+        let (team, agent) = names();
+        let registration = registration(GENERATION_ONE, "127.0.0.1:43101");
+        store
+            .register(&registration, timestamp(10))
+            .expect("register");
+
+        let outcome = store.unregister(&team, &agent, &generation(GENERATION_TWO));
+        assert_eq!(
+            outcome,
+            Err(GraftEndpointStoreError::NotOwner),
+            "a foreign generation must be rejected distinctly, not silently ignored"
+        );
+        let lease = store
+            .lookup(&team, &agent)
+            .expect("lookup")
+            .expect("the row must remain after a rejected unregister");
+        assert_eq!(lease.owner_generation, generation(GENERATION_ONE));
+        assert_eq!(lease.endpoint, registration.endpoint);
+    }
+
+    #[test]
+    fn unregister_of_an_absent_lease_is_idempotent() {
+        let store = store();
+        let (team, agent) = names();
+        assert_eq!(store.lookup(&team, &agent).expect("lookup"), None);
+
+        store
+            .unregister(&team, &agent, &generation(GENERATION_ONE))
+            .expect("unregistering an absent lease must succeed idempotently");
+        assert_eq!(store.lookup(&team, &agent).expect("lookup"), None);
     }
 
     #[test]
     fn lease_survives_backend_reopen() {
         let directory = tempfile::tempdir().expect("temporary state root");
         let path = directory.path().join("mail.db");
-        let registration = registration("generation-1", "127.0.0.1:43101");
+        let registration = registration(GENERATION_ONE, "127.0.0.1:43101");
         let (team, agent) = names();
         {
             let backend = crate::SqliteStorageBackend::new(&path).expect("backend");
@@ -347,7 +444,7 @@ mod tests {
             .lookup(&team, &agent)
             .expect("lookup")
             .expect("persisted lease");
-        assert_eq!(lease.owner_generation, "generation-1");
+        assert_eq!(lease.owner_generation, generation(GENERATION_ONE));
         assert_eq!(lease.registered_at, timestamp(10));
     }
 }

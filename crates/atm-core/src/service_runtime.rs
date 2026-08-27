@@ -11,7 +11,7 @@ use std::sync::{Arc, RwLock};
 use atm_storage::{
     AsyncMessageSearchStore, AsyncMessageStore as SharedAsyncMessageStore, GraftEndpointStoreError,
     GraftReceiverEndpointStore, GraftReceiverLease, MessageStore as SharedMessageStore,
-    PendingNudgeStore, RosterStore as SharedRosterStore, TemplateCatalogStore,
+    OwnerGeneration, PendingNudgeStore, RosterStore as SharedRosterStore, TemplateCatalogStore,
 };
 
 use crate::boundary::TemplateComposer;
@@ -109,7 +109,7 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
         &self,
         _team: &TeamName,
         _agent: &AgentName,
-        _owner_generation: &str,
+        _owner_generation: &OwnerGeneration,
         _now: chrono::DateTime<chrono::Utc>,
     ) -> Result<(), AtmError> {
         Ok(())
@@ -598,7 +598,7 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         &self,
         team: &TeamName,
         agent: &AgentName,
-        owner_generation: &str,
+        owner_generation: &OwnerGeneration,
         now: chrono::DateTime<chrono::Utc>,
     ) -> Result<(), AtmError> {
         let Some(store) = &self.graft_receiver_endpoint_store else {
@@ -668,14 +668,26 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
     }
 }
 
-#[allow(dead_code)]
-fn graft_store_error(error: GraftEndpointStoreError) -> AtmError {
+/// Canonical `GraftEndpointStoreError` -> `AtmError` mapping.
+///
+/// This is the single source of truth for how graft-receiver store errors
+/// surface as `AtmError`s (and therefore as HTTP statuses, via the shared
+/// `error_response` translation in `atm-http-runtime`). QA-1 finding: this
+/// mapping used to be duplicated here and in
+/// `atm-http-runtime::storage_and_nudge_router`, with different outcomes
+/// (`NotOwner` mapped to `daemon_unavailable`/503 here but to
+/// `validation`/400 there) depending on which call path produced the error.
+/// A generation mismatch is a caller-input problem, not a backend outage, so
+/// the unified mapping treats it (and the reserved `AlreadyActive` variant)
+/// as a validation error; only genuine backend I/O failures map to
+/// `daemon_unavailable`.
+pub fn graft_store_error(error: GraftEndpointStoreError) -> AtmError {
     match error {
         GraftEndpointStoreError::NotOwner => {
-            AtmError::daemon_unavailable("graft receiver lease is owned by another generation")
+            AtmError::validation("graft receiver lease is owned by another generation")
         }
         GraftEndpointStoreError::AlreadyActive => {
-            AtmError::daemon_unavailable("graft receiver lease is already active")
+            AtmError::validation("graft receiver lease is already active")
         }
         GraftEndpointStoreError::Storage(message) => AtmError::daemon_unavailable(message),
     }

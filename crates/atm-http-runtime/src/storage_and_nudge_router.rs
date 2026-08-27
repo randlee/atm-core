@@ -12,13 +12,13 @@ use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use atm_core::GraftEndpointStoreError;
 use atm_core::LocalServiceRuntime;
 use atm_core::api::{ApiRequest, ApiResponse, AuthenticatedIngress, RequestDeadline};
 use atm_core::boundary::MessageReceivedHookSelector;
 use atm_core::clear::ClearQuery;
 use atm_core::doctor::DoctorQuery;
 use atm_core::error::AtmError;
+use atm_core::graft_store_error;
 use atm_core::list::ListQuery;
 use atm_core::observability::ObservabilityPort;
 use atm_core::protocol::{
@@ -795,18 +795,6 @@ fn validate_graft_receiver_member(
     Ok(())
 }
 
-fn graft_store_error(error: GraftEndpointStoreError) -> AtmError {
-    match error {
-        GraftEndpointStoreError::NotOwner => {
-            AtmError::validation("graft receiver lease is owned by another generation")
-        }
-        GraftEndpointStoreError::AlreadyActive => {
-            AtmError::validation("graft receiver lease is already active")
-        }
-        GraftEndpointStoreError::Storage(message) => AtmError::daemon_unavailable(message),
-    }
-}
-
 fn append_warnings(outcome: &mut WriteOutcome, warnings: Vec<WarningEntry>) {
     match outcome {
         WriteOutcome::Sent(outcome) => outcome.warnings.extend(warnings),
@@ -852,8 +840,9 @@ mod tests {
     };
     use atm_core::observability::NullObservability;
     use atm_core::protocol::{
-        GraftReceiverRegistration, HeartbeatActivity, RequestEnvelope, ResponseEnvelope,
-        RuntimeReadinessState, SendResponseEnvelope, TeamMemberHeartbeatRequest,
+        GraftReceiverRegistration, GraftReceiverUnregistration, HeartbeatActivity, OwnerGeneration,
+        RequestEnvelope, ResponseEnvelope, RuntimeReadinessState, SendResponseEnvelope,
+        TeamMemberHeartbeatRequest,
     };
     use atm_core::schema::AtmMessageId;
     use atm_core::send::{
@@ -1610,7 +1599,8 @@ mod tests {
             agent: "recipient".parse().expect("agent"),
             endpoint: "127.0.0.1:43101".parse().expect("endpoint"),
             capability: atm_core::local_http::LocalCapability::generate().expect("capability"),
-            owner_generation: "01J00000000000000000000000".to_owned(),
+            owner_generation: OwnerGeneration::new("01J00000000000000000000000")
+                .expect("owner generation"),
         };
         let response = fixture
             .router
@@ -1690,6 +1680,181 @@ mod tests {
             rejected_endpoint.is_err(),
             "non-loopback endpoint must be rejected"
         );
+    }
+
+    // AC 4: register and unregister must both reject non-local ingress and an
+    // unknown roster member, independent of the register/lookup coverage
+    // above.
+    #[tokio::test]
+    async fn graft_receiver_register_and_unregister_reject_non_local_ingress_and_unknown_members() {
+        let fixture = fixture(true, None, None);
+        let team: TeamName = "test-team".parse().expect("team");
+        let known_agent: AgentName = "recipient".parse().expect("agent");
+        let unknown_agent: AgentName = "unknown".parse().expect("agent");
+        let generation = OwnerGeneration::new("01J00000000000000000000010").expect("generation");
+        let registration = GraftReceiverRegistration {
+            team: team.clone(),
+            agent: known_agent.clone(),
+            endpoint: "127.0.0.1:43105".parse().expect("endpoint"),
+            capability: atm_core::local_http::LocalCapability::generate().expect("capability"),
+            owner_generation: generation.clone(),
+        };
+        let unregistration = GraftReceiverUnregistration {
+            team: team.clone(),
+            agent: known_agent.clone(),
+            owner_generation: generation.clone(),
+        };
+
+        let non_local_register = fixture
+            .router
+            .clone()
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverRegister(registration.clone())),
+                AuthenticatedIngress::Peer,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await;
+        assert!(
+            non_local_register.is_err(),
+            "peer ingress must not register receivers"
+        );
+
+        let non_local_unregister = fixture
+            .router
+            .clone()
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverUnregister(
+                    unregistration.clone(),
+                )),
+                AuthenticatedIngress::Peer,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await;
+        assert!(
+            non_local_unregister.is_err(),
+            "peer ingress must not unregister receivers"
+        );
+
+        let mut unknown_registration = registration.clone();
+        unknown_registration.agent = unknown_agent.clone();
+        let unknown_member_register = fixture
+            .router
+            .clone()
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverRegister(unknown_registration)),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await;
+        assert!(
+            unknown_member_register.is_err(),
+            "an unknown roster member must not be registered"
+        );
+
+        let unknown_unregistration = GraftReceiverUnregistration {
+            team: team.clone(),
+            agent: unknown_agent,
+            owner_generation: generation,
+        };
+        let unknown_member_unregister = fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverUnregister(
+                    unknown_unregistration,
+                )),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await;
+        assert!(
+            unknown_member_unregister.is_err(),
+            "an unknown roster member must not be unregistered"
+        );
+    }
+
+    // AC 6: `GraftReceiverLookup` round-trips: hit, miss (`Ok(None)`, not an
+    // error), and non-local ingress rejected.
+    #[tokio::test]
+    async fn graft_receiver_lookup_round_trips_hit_miss_and_rejects_non_local_ingress() {
+        let fixture = fixture(true, None, None);
+        let team: TeamName = "test-team".parse().expect("team");
+        let registered_agent: AgentName = "recipient".parse().expect("agent");
+        let unleased_agent: AgentName = "sender".parse().expect("agent");
+        let registration = GraftReceiverRegistration {
+            team: team.clone(),
+            agent: registered_agent.clone(),
+            endpoint: "127.0.0.1:43106".parse().expect("endpoint"),
+            capability: atm_core::local_http::LocalCapability::generate().expect("capability"),
+            owner_generation: OwnerGeneration::new("01J00000000000000000000011")
+                .expect("generation"),
+        };
+        fixture
+            .router
+            .clone()
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverRegister(registration.clone())),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("register response");
+
+        // Hit: a registered member returns its lease.
+        let hit = fixture
+            .router
+            .clone()
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverLookup {
+                    team: team.clone(),
+                    agent: registered_agent,
+                }),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("lookup response")
+            .into_inner();
+        assert!(matches!(
+            hit,
+            ResponseEnvelope::GraftReceiverLookup(Some(lease))
+                if lease.endpoint == registration.endpoint
+        ));
+
+        // Miss: a known roster member with no registered lease is `Ok(None)`,
+        // not an error.
+        let miss = fixture
+            .router
+            .clone()
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverLookup {
+                    team: team.clone(),
+                    agent: unleased_agent,
+                }),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("lookup response for a member with no lease")
+            .into_inner();
+        assert!(
+            matches!(miss, ResponseEnvelope::GraftReceiverLookup(None)),
+            "a known member with no registered lease must be Ok(None), not an error"
+        );
+
+        // Non-local ingress is rejected with the same gating as
+        // register/unregister.
+        let non_local = fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverLookup {
+                    team,
+                    agent: "recipient".parse().expect("agent"),
+                }),
+                AuthenticatedIngress::Peer,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await;
+        assert!(non_local.is_err(), "peer ingress must not look up leases");
     }
 
     #[tokio::test]
