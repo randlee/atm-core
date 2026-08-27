@@ -911,9 +911,9 @@ def wyvern_pins(root: Path) -> dict[Path, str]:
         path = root / relative_path
         if not path.is_file():
             continue
-        match = WYVERN_PIN_PATTERN.search(path.read_text(encoding="utf-8"))
-        if match is not None:
-            pins[relative_path] = match.group(1)
+        matches = WYVERN_PIN_PATTERN.findall(path.read_text(encoding="utf-8"))
+        if len(matches) == 1:
+            pins[relative_path] = matches[0]
     return pins
 
 

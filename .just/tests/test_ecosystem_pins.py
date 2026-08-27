@@ -247,6 +247,32 @@ class EcosystemPinTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "exactly one"):
                 VALIDATE_RELEASE.replace_wyvern_pin(wyvern, "0.4.0")
 
+    def test_wyvern_pin_pair_must_agree_during_preflight(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for relative_path in (
+                Path("Cargo.toml"),
+                Path("crates/atm-template-sc-compose/Cargo.toml"),
+                *VALIDATE_RELEASE.WYVERN_PIN_FILES,
+            ):
+                destination = root / relative_path
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(REPO_ROOT / relative_path, destination)
+            mismatched = root / VALIDATE_RELEASE.WYVERN_PIN_FILES[1]
+            mismatched.write_text(
+                mismatched.read_text(encoding="utf-8").replace("0.5.0", "0.4.0"),
+                encoding="utf-8",
+            )
+            findings: list[VALIDATE_RELEASE.Finding] = []
+            with (
+                mock.patch.object(VALIDATE_RELEASE, "latest_registry_version", return_value="1.2.0"),
+                mock.patch.object(VALIDATE_RELEASE, "latest_wyvern_version", return_value="0.5.0"),
+                mock.patch.object(VALIDATE_RELEASE.shutil, "which", return_value="/usr/bin/wyvern"),
+            ):
+                VALIDATE_RELEASE.validate_ecosystem_currency(root, findings, dry_run=True)
+            inconsistency = next(finding for finding in findings if "missing or inconsistent" in finding.summary)
+            self.assertIn("same exact WYVERN_PIN", inconsistency.detail)
+
     @mock.patch.object(VALIDATE_RELEASE, "run_capture")
     def test_wyvern_release_lookup_uses_approved_repository(self, run_capture: mock.Mock) -> None:
         run_capture.return_value = subprocess.CompletedProcess(

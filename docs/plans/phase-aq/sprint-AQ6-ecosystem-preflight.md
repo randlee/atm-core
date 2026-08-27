@@ -154,6 +154,10 @@ regression-tested inside Wyvern's own CI.
    guarantee (no `atm` build/test lane requires Wyvern) remains
    independently verified and unaffected by this new preflight-host
    requirement.
+   The two platform Send-To entry points retain paired `WYVERN_PIN`
+   declarations; the preflight treats them as one logical source and fails
+   actionably if either declaration is missing, duplicated, or disagrees with
+   the other.
 1b. The fix-forward escape hatch: a simulated upstream regression (stale
    fixture/stub release) drives the preflight step to pin back to the
    last known-good version, file (or reuse, if `ATMD_GH_AUTOFIX_ISSUES=1`
@@ -189,7 +193,7 @@ None.
 
 | Criterion | Evidence/status |
 | --- | --- |
-| AC1 / AC1a / AC1b | Blocking validator, exact pin comparison, actionable Wyvern prerequisite, gated pin-back mutation, regression tests, and evidence-register recording in `scripts/validate_release.py` and `.just/tests/test_ecosystem_pins.py`. |
+| AC1 / AC1a / AC1b | Blocking validator, exact pin comparison, actionable Wyvern prerequisite, paired `WYVERN_PIN` single-source check, gated pin-back mutation, regression tests, and evidence-register recording in `scripts/validate_release.py` and `.just/tests/test_ecosystem_pins.py`. |
 | AC2 | Dry-run transcript committed in `docs/plans/phase-aq/evidence/AQ6/ecosystem-preflight.md`. |
 | AC3 | Wyvern contract issue [#139](https://github.com/randlee/wyvern/issues/139), linked from the AQ6 evidence register. |
 | AC4 | PR #1066 CI lane run IDs are recorded in the evidence file after the final checks complete; local lint/test phases passed, with local macOS codesign requiring an interactive keychain and therefore not claimable here. |
