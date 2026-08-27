@@ -22,6 +22,20 @@ def atm_command() -> str:
     return os.environ.get("ATM_BIN", "atm")
 
 
+def atm_command_parts() -> list[str]:
+    """Build a portable argv for the configured ATM executable.
+
+    Unix can execute a Python test shim through its shebang, but Windows does
+    not treat a `.py` path as an executable for `CreateProcess`. Supporting a
+    Python shim here keeps the deterministic hook harness cross-platform while
+    leaving normal `atm`/`atm.exe` launches unchanged.
+    """
+    command = atm_command()
+    if Path(command).suffix.lower() == ".py":
+        return [sys.executable, command]
+    return [command]
+
+
 def write_hook_trace(
     command: list[str],
     completed: subprocess.CompletedProcess[str] | None = None,
@@ -52,7 +66,7 @@ def write_hook_trace(
 def run_atm(
     args: list[str], *, strict: bool = False, trace: bool = False
 ) -> subprocess.CompletedProcess[str] | None:
-    command = [atm_command(), *args]
+    command = [*atm_command_parts(), *args]
     try:
         completed = subprocess.run(
             command,
