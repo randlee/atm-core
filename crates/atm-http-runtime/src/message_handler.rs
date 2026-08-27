@@ -17,10 +17,9 @@ use atm_core::clear::ClearQuery;
 use atm_core::doctor::DoctorQuery;
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::protocol::{
-    CompatibilityPreflight, GraftReceiverLookupRequest, GraftReceiverRegistration,
-    GraftReceiverRefreshRequest, GraftReceiverUnregistration, QueueGetNextRequest, RequestId,
-    ResponseEnvelope,
-    SendResponseEnvelope, TeamMemberHeartbeatRequest, next_request_id,
+    CompatibilityPreflight, GraftReceiverLookupRequest, GraftReceiverRefreshRequest,
+    GraftReceiverRegistration, GraftReceiverUnregistration, QueueGetNextRequest, RequestId,
+    ResponseEnvelope, SendResponseEnvelope, TeamMemberHeartbeatRequest, next_request_id,
 };
 use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::search::SearchRequest;
