@@ -206,6 +206,50 @@ fn deferred_write_suppresses_dispatch_and_sets_exactly_one_marker() {
     );
 }
 
+/// AQ2.5 AC3: a deferred write to a bare-CLI recipient must retain the
+/// queue-pull dispatch so the daemon can append the message to its RAM FIFO.
+#[test]
+fn deferred_bare_cli_write_builds_queue_pull_dispatch() {
+    let (root, runtime, _recording_store, team) = setup();
+    let home_dir = root.path().join("home");
+    std::fs::create_dir_all(&home_dir).expect("home dir");
+    runtime
+        .shared_roster_store_arc()
+        .save_roster(&atm_storage::RosterSnapshot {
+            team_name: team.clone(),
+            members: vec![
+                roster_member(&team, "sender", None),
+                roster_member(&team, "recipient", None),
+            ],
+            refreshed_at: None,
+        })
+        .expect("seed bare-CLI roster");
+
+    let request = write_request(
+        &home_dir,
+        &team,
+        NudgeMode::Deferred,
+        AtmMessageId::new(),
+        IsoTimestamp::now(),
+    );
+    let prepared =
+        prepare_write_with_runtime(request, &NullObservability, &runtime).expect("prepare write");
+    let dispatches = prepared
+        .build_received_hook_dispatches(&runtime)
+        .expect("dispatches");
+
+    assert_eq!(
+        dispatches.len(),
+        1,
+        "bare-CLI deferred writes need one queue handoff"
+    );
+    assert!(matches!(
+        dispatches[0].target,
+        atm_core::boundary::PostSendBuiltInTarget::QueuePull(_)
+    ));
+    assert_eq!(dispatches[0].kind, atm_core::boundary::NudgeKind::Queue);
+}
+
 #[test]
 fn immediate_write_dispatch_is_unchanged_and_sets_no_marker() {
     let (root, runtime, recording_store, team) = setup();

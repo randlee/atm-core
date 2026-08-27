@@ -218,7 +218,13 @@ def stop_daemon(process: subprocess.Popen[str] | None) -> None:
         process.wait(timeout=5)
 
 
-def run_hook(env: dict[str, str], atm: Path, harness: str, timeout: float) -> subprocess.CompletedProcess[str]:
+def run_hook(
+    env: dict[str, str],
+    atm: Path,
+    harness: str,
+    timeout: float,
+    trace_path: Path,
+) -> subprocess.CompletedProcess[str]:
     hook = ROOT / "scripts" / "hooks" / "atm_queue_hook.py"
     hook_env = {
         **env,
@@ -227,6 +233,7 @@ def run_hook(env: dict[str, str], atm: Path, harness: str, timeout: float) -> su
         "ATM_TEAM": TEAM,
         "ATM_HOME": env["ATM_HOME"],
         "ATM_CONFIG_HOME": env["ATM_CONFIG_HOME"],
+        "ATM_HOOK_TRACE_FILE": str(trace_path),
     }
     return subprocess.run(
         [sys.executable, str(hook), "--event", "stop", "--harness", harness],
@@ -255,12 +262,80 @@ def send_message(atm: Path, env: dict[str, str], timeout: float, *, verb: str, b
     return {"verb": verb, "body": body, "stdout": completed.stdout.strip()}
 
 
+def diagnostic_command(
+    atm: Path,
+    env: dict[str, str],
+    args: list[str],
+    *,
+    identity: str,
+    timeout: float,
+) -> dict[str, Any]:
+    completed = run_cli(atm, env, args, identity=identity, timeout=timeout)
+    return {
+        "argv": completed.args,
+        "returncode": completed.returncode,
+        "stdout": completed.stdout,
+        "stderr": completed.stderr,
+    }
+
+
+def daemon_log_tail(env: dict[str, str]) -> dict[str, Any]:
+    candidates = [
+        Path(env["ATM_HOME"]) / "logs" / "atm.log.jsonl",
+        Path(env.get("ATM_LOG_DIR", "")) / "atm.log.jsonl",
+        Path(env["ATM_HOME"]) / "atm.log.jsonl",
+    ]
+    for path in candidates:
+        if not path.is_file():
+            continue
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        filtered = [
+            line
+            for line in lines
+            if any(term in line.lower() for term in ("queue", "pending", "nudge"))
+        ]
+        return {"path": str(path), "lines": filtered[-40:]}
+    return {"path": str(candidates[0]), "lines": [], "missing": True}
+
+
 def pull_step(env: dict[str, str], atm: Path, timeout: float, *, harness: str = "claude") -> dict[str, Any]:
-    completed = run_hook(env, atm, harness, timeout)
+    # The hook's trace captures the raw queue-get process without performing a
+    # second destructive pull. The mailbox/doctor/log probes are read-only and
+    # run immediately before the lifecycle Stop invocation.
+    trace_path = Path(env["ATM_HOOK_STATE_DIR"]) / "last-queue-get.json"
+    try:
+        trace_path.unlink()
+    except FileNotFoundError:
+        pass
+    inbox = diagnostic_command(
+        atm,
+        env,
+        ["peek", "--json", "--all", "--team", TEAM, "--as", RECEIVER],
+        identity=RECEIVER,
+        timeout=timeout,
+    )
+    doctor = diagnostic_command(
+        atm,
+        env,
+        ["doctor", "--json", "--team", TEAM],
+        identity=RECEIVER,
+        timeout=timeout,
+    )
+    completed = run_hook(env, atm, harness, timeout, trace_path)
+    if trace_path.is_file():
+        raw_queue_get: dict[str, Any] = json.loads(trace_path.read_text(encoding="utf-8"))
+    else:
+        raw_queue_get = {"missing": True, "path": str(trace_path)}
     step: dict[str, Any] = {
         "returncode": completed.returncode,
         "stdout": completed.stdout.strip(),
         "stderr_tail": completed.stderr.strip()[-2000:],
+        "diagnostics": {
+            "raw_queue_get": raw_queue_get,
+            "receiver_inbox_peek": inbox,
+            "doctor": doctor,
+            "daemon_log_tail": daemon_log_tail(env),
+        },
         "hook_argv": [sys.executable, str(ROOT / "scripts" / "hooks" / "atm_queue_hook.py"), "--event", "stop", "--harness", harness],
         "hook_env_keys": sorted(
             key
@@ -273,8 +348,9 @@ def pull_step(env: dict[str, str], atm: Path, timeout: float, *, harness: str = 
                 "ATM_HOOK_STATE_DIR",
                 "ATM_HOOK_DEBOUNCE_SECONDS",
                 "ATM_HOOK_TIMEOUT_SECONDS",
+                "ATM_HOOK_TRACE_FILE",
             )
-            if key in env or key in {"ATM_BIN", "ATM_IDENTITY", "ATM_TEAM"}
+            if key in env or key in {"ATM_BIN", "ATM_IDENTITY", "ATM_TEAM", "ATM_HOOK_TRACE_FILE"}
         ),
     }
     if step["stdout"]:
