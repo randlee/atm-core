@@ -6,7 +6,7 @@ phase: AT
 sprint: AT.2
 worktree: feature/pat-s2-legacy-publish-deletion
 branch: feature/pat-s2-legacy-publish-deletion
-status: proposed
+status: complete
 estimated_scope: verify-then-delete of retired publish assets; no behavior additions
 ```
 

@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import shutil
 import re
 import subprocess
 import sys
@@ -15,23 +14,6 @@ from pathlib import Path
 
 PREFLIGHT_FULL = "full"
 PREFLIGHT_LOCKED = "locked"
-INSTALLED_DOC_REVIEW_FIELD = "reviewed_for_release"
-
-
-def require_relpath(obj: dict, key: str, label: str) -> Path:
-    value = Path(require_str(obj, key, label))
-    if value.is_absolute():
-        raise SystemExit(f"{label}.{key} must be a relative path")
-    return value
-
-
-def manifest_repo_root(manifest_path: Path) -> Path:
-    return manifest_path.resolve().parent.parent
-
-
-def installed_docs_source_root(manifest_path: Path) -> Path:
-    manifest = load_manifest(manifest_path)
-    return manifest_repo_root(manifest_path) / manifest["installed_docs"]["source_root"]
 HOMEBREW_PLATFORM_TRIPLES = {
     ("on_macos", "on_arm"): "aarch64-apple-darwin",
     ("on_macos", "on_intel"): "x86_64-apple-darwin",
@@ -92,26 +74,10 @@ def load_manifest(path: Path) -> dict:
             raise SystemExit(f"duplicate release binary {name}")
         seen_bins.add(name)
 
-    installed_docs = data.get("installed_docs")
-    if not isinstance(installed_docs, dict):
-        raise SystemExit("manifest must define [installed_docs]")
-    source_root = require_relpath(installed_docs, "source_root", "installed_docs")
-    install_root = require_relpath(installed_docs, "install_root", "installed_docs")
-    entrypoint = require_relpath(installed_docs, "entrypoint", "installed_docs")
-    try:
-        entrypoint.relative_to(install_root)
-    except ValueError as exc:
-        raise SystemExit("installed_docs.entrypoint must live under installed_docs.install_root") from exc
-
     crates.sort(key=lambda item: (item["publish_order"], item["artifact"]))
     return {
         "crates": crates,
         "release_binaries": binaries,
-        "installed_docs": {
-            "source_root": source_root,
-            "install_root": install_root,
-            "entrypoint": entrypoint,
-        },
     }
 
 
@@ -199,46 +165,6 @@ def list_publish_plan(args: argparse.Namespace) -> int:
 def list_release_binaries(args: argparse.Namespace) -> int:
     for entry in load_manifest(Path(args.manifest))["release_binaries"]:
         print(entry["name"])
-    return 0
-
-
-def installed_doc_source_files(manifest_path: Path) -> list[Path]:
-    source_root = installed_docs_source_root(manifest_path)
-    if not source_root.is_dir():
-        raise SystemExit(f"installed docs source root does not exist: {source_root}")
-    return sorted(path for path in source_root.rglob("*") if path.is_file())
-
-
-def installed_doc_members(manifest_path: Path) -> list[Path]:
-    manifest = load_manifest(manifest_path)
-    source_root = installed_docs_source_root(manifest_path)
-    install_root = manifest["installed_docs"]["install_root"]
-    members: list[Path] = []
-    for path in installed_doc_source_files(manifest_path):
-        members.append(install_root / path.relative_to(source_root))
-    return members
-
-
-def list_installed_doc_members(args: argparse.Namespace) -> int:
-    for member in installed_doc_members(Path(args.manifest)):
-        print(member.as_posix())
-    return 0
-
-
-def stage_install_docs(args: argparse.Namespace) -> int:
-    manifest_path = Path(args.manifest)
-    manifest = load_manifest(manifest_path)
-    repo_root = manifest_repo_root(manifest_path)
-    source_root = repo_root / manifest["installed_docs"]["source_root"]
-    install_root = Path(args.output_root) / manifest["installed_docs"]["install_root"]
-    if install_root.exists():
-        shutil.rmtree(install_root)
-    install_root.mkdir(parents=True, exist_ok=True)
-    for source_path in installed_doc_source_files(manifest_path):
-        destination = install_root / source_path.relative_to(source_root)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source_path, destination)
-    print(install_root)
     return 0
 
 
@@ -759,15 +685,6 @@ def build_parser() -> argparse.ArgumentParser:
     list_bins = subparsers.add_parser("list-release-binaries")
     list_bins.add_argument("--manifest", required=True)
     list_bins.set_defaults(func=list_release_binaries)
-
-    list_docs = subparsers.add_parser("list-installed-doc-members")
-    list_docs.add_argument("--manifest", required=True)
-    list_docs.set_defaults(func=list_installed_doc_members)
-
-    stage_docs = subparsers.add_parser("stage-install-docs")
-    stage_docs.add_argument("--manifest", required=True)
-    stage_docs.add_argument("--output-root", required=True)
-    stage_docs.set_defaults(func=stage_install_docs)
 
     validate_bins = subparsers.add_parser("validate-release-binaries")
     validate_bins.add_argument("--manifest", required=True)

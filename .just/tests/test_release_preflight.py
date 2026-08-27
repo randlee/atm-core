@@ -1,3 +1,5 @@
+"""Temporary consumer-contract coverage retained pending the first kit release."""
+
 from __future__ import annotations
 
 from pathlib import Path

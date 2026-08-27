@@ -17,6 +17,7 @@ from check_version_sync import validate_lockfile
 from check_version_sync import validate_winget_manifests
 from check_version_sync import success_message
 from check_version_sync import validate_release_version_lockstep
+from check_version_sync import KIT_RELEASE_ARTIFACTS
 
 
 ROOT_MANIFEST = """\
@@ -69,11 +70,12 @@ class CheckVersionSyncTests(unittest.TestCase):
 
         validate_release_version_lockstep(repo_root)
 
+        expected_kit_script = str(repo_root / KIT_RELEASE_ARTIFACTS)
         self.assertEqual(
             run.call_args.args[0],
             [
                 sys.executable,
-                "/tmp/atm/.github/scripts/release_artifacts.py",
+                expected_kit_script,
                 "verify-version-lockstep",
                 "--manifest",
                 "release/publish-artifacts.toml",

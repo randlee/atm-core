@@ -49,7 +49,8 @@ release flow.
   - `inventory`
   - `cargo-lock-drift`
   - `dependency-currency`
-  - `phase-ad-readiness`
+  - the optional historical `phase-ad-readiness` diagnostic (thorough-smoke
+    only; not part of the default release target)
 - `just lint all` currently gates 21 subchecks:
   - `fmt`
   - `clippy`
