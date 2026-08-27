@@ -25,7 +25,10 @@ fn receiver_record_publication_and_unlink_stay_in_the_listener_owner() {
     );
     let authorized_record_publication_sites = [
         "fn write_receiver_record(",
-        "write_receiver_record(record_path, &record)?;",
+        // RBQA-F002 (AQ1.7 PR #1048): `bind`'s legacy dual-write is
+        // best-effort — logged, never propagated — so it can no longer
+        // hard-gate the authoritative daemon-registry registration.
+        "if let Err(error) = write_receiver_record(record_path, &record) {",
         "write_receiver_record(&self.record_path, &self.record)?;",
     ];
     assert_eq!(
