@@ -62,7 +62,7 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-053 — Typed Temporary Daemon-Service Launch Overlay](./ADR-053-typed-temporary-daemon-service-launch-overlay.md)
 - `ADR-054` — reserved — Phase AQ (nudge taxonomy + queue mechanism, AQ1 —
   landing on `feature/aq-1-trait-foundation`)
-- `ADR-055` — reserved — Phase AQ (ATM_TEMP + transfer seam, AQ4)
+- [ADR-055 — `ATM_TEMP` Scratch-Root Contract and Cross-Host Transfer Seam](./ADR-055-atm-temp-and-transfer-seam.md)
 - `ADR-056` — reserved — Phase AQ (graft receiver registration + lease
   semantics, AQ1.5)
 - [ADR-057 — Peer-Write Redial and Delivery-Attempt Invariant](./ADR-057-peer-write-redial-and-delivery-attempt-invariant.md)
