@@ -1383,7 +1383,12 @@ Status 2026-08-26: plan hardened (plan-QA PASS 2026-08-24, queue-first
 6-sprint structure with the AQ1.5–AQ1.9 graft-registration insertion and
 AQ2.5 delivery triggers). AQ's entry dependency — Phase AO2 merged to
 `develop` (ADR-047/ADR-053 on the cut head) — is satisfied as of PR #966.
-Ready to start on approval.
+AQ1.6 graft receiver registration client implementation is complete on
+`feature/aq-1-6-graft-receiver-registration-client`; its PR targets
+`integrate/phase-aq`. AQ1.7 graft endpoint consumer cutover is complete on
+`feature/aq-1-7-graft-endpoint-consumer-cutover`, pending its PR review.
+AQ1.8 graft file-record retirement is complete on
+`feature/aq-1-8-graft-file-record-retirement`, pending its PR review.
 
 ## 49. Phase AO2 — Benchmark Safety, Evidence, And Transport Performance [COMPLETE — MERGED TO DEVELOP]
 

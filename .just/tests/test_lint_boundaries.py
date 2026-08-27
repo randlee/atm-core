@@ -1308,6 +1308,96 @@ atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.1.2" }
                 rendered,
             )
 
+    def test_collect_boundary_violations_scans_consumer_crate_cfg_test_src_module_for_trait_only_doubles(
+        self,
+    ) -> None:
+        """AQ1.5 QA-2: a `#[cfg(test)]` module inside a *consumer* crate's
+        `src/` must not be invisible either.
+
+        Covers both shapes the finding calls out: an inline
+        `#[cfg(test)] mod NAME { .. }` block and a `#[cfg(test)] mod NAME;`
+        file module -- the latter is the exact shape of the real
+        `atm_core::ack::admission_tests::EmptyGraftReceiverStore` double this
+        regression guards.
+        """
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            trait_only_record = (
+                BASE_BOUNDARY_TOML.replace('trait = "MailStore"', 'trait = "TestEmitter"')
+                .replace('owner_package = "atm-storage-rusqlite"', 'owner_package = "atm-core"')
+                .replace('owner_crate_path = "atm_storage_rusqlite"', 'owner_crate_path = "atm_core"')
+                .replace(
+                    'allowed_dependents = ["atm-daemon"]',
+                    'allowed_dependents = ["agent-team-mail", "atm-daemon", "atm-storage-rusqlite"]',
+                )
+                .replace('type = "SqliteMailStore"\nmodule = "atm_storage_rusqlite::mail_store"\n', "")
+                .replace('visibility = "private"\nconstructor = "private"', 'visibility = "trait_only"\nconstructor = "none"')
+                .replace('state = "planned"', 'state = "active"')
+                .replace(
+                    'allowed_test_double_paths = ["atm_core::test_support::InMemoryMailStore"]',
+                    'allowed_test_double_paths = ['
+                    '"atm_daemon::tests::ApprovedInlineEmitter", '
+                    '"atm_daemon::emitter_double::ApprovedFileEmitter"]',
+                )
+            )
+            self.write_toml_record(repo_root, "atm-core", text=trait_only_record)
+            (repo_root / "crates/atm-daemon/src/lib.rs").write_text(
+                "impl TestEmitter for ProductionOutsideCfgTestEmitter {}\n"
+                "\n"
+                "#[cfg(test)]\n"
+                "mod tests {\n"
+                "    impl TestEmitter for ApprovedInlineEmitter {}\n"
+                "    impl TestEmitter for UnapprovedInlineEmitter {}\n"
+                "}\n"
+                "\n"
+                "#[cfg(test)]\n"
+                "mod emitter_double;\n",
+                encoding="utf-8",
+            )
+            (repo_root / "crates/atm-daemon/src/emitter_double.rs").write_text(
+                "impl TestEmitter for ApprovedFileEmitter {}\n"
+                "impl TestEmitter for UnapprovedFileEmitter {}\n"
+                '// impl TestEmitter for CommentedOutFileEmitter {}\n'
+                '    source.contains("impl TestEmitter for StringLiteralFileEmitter");\n',
+                encoding="utf-8",
+            )
+
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+
+            self.assertFalse(
+                any("atm_daemon::tests::ApprovedInlineEmitter" in item for item in rendered), rendered
+            )
+            self.assertFalse(
+                any("atm_daemon::emitter_double::ApprovedFileEmitter" in item for item in rendered), rendered
+            )
+            self.assertFalse(any("CommentedOutFileEmitter" in item for item in rendered), rendered)
+            self.assertFalse(any("StringLiteralFileEmitter" in item for item in rendered), rendered)
+            # A production impl sitting outside any #[cfg(test)] scope in a
+            # consumer crate is out of this pass's remit (that is a different
+            # policy question than test-double allowlisting); confirm the new
+            # cfg(test)-module scan did not silently widen scope to it.
+            self.assertFalse(
+                any("ProductionOutsideCfgTestEmitter" in item for item in rendered), rendered
+            )
+            self.assertTrue(
+                any(
+                    "trait-only implementation 'atm_daemon::tests::UnapprovedInlineEmitter'" in item
+                    and "allowed_test_double_paths" in item
+                    for item in rendered
+                ),
+                rendered,
+            )
+            self.assertTrue(
+                any(
+                    "trait-only implementation 'atm_daemon::emitter_double::UnapprovedFileEmitter'" in item
+                    and "allowed_test_double_paths" in item
+                    for item in rendered
+                ),
+                rendered,
+            )
+
     def test_every_declared_io_forbidden_tag_has_source_pattern_mapping(self) -> None:
         declared: set[str] = set()
         for path in Path(__file__).resolve().parents[2].glob("boundaries/*/*.toml"):

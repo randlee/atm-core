@@ -1,0 +1,49 @@
+boundary_id = "BOUNDARY-GraftReceiverEndpointStore"
+owner_package = "atm-storage"
+owner_crate_path = "atm_storage"
+name = "GraftReceiverEndpointStore"
+
+[public]
+trait = "GraftReceiverEndpointStore"
+notes = "sealed storage-neutral durable registry for loopback graft receiver leases; the natural (team, agent) key is intentionally not a SQL foreign key to the replace-on-save roster"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["graft_receiver_lease_registration", "graft_receiver_lease_refresh", "graft_receiver_lease_unregistration", "graft_receiver_liveness_feedback"]
+io_forbidden = ["direct_sqlite_io", "message_delivery", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-core", "atm-daemon-bootstrap", "atm-runtime", "atm-storage-rusqlite"]
+allowed_dependencies = ["atm-error", "base64", "chrono", "getrandom", "serde"]
+forbidden_edges = ["atm-storage -> atm-core", "atm-storage -> atm-storage-rusqlite", "atm-storage -> atm-daemon"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["rusqlite::Connection"]
+
+[contracts]
+request_types = ["GraftReceiverRegistration", "TeamName", "AgentName", "SocketAddr", "LocalCapability", "DateTime<Utc>"]
+response_types = ["GraftReceiverLease", "Option<GraftReceiverLease>"]
+error_types = ["GraftEndpointStoreError"]
+notes = ["register unconditionally displaces a different owner generation because its sole in-tree caller has already acquired the same-host receiver flock", "lookup liveness is derived by consumers from last_seen_at and unreachable_at; no status boolean is stored", "the lease table uses a natural (team, agent) join key and declares no roster foreign key"]
+
+[testing]
+allowed_test_double_paths = [
+  "crate::contract::DummyGraftReceiverEndpointStore",
+  "atm_core::ack::admission_tests::EmptyGraftReceiverStore",
+]
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-GRAFT-RECEIVER-ENDPOINT-STORE-REFERENCES"]
+review_gates = ["local_ingress_only", "loopback_endpoint_only", "no_backend_to_core_edge_for_graft_receiver_endpoint_store"]
+
+[status]
+state = "concrete_landed"
+notes = ["AQ1.5 owns the sealed contract, SQLite implementation, schema migration, and replacement-router registration routes; receiver-side announce and production bootstrap wiring belong to AQ1.6 and AQ1.7"]

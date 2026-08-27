@@ -5,7 +5,7 @@
 //! decide how a queue-claimed (or immediate) receiver nudge should reach its
 //! recipient. It intentionally performs no delivery of its own and requires
 //! no schema migration: every input is already-persisted roster data
-//! (`recipient_pane_id`, `metadata_json`).
+//! (`recipient_pane_id`, `metadata_json`) and the registry-backed graft lease.
 
 use std::fmt;
 
@@ -81,6 +81,21 @@ pub enum LocalMessageReceivedBackend {
 pub enum GraftLeaseState {
     Absent,
     Active,
+}
+
+/// Map the durable registry lookup to the AQ1 classifier state.
+///
+/// Lease freshness and delivery reachability are advisory diagnostics. A
+/// present lease remains an active graft capability for routing, even when it
+/// is stale or has recorded an unreachable observation; delivery owns the
+/// dial-anyway behavior.
+#[must_use]
+pub fn graft_lease_state(lookup: Option<&atm_storage::GraftReceiverLease>) -> GraftLeaseState {
+    if lookup.is_some() {
+        GraftLeaseState::Active
+    } else {
+        GraftLeaseState::Absent
+    }
 }
 
 /// The delivery channel one committed dispatch should be routed through.
@@ -214,6 +229,21 @@ mod tests {
             classify_delivery_channel(None, GraftLeaseState::Absent),
             DeliveryChannel::BareCli
         );
+    }
+
+    #[test]
+    fn graft_lease_state_maps_presence_without_rederiving_liveness() {
+        assert_eq!(graft_lease_state(None), GraftLeaseState::Absent);
+        let lease = atm_storage::GraftReceiverLease {
+            endpoint: "127.0.0.1:1".parse().expect("endpoint"),
+            capability: crate::local_http::LocalCapability::generate().expect("capability"),
+            owner_generation: crate::protocol::OwnerGeneration::new("01J00000000000000000000000")
+                .expect("owner generation"),
+            registered_at: chrono::Utc::now() - chrono::Duration::hours(1),
+            last_seen_at: chrono::Utc::now() - chrono::Duration::hours(1),
+            unreachable_since: Some(chrono::Utc::now()),
+        };
+        assert_eq!(graft_lease_state(Some(&lease)), GraftLeaseState::Active);
     }
 
     #[test]
