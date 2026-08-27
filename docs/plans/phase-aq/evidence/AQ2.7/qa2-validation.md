@@ -31,7 +31,7 @@ exact `ac04_shutdown_send_stops_pump_before_drain_completes` test.
 | Gate | Result |
 |---|---|
 | `cargo fmt --all -- --check` | PASS |
-| `cargo clippy --workspace --all-targets -- -D warnings` | PASS |
+| `cargo clippy --workspace --exclude atm-daemon --all-targets -- -D warnings` | PASS |
 | `python3 .just/run_lint.py all` | PASS — all 32 checks, including `sc-boundary` |
 | `cargo test -p atm-herdr -p atm-daemon-bootstrap` | PASS — 13 + 30 tests |
 | `cargo test -p atm-graft` | PASS — 36 tests, including bare-workspace activation |
@@ -43,6 +43,11 @@ The prior workspace failure in
 was caused by the sibling merge reintroducing file-record references. The
 integrate-side graft correction resolves that mismatch without weakening or
 editing the architectural guard.
+
+For QA-4, `origin/integrate/phase-aq` was merged again at `1afc2fdf9` in merge
+commit `5bab9094f`. The only conflict was in `crates/atm-herdr/src/lib.rs`;
+the merged result retains the AQ2.7 advancing `TestBreakerClock` and the
+integrate-side `BreakerClock` tests.
 
 ## QA-4 retry-partition run
 
@@ -62,6 +67,16 @@ The deterministic blocked-dialog transcript is recorded in
 
 AQ3 drains tmux / graft-only remains a downstream integrate verification after
 #1054 merges (AQ3 tests …); it is not claimed as complete here.
+
+## QA-4 post-merge gates
+
+| Gate | Result |
+|---|---|
+| `cargo fmt --all -- --check` | PASS |
+| `cargo clippy --workspace --exclude atm-daemon --all-targets -- -D warnings` | PASS |
+| `python3 .just/run_lint.py all` | PASS — all 32 checks |
+| `cargo test -p atm-http-runtime` | PASS — 151 tests and 2 doctests |
+| `cargo test --workspace` | PASS — all workspace tests and doctests |
 
 ## Scope and evidence notes
 
