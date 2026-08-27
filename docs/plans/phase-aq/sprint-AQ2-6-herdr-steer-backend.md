@@ -325,7 +325,7 @@ this doc cites it by decision id (`D1`–`D8`).
    `crates/atm-herdr` (precedent: `crates/atm-graft` — a thin embedded
    client crate with a narrow, named dependency set), **not** a module in
    `atm-http-runtime` and **not** `atm-core`. `atm-herdr` depends only on
-   `atm-core` (for `HerdrSession`, the public `boundary::MemberKey`, and
+   `atm-core` (for `HerdrSession`, `AgentName`, `RequestDeadline`, and
    `AtmError`), `tokio`, and `serde_json` — no `atm-storage`, no
    `atm-storage-rusqlite`, no `atm-http-runtime`. Its two dependents are
    exactly `atm-http-runtime` (AQ2.7's poll pump,
@@ -353,7 +353,8 @@ this doc cites it by decision id (`D1`–`D8`).
      `owner_package = "atm-herdr"`; `[dependencies] allowed_dependents =
      ["atm-http-runtime", "atm-daemon-bootstrap"]` (exactly the two above);
      `forbidden_edges = ["atm-core -> atm-herdr", "atm-storage -> atm-herdr",
-     "atm-storage-rusqlite -> atm-herdr"]`, enforced by the boundaries
+     "atm-storage-rusqlite -> atm-herdr", "atm-herdr -> atm-daemon-bootstrap",
+     "atm-herdr -> atm-http-runtime"]`, enforced by the boundaries
      lint's live-Cargo-edge check.
    - `docs/atm-herdr/{requirements.md,architecture.md,boundaries.md}`
      (atm-graft-style crate docs, authored in planning; this sprint updates
@@ -377,12 +378,12 @@ this doc cites it by decision id (`D1`–`D8`).
 
    ```rust
    pub trait HerdrProcessAdapter: Send + Sync {
-       fn prompt(&self, agent: &AgentName, session: Option<&str>, deadline: RequestDeadline)
+       fn prompt(&self, agent: &AgentName, session: Option<&HerdrSession>, deadline: RequestDeadline)
            -> Pin<Box<dyn Future<Output = Result<HerdrPromptOutcome, AtmError>> + Send + '_>>;
-       fn wait(&self, agent: &AgentName, session: Option<&str>, until: &[HerdrAgentStatus],
+       fn wait(&self, agent: &AgentName, session: Option<&HerdrSession>, until: &[HerdrAgentStatus],
                timeout: Duration, deadline: RequestDeadline)
            -> Pin<Box<dyn Future<Output = Result<HerdrWaitOutcome, AtmError>> + Send + '_>>;
-       fn get(&self, agent: &AgentName, session: Option<&str>, deadline: RequestDeadline)
+       fn get(&self, agent: &AgentName, session: Option<&HerdrSession>, deadline: RequestDeadline)
            -> Pin<Box<dyn Future<Output = Result<HerdrGetOutcome, AtmError>> + Send + '_>>;
    }
    pub struct HerdrProcessInvoker;
@@ -445,7 +446,43 @@ this doc cites it by decision id (`D1`–`D8`).
      accepted; it does not mean the message was read, an agent turn
      completed, or an idle state was observed.
 
-4. **Boundary and observability governance.** Update
+4. **atm-herdr crate internals: `HerdrError` and `HerdrSpawnBreaker`
+   (HR-CORE-008, HR-CORE-009, HR-SAFE-005, HR-SAFE-006, HR-TEST-005).**
+   Same `crates/atm-herdr` crate and PR as deliverable 3; this is its
+   error/breaker/test-double surface, not a separate crate:
+
+   - `HerdrError` (`error.rs`): the closed enum mapping every ADR-058 D8
+     stderr `error.code` row this crate parses, plus this crate's own
+     transport/timeout/breaker outcomes (`ServerNotRunning`,
+     `ProtocolMismatch`, `TimedOut`, `Unavailable { retry_after }`, and an
+     `Advisory { code }` catch-all for an unrecognized `error.code`) —
+     never matched on `error.message` text or JSON key order
+     (`HR-CORE-008`). `From<HerdrError> for atm_core::error::AtmError`
+     lets a caller fold it at its own boundary; `atm-herdr` itself never
+     constructs an `AtmError`.
+   - `HerdrSpawnBreaker` (`breaker.rs`): a per-host, in-memory circuit
+     breaker (`HR-CORE-009`) constructed exactly once, at the composition
+     root (`atm-daemon-bootstrap::build_replacement_handler`), and shared
+     via one `Arc<HerdrSpawnBreaker>` across every `HerdrProcessInvoker`
+     call and every member — never a second, independently-constructed
+     instance (ADR-058 D10.1). Exponential backoff `1s *
+     2^consecutive_failures`, capped at `30s`; half-open state permits
+     exactly one probe, whose own outcome decides the next transition.
+     Opens only on the infrastructure-class outcomes named in
+     `HR-SAFE-005` (`server_not_running`, `protocol_mismatch`, an
+     external-timeout kill, or a failed `agent list`/`agent get` call) and
+     never on a lifecycle/target-shaped outcome (`agent_blocked`,
+     `agent_not_found`, `agent_not_ready`, `agent_target_ambiguous`).
+     While open, every adapter method returns `HerdrError::Unavailable
+     { retry_after }` without spawning a child (`HR-SAFE-006`). State is
+     never persisted to SQLite, the roster, or `.atm.toml`, and resets to
+     closed on daemon restart.
+   - `testing::FakeHerdrProcessAdapter` (`testing.rs`, `test-utils`
+     feature): the sole test double any consumer crate uses below the
+     adapter boundary, satisfying deliverable 3's `forbidden_test_bypasses`
+     rule and this crate's own equivalent.
+
+5. **Boundary and observability governance.** Update
    `boundaries/atm-core/message-received-hook-emitter.toml`
    (`[status].notes`, currently "the daemon tmux receiver and
    atm_graft::nudge_sink::GraftReceiveHook") and the matching boundary tests
@@ -574,19 +611,27 @@ this doc cites it by decision id (`D1`–`D8`).
     per `message-received-hook-emitter.toml`'s `forbidden_test_bypasses`
     and the equivalent rule in `boundaries/atm-herdr/herdr-process-adapter.toml`.
     **(deliverable 3, I18)**
-13. `select_emitter` routes `(Steer, LocalSteer(Herdr(_)))` **and**
+13. A breaker unit-test suite proves: `HerdrSpawnBreaker` opens on
+    `server_not_running`, `protocol_mismatch`, an external-timeout kill,
+    and a failed `agent list` call; backoff is `1s * 2^consecutive_failures`
+    capped at `30s`; half-open state permits exactly one probe; and the
+    first successful probe after `retry_after` elapses closes the breaker
+    and resets the failure counter. `HerdrError`'s mapping covers every
+    ADR-058 D8 `error.code` row. **(deliverable 4)**
+14. `select_emitter` routes `(Steer, LocalSteer(Herdr(_)))` **and**
     `(Queue, LocalSteer(Herdr(_)))` to `HerdrReceivedHook`; `(Queue, Tmux(_)
-    | Graft(_))` still routes to `None`. **(deliverable 4)**
-14. Boundary-manifest freshness for **both** `message-received-hook-emitter.toml`
+    | Graft(_))` still routes to `None`. **(deliverable 5)**
+15. Boundary-manifest freshness for **both** `message-received-hook-emitter.toml`
     and the new `boundaries/atm-herdr/herdr-process-adapter.toml`
     (`allowed_dependents` exactly `["atm-http-runtime", "atm-daemon-bootstrap"]`,
     `forbidden_edges` covering `atm-core`/`atm-storage`/`atm-storage-rusqlite`
-    -> `atm-herdr`), the `herdr_string_containment_gate` source-audit rule,
+    -> `atm-herdr` and `atm-herdr` -> `atm-daemon-bootstrap`/`atm-http-runtime`),
+    the `herdr_string_containment_gate` source-audit rule,
     `docs/atm-herdr/{requirements.md,architecture.md,boundaries.md}` present
     and current, `cargo test -p atm-architecture`, and `just test` pass on
     all three lanes. Herdr command fixtures run on macOS/ubuntu; Windows
     verifies selection and command construction only until a supported
-    Windows Herdr deployment is explicitly added. **(deliverable 4)**
+    Windows Herdr deployment is explicitly added. **(deliverable 5)**
 
 ## Required validation
 

@@ -38,10 +38,12 @@ Rules:
   `atm-daemon`
 - `atm-herdr` must not perform direct SQLite access, direct roster
   reads/writes, or direct mail read/write of any kind
-- `atm-herdr` must not resolve `LocalMessageReceivedBackend`,
-  `HerdrSession`, or any other roster-derived routing value; every public
-  method takes an already-resolved `AgentName` and an already-resolved
-  optional session string supplied by the caller
+- `atm-herdr` depends on `atm-core` only for `AgentName`, `HerdrSession`,
+  `RequestDeadline`, and `AtmError`; it must not resolve
+  `LocalMessageReceivedBackend` or any other roster-derived routing value
+  itself — every public method takes an already-resolved `AgentName` and
+  an already-resolved, already-validated `Option<&HerdrSession>` supplied
+  by the caller
 - `atm-herdr` must not implement `PendingNudgeStore`, `MemberKey`,
   `NudgeClaim`, or any queue-state mutation; queue claim/release/requeue
   policy is entirely caller-owned
@@ -62,7 +64,7 @@ Rules:
   mailbox-read prompt constant (ADR-058 D2)
 - `atm-herdr` must never read `HERDR_SESSION` or `HERDR_SOCKET_PATH` from
   its own process environment to select a session; the caller's explicit
-  `Option<&str>` argument is the only session source (ADR-058 D1)
+  `Option<&HerdrSession>` argument is the only session source (ADR-058 D1)
 - `HerdrSpawnBreaker` state must remain in-memory, process-lifetime,
   per-host, and shared by every member; it must never be persisted to
   SQLite, the roster, or `.atm.toml`, and must never be keyed per member

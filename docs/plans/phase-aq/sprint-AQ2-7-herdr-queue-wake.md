@@ -106,7 +106,8 @@ for whichever sprint picks up the shared-drain follow-up.
    to its own crate, `crates/atm-herdr`** (precedent: `crates/atm-graft`),
    authored by AQ2.6 (`sprint-AQ2-6-herdr-steer-backend.md` deliverable 3).
    This sprint only **imports** `atm_herdr::{HerdrProcessAdapter,
-   HerdrAgentListEntry, HerdrAgentListOutcome, HerdrAgentStatus}` — it does
+   AgentSnapshot, HerdrListOutcome, HerdrAgentStatus, HerdrError,
+   HerdrSpawnBreaker}` — it does
    not define the crate, its `Cargo.toml`, or its boundary manifest. The
    module layout is normatively documented in `docs/atm-herdr/architecture.md`
    (authored in planning alongside this sprint by a separate doc pass; this
@@ -253,19 +254,58 @@ for whichever sprint picks up the shared-drain follow-up.
    filtering step, not duplicated at outcome time.
 
 4. **Poll-to-heartbeat feed — every listed member, not only pending
-   ones.** Each tick, for every `(team, member)` in deliverable 2a's
+   ones — through a new source-gated entry point that never writes
+   `pid`.** Each tick, for every `(team, member)` in deliverable 2a's
    roster-wide `HerdrSteer` population that has a matching entry (by
    `name`) in that session's `agent list` result (deliverable 2c), record
    the observed state into the **same** `RuntimeHealth` map harness
-   heartbeats populate (`crates/atm-http-runtime/src/runtime_health.rs`),
-   using the **same** `record_heartbeat` entry point
-   `storage_and_nudge_router.rs`'s heartbeat handler already calls
-   (`~487-510`, per `sprint-AQ3-queue-tmux.md`'s citation) — this is the
-   mechanism the Non-closure/Convergence note above depends on for a
-   future kind-agnostic AQ3 drain to pick Herdr members up for free.
+   heartbeats populate (`crates/atm-http-runtime/src/runtime_health.rs`) —
+   but **not** through `record_heartbeat`. `record_heartbeat`
+   (`runtime_health.rs:101-157`) unconditionally sets `record.pid =
+   Some(request.pid)` at line 144 on every call, for every member, whether
+   or not the request actually carries a live process's pid; a synthesized
+   Herdr-poll observation has no real pid, so routing it through
+   `record_heartbeat` (the prior draft's `TeamMemberHeartbeatRequest {
+   pid: 0, ... }`) would clobber a member's doctor-visible pid with `0` on
+   every poll tick and corrupt the next native heartbeat's `pid_changed`
+   computation (`previous_pid.is_some_and(|pid| pid != request.pid)` would
+   compare against the poll's `0`, not the member's real prior pid). This
+   sprint therefore adds a second, source-gated entry point instead of
+   reusing `record_heartbeat`, and never constructs a
+   `TeamMemberHeartbeatRequest` for a poll observation:
 
-   - **Mapping**: `agent_status` `idle`/`done` → `HeartbeatActivity::Idle`;
-     `working`/`blocked` → `HeartbeatActivity::ActiveToolUse` (`RuntimeMemberState`
+   ```rust
+   // atm-http-runtime, RuntimeHealth, AQ2.7-owned
+   pub fn record_observed_state(
+       &self,
+       member: &MemberKey,
+       state: RuntimeMemberState,
+       source: RuntimeObservationSource,
+   ) {
+       // Updates only `state`, `state_changed_at` (on an actual
+       // transition), and `last_active_at` when `state ==
+       // RuntimeMemberState::Active` — the same transition-detection
+       // path `record_heartbeat` uses, so a future
+       // `MemberStateTransitionSink::on_transition` hook (AQ3) fires
+       // uniformly from either entry point once it exists. Never writes
+       // `pid`, `session_id`, or `session_changed_at`: this entry point
+       // has no pid or session to report and must never overwrite a
+       // native heartbeat's.
+   }
+   ```
+
+   `MemberKey` (`runtime_health.rs:44-47`) becomes `pub(crate)` (from
+   private) so this sprint's pump, also in `atm-http-runtime`, can
+   construct it — no cross-crate visibility change. The pump calls
+   `record_observed_state(&member_key, mapped_state,
+   RuntimeObservationSource::HerdrPoll)` directly; it never builds a
+   `TeamMemberHeartbeatRequest` or discards a `TeamMemberHeartbeatResponse`
+   for this path, so `TeamMemberHeartbeatRequest` itself is **not**
+   widened with a `source` field by this sprint (unlike the prior draft) —
+   the poll path no longer goes through it at all.
+
+   - **Mapping**: `agent_status` `idle`/`done` → `RuntimeMemberState::Idle`;
+     `working`/`blocked` → `RuntimeMemberState::Active` (`RuntimeMemberState`
      has no distinct blocked/working variant — `protocol.rs:366-372` — so
      both map to the existing `Active` state); `unknown`, or the member
      absent from the `list` result, produces **no call** — an existing
@@ -276,28 +316,25 @@ for whichever sprint picks up the shared-drain follow-up.
      harness heartbeat push).** `RuntimeObservationSource`
      (`protocol.rs:322-326`, currently `{Heartbeat, LocalCommand}`) gains a
      third variant, `HerdrPoll` (serializes `herdr_poll`, `#[serde(rename_all
-     = "snake_case")]` already on the enum). `TeamMemberHeartbeatRequest`
-     (`protocol.rs:329-341`) gains `#[serde(default)] pub source:
-     RuntimeObservationSource`, defaulting to `Heartbeat` (`#[derive(Default)]`
-     + `#[default]` on the `Heartbeat` variant) so every existing native
-     heartbeat caller (`storage_and_nudge_router.rs`'s handler, which never
-     sets this field) is unaffected. `RuntimeHealth`'s private `MemberRecord`
-     (`runtime_health.rs:49-56`) gains a `state_source: RuntimeObservationSource`
-     field (defaulted `Heartbeat`); `record_heartbeat`
-     (`runtime_health.rs:101-157`) stores `request.source` into it instead of
-     leaving it implicit; `snapshot` (`runtime_health.rs:161-180`) reads
-     `record.state_source` instead of the currently hardcoded
-     `Some(RuntimeObservationSource::Heartbeat)` at line 173. This is a
-     backward-compatible widening of an existing type this sprint owns the
-     diff for — AQ3 (landing later) does not need to touch it.
-   - **Synthesized request.** `TeamMemberHeartbeatRequest { team, member,
-     pid: 0, observed_at: <tick wall-clock IsoTimestamp>, activity,
-     source: RuntimeObservationSource::HerdrPoll, session_id: None }`.
-     `pid: 0` is an explicit non-process sentinel — Herdr-poll observations
-     are not tied to a harness OS process the way a native heartbeat is;
-     `pid_changed` on the resulting `TeamMemberHeartbeatResponse` is not
-     meaningful here and this sprint discards the response rather than
-     forwarding it anywhere doctor-visible as an anomaly.
+     = "snake_case")]` already on the enum). `RuntimeHealth`'s private
+     `MemberRecord` (`runtime_health.rs:49-56`) gains a `state_source:
+     RuntimeObservationSource` field (defaulted `Heartbeat`);
+     `record_observed_state` stores `source` into it; `record_heartbeat`
+     continues to store `RuntimeObservationSource::Heartbeat`
+     unconditionally on every call (a native heartbeat is always more
+     authoritative than a stale poll-derived tag); `snapshot`
+     (`runtime_health.rs:161-180`) reads `record.state_source` instead of
+     the currently hardcoded `Some(RuntimeObservationSource::Heartbeat)`
+     at line 173. This is a backward-compatible widening of an existing
+     type this sprint owns the diff for — AQ3 (landing later) does not
+     need to touch it.
+   - **No synthesized `TeamMemberHeartbeatRequest`, no `pid: 0` sentinel,
+     no discarded response.** The prior draft's `TeamMemberHeartbeatRequest
+     { pid: 0, ... }` routed through `record_heartbeat` is deleted outright,
+     not merely reinterpreted: `record_observed_state` takes exactly
+     `member`, `state`, and `source`, returns nothing, and there is no
+     `pid_changed` computation on this path because no pid is ever
+     written or compared.
    - **The tick's own drain decision (deliverable 2d) uses the fresh `list`
      result directly, never a stale `RuntimeHealth` read-back** — heartbeat
      ingestion is a side effect of the poll for observability/convergence,
@@ -350,8 +387,8 @@ for whichever sprint picks up the shared-drain follow-up.
    fixture proves: no claim is taken for the affected session while open
    (nothing to release), subsequent ticks skip the `list` spawn entirely
    until `retry_after`, and the first successful `list` after `retry_after`
-   closes the breaker — reusing AQ2.6 AC 11's extension fixture shape, not
-   a second breaker implementation.
+   closes the breaker — reusing AQ2.6 AC 13's breaker fixture shape (AQ2.6
+   deliverable 4, `HerdrSpawnBreaker`), not a second breaker implementation.
 6. A `blocked`-race fixture: the tick's `list` observes a member `idle`,
    the member enters a blocked dialog before the subsequent `prompt`
    lands; `agent prompt` returns `agent_blocked`; the exact claim is
@@ -391,7 +428,13 @@ for whichever sprint picks up the shared-drain follow-up.
     `MemberStateTransitionSink::on_transition` fires for a Herdr member —
     that trait does not exist until AQ3 lands; the convergence claim
     (Non-closure) is validated once AQ3's kind-agnostic drain follow-up
-    lands, not by this sprint.
+    lands, not by this sprint. A further fixture proves `record_observed_state`
+    never writes `pid`: after a `HerdrPoll` tick observes a member, that
+    member's `pid` in the `RuntimeHealth` snapshot is unchanged from
+    whatever it was before the tick (`None` if the member never sent a
+    native heartbeat); a subsequent native heartbeat's `pid_changed`
+    computation is then exercised and shown to compare against that
+    pre-poll pid, not against any value the poll tick introduced.
 
 ## Required validation
 

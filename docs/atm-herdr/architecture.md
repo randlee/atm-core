@@ -18,10 +18,14 @@ pre-Phase-AQ workspace.
 ## 2. Architectural Rules
 
 - `atm-herdr` is a leaf process-adapter crate: it depends on `atm-core`
-  (for `AgentName`, `RequestDeadline`, and shared error vocabulary), `tokio`
-  (for `tokio::process`), and `serde`/`serde_json` (for stderr/stdout JSON
-  parsing) only. No other dependency is permitted without a boundary
-  amendment.
+  (for `AgentName`, `HerdrSession`, `RequestDeadline`, and `AtmError`),
+  `tokio` (for `tokio::process`), and `serde`/`serde_json` (for
+  stderr/stdout JSON parsing) only. No other dependency is permitted
+  without a boundary amendment. Passing `HerdrSession` — an already-
+  validated `atm-core` newtype — as the adapter's session parameter is
+  the whole point of depending on it here: this crate never resolves or
+  parses a session identifier itself, it only accepts one the caller
+  already validated.
 - `atm-herdr` must not depend on `atm-storage`, `atm-storage-rusqlite`,
   `atm-http-runtime`, or `atm-daemon-bootstrap`. Those crates depend on
   `atm-herdr`, never the reverse.
@@ -161,7 +165,7 @@ pub trait HerdrProcessAdapter: Send + Sync {
     fn prompt<'a>(
         &'a self,
         agent: &'a atm_core::types::AgentName,
-        session: Option<&'a str>,
+        session: Option<&'a atm_core::HerdrSession>,
         deadline: atm_core::RequestDeadline,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<HerdrPromptOutcome, HerdrError>> + Send + 'a>>;
 
@@ -171,7 +175,7 @@ pub trait HerdrProcessAdapter: Send + Sync {
     fn wait<'a>(
         &'a self,
         agent: &'a atm_core::types::AgentName,
-        session: Option<&'a str>,
+        session: Option<&'a atm_core::HerdrSession>,
         until: &'a [HerdrAgentStatus],
         timeout: std::time::Duration,
         deadline: atm_core::RequestDeadline,
@@ -180,7 +184,7 @@ pub trait HerdrProcessAdapter: Send + Sync {
     fn get<'a>(
         &'a self,
         agent: &'a atm_core::types::AgentName,
-        session: Option<&'a str>,
+        session: Option<&'a atm_core::HerdrSession>,
         deadline: atm_core::RequestDeadline,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<HerdrGetOutcome, HerdrError>> + Send + 'a>>;
 
@@ -189,7 +193,7 @@ pub trait HerdrProcessAdapter: Send + Sync {
     /// AQ2.7 queue pump's sole liveness/status discovery call.
     fn list<'a>(
         &'a self,
-        session: Option<&'a str>,
+        session: Option<&'a atm_core::HerdrSession>,
         deadline: atm_core::RequestDeadline,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<HerdrListOutcome, HerdrError>> + Send + 'a>>;
 }
@@ -242,10 +246,10 @@ impl HerdrProcessAdapter for HerdrProcessInvoker { /* .. */ }
 pub mod testing {
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub enum FakeHerdrCall {
-        Prompt { agent: String, session: Option<String> },
-        Wait { agent: String, session: Option<String>, until: Vec<super::HerdrAgentStatus>, timeout: std::time::Duration },
-        Get { agent: String, session: Option<String> },
-        List { session: Option<String> },
+        Prompt { agent: String, session: Option<atm_core::HerdrSession> },
+        Wait { agent: String, session: Option<atm_core::HerdrSession>, until: Vec<super::HerdrAgentStatus>, timeout: std::time::Duration },
+        Get { agent: String, session: Option<atm_core::HerdrSession> },
+        List { session: Option<atm_core::HerdrSession> },
     }
 
     /// Records every call for assertion; configurable per-call outcome.
@@ -337,8 +341,9 @@ HerdrProcessInvoker::list(session, deadline)        (once per distinct session)
                                                   <---- Vec<AgentSnapshot> (exit 0),
                                                         or error.code (exit 1) ----
   <-------------------------------------------------|
-  | record every listed member's status into
-  |   RuntimeHealth (source = "herdr-poll")
+  | record_observed_state(member, state,
+  |   RuntimeObservationSource::HerdrPoll)  [atm-http-runtime,
+  |   RuntimeHealth] -- never record_heartbeat; never writes pid
   |
   | for each pending member whose listed
   |   status is Idle | Done:
