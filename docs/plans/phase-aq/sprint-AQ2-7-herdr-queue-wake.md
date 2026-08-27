@@ -279,6 +279,25 @@ for whichever sprint picks up the shared-drain follow-up.
       already discloses for its own post-commit `mark_pending` window, not
       a batch-sized regression this sprint introduces.
 
+> **Retry-semantics ruling (fenix, 2026-08-27, #1056 QA-1 AQ27-CRIT-001 / req-qa
+> ADR-054-vs-ADR-058 conflict):** ADR-054 (f) and ADR-058 D8 both apply,
+> partitioned by whether input reached the agent. (a) **No input injected** —
+> `agent_blocked`, the not-present family (`agent_not_found`,
+> `agent_not_running`, `agent_target_ambiguous`, `agent_not_ready`), and
+> infrastructure outcomes (`server_not_running`, `protocol_mismatch`, external
+> timeout, `list` failure → breaker): `release_pending` (no budget consumed)
+> **but bounded**: the pump keeps an in-memory per-member consecutive-release
+> counter; on the `HERDR_MAX_CONSECUTIVE_RELEASES = 10`th consecutive release
+> for the same member the pump calls `requeue_pending` instead (consumes one
+> attempt) and resets the counter, so a permanently blocked or absent agent
+> reaches `MAX_NUDGE_ATTEMPTS` and surfaces as stuck via AQ1's store — the
+> stuck-recovery signal is reachable for Herdr. (b) **Input injected or
+> ambiguous** — `agent_prompt_stalled`, a prompt error returned after the write,
+> or a timeout after the write: `requeue_pending` (consumes budget). In every
+> failure case the emit result is a **failure outcome**, never `Ok`; only a
+> confirmed prompt submission is success. ACs 5–7 must exercise both
+> partitions and the consecutive-release bound.
+
 3. **Outcome handling — claim-then-write-back, no unclaimed prompt ever
    fires, drop-guard release under cancellation.** For each claim, taken
    and dispatched immediately in deliverable 2d's one-at-a-time rotation

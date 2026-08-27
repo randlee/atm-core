@@ -106,3 +106,7 @@ triage:a12 a triage:Assignment ;
     triage:ofSprint triage:AQ4 ;
     triage:assignedTo "fenix" ;
     triage:assignedAt "2026-08-27T05:40:00Z"^^xsd:dateTime .
+
+triage:c10 a triage:Completion ;
+    triage:ofSprint triage:AQ2-7 ;
+    triage:at "2026-08-27T05:45:19Z"^^xsd:dateTime .
