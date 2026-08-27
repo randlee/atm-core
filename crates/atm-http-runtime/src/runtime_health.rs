@@ -29,6 +29,7 @@ struct RuntimeHealthState {
     owner_pid: Option<u32>,
     members: HashMap<MemberKey, MemberRecord>,
     graft_queue_handoff_failures_total: u64,
+    queue_marker_set_failures_total: u64,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -102,6 +103,12 @@ impl RuntimeHealth {
         let mut state = self.lock();
         state.graft_queue_handoff_failures_total =
             state.graft_queue_handoff_failures_total.saturating_add(1);
+    }
+
+    pub fn record_queue_marker_set_failure(&self) {
+        let mut state = self.lock();
+        state.queue_marker_set_failures_total =
+            state.queue_marker_set_failures_total.saturating_add(1);
     }
 
     /// Record an already-authorized local heartbeat.
@@ -225,6 +232,7 @@ impl RuntimeHealth {
             member_counts: counts,
             members,
             graft_queue_handoff_failures_total: state.graft_queue_handoff_failures_total,
+            queue_marker_set_failures_total: state.queue_marker_set_failures_total,
         }
     }
 
