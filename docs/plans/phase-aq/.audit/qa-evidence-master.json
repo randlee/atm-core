@@ -445,7 +445,7 @@
    "assignment_message_id": null,
    "assignment_from": "fenix",
    "assignment_shared_path": null,
-   "assignment_summary": "AQ3 idle-drain + sweep (cipher), PR #1054 @ d44d01246; QA-1 on fenix's parallel quality-mgr instance",
+   "assignment_summary": "AQ3 idle-drain + sweep (cipher), PR #1054 (head now 75e444606); QA-1 with primary quality-mgr (team-lead dispatch)",
    "result_time_utc": null,
    "result_time_pst": null,
    "result_message_id": null,
