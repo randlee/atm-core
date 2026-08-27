@@ -151,26 +151,54 @@ mod tests {
         );
     }
 
+    fn digit_char(value: usize) -> char {
+        char::from_digit(value as u32, 36).expect("digit fits base-36 for this test's range")
+    }
+
     #[test]
     fn overflow_drops_oldest_and_counts_the_drop() {
         let (fifo, drops) = fifo();
         let key = member();
-        for digit in 0..=BARE_CLI_FIFO_CAPACITY {
+        // Fill the FIFO exactly (digits 0..capacity-1), then append one more:
+        // that append must evict digit 0 specifically -- the oldest entry --
+        // not merely "some" entry.
+        for digit in 0..BARE_CLI_FIFO_CAPACITY {
             append_bare_cli_message(
                 &fifo,
                 &drops,
                 key.clone(),
-                message(
-                    NudgeKind::Queue,
-                    char::from_digit(digit as u32, 36).expect("digit"),
-                ),
+                message(NudgeKind::Queue, digit_char(digit)),
             )
             .expect("append");
         }
+        append_bare_cli_message(
+            &fifo,
+            &drops,
+            key.clone(),
+            message(NudgeKind::Queue, digit_char(BARE_CLI_FIFO_CAPACITY)),
+        )
+        .expect("append past capacity");
         assert_eq!(drops.load(Ordering::Relaxed), 1);
+
+        // Queue-kind items drain one at a time, oldest first; draining the
+        // whole retained window proves both which entry was evicted and
+        // that ordering survived the eviction.
+        let mut drained_bodies = Vec::new();
+        loop {
+            let batch = drain_bare_cli_messages(&fifo, &key).expect("drain");
+            if batch.is_empty() {
+                break;
+            }
+            assert_eq!(batch.len(), 1, "queue-kind items drain one at a time");
+            drained_bodies.push(batch[0].body.clone());
+        }
+        let expected: Vec<String> = (1..=BARE_CLI_FIFO_CAPACITY)
+            .map(|digit| digit_char(digit).to_string())
+            .collect();
         assert_eq!(
-            drain_bare_cli_messages(&fifo, &key).expect("drain").len(),
-            1
+            drained_bodies, expected,
+            "digit 0 (the oldest entry) was evicted; the retained window is \
+             digits 1..=capacity, oldest first"
         );
     }
 }

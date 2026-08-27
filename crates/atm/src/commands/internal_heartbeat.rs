@@ -4,11 +4,12 @@ use atm_core::caller_context::{
     CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride,
     resolve_cli_mutation_caller_context_with_overrides,
 };
+use atm_core::error::AtmError;
 use atm_core::protocol::{
     HeartbeatActivity, RequestEnvelope, ResponseEnvelope, TeamMemberHeartbeatRequest,
 };
 use atm_core::types::IsoTimestamp;
-use atm_daemon_client::resolve_daemon_local_ipc_endpoint;
+use atm_daemon_client::{DaemonLocalIpcEndpoint, resolve_daemon_local_ipc_endpoint};
 use atm_http_runtime::SAME_HOST_REQUEST_DEADLINE;
 use clap::{Args, ValueEnum};
 
@@ -43,7 +44,24 @@ pub struct InternalHeartbeatCommand {
 }
 
 impl InternalHeartbeatCommand {
-    pub async fn run(self, _observability: &CliObservability) -> Result<()> {
+    pub async fn run(self, observability: &CliObservability) -> Result<()> {
+        self.run_with_endpoint(resolve_daemon_local_ipc_endpoint(), observability)
+            .await
+    }
+
+    /// Testable core of [`Self::run`].
+    ///
+    /// Production always resolves `endpoint` from
+    /// [`resolve_daemon_local_ipc_endpoint`], the OS-account singleton
+    /// runtime path. Accepting it as a parameter lets tests simulate daemon
+    /// unavailability (a closed socket / refused connect) against an
+    /// isolated, caller-controlled endpoint instead of that shared,
+    /// process-wide singleton.
+    async fn run_with_endpoint(
+        self,
+        endpoint: Result<DaemonLocalIpcEndpoint, AtmError>,
+        _observability: &CliObservability,
+    ) -> Result<()> {
         let caller = resolve_cli_mutation_caller_context_with_overrides(CallerContextOverrides {
             identity_override: self.actor.as_deref().map(CallerIdentityOverride),
             chat_id_override: None,
@@ -59,7 +77,7 @@ impl InternalHeartbeatCommand {
                 .activity_observation
                 .and_then(|observation| observation.session_id),
         });
-        let endpoint = match resolve_daemon_local_ipc_endpoint() {
+        let endpoint = match endpoint {
             Ok(endpoint) => endpoint,
             Err(error) if error.is_daemon_unavailable() => return Ok(()),
             Err(error) => return Err(error.into()),
@@ -89,11 +107,75 @@ impl InternalHeartbeatCommand {
 
 #[cfg(test)]
 mod tests {
-    use super::InternalHeartbeatActivity;
-    use clap::ValueEnum;
+    use atm_core::test_support::EnvGuard;
+    use clap::{Parser, ValueEnum};
+    use serial_test::serial;
+
+    use super::{DaemonLocalIpcEndpoint, InternalHeartbeatActivity, InternalHeartbeatCommand};
+    use crate::commands::Cli;
+    use crate::observability::CliObservability;
 
     #[test]
     fn heartbeat_cli_accepts_all_three_activity_values() {
         assert_eq!(InternalHeartbeatActivity::value_variants().len(), 3);
+    }
+
+    /// ATM-QA-010 / QA-006: proves real clap parsing of the documented
+    /// `--activity`/`--team`/`--as` flags, not merely the enum's arity.
+    #[test]
+    fn heartbeat_cli_parses_activity_team_and_actor_flags() {
+        let Cli { command, .. } = Cli::try_parse_from([
+            "atm",
+            "_internal-heartbeat",
+            "--activity",
+            "idle",
+            "--team",
+            "aq-team",
+            "--as",
+            "aq-agent",
+        ])
+        .expect("heartbeat CLI parses its documented flags");
+        let super::super::Command::InternalHeartbeat(parsed) = command else {
+            unreachable!("internal-heartbeat command")
+        };
+        assert!(matches!(parsed.activity, InternalHeartbeatActivity::Idle));
+        assert_eq!(parsed.team.as_deref(), Some("aq-team"));
+        assert_eq!(parsed.actor.as_deref(), Some("aq-agent"));
+    }
+
+    #[test]
+    fn heartbeat_cli_rejects_a_missing_activity() {
+        let result = Cli::try_parse_from(["atm", "_internal-heartbeat"]);
+        assert!(result.is_err(), "--activity is required");
+    }
+
+    /// AC8: a real, bounded-timeout exit-0 proof for the heartbeat CLI
+    /// surface. This resolves a valid, isolated endpoint path with nothing
+    /// listening (a closed socket, simulating daemon unavailability), so the
+    /// real `preferred_local_client(...).execute(...)` connect-refusal path
+    /// runs, not the earlier `resolve_daemon_local_ipc_endpoint()`
+    /// short-circuit.
+    #[tokio::test]
+    #[serial(env)]
+    async fn heartbeat_exits_ok_within_the_bounded_timeout_when_the_daemon_is_unavailable() {
+        let _env = EnvGuard::set_many([("ATM_IDENTITY", Some("aq25-ac8-heartbeat-agent"))]);
+        let temporary_root = tempfile::tempdir().expect("isolated runtime root");
+        let endpoint = DaemonLocalIpcEndpoint::new(temporary_root.path().join("local-http.json"))
+            .expect("isolated endpoint path");
+        let command = InternalHeartbeatCommand {
+            activity: InternalHeartbeatActivity::Idle,
+            team: Some("aq25-ac8-team".to_owned()),
+            actor: None,
+        };
+
+        let started = std::time::Instant::now();
+        command
+            .run_with_endpoint(Ok(endpoint), &CliObservability::fallback())
+            .await
+            .expect("a daemon-down heartbeat must fail open and exit 0");
+        assert!(
+            started.elapsed() < atm_http_runtime::SAME_HOST_REQUEST_DEADLINE,
+            "the fail-open path must return well inside the bounded connect budget, not hang past it"
+        );
     }
 }

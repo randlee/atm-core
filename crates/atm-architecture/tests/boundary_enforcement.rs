@@ -2901,6 +2901,26 @@ fn aq25_adr_addendum_contains_normative_trigger_policy() {
     }
 }
 
+/// AC9 / ATM-QA-003: the ADR-054 addendum must carry a recorded
+/// quality-mgr sign-off *section*, not merely policy prose. This checks for
+/// the heading and the sign-off table's header row, which persist once
+/// quality-mgr fills in the pending row on re-gate -- unlike the pending
+/// placeholder text itself, which is expected to change.
+#[test]
+fn aq25_adr_addendum_records_a_quality_mgr_sign_off_section() {
+    let root = workspace_root();
+    let adr = read_source(&root.join("docs/adr/ADR-054-nudge-taxonomy-and-queue-mechanism.md"));
+    for required in [
+        "### AQ2.5 quality-mgr sign-off",
+        "| Sprint | Gate | Reviewer | Date | Verdict | Notes |",
+    ] {
+        assert!(
+            adr.contains(required),
+            "ADR-054 is missing the AQ2.5 quality-mgr sign-off section marker {required}"
+        );
+    }
+}
+
 #[test]
 fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
     let root = workspace_root();
