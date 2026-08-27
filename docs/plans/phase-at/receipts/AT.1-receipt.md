@@ -6,7 +6,7 @@ sprint: AT.1
 branch: feature/pat-s1-install-and-publish
 base: origin/integrate/phase-at @ 2bad2812a
 status: install-parity-complete
-testpypi: pending-authorization-and-merge
+testpypi: authorized-attempt-failed-upstream-orchestration-repair-pending
 production: pending-contemporaneous-authorization
 ```
 
@@ -107,10 +107,29 @@ post-release retry workflow that accepts only `tag` and `target`, verifies the
 non-draft release and attached assets, and neither rebuilds assets nor creates
 tags.
 
-No TestPyPI authorization was relayed with this assignment. Therefore no
-publish workflow was dispatched. The next authorized action is to open and
-merge this install/parity PR, then obtain Fenix's relayed verbatim authorization
-from Rand before dispatching the TestPyPI command. Production remains
+## TestPyPI attempt evidence
+
+Rand's verbatim authorization, relayed by Fenix, was: `"sure, testpypi"`.
+Under that authorization, the post-release retry workflow was dispatched on
+`integrate/phase-at` for tag `v1.4.3` and the TestPyPI target:
+
+| Field | Value |
+| --- | --- |
+| Workflow run | [33040465059](https://github.com/randlee/atm-core/actions/runs/33040465059) |
+| Workflow | `pypi-publish.yml` |
+| Ref / inputs | `integrate/phase-at`; `tag=v1.4.3`; `target=testpypi` |
+| Conclusion | Failed in `verify-release`; `publish` was skipped |
+| TestPyPI effect | No package was uploaded |
+| Production effect | None; production was neither authorized nor dispatched |
+
+The failure is an upstream orchestration defect, not a release-artifact or
+credential failure. The workflow checked out the historical release tag before
+calling the repository-local `verify-published-release` action; `v1.4.3`
+predates that action, so GitHub could not find its `action.yml`. The required
+retry sequence is: land the upstream `sc-publish` orchestration repair (keep
+the workflow/action code from its workflow ref and fetch the release tag
+separately for verification), re-pin and reinstall the kit, then retry only
+the authorized TestPyPI command. Production remains
 `pending-contemporaneous-authorization`; no standing or advance authorization
 will be treated as production permission.
 
@@ -155,7 +174,8 @@ pinned kit or removing a legacy asset:
 | `.venv-sc-publish/bin/python "$SP/plugins/sc-publish/install.py" --dry-run --input release/sc-publish-consumer-input.json .` | 0 | `Publish-kit assets are in sync.` |
 | `install.package_files()` parity sweep with `RENAMED_FILES` | 0 | `byte-identical: 49, mismatched: 0, missing: 0`. |
 
-No TestPyPI or production publish workflow was dispatched in either fix round:
-both remain authorization-gated. The clean detached scratch checkout was used
-for every pin-sensitive command; the developer checkout with its untracked
-`.sc-compose/` directory was not modified.
+The TestPyPI attempt above is the only publish dispatch in the AT.1 work. It
+failed before publication and did not upload an artifact. Production remains
+authorization-gated and was never dispatched. The clean detached scratch
+checkout was used for every pin-sensitive command; the developer checkout with
+its untracked `.sc-compose/` directory was not modified.
