@@ -332,3 +332,31 @@ an optimization; AQ1's test suite proves it directly (duplicate write → zero
 - `atm queue <to> <msg>` full-surface parity truth-table against `atm send`
   (AC 3), including `--attach` parity arriving free from the shared
   `run_with_mode` implementation.
+
+## AQ2.5 addendum — delivery-trigger policy
+
+This addendum is normative for the AQ2.5 delivery-trigger implementation.
+“Steer” and “queue” remain kinds, while the physical mechanism may defer a
+steer-kind notification until a bare-CLI Stop pull; mechanism timing never
+changes the kind.
+
+| Kind | Classifier-owned channel | Delivery trigger | Mechanism |
+| --- | --- | --- | --- |
+| steer | Tmux, Herdr, or bare CLI | immediate post-persistence delivery, or next bare-CLI Stop pull | selected receiver hook or bounded RAM FIFO |
+| queue | Graft, Herdr, or bare CLI | receiver queue handoff, sweep, or next bare-CLI Stop pull | published receiver, Herdr queue, or bounded RAM FIFO |
+
+The `DeliveryChannel` classifier is the sole owner of channel selection; its
+call sites and selector tests enforce this matrix. Channel names must describe
+the positive mechanism (`QueuePull`, `Graft`, `Herdr`, or `Tmux`) rather than
+an absence of another backend. Heartbeats are produced by harness hooks and
+debounced there; the daemon records authenticated observations but owns no
+timer or harness lifecycle.
+
+Bare-CLI pull notifications are RAM-only daemon-lifetime state. The map is
+bounded to 32 messages per member, drops the oldest item on overflow, and
+reports the cumulative drop count through doctor. A daemon restart empties the
+FIFO; durable mailbox messages remain authoritative. Each pull drains all
+steer items and at most one oldest queue item. Empty pulls are successful and
+must never block a Stop loop. Codex lifecycle integration uses the same
+authenticated queue-get contract; a host-specific Codex drain adapter remains
+an explicit coordination gap rather than an invented daemon-side fallback.

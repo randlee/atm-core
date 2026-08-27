@@ -31,6 +31,7 @@ use atm_core::send::{NudgeMode, WarningEntry, WriteOutcome, prepare_write_with_a
 use crate::CanonicalWriteHandler;
 use crate::PeerConnectionPool;
 use crate::RuntimeHealth;
+use crate::bare_cli_fifo::{BareCliFifo, BareCliQueueFullDrops, drain_bare_cli_messages};
 
 fn retry_deferred_marker<F>(health: &RuntimeHealth, mut mark: F) -> Result<(), AtmError>
 where
@@ -132,6 +133,8 @@ pub struct StorageAndNudgeRouter {
     direct_peer_port: NonZeroU16,
     peer_connection_pool: Option<PeerConnectionPool>,
     shared_direct_peer_client: Option<reqwest::Client>,
+    bare_cli_fifo: BareCliFifo,
+    bare_cli_queue_full_drops: BareCliQueueFullDrops,
 }
 
 impl StorageAndNudgeRouter {
@@ -156,6 +159,8 @@ impl StorageAndNudgeRouter {
             direct_peer_port: crate::direct_peer_port(),
             peer_connection_pool: None,
             shared_direct_peer_client: None,
+            bare_cli_fifo: Default::default(),
+            bare_cli_queue_full_drops: Default::default(),
         }
     }
 
@@ -176,6 +181,18 @@ impl StorageAndNudgeRouter {
     ) -> Self {
         self.runtime_health = runtime_health;
         self.doctor_ports = Some(doctor_ports);
+        self
+    }
+
+    /// Installs the daemon-lifetime bare-CLI FIFO and its overflow counter.
+    #[must_use]
+    pub fn with_bare_cli_fifo(
+        mut self,
+        fifo: BareCliFifo,
+        queue_full_drops: BareCliQueueFullDrops,
+    ) -> Self {
+        self.bare_cli_fifo = fifo;
+        self.bare_cli_queue_full_drops = queue_full_drops;
         self
     }
 
@@ -404,6 +421,9 @@ impl StorageAndNudgeRouter {
                 ResponseEnvelope::CompatibilityVerdict(compatibility_verdict(preflight)),
             )),
             ApiRequest::Heartbeat(request) => self.heartbeat(request, ingress, deadline).await,
+            ApiRequest::QueueGetNext(request) => {
+                self.queue_get_next(request, ingress, deadline).await
+            }
             ApiRequest::GraftReceiverRegister(request) => {
                 self.graft_receiver_register(request, ingress, deadline)
                     .await
@@ -515,6 +535,7 @@ impl StorageAndNudgeRouter {
         let observability = Arc::clone(&self.observability);
         let home = self.daemon_home.clone();
         let runtime_health = self.runtime_health.clone();
+        let bare_cli_queue_full_drops = self.bare_cli_queue_full_drops.clone();
         let doctor_ports = self.doctor_ports.clone();
         let presence_doctor = doctor_ports
             .as_ref()
@@ -538,7 +559,10 @@ impl StorageAndNudgeRouter {
                         &runtime,
                     ),
                 }?;
-                report.runtime_status = Some(runtime_health.snapshot());
+                let mut runtime_status = runtime_health.snapshot();
+                runtime_status.bare_cli_queue_full_drops_total =
+                    bare_cli_queue_full_drops.load(std::sync::atomic::Ordering::Relaxed);
+                report.runtime_status = Some(runtime_status);
                 report.daemon_context = daemon_context;
                 Ok(report)
             })
@@ -589,6 +613,42 @@ impl StorageAndNudgeRouter {
                     health.record_heartbeat(&request),
                 ))
             })
+    }
+
+    async fn queue_get_next(
+        &self,
+        request: atm_core::protocol::QueueGetNextRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        if ingress != AuthenticatedIngress::Local {
+            return Err(AtmError::validation(
+                "bare-CLI queue pulls are available only through authenticated local HTTP adapters",
+            ));
+        }
+        let runtime = self.service_runtime.clone();
+        let fifo = self.bare_cli_fifo.clone();
+        self.blocking_core_bridge
+            .run(deadline, move || {
+                validate_heartbeat_member(
+                    runtime,
+                    &atm_core::protocol::TeamMemberHeartbeatRequest {
+                        team: request.team.clone(),
+                        member: request.member.clone(),
+                        pid: 0,
+                        observed_at: atm_core::types::IsoTimestamp::now(),
+                        activity: atm_core::protocol::HeartbeatActivity::Idle,
+                        session_id: None,
+                    },
+                )?;
+                let member = atm_core::boundary::MemberKey::new(request.team, request.member);
+                drain_bare_cli_messages(&fifo, &member).map(|messages| {
+                    ApiResponse::new(ResponseEnvelope::QueueGetNext(
+                        atm_core::protocol::QueueGetNextResponse { messages },
+                    ))
+                })
+            })
+            .await
     }
 
     async fn graft_receiver_register(
@@ -1086,6 +1146,7 @@ mod tests {
                 }
                 PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Herdr(_)) => None,
                 PostSendBuiltInTarget::Graft(_) => Some(self.graft.as_ref()),
+                PostSendBuiltInTarget::QueuePull(_) => None,
             }
         }
     }

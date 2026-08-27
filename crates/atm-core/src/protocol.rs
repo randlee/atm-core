@@ -21,6 +21,7 @@ use crate::error_codes::AtmErrorCode;
 use crate::home;
 use crate::list::{ListOutcome, ListQuery};
 use crate::read::{PeekQuery, ReadOutcome, ReadQuery};
+use crate::schema::AtmMessageId;
 use crate::search::{SearchRequest, SearchResponse};
 use crate::send::{SendOutcome, WriteRequest};
 use crate::types::{AgentName, IsoTimestamp, SessionId, TeamName, deserialize_optional_session_id};
@@ -52,6 +53,7 @@ pub enum RequestEnvelope {
     Write(Box<WriteRequest>),
     CompatibilityPreflight(CompatibilityPreflight),
     Heartbeat(TeamMemberHeartbeatRequest),
+    QueueGetNext(QueueGetNextRequest),
     GraftReceiverRegister(GraftReceiverRegistration),
     GraftReceiverUnregister(GraftReceiverUnregistration),
     GraftReceiverLookup {
@@ -74,6 +76,7 @@ pub enum ResponseEnvelope {
     Send(SendResponseEnvelope),
     CompatibilityVerdict(CompatibilityVerdict),
     Heartbeat(TeamMemberHeartbeatResponse),
+    QueueGetNext(QueueGetNextResponse),
     GraftReceiverRegister,
     GraftReceiverUnregister,
     GraftReceiverLookup(Option<GraftReceiverLease>),
@@ -380,6 +383,27 @@ pub struct TeamMemberHeartbeatResponse {
     pub session_id: Option<SessionId>,
 }
 
+/// Authenticated local request to drain one member's bare-CLI queue.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct QueueGetNextRequest {
+    pub team: TeamName,
+    pub member: AgentName,
+}
+
+/// One item returned by the bare-CLI queue pull.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct QueuedNudgeMessage {
+    pub kind: crate::boundary::NudgeKind,
+    pub msg_id: AtmMessageId,
+    pub body: String,
+}
+
+/// Bare-CLI queue drain result: all current steer items and at most one queue item.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct QueueGetNextResponse {
+    pub messages: Vec<QueuedNudgeMessage>,
+}
+
 /// Owner-checked removal request for one durable graft receiver lease.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GraftReceiverUnregistration {
@@ -468,6 +492,9 @@ pub struct RuntimeStatusSnapshot {
     /// Cumulative failures clearing a queue marker after a successful handoff.
     #[serde(default, skip_serializing_if = "is_zero_u64")]
     pub graft_queue_marker_clear_failures_total: u64,
+    /// Cumulative bare-CLI FIFO overflow drops observed by the daemon.
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub bare_cli_queue_full_drops_total: u64,
     /// Cumulative failures setting a deferred queue marker.
     #[serde(default, skip_serializing_if = "is_zero_u64")]
     pub queue_marker_set_failures_total: u64,
@@ -616,6 +643,7 @@ mod tests {
             members: Vec::new(),
             graft_queue_handoff_failures_total: 0,
             graft_queue_marker_clear_failures_total: 0,
+            bare_cli_queue_full_drops_total: 0,
             queue_marker_set_failures_total: 0,
         };
 
@@ -678,6 +706,7 @@ mod tests {
             }],
             graft_queue_handoff_failures_total: 0,
             graft_queue_marker_clear_failures_total: 0,
+            bare_cli_queue_full_drops_total: 0,
             queue_marker_set_failures_total: 0,
         };
         let decoded: LegacyRuntimeStatusSnapshot =

@@ -22,7 +22,9 @@ use atm_core::error::{AtmError, AtmErrorCode};
 #[cfg(feature = "benchmark-harness")]
 use atm_herdr::{AgentSnapshot, HerdrAgentStatus, HerdrError};
 use atm_herdr::{HerdrProcessAdapter, HerdrPromptOutcome};
-use atm_http_runtime::RuntimeHealth;
+use atm_http_runtime::{
+    BareCliFifo, BareCliQueueFullDrops, RuntimeHealth, append_bare_cli_message,
+};
 
 /// Builds the selector injected into every production replacement daemon.
 ///
@@ -51,6 +53,26 @@ pub fn active_received_hook_selector_with_health(
         herdr_process,
         runtime_health,
     ))
+}
+
+/// Builds the production selector with the composition-root-owned bare-CLI
+/// FIFO and overflow counter.
+pub fn active_received_hook_selector_with_health_and_fifo(
+    service_runtime: LocalServiceRuntime,
+    herdr_process: Arc<dyn HerdrProcessAdapter>,
+    runtime_health: RuntimeHealth,
+    bare_cli_fifo: BareCliFifo,
+    bare_cli_queue_full_drops: BareCliQueueFullDrops,
+) -> Arc<dyn MessageReceivedHookSelector> {
+    Arc::new(
+        ReplacementReceivedHookSelector::with_herdr_process_and_fifo(
+            service_runtime,
+            herdr_process,
+            runtime_health,
+            bare_cli_fifo,
+            bare_cli_queue_full_drops,
+        ),
+    )
 }
 
 /// Mode accepted exclusively by the separately compiled benchmark binary.
@@ -102,6 +124,27 @@ pub fn benchmark_received_hook_selector_with_health(
             service_runtime,
             herdr_process,
             runtime_health,
+        ),
+        BenchmarkHookMode::Disabled => Arc::new(DisabledReceivedHookSelector),
+    }
+}
+
+#[cfg(feature = "benchmark-harness")]
+pub fn benchmark_received_hook_selector_with_health_and_fifo(
+    service_runtime: LocalServiceRuntime,
+    mode: BenchmarkHookMode,
+    herdr_process: Arc<dyn HerdrProcessAdapter>,
+    runtime_health: RuntimeHealth,
+    bare_cli_fifo: BareCliFifo,
+    bare_cli_queue_full_drops: BareCliQueueFullDrops,
+) -> Arc<dyn MessageReceivedHookSelector> {
+    match mode {
+        BenchmarkHookMode::Active => active_received_hook_selector_with_health_and_fifo(
+            service_runtime,
+            herdr_process,
+            runtime_health,
+            bare_cli_fifo,
+            bare_cli_queue_full_drops,
         ),
         BenchmarkHookMode::Disabled => Arc::new(DisabledReceivedHookSelector),
     }
@@ -179,6 +222,7 @@ struct ReplacementReceivedHookSelector {
     tmux: TokioTmuxReceivedHook,
     herdr: HerdrReceivedHook,
     graft: PublishedGraftReceivedHook,
+    queue_pull: PullPendingReceivedHook,
 }
 
 impl ReplacementReceivedHookSelector {
@@ -198,14 +242,36 @@ impl ReplacementReceivedHookSelector {
         herdr_process: Arc<dyn HerdrProcessAdapter>,
         runtime_health: RuntimeHealth,
     ) -> Self {
+        Self::with_herdr_process_and_fifo(
+            service_runtime,
+            herdr_process,
+            runtime_health,
+            Default::default(),
+            Default::default(),
+        )
+    }
+
+    #[must_use]
+    fn with_herdr_process_and_fifo(
+        service_runtime: LocalServiceRuntime,
+        herdr_process: Arc<dyn HerdrProcessAdapter>,
+        runtime_health: RuntimeHealth,
+        bare_cli_fifo: BareCliFifo,
+        bare_cli_queue_full_drops: BareCliQueueFullDrops,
+    ) -> Self {
         Self {
             tmux: TokioTmuxReceivedHook,
             herdr: HerdrReceivedHook {
                 process: herdr_process,
             },
             graft: PublishedGraftReceivedHook {
+                service_runtime: service_runtime.clone(),
+                runtime_health: runtime_health.clone(),
+            },
+            queue_pull: PullPendingReceivedHook {
                 service_runtime,
-                runtime_health,
+                bare_cli_fifo,
+                bare_cli_queue_full_drops,
             },
         }
     }
@@ -229,6 +295,8 @@ impl MessageReceivedHookSelector for ReplacementReceivedHookSelector {
             ) => Some(&self.herdr),
             (NudgeKind::Steer, PostSendBuiltInTarget::Graft(_)) => Some(&self.graft),
             (NudgeKind::Queue, PostSendBuiltInTarget::Graft(_)) => Some(&self.graft),
+            (NudgeKind::Queue, PostSendBuiltInTarget::QueuePull(_)) => Some(&self.queue_pull),
+            (NudgeKind::Steer, PostSendBuiltInTarget::QueuePull(_)) => None,
             (
                 NudgeKind::Queue,
                 PostSendBuiltInTarget::LocalSteer(boundary::LocalSteerTarget::Herdr(_)),
@@ -409,6 +477,51 @@ fn hook_deadline_error(stage: &'static str) -> AtmError {
     )
 }
 
+fn clear_queue_marker_after_handoff(
+    service_runtime: &LocalServiceRuntime,
+    runtime_health: &RuntimeHealth,
+    member: &atm_core::boundary::MemberKey,
+    message_id: &atm_core::schema::AtmMessageId,
+) {
+    let store = match service_runtime.pending_nudge_store() {
+        Ok(store) => store,
+        Err(error) => {
+            runtime_health.record_graft_queue_marker_clear_failure();
+            tracing::warn!(
+                subsystem = "atm_core.queue",
+                action = "handoff_marker_clear",
+                outcome = "failed",
+                %error,
+                msg_id = %message_id,
+                "queue delivery succeeded but pending marker store was unavailable"
+            );
+            return;
+        }
+    };
+    if let Err(error) = store.clear_pending_on_handoff(member, message_id) {
+        runtime_health.record_graft_queue_marker_clear_failure();
+        tracing::warn!(
+            subsystem = "atm_core.queue",
+            action = "handoff_marker_clear",
+            outcome = "failed",
+            %error,
+            msg_id = %message_id,
+            "queue delivery succeeded but pending marker clear failed; retrying"
+        );
+        if let Err(retry_error) = store.clear_pending_on_handoff(member, message_id) {
+            runtime_health.record_graft_queue_marker_clear_failure();
+            tracing::warn!(
+                subsystem = "atm_core.queue",
+                action = "handoff_marker_clear",
+                outcome = "failed",
+                %retry_error,
+                msg_id = %message_id,
+                "pending marker clear retry failed after successful queue delivery"
+            );
+        }
+    }
+}
+
 /// Graft remains receiver-owned. The existing endpoint operation has bounded
 /// socket timeouts derived from the inherited absolute deadline, so the only
 /// blocking seam is awaited rather than detached.
@@ -444,47 +557,12 @@ impl AsyncMessageReceivedHookEmitter for PublishedGraftReceivedHook {
                     deadline,
                 );
                 if result.is_ok() && kind == NudgeKind::Queue {
-                    let store = match service_runtime.pending_nudge_store() {
-                        Ok(store) => store,
-                        Err(error) => {
-                            runtime_health_for_clear.record_graft_queue_marker_clear_failure();
-                            tracing::warn!(
-                                subsystem = "atm_core.queue",
-                                action = "handoff_marker_clear",
-                                outcome = "failed",
-                                %error,
-                                msg_id = %message_id,
-                                "queue delivery succeeded but pending marker store was unavailable"
-                            );
-                            return result;
-                        }
-                    };
-                    if let Err(error) =
-                        store.clear_pending_on_handoff(&member_for_handoff, &message_id)
-                    {
-                        runtime_health_for_clear.record_graft_queue_marker_clear_failure();
-                        tracing::warn!(
-                            subsystem = "atm_core.queue",
-                            action = "handoff_marker_clear",
-                            outcome = "failed",
-                            %error,
-                            msg_id = %message_id,
-                            "queue delivery succeeded but pending marker clear failed; retrying"
-                        );
-                        if let Err(retry_error) =
-                            store.clear_pending_on_handoff(&member_for_handoff, &message_id)
-                        {
-                            runtime_health_for_clear.record_graft_queue_marker_clear_failure();
-                            tracing::warn!(
-                                subsystem = "atm_core.queue",
-                                action = "handoff_marker_clear",
-                                outcome = "failed",
-                                %retry_error,
-                                msg_id = %message_id,
-                                "pending marker clear retry failed after successful queue delivery"
-                            );
-                        }
-                    }
+                    clear_queue_marker_after_handoff(
+                        &service_runtime,
+                        &runtime_health_for_clear,
+                        &member_for_handoff,
+                        &message_id,
+                    );
                 }
                 result
             })
@@ -516,6 +594,68 @@ impl AsyncMessageReceivedHookEmitter for PublishedGraftReceivedHook {
     }
 }
 
+/// Hands a bare-CLI delivery to the daemon-lifetime FIFO and immediately
+/// clears only the exact durable pending marker that was handed off.
+#[derive(Clone)]
+struct PullPendingReceivedHook {
+    service_runtime: LocalServiceRuntime,
+    bare_cli_fifo: BareCliFifo,
+    bare_cli_queue_full_drops: BareCliQueueFullDrops,
+}
+
+impl boundary::sealed::Sealed for PullPendingReceivedHook {}
+
+impl AsyncMessageReceivedHookEmitter for PullPendingReceivedHook {
+    fn emit_received_message(
+        &self,
+        dispatch: BuiltInPostSendDispatch,
+        _deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Result<PostSendEmissionPath, AtmError>> + Send + '_>> {
+        let service_runtime = self.service_runtime.clone();
+        let bare_cli_fifo = self.bare_cli_fifo.clone();
+        let bare_cli_queue_full_drops = self.bare_cli_queue_full_drops.clone();
+        let target = match dispatch.target {
+            PostSendBuiltInTarget::QueuePull(target) => target,
+            _ => {
+                return Box::pin(async {
+                    Err(AtmError::new(
+                        AtmErrorCode::InternalError,
+                        "queue-pull emitter received a non-queue-pull target",
+                    ))
+                });
+            }
+        };
+        Box::pin(async move {
+            let member =
+                atm_core::boundary::MemberKey::new(target.team.clone(), target.agent.clone());
+            let message = atm_core::protocol::QueuedNudgeMessage {
+                kind: target.kind,
+                msg_id: target.msg_id,
+                body: target.body,
+            };
+            tokio::task::spawn_blocking(move || {
+                append_bare_cli_message(
+                    &bare_cli_fifo,
+                    &bare_cli_queue_full_drops,
+                    member.clone(),
+                    message,
+                )?;
+                let store = service_runtime.pending_nudge_store()?;
+                store.clear_pending_on_handoff(&member, &target.msg_id)?;
+                Ok(PostSendEmissionPath::QueuePull)
+            })
+            .await
+            .map_err(|source| {
+                AtmError::new(
+                    AtmErrorCode::InternalError,
+                    "bare-CLI queue-pull handoff task ended unexpectedly",
+                )
+                .with_cause(source)
+            })?
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
@@ -525,8 +665,8 @@ mod tests {
     use atm_core::boundary::{
         AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, HerdrNudgeTarget,
         LocalSteerTarget, LocalTmuxNudgeTarget, MemberKey, NudgeClaim, NudgeKind,
-        PendingNudgeStore, PostSendBuiltInTarget, PostSendHookEvent, RosterEntry, RosterHarness,
-        RosterMemberKind,
+        PendingNudgeStore, PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEvent,
+        QueuePullTarget, RosterEntry, RosterHarness, RosterMemberKind,
     };
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::graft::GraftReceiverListener;
@@ -742,6 +882,52 @@ mod tests {
         fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError> {
             self.inner.list_pending_members()
         }
+    }
+
+    #[tokio::test]
+    async fn bare_cli_queue_pull_appends_and_clears_the_exact_pending_marker() {
+        let root = tempfile::tempdir().expect("temporary runtime root");
+        let (runtime, _endpoint_store, team, recipient) = queue_graft_runtime(root.path());
+        let message_id = queue_write(root.path(), &runtime, &team);
+        let member = MemberKey::new(team.clone(), recipient.clone());
+        let mut dispatch = tmux_dispatch();
+        dispatch.kind = NudgeKind::Queue;
+        dispatch.target = PostSendBuiltInTarget::QueuePull(QueuePullTarget {
+            team: team.clone(),
+            agent: recipient.clone(),
+            kind: NudgeKind::Queue,
+            msg_id: message_id,
+            body: "bare CLI body".to_owned(),
+        });
+        let fifo: atm_http_runtime::BareCliFifo = Default::default();
+        let drops: atm_http_runtime::BareCliQueueFullDrops = Default::default();
+        let selector = ReplacementReceivedHookSelector::with_herdr_process_and_fifo(
+            runtime.clone(),
+            Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default()),
+            RuntimeHealth::default(),
+            fifo.clone(),
+            drops,
+        );
+
+        let path = selector
+            .select_emitter(&dispatch)
+            .expect("bare-CLI queue-pull emitter")
+            .emit_received_message(dispatch, RequestDeadline::after(Duration::from_secs(1)))
+            .await
+            .expect("queue-pull handoff");
+        assert_eq!(path, PostSendEmissionPath::QueuePull);
+        let drained =
+            atm_http_runtime::drain_bare_cli_messages(&fifo, &member).expect("drain FIFO");
+        assert_eq!(drained.len(), 1);
+        assert_eq!(drained[0].msg_id, message_id);
+        assert!(
+            runtime
+                .pending_nudge_store()
+                .expect("pending store")
+                .claim_next_pending(&member)
+                .expect("claim query")
+                .is_none()
+        );
     }
 
     #[tokio::test]

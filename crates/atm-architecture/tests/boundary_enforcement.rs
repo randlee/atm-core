@@ -2850,6 +2850,58 @@ fn al1_receiver_hook_boundary_replaces_retired_release_gate_artifacts() {
 }
 
 #[test]
+fn aq25_received_hook_manifest_matches_async_implementers() {
+    let root = workspace_root();
+    let manifest =
+        read_source(&root.join("boundaries/atm-core/message-received-hook-emitter.toml"));
+    let selector =
+        read_source(&root.join("crates/atm-daemon-bootstrap/src/received_hook_selector.rs"));
+    let implementers = [
+        "TokioTmuxReceivedHook",
+        "HerdrReceivedHook",
+        "PublishedGraftReceivedHook",
+        "PullPendingReceivedHook",
+    ];
+    assert_eq!(
+        selector
+            .matches("impl AsyncMessageReceivedHookEmitter for")
+            .count(),
+        implementers.len(),
+        "the selector's async implementer count must match the AQ2.5 inventory"
+    );
+    for implementer in implementers {
+        assert!(
+            selector.contains(&format!(
+                "impl AsyncMessageReceivedHookEmitter for {implementer}"
+            )),
+            "selector is missing async implementer {implementer}"
+        );
+        assert!(
+            manifest.contains(implementer),
+            "boundary manifest is missing async implementer {implementer}"
+        );
+    }
+}
+
+#[test]
+fn aq25_adr_addendum_contains_normative_trigger_policy() {
+    let root = workspace_root();
+    let adr = read_source(&root.join("docs/adr/ADR-054-nudge-taxonomy-and-queue-mechanism.md"));
+    for required in [
+        "AQ2.5 addendum",
+        "debounced there",
+        "RAM-only daemon-lifetime state",
+        "drops the oldest item",
+        "at most one oldest queue item",
+    ] {
+        assert!(
+            adr.contains(required),
+            "ADR-054 is missing AQ2.5 term {required}"
+        );
+    }
+}
+
+#[test]
 fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
     let root = workspace_root();
     let router = read_source(&root.join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"));

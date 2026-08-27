@@ -80,6 +80,14 @@ paths:
       responses:
         '200': { description: Heartbeat result, content: { application/json: { schema: { $ref: '#/components/schemas/HeartbeatResponse' } } } }
         default: { $ref: '#/components/responses/AtmError' }
+  /queue/get-next:
+    post:
+      operationId: getNextBareCliQueueMessages
+      description: Local-ingress-only FIFO pull for the authenticated caller's member.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/QueueGetNextRequest' } } } }
+      responses:
+        '200': { description: Queue messages, content: { application/json: { schema: { $ref: '#/components/schemas/QueueGetNextResponse' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
   /graft/receiver/register:
     post:
       operationId: registerGraftReceiver
@@ -214,6 +222,24 @@ components:
     HeartbeatResponse:
       type: object
       description: Team-member heartbeat result.
+    QueueGetNextRequest:
+      type: object
+      required: [team, member]
+      properties:
+        team: { type: string }
+        member: { type: string }
+    QueueGetNextResponse:
+      type: object
+      required: [messages]
+      properties:
+        messages: { type: array, items: { $ref: '#/components/schemas/QueuedNudgeMessage' } }
+    QueuedNudgeMessage:
+      type: object
+      required: [kind, msg_id, body]
+      properties:
+        kind: { type: string, enum: [steer, queue] }
+        msg_id: { type: string }
+        body: { type: string }
     GraftReceiverRegistration:
       type: object
       required: [team, agent, endpoint, capability, owner_generation]
