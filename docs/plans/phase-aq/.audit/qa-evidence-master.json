@@ -308,6 +308,31 @@
    "minor": null,
    "count_basis": "headline/reviewer",
    "evidence": "pending"
+  },
+  {
+   "run_id": "QA-AQ2-R1",
+   "aich_sprint": "AQ2",
+   "phase_sprint": "AQ2",
+   "pass": null,
+   "run_type": "qa",
+   "assignment_time_utc": "2026-08-27T04:22:00Z",
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": "fenix",
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ2 graft dual-channel (cipher), PR #1051 @ 9c72a4d0e; QA-1 queued",
+   "result_time_utc": null,
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": null,
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": null,
+   "blockers": null,
+   "important": null,
+   "minor": null,
+   "count_basis": "headline/reviewer",
+   "evidence": "pending"
   }
  ]
 }
