@@ -1295,19 +1295,19 @@
    "assignment_message_id": null,
    "assignment_from": "quality-mgr",
    "assignment_shared_path": null,
-   "assignment_summary": "AQ5 #1059: interim breaker-test widening dropped for #1060; converged head d56a28961, QA-1 pending",
-   "result_time_utc": "2026-08-27T21:30:00Z",
+   "assignment_summary": "AQ5 #1059: interim breaker-test widening dropped for #1060; converged head d56a28961, QA-1 FAIL",
+   "result_time_utc": "2026-08-27T23:05:00Z",
    "result_time_pst": null,
    "result_message_id": null,
    "result_from": "quality-mgr",
    "result_shared_path": null,
    "result_temp_path": null,
-   "verdict": null,
-   "blockers": null,
-   "important": null,
-   "minor": null,
+   "verdict": "FAIL",
+   "blockers": 4,
+   "important": 4,
+   "minor": 1,
    "count_basis": "headline/reviewer",
-   "evidence": "Converged head d56a28961 (interim breaker-test widening dropped for #1060). QA-1 pending."
+   "evidence": "5/14 @ d56a28961: ATM-QA-AQ5-001 pickers don't exclude dead/idle members (R4 Must), -002 traceability table mismapped (R3/R6/R7), -003 Wyvern pick-member.html PR absent, -004 manual GUI E2E absent; Important: no OS notification for GUI-entry stderr, README Nautilus path drift, committed fixtures unused by harness, degradation harness lacks CI transcript; Minor (rust-qa): member_mutation.rs:558 duplicate host insert. Ruling (fenix): fix pass dispatched for code/doc items; Wyvern PR to randlee/wyvern (refs #139); manual GUI E2E → follow-up AQ5-gui-e2e (owner: Rand, macOS Finder first; then Explorer/Nautilus)."
   },
   {
    "run_id": "QA-AQ3-R2",
@@ -1345,7 +1345,7 @@
    "assignment_message_id": null,
    "assignment_from": "quality-mgr",
    "assignment_shared_path": null,
-   "assignment_summary": "AQ1.8 #1049: head 8967cd39c, PASS, merge pending",
+   "assignment_summary": "AQ1.8 #1049: head 8967cd39c, PASS, merged 8e4c47671",
    "result_time_utc": "2026-08-27T21:30:00Z",
    "result_time_pst": null,
    "result_message_id": null,
@@ -1357,7 +1357,7 @@
    "important": 0,
    "minor": null,
    "count_basis": "headline/reviewer",
-   "evidence": "AQ1.8 #1049 PASS. Head 8967cd39c. Merge pending."
+   "evidence": "AQ1.8 #1049 PASS. Head 8967cd39c. Merged 8e4c47671."
   },
   {
    "run_id": "QA-AQ1.9-R1",
@@ -1496,6 +1496,17 @@
     "M5 team-lead confirmation message id"
    ],
    "tracked_at": "2026-08-27T20:00:00Z"
+  },
+  {
+   "id": "AQ5-gui-e2e",
+   "owner": "Rand",
+   "prerequisite": "macOS Finder manual GUI validation first, then Explorer/Nautilus",
+   "items": [
+    "live macOS Finder member-picker GUI E2E transcript",
+    "live Windows Explorer member-picker GUI E2E transcript",
+    "live Linux Nautilus member-picker GUI E2E transcript"
+   ],
+   "tracked_at": "2026-08-27T23:05:00Z"
   },
   {
    "id": "AQ4-tailscale-m5",
