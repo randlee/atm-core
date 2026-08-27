@@ -42,6 +42,8 @@ class HookTestHelpers:
             "ATM_HOOK_TIMEOUT_SECONDS": "1",
             "ATM_IDENTITY": "test-agent",
             "ATM_TEAM": "test-team",
+            "ATM_HOME": str(state.parent),
+            "ATM_CONFIG_HOME": str(state.parent),
         }
         return subprocess.run(
             [sys.executable, str(HOOK), "--event", event, "--harness", harness],
@@ -149,6 +151,36 @@ class QueueHookTests(HookTestHelpers, unittest.TestCase):
             result = self.run_hook("stop", fake, state)
             self.assertEqual(result.returncode, 0)
             self.assertEqual(result.stdout, "")
+
+    def test_stop_fails_loudly_when_caller_context_is_missing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root, state = Path(directory), Path(directory) / "state"
+            fake = self.fake_cli(root, [])
+            env = {
+                **os.environ,
+                "ATM_BIN": str(fake),
+                "ATM_HOOK_STATE_DIR": str(state),
+                "ATM_HOOK_TIMEOUT_SECONDS": "1",
+                "ATM_IDENTITY": "test-agent",
+                "ATM_HOME": str(root),
+            }
+            env.pop("ATM_TEAM", None)
+            result = subprocess.run(
+                [sys.executable, str(HOOK), "--event", "stop"],
+                capture_output=True,
+                text=True,
+                env=env,
+                check=False,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("ATM_TEAM is required", result.stderr)
+
+    def test_stop_fails_loudly_when_atm_cli_cannot_start(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root, state = Path(directory), Path(directory) / "state"
+            result = self.run_hook("stop", root / "missing-atm", state)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("could not run", result.stderr)
 
     def test_literal_multi_stop_drain_sequence_terminates_on_empty(self):
         """AC4: a genuine-idle Stop drains the oldest queued message, the
