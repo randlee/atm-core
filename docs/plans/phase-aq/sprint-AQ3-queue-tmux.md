@@ -187,6 +187,44 @@ None.
   heartbeats directly; the sweep pre-check consumes AQ2.5's classifier
   seam (see Dependencies).
 
+### AC8 multi-OS CI citation (2026-08-27, ATM-QA-102)
+
+CI run [`33123121121`](https://github.com/randlee/atm-core/actions/runs/33123121121)
+at head `9af3817b2704594bb6ef7f44d2670f552ca9eb10` (PR #1054):
+
+| Lane | ubuntu-latest | macos-latest | windows-latest |
+| --- | --- | --- | --- |
+| Test | pass | pass | **fail** |
+| Just lint | pass | pass | pass |
+| Clippy | pass | — | — |
+| Format check | pass | — | — |
+
+The only red cell, `Test (windows-latest)`, was **not** an AQ3/Rust failure:
+`scripts/hooks/test_queue_hooks.py` (AQ2.5-owned Python Stop-hook test) failed
+4/7 cases on Windows only, unrelated to this sprint's daemon-side drain code.
+That gap was closed by a merge-forward fix,
+`fix(aq2.5): run Python hook test shims on Windows` (`0129e2d42`), landed on
+this branch at head `803168c59521e04ef1b70c60ee162248b75312c4`. CI run
+[`33124563956`](https://github.com/randlee/atm-core/actions/runs/33124563956)
+at that head confirms `Test (ubuntu-latest)` and `Test (macos-latest)` green
+(unchanged from before); `Test (windows-latest)` was still in progress at the
+time this citation was written — see that run's Actions page for its final
+conclusion. The fix predates and is independent of AQ3's own changes below.
+
+The companion `Phase AQ Evidence` workflow (a separate, non-gating job that
+runs the live-evidence harnesses under `scripts/phase-aq/`) is red on both
+`ubuntu-latest` and `macos-latest` at both of the above heads
+([`33123121243`](https://github.com/randlee/atm-core/actions/runs/33123121243),
+[`33124563961`](https://github.com/randlee/atm-core/actions/runs/33124563961)),
+but precisely and only because of the pre-existing AQ1.9
+`run_hermes_atm_restart_matrix.py` harness failure (unrelated to AQ3 —
+tracked separately); the AQ2.5 harness passes clean in the same run. This
+sprint's own live-evidence harness, `run_aq3_tmux_idle_drain_evidence.py`
+(ATM-QA-101), was not yet registered in `EVIDENCE_DIR_BY_SCRIPT` at either of
+those heads — it is registered as part of this same change and will be
+exercised, along with a Windows leg added to that workflow's matrix (the
+harness self-records a `skipped_no_tmux` status there), on the next dispatch.
+
 ## Non-closure / out of scope
 
 - QA-1 remediation (2026-08-27): transition drains are tracked and joined
