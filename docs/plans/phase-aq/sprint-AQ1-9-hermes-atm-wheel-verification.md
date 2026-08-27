@@ -74,6 +74,11 @@ the exact one-command procedure to produce real `restart-matrix-<host>.json`
 / `.md` evidence once run on a dedicated host; those files (not this doc)
 are the only source of truth for pass/fail once the runs happen.
 
+Clean-runner Linux matrix PASSED 3/3 in run 33094805689 at head a2dc79e52
+(`restart-matrix-clean-runner-linux.json`, `restart-matrix-clean-runner-linux.md`).
+macOS row did not execute (runner bootstrap failure, cargo-binstall 403 — pending PR #1061).
+m5 remains OPEN.
+
 ## Acceptance criteria
 
 1. Wheel builds green against the phase branch; hermes-atm's own test
