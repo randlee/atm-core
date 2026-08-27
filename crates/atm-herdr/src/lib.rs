@@ -963,11 +963,17 @@ mod tests {
     /// backoff window (1s), flipping the breaker from `Open` to `HalfOpen`
     /// and failing the assertion. Freezing the clock removes that race
     /// without changing production breaker semantics.
+    ///
+    /// Only used by the `#[cfg(unix)]` tests below, which spawn a real
+    /// child process; gated the same way so it isn't dead code elsewhere
+    /// (e.g. on Windows).
+    #[cfg(unix)]
     #[derive(Debug)]
     struct TestBreakerClock {
         now: Instant,
     }
 
+    #[cfg(unix)]
     impl TestBreakerClock {
         fn frozen() -> Self {
             Self {
@@ -976,6 +982,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     impl BreakerClock for TestBreakerClock {
         fn now(&self) -> Instant {
             self.now
