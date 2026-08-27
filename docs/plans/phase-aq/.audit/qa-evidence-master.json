@@ -3,9 +3,9 @@
  "timezone": "UTC (result_time_pst/assignment_time_pst omitted; verdict timestamps are GitHub PR comment times)",
  "audit_window": {
   "start": "2026-08-27T00:09:55Z",
-  "end": "2026-08-27T02:34:45Z"
+  "end": "2026-08-27T03:05:00Z"
  },
- "scope": "phase-aq sprints in landing order (structure.ttl). Runs recorded: AQ1 (3, final PASS, merged), AQ2.6 (2, latest FAIL, fix cycle 2 in progress), AQ1.5 (1, FAIL, fix in progress). AQ1.6 (#1046) QA not yet run. Non-sprint lanes reviewed by quality-mgr but not sprint rows: lane A ADR-058 #1039 (PASS d6f4dd90f, merged 4805264a2) and lane C AQ4 groundwork #1043 (FAIL a911abfd8, fix in progress) \u2014 they roll into AQ2.6/AQ4 evidence at closeout.",
+ "scope": "phase-aq sprints in landing order (structure.ttl). Runs recorded: AQ1 (3, final PASS, merged), AQ2.6 (2, latest FAIL, fix cycle 2 in progress), AQ1.5 (1, FAIL, fix in progress). AQ1.6 (#1046) QA-1 requested (pending run recorded, verdict null). Non-sprint lanes reviewed by quality-mgr but not sprint rows: lane A ADR-058 #1039 (PASS d6f4dd90f, merged 4805264a2) and lane C AQ4 groundwork #1043 (FAIL a911abfd8, fix in progress) \u2014 they roll into AQ2.6/AQ4 evidence at closeout.",
  "count_basis": "headline/reviewer",
  "path_notes": "Built from quality-mgr's PR review comments (the authoritative verdict artifacts for this phase) via gh; ATM message ids omitted (null) because verdicts were relayed by team-lead rather than dispatched via j2 QA assignments. No verdict or count fabricated; null means not recorded, not absent.",
  "runs": [
@@ -158,6 +158,56 @@
    "minor": 4,
    "count_basis": "headline/reviewer",
    "evidence": "quality-mgr verdict on PR #1045 @ 4ec60c09c: https://github.com/randlee/atm-core/pull/1045#issuecomment-5433395018"
+  },
+  {
+   "run_id": "QA-AQ1.6-R1",
+   "aich_sprint": "AQ1-6",
+   "phase_sprint": "AQ1.6",
+   "pass": null,
+   "run_type": "qa",
+   "assignment_time_utc": "2026-08-27T02:50:00Z",
+   "assignment_time_pst": null,
+   "assignment_message_id": "01M10JFSKQDFTW63TCS2Y4HY3R",
+   "assignment_from": "fenix",
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ1.6 graft receiver registration client (cipher), PR #1046 @ aaafcb9b1 (post #1045 merge-forward); QA-1 requested via team-lead",
+   "result_time_utc": null,
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": null,
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": null,
+   "blockers": null,
+   "important": null,
+   "minor": null,
+   "count_basis": "headline/reviewer",
+   "evidence": "pending \u2014 quality-mgr QA-1 not yet returned"
+  },
+  {
+   "run_id": "QA-AQ2.6-R3",
+   "aich_sprint": "AQ2-6",
+   "phase_sprint": "AQ2.6",
+   "pass": null,
+   "run_type": "qa",
+   "assignment_time_utc": "2026-08-27T02:45:00Z",
+   "assignment_time_pst": null,
+   "assignment_message_id": "01M10J4MRX8Q5GN2FCAECB9GWE",
+   "assignment_from": "fenix",
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ2.6 QA-3 on #1042 @ b55705cf9 after fix cycle 2",
+   "result_time_utc": "2026-08-27T03:05:00Z",
+   "result_time_pst": null,
+   "result_message_id": "01M10JK41XZSWZ8W7YBN44F2R7",
+   "result_from": "quality-mgr",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": "FAIL",
+   "blockers": 0,
+   "important": 1,
+   "minor": null,
+   "count_basis": "headline/reviewer",
+   "evidence": "19/19 deliverables, 0 blocking, 1 important (execute_list trips breaker on non-infrastructure errors); fix cycle 3 dispatched. https://github.com/randlee/atm-core/pull/1042#issuecomment-5433802008"
   }
  ]
 }
