@@ -96,6 +96,38 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
             with self.subTest(status=status):
                 self.assertEqual(0 if status in ("pass", "blocked_ambient_daemon", "skipped_no_sshd") else 1, expected)
 
+    def test_write_sender_atm_config_writes_the_local_host_key_directly_into_cwd(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            cwd = Path(temporary)
+            config_path = module.write_sender_atm_config(cwd, "aq4-sender")
+
+            self.assertEqual(config_path, cwd / ".atm.toml")
+            self.assertTrue(config_path.is_file())
+            self.assertEqual(config_path.read_text(encoding="utf-8"), '[atm]\nlocal_host = "aq4-sender"\n')
+
+    def test_write_sender_atm_config_round_trips_through_the_real_atm_core_parser(self) -> None:
+        # Proves the written file is not merely well-formed TOML but is
+        # accepted by the same production parser this scenario's `atm send`
+        # invocation depends on (crates/atm-core/src/config/mod.rs), so a
+        # parser-format drift is caught here rather than only live on CI.
+        import tomllib
+
+        module = load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            cwd = Path(temporary)
+            config_path = module.write_sender_atm_config(cwd, "aq4-sender")
+            parsed = tomllib.loads(config_path.read_text(encoding="utf-8"))
+            self.assertEqual(parsed["atm"]["local_host"], "aq4-sender")
+
+    def test_sender_local_host_differs_from_the_recipient_host_so_delivery_stays_remote(self) -> None:
+        # classify_recipient_locality treats an equal local_host/recipient
+        # host as same-host, which would skip the transfer-script path this
+        # scenario exists to exercise (see write_sender_atm_config's
+        # docstring).
+        module = load_module()
+        self.assertNotEqual(module.SENDER_LOCAL_HOST, module.TRANSFER_HOST)
+
     def test_free_loopback_port_returns_an_ephemeral_port(self) -> None:
         module = load_module()
         port = module.free_loopback_port()

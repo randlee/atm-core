@@ -35,7 +35,15 @@ Why this script writes into the real (not scratch) `$HOME/.ssh/config`:
 forwarded to the spawned `ssh`/`scp` child, so those processes resolve their
 own home directory (and therefore `~/.ssh/config`) via the OS account,
 never via any `$HOME` this script sets for the outer `atm` CLI process. The
-addition is backed up and restored; see `_install_ssh_client_config`.
+addition is backed up and restored; see `SshClientConfigOverride`.
+
+Why this script also writes a sender-side `.atm.toml` with `local_host`
+(confirmed live on clean-runner CI, run 33125703487: `atm send` exited 3,
+"recipient is qualified for host 'localhost' but this machine's `.atm.toml`
+has no `local_host` set"): decision (f) fails a host-qualified recipient
+closed with `LocalHostUnset` unless the sender's own `local_host` is
+configured. See `write_sender_atm_config`'s docstring for why its value is
+deliberately a *different* label than the recipient's `localhost`.
 """
 
 from __future__ import annotations
@@ -59,6 +67,7 @@ TEAM = "aq4-transfer-evidence"
 SENDER = "aq4-sender"
 RECEIVER = "aq4-receiver"
 TRANSFER_HOST = "localhost"
+SENDER_LOCAL_HOST = "aq4-sender"
 READY_TIMEOUT_SECONDS = 15.0
 SSHD_READY_TIMEOUT_SECONDS = 10.0
 ATTACHMENT_FILE_NAME = "aq4-report.pdf"
@@ -330,10 +339,18 @@ def fixture_environment(root: Path) -> dict[str, str]:
     }
 
 
-def run_cli(atm: Path, env: dict[str, str], args: list[str], *, identity: str, timeout: float) -> subprocess.CompletedProcess[str]:
+def run_cli(
+    atm: Path,
+    env: dict[str, str],
+    args: list[str],
+    *,
+    identity: str,
+    timeout: float,
+    cwd: Path | None = None,
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [str(atm), *args],
-        cwd=ROOT,
+        cwd=cwd or ROOT,
         env={**env, "ATM_IDENTITY": identity},
         capture_output=True,
         text=True,
@@ -344,14 +361,26 @@ def run_cli(atm: Path, env: dict[str, str], args: list[str], *, identity: str, t
     )
 
 
-def add_roster_member(atm: Path, env: dict[str, str], home: Path, member: str, timeout: float) -> dict[str, Any]:
-    completed = run_cli(
-        atm,
-        env,
-        ["teams", "add-member", TEAM, member, "--home-dir", str(home), "--json"],
-        identity=SENDER,
-        timeout=timeout,
-    )
+def add_roster_member(
+    atm: Path,
+    env: dict[str, str],
+    home: Path,
+    member: str,
+    timeout: float,
+    *,
+    host: str | None = None,
+) -> dict[str, Any]:
+    args = ["teams", "add-member", TEAM, member, "--home-dir", str(home)]
+    if host is not None:
+        # Decision (e): the roster's own registered host binding, recorded
+        # for picker-projection fidelity -- independent of (and consistent
+        # with) the `--host` this scenario also passes explicitly on `atm
+        # send` below, since the legacy direct-host path
+        # (`is_legacy_direct_host`) never consults the roster for host
+        # resolution.
+        args += ["--host", host]
+    args.append("--json")
+    completed = run_cli(atm, env, args, identity=SENDER, timeout=timeout)
     if completed.returncode != 0:
         detail = completed.stderr.strip() or completed.stdout.strip()
         raise RuntimeError(f"could not add {member} to the isolated roster: {detail}")
@@ -410,6 +439,24 @@ def extract_landed_path(peek_stdout: str, file_name: str) -> str | None:
     pattern = re.compile(r"Attached files \(on this host\):\\?n?- (\S*" + re.escape(file_name) + r")")
     match = pattern.search(peek_stdout)
     return match.group(1) if match else None
+
+
+def write_sender_atm_config(cwd: Path, local_host: str) -> Path:
+    """Writes `.atm.toml` with `[atm] local_host = "<local_host>"` directly
+    into `cwd` (ADR-055 decision (f)). Required: a host-qualified recipient
+    (this scenario's `--host localhost`) with no `local_host` configured
+    fails closed with `LocalHostUnset` before ever reaching the transfer
+    script -- confirmed live on clean-runner CI (run 33125703487, exit code
+    3, "recipient is qualified for host 'localhost' but this machine's
+    `.atm.toml` has no `local_host` set"). `local_host` is deliberately a
+    *different* label ("aq4-sender") than the recipient's `localhost`: equal
+    values would classify the recipient same-host
+    (`classify_recipient_locality`), skipping the transfer-script path this
+    scenario exists to exercise.
+    """
+    config_path = cwd / ".atm.toml"
+    config_path.write_text(f'[atm]\nlocal_host = "{local_host}"\n', encoding="utf-8")
+    return config_path
 
 
 def install_transfer_script(home: Path) -> Path:
@@ -475,10 +522,23 @@ def run_scenario(args: argparse.Namespace) -> dict[str, Any]:
                 record["error"] = sshd.get("log_tail") or "sshd did not open its loopback port"
                 return record
 
+            sender_cwd = root / "sender-cwd"
+            sender_cwd.mkdir()
+            sender_config_path = write_sender_atm_config(sender_cwd, SENDER_LOCAL_HOST)
+            record["sender_atm_config"] = {
+                "path": str(sender_config_path),
+                "local_host": SENDER_LOCAL_HOST,
+            }
+
             with SshClientConfigOverride(port, keys["identity"]):
                 record["roster"] = {
                     "sender": add_roster_member(args.atm, env, home, SENDER, args.timeout),
-                    "receiver": add_roster_member(args.atm, env, home, RECEIVER, args.timeout),
+                    # Decision (e): register the receiver's roster host as
+                    # the same literal "localhost" the send below targets
+                    # with --host, so the recipient this scenario delivers
+                    # to is consistently recorded as reachable at that host,
+                    # not merely accepted through the send-time override.
+                    "receiver": add_roster_member(args.atm, env, home, RECEIVER, args.timeout, host=TRANSFER_HOST),
                 }
 
                 installed_script = install_transfer_script(home)
@@ -500,12 +560,20 @@ def run_scenario(args: argparse.Namespace) -> dict[str, Any]:
                 attach_path = attach_source_dir / ATTACHMENT_FILE_NAME
                 attach_path.write_bytes(ATTACHMENT_BODY)
 
+                # cwd=sender_cwd: `atm send` resolves `.atm.toml`'s
+                # `local_host` (decision (f)) by walking upward from the
+                # process's current directory, so the sender-side config
+                # written above is only found if this invocation actually
+                # runs from there -- unlike every other command in this
+                # scenario, which has no need for `local_host` and keeps
+                # running from ROOT.
                 send_completed = run_cli(
                     args.atm,
                     env,
                     ["send", f"{RECEIVER}@{TEAM}", MESSAGE_TEXT, "--host", TRANSFER_HOST, "--attach", str(attach_path)],
                     identity=SENDER,
                     timeout=args.timeout,
+                    cwd=sender_cwd,
                 )
                 record["send"] = {
                     "argv": send_completed.args,
