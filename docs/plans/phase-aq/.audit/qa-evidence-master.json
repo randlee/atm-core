@@ -1370,7 +1370,7 @@
    "assignment_message_id": null,
    "assignment_from": "quality-mgr",
    "assignment_shared_path": null,
-   "assignment_summary": "AQ1.9 #1050: head 23e420ccd, QA PASS confirmed; merged e151f30e6 (graft chain AQ1.5–1.9 complete on integrate)",
+   "assignment_summary": "AQ1.9 #1050: head 23e420ccd, QA PASS confirmed; merged e151f30e6 (graft chain AQ1.5\u20131.9 complete on integrate)",
    "result_time_utc": "2026-08-28T00:30:00Z",
    "result_time_pst": null,
    "result_message_id": null,
@@ -1382,7 +1382,7 @@
    "important": 0,
    "minor": null,
    "count_basis": "headline/reviewer",
-   "evidence": "AQ1.9 QA PASS @ 23e420ccd. Merged e151f30e6. Graft chain AQ1.5–1.9 complete on integrate."
+   "evidence": "AQ1.9 QA PASS @ 23e420ccd. Merged e151f30e6. Graft chain AQ1.5\u20131.9 complete on integrate."
   },
   {
    "run_id": "QA-AQ2.7-R3",
@@ -1657,7 +1657,7 @@
    "important": 0,
    "minor": null,
    "count_basis": "headline/reviewer",
-   "evidence": "macOS hook-test teardown race fix confirmed genuine @ d99df87d2. Merge pending CI. AQ3 #1054 merge-forward → c00d8452d."
+   "evidence": "macOS hook-test teardown race fix confirmed genuine @ d99df87d2. Merge pending CI. AQ3 #1054 merge-forward \u2192 c00d8452d."
   },
   {
    "run_id": "CI-AQ3-RUNNER-1",
@@ -1732,7 +1732,57 @@
    "important": 0,
    "minor": null,
    "count_basis": "headline/reviewer",
-   "evidence": "Clean-runner GHA run 33125703487: ubuntu/macos FAIL (harness wiring — atm send --host localhost rc 3: scratch .atm.toml lacks local_host); fix in progress."
+   "evidence": "Clean-runner GHA run 33125703487: ubuntu/macos FAIL (harness wiring \u2014 atm send --host localhost rc 3: scratch .atm.toml lacks local_host); fix in progress."
+  },
+  {
+   "run_id": "QA-AQ4-R4",
+   "aich_sprint": "AQ4",
+   "phase_sprint": "AQ4",
+   "pass": null,
+   "run_type": "qa",
+   "assignment_time_utc": null,
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": "quality-mgr",
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ4 #1055 harness fix head 3decc5742 (sender .atm.toml local_host provisioning; receiver --host localhost; +3 unit tests)",
+   "result_time_utc": "2026-08-28T01:00:00Z",
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": "quality-mgr",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": null,
+   "blockers": null,
+   "important": null,
+   "minor": null,
+   "count_basis": "headline/reviewer",
+   "evidence": "Harness fix 3decc5742: sender .atm.toml local_host provisioning, receiver --host localhost provisioning, +3 unit tests. Evidence rerun dispatched. QA-2 pending."
+  },
+  {
+   "run_id": "QA-AQ5-R2",
+   "aich_sprint": "AQ5",
+   "phase_sprint": "AQ5",
+   "pass": null,
+   "run_type": "qa",
+   "assignment_time_utc": null,
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": "quality-mgr",
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ5 #1059 picker fix head dcff4bac3 (dead/idle member exclusion in picker.py, picker-windows.ps1, test_picker_exclusion.py harness)",
+   "result_time_utc": "2026-08-28T01:00:00Z",
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": "quality-mgr",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": null,
+   "blockers": null,
+   "important": null,
+   "minor": null,
+   "count_basis": "headline/reviewer",
+   "evidence": "Picker fix dcff4bac3: real dead/idle member exclusion logic (picker.py, picker-windows.ps1); .just/tests/test_picker_exclusion.py harness (six-case degradation + GUI notifications). Traceability R3/R6/R7 corrected. Deliverable 3 upstream PR https://github.com/randlee/wyvern/pull/140. AQ5-gui-e2e follow-up (owner Rand) recorded in follow_ups. Windows CI gating fix + member_mutation.rs duplicate host write removed. Newly surfaced: atm-send-to.sh/.ps1 Wyvern invocation shape (wizard.json config in, WizardResult.data out) in-scope for next fix. QA-2 pending."
   }
  ],
  "follow_ups": [
