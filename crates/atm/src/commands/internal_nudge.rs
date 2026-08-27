@@ -3,6 +3,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
+use atm_core::api::{ApiRequest, DaemonApiClient};
 use atm_core::boundary::{
     BuiltInNudgeSinkTarget, InternalNudgeEnvelope, PostSendHookEvent, ResolvedBuiltInNudgeTemplate,
     TMUX_DOUBLE_ENTER_DELAY, TMUX_NUDGE_CONFIRM_KEY,
@@ -10,12 +11,14 @@ use atm_core::boundary::{
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::{
     GraftPostSendRequest, GraftPostSendResponse, deliver_graft_post_send,
-    graft_receiver_record_path_from_home,
+    graft_receiver_not_registered_error,
 };
-use atm_core::home;
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 #[cfg(test)]
 use atm_core::send::qualified_nudge_sender_identity;
 use atm_core::send::render_resolved_built_in_nudge;
+use atm_daemon_client::{resolve_daemon_local_ipc_endpoint, unexpected_response};
+use atm_http_runtime::SAME_HOST_REQUEST_DEADLINE;
 use clap::Args;
 
 use crate::observability::CliObservability;
@@ -38,14 +41,16 @@ const TMUX_PROGRAM_ENV: &str = "ATM_TEST_TMUX_BIN";
 pub struct InternalNudgeCommand;
 
 impl InternalNudgeCommand {
-    pub fn run(self, _observability: &CliObservability) -> Result<()> {
+    pub async fn run(self, _observability: &CliObservability) -> Result<()> {
         let input = InternalNudgeInput::from_env()?;
         let Some(template) = render_resolved_built_in_nudge(&input.event, &input.template)? else {
             return Ok(());
         };
         match input.sink_target {
             BuiltInNudgeSinkTarget::Tmux => TmuxNudgeSink.deliver(&input.event, &template)?,
-            BuiltInNudgeSinkTarget::Graft => GraftNudgeSink.deliver(&input.event, &template)?,
+            BuiltInNudgeSinkTarget::Graft => {
+                GraftNudgeSink.deliver(&input.event, &template).await?
+            }
         }
         Ok(())
     }
@@ -165,21 +170,18 @@ impl TmuxNudgeSink {
 struct GraftNudgeSink;
 
 impl GraftNudgeSink {
-    fn deliver(&self, event: &PostSendHookEvent, rendered_nudge: &str) -> Result<()> {
-        let home_dir = home::atm_home()?;
-        let record_path = graft_receiver_record_path_from_home(
-            &home_dir,
-            &event.recipient_team,
-            &event.recipient,
-        );
+    async fn deliver(&self, event: &PostSendHookEvent, rendered_nudge: &str) -> Result<()> {
+        let lease = lookup_receiver(&event.recipient_team, &event.recipient).await?;
         let request = GraftPostSendRequest {
             event: event.clone(),
+            kind: atm_core::boundary::NudgeKind::Steer,
             rendered_nudge: rendered_nudge.to_string(),
             // This legacy diagnostic command has no admitted message body.
             message_body: String::new(),
         };
         let response = deliver_graft_post_send(
-            &record_path,
+            lease.endpoint,
+            &lease.capability,
             &request,
             GRAFT_POST_SEND_CONNECT_DEADLINE,
             GRAFT_POST_SEND_IO_DEADLINE,
@@ -195,6 +197,42 @@ impl GraftNudgeSink {
             GraftPostSendResponse::Delivered => Ok(()),
             GraftPostSendResponse::Error(error) => Err(error.into()),
         }
+    }
+}
+
+async fn lookup_receiver(
+    team: &atm_core::types::TeamName,
+    agent: &atm_core::types::AgentName,
+) -> Result<atm_storage::GraftReceiverLease, AtmError> {
+    let endpoint = resolve_daemon_local_ipc_endpoint()?;
+    let transport =
+        atm_http_runtime::preferred_local_client(endpoint.as_ref(), SAME_HOST_REQUEST_DEADLINE)?;
+    lookup_receiver_via(transport.as_ref(), team, agent).await
+}
+
+/// Executes the `GraftReceiverLookup` round trip against any daemon client
+/// transport, decoupled from local endpoint resolution so it can be
+/// exercised against a fake or router-backed transport in tests without a
+/// running daemon (AC7).
+async fn lookup_receiver_via(
+    transport: &dyn DaemonApiClient,
+    team: &atm_core::types::TeamName,
+    agent: &atm_core::types::AgentName,
+) -> Result<atm_storage::GraftReceiverLease, AtmError> {
+    let response = transport
+        .execute(ApiRequest::new(RequestEnvelope::GraftReceiverLookup {
+            team: team.clone(),
+            agent: agent.clone(),
+        }))
+        .await?
+        .into_inner();
+    match response {
+        ResponseEnvelope::GraftReceiverLookup(Some(lease)) => Ok(lease),
+        ResponseEnvelope::GraftReceiverLookup(None) => {
+            Err(graft_receiver_not_registered_error(team, agent))
+        }
+        ResponseEnvelope::Error(error) => Err(error),
+        other => Err(unexpected_response("graft receiver lookup", other)),
     }
 }
 
@@ -273,9 +311,13 @@ mod tests {
     use serial_test::serial;
     use tempfile::tempdir;
 
+    use atm_core::graft::graft_receiver_not_registered_error;
+    use atm_core::protocol::{OwnerGeneration, RequestEnvelope, ResponseEnvelope};
+    use atm_core::transport::testing::FakeClientTransport;
+
     use super::{
         INTERNAL_NUDGE_ENV, InternalNudgeCommand, InternalNudgeInput, TMUX_PROGRAM_ENV,
-        render_template,
+        lookup_receiver_via, render_template,
     };
 
     fn base_event() -> PostSendHookEvent {
@@ -437,9 +479,9 @@ mod tests {
         assert_eq!(input.template.body, None);
     }
 
-    #[test]
+    #[tokio::test]
     #[serial(env)]
-    fn internal_nudge_run_skips_delivery_when_template_is_explicitly_disabled() {
+    async fn internal_nudge_run_skips_delivery_when_template_is_explicitly_disabled() {
         let payload = serde_json::to_string(&InternalNudgeEnvelope {
             event: base_event(),
             sink_target: BuiltInNudgeSinkTarget::Tmux,
@@ -453,6 +495,7 @@ mod tests {
 
         InternalNudgeCommand
             .run(&crate::observability::CliObservability::fallback())
+            .await
             .expect("disabled template should short-circuit");
     }
 
@@ -497,5 +540,53 @@ mod tests {
         let logged = fs::read_to_string(&tmux_log).expect("tmux log");
         assert_eq!(logged.matches("Enter").count(), 2);
         assert!(TMUX_DOUBLE_ENTER_DELAY >= Duration::from_millis(250));
+    }
+
+    // AC7 (PR #1048): `GraftReceiverLookup` round-trips through
+    // `_internal-nudge`'s own query path — `lookup_receiver_via` is the exact
+    // request/response contract `GraftNudgeSink::deliver` uses, exercised
+    // here against a fake transport so no real daemon or file record is
+    // involved, mirroring the router-level `GraftReceiverLookup` test style.
+    #[tokio::test]
+    async fn graft_receiver_lookup_round_trips_hit_and_absent_lease() {
+        let team: atm_core::types::TeamName = TEST_TEAM.parse().expect("team");
+        let agent: atm_core::types::AgentName = TEST_ARCH_CTM.parse().expect("agent");
+        let owner_generation =
+            OwnerGeneration::new("01J00000000000000000000040").expect("owner generation");
+        let lease = atm_storage::GraftReceiverLease {
+            endpoint: "127.0.0.1:43120".parse().expect("endpoint"),
+            capability: atm_core::local_http::LocalCapability::generate().expect("capability"),
+            owner_generation,
+            registered_at: chrono::Utc::now(),
+            last_seen_at: chrono::Utc::now(),
+            unreachable_since: None,
+        };
+
+        let hit_lease = lease.clone();
+        let hit_transport = FakeClientTransport::new(move |request| match request {
+            RequestEnvelope::GraftReceiverLookup { .. } => Ok(
+                ResponseEnvelope::GraftReceiverLookup(Some(hit_lease.clone())),
+            ),
+            other => panic!("unexpected request in graft receiver lookup test: {other:?}"),
+        });
+        let resolved = lookup_receiver_via(&hit_transport, &team, &agent)
+            .await
+            .expect("hit lookup must resolve the lease");
+        assert_eq!(resolved, lease);
+
+        let miss_transport = FakeClientTransport::new(|request| match request {
+            RequestEnvelope::GraftReceiverLookup { .. } => {
+                Ok(ResponseEnvelope::GraftReceiverLookup(None))
+            }
+            other => panic!("unexpected request in graft receiver lookup test: {other:?}"),
+        });
+        let error = lookup_receiver_via(&miss_transport, &team, &agent)
+            .await
+            .expect_err("an absent lease must surface the not-registered error");
+        assert_eq!(
+            error.code(),
+            graft_receiver_not_registered_error(&team, &agent).code()
+        );
+        assert!(error.message().contains(TEST_ARCH_CTM));
     }
 }

@@ -1363,6 +1363,9 @@ inventory. Queue ships first; trait foundation first, Herdr second
 (reordered 2026-08-26 per Rand). Fourteen sprints: AQ1 trait foundation +
 `atm queue` CLI verb + ADR-054 taxonomy + `PendingNudgeStore`; AQ2.6/AQ2.7
 Herdr local-steer backend + lifecycle-gated queue wake (most urgent);
+[AQ2.6 sprint](./plans/phase-aq/sprint-AQ2-6-herdr-steer-backend.md) is the
+authoritative implementation entry for the local Herdr backend and is
+complete after the AQ2.6 QA1 fix cycle;
 AQ1.5–AQ1.9 graft push-registration (ADR-056), parallel with Herdr; AQ2
 graft dual-channel; AQ2.5 queue delivery triggers (heartbeat hooks,
 bare-CLI FIFO); AQ3 tmux idle-drain + recovery sweep; AQ4 Send-To core
@@ -1385,7 +1388,16 @@ AQ2.5 delivery triggers). AQ's entry dependency — Phase AO2 merged to
 `develop` (ADR-047/ADR-053 on the cut head) — is satisfied as of PR #966.
 AQ1.6 graft receiver registration client implementation is complete on
 `feature/aq-1-6-graft-receiver-registration-client`; its PR targets
-`integrate/phase-aq`.
+`integrate/phase-aq`. AQ1.7 graft endpoint consumer cutover is complete on
+`feature/aq-1-7-graft-endpoint-consumer-cutover`, pending its PR review.
+AQ1.8 graft file-record retirement is complete on
+`feature/aq-1-8-graft-file-record-retirement`, pending its PR review.
+AQ1.9 hermes-atm wheel bump and local restart-matrix harness are complete on
+`feature/aq-1-9-hermes-atm-wheel-verification`; the m5 live matrix remains
+pending its host run.
+AQ2 graft dual-channel queue delivery is complete on
+`feature/aq-2-queue-graft`; its PR carries the additive wire kind, exact
+pending-marker handoff semantics, and Hermes `/queue`/`/steer` routing.
 
 ## 49. Phase AO2 — Benchmark Safety, Evidence, And Transport Performance [COMPLETE — MERGED TO DEVELOP]
 

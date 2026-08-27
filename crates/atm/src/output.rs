@@ -267,6 +267,7 @@ pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
     print_doctor_summary(report);
     print_doctor_observability(report);
     print_doctor_post_send(report);
+    print_doctor_graft_receivers(report);
     println!(
         "Logging health: {} | Query readiness: {}",
         render_doctor_state(report.observability.logging_state),
@@ -494,6 +495,24 @@ fn print_doctor_roster(report: &DoctorReport) {
     }
 }
 
+fn print_doctor_graft_receivers(report: &DoctorReport) {
+    if report.graft_receivers.receivers.is_empty() {
+        return;
+    }
+    println!();
+    println!("Graft receivers:");
+    for receiver in &report.graft_receivers.receivers {
+        println!(
+            "  {}@{} | endpoint={} last_seen_age={}s reachable_at_last_use={}",
+            receiver.agent,
+            receiver.team,
+            receiver.endpoint,
+            receiver.last_seen_age_seconds,
+            receiver.reachable_at_last_use
+        );
+    }
+}
+
 fn print_doctor_recommendations(report: &DoctorReport) {
     if report.recommendations.is_empty() {
         return;
@@ -535,6 +554,9 @@ pub fn print_add_member_result(outcome: &AddMemberOutcome, json: bool) -> Result
             outcome.member, outcome.team, outcome.created_inbox
         );
     }
+    for warning in &outcome.warnings {
+        eprintln!("warning: {warning}");
+    }
     Ok(())
 }
 
@@ -544,6 +566,9 @@ pub fn print_update_member_result(outcome: &UpdateMemberOutcome, json: bool) -> 
         println!("{}", serde_json::to_string_pretty(outcome)?);
     } else {
         println!("Updated member {} in {}", outcome.member, outcome.team);
+    }
+    for warning in &outcome.warnings {
+        eprintln!("warning: {warning}");
     }
     Ok(())
 }

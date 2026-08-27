@@ -1,6 +1,12 @@
+---
+status: complete
+branch: feature/aq-2-queue-graft
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/aq-2-queue-graft
+---
+
 # Sprint AQ2 — Queue: atm-graft Dual-Channel
 
-Status: draft · Branch: `feature/aq-2-queue-graft` off `integrate/phase-aq` ·
+Status: complete · Branch: `feature/aq-2-queue-graft` off `integrate/phase-aq` ·
 PR target: `integrate/phase-aq`
 recommended_agent: arch-ctm · recommended_model: deep-reasoning
 
@@ -75,6 +81,13 @@ message), NOT a background task.
    emits the event, increments the counter; wire-compat test for the
    evolved graft message (old receiver rejects gracefully or version gate
    per ADR-054 (g)).
+
+
+> **Evidence scope ruling (fenix, 2026-08-27, #1051 QA-2 ATM-QA-001):** loopback
+> hermes-atm harness evidence satisfies this sprint's Hermes demo requirement
+> for merge; the **live Hermes-fronted** run is deferred to AQ5 (phase
+> evidence), matching AQ1.9's deferred live-m5 row. Every AC ships with a
+> named automated test.
 
 ## Acceptance criteria
 

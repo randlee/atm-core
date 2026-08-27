@@ -19,6 +19,58 @@ use crate::send::NudgeMode;
 use crate::send::hook::build_built_in_dispatch;
 use crate::service_runtime::LocalServiceRuntime;
 
+/// Clears the exact durable queue marker after a successful handoff.
+///
+/// Marker cleanup is deliberately best-effort: the handoff has already
+/// succeeded, so cleanup must never turn that success into a failed delivery.
+/// A failed clear is logged and retried once. `record_failure` is invoked for
+/// each failed attempt so the composition layer can project the failure into
+/// its runtime-health counters without making core depend on that layer.
+pub fn clear_queue_marker_after_handoff(
+    service_runtime: &LocalServiceRuntime,
+    member: &MemberKey,
+    message_id: &AtmMessageId,
+    mut record_failure: impl FnMut(),
+) {
+    let store = match service_runtime.pending_nudge_store() {
+        Ok(store) => store,
+        Err(error) => {
+            record_failure();
+            tracing::warn!(
+                subsystem = "atm_core.queue",
+                action = "handoff_marker_clear",
+                outcome = "failed",
+                %error,
+                msg_id = %message_id,
+                "queue delivery succeeded but pending marker store was unavailable"
+            );
+            return;
+        }
+    };
+    if let Err(error) = store.clear_pending_on_handoff(member, message_id) {
+        record_failure();
+        tracing::warn!(
+            subsystem = "atm_core.queue",
+            action = "handoff_marker_clear",
+            outcome = "failed",
+            %error,
+            msg_id = %message_id,
+            "queue delivery succeeded but pending marker clear failed; retrying"
+        );
+        if let Err(retry_error) = store.clear_pending_on_handoff(member, message_id) {
+            record_failure();
+            tracing::warn!(
+                subsystem = "atm_core.queue",
+                action = "handoff_marker_clear",
+                outcome = "failed",
+                %retry_error,
+                msg_id = %message_id,
+                "pending marker clear retry failed after successful queue delivery"
+            );
+        }
+    }
+}
+
 /// Rebuilds the receiver-hook dispatch for one already-persisted message.
 ///
 /// `kind` selects the rebuilt dispatch's [`NudgeKind`] (a queue claim always

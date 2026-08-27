@@ -218,6 +218,8 @@ mod tests {
             harness,
             recipient_pane_id: None,
             local_tmux_post_send: false,
+            local_herdr_post_send: false,
+            herdr_session: None,
             graft_post_send: false,
             roster_backed: true,
         }

@@ -41,6 +41,13 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm-daemon", "atm-template-sc-compose"),
     ("atm-runtime", "atm-template-sc-compose"),
     ("atm-http-runtime", "atm-template-sc-compose"),
+    ("atm-core", "atm-herdr"),
+    ("atm-storage", "atm-herdr"),
+    ("atm-storage-rusqlite", "atm-herdr"),
+    ("atm-herdr", "atm-daemon"),
+    ("atm-herdr", "atm-daemon-bootstrap"),
+    ("atm-herdr", "atm-http-runtime"),
+    ("atm-herdr", "atm-storage-rusqlite"),
 ];
 
 const RETIRED_DAEMON_CONSTRUCT_FRAGMENTS: &[(&str, &str)] = &[
@@ -487,6 +494,108 @@ fn canonical_write_router_has_one_host_routing_decision() {
             !send.contains(retired),
             "AI.12 forbids the pre-router local-nudge helper `{retired}`"
         );
+    }
+}
+
+#[test]
+fn queue_marker_handoff_clear_has_one_core_owner() {
+    let root = workspace_root();
+    let mut files = Vec::new();
+    collect_rust_files(&root.join("crates"), &mut files);
+
+    let mut definitions = Vec::new();
+    let mut violations = Vec::new();
+    for path in files {
+        let source = read_source(&path);
+        let syntax = syn::parse_file(&source)
+            .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
+        let mut visitor = QueueMarkerClearVisitor::default();
+        visitor.visit_file(&syntax);
+        definitions.extend(
+            visitor
+                .definitions
+                .into_iter()
+                .map(|name| format!("{}::{name}", path.display().to_string().replace('\\', "/"))),
+        );
+        violations.extend(
+            visitor
+                .violations
+                .into_iter()
+                .map(|name| format!("{}::{name}", path.display().to_string().replace('\\', "/"))),
+        );
+    }
+
+    assert_eq!(
+        definitions.len(),
+        1,
+        "clear_queue_marker_after_handoff must have exactly one workspace definition: {definitions:?}"
+    );
+    assert!(
+        definitions[0].contains("crates/atm-core/"),
+        "the sole queue-marker clear helper must be owned by atm-core: {definitions:?}"
+    );
+    assert!(
+        violations.is_empty(),
+        "direct clear_pending_on_handoff calls are forbidden outside the core helper and store impl/tests: {violations:?}"
+    );
+}
+
+#[derive(Default)]
+struct QueueMarkerClearVisitor {
+    definitions: Vec<String>,
+    violations: Vec<String>,
+    current_function: Option<String>,
+    in_test_module: bool,
+    in_pending_nudge_store_impl: bool,
+}
+
+impl<'ast> Visit<'ast> for QueueMarkerClearVisitor {
+    fn visit_item_fn(&mut self, node: &'ast syn::ItemFn) {
+        let previous = self.current_function.replace(node.sig.ident.to_string());
+        if node.sig.ident == "clear_queue_marker_after_handoff" {
+            self.definitions.push(node.sig.ident.to_string());
+        }
+        syn::visit::visit_item_fn(self, node);
+        self.current_function = previous;
+    }
+
+    fn visit_item_impl(&mut self, node: &'ast syn::ItemImpl) {
+        let previous = self.in_pending_nudge_store_impl;
+        self.in_pending_nudge_store_impl = node.trait_.as_ref().is_some_and(|(_, path, _)| {
+            path.segments
+                .last()
+                .is_some_and(|segment| segment.ident == "PendingNudgeStore")
+        });
+        syn::visit::visit_item_impl(self, node);
+        self.in_pending_nudge_store_impl = previous;
+    }
+
+    fn visit_impl_item_fn(&mut self, node: &'ast syn::ImplItemFn) {
+        let previous = self.current_function.replace(node.sig.ident.to_string());
+        syn::visit::visit_impl_item_fn(self, node);
+        self.current_function = previous;
+    }
+
+    fn visit_item_mod(&mut self, node: &'ast syn::ItemMod) {
+        let previous = self.in_test_module;
+        self.in_test_module = previous || node.attrs.iter().any(is_cfg_test_attribute);
+        syn::visit::visit_item_mod(self, node);
+        self.in_test_module = previous;
+    }
+
+    fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
+        if node.method == "clear_pending_on_handoff"
+            && self.current_function.as_deref() != Some("clear_queue_marker_after_handoff")
+            && !self.in_pending_nudge_store_impl
+            && !self.in_test_module
+        {
+            self.violations.push(
+                self.current_function
+                    .clone()
+                    .unwrap_or_else(|| "<module-level expression>".to_owned()),
+            );
+        }
+        syn::visit::visit_expr_method_call(self, node);
     }
 }
 
@@ -1731,6 +1840,66 @@ fn workspace_source_must_not_reintroduce_retired_peer_delivery_constructs() {
 }
 
 #[test]
+fn aq4_send_to_staging_dir_has_a_single_construction_site_and_atm_temp_is_read_only_via_env_source()
+{
+    // AQ4 deliverable 7 (lane-C-relevant half, ATM-QA-002): precedent is
+    // `al3_received_hook_is_single_receiver_side_path_without_detached_work`'s
+    // `emit_received_hook` single-call-site assertion above. Nothing should
+    // be able to add a second `send_to_staging_dir()` implementation, or a
+    // free-function `env::var("ATM_TEMP")` read, without this test failing.
+    let source_root = workspace_root().join("crates");
+    let mut files = Vec::new();
+    collect_rust_files(&source_root, &mut files);
+    // Exclude this meta-test crate itself: its own source (this file)
+    // necessarily contains the literal strings this test searches for, as
+    // the search patterns rather than real definitions/reads.
+    files.retain(|path| {
+        !path
+            .components()
+            .any(|component| component.as_os_str() == "atm-architecture")
+    });
+
+    let mut send_to_staging_dir_definitions = 0usize;
+    let mut forbidden_atm_temp_env_reads = Vec::new();
+    let mut sanctioned_atm_temp_read_files = Vec::new();
+
+    for path in &files {
+        let source = read_source(path);
+        send_to_staging_dir_definitions += source.matches("fn send_to_staging_dir(").count();
+
+        // Matches both `env::var("ATM_TEMP")` and `std::env::var("ATM_TEMP")`
+        // (and the `_os` variant): any module-path prefix before `env::`
+        // still leaves this literal substring present.
+        for forbidden in ["env::var(\"ATM_TEMP\")", "env::var_os(\"ATM_TEMP\")"] {
+            if source.contains(forbidden) {
+                forbidden_atm_temp_env_reads.push(format!("{}: {forbidden}", path.display()));
+            }
+        }
+        // The sanctioned form: a **method call** on an `EnvSource` trait
+        // object (`env.var("ATM_TEMP")`), never the free-function path
+        // (ADR-055's M14 note; `crates/atm-core/src/atm_temp.rs`'s own
+        // module doc comment).
+        if source.contains("env.var(\"ATM_TEMP\")") {
+            sanctioned_atm_temp_read_files.push(path.clone());
+        }
+    }
+
+    assert_eq!(
+        send_to_staging_dir_definitions, 1,
+        "send_to_staging_dir() must have exactly one construction site in the workspace"
+    );
+    assert!(
+        forbidden_atm_temp_env_reads.is_empty(),
+        "ATM_TEMP must be read only through the EnvSource seam (env.var(...) method call), never a free-function env::var/env::var_os call: {forbidden_atm_temp_env_reads:?}"
+    );
+    assert_eq!(
+        sanctioned_atm_temp_read_files.len(),
+        1,
+        "ATM_TEMP's real environment read must stay concentrated in exactly one file, found: {sanctioned_atm_temp_read_files:?}"
+    );
+}
+
+#[test]
 fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() {
     let root = workspace_root();
     let daemon_lib = root.join("crates/atm-daemon/src/main.rs");
@@ -2266,8 +2435,8 @@ fn al1_http_runtime_is_core_contract_only_and_excludes_retired_transport_shapes(
         .expect("AL.1 HTTP runtime package must exist");
     assert_eq!(
         actual,
-        &BTreeSet::from(["agent-team-mail-core".to_string()]),
-        "atm-http-runtime may depend on ATM core contracts only"
+        &BTreeSet::from(["agent-team-mail-core".to_string(), "atm-herdr".to_string(),]),
+        "atm-http-runtime may depend on ATM core contracts and the Herdr process adapter"
     );
 
     let root = workspace_root();
@@ -3002,6 +3171,83 @@ fn al3_replacement_runtime_cannot_restore_legacy_or_blocking_runtime_constructs(
     }
 }
 
+#[test]
+fn herdr_constructors_have_one_composition_root_call_site() {
+    let root = workspace_root();
+    let mut rust_files = Vec::new();
+    collect_rust_files(&root.join("crates"), &mut rust_files);
+    rust_files.retain(|path| !path.starts_with(root.join("crates/atm-architecture/tests")));
+
+    let sources = rust_files
+        .iter()
+        .map(|path| read_source(path))
+        .collect::<Vec<_>>();
+    let breaker_calls = sources
+        .iter()
+        .map(|source| source.matches("HerdrSpawnBreaker::new(").count())
+        .sum::<usize>();
+    let invoker_calls = sources
+        .iter()
+        .map(|source| source.matches("HerdrProcessInvoker::new(").count())
+        .sum::<usize>();
+    assert_eq!(
+        breaker_calls, 1,
+        "HerdrSpawnBreaker must have one composition call site"
+    );
+    assert_eq!(
+        invoker_calls, 1,
+        "HerdrProcessInvoker must have one composition call site"
+    );
+
+    let bootstrap = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
+    let composition = bootstrap
+        .split_once("fn build_replacement_handler")
+        .and_then(|(_, tail)| tail.split_once("fn "))
+        .map(|(body, _)| body)
+        .expect("replacement handler composition function must exist");
+    assert!(composition.contains("HerdrSpawnBreaker::new("));
+    assert!(composition.contains("HerdrProcessInvoker::new("));
+}
+
+#[test]
+fn herdr_test_utils_are_dev_dependencies_only() {
+    let root = workspace_root();
+    for crate_name in ["atm-daemon-bootstrap", "atm-http-runtime"] {
+        let manifest: toml::Value = toml::from_str(&read_source(
+            &root.join(format!("crates/{crate_name}/Cargo.toml")),
+        ))
+        .expect("consumer manifest must parse");
+        let production = manifest
+            .get("dependencies")
+            .and_then(|table| table.get("atm-herdr"));
+        assert!(
+            !production.is_some_and(|dependency| {
+                dependency
+                    .get("features")
+                    .and_then(toml::Value::as_array)
+                    .is_some_and(|features| {
+                        features
+                            .iter()
+                            .any(|feature| feature.as_str() == Some("test-utils"))
+                    })
+            }),
+            "{crate_name} production atm-herdr dependency must not enable test-utils"
+        );
+        let dev = manifest
+            .get("dev-dependencies")
+            .and_then(|table| table.get("atm-herdr"))
+            .expect("consumer must declare atm-herdr test dependency");
+        assert!(
+            dev.get("features")
+                .and_then(toml::Value::as_array)
+                .is_some_and(|features| features
+                    .iter()
+                    .any(|feature| feature.as_str() == Some("test-utils"))),
+            "{crate_name} must enable atm-herdr test-utils only in dev-dependencies"
+        );
+    }
+}
+
 fn documented_forbidden_edges() -> BTreeSet<(String, String)> {
     guarded_boundary_files()
         .into_iter()
@@ -3052,6 +3298,7 @@ fn guarded_boundary_files() -> Vec<PathBuf> {
         root.join("boundaries/atm-runtime/runtime-composition.toml"),
         root.join("boundaries/atm-storage/tls.toml"),
         root.join("boundaries/atm-template-sc-compose/sc-composer.toml"),
+        root.join("boundaries/atm-herdr/herdr-process-adapter.toml"),
     ];
     let mut sqlite_files = fs::read_dir(root.join("boundaries/atm-storage-rusqlite"))
         .expect("boundaries/atm-storage-rusqlite directory must be readable")

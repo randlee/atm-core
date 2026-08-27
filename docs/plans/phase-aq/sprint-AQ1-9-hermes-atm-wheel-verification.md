@@ -1,7 +1,14 @@
+---
+status: pending-live-run
+branch: feature/aq-1-9-hermes-atm-wheel-verification
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/aq-1-9-hermes-atm-wheel-verification
+---
+
 # Sprint AQ1.9 — hermes-atm Wheel Bump + Live Verification
 
-Status: draft · Branch: `feature/aq-1-9-hermes-wheel-verify` off
-`integrate/phase-aq` · PR target: `integrate/phase-aq`
+Status: local loopback complete · m5 live run pending · Branch:
+`feature/aq-1-9-hermes-atm-wheel-verification` off `integrate/phase-aq` · PR
+target: `integrate/phase-aq`
 recommended_agent: Cipher-311d · recommended_model: fast
 
 Final graft connection-model sprint (see AQ1.5). The Python surface never
@@ -11,13 +18,17 @@ dependency bump plus live proof that the Hermes workaround era is over —
 coordinated with team-lead@atm-dev on M5, framed per standing convention as
 an atm-graft API change notification, not a Python code change request.
 
+> **Scope ruling (fenix, 2026-08-27):** the automated loopback restart-matrix
+> tests belong to AQ1.7; this sprint owns the live m5 evidence run (harness +
+> committed evidence), and may reuse AQ1.7's test fixtures.
+
 ## Deliverables
 
 1. Rebuild/bump the `atm-graft-python` wheel against the AQ1.5–AQ1.8
    crates. **Changelog and version target (closes M6)**: no per-wheel
    changelog exists in this repo (verified: only the root `CHANGELOG.md`,
    workspace-wide, currently documents up through `1.4.3` while
-   `Cargo.toml`'s workspace version is already `1.4.4`) — the entry lands
+   `Cargo.toml`'s workspace version was `1.4.4` before this sprint) — the entry lands
    in `CHANGELOG.md` under the next release heading, naming the
    registration cutover and ADR-056, matching the existing bullet style
    (e.g. "... (Phase AQ)"). The registration model change is internal to
@@ -44,6 +55,13 @@ an atm-graft API change notification, not a Python code change request.
 3. Notify M5 team-lead (ATM message) with the cutover summary and the
    evidence, and collect confirmation that the previously reported
    endpoint-decode failures / CLI-file workarounds are no longer needed.
+
+## Evidence
+
+The local loopback transcript and `atm doctor --json` captures are committed
+under `docs/plans/phase-aq/evidence/AQ1.9/`. The m5 evidence slot remains
+explicitly `PENDING-LIVE-RUN`; its exact single-command procedure is in
+`restart-matrix-m5.pending.md` in that directory.
 
 ## Acceptance criteria
 
