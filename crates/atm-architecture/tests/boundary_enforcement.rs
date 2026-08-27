@@ -515,13 +515,13 @@ fn queue_marker_handoff_clear_has_one_core_owner() {
             visitor
                 .definitions
                 .into_iter()
-                .map(|name| format!("{}::{name}", path.display())),
+                .map(|name| format!("{}::{name}", path.display().to_string().replace('\\', "/"))),
         );
         violations.extend(
             visitor
                 .violations
                 .into_iter()
-                .map(|name| format!("{}::{name}", path.display())),
+                .map(|name| format!("{}::{name}", path.display().to_string().replace('\\', "/"))),
         );
     }
 
