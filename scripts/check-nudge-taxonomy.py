@@ -113,7 +113,7 @@ ALLOWED_NUDGE_IDENTIFIERS = frozenset(
         "NoopNudgeTemplateOverrideStore", "nudge", "Nudge", "nudge_attempts", "nudge_count",
         "nudge_delivered", "nudge_dispatch", "nudge_kind_for_mode", "nudge_message_id", "nudge_mode", "nudge_pending_at",
         "nudge_preserves_typed_source_chat_id", "nudge_sink", "nudge_template",
-        "nudge_template_override_store", "nudge_timeout_secs", "NudgeClaim", "NudgeKind", "NudgeMode",
+        "nudge_template_override_store", "nudge_timeout_secs", "NudgeClaim", "NudgeKind", "NudgeMode", "QueuedNudgeMessage",
         "nudges", "NudgeTemplateOverrideStore", "on_nudge", "pending_nudge_store", "PendingNudgeStore",
         "primary_nudge", "print_clear_nudge_template_override_result",
         "print_disable_nudge_template_override_result", "print_set_nudge_template_override_result",

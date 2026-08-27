@@ -24,7 +24,21 @@ allowed_paths = ["crates/atm-core/tests/mailbox_locking.rs"]
 config_home_env = "ATM_CONFIG_HOME"
 
 [env_var_boundary]
-forbidden_env_vars = ["ATM_TEAM", "ATM_IDENTITY", "ATM_CHAT_ID", "ATM_SESSION_ID", "ATM_PID"]
+# ATM_TEMP is read only through the `EnvSource` trait-method seam
+# (`resolve_atm_temp`, crates/atm-core/src/atm_temp.rs), which is lint-clean
+# by construction: `env.var("ATM_TEMP")` is a method call, not the
+# free-function `env::var`/`std::env::var` path this lint's `ENV_CALL_RE`
+# matches. Listing it here is defensive coverage only (ADR-055 "M14"): there
+# is no existing offending call site to allowlist, and this catches a future
+# direct `env::var("ATM_TEMP")` added outside the `EnvSource` seam.
+forbidden_env_vars = [
+  "ATM_TEAM",
+  "ATM_IDENTITY",
+  "ATM_CHAT_ID",
+  "ATM_SESSION_ID",
+  "ATM_PID",
+  "ATM_TEMP",
+]
 restricted_crate_roots = ["crates/atm-core/src", "crates/atm-daemon/src"]
 # Seed boundary readers. The lint expands this set transitively to include
 # same-file wrappers (for example `*_or_warn`) that call these functions.
@@ -120,7 +134,7 @@ toml_glob = "boundaries/*/*.toml"
 # by one named implementation seam.
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm/Cargo.toml"
-allowed_dependencies = ["anyhow", "async-trait", "atm-core", "atm-daemon-bootstrap", "atm-daemon-client", "atm-graft", "atm-http-runtime", "atm-runtime-test-support", "atm-storage", "chrono", "clap", "sc-observability", "sc-observability-types", "serde", "serde_json", "serde_yaml", "serial_test", "tempfile", "time", "tokio", "tracing", "tracing-subscriber"]
+allowed_dependencies = ["anyhow", "async-trait", "atm-core", "atm-daemon-bootstrap", "atm-daemon-client", "atm-graft", "atm-http-runtime", "atm-runtime-test-support", "atm-storage", "chrono", "clap", "sc-observability", "sc-observability-types", "serde", "serde_json", "serde_yaml", "serial_test", "tempfile", "time", "tokio", "tracing", "tracing-subscriber", "ulid"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-core/Cargo.toml"

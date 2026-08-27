@@ -3,6 +3,12 @@ pub mod ack;
 pub mod address;
 /// Acknowledgement workflows for ack-required mailbox messages.
 pub mod api;
+/// `ATM_TEMP` scratch-root resolution and shared-host safety validation
+/// (ADR-055).
+pub mod atm_temp;
+/// `$ATM_TEMP` TTL sweep config validation and one pure, `tokio`-free sweep
+/// pass (ADR-055 decision (b)).
+pub mod atm_temp_sweeper;
 /// Phase R boundary traits and placeholder contract types.
 pub mod boundary;
 /// Hidden daemon-private ingress/export helpers used by concrete boundary
@@ -76,6 +82,10 @@ pub mod schema;
 pub mod search;
 /// Mailbox send workflows and request/response models.
 pub mod send;
+/// Send-To CLI-surface support: picker-recipient resolution, same-host/remote
+/// classification, attachment staging, and transfer-script invocation
+/// (ADR-055 decisions (c)-(g)).
+pub mod send_to;
 /// Internal service-owned seams that isolate retained command orchestration
 /// from direct helper/path access.
 pub(crate) mod service_runtime;
@@ -93,6 +103,10 @@ pub mod test_support;
 pub(crate) mod text;
 /// Internal linear-thread helpers shared by send/read/ack workflow logic.
 pub(crate) mod threading;
+/// Cross-host transfer-script resolution and argv-array invocation contract
+/// (ADR-055). Resolution and the safety check only; execution is wired in
+/// by the `atm send` CLI surface.
+pub mod transfer_script;
 /// Hidden transport test utilities shared by CLI-layer tests.
 #[doc(hidden)]
 #[cfg(feature = "test-utils")]
@@ -114,6 +128,13 @@ pub use api::{
 pub use atm_storage::derive_ack_requirement;
 pub use atm_storage::{GraftEndpointStoreError, GraftReceiverEndpointStore, GraftReceiverLease};
 pub use atm_storage::{TemplateFrontmatter, TemplateSha};
+pub use atm_temp::{
+    AtmTemp, AtmTempError, EnvSource, ProcessEnvSource, resolve_atm_temp, send_to_staging_dir,
+};
+pub use atm_temp_sweeper::{
+    EntryAge, EntryAgeSource, RealEntryAgeSource, SweepConfig, SweepReport, SweeperError,
+    sweep_once, sweep_once_cancellable, sweep_once_with_age_source, validate_sweep_config,
+};
 #[allow(deprecated)]
 pub use boundary::{
     AckTransition, AsyncMessageReceivedHookEmitter, BuiltInNudgeSinkTarget,
@@ -143,6 +164,12 @@ pub use delivery_channel::{
 pub use graft::AtmGraftClient;
 pub use protocol::{RequestEnvelope, ResponseEnvelope};
 pub use search::{SearchAggregateInput, SearchHit, SearchInput, SearchRequest, SearchResponse};
+pub use send_to::{
+    AddressResolutionError, PICKER_OUTPUT_SCHEMA_VERSION, PickerOutput, PickerOutputError,
+    PickerRecipientId, ROSTER_HOST_METADATA_KEY, RecipientLocality, classify_recipient_locality,
+    format_attachment_note, member_host, parse_picker_output, resolve_picker_recipient,
+    stage_same_host_attachments, validate_landed_dir_stdout,
+};
 // The canonical `GraftEndpointStoreError` -> `AtmError` mapping. Every
 // dispatch path (HTTP handlers, the retained-runtime bridge) must produce the
 // same `AtmError` — and therefore the same HTTP status — for a given store
@@ -150,6 +177,10 @@ pub use search::{SearchAggregateInput, SearchHit, SearchInput, SearchRequest, Se
 pub use service_runtime::graft_store_error;
 pub use service_runtime::{
     LocalFileNonClaudeOutbound, LocalServiceRuntime, with_default_local_service_runtime,
+};
+pub use transfer_script::{
+    ConfiguredTransferScript, TransferInvocation, TransferScript, TransferScriptKind,
+    resolve_transfer_script,
 };
 pub use workflow_analytics::{
     LifecycleObservation, WorkflowFact, WorkflowProjectionRequest, WorkflowSelector,

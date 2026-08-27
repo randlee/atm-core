@@ -10,7 +10,9 @@ pub mod clear;
 pub mod compose;
 pub mod doctor;
 pub mod help;
+pub(crate) mod internal_heartbeat;
 pub(crate) mod internal_nudge;
+pub(crate) mod internal_queue_get;
 pub mod list;
 pub mod log;
 pub mod members;
@@ -21,6 +23,7 @@ pub mod read;
 pub(crate) mod retained_roster;
 pub mod search;
 pub mod send;
+pub(crate) mod send_to;
 pub(crate) mod sender_roster;
 pub mod teams;
 pub mod templates;
@@ -32,7 +35,9 @@ pub use clear::ClearCommand;
 pub use compose::ComposeCommand;
 pub use doctor::DoctorCommand;
 pub use help::HelpCommand;
+pub(crate) use internal_heartbeat::InternalHeartbeatCommand;
 pub(crate) use internal_nudge::InternalNudgeCommand;
+pub(crate) use internal_queue_get::InternalQueueGetCommand;
 pub use list::ListCommand;
 pub use log::LogCommand;
 pub use members::MembersCommand;
@@ -120,6 +125,10 @@ enum Command {
     Help(HelpCommand),
     #[command(hide = true)]
     InternalNudge(InternalNudgeCommand),
+    #[command(name = "_internal-heartbeat", hide = true)]
+    InternalHeartbeat(InternalHeartbeatCommand),
+    #[command(name = "_internal-queue-get", hide = true)]
+    InternalQueueGet(InternalQueueGetCommand),
     #[cfg(any(test, feature = "cli-surface-dump"))]
     #[command(name = "__dump-cli-surface", hide = true)]
     DumpCliSurface(DumpCliSurfaceCommand),
@@ -145,7 +154,9 @@ impl Command {
             Self::Log(command) => command.run(observability),
             Self::Doctor(command) => command.run(observability).await,
             Self::Help(command) => command.run(observability),
-            Self::InternalNudge(command) => command.run(observability),
+            Self::InternalNudge(command) => command.run(observability).await,
+            Self::InternalHeartbeat(command) => command.run(observability).await,
+            Self::InternalQueueGet(command) => command.run(observability).await,
             #[cfg(any(test, feature = "cli-surface-dump"))]
             Self::DumpCliSurface(command) => command.run(observability),
             Self::Teams(command) => command.run(observability).await,

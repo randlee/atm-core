@@ -3,9 +3,9 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::{
-    AsyncMessageSearchStore, AsyncMessageStore, AtmError, MessageSearchStore, MessageStore,
-    NudgeTemplateOverrideStore, PeerConfigStore, PendingNudgeStore, RosterStore,
-    TemplateCatalogStore,
+    AsyncMessageSearchStore, AsyncMessageStore, AtmError, GraftReceiverEndpointStore,
+    MessageSearchStore, MessageStore, NudgeTemplateOverrideStore, PeerConfigStore,
+    PendingNudgeStore, RosterStore, TemplateCatalogStore,
 };
 
 /// Backend-neutral handles returned by the selected durable storage backend.
@@ -16,6 +16,7 @@ pub struct StorageHandles {
     roster_store: Arc<dyn RosterStore + Send + Sync>,
     nudge_template_override_store: Arc<dyn NudgeTemplateOverrideStore + Send + Sync>,
     pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
+    graft_receiver_endpoint_store: Arc<dyn GraftReceiverEndpointStore + Send + Sync>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
     template_catalog_store: Arc<dyn TemplateCatalogStore + Send + Sync>,
     message_search_store: Arc<dyn MessageSearchStore + Send + Sync>,
@@ -34,6 +35,7 @@ pub struct StorageHandleParts {
     pub roster_store: Arc<dyn RosterStore + Send + Sync>,
     pub nudge_template_override_store: Arc<dyn NudgeTemplateOverrideStore + Send + Sync>,
     pub pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
+    pub graft_receiver_endpoint_store: Arc<dyn GraftReceiverEndpointStore + Send + Sync>,
     pub peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
     pub template_catalog_store: Arc<dyn TemplateCatalogStore + Send + Sync>,
     pub message_search_store: Arc<dyn MessageSearchStore + Send + Sync>,
@@ -51,6 +53,10 @@ impl fmt::Debug for StorageHandles {
                 &"dyn NudgeTemplateOverrideStore",
             )
             .field("pending_nudge_store", &"dyn PendingNudgeStore")
+            .field(
+                "graft_receiver_endpoint_store",
+                &"dyn GraftReceiverEndpointStore",
+            )
             .field("peer_config_store", &"dyn PeerConfigStore")
             .field("template_catalog_store", &"dyn TemplateCatalogStore")
             .field("message_search_store", &"dyn MessageSearchStore")
@@ -67,6 +73,7 @@ impl StorageHandles {
             roster_store: parts.roster_store,
             nudge_template_override_store: parts.nudge_template_override_store,
             pending_nudge_store: parts.pending_nudge_store,
+            graft_receiver_endpoint_store: parts.graft_receiver_endpoint_store,
             peer_config_store: parts.peer_config_store,
             template_catalog_store: parts.template_catalog_store,
             message_search_store: parts.message_search_store,
@@ -97,6 +104,12 @@ impl StorageHandles {
     /// (`atm queue`) nudges.
     pub fn pending_nudge_store(&self) -> Arc<dyn PendingNudgeStore + Send + Sync> {
         Arc::clone(&self.pending_nudge_store)
+    }
+
+    pub fn graft_receiver_endpoint_store(
+        &self,
+    ) -> Arc<dyn GraftReceiverEndpointStore + Send + Sync> {
+        Arc::clone(&self.graft_receiver_endpoint_store)
     }
 
     pub fn peer_config_store(&self) -> Arc<dyn PeerConfigStore + Send + Sync> {

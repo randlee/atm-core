@@ -18,14 +18,14 @@ path = "src/bin/atm-daemon-benchmark.rs"
 required-features = ["benchmark-harness"]
 
 [dependencies]
-atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.4" }
-atm-herdr = { path = "../atm-herdr", version = "1.4.4" }
-atm-http-runtime = { path = "../atm-http-runtime", version = "1.4.4" }
-atm-runtime = { path = "../atm-runtime", version = "1.4.4" }
-atm-storage = { path = "../atm-storage", version = "1.4.4" }
-atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.4" }
-atm-template-sc-compose = { path = "../atm-template-sc-compose", version = "1.4.4" }
-peer-tls = { path = "../peer-tls", version = "1.4.4" }
+atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.5" }
+atm-herdr = { path = "../atm-herdr", version = "1.4.5" }
+atm-http-runtime = { path = "../atm-http-runtime", version = "1.4.5" }
+atm-runtime = { path = "../atm-runtime", version = "1.4.5" }
+atm-storage = { path = "../atm-storage", version = "1.4.5" }
+atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.5" }
+atm-template-sc-compose = { path = "../atm-template-sc-compose", version = "1.4.5" }
+peer-tls = { path = "../peer-tls", version = "1.4.5" }
 tokio.workspace = true
 tracing.workspace = true
 fs4 = "0.13"
@@ -33,8 +33,8 @@ serde_json.workspace = true
 ulid.workspace = true
 
 [dev-dependencies]
-atm-herdr = { path = "../atm-herdr", version = "1.4.4", features = ["test-utils"] }
-atm-http-runtime = { path = "../atm-http-runtime", version = "1.4.4", features = ["test-support"] }
-atm-runtime-test-support = { path = "../atm-runtime-test-support", version = "1.4.4" }
+atm-herdr = { path = "../atm-herdr", version = "1.4.5", features = ["test-utils"] }
+atm-http-runtime = { path = "../atm-http-runtime", version = "1.4.5", features = ["test-support"] }
+atm-runtime-test-support = { path = "../atm-runtime-test-support", version = "1.4.5" }
 serde_json.workspace = true
 tempfile = "3"

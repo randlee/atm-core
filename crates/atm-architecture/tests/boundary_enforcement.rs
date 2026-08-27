@@ -1738,6 +1738,96 @@ fn workspace_source_must_not_reintroduce_retired_peer_delivery_constructs() {
 }
 
 #[test]
+fn aq4_send_to_staging_dir_has_a_single_construction_site_and_atm_temp_is_read_only_via_env_source()
+{
+    // AQ4 deliverable 7 (lane-C-relevant half, ATM-QA-002): precedent is
+    // `al3_received_hook_is_single_receiver_side_path_without_detached_work`'s
+    // `emit_received_hook` single-call-site assertion above. Nothing should
+    // be able to add a second `send_to_staging_dir()` implementation, or a
+    // free-function `env::var("ATM_TEMP")` read, without this test failing.
+    let source_root = workspace_root().join("crates");
+    let mut files = Vec::new();
+    collect_rust_files(&source_root, &mut files);
+    // Exclude this meta-test crate itself: its own source (this file)
+    // necessarily contains the literal strings this test searches for, as
+    // the search patterns rather than real definitions/reads.
+    files.retain(|path| {
+        !path
+            .components()
+            .any(|component| component.as_os_str() == "atm-architecture")
+    });
+
+    let mut send_to_staging_dir_definitions = 0usize;
+    let mut forbidden_atm_temp_env_reads = Vec::new();
+    let mut sanctioned_atm_temp_read_files = Vec::new();
+
+    for path in &files {
+        let source = read_source(path);
+        send_to_staging_dir_definitions += source.matches("fn send_to_staging_dir(").count();
+
+        // Matches both `env::var("ATM_TEMP")` and `std::env::var("ATM_TEMP")`
+        // (and the `_os` variant): any module-path prefix before `env::`
+        // still leaves this literal substring present.
+        for forbidden in ["env::var(\"ATM_TEMP\")", "env::var_os(\"ATM_TEMP\")"] {
+            if source.contains(forbidden) {
+                forbidden_atm_temp_env_reads.push(format!("{}: {forbidden}", path.display()));
+            }
+        }
+        // The sanctioned form: a **method call** on an `EnvSource` trait
+        // object (`env.var("ATM_TEMP")`), never the free-function path
+        // (ADR-055's M14 note; `crates/atm-core/src/atm_temp.rs`'s own
+        // module doc comment).
+        if source.contains("env.var(\"ATM_TEMP\")") {
+            sanctioned_atm_temp_read_files.push(path.clone());
+        }
+    }
+
+    assert_eq!(
+        send_to_staging_dir_definitions, 1,
+        "send_to_staging_dir() must have exactly one construction site in the workspace"
+    );
+    assert!(
+        forbidden_atm_temp_env_reads.is_empty(),
+        "ATM_TEMP must be read only through the EnvSource seam (env.var(...) method call), never a free-function env::var/env::var_os call: {forbidden_atm_temp_env_reads:?}"
+    );
+    assert_eq!(
+        sanctioned_atm_temp_read_files.len(),
+        1,
+        "ATM_TEMP's real environment read must stay concentrated in exactly one file, found: {sanctioned_atm_temp_read_files:?}"
+    );
+}
+
+#[test]
+fn aq4_resolve_picker_recipient_has_a_single_construction_site() {
+    // AQ4 deliverable 7 (dev-owned half, ADR-055 decision (e)): the
+    // companion assertion to
+    // `aq4_send_to_staging_dir_has_a_single_construction_site_...` above.
+    // `resolve_picker_recipient` is the sprint doc's declared "single
+    // canonical implementation" for turning a `--from-json` recipient id
+    // into a routable `AgentAddress`; nothing should be able to add a
+    // second, divergent resolver without this test failing.
+    let source_root = workspace_root().join("crates");
+    let mut files = Vec::new();
+    collect_rust_files(&source_root, &mut files);
+    files.retain(|path| {
+        !path
+            .components()
+            .any(|component| component.as_os_str() == "atm-architecture")
+    });
+
+    let mut definitions = 0usize;
+    for path in &files {
+        let source = read_source(path);
+        definitions += source.matches("fn resolve_picker_recipient(").count();
+    }
+
+    assert_eq!(
+        definitions, 1,
+        "resolve_picker_recipient() must have exactly one construction site in the workspace"
+    );
+}
+
+#[test]
 fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() {
     let root = workspace_root();
     let daemon_lib = root.join("crates/atm-daemon/src/main.rs");
@@ -2847,6 +2937,58 @@ fn al1_receiver_hook_boundary_replaces_retired_release_gate_artifacts() {
                 .exists(),
         "retired sender-oriented hook manifests must not remain live compatibility artifacts"
     );
+}
+
+#[test]
+fn aq25_received_hook_manifest_matches_async_implementers() {
+    let root = workspace_root();
+    let manifest =
+        read_source(&root.join("boundaries/atm-core/message-received-hook-emitter.toml"));
+    let selector =
+        read_source(&root.join("crates/atm-daemon-bootstrap/src/received_hook_selector.rs"));
+    let implementers = [
+        "TokioTmuxReceivedHook",
+        "HerdrReceivedHook",
+        "PublishedGraftReceivedHook",
+        "PullPendingReceivedHook",
+    ];
+    assert_eq!(
+        selector
+            .matches("impl AsyncMessageReceivedHookEmitter for")
+            .count(),
+        implementers.len(),
+        "the selector's async implementer count must match the AQ2.5 inventory"
+    );
+    for implementer in implementers {
+        assert!(
+            selector.contains(&format!(
+                "impl AsyncMessageReceivedHookEmitter for {implementer}"
+            )),
+            "selector is missing async implementer {implementer}"
+        );
+        assert!(
+            manifest.contains(implementer),
+            "boundary manifest is missing async implementer {implementer}"
+        );
+    }
+}
+
+#[test]
+fn aq25_adr_addendum_contains_normative_trigger_policy() {
+    let root = workspace_root();
+    let adr = read_source(&root.join("docs/adr/ADR-054-nudge-taxonomy-and-queue-mechanism.md"));
+    for required in [
+        "AQ2.5 addendum",
+        "debounced there",
+        "RAM-only daemon-lifetime state",
+        "drops the oldest item",
+        "at most one oldest queue item",
+    ] {
+        assert!(
+            adr.contains(required),
+            "ADR-054 is missing AQ2.5 term {required}"
+        );
+    }
 }
 
 #[test]
