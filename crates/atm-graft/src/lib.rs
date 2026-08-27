@@ -10,7 +10,7 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use atm_core::api::{ApiRequest, DaemonApiClient};
-use atm_core::boundary::PostSendHookEvent;
+use atm_core::boundary::{NudgeKind, PostSendHookEvent};
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::AtmGraftClient;
 use atm_core::list::{ListOutcome, ListQuery};
@@ -79,6 +79,7 @@ pub mod prelude {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HostNudge {
     pub event: PostSendHookEvent,
+    pub kind: NudgeKind,
     pub body: String,
     pub notice_text: String,
 }

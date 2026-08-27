@@ -1395,6 +1395,9 @@ AQ1.8 graft file-record retirement is complete on
 AQ1.9 hermes-atm wheel bump and local restart-matrix harness are complete on
 `feature/aq-1-9-hermes-atm-wheel-verification`; the m5 live matrix remains
 pending its host run.
+AQ2 graft dual-channel queue delivery is complete on
+`feature/aq-2-queue-graft`; its PR carries the additive wire kind, exact
+pending-marker handoff semantics, and Hermes `/queue`/`/steer` routing.
 
 ## 49. Phase AO2 — Benchmark Safety, Evidence, And Transport Performance [COMPLETE — MERGED TO DEVELOP]
 
