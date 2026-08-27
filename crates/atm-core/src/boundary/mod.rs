@@ -40,6 +40,16 @@ pub enum NudgeKind {
     Queue,
 }
 
+impl NudgeKind {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Steer => "steer",
+            Self::Queue => "queue",
+        }
+    }
+}
+
 /// The retained tmux receiver nudge confirms its literal payload with two
 /// `send-keys Enter` events separated by this bounded delay. The active Tokio
 /// runtime and CLI command share this contract; frozen legacy daemon source

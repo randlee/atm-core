@@ -1079,7 +1079,9 @@ mod tests {
     #[cfg(unix)]
     #[tokio::test]
     async fn failing_bypass_get_does_not_open_the_shared_breaker() {
-        let breaker = Arc::new(HerdrSpawnBreaker::default());
+        let breaker = Arc::new(HerdrSpawnBreaker::with_clock(Arc::new(
+            TestBreakerClock::new(),
+        )));
         breaker.record_infrastructure_failure();
         let failures = breaker.consecutive_failures();
         let agent: AgentName = "alice".parse().expect("agent");
@@ -1100,7 +1102,9 @@ mod tests {
     #[cfg(unix)]
     #[tokio::test]
     async fn failing_list_opens_the_shared_breaker() {
-        let breaker = Arc::new(HerdrSpawnBreaker::default());
+        let breaker = Arc::new(HerdrSpawnBreaker::with_clock(Arc::new(
+            TestBreakerClock::new(),
+        )));
         let result = execute_list(
             "/usr/bin/false",
             Arc::clone(&breaker),

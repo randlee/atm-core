@@ -43,6 +43,7 @@ class FakeNudge:
     message_id = "01KZMDTEST0000000000000000"
     body = f'<atm from="{TEST_SOURCE}"><action>read atm</action></atm>'
     notice_text = f"📬 from {TEST_SOURCE}\nreview failing smoke lane"
+    kind = "queue"
 
 
 class RuntimeTests(unittest.TestCase):
@@ -61,11 +62,7 @@ class RuntimeTests(unittest.TestCase):
             )
 
     def test_callback_enqueues_notice_then_internal_telegram_event(self):
-        """The runner API owns Hermes' existing internal-event queue seam.
-
-        ATM steer is not implemented in this MVP and remains a planned future
-        delivery mode.
-        """
+        """The runner API owns Hermes' internal-event delivery seam."""
 
         async def scenario():
             import hermes_atm.runtime as module
@@ -113,6 +110,43 @@ class RuntimeTests(unittest.TestCase):
                 )
                 runtime.close()
                 self.assertTrue(session.closed)
+            finally:
+                module.atm_graft.PyGraftSession = original
+
+        asyncio.run(scenario())
+
+    def test_callback_routes_steer_kind_to_hermes_steer_mode(self):
+        async def scenario():
+            import hermes_atm.runtime as module
+
+            original = module.atm_graft.PyGraftSession
+            session = None
+
+            def make_session(caller):
+                nonlocal session
+                session = FakeSession(caller)
+                return session
+
+            module.atm_graft.PyGraftSession = make_session
+            try:
+                injector = FakeInjector()
+                runtime = HermesAtmRuntime.from_components(
+                    inject_internal_message=injector,
+                    loop=asyncio.get_running_loop(),
+                    platform="telegram",
+                    profile=TEST_PROFILE,
+                    environment={
+                        "ATM_HOME": "/tmp/atm",
+                        "ATM_IDENTITY": TEST_IDENTITY,
+                        "ATM_TEAM": TEST_TEAM,
+                        "ATM_CHAT_ID": TEST_CHAT_ID,
+                    },
+                )
+                session.callback(type("SteerNudge", (), {"body": "steer", "kind": "steer"})())
+                await asyncio.sleep(0)
+                await asyncio.sleep(0)
+                self.assertEqual(injector.calls[0]["mode"], "steer")
+                runtime.close()
             finally:
                 module.atm_graft.PyGraftSession = original
 

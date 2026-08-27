@@ -24,7 +24,7 @@ cargo_metadata.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sc-lint-directives = { path = "../sc-lint-directives" }
-sc-lint-attributes = { path = "../sc-lint-attributes", version = "1.4.4" }
+sc-lint-attributes = { path = "../sc-lint-attributes", version = "1.4.5" }
 clap = { version = "4", features = ["derive"] }
 syn = { version = "2", features = ["full", "parsing", "visit"] }
 quote = "1"

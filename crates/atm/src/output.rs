@@ -267,6 +267,7 @@ pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
     print_doctor_summary(report);
     print_doctor_observability(report);
     print_doctor_post_send(report);
+    print_doctor_graft_receivers(report);
     println!(
         "Logging health: {} | Query readiness: {}",
         render_doctor_state(report.observability.logging_state),
@@ -490,6 +491,24 @@ fn print_doctor_roster(report: &DoctorReport) {
             empty_dash(&home_dir),
             empty_dash_opt(member.live_cwd.as_deref()),
             empty_dash_opt(member.tmux_pane_id.as_deref())
+        );
+    }
+}
+
+fn print_doctor_graft_receivers(report: &DoctorReport) {
+    if report.graft_receivers.receivers.is_empty() {
+        return;
+    }
+    println!();
+    println!("Graft receivers:");
+    for receiver in &report.graft_receivers.receivers {
+        println!(
+            "  {}@{} | endpoint={} last_seen_age={}s reachable_at_last_use={}",
+            receiver.agent,
+            receiver.team,
+            receiver.endpoint,
+            receiver.last_seen_age_seconds,
+            receiver.reachable_at_last_use
         );
     }
 }

@@ -27,6 +27,8 @@ use crate::runtime_health::RuntimeHealth;
 pub const HERDR_POLL_INTERVAL_MS: u64 = 5_000;
 /// Maximum number of prompts admitted by one poll tick.
 pub const HERDR_MAX_PROMPTS_PER_TICK: usize = 16;
+/// Consecutive no-input releases before one retry-budget attempt is spent.
+pub const HERDR_MAX_CONSECUTIVE_RELEASES: u32 = 10;
 const HERDR_REQUEST_DEADLINE: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -48,6 +50,7 @@ pub struct HerdrQueueWakePump {
     runtime_health: RuntimeHealth,
     herdr_process: Arc<dyn HerdrProcessAdapter>,
     cursor: Arc<Mutex<usize>>,
+    release_streaks: Arc<Mutex<HashMap<MemberKey, u32>>>,
     last_stats: Arc<Mutex<HerdrQueueWakeStats>>,
 }
 
@@ -65,6 +68,7 @@ impl HerdrQueueWakePump {
             runtime_health,
             herdr_process,
             cursor: Arc::new(Mutex::new(0)),
+            release_streaks: Arc::new(Mutex::new(HashMap::new())),
             last_stats: Arc::new(Mutex::new(HerdrQueueWakeStats::default())),
         }
     }
@@ -221,6 +225,7 @@ impl HerdrQueueWakePump {
                     Arc::clone(&pending_store),
                     member.key.clone(),
                     claim.clone(),
+                    Arc::clone(&self.release_streaks),
                 );
                 let dispatch = match run_blocking({
                     let runtime = self.service_runtime.clone();
@@ -238,13 +243,13 @@ impl HerdrQueueWakePump {
                 {
                     Ok(Some(dispatch)) => dispatch,
                     Ok(None) | Err(_) => {
-                        release.release();
+                        release.release_without_input();
                         stats.released += 1;
                         continue;
                     }
                 };
                 let Some(emitter) = self.selector.select_emitter(&dispatch) else {
-                    release.release();
+                    release.release_without_input();
                     stats.released += 1;
                     continue;
                 };
@@ -253,6 +258,21 @@ impl HerdrQueueWakePump {
                     .await
                 {
                     Ok(_) => {
+                        let runtime = self.service_runtime.clone();
+                        let member_key = member.key.clone();
+                        let message_id = claim.msg;
+                        let health = self.runtime_health.clone();
+                        let _ = run_blocking(move || {
+                            atm_core::nudge_dispatch::clear_queue_marker_after_handoff(
+                                &runtime,
+                                &member_key,
+                                &message_id,
+                                || health.record_graft_queue_marker_clear_failure(),
+                            );
+                            Ok(())
+                        })
+                        .await;
+                        self.reset_release_streak(&member.key);
                         release.disarm();
                         stats.prompted += 1;
                     }
@@ -260,7 +280,11 @@ impl HerdrQueueWakePump {
                         if error.code() == AtmErrorCode::HerdrUnavailable {
                             stats.breaker_open += 1;
                         }
-                        release.release();
+                        if error.code() == AtmErrorCode::HerdrPromptFailed {
+                            release.requeue();
+                        } else {
+                            release.release_without_input();
+                        }
                         stats.released += 1;
                     }
                 }
@@ -297,6 +321,13 @@ impl HerdrQueueWakePump {
             .last_stats
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = stats;
+    }
+
+    fn reset_release_streak(&self, member: &MemberKey) {
+        self.release_streaks
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(member);
     }
 }
 
@@ -382,6 +413,7 @@ struct ReleasePendingOnDrop {
     store: Arc<dyn PendingNudgeStore + Send + Sync>,
     member: MemberKey,
     claim: atm_core::boundary::NudgeClaim,
+    release_streaks: Arc<Mutex<HashMap<MemberKey, u32>>>,
     armed: bool,
 }
 
@@ -390,19 +422,49 @@ impl ReleasePendingOnDrop {
         store: Arc<dyn PendingNudgeStore + Send + Sync>,
         member: MemberKey,
         claim: atm_core::boundary::NudgeClaim,
+        release_streaks: Arc<Mutex<HashMap<MemberKey, u32>>>,
     ) -> Self {
         Self {
             store,
             member,
             claim,
+            release_streaks,
             armed: true,
         }
     }
 
-    fn release(&mut self) {
+    fn release_without_input(&mut self) {
         if self.armed {
-            if let Err(error) = self.store.release_pending(&self.member, &self.claim) {
-                tracing::warn!(error = %error, member = %self.member, "failed to release Herdr queue claim");
+            let should_requeue = {
+                let mut streaks = self
+                    .release_streaks
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                let streak = streaks.entry(self.member.clone()).or_default();
+                *streak = streak.saturating_add(1);
+                if *streak >= HERDR_MAX_CONSECUTIVE_RELEASES {
+                    streaks.remove(&self.member);
+                    true
+                } else {
+                    false
+                }
+            };
+            let result = if should_requeue {
+                self.store.requeue_pending(&self.member, &self.claim)
+            } else {
+                self.store.release_pending(&self.member, &self.claim)
+            };
+            if let Err(error) = result {
+                tracing::warn!(error = %error, member = %self.member, "failed to resolve Herdr queue claim");
+            }
+            self.armed = false;
+        }
+    }
+
+    fn requeue(&mut self) {
+        if self.armed {
+            if let Err(error) = self.store.requeue_pending(&self.member, &self.claim) {
+                tracing::warn!(error = %error, member = %self.member, "failed to requeue Herdr queue claim");
             }
             self.armed = false;
         }
@@ -415,7 +477,7 @@ impl ReleasePendingOnDrop {
 
 impl Drop for ReleasePendingOnDrop {
     fn drop(&mut self) {
-        self.release();
+        self.release_without_input();
     }
 }
 

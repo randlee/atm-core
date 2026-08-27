@@ -58,6 +58,7 @@ mod peer_connection_pool;
 mod peer_stream;
 mod private_staging;
 mod runtime_health;
+mod runtime_maintenance;
 mod runtime_setup;
 mod storage_and_nudge_router;
 #[cfg(unix)]
@@ -78,11 +79,6 @@ use unix_socket::{
     UnixSocketPathGuard, UnixSocketStartupLock, bind_unix_listener, reclaim_stale_unix_socket,
 };
 
-/// An aborted Tokio task should stop at its next cancellation point. Keep this
-/// grace deliberately short and fixed so a pathological task cannot extend the
-/// configured shutdown deadline without bound.
-const ABORT_JOIN_GRACE: Duration = Duration::from_millis(100);
-
 #[cfg(unix)]
 pub use client::unix_socket_client;
 pub use client::{
@@ -91,7 +87,8 @@ pub use client::{
     shared_direct_peer_client,
 };
 pub use herdr_queue_wake::{
-    HERDR_MAX_PROMPTS_PER_TICK, HERDR_POLL_INTERVAL_MS, HerdrQueueWakePump, HerdrQueueWakeStats,
+    HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK, HERDR_POLL_INTERVAL_MS,
+    HerdrQueueWakePump, HerdrQueueWakeStats,
 };
 pub use loopback_tcp::LoopbackTcpConfig;
 pub use message_handler::{
@@ -103,12 +100,9 @@ pub use peer_stream::{
     PeerStreamFuture,
 };
 pub use runtime_health::RuntimeHealth;
+use runtime_maintenance::ABORT_JOIN_GRACE;
+pub use runtime_maintenance::{Draining, Running, RuntimeMaintenance, Stopped};
 pub use storage_and_nudge_router::StorageAndNudgeRouter;
-
-/// A runtime-owned maintenance task that follows the server shutdown signal.
-pub trait RuntimeMaintenance: Send + Sync {
-    fn start(&self, shutdown: watch::Receiver<()>) -> JoinHandle<()>;
-}
 
 /// Validated configuration for the maintained Tokio HTTP runtime.
 ///
@@ -456,25 +450,6 @@ impl HttpRuntimeBuilder {
 
 /// Validated but not started runtime state.
 pub struct Configured;
-/// Runtime lifecycle state while its owned Axum server is accepting requests.
-pub struct Running {
-    local_address: SocketAddr,
-    direct_peer_address: Option<SocketAddr>,
-    shutdown_tx: watch::Sender<()>,
-    server_stopped_rx: watch::Receiver<bool>,
-    server_task: JoinHandle<std::io::Result<()>>,
-    maintenance_task: Option<JoinHandle<()>>,
-    endpoint_record: LoopbackEndpointRecordGuard,
-}
-/// Runtime lifecycle state after cancellation and while the Axum task drains.
-pub struct Draining {
-    server_task: JoinHandle<std::io::Result<()>>,
-    maintenance_task: Option<JoinHandle<()>>,
-    endpoint_record: LoopbackEndpointRecordGuard,
-}
-/// Terminal lifecycle state with no live runtime-owned handles.
-pub struct Stopped;
-
 /// Non-cloneable lifecycle owner. State transitions consume this value.
 pub struct HttpRuntime<State> {
     config: HttpRuntimeConfig,
