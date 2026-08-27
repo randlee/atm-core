@@ -125,10 +125,14 @@ fn transfer_script_root() -> Result<PathBuf, AtmTempError> {
     home_dir_from_env(&ProcessEnvSource).map(|home| home.join(".atm").join("transfer"))
 }
 
-/// Resolves the user's home directory (`$HOME`, then `%USERPROFILE%` — the
-/// same precedence `crate::home::resolve_user_home` uses) through the
-/// [`EnvSource`] seam, so a missing-home-directory failure is unit-testable
-/// with a `FakeEnvSource` instead of mutating the real process environment.
+/// Resolves the user's home directory through the [`EnvSource`] seam, so a
+/// missing-home-directory failure is unit-testable with a `FakeEnvSource`
+/// instead of mutating the real process environment.
+///
+/// Delegates the actual `$HOME`-then-`%USERPROFILE%` precedence decision to
+/// [`crate::home::resolve_user_home_via`] (RBQA-F001) rather than
+/// reimplementing it here: this function's only job is mapping that shared
+/// precedence's `None` to this module's own error type.
 ///
 /// # Errors
 ///
@@ -136,11 +140,7 @@ fn transfer_script_root() -> Result<PathBuf, AtmTempError> {
 /// set (or both are empty) — distinct from [`AtmTempError::Unresolvable`],
 /// which names an `ATM_TEMP`-resolution failure, not a home-directory one.
 fn home_dir_from_env(env: &dyn EnvSource) -> Result<PathBuf, AtmTempError> {
-    env.var("HOME")
-        .filter(|value| !value.is_empty())
-        .or_else(|| env.var("USERPROFILE").filter(|value| !value.is_empty()))
-        .map(PathBuf::from)
-        .ok_or(AtmTempError::HomeDirUnavailable)
+    crate::home::resolve_user_home_via(env).ok_or(AtmTempError::HomeDirUnavailable)
 }
 
 /// Testable core of [`resolve_transfer_script`]: resolves against an
