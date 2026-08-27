@@ -10,8 +10,7 @@ use std::sync::mpsc::TrySendError;
 
 use atm_core::GraftConfig;
 use atm_core::boundary::{
-    BuiltInPostSendDispatch, GraftNudgeTarget, MessageReceivedHookEmitter, NudgeKind,
-    PostSendBuiltInTarget,
+    BuiltInPostSendDispatch, GraftNudgeTarget, MessageReceivedHookEmitter, PostSendBuiltInTarget,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::{
@@ -744,6 +743,7 @@ fn handle_graft_receiver_connection(
 ) -> Result<(), AtmError> {
     let request = listener.read_request(stream, GRAFT_RECEIVER_IO_DEADLINE)?;
     let event = request.event;
+    let kind = request.kind;
     let rendered_nudge = request.rendered_nudge;
     let message_body = request.message_body;
     let dispatch = BuiltInPostSendDispatch {
@@ -754,7 +754,7 @@ fn handle_graft_receiver_connection(
             message_body,
         }),
         event,
-        kind: NudgeKind::Steer,
+        kind,
     };
     let response = match (GraftReceiveHook {
         injector,
@@ -773,7 +773,7 @@ fn handle_graft_receiver_connection(
 
 #[cfg(test)]
 mod tests {
-    use atm_core::boundary::PostSendHookEvent;
+    use atm_core::boundary::{NudgeKind, PostSendHookEvent};
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::graft::{
         GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL, GraftPostSendRequest, GraftPostSendResponse,
@@ -937,6 +937,7 @@ mod tests {
             capability,
             &GraftPostSendRequest {
                 event,
+                kind: NudgeKind::Steer,
                 rendered_nudge: "<atm>test nudge</atm>".to_string(),
                 message_body: "full immutable body".to_string(),
             },
@@ -966,6 +967,7 @@ mod tests {
     fn request_nudge() -> HostNudge {
         let event = request_event();
         HostNudge {
+            kind: NudgeKind::Steer,
             body: event.description.clone(),
             notice_text: format!("📬 from {}\n{}", event.source_address(), event.description),
             event,

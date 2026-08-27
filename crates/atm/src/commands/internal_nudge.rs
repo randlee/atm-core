@@ -174,6 +174,7 @@ impl GraftNudgeSink {
         let lease = lookup_receiver(&event.recipient_team, &event.recipient).await?;
         let request = GraftPostSendRequest {
             event: event.clone(),
+            kind: atm_core::boundary::NudgeKind::Steer,
             rendered_nudge: rendered_nudge.to_string(),
             // This legacy diagnostic command has no admitted message body.
             message_body: String::new(),

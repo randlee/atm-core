@@ -20,8 +20,8 @@ use ulid::Ulid;
 
 use crate::api::RequestDeadline;
 use crate::boundary::{
-    BuiltInPostSendDispatch, GraftNudgeTarget, PostSendBuiltInTarget, PostSendEmissionPath,
-    PostSendHookEvent,
+    BuiltInPostSendDispatch, GraftNudgeTarget, NudgeKind, PostSendBuiltInTarget,
+    PostSendEmissionPath, PostSendHookEvent,
 };
 use crate::error::{AtmError, AtmErrorCode};
 use crate::list::{ListOutcome, ListQuery};
@@ -40,11 +40,20 @@ pub const GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GraftPostSendRequest {
     pub event: PostSendHookEvent,
+    /// The ATM nudge taxonomy kind carried over the graft channel. Missing
+    /// kind is the pre-AQ2 wire shape and is interpreted as the historical
+    /// immediate steer.
+    #[serde(default = "default_graft_kind")]
+    pub kind: NudgeKind,
     /// Canonical database-resolved `<atm …>` nudge text. The receiver must
     /// inject this text, never substitute the stored message description.
     pub rendered_nudge: String,
     /// Immutable message content associated with `rendered_nudge`.
     pub message_body: String,
+}
+
+const fn default_graft_kind() -> NudgeKind {
+    NudgeKind::Steer
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -114,6 +123,7 @@ where
         &lease.capability,
         &GraftPostSendRequest {
             event: dispatch.event.clone(),
+            kind: dispatch.kind,
             rendered_nudge: rendered_nudge.clone(),
             message_body: message_body.clone(),
         },
@@ -621,8 +631,8 @@ pub trait AtmGraftClient: Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::{
-        AtmGraftClient, GraftPostSendRequest, GraftPostSendResponse, GraftReceiverListener,
-        RECEIVER_HOOK_RESULT_HANDOFF_GRACE, deliver_graft_post_send,
+        AtmGraftClient, GraftPostSendRequest, GraftPostSendResponse, GraftPostSendWireRequest,
+        GraftReceiverListener, RECEIVER_HOOK_RESULT_HANDOFF_GRACE, deliver_graft_post_send,
         deliver_published_receiver_hook, graft_receiver_lock_path_from_root, remaining_hook_budget,
     };
     use crate::api::RequestDeadline;
@@ -724,6 +734,7 @@ mod tests {
         .expect("bind listener");
         let request = GraftPostSendRequest {
             event: test_event(),
+            kind: NudgeKind::Steer,
             rendered_nudge: "<atm>test nudge</atm>".to_string(),
             message_body: "full immutable body".to_string(),
         };
@@ -753,12 +764,47 @@ mod tests {
         assert_eq!(received.rendered_nudge, "<atm>test nudge</atm>");
         assert_eq!(received.message_body, "full immutable body");
         assert_eq!(received.event.description, "loopback graft transport");
+        assert_eq!(received.kind, NudgeKind::Steer);
         listener
             .write_response(&mut stream, &GraftPostSendResponse::Delivered)
             .expect("write response");
 
         let response = sender.join().expect("join sender").expect("deliver");
         assert_eq!(response, GraftPostSendResponse::Delivered);
+    }
+
+    #[test]
+    fn pre_aq2_wire_request_defaults_to_steer_kind() {
+        let event = test_event();
+        let old_wire = serde_json::json!({
+            "capability_base64url": "capability",
+            "request": {
+                "event": event,
+                "rendered_nudge": "<atm>legacy</atm>",
+                "message_body": "legacy body"
+            }
+        });
+        let decoded: GraftPostSendWireRequest =
+            serde_json::from_value(old_wire).expect("old wire shape remains readable");
+        assert_eq!(decoded.request.kind, NudgeKind::Steer);
+    }
+
+    #[test]
+    fn queue_kind_is_preserved_on_the_evolved_wire_request() {
+        let request = GraftPostSendRequest {
+            event: test_event(),
+            kind: NudgeKind::Queue,
+            rendered_nudge: "<atm>queued</atm>".to_owned(),
+            message_body: "queued body".to_owned(),
+        };
+        let wire = GraftPostSendWireRequest {
+            capability_base64url: "capability".to_owned(),
+            request,
+        };
+        let decoded: GraftPostSendWireRequest =
+            serde_json::from_slice(&serde_json::to_vec(&wire).expect("encode wire"))
+                .expect("decode wire");
+        assert_eq!(decoded.request.kind, NudgeKind::Queue);
     }
 
     #[test]
@@ -779,6 +825,7 @@ mod tests {
                 capability_base64url: "not-the-real-capability".to_string(),
                 request: GraftPostSendRequest {
                     event: test_event(),
+                    kind: NudgeKind::Steer,
                     rendered_nudge: "<atm>test nudge</atm>".to_string(),
                     message_body: "full immutable body".to_string(),
                 },
