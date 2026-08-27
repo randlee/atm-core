@@ -275,7 +275,7 @@ class ValidateReleaseProofTests(unittest.TestCase):
 
     @mock.patch.object(VALIDATE_RELEASE, "load_release_contract")
     @mock.patch.object(VALIDATE_RELEASE, "run_capture")
-    def test_default_publish_surface_skips_candidate_only_package_checks(
+    def test_publish_surface_warns_only_for_unpublished_workspace_resolution(
         self,
         run_capture: mock.Mock,
         load_release_contract: mock.Mock,
@@ -286,42 +286,78 @@ class ValidateReleaseProofTests(unittest.TestCase):
                 {"package": "internal-crate", "publish": False},
             ]
         }
-        run_capture.return_value = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+        unpublished = subprocess.CompletedProcess(
+            args=["cargo", "publish", "--dry-run"],
+            returncode=101,
+            stdout="",
+            stderr=(
+                'failed to select a version for the requirement `atm-error = "^1.3.0"`\n'
+                'candidate versions found which didn\'t match: 1.2.9\n'
+                'location searched: crates.io index\n'
+            ),
+        )
+        run_capture.side_effect = [
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+            unpublished,
+            unpublished,
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+        ]
+        findings: list[VALIDATE_RELEASE.Finding] = []
+
+        with mock.patch.object(VALIDATE_RELEASE, "workspace_package_names", return_value={"atm-error"}):
+            VALIDATE_RELEASE.validate_publish_surface(
+                self.root,
+                "1.3.0",
+                findings,
+                enforce_release_version=False,
+            )
+
+        commands = [call.args[0] for call in run_capture.call_args_list]
+        self.assertIn(["cargo", "package", "-p", "published-crate", "--locked", "--no-verify"], commands)
+        self.assertIn(["cargo", "publish", "--dry-run", "-p", "published-crate", "--locked", "--no-verify"], commands)
+        self.assertIn(["cargo", "check", "-p", "internal-crate", "--locked"], commands)
+        self.assertFalse(any(finding.blocks for finding in findings))
+        self.assertEqual(
+            [finding.severity for finding in findings if finding.check.startswith("cargo-")],
+            ["warning", "warning"],
+        )
+
+    @mock.patch.object(VALIDATE_RELEASE, "load_release_contract")
+    @mock.patch.object(VALIDATE_RELEASE, "run_capture")
+    def test_publish_surface_keeps_other_dry_run_failures_blocking(
+        self,
+        run_capture: mock.Mock,
+        load_release_contract: mock.Mock,
+    ) -> None:
+        load_release_contract.return_value = {"crates": [{"package": "published-crate", "publish": True}]}
+        run_capture.side_effect = [
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+            subprocess.CompletedProcess(
+                args=["cargo", "package"],
+                returncode=101,
+                stdout="",
+                stderr=(
+                    'failed to select a version for the requirement `third-party = "^1.3.0"`\n'
+                    'candidate versions found which didn\'t match: 1.2.9\n'
+                    'location searched: crates.io index\n'
+                ),
+            ),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+        ]
         findings: list[VALIDATE_RELEASE.Finding] = []
 
         VALIDATE_RELEASE.validate_publish_surface(
             self.root,
             "1.3.0",
             findings,
-            enforce_release_version=False,
-        )
-
-        commands = [call.args[0] for call in run_capture.call_args_list]
-        self.assertNotIn(["cargo", "package", "-p", "published-crate", "--locked", "--no-verify"], commands)
-        self.assertNotIn(["cargo", "publish", "--dry-run", "-p", "published-crate", "--locked", "--no-verify"], commands)
-        self.assertIn(["cargo", "check", "-p", "internal-crate", "--locked"], commands)
-        self.assertTrue(any(finding.check == "publishable-crate-dry-runs" for finding in findings))
-
-    @mock.patch.object(VALIDATE_RELEASE, "load_release_contract")
-    @mock.patch.object(VALIDATE_RELEASE, "run_capture")
-    def test_release_candidate_publish_surface_keeps_package_checks(
-        self,
-        run_capture: mock.Mock,
-        load_release_contract: mock.Mock,
-    ) -> None:
-        load_release_contract.return_value = {"crates": [{"package": "published-crate", "publish": True}]}
-        run_capture.return_value = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
-
-        VALIDATE_RELEASE.validate_publish_surface(
-            self.root,
-            "1.3.0",
-            [],
             enforce_release_version=True,
         )
 
         commands = [call.args[0] for call in run_capture.call_args_list]
         self.assertIn(["cargo", "package", "-p", "published-crate", "--locked", "--no-verify"], commands)
         self.assertIn(["cargo", "publish", "--dry-run", "-p", "published-crate", "--locked", "--no-verify"], commands)
+        self.assertTrue(any(finding.check == "cargo-package-published-crate" and finding.blocks for finding in findings))
 
 
 if __name__ == "__main__":

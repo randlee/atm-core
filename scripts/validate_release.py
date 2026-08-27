@@ -178,6 +178,53 @@ def append_completed_findings(
     )
 
 
+def is_expected_unpublished_workspace_resolution(
+    completed: subprocess.CompletedProcess[str],
+    root: Path,
+    workspace_version: str,
+) -> bool:
+    """Identify Cargo's pre-publication lookup of this workspace version only."""
+
+    if completed.returncode == 0:
+        return False
+    output = f"{completed.stdout}\n{completed.stderr}"
+    requirement = re.compile(
+        rf'failed to select a version for the requirement `(?P<package>[^\s=]+) = "\^{re.escape(workspace_version)}"`'
+    )
+    match = requirement.search(output)
+    return bool(
+        match
+        and match.group("package") in workspace_package_names(root)
+        and "candidate versions found which didn't match" in output
+        and "location searched: crates.io index" in output
+    )
+
+
+def append_publish_dry_run_finding(
+    findings: list[Finding],
+    completed: subprocess.CompletedProcess[str],
+    root: Path,
+    check: str,
+    failure_summary: str,
+    workspace_version: str,
+) -> None:
+    """Keep publish dry-runs fail-closed except before their own version exists."""
+
+    if is_expected_unpublished_workspace_resolution(completed, root, workspace_version):
+        findings.append(
+            Finding(
+                check=check,
+                severity="warning",
+                summary="package dry-run requires the not-yet-published workspace version",
+                detail=(completed.stderr or completed.stdout).strip(),
+                command=completed.args if isinstance(completed.args, list) else None,
+                exit_code=completed.returncode,
+            )
+        )
+        return
+    append_completed_findings(findings, check, completed, f"{check} passed", failure_summary)
+
+
 def validate_support_files(root: Path, findings: list[Finding]) -> None:
     missing = [path for path in REQUIRED_RELEASE_FILES if not (root / path).exists()]
     if missing:
@@ -422,30 +469,21 @@ def validate_publish_surface(
         findings.append(Finding("publish-surface-plan", "error", "release contract crates must declare package names"))
         return
 
-    if enforce_release_version:
-        for crate in publishable_crates:
-            for cmd, check_name, summary in (
-                (
-                    ["cargo", "package", "-p", crate, "--locked", "--no-verify"],
-                    f"cargo-package-{crate}",
-                    f"`cargo package` failed for {crate}",
-                ),
-                (
-                    ["cargo", "publish", "--dry-run", "-p", crate, "--locked", "--no-verify"],
-                    f"cargo-publish-dry-run-{crate}",
-                    f"`cargo publish --dry-run` failed for {crate}",
-                ),
-            ):
-                completed = run_capture(cmd, cwd=root)
-                append_completed_findings(findings, check_name, completed, f"{check_name} passed", summary)
-    else:
-        findings.append(
-            Finding(
-                check="publishable-crate-dry-runs",
-                severity="warning",
-                summary="publishable crate package/publish dry-runs skipped outside explicit release-candidate mode",
-            )
-        )
+    for crate in publishable_crates:
+        for cmd, check_name, summary in (
+            (
+                ["cargo", "package", "-p", crate, "--locked", "--no-verify"],
+                f"cargo-package-{crate}",
+                f"`cargo package` failed for {crate}",
+            ),
+            (
+                ["cargo", "publish", "--dry-run", "-p", crate, "--locked", "--no-verify"],
+                f"cargo-publish-dry-run-{crate}",
+                f"`cargo publish --dry-run` failed for {crate}",
+            ),
+        ):
+            completed = run_capture(cmd, cwd=root)
+            append_publish_dry_run_finding(findings, completed, root, check_name, summary, version)
 
     for crate in locked_crates:
         completed = run_capture(["cargo", "check", "-p", crate, "--locked"], cwd=root)
