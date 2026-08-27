@@ -618,7 +618,7 @@ impl StorageAndNudgeRouter {
         let sink = self.member_state_transition_sink.clone();
         self.blocking_core_bridge
             .run(deadline, move || {
-                validate_heartbeat_member(runtime, &request)?;
+                validate_heartbeat_member(&runtime, &request.team, &request.member)?;
                 Ok(request)
             })
             .await
@@ -650,17 +650,7 @@ impl StorageAndNudgeRouter {
         let fifo = self.bare_cli_fifo.clone();
         self.blocking_core_bridge
             .run(deadline, move || {
-                validate_heartbeat_member(
-                    runtime,
-                    &atm_core::protocol::TeamMemberHeartbeatRequest {
-                        team: request.team.clone(),
-                        member: request.member.clone(),
-                        pid: 0,
-                        observed_at: atm_core::types::IsoTimestamp::now(),
-                        activity: atm_core::protocol::HeartbeatActivity::Idle,
-                        session_id: None,
-                    },
-                )?;
+                validate_heartbeat_member(&runtime, &request.team, &request.member)?;
                 let member = atm_core::boundary::MemberKey::new(request.team, request.member);
                 drain_bare_cli_messages(&fifo, &member).map(|messages| {
                     ApiResponse::new(ResponseEnvelope::QueueGetNext(
@@ -887,17 +877,12 @@ fn compatibility_verdict(
 }
 
 fn validate_heartbeat_member(
-    runtime: LocalServiceRuntime,
-    request: &atm_core::protocol::TeamMemberHeartbeatRequest,
+    runtime: &LocalServiceRuntime,
+    team: &atm_core::types::TeamName,
+    member: &atm_core::types::AgentName,
 ) -> Result<(), AtmError> {
-    if runtime
-        .load_roster_member(&request.team, &request.member)?
-        .is_none()
-    {
-        return Err(AtmError::agent_not_found(
-            request.member.as_str(),
-            request.team.as_str(),
-        ));
+    if runtime.load_roster_member(team, member)?.is_none() {
+        return Err(AtmError::agent_not_found(member.as_str(), team.as_str()));
     }
     Ok(())
 }
@@ -961,28 +946,29 @@ mod tests {
     use atm_core::LocalServiceRuntime;
     use atm_core::boundary::{
         AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, GraftNudgeTarget,
-        LocalSteerTarget, LocalTmuxNudgeTarget, MemberKey, MessageReceivedHookSelector, NudgeKind,
-        PendingNudgeStore, PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEvent,
-        RosterEntry, RosterHarness, RosterMemberKind,
+        LocalSteerTarget, LocalTmuxNudgeTarget, MemberKey, MessageReceivedHookSelector, NudgeClaim,
+        NudgeKind, PendingNudgeStore, PostSendBuiltInTarget, PostSendEmissionPath,
+        PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
     };
     use atm_core::observability::NullObservability;
     use atm_core::protocol::{
         GraftReceiverRegistration, GraftReceiverUnregistration, HeartbeatActivity, OwnerGeneration,
-        RequestEnvelope, ResponseEnvelope, RuntimeReadinessState, SendResponseEnvelope,
-        TeamMemberHeartbeatRequest,
+        QueueGetNextRequest, QueuedNudgeMessage, RequestEnvelope, ResponseEnvelope,
+        RuntimeReadinessState, SendResponseEnvelope, TeamMemberHeartbeatRequest,
     };
     use atm_core::schema::AtmMessageId;
     use atm_core::send::{
         MessageClassification, NudgeMode, SendMessageSource, TemplateSendSource, WriteRequest,
     };
-    use atm_core::types::{AgentName, ModelName, PaneId, TeamName};
+    use atm_core::types::{AgentName, IsoTimestamp, ModelName, PaneId, TeamName};
     use atm_core::{AuthenticatedIngress, RequestDeadline, api::ApiRequest, error::AtmError};
     use atm_runtime_test_support::{
         inspect_template_admission_for_test, install_sqlite_message_write_failure,
         open_graft_receiver_endpoint_store, open_sqlite_boundary,
     };
     use atm_storage::{
-        MessageKey, MessageQuery, MessageStore, RosterSnapshot, TemplateFrontmatter, TemplateSha,
+        MessageKey, MessageQuery, MessageStore, RosterSnapshot, RosterStore as StorageRosterStore,
+        TemplateFrontmatter, TemplateSha,
     };
     use axum::body::{Body, to_bytes};
     use axum::http::header::{CONTENT_TYPE, LOCATION};
@@ -997,8 +983,9 @@ mod tests {
         direct_peer_tcp_client,
     };
     use crate::{
-        AuthenticatedConnector, CanonicalWriteHandler, NonZeroDuration, RuntimeHealth,
-        RuntimeLimits, RuntimeTimeouts, canonical_message_router,
+        AuthenticatedConnector, BareCliFifo, BareCliQueueFullDrops, CanonicalWriteHandler,
+        NonZeroDuration, RuntimeHealth, RuntimeLimits, RuntimeTimeouts, append_bare_cli_message,
+        canonical_message_router,
     };
     #[cfg(unix)]
     use crate::{UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid};
@@ -1081,6 +1068,67 @@ mod tests {
             _dispatch: &BuiltInPostSendDispatch,
         ) -> Option<&dyn AsyncMessageReceivedHookEmitter> {
             None
+        }
+    }
+
+    struct FailingMarkPendingStore {
+        inner: Arc<dyn PendingNudgeStore + Send + Sync>,
+        remaining_failures: AtomicUsize,
+    }
+
+    impl atm_storage::contract::sealed::Sealed for FailingMarkPendingStore {}
+
+    impl PendingNudgeStore for FailingMarkPendingStore {
+        fn mark_pending(
+            &self,
+            member: &MemberKey,
+            msg: &AtmMessageId,
+            at: IsoTimestamp,
+        ) -> Result<bool, AtmError> {
+            let previous = self
+                .remaining_failures
+                .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |remaining| {
+                    remaining.checked_sub(1)
+                })
+                .unwrap_or(0);
+            if previous > 0 {
+                return Err(AtmError::daemon_unavailable(
+                    "test pending-marker store failure",
+                ));
+            }
+            self.inner.mark_pending(member, msg, at)
+        }
+
+        fn claim_next_pending(&self, member: &MemberKey) -> Result<Option<NudgeClaim>, AtmError> {
+            self.inner.claim_next_pending(member)
+        }
+
+        fn requeue_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
+            self.inner.requeue_pending(member, claim)
+        }
+
+        fn release_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
+            self.inner.release_pending(member, claim)
+        }
+
+        fn clear_pending_on_read(
+            &self,
+            member: &MemberKey,
+            msg: &AtmMessageId,
+        ) -> Result<(), AtmError> {
+            self.inner.clear_pending_on_read(member, msg)
+        }
+
+        fn clear_pending_on_handoff(
+            &self,
+            member: &MemberKey,
+            msg: &AtmMessageId,
+        ) -> Result<(), AtmError> {
+            self.inner.clear_pending_on_handoff(member, msg)
+        }
+
+        fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError> {
+            self.inner.list_pending_members()
         }
     }
 
@@ -1177,6 +1225,7 @@ mod tests {
         message_store: Arc<dyn MessageStore + Send + Sync>,
         pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
         received_hook: Arc<RecordingReceivedHook>,
+        runtime_health: RuntimeHealth,
         database_path: PathBuf,
         home_dir: PathBuf,
         current_dir: PathBuf,
@@ -1259,37 +1308,41 @@ mod tests {
     where
         F: FnOnce(Arc<RecordingReceivedHook>) -> Arc<dyn MessageReceivedHookSelector>,
     {
+        fixture_with_selector_and_template_and_pending(
+            with_recipient,
+            hook_failure,
+            cancelled_on_drop,
+            template_composer,
+            select,
+            None,
+        )
+    }
+
+    fn fixture_with_selector_and_template_and_pending<F>(
+        with_recipient: bool,
+        hook_failure: Option<AtmError>,
+        cancelled_on_drop: Option<Arc<AtomicBool>>,
+        template_composer: Option<Arc<dyn atm_core::TemplateComposer>>,
+        select: F,
+        pending_marker_failures: Option<usize>,
+    ) -> Fixture
+    where
+        F: FnOnce(Arc<RecordingReceivedHook>) -> Arc<dyn MessageReceivedHookSelector>,
+    {
         let temporary_root = tempfile::tempdir().expect("temporary runtime root");
         let database_path = temporary_root.path().join("mail.sqlite");
         let assembly = open_sqlite_boundary(&database_path).expect("assemble SQLite boundary");
         let team: TeamName = "test-team".parse().expect("team");
         if with_recipient {
-            assembly
-                .shared_roster_store_arc()
-                .save_roster(&RosterSnapshot {
-                    team_name: team.clone(),
-                    members: ["recipient", "sender"]
-                        .into_iter()
-                        .map(|agent_name| RosterEntry {
-                            team_name: team.clone(),
-                            agent_name: agent_name.parse().expect("agent"),
-                            member_kind: RosterMemberKind::Permanent,
-                            harness: RosterHarness::PythonGraft,
-                            agent_type: atm_core::schema::AgentType::default(),
-                            model: ModelName::default(),
-                            recipient_pane_id: None,
-                            metadata_json: serde_json::Map::new(),
-                        })
-                        .collect(),
-                    refreshed_at: None,
-                })
-                .expect("seed recipient roster");
+            seed_fixture_roster(&assembly.shared_roster_store_arc(), &team);
         }
         let message_store = assembly.message_store_arc();
         let pending_nudge_store = assembly
             .service_runtime
             .pending_nudge_store()
             .expect("sqlite pending-nudge store");
+        let pending_nudge_store_for_runtime =
+            pending_store_with_failures(&pending_nudge_store, pending_marker_failures);
         let received_hook = Arc::new(RecordingReceivedHook {
             message_store: Arc::clone(&message_store),
             emitted_ids: Mutex::new(Vec::new()),
@@ -1309,23 +1362,64 @@ mod tests {
         };
         let service_runtime =
             attach_graft_receiver_store(service_runtime, &database_path, with_recipient);
+        let service_runtime =
+            service_runtime.with_pending_nudge_store(pending_nudge_store_for_runtime);
         let router = StorageAndNudgeRouter::new(
             service_runtime,
             Arc::new(NullObservability),
             select(received_hook.clone()),
             home_dir.clone(),
         )
-        .with_runtime_health(health, assembly.doctor_ports);
+        .with_runtime_health(health.clone(), assembly.doctor_ports);
         Fixture {
             _temporary_root: temporary_root,
             router,
             message_store,
             pending_nudge_store,
             received_hook,
+            runtime_health: health,
             database_path,
             home_dir,
             current_dir,
         }
+    }
+
+    fn pending_store_with_failures(
+        store: &Arc<dyn PendingNudgeStore + Send + Sync>,
+        failures: Option<usize>,
+    ) -> Arc<dyn PendingNudgeStore + Send + Sync> {
+        match failures {
+            Some(failures) => Arc::new(FailingMarkPendingStore {
+                inner: Arc::clone(store),
+                remaining_failures: AtomicUsize::new(failures),
+            }),
+            None => Arc::clone(store),
+        }
+    }
+
+    fn seed_fixture_roster(
+        roster_store: &Arc<dyn StorageRosterStore + Send + Sync>,
+        team: &TeamName,
+    ) {
+        roster_store
+            .save_roster(&RosterSnapshot {
+                team_name: team.clone(),
+                members: ["recipient", "sender"]
+                    .into_iter()
+                    .map(|agent_name| RosterEntry {
+                        team_name: team.clone(),
+                        agent_name: agent_name.parse().expect("agent"),
+                        member_kind: RosterMemberKind::Permanent,
+                        harness: RosterHarness::PythonGraft,
+                        agent_type: atm_core::schema::AgentType::default(),
+                        model: ModelName::default(),
+                        recipient_pane_id: None,
+                        metadata_json: serde_json::Map::new(),
+                    })
+                    .collect(),
+                refreshed_at: None,
+            })
+            .expect("seed recipient roster");
     }
 
     fn attach_graft_receiver_store(
@@ -1687,7 +1781,9 @@ mod tests {
             .expect("authorized heartbeat");
         assert!(matches!(
             first_response.into_inner(),
-            ResponseEnvelope::Heartbeat(response) if !response.pid_changed
+            ResponseEnvelope::Heartbeat(response)
+                if !response.pid_changed
+                    && response.state == atm_core::protocol::RuntimeMemberState::Active
         ));
 
         let second = TeamMemberHeartbeatRequest {
@@ -1706,7 +1802,9 @@ mod tests {
             .expect("second authorized heartbeat");
         assert!(matches!(
             second_response.into_inner(),
-            ResponseEnvelope::Heartbeat(response) if response.pid_changed
+            ResponseEnvelope::Heartbeat(response)
+                if response.pid_changed
+                    && response.state == atm_core::protocol::RuntimeMemberState::Offline
         ));
         // Health remains listener-owned. A member becoming offline does not
         // make a process that is still serving local adapters become NotReady.
@@ -1715,6 +1813,237 @@ mod tests {
             RuntimeReadinessState::Unavailable,
             "the fixture has no running listener; heartbeat cannot claim readiness"
         );
+    }
+
+    /// AC1: a deterministic (non-wall-clock) `observed_at` proves the
+    /// existing Heartbeat route drives `RuntimeHealth`'s member-state
+    /// projection end to end. AQ3's own observation sink does not exist yet
+    /// (this sprint is upstream of AQ3), so this test covers the AC1 claim
+    /// as it is actually implementable today: the router's real dispatch
+    /// path into `RuntimeHealth::record_heartbeat` and its snapshot.
+    #[tokio::test]
+    async fn heartbeat_route_drives_runtime_health_member_state_transitions_with_a_deterministic_clock()
+     {
+        let fixture = fixture(true, None, None);
+        let observed_at: atm_core::types::IsoTimestamp = "2026-01-01T00:00:00Z"
+            .parse()
+            .expect("deterministic fixed timestamp, not wall-clock `now()`");
+        let request = TeamMemberHeartbeatRequest {
+            team: "test-team".parse().expect("team"),
+            member: "recipient".parse().expect("agent"),
+            pid: 7,
+            observed_at,
+            activity: HeartbeatActivity::ActiveToolUse,
+            session_id: None,
+        };
+        fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Heartbeat(request)),
+                atm_core::AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("authorized heartbeat");
+
+        let snapshot = fixture.router.runtime_health.snapshot();
+        let member = snapshot
+            .members
+            .iter()
+            .find(|observation| observation.member.as_str() == "recipient")
+            .expect("heartbeat route projected the member into RuntimeHealth");
+        assert_eq!(
+            member.state,
+            atm_core::protocol::RuntimeMemberState::Active,
+            "an active-tool-use heartbeat drives the member to Active"
+        );
+        assert_eq!(
+            member.last_active_at,
+            Some(observed_at),
+            "the projection preserves the caller-supplied deterministic timestamp"
+        );
+
+        let idle_request = TeamMemberHeartbeatRequest {
+            team: "test-team".parse().expect("team"),
+            member: "recipient".parse().expect("agent"),
+            pid: 7,
+            observed_at,
+            activity: HeartbeatActivity::Idle,
+            session_id: None,
+        };
+        fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Heartbeat(idle_request)),
+                atm_core::AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("second authorized heartbeat");
+        let idle_state = fixture
+            .router
+            .runtime_health
+            .snapshot()
+            .members
+            .into_iter()
+            .find(|observation| observation.member.as_str() == "recipient")
+            .expect("member remains projected")
+            .state;
+        assert_eq!(
+            idle_state,
+            atm_core::protocol::RuntimeMemberState::Idle,
+            "an idle heartbeat transitions the projected member state to Idle"
+        );
+    }
+
+    /// AC5: a caller not on the roster is rejected by the real
+    /// `queue_get_next` handler, not merely the wire codec.
+    #[tokio::test]
+    async fn queue_get_next_router_rejects_a_caller_not_on_the_roster() {
+        let fixture = fixture(true, None, None);
+        let request = QueueGetNextRequest {
+            team: "test-team".parse().expect("team"),
+            member: "not-on-the-roster".parse().expect("agent"),
+        };
+        let error = fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::QueueGetNext(request)),
+                atm_core::AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect_err("a non-roster member must be rejected");
+        assert_eq!(error.code(), atm_core::error::AtmErrorCode::AgentNotFound);
+    }
+
+    /// AC7/AC3: the real `queue_get_next` handler (not the FIFO helper in
+    /// isolation) drains a pre-seeded bare-CLI FIFO entry for an
+    /// authenticated roster member.
+    #[tokio::test]
+    async fn queue_get_next_router_drains_the_bare_cli_fifo_through_the_real_dispatch_path() {
+        let fixture = fixture(true, None, None);
+        let fifo: BareCliFifo = Default::default();
+        let drops: BareCliQueueFullDrops = Default::default();
+        let router = fixture
+            .router
+            .clone()
+            .with_bare_cli_fifo(fifo.clone(), drops);
+        let member = MemberKey::new(
+            "test-team".parse().expect("team"),
+            "recipient".parse().expect("agent"),
+        );
+        append_bare_cli_message(
+            &fifo,
+            &Default::default(),
+            member,
+            QueuedNudgeMessage {
+                kind: NudgeKind::Queue,
+                msg_id: AtmMessageId::new(),
+                body: "queued through the real handler".to_owned(),
+            },
+        )
+        .expect("seed FIFO");
+
+        let request = QueueGetNextRequest {
+            team: "test-team".parse().expect("team"),
+            member: "recipient".parse().expect("agent"),
+        };
+        let response = router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::QueueGetNext(request)),
+                atm_core::AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("authorized queue-get");
+        let ResponseEnvelope::QueueGetNext(response) = response.into_inner() else {
+            panic!("expected a QueueGetNext response");
+        };
+        assert_eq!(response.messages.len(), 1);
+        assert_eq!(response.messages[0].body, "queued through the real handler");
+    }
+
+    /// AC6 migration case: a stale FIFO entry from an earlier bare-CLI
+    /// window still drains on `queue_get_next` even after the member's
+    /// roster/lease inputs have since changed. `queue_get_next` never
+    /// re-runs the classifier (FIFO existence wins, critical review I15);
+    /// this proves that invariant against the real handler, not just the
+    /// classifier function in isolation.
+    #[tokio::test]
+    async fn queue_get_next_router_drains_a_stale_fifo_entry_after_the_members_classification_changes()
+     {
+        let fixture = fixture(true, None, None);
+        let fifo: BareCliFifo = Default::default();
+        let drops: BareCliQueueFullDrops = Default::default();
+        let team: TeamName = "test-team".parse().expect("team");
+        let member = MemberKey::new(team.clone(), "recipient".parse().expect("agent"));
+        append_bare_cli_message(
+            &fifo,
+            &Default::default(),
+            member.clone(),
+            QueuedNudgeMessage {
+                kind: NudgeKind::Queue,
+                msg_id: AtmMessageId::new(),
+                body: "queued before the migration".to_owned(),
+            },
+        )
+        .expect("seed stale FIFO entry");
+
+        // Flip the roster input the classifier reads: this member now
+        // resolves to a tmux local backend (would classify TmuxSteer for
+        // any *new* dispatch), simulating a migration away from bare-CLI
+        // since the FIFO entry was queued.
+        let assembly_roster =
+            atm_runtime_test_support::open_sqlite_boundary(&fixture.database_path)
+                .expect("reopen SQLite boundary for the roster mutation");
+        assembly_roster
+            .shared_roster_store_arc()
+            .save_roster(&RosterSnapshot {
+                team_name: team.clone(),
+                members: ["recipient", "sender"]
+                    .into_iter()
+                    .map(|agent_name| RosterEntry {
+                        team_name: team.clone(),
+                        agent_name: agent_name.parse().expect("agent"),
+                        member_kind: RosterMemberKind::Permanent,
+                        harness: RosterHarness::PythonGraft,
+                        agent_type: atm_core::schema::AgentType::default(),
+                        model: ModelName::default(),
+                        recipient_pane_id: if agent_name == "recipient" {
+                            Some(PaneId::from_cli("%9").expect("pane"))
+                        } else {
+                            None
+                        },
+                        metadata_json: serde_json::Map::new(),
+                    })
+                    .collect(),
+                refreshed_at: None,
+            })
+            .expect("flip recipient onto a tmux local backend");
+
+        let router = fixture.router.clone().with_bare_cli_fifo(fifo, drops);
+        let request = QueueGetNextRequest {
+            team,
+            member: "recipient".parse().expect("agent"),
+        };
+        let response = router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::QueueGetNext(request)),
+                atm_core::AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("authorized queue-get");
+        let ResponseEnvelope::QueueGetNext(response) = response.into_inner() else {
+            panic!("expected a QueueGetNext response");
+        };
+        assert_eq!(
+            response.messages.len(),
+            1,
+            "the stale FIFO entry still drains after the member's classification inputs changed"
+        );
+        assert_eq!(response.messages[0].body, "queued before the migration");
     }
 
     #[tokio::test]
@@ -2146,6 +2475,89 @@ mod tests {
         assert!(
             second_claim.is_none(),
             "an idempotent duplicate must not re-mark a claimed deferred write"
+        );
+    }
+
+    #[tokio::test]
+    async fn async_router_retries_one_marker_failure_and_preserves_write() {
+        let fixture = fixture_with_selector_and_template_and_pending(
+            true,
+            None,
+            None,
+            None,
+            |received_hook| {
+                Arc::new(FixedReceivedHookSelector {
+                    emitter: received_hook,
+                })
+            },
+            Some(1),
+        );
+        let message_id = AtmMessageId::new();
+        let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone())
+            .with_origin_metadata(message_id, atm_core::types::IsoTimestamp::now())
+            .with_nudge_mode(NudgeMode::Deferred);
+
+        let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+        assert_eq!(response.status(), StatusCode::CREATED);
+        assert_eq!(
+            fixture
+                .runtime_health
+                .snapshot()
+                .queue_marker_set_failures_total,
+            1
+        );
+        assert_eq!(
+            fixture
+                .pending_nudge_store
+                .claim_next_pending(&MemberKey::new(
+                    "test-team".parse().expect("team"),
+                    "recipient".parse().expect("agent"),
+                ))
+                .expect("claim after one retry")
+                .expect("marker succeeds on retry")
+                .msg,
+            message_id
+        );
+    }
+
+    #[tokio::test]
+    async fn async_router_counts_two_marker_failures_and_preserves_documented_loss_bound() {
+        let fixture = fixture_with_selector_and_template_and_pending(
+            true,
+            None,
+            None,
+            None,
+            |received_hook| {
+                Arc::new(FixedReceivedHookSelector {
+                    emitter: received_hook,
+                })
+            },
+            Some(2),
+        );
+        let message_id = AtmMessageId::new();
+        let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone())
+            .with_origin_metadata(message_id, atm_core::types::IsoTimestamp::now())
+            .with_nudge_mode(NudgeMode::Deferred);
+
+        let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+        assert_eq!(response.status(), StatusCode::CREATED);
+        assert_eq!(
+            fixture
+                .runtime_health
+                .snapshot()
+                .queue_marker_set_failures_total,
+            2
+        );
+        assert!(
+            fixture
+                .pending_nudge_store
+                .claim_next_pending(&MemberKey::new(
+                    "test-team".parse().expect("team"),
+                    "recipient".parse().expect("agent"),
+                ))
+                .expect("claim after exhausted retries")
+                .is_none(),
+            "the documented two-attempt marker loss bound leaves no marker"
         );
     }
 

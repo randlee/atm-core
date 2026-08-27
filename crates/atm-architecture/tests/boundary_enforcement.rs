@@ -498,6 +498,108 @@ fn canonical_write_router_has_one_host_routing_decision() {
 }
 
 #[test]
+fn queue_marker_handoff_clear_has_one_core_owner() {
+    let root = workspace_root();
+    let mut files = Vec::new();
+    collect_rust_files(&root.join("crates"), &mut files);
+
+    let mut definitions = Vec::new();
+    let mut violations = Vec::new();
+    for path in files {
+        let source = read_source(&path);
+        let syntax = syn::parse_file(&source)
+            .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
+        let mut visitor = QueueMarkerClearVisitor::default();
+        visitor.visit_file(&syntax);
+        definitions.extend(
+            visitor
+                .definitions
+                .into_iter()
+                .map(|name| format!("{}::{name}", path.display())),
+        );
+        violations.extend(
+            visitor
+                .violations
+                .into_iter()
+                .map(|name| format!("{}::{name}", path.display())),
+        );
+    }
+
+    assert_eq!(
+        definitions.len(),
+        1,
+        "clear_queue_marker_after_handoff must have exactly one workspace definition: {definitions:?}"
+    );
+    assert!(
+        definitions[0].contains("crates/atm-core/"),
+        "the sole queue-marker clear helper must be owned by atm-core: {definitions:?}"
+    );
+    assert!(
+        violations.is_empty(),
+        "direct clear_pending_on_handoff calls are forbidden outside the core helper and store impl/tests: {violations:?}"
+    );
+}
+
+#[derive(Default)]
+struct QueueMarkerClearVisitor {
+    definitions: Vec<String>,
+    violations: Vec<String>,
+    current_function: Option<String>,
+    in_test_module: bool,
+    in_pending_nudge_store_impl: bool,
+}
+
+impl<'ast> Visit<'ast> for QueueMarkerClearVisitor {
+    fn visit_item_fn(&mut self, node: &'ast syn::ItemFn) {
+        let previous = self.current_function.replace(node.sig.ident.to_string());
+        if node.sig.ident == "clear_queue_marker_after_handoff" {
+            self.definitions.push(node.sig.ident.to_string());
+        }
+        syn::visit::visit_item_fn(self, node);
+        self.current_function = previous;
+    }
+
+    fn visit_item_impl(&mut self, node: &'ast syn::ItemImpl) {
+        let previous = self.in_pending_nudge_store_impl;
+        self.in_pending_nudge_store_impl = node.trait_.as_ref().is_some_and(|(_, path, _)| {
+            path.segments
+                .last()
+                .is_some_and(|segment| segment.ident == "PendingNudgeStore")
+        });
+        syn::visit::visit_item_impl(self, node);
+        self.in_pending_nudge_store_impl = previous;
+    }
+
+    fn visit_impl_item_fn(&mut self, node: &'ast syn::ImplItemFn) {
+        let previous = self.current_function.replace(node.sig.ident.to_string());
+        syn::visit::visit_impl_item_fn(self, node);
+        self.current_function = previous;
+    }
+
+    fn visit_item_mod(&mut self, node: &'ast syn::ItemMod) {
+        let previous = self.in_test_module;
+        self.in_test_module = previous || node.attrs.iter().any(is_cfg_test_attribute);
+        syn::visit::visit_item_mod(self, node);
+        self.in_test_module = previous;
+    }
+
+    fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
+        if node.method == "clear_pending_on_handoff"
+            && self.current_function.as_deref() != Some("clear_queue_marker_after_handoff")
+            && !self.in_pending_nudge_store_impl
+            && !self.in_test_module
+        {
+            self.violations.push(
+                self.current_function
+                    .clone()
+                    .unwrap_or_else(|| "<module-level expression>".to_owned()),
+            );
+        }
+        syn::visit::visit_expr_method_call(self, node);
+    }
+}
+
+#[test]
 fn ai23_peer_adapter_never_matches_localhost_or_own_ip() {
     let root = workspace_root();
     let router = read_source(&root.join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"));
@@ -2987,6 +3089,26 @@ fn aq25_adr_addendum_contains_normative_trigger_policy() {
         assert!(
             adr.contains(required),
             "ADR-054 is missing AQ2.5 term {required}"
+        );
+    }
+}
+
+/// AC9 / ATM-QA-003: the ADR-054 addendum must carry a recorded
+/// quality-mgr sign-off *section*, not merely policy prose. This checks for
+/// the heading and the sign-off table's header row, which persist once
+/// quality-mgr fills in the pending row on re-gate -- unlike the pending
+/// placeholder text itself, which is expected to change.
+#[test]
+fn aq25_adr_addendum_records_a_quality_mgr_sign_off_section() {
+    let root = workspace_root();
+    let adr = read_source(&root.join("docs/adr/ADR-054-nudge-taxonomy-and-queue-mechanism.md"));
+    for required in [
+        "### AQ2.5 quality-mgr sign-off",
+        "| Sprint | Gate | Reviewer | Date | Verdict | Notes |",
+    ] {
+        assert!(
+            adr.contains(required),
+            "ADR-054 is missing the AQ2.5 quality-mgr sign-off section marker {required}"
         );
     }
 }

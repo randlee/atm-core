@@ -38,9 +38,9 @@ use atm_herdr::{
 use atm_http_runtime::{
     AcceptedPeerStream, BareCliFifo, BareCliQueueFullDrops, DirectPeerTcpConfig,
     EstablishedPeerStream, HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig,
-    MemberStateTransitionSink, NonZeroDuration, PeerConnectionPool, PeerPoolConfig,
-    PeerStreamAdapter, PeerStreamFuture, RuntimeHealth, RuntimeLimits, RuntimeTimeouts,
-    StorageAndNudgeRouter, shared_direct_peer_client,
+    NonZeroDuration, PeerConnectionPool, PeerPoolConfig, PeerStreamAdapter, PeerStreamFuture,
+    RuntimeHealth, RuntimeLimits, RuntimeTimeouts, StorageAndNudgeRouter,
+    shared_direct_peer_client,
 };
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime};
 use atm_storage_rusqlite::SqliteStorageFactory;
@@ -757,12 +757,12 @@ fn build_replacement_handler(
         bare_cli_fifo.clone(),
         bare_cli_queue_full_drops.clone(),
     );
-    let transition_sink: Arc<dyn MemberStateTransitionSink> =
-        Arc::new(queue_drain::DrainOnTransitionSink::new(
-            assembly.service_runtime.clone(),
-            Arc::clone(&selector),
-            runtime_health.clone(),
-        ));
+    let transition_sink = queue_drain::transition_sink(
+        assembly.service_runtime.clone(),
+        Arc::clone(&selector),
+        runtime_health.clone(),
+        recovery_sweep.transition_tracker(),
+    );
     let handler = StorageAndNudgeRouter::new(
         assembly.service_runtime,
         observability,

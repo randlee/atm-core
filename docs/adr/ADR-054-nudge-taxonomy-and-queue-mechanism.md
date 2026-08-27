@@ -353,7 +353,7 @@ debounced there; the daemon records authenticated observations but owns no
 timer or harness lifecycle.
 
 Bare-CLI pull notifications are RAM-only daemon-lifetime state. The map is
-bounded to 32 messages per member, drops the oldest item on overflow, and
+bounded to 32 messages *per member*, drops the oldest item on overflow, and
 reports the cumulative drop count through doctor. A daemon restart empties the
 FIFO; durable mailbox messages remain authoritative. Each pull drains all
 steer items and at most one oldest queue item. Empty pulls are successful and
@@ -371,3 +371,42 @@ consecutive-release cap (`HERDR_MAX_CONSECUTIVE_RELEASES = 10`, after which one
 ambiguous (`agent_prompt_stalled`, post-write errors/timeouts) use
 `requeue_pending`. This keeps the (f) stuck signal reachable for Herdr
 members. Normative text: sprint-AQ2-7 deliverable 3.
+
+A marker-clear failure after a successful bare-CLI FIFO append (the handoff)
+is never allowed to fail that delivery: it is routed through the same
+`clear_queue_marker_after_handoff` retry-once-and-count helper AQ2's graft
+channel uses (`atm-daemon-bootstrap/src/received_hook_selector.rs`), so the
+failure is logged and counted while `emit_received_message` still returns
+`Success` (AQ25-CRIT-001). Because bare-CLI members are never swept by AQ3
+(only `TmuxSteer`/`Graft` members are), a marker that survives both clear
+attempts becomes a **permanently orphaned pending marker** for that member —
+there is no scheduler that will ever revisit it. This residual is disclosed,
+not silently accepted as impossible: no sweeper covers `BareCli` by design,
+and no one-shot clear-on-next-get retry is added either, per the sprint's
+simplicity mandate (no additional hook-side or daemon-side state machines).
+An operator can detect and clear the residual manually via the existing
+`graft_queue_marker_clear_failures_total` doctor counter and
+`PendingNudgeStore::clear_pending_on_read`, which any subsequent successful
+delivery or `atm read` already exercises for that member.
+
+### Accepted resilience tradeoffs (disclosed, not blocking)
+
+- The high-frequency `Heartbeat` and `QueueGetNext` routes share the same
+  single-permit `BlockingCoreBridge` bridge used by slower mailbox
+  operations. Under sustained load this can add queueing latency to a
+  heartbeat or queue-get call; it is not a correctness or fail-open risk
+  (the bounded connect/request deadline still governs), and is accepted
+  rather than given a dedicated admission lane in this sprint.
+- The bare-CLI FIFO's 32-message-per-member bound is enforced per member;
+  there is no additional cap on the aggregate memory used across all
+  bare-CLI members on one daemon. A daemon serving an unusually large
+  bare-CLI roster could accumulate proportionally more RAM. This is an
+  accepted, documented tradeoff consistent with the simplicity mandate
+  (RAM-only, restart-recoverable state); it is not a durability or
+  correctness concern since the mailbox remains the source of truth.
+
+### AQ2.5 quality-mgr sign-off
+
+| Sprint | Gate | Reviewer | Date | Verdict | Notes |
+| --- | --- | --- | --- | --- | --- |
+| AQ2.5 | ADR-054 addendum (delivery-trigger policy, AC 9) | quality-mgr | _pending re-gate_ | _pending_ | Fill in on re-gate after the QA-1 fix cycle closes; mirrors AQ1 AC 1's ADR-054 sign-off gate. |
