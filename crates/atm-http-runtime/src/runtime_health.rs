@@ -28,6 +28,9 @@ struct RuntimeHealthState {
     detail: Option<String>,
     owner_pid: Option<u32>,
     members: HashMap<MemberKey, MemberRecord>,
+    graft_queue_handoff_failures_total: u64,
+    graft_queue_marker_clear_failures_total: u64,
+    queue_marker_set_failures_total: u64,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -92,6 +95,29 @@ impl RuntimeHealth {
         let mut state = self.lock();
         state.lifecycle = Lifecycle::Stopped;
         state.detail = Some("replacement runtime is stopped".to_owned());
+    }
+
+    /// Records one failed queue-kind graft handoff. The counter is
+    /// cumulative for the daemon lifetime and deliberately does not own any
+    /// retry state; the pending-nudge store and AQ3 own that policy.
+    pub fn record_graft_queue_handoff_failure(&self) {
+        let mut state = self.lock();
+        state.graft_queue_handoff_failures_total =
+            state.graft_queue_handoff_failures_total.saturating_add(1);
+    }
+
+    /// Records a failed pending-marker clear after delivery succeeded.
+    pub fn record_graft_queue_marker_clear_failure(&self) {
+        let mut state = self.lock();
+        state.graft_queue_marker_clear_failures_total = state
+            .graft_queue_marker_clear_failures_total
+            .saturating_add(1);
+    }
+
+    pub fn record_queue_marker_set_failure(&self) {
+        let mut state = self.lock();
+        state.queue_marker_set_failures_total =
+            state.queue_marker_set_failures_total.saturating_add(1);
     }
 
     /// Record an already-authorized local heartbeat.
@@ -214,6 +240,10 @@ impl RuntimeHealth {
             degraded_ingest: false,
             member_counts: counts,
             members,
+            graft_queue_handoff_failures_total: state.graft_queue_handoff_failures_total,
+            graft_queue_marker_clear_failures_total: state.graft_queue_marker_clear_failures_total,
+            bare_cli_queue_full_drops_total: 0,
+            queue_marker_set_failures_total: state.queue_marker_set_failures_total,
         }
     }
 
@@ -268,5 +298,15 @@ mod tests {
             health.snapshot().liveness,
             RuntimeLivenessState::Unavailable
         );
+    }
+
+    #[test]
+    fn queue_graft_failures_are_cumulative_health_observations() {
+        let health = RuntimeHealth::default();
+        health.record_graft_queue_handoff_failure();
+        health.record_graft_queue_handoff_failure();
+        health.record_graft_queue_marker_clear_failure();
+        assert_eq!(health.snapshot().graft_queue_handoff_failures_total, 2);
+        assert_eq!(health.snapshot().graft_queue_marker_clear_failures_total, 1);
     }
 }

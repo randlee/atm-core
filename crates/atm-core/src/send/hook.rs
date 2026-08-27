@@ -2,8 +2,9 @@ use tracing::warn;
 
 use super::{ResolvedRecipient, nudge_template};
 use crate::boundary::{
-    BuiltInPostSendDispatch, GraftNudgeTarget, LocalTmuxNudgeTarget, NudgeKind,
-    PostSendBuiltInTarget, PostSendHookEvent, built_in_nudge_template_kind_from_post_send_event,
+    BuiltInPostSendDispatch, GraftNudgeTarget, HerdrNudgeTarget, LocalSteerTarget,
+    LocalTmuxNudgeTarget, NudgeKind, PostSendBuiltInTarget, PostSendHookEvent, QueuePullTarget,
+    built_in_nudge_template_kind_from_post_send_event,
 };
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
@@ -34,10 +35,21 @@ where
         let rendered_nudge = render_built_in_nudge_for_dispatch(runtime, event)?;
         return Some(BuiltInPostSendDispatch {
             event: event.clone(),
-            target: PostSendBuiltInTarget::LocalSteer(LocalTmuxNudgeTarget {
-                pane_id,
-                rendered_nudge,
-            }),
+            target: PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Tmux(
+                LocalTmuxNudgeTarget {
+                    pane_id,
+                    rendered_nudge,
+                },
+            )),
+            kind,
+        });
+    }
+    if delivery_snapshot.local_herdr_post_send {
+        return Some(BuiltInPostSendDispatch {
+            event: event.clone(),
+            target: PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Herdr(HerdrNudgeTarget {
+                session: delivery_snapshot.herdr_session.clone(),
+            })),
             kind,
         });
     }
@@ -50,6 +62,19 @@ where
                 recipient_team: event.recipient_team.clone(),
                 rendered_nudge,
                 message_body: message_body.to_owned(),
+            }),
+            kind,
+        });
+    }
+    if delivery_snapshot.bare_cli_post_send {
+        return Some(BuiltInPostSendDispatch {
+            event: event.clone(),
+            target: PostSendBuiltInTarget::QueuePull(QueuePullTarget {
+                team: event.recipient_team.clone(),
+                agent: event.recipient.clone(),
+                kind,
+                msg_id: event.message_id,
+                body: message_body.to_owned(),
             }),
             kind,
         });

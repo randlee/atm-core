@@ -1,0 +1,18 @@
+[package]
+name = "atm-herdr"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Tokio-native process adapter for the Herdr CLI."
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+test-utils = []
+
+[dependencies]
+atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.5" }
+serde_json.workspace = true
+tokio.workspace = true

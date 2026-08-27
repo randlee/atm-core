@@ -6,6 +6,7 @@ members = [
     "crates/atm-storage-sqlserver-proof",
     "crates/atm-core",
     "crates/atm-http-runtime",
+    "crates/atm-herdr",
     "crates/atm-runtime",
     "crates/atm-runtime-test-support",
     "crates/atm",
@@ -26,7 +27,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "1.4.4"
+version = "1.4.5"
 edition = "2024"
 rust-version = "1.94.1"
 authors = ["atm-core contributors"]

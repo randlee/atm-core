@@ -524,6 +524,18 @@ fn execute_typed_local_request(
     }
 }
 
+/// Execute one typed request through the retained compatibility bridge.
+///
+/// New callers should remain async at their public boundary. This helper is
+/// limited to synchronous worker integrations that already own a configured
+/// [`DaemonApiClient`], such as the embedded graft receiver loop.
+pub fn execute_api_request(
+    client: Arc<dyn DaemonApiClient>,
+    request: RequestEnvelope,
+) -> Result<ResponseEnvelope, AtmError> {
+    execute_typed_local_request(client, request)
+}
+
 fn try_connect_with_transport(
     endpoint: &DaemonLocalIpcEndpoint,
     transport: LocalDaemonTransport,

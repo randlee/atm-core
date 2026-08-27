@@ -31,6 +31,33 @@ use atm_core::send::{NudgeMode, WarningEntry, WriteOutcome, prepare_write_with_a
 use crate::CanonicalWriteHandler;
 use crate::PeerConnectionPool;
 use crate::RuntimeHealth;
+use crate::bare_cli_fifo::{BareCliFifo, BareCliQueueFullDrops, drain_bare_cli_messages};
+
+fn retry_deferred_marker<F>(health: &RuntimeHealth, mut mark: F) -> Result<(), AtmError>
+where
+    F: FnMut() -> Result<(), AtmError>,
+{
+    match mark() {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            health.record_queue_marker_set_failure();
+            tracing::warn!(
+                subsystem = "atm_core.queue",
+                action = "queue_marker_set",
+                outcome = "failed",
+                %error,
+                "retrying deferred write queue marker"
+            );
+            match mark() {
+                Ok(()) => Ok(()),
+                Err(retry_error) => {
+                    health.record_queue_marker_set_failure();
+                    Err(retry_error)
+                }
+            }
+        }
+    }
+}
 
 /// Bounded bridge for synchronous core operations that are not storage-writer
 /// submissions.
@@ -106,6 +133,8 @@ pub struct StorageAndNudgeRouter {
     direct_peer_port: NonZeroU16,
     peer_connection_pool: Option<PeerConnectionPool>,
     shared_direct_peer_client: Option<reqwest::Client>,
+    bare_cli_fifo: BareCliFifo,
+    bare_cli_queue_full_drops: BareCliQueueFullDrops,
 }
 
 impl StorageAndNudgeRouter {
@@ -130,6 +159,8 @@ impl StorageAndNudgeRouter {
             direct_peer_port: crate::direct_peer_port(),
             peer_connection_pool: None,
             shared_direct_peer_client: None,
+            bare_cli_fifo: Default::default(),
+            bare_cli_queue_full_drops: Default::default(),
         }
     }
 
@@ -150,6 +181,18 @@ impl StorageAndNudgeRouter {
     ) -> Self {
         self.runtime_health = runtime_health;
         self.doctor_ports = Some(doctor_ports);
+        self
+    }
+
+    /// Installs the daemon-lifetime bare-CLI FIFO and its overflow counter.
+    #[must_use]
+    pub fn with_bare_cli_fifo(
+        mut self,
+        fifo: BareCliFifo,
+        queue_full_drops: BareCliQueueFullDrops,
+    ) -> Self {
+        self.bare_cli_fifo = fifo;
+        self.bare_cli_queue_full_drops = queue_full_drops;
         self
     }
 
@@ -215,21 +258,31 @@ impl StorageAndNudgeRouter {
         let outcome = prepared.finish(&self.service_runtime, self.observability.as_ref())?;
         if newly_persisted && canonical_request.nudge_mode == NudgeMode::Deferred {
             let runtime = self.service_runtime.clone();
-            if let Err(error) = self
+            let health = self.runtime_health.clone();
+            let marker_result = self
                 .blocking_core_bridge
                 .run(deadline, move || {
-                    prepared.mark_pending_if_deferred(&runtime);
-                    Ok(())
+                    Ok(retry_deferred_marker(&health, || {
+                        prepared.mark_pending_if_deferred(&runtime)
+                    }))
                 })
-                .await
-            {
-                tracing::warn!(
+                .await;
+            match marker_result {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => tracing::warn!(
+                    subsystem = "atm_core.queue",
+                    action = "queue_marker_set",
+                    outcome = "failed",
+                    %error,
+                    "deferred write queue marker failed after one retry"
+                ),
+                Err(error) => tracing::warn!(
                     subsystem = "atm_core.queue",
                     action = "queue_marker_set",
                     outcome = "failed",
                     %error,
                     "deferred write queue marker task could not be scheduled"
-                );
+                ),
             }
         }
         Ok(CommittedWrite {
@@ -368,6 +421,9 @@ impl StorageAndNudgeRouter {
                 ResponseEnvelope::CompatibilityVerdict(compatibility_verdict(preflight)),
             )),
             ApiRequest::Heartbeat(request) => self.heartbeat(request, ingress, deadline).await,
+            ApiRequest::QueueGetNext(request) => {
+                self.queue_get_next(request, ingress, deadline).await
+            }
             ApiRequest::GraftReceiverRegister(request) => {
                 self.graft_receiver_register(request, ingress, deadline)
                     .await
@@ -479,9 +535,14 @@ impl StorageAndNudgeRouter {
         let observability = Arc::clone(&self.observability);
         let home = self.daemon_home.clone();
         let runtime_health = self.runtime_health.clone();
+        let bare_cli_queue_full_drops = self.bare_cli_queue_full_drops.clone();
         let doctor_ports = self.doctor_ports.clone();
+        let presence_doctor = doctor_ports
+            .as_ref()
+            .map(|ports| Arc::clone(&ports.herdr_presence));
         let daemon_context = self.daemon_context.clone();
-        self.blocking_core_bridge
+        let mut report = self
+            .blocking_core_bridge
             .run(deadline, move || {
                 let query = query.with_daemon_paths(home);
                 let mut report = match doctor_ports {
@@ -498,11 +559,21 @@ impl StorageAndNudgeRouter {
                         &runtime,
                     ),
                 }?;
-                report.runtime_status = Some(runtime_health.snapshot());
+                let mut runtime_status = runtime_health.snapshot();
+                runtime_status.bare_cli_queue_full_drops_total =
+                    bare_cli_queue_full_drops.load(std::sync::atomic::Ordering::Relaxed);
+                report.runtime_status = Some(runtime_status);
                 report.daemon_context = daemon_context;
-                Ok(ApiResponse::new(ResponseEnvelope::Doctor(Box::new(report))))
+                Ok(report)
             })
-            .await
+            .await?;
+        if let (Some(presence_doctor), Some(roster)) =
+            (presence_doctor, report.member_roster.as_ref())
+        {
+            let findings = presence_doctor.probe(roster, deadline).await;
+            atm_core::doctor::append_doctor_findings(&mut report, findings);
+        }
+        Ok(ApiResponse::new(ResponseEnvelope::Doctor(Box::new(report))))
     }
 
     async fn search(
@@ -542,6 +613,42 @@ impl StorageAndNudgeRouter {
                     health.record_heartbeat(&request),
                 ))
             })
+    }
+
+    async fn queue_get_next(
+        &self,
+        request: atm_core::protocol::QueueGetNextRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        if ingress != AuthenticatedIngress::Local {
+            return Err(AtmError::validation(
+                "bare-CLI queue pulls are available only through authenticated local HTTP adapters",
+            ));
+        }
+        let runtime = self.service_runtime.clone();
+        let fifo = self.bare_cli_fifo.clone();
+        self.blocking_core_bridge
+            .run(deadline, move || {
+                validate_heartbeat_member(
+                    runtime,
+                    &atm_core::protocol::TeamMemberHeartbeatRequest {
+                        team: request.team.clone(),
+                        member: request.member.clone(),
+                        pid: 0,
+                        observed_at: atm_core::types::IsoTimestamp::now(),
+                        activity: atm_core::protocol::HeartbeatActivity::Idle,
+                        session_id: None,
+                    },
+                )?;
+                let member = atm_core::boundary::MemberKey::new(request.team, request.member);
+                drain_bare_cli_messages(&fifo, &member).map(|messages| {
+                    ApiResponse::new(ResponseEnvelope::QueueGetNext(
+                        atm_core::protocol::QueueGetNextResponse { messages },
+                    ))
+                })
+            })
+            .await
     }
 
     async fn graft_receiver_register(
@@ -834,9 +941,9 @@ mod tests {
     use atm_core::LocalServiceRuntime;
     use atm_core::boundary::{
         AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, GraftNudgeTarget,
-        LocalTmuxNudgeTarget, MemberKey, MessageReceivedHookSelector, NudgeKind, PendingNudgeStore,
-        PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEvent, RosterEntry, RosterHarness,
-        RosterMemberKind,
+        LocalSteerTarget, LocalTmuxNudgeTarget, MemberKey, MessageReceivedHookSelector, NudgeKind,
+        PendingNudgeStore, PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEvent,
+        RosterEntry, RosterHarness, RosterMemberKind,
     };
     use atm_core::observability::NullObservability;
     use atm_core::protocol::{
@@ -863,7 +970,7 @@ mod tests {
     use tempfile::TempDir;
     use tower::ServiceExt;
 
-    use super::{BlockingCoreBridge, StorageAndNudgeRouter};
+    use super::{BlockingCoreBridge, StorageAndNudgeRouter, retry_deferred_marker};
     use crate::{
         AcceptedPeerStream, EstablishedPeerStream, HttpRuntimeBuilder, HttpRuntimeConfig,
         LoopbackTcpConfig, PeerConnectionPool, PeerPoolConfig, PeerStreamAdapter, PeerStreamFuture,
@@ -1034,8 +1141,12 @@ mod tests {
             dispatch: &BuiltInPostSendDispatch,
         ) -> Option<&dyn AsyncMessageReceivedHookEmitter> {
             match &dispatch.target {
-                PostSendBuiltInTarget::LocalSteer(_) => Some(self.tmux.as_ref()),
+                PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Tmux(_)) => {
+                    Some(self.tmux.as_ref())
+                }
+                PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Herdr(_)) => None,
                 PostSendBuiltInTarget::Graft(_) => Some(self.graft.as_ref()),
+                PostSendBuiltInTarget::QueuePull(_) => None,
             }
         }
     }
@@ -1176,7 +1287,8 @@ mod tests {
             Some(composer) => assembly.service_runtime.with_template_composer(composer),
             None => assembly.service_runtime,
         };
-        let service_runtime = attach_graft_receiver_store(service_runtime, &database_path);
+        let service_runtime =
+            attach_graft_receiver_store(service_runtime, &database_path, with_recipient);
         let router = StorageAndNudgeRouter::new(
             service_runtime,
             Arc::new(NullObservability),
@@ -1199,11 +1311,27 @@ mod tests {
     fn attach_graft_receiver_store(
         service_runtime: LocalServiceRuntime,
         database_path: &Path,
+        with_recipient: bool,
     ) -> LocalServiceRuntime {
-        service_runtime.with_graft_receiver_endpoint_store(
-            open_graft_receiver_endpoint_store(database_path)
-                .expect("sqlite graft receiver endpoint store"),
-        )
+        let store = open_graft_receiver_endpoint_store(database_path)
+            .expect("sqlite graft receiver endpoint store");
+        if with_recipient {
+            store
+                .register(
+                    &GraftReceiverRegistration {
+                        team: "test-team".parse().expect("team"),
+                        agent: "recipient".parse().expect("agent"),
+                        endpoint: "127.0.0.1:9".parse().expect("endpoint"),
+                        capability: atm_core::local_http::LocalCapability::generate()
+                            .expect("capability"),
+                        owner_generation: OwnerGeneration::new("01J00000000000000000000000")
+                            .expect("owner generation"),
+                    },
+                    atm_core::types::IsoTimestamp::now().into_inner(),
+                )
+                .expect("register fixture graft receiver");
+        }
+        service_runtime.with_graft_receiver_endpoint_store(store)
     }
 
     fn write_request(home_dir: PathBuf, current_dir: PathBuf) -> WriteRequest {
@@ -1371,6 +1499,31 @@ mod tests {
         );
     }
 
+    #[test]
+    fn aq2_crit_002_marker_failure_retries_once_and_preserves_write_success() {
+        let health = RuntimeHealth::default();
+        let attempts = AtomicUsize::new(0);
+        let result = retry_deferred_marker(&health, || {
+            let attempt = attempts.fetch_add(1, Ordering::SeqCst);
+            if attempt == 0 {
+                Err(AtmError::mailbox_write("marker test failure"))
+            } else {
+                Ok(())
+            }
+        });
+
+        assert!(
+            result.is_ok(),
+            "a successful retry must preserve the write result"
+        );
+        assert_eq!(
+            attempts.load(Ordering::SeqCst),
+            2,
+            "marker failure retries once"
+        );
+        assert_eq!(health.snapshot().queue_marker_set_failures_total, 1);
+    }
+
     fn hook_event() -> PostSendHookEvent {
         PostSendHookEvent {
             sender: "sender".parse().expect("sender"),
@@ -1413,10 +1566,12 @@ mod tests {
         };
         let tmux_dispatch = BuiltInPostSendDispatch {
             event: hook_event(),
-            target: PostSendBuiltInTarget::LocalSteer(LocalTmuxNudgeTarget {
-                pane_id: PaneId::from_cli("%1").expect("pane"),
-                rendered_nudge: "tmux nudge".to_owned(),
-            }),
+            target: PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Tmux(
+                LocalTmuxNudgeTarget {
+                    pane_id: PaneId::from_cli("%1").expect("pane"),
+                    rendered_nudge: "tmux nudge".to_owned(),
+                },
+            )),
             kind: NudgeKind::Steer,
         };
         let graft_dispatch = BuiltInPostSendDispatch {
@@ -1927,8 +2082,21 @@ mod tests {
                 .emitted_ids
                 .lock()
                 .expect("inspect deferred hook emissions")
-                .is_empty(),
-            "deferred write must suppress immediate receiver delivery"
+                .len()
+                == 1,
+            "a graft recipient receives its queue-shaped handoff at write time"
+        );
+        assert_eq!(
+            fixture
+                .received_hook
+                .dispatches
+                .lock()
+                .expect("inspect deferred dispatch")
+                .first()
+                .expect("queue dispatch")
+                .kind,
+            NudgeKind::Queue,
+            "the graft handoff is explicitly queue-kind"
         );
 
         let member = MemberKey::new(

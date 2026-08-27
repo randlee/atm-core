@@ -77,6 +77,7 @@ ALLOWED_FORBIDDEN_LITERALS = (
 # need a second pass over the AQ1 contract surface.
 ALLOWED_NUDGE_IDENTIFIERS = frozenset(
     {
+        "HerdrNudgeTarget",
         "_enqueue_nudge", "_nudge", "_on_nudge", "acquire_host_nudge_helper_permit",
         "bounded_host_nudge_injector_caps_helper_growth_under_repeated_hangs",
         "bounded_host_nudge_injector_timeout_does_not_wedge_future_delivery",
@@ -112,7 +113,7 @@ ALLOWED_NUDGE_IDENTIFIERS = frozenset(
         "NoopNudgeTemplateOverrideStore", "nudge", "Nudge", "nudge_attempts", "nudge_count",
         "nudge_delivered", "nudge_dispatch", "nudge_kind_for_mode", "nudge_message_id", "nudge_mode", "nudge_pending_at",
         "nudge_preserves_typed_source_chat_id", "nudge_sink", "nudge_template",
-        "nudge_template_override_store", "nudge_timeout_secs", "NudgeClaim", "NudgeKind", "NudgeMode",
+        "nudge_template_override_store", "nudge_timeout_secs", "NudgeClaim", "NudgeKind", "NudgeMode", "QueuedNudgeMessage",
         "nudges", "NudgeTemplateOverrideStore", "on_nudge", "pending_nudge_store", "PendingNudgeStore",
         "primary_nudge", "print_clear_nudge_template_override_result",
         "print_disable_nudge_template_override_result", "print_set_nudge_template_override_result",
@@ -146,6 +147,20 @@ ALLOWED_NUDGE_IDENTIFIERS = frozenset(
 NUDGE_IDENTIFIER_PATTERN = re.compile(r"[A-Za-z_]*[Nn]udge[A-Za-z_]*")
 CFG_TEST_ATTRIBUTE = re.compile(r"^\s*#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]\s*$")
 TEST_MODULE_DECLARATION = re.compile(r"\bmod\s+[A-Za-z_][A-Za-z0-9_]*\s*\{")
+
+# Herdr owns its external wire vocabulary. Domain-level backend labels such
+# as `backendType = "herdr"` remain core-owned roster data, but CLI argv
+# tokens, response field names, and structured error codes may not leak into
+# another crate. Keep this list deliberately limited to the wire vocabulary so
+# the audit does not reject ordinary prose or backend selection metadata.
+HERDR_WIRE_PATTERNS = tuple(
+    re.compile(pattern)
+    for pattern in (
+        r'\[\s*"agent"\s*,\s*"(?:prompt|wait|get|list)"',
+        r'"agent_status"',
+        r'"(?:agent_blocked|agent_not_found|agent_not_ready|agent_target_ambiguous|agent_not_running|agent_prompt_stalled|server_not_running|protocol_mismatch|invalid_agent_name|empty_agent_prompt|server_unavailable|internal_error|agent_prompt_failed)"',
+    )
+)
 
 
 def iter_rust_sources(repo_root: Path) -> tuple[Path, ...]:
@@ -199,11 +214,40 @@ def iter_rust_lines(path: Path):
 
 def find_violations(repo_root: Path) -> tuple[Violation, ...]:
     violations: list[Violation] = []
+    backend_type_paths = {
+        "crates/atm-core/src/team_admin/member_mutation.rs",
+        "crates/atm-core/src/delivery_channel.rs",
+    }
+    actual_backend_type_paths = {
+        path.relative_to(repo_root).as_posix()
+        for path in iter_rust_sources(repo_root)
+        if '"backendType"' in path.read_text(encoding="utf-8")
+    }
+    # Synthetic fixture repositories used by the taxonomy tests do not carry
+    # the workspace roster sources, so there is no ownership inventory to
+    # validate there.  A real workspace always has at least one occurrence.
+    if actual_backend_type_paths and actual_backend_type_paths != backend_type_paths:
+        violations.append(Violation(
+            Path("crates/atm-core"), 0,
+            'the roster backendType mapping must be owned by exactly member_mutation.rs and delivery_channel.rs',
+            ", ".join(sorted(actual_backend_type_paths)),
+        ))
     for path in iter_rust_sources(repo_root):
         relative_path = path.relative_to(repo_root).as_posix()
         relative = Path(relative_path)
         test_source = is_test_source(relative)
         for line_number, line, in_test_module in iter_rust_lines(path):
+            if relative_path != "crates/atm-herdr/src/lib.rs":
+                for pattern in HERDR_WIRE_PATTERNS:
+                    if pattern.search(line):
+                        violations.append(
+                            Violation(
+                                Path(relative_path),
+                                line_number,
+                                "herdr_string_containment_gate: Herdr wire literal must remain inside crates/atm-herdr",
+                                line.strip(),
+                            )
+                        )
             for label, pattern in FORBIDDEN_PATTERNS:
                 if pattern.search(line) and not is_allowed_forbidden_literal(relative_path, line):
                     violations.append(Violation(Path(relative_path), line_number, label, line.strip()))

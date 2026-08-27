@@ -1,6 +1,6 @@
 # Sprint AQ2.5 — Queue Delivery Triggers: Harness Idle Signal + Bare-CLI Stop-Pull
 
-Status: draft · Branch: `feature/aq-2-5-queue-delivery-triggers` off
+Status: complete · Branch: `feature/aq-2-5-queue-delivery-triggers` off
 `integrate/phase-aq` · PR target: `integrate/phase-aq`
 recommended_agent: arch-ctm · recommended_model: deep-reasoning
 

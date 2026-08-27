@@ -305,6 +305,10 @@ jobs:
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         run: python .just/run_hermes_graft_bridge_tests.py
 
+      - name: Run ATM queue lifecycle hook tests
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        run: just test-queue-hooks-python
+
       - name: Test admission-capacity benchmark runner
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         run: just test-admission-capacity
