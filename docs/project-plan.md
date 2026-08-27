@@ -1398,6 +1398,11 @@ pending its host run.
 AQ2 graft dual-channel queue delivery is complete on
 `feature/aq-2-queue-graft`; its PR carries the additive wire kind, exact
 pending-marker handoff semantics, and Hermes `/queue`/`/steer` routing.
+AQ2.5 queue delivery triggers (heartbeat CLI surface, reference Claude/Codex
+hook scripts, the RAM-only bare-CLI FIFO + Stop-pull drain route, the
+`QueuePull` classifier arm, and the ADR-054 delivery-trigger addendum) is on
+`feature/aq-2-5-queue-delivery-triggers`; its PR (#1053) targets
+`integrate/phase-aq` and is in its QA-1 fix cycle.
 
 ## 49. Phase AO2 — Benchmark Safety, Evidence, And Transport Performance [COMPLETE — MERGED TO DEVELOP]
 

@@ -242,6 +242,7 @@ impl RuntimeHealth {
             members,
             graft_queue_handoff_failures_total: state.graft_queue_handoff_failures_total,
             graft_queue_marker_clear_failures_total: state.graft_queue_marker_clear_failures_total,
+            bare_cli_queue_full_drops_total: 0,
             queue_marker_set_failures_total: state.queue_marker_set_failures_total,
         }
     }

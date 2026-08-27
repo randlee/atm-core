@@ -1,0 +1,376 @@
+{
+  "schema_version": 1,
+  "sprint": "AQ2.5",
+  "host": "clean-runner-macos",
+  "commit": "df5900a5e600b34ccc09e3f47c41267eb48b6253",
+  "record": {
+    "sprint": "AQ2.5",
+    "host": "clean-runner-macos",
+    "started_at_ns": 1787861052545357000,
+    "status": "pass",
+    "roster": {
+      "sender": {
+        "argv": [
+          "/Users/runner/work/atm-core/atm-core/target/release/atm",
+          "teams",
+          "add-member",
+          "aq2-5-bare-cli",
+          "aq2-5-sender",
+          "--home-dir",
+          "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/home",
+          "--json"
+        ],
+        "stdout": "{\n  \"action\": \"add-member\",\n  \"team\": \"aq2-5-bare-cli\",\n  \"member\": \"aq2-5-sender\",\n  \"created_inbox\": true\n}"
+      },
+      "receiver": {
+        "argv": [
+          "/Users/runner/work/atm-core/atm-core/target/release/atm",
+          "teams",
+          "add-member",
+          "aq2-5-bare-cli",
+          "aq2-5-receiver",
+          "--home-dir",
+          "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/home",
+          "--json"
+        ],
+        "stdout": "{\n  \"action\": \"add-member\",\n  \"team\": \"aq2-5-bare-cli\",\n  \"member\": \"aq2-5-receiver\",\n  \"created_inbox\": true\n}"
+      }
+    },
+    "daemon_start": {
+      "ready": true,
+      "pid": 23866,
+      "stdout_tail": [
+        "ATM_DAEMON_READY"
+      ],
+      "exited_early": false,
+      "returncode": null,
+      "stderr_tail": ""
+    },
+    "queue_kind_sends": [
+      {
+        "verb": "queue",
+        "body": "queue-item-one",
+        "stdout": "Sent to aq2-5-receiver@aq2-5-bare-cli [message_id: 01M12D5BAXG9MAM65BHH87SENQ]"
+      },
+      {
+        "verb": "queue",
+        "body": "queue-item-two",
+        "stdout": "Sent to aq2-5-receiver@aq2-5-bare-cli [message_id: 01M12D5BBZ24SSS8G3PJRYC4GE]"
+      }
+    ],
+    "queue_kind_pulls": [
+      {
+        "returncode": 0,
+        "stdout": "{\"decision\":\"block\",\"reason\":\"queue-item-one\"}",
+        "stderr_tail": "",
+        "diagnostics": {
+          "raw_queue_get": {
+            "argv": [
+              "/Users/runner/work/atm-core/atm-core/target/release/atm",
+              "_internal-queue-get",
+              "--team",
+              "aq2-5-bare-cli",
+              "--as",
+              "aq2-5-receiver",
+              "--require-daemon"
+            ],
+            "returncode": 0,
+            "stdout": "{\"kind\":\"queue\",\"msg_id\":\"01M12D5BAXG9MAM65BHH87SENQ\",\"body\":\"queue-item-one\"}\n",
+            "stderr": ""
+          },
+          "receiver_inbox_peek": {
+            "argv": [
+              "/Users/runner/work/atm-core/atm-core/target/release/atm",
+              "peek",
+              "--json",
+              "--all",
+              "--team",
+              "aq2-5-bare-cli",
+              "--as",
+              "aq2-5-receiver"
+            ],
+            "returncode": 0,
+            "stdout": "{\n  \"action\": \"peek\",\n  \"team\": \"aq2-5-bare-cli\",\n  \"agent\": \"aq2-5-receiver\",\n  \"selection_mode\": \"all\",\n  \"mutation_applied\": false,\n  \"count\": 1,\n  \"message\": {\n    \"bucket\": \"unread\",\n    \"class\": \"unread\",\n    \"from\": \"aq2-5-sender\",\n    \"text\": \"queue-item-two\",\n    \"timestamp\": \"2026-08-27T20:04:12.799002Z\",\n    \"read\": false,\n    \"source_team\": \"aq2-5-bare-cli\",\n    \"summary\": \"queue-item-two\",\n    \"message_id\": \"01M12D5BBZ24SSS8G3PJRYC4GE\",\n    \"requires_ack\": false\n  },\n  \"selected_message_id\": \"01M12D5BBZ24SSS8G3PJRYC4GE\",\n  \"match_count\": 2,\n  \"additional_match_count\": 1,\n  \"bucket_counts\": {\n    \"unread\": 2,\n    \"pending_ack\": 0,\n    \"history\": 0\n  }\n}\n",
+            "stderr": ""
+          },
+          "doctor": {
+            "argv": [
+              "/Users/runner/work/atm-core/atm-core/target/release/atm",
+              "doctor",
+              "--json",
+              "--team",
+              "aq2-5-bare-cli"
+            ],
+            "returncode": 0,
+            "stdout": "{\n  \"summary\": {\n    \"status\": \"healthy\",\n    \"message\": \"ATM doctor completed with healthy findings only\",\n    \"info_count\": 1,\n    \"warning_count\": 0,\n    \"error_count\": 0\n  },\n  \"findings\": [\n    {\n      \"severity\": \"info\",\n      \"code\": \"ATM_OBSERVABILITY_HEALTH_OK\",\n      \"message\": \"shared observability active at /var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/logs/atm.log.jsonl; logging health is healthy and query readiness is unknown. Detail: writer_state=running queue_depth=2 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never\",\n      \"remediation\": null\n    }\n  ],\n  \"recommendations\": [],\n  \"environment\": {\n    \"atm_home\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/atm-home\",\n    \"atm_team\": \"aq2-5-bare-cli\",\n    \"atm_identity\": \"aq2-5-receiver\",\n    \"team_override\": \"aq2-5-bare-cli\"\n  },\n  \"client_context\": {\n    \"team\": \"aq2-5-bare-cli\",\n    \"identity\": \"aq2-5-receiver\",\n    \"version\": \"1.4.5\",\n    \"cli_schema_version\": 1,\n    \"http_api_version\": \"1.0.0\"\n  },\n  \"daemon_context\": {\n    \"team\": \"aq2-5-bare-cli\",\n    \"version\": \"1.4.5\",\n    \"cli_schema_version\": 1,\n    \"http_api_version\": \"1.0.0\",\n    \"peer_wire_security\": \"plaintext-test\"\n  },\n  \"member_roster\": {\n    \"team\": \"aq2-5-bare-cli\",\n    \"members\": [\n      {\n        \"name\": \"aq2-5-receiver\",\n        \"agent_id\": \"aq2-5-receiver@aq2-5-bare-cli\",\n        \"agent_type\": \"general-purpose\",\n        \"harness\": \"claude-code\",\n        \"model\": \"unknown\",\n        \"joined_at\": 1787861052667,\n        \"tmux_pane_id\": null,\n        \"home_dir\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/home\",\n        \"live_cwd\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/atm-home\",\n        \"extra\": {}\n      },\n      {\n        \"name\": \"aq2-5-sender\",\n        \"agent_id\": \"aq2-5-sender@aq2-5-bare-cli\",\n        \"agent_type\": \"general-purpose\",\n        \"harness\": \"claude-code\",\n        \"model\": \"unknown\",\n        \"joined_at\": 1787861052652,\n        \"tmux_pane_id\": null,\n        \"home_dir\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/home\",\n        \"extra\": {}\n      }\n    ]\n  },\n  \"graft_receivers\": {\n    \"receivers\": []\n  },\n  \"observability\": {\n    \"active_log_path\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/logs/atm.log.jsonl\",\n    \"logging_state\": \"healthy\",\n    \"query_state\": null,\n    \"maintenance\": {\n      \"state\": \"running\",\n      \"rotated_files_total\": 0,\n      \"pruned_files_total\": 0,\n      \"last_pass_at\": null\n    },\n    \"diagnostic\": null,\n    \"detail\": \"writer_state=running queue_depth=2 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never\"\n  },\n  \"herdr_breaker\": {\n    \"state\": \"closed\"\n  },\n  \"post_send\": {\n    \"config_root\": \"\",\n    \"external_rules\": [],\n    \"recipient_paths\": []\n  },\n  \"config\": {\n    \"findings\": []\n  },\n  \"mail_store\": {\n    \"findings\": []\n  },\n  \"roster_store\": {\n    \"findings\": []\n  },\n  \"drift_findings\": [],\n  \"runtime_status\": {\n    \"liveness\": \"running\",\n    \"readiness\": \"ready\",\n    \"singleton_owner_pid\": 23866,\n    \"degraded_ingest\": false,\n    \"member_counts\": {\n      \"active_members\": 0,\n      \"idle_members\": 0,\n      \"offline_members\": 0,\n      \"unknown_members\": 0\n    }\n  }\n}\n",
+            "stderr": ""
+          },
+          "daemon_log_tail": {
+            "path": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/logs/atm.log.jsonl",
+            "lines": []
+          }
+        },
+        "hook_argv": [
+          "/Users/runner/work/atm-core/atm-core/.bootstrap-venv/bin/python",
+          "/Users/runner/work/atm-core/atm-core/scripts/hooks/atm_queue_hook.py",
+          "--event",
+          "stop",
+          "--harness",
+          "claude"
+        ],
+        "hook_env_keys": [
+          "ATM_BIN",
+          "ATM_CONFIG_HOME",
+          "ATM_HOME",
+          "ATM_HOOK_DEBOUNCE_SECONDS",
+          "ATM_HOOK_STATE_DIR",
+          "ATM_HOOK_TIMEOUT_SECONDS",
+          "ATM_HOOK_TRACE_FILE",
+          "ATM_IDENTITY",
+          "ATM_TEAM"
+        ],
+        "block": {
+          "decision": "block",
+          "reason": "queue-item-one"
+        }
+      },
+      {
+        "returncode": 0,
+        "stdout": "{\"decision\":\"block\",\"reason\":\"queue-item-two\"}",
+        "stderr_tail": "",
+        "diagnostics": {
+          "raw_queue_get": {
+            "argv": [
+              "/Users/runner/work/atm-core/atm-core/target/release/atm",
+              "_internal-queue-get",
+              "--team",
+              "aq2-5-bare-cli",
+              "--as",
+              "aq2-5-receiver",
+              "--require-daemon"
+            ],
+            "returncode": 0,
+            "stdout": "{\"kind\":\"queue\",\"msg_id\":\"01M12D5BBZ24SSS8G3PJRYC4GE\",\"body\":\"queue-item-two\"}\n",
+            "stderr": ""
+          },
+          "receiver_inbox_peek": {
+            "argv": [
+              "/Users/runner/work/atm-core/atm-core/target/release/atm",
+              "peek",
+              "--json",
+              "--all",
+              "--team",
+              "aq2-5-bare-cli",
+              "--as",
+              "aq2-5-receiver"
+            ],
+            "returncode": 0,
+            "stdout": "{\n  \"action\": \"peek\",\n  \"team\": \"aq2-5-bare-cli\",\n  \"agent\": \"aq2-5-receiver\",\n  \"selection_mode\": \"all\",\n  \"mutation_applied\": false,\n  \"count\": 1,\n  \"message\": {\n    \"bucket\": \"unread\",\n    \"class\": \"unread\",\n    \"from\": \"aq2-5-sender\",\n    \"text\": \"queue-item-two\",\n    \"timestamp\": \"2026-08-27T20:04:12.799002Z\",\n    \"read\": false,\n    \"source_team\": \"aq2-5-bare-cli\",\n    \"summary\": \"queue-item-two\",\n    \"message_id\": \"01M12D5BBZ24SSS8G3PJRYC4GE\",\n    \"requires_ack\": false\n  },\n  \"selected_message_id\": \"01M12D5BBZ24SSS8G3PJRYC4GE\",\n  \"match_count\": 2,\n  \"additional_match_count\": 1,\n  \"bucket_counts\": {\n    \"unread\": 2,\n    \"pending_ack\": 0,\n    \"history\": 0\n  }\n}\n",
+            "stderr": ""
+          },
+          "doctor": {
+            "argv": [
+              "/Users/runner/work/atm-core/atm-core/target/release/atm",
+              "doctor",
+              "--json",
+              "--team",
+              "aq2-5-bare-cli"
+            ],
+            "returncode": 0,
+            "stdout": "{\n  \"summary\": {\n    \"status\": \"healthy\",\n    \"message\": \"ATM doctor completed with healthy findings only\",\n    \"info_count\": 1,\n    \"warning_count\": 0,\n    \"error_count\": 0\n  },\n  \"findings\": [\n    {\n      \"severity\": \"info\",\n      \"code\": \"ATM_OBSERVABILITY_HEALTH_OK\",\n      \"message\": \"shared observability active at /var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/logs/atm.log.jsonl; logging health is healthy and query readiness is unknown. Detail: writer_state=running queue_depth=1 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never\",\n      \"remediation\": null\n    }\n  ],\n  \"recommendations\": [],\n  \"environment\": {\n    \"atm_home\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/atm-home\",\n    \"atm_team\": \"aq2-5-bare-cli\",\n    \"atm_identity\": \"aq2-5-receiver\",\n    \"team_override\": \"aq2-5-bare-cli\"\n  },\n  \"client_context\": {\n    \"team\": \"aq2-5-bare-cli\",\n    \"identity\": \"aq2-5-receiver\",\n    \"version\": \"1.4.5\",\n    \"cli_schema_version\": 1,\n    \"http_api_version\": \"1.0.0\"\n  },\n  \"daemon_context\": {\n    \"team\": \"aq2-5-bare-cli\",\n    \"version\": \"1.4.5\",\n    \"cli_schema_version\": 1,\n    \"http_api_version\": \"1.0.0\",\n    \"peer_wire_security\": \"plaintext-test\"\n  },\n  \"member_roster\": {\n    \"team\": \"aq2-5-bare-cli\",\n    \"members\": [\n      {\n        \"name\": \"aq2-5-receiver\",\n        \"agent_id\": \"aq2-5-receiver@aq2-5-bare-cli\",\n        \"agent_type\": \"general-purpose\",\n        \"harness\": \"claude-code\",\n        \"model\": \"unknown\",\n        \"joined_at\": 1787861052667,\n        \"tmux_pane_id\": null,\n        \"home_dir\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/home\",\n        \"live_cwd\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/atm-home\",\n        \"extra\": {}\n      },\n      {\n        \"name\": \"aq2-5-sender\",\n        \"agent_id\": \"aq2-5-sender@aq2-5-bare-cli\",\n        \"agent_type\": \"general-purpose\",\n        \"harness\": \"claude-code\",\n        \"model\": \"unknown\",\n        \"joined_at\": 1787861052652,\n        \"tmux_pane_id\": null,\n        \"home_dir\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/home\",\n        \"extra\": {}\n      }\n    ]\n  },\n  \"graft_receivers\": {\n    \"receivers\": []\n  },\n  \"observability\": {\n    \"active_log_path\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/logs/atm.log.jsonl\",\n    \"logging_state\": \"healthy\",\n    \"query_state\": null,\n    \"maintenance\": {\n      \"state\": \"running\",\n      \"rotated_files_total\": 0,\n      \"pruned_files_total\": 0,\n      \"last_pass_at\": null\n    },\n    \"diagnostic\": null,\n    \"detail\": \"writer_state=running queue_depth=1 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never\"\n  },\n  \"herdr_breaker\": {\n    \"state\": \"closed\"\n  },\n  \"post_send\": {\n    \"config_root\": \"\",\n    \"external_rules\": [],\n    \"recipient_paths\": []\n  },\n  \"config\": {\n    \"findings\": []\n  },\n  \"mail_store\": {\n    \"findings\": []\n  },\n  \"roster_store\": {\n    \"findings\": []\n  },\n  \"drift_findings\": [],\n  \"runtime_status\": {\n    \"liveness\": \"running\",\n    \"readiness\": \"ready\",\n    \"singleton_owner_pid\": 23866,\n    \"degraded_ingest\": false,\n    \"member_counts\": {\n      \"active_members\": 0,\n      \"idle_members\": 0,\n      \"offline_members\": 0,\n      \"unknown_members\": 0\n    }\n  }\n}\n",
+            "stderr": ""
+          },
+          "daemon_log_tail": {
+            "path": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/logs/atm.log.jsonl",
+            "lines": []
+          }
+        },
+        "hook_argv": [
+          "/Users/runner/work/atm-core/atm-core/.bootstrap-venv/bin/python",
+          "/Users/runner/work/atm-core/atm-core/scripts/hooks/atm_queue_hook.py",
+          "--event",
+          "stop",
+          "--harness",
+          "claude"
+        ],
+        "hook_env_keys": [
+          "ATM_BIN",
+          "ATM_CONFIG_HOME",
+          "ATM_HOME",
+          "ATM_HOOK_DEBOUNCE_SECONDS",
+          "ATM_HOOK_STATE_DIR",
+          "ATM_HOOK_TIMEOUT_SECONDS",
+          "ATM_HOOK_TRACE_FILE",
+          "ATM_IDENTITY",
+          "ATM_TEAM"
+        ],
+        "block": {
+          "decision": "block",
+          "reason": "queue-item-two"
+        }
+      },
+      {
+        "returncode": 0,
+        "stdout": "",
+        "stderr_tail": "",
+        "diagnostics": {
+          "raw_queue_get": {
+            "argv": [
+              "/Users/runner/work/atm-core/atm-core/target/release/atm",
+              "_internal-queue-get",
+              "--team",
+              "aq2-5-bare-cli",
+              "--as",
+              "aq2-5-receiver",
+              "--require-daemon"
+            ],
+            "returncode": 0,
+            "stdout": "",
+            "stderr": ""
+          },
+          "receiver_inbox_peek": {
+            "argv": [
+              "/Users/runner/work/atm-core/atm-core/target/release/atm",
+              "peek",
+              "--json",
+              "--all",
+              "--team",
+              "aq2-5-bare-cli",
+              "--as",
+              "aq2-5-receiver"
+            ],
+            "returncode": 0,
+            "stdout": "{\n  \"action\": \"peek\",\n  \"team\": \"aq2-5-bare-cli\",\n  \"agent\": \"aq2-5-receiver\",\n  \"selection_mode\": \"all\",\n  \"mutation_applied\": false,\n  \"count\": 1,\n  \"message\": {\n    \"bucket\": \"unread\",\n    \"class\": \"unread\",\n    \"from\": \"aq2-5-sender\",\n    \"text\": \"queue-item-two\",\n    \"timestamp\": \"2026-08-27T20:04:12.799002Z\",\n    \"read\": false,\n    \"source_team\": \"aq2-5-bare-cli\",\n    \"summary\": \"queue-item-two\",\n    \"message_id\": \"01M12D5BBZ24SSS8G3PJRYC4GE\",\n    \"requires_ack\": false\n  },\n  \"selected_message_id\": \"01M12D5BBZ24SSS8G3PJRYC4GE\",\n  \"match_count\": 2,\n  \"additional_match_count\": 1,\n  \"bucket_counts\": {\n    \"unread\": 2,\n    \"pending_ack\": 0,\n    \"history\": 0\n  }\n}\n",
+            "stderr": ""
+          },
+          "doctor": {
+            "argv": [
+              "/Users/runner/work/atm-core/atm-core/target/release/atm",
+              "doctor",
+              "--json",
+              "--team",
+              "aq2-5-bare-cli"
+            ],
+            "returncode": 0,
+            "stdout": "{\n  \"summary\": {\n    \"status\": \"healthy\",\n    \"message\": \"ATM doctor completed with healthy findings only\",\n    \"info_count\": 1,\n    \"warning_count\": 0,\n    \"error_count\": 0\n  },\n  \"findings\": [\n    {\n      \"severity\": \"info\",\n      \"code\": \"ATM_OBSERVABILITY_HEALTH_OK\",\n      \"message\": \"shared observability active at /var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/logs/atm.log.jsonl; logging health is healthy and query readiness is unknown. Detail: writer_state=running queue_depth=1 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never\",\n      \"remediation\": null\n    }\n  ],\n  \"recommendations\": [],\n  \"environment\": {\n    \"atm_home\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/atm-home\",\n    \"atm_team\": \"aq2-5-bare-cli\",\n    \"atm_identity\": \"aq2-5-receiver\",\n    \"team_override\": \"aq2-5-bare-cli\"\n  },\n  \"client_context\": {\n    \"team\": \"aq2-5-bare-cli\",\n    \"identity\": \"aq2-5-receiver\",\n    \"version\": \"1.4.5\",\n    \"cli_schema_version\": 1,\n    \"http_api_version\": \"1.0.0\"\n  },\n  \"daemon_context\": {\n    \"team\": \"aq2-5-bare-cli\",\n    \"version\": \"1.4.5\",\n    \"cli_schema_version\": 1,\n    \"http_api_version\": \"1.0.0\",\n    \"peer_wire_security\": \"plaintext-test\"\n  },\n  \"member_roster\": {\n    \"team\": \"aq2-5-bare-cli\",\n    \"members\": [\n      {\n        \"name\": \"aq2-5-receiver\",\n        \"agent_id\": \"aq2-5-receiver@aq2-5-bare-cli\",\n        \"agent_type\": \"general-purpose\",\n        \"harness\": \"claude-code\",\n        \"model\": \"unknown\",\n        \"joined_at\": 1787861052667,\n        \"tmux_pane_id\": null,\n        \"home_dir\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/home\",\n        \"live_cwd\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/atm-home\",\n        \"extra\": {}\n      },\n      {\n        \"name\": \"aq2-5-sender\",\n        \"agent_id\": \"aq2-5-sender@aq2-5-bare-cli\",\n        \"agent_type\": \"general-purpose\",\n        \"harness\": \"claude-code\",\n        \"model\": \"unknown\",\n        \"joined_at\": 1787861052652,\n        \"tmux_pane_id\": null,\n        \"home_dir\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/home\",\n        \"extra\": {}\n      }\n    ]\n  },\n  \"graft_receivers\": {\n    \"receivers\": []\n  },\n  \"observability\": {\n    \"active_log_path\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/logs/atm.log.jsonl\",\n    \"logging_state\": \"healthy\",\n    \"query_state\": null,\n    \"maintenance\": {\n      \"state\": \"running\",\n      \"rotated_files_total\": 0,\n      \"pruned_files_total\": 0,\n      \"last_pass_at\": null\n    },\n    \"diagnostic\": null,\n    \"detail\": \"writer_state=running queue_depth=1 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never\"\n  },\n  \"herdr_breaker\": {\n    \"state\": \"closed\"\n  },\n  \"post_send\": {\n    \"config_root\": \"\",\n    \"external_rules\": [],\n    \"recipient_paths\": []\n  },\n  \"config\": {\n    \"findings\": []\n  },\n  \"mail_store\": {\n    \"findings\": []\n  },\n  \"roster_store\": {\n    \"findings\": []\n  },\n  \"drift_findings\": [],\n  \"runtime_status\": {\n    \"liveness\": \"running\",\n    \"readiness\": \"ready\",\n    \"singleton_owner_pid\": 23866,\n    \"degraded_ingest\": false,\n    \"member_counts\": {\n      \"active_members\": 0,\n      \"idle_members\": 0,\n      \"offline_members\": 0,\n      \"unknown_members\": 0\n    }\n  }\n}\n",
+            "stderr": ""
+          },
+          "daemon_log_tail": {
+            "path": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/logs/atm.log.jsonl",
+            "lines": []
+          }
+        },
+        "hook_argv": [
+          "/Users/runner/work/atm-core/atm-core/.bootstrap-venv/bin/python",
+          "/Users/runner/work/atm-core/atm-core/scripts/hooks/atm_queue_hook.py",
+          "--event",
+          "stop",
+          "--harness",
+          "claude"
+        ],
+        "hook_env_keys": [
+          "ATM_BIN",
+          "ATM_CONFIG_HOME",
+          "ATM_HOME",
+          "ATM_HOOK_DEBOUNCE_SECONDS",
+          "ATM_HOOK_STATE_DIR",
+          "ATM_HOOK_TIMEOUT_SECONDS",
+          "ATM_HOOK_TRACE_FILE",
+          "ATM_IDENTITY",
+          "ATM_TEAM"
+        ]
+      }
+    ],
+    "queue_kind_one_per_stop_confirmed": true,
+    "steer_kind_sends": [
+      {
+        "verb": "send",
+        "body": "steer-item-one",
+        "stdout": "Sent to aq2-5-receiver@aq2-5-bare-cli [message_id: 01M12D5BNJ6ZRH1XEXAXNP4Z5C]"
+      },
+      {
+        "verb": "send",
+        "body": "steer-item-two",
+        "stdout": "Sent to aq2-5-receiver@aq2-5-bare-cli [message_id: 01M12D5BQ7EBEEWATFJK91CJAW]"
+      }
+    ],
+    "steer_kind_pull": {
+      "returncode": 0,
+      "stdout": "{\"decision\":\"block\",\"reason\":\"steer-item-one\\nsteer-item-two\"}",
+      "stderr_tail": "",
+      "diagnostics": {
+        "raw_queue_get": {
+          "argv": [
+            "/Users/runner/work/atm-core/atm-core/target/release/atm",
+            "_internal-queue-get",
+            "--team",
+            "aq2-5-bare-cli",
+            "--as",
+            "aq2-5-receiver",
+            "--require-daemon"
+          ],
+          "returncode": 0,
+          "stdout": "{\"kind\":\"steer\",\"msg_id\":\"01M12D5BNJ6ZRH1XEXAXNP4Z5C\",\"body\":\"steer-item-one\"}\n{\"kind\":\"steer\",\"msg_id\":\"01M12D5BQ7EBEEWATFJK91CJAW\",\"body\":\"steer-item-two\"}\n",
+          "stderr": ""
+        },
+        "receiver_inbox_peek": {
+          "argv": [
+            "/Users/runner/work/atm-core/atm-core/target/release/atm",
+            "peek",
+            "--json",
+            "--all",
+            "--team",
+            "aq2-5-bare-cli",
+            "--as",
+            "aq2-5-receiver"
+          ],
+          "returncode": 0,
+          "stdout": "{\n  \"action\": \"peek\",\n  \"team\": \"aq2-5-bare-cli\",\n  \"agent\": \"aq2-5-receiver\",\n  \"selection_mode\": \"all\",\n  \"mutation_applied\": false,\n  \"count\": 1,\n  \"message\": {\n    \"bucket\": \"unread\",\n    \"class\": \"unread\",\n    \"from\": \"aq2-5-sender\",\n    \"text\": \"steer-item-two\",\n    \"timestamp\": \"2026-08-27T20:04:13.159906Z\",\n    \"read\": false,\n    \"source_team\": \"aq2-5-bare-cli\",\n    \"summary\": \"steer-item-two\",\n    \"message_id\": \"01M12D5BQ7EBEEWATFJK91CJAW\",\n    \"requires_ack\": false\n  },\n  \"selected_message_id\": \"01M12D5BQ7EBEEWATFJK91CJAW\",\n  \"match_count\": 4,\n  \"additional_match_count\": 3,\n  \"bucket_counts\": {\n    \"unread\": 4,\n    \"pending_ack\": 0,\n    \"history\": 0\n  }\n}\n",
+          "stderr": ""
+        },
+        "doctor": {
+          "argv": [
+            "/Users/runner/work/atm-core/atm-core/target/release/atm",
+            "doctor",
+            "--json",
+            "--team",
+            "aq2-5-bare-cli"
+          ],
+          "returncode": 0,
+          "stdout": "{\n  \"summary\": {\n    \"status\": \"healthy\",\n    \"message\": \"ATM doctor completed with healthy findings only\",\n    \"info_count\": 1,\n    \"warning_count\": 0,\n    \"error_count\": 0\n  },\n  \"findings\": [\n    {\n      \"severity\": \"info\",\n      \"code\": \"ATM_OBSERVABILITY_HEALTH_OK\",\n      \"message\": \"shared observability active at /var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/logs/atm.log.jsonl; logging health is healthy and query readiness is unknown. Detail: writer_state=running queue_depth=2 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never\",\n      \"remediation\": null\n    }\n  ],\n  \"recommendations\": [],\n  \"environment\": {\n    \"atm_home\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/atm-home\",\n    \"atm_team\": \"aq2-5-bare-cli\",\n    \"atm_identity\": \"aq2-5-receiver\",\n    \"team_override\": \"aq2-5-bare-cli\"\n  },\n  \"client_context\": {\n    \"team\": \"aq2-5-bare-cli\",\n    \"identity\": \"aq2-5-receiver\",\n    \"version\": \"1.4.5\",\n    \"cli_schema_version\": 1,\n    \"http_api_version\": \"1.0.0\"\n  },\n  \"daemon_context\": {\n    \"team\": \"aq2-5-bare-cli\",\n    \"version\": \"1.4.5\",\n    \"cli_schema_version\": 1,\n    \"http_api_version\": \"1.0.0\",\n    \"peer_wire_security\": \"plaintext-test\"\n  },\n  \"member_roster\": {\n    \"team\": \"aq2-5-bare-cli\",\n    \"members\": [\n      {\n        \"name\": \"aq2-5-receiver\",\n        \"agent_id\": \"aq2-5-receiver@aq2-5-bare-cli\",\n        \"agent_type\": \"general-purpose\",\n        \"harness\": \"claude-code\",\n        \"model\": \"unknown\",\n        \"joined_at\": 1787861052667,\n        \"tmux_pane_id\": null,\n        \"home_dir\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/home\",\n        \"live_cwd\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/atm-home\",\n        \"extra\": {}\n      },\n      {\n        \"name\": \"aq2-5-sender\",\n        \"agent_id\": \"aq2-5-sender@aq2-5-bare-cli\",\n        \"agent_type\": \"general-purpose\",\n        \"harness\": \"claude-code\",\n        \"model\": \"unknown\",\n        \"joined_at\": 1787861052652,\n        \"tmux_pane_id\": null,\n        \"home_dir\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/home\",\n        \"extra\": {}\n      }\n    ]\n  },\n  \"graft_receivers\": {\n    \"receivers\": []\n  },\n  \"observability\": {\n    \"active_log_path\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/logs/atm.log.jsonl\",\n    \"logging_state\": \"healthy\",\n    \"query_state\": null,\n    \"maintenance\": {\n      \"state\": \"running\",\n      \"rotated_files_total\": 0,\n      \"pruned_files_total\": 0,\n      \"last_pass_at\": null\n    },\n    \"diagnostic\": null,\n    \"detail\": \"writer_state=running queue_depth=2 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never\"\n  },\n  \"herdr_breaker\": {\n    \"state\": \"closed\"\n  },\n  \"post_send\": {\n    \"config_root\": \"\",\n    \"external_rules\": [],\n    \"recipient_paths\": []\n  },\n  \"config\": {\n    \"findings\": []\n  },\n  \"mail_store\": {\n    \"findings\": []\n  },\n  \"roster_store\": {\n    \"findings\": []\n  },\n  \"drift_findings\": [],\n  \"runtime_status\": {\n    \"liveness\": \"running\",\n    \"readiness\": \"ready\",\n    \"singleton_owner_pid\": 23866,\n    \"degraded_ingest\": false,\n    \"member_counts\": {\n      \"active_members\": 0,\n      \"idle_members\": 1,\n      \"offline_members\": 0,\n      \"unknown_members\": 0\n    },\n    \"members\": [\n      {\n        \"team\": \"aq2-5-bare-cli\",\n        \"member\": \"aq2-5-receiver\",\n        \"state\": \"idle\",\n        \"pid\": 23888,\n        \"state_changed_by\": \"heartbeat\",\n        \"state_changed_at\": \"2026-08-27T20:04:13.200311Z\"\n      }\n    ]\n  }\n}\n",
+          "stderr": ""
+        },
+        "daemon_log_tail": {
+          "path": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/logs/atm.log.jsonl",
+          "lines": []
+        }
+      },
+      "hook_argv": [
+        "/Users/runner/work/atm-core/atm-core/.bootstrap-venv/bin/python",
+        "/Users/runner/work/atm-core/atm-core/scripts/hooks/atm_queue_hook.py",
+        "--event",
+        "stop",
+        "--harness",
+        "claude"
+      ],
+      "hook_env_keys": [
+        "ATM_BIN",
+        "ATM_CONFIG_HOME",
+        "ATM_HOME",
+        "ATM_HOOK_DEBOUNCE_SECONDS",
+        "ATM_HOOK_STATE_DIR",
+        "ATM_HOOK_TIMEOUT_SECONDS",
+        "ATM_HOOK_TRACE_FILE",
+        "ATM_IDENTITY",
+        "ATM_TEAM"
+      ],
+      "block": {
+        "decision": "block",
+        "reason": "steer-item-one\nsteer-item-two"
+      }
+    },
+    "steer_kind_full_drain_confirmed": true,
+    "doctor_after": "{\n  \"summary\": {\n    \"status\": \"healthy\",\n    \"message\": \"ATM doctor completed with healthy findings only\",\n    \"info_count\": 1,\n    \"warning_count\": 0,\n    \"error_count\": 0\n  },\n  \"findings\": [\n    {\n      \"severity\": \"info\",\n      \"code\": \"ATM_OBSERVABILITY_HEALTH_OK\",\n      \"message\": \"shared observability active at /var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/logs/atm.log.jsonl; logging health is healthy and query readiness is unknown. Detail: writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never\",\n      \"remediation\": null\n    }\n  ],\n  \"recommendations\": [],\n  \"environment\": {\n    \"atm_home\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/atm-home\",\n    \"atm_team\": \"aq2-5-bare-cli\",\n    \"atm_identity\": \"aq2-5-receiver\",\n    \"team_override\": null\n  },\n  \"client_context\": {\n    \"team\": \"aq2-5-bare-cli\",\n    \"identity\": \"aq2-5-receiver\",\n    \"version\": \"1.4.5\",\n    \"cli_schema_version\": 1,\n    \"http_api_version\": \"1.0.0\"\n  },\n  \"daemon_context\": {\n    \"team\": \"aq2-5-bare-cli\",\n    \"version\": \"1.4.5\",\n    \"cli_schema_version\": 1,\n    \"http_api_version\": \"1.0.0\",\n    \"peer_wire_security\": \"plaintext-test\"\n  },\n  \"member_roster\": {\n    \"team\": \"aq2-5-bare-cli\",\n    \"members\": [\n      {\n        \"name\": \"aq2-5-receiver\",\n        \"agent_id\": \"aq2-5-receiver@aq2-5-bare-cli\",\n        \"agent_type\": \"general-purpose\",\n        \"harness\": \"claude-code\",\n        \"model\": \"unknown\",\n        \"joined_at\": 1787861052667,\n        \"tmux_pane_id\": null,\n        \"home_dir\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/home\",\n        \"live_cwd\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/atm-home\",\n        \"extra\": {}\n      },\n      {\n        \"name\": \"aq2-5-sender\",\n        \"agent_id\": \"aq2-5-sender@aq2-5-bare-cli\",\n        \"agent_type\": \"general-purpose\",\n        \"harness\": \"claude-code\",\n        \"model\": \"unknown\",\n        \"joined_at\": 1787861052652,\n        \"tmux_pane_id\": null,\n        \"home_dir\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/home\",\n        \"extra\": {}\n      }\n    ]\n  },\n  \"graft_receivers\": {\n    \"receivers\": []\n  },\n  \"observability\": {\n    \"active_log_path\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq2-5-evidence-u038_z29/logs/atm.log.jsonl\",\n    \"logging_state\": \"healthy\",\n    \"query_state\": null,\n    \"maintenance\": {\n      \"state\": \"running\",\n      \"rotated_files_total\": 0,\n      \"pruned_files_total\": 0,\n      \"last_pass_at\": null\n    },\n    \"diagnostic\": null,\n    \"detail\": \"writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never\"\n  },\n  \"herdr_breaker\": {\n    \"state\": \"closed\"\n  },\n  \"post_send\": {\n    \"config_root\": \"\",\n    \"external_rules\": [],\n    \"recipient_paths\": []\n  },\n  \"config\": {\n    \"findings\": []\n  },\n  \"mail_store\": {\n    \"findings\": []\n  },\n  \"roster_store\": {\n    \"findings\": []\n  },\n  \"drift_findings\": [],\n  \"runtime_status\": {\n    \"liveness\": \"running\",\n    \"readiness\": \"ready\",\n    \"singleton_owner_pid\": 23866,\n    \"degraded_ingest\": false,\n    \"member_counts\": {\n      \"active_members\": 0,\n      \"idle_members\": 1,\n      \"offline_members\": 0,\n      \"unknown_members\": 0\n    },\n    \"members\": [\n      {\n        \"team\": \"aq2-5-bare-cli\",\n        \"member\": \"aq2-5-receiver\",\n        \"state\": \"idle\",\n        \"pid\": 23888,\n        \"state_changed_by\": \"heartbeat\",\n        \"state_changed_at\": \"2026-08-27T20:04:13.200311Z\"\n      }\n    ]\n  }\n}\n",
+    "finished_at_ns": 1787861053314454000
+  }
+}

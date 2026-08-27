@@ -204,6 +204,22 @@
         }
       }
     },
+    "/queue/get-next": {
+      "post": {
+        "operation_id": "getNextBareCliQueueMessages",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/QueueGetNextResponse"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
     "/runtime/reload": {
       "post": {
         "operation_id": "reloadRuntimeView",
@@ -363,6 +379,36 @@
     "PeekQuery": {
       "properties": [],
       "required": []
+    },
+    "QueueGetNextRequest": {
+      "properties": [
+        "member",
+        "team"
+      ],
+      "required": [
+        "member",
+        "team"
+      ]
+    },
+    "QueueGetNextResponse": {
+      "properties": [
+        "messages"
+      ],
+      "required": [
+        "messages"
+      ]
+    },
+    "QueuedNudgeMessage": {
+      "properties": [
+        "body",
+        "kind",
+        "msg_id"
+      ],
+      "required": [
+        "body",
+        "kind",
+        "msg_id"
+      ]
     },
     "ReadQuery": {
       "properties": [],

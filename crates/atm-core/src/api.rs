@@ -13,7 +13,8 @@ use crate::doctor::DoctorQuery;
 use crate::error::AtmError;
 use crate::list::ListQuery;
 use crate::protocol::{
-    CompatibilityPreflight, RequestEnvelope, ResponseEnvelope, TeamMemberHeartbeatRequest,
+    CompatibilityPreflight, QueueGetNextRequest, RequestEnvelope, ResponseEnvelope,
+    TeamMemberHeartbeatRequest,
 };
 use crate::read::{PeekQuery, ReadQuery};
 use crate::search::SearchRequest;
@@ -34,6 +35,7 @@ const READ_PATH: &str = "/v1/atm/messages/read";
 const DOCTOR_PATH: &str = "/v1/atm/doctor";
 const COMPATIBILITY_PATH: &str = "/v1/atm/compatibility";
 const HEARTBEAT_PATH: &str = "/v1/atm/heartbeat";
+const QUEUE_GET_NEXT_PATH: &str = "/v1/atm/queue/get-next";
 const GRAFT_RECEIVER_REGISTER_PATH: &str = "/v1/atm/graft/receiver/register";
 const GRAFT_RECEIVER_REFRESH_PATH: &str = "/v1/atm/graft/receiver/refresh";
 const GRAFT_RECEIVER_UNREGISTER_PATH: &str = "/v1/atm/graft/receiver/unregister";
@@ -59,6 +61,7 @@ pub enum HttpRouteKind {
     RuntimeReload,
     Compatibility,
     Heartbeat,
+    QueueGetNext,
     GraftReceiverRegister,
     GraftReceiverRefresh,
     GraftReceiverUnregister,
@@ -146,6 +149,13 @@ const HTTP_ROUTE_SPECS: &[HttpRouteSpec] = &[
         },
     },
     HttpRouteSpec {
+        kind: HttpRouteKind::QueueGetNext,
+        route: HttpRoute {
+            method: "POST",
+            path_template: QUEUE_GET_NEXT_PATH,
+        },
+    },
+    HttpRouteSpec {
         kind: HttpRouteKind::GraftReceiverRegister,
         route: HttpRoute {
             method: "POST",
@@ -194,10 +204,11 @@ fn route_spec(kind: HttpRouteKind) -> &'static HttpRouteSpec {
         HttpRouteKind::RuntimeReload => &HTTP_ROUTE_SPECS[7],
         HttpRouteKind::Compatibility => &HTTP_ROUTE_SPECS[8],
         HttpRouteKind::Heartbeat => &HTTP_ROUTE_SPECS[9],
-        HttpRouteKind::GraftReceiverRegister => &HTTP_ROUTE_SPECS[10],
-        HttpRouteKind::GraftReceiverUnregister => &HTTP_ROUTE_SPECS[11],
-        HttpRouteKind::GraftReceiverLookup => &HTTP_ROUTE_SPECS[12],
-        HttpRouteKind::GraftReceiverRefresh => &HTTP_ROUTE_SPECS[13],
+        HttpRouteKind::QueueGetNext => &HTTP_ROUTE_SPECS[10],
+        HttpRouteKind::GraftReceiverRegister => &HTTP_ROUTE_SPECS[11],
+        HttpRouteKind::GraftReceiverUnregister => &HTTP_ROUTE_SPECS[12],
+        HttpRouteKind::GraftReceiverLookup => &HTTP_ROUTE_SPECS[13],
+        HttpRouteKind::GraftReceiverRefresh => &HTTP_ROUTE_SPECS[14],
     }
 }
 
@@ -213,6 +224,7 @@ fn route_kind_for_request(request: &RequestEnvelope) -> HttpRouteKind {
         RequestEnvelope::ReloadRuntimeView => HttpRouteKind::RuntimeReload,
         RequestEnvelope::CompatibilityPreflight(_) => HttpRouteKind::Compatibility,
         RequestEnvelope::Heartbeat(_) => HttpRouteKind::Heartbeat,
+        RequestEnvelope::QueueGetNext(_) => HttpRouteKind::QueueGetNext,
         RequestEnvelope::GraftReceiverRegister(_) => HttpRouteKind::GraftReceiverRegister,
         RequestEnvelope::GraftReceiverRefresh(_) => HttpRouteKind::GraftReceiverRefresh,
         RequestEnvelope::GraftReceiverUnregister(_) => HttpRouteKind::GraftReceiverUnregister,
@@ -343,6 +355,7 @@ fn encode_request_body(request: &RequestEnvelope) -> Result<Vec<u8>, AtmError> {
         RequestEnvelope::Write(value) => serde_json::to_vec(value),
         RequestEnvelope::CompatibilityPreflight(value) => serde_json::to_vec(value),
         RequestEnvelope::Heartbeat(value) => serde_json::to_vec(value),
+        RequestEnvelope::QueueGetNext(value) => serde_json::to_vec(value),
         RequestEnvelope::GraftReceiverRegister(value) => serde_json::to_vec(value),
         RequestEnvelope::GraftReceiverRefresh(value) => serde_json::to_vec(value),
         RequestEnvelope::GraftReceiverUnregister(value) => serde_json::to_vec(value),
@@ -396,6 +409,9 @@ fn decode_success_response(
         RequestEnvelope::Heartbeat(_) => {
             decode_response_body(body, "heartbeat").map(ResponseEnvelope::Heartbeat)
         }
+        RequestEnvelope::QueueGetNext(_) => {
+            decode_response_body(body, "queue get next").map(ResponseEnvelope::QueueGetNext)
+        }
         RequestEnvelope::GraftReceiverRegister(_) => {
             decode_response_body::<()>(body, "graft receiver register")
                 .map(|()| ResponseEnvelope::GraftReceiverRegister)
@@ -448,6 +464,7 @@ pub enum ApiRequest {
     Search(Box<SearchRequest>),
     CompatibilityPreflight(CompatibilityPreflight),
     Heartbeat(TeamMemberHeartbeatRequest),
+    QueueGetNext(QueueGetNextRequest),
     GraftReceiverRegister(atm_storage::GraftReceiverRegistration),
     GraftReceiverRefresh(crate::protocol::GraftReceiverRefreshRequest),
     GraftReceiverUnregister(crate::protocol::GraftReceiverUnregistration),
@@ -485,6 +502,7 @@ impl ApiRequest {
                 RequestEnvelope::CompatibilityPreflight(preflight)
             }
             Self::Heartbeat(request) => RequestEnvelope::Heartbeat(request),
+            Self::QueueGetNext(request) => RequestEnvelope::QueueGetNext(request),
             Self::GraftReceiverRegister(request) => RequestEnvelope::GraftReceiverRegister(request),
             Self::GraftReceiverRefresh(request) => RequestEnvelope::GraftReceiverRefresh(request),
             Self::GraftReceiverUnregister(request) => {
@@ -518,6 +536,7 @@ impl From<RequestEnvelope> for ApiRequest {
                 Self::CompatibilityPreflight(preflight)
             }
             RequestEnvelope::Heartbeat(request) => Self::Heartbeat(request),
+            RequestEnvelope::QueueGetNext(request) => Self::QueueGetNext(request),
             RequestEnvelope::GraftReceiverRegister(request) => Self::GraftReceiverRegister(request),
             RequestEnvelope::GraftReceiverRefresh(request) => Self::GraftReceiverRefresh(request),
             RequestEnvelope::GraftReceiverUnregister(request) => {
@@ -552,6 +571,7 @@ mod tests {
     use std::net::SocketAddr;
 
     use super::{HttpRouteKind, encode_http_request, http_route_kind};
+    use crate::protocol::QueueGetNextRequest;
     use crate::protocol::{
         GraftReceiverLookupRequest, GraftReceiverRegistration, OwnerGeneration, RequestEnvelope,
     };
@@ -645,6 +665,25 @@ mod tests {
                 assert_eq!(decoded.agent.as_str(), "test-agent");
             }
         }
+    }
+
+    #[test]
+    fn queue_get_next_route_round_trips_through_the_shared_codec() {
+        let request = RequestEnvelope::QueueGetNext(QueueGetNextRequest {
+            team: crate::types::TeamName::from_validated("test-team"),
+            member: crate::types::AgentName::from_validated("test-agent"),
+        });
+        let encoded = encode_http_request(&request, &[]).expect("queue get HTTP request");
+        assert_eq!(encoded.method, "POST");
+        assert_eq!(encoded.path, "/v1/atm/queue/get-next");
+        assert_eq!(
+            http_route_kind(&encoded.method, &encoded.path),
+            Some(HttpRouteKind::QueueGetNext)
+        );
+        let decoded: QueueGetNextRequest =
+            serde_json::from_slice(&encoded.body).expect("queue get request body");
+        assert_eq!(decoded.team.as_str(), "test-team");
+        assert_eq!(decoded.member.as_str(), "test-agent");
     }
 }
 

@@ -49,6 +49,7 @@ use tokio::net::UnixListener;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
+mod bare_cli_fifo;
 mod client;
 mod http1_server;
 mod loopback_tcp;
@@ -82,6 +83,10 @@ use unix_socket::{
 /// configured shutdown deadline without bound.
 const ABORT_JOIN_GRACE: Duration = Duration::from_millis(100);
 
+pub use bare_cli_fifo::{
+    BARE_CLI_FIFO_CAPACITY, BareCliFifo, BareCliQueueFullDrops, append_bare_cli_message,
+    drain_bare_cli_messages,
+};
 #[cfg(unix)]
 pub use client::unix_socket_client;
 pub use client::{

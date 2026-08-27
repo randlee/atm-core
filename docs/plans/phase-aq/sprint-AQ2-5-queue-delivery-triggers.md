@@ -1,6 +1,6 @@
 # Sprint AQ2.5 — Queue Delivery Triggers: Harness Idle Signal + Bare-CLI Stop-Pull
 
-Status: draft · Branch: `feature/aq-2-5-queue-delivery-triggers` off
+Status: complete · Branch: `feature/aq-2-5-queue-delivery-triggers` off
 `integrate/phase-aq` · PR target: `integrate/phase-aq`
 recommended_agent: arch-ctm · recommended_model: deep-reasoning
 
@@ -222,11 +222,15 @@ the false-stuck problem cannot arise.
    stdout: one JSON line per drained message
    `{"kind": "...", "msg_id": "...", "body": "..."}`; **nothing when
    nothing is pending** (exit 0). Daemon unreachable: exit 0 within the
-   bounded timeout, nothing on stdout (fail-open — a stop must never be
-   wedged).
+   bounded timeout, nothing on stdout for the raw CLI surface (fail-open — a
+   direct CLI call must never be wedged). The lifecycle Stop hook invokes the
+   hidden `--require-daemon` mode and reports an unavailable daemon or missing
+   caller context as non-zero stderr rather than treating a diagnostic failure
+   as an empty pull.
 
    **Claude Stop-hook consumer** (part of deliverable 2's script set),
-   equally a straight line: on `Stop`, run `_internal-queue-get`; got
+   equally a straight line: on `Stop`, run `_internal-queue-get --team <TEAM>
+   --as <ACTOR> --require-daemon`; got
    messages → emit Claude's literal block shape (bodies joined,
    oldest first) and exit 0; got nothing → exit 0.
 
@@ -243,8 +247,9 @@ the false-stuck problem cannot arise.
    the get always fires (hooks are uniform and roster-blind per this
    sprint's naming rule) but returns empty for a non-bare-CLI member,
    while the debounced heartbeat only ever produces an AQ3 drain for a
-   non-bare-CLI member. Neither call blocks or waits on the other; both
-   are independently fail-open.
+   non-bare-CLI member. Neither call blocks or waits on the other; the raw CLI
+   surface remains fail-open, while the Stop hook reports queue-pull
+   diagnostics fail-closed.
 
    ```json
    {"decision": "block", "reason": "<drained message bodies>"}
@@ -254,7 +259,9 @@ the false-stuck problem cannot arise.
    including `stop_hook_active: true` — that is how a queue backlog
    drains one-per-stop. The termination guarantee is structural:
    **never block when the get returned nothing.** No hook-side counters
-   or state. **Fail-open**: any error path exits 0 without blocking.
+   or state. A direct CLI daemon-down path remains fail-open, but the Stop hook
+   reports missing context, an unavailable daemon, malformed queue output, or
+   an ATM CLI failure as non-zero stderr rather than silently exiting 0.
 
 4. **Bare-CLI arm of AQ1's channel classifier + received-hook selector
    extension.** This sprint consumes AQ1's classifier; it adds only the
@@ -477,8 +484,11 @@ the false-stuck problem cannot arise.
    the FIFO and clears the pending marker in the same dispatch (AQ2
    handoff semantics) — the AQ3 sweep subsequently finds nothing for
    that member (test double).
-8. Daemon down: both CLI surfaces exit 0 within the bounded timeout;
-   hooks never block a harness (timed test).
+8. Daemon down: both raw CLI surfaces exit 0 within the bounded timeout
+   and print nothing; the lifecycle Stop hook's `--require-daemon` queue
+   pull instead exits nonzero with a diagnostic on stderr, while still
+   returning within the bounded timeout. Hooks never block a harness
+   (timed test).
 9. ADR-054 addendum merged with quality-mgr sign-off recorded (mirrors
    AQ1 AC 1's ADR gate).
 10. `just test` all three lanes. Claude hook scripts' Python unit tests
@@ -505,28 +515,21 @@ the false-stuck problem cannot arise.
 11. Boundary-manifest freshness: `boundaries/atm-core/
    message-received-hook-emitter.toml`'s `[status].notes` implementer
    list — brought current by AQ1's L3.2 (baseline: `TokioTmuxReceivedHook`,
-   `PublishedGraftReceivedHook`, sync `GraftReceiveHook`; verified today's
-   pre-AQ1 manifest instead says only "the daemon tmux receiver and
-   atm_graft::nudge_sink::GraftReceiveHook", so AQ1 must land its
-   currency fix first) — is extended in this sprint's PR by exactly one
-   name, `PullPendingReceivedHook`, the third
+   `HerdrReceivedHook`, `PublishedGraftReceivedHook`, sync
+   `GraftReceiveHook`; verified today's pre-AQ1 manifest instead says only
+   "the daemon tmux receiver and atm_graft::nudge_sink::GraftReceiveHook",
+   so AQ1 must land its currency fix first) — is extended in this sprint's
+   PR by exactly one name, `PullPendingReceivedHook`, the fourth
    `AsyncMessageReceivedHookEmitter` implementer (after
-   `TokioTmuxReceivedHook` and `PublishedGraftReceivedHook`;
-   `received_hook_selector.rs` has exactly those two `impl
-   AsyncMessageReceivedHookEmitter for` occurrences today, verified). No
-   manifest-vs-code count test exists in the repo yet
-   (`crates/atm-architecture/tests/boundary_enforcement.rs`'s existing
-   `al1`/`al3`/`al9` checks reference the manifest file only, never an
-   implementer count) — this sprint adds one, a new test function in that
-   same file (e.g. `al_message_received_hook_emitter_manifest_matches_async_implementers`,
-   following the file's existing `.matches("...").count()` idiom at
-   `al3_received_hook_is_single_receiver_side_path_without_detached_work`),
-   asserting `received_hook_selector.rs`'s literal
-   `impl AsyncMessageReceivedHookEmitter for` count (3 after this sprint)
-   against the manifest's implementer-list length, so a future drift in
-   either fails CI. If AQ1 has already introduced this test as part of
-   its own manifest-currency fix, this sprint extends the same test's
-   literal count from 2 to 3 rather than adding a second one.
+   `TokioTmuxReceivedHook`, `HerdrReceivedHook`, and
+   `PublishedGraftReceivedHook`; `received_hook_selector.rs` has exactly
+   those four `impl AsyncMessageReceivedHookEmitter for` occurrences today,
+   verified). The manifest-vs-code count test in
+   `crates/atm-architecture/tests/boundary_enforcement.rs` keeps this list
+   current: `aq25_received_hook_manifest_matches_async_implementers`
+   asserts the selector's literal implementer count (4) against the
+   manifest's implementer list and checks every named implementer, so a
+   future drift in either fails CI.
 
 ## Required validation
 
@@ -541,6 +544,13 @@ the false-stuck problem cannot arise.
   sweep-skips-bare-CLI test is **AQ3's AC** (it owns the sweep
   pre-check code); AQ2.5's AC 6 covers only the classifier both rely
   on.
+
+## Evidence/validation
+
+| Runner | Status | Run ID | Head | Files |
+|--------|--------|--------|------|-------|
+| ubuntu-latest | PASS | [33100596324](https://github.com/randlee/atm-core/actions/runs/33100596324) | bc3c9ee95 | [queue-delivery-trigger-clean-runner-linux.json](evidence/AQ2.5/queue-delivery-trigger-clean-runner-linux.json), [queue-delivery-trigger-clean-runner-linux.md](evidence/AQ2.5/queue-delivery-trigger-clean-runner-linux.md) — both scenarios (queue_kind_one_per_stop, steer_kind_full_drain) confirmed |
+| macOS | PASS | [33110344593](https://github.com/randlee/atm-core/actions/runs/33110344593) | df5900a5e | [queue-delivery-trigger-clean-runner-macos.json](evidence/AQ2.5/queue-delivery-trigger-clean-runner-macos.json), [queue-delivery-trigger-clean-runner-macos.md](evidence/AQ2.5/queue-delivery-trigger-clean-runner-macos.md) — both scenarios (queue_kind_one_per_stop, steer_kind_full_drain) confirmed |
 
 ## Non-closure / out of scope
 

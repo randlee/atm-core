@@ -8,6 +8,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
+    process::Command,
 };
 
 use cargo_metadata::{DependencyKind, MetadataCommand};
@@ -3008,6 +3009,135 @@ fn al1_receiver_hook_boundary_replaces_retired_release_gate_artifacts() {
                 .join("boundaries/atm-core/graft-post-send-port.toml")
                 .exists(),
         "retired sender-oriented hook manifests must not remain live compatibility artifacts"
+    );
+}
+
+#[test]
+fn aq25_received_hook_manifest_matches_async_implementers() {
+    let root = workspace_root();
+    let manifest =
+        read_source(&root.join("boundaries/atm-core/message-received-hook-emitter.toml"));
+    let selector =
+        read_source(&root.join("crates/atm-daemon-bootstrap/src/received_hook_selector.rs"));
+    let implementers = [
+        "TokioTmuxReceivedHook",
+        "HerdrReceivedHook",
+        "PublishedGraftReceivedHook",
+        "PullPendingReceivedHook",
+    ];
+    assert_eq!(
+        selector
+            .matches("impl AsyncMessageReceivedHookEmitter for")
+            .count(),
+        implementers.len(),
+        "the selector's async implementer count must match the AQ2.5 inventory"
+    );
+    for implementer in implementers {
+        assert!(
+            selector.contains(&format!(
+                "impl AsyncMessageReceivedHookEmitter for {implementer}"
+            )),
+            "selector is missing async implementer {implementer}"
+        );
+        assert!(
+            manifest.contains(implementer),
+            "boundary manifest is missing async implementer {implementer}"
+        );
+    }
+}
+
+#[test]
+fn aq25_adr_addendum_contains_normative_trigger_policy() {
+    let root = workspace_root();
+    let adr = read_source(&root.join("docs/adr/ADR-054-nudge-taxonomy-and-queue-mechanism.md"));
+    for required in [
+        "AQ2.5 addendum",
+        "debounced there",
+        "RAM-only daemon-lifetime state",
+        "drops the oldest item",
+        "at most one oldest queue item",
+    ] {
+        assert!(
+            adr.contains(required),
+            "ADR-054 is missing AQ2.5 term {required}"
+        );
+    }
+}
+
+/// AC9 / ATM-QA-003: the ADR-054 addendum must carry a recorded
+/// quality-mgr sign-off *section*, not merely policy prose. This checks for
+/// the heading and the sign-off table's header row, which persist once
+/// quality-mgr fills in the pending row on re-gate -- unlike the pending
+/// placeholder text itself, which is expected to change.
+#[test]
+fn aq25_adr_addendum_records_a_quality_mgr_sign_off_section() {
+    let root = workspace_root();
+    let adr = read_source(&root.join("docs/adr/ADR-054-nudge-taxonomy-and-queue-mechanism.md"));
+    let heading = "### AQ2.5 quality-mgr sign-off";
+    let heading_index = adr
+        .lines()
+        .position(|line| line.trim_end() == heading)
+        .expect("ADR-054 must contain an exact AQ2.5 quality-mgr sign-off heading");
+    let mut signoff_section = adr
+        .lines()
+        .skip(heading_index + 1)
+        .take_while(|line| !line.starts_with("### "));
+    assert!(
+        signoff_section
+            .any(|line| line.trim() == "| Sprint | Gate | Reviewer | Date | Verdict | Notes |"),
+        "ADR-054 AQ2.5 sign-off heading must contain the sign-off table header"
+    );
+}
+
+#[test]
+fn no_merge_conflict_markers_in_tracked_docs() {
+    let root = workspace_root();
+    let output = Command::new("git")
+        .args([
+            "-C",
+            root.to_str().expect("workspace path is UTF-8"),
+            "ls-files",
+            "-z",
+            "--",
+            "docs",
+            ".sprints",
+            ".triage",
+        ])
+        .output()
+        .expect("git must be available to enumerate tracked documentation");
+    assert!(
+        output.status.success(),
+        "git ls-files failed while enumerating tracked documentation: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let mut findings = Vec::new();
+    for relative in output
+        .stdout
+        .split(|byte| *byte == 0)
+        .filter(|path| !path.is_empty())
+        .filter_map(|path| std::str::from_utf8(path).ok())
+    {
+        let is_markdown_under_docs = relative.starts_with("docs/") && relative.ends_with(".md");
+        let is_sprint_or_triage_artifact =
+            relative.starts_with(".sprints/") || relative.starts_with(".triage/");
+        if !(is_markdown_under_docs || is_sprint_or_triage_artifact) {
+            continue;
+        }
+        let path = root.join(relative);
+        let contents = read_source(&path);
+        for (line_number, line) in contents.lines().enumerate() {
+            if ["<<<<<<<", "=======", ">>>>>>>"]
+                .iter()
+                .any(|marker| line.starts_with(marker))
+            {
+                findings.push(format!("{}:{}: {}", path.display(), line_number + 1, line));
+            }
+        }
+    }
+    assert!(
+        findings.is_empty(),
+        "tracked documentation contains merge-conflict markers:\n{}",
+        findings.join("\n")
     );
 }
 

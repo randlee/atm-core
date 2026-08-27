@@ -64,6 +64,7 @@ pub(crate) struct DeliveryRecipientSnapshot {
     pub(crate) local_herdr_post_send: bool,
     pub(crate) herdr_session: Option<HerdrSession>,
     pub(crate) graft_post_send: bool,
+    pub(crate) bare_cli_post_send: bool,
     pub(crate) roster_backed: bool,
 }
 
@@ -78,6 +79,7 @@ impl DeliveryRecipientSnapshot {
             local_herdr_post_send: false,
             herdr_session: None,
             graft_post_send: false,
+            bare_cli_post_send: false,
             roster_backed: false,
         }
     }
@@ -97,6 +99,7 @@ impl DeliveryRecipientSnapshot {
             _ => None,
         };
         let graft_post_send = delivery_channel == DeliveryChannel::Graft;
+        let bare_cli_post_send = delivery_channel == DeliveryChannel::BareCli;
         Self {
             agent: member.agent_name,
             team: member.team_name,
@@ -106,6 +109,7 @@ impl DeliveryRecipientSnapshot {
             local_herdr_post_send,
             herdr_session,
             graft_post_send,
+            bare_cli_post_send,
             roster_backed: true,
         }
     }

@@ -7,7 +7,7 @@ use std::io::Write;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 #[cfg(unix)]
 use std::num::NonZeroU32;
-use std::num::{NonZeroU16, NonZeroUsize};
+use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::{Arc, Once};
 use std::time::Duration;
@@ -47,12 +47,18 @@ use peer_tls::MtlsPeerStreamAdapter;
 use tokio::net::TcpStream;
 
 mod atm_temp_sweeper_runtime;
+mod bare_cli_runtime;
 mod owner_gate;
+mod peer_launch_config;
 mod received_hook_selector;
 
 use atm_temp_sweeper_runtime::AtmTempSweeperRuntime;
+use bare_cli_runtime::BareCliRuntime;
 
 pub use owner_gate::DaemonOwnerGuard;
+pub use peer_launch_config::{
+    parse_direct_peer_port, parse_peer_pool_config, parse_peer_wire_mode,
+};
 pub use received_hook_selector::active_received_hook_selector;
 pub use received_hook_selector::active_received_hook_selector_with_health;
 #[cfg(feature = "benchmark-harness")]
@@ -84,6 +90,7 @@ struct ReplacementHandlerConfig<F> {
     peer_wire_mode: PeerWireMode,
     peer_adapter_selection: SelectedPeerAdapterSelection,
     runtime_health: RuntimeHealth,
+    bare_cli: BareCliRuntime,
     herdr_process: Option<Arc<dyn HerdrProcessAdapter>>,
 }
 
@@ -235,271 +242,6 @@ pub fn resolve_daemon_launch_identity() -> DaemonLaunchIdentity {
     }
 }
 
-/// Parse the sole non-durable peer-wire launch policy before composition.
-///
-/// The process mode deliberately has no environment, database, or adapter
-/// availability source: those inputs can cause a startup error but cannot
-/// select plaintext.
-pub fn parse_peer_wire_mode(
-    arguments: impl IntoIterator<Item = std::ffi::OsString>,
-) -> Result<PeerWireMode, AtmError> {
-    if std::env::var_os("ATM_PEER_WIRE_SECURITY").is_some() {
-        return Err(AtmError::peer_wire_mode_source_forbidden(
-            "ATM_PEER_WIRE_SECURITY is forbidden; use --peer-wire-security at daemon launch",
-        ));
-    }
-    let mut arguments = arguments.into_iter();
-    let _program = arguments.next();
-    let mut mode = None;
-    while let Some(argument) = arguments.next() {
-        let argument = argument.into_string().map_err(|_| {
-            AtmError::peer_wire_mode_invalid("daemon launch arguments must be valid UTF-8")
-        })?;
-        let value = if argument == "--peer-wire-security" {
-            Some(arguments.next().ok_or_else(|| {
-                AtmError::peer_wire_mode_invalid(
-                    "--peer-wire-security requires `mutual-tls` or `plaintext-test`",
-                )
-            })?)
-        } else {
-            argument
-                .strip_prefix("--peer-wire-security=")
-                .map(std::ffi::OsString::from)
-        };
-        let Some(value) = value else {
-            continue;
-        };
-        let value = value.into_string().map_err(|_| {
-            AtmError::peer_wire_mode_invalid("peer-wire launch mode must be valid UTF-8")
-        })?;
-        let parsed = match value.as_str() {
-            "mutual-tls" => PeerWireMode::mtls(),
-            "plaintext-test" => PeerWireMode::plaintext_test(),
-            _ => {
-                return Err(AtmError::peer_wire_mode_invalid(
-                    "--peer-wire-security accepts only `mutual-tls` or `plaintext-test`",
-                ));
-            }
-        };
-        if mode.replace(parsed).is_some() {
-            return Err(AtmError::peer_wire_mode_invalid(
-                "--peer-wire-security may be supplied only once",
-            ));
-        }
-    }
-    Ok(mode.unwrap_or_default())
-}
-
-/// Selects the direct-peer listener port from the immutable daemon launch.
-///
-/// The fixed protocol port remains the service default. An explicit value is
-/// useful for a dedicated physical benchmark account that shares a host with
-/// another account's live daemon; it is not peer identity or wire policy.
-pub fn parse_direct_peer_port(
-    arguments: impl IntoIterator<Item = std::ffi::OsString>,
-) -> Result<NonZeroU16, AtmError> {
-    let mut arguments = arguments.into_iter();
-    let _program = arguments.next();
-    let mut port = None;
-    while let Some(argument) = arguments.next() {
-        let argument = argument
-            .into_string()
-            .map_err(|_| AtmError::config("direct-peer launch arguments must be valid UTF-8"))?;
-        let value = if argument == "--direct-peer-port" {
-            Some(arguments.next().ok_or_else(|| {
-                AtmError::config("--direct-peer-port requires a non-zero TCP port")
-            })?)
-        } else {
-            argument
-                .strip_prefix("--direct-peer-port=")
-                .map(std::ffi::OsString::from)
-        };
-        let Some(value) = value else {
-            continue;
-        };
-        let value = value
-            .into_string()
-            .map_err(|_| AtmError::config("direct-peer launch port must be valid UTF-8"))?;
-        let parsed = value
-            .parse::<u16>()
-            .ok()
-            .and_then(NonZeroU16::new)
-            .ok_or_else(|| AtmError::config("--direct-peer-port requires a non-zero TCP port"))?;
-        if port.replace(parsed).is_some() {
-            return Err(AtmError::config(
-                "--direct-peer-port may be supplied only once",
-            ));
-        }
-    }
-    Ok(port.unwrap_or_else(|| {
-        NonZeroU16::new(atm_http_runtime::DIRECT_PEER_TCP_PORT)
-            .expect("the protocol direct-peer port is non-zero")
-    }))
-}
-
-/// Resolves bounded outbound peer-pool settings before daemon composition.
-/// Environment values provide deployment defaults; an explicit launch flag
-/// overrides the matching environment value without changing peer identity or
-/// wire-security policy.
-pub fn parse_peer_pool_config(
-    arguments: impl IntoIterator<Item = std::ffi::OsString>,
-) -> Result<PeerPoolConfig, AtmError> {
-    parse_peer_pool_config_with_environment(arguments, |name| std::env::var_os(name))
-}
-
-fn parse_peer_pool_config_with_environment(
-    arguments: impl IntoIterator<Item = std::ffi::OsString>,
-    mut environment: impl FnMut(&str) -> Option<std::ffi::OsString>,
-) -> Result<PeerPoolConfig, AtmError> {
-    let mut config = PeerPoolConfig::default();
-    apply_peer_pool_environment(&mut config, &mut environment)?;
-    apply_peer_pool_launch_overrides(&mut config, arguments)?;
-    config.validate()?;
-    Ok(config)
-}
-
-fn apply_peer_pool_environment(
-    config: &mut PeerPoolConfig,
-    environment: &mut impl FnMut(&str) -> Option<std::ffi::OsString>,
-) -> Result<(), AtmError> {
-    if let Some(value) = environment("ATM_PEER_POOL_MAX_PER_PEER") {
-        config.max_per_peer = parse_pool_usize("ATM_PEER_POOL_MAX_PER_PEER", value)?;
-    }
-    if let Some(value) = environment("ATM_PEER_POOL_MAX_POOLED_TOTAL") {
-        config.max_pooled_total = parse_pool_usize("ATM_PEER_POOL_MAX_POOLED_TOTAL", value)?;
-    }
-    if let Some(value) = environment("ATM_PEER_POOL_IDLE_TIMEOUT_MS") {
-        config.idle_timeout =
-            Duration::from_millis(parse_pool_u64("ATM_PEER_POOL_IDLE_TIMEOUT_MS", value)?);
-    }
-    Ok(())
-}
-
-fn apply_peer_pool_launch_overrides(
-    config: &mut PeerPoolConfig,
-    arguments: impl IntoIterator<Item = std::ffi::OsString>,
-) -> Result<(), AtmError> {
-    let mut arguments = arguments.into_iter();
-    let _program = arguments.next();
-    let mut max_per_peer_seen = false;
-    let mut max_total_seen = false;
-    let mut idle_timeout_seen = false;
-    while let Some(argument) = arguments.next() {
-        let Some((name, value)) = peer_pool_launch_argument(&mut arguments, argument)? else {
-            continue;
-        };
-        match name {
-            "--peer-pool-max-per-peer" => {
-                if max_per_peer_seen {
-                    return Err(AtmError::config(
-                        "--peer-pool-max-per-peer may be supplied only once",
-                    ));
-                }
-                max_per_peer_seen = true;
-                config.max_per_peer = parse_pool_usize(name, value)?;
-            }
-            "--peer-pool-max-pooled-total" => {
-                if max_total_seen {
-                    return Err(AtmError::config(
-                        "--peer-pool-max-pooled-total may be supplied only once",
-                    ));
-                }
-                max_total_seen = true;
-                config.max_pooled_total = parse_pool_usize(name, value)?;
-            }
-            "--peer-pool-idle-timeout-ms" => {
-                if idle_timeout_seen {
-                    return Err(AtmError::config(
-                        "--peer-pool-idle-timeout-ms may be supplied only once",
-                    ));
-                }
-                idle_timeout_seen = true;
-                config.idle_timeout = Duration::from_millis(parse_pool_u64(name, value)?);
-            }
-            _ => unreachable!("selected flag name is exhaustive"),
-        }
-    }
-    Ok(())
-}
-
-fn peer_pool_launch_argument(
-    arguments: &mut impl Iterator<Item = std::ffi::OsString>,
-    argument: std::ffi::OsString,
-) -> Result<Option<(&'static str, std::ffi::OsString)>, AtmError> {
-    let argument = argument
-        .into_string()
-        .map_err(|_| AtmError::config("peer-pool launch arguments must be valid UTF-8"))?;
-    let selected = match argument.as_str() {
-        "--peer-pool-max-per-peer" => Some((
-            "--peer-pool-max-per-peer",
-            next_pool_argument(arguments, &argument)?,
-        )),
-        "--peer-pool-max-pooled-total" => Some((
-            "--peer-pool-max-pooled-total",
-            next_pool_argument(arguments, &argument)?,
-        )),
-        "--peer-pool-idle-timeout-ms" => Some((
-            "--peer-pool-idle-timeout-ms",
-            next_pool_argument(arguments, &argument)?,
-        )),
-        _ => argument
-            .strip_prefix("--peer-pool-max-per-peer=")
-            .map(|value| ("--peer-pool-max-per-peer", std::ffi::OsString::from(value)))
-            .or_else(|| {
-                argument
-                    .strip_prefix("--peer-pool-max-pooled-total=")
-                    .map(|value| {
-                        (
-                            "--peer-pool-max-pooled-total",
-                            std::ffi::OsString::from(value),
-                        )
-                    })
-            })
-            .or_else(|| {
-                argument
-                    .strip_prefix("--peer-pool-idle-timeout-ms=")
-                    .map(|value| {
-                        (
-                            "--peer-pool-idle-timeout-ms",
-                            std::ffi::OsString::from(value),
-                        )
-                    })
-            }),
-    };
-    Ok(selected)
-}
-
-fn next_pool_argument(
-    arguments: &mut impl Iterator<Item = std::ffi::OsString>,
-    flag: &str,
-) -> Result<std::ffi::OsString, AtmError> {
-    arguments
-        .next()
-        .ok_or_else(|| AtmError::config(format!("{flag} requires a positive integer")))
-}
-
-fn parse_pool_usize(name: &str, value: std::ffi::OsString) -> Result<usize, AtmError> {
-    let value = value
-        .into_string()
-        .map_err(|_| AtmError::config(format!("{name} must be valid UTF-8")))?;
-    value
-        .parse::<usize>()
-        .ok()
-        .filter(|value| *value > 0)
-        .ok_or_else(|| AtmError::config(format!("{name} requires a positive integer")))
-}
-
-fn parse_pool_u64(name: &str, value: std::ffi::OsString) -> Result<u64, AtmError> {
-    let value = value
-        .into_string()
-        .map_err(|_| AtmError::config(format!("{name} must be valid UTF-8")))?;
-    value
-        .parse::<u64>()
-        .ok()
-        .filter(|value| *value > 0)
-        .ok_or_else(|| AtmError::config(format!("{name} requires a positive integer")))
-}
-
 struct BootstrapMtlsStreamAdapter {
     adapter: Arc<MtlsPeerStreamAdapter>,
 }
@@ -614,11 +356,13 @@ pub async fn run_replacement_daemon_with_observability(
     let peer_pool_config = parse_peer_pool_config(std::env::args_os())?;
     run_replacement_daemon_with_selector(
         observability,
-        |service_runtime, herdr_process, runtime_health| {
-            active_received_hook_selector_with_health(
+        |service_runtime, herdr_process, runtime_health, bare_cli| {
+            received_hook_selector::active_received_hook_selector_with_health_and_fifo(
                 service_runtime,
                 herdr_process,
                 runtime_health,
+                bare_cli.fifo(),
+                bare_cli.queue_full_drops(),
             )
         },
         resolve_daemon_launch_identity(),
@@ -642,12 +386,14 @@ pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode) -> Result<(), At
     let peer_pool_config = parse_peer_pool_config(std::env::args_os())?;
     run_replacement_daemon_with_selector(
         Arc::new(NullObservability),
-        move |service_runtime, herdr_process, runtime_health| {
-            received_hook_selector::benchmark_received_hook_selector_with_health(
+        move |service_runtime, herdr_process, runtime_health, bare_cli| {
+            received_hook_selector::benchmark_received_hook_selector_with_health_and_fifo(
                 service_runtime,
                 hook_mode,
                 herdr_process,
                 runtime_health,
+                bare_cli.fifo(),
+                bare_cli.queue_full_drops(),
             )
         },
         resolve_daemon_launch_identity(),
@@ -668,6 +414,7 @@ fn build_replacement_handler(
             atm_core::LocalServiceRuntime,
             Arc<dyn HerdrProcessAdapter>,
             RuntimeHealth,
+            BareCliRuntime,
         ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     >,
 ) -> Result<Arc<StorageAndNudgeRouter>, AtmError> {
@@ -678,6 +425,7 @@ fn build_replacement_handler(
         peer_wire_mode,
         peer_adapter_selection,
         runtime_health,
+        bare_cli,
         herdr_process,
     } = config;
     let herdr_process = match herdr_process {
@@ -699,6 +447,7 @@ fn build_replacement_handler(
         assembly.service_runtime.clone(),
         herdr_process,
         runtime_health.clone(),
+        bare_cli.clone(),
     );
     let handler = StorageAndNudgeRouter::new(
         assembly.service_runtime,
@@ -707,6 +456,7 @@ fn build_replacement_handler(
         atm_core::home::atm_home()?,
     )
     .with_runtime_health(runtime_health, assembly.doctor_ports)
+    .with_bare_cli_fifo(bare_cli.fifo(), bare_cli.queue_full_drops())
     .with_daemon_context(atm_core::doctor::DoctorExecutionContext {
         team: daemon_launch_identity.team.clone(),
         identity: daemon_launch_identity.identity.clone(),
@@ -834,6 +584,7 @@ async fn run_replacement_daemon_with_selector(
         atm_core::LocalServiceRuntime,
         Arc<dyn HerdrProcessAdapter>,
         RuntimeHealth,
+        BareCliRuntime,
     ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     daemon_launch_identity: DaemonLaunchIdentity,
     peer_wire_mode: PeerWireMode,
@@ -845,6 +596,7 @@ async fn run_replacement_daemon_with_selector(
     let scope = current_host_runtime_scope()?;
     let _owner = DaemonOwnerGuard::acquire_at(scope.owner_lock.clone())?;
     let runtime_health = RuntimeHealth::with_owner(std::process::id());
+    let bare_cli = BareCliRuntime::default();
     let atm_temp_sweeper =
         start_atm_temp_sweeper(Arc::clone(&observability), daemon_launch_identity.clone())?;
     let assembly = assemble_daemon_runtime()?;
@@ -862,6 +614,7 @@ async fn run_replacement_daemon_with_selector(
                 pool_config: peer_pool_config,
             },
             runtime_health: runtime_health.clone(),
+            bare_cli,
             herdr_process,
         },
     )?;
@@ -892,7 +645,7 @@ async fn run_replacement_daemon_with_selector(
 /// on every exit path (ready-signal failure, unexpected stop, or ordinary
 /// shutdown).
 async fn run_until_shutdown(
-    mut running: atm_http_runtime::HttpRuntime<atm_http_runtime::Running>,
+    running: atm_http_runtime::HttpRuntime<atm_http_runtime::Running>,
     handler: Arc<StorageAndNudgeRouter>,
     workflow_telemetry: atm_runtime::WorkflowTelemetryRuntime,
     atm_temp_sweeper: AtmTempSweeperRuntime,
@@ -909,36 +662,39 @@ async fn run_until_shutdown(
         .await;
         return Err(error);
     }
+    await_runtime_or_shutdown(running, &handler, workflow_telemetry, atm_temp_sweeper).await
+}
+
+async fn await_runtime_or_shutdown(
+    mut running: atm_http_runtime::HttpRuntime<atm_http_runtime::Running>,
+    handler: &StorageAndNudgeRouter,
+    workflow_telemetry: atm_runtime::WorkflowTelemetryRuntime,
+    atm_temp_sweeper: AtmTempSweeperRuntime,
+) -> Result<(), AtmError> {
     tokio::select! {
         signal = wait_for_shutdown_signal() => {
             let signal = signal?;
             eprintln!("replacement ATM daemon received {}; starting graceful shutdown", signal.as_str());
+            false
         }
         _ = running.wait_for_server_stop() => {
             eprintln!("replacement ATM HTTP runtime server stopped unexpectedly; beginning cleanup");
-            let result = match shutdown_replacement_daemon(
+            let result = shutdown_replacement_daemon(
                 running,
-                handler.as_ref(),
+                handler,
                 workflow_telemetry,
                 atm_temp_sweeper,
             )
-            .await
-            {
-                Ok(_) => Err(AtmError::daemon_unavailable(
+            .await;
+            return match result {
+                Ok(()) => Err(AtmError::daemon_unavailable(
                     "replacement HTTP runtime server stopped unexpectedly",
                 )),
                 Err(error) => Err(error),
             };
-            return result;
         }
-    }
-    shutdown_replacement_daemon(
-        running,
-        handler.as_ref(),
-        workflow_telemetry,
-        atm_temp_sweeper,
-    )
-    .await
+    };
+    shutdown_replacement_daemon(running, handler, workflow_telemetry, atm_temp_sweeper).await
 }
 
 /// Resolves `$ATM_TEMP` (defaulting and emitting the one-time fallback
@@ -1211,13 +967,13 @@ mod replacement_runtime_tests {
     use atm_template_sc_compose::ScComposeTemplateComposer;
     use serde_json::Map;
 
+    use super::peer_launch_config::parse_peer_pool_config_with_environment;
     use super::{
         DaemonLaunchIdentity, HerdrPresenceDoctorAdapter, REPLACEMENT_DRAIN_DEADLINE,
         ReplacementHandlerConfig, SelectedPeerAdapterSelection, ShutdownSignal,
         assemble_host_runtime_with_template_composer, build_replacement_handler,
-        parse_direct_peer_port, parse_peer_pool_config_with_environment, parse_peer_wire_mode,
-        peer_stream_adapter_for_mode, replacement_runtime_config_with_direct_peer,
-        write_ready_signal_if_requested,
+        parse_direct_peer_port, parse_peer_wire_mode, peer_stream_adapter_for_mode,
+        replacement_runtime_config_with_direct_peer, write_ready_signal_if_requested,
     };
 
     /// Test-owned receiver selection prevents an external tmux/graft action
@@ -1454,7 +1210,7 @@ mod replacement_runtime_tests {
             assembly,
             ReplacementHandlerConfig {
                 observability: Arc::new(NullObservability),
-                selector_factory: |_, _, _| {
+                selector_factory: |_, _, _, _| {
                     Arc::new(NoReceivedHookSelector)
                         as Arc<dyn atm_core::boundary::MessageReceivedHookSelector>
                 },
@@ -1465,6 +1221,7 @@ mod replacement_runtime_tests {
                     pool_config: PeerPoolConfig::default(),
                 },
                 runtime_health: runtime_health.clone(),
+                bare_cli: Default::default(),
                 herdr_process: None,
             },
         )
