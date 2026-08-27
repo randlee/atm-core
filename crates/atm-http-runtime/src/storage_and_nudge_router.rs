@@ -466,8 +466,12 @@ impl StorageAndNudgeRouter {
         let home = self.daemon_home.clone();
         let runtime_health = self.runtime_health.clone();
         let doctor_ports = self.doctor_ports.clone();
+        let presence_doctor = doctor_ports
+            .as_ref()
+            .map(|ports| Arc::clone(&ports.herdr_presence));
         let daemon_context = self.daemon_context.clone();
-        self.blocking_core_bridge
+        let mut report = self
+            .blocking_core_bridge
             .run(deadline, move || {
                 let query = query.with_daemon_paths(home);
                 let mut report = match doctor_ports {
@@ -486,9 +490,16 @@ impl StorageAndNudgeRouter {
                 }?;
                 report.runtime_status = Some(runtime_health.snapshot());
                 report.daemon_context = daemon_context;
-                Ok(ApiResponse::new(ResponseEnvelope::Doctor(Box::new(report))))
+                Ok(report)
             })
-            .await
+            .await?;
+        if let (Some(presence_doctor), Some(roster)) =
+            (presence_doctor, report.member_roster.as_ref())
+        {
+            let findings = presence_doctor.probe(roster, deadline).await;
+            atm_core::doctor::append_doctor_findings(&mut report, findings);
+        }
+        Ok(ApiResponse::new(ResponseEnvelope::Doctor(Box::new(report))))
     }
 
     async fn search(

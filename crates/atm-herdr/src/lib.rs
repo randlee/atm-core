@@ -192,6 +192,12 @@ pub enum HerdrBreakerState {
     HalfOpen,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HerdrBreakerSnapshot {
+    pub state: HerdrBreakerState,
+    pub consecutive_failures: u32,
+}
+
 #[derive(Debug, Default)]
 struct BreakerState {
     consecutive_failures: u32,
@@ -221,6 +227,24 @@ impl HerdrSpawnBreaker {
             };
         };
         breaker_state(&state)
+    }
+
+    /// Reads the state and failure counter under one lock for coherent
+    /// diagnostic projection.
+    #[must_use]
+    pub fn snapshot(&self) -> HerdrBreakerSnapshot {
+        let Ok(state) = self.state.lock() else {
+            return HerdrBreakerSnapshot {
+                state: HerdrBreakerState::Open {
+                    retry_after: BREAKER_MAX_BACKOFF,
+                },
+                consecutive_failures: u32::MAX,
+            };
+        };
+        HerdrBreakerSnapshot {
+            state: breaker_state(&state),
+            consecutive_failures: state.consecutive_failures,
+        }
     }
 
     #[must_use]

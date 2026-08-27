@@ -3,8 +3,11 @@ pub mod report;
 
 #[cfg(test)]
 use std::collections::BTreeSet;
+use std::future::Future;
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
 
+use crate::api::RequestDeadline;
 use crate::boundary::{ConfigDoctor, MailStoreDoctor, RosterStoreDoctor};
 use crate::config;
 use crate::delivery_channel::local_message_received_backend;
@@ -30,6 +33,30 @@ pub use report::{
     PeerWireSecurityStatus, PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport,
     RecipientDeliveryPath, RecipientDeliveryPathReport,
 };
+
+/// Async application port for the live Herdr visibility checks performed by
+/// the replacement daemon's doctor route. The core report owns finding shape;
+/// the composition root owns the concrete Herdr adapter.
+pub trait HerdrPresenceDoctor: Send + Sync {
+    fn probe<'a>(
+        &'a self,
+        roster: &'a MembersList,
+        caller_deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Vec<DoctorFinding>> + Send + 'a>>;
+}
+
+#[derive(Debug, Default)]
+pub struct ClosedHerdrPresenceDoctor;
+
+impl HerdrPresenceDoctor for ClosedHerdrPresenceDoctor {
+    fn probe<'a>(
+        &'a self,
+        _roster: &'a MembersList,
+        _caller_deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Vec<DoctorFinding>> + Send + 'a>> {
+        Box::pin(async { Vec::new() })
+    }
+}
 
 /// Inputs for a doctor run, including the caller's resolved identity.
 ///
@@ -70,6 +97,7 @@ pub struct RuntimeDoctorPorts {
     pub mail_store_doctor: Arc<dyn MailStoreDoctor + Send + Sync>,
     pub roster_store_doctor: Arc<dyn RosterStoreDoctor + Send + Sync>,
     pub herdr_breaker: Arc<dyn HerdrBreakerDoctor>,
+    pub herdr_presence: Arc<dyn HerdrPresenceDoctor>,
 }
 
 impl std::fmt::Debug for RuntimeDoctorPorts {
@@ -79,6 +107,7 @@ impl std::fmt::Debug for RuntimeDoctorPorts {
             .field("mail_store_doctor", &"dyn MailStoreDoctor")
             .field("roster_store_doctor", &"dyn RosterStoreDoctor")
             .field("herdr_breaker", &"dyn HerdrBreakerDoctor")
+            .field("herdr_presence", &"dyn HerdrPresenceDoctor")
             .finish()
     }
 }
@@ -186,6 +215,14 @@ pub fn run_doctor_with_runtime_ports(
         None,
         runtime_doctors.herdr_breaker.report(),
     ))
+}
+
+/// Add asynchronous, composition-owned presence findings and refresh the
+/// derived summary/recommendation projections.
+pub fn append_doctor_findings(report: &mut DoctorReport, findings: Vec<DoctorFinding>) {
+    report.findings.extend(findings);
+    report.summary = summarize_doctor_findings(&report.findings);
+    report.recommendations = collect_recommendations(&report.findings);
 }
 
 /// Project safe peer-control-plane state into doctor output. A storage or

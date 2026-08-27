@@ -104,8 +104,10 @@ doc-review visibility; the TOML is authoritative):
 - `atm-core -> atm-herdr`
 - `atm-storage -> atm-herdr`
 - `atm-storage-rusqlite -> atm-herdr`
+- `atm-herdr -> atm-daemon`
 - `atm-herdr -> atm-daemon-bootstrap`
 - `atm-herdr -> atm-http-runtime`
+- `atm-herdr -> atm-storage-rusqlite`
 
 `atm-core` and `atm-storage` are lower in the dependency graph than
 `atm-herdr` and must never depend upward into it; `atm-herdr` is a leaf

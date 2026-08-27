@@ -17,9 +17,9 @@ use atm_core::boundary::{
 };
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::{HerdrSession, LocalServiceRuntime};
-use atm_herdr::{HerdrError, HerdrProcessAdapter, HerdrPromptOutcome};
 #[cfg(feature = "benchmark-harness")]
 use atm_herdr::{AgentSnapshot, HerdrAgentStatus};
+use atm_herdr::{HerdrError, HerdrProcessAdapter, HerdrPromptOutcome};
 
 /// Builds the selector injected into every production replacement daemon.
 ///
@@ -314,27 +314,33 @@ impl AsyncMessageReceivedHookEmitter for HerdrReceivedHook {
                 Ok(HerdrPromptOutcome::Accepted(_)) => {
                     tracing::info!(backend = "herdr", member = %dispatch.event.recipient, outcome = "accepted", "Herdr wake-up submitted");
                 }
-                Err(error @ HerdrError::AgentBlocked)
-                | Err(error @ HerdrError::AgentNotFound)
-                | Err(error @ HerdrError::AgentNotReady)
-                | Err(error @ HerdrError::AgentTargetAmbiguous)
-                | Err(error @ HerdrError::AgentNotRunning)
-                | Err(error @ HerdrError::AgentPromptStalled)
-                | Err(error @ HerdrError::ServerNotRunning)
-                | Err(error @ HerdrError::ProtocolMismatch)
-                | Err(error @ HerdrError::Timeout)
-                | Err(error @ HerdrError::InvalidAgentName)
-                | Err(error @ HerdrError::EmptyAgentPrompt)
-                | Err(error @ HerdrError::ServerUnavailable)
-                | Err(error @ HerdrError::InternalError)
-                | Err(error @ HerdrError::TimedOut)
-                | Err(error @ HerdrError::Unavailable { .. })
-                | Err(error @ HerdrError::Advisory { .. }) => {
-                    tracing::warn!(backend = "herdr", member = %dispatch.event.recipient, error = ?error, outcome = "advisory_failure", "Herdr wake-up was not accepted");
+                Err(error) => {
+                    let outcome = herdr_error_outcome(&error);
+                    tracing::warn!(backend = "herdr", member = %dispatch.event.recipient, error = ?error, outcome, "Herdr wake-up was not accepted");
                 }
             }
             Ok(PostSendEmissionPath::LocalHerdr)
         })
+    }
+}
+
+fn herdr_error_outcome(error: &HerdrError) -> &'static str {
+    match error {
+        HerdrError::AgentBlocked => "blocked_before_input",
+        HerdrError::AgentNotFound
+        | HerdrError::AgentNotRunning
+        | HerdrError::AgentTargetAmbiguous => "target_not_present",
+        HerdrError::AgentNotReady => "not_ready",
+        HerdrError::AgentPromptStalled => "prompt_stalled",
+        HerdrError::ServerNotRunning => "server_not_running",
+        HerdrError::ProtocolMismatch => "protocol_mismatch",
+        HerdrError::Timeout | HerdrError::TimedOut => "timed_out",
+        HerdrError::ServerUnavailable => "server_unavailable",
+        HerdrError::InvalidAgentName => "invalid_agent_name",
+        HerdrError::EmptyAgentPrompt => "empty_agent_prompt",
+        HerdrError::InternalError => "internal_error",
+        HerdrError::Unavailable { .. } => "breaker_unavailable",
+        HerdrError::Advisory { .. } => "advisory_failure",
     }
 }
 
