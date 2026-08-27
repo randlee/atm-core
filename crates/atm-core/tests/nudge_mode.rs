@@ -13,7 +13,9 @@ use atm_core::boundary::{
 use atm_core::error::AtmError;
 use atm_core::observability::NullObservability;
 use atm_core::schema::AtmMessageId;
-use atm_core::send::{NudgeMode, SendMessageSource, WriteRequest, prepare_write_with_runtime};
+use atm_core::send::{
+    NudgeMode, SendMessageSource, WriteRequest, prepare_write_with_runtime, write_mail_with_runtime,
+};
 use atm_core::types::{AgentName, IsoTimestamp, ModelName, PaneId, TeamName};
 
 /// Records every `mark_pending` call; every other method is a trivial no-op
@@ -270,6 +272,56 @@ fn duplicate_deferred_write_sets_no_second_marker() {
         recording_store.mark_pending_call_count(),
         1,
         "an idempotent duplicate write must not set a second queue marker"
+    );
+}
+
+/// QM40v2-I1 regression: the synchronous public write API
+/// (`write_mail_with_runtime`) must set the durable queue marker for a
+/// newly persisted `NudgeMode::Deferred` write on its own, since it has no
+/// async router to schedule `mark_pending_if_deferred` separately.
+#[test]
+fn sync_write_mail_with_runtime_sets_marker_for_deferred_write() {
+    let (root, runtime, recording_store, team) = setup();
+    let home_dir = root.path().join("home");
+    std::fs::create_dir_all(&home_dir).expect("home dir");
+    let message_id = AtmMessageId::new();
+    let timestamp = IsoTimestamp::now();
+
+    let request = write_request(&home_dir, &team, NudgeMode::Deferred, message_id, timestamp);
+    write_mail_with_runtime(request, &NullObservability, &runtime).expect("write mail");
+
+    assert_eq!(
+        recording_store.mark_pending_call_count(),
+        1,
+        "the synchronous write API must set exactly one queue marker for a \
+         newly persisted deferred write"
+    );
+}
+
+/// Companion to the above: an immediate write through the same synchronous
+/// entry point must never set a queue marker.
+#[test]
+fn sync_write_mail_with_runtime_sets_no_marker_for_immediate_write() {
+    let (root, runtime, recording_store, team) = setup();
+    let home_dir = root.path().join("home");
+    std::fs::create_dir_all(&home_dir).expect("home dir");
+    let message_id = AtmMessageId::new();
+    let timestamp = IsoTimestamp::now();
+
+    let request = write_request(
+        &home_dir,
+        &team,
+        NudgeMode::Immediate,
+        message_id,
+        timestamp,
+    );
+    write_mail_with_runtime(request, &NullObservability, &runtime).expect("write mail");
+
+    assert_eq!(
+        recording_store.mark_pending_call_count(),
+        0,
+        "an immediate write through the synchronous entry point must never \
+         set a durable queue marker"
     );
 }
 
