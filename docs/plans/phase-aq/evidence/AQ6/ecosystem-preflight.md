@@ -34,9 +34,13 @@ The detailed Wyvern CI contract-test request is filed at:
 <https://github.com/randlee/wyvern/issues/139>
 
 The issue specifies the version-1 `PickerInput` and `PickerOutput` schemas,
-schema-version rejection semantics, one-object stdin/stdout discipline,
-stderr-only diagnostics, cancel behavior, bounded parseable `--version`,
-approximately one-second cold start, and the shared fixture corpus.
+schema-version rejection semantics, diagnostics/cancel behavior, bounded
+parseable `--version`, approximately one-second cold start, and the shared
+fixture corpus. The AQ6 adapter now uses the released Wyvern wizard contract:
+it writes `PickerInput` under the generated wizard JSON's `config`, invokes
+`wyvern <wizard.json> --ui-root <asset directory>`, and unwraps the returned
+`WizardResult.data` as `PickerOutput`; it does not rely on the nonexistent
+`--picker` flag or bare stdout shape.
 
 ## PR CI evidence
 

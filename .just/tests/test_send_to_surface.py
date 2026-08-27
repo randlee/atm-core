@@ -145,7 +145,8 @@ class SendToSurfaceTests(unittest.TestCase):
                         )
                         wyvern.write_text(
                             f"#!/bin/sh\nif [ \"$1\" = --version ]; then\n{body}"
-                            f"else\nprintf '%s\\n' '{picker_output}'\nfi\n"
+                            f"elif [ \"$1\" = --picker ]; then\nexit 99\n"
+                            f"else\nprintf '%s\\n' '{{\"button\":\"finish\",\"data\":{picker_output},\"stack\":[]}}'\nfi\n"
                         )
                         executable(wyvern)
                     extra = {

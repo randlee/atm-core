@@ -32,6 +32,16 @@ class ReleasePreflightWorkflowTests(unittest.TestCase):
         self.assertIn('python-version: "3.14.7"', text)
         self.assertIn("tool: just@1.58.0", text)
         self.assertIn("run: just bootstrap", text)
+        self.assertIn("sc-compose --version", text)
+        self.assertIn("wyvern --version", text)
+
+    def test_release_preflight_bootstraps_every_ecosystem_tool(self) -> None:
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        bootstrap_manifest = (REPO_ROOT / "tools" / "bootstrap.toml").read_text(encoding="utf-8")
+
+        self.assertIn("run: just bootstrap", workflow)
+        self.assertIn('[sc-compose]\nversion = "1.5.0"', bootstrap_manifest)
+        self.assertIn('[wyvern]\nversion = "0.5.0"', bootstrap_manifest)
 
 
 if __name__ == "__main__":

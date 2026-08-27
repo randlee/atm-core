@@ -6,18 +6,21 @@ vendor the page or make Wyvern a build/test dependency.
 
 ## Invocation
 
-The atm adapter invokes the pinned binary as:
+The atm adapter generates a short-lived wizard command and invokes the pinned
+binary as:
 
 ```text
-wyvern --picker /absolute/path/to/pick-member.html
+wyvern /temporary/path/wizard.json --ui-root /directory/containing/pick-member.html
 ```
 
-It writes one `PickerInput` JSON object to stdin. The page must write exactly
-one `PickerOutput` JSON object to stdout and must write diagnostics to stderr.
-There must be no logging, HTML, or progress text on stdout. Cancel is a
-nonzero exit with no stdout. The binary's `--version` output must contain a
-parseable `MAJOR.MINOR.PATCH` version and return promptly; atm probes it with
-a 1.5 second deadline.
+The generated `wizard.json` carries one `PickerInput` object under the wizard
+command's opaque `config` field. The wizard writes a `WizardResult` envelope
+to stdout; the adapter accepts only `button: "finish"` and unwraps its
+`data` field as the `PickerOutput`. Cancel/dismissed buttons are treated as a
+nonzero selection failure with no stdout. Diagnostics, HTML, and progress
+text must not be forwarded to stdout. The binary's `--version` output must
+contain a parseable `MAJOR.MINOR.PATCH` version and return promptly; atm probes
+it with a 1.5 second deadline.
 
 ## JSON fixtures
 

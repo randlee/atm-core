@@ -24,14 +24,9 @@ picker_output=
 if [ -n "$picker_override" ]; then
     picker_output=$(printf '%s\n' "$input" | "$picker_override")
 else
-    if python3 "$send_to_dir/probe_wyvern.py" --pin "$WYVERN_PIN" --asset "$wyvern_asset" 2>/dev/null; then
-        if picker_output=$(printf '%s\n' "$input" | "${ATM_SEND_TO_WYVERN_BIN:-wyvern}" --picker "$wyvern_asset"); then
-            if ! printf '%s\n' "$picker_output" | python3 "$send_to_dir/picker.py" --validate >/dev/null; then
-                echo "send-to: Wyvern returned an incompatible PickerOutput; using native picker" >&2
-                picker_output=
-            fi
-        else
-            echo "send-to: Wyvern picker failed; using native picker" >&2
+    if picker_output=$(printf '%s\n' "$input" | python3 "$send_to_dir/run_wyvern_picker.py" --pin "$WYVERN_PIN" --asset "$wyvern_asset"); then
+        if ! printf '%s\n' "$picker_output" | python3 "$send_to_dir/picker.py" --validate >/dev/null; then
+            echo "send-to: Wyvern returned an incompatible PickerOutput; using native picker" >&2
             picker_output=
         fi
     else

@@ -1203,10 +1203,10 @@ mod tests {
     use std::num::NonZeroU16;
     use std::path::{Path, PathBuf};
 
-    use super::{
-        FanOutRecipient, RecipientLocality, SendCommand, fan_out_result_json,
-        resolve_trusted_ipv4_with_lookup,
-    };
+    #[cfg(unix)]
+    use super::{FanOutRecipient, RecipientLocality};
+    use super::{SendCommand, fan_out_result_json, resolve_trusted_ipv4_with_lookup};
+    #[cfg(unix)]
     use crate::observability::CliObservability;
     use atm_core::roles::ROLE_TEAM_LEAD;
     use atm_core::send::{SendMessageSource, input};
@@ -2310,6 +2310,7 @@ mod tests {
     /// `crate::composition::tests::LoopbackFixture`'s seeding shape (that
     /// fixture is private to `composition.rs`'s own test module and cannot
     /// be reused directly from this sibling module).
+    #[cfg(unix)]
     #[allow(
         deprecated,
         reason = "test fixture calls the retained atm-core roster/mail store boundary directly, matching crate::composition::tests::LoopbackFixture's own precedent"
@@ -2322,6 +2323,7 @@ mod tests {
         current_dir: PathBuf,
     }
 
+    #[cfg(unix)]
     #[allow(
         deprecated,
         reason = "test fixture calls the retained atm-core roster/mail store boundary directly, matching crate::composition::tests::LoopbackFixture's own precedent"

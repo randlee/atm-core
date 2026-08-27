@@ -34,6 +34,15 @@ class BootstrapTests(unittest.TestCase):
         source = (SCRIPT.parents[1] / "tools" / "bootstrap.py").read_text(encoding="utf-8")
         self.assertNotIn('cargo", "install", "--locked", "--version", version, "sc-compose"', source)
 
+    def test_wyvern_uses_the_pinned_release_asset(self) -> None:
+        manifest = bootstrap.load_manifest()
+        asset, url = bootstrap.wyvern_install_command(manifest.wyvern, "aarch64-apple-darwin")
+        self.assertEqual(asset, "wyvern-macos-aarch64.tar.gz")
+        self.assertEqual(
+            url,
+            "https://github.com/randlee/wyvern/releases/download/v0.5.0/wyvern-macos-aarch64.tar.gz",
+        )
+
     def test_sc_compose_checksum_mismatch_is_a_hard_failure(self) -> None:
         manifest = bootstrap.load_manifest()
         with (
@@ -90,6 +99,7 @@ class BootstrapTests(unittest.TestCase):
             "cargo-modules": ("quick-install",),
         })
         self.assertEqual(manifest.sc_compose, "1.5.0")
+        self.assertEqual(manifest.wyvern, "0.5.0")
         self.assertEqual(dict(manifest.python_packages)["maturin"], "1.14.1")
 
     def test_macos_homebrew_seed_formula_is_derived_from_the_exact_python_pin(self) -> None:
@@ -114,6 +124,7 @@ class BootstrapTests(unittest.TestCase):
             mock.patch.object(bootstrap, "verify_installed_tools") as verify,
             mock.patch.object(bootstrap, "registry_tool_matches", return_value=False),
             mock.patch.object(bootstrap, "sc_compose_matches", return_value=False),
+            mock.patch.object(bootstrap, "wyvern_matches", return_value=False),
             mock.patch.object(bootstrap.subprocess, "run") as run,
         ):
             bootstrap.bootstrap(manifest, dry_run=True)
@@ -184,6 +195,7 @@ class BootstrapTests(unittest.TestCase):
             mock.patch.object(bootstrap, "binstall_tool_matches", return_value=False),
             mock.patch.object(bootstrap, "cargo_binstall_available", return_value=True),
             mock.patch.object(bootstrap, "sc_compose_matches", return_value=True),
+            mock.patch.object(bootstrap, "wyvern_matches", return_value=True),
             mock.patch.object(bootstrap, "verify_installed_tools"),
             mock.patch.object(bootstrap, "run", side_effect=failed_binstall),
         ):

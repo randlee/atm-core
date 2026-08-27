@@ -776,9 +776,10 @@ def replace_cargo_exact_pin(path: Path, dependency: str, version: str) -> bool:
         rf'(?m)^(?P<prefix>[ \t]*{re.escape(dependency)}[ \t]*=[ \t]*")'
         rf"=?\d+\.\d+\.\d+(?P<suffix>\"[^\n]*)$"
     )
-    updated, count = pattern.subn(rf"\g<prefix>={version}\g<suffix>", text, count=1)
-    if count != 1:
-        raise ValueError(f"could not find one exact Cargo pin for {dependency} in {path}")
+    matches = list(pattern.finditer(text))
+    if len(matches) != 1:
+        raise ValueError(f"expected exactly one exact Cargo pin for {dependency} in {path}; found {len(matches)}")
+    updated = pattern.sub(rf"\g<prefix>={version}\g<suffix>", text, count=1)
     if updated == text:
         return False
     path.write_text(updated, encoding="utf-8")
@@ -791,9 +792,10 @@ def replace_wyvern_pin(path: Path, version: str) -> bool:
         r'(?m)(?P<prefix>(?:WYVERN_PIN|wyvernPin)[ \t]*[=:][ \t]*["\'])'
         r"\d+\.\d+\.\d+(?P<suffix>[\"'][^\n]*)"
     )
-    updated, count = pattern.subn(rf"\g<prefix>{version}\g<suffix>", text, count=1)
-    if count != 1:
-        raise ValueError(f"could not find one WYVERN_PIN in {path}")
+    matches = list(pattern.finditer(text))
+    if len(matches) != 1:
+        raise ValueError(f"expected exactly one WYVERN_PIN in {path}; found {len(matches)}")
+    updated = pattern.sub(rf"\g<prefix>{version}\g<suffix>", text, count=1)
     if updated == text:
         return False
     path.write_text(updated, encoding="utf-8")

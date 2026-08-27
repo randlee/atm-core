@@ -195,6 +195,58 @@ class EcosystemPinTests(unittest.TestCase):
         self.assertEqual(before, after)
         self.assertFalse(any("pinned back" in finding.summary for finding in findings))
 
+    def test_healthy_latest_non_dry_run_does_not_rewrite_pins(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for relative_path in (
+                Path("Cargo.toml"),
+                Path("crates/atm-template-sc-compose/Cargo.toml"),
+                *VALIDATE_RELEASE.WYVERN_PIN_FILES,
+            ):
+                destination = root / relative_path
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(REPO_ROOT / relative_path, destination)
+            before = {
+                relative_path: (root / relative_path).read_text(encoding="utf-8")
+                for relative_path in (
+                    Path("Cargo.toml"),
+                    Path("crates/atm-template-sc-compose/Cargo.toml"),
+                    *VALIDATE_RELEASE.WYVERN_PIN_FILES,
+                )
+            }
+            latest_registry = {
+                "sc-composer": "1.5.0",
+                "sc-observability": "1.2.0",
+                "sc-observability-types": "1.2.0",
+            }
+            findings: list[VALIDATE_RELEASE.Finding] = []
+            with (
+                mock.patch.object(VALIDATE_RELEASE, "latest_registry_version", side_effect=lambda _root, dependency: latest_registry[dependency]),
+                mock.patch.object(VALIDATE_RELEASE, "latest_wyvern_version", return_value="0.5.0"),
+                mock.patch.object(VALIDATE_RELEASE.shutil, "which", return_value="/usr/bin/tool"),
+                mock.patch.object(VALIDATE_RELEASE, "run_ecosystem_command", return_value=True),
+                mock.patch.dict(VALIDATE_RELEASE.os.environ, {VALIDATE_RELEASE.ECOSYSTEM_FIX_FORWARD_ENV: "1"}, clear=False),
+            ):
+                VALIDATE_RELEASE.validate_ecosystem_currency(root, findings)
+            after = {
+                relative_path: (root / relative_path).read_text(encoding="utf-8")
+                for relative_path in before
+            }
+            self.assertEqual(before, after)
+            self.assertFalse(any("pinned back" in finding.summary for finding in findings))
+
+    def test_pin_rewriters_reject_ambiguous_two_match_fixtures(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            cargo = root / "Cargo.toml"
+            cargo.write_text('sc-observability = "=1.2.0"\nsc-observability = "=1.2.0"\n', encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "exactly one"):
+                VALIDATE_RELEASE.replace_cargo_exact_pin(cargo, "sc-observability", "1.1.0")
+            wyvern = root / "send-to.sh"
+            wyvern.write_text('WYVERN_PIN="0.5.0"\nWYVERN_PIN="0.5.0"\n', encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "exactly one"):
+                VALIDATE_RELEASE.replace_wyvern_pin(wyvern, "0.4.0")
+
     @mock.patch.object(VALIDATE_RELEASE, "run_capture")
     def test_wyvern_release_lookup_uses_approved_repository(self, run_capture: mock.Mock) -> None:
         run_capture.return_value = subprocess.CompletedProcess(

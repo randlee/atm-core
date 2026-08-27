@@ -17,10 +17,9 @@ if ($env:ATM_SEND_TO_PICKER) {
     # AQ6 updates this exact-version constant during release preflight.
     $wyvernPin = "0.5.0"
     $asset = if ($env:ATM_SEND_TO_WYVERN_ASSET) { $env:ATM_SEND_TO_WYVERN_ASSET } else { Join-Path $pickerDir "pick-member.html" }
-    $probe = & python (Join-Path $pickerDir "probe_wyvern.py") --pin $wyvernPin --asset $asset 2>$null
+    $pickerOutput = $inputJson | & python (Join-Path $pickerDir "run_wyvern_picker.py") --pin $wyvernPin --asset $asset | Out-String
     if ($LASTEXITCODE -eq 0) {
         try {
-            $pickerOutput = $inputJson | & (if ($env:ATM_SEND_TO_WYVERN_BIN) { $env:ATM_SEND_TO_WYVERN_BIN } else { "wyvern" }) --picker $asset | Out-String
             $null = $pickerOutput | & python (Join-Path $pickerDir "picker.py") --validate
             if ($LASTEXITCODE -ne 0) { $pickerOutput = $null; [Console]::Error.WriteLine("send-to: Wyvern returned an incompatible PickerOutput; using native picker") }
         } catch {
