@@ -102,13 +102,27 @@ for whichever sprint picks up the shared-drain follow-up.
    `atm-herdr` crate (structural change below) for the adapter types; it
    already depends on `tokio`.
 
+   **One composition shape (closes finding 101 — this pump RECEIVES the
+   adapter, it never constructs one).** `build_replacement_handler` is the
+   single construction site for both `HerdrSpawnBreaker::new` and
+   `HerdrProcessInvoker::new` (see `sprint-AQ2-6-herdr-steer-backend.md`
+   deliverable 5 for the exact code); this sprint's constructor is
+   `HerdrQueueWakePump::new(.., herdr.clone())`, called from
+   `build_replacement_handler` with the same `Arc<dyn HerdrProcessAdapter>`
+   clone passed into `active_received_hook_selector(service_runtime,
+   bare_cli_fifo, herdr.clone())`. `HerdrQueueWakePump` never calls
+   `HerdrProcessInvoker::new` or `HerdrSpawnBreaker::new` itself.
+
    **Structural change (Rand, 2026-08-26): the Herdr process adapter moves
    to its own crate, `crates/atm-herdr`** (precedent: `crates/atm-graft`),
    authored by AQ2.6 (`sprint-AQ2-6-herdr-steer-backend.md` deliverable 3).
    This sprint only **imports** `atm_herdr::{HerdrProcessAdapter,
    AgentSnapshot, HerdrListOutcome, HerdrAgentStatus, HerdrError,
    HerdrSpawnBreaker}` — it does
-   not define the crate, its `Cargo.toml`, or its boundary manifest. The
+   not define the crate, its `Cargo.toml`, its boundary manifest, or the
+   `list` trait method (finding 102: `list` is a day-one member of
+   `HerdrProcessAdapter`, defined and argv-tested in AQ2.6's PR; this
+   sprint only consumes it — see AQ2.6 deliverable 3 and Dependencies). The
    module layout is normatively documented in `docs/atm-herdr/architecture.md`
    (authored in planning alongside this sprint by a separate doc pass; this
    sprint updates it only if its own implementation deviates from what is
@@ -142,16 +156,21 @@ for whichever sprint picks up the shared-drain follow-up.
    wrapped in `tokio::time::timeout(<daemon shutdown deadline>, ...)`,
    mirroring `HttpRuntime::finish_shutdown`'s `tokio::time::timeout(self.
    config.timeouts.shutdown, &mut server_task)` (`lib.rs:853`) — this pump
-   does not invent a second shutdown-deadline source. The legacy synchronous
-   daemon is out of scope and must not be touched.
+   does not invent a second shutdown-deadline source. **If that timeout
+   elapses before the in-flight tick completes (closes finding 106), the
+   cancelled tick future's drop unwinds through deliverable 2d's
+   `ReleasePendingOnDrop` guard**, which releases whatever single claim the
+   tick was mid-dispatch on at the moment of cancellation — no claim is
+   ever silently dropped by a timed-out shutdown; AC 11 proves this. The
+   legacy synchronous daemon is out of scope and must not be touched.
 
    It considers only `DeliveryChannel::HerdrSteer` members and only
    queue-kind pending markers. It owns no mailbox rows, FIFO, or retry
    count — retry/FIFO stay AQ1's store; this pump owns only the poll,
    the claim/dispatch call, and (deliverable 4) the poll-to-heartbeat feed.
 
-2. **Tick body: session grouping, one `agent list` per session, FIFO claim
-   with a host-wide burst cap.**
+2. **Tick body: session grouping, one `agent list` per session, round-robin
+   claim-then-dispatch with a host-wide burst cap (findings 106/109).**
 
    a. **Roster-wide Herdr population.** Enumerate every `HerdrSteer` member
       (not just pending ones — deliverable 4 needs the full population) via
@@ -187,31 +206,69 @@ for whichever sprint picks up the shared-drain follow-up.
       (`storage_and_nudge_router.rs:1081`, `RequestDeadline::after(...)`
       outside any HTTP request context).
 
-   d. **Idle gate + claim, FIFO by oldest pending ULID, burst-cap via
-      claim-then-release (not pre-sort).** `PendingNudgeStore` is frozen by
-      AQ1 ("no later sprint may define or widen them") and exposes no
-      cross-member ordering key, only per-member oldest-first
-      `claim_next_pending`. So: for every pending Herdr member (from b)
-      whose `list` entry (from c) has `agent_status ∈ {idle, done}`, claim
-      immediately — `claim_next_pending(member)` — collecting every
-      successful `NudgeClaim` across every session polled this tick. Once
-      every eligible member for the tick has been claimed, sort the
-      collected claims by `claim.msg` (an `AtmMessageId`, ULID-backed — AQ1:
-      "FIFO derived ... ULID order", lexicographically sortable by creation
-      time) ascending, and dispatch the first `HERDR_MAX_PROMPTS_PER_TICK`
-      of them (deliverable 3). Every claim beyond the cap is immediately
-      `release_pending`'d — no prompt was attempted, so this spends no
-      retry budget — and waits for the next tick's fresh idle observation.
-      **Exactly one claim per member per tick**, and only when idle:
-      `agent_status ∈ {working, blocked, unknown}`, or the member absent
-      from that session's `list` result, produces no claim at all for that
-      member this tick — five queued messages to one member are therefore
-      at most five prompts total, one per satisfied idle tick, never five
-      in one tick.
+   d. **Idle gate + one-claim-at-a-time claim-then-dispatch, round-robin
+      fairness via a persisted rotation cursor, burst cap by early stop
+      (closes findings 106 and 109 — claims are never batched ahead of
+      dispatch, and cap enforcement is never a claimed-then-released
+      cycle).** `PendingNudgeStore` is frozen by AQ1 ("no later sprint may
+      define or widen them") and exposes no cross-member ordering key, only
+      per-member oldest-first `claim_next_pending`. The tick therefore
+      builds an ordered *candidate list* — every pending Herdr member (from
+      b) whose `list` entry (from c) has `agent_status ∈ {idle, done}` —
+      and orders it **across members** by a single **rotating start index**
+      (`HerdrTickRotationCursor`, held in the pump's own in-memory state,
+      process-lifetime like the breaker, reset to `0` on daemon restart):
+      the fixed, alphabetically-sorted `(team, agent)` candidate universe is
+      rotated so this tick starts at `cursor % candidates.len()` and wraps,
+      then the cursor advances by the number of candidates *considered* this
+      tick (claimed-or-skipped, not just successfully dispatched) so the
+      next tick picks up where this one left off. Within one member's own
+      turn there is only ever one oldest-first candidate
+      (`claim_next_pending`'s own FIFO), so "oldest ULID within a member"
+      falls out of that call for free — the rotation only orders *across*
+      members, which is what guarantees every one of 20 idle+pending
+      members is prompted within 2 ticks at cap 16 (AC 12).
+
+      The tick walks this rotated order **one member at a time,
+      claim-then-dispatch, never claim-then-hold**: for each member in
+      turn, `claim_next_pending(member)` is called immediately followed by
+      that same claim's dispatch (deliverable 3) inside one scope guarded
+      by `ReleasePendingOnDrop` (constructed the instant the claim
+      succeeds, disarmed only after the outcome is durably written back —
+      see deliverable 3 and AC 11). No claim is ever added to a batch and
+      revisited later; a claim is held only for the duration of its own
+      dispatch call. The loop stops after `HERDR_MAX_PROMPTS_PER_TICK`
+      **successful `prompted` dispatches** or after the rotated candidate
+      list is exhausted, whichever comes first — a claim beyond the cap is
+      simply **never taken** (not claimed-then-`release_pending`'d: with
+      one-at-a-time claiming there is nothing left to release once the cap
+      is reached, because the loop has already stopped claiming). Members
+      past the cap keep their marker and attempt count exactly as they
+      were and are reconsidered on the next tick, starting from the
+      advanced rotation cursor. `agent_status ∈ {working, blocked,
+      unknown}`, or the member absent from that session's `list` result,
+      still produces no claim at all for that member this tick — five
+      queued messages to one member are therefore at most five prompts
+      total, one per satisfied idle tick, never five in one tick.
+
+      **Crash-window bound (closes finding 106).** Because claims are
+      never batched, at most one claim can be outstanding — claimed by
+      `claim_next_pending` but not yet resolved — at any instant during a
+      tick. AQ1's `claim_next_pending` clears the row's `nudge_pending_at`
+      marker at claim time (`sprint-AQ1-queue-cli.md` deliverable 6); a
+      hard daemon crash after that clear and before this pump's dispatch
+      outcome is written back therefore strands **at most one message per
+      tick**, never the whole candidate set. See Non-closure for the
+      disclosed recovery path — this is the same single-message class AQ1
+      already discloses for its own post-commit `mark_pending` window, not
+      a batch-sized regression this sprint introduces.
 
 3. **Outcome handling — claim-then-write-back, no unclaimed prompt ever
-   fires.** For each dispatched claim (deliverable 2d, in ULID order, capped
-   at `HERDR_MAX_PROMPTS_PER_TICK`): rebuild the dispatch via AQ1's
+   fires, drop-guard release under cancellation.** For each claim, taken
+   and dispatched immediately in deliverable 2d's one-at-a-time rotation
+   order (never in ULID-sorted batches, capped at
+   `HERDR_MAX_PROMPTS_PER_TICK` successful dispatches): rebuild the
+   dispatch via AQ1's
    `rebuild_received_hook_dispatch(runtime, member, claim.msg,
    NudgeKind::Queue)` (`nudge_dispatch.rs`) and send it through the injected
    `Arc<dyn MessageReceivedHookSelector>` (the same selector instance
@@ -222,31 +279,50 @@ for whichever sprint picks up the shared-drain follow-up.
    reference to the emitter or to `atm_herdr::HerdrProcessAdapter::prompt`
    directly.
 
+   **Drop-guard release under cancellation (closes finding 106).** The
+   claim-then-dispatch scope (deliverable 2d) is guarded by a
+   `ReleasePendingOnDrop` value constructed immediately after
+   `claim_next_pending` succeeds. Every outcome branch below explicitly
+   disarms that guard as its last step, once the outcome is durably
+   written back (a `release_pending`/`requeue_pending` call already made,
+   or an explicit no-op for `prompted`) — the guard is never the *normal*
+   release mechanism, only a safety net. The one path that tears the scope
+   down before an outcome branch runs is deliverable 1's bounded shutdown
+   timeout cancelling the in-flight tick future; there, the guard's `Drop`
+   impl calls `release_pending(member, claim)` synchronously (a direct,
+   non-async `PendingNudgeStore` call — the same sync method every other
+   caller uses) before the claim would otherwise be lost. AC 11 proves
+   this fires under a simulated shutdown-timeout cancellation.
+
    - **Success** → no further store write; `claim_next_pending` already
-     cleared the marker at claim time. Emitted as `prompted`.
+     cleared the marker at claim time. Emitted as `prompted`; guard disarmed.
    - **`agent_blocked`** (the agent started a turn between the tick's `list`
      observation and this prompt — the acknowledged race, ADR-058 D7) →
      `release_pending(member, claim)`: restores exactly that marker without
-     incrementing `nudge_attempts`. Emitted as `blocked_before_input_released`.
+     incrementing `nudge_attempts`. Emitted as `blocked_before_input_released`;
+     guard disarmed immediately after the `release_pending` call returns.
    - **`agent_not_found` / `agent_target_ambiguous` / `agent_not_ready`**
      (the member vanished, was renamed, or lost foreground between the
      tick's `list` snapshot and the prompt spawn) → `release_pending(member,
      claim)` — an absent/renamed target is not a delivery failure, so no
      retry budget is spent — plus the doctor-visible `held_target_not_present`
-     counter (deliverable 5). Emitted as `held_target_not_present`.
+     counter (deliverable 5). Emitted as `held_target_not_present`; guard
+     disarmed after the `release_pending` call returns.
    - **Timeout / spawn / protocol errors on the prompt itself, or on the
      tick's own `agent list` call (deliverable 2c)** → the shared,
      per-host `HerdrSpawnBreaker` (ADR-058 D10.1, now living beside the
-     adapter in `atm-herdr`) opens; any claim already taken for that
-     session this tick is `release_pending`'d (no retry budget spent —
-     nothing was ever injected). While the breaker is open, subsequent
-     ticks skip `list`/`prompt` calls for the affected session entirely
-     (no spawn, `HerdrUnavailable` returned synchronously by the adapter)
-     until `retry_after` elapses. Emitted as `dispatch_failed_requeued` is
-     **not** used here — an infra failure never reaches `requeue_pending`,
-     only `release_pending`, because Steer/Queue-kind Herdr dispatch has no
-     independent retry counter of its own (AQ1 §1.4 applies the same way it
-     does to AQ2.6's immediate steer path).
+     adapter in `atm-herdr`) opens; because deliverable 2d claims one
+     member at a time, at most the single claim currently in flight for
+     that session needs releasing — `release_pending`'d (no retry budget
+     spent — nothing was ever injected) and its guard disarmed. While the
+     breaker is open, subsequent ticks skip `list`/`prompt` calls for the
+     affected session entirely (no spawn, `HerdrUnavailable` returned
+     synchronously by the adapter) until `retry_after` elapses. Emitted as
+     `dispatch_failed_requeued` is **not** used here — an infra failure
+     never reaches `requeue_pending`, only `release_pending`, because
+     Steer/Queue-kind Herdr dispatch has no independent retry counter of
+     its own (AQ1 §1.4 applies the same way it does to AQ2.6's immediate
+     steer path).
 
    A member absent from its session's `list` result entirely (deliverable
    2d) is never claimed in the first place — there is nothing to release;
@@ -367,10 +443,13 @@ for whichever sprint picks up the shared-drain follow-up.
    on what `list_pending_members` currently reports.
 2. **Burst cap.** With more than `HERDR_MAX_PROMPTS_PER_TICK` (16) distinct
    Herdr members simultaneously idle and pending in one tick, exactly 16
-   are claimed-and-prompted; the rest are claimed-then-`release_pending`'d
-   with no attempt-count change and are prompted (subject to a fresh idle
-   re-check) on the next tick. A fixture proves the cap is enforced
-   host-wide, across sessions, not per-session.
+   are claimed-and-prompted; the remainder are **never claimed at all**
+   this tick (deliverable 2d's one-at-a-time loop simply stops — not a
+   claimed-then-`release_pending`'d cycle) with no attempt-count change,
+   and are reconsidered on a following tick as the rotation cursor
+   advances (see AC 12 for the fairness bound). A fixture proves the cap
+   is enforced host-wide, across sessions, not per-session, and that the
+   untouched remainder's markers were never claimed.
 3. **Session grouping.** Two eligible Herdr members configured with
    different `HerdrSession`s produce exactly two `agent list` child
    invocations in one tick, each with a distinct `HERDR_SESSION` value on
@@ -435,6 +514,25 @@ for whichever sprint picks up the shared-drain follow-up.
     native heartbeat); a subsequent native heartbeat's `pid_changed`
     computation is then exercised and shown to compare against that
     pre-poll pid, not against any value the poll tick introduced.
+11. **Drop-guard release under shutdown timeout (closes finding 106).** A
+    fixture holds a claim inside a fake dispatch whose future never
+    resolves, triggers the runtime's shutdown watch, and proves that once
+    deliverable 1's shutdown timeout elapses and the tick future is
+    cancelled, `release_pending` has been called exactly once for that
+    claim (marker restored, attempt count unchanged) — proving the
+    `ReleasePendingOnDrop` guard fires under cancellation, distinct from
+    and in addition to the explicit-outcome release paths already covered
+    by AC 6/AC 7.
+12. **Round-robin fairness (closes finding 109).** With 20 distinct Herdr
+    members simultaneously idle and pending and `HERDR_MAX_PROMPTS_PER_TICK`
+    held at its constant 16, a fixture proves every one of the 20 members
+    receives exactly one prompt within 2 ticks: tick 1 claims-and-dispatches
+    16 in rotation order starting from the persisted cursor, advances the
+    cursor past all 20 considered candidates (16 dispatched + 4 skipped by
+    the cap), and tick 2 starts from the advanced cursor and dispatches the
+    remaining 4 (plus up to 12 more from the next rotation, if still
+    idle+pending) — no member is starved by always losing the tie-break to
+    the same neighbors on every tick.
 
 ## Required validation
 
@@ -452,13 +550,20 @@ for whichever sprint picks up the shared-drain follow-up.
   produce two `agent list` children with distinct `HERDR_SESSION` values in
   one tick.
 - Burst-cap fixture: more than 16 simultaneously idle+pending Herdr members
-  in one tick produce exactly 16 prompts and 
-  `count - 16` claim-then-release cycles with no attempt-count change.
+  in one tick produce exactly 16 prompts; the remaining `count - 16` are
+  never claimed this tick at all (no claim-then-release cycle — deliverable
+  2d's one-at-a-time loop simply stops claiming) with no attempt-count
+  change, and are picked up on the following tick(s) as the rotation cursor
+  advances — with 20 members and cap 16, every member is prompted within 2
+  ticks (AC 12).
 - Heartbeat-feed fixture: `atm doctor --json` reflects a polled Herdr
   member's state after one tick, tagged `herdr_poll`.
 - Regression test: AQ3 continues to drain tmux/graft only (its channel
   pre-check still skips `HerdrSteer`), while Herdr queue work is owned only
   by this pump.
+- Shutdown-cancellation fixture: a claim held mid-dispatch when the runtime's
+  bounded shutdown timeout elapses is released via the `ReleasePendingOnDrop`
+  guard (AC 11), not left stranded.
 
 ## Non-closure / out of scope
 
@@ -484,7 +589,28 @@ for whichever sprint picks up the shared-drain follow-up.
   and structured (so that consolidation is a deletion, not a rewrite).
 - `HerdrQueueWakePumpConfig`, the semaphore-bounded per-member task model,
   and the 45-minute `agent wait` timeout — all deleted by this rewrite, not
-  carried forward in any form.
+  carried forward in any form. (For historical reference only:
+  `HERDR_WAIT_GRACE_MS` and the semaphore-bounded model were defined at
+  plan/phase-aq commits `9827dfb1e`…`ea990a8dd`, superseded in full by
+  commit `931f66f1d`'s polling-drain rewrite.)
+- **Single-message crash window (closes finding 106's disclosure
+  requirement; same class as AQ1's post-commit `mark_pending` window).**
+  `claim_next_pending` clears a row's `nudge_pending_at` marker at the
+  moment of claim (`sprint-AQ1-queue-cli.md` deliverable 6). If the daemon
+  process crashes after that clear and before this pump's dispatch outcome
+  is written back (deliverable 3), that one message's marker is already
+  gone: the row is **not** re-discoverable by AQ3's recovery sweep, which
+  only re-attempts messages whose marker is still set. Deliverable 2d's
+  one-claim-at-a-time design bounds this to **at most one message per
+  tick**, never a batch. The message itself is not lost — it was already
+  durably persisted and remains readable via `atm read` like any other mail
+  — only its *deferred nudge* silently fails to retry, invisibly to the
+  sweep. Operator recovery: no automatic detection exists for this window
+  in Phase AQ; an operator who suspects a crash mid-tick can inspect
+  `mail_message_states` for unread rows with no `nudge_pending_at` set near
+  a recent daemon-restart timestamp, or simply have the recipient run
+  `atm read` (which surfaces the message regardless of marker state) or
+  have the sender re-issue `atm queue` for that recipient.
 
 ## Dependencies
 
