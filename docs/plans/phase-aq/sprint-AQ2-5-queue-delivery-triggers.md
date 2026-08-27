@@ -222,11 +222,15 @@ the false-stuck problem cannot arise.
    stdout: one JSON line per drained message
    `{"kind": "...", "msg_id": "...", "body": "..."}`; **nothing when
    nothing is pending** (exit 0). Daemon unreachable: exit 0 within the
-   bounded timeout, nothing on stdout (fail-open — a stop must never be
-   wedged).
+   bounded timeout, nothing on stdout for the raw CLI surface (fail-open — a
+   direct CLI call must never be wedged). The lifecycle Stop hook invokes the
+   hidden `--require-daemon` mode and reports an unavailable daemon or missing
+   caller context as non-zero stderr rather than treating a diagnostic failure
+   as an empty pull.
 
    **Claude Stop-hook consumer** (part of deliverable 2's script set),
-   equally a straight line: on `Stop`, run `_internal-queue-get`; got
+   equally a straight line: on `Stop`, run `_internal-queue-get --team <TEAM>
+   --as <ACTOR> --require-daemon`; got
    messages → emit Claude's literal block shape (bodies joined,
    oldest first) and exit 0; got nothing → exit 0.
 
@@ -243,8 +247,9 @@ the false-stuck problem cannot arise.
    the get always fires (hooks are uniform and roster-blind per this
    sprint's naming rule) but returns empty for a non-bare-CLI member,
    while the debounced heartbeat only ever produces an AQ3 drain for a
-   non-bare-CLI member. Neither call blocks or waits on the other; both
-   are independently fail-open.
+   non-bare-CLI member. Neither call blocks or waits on the other; the raw CLI
+   surface remains fail-open, while the Stop hook reports queue-pull
+   diagnostics fail-closed.
 
    ```json
    {"decision": "block", "reason": "<drained message bodies>"}
@@ -254,7 +259,9 @@ the false-stuck problem cannot arise.
    including `stop_hook_active: true` — that is how a queue backlog
    drains one-per-stop. The termination guarantee is structural:
    **never block when the get returned nothing.** No hook-side counters
-   or state. **Fail-open**: any error path exits 0 without blocking.
+   or state. A direct CLI daemon-down path remains fail-open, but the Stop hook
+   reports missing context, an unavailable daemon, malformed queue output, or
+   an ATM CLI failure as non-zero stderr rather than silently exiting 0.
 
 4. **Bare-CLI arm of AQ1's channel classifier + received-hook selector
    extension.** This sprint consumes AQ1's classifier; it adds only the
