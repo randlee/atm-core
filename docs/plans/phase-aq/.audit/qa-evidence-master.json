@@ -457,7 +457,7 @@
    "important": null,
    "minor": null,
    "count_basis": "headline/reviewer",
-   "evidence": "7/15; AQ3-CRIT-001 bare-CLI orphaned marker depends on #1053 fix; CRIT-002 untracked shutdown task; CRIT-003 fourth hand-rolled marker-clear (systemic fix: single helper + architecture gate on AQ2); CRIT-004 sweep aborts pass on first failure; evidence transcript + project-plan entry missing. Merge order #1051 \u2192 #1053 \u2192 #1054. https://github.com/randlee/atm-core/pull/1054"
+   "evidence": "7/15; AQ3-CRIT-001 bare-CLI orphaned marker depends on #1053 fix; CRIT-002 untracked shutdown task; CRIT-003 fourth hand-rolled marker-clear (systemic fix: single helper + architecture gate on AQ2); CRIT-004 sweep aborts pass on first failure; evidence transcript + project-plan entry missing. Merge order #1051 \u2192 #1053 \u2192 #1054. Fixes: CRIT-002/003/004 @ 50f399f59; #1053 merged (CRIT-001) \u2192 QA-2 target bfe0d9194. https://github.com/randlee/atm-core/pull/1054"
   },
   {
    "run_id": "QA-AQ2.7-R1",
