@@ -74,7 +74,7 @@ remain the source of truth for the local-loopback and m5 rows until real
 | Host | Status | Run | Evidence |
 |---|---|---|---|
 | clean-runner-linux | PASS 3/3 | run [33094805689](https://github.com/randlee/atm-core/actions/runs/33094805689), head `a2dc79e52` | `docs/plans/phase-aq/evidence/AQ1.9/restart-matrix-clean-runner-linux.json`, `restart-matrix-clean-runner-linux.md` |
-| clean-runner-macos | pending (run in progress at time of writing) | run [33110341894](https://github.com/randlee/atm-core/actions/runs/33110341894) | not yet committed |
+| clean-runner-macos | PASS 3/3 | run [33110341894](https://github.com/randlee/atm-core/actions/runs/33110341894), head `585eff5e4` | `docs/plans/phase-aq/evidence/AQ1.9/restart-matrix-clean-runner-macos.json`, `restart-matrix-clean-runner-macos.md` |
 | m5 | FOLLOW-UP (AQ1.9-m5) | not attempted (m5 unreachable) | `docs/plans/phase-aq/evidence/AQ1.9/restart-matrix-m5.pending.md` (stub); owner: Phase AQ closeout (AQ6); prerequisite: m5 reachable |
 
 ## Scope ruling (fenix, Phase AQ driver, 2026-08-27)
