@@ -1363,6 +1363,9 @@ inventory. Queue ships first; trait foundation first, Herdr second
 (reordered 2026-08-26 per Rand). Fourteen sprints: AQ1 trait foundation +
 `atm queue` CLI verb + ADR-054 taxonomy + `PendingNudgeStore`; AQ2.6/AQ2.7
 Herdr local-steer backend + lifecycle-gated queue wake (most urgent);
+[AQ2.6 sprint](./plans/phase-aq/sprint-AQ2-6-herdr-steer-backend.md) is the
+authoritative implementation entry for the local Herdr backend and is
+complete after the AQ2.6 QA1 fix cycle;
 AQ1.5–AQ1.9 graft push-registration (ADR-056), parallel with Herdr; AQ2
 graft dual-channel; AQ2.5 queue delivery triggers (heartbeat hooks,
 bare-CLI FIFO); AQ3 tmux idle-drain + recovery sweep; AQ4 Send-To core

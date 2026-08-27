@@ -449,7 +449,10 @@ List teams or run one team-administration subcommand
 | `--agent-type` |  | no |  |
 | `--model` |  | no |  |
 | `--home-dir` |  | no |  |
-| `--pane-id` |  | no | tmux pane id in '%<number>' form or a bare numeric pane id |
+| `--backend` |  | no | local receiver backend: tmux or herdr |
+| `--target` |  | no | tmux pane target; required for --backend tmux |
+| `--session` |  | no | Herdr session name; only valid with --backend herdr |
+| `--pane-id` |  | no | deprecated compatibility spelling for --backend tmux --target |
 | `--json` |  | no |  |
 | `--stderr-logs` |  | no | Route retained observability console logs to stderr |
 
@@ -519,7 +522,10 @@ List teams or run one team-administration subcommand
 | `--harness` |  | no |  |
 | `--agent-type` |  | no |  |
 | `--model` |  | no |  |
-| `--pane-id` |  | no | tmux pane id in '%<number>' form or a bare numeric pane id |
+| `--backend` |  | no | local receiver backend: tmux or herdr |
+| `--target` |  | no | tmux pane target; required for --backend tmux |
+| `--session` |  | no | Herdr session name; only valid with --backend herdr |
+| `--pane-id` |  | no | deprecated compatibility spelling for --backend tmux --target |
 | `--json` |  | no |  |
 | `--stderr-logs` |  | no | Route retained observability console logs to stderr |
 

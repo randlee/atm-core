@@ -68,6 +68,16 @@ pub use crate::write::{
 #[cfg(test)]
 pub(crate) use crate::write::{send_mail_with_runtime_impl, write_mail_with_runtime_impl};
 
+/// Selects when a committed write's receiver nudge is emitted.
+/// `NudgeMode::Deferred` is persisted as a queue marker for later delivery.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NudgeMode {
+    #[default]
+    Immediate,
+    Deferred,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SendMessageSource {
     Inline(String),
@@ -108,20 +118,6 @@ pub struct MessageClassification {
     pub category: Option<String>,
     pub tags: Vec<String>,
     pub content_format: Option<String>,
-}
-
-/// Selects when a committed write's receiver nudge is emitted.
-///
-/// `Immediate` is the historical best-effort steer emitted inline with the
-/// post-write hook path (`atm send`). `Deferred` instead marks the message
-/// for durable, at-most-once delivery via `PendingNudgeStore` (`atm queue`);
-/// no immediate steer dispatch is produced for that write.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum NudgeMode {
-    #[default]
-    Immediate,
-    Deferred,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -233,6 +229,14 @@ impl WriteRequest {
         self
     }
 
+    /// Select whether this write's receiver nudge is emitted immediately
+    /// (default) or deferred to durable at-most-once queue delivery.
+    #[must_use]
+    pub fn with_nudge_mode(mut self, nudge_mode: NudgeMode) -> Self {
+        self.nudge_mode = nudge_mode;
+        self
+    }
+
     #[must_use]
     pub fn with_activity_observation(
         mut self,
@@ -258,14 +262,6 @@ impl WriteRequest {
         self.to = None;
         self.requires_ack = false;
         self.acknowledges_message_id = Some(message_id);
-        self
-    }
-
-    /// Select whether this write's receiver nudge is emitted immediately
-    /// (default) or deferred to durable at-most-once queue delivery.
-    #[must_use]
-    pub fn with_nudge_mode(mut self, nudge_mode: NudgeMode) -> Self {
-        self.nudge_mode = nudge_mode;
         self
     }
 
