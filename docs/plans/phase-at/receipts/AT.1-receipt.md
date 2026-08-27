@@ -121,3 +121,41 @@ No GENUINE STOP occurred. The temporary local upstream checkout with
 branch protection is recorded as transition evidence, not a release blocker.
 No legacy workflow or publish asset was deleted; AT.2 remains the only owner
 of deletion decisions.
+
+## Fix rounds AT1-FIX-R1 and AT1-FIX-R2
+
+The R1 follow-up corrected consumer-owned validation without editing the
+pinned kit or removing a legacy asset:
+
+- **AT1-QA-001:** `scripts/validate_release.py` invokes the installed
+  `.github/scripts/release_artifacts.py` contract for manifest, preflight,
+  publish-plan, binary, and inventory operations. The retained root
+  `scripts/release_artifacts.py` is not deleted and is used only by its
+  legacy installed-doc compatibility path.
+- **AT1-QA-002:** the AT.1 plan remains `in-progress` while TestPyPI and
+  production publication are authorization-gated.
+- **AT1-QA-003:** `.just/check_version_sync.py` delegates release-artifact
+  version lockstep to the installed kit; the consumer linter retains only its
+  local workspace-member policy.
+- **AT1-QA-004:** real Cargo package and publish dry-runs still run locally.
+  A failed dry-run is an Expected/Proceed warning only when Cargo reports all
+  of: an internal workspace package, an exact `^1.4.4` requirement, candidate
+  versions that do not match, and the public crates.io index. Compilation,
+  packaging, malformed-manifest, and third-party dependency failures remain
+  blocking. This implements the phase README's not-yet-published-version row;
+  it is not a blanket dry-run bypass.
+
+| Command | Exit | Result |
+| --- | ---: | --- |
+| `just validate` | 0 | Default pre-publish validation passed. The current coordinated release version produced only the documented, shape-specific unpublished-internal-version dry-run warnings; no blockers. |
+| `just lint` | 0 | Full lint recipe passed. |
+| `just test` | 0 | `708` tests passed, `9` skipped. |
+| `python3 .just/tests/test_validate_release.py` | 0 | `9` tests passed, including the R2 expected-warning and non-workspace blocking cases. |
+| `.venv-sc-publish/bin/python -m pytest -p no:cacheprovider "$SP/plugins/sc-publish/.github/scripts/tests" -q` | 0 | `79 passed, 10 skipped, 3 subtests passed` against clean detached pin `42e0fcea23f730fae0ef3d08b060cd4df6a2602e`. |
+| `.venv-sc-publish/bin/python "$SP/plugins/sc-publish/install.py" --dry-run --input release/sc-publish-consumer-input.json .` | 0 | `Publish-kit assets are in sync.` |
+| `install.package_files()` parity sweep with `RENAMED_FILES` | 0 | `byte-identical: 49, mismatched: 0, missing: 0`. |
+
+No TestPyPI or production publish workflow was dispatched in either fix round:
+both remain authorization-gated. The clean detached scratch checkout was used
+for every pin-sensitive command; the developer checkout with its untracked
+`.sc-compose/` directory was not modified.
