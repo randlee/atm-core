@@ -1,3 +1,5 @@
+"""Temporary legacy coverage retained pending the first kit-release receipt."""
+
 from __future__ import annotations
 
 from pathlib import Path

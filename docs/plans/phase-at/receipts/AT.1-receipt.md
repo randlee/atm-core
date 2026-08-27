@@ -181,7 +181,7 @@ pinned kit or removing a legacy asset:
 | --- | ---: | --- |
 | `just validate` | 0 | Default pre-publish validation passed. The current coordinated release version produced only the documented, shape-specific unpublished-internal-version dry-run warnings; no blockers. |
 | `just lint` | 0 | Full lint recipe passed. |
-| `just test` | 0 | `708` tests passed, `9` skipped. |
+| `just test` | 0 | `708` tests passed, `9` skipped. This is six fewer than the earlier 714-test AT.1 run because the kit-delegation change replaced ten root `check_version_sync` behavior tests with four installed-kit delegation tests. |
 | `python3 .just/tests/test_validate_release.py` | 0 | `9` tests passed, including the R2 expected-warning and non-workspace blocking cases. |
 | `.venv-sc-publish/bin/python -m pytest -p no:cacheprovider "$SP/plugins/sc-publish/.github/scripts/tests" -q` | 0 | `79 passed, 10 skipped, 3 subtests passed` against clean detached pin `42e0fcea23f730fae0ef3d08b060cd4df6a2602e`. |
 | `.venv-sc-publish/bin/python "$SP/plugins/sc-publish/install.py" --dry-run --input release/sc-publish-consumer-input.json .` | 0 | `Publish-kit assets are in sync.` |

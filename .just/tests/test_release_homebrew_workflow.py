@@ -1,3 +1,5 @@
+"""ATM-owned manifest-data assertions for the kit-rendered Homebrew workflow."""
+
 from __future__ import annotations
 
 from pathlib import Path

@@ -21,7 +21,8 @@ docs, or invalid fenced examples.
 
 ## Exact Targets
 
-- `scripts/verify_user_docs.py`
+- the dedicated user-document verifier (retired in AT.2 after its manifest
+  schema became unreachable)
 - `.just/`
 - `Justfile`
 - `scripts/validate_release.py`
@@ -43,7 +44,7 @@ def verify_installed_copy(source_root: Path, installed_root: Path) -> list[str]:
 
 ## Deliverables
 
-- one canonical verifier script at `scripts/verify_user_docs.py` checks:
+- one canonical verifier script checked:
   - every linked user-doc target exists
   - every linked path is relative
   - every fenced `json` block parses
@@ -89,9 +90,9 @@ def verify_installed_copy(source_root: Path, installed_root: Path) -> list[str]:
 ## Required Validation
 
 - `python3 scripts/release_artifacts.py stage-install-docs --manifest release/publish-artifacts.toml --output-root target/phase-ae/staged-install-root`
-- `python3 scripts/verify_user_docs.py --source-root docs/user-documents`
-- `python3 scripts/verify_user_docs.py --source-root docs/user-documents --installed-root target/phase-ae/staged-install-root/share/doc/atm`
+- the retired verifier against `docs/user-documents`
+- the retired verifier against `target/phase-ae/staged-install-root/share/doc/atm`
 - `cargo test -p agent-team-mail commands::help::tests::doc_link_for_every_topic_resolves_in_source_and_installed_copy -- --nocapture`
-- `rg -n "verify_user_docs.py" .just Justfile scripts/validate_release.py`
+- reference scan of the verifier's former runtime surfaces
 - `just test`
 - `git diff --check`

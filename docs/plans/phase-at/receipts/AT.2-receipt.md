@@ -1,0 +1,75 @@
+# AT.2 legacy publish-surface deletion receipt
+
+```yaml
+receipt_type: sprint
+sprint: AT.2
+branch: feature/pat-s2-legacy-publish-deletion
+worktree: feature/pat-s2-legacy-publish-deletion
+status: complete
+kit_revision: 42e0fcea23f730fae0ef3d08b060cd4df6a2602e
+```
+
+## Gate state
+
+AT.2 follows the forward-only ruling: no pre-kit tag is republished. The
+first kit-era `1.4.4` release has not yet produced its crates.io, GitHub
+Release, channel, TestPyPI, or production-PyPI receipts. Therefore every
+table row whose gate is a future publication receipt is retained as an
+explicit deferral; this is an AT.2 completion outcome, not a failed deletion.
+
+The independent GitHub Actions history command was:
+
+```text
+gh run list --workflow=pypi-publish.yml --limit 30 --json databaseId,displayTitle,event,headBranch,headSha,status,conclusion,url,createdAt
+[{"conclusion":"failure","createdAt":"2026-08-27T04:47:15Z","databaseId":33040465059,"displayTitle":"Publish PyPI","event":"workflow_dispatch","headBranch":"integrate/phase-at","headSha":"e8722dff6637724767504915963015055af28553","status":"completed","url":"https://github.com/randlee/atm-core/actions/runs/33040465059"}]
+```
+
+This establishes that run `33040465059` is the only TestPyPI/PyPI retry
+dispatch. It failed before its publish job, so no package was uploaded and no
+production dispatch occurred.
+
+## Candidate dispositions
+
+The reference scan was run for every path with the AT.2 prescribed command
+over `.github/`, `.just/`, `Justfile`, `scripts/`, and `docs/`. `AT.2 plan`
+means the remaining mention is this disposition table; `historical receipt`
+means immutable evidence rather than a live caller.
+
+| Path | Disposition | Gate / coverage statement | Reference-scan result |
+| --- | --- | --- | --- |
+| `.github/workflows/hermes-atm-pypi-publish.yml` | `deferred-until-production-pypi-receipt` | Kit `pypi-publish.yml` must first prove all declared distributions, including `hermes-atm`, on production PyPI. | AT.2 plan only. |
+| `scripts/prepare_hermes_atm_publish_artifacts.py` | `deferred-until-production-pypi-receipt` | Same production kit leg; this script feeds the legacy workflow. | Legacy workflow plus AT.2 plan. |
+| `.just/tests/test_hermes_atm_pypi_publish_workflow.py` | `deferred-until-production-pypi-receipt` | Temporary compatibility coverage until the production receipt exists. | AT.2 plan only. |
+| `.just/tests/test_prepare_hermes_atm_publish_artifacts.py` | `deferred-until-production-pypi-receipt` | Temporary compatibility coverage until the production receipt exists. | AT.2 plan only. |
+| `scripts/release_artifacts.py` | `deferred-until-first-kit-release-receipt` | Root legacy helper remains until the first kit release proves `.github/scripts/release_artifacts.py` end-to-end. | Live references were removed from retained consumers; remaining references are historical/kit paths and AT.2 planning. |
+| `scripts/release_gate.sh` | `deferred-until-first-kit-release-receipt` | Kit `.github/scripts/release_gate.sh` in `release.yml` needs first-release evidence. | Retained validator and installed workflow references; no deletion before its gate. |
+| `scripts/verify_release_archive.py` | `retained-atm-owned-data-deferred-until-first-kit-release-receipt` | It now reads the consumer manifest's `release_binaries[].bundled_paths` directly, asserting ATM archive membership data while the kit owns generic asset verification. | AT.2 plan and project-plan references only. |
+| `scripts/validate_release.py` | `retained-atm-owned-data-deferred-until-first-kit-release-receipt` | Live `just validate` consumer policy: workspace dry-run classification, lint/CLI/inventory orchestration, and findings output remain ATM-owned. Installed-kit manifest/preflight commands are delegated. | `Justfile`, smoke/preflight docs, and the retained test. |
+| `.just/tests/test_release_artifacts.py` | `deferred-until-first-kit-release-receipt` | Temporary legacy compatibility coverage; its module docstring records the deferral. | AT.2 plan plus historical rehearsal evidence. |
+| `.just/tests/test_release_gate.py` | `deferred-until-first-kit-release-receipt` | Temporary legacy compatibility coverage; its module docstring records the deferral. | AT.2 plan only. |
+| `.just/tests/test_release_homebrew_workflow.py` | `retained-atm-owned-data-deferred-until-homebrew-channel-receipt` | Asserts consumer manifest formula data rendered by the kit workflow. | AT.2/AT.1 plans and historical receipt evidence. |
+| `.just/tests/test_release_preflight.py` | `deferred-until-first-kit-release-receipt` | Temporary consumer-contract coverage pending the first kit release. | AT.2/AT.1 plans and historical receipt evidence. |
+| `.just/tests/test_validate_release.py` | `retained-atm-owned-data-deferred-until-first-kit-release-receipt` | Tests the retained consumer validator and its kit delegation boundary. | Smoke documentation, AT.1 receipt, and AT.2 plan. |
+| `.winget/randlee.agent-team-mail.yaml` | `deferred-until-winget-channel-receipt` | Kit `winget-publish.yml` must first prove generated-manifest publication. | ATM version-sync test and AT.2 plan. |
+
+## Structural legacy removals and boundary corrections
+
+| Item | Disposition | Evidence |
+| --- | --- | --- |
+| Legacy `[installed_docs]` branch in `validate_release.py` | deleted | The live manifest has no `[installed_docs]` table. Validation now relies on the installed kit's manifest contract, whose real document-shipping representation is `release_binaries[].bundled_paths`. The legacy fixture was removed and a regression test proves it cannot re-enter this path. |
+| Retired user-document verifier and its unit-test module | deleted | They only supported the retired unreachable branch. The default test runner no longer invokes them; prescribed executable-surface scans return no references. Historical Phase AE prose now identifies the retired verifier without presenting a live path. |
+| Root `release_artifacts` imports | removed | `validate_release.py` no longer imports the root helper. `verify_release_archive.py` now parses consumer-owned `bundled_paths` directly; directory, file, Windows, and missing-source cases are covered. |
+| Phase AD readiness | sunset from `all`/`validate` | The explicit `phase-ad-readiness` target remains only for the thorough-smoke lane; a unit test proves it is not in `DEFAULT_RELEASE_TARGETS`. |
+| Workspace-member enumeration | deferred with root helper | `scripts/release_artifacts.py` cannot be deleted before its first-kit-release receipt, so its fourth enumeration remains temporarily. AT.2 adds no shared helper and records the remaining duplication rather than masking it. |
+
+## Validation evidence
+
+| Command | Exit | Result |
+| --- | ---: | --- |
+| Pinned checkout bootstrap + `install.py --dry-run` | 0 | `sc-compose==1.4.1` bootstrapped in `.venv-sc-publish-at2`; detached pin `42e0fcea23f730fae0ef3d08b060cd4df6a2602e` reported `Publish-kit assets are in sync.` |
+| `python3 .just/tests/test_validate_release.py` | 0 | 7 tests passed, including the legacy-schema non-execution regression and Phase AD default-target sunset. |
+| `python3 .just/tests/test_verify_release_archive.py` | 0 | 2 tests passed: directory/file bundle expansion, Windows binary naming, and fail-closed missing-source coverage. |
+| `just lint` | 0 | Full repository lint gate passed. |
+| `just test` | 0 | 703 tests passed, 9 skipped. |
+| Workflow YAML parse | 0 | All `.github/workflows/*.yml` parsed successfully. |
+| Deleted-path executable scan | 0 | No executable reference remains to either retired user-document verifier path; the AT.2 receipt is the sole disposition record. |

@@ -17,7 +17,6 @@ def run(command: list[str]) -> None:
 def main() -> int:
     mode = sys.argv[1] if len(sys.argv) > 1 else "default"
     if mode == "default":
-        run([sys.executable, "scripts/verify_user_docs.py", "--source-root", "docs/user-documents"])
         run([sys.executable, ".just/run_pytests.py"])
         run(["cargo", "build", "--workspace"])
         # `atm-daemon` is reference-only while Phase AL constructs the
