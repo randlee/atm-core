@@ -1960,8 +1960,21 @@ mod tests {
                 .emitted_ids
                 .lock()
                 .expect("inspect deferred hook emissions")
-                .is_empty(),
-            "deferred write must suppress immediate receiver delivery"
+                .len()
+                == 1,
+            "a graft recipient receives its queue-shaped handoff at write time"
+        );
+        assert_eq!(
+            fixture
+                .received_hook
+                .dispatches
+                .lock()
+                .expect("inspect deferred dispatch")
+                .first()
+                .expect("queue dispatch")
+                .kind,
+            NudgeKind::Queue,
+            "the graft handoff is explicitly queue-kind"
         );
 
         let member = MemberKey::new(

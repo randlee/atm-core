@@ -275,7 +275,7 @@ dependencies = [
 
 [[package]]
 name = "atm-herdr"
-version = "1.4.4"
+version = "1.4.5"
 dependencies = [
  "agent-team-mail-core",
  "serde_json",

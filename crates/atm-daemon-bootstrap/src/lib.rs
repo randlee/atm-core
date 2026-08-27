@@ -49,6 +49,7 @@ mod received_hook_selector;
 
 pub use owner_gate::DaemonOwnerGuard;
 pub use received_hook_selector::active_received_hook_selector;
+pub use received_hook_selector::active_received_hook_selector_with_health;
 #[cfg(feature = "benchmark-harness")]
 pub use received_hook_selector::{BenchmarkHookMode, benchmark_received_hook_selector};
 
@@ -608,7 +609,13 @@ pub async fn run_replacement_daemon_with_observability(
     let peer_pool_config = parse_peer_pool_config(std::env::args_os())?;
     run_replacement_daemon_with_selector(
         observability,
-        active_received_hook_selector,
+        |service_runtime, herdr_process, runtime_health| {
+            active_received_hook_selector_with_health(
+                service_runtime,
+                herdr_process,
+                runtime_health,
+            )
+        },
         resolve_daemon_launch_identity(),
         peer_wire_mode,
         DirectPeerTcpConfig::configured(direct_peer_port),
@@ -630,8 +637,13 @@ pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode) -> Result<(), At
     let peer_pool_config = parse_peer_pool_config(std::env::args_os())?;
     run_replacement_daemon_with_selector(
         Arc::new(NullObservability),
-        move |service_runtime, herdr_process| {
-            benchmark_received_hook_selector(service_runtime, hook_mode, herdr_process)
+        move |service_runtime, herdr_process, runtime_health| {
+            received_hook_selector::benchmark_received_hook_selector_with_health(
+                service_runtime,
+                hook_mode,
+                herdr_process,
+                runtime_health,
+            )
         },
         resolve_daemon_launch_identity(),
         peer_wire_mode,
@@ -650,6 +662,7 @@ fn build_replacement_handler(
         impl FnOnce(
             atm_core::LocalServiceRuntime,
             Arc<dyn HerdrProcessAdapter>,
+            RuntimeHealth,
         ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     >,
 ) -> Result<Arc<StorageAndNudgeRouter>, AtmError> {
@@ -677,7 +690,11 @@ fn build_replacement_handler(
             process
         }
     };
-    let selector = selector_factory(assembly.service_runtime.clone(), herdr_process);
+    let selector = selector_factory(
+        assembly.service_runtime.clone(),
+        herdr_process,
+        runtime_health.clone(),
+    );
     let handler = StorageAndNudgeRouter::new(
         assembly.service_runtime,
         observability,
@@ -811,6 +828,7 @@ async fn run_replacement_daemon_with_selector(
     selector_factory: impl FnOnce(
         atm_core::LocalServiceRuntime,
         Arc<dyn HerdrProcessAdapter>,
+        RuntimeHealth,
     ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     daemon_launch_identity: DaemonLaunchIdentity,
     peer_wire_mode: PeerWireMode,
@@ -825,8 +843,6 @@ async fn run_replacement_daemon_with_selector(
     let assembly = assemble_daemon_runtime()?;
     let workflow_telemetry = assembly.workflow_telemetry.clone();
     let peer_stream_adapter = bootstrap_peer_stream_adapter(&assembly, peer_wire_mode)?;
-    // The shipped daemon always keeps the injected receiver hook active.
-    // Benchmark-only selection is available only from the separate binary.
     let handler = build_replacement_handler(
         assembly,
         ReplacementHandlerConfig {
@@ -1359,7 +1375,7 @@ mod replacement_runtime_tests {
             assembly,
             ReplacementHandlerConfig {
                 observability: Arc::new(NullObservability),
-                selector_factory: |_, _| {
+                selector_factory: |_, _, _| {
                     Arc::new(NoReceivedHookSelector)
                         as Arc<dyn atm_core::boundary::MessageReceivedHookSelector>
                 },

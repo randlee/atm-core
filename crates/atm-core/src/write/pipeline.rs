@@ -223,7 +223,19 @@ impl PreparedWrite {
         &self,
         runtime: &LocalServiceRuntime,
     ) -> Result<Vec<BuiltInPostSendDispatch>, AtmError> {
-        if self.outbound_request.nudge_mode == NudgeMode::Deferred {
+        let post_write = match &self.received_hook {
+            Ok(Some(post_write)) => post_write,
+            Ok(None) => return Ok(Vec::new()),
+            Err(error) => return Err(error.clone()),
+        };
+        // Queue is a deferred notification for local steer backends, but the
+        // graft recipient's queue-shaped channel is itself the handoff. The
+        // selector owns the channel-specific emitter; retain AQ1's
+        // suppression for every other backend until its downstream trigger
+        // sprint supplies that emitter.
+        if self.outbound_request.nudge_mode == NudgeMode::Deferred
+            && !post_write.delivery_snapshot.graft_post_send
+        {
             tracing::info!(
                 subsystem = "atm_core.queue",
                 action = "steer_suppressed",
@@ -233,11 +245,6 @@ impl PreparedWrite {
             );
             return Ok(Vec::new());
         }
-        let post_write = match &self.received_hook {
-            Ok(Some(post_write)) => post_write,
-            Ok(None) => return Ok(Vec::new()),
-            Err(error) => return Err(error.clone()),
-        };
         let mut dispatches = Vec::new();
         for message in &post_write.messages {
             let event = crate::send::hook::post_send_event_from_message(
