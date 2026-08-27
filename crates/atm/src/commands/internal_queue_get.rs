@@ -19,6 +19,8 @@ pub struct InternalQueueGetCommand {
     pub team: Option<String>,
     #[arg(long = "as")]
     pub actor: Option<String>,
+    #[arg(long, hide = true)]
+    pub require_daemon: bool,
 }
 
 impl InternalQueueGetCommand {
@@ -51,7 +53,12 @@ impl InternalQueueGetCommand {
         });
         let endpoint = match endpoint {
             Ok(endpoint) => endpoint,
-            Err(error) if error.is_daemon_unavailable() => return Ok(()),
+            Err(error) if error.is_daemon_unavailable() => {
+                if self.require_daemon {
+                    return Err(error.into());
+                }
+                return Ok(());
+            }
             Err(error) => return Err(error.into()),
         };
         let transport = match atm_http_runtime::preferred_local_client(
@@ -59,12 +66,22 @@ impl InternalQueueGetCommand {
             SAME_HOST_REQUEST_DEADLINE,
         ) {
             Ok(transport) => transport,
-            Err(error) if error.is_daemon_unavailable() => return Ok(()),
+            Err(error) if error.is_daemon_unavailable() => {
+                if self.require_daemon {
+                    return Err(error.into());
+                }
+                return Ok(());
+            }
             Err(error) => return Err(error.into()),
         };
         let response = match transport.execute(ApiRequest::new(request)).await {
             Ok(response) => response.into_inner(),
-            Err(error) if error.is_daemon_unavailable() => return Ok(()),
+            Err(error) if error.is_daemon_unavailable() => {
+                if self.require_daemon {
+                    return Err(error.into());
+                }
+                return Ok(());
+            }
             Err(error) => return Err(error.into()),
         };
         match response {
@@ -114,6 +131,7 @@ mod tests {
         let command = InternalQueueGetCommand {
             team: Some("aq25-ac8-team".to_owned()),
             actor: None,
+            require_daemon: false,
         };
 
         let started = std::time::Instant::now();
@@ -124,6 +142,27 @@ mod tests {
         assert!(
             started.elapsed() < atm_http_runtime::SAME_HOST_REQUEST_DEADLINE,
             "the fail-open path must return well inside the bounded connect budget, not hang past it"
+        );
+    }
+
+    #[tokio::test]
+    #[serial(env)]
+    async fn queue_get_require_daemon_reports_daemon_unavailability() {
+        let _env = EnvGuard::set_many([("ATM_IDENTITY", Some("aq25-strict-queue-get-agent"))]);
+        let temporary_root = tempfile::tempdir().expect("isolated runtime root");
+        let endpoint = DaemonLocalIpcEndpoint::new(temporary_root.path().join("local-http.json"))
+            .expect("isolated endpoint path");
+        let command = InternalQueueGetCommand {
+            team: Some("aq25-strict-queue-get-team".to_owned()),
+            actor: None,
+            require_daemon: true,
+        };
+        assert!(
+            command
+                .run_with_endpoint(Ok(endpoint), &CliObservability::fallback())
+                .await
+                .is_err(),
+            "strict queue-get must surface daemon unavailability to the Stop hook"
         );
     }
 }

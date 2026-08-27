@@ -1,9 +1,10 @@
 # ATM lifecycle hooks
 
 `claude_queue_hook.py` and `codex_queue_hook.py` are thin adapters over
-`atm_queue_hook.py`. They are intentionally fail-open: a missing or unreachable
-daemon never blocks the host harness. Set `ATM_BIN` when the `atm` executable is
-not on `PATH`.
+`atm_queue_hook.py`. A Stop queue pull is fail-closed for diagnostics: missing
+caller context, an unavailable daemon, or an ATM CLI failure returns non-zero
+and writes the reason to stderr instead of silently allowing a harness Stop to
+pass. Set `ATM_BIN` when the `atm` executable is not on `PATH`.
 
 Supported events are `pre-tool-use`, `stop`, and `session-end`. A Stop performs
 one synchronous `_internal-queue-get`; Claude prints the literal JSON block
@@ -21,7 +22,10 @@ ATM_HOOK_TIMEOUT_SECONDS=2
 ATM_BIN=/path/to/atm
 ```
 
-The hook only presents caller context already held in `ATM_TEAM` and
-`ATM_IDENTITY`; it has no target-member option. Use
+The hook presents caller context already held in `ATM_TEAM` and
+`ATM_IDENTITY`, and requires an absolute existing `ATM_HOME` (or `HOME`) for a
+Stop pull; it has no target-member option. The Stop call passes `--team`,
+`--as`, and the hidden `--require-daemon` flag explicitly to the internal CLI.
+Use
 `python3 scripts/hooks/test_queue_hooks.py` for the deterministic fake-CLI
 contract tests.
