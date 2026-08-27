@@ -172,7 +172,7 @@ def add_roster_member(atm: Path, env: dict[str, str], home: Path, member: str, t
 
 def start_daemon(daemon: Path, env: dict[str, str], timeout: float) -> dict[str, Any]:
     process = subprocess.Popen(
-        [str(daemon)],
+        [str(daemon), "--peer-wire-security", "plaintext-test"],
         cwd=ROOT,
         env={**env, "ATM_DAEMON_READY_STDOUT": "1"},
         stdout=subprocess.PIPE,
