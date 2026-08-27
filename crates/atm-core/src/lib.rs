@@ -3,6 +3,9 @@ pub mod ack;
 pub mod address;
 /// Acknowledgement workflows for ack-required mailbox messages.
 pub mod api;
+/// `ATM_TEMP` scratch-root resolution and shared-host safety validation
+/// (ADR-055).
+pub mod atm_temp;
 /// Phase R boundary traits and placeholder contract types.
 pub mod boundary;
 /// Hidden daemon-private ingress/export helpers used by concrete boundary
@@ -87,6 +90,10 @@ pub mod test_support;
 pub(crate) mod text;
 /// Internal linear-thread helpers shared by send/read/ack workflow logic.
 pub(crate) mod threading;
+/// Cross-host transfer-script resolution and argv-array invocation contract
+/// (ADR-055). Resolution and the safety check only; execution is wired in
+/// by the `atm send` CLI surface.
+pub mod transfer_script;
 /// Hidden transport test utilities shared by CLI-layer tests.
 #[doc(hidden)]
 #[cfg(feature = "test-utils")]
@@ -107,6 +114,9 @@ pub use api::{
 };
 pub use atm_storage::derive_ack_requirement;
 pub use atm_storage::{TemplateFrontmatter, TemplateSha};
+pub use atm_temp::{
+    AtmTemp, AtmTempError, EnvSource, ProcessEnvSource, resolve_atm_temp, send_to_staging_dir,
+};
 #[allow(deprecated)]
 pub use boundary::{
     AckTransition, AsyncMessageReceivedHookEmitter, BuiltInNudgeSinkTarget,
@@ -134,6 +144,10 @@ pub use protocol::{RequestEnvelope, ResponseEnvelope};
 pub use search::{SearchAggregateInput, SearchHit, SearchInput, SearchRequest, SearchResponse};
 pub use service_runtime::{
     LocalFileNonClaudeOutbound, LocalServiceRuntime, with_default_local_service_runtime,
+};
+pub use transfer_script::{
+    ConfiguredTransferScript, TransferInvocation, TransferScript, TransferScriptKind,
+    resolve_transfer_script,
 };
 pub use workflow_analytics::{
     LifecycleObservation, WorkflowFact, WorkflowProjectionRequest, WorkflowSelector,
