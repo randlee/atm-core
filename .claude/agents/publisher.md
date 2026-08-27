@@ -268,6 +268,18 @@ gh run download <preflight-run-id> --name release-findings --dir release/
 cat release/release-findings.json
 ```
 
+**Step D — Confirm the sc-ecosystem gate:**
+
+The canonical `just validate` run includes the blocking ecosystem preflight.
+It checks the latest `sc-composer`, `sc-observability`,
+`sc-observability-types`, and Wyvern releases, verifies the exact pins, and
+runs the named adapter, template-render, and picker-fixture tests. A host
+without `wyvern` on `PATH` must stop with the install instruction; do not
+silently skip that finding. When an upstream regression requires a pin-back,
+use `ATMD_GH_AUTOFIX_ISSUES=1` to reuse the dependency issue path and record
+the regression, pinned-back version, and issue URL in the Phase AQ evidence
+register before continuing.
+
 **Step D — Verify Homebrew / `winget` prerequisites that remain external to the local validator:**
 ```bash
 sed -n '1,120p' docs/WINGET_SETUP.md
