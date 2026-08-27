@@ -25,14 +25,14 @@ The AQ3 clean-runner job definition is [`PR #1058`](https://github.com/randlee/a
 | Requirement | Closing test or artifact | Verdict |
 | --- | --- | --- |
 | R1, one gesture on macOS/Windows/Linux | `scripts/send-to/README.md`, `atm-send-to.command`, `atm-send-to.ps1`, Nautilus script, and XDG desktop entry; physical Finder/Explorer/Nautilus delivery still needs host runs | OPEN — owners: fenix (macOS), QA Windows/Ubuntu |
-| R2, multi-select recipients and multi-file `$@` | `.just/tests/test_send_to_surface.py::test_multiple_files_and_recipients_reach_one_final_send`; `picker-output-v1.json` | PASS — AQ5 implementation commit |
-| R3, native picker behavior | `picker-macos.sh`, `picker-windows.ps1`, `picker-linux.sh`, and `test_reference_picker_emits_versioned_output` | PASS — AQ5 implementation commit |
-| R4, dead/idle visibility and safe routing | `PickerInput` status mapping test in `crates/atm/src/commands/members.rs`; Wyvern contract fixture | PASS — AQ5 implementation commit |
-| R5, fail closed before send | `test_cancel_exits_without_invoking_send`; picker output validation before final `atm send` | PASS — AQ5 implementation commit |
-| R6, host/cwd/status picker projection | `atm teams --json --members`, explicit durable roster `host`, and CLI baseline | PASS — AQ5 implementation commit |
+| R2, multi-select recipients and multi-file `$@` | `.just/tests/test_send_to_surface.py::test_multiple_files_and_recipients_reach_one_final_send`; `picker-output-v1.json` | PASS — [`2b280eba2adaffbf180b4812421849a613f842e2`](https://github.com/randlee/atm-core/commit/2b280eba2adaffbf180b4812421849a613f842e2) |
+| R3, native picker behavior | `picker-macos.sh`, `picker-windows.ps1`, `picker-linux.sh`, and `test_reference_picker_emits_versioned_output` | PASS — [`2b280eba2adaffbf180b4812421849a613f842e2`](https://github.com/randlee/atm-core/commit/2b280eba2adaffbf180b4812421849a613f842e2) |
+| R4, dead/idle visibility and safe routing | `PickerInput` status mapping test in `crates/atm/src/commands/members.rs`; Wyvern contract fixture | PASS — [`2b280eba2adaffbf180b4812421849a613f842e2`](https://github.com/randlee/atm-core/commit/2b280eba2adaffbf180b4812421849a613f842e2) |
+| R5, fail closed before send | `test_cancel_exits_without_invoking_send`; picker output validation before final `atm send` | PASS — [`2b280eba2adaffbf180b4812421849a613f842e2`](https://github.com/randlee/atm-core/commit/2b280eba2adaffbf180b4812421849a613f842e2) |
+| R6, host/cwd/status picker projection | `atm teams --json --members`, explicit durable roster `host`, and CLI baseline | PASS — [`2b280eba2adaffbf180b4812421849a613f842e2`](https://github.com/randlee/atm-core/commit/2b280eba2adaffbf180b4812421849a613f842e2) |
 | R7, configured transfer and canonical unconfigured-host error | AQ4 transfer seam and `docs/cross-host-file-transfer.md`; live US-2 configured/unconfigured host transcript not run in this environment | OPEN — owner: fenix/QA host operator |
-| R8, attachment text is untrusted | [`CLAUDE.md`](../../../CLAUDE.md) and [`docs/agent-conventions.md`](../../../agent-conventions.md) | PASS — AQ5 implementation commit |
-| R13, side-effect-free chaining | pipeline captures and validates picker output before constructing the final send argv; cancel harness proves zero sends | PASS — AQ5 implementation commit |
+| R8, attachment text is untrusted | [`CLAUDE.md`](../../../CLAUDE.md) and [`docs/agent-conventions.md`](../../../agent-conventions.md) | PASS — [`2b280eba2adaffbf180b4812421849a613f842e2`](https://github.com/randlee/atm-core/commit/2b280eba2adaffbf180b4812421849a613f842e2) |
+| R13, side-effect-free chaining | pipeline captures and validates picker output before constructing the final send argv; cancel harness proves zero sends | PASS — [`2b280eba2adaffbf180b4812421849a613f842e2`](https://github.com/randlee/atm-core/commit/2b280eba2adaffbf180b4812421849a613f842e2) |
 | R14, queue mirrors send surface | AQ1–AQ3 queue evidence and the AQ4 shared attachment CLI; no queue code changed in AQ5 | PASS — referenced AQ2/AQ3 heads |
 | R15, deferred wake and restart semantics | AQ2.7 Herdr and AQ3 tmux evidence refs above; AQ1.9 m5 restart matrix remains an explicit pending slot | OPEN — owner: fenix/m5 operator |
 
