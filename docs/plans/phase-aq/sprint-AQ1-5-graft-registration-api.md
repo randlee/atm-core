@@ -1,6 +1,12 @@
+---
+status: complete
+branch: feature/aq-1-5-graft-registration-api
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/aq-1-5-graft-registration-api
+---
+
 # Sprint AQ1.5 — Graft Receiver Registration: Daemon API + Durable Store
 
-Status: draft · Branch: `feature/aq-1-5-graft-registration-api` off
+Status: complete · Branch: `feature/aq-1-5-graft-registration-api` off
 `integrate/phase-aq` · PR target: `integrate/phase-aq`
 recommended_agent: arch-ctm · recommended_model: deep-reasoning
 

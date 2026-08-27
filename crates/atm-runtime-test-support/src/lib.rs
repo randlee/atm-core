@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::{Mutex, OnceLock};
 
 use atm_core::error::AtmError;
@@ -74,6 +75,15 @@ pub fn open_sqlite_boundary(path: impl AsRef<Path>) -> Result<RuntimeAssembly, A
         template_composer: None,
         workflow_telemetry: None,
     })
+}
+
+/// Open the graft endpoint registry for replacement-router tests without
+/// exposing a concrete SQLite handle to the HTTP runtime.
+pub fn open_graft_receiver_endpoint_store(
+    path: impl AsRef<Path>,
+) -> Result<Arc<dyn atm_core::GraftReceiverEndpointStore + Send + Sync>, AtmError> {
+    let backend = atm_storage_rusqlite::SqliteStorageBackend::new(path)?;
+    Ok(backend.graft_receiver_endpoint_store())
 }
 
 /// Build an isolated SQLite runtime from a test-owned directory.
