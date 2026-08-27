@@ -197,9 +197,10 @@ Decisions surfaced by the finalization agents — **all eight approved by Rand
 same-host exclusivity) — revises a 4-round-hardened contract element; (2)
 AQ1.7 dials present-but-expired leases rather than refusing; (3) AQ2.6
 mixed-backend doctor finding is Warning, not Error; (4) AQ2.6
-`normalize_tmux_pane_id` non-`%N` targets accepted-with-warning; (5) AQ2.7
-`HerdrQueueWakePumpConfig` defaults `max_concurrent_waits = 8`,
-`target_recheck_interval = 10 min`; (6) AQ4 lands as one PR with tagged
+`normalize_tmux_pane_id` non-`%N` targets accepted-with-warning; (5)
+**superseded same-day by the polling-drain rewrite: no
+`HerdrQueueWakePumpConfig`; fixed constants `HERDR_POLL_INTERVAL_MS = 5_000`,
+`HERDR_MAX_PROMPTS_PER_TICK = 16` (approved by Rand 2026-08-26)**; (6) AQ4 lands as one PR with tagged
 sequential commits and a single QA gate (not AQ4a/AQ4b); (7) AQ4
 `AtmConfig.local_host` as the sender's own host identity; (8) AQ6 Wyvern
 issue target repo `randlee/wyvern`.

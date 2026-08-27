@@ -38,10 +38,12 @@ Rules:
   `atm-daemon`
 - `atm-herdr` must not perform direct SQLite access, direct roster
   reads/writes, or direct mail read/write of any kind
-- `atm-herdr` must not resolve `LocalMessageReceivedBackend`,
-  `HerdrSession`, or any other roster-derived routing value; every public
-  method takes an already-resolved `AgentName` and an already-resolved
-  optional session string supplied by the caller
+- `atm-herdr` depends on `atm-core` only for `AgentName`, `HerdrSession`,
+  `RequestDeadline`, and `AtmError`; it must not resolve
+  `LocalMessageReceivedBackend` or any other roster-derived routing value
+  itself — every public method takes an already-resolved `AgentName` and
+  an already-resolved, already-validated `Option<&HerdrSession>` supplied
+  by the caller
 - `atm-herdr` must not implement `PendingNudgeStore`, `MemberKey`,
   `NudgeClaim`, or any queue-state mutation; queue claim/release/requeue
   policy is entirely caller-owned
@@ -62,15 +64,19 @@ Rules:
   mailbox-read prompt constant (ADR-058 D2)
 - `atm-herdr` must never read `HERDR_SESSION` or `HERDR_SOCKET_PATH` from
   its own process environment to select a session; the caller's explicit
-  `Option<&str>` argument is the only session source (ADR-058 D1)
+  `Option<&HerdrSession>` argument is the only session source (ADR-058 D1)
 - `HerdrSpawnBreaker` state must remain in-memory, process-lifetime,
   per-host, and shared by every member; it must never be persisted to
   SQLite, the roster, or `.atm.toml`, and must never be keyed per member
 - `HerdrSpawnBreaker` must open only on infrastructure-class outcomes
-  (`server_not_running`, `protocol_mismatch`, an external-timeout kill, a
-  failed `agent list` call, or a failed `agent get` doctor probe) and
-  must never open on a lifecycle/target-shaped outcome (`agent_blocked`,
-  `agent_not_found`, `agent_not_ready`, `agent_target_ambiguous`)
+  (`server_not_running`, `protocol_mismatch`, an external-timeout kill, or a
+  failed `agent list` call) and must never open on a lifecycle/target-shaped
+  outcome (`agent_blocked`, `agent_not_found`, `agent_not_ready`,
+  `agent_target_ambiguous`). A failed `agent get` call must never open the
+  breaker either: the doctor/presence-probe call site always invokes `get`
+  under `BreakerPolicy::Bypass`, which never consults or updates this
+  breaker (a hypothetical future `BreakerPolicy::Shared` `get` caller is
+  the only mode that would participate, and none exists in Phase AQ)
 - no `herdr` argv literal, Herdr JSON field name, or Herdr `error.code`
   string literal may appear anywhere outside `crates/atm-herdr` — this is
   the source-audit gate enforced alongside this boundary
@@ -78,6 +84,14 @@ Rules:
   real `herdr` binary in any automated test; `testing::FakeHerdrProcessAdapter`
   behind the `test-utils` feature is the sole permitted test double below
   the adapter boundary
+- `atm-herdr`'s `test-utils` feature must be enabled only via a
+  `[dev-dependencies]` entry in `atm-daemon-bootstrap/Cargo.toml` and
+  `atm-http-runtime/Cargo.toml`; enabling it from either crate's
+  `[dependencies]` table would ship the fake adapter into production
+  builds and is a boundary violation, mechanically checked by extending
+  the boundaries lint (or an `atm-architecture` test) to grep both
+  Cargo.toml files' `[dependencies]` sections for a `features =
+  [.."test-utils"..]` entry naming `atm-herdr` and fail CI if found there
 - `atm-herdr` must not run or wrap `herdr agent start` or
   `herdr agent rename`; those are operator/launch-convention commands
   this crate defines no argv for (ADR-058 D6)

@@ -18,10 +18,14 @@ pre-Phase-AQ workspace.
 ## 2. Architectural Rules
 
 - `atm-herdr` is a leaf process-adapter crate: it depends on `atm-core`
-  (for `AgentName`, `RequestDeadline`, and shared error vocabulary), `tokio`
-  (for `tokio::process`), and `serde`/`serde_json` (for stderr/stdout JSON
-  parsing) only. No other dependency is permitted without a boundary
-  amendment.
+  (for `AgentName`, `HerdrSession`, `RequestDeadline`, and `AtmError`),
+  `tokio` (for `tokio::process`), and `serde`/`serde_json` (for
+  stderr/stdout JSON parsing) only. No other dependency is permitted
+  without a boundary amendment. Passing `HerdrSession` — an already-
+  validated `atm-core` newtype — as the adapter's session parameter is
+  the whole point of depending on it here: this crate never resolves or
+  parses a session identifier itself, it only accepts one the caller
+  already validated.
 - `atm-herdr` must not depend on `atm-storage`, `atm-storage-rusqlite`,
   `atm-http-runtime`, or `atm-daemon-bootstrap`. Those crates depend on
   `atm-herdr`, never the reverse.
@@ -104,6 +108,26 @@ pub struct HerdrWaitOutcome { pub snapshot: AgentSnapshot }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HerdrGetOutcome { pub snapshot: AgentSnapshot }
 
+/// Selects whether a `get` call participates in the shared
+/// `HerdrSpawnBreaker` (finding 108). `atm doctor`'s presence probe always
+/// passes `Bypass`: a doctor-only visibility check must never open, close,
+/// or be gated by the breaker that governs live steer/queue delivery for
+/// unrelated members. `Shared` is reserved for a possible future `get`
+/// caller that should participate like `prompt`/`list`; no Phase AQ caller
+/// passes it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BreakerPolicy {
+    /// Checks `permits_spawn()` first and records the outcome against the
+    /// shared breaker, exactly like `prompt`/`list`. Unused in Phase AQ.
+    Shared,
+    /// Always attempts the spawn regardless of breaker state (bounded by
+    /// the same effective deadline, `HR-SAFE-002`); never consults
+    /// `permits_spawn()` and never calls `record_success`/
+    /// `record_infrastructure_failure`. The doctor presence probe's only
+    /// mode.
+    Bypass,
+}
+
 /// Every agent Herdr's server currently reports, across all of its
 /// workspaces, for the session the child was invoked under (ADR-058
 /// D2/D9 sibling; `ResponseResult::AgentList`,
@@ -153,15 +177,16 @@ impl From<HerdrError> for atm_core::error::AtmError { /* .. */ }
 /// The only cross-crate contract point. `HerdrReceivedHook` (AQ2.6) calls
 /// `prompt`; `HerdrQueueWakePump` (AQ2.7) calls `list` then `prompt` on
 /// each tick (Rand's 2026-08-26 decision — see architecture.md §6);
-/// `atm doctor`'s presence probe calls `get`. `wait` is part of this
-/// trait's contract (ADR-058 D2) but is not invoked by any Phase AQ
-/// caller; it is retained for a possible future lifecycle-gated delivery
-/// mode.
+/// `atm doctor`'s presence probe calls `get` with `BreakerPolicy::Bypass`
+/// (finding 108) so a probe failure never opens or is gated by the shared
+/// breaker. `wait` is part of this trait's contract (ADR-058 D2) but is
+/// not invoked by any Phase AQ caller; it is retained for a possible
+/// future lifecycle-gated delivery mode.
 pub trait HerdrProcessAdapter: Send + Sync {
     fn prompt<'a>(
         &'a self,
         agent: &'a atm_core::types::AgentName,
-        session: Option<&'a str>,
+        session: Option<&'a atm_core::HerdrSession>,
         deadline: atm_core::RequestDeadline,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<HerdrPromptOutcome, HerdrError>> + Send + 'a>>;
 
@@ -171,7 +196,7 @@ pub trait HerdrProcessAdapter: Send + Sync {
     fn wait<'a>(
         &'a self,
         agent: &'a atm_core::types::AgentName,
-        session: Option<&'a str>,
+        session: Option<&'a atm_core::HerdrSession>,
         until: &'a [HerdrAgentStatus],
         timeout: std::time::Duration,
         deadline: atm_core::RequestDeadline,
@@ -180,8 +205,9 @@ pub trait HerdrProcessAdapter: Send + Sync {
     fn get<'a>(
         &'a self,
         agent: &'a atm_core::types::AgentName,
-        session: Option<&'a str>,
+        session: Option<&'a atm_core::HerdrSession>,
         deadline: atm_core::RequestDeadline,
+        breaker_policy: BreakerPolicy,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<HerdrGetOutcome, HerdrError>> + Send + 'a>>;
 
     /// `herdr agent list` — one call per distinct session; `HERDR_SESSION`
@@ -189,7 +215,7 @@ pub trait HerdrProcessAdapter: Send + Sync {
     /// AQ2.7 queue pump's sole liveness/status discovery call.
     fn list<'a>(
         &'a self,
-        session: Option<&'a str>,
+        session: Option<&'a atm_core::HerdrSession>,
         deadline: atm_core::RequestDeadline,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<HerdrListOutcome, HerdrError>> + Send + 'a>>;
 }
@@ -216,8 +242,10 @@ impl HerdrSpawnBreaker {
     pub fn record_success(&self) { /* .. */ }
     /// Opens the breaker only for the infrastructure-class outcomes named
     /// in HR-SAFE-005 (`server_not_running`, `protocol_mismatch`, an
-    /// external-timeout kill, or a failed `list`/`get` call); a
-    /// lifecycle-shaped `HerdrError` must not reach this.
+    /// external-timeout kill, or a failed `list` call — **not** a failed
+    /// `get` call made under `BreakerPolicy::Bypass`, which never calls
+    /// this method at all, finding 108); a lifecycle-shaped `HerdrError`
+    /// must not reach this either.
     pub fn record_infrastructure_failure(&self) { /* .. */ }
 }
 
@@ -242,10 +270,10 @@ impl HerdrProcessAdapter for HerdrProcessInvoker { /* .. */ }
 pub mod testing {
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub enum FakeHerdrCall {
-        Prompt { agent: String, session: Option<String> },
-        Wait { agent: String, session: Option<String>, until: Vec<super::HerdrAgentStatus>, timeout: std::time::Duration },
-        Get { agent: String, session: Option<String> },
-        List { session: Option<String> },
+        Prompt { agent: String, session: Option<atm_core::HerdrSession> },
+        Wait { agent: String, session: Option<atm_core::HerdrSession>, until: Vec<super::HerdrAgentStatus>, timeout: std::time::Duration },
+        Get { agent: String, session: Option<atm_core::HerdrSession>, breaker_policy: super::BreakerPolicy },
+        List { session: Option<atm_core::HerdrSession> },
     }
 
     /// Records every call for assertion; configurable per-call outcome.
@@ -337,8 +365,9 @@ HerdrProcessInvoker::list(session, deadline)        (once per distinct session)
                                                   <---- Vec<AgentSnapshot> (exit 0),
                                                         or error.code (exit 1) ----
   <-------------------------------------------------|
-  | record every listed member's status into
-  |   RuntimeHealth (source = "herdr-poll")
+  | record_observed_state(member, state,
+  |   RuntimeObservationSource::HerdrPoll)  [atm-http-runtime,
+  |   RuntimeHealth] -- never record_heartbeat; never writes pid
   |
   | for each pending member whose listed
   |   status is Idle | Done:
@@ -438,18 +467,37 @@ caller invokes `wait`.
 `atm-herdr` defines the `HerdrSpawnBreaker` type but does not construct
 its own singleton — composition is the responsibility of the composition
 root, matching how `active_received_hook_selector` and
-`StorageAndNudgeRouter` are already built (sprint-AQ2-7 deliverable 1):
+`StorageAndNudgeRouter` are already built (sprint-AQ2-7 deliverable 1).
+**One composition shape (finding 101): the selector RECEIVES the adapter,
+it never constructs one.**
 
-- `atm-daemon-bootstrap::build_replacement_handler` constructs exactly one
-  `Arc<HerdrSpawnBreaker>` and exactly one `HerdrProcessInvoker` wrapping
-  it, at daemon startup.
-- That single `Arc<dyn HerdrProcessAdapter>` (erasing to the trait so both
-  consumers depend only on `atm-herdr`'s public trait, not on
-  `HerdrProcessInvoker` concretely) is handed to:
-  - `HerdrReceivedHook` (`atm-daemon-bootstrap`, AQ2.6) for the immediate
-    steer path (§5)
-  - `HerdrQueueWakePump` (`atm-http-runtime`, AQ2.7) for the queue-tick
-    gate path (§6)
+- `atm-daemon-bootstrap::build_replacement_handler` is the **only**
+  construction site for either type in the workspace, at daemon startup:
+
+  ```rust
+  let breaker = Arc::new(HerdrSpawnBreaker::new());
+  let herdr: Arc<dyn HerdrProcessAdapter> = Arc::new(HerdrProcessInvoker::new(breaker.clone()));
+  ```
+
+- `build_replacement_handler` passes `herdr.clone()` into **both**
+  consumers from this single instance:
+  - `active_received_hook_selector(service_runtime, bare_cli_fifo,
+    herdr.clone())` — the widened `selector_factory` signature (AQ2.6),
+    which stores the received `Arc<dyn HerdrProcessAdapter>` on
+    `HerdrReceivedHook` (`atm-daemon-bootstrap`, AQ2.6) for the immediate
+    steer path (§5). `active_received_hook_selector` never calls
+    `HerdrProcessInvoker::new` or `HerdrSpawnBreaker::new` itself.
+  - `HerdrQueueWakePump::new(.., herdr.clone())` (`atm-http-runtime`,
+    AQ2.7) for the queue-tick gate path (§6).
+  - The benchmark harness caller (`run_benchmark_daemon`,
+    `atm-daemon-bootstrap`) passes a fake/no-op `HerdrProcessAdapter` into
+    the same widened `active_received_hook_selector` signature — the same
+    precedent AQ2.5 established for `BareCliFifo` (`Arc::default()`;
+    benchmark semantics intentionally exclude bare-CLI/Herdr delivery) —
+    never a real `HerdrProcessInvoker`.
+- An architecture test asserts exactly one `HerdrSpawnBreaker::new(` call
+  site and exactly one `HerdrProcessInvoker::new(` call site in the whole
+  workspace, both inside `build_replacement_handler`.
 - Sharing one breaker instance across both consumers and every member is
   required by ADR-058 D10.1 ("per-host circuit breaker shared by every
   Herdr member") — a second, independently-constructed breaker anywhere
@@ -468,8 +516,10 @@ root, matching how `active_received_hook_selector` and
   though no Phase AQ caller invokes it (`HR-CORE-003`), so the contracted
   method does not silently bit-rot.
 - **Deadline tests** (`HR-TEST-004`) use a fake adapter whose future never
-  resolves to prove the single flat 5 s external bound fires, kills, and
-  reaps the child, for each of `prompt`, `get`, and `list`.
+  resolves to prove the effective `min(caller RequestDeadline, 5 s)` bound
+  fires, kills, and reaps the child, for each of `prompt`, `get`, and
+  `list` — including a shorter-caller-deadline case (e.g. AQ2.6's 2 s
+  doctor probe) proving the bound shortens but never lengthens past 5 s.
 - **Breaker tests** (`HR-TEST-005`) drive `HerdrSpawnBreaker` directly
   through `CLOSED -> OPEN -> HALF_OPEN -> CLOSED` and
   `CLOSED -> OPEN -> HALF_OPEN -> OPEN` (failed probe) without spawning
@@ -501,7 +551,17 @@ following are not true:
   `.atm.toml`
 - the `test-utils` feature gates `FakeHerdrProcessAdapter`; it is not
   reachable from a non-test, non-`test-utils` build
+- `test-utils` is enabled only via `[dev-dependencies]` in
+  `atm-daemon-bootstrap/Cargo.toml` and `atm-http-runtime/Cargo.toml`
+  (finding 107); a grep of both files' `[dependencies]` tables for
+  `features = [.."test-utils"..]` must find nothing
 - no test in this crate or any consumer crate depends on a `herdr` binary
   being present on `PATH`
 - `HerdrQueueWakePump` (`atm-http-runtime`, AQ2.7) calls `list` and
   `prompt` only; no Phase AQ call site invokes `wait`
+- `get`'s doctor call site always passes `BreakerPolicy::Bypass` (finding
+  108); a fixture proves a `Bypass` `get` failure during a simulated
+  outage leaves `HerdrSpawnBreaker` `Closed`
+- exactly one `HerdrSpawnBreaker::new(` and one `HerdrProcessInvoker::new(`
+  call site exist in the workspace, both inside
+  `atm-daemon-bootstrap::build_replacement_handler` (finding 101, §9)
