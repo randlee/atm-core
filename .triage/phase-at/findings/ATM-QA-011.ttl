@@ -15,13 +15,16 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-27T20:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AT2 ;
   triage:foundAt "2026-08-27T20:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-011/PAT-S2-1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-011/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-27T21:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/ATM-QA-011/PAT-S2-1>
   a triage:Occurrence ;
@@ -40,3 +43,21 @@
   triage:branch "feature/pat-s2-legacy-publish-deletion" ;
   triage:headSha "b7f8c189872f4a07b1329fc3f0af911130968b88" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/ATM-QA-011/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-at/receipts/AT.2-receipt.md" ;
+  triage:line 12 ;
+  triage:snippet "quality-mgr AT2-QA-R2 re-verification: AT.2-receipt.md now carries an Immutable inputs table with sc-publish revision 42e0fcea23f730fae0ef3d08b060cd4df6a2602e, package digest 75da9d18426eacb92bab3e02bb6655a35e14f69deafe1ba2d00f4e93aabc0a5b, consumer-input SHA-256 ba518f7f1d10fc25d788d15bf68398483fd1691b9604dabbb83196d74b23d2c2, and rendered-manifest SHA-256s for release/publish-artifacts.toml (f6d5ba976b01c255c14e35fe93322bc5a082fa6dc3989546e5867007c5d37287) and release/publish-channel-contracts.toml (88d7ac055689c1e9fcd752c178eac9094ca29084a097fa7aff109c4fb0f40fd8); quality-mgr independently recomputed all three non-package-digest hashes via `shasum -a 256` against the live files and confirmed exact matches, resolving req-qa's ATM-QA-011-R2 tooling-gap concern; confirmed by arch-qa and ruthless-boundary-qa on PR #1064" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pat-s2-legacy-publish-deletion" ;
+  triage:headSha "a9697994ada4bd00b84b971269ead48d897808ba" ;
+  triage:occursIn <urn:atm:triage:worktree/PAT-S2/a9697994> .
+
+<urn:atm:triage:worktree/PAT-S2/a9697994>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature-pat-s2-legacy-publish-deletion" ;
+  triage:branch "feature/pat-s2-legacy-publish-deletion" ;
+  triage:headSha "a9697994ada4bd00b84b971269ead48d897808ba" ;
+  triage:orderIndex 2 .

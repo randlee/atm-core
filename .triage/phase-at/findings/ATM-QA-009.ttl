@@ -15,13 +15,16 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "release/*.md and any other doc directory outside .github/, .just/, Justfile, scripts/, docs/ for stale references to files this sprint deletes" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-27T20:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AT2 ;
   triage:foundAt "2026-08-27T20:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-009/PAT-S2-1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-009/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-27T21:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/ATM-QA-009/PAT-S2-1>
   a triage:Occurrence ;
@@ -40,3 +43,21 @@
   triage:branch "feature/pat-s2-legacy-publish-deletion" ;
   triage:headSha "b7f8c189872f4a07b1329fc3f0af911130968b88" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/ATM-QA-009/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "release/publish-surface-scope.md" ;
+  triage:line 65 ;
+  triage:snippet "quality-mgr AT2-QA-R2 re-verification: release/publish-surface-scope.md no longer describes scripts/verify_user_docs.py as the live user-doc freshness gate; it now states the retained ATM checks validate consumer-contract data only and do not maintain a second user-document staging/freshness-verifier path (post-AT.2 release boundary). Confirmed independently by arch-qa and ruthless-boundary-qa on PR #1064. A whole-repo grep afterward surfaced one further hit at reports/smoke/phase-AE-installed-docs-proof.md:89, a dated pre-AT2 Phase AE smoke-proof record (last touched by 6e48d004c, unrelated to this sprint) describing what was historically run, not current behavior; tracked separately as ATM-QA-012 (receipt exclusion-wording gap) rather than reopening this record, since the live-doc defect this finding targeted is fixed." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pat-s2-legacy-publish-deletion" ;
+  triage:headSha "a9697994ada4bd00b84b971269ead48d897808ba" ;
+  triage:occursIn <urn:atm:triage:worktree/PAT-S2/a9697994> .
+
+<urn:atm:triage:worktree/PAT-S2/a9697994>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature-pat-s2-legacy-publish-deletion" ;
+  triage:branch "feature/pat-s2-legacy-publish-deletion" ;
+  triage:headSha "a9697994ada4bd00b84b971269ead48d897808ba" ;
+  triage:orderIndex 2 .
