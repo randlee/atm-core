@@ -6,7 +6,7 @@ sprint: AT.1
 branch: feature/pat-s1-install-and-publish
 base: origin/integrate/phase-at @ 2bad2812a
 status: install-parity-complete
-testpypi: authorized-attempt-failed-upstream-orchestration-repair-pending
+testpypi: retargeted-to-first-kit-era-tag-v1.4.4-at-phase-close
 production: pending-contemporaneous-authorization
 ```
 
@@ -125,11 +125,24 @@ Under that authorization, the post-release retry workflow was dispatched on
 The failure is an upstream orchestration defect, not a release-artifact or
 credential failure. The workflow checked out the historical release tag before
 calling the repository-local `verify-published-release` action; `v1.4.3`
-predates that action, so GitHub could not find its `action.yml`. The required
-retry sequence is: land the upstream `sc-publish` orchestration repair (keep
-the workflow/action code from its workflow ref and fetch the release tag
-separately for verification), re-pin and reinstall the kit, then retry only
-the authorized TestPyPI command. Production remains
+predates that action, so GitHub could not find its `action.yml`.
+
+**Amendment (2026-08-27, owner decision — forward-only publishing.)** Rand
+ruled: "I don't see a reason to try to re-publish anything before the first
+kit install." Publishing tags that predate the kit installation is out of
+scope, so the previously planned upstream repair was withdrawn (`sc-publish`
+PR #57 closed unmerged; the policy is recorded there and as a one-line
+limitation note in the `sc-publish` docs). No kit change is required: every
+tag cut from a kit-installed tree carries the actions/scripts and the kit
+manifest schema the workflows need. Independent verification during triage:
+the `v1.4.3` tag tree also fails the current kit's manifest schema
+(`channel-config` rejects it — `[project]` missing required keys — and
+`publish-channel-contracts.toml` is absent at the tag), so `v1.4.3` is
+unpublishable via the kit on two independent grounds. The TestPyPI leg is
+therefore retargeted from `v1.4.3` to the first kit-era tag (workspace version
+`1.4.4`), to be cut after phase AT merges to `develop`, with the publish leg
+run as phase-close verification. Rand's TestPyPI authorization (`"sure,
+testpypi"`) carries over to that retargeted dispatch. Production remains
 `pending-contemporaneous-authorization`; no standing or advance authorization
 will be treated as production permission.
 
