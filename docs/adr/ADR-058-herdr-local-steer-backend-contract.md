@@ -483,6 +483,9 @@ herdr agent list
   (the list bound, not the removed wait bound), never by anything
   Herdr-side.
 
+- `atm doctor`'s presence probe calls `get` with `BreakerPolicy::Bypass`
+  (PLAN-CRIT-108); see D10.1 carve-out.
+
 ### D10. Child-process bound (external timeout, independent of Herdr)
 
 Herdr's own client applies **no** read/connect timeout on `send_request`
@@ -603,6 +606,11 @@ burns a child process per attempt. **An `agent list` failure is the same
 class of outcome as an `agent prompt` failure here** — both are single
 bounded child spawns behind the same socket (D9.1, D10) — so atm-core
 applies one **per-host circuit breaker** shared by every Herdr member and
+**Carve-out (critical review PLAN-CRIT-108):** the `agent get` doctor/presence
+probe is invoked under `BreakerPolicy::Bypass` and neither opens nor is gated
+by this breaker — running `atm doctor` during a Herdr outage must never
+suppress live steer/queue delivery. All other commands use
+`BreakerPolicy::Shared`.
 every Herdr command (the Herdr server is host-wide):
 
 - State lives beside the adapter in `atm-herdr` (structural change,
