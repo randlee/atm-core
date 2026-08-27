@@ -688,11 +688,24 @@ async fn run_replacement_daemon_with_selector(
         &peer_stream_adapter,
     );
     let runtime_handler: Arc<dyn atm_http_runtime::CanonicalWriteHandler> = handler.clone();
-    let mut running = HttpRuntimeBuilder::new(config, runtime_handler)
+    let running = HttpRuntimeBuilder::new(config, runtime_handler)
         .with_runtime_health(runtime_health)
         .build()?
         .start()
         .await?;
+    run_until_shutdown(running, handler, workflow_telemetry, atm_temp_sweeper).await
+}
+
+/// Advertises readiness, then waits for either a shutdown signal or an
+/// unexpected server stop, draining every supervised subsystem exactly once
+/// on every exit path (ready-signal failure, unexpected stop, or ordinary
+/// shutdown).
+async fn run_until_shutdown(
+    mut running: atm_http_runtime::HttpRuntime<atm_http_runtime::Running>,
+    handler: Arc<StorageAndNudgeRouter>,
+    workflow_telemetry: atm_runtime::WorkflowTelemetryRuntime,
+    atm_temp_sweeper: AtmTempSweeperRuntime,
+) -> Result<(), AtmError> {
     if let Err(error) = emit_ready_signal_if_requested() {
         // The process has not advertised readiness, so it must not retain an
         // otherwise-live listener when its supervisor handshake fails.
