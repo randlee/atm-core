@@ -794,17 +794,23 @@ fn validate_attach_sources(files: &[PathBuf]) -> Result<()> {
 /// it in `--json` output when requested.
 fn report_fan_out_result(json: bool, delivered: &[String], not_delivered: &[String]) {
     if json {
-        let report = serde_json::json!({
-            "delivered": delivered,
-            "not_delivered": not_delivered,
-        });
-        eprintln!("{report}");
+        eprintln!("{}", fan_out_result_json(delivered, not_delivered));
     } else {
         eprintln!("delivered: {}", delivered.join(", "));
         if !not_delivered.is_empty() {
             eprintln!("not delivered: {}", not_delivered.join(", "));
         }
     }
+}
+
+/// Builds the decision-(g) `--json` partial-delivery report. Extracted from
+/// [`report_fan_out_result`] so its exact shape is unit-testable without
+/// capturing process stderr.
+fn fan_out_result_json(delivered: &[String], not_delivered: &[String]) -> serde_json::Value {
+    serde_json::json!({
+        "delivered": delivered,
+        "not_delivered": not_delivered,
+    })
 }
 
 /// Combines optional message text with the decision-(d) attachment note:
@@ -1197,7 +1203,11 @@ mod tests {
     use std::num::NonZeroU16;
     use std::path::{Path, PathBuf};
 
-    use super::{SendCommand, resolve_trusted_ipv4_with_lookup};
+    use super::{
+        FanOutRecipient, RecipientLocality, SendCommand, fan_out_result_json,
+        resolve_trusted_ipv4_with_lookup,
+    };
+    use crate::observability::CliObservability;
     use atm_core::roles::ROLE_TEAM_LEAD;
     use atm_core::send::{SendMessageSource, input};
     use atm_core::test_support::{EnvGuard, TEST_SENDER};
@@ -2275,5 +2285,305 @@ mod tests {
             }
             other => panic!("expected file message source, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn fan_out_result_json_reports_delivered_and_not_delivered_by_recipient_id() {
+        let report = fan_out_result_json(
+            &["a@team".to_string(), "b@team".to_string()],
+            &["c@team".to_string()],
+        );
+        assert_eq!(
+            report,
+            serde_json::json!({
+                "delivered": ["a@team", "b@team"],
+                "not_delivered": ["c@team"],
+            })
+        );
+    }
+
+    // -- `--from-json` multi-recipient fan-out integration test (decision
+    // (g)): a real, storage-backed `CliComposition::send` (no live daemon
+    // process) with mid-batch failure. --
+
+    /// Minimal roster/team fixture for the fan-out integration test, mirrors
+    /// `crate::composition::tests::LoopbackFixture`'s seeding shape (that
+    /// fixture is private to `composition.rs`'s own test module and cannot
+    /// be reused directly from this sibling module).
+    #[allow(
+        deprecated,
+        reason = "test fixture calls the retained atm-core roster/mail store boundary directly, matching crate::composition::tests::LoopbackFixture's own precedent"
+    )]
+    struct FanOutFixture {
+        _env_guard: EnvGuard,
+        _runtime_guard: atm_runtime_test_support::SqliteRuntimeGuard,
+        _tempdir: TempDir,
+        home_dir: PathBuf,
+        current_dir: PathBuf,
+    }
+
+    #[allow(
+        deprecated,
+        reason = "test fixture calls the retained atm-core roster/mail store boundary directly, matching crate::composition::tests::LoopbackFixture's own precedent"
+    )]
+    impl FanOutFixture {
+        fn new(recipients: &[&str]) -> Self {
+            let tempdir = TempDir::new().expect("tempdir");
+            let home_dir = tempdir.path().to_path_buf();
+            let current_dir = tempdir.path().join("cwd");
+            std::fs::create_dir_all(&current_dir).expect("cwd");
+            std::fs::write(
+                current_dir.join(".atm.toml"),
+                "[atm]
+",
+            )
+            .expect("fixture atm config");
+            let env_guard = EnvGuard::set_many([
+                (
+                    "ATM_HOME",
+                    Some(home_dir.to_str().expect("utf8 tempdir path")),
+                ),
+                ("HOME", Some(home_dir.to_str().expect("utf8 tempdir path"))),
+            ]);
+            let runtime_guard =
+                atm_runtime_test_support::install_isolated_sqlite_runtime(&home_dir);
+
+            let team_dir = home_dir.join(".claude").join("teams").join(TEST_TEAM);
+            std::fs::create_dir_all(team_dir.join("inboxes")).expect("inboxes dir");
+            let mut members = vec![atm_core::schema::AgentMember::with_name(
+                TEST_SENDER.parse().expect("sender"),
+            )];
+            for recipient in recipients {
+                members.push(atm_core::schema::AgentMember::with_name(
+                    recipient.parse().expect("recipient"),
+                ));
+            }
+            let config = atm_core::schema::TeamConfig {
+                members,
+                ..Default::default()
+            };
+            std::fs::write(
+                team_dir.join("config.json"),
+                serde_json::to_vec(&config).expect("team config"),
+            )
+            .expect("write team config");
+
+            let team: TeamName = TEST_TEAM.parse().expect("team");
+            let assembly = atm_runtime_test_support::open_isolated_sqlite_boundary(&home_dir)
+                .expect("sqlite db");
+            let roster_store = assembly.roster_store_arc();
+            let mut roster_members = vec![Self::roster_entry(&team, TEST_SENDER)];
+            for recipient in recipients {
+                roster_members.push(Self::roster_entry(&team, recipient));
+            }
+            roster_store
+                .replace_roster(&team, &roster_members)
+                .expect("seed roster");
+
+            Self {
+                _env_guard: env_guard,
+                _runtime_guard: runtime_guard,
+                _tempdir: tempdir,
+                home_dir,
+                current_dir,
+            }
+        }
+
+        fn roster_entry(team: &TeamName, agent: &str) -> atm_core::boundary::RosterEntry {
+            atm_core::boundary::RosterEntry {
+                team_name: team.clone(),
+                agent_name: agent.parse().expect("agent"),
+                member_kind: atm_core::boundary::RosterMemberKind::Permanent,
+                harness: atm_core::boundary::RosterHarness::ClaudeCode,
+                agent_type: atm_core::schema::AgentType::default(),
+                model: atm_core::types::ModelName::default(),
+                recipient_pane_id: None,
+                metadata_json: serde_json::Map::new(),
+            }
+        }
+
+        /// Writes a real, owner-secured `~/.atm/transfer/<host>` stub script
+        /// (under this fixture's `HOME` override) that stages `attach_name`
+        /// into a real directory and prints it on stdout -- exercising the
+        /// production `resolve_transfer_script`/`invoke_transfer_script`
+        /// path exactly as a real cross-host transfer would.
+        fn write_remote_transfer_script(&self, host: &str, attach_name: &str) -> PathBuf {
+            use std::os::unix::fs::PermissionsExt;
+
+            let transfer_root = self.home_dir.join(".atm").join("transfer");
+            std::fs::create_dir_all(&transfer_root).expect("transfer root");
+            std::fs::set_permissions(&transfer_root, std::fs::Permissions::from_mode(0o700))
+                .expect("secure transfer root");
+            let landed_dir = self.home_dir.join("remote-landed");
+            std::fs::create_dir_all(&landed_dir).expect("landed dir");
+            let script_path = transfer_root.join(host);
+            let script_body = format!(
+                "#!/bin/sh\ncp \"$3\" {}/{attach_name}\necho {}\n",
+                landed_dir.display(),
+                landed_dir.display()
+            );
+            std::fs::write(&script_path, script_body).expect("write stub script");
+            std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o700))
+                .expect("chmod stub script");
+            landed_dir
+        }
+
+        fn write_attach_file(&self, name: &str, contents: &[u8]) -> PathBuf {
+            let path = self._tempdir.path().join(name);
+            std::fs::write(&path, contents).expect("write attach source");
+            path
+        }
+
+        fn inbox_contains(&self, agent: &str, text_fragment: &str) -> bool {
+            let assembly = atm_runtime_test_support::open_isolated_sqlite_boundary(&self.home_dir)
+                .expect("sqlite db");
+            let mail_store = assembly.mail_store_arc();
+            let team: TeamName = TEST_TEAM.parse().expect("team");
+            let agent_name: atm_core::types::AgentName = agent.parse().expect("agent");
+            let rows = mail_store
+                .query_mailbox_metadata(&team, &agent_name, None)
+                .expect("mailbox rows");
+            rows.into_iter().any(|row| {
+                mail_store
+                    .load_message(&team, &agent_name, &row.message_key)
+                    .expect("message record")
+                    .is_some_and(|message| message.envelope.text.contains(text_fragment))
+            })
+        }
+    }
+
+    /// Decision (g): a transfer or send failure for recipient N aborts every
+    /// remaining not-yet-attempted recipient. Recipient 1 (remote, real
+    /// transfer-script invocation) is delivered; recipient 2 is a
+    /// same-host, self-addressed recipient that the canonical writer's
+    /// self-send guard always rejects (a deterministic, real send-layer
+    /// failure -- not a stub); recipient 3 is never attempted. Remote
+    /// staged bytes from recipient 1's successful transfer are asserted to
+    /// still exist afterward: this sprint ships no rollback machinery.
+    #[tokio::test]
+    #[serial(env)]
+    async fn from_json_fan_out_aborts_remaining_recipients_after_a_mid_batch_failure() {
+        let fixture = FanOutFixture::new(&["remote-recipient", "never-recipient"]);
+        let landed_dir = fixture.write_remote_transfer_script("stub-host", "report.pdf");
+        let attach_file = fixture.write_attach_file("report.pdf", b"pdf-bytes");
+
+        let composition_observability = CliObservability::fallback();
+        let transport =
+            std::sync::Arc::new(atm_core::transport::testing::LoopbackClientTransport::new(
+                std::sync::Arc::new(atm_core::observability::NullObservability),
+            ));
+        let composition = crate::composition::CliComposition::from_loopback_transport(
+            transport,
+            &composition_observability,
+        );
+
+        let caller_context = atm_core::caller_context::CallerContext {
+            caller_identity: TEST_SENDER.parse().expect("caller"),
+            caller_chat_id: None,
+            caller_team: TEST_TEAM.parse().expect("team"),
+            activity_observation: None,
+        };
+
+        let remote_address: atm_core::address::AgentAddress =
+            format!("remote-recipient@{TEST_TEAM}.stub-host")
+                .parse()
+                .expect("remote address");
+        let self_address: atm_core::address::AgentAddress = format!("{TEST_SENDER}@{TEST_TEAM}")
+            .parse()
+            .expect("self address");
+        let never_address: atm_core::address::AgentAddress = format!("never-recipient@{TEST_TEAM}")
+            .parse()
+            .expect("never address");
+
+        let recipients = vec![
+            FanOutRecipient {
+                member_id: format!("remote-recipient@{TEST_TEAM}"),
+                address: remote_address,
+                locality: RecipientLocality::Remote("stub-host".parse().expect("host")),
+            },
+            FanOutRecipient {
+                member_id: format!("{TEST_SENDER}@{TEST_TEAM}"),
+                address: self_address,
+                locality: RecipientLocality::SameHost,
+            },
+            FanOutRecipient {
+                member_id: format!("never-recipient@{TEST_TEAM}"),
+                address: never_address,
+                locality: RecipientLocality::SameHost,
+            },
+        ];
+
+        let mut command = send_command("placeholder@test-team", None);
+        command.attach = vec![attach_file];
+        let picker_output = atm_core::send_to::PickerOutput {
+            schema_version: 1,
+            recipients: Vec::new(),
+            note: Some("fan-out test".to_string()),
+        };
+        let env = std::collections::HashMap::from([(
+            "ATM_TEMP",
+            fixture
+                .home_dir
+                .join("atm-temp")
+                .to_str()
+                .expect("utf8")
+                .to_string(),
+        )]);
+        struct FixedEnvSource(std::collections::HashMap<&'static str, String>);
+        impl atm_core::atm_temp::EnvSource for FixedEnvSource {
+            fn var(&self, key: &str) -> Option<String> {
+                self.0.get(key).cloned()
+            }
+        }
+        let atm_temp =
+            atm_core::atm_temp::resolve_atm_temp(&FixedEnvSource(env)).expect("atm_temp resolves");
+
+        let (delivered, not_delivered, failure) = command
+            .send_fan_out_recipients(
+                &recipients,
+                &picker_output,
+                &composition,
+                &fixture.current_dir,
+                fixture.home_dir.clone(),
+                atm_core::send::NudgeMode::Immediate,
+                Some(&atm_temp),
+                &caller_context,
+            )
+            .await;
+
+        assert_eq!(delivered, vec![format!("remote-recipient@{TEST_TEAM}")]);
+        assert_eq!(
+            not_delivered,
+            vec![
+                format!("{TEST_SENDER}@{TEST_TEAM}"),
+                format!("never-recipient@{TEST_TEAM}"),
+            ]
+        );
+        assert!(
+            failure.is_some(),
+            "recipient 2's self-send must abort the batch"
+        );
+        assert!(
+            landed_dir.join("report.pdf").exists(),
+            "remote staged bytes must be left in place after the aborted batch (no rollback)"
+        );
+        assert!(
+            fixture.inbox_contains("remote-recipient", "fan-out test"),
+            "recipient 1 must have actually received its message"
+        );
+
+        // The same delivered/not-delivered lists this test already asserted
+        // are exactly what --json would have printed on stderr (decision
+        // (g)'s partial report).
+        assert_eq!(
+            fan_out_result_json(&delivered, &not_delivered),
+            serde_json::json!({
+                "delivered": [format!("remote-recipient@{TEST_TEAM}")],
+                "not_delivered": [
+                    format!("{TEST_SENDER}@{TEST_TEAM}"),
+                    format!("never-recipient@{TEST_TEAM}"),
+                ],
+            })
+        );
     }
 }

@@ -1687,6 +1687,7 @@ mod replacement_runtime_tests {
                 }),
                 home_dir: std::path::PathBuf::from("/tmp").into(),
                 live_cwd: None,
+                host: None,
                 extra: serde_json::Map::new(),
             }],
         };

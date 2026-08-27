@@ -442,6 +442,7 @@ List teams or run one team-administration subcommand
 | Flag | Short | Required | Description |
 |------|-------|----------|-------------|
 | `--json` |  | no |  |
+| `--members` |  | no | Emit the picker member projection (ADR-055 decision (e), PRD §4.2/§5a) instead of the team-count list: per-member `{"id","name", "host","cwd","status"}`, consumed by `atm send --from-json`'s `recipients`. Only valid without a subcommand |
 | `--stderr-logs` |  | no | Route retained observability console logs to stderr |
 
 #### `atm teams add-member`
@@ -457,6 +458,7 @@ List teams or run one team-administration subcommand
 | `--target` |  | no | tmux pane target; required for --backend tmux |
 | `--session` |  | no | Herdr session name; only valid with --backend herdr |
 | `--pane-id` |  | no | deprecated compatibility spelling for --backend tmux --target |
+| `--host` |  | no | this member's registered host (ADR-055 decision (e)); used for Send-To same-host/remote routing, never inferred |
 | `--json` |  | no |  |
 | `--stderr-logs` |  | no | Route retained observability console logs to stderr |
 
@@ -530,6 +532,7 @@ List teams or run one team-administration subcommand
 | `--target` |  | no | tmux pane target; required for --backend tmux |
 | `--session` |  | no | Herdr session name; only valid with --backend herdr |
 | `--pane-id` |  | no | deprecated compatibility spelling for --backend tmux --target |
+| `--host` |  | no | this member's registered host (ADR-055 decision (e)); used for Send-To same-host/remote routing, never inferred |
 | `--json` |  | no |  |
 | `--stderr-logs` |  | no | Route retained observability console logs to stderr |
 
