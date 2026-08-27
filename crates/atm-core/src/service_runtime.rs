@@ -680,8 +680,11 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
 /// `validation`/400 there) depending on which call path produced the error.
 /// A generation mismatch is a caller-input problem, not a backend outage, so
 /// the unified mapping treats it (and the reserved `AlreadyActive` variant)
-/// as a validation error; only genuine backend I/O failures map to
-/// `daemon_unavailable`.
+/// as a validation error. Genuine backend I/O failures (`Storage`) preserve
+/// the originating error's own code and cause (RBP-F001) instead of
+/// collapsing every failure into one generic `daemon_unavailable` shape —
+/// a caller-input constraint violation surfaced by the backend therefore no
+/// longer looks identical to a true outage.
 pub fn graft_store_error(error: GraftEndpointStoreError) -> AtmError {
     match error {
         GraftEndpointStoreError::NotOwner => AtmError::new(
@@ -691,7 +694,17 @@ pub fn graft_store_error(error: GraftEndpointStoreError) -> AtmError {
         GraftEndpointStoreError::AlreadyActive => {
             AtmError::validation("graft receiver lease is already active")
         }
-        GraftEndpointStoreError::Storage(message) => AtmError::daemon_unavailable(message),
+        GraftEndpointStoreError::Storage {
+            code,
+            message,
+            cause,
+        } => {
+            let error = AtmError::new(code, message);
+            match cause {
+                Some(cause) => error.with_cause(cause),
+                None => error,
+            }
+        }
     }
 }
 
@@ -842,5 +855,36 @@ mod tests {
             })
             .expect("reloaded roster lookup");
         assert_eq!(loads.load(Ordering::Relaxed), 2);
+    }
+
+    // RBP-F001/RBP-F003: `graft_store_error` is the single canonical
+    // `GraftEndpointStoreError` -> `AtmError` mapping. This covers all three
+    // variants, including the ADR-056-reserved `AlreadyActive` (RBP-F003:
+    // never constructed by the only production implementer today, but the
+    // mapping for it must still be exercised and correct for the day a
+    // caller that cannot prove same-host exclusivity needs it).
+    #[test]
+    fn graft_store_error_maps_all_variants_and_preserves_storage_code_and_cause() {
+        use crate::service_runtime::graft_store_error;
+        use atm_storage::contract::GraftEndpointStoreError;
+
+        let not_owner = graft_store_error(GraftEndpointStoreError::NotOwner);
+        assert_eq!(not_owner.code(), AtmErrorCode::GraftReceiverNotOwner);
+
+        let already_active = graft_store_error(GraftEndpointStoreError::AlreadyActive);
+        assert_eq!(already_active.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(already_active.message().contains("already active"));
+
+        // A representative backend failure code distinct from the generic
+        // `daemon_unavailable` this used to collapse into (RBP-F001): the
+        // original code and cause survive the round trip through `Storage`.
+        let storage_error = graft_store_error(GraftEndpointStoreError::Storage {
+            code: AtmErrorCode::MailboxWriteFailed,
+            message: "disk full".to_string(),
+            cause: Some("ENOSPC".to_string()),
+        });
+        assert_eq!(storage_error.code(), AtmErrorCode::MailboxWriteFailed);
+        assert!(storage_error.message().starts_with("disk full"));
+        assert_eq!(storage_error.cause(), Some("ENOSPC"));
     }
 }

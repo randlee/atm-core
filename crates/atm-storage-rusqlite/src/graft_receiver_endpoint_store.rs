@@ -21,7 +21,7 @@ impl SqliteGraftReceiverEndpointStore {
     }
 
     fn storage_error(error: atm_storage::AtmError) -> GraftEndpointStoreError {
-        GraftEndpointStoreError::Storage(error.to_string())
+        GraftEndpointStoreError::storage(&error)
     }
 }
 

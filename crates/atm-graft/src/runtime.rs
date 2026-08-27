@@ -560,12 +560,11 @@ pub(crate) struct GraftReceiverLoopContext {
     pub(crate) ready_tx: Option<SyncSender<()>>,
 }
 
-/// The listener's owner generation is a freshly minted ULID (see
-/// `GraftReceiverListener::bind`), so this conversion into the storage-layer
-/// validated newtype can never fail in practice.
+/// The listener already stores its owner generation as the validated
+/// `OwnerGeneration` newtype (RBP-F002), so this is a cheap clone rather
+/// than a re-parse of a raw string on every ~1s refresh tick.
 fn owner_generation(listener: &GraftReceiverListener) -> OwnerGeneration {
-    OwnerGeneration::new(listener.owner_generation())
-        .expect("graft receiver listener owner generation is always a valid ULID")
+    listener.owner_generation().clone()
 }
 
 /// Runs a possibly-blocking daemon client call on a helper thread and gives up
@@ -708,8 +707,28 @@ impl RegisteredGraftReceiver {
 
 impl Drop for RegisteredGraftReceiver {
     fn drop(&mut self) {
-        let Some(client) = self.client.take() else {
-            return;
+        // ATM-QA-007: attempt a best-effort reconnect via `connect_existing()`
+        // when no client was ever established (mirrors `client()`'s own
+        // fallback), instead of unconditionally skipping the unregister
+        // attempt. A transient hiccup that prevented every prior
+        // announce/refresh from ever populating `self.client` must not also
+        // silently lose the final unregister attempt at clean shutdown.
+        let client = match self.client.take() {
+            Some(client) => client,
+            None => match GraftClient::connect_existing() {
+                Ok(client) => client,
+                Err(error) => {
+                    tracing::debug!(
+                        subsystem = "atm_graft.receiver_loop",
+                        action = "unregister_graft_receiver",
+                        outcome = "best_effort_reconnect_failure",
+                        error_code = %error.code(),
+                        error_message = %error.message(),
+                        "graft receiver could not reconnect to attempt a best-effort lease unregister"
+                    );
+                    return;
+                }
+            },
         };
         let team = self.team.clone();
         let agent = self.agent.clone();
@@ -2237,6 +2256,67 @@ mod tests {
             backoff.current_delay(),
             GRAFT_LEASE_REFRESH_INTERVAL,
             "a success must reset the cadence back to the base interval"
+        );
+    }
+
+    // ATM-QA-006: dropping an already-superseded `RegisteredGraftReceiver`
+    // wrapper (an old generation, after a newer generation has taken over
+    // the lease elsewhere) must be a no-op against the daemon-lease path —
+    // the store's `NotOwner` rejection is swallowed the same best-effort way
+    // as any other unregister failure, never panicking and never touching
+    // the newer generation's lease.
+    #[test]
+    fn drop_of_a_superseded_generation_is_a_noop_against_the_daemon_lease_path() {
+        let paths = test_paths();
+        let registry = FakeGraftRegistry::new(true);
+        let team = TeamName::from_validated(TEST_TEAM);
+        let agent = AgentName::from_validated(TEST_QA);
+        let (_stop_tx, stop_rx) = mpsc::channel();
+        let snapshot = Arc::new(RwLock::new(SessionSnapshot {
+            team: team.clone(),
+            agent: agent.clone(),
+            state: GraftSessionState::Listening,
+        }));
+        let ctx = GraftReceiverLoopContext {
+            graft_root: paths.workspace_root.clone(),
+            team: team.clone(),
+            agent: agent.clone(),
+            owner_chat_id: None,
+            client: Some(registry.client()),
+            snapshot,
+            injector: Arc::new(RecordingInjector::default()) as Arc<dyn HostNudgeInjector>,
+            observability: Arc::new(NoopObservability),
+            stop_rx,
+            ready_tx: None,
+        };
+        let listener = bind_receiver(&paths, None).expect("bind listener");
+        let mut receiver = RegisteredGraftReceiver::new(listener, &ctx);
+        receiver.announce().expect("announce this generation");
+        let own_generation = registry
+            .lease(&team, &agent)
+            .expect("lease registered")
+            .owner_generation;
+
+        // A newer generation displaces the lease elsewhere (e.g. a successor
+        // bind after this process is SIGKILLed) while `receiver` is still
+        // alive here in the test, modeling the exact race the finding
+        // describes.
+        let successor_generation =
+            OwnerGeneration::new("01J000000000000000000000AA").expect("generation");
+        assert_ne!(own_generation, successor_generation);
+        registry.seed_stale_lease(team.clone(), agent.clone(), successor_generation.clone());
+
+        // Dropping the superseded wrapper must not panic and must not
+        // disturb the newer generation's lease.
+        drop(receiver);
+
+        let lease = registry
+            .lease(&team, &agent)
+            .expect("the newer generation's lease must remain");
+        assert_eq!(
+            lease.owner_generation, successor_generation,
+            "an old generation's Drop-time unregister must be rejected (NotOwner) and swallowed, \
+             never displacing a newer generation's lease"
         );
     }
 }

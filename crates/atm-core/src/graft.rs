@@ -26,6 +26,7 @@ use crate::boundary::{
 use crate::error::{AtmError, AtmErrorCode};
 use crate::list::{ListOutcome, ListQuery};
 use crate::local_http::LocalCapability;
+use crate::protocol::OwnerGeneration;
 use crate::read::{ReadOutcome, ReadQuery};
 use crate::schema::canonical_graft_root;
 use crate::send::{SendOutcome, SendRequest};
@@ -312,7 +313,7 @@ pub fn read_graft_post_send_message<T: DeserializeOwned>(
 pub struct GraftReceiverListener {
     listener: TcpListener,
     record_path: PathBuf,
-    owner_generation: String,
+    owner_generation: OwnerGeneration,
     capability: LocalCapability,
     record: GraftReceiverEndpointRecord,
     _ownership: ReceiverOwnershipGuard,
@@ -412,10 +413,15 @@ impl GraftReceiverListener {
             .with_cause(source)
         })?;
         let capability = LocalCapability::generate()?;
-        let owner_generation = Ulid::new().to_string();
+        // A freshly minted ULID is always a valid `OwnerGeneration`; storing
+        // the already-validated newtype here (RBP-F002) means every later
+        // read of this listener's generation is a cheap clone instead of a
+        // re-parse of a raw string on every ~1s refresh tick.
+        let owner_generation = OwnerGeneration::new(Ulid::new().to_string())
+            .expect("a freshly minted ULID is always a valid owner generation");
         let record = GraftReceiverEndpointRecord {
             schema_version: GRAFT_RECEIVER_RECORD_SCHEMA_VERSION,
-            owner_generation: owner_generation.clone(),
+            owner_generation: owner_generation.as_str().to_string(),
             owner_chat_id,
             loopback,
             capability_base64url: capability.to_base64url(),
@@ -455,7 +461,7 @@ impl GraftReceiverListener {
             }
             true => {
                 let current = read_receiver_record(&self.record_path)?;
-                if current.owner_generation == self.owner_generation {
+                if current.owner_generation == self.owner_generation.as_str() {
                     Ok(false)
                 } else {
                     Err(AtmError::new(
@@ -564,7 +570,7 @@ impl GraftReceiverListener {
     }
 
     /// Return the generation that owns this receiver binding.
-    pub fn owner_generation(&self) -> &str {
+    pub fn owner_generation(&self) -> &OwnerGeneration {
         &self.owner_generation
     }
 }
@@ -574,7 +580,7 @@ impl Drop for GraftReceiverListener {
         // Only the generation that published this record may remove it. This
         // prevents an old listener from erasing a successor after a reclaim.
         if let Ok(record) = read_receiver_record(&self.record_path)
-            && record.owner_generation == self.owner_generation
+            && record.owner_generation == self.owner_generation.as_str()
         {
             let _ = fs::remove_file(&self.record_path);
             tracing::info!(record_path = %self.record_path.display(), action = "receiver_record_cleanup", outcome = "removed", "graft receiver removed its owned endpoint record");
