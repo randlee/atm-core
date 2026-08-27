@@ -11,6 +11,10 @@ pub mod schema;
 pub mod search;
 pub mod template_catalog;
 pub mod template_workflow;
+/// Shared no-op test doubles for storage contract traits (RBQA-F002/F003).
+#[doc(hidden)]
+#[cfg(any(test, feature = "test-utils"))]
+pub mod testing;
 pub mod tls;
 pub mod types;
 mod validation;

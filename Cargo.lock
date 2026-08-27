@@ -257,6 +257,7 @@ dependencies = [
  "async-trait",
  "atm-daemon-client",
  "atm-http-runtime",
+ "atm-runtime-test-support",
  "serde_json",
  "tempfile",
  "tokio",

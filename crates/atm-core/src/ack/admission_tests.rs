@@ -8,7 +8,7 @@
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use serde_json::Map;
 
 use super::{admit_acknowledgement_write, admit_acknowledgement_write_async};
@@ -25,9 +25,8 @@ use crate::types::{AgentName, IsoTimestamp, TeamName};
 use atm_storage::OwnerGeneration;
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource,
-    GraftEndpointStoreError, GraftReceiverEndpointStore, GraftReceiverLease,
-    GraftReceiverRegistration,
 };
+use atm_storage::testing::NoopGraftReceiverEndpointStore;
 
 /// The acknowledging agent: the pending source sits in this agent's mailbox
 /// and was sent by `TEST_SENDER`, so the reply target is never self-addressed.
@@ -429,56 +428,9 @@ fn local_runtime(store: Arc<InMemoryAsyncStore>, attach_async_store: bool) -> Lo
     }
 }
 
-struct EmptyGraftReceiverStore;
-
-impl atm_storage::contract::sealed::Sealed for EmptyGraftReceiverStore {}
-
-impl GraftReceiverEndpointStore for EmptyGraftReceiverStore {
-    fn register(
-        &self,
-        _registration: &GraftReceiverRegistration,
-        _now: DateTime<Utc>,
-    ) -> Result<(), GraftEndpointStoreError> {
-        Ok(())
-    }
-
-    fn refresh(
-        &self,
-        _team: &TeamName,
-        _agent: &AgentName,
-        _owner_generation: &OwnerGeneration,
-        _now: DateTime<Utc>,
-    ) -> Result<(), GraftEndpointStoreError> {
-        Ok(())
-    }
-
-    fn unregister(
-        &self,
-        _team: &TeamName,
-        _agent: &AgentName,
-        _owner_generation: &OwnerGeneration,
-    ) -> Result<(), GraftEndpointStoreError> {
-        Ok(())
-    }
-
-    fn lookup(
-        &self,
-        _team: &TeamName,
-        _agent: &AgentName,
-    ) -> Result<Option<GraftReceiverLease>, GraftEndpointStoreError> {
-        Ok(None)
-    }
-
-    fn mark_unreachable(
-        &self,
-        _team: &TeamName,
-        _agent: &AgentName,
-        _owner_generation: &OwnerGeneration,
-        _now: DateTime<Utc>,
-    ) -> Result<(), GraftEndpointStoreError> {
-        Ok(())
-    }
-}
+// RBQA-F002/F003: the no-op `GraftReceiverEndpointStore` test double lives
+// once in `atm_storage::testing::NoopGraftReceiverEndpointStore`, shared
+// with `atm-storage`'s own contract tests, instead of being duplicated here.
 
 #[test]
 fn graft_receiver_runtime_wiring_and_unconfigured_defaults_are_explicit() {
@@ -513,7 +465,7 @@ fn graft_receiver_runtime_wiring_and_unconfigured_defaults_are_explicit() {
         }),
         false,
     )
-    .with_graft_receiver_endpoint_store(Arc::new(EmptyGraftReceiverStore));
+    .with_graft_receiver_endpoint_store(Arc::new(NoopGraftReceiverEndpointStore));
     assert!(runtime.graft_receiver_endpoint_store().is_ok());
     assert_eq!(
         runtime
