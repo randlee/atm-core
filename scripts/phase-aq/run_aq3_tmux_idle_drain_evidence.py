@@ -48,7 +48,14 @@ Mechanism notes:
   whatever the pane's foreground command echoes back, so raw substring counts
   in `tmux capture-pane` output are not a reliable one-shot signal. Pane
   capture is used here only to prove presence, ordering (FIFO), and negative
-  absence (the second message is not yet delivered).
+  absence (the second message is not yet delivered). The counter read is
+  polled (`wait_for_drained_counter_at_least`), not read once immediately
+  after `wait_for_pane` returns: `TokioTmuxReceivedHook::emit_received_message`
+  makes the rendered nudge visible in the pane on its *first* `send-keys`
+  call, but only clears the pending marker and increments this counter after
+  two more sequential tmux round trips separated by the deliberate 275ms
+  `TMUX_DOUBLE_ENTER_DELAY` -- an immediate single read races that tail
+  latency and reproducibly under-reads the counter.
 - This harness exercises deliverable 2 (the idle-transition drain), not
   deliverable 3 (the 30-second periodic recovery sweep): deliverable 3's
   restart-recovery behavior is covered by `queue_drain.rs`'s own unit and
@@ -392,6 +399,27 @@ def drained_counter(atm: Path, env: dict[str, str], timeout: float) -> int:
     return int(runtime_status.get("queue_messages_drained_total", 0))
 
 
+def wait_for_drained_counter_at_least(atm: Path, env: dict[str, str], timeout: float, minimum: int) -> int:
+    """Poll `queue_messages_drained_total` until it reaches `minimum` or `timeout` elapses.
+
+    `wait_for_pane` only proves the rendered nudge text became visible, which
+    happens on the *first* of three sequential tmux `send-keys` calls inside
+    `TokioTmuxReceivedHook::emit_received_message`. The daemon does not clear
+    the pending marker or increment this counter until *after* the second and
+    third `send-keys` calls -- separated by the deliberate
+    `TMUX_DOUBLE_ENTER_DELAY` (275ms) -- complete. A single immediate read
+    right after `wait_for_pane` returns races that tail latency and
+    reproducibly under-reads the counter; polling here is required, not
+    optional.
+    """
+    deadline = time.monotonic() + timeout
+    latest = drained_counter(atm, env, timeout)
+    while latest < minimum and time.monotonic() < deadline:
+        time.sleep(0.05)
+        latest = drained_counter(atm, env, timeout)
+    return latest
+
+
 def daemon_log_tail(env: dict[str, str]) -> dict[str, Any]:
     candidates = [
         Path(env["ATM_HOME"]) / "logs" / "atm.log.jsonl",
@@ -503,7 +531,9 @@ def run_scenario(args: argparse.Namespace) -> dict[str, Any]:
             # --- First Idle transition drains exactly the oldest pending row. ---
             first_transition = heartbeat(args.atm, env, RECEIVER, "idle", args.timeout)
             pane_after_first = wait_for_pane(socket_name, pane, QUEUE_BODY_ONE, args.timeout)
-            counters_after_first = drained_counter(args.atm, env, args.timeout)
+            counters_after_first = wait_for_drained_counter_at_least(
+                args.atm, env, args.timeout, counters_before + 1
+            )
             record["idle_transition_drain_one"] = {
                 "heartbeat": first_transition,
                 "pane_after": pane_after_first,
@@ -517,7 +547,9 @@ def run_scenario(args: argparse.Namespace) -> dict[str, Any]:
             heartbeat(args.atm, env, RECEIVER, "active-tool-use", args.timeout)
             second_transition = heartbeat(args.atm, env, RECEIVER, "idle", args.timeout)
             pane_after_second = wait_for_pane(socket_name, pane, QUEUE_BODY_TWO, args.timeout)
-            counters_after_second = drained_counter(args.atm, env, args.timeout)
+            counters_after_second = wait_for_drained_counter_at_least(
+                args.atm, env, args.timeout, counters_after_first + 1
+            )
             record["idle_transition_drain_two"] = {
                 "heartbeat": second_transition,
                 "pane_after": pane_after_second,

@@ -112,6 +112,25 @@ class Aq3TmuxIdleDrainEvidenceTests(unittest.TestCase):
             module.tmux_available = original
         self.assertEqual(record["status"], "skipped_no_tmux")
 
+    def test_wait_for_drained_counter_polls_past_the_tmux_double_enter_tail_latency(self) -> None:
+        # Regression for a real observed race (2026-08-27 clean-runner CI):
+        # `wait_for_pane` only proves the rendered nudge became visible on the
+        # daemon's *first* tmux send-keys call; the pending-marker clear and
+        # counter increment land only after two more tmux round trips
+        # separated by the 275ms TMUX_DOUBLE_ENTER_DELAY. A single immediate
+        # `drained_counter` read reproducibly under-reads; polling must not.
+        module = load_module()
+        readings = iter([0, 0, 1])
+        module.drained_counter = lambda atm, env, timeout: next(readings)
+        result = module.wait_for_drained_counter_at_least(Path("/bin/atm"), {}, 5.0, minimum=1)
+        self.assertEqual(result, 1)
+
+    def test_wait_for_drained_counter_times_out_returning_the_last_observed_value(self) -> None:
+        module = load_module()
+        module.drained_counter = lambda atm, env, timeout: 0
+        result = module.wait_for_drained_counter_at_least(Path("/bin/atm"), {}, 0.2, minimum=1)
+        self.assertEqual(result, 0)
+
     def test_message_kinds_map_to_the_expected_atm_verbs(self) -> None:
         # AQ1 D4 / NudgeMode: `atm queue` is always Deferred (pending-store
         # gated), `atm send` is always Immediate (never queued). This
