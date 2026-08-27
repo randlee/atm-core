@@ -33,12 +33,19 @@ class HookTestHelpers:
     neither test class inherits the other's `test_*` methods (that would
     double-run the shared contract tests once per class)."""
 
-    def run_hook(self, event: str, fake: Path, state: Path, harness: str = "claude") -> subprocess.CompletedProcess[str]:
+    def run_hook(
+        self,
+        event: str,
+        fake: Path,
+        state: Path,
+        harness: str = "claude",
+        debounce_seconds: str = "0.02",
+    ) -> subprocess.CompletedProcess[str]:
         env = {
             **os.environ,
             "ATM_BIN": str(fake),
             "ATM_HOOK_STATE_DIR": str(state),
-            "ATM_HOOK_DEBOUNCE_SECONDS": "0.02",
+            "ATM_HOOK_DEBOUNCE_SECONDS": debounce_seconds,
             "ATM_HOOK_TIMEOUT_SECONDS": "1",
             "ATM_IDENTITY": "test-agent",
             "ATM_TEAM": "test-team",
@@ -102,14 +109,17 @@ class QueueHookTests(HookTestHelpers, unittest.TestCase):
     """Shared, harness-neutral hook contract. Runs on all three CI matrix
     OSes, including Windows (Claude Code runs on Windows)."""
 
-    def test_stop_pull_blocks_with_literal_json_and_schedules_idle(self):
+    def test_stop_pull_blocks_with_literal_json_and_completes_idle_inline(self):
         with tempfile.TemporaryDirectory() as directory:
             root, state = Path(directory), Path(directory) / "state"
             fake = self.fake_cli(root, [{"kind": "queue", "msg_id": "01TEST", "body": "read atm"}])
-            result = self.run_hook("stop", fake, state)
+            # Avoid leaving a detached expiry child behind while
+            # TemporaryDirectory is tearing down this fixture. Other tests
+            # cover the delayed expiry path and the worker also tolerates a
+            # vanished state directory.
+            result = self.run_hook("stop", fake, state, debounce_seconds="0")
             self.assertEqual(result.returncode, 0)
             self.assertEqual(json.loads(result.stdout), {"decision": "block", "reason": "read atm"})
-            time.sleep(0.05)
 
     def test_pre_tool_use_cancels_debounced_stop_timer(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -118,6 +128,13 @@ class QueueHookTests(HookTestHelpers, unittest.TestCase):
             self.run_hook("stop", fake, state)
             self.run_hook("pre-tool-use", fake, state)
             self.assertFalse((state / "pending-idle").exists())
+
+    def test_idle_expiry_ignores_a_vanished_state_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root, state = Path(directory), Path(directory) / "state"
+            fake = self.fake_cli(root, [])
+            result = self.run_hook("idle-expired", fake, state)
+            self.assertEqual(result.returncode, 0)
 
     def test_stop_debounce_expiry_sends_exactly_one_idle_heartbeat(self):
         """AC2: proves the debounced expiry actually calls
