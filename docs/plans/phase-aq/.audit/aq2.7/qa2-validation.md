@@ -6,12 +6,13 @@ PR: #1056, target `integrate/phase-aq`
 
 ## Merge-forward checkpoint
 
-`origin/integrate/phase-aq` at `334e5ca89` is already an ancestor of the
-branch's `def0365ee` head, so no additional merge was made for this fix. The
-correction takes the integrate side wholesale for the three graft files named
-in `merge-forward.md`, plus the dependent CLI caller. This removes the
-retired file-record publication path while retaining the AQ2.7 implementation
-files in Herdr, HTTP runtime, and daemon bootstrap.
+`origin/integrate/phase-aq` was merged at `a3c935639` in merge commit
+`64752cb91`. Its sole conflict was a comment-only difference in
+`crates/atm-graft/src/runtime/mod.rs`, resolved with integrate's version. The
+earlier correction took the integrate side wholesale for the three graft files
+named in `merge-forward.md`, plus the dependent CLI caller. This keeps the
+retired file-record publication path removed while retaining the AQ2.7
+implementation files in Herdr, HTTP runtime, and daemon bootstrap.
 
 ## Focused QA-2 run
 
