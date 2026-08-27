@@ -135,8 +135,11 @@ the two scratch smoke branches are eligible for cleanup after this import.
 
 The first-attempt cleanup is recorded here: PR #935 was closed and
 `feature/vendor-sc-compose-publishing-skill` was deleted;
-`fix/publish-manifest-complete` and `integrate/publish-release-readiness` were
-fully merged or superseded and deleted; the two scratch smoke branches
+`fix/publish-manifest-complete` was fully merged or superseded and deleted;
+`integrate/publish-release-readiness` was fully merged by PR #425 with zero
+commits ahead of `develop`, but remote deletion was rejected by the
+`integrate/*` repository ruleset and is pending manual deletion by the
+repository owner. The two scratch smoke branches
 (`smoke/phase-at-at1-rehearsal` and `smoke/phase-at-repin-verify`) are eligible
 for deletion after the artifact recovery above. No branch cleanup removes
 evidence because the recovered copies are retained in this plan branch.

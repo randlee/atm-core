@@ -43,8 +43,13 @@ use identical shared assets and tool bootstrap, then publish the immutable
    `docs/plans/phase-at/recovered/sc-publish-consumer-input.rehearsal.json`.
    Promote that recovered consumer input after reviewing its diff against the
    Publish Surface Ground Truth below and re-running the scripted
-   install/dry-run/parity/test validation at the new pin. Full re-derivation
-   of the document is intentionally dropped as redundant bureaucracy.
+   install/dry-run/parity/test validation at the new pin. Before promotion,
+   re-derive the crate census from `cargo metadata` on the sprint-time source
+   and make an explicit `publish`/`publish = false` decision for every member,
+   including the unresolved `peer-tls` member noted below; the recovered input
+   must not be promoted as-is. Full re-derivation of the document is
+   intentionally dropped as redundant bureaucracy, but this live census and
+   disposition gate is mandatory.
 3. Use the package's single tool bootstrap in both preflight and release.
    Remove no legacy workflow until the new AT.2 deletion sprint's coverage gate; where the installer
    overwrites a same-named legacy file, the overwrite is the adoption. The
@@ -128,8 +133,9 @@ metadata` at sprint time is authoritative if the workspace has changed.
 
 | Surface | Members |
 | --- | --- |
-| Publishable crates (crates.io), dependency order | 12 crates, one valid topological order: `atm-error` → `atm-storage` → `agent-team-mail-core` → `atm-storage-rusqlite` → `atm-http-runtime` → `atm-runtime` → `atm-template-sc-compose` → `atm-daemon-bootstrap` → `atm-daemon-client` → `agent-team-mail` → `atm-daemon` → `atm-graft`. Any order satisfying the workspace dependency graph is acceptable. |
+| Publishable crates (crates.io), dependency order | Baseline census: 12 crates, one valid topological order: `atm-error` → `atm-storage` → `agent-team-mail-core` → `atm-storage-rusqlite` → `atm-http-runtime` → `atm-runtime` → `atm-template-sc-compose` → `atm-daemon-bootstrap` → `atm-daemon-client` → `agent-team-mail` → `atm-daemon` → `atm-graft`. Any order satisfying the workspace dependency graph is acceptable; re-derive this list at sprint time. |
 | Internal `publish = false` crates | 9 crates, never published: `atm-architecture`, `atm-storage-sqlserver-proof`, `atm-runtime-test-support`, `atm-peer-tls-interop`, `atm-graft-python`, `atm-query-python`, `sc-lint-attributes`, `sc-lint-directives`, `sc-lint-boundary`. |
+| Workspace member requiring an explicit disposition | **UNRESOLVED:** `peer-tls` is present on current `origin/develop` (workspace version `1.4.4`), has no `publish = false` declaration, and depends on `atm-storage`. The sprint must explicitly choose `publish = true` or `publish = false` and update the consumer input before promotion. |
 | Python distributions | `atm-graft` (maturin, `crates/atm-graft-python`, version dynamic from Cargo.toml), `atm-query` (maturin, `crates/atm-query-python`), `hermes-atm` (setuptools, `crates/hermes-atm` — a pure-Python package, not a workspace crate). |
 | Released binaries | `atm` (crate `agent-team-mail`) and `atm-daemon` (crate `atm-daemon`), both confirmed cargo bin targets. `atm_post_send_hook_fixture` and `atm-daemon-benchmark` are internal bins and are not released. |
 
@@ -144,12 +150,24 @@ Expected channel enablement (all six):
 | Winget | Enabled — identifier `randlee.agent-team-mail`. |
 | Scoop | Enabled — bucket `randlee/scoop-bucket`; kit-new channel with no legacy workflow. |
 
+The baseline counts and recovered input predate the live `peer-tls` member. The
+re-pin verification verdict (`AT-REPIN-VERIFY-R1`, retained at
+`recovered/repin-verify-42e0fce-receipt.md`) proves schema compatibility,
+installer parity, and manifest validation for the already-declared input; it
+does **not** prove crate-list completeness against a later workspace census.
+Its recovered manifest hashes remain source evidence, but AT.1 must recompute
+them after the live census and disposition decision.
+
 ## Prerequisites
 
 - A clean ATM worktree off `develop` (baseline `d610b4c07`, post-PR #960) and
   an immutable, locally available `sc-publish` revision resolving #39–#41.
   Network unavailability may delay selecting a newer revision, but does not
   justify a local fork or hand edit.
+- Before promoting the recovered input, run `cargo metadata --no-deps
+  --format-version 1` against the sprint-time source, record the workspace
+  version (current `origin/develop` is `1.4.4`), and resolve `peer-tls`'s
+  publish disposition explicitly.
 - The caller has reviewed the complete consumer JSON before installation.
 
 ## Dependencies
@@ -186,6 +204,9 @@ decision.
   legacy name is missing (REQ-P-RELEASE-001/002/003/005).
 - The complete JSON and parsed manifests agree on publish surface, explicit
   order, all Python distributions, and each declared build system.
+- The sprint-time `cargo metadata` census is recorded in the AT.1 receipt;
+  every workspace member has an explicit publish disposition, including
+  `peer-tls`, and the recovered input is never promoted without that update.
 - No branch-protection required check on `integrate/phase-at` or `develop`
   references a job name that no longer exists after the install
   (Deliverable 6).
@@ -237,6 +258,10 @@ that shared test suite.
 - Record any shared-package defect as an upstream `sc-publish` issue/PR with
   the failing fixture and command; do not patch its copied ATM files
   (ADR-050).
+- Correlate the completed re-pin proof as `AT-REPIN-VERIFY-R1` and record the
+  exact source refs used for byte comparison of each recovered artifact. The
+  imported historical rehearsal receipt remains byte-frozen; its pre-restructure
+  names and findings are intentionally not edited.
 
 ## Rollback
 
