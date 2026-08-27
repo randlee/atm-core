@@ -422,21 +422,30 @@ def validate_publish_surface(
         findings.append(Finding("publish-surface-plan", "error", "release contract crates must declare package names"))
         return
 
-    for crate in publishable_crates:
-        for cmd, check_name, summary in (
-            (
-                ["cargo", "package", "-p", crate, "--locked", "--no-verify"],
-                f"cargo-package-{crate}",
-                f"`cargo package` failed for {crate}",
-            ),
-            (
-                ["cargo", "publish", "--dry-run", "-p", crate, "--locked", "--no-verify"],
-                f"cargo-publish-dry-run-{crate}",
-                f"`cargo publish --dry-run` failed for {crate}",
-            ),
-        ):
-            completed = run_capture(cmd, cwd=root)
-            append_completed_findings(findings, check_name, completed, f"{check_name} passed", summary)
+    if enforce_release_version:
+        for crate in publishable_crates:
+            for cmd, check_name, summary in (
+                (
+                    ["cargo", "package", "-p", crate, "--locked", "--no-verify"],
+                    f"cargo-package-{crate}",
+                    f"`cargo package` failed for {crate}",
+                ),
+                (
+                    ["cargo", "publish", "--dry-run", "-p", crate, "--locked", "--no-verify"],
+                    f"cargo-publish-dry-run-{crate}",
+                    f"`cargo publish --dry-run` failed for {crate}",
+                ),
+            ):
+                completed = run_capture(cmd, cwd=root)
+                append_completed_findings(findings, check_name, completed, f"{check_name} passed", summary)
+    else:
+        findings.append(
+            Finding(
+                check="publishable-crate-dry-runs",
+                severity="warning",
+                summary="publishable crate package/publish dry-runs skipped outside explicit release-candidate mode",
+            )
+        )
 
     for crate in locked_crates:
         completed = run_capture(["cargo", "check", "-p", crate, "--locked"], cwd=root)

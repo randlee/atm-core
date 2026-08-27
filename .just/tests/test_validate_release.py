@@ -273,6 +273,56 @@ class ValidateReleaseProofTests(unittest.TestCase):
         self.assertEqual(run_capture.call_args.args[0][1], ".github/scripts/release_artifacts.py")
         self.assertTrue(any(finding.check == "release-binaries" and finding.blocks for finding in findings))
 
+    @mock.patch.object(VALIDATE_RELEASE, "load_release_contract")
+    @mock.patch.object(VALIDATE_RELEASE, "run_capture")
+    def test_default_publish_surface_skips_candidate_only_package_checks(
+        self,
+        run_capture: mock.Mock,
+        load_release_contract: mock.Mock,
+    ) -> None:
+        load_release_contract.return_value = {
+            "crates": [
+                {"package": "published-crate", "publish": True},
+                {"package": "internal-crate", "publish": False},
+            ]
+        }
+        run_capture.return_value = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+        findings: list[VALIDATE_RELEASE.Finding] = []
+
+        VALIDATE_RELEASE.validate_publish_surface(
+            self.root,
+            "1.3.0",
+            findings,
+            enforce_release_version=False,
+        )
+
+        commands = [call.args[0] for call in run_capture.call_args_list]
+        self.assertNotIn(["cargo", "package", "-p", "published-crate", "--locked", "--no-verify"], commands)
+        self.assertNotIn(["cargo", "publish", "--dry-run", "-p", "published-crate", "--locked", "--no-verify"], commands)
+        self.assertIn(["cargo", "check", "-p", "internal-crate", "--locked"], commands)
+        self.assertTrue(any(finding.check == "publishable-crate-dry-runs" for finding in findings))
+
+    @mock.patch.object(VALIDATE_RELEASE, "load_release_contract")
+    @mock.patch.object(VALIDATE_RELEASE, "run_capture")
+    def test_release_candidate_publish_surface_keeps_package_checks(
+        self,
+        run_capture: mock.Mock,
+        load_release_contract: mock.Mock,
+    ) -> None:
+        load_release_contract.return_value = {"crates": [{"package": "published-crate", "publish": True}]}
+        run_capture.return_value = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+
+        VALIDATE_RELEASE.validate_publish_surface(
+            self.root,
+            "1.3.0",
+            [],
+            enforce_release_version=True,
+        )
+
+        commands = [call.args[0] for call in run_capture.call_args_list]
+        self.assertIn(["cargo", "package", "-p", "published-crate", "--locked", "--no-verify"], commands)
+        self.assertIn(["cargo", "publish", "--dry-run", "-p", "published-crate", "--locked", "--no-verify"], commands)
+
 
 if __name__ == "__main__":
     unittest.main()
