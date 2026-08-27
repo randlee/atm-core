@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::types::{AgentName, TeamName};
+use crate::types::{AgentName, HostName, TeamName};
 
 pub const DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES: u64 = 128 * 1024;
 pub const MAX_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES: u64 = 1_048_576;
@@ -92,6 +92,14 @@ pub struct AtmConfig {
     /// `$ATM_TEMP` sweep TTL in days (ADR-055 decision (b)). Same
     /// zero-validation timing as `sweep_interval_seconds`.
     pub sweep_ttl_days: u32,
+    /// This machine's own routable host identity (ADR-055 decision (f)).
+    ///
+    /// Set once per machine by the operator, using the **same** value they
+    /// register via `teams update-member --host` for agents running on this
+    /// machine. Used only to classify a Send-To recipient as same-host
+    /// (`None`, or equal to this value) or remote (anything else); never
+    /// inferred from heartbeat, DNS, or socket state.
+    pub local_host: Option<HostName>,
     pub config_root: PathBuf,
 }
 
@@ -110,6 +118,7 @@ impl Default for AtmConfig {
             graft: GraftConfig::default(),
             sweep_interval_seconds: DEFAULT_SWEEP_INTERVAL_SECONDS,
             sweep_ttl_days: DEFAULT_SWEEP_TTL_DAYS,
+            local_host: None,
             config_root: PathBuf::new(),
         }
     }

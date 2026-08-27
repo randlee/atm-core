@@ -82,6 +82,10 @@ pub mod schema;
 pub mod search;
 /// Mailbox send workflows and request/response models.
 pub mod send;
+/// Send-To CLI-surface support: picker-recipient resolution, same-host/remote
+/// classification, attachment staging, and transfer-script invocation
+/// (ADR-055 decisions (c)-(g)).
+pub mod send_to;
 /// Internal service-owned seams that isolate retained command orchestration
 /// from direct helper/path access.
 pub(crate) mod service_runtime;
@@ -160,6 +164,12 @@ pub use delivery_channel::{
 pub use graft::AtmGraftClient;
 pub use protocol::{RequestEnvelope, ResponseEnvelope};
 pub use search::{SearchAggregateInput, SearchHit, SearchInput, SearchRequest, SearchResponse};
+pub use send_to::{
+    AddressResolutionError, PICKER_OUTPUT_SCHEMA_VERSION, PickerOutput, PickerOutputError,
+    PickerRecipientId, ROSTER_HOST_METADATA_KEY, RecipientLocality, classify_recipient_locality,
+    format_attachment_note, member_host, parse_picker_output, resolve_picker_recipient,
+    stage_same_host_attachments, validate_landed_dir_stdout,
+};
 // The canonical `GraftEndpointStoreError` -> `AtmError` mapping. Every
 // dispatch path (HTTP handlers, the retained-runtime bridge) must produce the
 // same `AtmError` — and therefore the same HTTP status — for a given store
