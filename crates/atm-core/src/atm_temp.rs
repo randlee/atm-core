@@ -383,6 +383,7 @@ fn default_scratch_root() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     use crate::test_support::capture_tracing;
     use std::collections::HashMap;
 
