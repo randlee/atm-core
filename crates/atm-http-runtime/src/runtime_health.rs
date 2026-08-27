@@ -32,6 +32,7 @@ struct RuntimeHealthState {
     graft_queue_handoff_failures_total: u64,
     graft_queue_marker_clear_failures_total: u64,
     queue_marker_set_failures_total: u64,
+    herdr_queue_last_tick_at: Option<IsoTimestamp>,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -114,6 +115,10 @@ impl RuntimeHealth {
         let mut state = self.lock();
         state.queue_marker_set_failures_total =
             state.queue_marker_set_failures_total.saturating_add(1);
+    }
+
+    pub fn record_herdr_queue_tick(&self, observed_at: Option<IsoTimestamp>) {
+        self.lock().herdr_queue_last_tick_at = observed_at;
     }
 
     /// Record an already-authorized local heartbeat.
@@ -220,6 +225,10 @@ impl RuntimeHealth {
         }
     }
 
+    pub fn record_herdr_poll_state(&self, member: &MemberKey, next_state: RuntimeMemberState) {
+        self.record_observed_state(member, next_state, RuntimeObservationSource::HerdrPoll);
+    }
+
     #[must_use]
     pub fn snapshot(&self) -> RuntimeStatusSnapshot {
         let state = self.lock();
@@ -280,6 +289,7 @@ impl RuntimeHealth {
             graft_queue_handoff_failures_total: state.graft_queue_handoff_failures_total,
             graft_queue_marker_clear_failures_total: state.graft_queue_marker_clear_failures_total,
             queue_marker_set_failures_total: state.queue_marker_set_failures_total,
+            herdr_queue_last_tick_at: state.herdr_queue_last_tick_at,
         }
     }
 
@@ -376,5 +386,13 @@ mod tests {
             member.session_changed_by,
             Some(RuntimeObservationSource::Heartbeat)
         );
+    }
+
+    #[test]
+    fn herdr_queue_tick_is_visible_to_runtime_status() {
+        let health = RuntimeHealth::default();
+        let tick = IsoTimestamp::now();
+        health.record_herdr_queue_tick(Some(tick));
+        assert_eq!(health.snapshot().herdr_queue_last_tick_at, Some(tick));
     }
 }

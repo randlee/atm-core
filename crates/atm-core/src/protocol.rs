@@ -472,6 +472,9 @@ pub struct RuntimeStatusSnapshot {
     /// Cumulative failures setting a deferred queue marker.
     #[serde(default, skip_serializing_if = "is_zero_u64")]
     pub queue_marker_set_failures_total: u64,
+    /// Timestamp of the most recent Herdr queue-wake poll, when enabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub herdr_queue_last_tick_at: Option<IsoTimestamp>,
 }
 
 fn is_zero_u64(value: &u64) -> bool {
@@ -618,6 +621,7 @@ mod tests {
             graft_queue_handoff_failures_total: 0,
             graft_queue_marker_clear_failures_total: 0,
             queue_marker_set_failures_total: 0,
+            herdr_queue_last_tick_at: None,
         };
 
         let encoded = serde_json::to_vec(&snapshot).expect("encode runtime snapshot");
@@ -680,6 +684,7 @@ mod tests {
             graft_queue_handoff_failures_total: 0,
             graft_queue_marker_clear_failures_total: 0,
             queue_marker_set_failures_total: 0,
+            herdr_queue_last_tick_at: None,
         };
         let decoded: LegacyRuntimeStatusSnapshot =
             serde_json::from_value(serde_json::to_value(snapshot).expect("encode snapshot"))

@@ -32,3 +32,22 @@ pub struct Draining {
 }
 
 pub struct Stopped;
+
+pub(crate) async fn abort_and_join<T>(task: &mut JoinHandle<T>) {
+    task.abort();
+    if tokio::time::timeout(ABORT_JOIN_GRACE, task).await.is_err() {
+        tracing::warn!(
+            abort_join_grace_ms = ABORT_JOIN_GRACE.as_millis(),
+            "runtime task exceeded the bounded abort-join grace"
+        );
+    }
+}
+
+pub(crate) async fn finish_maintenance(mut task: JoinHandle<()>, shutdown_timeout: Duration) {
+    if tokio::time::timeout(shutdown_timeout, &mut task)
+        .await
+        .is_err()
+    {
+        abort_and_join(&mut task).await;
+    }
+}

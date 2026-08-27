@@ -4,13 +4,21 @@ Status: complete · Branch: `feature/aq-2-7-herdr-queue-wake` off
 `integrate/phase-aq` · PR target: `integrate/phase-aq`
 recommended_agent: arch-ctm · recommended_model: deep-reasoning
 
-Implementation status (2026-08-26): complete on the assigned branch. The
+Implementation status (2026-08-26): complete on the assigned branch; QA-1
+rework is included. The
 Tokio runtime owns one fixed-cadence `HerdrQueueWakePump`, roster-wide Herdr
 session polling, FIFO pending claims with a host-wide burst cap and rotating
 cursor, selector-based Queue dispatch, cancellation-safe claim release, and
 `RuntimeHealth` poll provenance. Runtime shutdown owns and joins the pump task.
 The pre-existing AQ2.6 breaker timing flake was made deterministic with an
 injected test clock before this sprint's implementation.
+
+QA-1 rework adds deterministic breaker coverage, runtime shutdown-signal
+selection, the documented release/requeue partition with a ten-release bound,
+failure propagation from the Herdr emitter, AC-named pump fixtures using the
+fake adapter, poll timestamp propagation into runtime status and doctor, and
+the `runtime_maintenance.rs` extraction that keeps the production runtime
+module below the architecture line limit.
 
 Implement deferred queue wake-ups for AQ2.6's `HerdrSteer` members without
 pretending that Herdr supplies a queue. The durable ATM mailbox is the queue:

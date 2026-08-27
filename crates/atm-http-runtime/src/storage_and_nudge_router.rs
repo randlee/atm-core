@@ -547,7 +547,10 @@ impl StorageAndNudgeRouter {
                         &runtime,
                     ),
                 }?;
-                report.runtime_status = Some(runtime_health.snapshot());
+                let runtime_snapshot = runtime_health.snapshot();
+                report.herdr_queue_pump.last_tick_at = runtime_snapshot.herdr_queue_last_tick_at;
+                report.herdr_queue_pump.breaker = report.herdr_breaker.clone();
+                report.runtime_status = Some(runtime_snapshot);
                 report.daemon_context = daemon_context;
                 Ok(report)
             })
@@ -1786,10 +1789,14 @@ mod tests {
             )
             .await
             .expect("doctor response");
-        assert!(matches!(
-            response.into_inner(),
-            ResponseEnvelope::Doctor(report) if report.daemon_context == Some(daemon_context)
-        ));
+        match response.into_inner() {
+            ResponseEnvelope::Doctor(report) => {
+                assert_eq!(report.daemon_context, Some(daemon_context));
+                assert_eq!(report.herdr_queue_pump.last_tick_at, None);
+                assert_eq!(report.herdr_queue_pump.breaker, report.herdr_breaker);
+            }
+            other => panic!("expected doctor report, got {other:?}"),
+        }
     }
 
     async fn post_write(app: axum::Router, write: &WriteRequest) -> axum::response::Response {

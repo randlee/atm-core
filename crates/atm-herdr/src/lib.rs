@@ -90,15 +90,15 @@ impl From<HerdrError> for AtmError {
                 "Herdr agent was not found".to_owned(),
             ),
             HerdrError::AgentNotReady => (
-                AtmErrorCode::HerdrPromptFailed,
+                AtmErrorCode::HerdrAgentNotVisible,
                 "Herdr agent is not ready".to_owned(),
             ),
             HerdrError::AgentTargetAmbiguous => (
-                AtmErrorCode::HerdrPromptFailed,
+                AtmErrorCode::HerdrAgentNotVisible,
                 "Herdr agent target is ambiguous".to_owned(),
             ),
             HerdrError::AgentNotRunning => (
-                AtmErrorCode::HerdrUnavailable,
+                AtmErrorCode::HerdrAgentNotVisible,
                 "Herdr agent is not running".to_owned(),
             ),
             HerdrError::AgentPromptStalled => (

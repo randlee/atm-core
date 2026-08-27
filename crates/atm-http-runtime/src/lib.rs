@@ -100,8 +100,8 @@ pub use peer_stream::{
     PeerStreamFuture,
 };
 pub use runtime_health::RuntimeHealth;
-use runtime_maintenance::ABORT_JOIN_GRACE;
 pub use runtime_maintenance::{Draining, Running, RuntimeMaintenance, Stopped};
+use runtime_maintenance::{abort_and_join, finish_maintenance};
 pub use storage_and_nudge_router::StorageAndNudgeRouter;
 
 /// Validated configuration for the maintained Tokio HTTP runtime.
@@ -968,28 +968,14 @@ impl HttpRuntime<Draining> {
             )
             .with_cause(source)),
             Err(_) => {
-                server_task.abort();
-                if tokio::time::timeout(ABORT_JOIN_GRACE, &mut server_task)
-                    .await
-                    .is_err()
-                {
-                    tracing::warn!(
-                        abort_join_grace_ms = ABORT_JOIN_GRACE.as_millis(),
-                        "replacement HTTP runtime task exceeded the bounded abort-join grace"
-                    );
-                }
+                abort_and_join(&mut server_task).await;
                 Err(AtmError::daemon_unavailable(
                     "replacement HTTP runtime exceeded its shutdown deadline",
                 ))
             }
         };
-        if let Some(mut task) = maintenance_task.take() {
-            let maintenance_result =
-                tokio::time::timeout(self.config.timeouts.shutdown, &mut task).await;
-            if maintenance_result.is_err() {
-                task.abort();
-                let _ = tokio::time::timeout(ABORT_JOIN_GRACE, &mut task).await;
-            }
+        if let Some(task) = maintenance_task.take() {
+            finish_maintenance(task, self.config.timeouts.shutdown).await;
         }
         let cleanup_result = cleanup_loopback_endpoint_record(endpoint_record).await;
         let result = server_result.and(cleanup_result);
