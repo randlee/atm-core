@@ -81,6 +81,26 @@ render, the write fails closed with a typed error and performs no durable
 admission. Include-graph pinning and portable reproduction remain owned by
 sc-compose/dolt, not ATM.
 
+### Amendment (Phase AQ) — `PendingNudgeStore`
+
+ADR-054 (Sprint AQ1) is the follow-up ADR required by ADR-018 §3 before the
+sixth optional storage capability is added. This amendment records that
+governance step in the storage-boundary inventory this ADR owns; the
+capability's full semantics (durable at-most-once claim/release lifecycle,
+FIFO derivation, bounded retry) are decided in ADR-054 and are not repeated
+here.
+
+`PendingNudgeStore` is a new sealed, backend-neutral optional capability
+trait on the `atm-storage` shared contract, joining `PeerConfigStore`,
+`OutboundMessageQuery`, `NudgeTemplateOverrideStore`, `TemplateCatalogStore`,
+and `MessageSearchStore` as the sixth. It is recorded machine-readably in
+`boundaries/atm-storage/pending-nudge-store.toml` and enforced by
+`crates/atm-architecture/tests/pending_nudge_store_boundary.rs`, following
+the same pattern the Phase AN extension above established. As with that
+extension, this amendment authorizes no further optional storage capability
+trait: a seventh requires its own new ADR under ADR-018 §3, counted from
+ADR-054 forward.
+
 ## Consequences
 
 The prior runtime indirection is not a justification for SQLite-backed daemon

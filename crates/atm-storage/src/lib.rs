@@ -27,12 +27,13 @@ pub use analyst_query::{AnalystQueryRow, AnalystQueryStore, AnalystQueryValue};
 pub use contract::{
     AckRequirementState, AckTransition, AcknowledgementCommit, AcknowledgementReplyBuilder,
     AcknowledgementSource, AgentType, AsyncMessageStore, BuiltInNudgeTemplateKind,
-    CertificateFingerprint, HttpsInterface, LocalCertificate, MailMessageState,
+    CertificateFingerprint, HttpsInterface, LocalCertificate, MAX_NUDGE_ATTEMPTS, MailMessageState,
     MailboxBucketCounts, Message, MessageFingerprint, MessageKey, MessageQuery,
-    MessageReceivedEvent, MessageStore, NudgeTemplateOverrideStore, PeerConfigStore, PrivateKeyRef,
-    RosterChangedEvent, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore,
-    StorageNotifier, TaskState, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
-    TrustedPeer, derive_ack_requirement,
+    MessageReceivedEvent, MessageStore, NudgeClaim, NudgeTemplateOverrideStore, PeerConfigStore,
+    PendingNudgeStore, PrivateKeyRef, RosterChangedEvent, RosterHarness, RosterMember,
+    RosterMemberKind, RosterSnapshot, RosterStore, StorageNotifier, TaskState,
+    TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, TrustedPeer,
+    derive_ack_requirement,
 };
 pub use error::AtmError;
 pub use error_codes::AtmErrorCode;
@@ -64,7 +65,7 @@ pub use tls::{
     install_tls_provider, normalize_fingerprint,
 };
 pub use types::{
-    AgentId, AgentIdentity, AgentName, ChatId, HostName, IsoTimestamp, ModelName, PaneId, TaskId,
-    TeamName, TemplateFrontmatter, TemplateSha,
+    AgentId, AgentIdentity, AgentName, ChatId, HostName, IsoTimestamp, MemberKey, ModelName,
+    PaneId, TaskId, TeamName, TemplateFrontmatter, TemplateSha,
 };
 pub use validation::{validate_agent_at_team, validate_path_segment};

@@ -390,6 +390,15 @@ Notes:
 - AL.1 transplanted the accepted AK.11 receiver-only contract. It is invoked
   only after persistence of a new inbound immutable message; idempotent
   duplicate receipt emits no second hook.
+- `MessageReceivedHookEmitter` is the retained sync trait
+  (`atm_graft::nudge_sink::GraftReceiveHook`); `AsyncMessageReceivedHookEmitter`
+  is the accepted Tokio-native async extension point selected by daemon
+  composition. Sprint AQ1 (L3.2) brings the implementer set current: the
+  accepted async implementers are `TokioTmuxReceivedHook` and
+  `PublishedGraftReceivedHook`, both in
+  `crates/atm-daemon-bootstrap/src/received_hook_selector.rs`; this is the
+  authoritative implementer count later sprints' manifest ACs (AQ2.5 AC 11,
+  AQ2.6) extend.
 - AL.3 invokes it from the one canonical post-persistence dispatch path using
   the request's remaining budget. Its attempt is sender-observable, has no
   detached worker, queue, or sender retry, and an exhausted budget is retained

@@ -16,6 +16,7 @@ pub mod log;
 pub mod members;
 pub mod peek;
 pub mod peer;
+pub mod queue;
 pub mod read;
 pub(crate) mod retained_roster;
 pub mod search;
@@ -37,6 +38,7 @@ pub use log::LogCommand;
 pub use members::MembersCommand;
 pub use peek::PeekCommand;
 pub use peer::PeerCommand;
+pub use queue::QueueCommand;
 pub use read::ReadCommand;
 pub use search::SearchCommand;
 pub use send::SendCommand;
@@ -104,6 +106,7 @@ impl Cli {
 enum Command {
     Api(ApiCommand),
     Send(SendCommand),
+    Queue(QueueCommand),
     Compose(ComposeCommand),
     List(ListCommand),
     Peek(PeekCommand),
@@ -130,6 +133,7 @@ impl Command {
         match self {
             Self::Api(command) => command.run(observability),
             Self::Send(command) => command.run(observability).await,
+            Self::Queue(command) => command.run(observability).await,
             Self::Compose(command) => command.run(),
             Self::List(command) => command.run(observability).await,
             Self::Peek(command) => command.run(observability).await,

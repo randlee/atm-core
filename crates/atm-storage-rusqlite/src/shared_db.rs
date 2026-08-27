@@ -64,6 +64,8 @@ CREATE TABLE IF NOT EXISTS mail_message_states (
     expires_at TEXT NULL,
     deleted_at TEXT NULL,
     updated_at TEXT NULL,
+    nudge_pending_at TEXT NULL,
+    nudge_attempts INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (team, agent, message_key),
     FOREIGN KEY (team, agent, message_key)
         REFERENCES mail_messages(team, agent, message_key)
@@ -661,6 +663,7 @@ pub(crate) fn ensure_schema(
     ensure_team_roster_columns(connection, target)?;
     ensure_team_roster_harness_values(connection, target)?;
     ensure_team_nudge_template_override_columns(connection, target)?;
+    ensure_mail_message_states_nudge_columns(connection, target)?;
     ensure_column(
         connection,
         target,
@@ -867,6 +870,46 @@ fn ensure_team_nudge_template_override_columns(
             )
         })?;
     Ok(())
+}
+
+fn ensure_mail_message_states_nudge_columns(
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
+    ensure_column(
+        connection,
+        target,
+        "mail_message_states",
+        "nudge_pending_at",
+        "ALTER TABLE mail_message_states ADD COLUMN nudge_pending_at TEXT NULL;",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "mail_message_states",
+        "nudge_attempts",
+        "ALTER TABLE mail_message_states ADD COLUMN nudge_attempts INTEGER NOT NULL DEFAULT 0;",
+    )?;
+    // Partial index: only rows currently awaiting a deferred nudge are
+    // indexed, keeping claim_next_pending's ORDER BY message_key scan cheap
+    // without paying index-maintenance cost on the (much larger) steady
+    // state of already-delivered rows. Created here (post column-migration)
+    // rather than in DB_MIGRATIONS because ensure_schema runs DB_MIGRATIONS
+    // before the column-migration functions, and the index depends on the
+    // nudge_pending_at column existing.
+    connection
+        .execute_batch(
+            "CREATE INDEX IF NOT EXISTS idx_mail_message_states_pending
+                ON mail_message_states(team, agent, message_key)
+                WHERE nudge_pending_at IS NOT NULL;",
+        )
+        .map_err(|error| {
+            sqlite_error(
+                target,
+                "failed to create pending-nudge partial index",
+                error,
+            )
+        })
 }
 
 fn ensure_mail_messages_message_id_compat(
@@ -1260,5 +1303,98 @@ mod tests {
             )
             .expect("query migrated mode");
         assert_eq!(mode, "disabled");
+    }
+
+    #[test]
+    fn ensure_mail_message_states_nudge_columns_migrates_legacy_rows_and_creates_the_partial_index()
+    {
+        let target = SharedDbTarget::InMemory {
+            uri: format!(
+                "file:atm-storage-rusqlite-shared-db-test-{}?mode=memory&cache=shared",
+                NEXT_IN_MEMORY_DB_ID.fetch_add(1, Ordering::Relaxed)
+            ),
+        };
+        let connection = open_connection_for_target(&target).expect("open connection");
+        connection
+            .execute_batch(
+                "CREATE TABLE mail_message_states (
+                    team TEXT NOT NULL,
+                    agent TEXT NOT NULL,
+                    message_key TEXT NOT NULL,
+                    read INTEGER NOT NULL DEFAULT 0 CHECK(read IN (0, 1)),
+                    pending_ack_at TEXT NULL,
+                    acknowledged_at TEXT NULL,
+                    expires_at TEXT NULL,
+                    deleted_at TEXT NULL,
+                    updated_at TEXT NULL,
+                    PRIMARY KEY (team, agent, message_key)
+                 );",
+            )
+            .expect("create pre-AQ1 mail_message_states table");
+        connection
+            .execute(
+                "INSERT INTO mail_message_states(team, agent, message_key, read, updated_at)
+                 VALUES (?1, ?2, ?3, 0, ?4);",
+                rusqlite::params![
+                    "test-team",
+                    "test-agent",
+                    "atm:01J00000000000000000000001",
+                    atm_storage::types::IsoTimestamp::now().to_string()
+                ],
+            )
+            .expect("insert legacy row");
+
+        ensure_mail_message_states_nudge_columns(&connection, &target)
+            .expect("migrate mail_message_states nudge columns");
+
+        let columns: Vec<String> = connection
+            .prepare("PRAGMA table_info(mail_message_states);")
+            .expect("prepare pragma")
+            .query_map([], |row| row.get::<_, String>(1))
+            .expect("query pragma")
+            .collect::<Result<_, _>>()
+            .expect("decode pragma");
+        assert!(
+            columns.iter().any(|column| column == "nudge_pending_at"),
+            "schema upgrade should add the nudge_pending_at column"
+        );
+        assert!(
+            columns.iter().any(|column| column == "nudge_attempts"),
+            "schema upgrade should add the nudge_attempts column"
+        );
+
+        let (read, nudge_pending_at, nudge_attempts): (i64, Option<String>, i64) = connection
+            .query_row(
+                "SELECT read, nudge_pending_at, nudge_attempts FROM mail_message_states
+                 WHERE team = 'test-team' AND agent = 'test-agent'
+                   AND message_key = 'atm:01J00000000000000000000001';",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .expect("query migrated row");
+        assert_eq!(
+            read, 0,
+            "the migration must preserve pre-existing column data"
+        );
+        assert!(nudge_pending_at.is_none());
+        assert_eq!(nudge_attempts, 0);
+
+        let index_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master
+                 WHERE type = 'index' AND name = 'idx_mail_message_states_pending';",
+                [],
+                |row| row.get(0),
+            )
+            .expect("query sqlite_master");
+        assert_eq!(
+            index_count, 1,
+            "the migration must create the pending-nudge partial index"
+        );
+
+        // Idempotent: running the migration again on an already-migrated
+        // database must not error.
+        ensure_mail_message_states_nudge_columns(&connection, &target)
+            .expect("re-run migration idempotently");
     }
 }

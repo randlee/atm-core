@@ -38,6 +38,7 @@ PYTHON_LINT_ORDER = (
     "silent-emit",
     "function-length",
     "legacy-mailbox-paths",
+    "nudge-taxonomy",
     "capability-degradation",
     "identities",
     "env-var-boundary",
@@ -65,6 +66,7 @@ FAST_LINT_ORDER = (
     "silent-emit",
     "function-length",
     "legacy-mailbox-paths",
+    "nudge-taxonomy",
     "capability-degradation",
     "spell",
     "hermes-adapter",
@@ -149,6 +151,10 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         "legacy-mailbox-paths": LintTask(
             "legacy-mailbox-paths",
             [*python_command, str(repo_root / "scripts/check-legacy-mailbox-paths.py")],
+        ),
+        "nudge-taxonomy": LintTask(
+            "nudge-taxonomy",
+            [*python_command, str(repo_root / "scripts/check-nudge-taxonomy.py")],
         ),
         "capability-degradation": LintTask(
             "capability-degradation",

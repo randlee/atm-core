@@ -1585,6 +1585,22 @@ def source_files_for_crate(info: ManifestInfo) -> list[Path]:
     return sorted(crate_root.glob("**/*.rs"))
 
 
+def test_source_files_for_crate(info: ManifestInfo) -> list[Path]:
+    """Return every dev-only integration-test source file under `info`'s `tests/`.
+
+    A sealed trait's boundary is not limited to a crate's `src/`: an
+    integration test in any workspace crate's `tests/` directory can still
+    provide an `impl Trait for SomeDouble` test double. Those files never
+    ship in a release build, but they are real implementations that a
+    `testing.allowed_test_double_paths` allowlist must be able to name and
+    the boundary lint must be able to see.
+    """
+    tests_root = info.path.parent / "tests"
+    if not tests_root.exists():
+        return []
+    return sorted(tests_root.glob("**/*.rs"))
+
+
 def dedupe_violations(violations: list[BoundaryViolation]) -> list[BoundaryViolation]:
     unique: dict[tuple[str, str], BoundaryViolation] = {}
     for violation in violations:
@@ -2099,20 +2115,61 @@ def source_module_path(info: ManifestInfo, source_path: Path) -> str:
     return "::".join(("crate", *parts))
 
 
+def test_module_path(info: ManifestInfo, source_path: Path) -> str:
+    """Return the module path an integration-test source file is addressed by.
+
+    Each top-level file under `tests/` compiles as its own crate root, so it
+    is addressed from outside the crate as `<crate_path_name>::tests::<file>`
+    rather than the `crate::…` convention `src/` files use. This mirrors the
+    `<crate>::tests::<file_stem>::<Type>` shape boundary manifests use for
+    `testing.allowed_test_double_paths` entries naming a consumer crate's test
+    double (e.g. `atm_core::tests::nudge_mode::RecordingPendingNudgeStore`).
+    """
+
+    relative = source_path.relative_to(info.path.parent / "tests")
+    parts = list(relative.with_suffix("").parts)
+    if parts and parts[-1] in {"main", "mod"}:
+        parts.pop()
+    return "::".join((info.crate_path_name, "tests", *parts))
+
+
+def is_inside_string_literal(line: str, match_start: int) -> bool:
+    """Return whether `match_start` in `line` sits inside a `"…"` literal.
+
+    Counts unescaped double quotes preceding `match_start`; an odd count means
+    the position is inside an open string literal.
+    """
+
+    quote_count = 0
+    escaped = False
+    for character in line[:match_start]:
+        if escaped:
+            escaped = False
+            continue
+        if character == "\\":
+            escaped = True
+            continue
+        if character == '"':
+            quote_count += 1
+    return quote_count % 2 == 1
+
+
 def find_trait_only_test_double_violations(
     record: BoundaryRecord,
-    owner_info: ManifestInfo,
+    module_path: str,
     source_path: Path,
     repo_root: Path,
 ) -> list[BoundaryViolation]:
-    """Require every owner-crate trait-only implementation to be an approved double.
+    """Require every trait-only implementation to be an approved test double.
 
     A trait-only boundary that declares approved test doubles must name every
-    owner-crate implementation in ``testing.allowed_test_double_paths``. Keeping
-    this check in the generic boundary linter prevents a second ad-hoc test
-    emitter from silently bypassing the boundary manifest. Empty allowlists keep
-    legacy trait-only records observational until their test-double policy is
-    explicitly declared.
+    implementation reachable from the owner crate's `src/` *and* every
+    workspace crate's `tests/` directory in ``testing.allowed_test_double_paths``.
+    Keeping this check in the generic boundary linter prevents a second ad-hoc
+    test emitter — in production code or in a consumer crate's integration
+    tests — from silently bypassing the boundary manifest. Empty allowlists
+    keep legacy trait-only records observational until their test-double
+    policy is explicitly declared.
     """
 
     if record.public_trait is None:
@@ -2121,7 +2178,6 @@ def find_trait_only_test_double_violations(
         rf"\bimpl(?:<[^>]+>)?\s+(?:[A-Za-z_][A-Za-z0-9_:]*::)?"
         rf"{re.escape(record.public_trait)}(?:<[^>]+>)?\s+for\s+([A-Za-z_][A-Za-z0-9_]*)"
     )
-    module_path = source_module_path(owner_info, source_path)
     allowed_paths = set(record.allowed_test_double_paths)
     violations: list[BoundaryViolation] = []
     rel_source = source_path.relative_to(repo_root).as_posix()
@@ -2130,6 +2186,12 @@ def find_trait_only_test_double_violations(
             continue
         match = trait_pattern.search(line)
         if match is None:
+            continue
+        if is_inside_string_literal(line, match.start()):
+            # Architecture/boundary tests commonly assert against source text
+            # via string literals, e.g.
+            # `source.contains("impl Foo for Bar")`. That inert literal is not
+            # a real implementation and must not be mistaken for one.
             continue
         implementation_path = f"{module_path}::{match.group(1)}"
         if implementation_path in allowed_paths:
@@ -2147,17 +2209,23 @@ def find_trait_only_test_double_violations(
 def collect_active_implementation_violations(repo_root: Path, records: list[BoundaryRecord]) -> list[BoundaryViolation]:
     violations: list[BoundaryViolation] = []
     alias_map = manifest_by_alias(repo_root)
+    all_infos = manifest_info(repo_root)
     for record in records:
         if not record.is_active:
             continue
         owner_info = alias_map.get(record.owner_package)
         if owner_info is None:
             continue
+        is_trait_only_with_allowlist = (
+            record.implementation_visibility == "trait_only" and record.allowed_test_double_paths
+        )
         source_files = source_files_for_crate(owner_info)
         for source_path in source_files:
-            if record.implementation_visibility == "trait_only" and record.allowed_test_double_paths:
+            if is_trait_only_with_allowlist:
                 violations.extend(
-                    find_trait_only_test_double_violations(record, owner_info, source_path, repo_root)
+                    find_trait_only_test_double_violations(
+                        record, source_module_path(owner_info, source_path), source_path, repo_root
+                    )
                 )
                 continue
             if record.implementation_visibility == "private":
@@ -2165,6 +2233,19 @@ def collect_active_implementation_violations(repo_root: Path, records: list[Boun
                 violations.extend(find_public_reexport_violations(record, source_path, repo_root))
             if record.implementation_constructor == "private":
                 violations.extend(find_public_constructor_violations(record, source_path, repo_root))
+        if is_trait_only_with_allowlist:
+            # A sealed trait's test doubles are not confined to the owner
+            # crate's own `src/`: any workspace crate may implement the trait
+            # from its dev-only `tests/` directory (e.g. a consumer crate's
+            # integration-test double). Scan every crate's `tests/` so such a
+            # double is either allowlisted or flagged, never invisible.
+            for test_info in all_infos:
+                for test_path in test_source_files_for_crate(test_info):
+                    violations.extend(
+                        find_trait_only_test_double_violations(
+                            record, test_module_path(test_info, test_path), test_path, repo_root
+                        )
+                    )
     return violations
 
 

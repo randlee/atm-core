@@ -10,7 +10,8 @@ use std::sync::{Arc, RwLock};
 
 use atm_storage::{
     AsyncMessageSearchStore, AsyncMessageStore as SharedAsyncMessageStore,
-    MessageStore as SharedMessageStore, RosterStore as SharedRosterStore, TemplateCatalogStore,
+    MessageStore as SharedMessageStore, PendingNudgeStore, RosterStore as SharedRosterStore,
+    TemplateCatalogStore,
 };
 
 use crate::boundary::TemplateComposer;
@@ -140,6 +141,10 @@ pub struct LocalServiceRuntime {
         std::sync::Arc<dyn crate::boundary::NudgeTemplateOverrideStore + Send + Sync>,
     pub(crate) non_claude_outbound:
         std::sync::Arc<dyn crate::boundary::NonClaudeOutbound + Send + Sync>,
+    /// Optional durable at-most-once delivery capability for deferred
+    /// (`atm queue`) nudges. Unset in runtimes that never enqueue a deferred
+    /// nudge, e.g. plain-text mailbox tests.
+    pending_nudge_store: Option<std::sync::Arc<dyn PendingNudgeStore + Send + Sync>>,
     /// Optional renderer selected by the bootstrap composition root. Core send
     /// policy sees only this port; it never depends on `sc-composer` itself.
     pub(crate) template_composer: Option<std::sync::Arc<dyn TemplateComposer>>,
@@ -173,6 +178,7 @@ impl LocalServiceRuntime {
             roster_store,
             nudge_template_override_store,
             non_claude_outbound,
+            pending_nudge_store: None,
             template_composer: None,
             template_catalog_store: None,
             roster_cache: Arc::new(RosterSnapshotCache::default()),
@@ -225,6 +231,33 @@ impl LocalServiceRuntime {
         self.async_message_search_store.clone().ok_or_else(|| {
             AtmError::daemon_unavailable(
                 "Tokio typed message search was not installed in this runtime",
+            )
+        })
+    }
+
+    /// Attaches the durable at-most-once delivery capability for deferred
+    /// (`atm queue`) nudges selected by the composition root.
+    #[must_use]
+    pub fn with_pending_nudge_store(
+        mut self,
+        pending_nudge_store: std::sync::Arc<dyn PendingNudgeStore + Send + Sync>,
+    ) -> Self {
+        self.pending_nudge_store = Some(pending_nudge_store);
+        self
+    }
+
+    /// Returns the runtime-selected deferred-nudge delivery capability.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] if no `PendingNudgeStore` was installed in this
+    /// runtime.
+    pub fn pending_nudge_store(
+        &self,
+    ) -> Result<std::sync::Arc<dyn PendingNudgeStore + Send + Sync>, AtmError> {
+        self.pending_nudge_store.clone().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "the deferred-nudge pending store was not installed in this runtime",
             )
         })
     }
@@ -391,6 +424,7 @@ impl fmt::Debug for LocalServiceRuntime {
                 "non_claude_outbound",
                 &std::sync::Arc::as_ptr(&self.non_claude_outbound),
             )
+            .field("pending_nudge_store", &self.pending_nudge_store.is_some())
             .finish()
     }
 }

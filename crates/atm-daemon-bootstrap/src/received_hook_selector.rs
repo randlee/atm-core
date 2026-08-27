@@ -13,7 +13,8 @@ use atm_core::LocalServiceRuntime;
 use atm_core::RequestDeadline;
 use atm_core::boundary::{
     self, AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, MessageReceivedHookSelector,
-    PostSendBuiltInTarget, PostSendEmissionPath, TMUX_DOUBLE_ENTER_DELAY, TMUX_NUDGE_CONFIRM_KEY,
+    NudgeKind, PostSendBuiltInTarget, PostSendEmissionPath, TMUX_DOUBLE_ENTER_DELAY,
+    TMUX_NUDGE_CONFIRM_KEY,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
 
@@ -87,9 +88,10 @@ impl MessageReceivedHookSelector for ReplacementReceivedHookSelector {
         &self,
         dispatch: &BuiltInPostSendDispatch,
     ) -> Option<&dyn AsyncMessageReceivedHookEmitter> {
-        match dispatch.target {
-            PostSendBuiltInTarget::LocalTmux(_) => Some(&self.tmux),
-            PostSendBuiltInTarget::Graft(_) => Some(&self.graft),
+        match (dispatch.kind, &dispatch.target) {
+            (NudgeKind::Steer, PostSendBuiltInTarget::LocalSteer(_)) => Some(&self.tmux),
+            (NudgeKind::Steer, PostSendBuiltInTarget::Graft(_)) => Some(&self.graft),
+            (NudgeKind::Queue, _) => None, // AQ2/AQ3 own queue-kind emitters
         }
     }
 }
@@ -128,7 +130,7 @@ impl AsyncMessageReceivedHookEmitter for TokioTmuxReceivedHook {
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<PostSendEmissionPath, AtmError>> + Send + '_>> {
         Box::pin(async move {
-            let PostSendBuiltInTarget::LocalTmux(target) = dispatch.target else {
+            let PostSendBuiltInTarget::LocalSteer(target) = dispatch.target else {
                 return Err(AtmError::validation(
                     "tmux receiver hook received a non-tmux dispatch",
                 ));
@@ -255,17 +257,16 @@ mod tests {
     use std::time::Duration;
 
     use atm_core::RequestDeadline;
-    #[cfg(feature = "benchmark-harness")]
     use atm_core::boundary::MessageReceivedHookSelector;
     use atm_core::boundary::{
-        AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, LocalTmuxNudgeTarget,
+        AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, LocalTmuxNudgeTarget, NudgeKind,
         PostSendBuiltInTarget, PostSendHookEvent,
     };
     use atm_core::types::{AgentName, PaneId, TeamName};
 
-    use super::TokioTmuxReceivedHook;
     #[cfg(feature = "benchmark-harness")]
     use super::{BenchmarkHookMode, DisabledReceivedHookSelector};
+    use super::{ReplacementReceivedHookSelector, TokioTmuxReceivedHook};
 
     fn tmux_dispatch() -> BuiltInPostSendDispatch {
         BuiltInPostSendDispatch {
@@ -283,11 +284,30 @@ mod tests {
                 task_id: None,
                 recipient_pane_id: Some(PaneId::from_cli("%1").expect("pane")),
             },
-            target: PostSendBuiltInTarget::LocalTmux(LocalTmuxNudgeTarget {
+            target: PostSendBuiltInTarget::LocalSteer(LocalTmuxNudgeTarget {
                 pane_id: PaneId::from_cli("%1").expect("pane"),
                 rendered_nudge: "test".to_owned(),
             }),
+            kind: NudgeKind::Steer,
         }
+    }
+
+    fn queue_dispatch() -> BuiltInPostSendDispatch {
+        let mut dispatch = tmux_dispatch();
+        dispatch.kind = NudgeKind::Queue;
+        dispatch
+    }
+
+    #[test]
+    fn selector_routes_tmux_only_for_steer() {
+        let temporary_root = tempfile::tempdir().expect("temporary selector runtime root");
+        let assembly =
+            atm_runtime_test_support::open_isolated_sqlite_boundary(temporary_root.path())
+                .expect("assemble isolated selector runtime");
+        let selector = ReplacementReceivedHookSelector::new(assembly.service_runtime);
+
+        assert!(selector.select_emitter(&tmux_dispatch()).is_some());
+        assert!(selector.select_emitter(&queue_dispatch()).is_none());
     }
 
     #[tokio::test]

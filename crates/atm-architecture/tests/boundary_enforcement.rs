@@ -2917,8 +2917,17 @@ fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
         "the canonical PreparedWrite seam must retain in-memory received-hook planning without reloading a committed record"
     );
     assert!(
+        send_module.contains("pub enum NudgeMode")
+            && write_module_code.contains("NudgeMode::Deferred"),
+        "the canonical send/write modules must define and apply the deferred queue nudge mode"
+    );
+    assert!(
         received_hook_selector.contains("impl MessageReceivedHookSelector"),
         "the replacement bootstrap must remain the concrete received-hook selector implementation"
+    );
+    assert!(
+        received_hook_selector.contains("NudgeKind::Queue"),
+        "the replacement receiver selector must explicitly handle queue-kind dispatches"
     );
 
     // `atm-graft/src/runtime.rs` is deliberately excluded: it is the

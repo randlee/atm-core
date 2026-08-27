@@ -33,7 +33,10 @@ impl WriterStatementCache {
                acknowledged_at = excluded.acknowledged_at,
                expires_at = excluded.expires_at,
                deleted_at = excluded.deleted_at,
-               updated_at = excluded.updated_at;",
+               updated_at = excluded.updated_at,
+               nudge_pending_at = CASE WHEN excluded.read = 1
+                                       THEN NULL
+                                       ELSE mail_message_states.nudge_pending_at END;",
         )?;
         statement.execute(params)
     }
