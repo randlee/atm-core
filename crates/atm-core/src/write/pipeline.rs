@@ -242,6 +242,7 @@ impl PreparedWrite {
         // sprint supplies that emitter.
         if self.outbound_request.nudge_mode == NudgeMode::Deferred
             && !post_write.delivery_snapshot.graft_post_send
+            && !post_write.delivery_snapshot.bare_cli_post_send
         {
             tracing::info!(
                 subsystem = "atm_core.queue",

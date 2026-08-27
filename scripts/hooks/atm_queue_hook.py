@@ -22,7 +22,36 @@ def atm_command() -> str:
     return os.environ.get("ATM_BIN", "atm")
 
 
-def run_atm(args: list[str], *, strict: bool = False) -> subprocess.CompletedProcess[str] | None:
+def write_hook_trace(
+    command: list[str],
+    completed: subprocess.CompletedProcess[str] | None = None,
+    error: str | None = None,
+) -> None:
+    """Persist optional raw command diagnostics for live evidence harnesses."""
+    trace_file = os.environ.get("ATM_HOOK_TRACE_FILE", "").strip()
+    if not trace_file:
+        return
+    payload: dict[str, object] = {"argv": command}
+    if completed is not None:
+        payload.update(
+            {
+                "returncode": completed.returncode,
+                "stdout": completed.stdout,
+                "stderr": completed.stderr,
+            }
+        )
+    if error is not None:
+        payload["error"] = error
+    try:
+        Path(trace_file).write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    except OSError:
+        # Diagnostics must never change the lifecycle hook's delivery result.
+        pass
+
+
+def run_atm(
+    args: list[str], *, strict: bool = False, trace: bool = False
+) -> subprocess.CompletedProcess[str] | None:
     command = [atm_command(), *args]
     try:
         completed = subprocess.run(
@@ -34,9 +63,13 @@ def run_atm(args: list[str], *, strict: bool = False) -> subprocess.CompletedPro
             env=os.environ.copy(),
         )
     except (OSError, subprocess.SubprocessError, ValueError) as error:
+        if trace:
+            write_hook_trace(command, error=str(error))
         if strict:
             raise RuntimeError(f"could not run {' '.join(command)}: {error}") from error
         return None
+    if trace:
+        write_hook_trace(command, completed)
     if strict and completed.returncode != 0:
         detail = completed.stderr.strip() or completed.stdout.strip() or "no diagnostic output"
         raise RuntimeError(
@@ -75,6 +108,7 @@ def queue_pull(harness: str) -> list[dict[str, object]]:
             "--require-daemon",
         ],
         strict=True,
+        trace=True,
     )
     if response is None:
         raise RuntimeError("ATM queue pull returned no process result")
