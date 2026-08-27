@@ -198,7 +198,7 @@ fn deferred_write_suppresses_dispatch_and_sets_exactly_one_marker() {
     prepared
         .finish(&runtime, &NullObservability)
         .expect("finish");
-    prepared.mark_pending_if_deferred(&runtime);
+    let _ = prepared.mark_pending_if_deferred(&runtime);
     assert_eq!(
         recording_store.mark_pending_call_count(),
         1,
@@ -239,7 +239,7 @@ fn immediate_write_dispatch_is_unchanged_and_sets_no_marker() {
     prepared
         .finish(&runtime, &NullObservability)
         .expect("finish");
-    prepared.mark_pending_if_deferred(&runtime);
+    let _ = prepared.mark_pending_if_deferred(&runtime);
     assert_eq!(
         recording_store.mark_pending_call_count(),
         0,
@@ -265,7 +265,7 @@ fn duplicate_deferred_write_sets_no_second_marker() {
         prepared
             .finish(&runtime, &NullObservability)
             .expect("finish");
-        prepared.mark_pending_if_deferred(&runtime);
+        let _ = prepared.mark_pending_if_deferred(&runtime);
     }
 
     assert_eq!(
@@ -343,7 +343,7 @@ fn failing_marker_store_does_not_fail_the_deferred_write() {
     prepared
         .finish(&runtime, &NullObservability)
         .expect("a marker failure must not fail durable write");
-    prepared.mark_pending_if_deferred(&runtime);
+    let _ = prepared.mark_pending_if_deferred(&runtime);
 
     assert_eq!(
         failing_store.mark_pending_call_count(),

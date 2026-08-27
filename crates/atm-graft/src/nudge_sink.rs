@@ -92,6 +92,7 @@ impl MessageReceivedHookEmitter for GraftReceiveHook<'_> {
         );
         self.deliver(HostNudge {
             event: dispatch.event.clone(),
+            kind: dispatch.kind,
             body: format!("{rendered_nudge}\n\n{message_body}"),
             notice_text,
         })?;
@@ -179,6 +180,7 @@ mod tests {
 
         let event = request_event();
         sink.deliver(HostNudge {
+            kind: atm_core::boundary::NudgeKind::Steer,
             notice_text: format!("📬 from {}\n{}", event.source_address(), event.description),
             body: event.description.clone(),
             event,
@@ -237,6 +239,7 @@ mod tests {
         let event = request_event();
         let error = sink
             .deliver(HostNudge {
+                kind: atm_core::boundary::NudgeKind::Steer,
                 notice_text: format!("📬 from {}\n{}", event.source_address(), event.description),
                 body: event.description.clone(),
                 event,

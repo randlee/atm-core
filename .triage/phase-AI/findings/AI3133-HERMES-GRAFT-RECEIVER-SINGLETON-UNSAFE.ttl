@@ -12,8 +12,8 @@
   triage:severity "major" ;
   triage:repeatable false ;
   triage:sweepScope "component" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "superseded" ;
+  triage:closed true ;
   triage:dispatchReady false ;
   triage:blockingCurrentMerge false ;
   triage:note "Architecture gap, not a regression in the reviewed merge (integrate/phase-ai-31-33@21957012) — single-active-receiver-per-(workspace,team,agent) has always been the implicit contract and nothing in this merge changed it. Do not fix under time pressure or as an incidental change. A safe multi-receiver-or-enforced-singleton design (e.g. PID/lock-file exclusivity on bind, or record generation/ownership token checked before Drop deletes it) requires an approved design before implementation; scope belongs to a future planning sprint, not the current phase-ai-31-33 branch. Until an approved replacement design lands, the current one-active-receiver-per-endpoint invariant must be preserved and operationally enforced (never run two receiver processes for the same workspace/team/agent concurrently) rather than patched ad hoc." ;
@@ -25,17 +25,20 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3133-HERMES-GRAFT-RECEIVER-SINGLETON-UNSAFE/drop-unconditional-delete> ;
   triage:openOn <urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33> ;
   triage:promoteTo <urn:atm:triage:worktree/phase-AI/future-planning-sprint> ;
-  triage:highestOpenBranch "integrate/phase-ai-31-33" .
+  triage:highestOpenBranch "feature/aq-1-8-graft-file-record-retirement" ;
+  triage:resolution "Superseded by ADR-056 and closed by AQ1.8. Defect #1 (bind-overwrite / singleton safety) is fixed by the retained AI.36 ReceiverOwnershipGuard flock; defect #2 (truncating endpoint-file write) is eliminated because the file publication and read machinery are deleted; defect #3 (unconditional Drop deletion) is eliminated because receiver Drop no longer removes a shared artifact and the registry lifecycle remains owner-generation checked. Merge-forward commit 78a3d739b and implementation commit a8ccbbe874ee4ca433060dca3436d0d733499ed are ancestry-verified: git merge-base --is-ancestor 78a3d739b a8ccbbe874ee4ca433060d0d733499ed passed, and git merge-base --is-ancestor 1c74392a8 a8ccbbe874ee4ca433060d0d733499ed passed on the AQ1.8 branch. The accepted cold-start residual risk is recorded in ADR-056: a receiver binding while the daemon is down has no registry lease until the next successful refresh tick and delivery reports receiver-not-registered during that window. I12 capability parity is retained: the registry uses the existing LocalCapability base64url encoding and shared SQLite file-level protection, with no new 0o600 database guarantee claimed." ;
+  triage:closureNote "Developer evidence: feature/aq-1-8-graft-file-record-retirement @ a8ccbbe874ee4ca433060dca3436d0d733499ed removes the file endpoint schema, path builders, read/write/republish lifecycle, and listener Drop cleanup; bind retains the historical .atm/graft/<team>/<agent>.lock flock and removes one orphaned legacy .json artifact. cargo test --workspace --all-targets, clippy -D warnings, fmt, boundary lint, function-length lint, and Python ownership integration were run on the branch." .
 
 <urn:atm:triage:occurrence/AI3133-HERMES-GRAFT-RECEIVER-SINGLETON-UNSAFE/bind-overwrite>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/graft.rs" ;
   triage:line 359 ;
   triage:snippet "fn prepare_receiver_record_parent(record_path: &Path) -> Result<(), AtmError> { ... if record_path.exists() { fs::remove_file(record_path)... } } — bind() unconditionally clears any pre-existing endpoint record with no ownership/liveness check before a new receiver claims the path." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
-  triage:headSha "21957012" ;
+  triage:headSha "a8ccbbe874ee4ca433060dca3436d0d733499ed" ;
+  triage:resolution "Fixed by the retained ReceiverOwnershipGuard flock, now acquired before stale-artifact cleanup and listener bind; the registry lease and owner generation provide the daemon-side ownership model." ;
   triage:occursIn <urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33> .
 
 <urn:atm:triage:occurrence/AI3133-HERMES-GRAFT-RECEIVER-SINGLETON-UNSAFE/record-truncate-write>
@@ -43,10 +46,11 @@
   triage:file "crates/atm-core/src/graft.rs" ;
   triage:line 393 ;
   triage:snippet "fn write_receiver_record(record_path: &Path, record: &GraftReceiverEndpointRecord) -> Result<(), AtmError> { ... options.write(true).create(true).truncate(true); ... } — plain truncating write, no exclusive-create/lock, so a second bind() for the same path silently replaces the first receiver's advertised endpoint." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
-  triage:headSha "21957012" ;
+  triage:headSha "a8ccbbe874ee4ca433060dca3436d0d733499ed" ;
+  triage:resolution "Fixed by deleting the endpoint-file schema and truncating write path; endpoint and capability publication now uses the registry registration API with the existing base64url capability encoding." ;
   triage:occursIn <urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33> .
 
 <urn:atm:triage:occurrence/AI3133-HERMES-GRAFT-RECEIVER-SINGLETON-UNSAFE/drop-unconditional-delete>
@@ -54,10 +58,11 @@
   triage:file "crates/atm-core/src/graft.rs" ;
   triage:line 287 ;
   triage:snippet "impl Drop for GraftReceiverListener { fn drop(&mut self) { let _ = fs::remove_file(&self.record_path); } } — deletes the record path unconditionally on close, with no check that the on-disk record still belongs to this listener instance; can delete a newer, still-live receiver's record." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
-  triage:headSha "21957012" ;
+  triage:headSha "a8ccbbe874ee4ca433060dca3436d0d733499ed" ;
+  triage:resolution "Fixed by removing the listener's artifact-cleanup Drop path; RegisteredGraftReceiver remains the sole best-effort owner-generation-checked registry unregister path." ;
   triage:occursIn <urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33> .
 
 <urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33>

@@ -88,3 +88,19 @@ python .claude/skills/daemon-switch/scripts/daemon-switch.py switch `
 Creating those symlinks may require Developer Mode or an elevated shell. If
 they are unavailable, the script fails closed; do not replace installed
 executables or introduce a second daemon.
+
+## Default scratch root (ADR-055)
+
+A session created by this skill never accepts a raw daemon argument,
+alternate endpoint/root, environment selector, service wrapper, or arbitrary
+configuration edit (see the ADR-053 Decision section). `ATM_TEMP` is exactly
+such an environment selector, so it was never a candidate for this skill's
+overlay surface, and this remains true after ADR-055: both the ordinary
+launch path and the `--peer-wire-security plaintext-test` overlay session
+inherit the same daemon-resolved default scratch root
+(`<std::env::temp_dir()>/atm-<uid>` on Unix, `<temp_dir()>\atm` on Windows) —
+no launch-overlay change was needed for this. An operator who wants a
+non-default scratch root sets `ATM_TEMP` in the managed service's own launch
+environment directly (outside this skill), the same way any other daemon
+environment variable would be set; this skill's typed overlay session
+continues to carry only the mTLS/plaintext-test mode selector.

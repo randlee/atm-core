@@ -14,6 +14,7 @@ use std::time::Duration;
 
 use atm_core::LocalFileNonClaudeOutbound;
 use atm_core::api::RequestDeadline;
+use atm_core::atm_temp::{ProcessEnvSource, is_atm_temp_unset};
 use atm_core::boundary::{NonClaudeOutbound, RosterStore, TemplateComposer};
 use atm_core::doctor::{DoctorFinding, DoctorSeverity, HerdrPresenceDoctor};
 use atm_core::error::AtmError;
@@ -29,6 +30,7 @@ use atm_core::send::input::DEFAULT_MESSAGE_MAX_BYTES;
 use atm_core::team_admin::MembersList;
 use atm_core::types::HostName;
 use atm_core::types::{AgentName, TeamName};
+use atm_core::{AtmConfig, resolve_atm_temp, validate_sweep_config};
 use atm_herdr::{
     BreakerPolicy, HerdrBreakerState, HerdrError, HerdrProcessAdapter, HerdrProcessInvoker,
     HerdrSpawnBreaker,
@@ -44,11 +46,15 @@ use atm_storage_rusqlite::SqliteStorageFactory;
 use peer_tls::MtlsPeerStreamAdapter;
 use tokio::net::TcpStream;
 
+mod atm_temp_sweeper_runtime;
 mod owner_gate;
 mod received_hook_selector;
 
+use atm_temp_sweeper_runtime::AtmTempSweeperRuntime;
+
 pub use owner_gate::DaemonOwnerGuard;
 pub use received_hook_selector::active_received_hook_selector;
+pub use received_hook_selector::active_received_hook_selector_with_health;
 #[cfg(feature = "benchmark-harness")]
 pub use received_hook_selector::{BenchmarkHookMode, benchmark_received_hook_selector};
 
@@ -608,7 +614,13 @@ pub async fn run_replacement_daemon_with_observability(
     let peer_pool_config = parse_peer_pool_config(std::env::args_os())?;
     run_replacement_daemon_with_selector(
         observability,
-        active_received_hook_selector,
+        |service_runtime, herdr_process, runtime_health| {
+            active_received_hook_selector_with_health(
+                service_runtime,
+                herdr_process,
+                runtime_health,
+            )
+        },
         resolve_daemon_launch_identity(),
         peer_wire_mode,
         DirectPeerTcpConfig::configured(direct_peer_port),
@@ -630,8 +642,13 @@ pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode) -> Result<(), At
     let peer_pool_config = parse_peer_pool_config(std::env::args_os())?;
     run_replacement_daemon_with_selector(
         Arc::new(NullObservability),
-        move |service_runtime, herdr_process| {
-            benchmark_received_hook_selector(service_runtime, hook_mode, herdr_process)
+        move |service_runtime, herdr_process, runtime_health| {
+            received_hook_selector::benchmark_received_hook_selector_with_health(
+                service_runtime,
+                hook_mode,
+                herdr_process,
+                runtime_health,
+            )
         },
         resolve_daemon_launch_identity(),
         peer_wire_mode,
@@ -650,6 +667,7 @@ fn build_replacement_handler(
         impl FnOnce(
             atm_core::LocalServiceRuntime,
             Arc<dyn HerdrProcessAdapter>,
+            RuntimeHealth,
         ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     >,
 ) -> Result<Arc<StorageAndNudgeRouter>, AtmError> {
@@ -677,7 +695,11 @@ fn build_replacement_handler(
             process
         }
     };
-    let selector = selector_factory(assembly.service_runtime.clone(), herdr_process);
+    let selector = selector_factory(
+        assembly.service_runtime.clone(),
+        herdr_process,
+        runtime_health.clone(),
+    );
     let handler = StorageAndNudgeRouter::new(
         assembly.service_runtime,
         observability,
@@ -811,6 +833,7 @@ async fn run_replacement_daemon_with_selector(
     selector_factory: impl FnOnce(
         atm_core::LocalServiceRuntime,
         Arc<dyn HerdrProcessAdapter>,
+        RuntimeHealth,
     ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     daemon_launch_identity: DaemonLaunchIdentity,
     peer_wire_mode: PeerWireMode,
@@ -822,11 +845,11 @@ async fn run_replacement_daemon_with_selector(
     let scope = current_host_runtime_scope()?;
     let _owner = DaemonOwnerGuard::acquire_at(scope.owner_lock.clone())?;
     let runtime_health = RuntimeHealth::with_owner(std::process::id());
+    let atm_temp_sweeper =
+        start_atm_temp_sweeper(Arc::clone(&observability), daemon_launch_identity.clone())?;
     let assembly = assemble_daemon_runtime()?;
     let workflow_telemetry = assembly.workflow_telemetry.clone();
     let peer_stream_adapter = bootstrap_peer_stream_adapter(&assembly, peer_wire_mode)?;
-    // The shipped daemon always keeps the injected receiver hook active.
-    // Benchmark-only selection is available only from the separate binary.
     let handler = build_replacement_handler(
         assembly,
         ReplacementHandlerConfig {
@@ -856,15 +879,34 @@ async fn run_replacement_daemon_with_selector(
         &peer_stream_adapter,
     );
     let runtime_handler: Arc<dyn atm_http_runtime::CanonicalWriteHandler> = handler.clone();
-    let mut running = HttpRuntimeBuilder::new(config, runtime_handler)
+    let running = HttpRuntimeBuilder::new(config, runtime_handler)
         .with_runtime_health(runtime_health)
         .build()?
         .start()
         .await?;
+    run_until_shutdown(running, handler, workflow_telemetry, atm_temp_sweeper).await
+}
+
+/// Advertises readiness, then waits for either a shutdown signal or an
+/// unexpected server stop, draining every supervised subsystem exactly once
+/// on every exit path (ready-signal failure, unexpected stop, or ordinary
+/// shutdown).
+async fn run_until_shutdown(
+    mut running: atm_http_runtime::HttpRuntime<atm_http_runtime::Running>,
+    handler: Arc<StorageAndNudgeRouter>,
+    workflow_telemetry: atm_runtime::WorkflowTelemetryRuntime,
+    atm_temp_sweeper: AtmTempSweeperRuntime,
+) -> Result<(), AtmError> {
     if let Err(error) = emit_ready_signal_if_requested() {
         // The process has not advertised readiness, so it must not retain an
         // otherwise-live listener when its supervisor handshake fails.
-        let _ = shutdown_replacement_daemon(running, handler.as_ref(), workflow_telemetry).await;
+        let _ = shutdown_replacement_daemon(
+            running,
+            handler.as_ref(),
+            workflow_telemetry,
+            atm_temp_sweeper,
+        )
+        .await;
         return Err(error);
     }
     tokio::select! {
@@ -874,7 +916,14 @@ async fn run_replacement_daemon_with_selector(
         }
         _ = running.wait_for_server_stop() => {
             eprintln!("replacement ATM HTTP runtime server stopped unexpectedly; beginning cleanup");
-            let result = match shutdown_replacement_daemon(running, handler.as_ref(), workflow_telemetry).await {
+            let result = match shutdown_replacement_daemon(
+                running,
+                handler.as_ref(),
+                workflow_telemetry,
+                atm_temp_sweeper,
+            )
+            .await
+            {
                 Ok(_) => Err(AtmError::daemon_unavailable(
                     "replacement HTTP runtime server stopped unexpectedly",
                 )),
@@ -883,7 +932,51 @@ async fn run_replacement_daemon_with_selector(
             return result;
         }
     }
-    shutdown_replacement_daemon(running, handler.as_ref(), workflow_telemetry).await
+    shutdown_replacement_daemon(
+        running,
+        handler.as_ref(),
+        workflow_telemetry,
+        atm_temp_sweeper,
+    )
+    .await
+}
+
+/// Resolves `$ATM_TEMP` (defaulting and emitting the one-time fallback
+/// warning when unset, per ADR-055 decision (a)) and starts its periodic
+/// TTL sweeper. A resolution or sweep-config failure fails daemon boot
+/// closed: an operator who explicitly set an invalid `ATM_TEMP`, or a zero
+/// sweep interval/TTL, gets an actionable error rather than a silently
+/// disabled sweeper.
+fn start_atm_temp_sweeper(
+    observability: Arc<dyn ObservabilityPort + Send + Sync>,
+    daemon_launch_identity: DaemonLaunchIdentity,
+) -> Result<AtmTempSweeperRuntime, AtmError> {
+    let env = ProcessEnvSource;
+    let atm_temp =
+        resolve_atm_temp(&env).map_err(|error| AtmError::config(format!("ATM_TEMP: {error}")))?;
+    if is_atm_temp_unset(&env) {
+        tracing::warn!(
+            default_path = %atm_temp.path().display(),
+            override_env = "ATM_TEMP",
+            "ATM_TEMP is unset; using the default scratch root (set ATM_TEMP to override)"
+        );
+    }
+    // Sweep interval/TTL configuration is not yet threaded from `.atm.toml`
+    // into daemon composition (the daemon's config doctor deliberately does
+    // not depend on a workspace-relative `.atm.toml` — see
+    // `assemble_daemon_runtime`'s doc comment); `AtmConfig::default()`'s
+    // sweep fields are the compiled-in ADR-055 defaults (1 hour / 30 days)
+    // until that threading lands.
+    let defaults = AtmConfig::default();
+    let sweep_config =
+        validate_sweep_config(defaults.sweep_interval_seconds, defaults.sweep_ttl_days)
+            .map_err(|error| AtmError::config(format!("$ATM_TEMP sweep config: {error}")))?;
+    Ok(AtmTempSweeperRuntime::start(
+        atm_temp.path().to_path_buf(),
+        sweep_config,
+        observability,
+        daemon_launch_identity,
+    ))
 }
 
 fn bootstrap_peer_stream_adapter(
@@ -907,12 +1000,14 @@ async fn shutdown_replacement_daemon(
     running: atm_http_runtime::HttpRuntime<atm_http_runtime::Running>,
     handler: &StorageAndNudgeRouter,
     workflow_telemetry: atm_runtime::WorkflowTelemetryRuntime,
+    atm_temp_sweeper: AtmTempSweeperRuntime,
 ) -> Result<(), AtmError> {
     let stopped = running.begin_shutdown().finish().await;
     handler
         .shutdown_peer_connections(REPLACEMENT_DRAIN_DEADLINE)
         .await;
     workflow_telemetry.shutdown().await;
+    atm_temp_sweeper.shutdown().await;
     let _stopped = stopped?;
     Ok(())
 }
@@ -1359,7 +1454,7 @@ mod replacement_runtime_tests {
             assembly,
             ReplacementHandlerConfig {
                 observability: Arc::new(NullObservability),
-                selector_factory: |_, _| {
+                selector_factory: |_, _, _| {
                     Arc::new(NoReceivedHookSelector)
                         as Arc<dyn atm_core::boundary::MessageReceivedHookSelector>
                 },
