@@ -297,7 +297,7 @@ impl MessageReceivedHookSelector for ReplacementReceivedHookSelector {
             (NudgeKind::Steer, PostSendBuiltInTarget::Graft(_)) => Some(&self.graft),
             (NudgeKind::Queue, PostSendBuiltInTarget::Graft(_)) => Some(&self.graft),
             (NudgeKind::Queue, PostSendBuiltInTarget::QueuePull(_)) => Some(&self.queue_pull),
-            (NudgeKind::Steer, PostSendBuiltInTarget::QueuePull(_)) => None,
+            (NudgeKind::Steer, PostSendBuiltInTarget::QueuePull(_)) => Some(&self.queue_pull),
             (
                 NudgeKind::Queue,
                 PostSendBuiltInTarget::LocalSteer(boundary::LocalSteerTarget::Herdr(_)),
@@ -902,6 +902,54 @@ mod tests {
                 .claim_next_pending(&member)
                 .expect("claim query")
                 .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn bare_cli_steer_queue_pull_appends_and_drains_all_steer_items() {
+        let root = tempfile::tempdir().expect("temporary runtime root");
+        let (runtime, _endpoint_store, team, recipient) = queue_graft_runtime(root.path());
+        let member = MemberKey::new(team.clone(), recipient.clone());
+        let fifo: atm_http_runtime::BareCliFifo = Default::default();
+        let drops: atm_http_runtime::BareCliQueueFullDrops = Default::default();
+        let selector = ReplacementReceivedHookSelector::with_herdr_process_and_fifo(
+            runtime,
+            Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default()),
+            RuntimeHealth::default(),
+            fifo.clone(),
+            drops,
+        );
+
+        for (message_id, body) in [
+            ("01KZ0000000000000000000001", "steer one"),
+            ("01KZ0000000000000000000002", "steer two"),
+        ] {
+            let mut dispatch = tmux_dispatch();
+            dispatch.kind = NudgeKind::Steer;
+            dispatch.target = PostSendBuiltInTarget::QueuePull(QueuePullTarget {
+                team: team.clone(),
+                agent: recipient.clone(),
+                kind: NudgeKind::Steer,
+                msg_id: message_id.parse().expect("message id"),
+                body: body.to_owned(),
+            });
+            selector
+                .select_emitter(&dispatch)
+                .expect("bare-CLI steer queue-pull emitter")
+                .emit_received_message(dispatch, RequestDeadline::after(Duration::from_secs(1)))
+                .await
+                .expect("steer queue-pull handoff");
+        }
+
+        let drained =
+            atm_http_runtime::drain_bare_cli_messages(&fifo, &member).expect("drain steer FIFO");
+        assert_eq!(drained.len(), 2, "all steer-kind items drain together");
+        assert_eq!(drained[0].body, "steer one");
+        assert_eq!(drained[1].body, "steer two");
+        assert!(
+            drained
+                .iter()
+                .all(|message| message.kind == NudgeKind::Steer)
         );
     }
 
