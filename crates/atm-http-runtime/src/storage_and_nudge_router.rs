@@ -32,6 +32,32 @@ use crate::CanonicalWriteHandler;
 use crate::PeerConnectionPool;
 use crate::RuntimeHealth;
 
+fn retry_deferred_marker<F>(health: &RuntimeHealth, mut mark: F) -> Result<(), AtmError>
+where
+    F: FnMut() -> Result<(), AtmError>,
+{
+    match mark() {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            health.record_queue_marker_set_failure();
+            tracing::warn!(
+                subsystem = "atm_core.queue",
+                action = "queue_marker_set",
+                outcome = "failed",
+                %error,
+                "retrying deferred write queue marker"
+            );
+            match mark() {
+                Ok(()) => Ok(()),
+                Err(retry_error) => {
+                    health.record_queue_marker_set_failure();
+                    Err(retry_error)
+                }
+            }
+        }
+    }
+}
+
 /// Bounded bridge for synchronous core operations that are not storage-writer
 /// submissions.
 ///
@@ -219,23 +245,9 @@ impl StorageAndNudgeRouter {
             let marker_result = self
                 .blocking_core_bridge
                 .run(deadline, move || {
-                    let first = prepared.mark_pending_if_deferred(&runtime);
-                    if let Err(error) = &first {
-                        health.record_queue_marker_set_failure();
-                        tracing::warn!(
-                            subsystem = "atm_core.queue",
-                            action = "queue_marker_set",
-                            outcome = "failed",
-                            %error,
-                            "retrying deferred write queue marker"
-                        );
-                        let retry = prepared.mark_pending_if_deferred(&runtime);
-                        if retry.is_err() {
-                            health.record_queue_marker_set_failure();
-                        }
-                        return Ok(retry);
-                    }
-                    Ok(Ok(()))
+                    Ok(retry_deferred_marker(&health, || {
+                        prepared.mark_pending_if_deferred(&runtime)
+                    }))
                 })
                 .await;
             match marker_result {
@@ -898,7 +910,7 @@ mod tests {
     use tempfile::TempDir;
     use tower::ServiceExt;
 
-    use super::{BlockingCoreBridge, StorageAndNudgeRouter};
+    use super::{BlockingCoreBridge, StorageAndNudgeRouter, retry_deferred_marker};
     use crate::{
         AcceptedPeerStream, EstablishedPeerStream, HttpRuntimeBuilder, HttpRuntimeConfig,
         LoopbackTcpConfig, PeerConnectionPool, PeerPoolConfig, PeerStreamAdapter, PeerStreamFuture,
@@ -1424,6 +1436,31 @@ mod tests {
             !started.load(Ordering::SeqCst),
             "an expired request must not create a blocking SQLite job"
         );
+    }
+
+    #[test]
+    fn aq2_crit_002_marker_failure_retries_once_and_preserves_write_success() {
+        let health = RuntimeHealth::default();
+        let attempts = AtomicUsize::new(0);
+        let result = retry_deferred_marker(&health, || {
+            let attempt = attempts.fetch_add(1, Ordering::SeqCst);
+            if attempt == 0 {
+                Err(AtmError::mailbox_write("marker test failure"))
+            } else {
+                Ok(())
+            }
+        });
+
+        assert!(
+            result.is_ok(),
+            "a successful retry must preserve the write result"
+        );
+        assert_eq!(
+            attempts.load(Ordering::SeqCst),
+            2,
+            "marker failure retries once"
+        );
+        assert_eq!(health.snapshot().queue_marker_set_failures_total, 1);
     }
 
     fn hook_event() -> PostSendHookEvent {

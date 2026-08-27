@@ -74,3 +74,17 @@ triage:a8 a triage:Assignment ;
     triage:ofSprint triage:AQ2 ;
     triage:assignedTo "cipher" ;
     triage:assignedAt "2026-08-27T03:55:00Z"^^xsd:dateTime .
+
+triage:c8 a triage:Completion ;
+    triage:ofSprint triage:AQ2 ;
+    triage:at "2026-08-27T04:18:44Z"^^xsd:dateTime .
+
+triage:a9 a triage:Assignment ;
+    triage:ofSprint triage:AQ2-5 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-08-27T04:22:00Z"^^xsd:dateTime .
+
+triage:a10 a triage:Assignment ;
+    triage:ofSprint triage:AQ2-7 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-27T04:30:00Z"^^xsd:dateTime .

@@ -465,6 +465,9 @@ pub struct RuntimeStatusSnapshot {
     /// Cumulative queue-kind graft handoff failures observed by this daemon.
     #[serde(default, skip_serializing_if = "is_zero_u64")]
     pub graft_queue_handoff_failures_total: u64,
+    /// Cumulative failures clearing a queue marker after a successful handoff.
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub graft_queue_marker_clear_failures_total: u64,
     /// Cumulative failures setting a deferred queue marker.
     #[serde(default, skip_serializing_if = "is_zero_u64")]
     pub queue_marker_set_failures_total: u64,
@@ -612,6 +615,7 @@ mod tests {
             },
             members: Vec::new(),
             graft_queue_handoff_failures_total: 0,
+            graft_queue_marker_clear_failures_total: 0,
             queue_marker_set_failures_total: 0,
         };
 
@@ -673,6 +677,7 @@ mod tests {
                 session_changed_at: None,
             }],
             graft_queue_handoff_failures_total: 0,
+            graft_queue_marker_clear_failures_total: 0,
             queue_marker_set_failures_total: 0,
         };
         let decoded: LegacyRuntimeStatusSnapshot =

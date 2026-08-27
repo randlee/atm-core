@@ -3,7 +3,7 @@
  "timezone": "UTC (result_time_pst/assignment_time_pst omitted; verdict timestamps are GitHub PR comment times)",
  "audit_window": {
   "start": "2026-08-27T00:09:55Z",
-  "end": "2026-08-27T03:15:00Z"
+  "end": "2026-08-27T04:40:00Z"
  },
  "scope": "phase-aq sprints in landing order (structure.ttl). Runs recorded: AQ1 (3, final PASS, merged), AQ2.6 (2, latest FAIL, fix cycle 2 in progress), AQ1.5 (1, FAIL, fix in progress). AQ1.6 (#1046) QA-1 requested (pending run recorded, verdict null). Non-sprint lanes reviewed by quality-mgr but not sprint rows: lane A ADR-058 #1039 (PASS d6f4dd90f, merged 4805264a2) and lane C AQ4 groundwork #1043 (FAIL a911abfd8, fix in progress) \u2014 they roll into AQ2.6/AQ4 evidence at closeout.",
  "count_basis": "headline/reviewer",
@@ -308,6 +308,56 @@
    "minor": null,
    "count_basis": "headline/reviewer",
    "evidence": "pending"
+  },
+  {
+   "run_id": "QA-AQ2-R1",
+   "aich_sprint": "AQ2",
+   "phase_sprint": "AQ2",
+   "pass": null,
+   "run_type": "qa",
+   "assignment_time_utc": "2026-08-27T04:22:00Z",
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": "fenix",
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ2 graft dual-channel (cipher), PR #1051 @ 9c72a4d0e; QA-1 queued",
+   "result_time_utc": "2026-08-27T04:40:00Z",
+   "result_time_pst": null,
+   "result_message_id": "01M10QRF45P33JHWDQHRF0T932",
+   "result_from": "quality-mgr",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": "FAIL",
+   "blockers": 3,
+   "important": null,
+   "minor": null,
+   "count_basis": "headline/reviewer",
+   "evidence": "7/9; AQ2-CRIT-001 handoff-clear failure masks delivery success (dup delivery), AQ2-CRIT-002 marker-set failure swallowed, ATM-QA-001 Hermes transcript missing; flaky atm-herdr test \u2192 AQ2.7. Fix dispatched to cipher. https://github.com/randlee/atm-core/pull/1051"
+  },
+  {
+   "run_id": "QA-AQ2.6-R4",
+   "aich_sprint": "AQ2-6",
+   "phase_sprint": "AQ2.6",
+   "pass": null,
+   "run_type": "qa",
+   "assignment_time_utc": "2026-08-27T03:22:00Z",
+   "assignment_time_pst": null,
+   "assignment_message_id": "01M10JWAVK5DFXZRS3GCZ9HJVW",
+   "assignment_from": "fenix",
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ2.6 QA-4 single-item verify on #1042 @ 2048e310d (execute_list breaker routing)",
+   "result_time_utc": "2026-08-27T04:25:00Z",
+   "result_time_pst": null,
+   "result_message_id": "01M10Q6BQXC61GXYPBTAW6Y97N",
+   "result_from": "quality-mgr",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": "PASS",
+   "blockers": 0,
+   "important": 0,
+   "minor": null,
+   "count_basis": "headline/reviewer",
+   "evidence": "19/19; merge requested. https://github.com/randlee/atm-core/pull/1042"
   }
  ]
 }
