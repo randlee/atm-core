@@ -18,9 +18,11 @@ use clap::{Args, Subcommand};
 use crate::commands::caller_context::{
     CallerContext, CallerContextOverrides, resolve_cli_caller_context,
 };
-use crate::commands::members;
 use crate::commands::retained_roster::with_retained_roster_store;
-use crate::composition::reload_running_runtime_view;
+use crate::composition::{
+    AtmHomePath, CliComposition, InvocationDir, reload_running_runtime_view,
+    resolve_command_runtime_context,
+};
 use crate::observability::CliObservability;
 use crate::output;
 
@@ -33,8 +35,11 @@ pub struct TeamsCommand {
     #[arg(long)]
     json: bool,
 
-    /// Emit the nested PickerInput contract used by Send-To pickers.
-    #[arg(long, requires = "json")]
+    /// Emit the picker member projection (ADR-055 decision (e), PRD
+    /// §4.2/§5a) instead of the team-count list: per-member `{"id","name",
+    /// "host","cwd","status"}`, consumed by `atm send --from-json`'s
+    /// `recipients`. Only valid without a subcommand.
+    #[arg(long)]
     members: bool,
 }
 
@@ -73,14 +78,18 @@ struct AddMemberCommand {
     #[arg(long, help = "Herdr session name; only valid with --backend herdr")]
     session: Option<String>,
 
-    #[arg(long, help = "durable routable host advertised to Send-To")]
-    host: Option<String>,
-
     #[arg(
         long = "pane-id",
         help = "deprecated compatibility spelling for --backend tmux --target"
     )]
     pane_id: Option<String>,
+
+    #[arg(
+        long,
+        help = "this member's registered host (ADR-055 decision (e)); used for Send-To \
+                same-host/remote routing, never inferred"
+    )]
+    host: Option<String>,
 
     #[arg(long)]
     json: bool,
@@ -115,14 +124,18 @@ struct UpdateMemberCommand {
     #[arg(long, help = "Herdr session name; only valid with --backend herdr")]
     session: Option<String>,
 
-    #[arg(long, help = "durable routable host advertised to Send-To")]
-    host: Option<String>,
-
     #[arg(
         long = "pane-id",
         help = "deprecated compatibility spelling for --backend tmux --target"
     )]
     pane_id: Option<String>,
+
+    #[arg(
+        long,
+        help = "this member's registered host (ADR-055 decision (e)); used for Send-To \
+                same-host/remote routing, never inferred"
+    )]
+    host: Option<String>,
 
     #[arg(long)]
     json: bool,
@@ -197,14 +210,15 @@ struct RestoreCommand {
 
 impl TeamsCommand {
     /// Execute the `atm teams` command.
-    pub async fn run(self, _observability: &CliObservability) -> Result<()> {
+    pub async fn run(self, observability: &CliObservability) -> Result<()> {
         let caller_context = resolve_cli_caller_context(CallerContextOverrides::default())?;
         let home_dir = home::atm_home()?;
         match self.command {
+            None if self.members => {
+                self.run_members_projection(caller_context, observability)
+                    .await
+            }
             None => {
-                if self.members {
-                    return members::print_picker_input(_observability).await;
-                }
                 let outcome = with_retained_roster_store(|roster_store| {
                     team_admin::list_teams_with_roster_store(
                         roster_store,
@@ -226,6 +240,84 @@ impl TeamsCommand {
             Some(TeamsSubcommand::Backup(command)) => command.run(home_dir),
             Some(TeamsSubcommand::Restore(command)) => command.run(home_dir).await,
         }
+    }
+
+    /// Executes `atm teams --members` (ADR-055 decision (e), PRD §4.2/§5a):
+    /// projects the roster's registered `host` metadata and each member's
+    /// live runtime state into the picker-consumable shape `atm send
+    /// --from-json` expects its `recipients` array to name.
+    async fn run_members_projection(
+        self,
+        caller_context: CallerContext,
+        observability: &CliObservability,
+    ) -> Result<()> {
+        let json = self.json;
+        let current_dir = home::command_invocation_dir()?;
+        let team = caller_context.caller_team.clone();
+        let outcome = with_retained_roster_store(|roster_store| {
+            team_admin::list_members_with_roster_store(
+                roster_store,
+                atm_core::team_admin::MembersQuery {
+                    team: team.clone(),
+                    caller_identity: Some(caller_context.caller_identity.clone()),
+                    live_cwd: Some(current_dir),
+                },
+            )
+        })?;
+        let runtime_states = self.runtime_member_states(&team, observability).await;
+        let projection =
+            atm_core::build_picker_members_projection(&team, &outcome.members, &runtime_states);
+        output::print_picker_members_projection(&projection, json)
+    }
+
+    /// Best-effort live runtime state per member, keyed by name. Returns an
+    /// empty map (every member projects as `dead`, never guessed
+    /// active/idle) when the daemon composition or doctor query itself
+    /// fails -- the picker projection must still return a usable, if
+    /// conservative, document rather than erroring the whole command.
+    async fn runtime_member_states(
+        &self,
+        team: &atm_core::types::TeamName,
+        observability: &CliObservability,
+    ) -> std::collections::BTreeMap<
+        atm_core::types::AgentName,
+        atm_core::protocol::RuntimeMemberState,
+    > {
+        let Ok((home_dir, current_dir)) = resolve_command_runtime_context("teams") else {
+            return std::collections::BTreeMap::new();
+        };
+        let query = atm_core::doctor::DoctorQuery {
+            home_dir,
+            current_dir,
+            team_override: Some(team.clone()),
+            caller_team: atm_core::caller_context::read_cli_team_from_env_or_warn(
+                "atm::teams::members::runtime",
+            ),
+            caller_identity: atm_core::caller_context::read_cli_identity_from_env_or_warn(
+                "atm::teams::members::runtime",
+            ),
+        };
+        let Ok(composition) = CliComposition::bootstrap(
+            "teams",
+            observability,
+            InvocationDir::new(&query.current_dir),
+            AtmHomePath::new(&query.home_dir),
+        ) else {
+            return std::collections::BTreeMap::new();
+        };
+        let Ok(report) = composition.doctor(query).await else {
+            return std::collections::BTreeMap::new();
+        };
+        report
+            .runtime_status
+            .map(|snapshot| {
+                snapshot
+                    .members
+                    .into_iter()
+                    .map(|observation| (observation.member, observation.state))
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 }
 
@@ -257,7 +349,8 @@ impl AddMemberCommand {
         atm_home_dir: PathBuf,
         member_home_dir: PathBuf,
     ) -> Result<AddMemberRequest> {
-        if self.backend.is_some() || self.target.is_some() || self.session.is_some() {
+        let host = self.host.clone();
+        let request = if self.backend.is_some() || self.target.is_some() || self.session.is_some() {
             if self.pane_id.is_some() {
                 return Err(anyhow::anyhow!(
                     "--pane-id cannot be combined with --backend, --target, or --session"
@@ -276,7 +369,6 @@ impl AddMemberCommand {
                     session: self.session.as_deref(),
                 },
             )
-            .and_then(|request| request.with_host(self.host.as_deref()))
         } else {
             AddMemberRequest::new(
                 atm_home_dir,
@@ -287,9 +379,8 @@ impl AddMemberCommand {
                 member_home_dir,
                 self.pane_id,
             )
-            .and_then(|request| request.with_host(self.host.as_deref()))
-        }
-        .map_err(Into::into)
+        }?;
+        request.with_host(host.as_deref()).map_err(Into::into)
     }
 }
 
@@ -385,7 +476,8 @@ impl UpdateMemberCommand {
     }
 
     fn build_request(self, caller_context: CallerContext) -> Result<UpdateMemberRequest> {
-        if self.backend.is_some() || self.target.is_some() || self.session.is_some() {
+        let host = self.host.clone();
+        let request = if self.backend.is_some() || self.target.is_some() || self.session.is_some() {
             if self.pane_id.is_some() {
                 return Err(anyhow::anyhow!(
                     "--pane-id cannot be combined with --backend, --target, or --session"
@@ -407,7 +499,6 @@ impl UpdateMemberCommand {
                     session: self.session.as_deref(),
                 },
             )
-            .and_then(|request| request.with_host(self.host.as_deref()))
         } else {
             UpdateMemberRequest::new(
                 caller_context.caller_identity,
@@ -421,9 +512,8 @@ impl UpdateMemberCommand {
                 self.model,
                 self.pane_id,
             )
-            .and_then(|request| request.with_host(self.host.as_deref()))
-        }
-        .map_err(Into::into)
+        }?;
+        request.with_host(host.as_deref()).map_err(Into::into)
     }
 }
 
@@ -813,6 +903,57 @@ mod tests {
     }
 
     #[test]
+    fn add_member_build_request_validates_and_preserves_host() {
+        let command = AddMemberCommand {
+            team: TEST_TEAM.to_string(),
+            member: TEST_SENDER.to_string(),
+            agent_type: "worker".to_string(),
+            model: "gpt-5".to_string(),
+            home_dir: None,
+            backend: None,
+            target: None,
+            session: None,
+            pane_id: None,
+            host: Some("rand-m5.local".to_string()),
+            json: false,
+        };
+
+        let (_atm_home_guard, atm_home_dir) = temp_test_path("atm-home");
+        let (_member_home_guard, member_home_dir) = temp_test_path("member-home");
+        let request = command
+            .build_request(atm_home_dir, member_home_dir)
+            .expect("request");
+
+        assert_eq!(
+            request.host.as_ref().map(|host| host.as_str()),
+            Some("rand-m5.local")
+        );
+    }
+
+    #[test]
+    fn add_member_build_request_rejects_an_invalid_host() {
+        let command = AddMemberCommand {
+            team: TEST_TEAM.to_string(),
+            member: TEST_SENDER.to_string(),
+            agent_type: "worker".to_string(),
+            model: "gpt-5".to_string(),
+            home_dir: None,
+            backend: None,
+            target: None,
+            session: None,
+            pane_id: None,
+            host: Some("has a space".to_string()),
+            json: false,
+        };
+
+        let (_atm_home_guard, atm_home_dir) = temp_test_path("atm-home");
+        let (_member_home_guard, member_home_dir) = temp_test_path("member-home");
+        command
+            .build_request(atm_home_dir, member_home_dir)
+            .expect_err("invalid host must be rejected before mutation");
+    }
+
+    #[test]
     #[serial(env)]
     fn add_member_defaults_member_home_dir_to_command_invocation_dir() {
         let fixture = Fixture::new();
@@ -889,6 +1030,67 @@ mod tests {
             Some(member_home_dir.as_path())
         );
         assert_eq!(request.tmux_pane_id.as_deref(), Some("%17"));
+    }
+
+    #[test]
+    fn update_member_build_request_validates_and_preserves_host() {
+        let command = UpdateMemberCommand {
+            team: TEST_TEAM.to_string(),
+            member: TEST_SENDER.to_string(),
+            home_dir: None,
+            workspace_root: None,
+            harness: None,
+            agent_type: None,
+            model: None,
+            backend: None,
+            target: None,
+            session: None,
+            pane_id: None,
+            host: Some("fastpc4.local".to_string()),
+            json: false,
+        };
+
+        let request = command
+            .build_request(CallerContext {
+                caller_identity: TEST_SENDER.parse().expect("caller"),
+                caller_chat_id: None,
+                caller_team: TEST_TEAM.parse().expect("team"),
+                activity_observation: None,
+            })
+            .expect("request");
+
+        assert_eq!(
+            request.host.as_ref().map(|host| host.as_str()),
+            Some("fastpc4.local")
+        );
+    }
+
+    #[test]
+    fn update_member_build_request_rejects_an_invalid_host() {
+        let command = UpdateMemberCommand {
+            team: TEST_TEAM.to_string(),
+            member: TEST_SENDER.to_string(),
+            home_dir: None,
+            workspace_root: None,
+            harness: None,
+            agent_type: None,
+            model: None,
+            backend: None,
+            target: None,
+            session: None,
+            pane_id: None,
+            host: Some("has a space".to_string()),
+            json: false,
+        };
+
+        command
+            .build_request(CallerContext {
+                caller_identity: TEST_SENDER.parse().expect("caller"),
+                caller_chat_id: None,
+                caller_team: TEST_TEAM.parse().expect("team"),
+                activity_observation: None,
+            })
+            .expect_err("invalid host must be rejected before mutation");
     }
 
     #[test]
@@ -973,6 +1175,27 @@ mod tests {
             test_runtime()
                 .block_on(command.run(&CliObservability::fallback()))
                 .expect("teams run");
+        });
+    }
+
+    /// ADR-055 decision (e)/PRD §4.2: `atm teams --json --members` runs end
+    /// to end against a real (isolated, sqlite-backed) roster without a live
+    /// daemon -- the runtime-state lookup degrades to an empty map (every
+    /// member projects `dead`) rather than failing the whole command.
+    #[test]
+    #[serial_test::serial(env)]
+    fn teams_members_projection_runs_without_daemon() {
+        let fixture = Fixture::new();
+        let command = TeamsCommand {
+            command: None,
+            json: true,
+            members: true,
+        };
+
+        fixture.with_env_and_cwd(|| {
+            test_runtime()
+                .block_on(command.run(&CliObservability::fallback()))
+                .expect("teams --members run");
         });
     }
 
@@ -1064,10 +1287,10 @@ mod tests {
             agent_type: Some("worker".to_string()),
             model: Some("gpt-5".to_string()),
             pane_id: Some("%19".to_string()),
+            host: None,
             backend: None,
             target: None,
             session: None,
-            host: None,
             json: true,
         };
 

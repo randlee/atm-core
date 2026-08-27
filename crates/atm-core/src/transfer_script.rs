@@ -302,8 +302,8 @@ fn check_transfer_root_metadata(
             }
         })?;
     check_path_within_profile(
-        transfer_root,
-        &profile_home,
+        &canonicalize_for_containment(transfer_root),
+        &canonicalize_for_containment(&profile_home),
         metadata.file_type().is_symlink(),
         "the ~/.atm/transfer directory",
         host,
@@ -397,12 +397,36 @@ fn check_script_safety(
             }
         })?;
     check_path_within_profile(
-        path,
-        &profile_home,
+        &canonicalize_for_containment(path),
+        &canonicalize_for_containment(&profile_home),
         metadata.file_type().is_symlink(),
         "the transfer script",
         host,
     )
+}
+
+/// Resolves `path` to its canonical form for the Windows containment check
+/// specifically (QM43 windows-CI regression): `Path::canonicalize()` on
+/// Windows resolves symlinks/junctions **and** normalizes an 8.3
+/// short-name path segment (e.g. `RUNNER~1`) to its long-name equivalent
+/// (`runneradmin`) -- both real, observed aliasing sources for the *same*
+/// filesystem location that a raw `Path::components()` comparison cannot
+/// see through on its own (this is exactly what broke on the
+/// `windows-latest` GitHub Actions runner: `%TEMP%` resolved through the
+/// short-name alias while `%USERPROFILE%` resolved through the long name,
+/// so an in-profile temp directory was wrongly rejected as
+/// "outside the profile"). Falls back to the as-given path on failure (a
+/// nonexistent or inaccessible path fails toward the stricter
+/// containment-rejection branch in `check_path_within_profile`, not a
+/// panic or a silently skipped check).
+///
+/// Applied only in this real-I/O wrapper, never inside
+/// `check_path_within_profile` itself: canonicalizing requires the path to
+/// exist on disk, which would make the pure core untestable with the
+/// synthetic, nonexistent paths its own unit tests use.
+#[cfg(windows)]
+fn canonicalize_for_containment(path: &Path) -> PathBuf {
+    path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
 }
 
 /// Resolves the home directory Windows path-containment checks
@@ -475,6 +499,27 @@ fn resolve_profile_home(
 /// achievable minimum bar now and records the gap here rather than
 /// pretending it is closed. See ADR-055's Windows-safety amendment for the
 /// full rationale.
+///
+/// **What this function does *not* do, and why that ordering matters.**
+/// This pure core never canonicalizes anything itself (no filesystem I/O
+/// of its own, by design) — it compares whatever `path`/`profile_home`
+/// strings it is given. Two representations of the *same real location*
+/// (an 8.3 short name like `RUNNER~1` versus its long-name equivalent
+/// `runneradmin`, observed for real on the `windows-latest` GitHub Actions
+/// runner: `%TEMP%` resolved through the short-name alias while
+/// `%USERPROFILE%` resolved through the long name) will therefore compare
+/// as *not* matching here, even though they refer to the same directory.
+/// Resolving that is the caller's job: the `#[cfg(windows)]` wrapper
+/// (`check_transfer_root_metadata`/`check_script_safety`) canonicalizes
+/// both `path` and `profile_home` (`canonicalize_for_containment`, which
+/// resolves 8.3 aliases the same way it resolves symlinks/junctions)
+/// *before* calling this function — but only for the containment compare.
+/// The reparse-point check must still run against the **un-canonicalized**
+/// path (`symlink_metadata`'s `is_reparse_point`, computed by the caller
+/// before it ever canonicalizes anything): canonicalizing a reparse point
+/// *follows* it, which would defeat the exact check meant to catch one.
+/// That is why `is_reparse_point` arrives here as an already-computed,
+/// independent `bool` rather than being derived from `path` itself.
 #[cfg(any(windows, test))]
 fn check_path_within_profile(
     path: &Path,
@@ -808,6 +853,122 @@ mod tests {
             &host("m5"),
         )
         .expect("a path under the honored override home must be accepted");
+    }
+
+    /// Documents the contract `check_path_within_profile`'s own doc
+    /// comment states: the pure core does **not** resolve 8.3
+    /// short-name-vs-long-name aliasing (`RUNNER~1` vs `runneradmin`) on
+    /// its own -- two strings naming the *same real directory* in
+    /// different forms compare as unrelated here. This is exactly the
+    /// shape of the `windows-latest` CI regression this test module's
+    /// sibling test (`eight_dot_three_short_name_alias_is_accepted_after_canonicalization`,
+    /// `#[cfg(windows)]`-only, since it needs a real 8.3 alias) reproduces
+    /// end to end through the canonicalizing wrapper; this test pins the
+    /// pure core's side of the contract on every platform, so a future
+    /// change that quietly makes the pure core "smarter" about aliasing
+    /// without updating its doc comment gets caught here.
+    #[test]
+    fn short_name_and_long_name_forms_of_the_same_directory_are_not_merged_by_the_pure_core() {
+        let profile_home = PathBuf::from(r"C:\Users\runneradmin");
+        let path = PathBuf::from(r"C:\Users\RUNNER~1\AppData\Local\Temp\.tmpY0TZeT");
+        let error = check_path_within_profile(
+            &path,
+            &profile_home,
+            false,
+            "the ~/.atm/transfer directory",
+            &host("m5"),
+        )
+        .expect_err(
+            "the pure core must not silently merge a short-name and long-name spelling of the \
+             same directory -- resolving that is the canonicalizing wrapper's job",
+        );
+        assert!(
+            matches!(&error, AtmTempError::TransferScriptUnsafe { reason, .. } if reason.contains("outside")),
+            "{error:?}"
+        );
+    }
+
+    /// Reproduces the `windows-latest` CI regression end to end through the
+    /// real canonicalizing wrapper (`canonicalize_for_containment`): a
+    /// path reached through its 8.3 short-name alias must still be
+    /// accepted as within the profile once both sides are canonicalized,
+    /// because `Path::canonicalize()` on Windows resolves a short-name
+    /// segment to its long-name equivalent the same way it resolves a
+    /// symlink or junction.
+    ///
+    /// Some Windows volumes/images have 8.3 name generation disabled
+    /// (`NtfsDisable8dot3NameCreation=1`), in which case `GetShortPathNameW`
+    /// returns the long name unchanged and there is nothing to prove here;
+    /// this test skips gracefully rather than asserting a false failure.
+    #[cfg(windows)]
+    #[test]
+    fn eight_dot_three_short_name_alias_is_accepted_after_canonicalization() {
+        let parent = tempfile::tempdir().expect("tempdir");
+        let long_name_dir = parent
+            .path()
+            .join("a-sufficiently-long-directory-name-for-8dot3-generation");
+        std::fs::create_dir(&long_name_dir).expect("create long-name dir");
+
+        let Some(short_name_dir) = windows_short_path_name(&long_name_dir) else {
+            eprintln!(
+                "skipping eight_dot_three_short_name_alias_is_accepted_after_canonicalization: \
+                 could not query a short-name alias"
+            );
+            return;
+        };
+        if short_name_dir == long_name_dir {
+            eprintln!(
+                "skipping eight_dot_three_short_name_alias_is_accepted_after_canonicalization: \
+                 8.3 short-name generation is disabled on this volume"
+            );
+            return;
+        }
+
+        std::fs::create_dir_all(long_name_dir.join(".atm").join("transfer"))
+            .expect("create nested target dir");
+
+        // Mirrors the CI bug exactly: the checked path arrives through its
+        // short-name alias (like `%TEMP%` did on the affected runner),
+        // while `profile_home` is the long name (like `%USERPROFILE%`).
+        let checked_path = short_name_dir.join(".atm").join("transfer");
+        let canonical_path = canonicalize_for_containment(&checked_path);
+        let canonical_profile = canonicalize_for_containment(&long_name_dir);
+        check_path_within_profile(
+            &canonical_path,
+            &canonical_profile,
+            false,
+            "the ~/.atm/transfer directory",
+            &host("m5"),
+        )
+        .expect("a short-name-aliased path under the profile must be accepted once canonicalized");
+    }
+
+    /// Looks up `path`'s 8.3 short-name alias via `GetShortPathNameW`.
+    /// Returns `None` on any API failure (missing path, buffer issue) so
+    /// the caller can skip its test gracefully rather than panicking on an
+    /// environment-specific Windows API quirk.
+    #[cfg(windows)]
+    fn windows_short_path_name(path: &Path) -> Option<PathBuf> {
+        use std::ffi::OsString;
+        use std::os::windows::ffi::{OsStrExt, OsStringExt};
+        use windows_sys::Win32::Storage::FileSystem::GetShortPathNameW;
+
+        let wide: Vec<u16> = path
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+        let mut buffer = vec![0u16; 4096];
+        // SAFETY: `wide` is a valid NUL-terminated UTF-16 string for the
+        // input path; `buffer` is a valid, writable buffer whose exact
+        // element count is passed as `cchBuffer`.
+        let length =
+            unsafe { GetShortPathNameW(wide.as_ptr(), buffer.as_mut_ptr(), buffer.len() as u32) };
+        if length == 0 || length as usize >= buffer.len() {
+            return None;
+        }
+        buffer.truncate(length as usize);
+        Some(PathBuf::from(OsString::from_wide(&buffer)))
     }
 
     #[cfg(unix)]

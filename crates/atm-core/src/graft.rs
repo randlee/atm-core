@@ -26,7 +26,6 @@ use crate::boundary::{
 use crate::error::{AtmError, AtmErrorCode};
 use crate::list::{ListOutcome, ListQuery};
 use crate::local_http::LocalCapability;
-use crate::protocol::OwnerGeneration;
 use crate::read::{ReadOutcome, ReadQuery};
 use crate::send::{SendOutcome, SendRequest};
 use crate::service_runtime::RetainedServiceRuntime;
@@ -289,7 +288,7 @@ pub fn read_graft_post_send_message<T: DeserializeOwned>(
 /// not loopback are dropped without being served.
 pub struct GraftReceiverListener {
     listener: TcpListener,
-    owner_generation: OwnerGeneration,
+    owner_generation: String,
     capability: LocalCapability,
     _ownership: ReceiverOwnershipGuard,
 }
@@ -378,12 +377,7 @@ impl GraftReceiverListener {
             .with_cause(source)
         })?;
         let capability = LocalCapability::generate()?;
-        // A freshly minted ULID is always a valid `OwnerGeneration`; storing
-        // the already-validated newtype here (RBP-F002) means every later
-        // read of this listener's generation is a cheap clone instead of a
-        // re-parse of a raw string on every ~1s refresh tick.
-        let owner_generation = OwnerGeneration::new(Ulid::new().to_string())
-            .expect("a freshly minted ULID is always a valid owner generation");
+        let owner_generation = Ulid::new().to_string();
         Ok(Self {
             listener,
             owner_generation,
@@ -488,7 +482,7 @@ impl GraftReceiverListener {
     }
 
     /// Return the generation that owns this receiver binding.
-    pub fn owner_generation(&self) -> &OwnerGeneration {
+    pub fn owner_generation(&self) -> &str {
         &self.owner_generation
     }
 }

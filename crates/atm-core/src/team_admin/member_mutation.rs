@@ -37,6 +37,8 @@ pub struct AddMemberRequest {
     pub tmux_pane_id: Option<PaneId>,
     pub local_backend: Option<LocalMessageReceivedBackend>,
     pub backend_warning: Option<String>,
+    /// This member's registered host (ADR-055 decision (e)), or `None` when
+    /// unset. Set via [`AddMemberRequest::with_host`].
     pub host: Option<HostName>,
 }
 
@@ -103,7 +105,11 @@ impl AddMemberRequest {
         })
     }
 
-    /// Set the explicit routable host advertised by the picker projection.
+    /// Sets this member's registered host (ADR-055 decision (e)).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] when `host` is not a valid [`HostName`].
     pub fn with_host(mut self, host: Option<&str>) -> Result<Self, AtmError> {
         self.host = host.map(str::parse).transpose()?;
         Ok(self)
@@ -136,6 +142,9 @@ pub struct UpdateMemberRequest {
     pub tmux_pane_id: Option<PaneId>,
     pub local_backend: Option<LocalMessageReceivedBackend>,
     pub backend_warning: Option<String>,
+    /// This member's registered host (ADR-055 decision (e)); `None` means
+    /// "leave unchanged" (the same convention as `harness`/`agent_type`/
+    /// `model`), never "clear". Set via [`UpdateMemberRequest::with_host`].
     pub host: Option<HostName>,
 }
 
@@ -223,7 +232,12 @@ impl UpdateMemberRequest {
         })
     }
 
-    /// Set the explicit routable host advertised by the picker projection.
+    /// Sets this member's registered host (ADR-055 decision (e)); `None`
+    /// leaves it unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] when `host` is not a valid [`HostName`].
     pub fn with_host(mut self, host: Option<&str>) -> Result<Self, AtmError> {
         self.host = host.map(str::parse).transpose()?;
         Ok(self)
@@ -502,7 +516,10 @@ fn build_member_add_roster_record(request: &AddMemberRequest) -> RosterEntry {
         json!(request.member_home_dir.as_ref().display().to_string()),
     );
     if let Some(host) = &request.host {
-        extra.insert("host".to_string(), json!(host.as_str()));
+        extra.insert(
+            crate::send_to::ROSTER_HOST_METADATA_KEY.to_string(),
+            json!(host.as_str()),
+        );
     }
 
     RosterEntry {
@@ -551,6 +568,12 @@ fn apply_member_metadata_update(member: &mut RosterEntry, request: &UpdateMember
     }
     if let Some(model) = &request.model {
         member.model = model.clone();
+    }
+    if let Some(host) = &request.host {
+        member.metadata_json.insert(
+            crate::send_to::ROSTER_HOST_METADATA_KEY.to_string(),
+            json!(host.as_str()),
+        );
     }
     match request.local_backend.as_ref() {
         Some(LocalMessageReceivedBackend::Tmux { pane_id }) => {

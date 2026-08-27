@@ -119,8 +119,22 @@ fn member_summary_from_roster(
         local_backend,
         home_dir: canonical_home_dir(&record.metadata_json).unwrap_or_default(),
         live_cwd: runtime_live_cwd(record, caller_identity, live_cwd),
+        host: member_registered_host(record),
         extra: compatibility_extra_fields(&record.metadata_json),
     }
+}
+
+/// Reads this member's registered host (ADR-055 decision (e)) from roster
+/// metadata for display/projection. Lenient by design: a malformed stored
+/// value degrades to `None` here rather than failing the whole roster
+/// listing -- `crate::send_to::member_host` is the fail-closed counterpart
+/// used by `--from-json` routing, where a malformed host must be reported.
+fn member_registered_host(record: &RosterEntry) -> Option<crate::types::HostName> {
+    record
+        .metadata_json
+        .get(crate::send_to::ROSTER_HOST_METADATA_KEY)
+        .and_then(Value::as_str)
+        .and_then(|raw| raw.parse().ok())
 }
 
 #[cfg(test)]

@@ -189,6 +189,19 @@ None.
 
 ## Non-closure / out of scope
 
+- QA-1 remediation (2026-08-27): transition drains are tracked and joined
+  within the replacement shutdown deadline; interrupted claims are released
+  by a drop guard; the recovery sweep isolates per-member failures and
+  continues; and handoff marker cleanup has one `atm-core` helper enforced by
+  an architecture test. The real daemon/tmux loopback transcript remains
+  pending because the shared local daemon owner lock is occupied and `m5` is
+  not resolvable from this workstation.
+- AQ2.5 dependency (2026-08-26): the bare-CLI delivery-trigger dependency
+  for AQ3-CRIT-001 is satisfied by reconciled head `72d413134` on
+  `feature/aq-2-5-queue-delivery-triggers`, including the shared
+  `atm-core::nudge_dispatch::clear_queue_marker_after_handoff` ownership
+  gate. The real daemon/tmux loopback transcript remains pending as noted
+  above.
 - Durable heartbeat history; subscription APIs beyond the internal sink;
   priority ordering; re-nudge/reminder policies.
 

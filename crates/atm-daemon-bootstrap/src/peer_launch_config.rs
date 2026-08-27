@@ -1,13 +1,13 @@
-//! Peer-wire security mode, direct-peer port, and outbound peer-pool launch
-//! parsing.
+//! Peer-wire mode and peer-pool launch-argument parsing.
 //!
-//! Split out of `lib.rs` (RULE-003) as one coherent unit: every function here
-//! parses one immutable piece of the daemon's peer-transport launch policy
-//! from process arguments (and, for the pool, environment defaults) before
-//! composition begins. None of it touches peer identity or wire-security
-//! selection, which remain `lib.rs`'s `parse_peer_wire_mode`-adjacent
-//! composition responsibilities.
+//! This module owns the immutable, launch-time-only parsing of the daemon's
+//! peer transport policy (`--peer-wire-security`, `--direct-peer-port`) and
+//! bounded outbound peer-pool settings (`--peer-pool-*` flags, with
+//! `ATM_PEER_POOL_*` environment defaults). It was split out of the parent
+//! crate root to keep that file under the repository's RULE-003 per-file
+//! line cap; daemon composition itself remains in the crate root.
 
+use std::ffi::OsString;
 use std::num::NonZeroU16;
 use std::time::Duration;
 
@@ -21,7 +21,7 @@ use atm_http_runtime::PeerPoolConfig;
 /// availability source: those inputs can cause a startup error but cannot
 /// select plaintext.
 pub fn parse_peer_wire_mode(
-    arguments: impl IntoIterator<Item = std::ffi::OsString>,
+    arguments: impl IntoIterator<Item = OsString>,
 ) -> Result<PeerWireMode, AtmError> {
     if std::env::var_os("ATM_PEER_WIRE_SECURITY").is_some() {
         return Err(AtmError::peer_wire_mode_source_forbidden(
@@ -44,7 +44,7 @@ pub fn parse_peer_wire_mode(
         } else {
             argument
                 .strip_prefix("--peer-wire-security=")
-                .map(std::ffi::OsString::from)
+                .map(OsString::from)
         };
         let Some(value) = value else {
             continue;
@@ -76,7 +76,7 @@ pub fn parse_peer_wire_mode(
 /// useful for a dedicated physical benchmark account that shares a host with
 /// another account's live daemon; it is not peer identity or wire policy.
 pub fn parse_direct_peer_port(
-    arguments: impl IntoIterator<Item = std::ffi::OsString>,
+    arguments: impl IntoIterator<Item = OsString>,
 ) -> Result<NonZeroU16, AtmError> {
     let mut arguments = arguments.into_iter();
     let _program = arguments.next();
@@ -92,7 +92,7 @@ pub fn parse_direct_peer_port(
         } else {
             argument
                 .strip_prefix("--direct-peer-port=")
-                .map(std::ffi::OsString::from)
+                .map(OsString::from)
         };
         let Some(value) = value else {
             continue;
@@ -122,14 +122,14 @@ pub fn parse_direct_peer_port(
 /// overrides the matching environment value without changing peer identity or
 /// wire-security policy.
 pub fn parse_peer_pool_config(
-    arguments: impl IntoIterator<Item = std::ffi::OsString>,
+    arguments: impl IntoIterator<Item = OsString>,
 ) -> Result<PeerPoolConfig, AtmError> {
     parse_peer_pool_config_with_environment(arguments, |name| std::env::var_os(name))
 }
 
 pub(crate) fn parse_peer_pool_config_with_environment(
-    arguments: impl IntoIterator<Item = std::ffi::OsString>,
-    mut environment: impl FnMut(&str) -> Option<std::ffi::OsString>,
+    arguments: impl IntoIterator<Item = OsString>,
+    mut environment: impl FnMut(&str) -> Option<OsString>,
 ) -> Result<PeerPoolConfig, AtmError> {
     let mut config = PeerPoolConfig::default();
     apply_peer_pool_environment(&mut config, &mut environment)?;
@@ -140,7 +140,7 @@ pub(crate) fn parse_peer_pool_config_with_environment(
 
 fn apply_peer_pool_environment(
     config: &mut PeerPoolConfig,
-    environment: &mut impl FnMut(&str) -> Option<std::ffi::OsString>,
+    environment: &mut impl FnMut(&str) -> Option<OsString>,
 ) -> Result<(), AtmError> {
     if let Some(value) = environment("ATM_PEER_POOL_MAX_PER_PEER") {
         config.max_per_peer = parse_pool_usize("ATM_PEER_POOL_MAX_PER_PEER", value)?;
@@ -157,7 +157,7 @@ fn apply_peer_pool_environment(
 
 fn apply_peer_pool_launch_overrides(
     config: &mut PeerPoolConfig,
-    arguments: impl IntoIterator<Item = std::ffi::OsString>,
+    arguments: impl IntoIterator<Item = OsString>,
 ) -> Result<(), AtmError> {
     let mut arguments = arguments.into_iter();
     let _program = arguments.next();
@@ -203,9 +203,9 @@ fn apply_peer_pool_launch_overrides(
 }
 
 fn peer_pool_launch_argument(
-    arguments: &mut impl Iterator<Item = std::ffi::OsString>,
-    argument: std::ffi::OsString,
-) -> Result<Option<(&'static str, std::ffi::OsString)>, AtmError> {
+    arguments: &mut impl Iterator<Item = OsString>,
+    argument: OsString,
+) -> Result<Option<(&'static str, OsString)>, AtmError> {
     let argument = argument
         .into_string()
         .map_err(|_| AtmError::config("peer-pool launch arguments must be valid UTF-8"))?;
@@ -224,41 +224,31 @@ fn peer_pool_launch_argument(
         )),
         _ => argument
             .strip_prefix("--peer-pool-max-per-peer=")
-            .map(|value| ("--peer-pool-max-per-peer", std::ffi::OsString::from(value)))
+            .map(|value| ("--peer-pool-max-per-peer", OsString::from(value)))
             .or_else(|| {
                 argument
                     .strip_prefix("--peer-pool-max-pooled-total=")
-                    .map(|value| {
-                        (
-                            "--peer-pool-max-pooled-total",
-                            std::ffi::OsString::from(value),
-                        )
-                    })
+                    .map(|value| ("--peer-pool-max-pooled-total", OsString::from(value)))
             })
             .or_else(|| {
                 argument
                     .strip_prefix("--peer-pool-idle-timeout-ms=")
-                    .map(|value| {
-                        (
-                            "--peer-pool-idle-timeout-ms",
-                            std::ffi::OsString::from(value),
-                        )
-                    })
+                    .map(|value| ("--peer-pool-idle-timeout-ms", OsString::from(value)))
             }),
     };
     Ok(selected)
 }
 
 fn next_pool_argument(
-    arguments: &mut impl Iterator<Item = std::ffi::OsString>,
+    arguments: &mut impl Iterator<Item = OsString>,
     flag: &str,
-) -> Result<std::ffi::OsString, AtmError> {
+) -> Result<OsString, AtmError> {
     arguments
         .next()
         .ok_or_else(|| AtmError::config(format!("{flag} requires a positive integer")))
 }
 
-fn parse_pool_usize(name: &str, value: std::ffi::OsString) -> Result<usize, AtmError> {
+fn parse_pool_usize(name: &str, value: OsString) -> Result<usize, AtmError> {
     let value = value
         .into_string()
         .map_err(|_| AtmError::config(format!("{name} must be valid UTF-8")))?;
@@ -269,7 +259,7 @@ fn parse_pool_usize(name: &str, value: std::ffi::OsString) -> Result<usize, AtmE
         .ok_or_else(|| AtmError::config(format!("{name} requires a positive integer")))
 }
 
-fn parse_pool_u64(name: &str, value: std::ffi::OsString) -> Result<u64, AtmError> {
+fn parse_pool_u64(name: &str, value: OsString) -> Result<u64, AtmError> {
     let value = value
         .into_string()
         .map_err(|_| AtmError::config(format!("{name} must be valid UTF-8")))?;

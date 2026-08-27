@@ -270,6 +270,7 @@ impl ReplacementReceivedHookSelector {
             },
             queue_pull: PullPendingReceivedHook {
                 service_runtime,
+                runtime_health,
                 bare_cli_fifo,
                 bare_cli_queue_full_drops,
             },
@@ -480,51 +481,6 @@ fn hook_deadline_error(stage: &'static str) -> AtmError {
     )
 }
 
-fn clear_queue_marker_after_handoff(
-    service_runtime: &LocalServiceRuntime,
-    runtime_health: &RuntimeHealth,
-    member: &atm_core::boundary::MemberKey,
-    message_id: &atm_core::schema::AtmMessageId,
-) {
-    let store = match service_runtime.pending_nudge_store() {
-        Ok(store) => store,
-        Err(error) => {
-            runtime_health.record_graft_queue_marker_clear_failure();
-            tracing::warn!(
-                subsystem = "atm_core.queue",
-                action = "handoff_marker_clear",
-                outcome = "failed",
-                %error,
-                msg_id = %message_id,
-                "queue delivery succeeded but pending marker store was unavailable"
-            );
-            return;
-        }
-    };
-    if let Err(error) = store.clear_pending_on_handoff(member, message_id) {
-        runtime_health.record_graft_queue_marker_clear_failure();
-        tracing::warn!(
-            subsystem = "atm_core.queue",
-            action = "handoff_marker_clear",
-            outcome = "failed",
-            %error,
-            msg_id = %message_id,
-            "queue delivery succeeded but pending marker clear failed; retrying"
-        );
-        if let Err(retry_error) = store.clear_pending_on_handoff(member, message_id) {
-            runtime_health.record_graft_queue_marker_clear_failure();
-            tracing::warn!(
-                subsystem = "atm_core.queue",
-                action = "handoff_marker_clear",
-                outcome = "failed",
-                %retry_error,
-                msg_id = %message_id,
-                "pending marker clear retry failed after successful queue delivery"
-            );
-        }
-    }
-}
-
 /// Graft remains receiver-owned. The existing endpoint operation has bounded
 /// socket timeouts derived from the inherited absolute deadline, so the only
 /// blocking seam is awaited rather than detached.
@@ -560,11 +516,11 @@ impl AsyncMessageReceivedHookEmitter for PublishedGraftReceivedHook {
                     deadline,
                 );
                 if result.is_ok() && kind == NudgeKind::Queue {
-                    clear_queue_marker_after_handoff(
+                    atm_core::nudge_dispatch::clear_queue_marker_after_handoff(
                         &service_runtime,
-                        &runtime_health_for_clear,
                         &member_for_handoff,
                         &message_id,
+                        || runtime_health_for_clear.record_graft_queue_marker_clear_failure(),
                     );
                 }
                 result
@@ -599,9 +555,20 @@ impl AsyncMessageReceivedHookEmitter for PublishedGraftReceivedHook {
 
 /// Hands a bare-CLI delivery to the daemon-lifetime FIFO and immediately
 /// clears only the exact durable pending marker that was handed off.
+///
+/// Bare-CLI members are never swept (AQ3 schedules only `TmuxSteer`/`Graft`
+/// members), so the FIFO append is this channel's *only* handoff moment: a
+/// marker left set after a successful append would be permanently orphaned,
+/// with no scheduler ever revisiting it. A marker-clear failure must
+/// therefore never turn an already-successful append into a reported
+/// delivery failure; it is routed through the same
+/// `clear_queue_marker_after_handoff` retry-once-and-count helper AQ2's
+/// graft channel uses, so a clear failure is logged and counted (and
+/// retried once) while `emit_received_message` still returns `Success`.
 #[derive(Clone)]
 struct PullPendingReceivedHook {
     service_runtime: LocalServiceRuntime,
+    runtime_health: RuntimeHealth,
     bare_cli_fifo: BareCliFifo,
     bare_cli_queue_full_drops: BareCliQueueFullDrops,
 }
@@ -615,6 +582,7 @@ impl AsyncMessageReceivedHookEmitter for PullPendingReceivedHook {
         _deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<PostSendEmissionPath, AtmError>> + Send + '_>> {
         let service_runtime = self.service_runtime.clone();
+        let runtime_health = self.runtime_health.clone();
         let bare_cli_fifo = self.bare_cli_fifo.clone();
         let bare_cli_queue_full_drops = self.bare_cli_queue_full_drops.clone();
         let target = match dispatch.target {
@@ -643,8 +611,15 @@ impl AsyncMessageReceivedHookEmitter for PullPendingReceivedHook {
                     member.clone(),
                     message,
                 )?;
-                let store = service_runtime.pending_nudge_store()?;
-                store.clear_pending_on_handoff(&member, &target.msg_id)?;
+                // The append above IS the handoff (AQ2 handoff semantics).
+                // A marker-clear failure here is never allowed to fail an
+                // already-successful FIFO append; see the struct doc.
+                atm_core::nudge_dispatch::clear_queue_marker_after_handoff(
+                    &service_runtime,
+                    &member,
+                    &target.msg_id,
+                    || runtime_health.record_graft_queue_marker_clear_failure(),
+                );
                 Ok(PostSendEmissionPath::QueuePull)
             })
             .await
@@ -934,6 +909,74 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn aq25_crit_001_bare_cli_marker_clear_failure_does_not_fail_delivery() {
+        let root = tempfile::tempdir().expect("temporary runtime root");
+        let (base_runtime, _endpoint_store, team, recipient) = queue_graft_runtime(root.path());
+        let base_pending_store = base_runtime.pending_nudge_store().expect("pending store");
+        let failing_store = Arc::new(FailingClearPendingStore {
+            inner: base_pending_store,
+            clear_calls: AtomicUsize::new(0),
+        });
+        let runtime = base_runtime.with_pending_nudge_store(failing_store.clone());
+        let message_id = queue_write(root.path(), &runtime, &team);
+        let member = MemberKey::new(team.clone(), recipient.clone());
+        let mut dispatch = tmux_dispatch();
+        dispatch.kind = NudgeKind::Queue;
+        dispatch.target = PostSendBuiltInTarget::QueuePull(QueuePullTarget {
+            team: team.clone(),
+            agent: recipient.clone(),
+            kind: NudgeKind::Queue,
+            msg_id: message_id,
+            body: "bare CLI body".to_owned(),
+        });
+        let fifo: atm_http_runtime::BareCliFifo = Default::default();
+        let drops: atm_http_runtime::BareCliQueueFullDrops = Default::default();
+        let health = RuntimeHealth::default();
+        let selector = ReplacementReceivedHookSelector::with_herdr_process_and_fifo(
+            runtime.clone(),
+            Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default()),
+            health.clone(),
+            fifo.clone(),
+            drops,
+        );
+
+        let path = selector
+            .select_emitter(&dispatch)
+            .expect("bare-CLI queue-pull emitter")
+            .emit_received_message(dispatch, RequestDeadline::after(Duration::from_secs(1)))
+            .await
+            .expect("a marker-clear failure must not fail an already-successful FIFO handoff");
+        assert_eq!(path, PostSendEmissionPath::QueuePull);
+
+        let drained =
+            atm_http_runtime::drain_bare_cli_messages(&fifo, &member).expect("drain FIFO");
+        assert_eq!(
+            drained.len(),
+            1,
+            "the FIFO append succeeded and must still be observable"
+        );
+        assert_eq!(drained[0].msg_id, message_id);
+        assert_eq!(
+            failing_store.clear_calls.load(Ordering::SeqCst),
+            2,
+            "the shared helper retries the marker clear exactly once"
+        );
+        assert_eq!(health.snapshot().graft_queue_handoff_failures_total, 0);
+        assert_eq!(health.snapshot().graft_queue_marker_clear_failures_total, 2);
+        let claim = runtime
+            .pending_nudge_store()
+            .expect("pending store")
+            .claim_next_pending(&member)
+            .expect("claim query")
+            .expect(
+                "a failed marker clear leaves the durable marker set; bare-CLI members are \
+                 never swept, so this is disclosed as an orphaned-marker residual in the \
+                 ADR-054 addendum rather than silently retried indefinitely",
+            );
+        assert_eq!(claim.msg, message_id);
+    }
+
+    #[tokio::test]
     async fn queue_graft_handoff_clears_only_the_handed_message_marker() {
         let root = tempfile::tempdir().expect("temporary runtime root");
         let (runtime, endpoint_store, team, recipient) = queue_graft_runtime(root.path());
@@ -946,7 +989,8 @@ mod tests {
                     agent: recipient.clone(),
                     endpoint: listener.local_addr().expect("endpoint"),
                     capability: listener.capability().clone(),
-                    owner_generation: listener.owner_generation().clone(),
+                    owner_generation: OwnerGeneration::new(listener.owner_generation())
+                        .expect("generation"),
                 },
                 atm_core::types::IsoTimestamp::now().into_inner(),
             )
@@ -1028,7 +1072,8 @@ mod tests {
                     agent: recipient.clone(),
                     endpoint: listener.local_addr().expect("endpoint"),
                     capability: listener.capability().clone(),
-                    owner_generation: listener.owner_generation().clone(),
+                    owner_generation: OwnerGeneration::new(listener.owner_generation())
+                        .expect("generation"),
                 },
                 atm_core::types::IsoTimestamp::now().into_inner(),
             )

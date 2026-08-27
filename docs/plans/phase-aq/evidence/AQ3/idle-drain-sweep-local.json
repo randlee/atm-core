@@ -1,0 +1,17 @@
+{
+  "commit": "c88fb3dc61b075b531479732453302de523bada6",
+  "host": "local",
+  "record": {
+    "ambient_daemon_pids": [
+      1816
+    ],
+    "error": "an ATM daemon already owns this OS account's singleton runtime root; the runner refuses to contend with the ambient session. Run on a dedicated OS account with no ambient atm-daemon for positive evidence.",
+    "host": "local",
+    "recovery_sweep_interval_seconds": 30.0,
+    "sprint": "AQ3",
+    "started_at_ns": 1787811179218546000,
+    "status": "blocked_ambient_daemon"
+  },
+  "schema_version": 1,
+  "sprint": "AQ3"
+}

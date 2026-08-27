@@ -394,6 +394,7 @@ fn age_at_least(t: Option<SystemTime>, ttl: Duration, now: SystemTime) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     use crate::test_support::capture_tracing;
     use std::collections::HashMap;
     use std::sync::atomic::AtomicUsize;
@@ -401,6 +402,7 @@ mod tests {
 
     const TTL: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 
+    #[cfg(unix)]
     fn age_file(path: &Path, age: Duration, now: SystemTime) {
         let modified = now
             .checked_sub(age)

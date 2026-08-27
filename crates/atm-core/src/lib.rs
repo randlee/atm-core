@@ -61,6 +61,8 @@ pub mod observability;
 pub mod peer_wire;
 /// Internal atomic persistence helpers for shared mutable state files.
 pub(crate) mod persistence;
+/// Picker member projection (`atm teams --json --members`), PRD §4.2/§5a.
+pub mod picker_projection;
 /// Hidden process-liveness helpers shared across lock implementations.
 #[doc(hidden)]
 pub mod process;
@@ -162,6 +164,10 @@ pub use delivery_channel::{
 /// boundary. Shared advisory/session protocol DTOs are not part of the
 /// accepted `atm-core` surface.
 pub use graft::AtmGraftClient;
+pub use picker_projection::{
+    PICKER_MEMBERS_SCHEMA_VERSION, PickerMember, PickerMemberStatus, PickerMembersProjection,
+    build_picker_members_projection,
+};
 pub use protocol::{RequestEnvelope, ResponseEnvelope};
 pub use search::{SearchAggregateInput, SearchHit, SearchInput, SearchRequest, SearchResponse};
 pub use send_to::{

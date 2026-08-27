@@ -38,9 +38,9 @@ use atm_herdr::{
 use atm_http_runtime::{
     AcceptedPeerStream, BareCliFifo, BareCliQueueFullDrops, DirectPeerTcpConfig,
     EstablishedPeerStream, HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig,
-    MemberStateTransitionSink, NonZeroDuration, PeerConnectionPool, PeerPoolConfig,
-    PeerStreamAdapter, PeerStreamFuture, RuntimeHealth, RuntimeLimits, RuntimeTimeouts,
-    StorageAndNudgeRouter, shared_direct_peer_client,
+    NonZeroDuration, PeerConnectionPool, PeerPoolConfig, PeerStreamAdapter, PeerStreamFuture,
+    RuntimeHealth, RuntimeLimits, RuntimeTimeouts, StorageAndNudgeRouter,
+    shared_direct_peer_client,
 };
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime};
 use atm_storage_rusqlite::SqliteStorageFactory;
@@ -50,17 +50,15 @@ use tokio::net::TcpStream;
 mod atm_temp_config;
 mod atm_temp_sweeper_runtime;
 mod owner_gate;
-mod peer_wire_config;
+mod peer_launch_config;
 mod queue_drain;
 mod received_hook_selector;
 
 use atm_temp_config::daemon_atm_config;
 use atm_temp_sweeper_runtime::AtmTempSweeperRuntime;
+use peer_launch_config::{parse_direct_peer_port, parse_peer_pool_config, parse_peer_wire_mode};
 
 pub use owner_gate::DaemonOwnerGuard;
-#[cfg(test)]
-use peer_wire_config::parse_peer_pool_config_with_environment;
-pub use peer_wire_config::{parse_direct_peer_port, parse_peer_pool_config, parse_peer_wire_mode};
 pub use received_hook_selector::active_received_hook_selector;
 pub use received_hook_selector::active_received_hook_selector_with_health;
 #[cfg(feature = "benchmark-harness")]
@@ -496,12 +494,12 @@ fn build_replacement_handler(
         bare_cli_fifo.clone(),
         bare_cli_queue_full_drops.clone(),
     );
-    let transition_sink: Arc<dyn MemberStateTransitionSink> =
-        Arc::new(queue_drain::DrainOnTransitionSink::new(
-            assembly.service_runtime.clone(),
-            Arc::clone(&selector),
-            runtime_health.clone(),
-        ));
+    let transition_sink = queue_drain::transition_sink(
+        assembly.service_runtime.clone(),
+        Arc::clone(&selector),
+        runtime_health.clone(),
+        recovery_sweep.transition_tracker(),
+    );
     let handler = StorageAndNudgeRouter::new(
         assembly.service_runtime,
         observability,
@@ -1035,13 +1033,14 @@ mod replacement_runtime_tests {
     use atm_template_sc_compose::ScComposeTemplateComposer;
     use serde_json::Map;
 
+    use crate::peer_launch_config::parse_peer_pool_config_with_environment;
+
     use super::{
         DaemonLaunchIdentity, HerdrPresenceDoctorAdapter, REPLACEMENT_DRAIN_DEADLINE,
         ReplacementHandlerConfig, SelectedPeerAdapterSelection, ShutdownSignal,
         assemble_host_runtime_with_template_composer, build_replacement_handler,
-        parse_direct_peer_port, parse_peer_pool_config_with_environment, parse_peer_wire_mode,
-        peer_stream_adapter_for_mode, replacement_runtime_config_with_direct_peer,
-        write_ready_signal_if_requested,
+        parse_direct_peer_port, parse_peer_wire_mode, peer_stream_adapter_for_mode,
+        replacement_runtime_config_with_direct_peer, write_ready_signal_if_requested,
     };
 
     /// Test-owned receiver selection prevents an external tmux/graft action
@@ -1426,6 +1425,7 @@ mod replacement_runtime_tests {
                 }),
                 home_dir: std::path::PathBuf::from("/tmp").into(),
                 live_cwd: None,
+                host: None,
                 extra: serde_json::Map::new(),
             }],
         };

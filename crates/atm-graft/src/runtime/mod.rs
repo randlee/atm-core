@@ -776,7 +776,8 @@ mod tests {
     use atm_core::boundary::{NudgeKind, PostSendHookEvent};
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::graft::{
-        GraftPostSendRequest, GraftPostSendResponse, GraftReceiverListener, deliver_graft_post_send,
+        GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL, GraftPostSendRequest, GraftPostSendResponse,
+        GraftReceiverListener, deliver_graft_post_send,
     };
     use atm_core::protocol::{LocalCapability, OwnerGeneration, RequestEnvelope, ResponseEnvelope};
     use atm_core::schema::AtmMessageId;
@@ -796,9 +797,9 @@ mod tests {
     use crate::{GraftClient, GraftObservability, HostNudge, HostNudgeInjector};
 
     use super::{
-        BoundedHostNudgeInjector, GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL,
-        GRAFT_RECEIVER_RECOVERY_MAX_DURATION, GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY,
-        GraftReceiverLeaseClient, GraftReceiverLoopContext, HelperThreadBudget,
+        BoundedHostNudgeInjector, GRAFT_RECEIVER_RECOVERY_MAX_DURATION,
+        GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY, GraftReceiverLeaseClient,
+        GraftReceiverLoopContext, HelperThreadBudget,
         MAX_HOST_NUDGE_HELPERS, RECEIVE_LOOP_READY_DEADLINE, ReceiverReadyLatch,
         ReceiverRecoveryCircuit, RegisteredGraftReceiver, handle_graft_receiver_connection,
         join_receive_loop_with_deadline, load_graft_config, read_snapshot,
@@ -1575,7 +1576,8 @@ mod tests {
         let listener = bind_receiver(&paths, None).expect("bind listener");
         let expected_endpoint = listener.local_addr().expect("bound endpoint");
         let expected_capability = listener.capability().clone();
-        let expected_generation = listener.owner_generation().clone();
+        let expected_generation = OwnerGeneration::new(listener.owner_generation())
+            .expect("bound listener owner generation is a valid ULID");
 
         let ctx = GraftReceiverLoopContext {
             graft_root: paths.workspace_root.clone(),
@@ -1615,10 +1617,10 @@ mod tests {
         );
     }
 
-    // AC2: bind with the daemon down succeeds (the receiver stays functional
-    // through the registry-backed lease model even while unregistered), and
-    // the next tick after the daemon returns registers the lease with no
-    // manual step.
+    // AC2: bind with the daemon down succeeds (the receiver stays live and
+    // reachable over its loopback listener even though the daemon lease
+    // registration has not landed yet), and the next tick after the daemon
+    // returns registers the lease with no manual step.
     #[test]
     fn ac2_bind_with_daemon_down_succeeds_and_registers_once_daemon_returns() {
         let paths = test_paths();
@@ -1631,7 +1633,7 @@ mod tests {
         assert_eq!(
             deliver_request(endpoint, &capability, request_event()),
             GraftPostSendResponse::Delivered,
-            "bind must succeed and the accept loop must keep serving even though the daemon is down"
+            "the loopback receiver must stay functional even though the daemon is down"
         );
         assert_eq!(registry.registration_count(), 0);
 

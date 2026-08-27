@@ -779,6 +779,7 @@ fn member_summary(
             }
             _ => None,
         },
+        host: None,
         extra: member.extra.clone(),
     }
 }
@@ -1067,6 +1068,7 @@ mod tests {
                 local_backend: None,
                 home_dir: PathBuf::from("/workspace").into(),
                 live_cwd: None,
+                host: None,
                 extra: serde_json::Map::new(),
             }],
         };
