@@ -273,11 +273,22 @@ fn check_transfer_root_metadata(
             reason: format!("{} is not a directory", transfer_root.display()),
         });
     }
-    check_windows_path_safety(
+    let profile_home =
+        windows_profile_home_for_containment(&ProcessEnvSource).ok_or_else(|| {
+            AtmTempError::TransferScriptUnsafe {
+                host: host.clone(),
+                reason: "could not resolve a home directory to validate the ~/.atm/transfer \
+                      directory's containment ($HOME/%USERPROFILE% unset and the OS account \
+                      profile is unavailable)"
+                    .to_string(),
+            }
+        })?;
+    check_path_within_profile(
         transfer_root,
-        host,
-        metadata,
+        &profile_home,
+        metadata.file_type().is_symlink(),
         "the ~/.atm/transfer directory",
+        host,
     )
 }
 
@@ -357,42 +368,104 @@ fn check_script_safety(
             reason: format!("{} is not a regular file", path.display()),
         });
     }
-    check_windows_path_safety(path, host, metadata, "the transfer script")
+    let profile_home =
+        windows_profile_home_for_containment(&ProcessEnvSource).ok_or_else(|| {
+            AtmTempError::TransferScriptUnsafe {
+                host: host.clone(),
+                reason: "could not resolve a home directory to validate the transfer \
+                      script's containment ($HOME/%USERPROFILE% unset and the OS account \
+                      profile is unavailable)"
+                    .to_string(),
+            }
+        })?;
+    check_path_within_profile(
+        path,
+        &profile_home,
+        metadata.file_type().is_symlink(),
+        "the transfer script",
+        host,
+    )
 }
 
-/// Minimum-bar Windows safety check for the transfer-script seam
-/// (`docs/cross-platform-guidelines.md`'s `#[cfg(windows)]`-split pattern),
-/// applied to both the script file and its containing `~/.atm/transfer`
-/// directory. Windows has no POSIX owner-uid/mode-bits model, so this is
-/// not a like-for-like port of the Unix check; it verifies two structural
-/// properties instead:
+/// Resolves the home directory Windows path-containment checks
+/// (`check_path_within_profile`, below) validate against: the **same**
+/// `$HOME`-then-`%USERPROFILE%` precedence `transfer_script_root` uses to
+/// build the transfer root in the first place
+/// (`crate::home::resolve_user_home_via`), never re-derived independently.
+/// Validating containment against a *different* resolution (the earlier
+/// version of this check used `crate::home::os_account_home`, which
+/// ignores an explicit `$HOME`/`%USERPROFILE%` override) is exactly what
+/// let a legitimate override get rejected: `transfer_script_root` would
+/// build the transfer root under the override, and this check would then
+/// refuse it for sitting outside the *unrelated* OS-account profile.
 ///
-/// 1. `path` is not a reparse point (an NTFS symlink or junction) — a
-///    reparse point passing this check could point somewhere outside the
-///    validated location by the time it is used, defeating everything
-///    below it. `metadata` comes from `symlink_metadata` (never followed),
-///    so this is exactly the same "never follow symlinks out of the
-///    checked location" discipline the rest of this module already uses.
-/// 2. `path` resolves under the current OS account's profile directory,
-///    read through the same known-folder API `crate::home::os_account_home`
-///    uses for host-runtime ownership (`SHGetKnownFolderPath`), not
-///    `%USERPROFILE%`, which a caller process can redirect.
+/// Falls back to `crate::home::os_account_home` (the known-folder API)
+/// only when neither environment variable is set. Returns `None` (fail
+/// closed, never silently skipping the containment check) when neither
+/// source resolves.
+#[cfg(windows)]
+fn windows_profile_home_for_containment(env: &dyn EnvSource) -> Option<PathBuf> {
+    resolve_profile_home(
+        crate::home::resolve_user_home_via(env),
+        crate::home::os_account_home().ok(),
+    )
+}
+
+/// Pure fallback-order decision behind [`windows_profile_home_for_containment`],
+/// extracted so it is unit-testable on every platform without touching the
+/// real environment or the Windows known-folder API: prefer `from_env` (the
+/// override-aware resolution), fall back to `from_os_account` only when
+/// `from_env` is `None`, and fail closed (`None`) when both are `None`.
+#[cfg(any(windows, test))]
+fn resolve_profile_home(
+    from_env: Option<PathBuf>,
+    from_os_account: Option<PathBuf>,
+) -> Option<PathBuf> {
+    from_env.or(from_os_account)
+}
+
+/// Pure, platform-independent core of the Windows transfer-script path
+/// safety check. Compiled and unit-tested on every platform, not only
+/// Windows, because it performs no filesystem or WinAPI I/O of its own:
+/// callers supply `is_reparse_point` (from an already-taken
+/// `symlink_metadata`, never re-derived by following the path) and
+/// `profile_home` (see [`windows_profile_home_for_containment`]) as plain
+/// data.
+///
+/// Refuses a reparse point outright: an NTFS symlink or junction could
+/// point somewhere outside `profile_home` by the time it is actually used,
+/// defeating everything below it.
+///
+/// Otherwise requires `path` to sit under `profile_home`, compared
+/// **component-by-component** (`Path::components()`), not by raw string
+/// prefix, for two reasons:
+/// - a sibling directory sharing a string prefix must not pass —
+///   `C:\Users\rand` is not a path-*component* prefix of
+///   `C:\Users\randlee` (`rand` != `randlee` as the differing final shared
+///   segment), even though it is a raw *string* prefix of it;
+/// - a verbatim (`\\?\`) or UNC path-prefix component must not spuriously
+///   mismatch a non-verbatim prefix naming the same location (a real,
+///   easy-to-hit gap when one side has been `canonicalize()`d and the
+///   other has not).
 ///
 /// **Explicitly deferred, not silently assumed safe:** this does **not**
-/// inspect the file/directory's Windows ACL (who else has write access).
-/// Unlike Unix mode bits, a Windows ACL has no single-comparison shape to
-/// check generically; mirroring `atm_temp.rs`'s own Windows scratch-root
-/// branch (`validate_existing_scratch_dir`, which also performs no ACL
-/// check and documents why), this ships the achievable minimum bar now
-/// and records the gap here rather than pretending it is closed.
-#[cfg(windows)]
-fn check_windows_path_safety(
+/// inspect the file/directory's Windows ACL (who else besides the current
+/// user has write access). Unlike Unix mode bits, a Windows ACL has no
+/// single-comparison shape to check generically; mirroring `atm_temp.rs`'s
+/// own Windows scratch-root branch (`validate_existing_scratch_dir`, which
+/// also performs no ACL check and documents why), this ships the
+/// achievable minimum bar now and records the gap here rather than
+/// pretending it is closed. See ADR-055's Windows-safety amendment for the
+/// full rationale.
+#[cfg(any(windows, test))]
+fn check_path_within_profile(
     path: &Path,
+    profile_home: &Path,
+    is_reparse_point: bool,
+    what: &str,
     host: &HostName,
-    metadata: &std::fs::Metadata,
-    what: &'static str,
 ) -> Result<(), AtmTempError> {
-    if metadata.file_type().is_symlink() {
+    if is_reparse_point {
         return Err(AtmTempError::TransferScriptUnsafe {
             host: host.clone(),
             reason: format!(
@@ -401,35 +474,77 @@ fn check_windows_path_safety(
             ),
         });
     }
-    let profile =
-        crate::home::os_account_home().map_err(|_| AtmTempError::TransferScriptUnsafe {
-            host: host.clone(),
-            reason: format!(
-                "could not resolve the current user's profile directory to validate {what} at {}",
-                path.display()
-            ),
-        })?;
-    // Both sides canonicalized consistently: Windows `canonicalize()`
-    // normalizes to a double-backslash-question-mark-prefixed
-    // extended-length absolute path, and comparing one
-    // canonicalized side against one non-canonicalized side would produce
-    // spurious `starts_with` mismatches. Falling back to the
-    // as-resolved path/profile on a canonicalize failure fails toward the
-    // stricter branch below (an unresolvable path is unlikely to already
-    // start with a resolvable profile path).
-    let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-    let canonical_profile = profile.canonicalize().unwrap_or(profile);
-    if !canonical_path.starts_with(&canonical_profile) {
+    if !path_is_within(path, profile_home) {
         return Err(AtmTempError::TransferScriptUnsafe {
             host: host.clone(),
             reason: format!(
                 "{what} at {} is outside the current user's profile directory ({})",
                 path.display(),
-                canonical_profile.display()
+                profile_home.display()
             ),
         });
     }
     Ok(())
+}
+
+/// Component-aware "is `path` located under `root`" check. Unlike
+/// `Path::starts_with`, a leading path-prefix component (a Windows drive
+/// letter or UNC server/share) is normalized before comparison
+/// (`normalized_prefix_key`), so a verbatim (`\\?\C:\`) and non-verbatim
+/// (`C:\`) spelling of the same prefix compare equal; every other
+/// component still compares exactly, so a sibling directory sharing a
+/// string prefix (`rand` vs `randlee`) is correctly rejected.
+#[cfg(any(windows, test))]
+fn path_is_within(path: &Path, root: &Path) -> bool {
+    let mut path_components = path.components();
+    for root_component in root.components() {
+        let Some(path_component) = path_components.next() else {
+            return false;
+        };
+        if !components_match(root_component, path_component) {
+            return false;
+        }
+    }
+    true
+}
+
+#[cfg(any(windows, test))]
+fn components_match(expected: std::path::Component<'_>, actual: std::path::Component<'_>) -> bool {
+    use std::path::Component;
+
+    match (expected, actual) {
+        (Component::Prefix(expected), Component::Prefix(actual)) => {
+            normalized_prefix_key(expected.kind()) == normalized_prefix_key(actual.kind())
+        }
+        (Component::RootDir, Component::RootDir)
+        | (Component::CurDir, Component::CurDir)
+        | (Component::ParentDir, Component::ParentDir) => true,
+        (Component::Normal(expected), Component::Normal(actual)) => expected == actual,
+        _ => false,
+    }
+}
+
+/// A path-prefix component's logical identity, normalized so a verbatim
+/// (`\\?\C:\`, `\\?\UNC\server\share`) and non-verbatim (`C:\`,
+/// `\\server\share`) spelling of the same drive or UNC location produce
+/// the same key. Windows drive letters and UNC server/share names are
+/// case-insensitive, so both are uppercased.
+#[cfg(any(windows, test))]
+fn normalized_prefix_key(kind: std::path::Prefix<'_>) -> String {
+    use std::path::Prefix;
+
+    match kind {
+        Prefix::Disk(letter) | Prefix::VerbatimDisk(letter) => {
+            format!("disk:{}", (letter as char).to_ascii_uppercase())
+        }
+        Prefix::UNC(server, share) | Prefix::VerbatimUNC(server, share) => format!(
+            "unc:{}:{}",
+            server.to_string_lossy().to_ascii_uppercase(),
+            share.to_string_lossy().to_ascii_uppercase()
+        ),
+        Prefix::Verbatim(component) => format!("verbatim:{}", component.to_string_lossy()),
+        Prefix::DeviceNS(component) => format!("devicens:{}", component.to_string_lossy()),
+    }
 }
 
 /// Pure predicate so tests can exercise "not owner-executable" without
@@ -533,6 +648,148 @@ mod tests {
                 OsString::from(r"C:\staging\report.pdf"),
             ]
         );
+    }
+
+    // These tests exercise `check_path_within_profile`/`path_is_within`/
+    // `resolve_profile_home` -- the pure, platform-independent core behind
+    // the Windows transfer-script path safety check. They are compiled and
+    // run on every CI platform (not gated `#[cfg(windows)]`) because the
+    // functions under test perform no filesystem or WinAPI I/O of their
+    // own; all paths below are synthetic and never touch a real
+    // filesystem.
+
+    #[test]
+    fn path_within_profile_is_accepted() {
+        let profile_home = PathBuf::from("C:/Users/randlee");
+        let path = PathBuf::from("C:/Users/randlee/.atm/transfer");
+        check_path_within_profile(
+            &path,
+            &profile_home,
+            false,
+            "the ~/.atm/transfer directory",
+            &host("m5"),
+        )
+        .expect("a path under the profile home must be accepted");
+    }
+
+    /// The classic path-prefix bug: `C:\Users\randlee` shares a raw
+    /// *string* prefix with `C:\Users\rand`, but it is a **sibling**
+    /// directory, not a subdirectory -- a naive `str::starts_with`-style
+    /// check would wrongly accept it. `check_path_within_profile` compares
+    /// path *components*, so `rand` != `randlee` as the differing final
+    /// shared segment correctly refuses it.
+    #[test]
+    fn sibling_prefix_directory_is_rejected() {
+        let profile_home = PathBuf::from("C:/Users/rand");
+        let path = PathBuf::from("C:/Users/randlee/.atm/transfer");
+        let error = check_path_within_profile(
+            &path,
+            &profile_home,
+            false,
+            "the ~/.atm/transfer directory",
+            &host("m5"),
+        )
+        .expect_err("a sibling directory sharing a string prefix must be refused");
+        assert!(
+            matches!(&error, AtmTempError::TransferScriptUnsafe { reason, .. } if reason.contains("outside")),
+            "{error:?}"
+        );
+    }
+
+    #[test]
+    fn reparse_point_is_rejected_even_when_nominally_inside_the_profile() {
+        let profile_home = PathBuf::from("C:/Users/randlee");
+        let path = PathBuf::from("C:/Users/randlee/.atm/transfer");
+        let error = check_path_within_profile(
+            &path,
+            &profile_home,
+            true,
+            "the transfer script",
+            &host("m5"),
+        )
+        .expect_err("a reparse point must be refused regardless of its nominal location");
+        assert!(
+            matches!(&error, AtmTempError::TransferScriptUnsafe { reason, .. } if reason.contains("reparse point")),
+            "{error:?}"
+        );
+    }
+
+    /// A verbatim (`\\?\`) drive prefix and its non-verbatim spelling name
+    /// the same location and must compare equal, not mismatch because one
+    /// side was `canonicalize()`d and the other was not.
+    ///
+    /// `#[cfg(windows)]`-only: `Component::Prefix` is produced only by
+    /// Windows path parsing (`std::path::Component`'s prefix variant has
+    /// no meaning for a Unix path, which has no drive letters or UNC
+    /// roots at all -- a backslash is not even a separator there), so
+    /// this specific scenario cannot be exercised on a non-Windows
+    /// target regardless of how the input is constructed. Every other
+    /// test in this group is genuinely cross-platform.
+    #[cfg(windows)]
+    #[test]
+    fn verbatim_drive_prefix_matches_its_non_verbatim_spelling() {
+        let profile_home = PathBuf::from(r"\\?\C:\Users\randlee");
+        let path = PathBuf::from(r"C:\Users\randlee\.atm\transfer");
+        check_path_within_profile(
+            &path,
+            &profile_home,
+            false,
+            "the ~/.atm/transfer directory",
+            &host("m5"),
+        )
+        .expect(
+            "a verbatim profile prefix must match a non-verbatim path prefix for the same drive",
+        );
+    }
+
+    /// `resolve_profile_home` (the pure fallback-order decision behind
+    /// `windows_profile_home_for_containment`): an env-resolved override
+    /// wins over the OS-account fallback when both are available -- this
+    /// is what makes an explicit `$HOME`/`%USERPROFILE%` override honored
+    /// end to end, since `transfer_script_root` resolves the transfer root
+    /// itself through the exact same env-first precedence.
+    #[test]
+    fn resolve_profile_home_prefers_the_env_override_over_the_os_account_fallback() {
+        let overridden = PathBuf::from("D:/CustomHome");
+        let os_account_default = PathBuf::from("C:/Users/randlee");
+        assert_eq!(
+            resolve_profile_home(Some(overridden.clone()), Some(os_account_default)),
+            Some(overridden)
+        );
+    }
+
+    #[test]
+    fn resolve_profile_home_falls_back_to_os_account_when_no_override_is_set() {
+        let os_account_default = PathBuf::from("C:/Users/randlee");
+        assert_eq!(
+            resolve_profile_home(None, Some(os_account_default.clone())),
+            Some(os_account_default)
+        );
+    }
+
+    #[test]
+    fn resolve_profile_home_fails_closed_when_neither_source_resolves() {
+        assert_eq!(resolve_profile_home(None, None), None);
+    }
+
+    /// End-to-end proof (still through the pure core only) that an
+    /// overridden home is honored: a path under the *override* is
+    /// accepted even though it sits nowhere near the OS-account default.
+    #[test]
+    fn override_home_is_honored_for_containment() {
+        let overridden = PathBuf::from("D:/CustomHome");
+        let os_account_default = PathBuf::from("C:/Users/randlee");
+        let profile_home = resolve_profile_home(Some(overridden.clone()), Some(os_account_default))
+            .expect("override resolves");
+        let path = overridden.join(".atm").join("transfer");
+        check_path_within_profile(
+            &path,
+            &profile_home,
+            false,
+            "the ~/.atm/transfer directory",
+            &host("m5"),
+        )
+        .expect("a path under the honored override home must be accepted");
     }
 
     #[cfg(unix)]

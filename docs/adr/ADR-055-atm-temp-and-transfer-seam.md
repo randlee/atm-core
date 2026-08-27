@@ -283,6 +283,79 @@ contract only; wiring the resolved script into an actual child-process exec
 from `atm send` is deliverable 3 of the full AQ4 sprint (lane C explicitly
 excludes `crates/atm/src/commands/send.rs` and the `--attach` CLI surface).
 
+### Amendment (2026-08-27): the Windows path-safety check
+
+Windows CI first exposed a build break (an unconditional `#[cfg(unix)]`
+import used outside its guard), and fixing it surfaced that the transfer-
+script safety check's Windows branch had been shipping as a documented
+no-op ever since decision (c) above was written: no reparse-point check, no
+containment check, nothing beyond "is this a file/directory." This
+amendment records the real Windows check that replaced it, and the design
+mistake a follow-up review caught before it reached that decision.
+
+**What the Windows check actually verifies**, for both the script file and
+its containing `~/.atm/transfer` directory:
+
+1. **Not a reparse point.** An NTFS symlink or junction is refused outright
+   (`TransferScriptUnsafe`) — it could point somewhere else entirely by the
+   time it is used, defeating every check that follows. Detected from the
+   same never-following `symlink_metadata` call this module already uses
+   everywhere else, so this costs no extra filesystem round trip and keeps
+   the "never follow a symlink out of the checked location" discipline
+   uniform across the whole module.
+2. **Path containment under the resolved home.** The path must sit under a
+   `profile_home` directory, compared component-by-component
+   (`Path::components()`, not a raw string prefix — a sibling directory
+   sharing a string prefix, e.g. `C:\Users\rand` vs. `C:\Users\randlee`,
+   must not pass a naive check, and a verbatim `\\?\`-prefixed path must
+   compare equal to its non-verbatim spelling of the same drive/UNC
+   location, not mismatch because only one side was `canonicalize()`d).
+
+**The mistake a review caught, and the fix.** The first version of this
+check resolved `profile_home` via `home::os_account_home` (the
+`SHGetKnownFolderPath` known-folder API) unconditionally — the same source
+`current_host_runtime_scope` uses for host-runtime ownership, which
+deliberately ignores `$HOME`/`%USERPROFILE%` by design. But
+`transfer_script_root` (the function that builds the path this check then
+validates) resolves the transfer root via `home::resolve_user_home_via`,
+which *does* honor an explicit `$HOME`/`%USERPROFILE%` override. Checking
+containment against a *different* home resolution than the one that built
+the path being checked meant a legitimate override was silently rejected:
+`transfer_script_root` would place `~/.atm/transfer` under the override,
+and the Windows check would then refuse it for sitting outside the
+unrelated OS-account profile. The fix: `profile_home` is always resolved
+the same way `transfer_script_root` resolves it first
+(`resolve_user_home_via`), falling back to `os_account_home` only when
+neither `$HOME` nor `%USERPROFILE%` is set, and failing closed
+(`TransferScriptUnsafe`) if neither source resolves at all — never
+silently skipping the containment check.
+
+**Testability.** The comparison logic (reparse refusal plus
+component-aware, verbatim/UNC-normalizing containment) is factored into a
+pure function taking plain data — a path, a profile-home path, and a
+`bool` for "is this a reparse point" — with no filesystem or WinAPI I/O of
+its own. It is compiled and unit-tested on every CI platform, not only
+Windows, specifically so a mistake like the one above (a check whose
+*logic* is fine but whose *inputs* are wrong) has a cheap, fast,
+cross-platform test surface instead of depending on Windows CI alone to
+catch it.
+
+**Unix/Windows asymmetry, and what remains deferred.** Unix's check (mode
+bits + owner uid, `mode & 0o077`, decision (c) above) and Windows's check
+(reparse refusal + profile containment) are *not* parallel implementations
+of one shared policy — they are the best achievable check for each
+platform's actual security model. Windows has no POSIX mode-bits/owner-uid
+concept to port; Unix has no NTFS reparse-point or known-folder-profile
+concept. **Full Windows ACL inspection (who besides the current user has
+write access to the script or its directory) is explicitly deferred, not
+silently assumed closed.** Unlike a Unix mode integer, a Windows ACL has no
+single-comparison shape to check generically — enumerating and evaluating
+an arbitrary ACL correctly (inherited entries, deny-before-allow ordering,
+well-known SIDs) is real, scoped work this sprint does not include. This
+mirrors decision (a)'s own Windows scratch-root check
+(`validate_existing_scratch_dir`), which likewise performs no ACL check and
+documents why rather than pretending the gap is closed.
+
 ### (d)–(g): message-text convention, member-host sourcing, local-host identity, fan-out failure policy
 
 These four decisions govern the CLI/roster surface (`atm send --attach`,
