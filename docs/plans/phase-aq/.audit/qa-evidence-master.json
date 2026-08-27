@@ -3,7 +3,7 @@
  "timezone": "UTC (result_time_pst/assignment_time_pst omitted; verdict timestamps are GitHub PR comment times)",
  "audit_window": {
   "start": "2026-08-27T00:09:55Z",
-  "end": "2026-08-28T00:35:00Z"
+  "end": "2026-08-28T01:40:00Z"
  },
  "scope": "phase-aq sprints in landing order (structure.ttl). Runs recorded: AQ1 (3, final PASS, merged), AQ2.6 (2, latest FAIL, fix cycle 2 in progress), AQ1.5 (1, FAIL, fix in progress). AQ1.6 (#1046) QA-1 requested (pending run recorded, verdict null). Non-sprint lanes reviewed by quality-mgr but not sprint rows: lane A ADR-058 #1039 (PASS d6f4dd90f, merged 4805264a2) and lane C AQ4 groundwork #1043 (QA-1 FAIL a911abfd8 \u2192 QA-2 FAIL 23be719f3 \u2192 QA-3 PASS 28422190e, merge requested) \u2014 they roll into AQ2.6/AQ4 evidence at closeout.",
  "count_basis": "headline/reviewer",
@@ -445,7 +445,7 @@
    "assignment_message_id": null,
    "assignment_from": "team-lead",
    "assignment_shared_path": null,
-   "assignment_summary": "AQ3 idle-drain + sweep (cipher), PR #1054 (head now 75e444606); QA-1 with primary quality-mgr (team-lead dispatch)",
+   "assignment_summary": "AQ3 idle-drain + sweep (cipher), PR #1054 (head 35a28588a); QA-1 root-caused first clean-runner idle-drain FAIL",
    "result_time_utc": "2026-08-27T06:05:00Z",
    "result_time_pst": null,
    "result_message_id": "01M10VSBF08TBBGNF89ZH3S2C8",
@@ -457,7 +457,7 @@
    "important": null,
    "minor": null,
    "count_basis": "headline/reviewer",
-   "evidence": "7/15; AQ3-CRIT-001 bare-CLI orphaned marker depends on #1053 fix; CRIT-002 untracked shutdown task; CRIT-003 fourth hand-rolled marker-clear (systemic fix: single helper + architecture gate on AQ2); CRIT-004 sweep aborts pass on first failure; evidence transcript + project-plan entry missing. Merge order #1051 \u2192 #1053 \u2192 #1054. Fixes: CRIT-002/003/004 @ 50f399f59; #1053 merged (CRIT-001) \u2192 QA-2 target bfe0d9194. https://github.com/randlee/atm-core/pull/1054"
+   "evidence": "AQ3 head 35a28588a: First clean-runner idle-drain FAIL root-caused as a harness read race (counter read before the tmux hook's double-enter tail; macOS showed 0\u21921). Harness polls now. +2 tests. Evidence rerun dispatched. QA-2 pending. https://github.com/randlee/atm-core/pull/1054"
   },
   {
    "run_id": "QA-AQ2.7-R1",
@@ -1745,7 +1745,7 @@
    "assignment_message_id": null,
    "assignment_from": "quality-mgr",
    "assignment_shared_path": null,
-   "assignment_summary": "AQ4 #1055 harness fix head 3decc5742 (sender .atm.toml local_host provisioning; receiver --host localhost; +3 unit tests)",
+   "assignment_summary": "AQ4 #1055 head 3decc5742: Evidence rerun 33126676155 dispatched on 3decc5742",
    "result_time_utc": "2026-08-28T01:00:00Z",
    "result_time_pst": null,
    "result_message_id": null,
@@ -1757,7 +1757,7 @@
    "important": null,
    "minor": null,
    "count_basis": "headline/reviewer",
-   "evidence": "Harness fix 3decc5742: sender .atm.toml local_host provisioning, receiver --host localhost provisioning, +3 unit tests. Evidence rerun dispatched. QA-2 pending."
+   "evidence": "AQ4 head 3decc5742: Evidence rerun 33126676155 dispatched. Sender .atm.toml local_host provisioning, receiver --host localhost provisioning, +3 unit tests. QA-2 pending."
   },
   {
    "run_id": "QA-AQ5-R2",
@@ -1770,7 +1770,7 @@
    "assignment_message_id": null,
    "assignment_from": "quality-mgr",
    "assignment_shared_path": null,
-   "assignment_summary": "AQ5 #1059 picker fix head dcff4bac3 (dead/idle member exclusion in picker.py, picker-windows.ps1, test_picker_exclusion.py harness)",
+   "assignment_summary": "AQ5 #1059 head 8cb881dfe: Wyvern invocation corrected to the real wizard contract (wizard.json config in, WizardResult.data out; picker.py --make-wizard-json/--unwrap-wizard-result; vendored pick-member.html from randlee/wyvern#140 head ae416c860)",
    "result_time_utc": "2026-08-28T01:00:00Z",
    "result_time_pst": null,
    "result_message_id": null,
@@ -1782,7 +1782,7 @@
    "important": null,
    "minor": null,
    "count_basis": "headline/reviewer",
-   "evidence": "Picker fix dcff4bac3: real dead/idle member exclusion logic (picker.py, picker-windows.ps1); .just/tests/test_picker_exclusion.py harness (six-case degradation + GUI notifications). Traceability R3/R6/R7 corrected. Deliverable 3 upstream PR https://github.com/randlee/wyvern/pull/140. AQ5-gui-e2e follow-up (owner Rand) recorded in follow_ups. Windows CI gating fix + member_mutation.rs duplicate host write removed. Newly surfaced: atm-send-to.sh/.ps1 Wyvern invocation shape (wizard.json config in, WizardResult.data out) in-scope for next fix. QA-2 pending."
+   "evidence": "AQ5 head 8cb881dfe: Wyvern real invocation contract corrected. Contract doc authoritative. Local end-to-end transcript docs/plans/phase-aq/evidence/AQ5/wyvern-real-invocation-local.md. Wyvern#139 comment with by-reference table (Rand's request). Fake-wyvern fixtures emit real envelope. QA-2 pending."
   }
  ],
  "follow_ups": [
