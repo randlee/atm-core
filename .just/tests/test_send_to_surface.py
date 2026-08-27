@@ -13,6 +13,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts/send-to/atm-send-to.sh"
 PICKER = ROOT / "scripts/send-to/picker.py"
+COMMAND_WRAPPER = ROOT / "scripts/send-to/atm-send-to.command"
+NAUTILUS_WRAPPER = ROOT / "scripts/send-to/nautilus-atm-send-to.sh"
 
 PICKER_INPUT = {
     "schema_version": 1,
@@ -59,7 +61,7 @@ class SendToSurfaceTests(unittest.TestCase):
         executable(path)
         return path
 
-    def run_surface(self, picker: Path | None, files: list[Path], directory: Path, log: Path, extra: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    def run_surface(self, picker: Path | None, files: list[Path], directory: Path, log: Path, extra: dict[str, str] | None = None, script: Path = SCRIPT) -> subprocess.CompletedProcess[str]:
         env = os.environ.copy()
         env["ATM_BIN"] = str(directory / "atm")
         if picker is not None:
@@ -68,7 +70,7 @@ class SendToSurfaceTests(unittest.TestCase):
             env.pop("ATM_SEND_TO_PICKER", None)
         if extra:
             env.update(extra)
-        return subprocess.run([str(SCRIPT), *(str(item) for item in files)], cwd=ROOT, env=env, text=True, capture_output=True)
+        return subprocess.run([str(script), *(str(item) for item in files)], cwd=ROOT, env=env, text=True, capture_output=True)
 
     def test_cancel_exits_without_invoking_send(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -97,11 +99,16 @@ class SendToSurfaceTests(unittest.TestCase):
 
     def test_reference_picker_emits_versioned_output(self) -> None:
         env = os.environ.copy()
+        # fenix is `idle` in PICKER_INPUT and therefore non-selectable (R4);
+        # requesting it alongside cipher (`active`) still returns only
+        # cipher, and the picker notes the exclusion on stderr.
         env["ATM_SEND_TO_SELECTION"] = "fenix@atm-dev,cipher@atm-dev"
         result = subprocess.run(["python3", str(PICKER)], input=json.dumps(PICKER_INPUT), text=True, env=env, capture_output=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["schema_version"], 1)
-        self.assertEqual(json.loads(result.stdout)["recipients"], ["cipher@atm-dev", "fenix@atm-dev"])
+        self.assertEqual(json.loads(result.stdout)["recipients"], ["cipher@atm-dev"])
+        self.assertIn("fenix", result.stderr)
+        self.assertIn("unavailable", result.stderr)
 
     def test_wyvern_degradation_cases_fall_back_and_still_send(self) -> None:
         cases = ("absent", "below", "unparsable", "hang", "missing-asset", "unknown-schema")
@@ -158,6 +165,60 @@ class SendToSurfaceTests(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertTrue(log.exists(), result.stderr)
                     self.assertIn("Wyvern", result.stderr)
+
+    def make_noisy_failing_picker(self, directory: Path, code: int = 7) -> Path:
+        """A picker that fails loudly on stderr, like the real `picker.py` does."""
+        path = directory / "picker-noisy-failure"
+        path.write_text(
+            "#!/bin/sh\ncat >/dev/null\n"
+            "echo 'send-to picker: at least one recipient must be selected' >&2\n"
+            f"exit {code}\n"
+        )
+        executable(path)
+        return path
+
+    def test_command_wrapper_propagates_exit_code_and_forwards_stderr_on_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            (directory / "input.json").write_text(json.dumps(PICKER_INPUT))
+            log = directory / "send.log"
+            self.make_atm(directory, log)
+            picker = self.make_noisy_failing_picker(directory, code=7)
+            result = self.run_surface(picker, [directory / "one.txt"], directory, log, script=COMMAND_WRAPPER)
+            # Regression guard: an earlier draft of atm-send-to.command used
+            # `if cmd; then ...; fi; status=$?`, which reads 0 (not the
+            # tested command's real status) once the `if` has no matching
+            # branch to run -- silently turning every wrapper failure into a
+            # reported success. The wrapper must propagate the real exit
+            # code, and stderr must still carry the failure detail (the
+            # notification is an addition, never a replacement).
+            self.assertEqual(result.returncode, 7, result.stderr)
+            self.assertFalse(log.exists(), result.stderr)
+            self.assertIn("send-to picker", result.stderr)
+
+    def test_command_wrapper_exits_zero_on_success(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            (directory / "input.json").write_text(json.dumps(PICKER_INPUT))
+            log = directory / "send.log"
+            self.make_atm(directory, log)
+            output = json.dumps({"schema_version": 1, "recipients": ["cipher@atm-dev"]})
+            picker = self.make_picker(directory, output)
+            result = self.run_surface(picker, [directory / "one.txt"], directory, log, script=COMMAND_WRAPPER)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(log.exists(), result.stderr)
+
+    def test_nautilus_wrapper_propagates_exit_code_and_forwards_stderr_on_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            (directory / "input.json").write_text(json.dumps(PICKER_INPUT))
+            log = directory / "send.log"
+            self.make_atm(directory, log)
+            picker = self.make_noisy_failing_picker(directory, code=7)
+            result = self.run_surface(picker, [directory / "one.txt"], directory, log, script=NAUTILUS_WRAPPER)
+            self.assertEqual(result.returncode, 7, result.stderr)
+            self.assertFalse(log.exists(), result.stderr)
+            self.assertIn("send-to picker", result.stderr)
 
 
 if __name__ == "__main__":

@@ -11,17 +11,30 @@ $rows = @(
         foreach ($member in $team.members) {
             [pscustomobject]@{
                 Id = [string]$member.id
+                Status = [string]$member.status
                 Label = "$($team.name) / $($member.name) [$($member.status)]"
             }
         }
     }
 )
+# PRD R4: dead/idle members must be genuinely non-selectable, not merely
+# labeled. Out-GridView has no notion of a disabled-but-visible row, so the
+# only way to make one non-selectable is to exclude it from the grid
+# entirely; the excluded members are still surfaced via a separate stderr
+# notice rather than a selectable row.
+$choices = @($rows | Where-Object { $_.Status -eq "active" })
+$unavailable = @($rows | Where-Object { $_.Status -ne "active" })
+if ($unavailable.Count -gt 0) {
+    $names = ($unavailable | ForEach-Object { $_.Label }) -join ", "
+    [Console]::Error.WriteLine("send-to picker: $($unavailable.Count) member(s) unavailable (dead/idle), excluded from selection: $names")
+}
+
 $selection = $env:ATM_SEND_TO_SELECTION
 if ($null -ne $selection) {
     $wanted = @($selection -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-    $chosen = @($rows | Where-Object { $wanted -contains $_.Id })
+    $chosen = @($choices | Where-Object { $wanted -contains $_.Id })
 } elseif (Get-Command Out-GridView -ErrorAction SilentlyContinue) {
-    $chosen = @( $rows | Out-GridView -Title "ATM Send-To (Ctrl-click for multiple)" -PassThru )
+    $chosen = @( $choices | Out-GridView -Title "ATM Send-To (Ctrl-click for multiple)" -PassThru )
 } else {
     [Console]::Error.WriteLine("send-to picker: Out-GridView is unavailable")
     exit 1

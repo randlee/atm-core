@@ -27,6 +27,19 @@ linked artifact.
    field, `PickerOutput` on confirm, nonzero on cancel. **Cold-start
    gate**: measured launch-to-interactive; if > 1 s the fallback stays
    default and the finding is recorded.
+
+   Landed as [`randlee/wyvern#140`](https://github.com/randlee/wyvern/pull/140)
+   (references atm-core issue #139): `examples/wizards/atm-pick-member/pages/pick-member.html`
+   + the Playwright L2 contract test `tests/l2/wizard-atm-pick-member.spec.ts`,
+   both passing locally against a real `wyvern` build before the PR opened.
+   Building it found a real invocation-shape gap versus this section's
+   `stdin JSON` sketch — Wyvern has no `--picker` flag and returns the
+   `PickerOutput` nested under a `WizardResult.data` envelope, not bare on
+   stdout — corrected in
+   [`wyvern-pick-member-contract.md`](fixtures/wyvern-pick-member-contract.md)
+   and tracked as an open `atm-send-to.sh` wiring follow-up in
+   [`validation-evidence.md`](validation-evidence.md) (Deliverable 3), not
+   silently left wrong. Cold-start measurement remains OPEN (`AQ5-gui-e2e`).
 3a. **Wyvern dependency contract** — Wyvern is an **optional runtime
    dependency**, never a build-time or packaging dependency of atm-core,
    and never required for any test lane:

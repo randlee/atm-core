@@ -25,6 +25,40 @@ def labels(rows: list[dict[str, Any]]) -> list[str]:
     return [str(row["label"]) for row in rows]
 
 
+def selectable_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Rows a human may actually pick (PRD R4: dead/idle disabled).
+
+    ``choose from list`` (macOS), zenity's ``--checklist``, and ``fzf`` have
+    no notion of a disabled-but-visible row, so the only way to make a
+    dead/idle member genuinely non-selectable is to omit it from the menu
+    entirely; :func:`unavailable_rows` is what still surfaces them to the
+    human, as a separate notice rather than a selectable choice.
+    """
+    return [row for row in rows if row["status"] == "active"]
+
+
+def unavailable_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The complement of :func:`selectable_rows`: dead/idle members."""
+    return [row for row in rows if row["status"] != "active"]
+
+
+def notice_unavailable(rows: list[dict[str, Any]]) -> None:
+    """Prints a one-line stderr notice naming any dead/idle members.
+
+    This is the "separate unavailable line/notice" required by PRD R4 in
+    place of a disabled-but-visible menu entry, which none of the supported
+    picker backends can render.
+    """
+    excluded = unavailable_rows(rows)
+    if not excluded:
+        return
+    names = ", ".join(labels(excluded))
+    print(
+        f"send-to picker: {len(excluded)} member(s) unavailable (dead/idle), excluded from selection: {names}",
+        file=sys.stderr,
+    )
+
+
 def selected_by_environment(rows: list[dict[str, Any]]) -> list[str] | None:
     raw = os.environ.get("ATM_SEND_TO_SELECTION")
     if raw is None:
@@ -97,13 +131,24 @@ def main(argv: list[str]) -> int:
             raise ValueError("PickerInput schema_version is not supported")
         for team in value.get("teams", []):
             for member in team.get("members", []):
-                rows.append({"id": member["id"], "label": f"{team.get('name', team.get('id', '?'))} / {member.get('name', member['id'])} [{member.get('status', 'dead')}]"})
-        selected = selected_by_environment(rows)
+                rows.append(
+                    {
+                        "id": member["id"],
+                        "status": member.get("status", "dead"),
+                        "label": f"{team.get('name', team.get('id', '?'))} / {member.get('name', member['id'])} [{member.get('status', 'dead')}]",
+                    }
+                )
+        # PRD R4: dead/idle members must be genuinely non-selectable, not
+        # merely labeled. Notice them separately, then only ever offer
+        # `active` rows to the selection paths below.
+        notice_unavailable(rows)
+        choices = selectable_rows(rows)
+        selected = selected_by_environment(choices)
         if selected is None:
             backend = args.backend
             if backend is None:
                 backend = "fzf"
-            selected = external_selection(rows, backend)
+            selected = external_selection(choices, backend)
         if selected is None:
             return fail("selection cancelled")
         if not selected:
