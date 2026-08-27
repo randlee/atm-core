@@ -93,6 +93,10 @@ _lint-legacy-mailbox-paths:
     {{python_cmd}} scripts/check-legacy-mailbox-paths.py
 
 [private]
+_lint-nudge-taxonomy:
+    {{python_cmd}} scripts/check-nudge-taxonomy.py
+
+[private]
 _lint-capability-degradation:
     {{python_cmd}} scripts/check-capability-degradation.py
 

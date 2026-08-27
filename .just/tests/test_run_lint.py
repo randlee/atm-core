@@ -44,6 +44,7 @@ resolver = "2"
         self.assertIn("silent-emit", names)
         self.assertIn("function-length", names)
         self.assertIn("legacy-mailbox-paths", names)
+        self.assertIn("nudge-taxonomy", names)
         self.assertIn("capability-degradation", names)
         self.assertIn("deny", names)
         self.assertIn("shear", names)
@@ -173,6 +174,10 @@ resolver = "2"
                 str(repo_root / "scripts/check-legacy-mailbox-paths.py"),
             )
             self.assertEqual(
+                tasks["nudge-taxonomy"].command[-1],
+                str(repo_root / "scripts/check-nudge-taxonomy.py"),
+            )
+            self.assertEqual(
                 tasks["capability-degradation"].command[-1],
                 str(repo_root / "scripts/check-capability-degradation.py"),
             )
@@ -210,6 +215,7 @@ resolver = "2"
                 "silent-emit",
                 "function-length",
                 "legacy-mailbox-paths",
+                "nudge-taxonomy",
                 "capability-degradation",
                 "spell",
                 "hermes-adapter",

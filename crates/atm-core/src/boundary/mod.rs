@@ -11,6 +11,32 @@ pub use atm_storage::{
     TeamNudgeTemplateOverrideRow,
 };
 
+/// Durable at-most-once delivery state for deferred (`atm queue`) nudges.
+///
+/// Re-exported from `atm_storage::contract`; see that crate for the
+/// canonical trait, error, and claim-tracking documentation.
+#[doc(inline)]
+pub use atm_storage::contract::{MAX_NUDGE_ATTEMPTS, NudgeClaim, PendingNudgeStore};
+/// The canonical durable-mailbox member key for nudge and queue surfaces.
+///
+/// Re-exported from `atm_storage::types`; see that crate for the canonical
+/// definition.
+#[doc(inline)]
+pub use atm_storage::types::MemberKey;
+
+/// Which kind of recipient nudge a committed dispatch represents.
+///
+/// `Steer` is the historical immediate best-effort receiver nudge (tmux
+/// `send-keys`, Graft loopback injection). `Queue` marks a message for
+/// deferred, durable, at-most-once delivery via [`PendingNudgeStore`]
+/// instead of an immediate emission attempt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NudgeKind {
+    Steer,
+    Queue,
+}
+
 /// The retained tmux receiver nudge confirms its literal payload with two
 /// `send-keys Enter` events separated by this bounded delay. The active Tokio
 /// runtime and CLI command share this contract; frozen legacy daemon source
@@ -148,7 +174,10 @@ pub struct GraftNudgeTarget {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub enum PostSendBuiltInTarget {
-    LocalTmux(LocalTmuxNudgeTarget),
+    /// Immediate local tmux `send-keys` steer. Renamed from `LocalTmux` to
+    /// pair with [`NudgeKind::Steer`]; the wrapped payload remains
+    /// tmux-shaped (`LocalTmuxNudgeTarget`) until a later sprint widens it.
+    LocalSteer(LocalTmuxNudgeTarget),
     Graft(GraftNudgeTarget),
 }
 
@@ -156,6 +185,9 @@ pub enum PostSendBuiltInTarget {
 pub struct BuiltInPostSendDispatch {
     pub event: PostSendHookEvent,
     pub target: PostSendBuiltInTarget,
+    /// Whether this dispatch is an immediate steer or a deferred queue
+    /// marker. See [`NudgeKind`].
+    pub kind: NudgeKind,
 }
 
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]

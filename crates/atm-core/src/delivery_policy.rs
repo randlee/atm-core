@@ -1,10 +1,12 @@
 use crate::boundary::{RosterEntry, RosterHarness};
+use crate::delivery_channel::{
+    DeliveryChannel, GraftLeaseState, classify_delivery_channel, local_message_received_backend,
+};
 use crate::error::AtmError;
 use crate::provenance::ValidatedWriteProvenance;
 use crate::schema::{AtmMessageId, ThreadMode};
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::types::{AgentName, PaneId, TeamName};
-use serde_json::Value;
 
 #[expect(
     dead_code,
@@ -74,21 +76,26 @@ impl DeliveryRecipientSnapshot {
         }
     }
 
+    /// Historical AQ0-era backend-selection flags kept for existing send/nudge
+    /// callers. They are projected from the canonical AQ1 delivery-channel
+    /// classifier so immediate and deferred routing cannot diverge.
     fn from_roster(member: RosterEntry) -> Self {
-        let local_tmux_post_send = member.recipient_pane_id.is_some()
-            || member
-                .metadata_json
-                .get("backendType")
-                .and_then(Value::as_str)
-                == Some("tmux");
-        let graft_post_send = matches!(
+        let local_backend = local_message_received_backend(&member);
+        let graft_lease = if matches!(
             member.harness,
             RosterHarness::CodexCli
                 | RosterHarness::GeminiCli
                 | RosterHarness::Opencode
                 | RosterHarness::Hermes
                 | RosterHarness::PythonGraft
-        ) && !local_tmux_post_send;
+        ) {
+            GraftLeaseState::Active
+        } else {
+            GraftLeaseState::Absent
+        };
+        let delivery_channel = classify_delivery_channel(local_backend.as_ref(), graft_lease);
+        let local_tmux_post_send = delivery_channel == DeliveryChannel::TmuxSteer;
+        let graft_post_send = delivery_channel == DeliveryChannel::Graft;
         Self {
             agent: member.agent_name,
             team: member.team_name,

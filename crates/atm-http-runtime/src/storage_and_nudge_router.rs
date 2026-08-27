@@ -24,17 +24,19 @@ use atm_core::protocol::{
     SendResponseEnvelope,
 };
 use atm_core::read::{PeekQuery, ReadQuery};
-use atm_core::send::{WarningEntry, WriteOutcome, prepare_write_with_async_runtime};
+use atm_core::send::{NudgeMode, WarningEntry, WriteOutcome, prepare_write_with_async_runtime};
 
 use crate::CanonicalWriteHandler;
 use crate::PeerConnectionPool;
 use crate::RuntimeHealth;
 
-/// Bounded bridge for a synchronous core operation that is not a storage-writer
-/// submission.
+/// Bounded bridge for synchronous core operations that are not storage-writer
+/// submissions.
 ///
-/// This is reserved for read, doctor, and heartbeat work. Durable writes use
-/// the async storage boundary directly and must not enter this bridge.
+/// Durable message admission uses the async storage boundary directly. The
+/// deferred queue marker is the one post-admission exception: its capability
+/// is intentionally synchronous, so the marker transaction enters this bridge
+/// before the request leaves the router.
 #[derive(Clone)]
 struct BlockingCoreBridge {
     permits: Arc<tokio::sync::Semaphore>,
@@ -191,6 +193,7 @@ impl StorageAndNudgeRouter {
     async fn commit_write(
         &self,
         request: atm_core::send::WriteRequest,
+        deadline: RequestDeadline,
     ) -> Result<CommittedWrite, AtmError> {
         let mut prepared = prepare_write_with_async_runtime(
             request,
@@ -208,6 +211,25 @@ impl StorageAndNudgeRouter {
             Ok(Vec::new())
         };
         let outcome = prepared.finish(&self.service_runtime, self.observability.as_ref())?;
+        if newly_persisted && canonical_request.nudge_mode == NudgeMode::Deferred {
+            let runtime = self.service_runtime.clone();
+            if let Err(error) = self
+                .blocking_core_bridge
+                .run(deadline, move || {
+                    prepared.mark_pending_if_deferred(&runtime);
+                    Ok(())
+                })
+                .await
+            {
+                tracing::warn!(
+                    subsystem = "atm_core.queue",
+                    action = "queue_marker_set",
+                    outcome = "failed",
+                    %error,
+                    "deferred write queue marker task could not be scheduled"
+                );
+            }
+        }
         Ok(CommittedWrite {
             outcome,
             canonical_request,
@@ -563,7 +585,7 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
             // shared writer uses them for its state and file-policy paths.
             request.home_dir = self.daemon_home.clone();
             request.current_dir = self.daemon_home.clone();
-            let mut committed = self.commit_write(request).await?;
+            let mut committed = self.commit_write(request, deadline).await?;
             if ingress == AuthenticatedIngress::Local
                 && committed.newly_persisted
                 && committed
@@ -707,8 +729,9 @@ mod tests {
 
     use atm_core::boundary::{
         AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, GraftNudgeTarget,
-        LocalTmuxNudgeTarget, MessageReceivedHookSelector, PostSendBuiltInTarget,
-        PostSendEmissionPath, PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
+        LocalTmuxNudgeTarget, MemberKey, MessageReceivedHookSelector, NudgeKind, PendingNudgeStore,
+        PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEvent, RosterEntry, RosterHarness,
+        RosterMemberKind,
     };
     use atm_core::observability::NullObservability;
     use atm_core::protocol::{
@@ -717,7 +740,7 @@ mod tests {
     };
     use atm_core::schema::AtmMessageId;
     use atm_core::send::{
-        MessageClassification, SendMessageSource, TemplateSendSource, WriteRequest,
+        MessageClassification, NudgeMode, SendMessageSource, TemplateSendSource, WriteRequest,
     };
     use atm_core::types::{AgentName, ModelName, PaneId, TeamName};
     use atm_core::{AuthenticatedIngress, RequestDeadline, api::ApiRequest, error::AtmError};
@@ -905,7 +928,7 @@ mod tests {
             dispatch: &BuiltInPostSendDispatch,
         ) -> Option<&dyn AsyncMessageReceivedHookEmitter> {
             match &dispatch.target {
-                PostSendBuiltInTarget::LocalTmux(_) => Some(self.tmux.as_ref()),
+                PostSendBuiltInTarget::LocalSteer(_) => Some(self.tmux.as_ref()),
                 PostSendBuiltInTarget::Graft(_) => Some(self.graft.as_ref()),
             }
         }
@@ -915,6 +938,7 @@ mod tests {
         _temporary_root: TempDir,
         router: StorageAndNudgeRouter,
         message_store: Arc<dyn MessageStore + Send + Sync>,
+        pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
         received_hook: Arc<RecordingReceivedHook>,
         database_path: PathBuf,
         home_dir: PathBuf,
@@ -1025,6 +1049,10 @@ mod tests {
                 .expect("seed recipient roster");
         }
         let message_store = assembly.message_store_arc();
+        let pending_nudge_store = assembly
+            .service_runtime
+            .pending_nudge_store()
+            .expect("sqlite pending-nudge store");
         let received_hook = Arc::new(RecordingReceivedHook {
             message_store: Arc::clone(&message_store),
             emitted_ids: Mutex::new(Vec::new()),
@@ -1053,6 +1081,7 @@ mod tests {
             _temporary_root: temporary_root,
             router,
             message_store,
+            pending_nudge_store,
             received_hook,
             database_path,
             home_dir,
@@ -1267,10 +1296,11 @@ mod tests {
         };
         let tmux_dispatch = BuiltInPostSendDispatch {
             event: hook_event(),
-            target: PostSendBuiltInTarget::LocalTmux(LocalTmuxNudgeTarget {
+            target: PostSendBuiltInTarget::LocalSteer(LocalTmuxNudgeTarget {
                 pane_id: PaneId::from_cli("%1").expect("pane"),
                 rendered_nudge: "tmux nudge".to_owned(),
             }),
+            kind: NudgeKind::Steer,
         };
         let graft_dispatch = BuiltInPostSendDispatch {
             event: hook_event(),
@@ -1280,6 +1310,7 @@ mod tests {
                 rendered_nudge: "<atm kind=\"nudge\"/>".to_owned(),
                 message_body: "message body".to_owned(),
             }),
+            kind: NudgeKind::Steer,
         };
 
         let selected_tmux = selector
@@ -1493,6 +1524,57 @@ mod tests {
                 .expect("load emitted message")
                 .is_some(),
             "the emitted message remains durable after the write response"
+        );
+    }
+
+    #[tokio::test]
+    async fn deferred_write_through_async_router_marks_once_without_tokio_sqlite_access() {
+        let fixture = fixture(true, None, None);
+        let message_id = AtmMessageId::new();
+        let timestamp = atm_core::types::IsoTimestamp::now();
+        let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone())
+            .with_origin_metadata(message_id, timestamp)
+            .with_nudge_mode(NudgeMode::Deferred);
+
+        let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+        assert_eq!(response.status(), StatusCode::CREATED);
+        assert!(
+            fixture
+                .received_hook
+                .emitted_ids
+                .lock()
+                .expect("inspect deferred hook emissions")
+                .is_empty(),
+            "deferred write must suppress immediate receiver delivery"
+        );
+
+        let member = MemberKey::new(
+            "test-team".parse().expect("team"),
+            "recipient".parse().expect("agent"),
+        );
+        let first_claim = tokio::task::spawn_blocking({
+            let store = fixture.pending_nudge_store.clone();
+            let member = member.clone();
+            move || store.claim_next_pending(&member)
+        })
+        .await
+        .expect("claim task joins")
+        .expect("claim succeeds")
+        .expect("deferred marker is claimable");
+        assert_eq!(first_claim.msg, message_id);
+
+        let duplicate = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+        assert_eq!(duplicate.status(), StatusCode::CREATED);
+        let second_claim = tokio::task::spawn_blocking({
+            let store = fixture.pending_nudge_store.clone();
+            move || store.claim_next_pending(&member)
+        })
+        .await
+        .expect("duplicate claim task joins")
+        .expect("duplicate claim succeeds");
+        assert!(
+            second_claim.is_none(),
+            "an idempotent duplicate must not re-mark a claimed deferred write"
         );
     }
 
@@ -2824,6 +2906,7 @@ mod tests {
                 rendered_nudge: "<atm kind=\"nudge\"/>".to_owned(),
                 message_body: "message body".to_owned(),
             }),
+            kind: NudgeKind::Steer,
         };
 
         let warnings = fixture

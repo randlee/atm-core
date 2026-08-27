@@ -1517,6 +1517,243 @@
           "short": null
         },
         {
+          "has_default": false,
+          "id": "category",
+          "long": "category",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "chat_id",
+          "long": "chat-id",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "content_format",
+          "long": "content-format",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": true,
+          "id": "dry_run",
+          "long": "dry-run",
+          "num_args": {
+            "max": 0,
+            "min": 0
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "env_prefix",
+          "long": "env-prefix",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "file",
+          "long": "file",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "host",
+          "long": "host",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": true,
+          "id": "json",
+          "long": "json",
+          "num_args": {
+            "max": 0,
+            "min": 0
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "message",
+          "long": null,
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": true,
+          "id": "requires_ack",
+          "long": "requires-ack",
+          "num_args": {
+            "max": 0,
+            "min": 0
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": true,
+          "id": "stderr_logs",
+          "long": "stderr-logs",
+          "num_args": {
+            "max": 0,
+            "min": 0
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": true,
+          "id": "stdin",
+          "long": "stdin",
+          "num_args": {
+            "max": 0,
+            "min": 0
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "summary",
+          "long": "summary",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "tag",
+          "long": "tag",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "task_id",
+          "long": "task-id",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "team",
+          "long": "team",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "template",
+          "long": "template",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "to",
+          "long": null,
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": true,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "var",
+          "long": "var",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "vars",
+          "long": "vars",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        }
+      ],
+      "name": "queue",
+      "subcommands": []
+    },
+    {
+      "args": [
+        {
+          "has_default": false,
+          "id": "actor",
+          "long": "as",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
           "has_default": true,
           "id": "all",
           "long": "all",

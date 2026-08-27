@@ -6,7 +6,7 @@ use anyhow::Result;
 use atm_core::address::AgentAddress;
 use atm_core::load_atm_config;
 use atm_core::send::{
-    MessageClassification, SendMessageSource, SendRequest, TemplateSendSource, input,
+    MessageClassification, NudgeMode, SendMessageSource, SendRequest, TemplateSendSource, input,
 };
 use atm_core::types::{AgentIdentity, HostName, TaskId, TeamName};
 use atm_daemon_bootstrap::with_default_peer_address_stores;
@@ -129,11 +129,26 @@ impl SendCommand {
 
     /// Execute the `atm send` command.
     pub async fn run(self, observability: &CliObservability) -> Result<()> {
-        let (home_dir, current_dir) = resolve_command_runtime_context("send")?;
+        self.run_with_mode(observability, NudgeMode::Immediate)
+            .await
+    }
+
+    /// Execute this shared command surface with an explicit nudge mode.
+    pub(crate) async fn run_with_mode(
+        self,
+        observability: &CliObservability,
+        nudge_mode: NudgeMode,
+    ) -> Result<()> {
+        let command_name = match nudge_mode {
+            NudgeMode::Immediate => "send",
+            NudgeMode::Deferred => "queue",
+        };
+        let (home_dir, current_dir) = resolve_command_runtime_context(command_name)?;
         let json = self.json;
-        let request = self.build_request(home_dir.clone(), current_dir.clone())?;
+        let request =
+            self.build_request_with_mode(home_dir.clone(), current_dir.clone(), nudge_mode)?;
         let composition = CliComposition::bootstrap(
-            "send",
+            command_name,
             observability,
             InvocationDir::new(&current_dir),
             AtmHomePath::new(&home_dir),
@@ -149,7 +164,17 @@ impl SendCommand {
         output::print_send_result(&outcome, json)
     }
 
+    #[cfg(test)]
     fn build_request(self, home_dir: PathBuf, current_dir: PathBuf) -> Result<SendRequest> {
+        self.build_request_with_mode(home_dir, current_dir, NudgeMode::Immediate)
+    }
+
+    fn build_request_with_mode(
+        self,
+        home_dir: PathBuf,
+        current_dir: PathBuf,
+        nudge_mode: NudgeMode,
+    ) -> Result<SendRequest> {
         let max_message_bytes = load_atm_config(&current_dir)?
             .map(|config| {
                 config.max_message_bytes.as_usize().ok_or_else(|| {
@@ -188,6 +213,7 @@ impl SendCommand {
                 .with_activity_observation(caller_context.activity_observation)
                 .with_max_message_bytes(max_message_bytes)
                 .with_classification(classification)
+                .with_nudge_mode(nudge_mode)
         })
         .map_err(Into::into)
     }

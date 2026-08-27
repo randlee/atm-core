@@ -2,6 +2,7 @@
 //! entry family, and persisted-write preparation.
 
 use super::*;
+use crate::send::NudgeMode;
 
 /// Result of the one canonical write operation.
 ///
@@ -66,12 +67,107 @@ impl PreparedWrite {
     /// Completes the canonical write before post-commit work is scheduled.
     /// For acknowledgements this records the source transition before the
     /// caller receives its local admission response.
+    ///
+    /// This deliberately does not set the `NudgeMode::Deferred` queue marker:
+    /// callers that route through an async boundary (e.g.
+    /// `StorageAndNudgeRouter`) must schedule [`PreparedWrite::mark_pending_if_deferred`]
+    /// on their own blocking task after this returns. Callers with no such
+    /// boundary should use [`PreparedWrite::finish_and_mark`] instead.
     pub fn finish(
         &mut self,
         runtime: &LocalServiceRuntime,
         observability: &dyn ObservabilityPort,
     ) -> Result<WriteOutcome, AtmError> {
         self.finish_with_runtime(runtime, observability)
+    }
+
+    /// Completes the canonical write and, for a newly persisted
+    /// `NudgeMode::Deferred` message, sets its durable queue marker in the
+    /// same call.
+    ///
+    /// This is the entry point for the synchronous public write API
+    /// (`write_mail_with_runtime`/`send_mail_with_runtime`/`ack_mail_with_runtime`):
+    /// those callers are already blocking, so performing the marker's
+    /// blocking SQLite transaction inline here never lands on an async
+    /// runtime worker. Callers that route through an async boundary must
+    /// instead call [`PreparedWrite::finish`] and schedule
+    /// [`PreparedWrite::mark_pending_if_deferred`] on their own blocking task.
+    pub fn finish_and_mark(
+        &mut self,
+        runtime: &LocalServiceRuntime,
+        observability: &dyn ObservabilityPort,
+    ) -> Result<WriteOutcome, AtmError> {
+        let outcome = self.finish(runtime, observability)?;
+        self.mark_pending_if_deferred(runtime);
+        Ok(outcome)
+    }
+
+    /// Sets the durable at-most-once queue marker for a newly persisted
+    /// `NudgeMode::Deferred` write.
+    ///
+    /// The caller must invoke this from a blocking task. The pending-store
+    /// contract is synchronous because its concrete SQLite implementation
+    /// owns a blocking transaction; the Tokio router supplies that task
+    /// boundary after async message admission completes.
+    pub fn mark_pending_if_deferred(&self, runtime: &LocalServiceRuntime) {
+        if !self.is_newly_persisted() || self.outbound_request.nudge_mode != NudgeMode::Deferred {
+            return;
+        }
+        let message_id = self.persisted_message_id();
+        let post_write = match &self.received_hook {
+            Ok(Some(post_write)) => post_write,
+            Ok(None) => {
+                tracing::warn!(
+                    subsystem = "atm_core.queue",
+                    action = "queue_marker_set",
+                    outcome = "failed",
+                    message_id = %message_id,
+                    "deferred write has no retained recipient to resolve a queue marker for"
+                );
+                return;
+            }
+            Err(error) => {
+                tracing::warn!(
+                    subsystem = "atm_core.queue",
+                    action = "queue_marker_set",
+                    outcome = "failed",
+                    message_id = %message_id,
+                    %error,
+                    "deferred write receiver-hook planning failed before queue marker resolution"
+                );
+                return;
+            }
+        };
+        let member = boundary::MemberKey::new(
+            post_write.recipient.team.clone(),
+            post_write.recipient.agent.clone(),
+        );
+        let store = match runtime.pending_nudge_store() {
+            Ok(store) => store,
+            Err(error) => {
+                tracing::warn!(
+                    subsystem = "atm_core.queue",
+                    action = "queue_marker_set",
+                    outcome = "failed",
+                    message_id = %message_id,
+                    member = %member,
+                    %error,
+                    "deferred write has no pending-nudge store installed in this runtime"
+                );
+                return;
+            }
+        };
+        if let Err(error) = store.mark_pending(&member, &message_id, self.persisted_timestamp) {
+            tracing::warn!(
+                subsystem = "atm_core.queue",
+                action = "queue_marker_set",
+                outcome = "failed",
+                message_id = %message_id,
+                member = %member,
+                %error,
+                "failed to set the deferred-nudge queue marker"
+            );
+        }
     }
 
     fn finish_with_runtime<R>(
@@ -127,6 +223,16 @@ impl PreparedWrite {
         &self,
         runtime: &LocalServiceRuntime,
     ) -> Result<Vec<BuiltInPostSendDispatch>, AtmError> {
+        if self.outbound_request.nudge_mode == NudgeMode::Deferred {
+            tracing::info!(
+                subsystem = "atm_core.queue",
+                action = "steer_suppressed",
+                outcome = "ok",
+                message_id = %self.persisted_message_id(),
+                "deferred write suppresses its immediate receiver steer"
+            );
+            return Ok(Vec::new());
+        }
         let post_write = match &self.received_hook {
             Ok(Some(post_write)) => post_write,
             Ok(None) => return Ok(Vec::new()),
@@ -144,6 +250,7 @@ impl PreparedWrite {
                 &post_write.delivery_snapshot,
                 &event,
                 &message.envelope.text,
+                self.outbound_request.nudge_mode,
             ) {
                 dispatches.push(dispatch);
             }
@@ -197,7 +304,7 @@ pub fn write_mail_with_runtime(
         runtime,
         DeliveryExecutionMode::Inline,
     )?;
-    prepared.finish(runtime, observability)
+    prepared.finish_and_mark(runtime, observability)
 }
 
 pub fn send_mail_with_runtime(
@@ -211,7 +318,7 @@ pub fn send_mail_with_runtime(
         runtime,
         DeliveryExecutionMode::Inline,
     )?
-    .finish(runtime, observability)?
+    .finish_and_mark(runtime, observability)?
     {
         WriteOutcome::Sent(outcome) => Ok(outcome),
         WriteOutcome::Acknowledged(_) => Err(AtmError::validation(

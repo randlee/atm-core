@@ -1249,6 +1249,65 @@ atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.1.2" }
                 rendered,
             )
 
+    def test_collect_boundary_violations_scans_consumer_crate_tests_dir_for_trait_only_doubles(
+        self,
+    ) -> None:
+        """QM40v2-I3: a consumer crate's `tests/` double must not be invisible.
+
+        `allowed_test_double_paths` can name a test double that lives in a
+        *different* crate's integration-test directory (e.g. an `atm-core`
+        consumer implementing an `atm-storage` sealed trait for its own test
+        suite). The scan must find both an approved and an unapproved double
+        there, and must not mistake a string-literal assertion (a common
+        architecture-test pattern) for a real implementation.
+        """
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            trait_only_record = (
+                BASE_BOUNDARY_TOML.replace('trait = "MailStore"', 'trait = "TestEmitter"')
+                .replace('owner_package = "atm-storage-rusqlite"', 'owner_package = "atm-core"')
+                .replace('owner_crate_path = "atm_storage_rusqlite"', 'owner_crate_path = "atm_core"')
+                .replace(
+                    'allowed_dependents = ["atm-daemon"]',
+                    'allowed_dependents = ["agent-team-mail", "atm-daemon", "atm-storage-rusqlite"]',
+                )
+                .replace('type = "SqliteMailStore"\nmodule = "atm_storage_rusqlite::mail_store"\n', "")
+                .replace('visibility = "private"\nconstructor = "private"', 'visibility = "trait_only"\nconstructor = "none"')
+                .replace('state = "planned"', 'state = "active"')
+                .replace(
+                    'allowed_test_double_paths = ["atm_core::test_support::InMemoryMailStore"]',
+                    'allowed_test_double_paths = ["atm_daemon::tests::emitter_double::ApprovedEmitter"]',
+                )
+            )
+            self.write_toml_record(repo_root, "atm-core", text=trait_only_record)
+            tests_dir = repo_root / "crates/atm-daemon/tests"
+            tests_dir.mkdir(parents=True, exist_ok=True)
+            (tests_dir / "emitter_double.rs").write_text(
+                "impl TestEmitter for ApprovedEmitter {}\n"
+                "impl TestEmitter for UnapprovedEmitter {}\n"
+                '// impl TestEmitter for CommentedOutEmitter {}\n'
+                '    source.contains("impl TestEmitter for StringLiteralEmitter");\n',
+                encoding="utf-8",
+            )
+
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            self.assertFalse(
+                any("atm_daemon::tests::emitter_double::ApprovedEmitter" in item for item in rendered),
+                rendered,
+            )
+            self.assertFalse(any("CommentedOutEmitter" in item for item in rendered), rendered)
+            self.assertFalse(any("StringLiteralEmitter" in item for item in rendered), rendered)
+            self.assertTrue(
+                any(
+                    "trait-only implementation 'atm_daemon::tests::emitter_double::UnapprovedEmitter'" in item
+                    and "allowed_test_double_paths" in item
+                    for item in rendered
+                ),
+                rendered,
+            )
+
     def test_every_declared_io_forbidden_tag_has_source_pattern_mapping(self) -> None:
         declared: set[str] = set()
         for path in Path(__file__).resolve().parents[2].glob("boundaries/*/*.toml"):
