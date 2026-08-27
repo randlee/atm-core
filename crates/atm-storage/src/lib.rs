@@ -67,7 +67,7 @@ pub use tls::{
 };
 pub use types::{
     AgentId, AgentIdentity, AgentName, ChatId, HostName, IsoTimestamp, LOCAL_CAPABILITY_BYTES,
-    LocalCapability, MemberKey, ModelName, PaneId, TaskId, TeamName, TemplateFrontmatter,
-    TemplateSha,
+    LocalCapability, MemberKey, ModelName, OwnerGeneration, PaneId, TaskId, TeamName,
+    TemplateFrontmatter, TemplateSha,
 };
 pub use validation::{validate_agent_at_team, validate_path_segment};

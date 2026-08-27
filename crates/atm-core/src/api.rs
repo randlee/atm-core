@@ -533,7 +533,9 @@ mod tests {
     use std::net::SocketAddr;
 
     use super::{HttpRouteKind, encode_http_request, http_route_kind};
-    use crate::protocol::{GraftReceiverLookupRequest, GraftReceiverRegistration, RequestEnvelope};
+    use crate::protocol::{
+        GraftReceiverLookupRequest, GraftReceiverRegistration, OwnerGeneration, RequestEnvelope,
+    };
     use crate::search::SearchRequest;
     use crate::types::{AgentName, TeamName};
 
@@ -569,12 +571,14 @@ mod tests {
 
     #[test]
     fn graft_receiver_routes_round_trip_through_the_shared_codec() {
+        let owner_generation =
+            OwnerGeneration::new("01J00000000000000000000000").expect("owner generation");
         let registration = GraftReceiverRegistration {
             team: TeamName::from_validated("test-team"),
             agent: AgentName::from_validated("test-agent"),
             endpoint: "127.0.0.1:43101".parse::<SocketAddr>().expect("endpoint"),
             capability: crate::local_http::LocalCapability::generate().expect("capability"),
-            owner_generation: "01J00000000000000000000000".to_owned(),
+            owner_generation: owner_generation.clone(),
         };
         let requests = [
             RequestEnvelope::GraftReceiverRegister(registration),
@@ -582,7 +586,7 @@ mod tests {
                 crate::protocol::GraftReceiverUnregistration {
                     team: TeamName::from_validated("test-team"),
                     agent: AgentName::from_validated("test-agent"),
-                    owner_generation: "01J00000000000000000000000".to_owned(),
+                    owner_generation,
                 },
             ),
             RequestEnvelope::GraftReceiverLookup {

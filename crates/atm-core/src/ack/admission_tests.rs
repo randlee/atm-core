@@ -22,6 +22,7 @@ use crate::send::{SendMessageSource, SendRequest};
 use crate::service_runtime::LocalServiceRuntime;
 use crate::test_support::{TEST_SENDER, TEST_TEAM};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
+use atm_storage::OwnerGeneration;
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource,
     GraftEndpointStoreError, GraftReceiverEndpointStore, GraftReceiverLease,
@@ -445,7 +446,7 @@ impl GraftReceiverEndpointStore for EmptyGraftReceiverStore {
         &self,
         _team: &TeamName,
         _agent: &AgentName,
-        _owner_generation: &str,
+        _owner_generation: &OwnerGeneration,
         _now: DateTime<Utc>,
     ) -> Result<(), GraftEndpointStoreError> {
         Ok(())
@@ -455,7 +456,7 @@ impl GraftReceiverEndpointStore for EmptyGraftReceiverStore {
         &self,
         _team: &TeamName,
         _agent: &AgentName,
-        _owner_generation: &str,
+        _owner_generation: &OwnerGeneration,
     ) -> Result<(), GraftEndpointStoreError> {
         Ok(())
     }
@@ -472,7 +473,7 @@ impl GraftReceiverEndpointStore for EmptyGraftReceiverStore {
         &self,
         _team: &TeamName,
         _agent: &AgentName,
-        _owner_generation: &str,
+        _owner_generation: &OwnerGeneration,
         _now: DateTime<Utc>,
     ) -> Result<(), GraftEndpointStoreError> {
         Ok(())
@@ -501,7 +502,7 @@ fn graft_receiver_runtime_wiring_and_unconfigured_defaults_are_explicit() {
         .mark_graft_receiver_unreachable(
             &TeamName::from_validated(TEST_TEAM),
             &AgentName::from_validated(CALLER),
-            "generation-1",
+            &OwnerGeneration::new("01J00000000000000000000001").expect("owner generation"),
             Utc::now(),
         )
         .expect("unconfigured unreachable default");

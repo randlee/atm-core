@@ -143,6 +143,11 @@ pub use delivery_channel::{
 pub use graft::AtmGraftClient;
 pub use protocol::{RequestEnvelope, ResponseEnvelope};
 pub use search::{SearchAggregateInput, SearchHit, SearchInput, SearchRequest, SearchResponse};
+// The canonical `GraftEndpointStoreError` -> `AtmError` mapping. Every
+// dispatch path (HTTP handlers, the retained-runtime bridge) must produce the
+// same `AtmError` — and therefore the same HTTP status — for a given store
+// error; see the doc comment on `service_runtime::graft_store_error`.
+pub use service_runtime::graft_store_error;
 pub use service_runtime::{
     LocalFileNonClaudeOutbound, LocalServiceRuntime, with_default_local_service_runtime,
 };
