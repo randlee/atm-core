@@ -112,6 +112,7 @@ pub use api::{
     MAX_HTTP_REQUEST_BODY_BYTES, RequestDeadline,
 };
 pub use atm_storage::derive_ack_requirement;
+pub use atm_storage::{GraftEndpointStoreError, GraftReceiverEndpointStore, GraftReceiverLease};
 pub use atm_storage::{TemplateFrontmatter, TemplateSha};
 #[allow(deprecated)]
 pub use boundary::{

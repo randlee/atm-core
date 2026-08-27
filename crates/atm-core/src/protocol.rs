@@ -25,6 +25,15 @@ use crate::search::{SearchRequest, SearchResponse};
 use crate::send::{SendOutcome, WriteRequest};
 use crate::types::{AgentName, IsoTimestamp, SessionId, TeamName, deserialize_optional_session_id};
 
+pub use atm_storage::{GraftReceiverLease, GraftReceiverRegistration, LocalCapability};
+
+/// Body representation for the local graft receiver lookup route.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GraftReceiverLookupRequest {
+    pub team: TeamName,
+    pub agent: AgentName,
+}
+
 const DAEMON_SOCKET_FILENAME: &str = "atm-daemon.sock";
 const MAX_VERSION_LENGTH: usize = 256;
 
@@ -41,6 +50,12 @@ pub enum RequestEnvelope {
     Write(Box<WriteRequest>),
     CompatibilityPreflight(CompatibilityPreflight),
     Heartbeat(TeamMemberHeartbeatRequest),
+    GraftReceiverRegister(GraftReceiverRegistration),
+    GraftReceiverUnregister(GraftReceiverUnregistration),
+    GraftReceiverLookup {
+        team: TeamName,
+        agent: AgentName,
+    },
     List(ListQuery),
     Peek(PeekQuery),
     Receive(ReadQuery),
@@ -57,6 +72,9 @@ pub enum ResponseEnvelope {
     Send(SendResponseEnvelope),
     CompatibilityVerdict(CompatibilityVerdict),
     Heartbeat(TeamMemberHeartbeatResponse),
+    GraftReceiverRegister,
+    GraftReceiverUnregister,
+    GraftReceiverLookup(Option<GraftReceiverLease>),
     List(ListOutcome),
     Peek(Box<ReadOutcome>),
     Receive(Box<ReadOutcome>),
@@ -358,6 +376,14 @@ pub struct TeamMemberHeartbeatResponse {
         deserialize_with = "deserialize_optional_session_id"
     )]
     pub session_id: Option<SessionId>,
+}
+
+/// Owner-checked removal request for one durable graft receiver lease.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GraftReceiverUnregistration {
+    pub team: TeamName,
+    pub agent: AgentName,
+    pub owner_generation: String,
 }
 
 /// Runtime-owned live-state projection for one known team member.

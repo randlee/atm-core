@@ -8,6 +8,7 @@
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+use chrono::{DateTime, Utc};
 use serde_json::Map;
 
 use super::{admit_acknowledgement_write, admit_acknowledgement_write_async};
@@ -23,6 +24,8 @@ use crate::test_support::{TEST_SENDER, TEST_TEAM};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource,
+    GraftEndpointStoreError, GraftReceiverEndpointStore, GraftReceiverLease,
+    GraftReceiverRegistration,
 };
 
 /// The acknowledging agent: the pending source sits in this agent's mailbox
@@ -423,6 +426,103 @@ fn local_runtime(store: Arc<InMemoryAsyncStore>, attach_async_store: bool) -> Lo
     } else {
         runtime
     }
+}
+
+struct EmptyGraftReceiverStore;
+
+impl atm_storage::contract::sealed::Sealed for EmptyGraftReceiverStore {}
+
+impl GraftReceiverEndpointStore for EmptyGraftReceiverStore {
+    fn register(
+        &self,
+        _registration: &GraftReceiverRegistration,
+        _now: DateTime<Utc>,
+    ) -> Result<(), GraftEndpointStoreError> {
+        Ok(())
+    }
+
+    fn refresh(
+        &self,
+        _team: &TeamName,
+        _agent: &AgentName,
+        _owner_generation: &str,
+        _now: DateTime<Utc>,
+    ) -> Result<(), GraftEndpointStoreError> {
+        Ok(())
+    }
+
+    fn unregister(
+        &self,
+        _team: &TeamName,
+        _agent: &AgentName,
+        _owner_generation: &str,
+    ) -> Result<(), GraftEndpointStoreError> {
+        Ok(())
+    }
+
+    fn lookup(
+        &self,
+        _team: &TeamName,
+        _agent: &AgentName,
+    ) -> Result<Option<GraftReceiverLease>, GraftEndpointStoreError> {
+        Ok(None)
+    }
+
+    fn mark_unreachable(
+        &self,
+        _team: &TeamName,
+        _agent: &AgentName,
+        _owner_generation: &str,
+        _now: DateTime<Utc>,
+    ) -> Result<(), GraftEndpointStoreError> {
+        Ok(())
+    }
+}
+
+#[test]
+fn graft_receiver_runtime_wiring_and_unconfigured_defaults_are_explicit() {
+    use crate::service_runtime::RetainedServiceRuntime;
+
+    let store = Arc::new(InMemoryAsyncStore {
+        records: Mutex::new(Vec::new()),
+    });
+    let runtime = local_runtime(store, false);
+    assert!(runtime.graft_receiver_endpoint_store().is_err());
+    assert_eq!(
+        runtime
+            .graft_receiver_lease(
+                &TeamName::from_validated(TEST_TEAM),
+                &AgentName::from_validated(CALLER)
+            )
+            .expect("unconfigured lease default"),
+        None
+    );
+    runtime
+        .mark_graft_receiver_unreachable(
+            &TeamName::from_validated(TEST_TEAM),
+            &AgentName::from_validated(CALLER),
+            "generation-1",
+            Utc::now(),
+        )
+        .expect("unconfigured unreachable default");
+
+    let runtime = local_runtime(
+        Arc::new(InMemoryAsyncStore {
+            records: Mutex::new(Vec::new()),
+        }),
+        false,
+    )
+    .with_graft_receiver_endpoint_store(Arc::new(EmptyGraftReceiverStore));
+    assert!(runtime.graft_receiver_endpoint_store().is_ok());
+    assert_eq!(
+        runtime
+            .graft_receiver_lease(
+                &TeamName::from_validated(TEST_TEAM),
+                &AgentName::from_validated(CALLER)
+            )
+            .expect("configured lease lookup"),
+        None
+    );
 }
 
 /// Minimal executor: with in-memory stores the admission future never pends,

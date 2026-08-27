@@ -2,12 +2,85 @@ use std::fmt;
 use std::ops::Deref;
 use std::str::FromStr;
 
+use base64::Engine as _;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::error::AtmError;
 use crate::template_workflow::TemplateVariableName;
 use crate::validation::{validate_agent_at_team, validate_path_segment};
+
+pub const LOCAL_CAPABILITY_BYTES: usize = 32;
+
+/// Per-bind secret used to authenticate same-host local HTTP and graft calls.
+///
+/// The storage contract owns this value because durable graft registrations
+/// must be implementable without a dependency on `atm-core`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocalCapability([u8; LOCAL_CAPABILITY_BYTES]);
+
+impl LocalCapability {
+    pub fn generate() -> Result<Self, AtmError> {
+        let mut bytes = [0; LOCAL_CAPABILITY_BYTES];
+        getrandom::fill(&mut bytes).map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "failed to generate local HTTP capability: {source}"
+            ))
+        })?;
+        Ok(Self(bytes))
+    }
+
+    pub fn to_base64url(&self) -> String {
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(self.0)
+    }
+
+    pub fn parse_base64url(value: &str) -> Result<Self, AtmError> {
+        let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(value)
+            .map_err(|source| {
+                AtmError::local_http_capability_invalid("local HTTP capability is not base64url")
+                    .with_cause(source)
+            })?;
+        let bytes: [u8; LOCAL_CAPABILITY_BYTES] = bytes.try_into().map_err(|_| {
+            AtmError::local_http_capability_invalid(
+                "local HTTP capability must decode to exactly 32 bytes",
+            )
+        })?;
+        Ok(Self(bytes))
+    }
+
+    pub fn matches_header(&self, value: &str) -> bool {
+        match Self::parse_base64url(value) {
+            Ok(candidate) => {
+                let mut difference = 0_u8;
+                for (left, right) in self.0.iter().zip(candidate.0.iter()) {
+                    difference |= left ^ right;
+                }
+                difference == 0
+            }
+            Err(_) => false,
+        }
+    }
+}
+
+impl Serialize for LocalCapability {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_base64url())
+    }
+}
+
+impl<'de> Deserialize<'de> for LocalCapability {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::parse_base64url(&value).map_err(serde::de::Error::custom)
+    }
+}
 
 /// Lowercase SHA-256 identity for an immutable raw template file.
 ///

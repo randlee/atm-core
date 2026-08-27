@@ -1,6 +1,8 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::fmt;
+use std::net::SocketAddr;
 use std::num::NonZeroU16;
 use std::ops::Deref;
 use std::str::FromStr;
@@ -9,7 +11,8 @@ use std::sync::Arc;
 use crate::error::AtmError;
 use crate::schema::{AtmMessageId, InboxMessage, MessageEnvelope};
 use crate::types::{
-    AgentName, HostName, IsoTimestamp, MemberKey, ModelName, PaneId, TaskId, TeamName,
+    AgentName, HostName, IsoTimestamp, LocalCapability, MemberKey, ModelName, PaneId, TaskId,
+    TeamName,
 };
 
 #[doc(hidden)]
@@ -615,6 +618,94 @@ pub trait RosterStore: sealed::Sealed + Send + Sync {
     fn load_roster(&self, team: &TeamName) -> Result<RosterSnapshot, AtmError>;
     fn save_roster(&self, roster: &RosterSnapshot) -> Result<(), AtmError>;
     fn list_teams(&self) -> Result<Vec<TeamName>, AtmError>;
+}
+
+/// Registration payload for one loopback graft receiver lease.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GraftReceiverRegistration {
+    pub team: TeamName,
+    pub agent: AgentName,
+    pub endpoint: SocketAddr,
+    pub capability: LocalCapability,
+    pub owner_generation: String,
+}
+
+/// Durable graft receiver endpoint and its liveness observations.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GraftReceiverLease {
+    pub endpoint: SocketAddr,
+    pub capability: LocalCapability,
+    pub owner_generation: String,
+    pub registered_at: DateTime<Utc>,
+    pub last_seen_at: DateTime<Utc>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unreachable_since: Option<DateTime<Utc>>,
+}
+
+/// Errors returned by the durable graft receiver endpoint store.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GraftEndpointStoreError {
+    /// Reserved for a future caller that cannot prove same-host exclusivity.
+    AlreadyActive,
+    /// The supplied owner generation does not own the stored lease.
+    NotOwner,
+    /// The backend could not complete the requested operation.
+    Storage(String),
+}
+
+impl fmt::Display for GraftEndpointStoreError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::AlreadyActive => formatter.write_str("graft receiver lease is already active"),
+            Self::NotOwner => {
+                formatter.write_str("graft receiver lease is owned by another generation")
+            }
+            Self::Storage(message) => {
+                write!(
+                    formatter,
+                    "graft receiver endpoint storage failed: {message}"
+                )
+            }
+        }
+    }
+}
+
+/// Durable registry for same-host graft receiver endpoints.
+pub trait GraftReceiverEndpointStore: sealed::Sealed + Send + Sync {
+    fn register(
+        &self,
+        registration: &GraftReceiverRegistration,
+        now: DateTime<Utc>,
+    ) -> Result<(), GraftEndpointStoreError>;
+
+    fn refresh(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+        owner_generation: &str,
+        now: DateTime<Utc>,
+    ) -> Result<(), GraftEndpointStoreError>;
+
+    fn unregister(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+        owner_generation: &str,
+    ) -> Result<(), GraftEndpointStoreError>;
+
+    fn lookup(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<Option<GraftReceiverLease>, GraftEndpointStoreError>;
+
+    fn mark_unreachable(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+        owner_generation: &str,
+        now: DateTime<Utc>,
+    ) -> Result<(), GraftEndpointStoreError>;
 }
 
 /// A non-empty, opaque certificate fingerprint. It cannot be confused with a

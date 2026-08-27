@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use atm_core::GraftEndpointStoreError;
 use atm_core::LocalServiceRuntime;
 use atm_core::api::{ApiRequest, ApiResponse, AuthenticatedIngress, RequestDeadline};
 use atm_core::boundary::MessageReceivedHookSelector;
@@ -20,8 +21,8 @@ use atm_core::error::AtmError;
 use atm_core::list::ListQuery;
 use atm_core::observability::ObservabilityPort;
 use atm_core::protocol::{
-    CompatibilityVerdict, ReleaseVersion, RequestEnvelope, RequestId, ResponseEnvelope,
-    SendResponseEnvelope,
+    CompatibilityVerdict, GraftReceiverRegistration, GraftReceiverUnregistration, ReleaseVersion,
+    RequestEnvelope, RequestId, ResponseEnvelope, SendResponseEnvelope,
 };
 use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::{NudgeMode, WarningEntry, WriteOutcome, prepare_write_with_async_runtime};
@@ -366,6 +367,18 @@ impl StorageAndNudgeRouter {
                 ResponseEnvelope::CompatibilityVerdict(compatibility_verdict(preflight)),
             )),
             ApiRequest::Heartbeat(request) => self.heartbeat(request, ingress, deadline).await,
+            ApiRequest::GraftReceiverRegister(request) => {
+                self.graft_receiver_register(request, ingress, deadline)
+                    .await
+            }
+            ApiRequest::GraftReceiverUnregister(request) => {
+                self.graft_receiver_unregister(request, ingress, deadline)
+                    .await
+            }
+            ApiRequest::GraftReceiverLookup { team, agent } => {
+                self.graft_receiver_lookup(team, agent, ingress, deadline)
+                    .await
+            }
             ApiRequest::ReloadRuntimeView => self.reload_runtime_view(ingress),
         }
     }
@@ -530,6 +543,72 @@ impl StorageAndNudgeRouter {
             })
     }
 
+    async fn graft_receiver_register(
+        &self,
+        request: GraftReceiverRegistration,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        require_local_graft_ingress(ingress)?;
+        let runtime = self.service_runtime.clone();
+        let store = runtime.graft_receiver_endpoint_store()?;
+        self.blocking_core_bridge
+            .run(deadline, move || {
+                validate_graft_receiver_member(&runtime, &request.team, &request.agent)?;
+                if !request.endpoint.ip().is_loopback() {
+                    return Err(AtmError::local_http_endpoint_non_loopback(
+                        "graft receiver endpoint must be loopback",
+                    ));
+                }
+                store
+                    .register(&request, atm_core::types::IsoTimestamp::now().into_inner())
+                    .map_err(graft_store_error)?;
+                Ok(ApiResponse::new(ResponseEnvelope::GraftReceiverRegister))
+            })
+            .await
+    }
+
+    async fn graft_receiver_unregister(
+        &self,
+        request: GraftReceiverUnregistration,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        require_local_graft_ingress(ingress)?;
+        let runtime = self.service_runtime.clone();
+        let store = runtime.graft_receiver_endpoint_store()?;
+        self.blocking_core_bridge
+            .run(deadline, move || {
+                validate_graft_receiver_member(&runtime, &request.team, &request.agent)?;
+                store
+                    .unregister(&request.team, &request.agent, &request.owner_generation)
+                    .map_err(graft_store_error)?;
+                Ok(ApiResponse::new(ResponseEnvelope::GraftReceiverUnregister))
+            })
+            .await
+    }
+
+    async fn graft_receiver_lookup(
+        &self,
+        team: atm_core::types::TeamName,
+        agent: atm_core::types::AgentName,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        require_local_graft_ingress(ingress)?;
+        let runtime = self.service_runtime.clone();
+        let store = runtime.graft_receiver_endpoint_store()?;
+        self.blocking_core_bridge
+            .run(deadline, move || {
+                validate_graft_receiver_member(&runtime, &team, &agent)?;
+                let lease = store.lookup(&team, &agent).map_err(graft_store_error)?;
+                Ok(ApiResponse::new(ResponseEnvelope::GraftReceiverLookup(
+                    lease,
+                )))
+            })
+            .await
+    }
+
     fn reload_runtime_view(&self, ingress: AuthenticatedIngress) -> Result<ApiResponse, AtmError> {
         if ingress != AuthenticatedIngress::Local {
             return Err(AtmError::validation(
@@ -691,6 +770,38 @@ fn validate_heartbeat_member(
     Ok(())
 }
 
+fn require_local_graft_ingress(ingress: AuthenticatedIngress) -> Result<(), AtmError> {
+    if ingress != AuthenticatedIngress::Local {
+        return Err(AtmError::validation(
+            "graft receiver registration is available only through authenticated local HTTP adapters",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_graft_receiver_member(
+    runtime: &LocalServiceRuntime,
+    team: &atm_core::types::TeamName,
+    agent: &atm_core::types::AgentName,
+) -> Result<(), AtmError> {
+    if runtime.load_roster_member(team, agent)?.is_none() {
+        return Err(AtmError::agent_not_found(agent.as_str(), team.as_str()));
+    }
+    Ok(())
+}
+
+fn graft_store_error(error: GraftEndpointStoreError) -> AtmError {
+    match error {
+        GraftEndpointStoreError::NotOwner => {
+            AtmError::validation("graft receiver lease is owned by another generation")
+        }
+        GraftEndpointStoreError::AlreadyActive => {
+            AtmError::validation("graft receiver lease is already active")
+        }
+        GraftEndpointStoreError::Storage(message) => AtmError::daemon_unavailable(message),
+    }
+}
+
 fn append_warnings(outcome: &mut WriteOutcome, warnings: Vec<WarningEntry>) {
     match outcome {
         WriteOutcome::Sent(outcome) => outcome.warnings.extend(warnings),
@@ -735,8 +846,8 @@ mod tests {
     };
     use atm_core::observability::NullObservability;
     use atm_core::protocol::{
-        HeartbeatActivity, RequestEnvelope, ResponseEnvelope, RuntimeReadinessState,
-        SendResponseEnvelope, TeamMemberHeartbeatRequest,
+        GraftReceiverRegistration, HeartbeatActivity, RequestEnvelope, ResponseEnvelope,
+        RuntimeReadinessState, SendResponseEnvelope, TeamMemberHeartbeatRequest,
     };
     use atm_core::schema::AtmMessageId;
     use atm_core::send::{
@@ -746,7 +857,7 @@ mod tests {
     use atm_core::{AuthenticatedIngress, RequestDeadline, api::ApiRequest, error::AtmError};
     use atm_runtime_test_support::{
         inspect_template_admission_for_test, install_sqlite_message_write_failure,
-        open_sqlite_boundary,
+        open_graft_receiver_endpoint_store, open_sqlite_boundary,
     };
     use atm_storage::{
         MessageKey, MessageQuery, MessageStore, RosterSnapshot, TemplateFrontmatter, TemplateSha,
@@ -1069,7 +1180,11 @@ mod tests {
         let service_runtime = match template_composer {
             Some(composer) => assembly.service_runtime.with_template_composer(composer),
             None => assembly.service_runtime,
-        };
+        }
+        .with_graft_receiver_endpoint_store(
+            open_graft_receiver_endpoint_store(&database_path)
+                .expect("sqlite graft receiver endpoint store"),
+        );
         let router = StorageAndNudgeRouter::new(
             service_runtime,
             Arc::new(NullObservability),
@@ -1472,6 +1587,96 @@ mod tests {
         )
         .await
         .expect("infallible Axum service")
+    }
+
+    #[tokio::test]
+    async fn graft_receiver_handlers_enforce_local_roster_and_loopback_contracts() {
+        let fixture = fixture(true, None, None);
+        let registration = GraftReceiverRegistration {
+            team: "test-team".parse().expect("team"),
+            agent: "recipient".parse().expect("agent"),
+            endpoint: "127.0.0.1:43101".parse().expect("endpoint"),
+            capability: atm_core::local_http::LocalCapability::generate().expect("capability"),
+            owner_generation: "01J00000000000000000000000".to_owned(),
+        };
+        let response = fixture
+            .router
+            .clone()
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverRegister(registration.clone())),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("register response");
+        assert!(matches!(
+            response.into_inner(),
+            ResponseEnvelope::GraftReceiverRegister
+        ));
+
+        let lookup = fixture
+            .router
+            .clone()
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverLookup {
+                    team: registration.team.clone(),
+                    agent: registration.agent.clone(),
+                }),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("lookup response")
+            .into_inner();
+        assert!(matches!(
+            lookup,
+            ResponseEnvelope::GraftReceiverLookup(Some(lease))
+                if lease.endpoint == registration.endpoint
+                    && lease.owner_generation == registration.owner_generation
+        ));
+
+        let non_local = fixture
+            .router
+            .clone()
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverRegister(registration.clone())),
+                AuthenticatedIngress::Peer,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await;
+        assert!(
+            non_local.is_err(),
+            "peer ingress must not register receivers"
+        );
+
+        let unknown = fixture
+            .router
+            .clone()
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverLookup {
+                    team: registration.team.clone(),
+                    agent: "unknown".parse().expect("agent"),
+                }),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await;
+        assert!(unknown.is_err(), "unknown roster members must be rejected");
+
+        let mut non_loopback = registration;
+        non_loopback.endpoint = "192.0.2.1:43101".parse().expect("endpoint");
+        let rejected_endpoint = fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverRegister(non_loopback)),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await;
+        assert!(
+            rejected_endpoint.is_err(),
+            "non-loopback endpoint must be rejected"
+        );
     }
 
     #[tokio::test]

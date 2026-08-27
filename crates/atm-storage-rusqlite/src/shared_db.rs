@@ -123,6 +123,18 @@ CREATE TABLE IF NOT EXISTS peer_trusted_peers (
     https_port INTEGER NOT NULL DEFAULT 43101 CHECK(https_port BETWEEN 1 AND 65535)
 );
 
+CREATE TABLE IF NOT EXISTS graft_receiver_endpoints (
+    team TEXT NOT NULL,
+    agent TEXT NOT NULL,
+    endpoint TEXT NOT NULL,
+    capability TEXT NOT NULL,
+    owner_generation TEXT NOT NULL,
+    registered_at TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL,
+    unreachable_at TEXT NULL,
+    PRIMARY KEY (team, agent)
+);
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_single_successor
     ON mail_messages(team, agent, parent_message_id)
     WHERE parent_message_id IS NOT NULL;
@@ -664,12 +676,62 @@ pub(crate) fn ensure_schema(
     ensure_team_roster_harness_values(connection, target)?;
     ensure_team_nudge_template_override_columns(connection, target)?;
     ensure_mail_message_states_nudge_columns(connection, target)?;
+    ensure_graft_receiver_endpoint_columns(connection, target)?;
     ensure_column(
         connection,
         target,
         "peer_trusted_peers",
         "https_port",
         "ALTER TABLE peer_trusted_peers ADD COLUMN https_port INTEGER NOT NULL DEFAULT 43101 CHECK(https_port BETWEEN 1 AND 65535);",
+    )?;
+    Ok(())
+}
+
+pub(crate) fn ensure_graft_receiver_endpoint_columns(
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
+    ensure_column(
+        connection,
+        target,
+        "graft_receiver_endpoints",
+        "endpoint",
+        "ALTER TABLE graft_receiver_endpoints ADD COLUMN endpoint TEXT NOT NULL DEFAULT '127.0.0.1:0';",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "graft_receiver_endpoints",
+        "capability",
+        "ALTER TABLE graft_receiver_endpoints ADD COLUMN capability TEXT NOT NULL DEFAULT '';",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "graft_receiver_endpoints",
+        "owner_generation",
+        "ALTER TABLE graft_receiver_endpoints ADD COLUMN owner_generation TEXT NOT NULL DEFAULT '';",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "graft_receiver_endpoints",
+        "registered_at",
+        "ALTER TABLE graft_receiver_endpoints ADD COLUMN registered_at TEXT NOT NULL DEFAULT '';",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "graft_receiver_endpoints",
+        "last_seen_at",
+        "ALTER TABLE graft_receiver_endpoints ADD COLUMN last_seen_at TEXT NOT NULL DEFAULT '';",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "graft_receiver_endpoints",
+        "unreachable_at",
+        "ALTER TABLE graft_receiver_endpoints ADD COLUMN unreachable_at TEXT NULL;",
     )?;
     Ok(())
 }
@@ -1396,5 +1458,41 @@ mod tests {
         // database must not error.
         ensure_mail_message_states_nudge_columns(&connection, &target)
             .expect("re-run migration idempotently");
+    }
+
+    #[test]
+    fn ensure_graft_receiver_endpoint_columns_is_idempotent() {
+        let target = SharedDbTarget::InMemory {
+            uri: format!(
+                "file:atm-storage-rusqlite-graft-endpoint-schema-{}?mode=memory&cache=shared",
+                NEXT_IN_MEMORY_DB_ID.fetch_add(1, Ordering::Relaxed)
+            ),
+        };
+        let mut connection = open_connection_for_target(&target).expect("open connection");
+        ensure_schema(&mut connection, &target).expect("initialise graft endpoint schema");
+        ensure_graft_receiver_endpoint_columns(&connection, &target)
+            .expect("re-run graft endpoint migration idempotently");
+        let columns: Vec<String> = connection
+            .prepare("PRAGMA table_info(graft_receiver_endpoints);")
+            .expect("prepare columns")
+            .query_map([], |row| row.get(1))
+            .expect("query columns")
+            .collect::<Result<_, _>>()
+            .expect("decode columns");
+        for expected in [
+            "team",
+            "agent",
+            "endpoint",
+            "capability",
+            "owner_generation",
+            "registered_at",
+            "last_seen_at",
+            "unreachable_at",
+        ] {
+            assert!(
+                columns.iter().any(|column| column == expected),
+                "missing {expected}"
+            );
+        }
     }
 }

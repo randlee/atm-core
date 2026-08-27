@@ -346,7 +346,9 @@ version = "1.4.4"
 dependencies = [
  "async-trait",
  "atm-error",
+ "base64",
  "chrono",
+ "getrandom 0.3.4",
  "rustls",
  "serde",
  "serde_json",

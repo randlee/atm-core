@@ -8,6 +8,7 @@
 //! message and roster contracts.
 
 mod analyst_query;
+mod graft_receiver_endpoint_store;
 #[cfg(test)]
 mod mailbox_metadata;
 mod nudge_template_override_store;
@@ -37,8 +38,8 @@ pub use crate::observability::{
 };
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, AsyncMessageStore,
-    MailboxBucketCounts, Message, MessageKey, MessageQuery, MessageStore, PeerConfigStore,
-    RosterStore,
+    GraftReceiverEndpointStore, MailboxBucketCounts, Message, MessageKey, MessageQuery,
+    MessageStore, PeerConfigStore, RosterStore,
 };
 use atm_storage::schema::MessageEnvelope;
 #[cfg(test)]
@@ -46,6 +47,7 @@ use atm_storage::schema::{AtmMessageId, ThreadMode};
 use atm_storage::types::{AgentName, TeamName};
 use atm_storage::{AsyncMessageSearchStore, MessageSearchStore, TemplateCatalogStore};
 use atm_storage::{AtmError, IsoTimestamp, StorageFactory, StorageHandleParts, StorageHandles};
+use graft_receiver_endpoint_store::SqliteGraftReceiverEndpointStore;
 use rusqlite::{Connection, OptionalExtension, params};
 use search_schema::delete_message_projection;
 use search_store::{async_search_store, search_store};
@@ -642,6 +644,7 @@ pub struct SqliteStorageBackend {
     roster_store: Arc<SqliteRosterStore>,
     nudge_template_override_store: Arc<SqliteNudgeTemplateOverrideStore>,
     pending_nudge_store: Arc<SqlitePendingNudgeStore>,
+    graft_receiver_endpoint_store: Arc<SqliteGraftReceiverEndpointStore>,
     peer_config_store: Arc<SqlitePeerConfigStore>,
     template_catalog_store: Arc<dyn TemplateCatalogStore>,
     message_search_store: Arc<dyn MessageSearchStore>,
@@ -716,6 +719,9 @@ impl SqliteStorageBackend {
                 Arc::clone(&db),
             )),
             pending_nudge_store: Arc::new(SqlitePendingNudgeStore::new(Arc::clone(&db))),
+            graft_receiver_endpoint_store: Arc::new(SqliteGraftReceiverEndpointStore::new(
+                Arc::clone(&db),
+            )),
             peer_config_store: Arc::new(SqlitePeerConfigStore::new(Arc::clone(&db))),
             template_catalog_store: template_catalog_store(Arc::clone(&db)),
             message_search_store: search_store(Arc::clone(&db)),
@@ -733,6 +739,9 @@ impl SqliteStorageBackend {
                 Arc::clone(&db),
             )),
             pending_nudge_store: Arc::new(SqlitePendingNudgeStore::new(Arc::clone(&db))),
+            graft_receiver_endpoint_store: Arc::new(SqliteGraftReceiverEndpointStore::new(
+                Arc::clone(&db),
+            )),
             peer_config_store: Arc::new(SqlitePeerConfigStore::new(Arc::clone(&db))),
             template_catalog_store: template_catalog_store(Arc::clone(&db)),
             message_search_store: search_store(Arc::clone(&db)),
@@ -775,6 +784,12 @@ impl SqliteStorageBackend {
 
     pub fn pending_nudge_store(&self) -> Arc<dyn atm_storage::PendingNudgeStore + Send + Sync> {
         self.pending_nudge_store.clone()
+    }
+
+    pub fn graft_receiver_endpoint_store(
+        &self,
+    ) -> Arc<dyn GraftReceiverEndpointStore + Send + Sync> {
+        self.graft_receiver_endpoint_store.clone()
     }
 
     pub fn peer_config_store(&self) -> Arc<dyn PeerConfigStore + Send + Sync> {
