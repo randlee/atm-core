@@ -26,9 +26,10 @@ use std::sync::Arc;
 
 pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
-    BootstrapTraceReport, ClosedHerdrBreakerDoctor, DaemonRuntimeDoctorReport, GraftReceiverLeaseDoctorReport, GraftReceiversDoctorReport,
+    BootstrapTraceReport, ClosedHerdrBreakerDoctor, DaemonRuntimeDoctorReport,
     DoctorEnvironmentVisibility, DoctorExecutionContext, DoctorFinding, DoctorReport,
-    DoctorSeverity, DoctorStatus, DoctorSummary, HerdrBreakerDoctor, HerdrBreakerDoctorReport,
+    DoctorSeverity, DoctorStatus, DoctorSummary, GraftReceiverLeaseDoctorReport,
+    GraftReceiversDoctorReport, HerdrBreakerDoctor, HerdrBreakerDoctorReport,
     HerdrBreakerDoctorState, PeerAuthorityDoctorReport, PeerConfigDoctorReport,
     PeerWireSecurityStatus, PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport,
     RecipientDeliveryPath, RecipientDeliveryPathReport,
@@ -145,12 +146,17 @@ pub fn run_doctor_with_runtime(
             &mut findings,
         )
     });
+    let graft_receivers = doctor_context
+        .resolved_team
+        .as_ref()
+        .map(|team| graft_receivers_doctor_report(runtime, team, &mut findings))
+        .unwrap_or_default();
     findings.push(finding);
     Ok(build_doctor_report(
         findings,
         doctor_context.environment,
         member_roster,
-        GraftReceiversDoctorReport::default(),
+        graft_receivers,
         PostSendDoctorReport::default(),
         crate::boundary::ConfigDoctorReport::default(),
         crate::boundary::MailStoreDoctorReport::default(),
@@ -187,6 +193,11 @@ pub fn run_doctor_with_runtime_ports(
             &mut drift_findings,
         )
     });
+    let graft_receivers = doctor_context
+        .resolved_team
+        .as_ref()
+        .map(|team| graft_receivers_doctor_report(runtime, team, &mut general_findings))
+        .unwrap_or_default();
     let findings = collect_doctor_findings(
         &reports,
         &drift_findings,
@@ -205,7 +216,7 @@ pub fn run_doctor_with_runtime_ports(
         findings,
         doctor_context.environment,
         member_roster,
-        GraftReceiversDoctorReport::default(),
+        graft_receivers,
         post_send,
         reports.config,
         reports.mail_store,
@@ -1027,6 +1038,135 @@ mod tests {
                 })
                 .collect(),
         }
+    }
+
+    #[test]
+    fn graft_receivers_doctor_report_renders_live_and_stale_lease_fixture() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let store_path = tempdir.path().join("graft-endpoints.sqlite3");
+        let store = atm_runtime_test_support::open_graft_receiver_endpoint_store(&store_path)
+            .expect("graft receiver endpoint store");
+
+        let team: TeamName = TEST_TEAM.parse().expect("team");
+        let live_agent = AgentName::from_validated("sender-a");
+        let stale_agent = AgentName::from_validated("sender-b");
+
+        let now = chrono::Utc::now();
+        let live_registered_at = now - chrono::Duration::seconds(5);
+        // Beyond `ACTIVE_LEASE_WINDOW_SECONDS`, but still dialed by delivery
+        // (I11); doctor's `reachable_at_last_use` flag is display-only.
+        let stale_registered_at = now - chrono::Duration::minutes(10);
+
+        store
+            .register(
+                &atm_storage::GraftReceiverRegistration {
+                    team: team.clone(),
+                    agent: live_agent.clone(),
+                    endpoint: "127.0.0.1:43101".parse().expect("endpoint"),
+                    capability: atm_storage::LocalCapability::generate().expect("capability"),
+                    owner_generation: atm_storage::OwnerGeneration::new(
+                        "01J00000000000000000000001",
+                    )
+                    .expect("owner generation"),
+                },
+                live_registered_at,
+            )
+            .expect("register live receiver");
+        store
+            .register(
+                &atm_storage::GraftReceiverRegistration {
+                    team: team.clone(),
+                    agent: stale_agent.clone(),
+                    endpoint: "127.0.0.1:43102".parse().expect("endpoint"),
+                    capability: atm_storage::LocalCapability::generate().expect("capability"),
+                    owner_generation: atm_storage::OwnerGeneration::new(
+                        "01J00000000000000000000002",
+                    )
+                    .expect("owner generation"),
+                },
+                stale_registered_at,
+            )
+            .expect("register stale receiver");
+
+        let runtime = test_runtime_with_roster(&["sender-a", "sender-b"])
+            .with_graft_receiver_endpoint_store(store);
+
+        let mut findings = Vec::new();
+        let report = super::graft_receivers_doctor_report(&runtime, &team, &mut findings);
+
+        assert!(findings.is_empty(), "{findings:#?}");
+        assert_eq!(report.receivers.len(), 2);
+
+        let live = report
+            .receivers
+            .iter()
+            .find(|receiver| receiver.agent == live_agent)
+            .expect("live receiver entry");
+        assert!(live.reachable_at_last_use, "{live:#?}");
+        assert_eq!(live.endpoint, "127.0.0.1:43101");
+
+        let stale = report
+            .receivers
+            .iter()
+            .find(|receiver| receiver.agent == stale_agent)
+            .expect("stale receiver entry");
+        assert!(!stale.reachable_at_last_use, "{stale:#?}");
+        assert_eq!(stale.endpoint, "127.0.0.1:43102");
+        assert!(
+            stale.last_seen_age_seconds > super::ACTIVE_LEASE_WINDOW_SECONDS,
+            "{stale:#?}"
+        );
+    }
+
+    #[test]
+    fn run_doctor_with_runtime_surfaces_graft_receiver_leases() {
+        let paths = TestPaths::new();
+        paths.write_team_layout(&[TEST_SENDER]);
+
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let store_path = tempdir.path().join("graft-endpoints.sqlite3");
+        let store = atm_runtime_test_support::open_graft_receiver_endpoint_store(&store_path)
+            .expect("graft receiver endpoint store");
+        let team: TeamName = TEST_TEAM.parse().expect("team");
+        store
+            .register(
+                &atm_storage::GraftReceiverRegistration {
+                    team: team.clone(),
+                    agent: AgentName::from_validated(TEST_SENDER),
+                    endpoint: "127.0.0.1:43101".parse().expect("endpoint"),
+                    capability: atm_storage::LocalCapability::generate().expect("capability"),
+                    owner_generation: atm_storage::OwnerGeneration::new(
+                        "01J00000000000000000000001",
+                    )
+                    .expect("owner generation"),
+                },
+                chrono::Utc::now(),
+            )
+            .expect("register live receiver");
+
+        let runtime = test_runtime(&paths).with_graft_receiver_endpoint_store(store);
+        let report = run_doctor_with_runtime(
+            query(&paths),
+            &StubObservability {
+                health: StubHealth::Ok(AtmObservabilityHealth {
+                    active_log_path: Some(paths.active_log_path.clone()),
+                    logging_state: AtmObservabilityHealthState::Healthy,
+                    query_state: Some(AtmObservabilityHealthState::Healthy),
+                    maintenance: None,
+                    diagnostic: None,
+                    detail: None,
+                }),
+            },
+            &runtime,
+        )
+        .expect("doctor report");
+
+        assert_eq!(report.graft_receivers.receivers.len(), 1);
+        assert_eq!(
+            report.graft_receivers.receivers[0].agent,
+            AgentName::from_validated(TEST_SENDER)
+        );
+        assert!(report.graft_receivers.receivers[0].reachable_at_last_use);
     }
 
     #[test]
