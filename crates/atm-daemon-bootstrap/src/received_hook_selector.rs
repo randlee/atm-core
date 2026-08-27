@@ -447,7 +447,7 @@ impl AsyncMessageReceivedHookEmitter for PublishedGraftReceivedHook {
                     let store = match service_runtime.pending_nudge_store() {
                         Ok(store) => store,
                         Err(error) => {
-                            runtime_health_for_clear.record_graft_queue_handoff_failure();
+                            runtime_health_for_clear.record_graft_queue_marker_clear_failure();
                             tracing::warn!(
                                 subsystem = "atm_core.queue",
                                 action = "handoff_marker_clear",
@@ -462,7 +462,7 @@ impl AsyncMessageReceivedHookEmitter for PublishedGraftReceivedHook {
                     if let Err(error) =
                         store.clear_pending_on_handoff(&member_for_handoff, &message_id)
                     {
-                        runtime_health_for_clear.record_graft_queue_handoff_failure();
+                        runtime_health_for_clear.record_graft_queue_marker_clear_failure();
                         tracing::warn!(
                             subsystem = "atm_core.queue",
                             action = "handoff_marker_clear",
@@ -474,7 +474,7 @@ impl AsyncMessageReceivedHookEmitter for PublishedGraftReceivedHook {
                         if let Err(retry_error) =
                             store.clear_pending_on_handoff(&member_for_handoff, &message_id)
                         {
-                            runtime_health_for_clear.record_graft_queue_handoff_failure();
+                            runtime_health_for_clear.record_graft_queue_marker_clear_failure();
                             tracing::warn!(
                                 subsystem = "atm_core.queue",
                                 action = "handoff_marker_clear",
@@ -524,17 +524,18 @@ mod tests {
     use atm_core::boundary::MessageReceivedHookSelector;
     use atm_core::boundary::{
         AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, HerdrNudgeTarget,
-        LocalSteerTarget, LocalTmuxNudgeTarget, MemberKey, NudgeKind, PostSendBuiltInTarget,
-        PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
+        LocalSteerTarget, LocalTmuxNudgeTarget, MemberKey, NudgeClaim, NudgeKind,
+        PendingNudgeStore, PostSendBuiltInTarget, PostSendHookEvent, RosterEntry, RosterHarness,
+        RosterMemberKind,
     };
-    use atm_core::error::AtmErrorCode;
+    use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::graft::GraftReceiverListener;
     use atm_core::nudge_dispatch::rebuild_received_hook_dispatch;
     use atm_core::observability::NullObservability;
     use atm_core::protocol::{GraftReceiverRegistration, OwnerGeneration};
-    use atm_core::schema::AgentType;
+    use atm_core::schema::{AgentType, AtmMessageId};
     use atm_core::send::{NudgeMode, SendMessageSource, WriteRequest, write_mail_with_runtime};
-    use atm_core::types::{AgentName, PaneId, TeamName};
+    use atm_core::types::{AgentName, IsoTimestamp, PaneId, TeamName};
     use atm_http_runtime::RuntimeHealth;
     use atm_runtime_test_support::{
         open_graft_receiver_endpoint_store, open_isolated_sqlite_boundary,
@@ -543,6 +544,7 @@ mod tests {
     use std::fs;
     use std::net::TcpListener;
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::thread;
 
     #[cfg(feature = "benchmark-harness")]
@@ -691,6 +693,57 @@ mod tests {
             .persisted_message_id()
     }
 
+    struct FailingClearPendingStore {
+        inner: Arc<dyn PendingNudgeStore + Send + Sync>,
+        clear_calls: AtomicUsize,
+    }
+
+    impl atm_storage::contract::sealed::Sealed for FailingClearPendingStore {}
+
+    impl PendingNudgeStore for FailingClearPendingStore {
+        fn mark_pending(
+            &self,
+            member: &MemberKey,
+            msg: &AtmMessageId,
+            at: IsoTimestamp,
+        ) -> Result<bool, AtmError> {
+            self.inner.mark_pending(member, msg, at)
+        }
+
+        fn claim_next_pending(&self, member: &MemberKey) -> Result<Option<NudgeClaim>, AtmError> {
+            self.inner.claim_next_pending(member)
+        }
+
+        fn requeue_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
+            self.inner.requeue_pending(member, claim)
+        }
+
+        fn release_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
+            self.inner.release_pending(member, claim)
+        }
+
+        fn clear_pending_on_read(
+            &self,
+            member: &MemberKey,
+            msg: &AtmMessageId,
+        ) -> Result<(), AtmError> {
+            self.inner.clear_pending_on_read(member, msg)
+        }
+
+        fn clear_pending_on_handoff(
+            &self,
+            _member: &MemberKey,
+            _msg: &AtmMessageId,
+        ) -> Result<(), AtmError> {
+            self.clear_calls.fetch_add(1, Ordering::SeqCst);
+            Err(AtmError::mailbox_write("clear marker test failure"))
+        }
+
+        fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError> {
+            self.inner.list_pending_members()
+        }
+    }
+
     #[tokio::test]
     async fn queue_graft_handoff_clears_only_the_handed_message_marker() {
         let root = tempfile::tempdir().expect("temporary runtime root");
@@ -765,6 +818,91 @@ mod tests {
             other_message_id,
             "successful handoff clears only the exact marker"
         );
+    }
+
+    #[tokio::test]
+    async fn aq2_crit_001_successful_handoff_retries_marker_clear_failure_without_failing_delivery()
+    {
+        let root = tempfile::tempdir().expect("temporary runtime root");
+        let (base_runtime, endpoint_store, team, recipient) = queue_graft_runtime(root.path());
+        let base_pending_store = base_runtime.pending_nudge_store().expect("pending store");
+        let failing_store = Arc::new(FailingClearPendingStore {
+            inner: base_pending_store,
+            clear_calls: AtomicUsize::new(0),
+        });
+        let runtime = base_runtime.with_pending_nudge_store(failing_store.clone());
+        let listener = GraftReceiverListener::bind(root.path(), &team, &recipient, None)
+            .expect("bind graft receiver");
+        endpoint_store
+            .register(
+                &GraftReceiverRegistration {
+                    team: team.clone(),
+                    agent: recipient.clone(),
+                    endpoint: listener.local_addr().expect("endpoint"),
+                    capability: listener.capability().clone(),
+                    owner_generation: OwnerGeneration::new(listener.owner_generation())
+                        .expect("generation"),
+                },
+                atm_core::types::IsoTimestamp::now().into_inner(),
+            )
+            .expect("register receiver");
+        let server = thread::Builder::new()
+            .name("graft-clear-failure-test-server".to_owned())
+            .spawn(move || {
+                let mut stream = loop {
+                    if let Some(stream) = listener.poll_accept().expect("accept") {
+                        break stream;
+                    }
+                    thread::yield_now();
+                };
+                listener
+                    .read_request(&mut stream, std::time::Duration::from_secs(3))
+                    .expect("read request");
+                listener
+                    .write_response(
+                        &mut stream,
+                        &atm_core::graft::GraftPostSendResponse::Delivered,
+                    )
+                    .expect("write response");
+            })
+            .expect("spawn graft test server");
+
+        let message_id = queue_write(root.path(), &runtime, &team);
+        let member = MemberKey::new(team.clone(), recipient.clone());
+        let dispatch =
+            rebuild_received_hook_dispatch(&runtime, &member, message_id, NudgeKind::Queue)
+                .expect("rebuild dispatch")
+                .expect("graft dispatch");
+        let health = RuntimeHealth::default();
+        let selector = ReplacementReceivedHookSelector::with_herdr_process(
+            runtime.clone(),
+            Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default()),
+            health.clone(),
+        );
+        let result = selector
+            .select_emitter(&dispatch)
+            .expect("graft emitter")
+            .emit_received_message(
+                dispatch,
+                RequestDeadline::after(std::time::Duration::from_secs(3)),
+            )
+            .await;
+        server.join().expect("server join");
+
+        assert!(
+            result.is_ok(),
+            "marker-clear failure must not fail delivery"
+        );
+        assert_eq!(failing_store.clear_calls.load(Ordering::SeqCst), 2);
+        assert_eq!(health.snapshot().graft_queue_handoff_failures_total, 0);
+        assert_eq!(health.snapshot().graft_queue_marker_clear_failures_total, 2);
+        let claim = runtime
+            .pending_nudge_store()
+            .expect("pending store")
+            .claim_next_pending(&member)
+            .expect("claim query")
+            .expect("failed marker clear leaves marker set");
+        assert_eq!(claim.msg, message_id);
     }
 
     #[tokio::test]

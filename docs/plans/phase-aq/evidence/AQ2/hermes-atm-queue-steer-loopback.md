@@ -4,6 +4,9 @@ Date: 2026-08-27
 Branch: `feature/aq-2-queue-graft`  
 Harness: the repository's isolated Hermes ATM wheel/loopback contract runner
 
+Per the 2026-08-27 Fenix ruling, this loopback harness evidence is accepted for
+AQ2; live Hermes-fronted evidence is deferred to AQ5 phase evidence.
+
 The following command builds the current `atm-graft` wheel, builds the current
 universal `hermes-atm` wheel, installs both into a clean temporary virtual
 environment, and runs the Hermes callback loopback tests:

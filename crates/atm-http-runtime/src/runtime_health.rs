@@ -29,6 +29,7 @@ struct RuntimeHealthState {
     owner_pid: Option<u32>,
     members: HashMap<MemberKey, MemberRecord>,
     graft_queue_handoff_failures_total: u64,
+    graft_queue_marker_clear_failures_total: u64,
     queue_marker_set_failures_total: u64,
 }
 
@@ -103,6 +104,14 @@ impl RuntimeHealth {
         let mut state = self.lock();
         state.graft_queue_handoff_failures_total =
             state.graft_queue_handoff_failures_total.saturating_add(1);
+    }
+
+    /// Records a failed pending-marker clear after delivery succeeded.
+    pub fn record_graft_queue_marker_clear_failure(&self) {
+        let mut state = self.lock();
+        state.graft_queue_marker_clear_failures_total = state
+            .graft_queue_marker_clear_failures_total
+            .saturating_add(1);
     }
 
     pub fn record_queue_marker_set_failure(&self) {
@@ -232,6 +241,7 @@ impl RuntimeHealth {
             member_counts: counts,
             members,
             graft_queue_handoff_failures_total: state.graft_queue_handoff_failures_total,
+            graft_queue_marker_clear_failures_total: state.graft_queue_marker_clear_failures_total,
             queue_marker_set_failures_total: state.queue_marker_set_failures_total,
         }
     }
@@ -294,6 +304,8 @@ mod tests {
         let health = RuntimeHealth::default();
         health.record_graft_queue_handoff_failure();
         health.record_graft_queue_handoff_failure();
+        health.record_graft_queue_marker_clear_failure();
         assert_eq!(health.snapshot().graft_queue_handoff_failures_total, 2);
+        assert_eq!(health.snapshot().graft_queue_marker_clear_failures_total, 1);
     }
 }
