@@ -220,10 +220,18 @@ def stop_daemon(process: subprocess.Popen[str] | None) -> None:
 
 def run_hook(env: dict[str, str], atm: Path, harness: str, timeout: float) -> subprocess.CompletedProcess[str]:
     hook = ROOT / "scripts" / "hooks" / "atm_queue_hook.py"
+    hook_env = {
+        **env,
+        "ATM_BIN": str(atm),
+        "ATM_IDENTITY": RECEIVER,
+        "ATM_TEAM": TEAM,
+        "ATM_HOME": env["ATM_HOME"],
+        "ATM_CONFIG_HOME": env["ATM_CONFIG_HOME"],
+    }
     return subprocess.run(
         [sys.executable, str(hook), "--event", "stop", "--harness", harness],
         cwd=ROOT,
-        env={**env, "ATM_BIN": str(atm), "ATM_IDENTITY": RECEIVER},
+        env=hook_env,
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -253,6 +261,21 @@ def pull_step(env: dict[str, str], atm: Path, timeout: float, *, harness: str = 
         "returncode": completed.returncode,
         "stdout": completed.stdout.strip(),
         "stderr_tail": completed.stderr.strip()[-2000:],
+        "hook_argv": [sys.executable, str(ROOT / "scripts" / "hooks" / "atm_queue_hook.py"), "--event", "stop", "--harness", harness],
+        "hook_env_keys": sorted(
+            key
+            for key in (
+                "ATM_BIN",
+                "ATM_IDENTITY",
+                "ATM_TEAM",
+                "ATM_HOME",
+                "ATM_CONFIG_HOME",
+                "ATM_HOOK_STATE_DIR",
+                "ATM_HOOK_DEBOUNCE_SECONDS",
+                "ATM_HOOK_TIMEOUT_SECONDS",
+            )
+            if key in env or key in {"ATM_BIN", "ATM_IDENTITY", "ATM_TEAM"}
+        ),
     }
     if step["stdout"]:
         step["block"] = json.loads(step["stdout"])

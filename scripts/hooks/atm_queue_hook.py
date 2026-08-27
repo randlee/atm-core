@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-open Claude/Codex lifecycle hooks for ATM heartbeat and queue pulls."""
+"""Claude/Codex lifecycle hooks for ATM heartbeat and queue pulls."""
 
 from __future__ import annotations
 
@@ -22,18 +22,74 @@ def atm_command() -> str:
     return os.environ.get("ATM_BIN", "atm")
 
 
-def run_atm(args: list[str]) -> subprocess.CompletedProcess[str] | None:
+def run_atm(args: list[str], *, strict: bool = False) -> subprocess.CompletedProcess[str] | None:
+    command = [atm_command(), *args]
     try:
-        return subprocess.run(
-            [atm_command(), *args],
+        completed = subprocess.run(
+            command,
             check=False,
             capture_output=True,
             text=True,
             timeout=float(os.environ.get("ATM_HOOK_TIMEOUT_SECONDS", "2")),
             env=os.environ.copy(),
         )
-    except (OSError, subprocess.SubprocessError, ValueError):
+    except (OSError, subprocess.SubprocessError, ValueError) as error:
+        if strict:
+            raise RuntimeError(f"could not run {' '.join(command)}: {error}") from error
         return None
+    if strict and completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip() or "no diagnostic output"
+        raise RuntimeError(
+            f"{' '.join(command)} exited {completed.returncode}: {detail}"
+        )
+    return completed
+
+
+def stop_hook_context() -> tuple[str, str]:
+    identity = os.environ.get("ATM_IDENTITY", "").strip()
+    team = os.environ.get("ATM_TEAM", "").strip()
+    if not identity:
+        raise RuntimeError("ATM_IDENTITY is required for a Stop queue pull")
+    if not team:
+        raise RuntimeError("ATM_TEAM is required for a Stop queue pull")
+    home = os.environ.get("ATM_HOME") or os.environ.get("HOME")
+    if not home:
+        raise RuntimeError("ATM_HOME or HOME is required for a Stop queue pull")
+    home_path = Path(home)
+    if not home_path.is_absolute() or not home_path.is_dir():
+        raise RuntimeError(f"ATM home is not an existing absolute directory: {home}")
+    if not atm_command().strip():
+        raise RuntimeError("ATM_BIN must name the ATM CLI for a Stop queue pull")
+    return team, identity
+
+
+def queue_pull(harness: str) -> list[dict[str, object]]:
+    team, identity = stop_hook_context()
+    response = run_atm(
+        [
+            "_internal-queue-get",
+            "--team",
+            team,
+            "--as",
+            identity,
+            "--require-daemon",
+        ],
+        strict=True,
+    )
+    if response is None:
+        raise RuntimeError("ATM queue pull returned no process result")
+    messages: list[dict[str, object]] = []
+    for line in response.stdout.splitlines():
+        if not line.strip():
+            continue
+        try:
+            value = json.loads(line)
+        except json.JSONDecodeError as error:
+            raise RuntimeError(f"ATM queue pull returned invalid JSON: {error}") from error
+        if not isinstance(value, dict):
+            raise RuntimeError("ATM queue pull returned a non-object JSON value")
+        messages.append(value)
+    return messages
 
 
 def send_heartbeat(activity: str, harness: str) -> None:
@@ -79,21 +135,6 @@ def expire_idle(token: str, harness: str) -> None:
     send_heartbeat("idle", harness)
 
 
-def queue_pull(harness: str) -> list[dict[str, object]]:
-    response = run_atm(["_internal-queue-get"])
-    if response is None or response.returncode != 0:
-        return []
-    messages: list[dict[str, object]] = []
-    for line in response.stdout.splitlines():
-        try:
-            value = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(value, dict):
-            messages.append(value)
-    return messages
-
-
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--event", choices=("pre-tool-use", "stop", "session-end", "idle-expired"), required=True)
@@ -111,7 +152,11 @@ def main() -> int:
         cancel_idle()
         send_heartbeat("session-ended", args.harness)
         return 0
-    messages = queue_pull(args.harness)
+    try:
+        messages = queue_pull(args.harness)
+    except RuntimeError as error:
+        print(f"ATM Stop queue hook failed: {error}", file=sys.stderr)
+        return 1
     schedule_idle(args.harness)
     if messages and args.harness == "claude":
         reason = "\n".join(str(message.get("body", "")) for message in messages)
