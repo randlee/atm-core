@@ -209,6 +209,7 @@ name = "atm-daemon-bootstrap"
 version = "1.4.4"
 dependencies = [
  "agent-team-mail-core",
+ "atm-herdr",
  "atm-http-runtime",
  "atm-runtime",
  "atm-runtime-test-support",
@@ -273,11 +274,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "atm-herdr"
+version = "1.4.4"
+dependencies = [
+ "agent-team-mail-core",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "atm-http-runtime"
 version = "1.4.4"
 dependencies = [
  "agent-team-mail-core",
  "async-trait",
+ "atm-herdr",
  "atm-runtime-test-support",
  "atm-storage",
  "axum",
