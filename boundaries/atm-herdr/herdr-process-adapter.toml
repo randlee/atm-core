@@ -33,6 +33,9 @@ io_forbidden = [
 allowed_dependents = ["atm-http-runtime", "atm-daemon-bootstrap"]
 allowed_dependencies = ["atm-core", "tokio", "serde_json"]
 forbidden_edges = [
+  "atm-core -> atm-herdr",
+  "atm-storage -> atm-herdr",
+  "atm-storage-rusqlite -> atm-herdr",
   "atm-herdr -> atm-daemon",
   "atm-herdr -> atm-daemon-bootstrap",
   "atm-herdr -> atm-http-runtime",
@@ -48,9 +51,9 @@ forbidden = [
 ]
 
 [contracts]
-request_types = ["HerdrPromptOutcome", "HerdrWaitOutcome", "HerdrGetOutcome"]
-response_types = ["HerdrAgentStatus"]
-error_types = ["AtmError"]
+request_types = ["HerdrPromptOutcome", "HerdrWaitOutcome", "HerdrGetOutcome", "HerdrListOutcome"]
+response_types = ["AgentSnapshot", "HerdrAgentStatus"]
+error_types = ["HerdrError"]
 
 [testing]
 allowed_test_double_paths = ["atm_herdr::testing::FakeHerdrProcessAdapter"]

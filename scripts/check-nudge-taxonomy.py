@@ -148,6 +148,20 @@ NUDGE_IDENTIFIER_PATTERN = re.compile(r"[A-Za-z_]*[Nn]udge[A-Za-z_]*")
 CFG_TEST_ATTRIBUTE = re.compile(r"^\s*#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]\s*$")
 TEST_MODULE_DECLARATION = re.compile(r"\bmod\s+[A-Za-z_][A-Za-z0-9_]*\s*\{")
 
+# Herdr owns its external wire vocabulary. Domain-level backend labels such
+# as `backendType = "herdr"` remain core-owned roster data, but CLI argv
+# tokens, response field names, and structured error codes may not leak into
+# another crate. Keep this list deliberately limited to the wire vocabulary so
+# the audit does not reject ordinary prose or backend selection metadata.
+HERDR_WIRE_PATTERNS = tuple(
+    re.compile(pattern)
+    for pattern in (
+        r'\[\s*"agent"\s*,\s*"(?:prompt|wait|get|list)"',
+        r'"agent_status"',
+        r'"(?:agent_blocked|agent_not_found|agent_not_ready|agent_target_ambiguous|agent_not_running|agent_prompt_stalled|server_not_running|protocol_mismatch|invalid_agent_name|empty_agent_prompt|server_unavailable|internal_error|agent_prompt_failed)"',
+    )
+)
+
 
 def iter_rust_sources(repo_root: Path) -> tuple[Path, ...]:
     crates_dir = repo_root / "crates"
@@ -220,6 +234,17 @@ def find_violations(repo_root: Path) -> tuple[Violation, ...]:
         relative = Path(relative_path)
         test_source = is_test_source(relative)
         for line_number, line, in_test_module in iter_rust_lines(path):
+            if relative_path != "crates/atm-herdr/src/lib.rs":
+                for pattern in HERDR_WIRE_PATTERNS:
+                    if pattern.search(line):
+                        violations.append(
+                            Violation(
+                                Path(relative_path),
+                                line_number,
+                                "herdr_string_containment_gate: Herdr wire literal must remain inside crates/atm-herdr",
+                                line.strip(),
+                            )
+                        )
             for label, pattern in FORBIDDEN_PATTERNS:
                 if pattern.search(line) and not is_allowed_forbidden_literal(relative_path, line):
                     violations.append(Violation(Path(relative_path), line_number, label, line.strip()))

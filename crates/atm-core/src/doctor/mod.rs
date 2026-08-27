@@ -23,11 +23,12 @@ use std::sync::Arc;
 
 pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
-    BootstrapTraceReport, DaemonRuntimeDoctorReport, DoctorEnvironmentVisibility,
-    DoctorExecutionContext, DoctorFinding, DoctorReport, DoctorSeverity, DoctorStatus,
-    DoctorSummary, PeerAuthorityDoctorReport, PeerConfigDoctorReport, PeerWireSecurityStatus,
-    PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport, RecipientDeliveryPath,
-    RecipientDeliveryPathReport,
+    BootstrapTraceReport, ClosedHerdrBreakerDoctor, DaemonRuntimeDoctorReport,
+    DoctorEnvironmentVisibility, DoctorExecutionContext, DoctorFinding, DoctorReport,
+    DoctorSeverity, DoctorStatus, DoctorSummary, HerdrBreakerDoctor, HerdrBreakerDoctorReport,
+    HerdrBreakerDoctorState, PeerAuthorityDoctorReport, PeerConfigDoctorReport,
+    PeerWireSecurityStatus, PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport,
+    RecipientDeliveryPath, RecipientDeliveryPathReport,
 };
 
 /// Inputs for a doctor run, including the caller's resolved identity.
@@ -68,6 +69,7 @@ pub struct RuntimeDoctorPorts {
     pub config_doctor: Arc<dyn ConfigDoctor + Send + Sync>,
     pub mail_store_doctor: Arc<dyn MailStoreDoctor + Send + Sync>,
     pub roster_store_doctor: Arc<dyn RosterStoreDoctor + Send + Sync>,
+    pub herdr_breaker: Arc<dyn HerdrBreakerDoctor>,
 }
 
 impl std::fmt::Debug for RuntimeDoctorPorts {
@@ -76,6 +78,7 @@ impl std::fmt::Debug for RuntimeDoctorPorts {
             .field("config_doctor", &"dyn ConfigDoctor")
             .field("mail_store_doctor", &"dyn MailStoreDoctor")
             .field("roster_store_doctor", &"dyn RosterStoreDoctor")
+            .field("herdr_breaker", &"dyn HerdrBreakerDoctor")
             .finish()
     }
 }
@@ -127,6 +130,7 @@ pub fn run_doctor_with_runtime(
         observability_health,
         None,
         None,
+        HerdrBreakerDoctorReport::default(),
     ))
 }
 
@@ -180,6 +184,7 @@ pub fn run_doctor_with_runtime_ports(
         observability_health,
         None,
         None,
+        runtime_doctors.herdr_breaker.report(),
     ))
 }
 
@@ -272,6 +277,7 @@ fn build_doctor_report(
     observability_health: crate::observability::AtmObservabilityHealth,
     runtime_status: Option<crate::protocol::RuntimeStatusSnapshot>,
     bootstrap_trace: Option<BootstrapTraceReport>,
+    herdr_breaker: HerdrBreakerDoctorReport,
 ) -> DoctorReport {
     let summary = summarize_doctor_findings(&findings);
     let recommendations = collect_recommendations(&findings);
@@ -284,6 +290,7 @@ fn build_doctor_report(
         daemon_context: None,
         member_roster,
         observability: observability_health,
+        herdr_breaker,
         post_send,
         config,
         mail_store,

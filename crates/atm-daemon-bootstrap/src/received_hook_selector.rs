@@ -9,7 +9,6 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use atm_core::LocalServiceRuntime;
 use atm_core::RequestDeadline;
 use atm_core::boundary::{
     self, AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, MessageReceivedHookSelector,
@@ -17,7 +16,8 @@ use atm_core::boundary::{
     TMUX_NUDGE_CONFIRM_KEY,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
-use atm_herdr::{HerdrProcessAdapter, HerdrProcessInvoker, HerdrPromptOutcome};
+use atm_core::{HerdrSession, LocalServiceRuntime};
+use atm_herdr::{HerdrError, HerdrProcessAdapter, HerdrPromptOutcome};
 
 /// Builds the selector injected into every production replacement daemon.
 ///
@@ -26,8 +26,12 @@ use atm_herdr::{HerdrProcessAdapter, HerdrProcessInvoker, HerdrPromptOutcome};
 /// is compiled as a separate feature-gated binary below.
 pub fn active_received_hook_selector(
     service_runtime: LocalServiceRuntime,
+    herdr_process: Arc<dyn HerdrProcessAdapter>,
 ) -> Arc<dyn MessageReceivedHookSelector> {
-    Arc::new(ReplacementReceivedHookSelector::new(service_runtime))
+    Arc::new(ReplacementReceivedHookSelector::with_herdr_process(
+        service_runtime,
+        herdr_process,
+    ))
 }
 
 /// Mode accepted exclusively by the separately compiled benchmark binary.
@@ -57,9 +61,10 @@ impl BenchmarkHookMode {
 pub fn benchmark_received_hook_selector(
     service_runtime: LocalServiceRuntime,
     mode: BenchmarkHookMode,
+    herdr_process: Arc<dyn HerdrProcessAdapter>,
 ) -> Arc<dyn MessageReceivedHookSelector> {
     match mode {
-        BenchmarkHookMode::Active => active_received_hook_selector(service_runtime),
+        BenchmarkHookMode::Active => active_received_hook_selector(service_runtime, herdr_process),
         BenchmarkHookMode::Disabled => Arc::new(DisabledReceivedHookSelector),
     }
 }
@@ -74,13 +79,17 @@ struct ReplacementReceivedHookSelector {
 }
 
 impl ReplacementReceivedHookSelector {
+    #[cfg(test)]
     #[must_use]
     fn new(service_runtime: LocalServiceRuntime) -> Self {
-        Self::new_with_herdr_process(service_runtime, Arc::new(HerdrProcessInvoker::default()))
+        Self::with_herdr_process(
+            service_runtime,
+            Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default()),
+        )
     }
 
     #[must_use]
-    fn new_with_herdr_process(
+    fn with_herdr_process(
         service_runtime: LocalServiceRuntime,
         herdr_process: Arc<dyn HerdrProcessAdapter>,
     ) -> Self {
@@ -226,25 +235,35 @@ impl AsyncMessageReceivedHookEmitter for HerdrReceivedHook {
                     "Herdr receiver hook received a non-Herdr dispatch",
                 ));
             };
-            let outcome = process
-                .prompt(
-                    &dispatch.event.recipient,
-                    target.session.as_deref(),
-                    deadline,
-                )
-                .await?;
-            match outcome {
-                HerdrPromptOutcome::Accepted => {
+            let session = target
+                .session
+                .as_deref()
+                .map(HerdrSession::new)
+                .transpose()?;
+            let result = process
+                .prompt(&dispatch.event.recipient, session.as_ref(), deadline)
+                .await;
+            match result {
+                Ok(HerdrPromptOutcome::Accepted(_)) => {
                     tracing::info!(backend = "herdr", member = %dispatch.event.recipient, outcome = "accepted", "Herdr wake-up submitted");
                 }
-                HerdrPromptOutcome::BlockedBeforeInput => {
-                    tracing::warn!(backend = "herdr", member = %dispatch.event.recipient, outcome = "blocked_before_input", "Herdr rejected wake-up before input");
-                }
-                HerdrPromptOutcome::TargetNotPresent => {
-                    tracing::warn!(backend = "herdr", member = %dispatch.event.recipient, outcome = "target_not_present", "Herdr agent target is not present");
-                }
-                HerdrPromptOutcome::AdvisoryFailure { code } => {
-                    tracing::warn!(backend = "herdr", member = %dispatch.event.recipient, %code, outcome = "advisory_failure", "Herdr wake-up was not accepted");
+                Err(error @ HerdrError::AgentBlocked)
+                | Err(error @ HerdrError::AgentNotFound)
+                | Err(error @ HerdrError::AgentNotReady)
+                | Err(error @ HerdrError::AgentTargetAmbiguous)
+                | Err(error @ HerdrError::AgentNotRunning)
+                | Err(error @ HerdrError::AgentPromptStalled)
+                | Err(error @ HerdrError::ServerNotRunning)
+                | Err(error @ HerdrError::ProtocolMismatch)
+                | Err(error @ HerdrError::Timeout)
+                | Err(error @ HerdrError::InvalidAgentName)
+                | Err(error @ HerdrError::EmptyAgentPrompt)
+                | Err(error @ HerdrError::ServerUnavailable)
+                | Err(error @ HerdrError::InternalError)
+                | Err(error @ HerdrError::TimedOut)
+                | Err(error @ HerdrError::Unavailable { .. })
+                | Err(error @ HerdrError::Advisory { .. }) => {
+                    tracing::warn!(backend = "herdr", member = %dispatch.event.recipient, error = ?error, outcome = "advisory_failure", "Herdr wake-up was not accepted");
                 }
             }
             Ok(PostSendEmissionPath::LocalHerdr)
@@ -330,7 +349,6 @@ impl AsyncMessageReceivedHookEmitter for PublishedGraftReceivedHook {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
     use std::time::Duration;
 
     use atm_core::RequestDeadline;
@@ -343,7 +361,7 @@ mod tests {
 
     #[cfg(feature = "benchmark-harness")]
     use super::{BenchmarkHookMode, DisabledReceivedHookSelector};
-    use super::{HerdrProcessInvoker, ReplacementReceivedHookSelector, TokioTmuxReceivedHook};
+    use super::{ReplacementReceivedHookSelector, TokioTmuxReceivedHook};
 
     fn tmux_dispatch() -> BuiltInPostSendDispatch {
         BuiltInPostSendDispatch {
@@ -383,10 +401,7 @@ mod tests {
         let assembly =
             atm_runtime_test_support::open_isolated_sqlite_boundary(temporary_root.path())
                 .expect("assemble isolated selector runtime");
-        let selector = ReplacementReceivedHookSelector::new_with_herdr_process(
-            assembly.service_runtime,
-            Arc::new(HerdrProcessInvoker::default()),
-        );
+        let selector = ReplacementReceivedHookSelector::new(assembly.service_runtime);
 
         assert!(selector.select_emitter(&tmux_dispatch()).is_some());
         assert!(selector.select_emitter(&queue_dispatch()).is_none());

@@ -730,9 +730,8 @@ mod tests {
     use atm_core::boundary::{
         AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, GraftNudgeTarget,
         LocalSteerTarget, LocalTmuxNudgeTarget, MemberKey, MessageReceivedHookSelector, NudgeKind,
-        PendingNudgeStore,
-        PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEvent, RosterEntry, RosterHarness,
-        RosterMemberKind,
+        PendingNudgeStore, PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEvent,
+        RosterEntry, RosterHarness, RosterMemberKind,
     };
     use atm_core::observability::NullObservability;
     use atm_core::protocol::{

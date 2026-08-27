@@ -26,6 +26,7 @@ use atm_core::peer_wire::{PeerWireMode, PeerWireSecurity};
 use atm_core::send::input::DEFAULT_MESSAGE_MAX_BYTES;
 use atm_core::types::HostName;
 use atm_core::types::{AgentName, TeamName};
+use atm_herdr::{HerdrBreakerState, HerdrProcessAdapter, HerdrProcessInvoker, HerdrSpawnBreaker};
 use atm_http_runtime::{
     AcceptedPeerStream, DirectPeerTcpConfig, EstablishedPeerStream, HttpRuntimeBuilder,
     HttpRuntimeConfig, LoopbackTcpConfig, NonZeroDuration, PeerConnectionPool, PeerPoolConfig,
@@ -62,6 +63,28 @@ const CANONICAL_WRITE_ENVELOPE_OVERHEAD_BYTES: usize = 64 * 1024;
 struct SelectedPeerAdapterSelection {
     adapter: Option<Arc<dyn PeerStreamAdapter>>,
     pool_config: PeerPoolConfig,
+}
+
+struct HerdrBreakerDoctorAdapter {
+    breaker: Arc<HerdrSpawnBreaker>,
+}
+
+impl atm_core::doctor::HerdrBreakerDoctor for HerdrBreakerDoctorAdapter {
+    fn report(&self) -> atm_core::doctor::HerdrBreakerDoctorReport {
+        match self.breaker.state() {
+            HerdrBreakerState::Closed => Default::default(),
+            HerdrBreakerState::Open { retry_after } => atm_core::doctor::HerdrBreakerDoctorReport {
+                state: atm_core::doctor::report::HerdrBreakerDoctorState::Open,
+                retry_after_ms: Some(retry_after.as_millis() as u64),
+                consecutive_failures: Some(self.breaker.consecutive_failures()),
+            },
+            HerdrBreakerState::HalfOpen => atm_core::doctor::HerdrBreakerDoctorReport {
+                state: atm_core::doctor::report::HerdrBreakerDoctorState::Open,
+                retry_after_ms: Some(0),
+                consecutive_failures: Some(self.breaker.consecutive_failures()),
+            },
+        }
+    }
 }
 
 /// Identity values captured once at the daemon bootstrap boundary.
@@ -488,7 +511,9 @@ pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode) -> Result<(), At
     let peer_pool_config = parse_peer_pool_config(std::env::args_os())?;
     run_replacement_daemon_with_selector(
         Arc::new(NullObservability),
-        move |service_runtime| benchmark_received_hook_selector(service_runtime, hook_mode),
+        move |service_runtime, herdr_process| {
+            benchmark_received_hook_selector(service_runtime, hook_mode, herdr_process)
+        },
         resolve_daemon_launch_identity(),
         peer_wire_mode,
         DirectPeerTcpConfig::configured(direct_peer_port),
@@ -498,17 +523,24 @@ pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode) -> Result<(), At
 }
 
 fn build_replacement_handler(
-    assembly: RuntimeAssembly,
+    mut assembly: RuntimeAssembly,
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
     selector_factory: impl FnOnce(
         atm_core::LocalServiceRuntime,
+        Arc<dyn HerdrProcessAdapter>,
     ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     daemon_launch_identity: &DaemonLaunchIdentity,
     peer_wire_mode: PeerWireMode,
     peer_adapter_selection: SelectedPeerAdapterSelection,
     runtime_health: RuntimeHealth,
 ) -> Result<Arc<StorageAndNudgeRouter>, AtmError> {
-    let selector = selector_factory(assembly.service_runtime.clone());
+    let herdr_breaker = Arc::new(HerdrSpawnBreaker::new());
+    let herdr_process: Arc<dyn HerdrProcessAdapter> =
+        Arc::new(HerdrProcessInvoker::new(Arc::clone(&herdr_breaker)));
+    assembly.doctor_ports.herdr_breaker = Arc::new(HerdrBreakerDoctorAdapter {
+        breaker: Arc::clone(&herdr_breaker),
+    });
+    let selector = selector_factory(assembly.service_runtime.clone(), herdr_process);
     let handler = StorageAndNudgeRouter::new(
         assembly.service_runtime,
         observability,
@@ -641,6 +673,7 @@ async fn run_replacement_daemon_with_selector(
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
     selector_factory: impl FnOnce(
         atm_core::LocalServiceRuntime,
+        Arc<dyn HerdrProcessAdapter>,
     ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     daemon_launch_identity: DaemonLaunchIdentity,
     peer_wire_mode: PeerWireMode,
@@ -1181,7 +1214,7 @@ mod replacement_runtime_tests {
         let handler = build_replacement_handler(
             assembly,
             Arc::new(NullObservability),
-            |_| Arc::new(NoReceivedHookSelector),
+            |_, _| Arc::new(NoReceivedHookSelector),
             &DaemonLaunchIdentity::default(),
             PeerWireMode::plaintext_test(),
             SelectedPeerAdapterSelection {
