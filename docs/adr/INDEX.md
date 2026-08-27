@@ -60,6 +60,12 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-052 — Benchmark Account Isolation and Snapshot Policy](./ADR-052-benchmark-account-isolation-and-snapshot-policy.md)
 - [ADR-053 — Typed Temporary Daemon-Service Launch Overlay](./ADR-053-typed-temporary-daemon-service-launch-overlay.md)
 - [ADR-057 — Peer-Write Redial and Delivery-Attempt Invariant](./ADR-057-peer-write-redial-and-delivery-attempt-invariant.md)
+- `ADR-054` — reserved — Phase AQ (nudge taxonomy + queue mechanism, AQ1 —
+  landing on `feature/aq-1-trait-foundation`)
+- `ADR-055` — reserved — Phase AQ (ATM_TEMP + transfer seam, AQ4)
+- `ADR-056` — reserved — Phase AQ (graft receiver registration + lease
+  semantics, AQ1.5)
+- [ADR-057 — Peer-Write Redial and Delivery-Attempt Invariant](./ADR-057-peer-write-redial-and-delivery-attempt-invariant.md)
 - [ADR-058 — Herdr Local Steer Backend Contract](./ADR-058-herdr-local-steer-backend-contract.md)
 
 ## Extracted Crate-Local ADRs
