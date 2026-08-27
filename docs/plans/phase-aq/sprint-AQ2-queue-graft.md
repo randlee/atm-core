@@ -82,6 +82,13 @@ message), NOT a background task.
    evolved graft message (old receiver rejects gracefully or version gate
    per ADR-054 (g)).
 
+
+> **Evidence scope ruling (fenix, 2026-08-27, #1051 QA-2 ATM-QA-001):** loopback
+> hermes-atm harness evidence satisfies this sprint's Hermes demo requirement
+> for merge; the **live Hermes-fronted** run is deferred to AQ5 (phase
+> evidence), matching AQ1.9's deferred live-m5 row. Every AC ships with a
+> named automated test.
+
 ## Acceptance criteria
 
 1. Graft recipient: queue-kind handoff on the queue channel, marker cleared
