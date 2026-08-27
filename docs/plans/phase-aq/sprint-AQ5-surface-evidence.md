@@ -32,14 +32,20 @@ linked artifact.
    (references atm-core issue #139): `examples/wizards/atm-pick-member/pages/pick-member.html`
    + the Playwright L2 contract test `tests/l2/wizard-atm-pick-member.spec.ts`,
    both passing locally against a real `wyvern` build before the PR opened.
-   Building it found a real invocation-shape gap versus this section's
-   `stdin JSON` sketch — Wyvern has no `--picker` flag and returns the
-   `PickerOutput` nested under a `WizardResult.data` envelope, not bare on
-   stdout — corrected in
-   [`wyvern-pick-member-contract.md`](fixtures/wyvern-pick-member-contract.md)
-   and tracked as an open `atm-send-to.sh` wiring follow-up in
-   [`validation-evidence.md`](validation-evidence.md) (Deliverable 3), not
-   silently left wrong. Cold-start measurement remains OPEN (`AQ5-gui-e2e`).
+   Building it found this section's `stdin JSON` sketch does not match
+   Wyvern's real CLI surface — no `--picker` flag; `PickerOutput` arrives
+   nested under a `WizardResult.data` envelope, not bare on stdout — and
+   that corrected shape is now **implemented**, not just documented:
+   `scripts/send-to/atm-send-to.sh`/`atm-send-to.ps1` generate a
+   `wizard.json` (`config` = `PickerInput`) into `$ATM_TEMP` scratch,
+   invoke `wyvern <wizard.json> --ui-root <dir>`, and unwrap `.data` via
+   `picker.py --unwrap-wizard-result`, verified end to end against the real
+   `wyvern#140` build
+   ([`evidence/AQ5/wyvern-real-invocation-local.md`](evidence/AQ5/wyvern-real-invocation-local.md)).
+   See [`wyvern-pick-member-contract.md`](fixtures/wyvern-pick-member-contract.md)
+   for the full shape and
+   [`validation-evidence.md`](validation-evidence.md) (Deliverable 3) for
+   the verdict. Cold-start measurement remains OPEN (`AQ5-gui-e2e`).
 3a. **Wyvern dependency contract** — Wyvern is an **optional runtime
    dependency**, never a build-time or packaging dependency of atm-core,
    and never required for any test lane:

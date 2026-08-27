@@ -131,14 +131,18 @@ def make_wyvern_stub(directory: Path, case: str) -> Path:
         version_body = "sleep 30\n"
     else:
         version_body = "printf 'wyvern 0.5.0\\n'\n"
-    picker_output = (
-        '{"schema_version":99,"recipients":["cipher@atm-dev"]}'
+    # A real Wyvern wizard's terminal stdout is the full WizardResult
+    # envelope (`{"button":"finish","data":<PickerOutput>,"stack":[...]}`),
+    # not a bare PickerOutput object -- this stub mirrors that exact shape
+    # (docs/plans/phase-aq/fixtures/wyvern-pick-member-contract.md).
+    wizard_result = (
+        '{"button":"finish","data":{"schema_version":99,"recipients":["cipher@atm-dev"]},"stack":[]}'
         if case == "unknown-schema"
-        else '{"schema_version":1,"recipients":["cipher@atm-dev"]}'
+        else '{"button":"finish","data":{"schema_version":1,"recipients":["cipher@atm-dev"]},"stack":[]}'
     )
     path.write_text(
         f"#!/bin/sh\nif [ \"$1\" = --version ]; then\n{version_body}"
-        f"else\nprintf '%s\\n' '{picker_output}'\nfi\n"
+        f"else\nprintf '%s\\n' '{wizard_result}'\nfi\n"
     )
     executable(path)
     return path

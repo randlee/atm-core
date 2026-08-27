@@ -110,6 +110,28 @@ class SendToSurfaceTests(unittest.TestCase):
         self.assertIn("fenix", result.stderr)
         self.assertIn("unavailable", result.stderr)
 
+    def test_generated_wizard_json_matches_contract_shape(self) -> None:
+        # docs/plans/phase-aq/fixtures/wyvern-pick-member-contract.md's "Real
+        # Wyvern invocation" shape: Wyvern has no `--picker` flag, so
+        # PickerInput travels verbatim as the generated wizard command's
+        # `config`, and the page id/title/html match the vendored
+        # scripts/send-to/pick-member.html asset atm-send-to.sh copies into
+        # the wizard `--ui-root` directory it builds per invocation.
+        result = subprocess.run(
+            ["python3", str(PICKER), "--make-wizard-json"],
+            input=json.dumps(PICKER_INPUT),
+            text=True,
+            capture_output=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        wizard = json.loads(result.stdout)
+        self.assertEqual(wizard["type"], "wizard")
+        self.assertEqual(
+            wizard["page"],
+            {"id": "pick-member", "title": "ATM Send-To", "html": "pages/pick-member.html"},
+        )
+        self.assertEqual(wizard["config"], PICKER_INPUT)
+
     def test_wyvern_degradation_cases_fall_back_and_still_send(self) -> None:
         cases = ("absent", "below", "unparsable", "hang", "missing-asset", "unknown-schema")
         with tempfile.TemporaryDirectory() as raw:
@@ -145,14 +167,22 @@ class SendToSurfaceTests(unittest.TestCase):
                             body = "sleep 30\n"
                         else:
                             body = "printf 'wyvern 0.5.0\\n'\n"
-                        picker_output = (
-                            '{"schema_version":99,"recipients":["cipher@atm-dev"]}'
+                        # A real Wyvern wizard's terminal stdout is the full
+                        # WizardResult envelope (`{"button":"finish","data":
+                        # <PickerOutput>,"stack":[...]}`), not a bare
+                        # PickerOutput object -- this stub mirrors that exact
+                        # shape so the harness proves the real contract
+                        # (docs/plans/phase-aq/fixtures/
+                        # wyvern-pick-member-contract.md), not the illustrative
+                        # bare-stdout sketch the PRD started from.
+                        wizard_result = (
+                            '{"button":"finish","data":{"schema_version":99,"recipients":["cipher@atm-dev"]},"stack":[]}'
                             if case == "unknown-schema"
-                            else '{"schema_version":1,"recipients":["cipher@atm-dev"]}'
+                            else '{"button":"finish","data":{"schema_version":1,"recipients":["cipher@atm-dev"]},"stack":[]}'
                         )
                         wyvern.write_text(
                             f"#!/bin/sh\nif [ \"$1\" = --version ]; then\n{body}"
-                            f"else\nprintf '%s\\n' '{picker_output}'\nfi\n"
+                            f"else\nprintf '%s\\n' '{wizard_result}'\nfi\n"
                         )
                         executable(wyvern)
                     extra = {

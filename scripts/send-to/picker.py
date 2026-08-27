@@ -15,6 +15,15 @@ from typing import Any
 
 SCHEMA_VERSION = 1
 
+# Wizard command shape the atm-core adapter generates for the real Wyvern
+# invocation (docs/plans/phase-aq/fixtures/wyvern-pick-member-contract.md):
+# Wyvern has no `--picker <path>` flag, so PickerInput travels as the wizard
+# command's opaque `config` field, and PickerOutput arrives nested under the
+# terminal WizardResult's `.data`, not bare on stdout.
+WIZARD_PAGE_ID = "pick-member"
+WIZARD_PAGE_TITLE = "ATM Send-To"
+WIZARD_PAGE_HTML = "pages/pick-member.html"
+
 
 def fail(message: str) -> int:
     print(f"send-to picker: {message}", file=sys.stderr)
@@ -114,16 +123,70 @@ def validate_output(value: Any) -> None:
         raise ValueError("PickerOutput note must be a string")
 
 
+def make_wizard_json(picker_input: Any) -> dict[str, Any]:
+    """Wraps `picker_input` (PickerInput) as the wizard Command this adapter
+    invokes Wyvern with -- `config` is the only channel a wizard page has for
+    caller-supplied data (`WizardCommand::config`, "never inspected by the
+    host"). See wyvern-pick-member-contract.md for the full invocation shape.
+    """
+    if not isinstance(picker_input, dict) or picker_input.get("schema_version") != SCHEMA_VERSION:
+        raise ValueError("PickerInput schema_version is not supported")
+    return {
+        "type": "wizard",
+        "page": {"id": WIZARD_PAGE_ID, "title": WIZARD_PAGE_TITLE, "html": WIZARD_PAGE_HTML},
+        "config": picker_input,
+    }
+
+
+def unwrap_wizard_result(value: Any) -> Any:
+    """Extracts and validates `PickerOutput` from a Wyvern `WizardResult`.
+
+    A real Wyvern wizard finishes with `{"button": ..., "data": ...,
+    "stack": [...]}` on stdout, not a bare `PickerOutput` object (this
+    module's `pick-member.html` page emits `PickerOutput`-shaped JSON as its
+    terminal page data, per `collectCurrentPageData()`). A non-`"finish"`
+    button (cancel/dismiss) is treated exactly like a cancelled native
+    picker: the caller falls back, never sends.
+    """
+    if not isinstance(value, dict):
+        raise ValueError("Wyvern wizard result must be a JSON object")
+    if value.get("button") != "finish":
+        raise ValueError(f"Wyvern wizard result button was {value.get('button')!r}, not 'finish'")
+    data = value.get("data")
+    validate_output(data)
+    return data
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--backend", choices=["fzf", "osascript", "zenity"])
     parser.add_argument("--validate", action="store_true")
+    parser.add_argument(
+        "--make-wizard-json",
+        action="store_true",
+        help="reads PickerInput on stdin, writes the wyvern wizard Command JSON (config=PickerInput) to stdout",
+    )
+    parser.add_argument(
+        "--unwrap-wizard-result",
+        action="store_true",
+        help="reads a wyvern WizardResult on stdin, writes its validated .data (PickerOutput) to stdout",
+    )
     args = parser.parse_args(argv[1:])
     try:
         value = json.load(sys.stdin)
         if args.validate:
             validate_output(value)
             json.dump(value, sys.stdout, separators=(",", ":"))
+            sys.stdout.write("\n")
+            return 0
+        if args.make_wizard_json:
+            wizard = make_wizard_json(value)
+            json.dump(wizard, sys.stdout, separators=(",", ":"))
+            sys.stdout.write("\n")
+            return 0
+        if args.unwrap_wizard_result:
+            output = unwrap_wizard_result(value)
+            json.dump(output, sys.stdout, separators=(",", ":"))
             sys.stdout.write("\n")
             return 0
         rows = []

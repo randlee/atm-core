@@ -63,7 +63,7 @@ Verdict: PASS for the automated six-case matrix (unit test + registered CI
 harness); the harness's own live-run transcript is produced by the next CI
 pass on this branch, not fabricated here.
 
-## Deliverable 3 — Wyvern `pick-member.html` (upstream)
+## Deliverable 3 — Wyvern `pick-member.html` (upstream, implemented and wired in)
 
 Upstream PR: [`randlee/wyvern#140`](https://github.com/randlee/wyvern/pull/140)
 (references atm-core issue #139) — adds
@@ -73,26 +73,38 @@ rejected) and the Playwright L2 contract test
 `tests/l2/wizard-atm-pick-member.spec.ts`, run locally against the real
 `wyvern` binary on `develop` (2 passed) before opening the PR.
 
-Building it surfaced a real, minimal integration-shape gap, corrected in
-[`wyvern-pick-member-contract.md`](fixtures/wyvern-pick-member-contract.md):
-Wyvern has no `--picker <path>` flag, and the terminal stdout is the full
-`WizardResult` envelope (`.data` holds `PickerOutput`), not a bare
-`PickerOutput` object on stdout. `scripts/send-to/atm-send-to.sh`'s current
-`--picker` probe/invocation predates this finding and still assumes the
-bare-stdout shape from the PRD's illustrative sketch; wiring the real Wyvern
-binary through the corrected `wizard.json`-generation + `.data`-unwrap shape
-is **not done in this sprint** and is recorded here as an explicit follow-up
-rather than silently left wrong. Since the probe never finds a real
-`wyvern` binary satisfying the pin in any test lane today, this gap has no
-effect on AQ5's automated coverage (the degradation matrix above already
-proves every no-Wyvern-available path); it only affects a future host that
-actually has Wyvern installed and passing the pin/asset probe.
+Building it surfaced a real, minimal integration-shape gap: Wyvern has no
+`--picker <path>` flag, and the terminal stdout is the full `WizardResult`
+envelope (`.data` holds `PickerOutput`), not a bare `PickerOutput` object.
+This is **implemented, not left as a gap**: `scripts/send-to/atm-send-to.sh`
+and `atm-send-to.ps1` generate a `wizard.json` (`config` = `PickerInput`)
+into `$ATM_TEMP` scratch, invoke `wyvern <wizard.json> --ui-root <dir>` (the
+real, working invocation), and unwrap `.data` from the resulting
+`WizardResult` via the new `picker.py --unwrap-wizard-result` mode. The
+bounded-deadline probe (`probe_wyvern.py`, 1.5s) and every degradation case
+(absent, below-pin, unparsable version, hanging `--version`, missing page
+asset, unknown `PickerOutput.schema_version`) are unchanged and still gate
+before any wizard.json is generated. The full shape is documented in
+[`wyvern-pick-member-contract.md`](fixtures/wyvern-pick-member-contract.md).
 
-Verdict: PASS for the linked PR + its own passing L2 test (Deliverable 3 is
-"land the Wyvern page in the Wyvern repo and record it," not "cut over
-`atm-send-to.sh` to it," per the sprint doc). The `atm-send-to.sh` wiring
-gap above is OPEN — owner: AQ6 preflight (pin bump) or a dedicated
-follow-up sprint.
+Verified against a real `wyvern#140` build (commit
+`958b5102e977f30f812213d5ae08c1420828bead`), not just the hermetic stub
+fixtures: `scripts/send-to/atm-send-to.sh` was run unmodified end to end
+against the real binary, with a roster fixture matching
+`picker-input-v1.json` (active/idle/dead), driven headlessly over Wyvern's
+own `WYVERN_VIEWER=none`/`WYVERN_DIALOG_URL_FILE` contract via the same
+`/api/wizard/state`+`/api/wizard/finish` HTTP endpoints the page's own JS
+uses. Full transcript (LOCAL, not a CI artifact — CI never installs Wyvern):
+[`evidence/AQ5/wyvern-real-invocation-local.md`](evidence/AQ5/wyvern-real-invocation-local.md).
+The hermetic stub fixtures in `.just/tests/test_send_to_surface.py` and
+`scripts/phase-aq/run_aq5_wyvern_degradation_evidence.py` were updated to
+emit the real `WizardResult`-with-`.data` shape (not the old bare
+`PickerOutput`) so those automated suites prove the real contract.
+
+Verdict: PASS — implemented and verified against a real `wyvern#140` build,
+not an open invocation-shape gap. `AQ6`'s release-preflight pin bump remains
+the process that keeps `WYVERN_PIN` current as Wyvern releases; that part
+was already in scope for AQ6 and is unaffected by this fix.
 
 ## Manual and deferred register
 

@@ -52,8 +52,15 @@ follow-on work, not part of AQ5.
 ## Optional Wyvern
 
 The exact pin is the `WYVERN_PIN` constant in each pipeline script (`0.5.0`,
-the latest `randlee/wyvern` release observed on 2026-08-26). The optional binary must be on `PATH`, satisfy the
-bounded `--version` probe, and have an external `pick-member.html` asset.
-Absent, old, unparsable, hung, unknown-schema, or missing-asset Wyvern always
-falls back to the native picker with a one-line stderr note. No atm build or
-test lane requires Wyvern.
+the latest `randlee/wyvern` release observed on 2026-08-26). The optional
+binary must be on `PATH`, satisfy the bounded `--version` probe, and find
+the vendored `pick-member.html` asset (`scripts/send-to/pick-member.html`,
+kept in sync with [`randlee/wyvern#140`](https://github.com/randlee/wyvern/pull/140)).
+When all of that holds, the pipeline generates a small `wizard.json`
+(`config` = the roster JSON) into `$ATM_TEMP` scratch and invokes
+`wyvern <wizard.json> --ui-root <dir>` -- Wyvern has no `--picker` flag, and
+its terminal stdout is a `WizardResult` envelope, not a bare `PickerOutput`;
+see [`docs/plans/phase-aq/fixtures/wyvern-pick-member-contract.md`](../../docs/plans/phase-aq/fixtures/wyvern-pick-member-contract.md)
+for the full shape. Absent, old, unparsable, hung, unknown-schema, or
+missing-asset Wyvern always falls back to the native picker with a one-line
+stderr note. No atm build or test lane requires Wyvern.
