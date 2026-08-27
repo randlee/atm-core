@@ -1365,7 +1365,9 @@ inventory. Queue ships first; trait foundation first, Herdr second
 Herdr local-steer backend + lifecycle-gated queue wake (most urgent);
 [AQ2.6 sprint](./plans/phase-aq/sprint-AQ2-6-herdr-steer-backend.md) is the
 authoritative implementation entry for the local Herdr backend and is
-complete after the AQ2.6 QA1 fix cycle;
+complete after the AQ2.6 QA1 fix cycle. The [AQ2.7 sprint](./plans/phase-aq/sprint-AQ2-7-herdr-queue-wake.md)
+is complete with the fixed-cadence Herdr queue-wake pump and runtime health
+poll projection;
 AQ1.5–AQ1.9 graft push-registration (ADR-056), parallel with Herdr; AQ2
 graft dual-channel; AQ2.5 queue delivery triggers (heartbeat hooks,
 bare-CLI FIFO); AQ3 tmux idle-drain + recovery sweep; AQ4 Send-To core

@@ -1,8 +1,16 @@
 # Sprint AQ2.7 — Queue: Herdr Poll-Gated Mailbox Wake-Up
 
-Status: draft · Branch: `feature/aq-2-7-herdr-queue-wake` off
+Status: complete · Branch: `feature/aq-2-7-herdr-queue-wake` off
 `integrate/phase-aq` · PR target: `integrate/phase-aq`
 recommended_agent: arch-ctm · recommended_model: deep-reasoning
+
+Implementation status (2026-08-26): complete on the assigned branch. The
+Tokio runtime owns one fixed-cadence `HerdrQueueWakePump`, roster-wide Herdr
+session polling, FIFO pending claims with a host-wide burst cap and rotating
+cursor, selector-based Queue dispatch, cancellation-safe claim release, and
+`RuntimeHealth` poll provenance. Runtime shutdown owns and joins the pump task.
+The pre-existing AQ2.6 breaker timing flake was made deterministic with an
+injected test clock before this sprint's implementation.
 
 Implement deferred queue wake-ups for AQ2.6's `HerdrSteer` members without
 pretending that Herdr supplies a queue. The durable ATM mailbox is the queue:

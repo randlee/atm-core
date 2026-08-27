@@ -50,6 +50,7 @@ use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
 mod client;
+mod herdr_queue_wake;
 mod http1_server;
 mod loopback_tcp;
 mod message_handler;
@@ -89,6 +90,9 @@ pub use client::{
     loopback_tcp_client, preferred_local_client, selected_write_transport,
     shared_direct_peer_client,
 };
+pub use herdr_queue_wake::{
+    HERDR_MAX_PROMPTS_PER_TICK, HERDR_POLL_INTERVAL_MS, HerdrQueueWakePump, HerdrQueueWakeStats,
+};
 pub use loopback_tcp::LoopbackTcpConfig;
 pub use message_handler::{
     AuthenticatedConnector, CanonicalWriteHandler, canonical_api_router, canonical_message_router,
@@ -100,6 +104,11 @@ pub use peer_stream::{
 };
 pub use runtime_health::RuntimeHealth;
 pub use storage_and_nudge_router::StorageAndNudgeRouter;
+
+/// A runtime-owned maintenance task that follows the server shutdown signal.
+pub trait RuntimeMaintenance: Send + Sync {
+    fn start(&self, shutdown: watch::Receiver<()>) -> JoinHandle<()>;
+}
 
 /// Validated configuration for the maintained Tokio HTTP runtime.
 ///
@@ -396,6 +405,7 @@ pub struct HttpRuntimeBuilder {
     config: HttpRuntimeConfig,
     handler: Arc<dyn CanonicalWriteHandler>,
     health: RuntimeHealth,
+    maintenance: Option<Arc<dyn RuntimeMaintenance>>,
 }
 
 impl HttpRuntimeBuilder {
@@ -405,6 +415,7 @@ impl HttpRuntimeBuilder {
             config,
             handler,
             health: RuntimeHealth::default(),
+            maintenance: None,
         }
     }
 
@@ -413,6 +424,13 @@ impl HttpRuntimeBuilder {
     #[must_use]
     pub fn with_runtime_health(mut self, health: RuntimeHealth) -> Self {
         self.health = health;
+        self
+    }
+
+    /// Attaches one process-owned maintenance task to the runtime lifecycle.
+    #[must_use]
+    pub fn with_maintenance(mut self, maintenance: Arc<dyn RuntimeMaintenance>) -> Self {
+        self.maintenance = Some(maintenance);
         self
     }
 
@@ -430,6 +448,7 @@ impl HttpRuntimeBuilder {
             config: self.config,
             handler: self.handler,
             health: self.health,
+            maintenance: self.maintenance,
             state: Configured,
         })
     }
@@ -444,11 +463,13 @@ pub struct Running {
     shutdown_tx: watch::Sender<()>,
     server_stopped_rx: watch::Receiver<bool>,
     server_task: JoinHandle<std::io::Result<()>>,
+    maintenance_task: Option<JoinHandle<()>>,
     endpoint_record: LoopbackEndpointRecordGuard,
 }
 /// Runtime lifecycle state after cancellation and while the Axum task drains.
 pub struct Draining {
     server_task: JoinHandle<std::io::Result<()>>,
+    maintenance_task: Option<JoinHandle<()>>,
     endpoint_record: LoopbackEndpointRecordGuard,
 }
 /// Terminal lifecycle state with no live runtime-owned handles.
@@ -459,6 +480,7 @@ pub struct HttpRuntime<State> {
     config: HttpRuntimeConfig,
     handler: Arc<dyn CanonicalWriteHandler>,
     health: RuntimeHealth,
+    maintenance: Option<Arc<dyn RuntimeMaintenance>>,
     state: State,
 }
 
@@ -490,6 +512,7 @@ impl HttpRuntime<Configured> {
         let (capability, endpoint_record) =
             publish_loopback_endpoint(&self.config, local_address, &self.health).await?;
         let (shutdown_tx, shutdown_rx) = watch::channel(());
+        let maintenance_shutdown_rx = shutdown_rx.clone();
         let (server_stopped_tx, server_stopped_rx) = watch::channel(false);
         let canonical_router = canonical_api_router(
             Arc::clone(&self.handler),
@@ -528,16 +551,22 @@ impl HttpRuntime<Configured> {
             }
         };
         self.health.mark_ready();
+        let maintenance_task = self
+            .maintenance
+            .as_ref()
+            .map(|maintenance| maintenance.start(maintenance_shutdown_rx));
         Ok(HttpRuntime {
             config: self.config,
             handler: self.handler,
             health: self.health,
+            maintenance: self.maintenance,
             state: Running {
                 local_address,
                 direct_peer_address,
                 shutdown_tx,
                 server_stopped_rx,
                 server_task,
+                maintenance_task,
                 endpoint_record,
             },
         })
@@ -925,8 +954,10 @@ impl HttpRuntime<Running> {
             config: self.config,
             handler: self.handler,
             health: self.health,
+            maintenance: self.maintenance,
             state: Draining {
                 server_task: self.state.server_task,
+                maintenance_task: self.state.maintenance_task,
                 endpoint_record: self.state.endpoint_record,
             },
         }
@@ -947,6 +978,7 @@ impl HttpRuntime<Draining> {
     pub async fn finish(self) -> Result<HttpRuntime<Stopped>, AtmError> {
         let Draining {
             mut server_task,
+            mut maintenance_task,
             endpoint_record,
         } = self.state;
         let finished = tokio::time::timeout(self.config.timeouts.shutdown, &mut server_task).await;
@@ -976,6 +1008,14 @@ impl HttpRuntime<Draining> {
                 ))
             }
         };
+        if let Some(mut task) = maintenance_task.take() {
+            let maintenance_result =
+                tokio::time::timeout(self.config.timeouts.shutdown, &mut task).await;
+            if maintenance_result.is_err() {
+                task.abort();
+                let _ = tokio::time::timeout(ABORT_JOIN_GRACE, &mut task).await;
+            }
+        }
         let cleanup_result = cleanup_loopback_endpoint_record(endpoint_record).await;
         let result = server_result.and(cleanup_result);
         self.health.mark_stopped();
@@ -984,6 +1024,7 @@ impl HttpRuntime<Draining> {
             config: self.config,
             handler: self.handler,
             health: self.health,
+            maintenance: self.maintenance,
             state: Stopped,
         })
     }

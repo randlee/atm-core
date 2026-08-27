@@ -343,6 +343,7 @@ pub enum HeartbeatActivity {
 pub enum RuntimeObservationSource {
     Heartbeat,
     LocalCommand,
+    HerdrPoll,
 }
 
 /// One daemon heartbeat request for one team member identity.

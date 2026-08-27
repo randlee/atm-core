@@ -106,6 +106,7 @@ pub struct StorageAndNudgeRouter {
     direct_peer_port: NonZeroU16,
     peer_connection_pool: Option<PeerConnectionPool>,
     shared_direct_peer_client: Option<reqwest::Client>,
+    maintenance: Option<Arc<dyn crate::RuntimeMaintenance>>,
 }
 
 impl StorageAndNudgeRouter {
@@ -130,6 +131,7 @@ impl StorageAndNudgeRouter {
             direct_peer_port: crate::direct_peer_port(),
             peer_connection_pool: None,
             shared_direct_peer_client: None,
+            maintenance: None,
         }
     }
 
@@ -150,6 +152,13 @@ impl StorageAndNudgeRouter {
     ) -> Self {
         self.runtime_health = runtime_health;
         self.doctor_ports = Some(doctor_ports);
+        self
+    }
+
+    /// Attaches the process-owned maintenance task to this composition root.
+    #[must_use]
+    pub fn with_maintenance(mut self, maintenance: Arc<dyn crate::RuntimeMaintenance>) -> Self {
+        self.maintenance = Some(maintenance);
         self
     }
 
@@ -633,6 +642,15 @@ impl StorageAndNudgeRouter {
         }
         self.service_runtime.clear_roster_cache();
         Ok(ApiResponse::new(ResponseEnvelope::RuntimeViewReloaded))
+    }
+}
+
+impl crate::RuntimeMaintenance for StorageAndNudgeRouter {
+    fn start(&self, shutdown: tokio::sync::watch::Receiver<()>) -> tokio::task::JoinHandle<()> {
+        self.maintenance.as_ref().map_or_else(
+            || tokio::spawn(async {}),
+            |maintenance| maintenance.start(shutdown),
+        )
     }
 }
 

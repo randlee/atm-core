@@ -34,10 +34,10 @@ use atm_herdr::{
     HerdrSpawnBreaker,
 };
 use atm_http_runtime::{
-    AcceptedPeerStream, DirectPeerTcpConfig, EstablishedPeerStream, HttpRuntimeBuilder,
-    HttpRuntimeConfig, LoopbackTcpConfig, NonZeroDuration, PeerConnectionPool, PeerPoolConfig,
-    PeerStreamAdapter, PeerStreamFuture, RuntimeHealth, RuntimeLimits, RuntimeTimeouts,
-    StorageAndNudgeRouter, shared_direct_peer_client,
+    AcceptedPeerStream, DirectPeerTcpConfig, EstablishedPeerStream, HerdrQueueWakePump,
+    HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig, NonZeroDuration, PeerConnectionPool,
+    PeerPoolConfig, PeerStreamAdapter, PeerStreamFuture, RuntimeHealth, RuntimeLimits,
+    RuntimeTimeouts, StorageAndNudgeRouter, shared_direct_peer_client,
 };
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime};
 use atm_storage_rusqlite::SqliteStorageFactory;
@@ -677,13 +677,21 @@ fn build_replacement_handler(
             process
         }
     };
-    let selector = selector_factory(assembly.service_runtime.clone(), herdr_process);
+    let service_runtime = assembly.service_runtime.clone();
+    let selector = selector_factory(service_runtime, Arc::clone(&herdr_process));
+    let queue_wake_pump = Arc::new(HerdrQueueWakePump::new(
+        assembly.service_runtime.clone(),
+        Arc::clone(&selector),
+        runtime_health.clone(),
+        herdr_process,
+    ));
     let handler = StorageAndNudgeRouter::new(
         assembly.service_runtime,
         observability,
         selector,
         atm_core::home::atm_home()?,
     )
+    .with_maintenance(queue_wake_pump)
     .with_runtime_health(runtime_health, assembly.doctor_ports)
     .with_daemon_context(atm_core::doctor::DoctorExecutionContext {
         team: daemon_launch_identity.team.clone(),
@@ -858,6 +866,7 @@ async fn run_replacement_daemon_with_selector(
     let runtime_handler: Arc<dyn atm_http_runtime::CanonicalWriteHandler> = handler.clone();
     let mut running = HttpRuntimeBuilder::new(config, runtime_handler)
         .with_runtime_health(runtime_health)
+        .with_maintenance(handler.clone())
         .build()?
         .start()
         .await?;

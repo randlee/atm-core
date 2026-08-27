@@ -5,6 +5,9 @@ use crate::error::AtmError;
 pub use crate::protocol::{NotificationEvent, RuntimeStatusSnapshot};
 use crate::schema::AtmMessageId;
 use crate::types::{AgentName, ChatId, HostName, PaneId, TaskId, TeamName};
+/// Durable roster store used by replacement-runtime maintenance projections.
+#[doc(inline)]
+pub use atm_storage::contract::RosterStore as DurableRosterStore;
 pub use atm_storage::contract::{AckTransition, Message, MessageKey, TaskState};
 pub use atm_storage::{
     BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, TeamNudgeTemplateOverrideMode,

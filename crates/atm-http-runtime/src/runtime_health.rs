@@ -7,12 +7,13 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use atm_core::boundary::MemberKey;
 use atm_core::protocol::{
     HeartbeatActivity, RuntimeLivenessState, RuntimeMemberObservation, RuntimeMemberState,
     RuntimeObservationSource, RuntimeReadinessState, RuntimeStatusCounts, RuntimeStatusSnapshot,
     TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
 };
-use atm_core::types::{AgentName, IsoTimestamp, SessionId, TeamName};
+use atm_core::types::{IsoTimestamp, SessionId};
 
 /// The bounded runtime-member projection is observability, not durable state.
 pub const MAX_RUNTIME_STATUS_MEMBERS: usize = 4096;
@@ -39,12 +40,6 @@ enum Lifecycle {
     Stopped,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
-struct MemberKey {
-    team: TeamName,
-    member: AgentName,
-}
-
 #[derive(Clone)]
 struct MemberRecord {
     pid: Option<u32>,
@@ -53,6 +48,7 @@ struct MemberRecord {
     last_active_at: Option<IsoTimestamp>,
     state_changed_at: Option<IsoTimestamp>,
     session_changed_at: Option<IsoTimestamp>,
+    state_source: RuntimeObservationSource,
 }
 
 impl RuntimeHealth {
@@ -105,7 +101,7 @@ impl RuntimeHealth {
         let mut state = self.lock();
         let key = MemberKey {
             team: request.team.clone(),
-            member: request.member.clone(),
+            agent: request.member.clone(),
         };
         if !state.members.contains_key(&key) && state.members.len() == MAX_RUNTIME_STATUS_MEMBERS {
             // Observability must never become an unbounded in-process cache.
@@ -127,6 +123,7 @@ impl RuntimeHealth {
             last_active_at: None,
             state_changed_at: None,
             session_changed_at: None,
+            state_source: RuntimeObservationSource::Heartbeat,
         });
         let next_state = match request.activity {
             HeartbeatActivity::ActiveToolUse => RuntimeMemberState::Active,
@@ -137,6 +134,7 @@ impl RuntimeHealth {
             record.state = next_state;
             record.state_changed_at = Some(request.observed_at);
         }
+        record.state_source = RuntimeObservationSource::Heartbeat;
         if next_state == RuntimeMemberState::Active {
             record.last_active_at = Some(request.observed_at);
         }
@@ -157,6 +155,45 @@ impl RuntimeHealth {
         }
     }
 
+    /// Records state observed by the Herdr poller without changing the
+    /// heartbeat-owned process/session identity fields.
+    pub fn record_observed_state(
+        &self,
+        member: &MemberKey,
+        next_state: RuntimeMemberState,
+        source: RuntimeObservationSource,
+    ) {
+        let mut state = self.lock();
+        if !state.members.contains_key(member)
+            && state.members.len() == MAX_RUNTIME_STATUS_MEMBERS
+            && let Some(evicted) = state
+                .members
+                .iter()
+                .min_by_key(|(_, record)| record.last_active_at.or(record.state_changed_at))
+                .map(|(key, _)| key.clone())
+        {
+            state.members.remove(&evicted);
+        }
+        let record = state.members.entry(member.clone()).or_insert(MemberRecord {
+            pid: None,
+            session_id: None,
+            state: RuntimeMemberState::Unknown,
+            last_active_at: None,
+            state_changed_at: None,
+            session_changed_at: None,
+            state_source: source,
+        });
+        let observed_at = IsoTimestamp::now();
+        if record.state != next_state {
+            record.state = next_state;
+            record.state_changed_at = Some(observed_at);
+        }
+        record.state_source = source;
+        if next_state == RuntimeMemberState::Active {
+            record.last_active_at = Some(observed_at);
+        }
+    }
+
     #[must_use]
     pub fn snapshot(&self) -> RuntimeStatusSnapshot {
         let state = self.lock();
@@ -165,12 +202,12 @@ impl RuntimeHealth {
             .iter()
             .map(|(key, record)| RuntimeMemberObservation {
                 team: key.team.clone(),
-                member: key.member.clone(),
+                member: key.agent.clone(),
                 state: record.state,
                 session_id: record.session_id.clone(),
                 pid: record.pid,
                 last_active_at: record.last_active_at,
-                state_changed_by: Some(RuntimeObservationSource::Heartbeat),
+                state_changed_by: Some(record.state_source),
                 state_changed_at: record.state_changed_at,
                 session_changed_by: record
                     .session_changed_at
@@ -227,11 +264,12 @@ impl RuntimeHealth {
 #[cfg(test)]
 mod tests {
     use super::RuntimeHealth;
+    use atm_core::boundary::MemberKey;
     use atm_core::protocol::{
-        HeartbeatActivity, RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState,
-        TeamMemberHeartbeatRequest,
+        HeartbeatActivity, RuntimeLivenessState, RuntimeMemberState, RuntimeObservationSource,
+        RuntimeReadinessState, TeamMemberHeartbeatRequest,
     };
-    use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+    use atm_core::types::{AgentName, IsoTimestamp, SessionId, TeamName};
 
     fn heartbeat(pid: u32, activity: HeartbeatActivity) -> TeamMemberHeartbeatRequest {
         TeamMemberHeartbeatRequest {
@@ -267,6 +305,37 @@ mod tests {
         assert_eq!(
             health.snapshot().liveness,
             RuntimeLivenessState::Unavailable
+        );
+    }
+
+    #[test]
+    fn herdr_poll_updates_state_without_overwriting_heartbeat_identity() {
+        let health = RuntimeHealth::default();
+        let request = TeamMemberHeartbeatRequest {
+            team: TeamName::from_validated("runtime-team"),
+            member: AgentName::from_validated("runtime-agent"),
+            pid: 42,
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::ActiveToolUse,
+            session_id: Some(SessionId::new("session-a").expect("session")),
+        };
+        health.record_heartbeat(&request);
+        health.record_observed_state(
+            &MemberKey::new(request.team.clone(), request.member.clone()),
+            RuntimeMemberState::Idle,
+            RuntimeObservationSource::HerdrPoll,
+        );
+        let member = &health.snapshot().members[0];
+        assert_eq!(member.pid, Some(42));
+        assert_eq!(member.session_id, request.session_id);
+        assert_eq!(member.state, RuntimeMemberState::Idle);
+        assert_eq!(
+            member.state_changed_by,
+            Some(RuntimeObservationSource::HerdrPoll)
+        );
+        assert_eq!(
+            member.session_changed_by,
+            Some(RuntimeObservationSource::Heartbeat)
         );
     }
 }
