@@ -1,0 +1,145 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AT1-QA-001>
+  a triage:Finding ;
+  triage:findingId "AT1-QA-001" ;
+  triage:title "just validate fails: validate gate still wired to legacy scripts/release_artifacts.py with legacy schema" ;
+  triage:description "The justfile validate target (via scripts/validate_release.py) runs the OLD scripts/release_artifacts.py, whose legacy schema requires required/preflight_check/verify_install per crate. The new sc-publish-installed release/publish-artifacts.toml no longer satisfies that schema, so `just validate` genuinely fails end-to-end (exit 1) on feature/pat-s1-install-and-publish. The AT.1 receipt validated only the NEW kit-installed .github/scripts/release_artifacts.py (which passes, exit 0). Fix direction: point scripts/validate_release.py's manifest step at the kit-installed validator." ;
+  triage:phaseId "phase-at" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "release-validation-gate" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-27T01:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AT1 ;
+  triage:foundAt "2026-08-27T01:31:34Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AT1-QA-001/pat-s1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AT1-QA-001/pat-s1-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AT1-QA-001/pat-s1-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AT1-QA-001/pat-s1-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AT1-QA-001/pat-s1-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AT1-QA-001/pat-s1-6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AT1-QA-001/pat-s1-7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AT1-QA-001/pat-s1-8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AT1-QA-001/pat-s1-9> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AT1-QA-001/pat-s1-1>
+  a triage:Occurrence ;
+  triage:file "scripts/validate_release.py" ;
+  triage:line 28 ;
+  triage:snippet "line 28: scripts/release_artifacts.py reference in REQUIRED_RELEASE_FILES" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pat-s1-install-and-publish" ;
+  triage:headSha "7df74a28b" ;
+  triage:occursIn <urn:atm:triage:worktree/pat-s1/7df74a28b> .
+
+<urn:atm:triage:occurrence/AT1-QA-001/pat-s1-2>
+  a triage:Occurrence ;
+  triage:file "scripts/validate_release.py" ;
+  triage:line 254 ;
+  triage:snippet "line 254: scripts/release_artifacts.py invoked for validate-manifest" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pat-s1-install-and-publish" ;
+  triage:headSha "7df74a28b" ;
+  triage:occursIn <urn:atm:triage:worktree/pat-s1/7df74a28b> .
+
+<urn:atm:triage:occurrence/AT1-QA-001/pat-s1-3>
+  a triage:Occurrence ;
+  triage:file "scripts/validate_release.py" ;
+  triage:line 267 ;
+  triage:snippet "line 267: scripts/release_artifacts.py invoked for validate-preflight-checks" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pat-s1-install-and-publish" ;
+  triage:headSha "7df74a28b" ;
+  triage:occursIn <urn:atm:triage:worktree/pat-s1/7df74a28b> .
+
+<urn:atm:triage:occurrence/AT1-QA-001/pat-s1-4>
+  a triage:Occurrence ;
+  triage:file "scripts/validate_release.py" ;
+  triage:line 280 ;
+  triage:snippet "line 280: scripts/release_artifacts.py invoked for validate-publish-order" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pat-s1-install-and-publish" ;
+  triage:headSha "7df74a28b" ;
+  triage:occursIn <urn:atm:triage:worktree/pat-s1/7df74a28b> .
+
+<urn:atm:triage:occurrence/AT1-QA-001/pat-s1-5>
+  a triage:Occurrence ;
+  triage:file "scripts/validate_release.py" ;
+  triage:line 306 ;
+  triage:snippet "line 306: scripts/release_artifacts.py invoked for validate-release-binaries" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pat-s1-install-and-publish" ;
+  triage:headSha "7df74a28b" ;
+  triage:occursIn <urn:atm:triage:worktree/pat-s1/7df74a28b> .
+
+<urn:atm:triage:occurrence/AT1-QA-001/pat-s1-6>
+  a triage:Occurrence ;
+  triage:file "scripts/validate_release.py" ;
+  triage:line 334 ;
+  triage:snippet "line 334: scripts/release_artifacts.py invoked for check-version-unpublished" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pat-s1-install-and-publish" ;
+  triage:headSha "7df74a28b" ;
+  triage:occursIn <urn:atm:triage:worktree/pat-s1/7df74a28b> .
+
+<urn:atm:triage:occurrence/AT1-QA-001/pat-s1-7>
+  a triage:Occurrence ;
+  triage:file "scripts/validate_release.py" ;
+  triage:line 362 ;
+  triage:snippet "line 362: scripts/release_artifacts.py invoked for list-preflight full mode" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pat-s1-install-and-publish" ;
+  triage:headSha "7df74a28b" ;
+  triage:occursIn <urn:atm:triage:worktree/pat-s1/7df74a28b> .
+
+<urn:atm:triage:occurrence/AT1-QA-001/pat-s1-8>
+  a triage:Occurrence ;
+  triage:file "scripts/validate_release.py" ;
+  triage:line 371 ;
+  triage:snippet "line 371: scripts/release_artifacts.py invoked for list-preflight locked mode" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pat-s1-install-and-publish" ;
+  triage:headSha "7df74a28b" ;
+  triage:occursIn <urn:atm:triage:worktree/pat-s1/7df74a28b> .
+
+<urn:atm:triage:occurrence/AT1-QA-001/pat-s1-9>
+  a triage:Occurrence ;
+  triage:file "scripts/validate_release.py" ;
+  triage:line 439 ;
+  triage:snippet "line 439: scripts/release_artifacts.py invoked for emit-inventory" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pat-s1-install-and-publish" ;
+  triage:headSha "7df74a28b" ;
+  triage:occursIn <urn:atm:triage:worktree/pat-s1/7df74a28b> .
+
+<urn:atm:triage:worktree/integrate-phase-at/2bad2812a>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-at" ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "2bad2812a" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pat-s1/7df74a28b>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature/pat-s1-install-and-publish" ;
+  triage:branch "feature/pat-s1-install-and-publish" ;
+  triage:headSha "7df74a28b" ;
+  triage:orderIndex 1 .
