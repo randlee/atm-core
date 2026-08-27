@@ -260,20 +260,14 @@ async fn drain_one(
     if tmux_marker {
         let runtime_for_clear = runtime.clone();
         let member_for_clear = member.clone();
+        let health_for_clear = runtime_health.clone();
         if let Err(error) = run_blocking("clear delivered queue marker", move || {
-            let store = runtime_for_clear.pending_nudge_store()?;
-            if let Err(first_error) = store.clear_pending_on_handoff(&member_for_clear, &message_id)
-            {
-                store
-                    .clear_pending_on_handoff(&member_for_clear, &message_id)
-                    .map_err(|retry_error| {
-                        AtmError::new(
-                            AtmErrorCode::InternalError,
-                            format!("queue marker clear failed after retry: {retry_error}"),
-                        )
-                        .with_cause(first_error)
-                    })?;
-            }
+            atm_core::nudge_dispatch::clear_queue_marker_after_handoff(
+                &runtime_for_clear,
+                &member_for_clear,
+                &message_id,
+                || health_for_clear.record_graft_queue_marker_clear_failure(),
+            );
             Ok(())
         })
         .await
