@@ -29,9 +29,9 @@ mod nudge_sink;
 mod runtime;
 
 use runtime::{
-    GraftReceiverLoopContext, RECEIVE_LOOP_READY_DEADLINE, ReceiverReadyLatch,
-    join_receive_loop_with_deadline, load_graft_config, read_snapshot, run_graft_receiver_loop,
-    set_session_state,
+    GraftReceiverLeaseClient, GraftReceiverLoopContext, RECEIVE_LOOP_READY_DEADLINE,
+    ReceiverReadyLatch, join_receive_loop_with_deadline, load_graft_config, read_snapshot,
+    run_graft_receiver_loop, set_session_state,
 };
 
 pub(crate) const RECEIVE_LOOP_JOIN_DEADLINE: Duration = Duration::from_secs(5);
@@ -235,7 +235,7 @@ impl GraftClient {
             options,
             injector,
             Arc::new(NoopGraftObservability),
-            Some(self.clone()),
+            Some(Arc::new(self.clone()) as Arc<dyn GraftReceiverLeaseClient>),
         )
     }
 
@@ -369,6 +369,51 @@ impl GraftClient {
     }
 }
 
+/// Exposes the narrow daemon-lease surface `runtime`'s receive loop needs
+/// (sc-boundary SCB-CYCLE-001): `GraftReceiverLoopContext`/
+/// `RegisteredGraftReceiver` depend on this trait, never on the concrete
+/// `GraftClient` type, so `GraftSession` (which the receive loop's context
+/// is built for) and `GraftClient` (which owns `activate_session`, a
+/// `GraftSession` constructor) do not reference each other's concrete types
+/// in a cycle.
+impl GraftReceiverLeaseClient for GraftClient {
+    fn register_receiver_sync(
+        &self,
+        team: TeamName,
+        agent: AgentName,
+        endpoint: SocketAddr,
+        capability: LocalCapability,
+        owner_generation: OwnerGeneration,
+    ) -> Result<(), AtmError> {
+        GraftClient::register_receiver_sync(
+            self,
+            team,
+            agent,
+            endpoint,
+            capability,
+            owner_generation,
+        )
+    }
+
+    fn refresh_receiver_sync(
+        &self,
+        team: TeamName,
+        agent: AgentName,
+        owner_generation: OwnerGeneration,
+    ) -> Result<(), AtmError> {
+        GraftClient::refresh_receiver_sync(self, team, agent, owner_generation)
+    }
+
+    fn unregister_receiver_sync(
+        &self,
+        team: TeamName,
+        agent: AgentName,
+        owner_generation: OwnerGeneration,
+    ) -> Result<(), AtmError> {
+        GraftClient::unregister_receiver_sync(self, team, agent, owner_generation)
+    }
+}
+
 #[async_trait::async_trait]
 impl AtmGraftClient for GraftClient {
     async fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
@@ -461,7 +506,7 @@ impl GraftSession {
         options: GraftSessionOptions,
         injector: Arc<dyn HostNudgeInjector>,
         observability: Arc<dyn GraftObservability>,
-        client: Option<GraftClient>,
+        client: Option<Arc<dyn GraftReceiverLeaseClient>>,
     ) -> Result<Self, AtmError> {
         // Retain ATM-owned configuration parsing so malformed configuration is
         // surfaced, but a missing config (or legacy graft.enabled setting)
@@ -499,7 +544,7 @@ impl GraftSession {
         worker_snapshot: Arc<RwLock<SessionSnapshot>>,
         injector: Arc<dyn HostNudgeInjector>,
         worker_observability: Arc<dyn GraftObservability>,
-        client: Option<GraftClient>,
+        client: Option<Arc<dyn GraftReceiverLeaseClient>>,
     ) -> Result<GraftReceiveLoopWorker, AtmError> {
         let (stop_tx, stop_rx) = mpsc::channel();
         let ready_latch = ReceiverReadyLatch::new();
@@ -579,7 +624,7 @@ fn spawn_graft_receive_loop(
     worker_snapshot: Arc<RwLock<SessionSnapshot>>,
     injector: Arc<dyn HostNudgeInjector>,
     worker_observability: Arc<dyn GraftObservability>,
-    client: Option<GraftClient>,
+    client: Option<Arc<dyn GraftReceiverLeaseClient>>,
     channels: ReceiveLoopChannels,
 ) -> Result<std::thread::JoinHandle<Result<(), AtmError>>, AtmError> {
     let thread_name = format!("atm-graft-{}", options.agent());

@@ -17,8 +17,7 @@ use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::{
     GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL, GraftPostSendResponse, GraftReceiverListener,
 };
-use atm_core::protocol::LocalCapability;
-use atm_core::protocol::OwnerGeneration;
+use atm_core::protocol::{LocalCapability, OwnerGeneration};
 use atm_core::types::{AgentName, ChatId, TeamName};
 
 use crate::nudge_sink::GraftReceiveHook;
@@ -28,6 +27,42 @@ use crate::{
 };
 
 pub(crate) const RECEIVE_LOOP_READY_DEADLINE: Duration = Duration::from_secs(3);
+
+/// The narrow daemon-lease surface the receive loop needs from a graft
+/// client: announce/refresh/unregister for one loopback endpoint.
+///
+/// This trait exists so `GraftReceiverLoopContext`/`RegisteredGraftReceiver`
+/// depend on an interface owned by this module, not on the concrete
+/// `GraftClient` type from `crate::lib` — `GraftClient` in turn depends on
+/// `GraftSession` (via `GraftClient::activate_session`), so a direct
+/// `GraftReceiverLoopContext: Option<GraftClient>` field would create a
+/// `GraftClient` <-> `GraftSession` architectural cycle (sc-boundary
+/// SCB-CYCLE-001). `GraftClient` implements this trait in `crate::lib`; the
+/// receive loop consumes only `Arc<dyn GraftReceiverLeaseClient>`.
+pub(crate) trait GraftReceiverLeaseClient: Send + Sync {
+    fn register_receiver_sync(
+        &self,
+        team: TeamName,
+        agent: AgentName,
+        endpoint: SocketAddr,
+        capability: LocalCapability,
+        owner_generation: OwnerGeneration,
+    ) -> Result<(), AtmError>;
+
+    fn refresh_receiver_sync(
+        &self,
+        team: TeamName,
+        agent: AgentName,
+        owner_generation: OwnerGeneration,
+    ) -> Result<(), AtmError>;
+
+    fn unregister_receiver_sync(
+        &self,
+        team: TeamName,
+        agent: AgentName,
+        owner_generation: OwnerGeneration,
+    ) -> Result<(), AtmError>;
+}
 const HOST_NUDGE_INJECTION_DEADLINE: Duration = Duration::from_millis(250);
 const GRAFT_RECEIVER_IO_DEADLINE: Duration = Duration::from_secs(3);
 pub(crate) const GRAFT_LEASE_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
@@ -550,7 +585,7 @@ pub(crate) struct GraftReceiverLoopContext {
     pub(crate) team: TeamName,
     pub(crate) agent: AgentName,
     pub(crate) owner_chat_id: Option<ChatId>,
-    pub(crate) client: Option<GraftClient>,
+    pub(crate) client: Option<Arc<dyn GraftReceiverLeaseClient>>,
     pub(crate) snapshot: SharedSessionSnapshot,
     pub(crate) injector: Arc<dyn HostNudgeInjector>,
     pub(crate) observability: Arc<dyn GraftObservability>,
@@ -612,7 +647,7 @@ struct RegisteredGraftReceiver {
     listener: GraftReceiverListener,
     team: TeamName,
     agent: AgentName,
-    client: Option<GraftClient>,
+    client: Option<Arc<dyn GraftReceiverLeaseClient>>,
     /// Set once [`Self::announce`] has observed a successful register call.
     /// While `false`, the periodic loop keeps retrying `announce` (an
     /// idempotent upsert) instead of the owner-checked `refresh`, so a
@@ -649,12 +684,12 @@ impl RegisteredGraftReceiver {
     /// per-request reconnection, and discarding it here would make retries
     /// unable to reach a daemon reachable only through a test-injected or
     /// otherwise non-default-resolvable client.
-    fn client(&mut self) -> Result<GraftClient, AtmError> {
+    fn client(&mut self) -> Result<Arc<dyn GraftReceiverLeaseClient>, AtmError> {
         if let Some(client) = &self.client {
-            return Ok(client.clone());
+            return Ok(Arc::clone(client));
         }
-        let client = GraftClient::connect_existing()?;
-        self.client = Some(client.clone());
+        let client: Arc<dyn GraftReceiverLeaseClient> = Arc::new(GraftClient::connect_existing()?);
+        self.client = Some(Arc::clone(&client));
         Ok(client)
     }
 
@@ -715,7 +750,7 @@ impl Drop for RegisteredGraftReceiver {
         let client = match self.client.take() {
             Some(client) => client,
             None => match GraftClient::connect_existing() {
-                Ok(client) => client,
+                Ok(client) => Arc::new(client) as Arc<dyn GraftReceiverLeaseClient>,
                 Err(error) => {
                     tracing::debug!(
                         subsystem = "atm_graft.receiver_loop",
@@ -1081,10 +1116,11 @@ mod tests {
     use super::{
         BoundedHostNudgeInjector, GRAFT_LEASE_REFRESH_INTERVAL,
         GRAFT_RECEIVER_RECOVERY_MAX_DURATION, GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY,
-        GraftReceiverLoopContext, HelperThreadBudget, LeaseRefreshBackoff, MAX_HOST_NUDGE_HELPERS,
-        RECEIVE_LOOP_READY_DEADLINE, ReceiverReadyLatch, ReceiverRecoveryCircuit,
-        RegisteredGraftReceiver, handle_graft_receiver_connection, join_receive_loop_with_deadline,
-        load_graft_config, read_snapshot, recover_after_poll_accept_error, recover_graft_receiver,
+        GraftReceiverLeaseClient, GraftReceiverLoopContext, HelperThreadBudget,
+        LeaseRefreshBackoff, MAX_HOST_NUDGE_HELPERS, RECEIVE_LOOP_READY_DEADLINE,
+        ReceiverReadyLatch, ReceiverRecoveryCircuit, RegisteredGraftReceiver,
+        handle_graft_receiver_connection, join_receive_loop_with_deadline, load_graft_config,
+        read_snapshot, recover_after_poll_accept_error, recover_graft_receiver,
         run_graft_receiver_loop, wait_for_stop_or_delay,
     };
     use crate::{GraftSessionState, RECEIVE_LOOP_JOIN_DEADLINE, SessionSnapshot};
@@ -1279,7 +1315,7 @@ mod tests {
             team: TeamName::from_validated(TEST_TEAM),
             agent: AgentName::from_validated(TEST_QA),
             owner_chat_id: None,
-            client,
+            client: client.map(|client| Arc::new(client) as Arc<dyn GraftReceiverLeaseClient>),
             snapshot: Arc::clone(&snapshot),
             injector,
             observability: Arc::new(NoopObservability),
@@ -2234,7 +2270,7 @@ mod tests {
             team: team.clone(),
             agent: agent.clone(),
             owner_chat_id: None,
-            client: Some(registry.client()),
+            client: Some(Arc::new(registry.client()) as Arc<dyn GraftReceiverLeaseClient>),
             snapshot,
             injector: Arc::new(RecordingInjector::default()) as Arc<dyn HostNudgeInjector>,
             observability: Arc::new(NoopObservability),
