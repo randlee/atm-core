@@ -13,7 +13,10 @@ use std::sync::{Arc, Once};
 use std::time::Duration;
 
 use atm_core::LocalFileNonClaudeOutbound;
+use atm_core::api::RequestDeadline;
+use atm_core::atm_temp::{ProcessEnvSource, is_atm_temp_unset};
 use atm_core::boundary::{NonClaudeOutbound, RosterStore, TemplateComposer};
+use atm_core::doctor::{DoctorFinding, DoctorSeverity, HerdrPresenceDoctor};
 use atm_core::error::AtmError;
 #[cfg(unix)]
 use atm_core::home::HOST_RUNTIME_SOCKET_FILE;
@@ -24,8 +27,14 @@ use atm_core::observability::{
 };
 use atm_core::peer_wire::{PeerWireMode, PeerWireSecurity};
 use atm_core::send::input::DEFAULT_MESSAGE_MAX_BYTES;
+use atm_core::team_admin::MembersList;
 use atm_core::types::HostName;
 use atm_core::types::{AgentName, TeamName};
+use atm_core::{AtmConfig, resolve_atm_temp, validate_sweep_config};
+use atm_herdr::{
+    BreakerPolicy, HerdrBreakerState, HerdrError, HerdrProcessAdapter, HerdrProcessInvoker,
+    HerdrSpawnBreaker,
+};
 use atm_http_runtime::{
     AcceptedPeerStream, DirectPeerTcpConfig, EstablishedPeerStream, HttpRuntimeBuilder,
     HttpRuntimeConfig, LoopbackTcpConfig, NonZeroDuration, PeerConnectionPool, PeerPoolConfig,
@@ -37,8 +46,11 @@ use atm_storage_rusqlite::SqliteStorageFactory;
 use peer_tls::MtlsPeerStreamAdapter;
 use tokio::net::TcpStream;
 
+mod atm_temp_sweeper_runtime;
 mod owner_gate;
 mod received_hook_selector;
+
+use atm_temp_sweeper_runtime::AtmTempSweeperRuntime;
 
 pub use owner_gate::DaemonOwnerGuard;
 pub use received_hook_selector::active_received_hook_selector;
@@ -62,6 +74,140 @@ const CANONICAL_WRITE_ENVELOPE_OVERHEAD_BYTES: usize = 64 * 1024;
 struct SelectedPeerAdapterSelection {
     adapter: Option<Arc<dyn PeerStreamAdapter>>,
     pool_config: PeerPoolConfig,
+}
+
+struct ReplacementHandlerConfig<F> {
+    observability: Arc<dyn ObservabilityPort + Send + Sync>,
+    selector_factory: F,
+    daemon_launch_identity: DaemonLaunchIdentity,
+    peer_wire_mode: PeerWireMode,
+    peer_adapter_selection: SelectedPeerAdapterSelection,
+    runtime_health: RuntimeHealth,
+    herdr_process: Option<Arc<dyn HerdrProcessAdapter>>,
+}
+
+struct HerdrBreakerDoctorAdapter {
+    breaker: Arc<HerdrSpawnBreaker>,
+}
+
+impl atm_core::doctor::HerdrBreakerDoctor for HerdrBreakerDoctorAdapter {
+    fn report(&self) -> atm_core::doctor::HerdrBreakerDoctorReport {
+        let snapshot = self.breaker.snapshot();
+        match snapshot.state {
+            HerdrBreakerState::Closed => Default::default(),
+            HerdrBreakerState::Open { retry_after } => atm_core::doctor::HerdrBreakerDoctorReport {
+                state: atm_core::doctor::report::HerdrBreakerDoctorState::Open,
+                retry_after_ms: Some(retry_after.as_millis() as u64),
+                consecutive_failures: Some(snapshot.consecutive_failures),
+            },
+            HerdrBreakerState::HalfOpen => atm_core::doctor::HerdrBreakerDoctorReport {
+                state: atm_core::doctor::report::HerdrBreakerDoctorState::Open,
+                retry_after_ms: Some(0),
+                consecutive_failures: Some(snapshot.consecutive_failures),
+            },
+        }
+    }
+}
+
+struct HerdrPresenceDoctorAdapter {
+    process: Arc<dyn HerdrProcessAdapter>,
+}
+
+impl HerdrPresenceDoctor for HerdrPresenceDoctorAdapter {
+    fn probe<'a>(
+        &'a self,
+        roster: &'a MembersList,
+        caller_deadline: RequestDeadline,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Vec<DoctorFinding>> + Send + 'a>> {
+        Box::pin(probe_herdr_presence(
+            Arc::clone(&self.process),
+            roster,
+            caller_deadline,
+        ))
+    }
+}
+
+async fn probe_herdr_presence(
+    process: Arc<dyn HerdrProcessAdapter>,
+    roster: &MembersList,
+    caller_deadline: RequestDeadline,
+) -> Vec<DoctorFinding> {
+    let mut findings = Vec::new();
+    let mut outage_reason = None;
+    for member in roster.members.iter().filter(|member| {
+        matches!(
+            member.local_message_received_backend(),
+            Some(atm_core::LocalMessageReceivedBackend::Herdr { .. })
+        )
+    }) {
+        match probe_herdr_member(process.as_ref(), member, caller_deadline).await {
+            Ok(()) => {}
+            Err(error) if error.is_infrastructure() => {
+                outage_reason.get_or_insert_with(|| format!("{error:?}"));
+            }
+            Err(error) => findings.push(herdr_presence_finding(error)),
+        }
+    }
+    if let Some(reason) = outage_reason {
+        findings.push(DoctorFinding {
+            severity: DoctorSeverity::Info,
+            code: atm_core::error_codes::AtmErrorCode::HerdrUnavailable,
+            message: format!("Herdr presence probe skipped: {reason}"),
+            remediation: None,
+        });
+    }
+    findings
+}
+
+async fn probe_herdr_member(
+    process: &dyn HerdrProcessAdapter,
+    member: &atm_core::team_admin::MemberSummary,
+    caller_deadline: RequestDeadline,
+) -> Result<(), HerdrError> {
+    let Some(atm_core::LocalMessageReceivedBackend::Herdr { session }) =
+        member.local_message_received_backend()
+    else {
+        return Ok(());
+    };
+    let deadline = caller_deadline
+        .remaining()
+        .map(|remaining| RequestDeadline::after(remaining.min(Duration::from_secs(2))))
+        .unwrap_or_else(|| RequestDeadline::after(Duration::ZERO));
+    process
+        .get(
+            &member.name,
+            session.as_ref(),
+            deadline,
+            BreakerPolicy::Bypass,
+        )
+        .await
+        .map(|_| ())
+}
+
+fn herdr_presence_finding(error: HerdrError) -> DoctorFinding {
+    let outcome = error.emission_outcome();
+    if matches!(error, HerdrError::AgentNotFound) {
+        let error = AtmError::new(
+            atm_core::error_codes::AtmErrorCode::HerdrAgentNotVisible,
+            "agent not visible in the member's configured Herdr session",
+        );
+        return DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: error.code(),
+            message: error.detail().to_owned(),
+            remediation: Some(error.remediation().to_owned()),
+        };
+    }
+    let error: AtmError = error.into();
+    DoctorFinding {
+        severity: DoctorSeverity::Warning,
+        code: error.code(),
+        message: format!(
+            "Herdr presence probe outcome `{outcome}`: {}",
+            error.detail()
+        ),
+        remediation: Some(error.remediation().to_owned()),
+    }
 }
 
 /// Identity values captured once at the daemon bootstrap boundary.
@@ -472,6 +618,7 @@ pub async fn run_replacement_daemon_with_observability(
         peer_wire_mode,
         DirectPeerTcpConfig::configured(direct_peer_port),
         peer_pool_config,
+        None,
     )
     .await
 }
@@ -488,27 +635,54 @@ pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode) -> Result<(), At
     let peer_pool_config = parse_peer_pool_config(std::env::args_os())?;
     run_replacement_daemon_with_selector(
         Arc::new(NullObservability),
-        move |service_runtime| benchmark_received_hook_selector(service_runtime, hook_mode),
+        move |service_runtime, herdr_process| {
+            benchmark_received_hook_selector(service_runtime, hook_mode, herdr_process)
+        },
         resolve_daemon_launch_identity(),
         peer_wire_mode,
         DirectPeerTcpConfig::configured(direct_peer_port),
         peer_pool_config,
+        Some(Arc::new(
+            received_hook_selector::BenchmarkNoopHerdrProcessAdapter,
+        )),
     )
     .await
 }
 
 fn build_replacement_handler(
-    assembly: RuntimeAssembly,
-    observability: Arc<dyn ObservabilityPort + Send + Sync>,
-    selector_factory: impl FnOnce(
-        atm_core::LocalServiceRuntime,
-    ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
-    daemon_launch_identity: &DaemonLaunchIdentity,
-    peer_wire_mode: PeerWireMode,
-    peer_adapter_selection: SelectedPeerAdapterSelection,
-    runtime_health: RuntimeHealth,
+    mut assembly: RuntimeAssembly,
+    config: ReplacementHandlerConfig<
+        impl FnOnce(
+            atm_core::LocalServiceRuntime,
+            Arc<dyn HerdrProcessAdapter>,
+        ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
+    >,
 ) -> Result<Arc<StorageAndNudgeRouter>, AtmError> {
-    let selector = selector_factory(assembly.service_runtime.clone());
+    let ReplacementHandlerConfig {
+        observability,
+        selector_factory,
+        daemon_launch_identity,
+        peer_wire_mode,
+        peer_adapter_selection,
+        runtime_health,
+        herdr_process,
+    } = config;
+    let herdr_process = match herdr_process {
+        Some(process) => process,
+        None => {
+            let herdr_breaker = Arc::new(HerdrSpawnBreaker::new());
+            let process: Arc<dyn HerdrProcessAdapter> =
+                Arc::new(HerdrProcessInvoker::new(Arc::clone(&herdr_breaker)));
+            assembly.doctor_ports.herdr_breaker = Arc::new(HerdrBreakerDoctorAdapter {
+                breaker: Arc::clone(&herdr_breaker),
+            });
+            assembly.doctor_ports.herdr_presence = Arc::new(HerdrPresenceDoctorAdapter {
+                process: Arc::clone(&process),
+            });
+            process
+        }
+    };
+    let selector = selector_factory(assembly.service_runtime.clone(), herdr_process);
     let handler = StorageAndNudgeRouter::new(
         assembly.service_runtime,
         observability,
@@ -641,16 +815,20 @@ async fn run_replacement_daemon_with_selector(
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
     selector_factory: impl FnOnce(
         atm_core::LocalServiceRuntime,
+        Arc<dyn HerdrProcessAdapter>,
     ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     daemon_launch_identity: DaemonLaunchIdentity,
     peer_wire_mode: PeerWireMode,
     direct_peer_tcp: DirectPeerTcpConfig,
     peer_pool_config: PeerPoolConfig,
+    herdr_process: Option<Arc<dyn HerdrProcessAdapter>>,
 ) -> Result<(), AtmError> {
     install_sqlite_retained_runtime_factory();
     let scope = current_host_runtime_scope()?;
     let _owner = DaemonOwnerGuard::acquire_at(scope.owner_lock.clone())?;
     let runtime_health = RuntimeHealth::with_owner(std::process::id());
+    let atm_temp_sweeper =
+        start_atm_temp_sweeper(Arc::clone(&observability), daemon_launch_identity.clone())?;
     let assembly = assemble_daemon_runtime()?;
     let workflow_telemetry = assembly.workflow_telemetry.clone();
     let peer_stream_adapter = bootstrap_peer_stream_adapter(&assembly, peer_wire_mode)?;
@@ -658,15 +836,18 @@ async fn run_replacement_daemon_with_selector(
     // Benchmark-only selection is available only from the separate binary.
     let handler = build_replacement_handler(
         assembly,
-        Arc::clone(&observability),
-        selector_factory,
-        &daemon_launch_identity,
-        peer_wire_mode,
-        SelectedPeerAdapterSelection {
-            adapter: peer_stream_adapter.clone(),
-            pool_config: peer_pool_config,
+        ReplacementHandlerConfig {
+            observability: Arc::clone(&observability),
+            selector_factory,
+            daemon_launch_identity: daemon_launch_identity.clone(),
+            peer_wire_mode,
+            peer_adapter_selection: SelectedPeerAdapterSelection {
+                adapter: peer_stream_adapter.clone(),
+                pool_config: peer_pool_config,
+            },
+            runtime_health: runtime_health.clone(),
+            herdr_process,
         },
-        runtime_health.clone(),
     )?;
     let config = replacement_runtime_config(
         &scope,
@@ -682,15 +863,34 @@ async fn run_replacement_daemon_with_selector(
         &peer_stream_adapter,
     );
     let runtime_handler: Arc<dyn atm_http_runtime::CanonicalWriteHandler> = handler.clone();
-    let mut running = HttpRuntimeBuilder::new(config, runtime_handler)
+    let running = HttpRuntimeBuilder::new(config, runtime_handler)
         .with_runtime_health(runtime_health)
         .build()?
         .start()
         .await?;
+    run_until_shutdown(running, handler, workflow_telemetry, atm_temp_sweeper).await
+}
+
+/// Advertises readiness, then waits for either a shutdown signal or an
+/// unexpected server stop, draining every supervised subsystem exactly once
+/// on every exit path (ready-signal failure, unexpected stop, or ordinary
+/// shutdown).
+async fn run_until_shutdown(
+    mut running: atm_http_runtime::HttpRuntime<atm_http_runtime::Running>,
+    handler: Arc<StorageAndNudgeRouter>,
+    workflow_telemetry: atm_runtime::WorkflowTelemetryRuntime,
+    atm_temp_sweeper: AtmTempSweeperRuntime,
+) -> Result<(), AtmError> {
     if let Err(error) = emit_ready_signal_if_requested() {
         // The process has not advertised readiness, so it must not retain an
         // otherwise-live listener when its supervisor handshake fails.
-        let _ = shutdown_replacement_daemon(running, handler.as_ref(), workflow_telemetry).await;
+        let _ = shutdown_replacement_daemon(
+            running,
+            handler.as_ref(),
+            workflow_telemetry,
+            atm_temp_sweeper,
+        )
+        .await;
         return Err(error);
     }
     tokio::select! {
@@ -700,7 +900,14 @@ async fn run_replacement_daemon_with_selector(
         }
         _ = running.wait_for_server_stop() => {
             eprintln!("replacement ATM HTTP runtime server stopped unexpectedly; beginning cleanup");
-            let result = match shutdown_replacement_daemon(running, handler.as_ref(), workflow_telemetry).await {
+            let result = match shutdown_replacement_daemon(
+                running,
+                handler.as_ref(),
+                workflow_telemetry,
+                atm_temp_sweeper,
+            )
+            .await
+            {
                 Ok(_) => Err(AtmError::daemon_unavailable(
                     "replacement HTTP runtime server stopped unexpectedly",
                 )),
@@ -709,7 +916,51 @@ async fn run_replacement_daemon_with_selector(
             return result;
         }
     }
-    shutdown_replacement_daemon(running, handler.as_ref(), workflow_telemetry).await
+    shutdown_replacement_daemon(
+        running,
+        handler.as_ref(),
+        workflow_telemetry,
+        atm_temp_sweeper,
+    )
+    .await
+}
+
+/// Resolves `$ATM_TEMP` (defaulting and emitting the one-time fallback
+/// warning when unset, per ADR-055 decision (a)) and starts its periodic
+/// TTL sweeper. A resolution or sweep-config failure fails daemon boot
+/// closed: an operator who explicitly set an invalid `ATM_TEMP`, or a zero
+/// sweep interval/TTL, gets an actionable error rather than a silently
+/// disabled sweeper.
+fn start_atm_temp_sweeper(
+    observability: Arc<dyn ObservabilityPort + Send + Sync>,
+    daemon_launch_identity: DaemonLaunchIdentity,
+) -> Result<AtmTempSweeperRuntime, AtmError> {
+    let env = ProcessEnvSource;
+    let atm_temp =
+        resolve_atm_temp(&env).map_err(|error| AtmError::config(format!("ATM_TEMP: {error}")))?;
+    if is_atm_temp_unset(&env) {
+        tracing::warn!(
+            default_path = %atm_temp.path().display(),
+            override_env = "ATM_TEMP",
+            "ATM_TEMP is unset; using the default scratch root (set ATM_TEMP to override)"
+        );
+    }
+    // Sweep interval/TTL configuration is not yet threaded from `.atm.toml`
+    // into daemon composition (the daemon's config doctor deliberately does
+    // not depend on a workspace-relative `.atm.toml` — see
+    // `assemble_daemon_runtime`'s doc comment); `AtmConfig::default()`'s
+    // sweep fields are the compiled-in ADR-055 defaults (1 hour / 30 days)
+    // until that threading lands.
+    let defaults = AtmConfig::default();
+    let sweep_config =
+        validate_sweep_config(defaults.sweep_interval_seconds, defaults.sweep_ttl_days)
+            .map_err(|error| AtmError::config(format!("$ATM_TEMP sweep config: {error}")))?;
+    Ok(AtmTempSweeperRuntime::start(
+        atm_temp.path().to_path_buf(),
+        sweep_config,
+        observability,
+        daemon_launch_identity,
+    ))
 }
 
 fn bootstrap_peer_stream_adapter(
@@ -733,12 +984,14 @@ async fn shutdown_replacement_daemon(
     running: atm_http_runtime::HttpRuntime<atm_http_runtime::Running>,
     handler: &StorageAndNudgeRouter,
     workflow_telemetry: atm_runtime::WorkflowTelemetryRuntime,
+    atm_temp_sweeper: AtmTempSweeperRuntime,
 ) -> Result<(), AtmError> {
     let stopped = running.begin_shutdown().finish().await;
     handler
         .shutdown_peer_connections(REPLACEMENT_DRAIN_DEADLINE)
         .await;
     workflow_telemetry.shutdown().await;
+    atm_temp_sweeper.shutdown().await;
     let _stopped = stopped?;
     Ok(())
 }
@@ -923,9 +1176,11 @@ mod replacement_runtime_tests {
     use std::time::Duration;
 
     use atm_core::api::ApiRequest;
+    use atm_core::api::RequestDeadline;
     use atm_core::boundary::{
         BuiltInPostSendDispatch, MessageReceivedHookSelector, RosterEntry, TemplateSource,
     };
+    use atm_core::doctor::{DoctorSeverity, HerdrPresenceDoctor};
     use atm_core::observability::NullObservability;
     use atm_core::peer_wire::PeerWireMode;
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
@@ -941,8 +1196,9 @@ mod replacement_runtime_tests {
     use serde_json::Map;
 
     use super::{
-        DaemonLaunchIdentity, REPLACEMENT_DRAIN_DEADLINE, SelectedPeerAdapterSelection,
-        ShutdownSignal, assemble_host_runtime_with_template_composer, build_replacement_handler,
+        DaemonLaunchIdentity, HerdrPresenceDoctorAdapter, REPLACEMENT_DRAIN_DEADLINE,
+        ReplacementHandlerConfig, SelectedPeerAdapterSelection, ShutdownSignal,
+        assemble_host_runtime_with_template_composer, build_replacement_handler,
         parse_direct_peer_port, parse_peer_pool_config_with_environment, parse_peer_wire_mode,
         peer_stream_adapter_for_mode, replacement_runtime_config_with_direct_peer,
         write_ready_signal_if_requested,
@@ -1180,15 +1436,21 @@ mod replacement_runtime_tests {
         let runtime_health = RuntimeHealth::with_owner(std::process::id());
         let handler = build_replacement_handler(
             assembly,
-            Arc::new(NullObservability),
-            |_| Arc::new(NoReceivedHookSelector),
-            &DaemonLaunchIdentity::default(),
-            PeerWireMode::plaintext_test(),
-            SelectedPeerAdapterSelection {
-                adapter: peer_stream_adapter.clone(),
-                pool_config: PeerPoolConfig::default(),
+            ReplacementHandlerConfig {
+                observability: Arc::new(NullObservability),
+                selector_factory: |_, _| {
+                    Arc::new(NoReceivedHookSelector)
+                        as Arc<dyn atm_core::boundary::MessageReceivedHookSelector>
+                },
+                daemon_launch_identity: DaemonLaunchIdentity::default(),
+                peer_wire_mode: PeerWireMode::plaintext_test(),
+                peer_adapter_selection: SelectedPeerAdapterSelection {
+                    adapter: peer_stream_adapter.clone(),
+                    pool_config: PeerPoolConfig::default(),
+                },
+                runtime_health: runtime_health.clone(),
+                herdr_process: None,
             },
-            runtime_health.clone(),
         )
         .expect("compose the replacement daemon handler");
         let config = replacement_runtime_config_with_direct_peer(
@@ -1299,6 +1561,102 @@ mod replacement_runtime_tests {
                 .text,
             "bootstrap adapter"
         );
+    }
+
+    #[tokio::test]
+    async fn doctor_presence_probe_uses_bypass_and_degrades_outages() {
+        let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
+        fake.queue_get_result(Err(atm_herdr::HerdrError::AgentNotFound));
+        let roster = atm_core::team_admin::MembersList {
+            team: "team".parse().expect("team"),
+            members: vec![atm_core::team_admin::MemberSummary {
+                name: "receiver".parse().expect("agent"),
+                agent_id: "receiver".to_owned(),
+                agent_type: "worker".to_owned(),
+                harness: atm_core::boundary::RosterHarness::CodexCli,
+                model: ModelName::new("gpt-5").expect("model"),
+                joined_at: None,
+                tmux_pane_id: None,
+                backend: Some("herdr".to_owned()),
+                herdr_session: Some("team-a".to_owned()),
+                local_backend: Some(atm_core::LocalMessageReceivedBackend::Herdr {
+                    session: Some(atm_core::HerdrSession::new("team-a").expect("session")),
+                }),
+                home_dir: std::path::PathBuf::from("/tmp").into(),
+                live_cwd: None,
+                extra: serde_json::Map::new(),
+            }],
+        };
+        let findings = HerdrPresenceDoctorAdapter {
+            process: fake.clone(),
+        }
+        .probe(&roster, RequestDeadline::after(Duration::from_secs(2)))
+        .await;
+        assert_eq!(findings.len(), 1);
+        assert_eq!(
+            findings[0].code,
+            atm_core::error_codes::AtmErrorCode::HerdrAgentNotVisible
+        );
+        assert!(matches!(
+            fake.calls().as_slice(),
+            [atm_herdr::testing::FakeHerdrCall::Get {
+                breaker_policy: atm_herdr::BreakerPolicy::Bypass,
+                ..
+            }]
+        ));
+
+        let outage_fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
+        outage_fake.queue_get_result(Err(atm_herdr::HerdrError::ServerUnavailable));
+        let outage_findings = HerdrPresenceDoctorAdapter {
+            process: outage_fake,
+        }
+        .probe(&roster, RequestDeadline::after(Duration::from_secs(2)))
+        .await;
+        assert_eq!(outage_findings.len(), 1);
+        assert_eq!(outage_findings[0].severity, DoctorSeverity::Info);
+        assert!(
+            outage_findings[0]
+                .message
+                .starts_with("Herdr presence probe skipped:")
+        );
+    }
+
+    #[test]
+    fn doctor_and_emitter_share_herdr_outcome_classification() {
+        let errors = [
+            atm_herdr::HerdrError::AgentBlocked,
+            atm_herdr::HerdrError::AgentNotFound,
+            atm_herdr::HerdrError::AgentNotReady,
+            atm_herdr::HerdrError::AgentTargetAmbiguous,
+            atm_herdr::HerdrError::AgentNotRunning,
+            atm_herdr::HerdrError::AgentPromptStalled,
+            atm_herdr::HerdrError::ServerNotRunning,
+            atm_herdr::HerdrError::ProtocolMismatch,
+            atm_herdr::HerdrError::Timeout,
+            atm_herdr::HerdrError::InvalidAgentName,
+            atm_herdr::HerdrError::EmptyAgentPrompt,
+            atm_herdr::HerdrError::ServerUnavailable,
+            atm_herdr::HerdrError::InternalError,
+            atm_herdr::HerdrError::TimedOut,
+            atm_herdr::HerdrError::Unavailable {
+                retry_after: Duration::from_secs(1),
+            },
+            atm_herdr::HerdrError::Advisory {
+                code: "future_code".to_owned(),
+            },
+        ];
+        for error in errors {
+            let outcome = error.emission_outcome();
+            let finding = super::herdr_presence_finding(error.clone());
+            if matches!(error, atm_herdr::HerdrError::AgentNotFound) {
+                assert_eq!(
+                    finding.code,
+                    atm_core::error_codes::AtmErrorCode::HerdrAgentNotVisible
+                );
+            } else {
+                assert!(finding.message.contains(outcome), "{outcome}");
+            }
+        }
     }
 
     #[cfg(unix)]

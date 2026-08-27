@@ -3,10 +3,14 @@ pub mod report;
 
 #[cfg(test)]
 use std::collections::BTreeSet;
+use std::future::Future;
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
 
+use crate::api::RequestDeadline;
 use crate::boundary::{ConfigDoctor, MailStoreDoctor, RosterStoreDoctor};
 use crate::config;
+use crate::delivery_channel::local_message_received_backend;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::ObservabilityPort;
 #[cfg(test)]
@@ -22,13 +26,37 @@ use std::sync::Arc;
 
 pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
-    BootstrapTraceReport, DaemonRuntimeDoctorReport, DoctorEnvironmentVisibility,
-    DoctorExecutionContext, DoctorFinding, DoctorReport, DoctorSeverity, DoctorStatus,
-    DoctorSummary, GraftReceiverLeaseDoctorReport, GraftReceiversDoctorReport,
-    PeerAuthorityDoctorReport, PeerConfigDoctorReport, PeerWireSecurityStatus,
-    PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport, RecipientDeliveryPath,
-    RecipientDeliveryPathReport,
+    BootstrapTraceReport, ClosedHerdrBreakerDoctor, DaemonRuntimeDoctorReport,
+    DoctorEnvironmentVisibility, DoctorExecutionContext, DoctorFinding, DoctorReport,
+    DoctorSeverity, DoctorStatus, DoctorSummary, HerdrBreakerDoctor, HerdrBreakerDoctorReport,
+    HerdrBreakerDoctorState, PeerAuthorityDoctorReport, PeerConfigDoctorReport,
+    PeerWireSecurityStatus, PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport,
+    RecipientDeliveryPath, RecipientDeliveryPathReport,
 };
+
+/// Async application port for the live Herdr visibility checks performed by
+/// the replacement daemon's doctor route. The core report owns finding shape;
+/// the composition root owns the concrete Herdr adapter.
+pub trait HerdrPresenceDoctor: Send + Sync {
+    fn probe<'a>(
+        &'a self,
+        roster: &'a MembersList,
+        caller_deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Vec<DoctorFinding>> + Send + 'a>>;
+}
+
+#[derive(Debug, Default)]
+pub struct ClosedHerdrPresenceDoctor;
+
+impl HerdrPresenceDoctor for ClosedHerdrPresenceDoctor {
+    fn probe<'a>(
+        &'a self,
+        _roster: &'a MembersList,
+        _caller_deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Vec<DoctorFinding>> + Send + 'a>> {
+        Box::pin(async { Vec::new() })
+    }
+}
 
 /// Inputs for a doctor run, including the caller's resolved identity.
 ///
@@ -68,6 +96,8 @@ pub struct RuntimeDoctorPorts {
     pub config_doctor: Arc<dyn ConfigDoctor + Send + Sync>,
     pub mail_store_doctor: Arc<dyn MailStoreDoctor + Send + Sync>,
     pub roster_store_doctor: Arc<dyn RosterStoreDoctor + Send + Sync>,
+    pub herdr_breaker: Arc<dyn HerdrBreakerDoctor>,
+    pub herdr_presence: Arc<dyn HerdrPresenceDoctor>,
 }
 
 impl std::fmt::Debug for RuntimeDoctorPorts {
@@ -76,6 +106,8 @@ impl std::fmt::Debug for RuntimeDoctorPorts {
             .field("config_doctor", &"dyn ConfigDoctor")
             .field("mail_store_doctor", &"dyn MailStoreDoctor")
             .field("roster_store_doctor", &"dyn RosterStoreDoctor")
+            .field("herdr_breaker", &"dyn HerdrBreakerDoctor")
+            .field("herdr_presence", &"dyn HerdrPresenceDoctor")
             .finish()
     }
 }
@@ -113,18 +145,11 @@ pub fn run_doctor_with_runtime(
             &mut findings,
         )
     });
-    let graft_receivers = doctor_context
-        .resolved_team
-        .as_ref()
-        .map_or_else(GraftReceiversDoctorReport::default, |team| {
-            graft_receivers_doctor_report(runtime, team, &mut findings)
-        });
     findings.push(finding);
     Ok(build_doctor_report(
         findings,
         doctor_context.environment,
         member_roster,
-        graft_receivers,
         PostSendDoctorReport::default(),
         crate::boundary::ConfigDoctorReport::default(),
         crate::boundary::MailStoreDoctorReport::default(),
@@ -134,6 +159,7 @@ pub fn run_doctor_with_runtime(
         observability_health,
         None,
         None,
+        HerdrBreakerDoctorReport::default(),
     ))
 }
 
@@ -160,12 +186,6 @@ pub fn run_doctor_with_runtime_ports(
             &mut drift_findings,
         )
     });
-    let graft_receivers = doctor_context
-        .resolved_team
-        .as_ref()
-        .map_or_else(GraftReceiversDoctorReport::default, |team| {
-            graft_receivers_doctor_report(runtime, team, &mut drift_findings)
-        });
     let findings = collect_doctor_findings(
         &reports,
         &drift_findings,
@@ -184,7 +204,6 @@ pub fn run_doctor_with_runtime_ports(
         findings,
         doctor_context.environment,
         member_roster,
-        graft_receivers,
         post_send,
         reports.config,
         reports.mail_store,
@@ -194,7 +213,16 @@ pub fn run_doctor_with_runtime_ports(
         observability_health,
         None,
         None,
+        runtime_doctors.herdr_breaker.report(),
     ))
+}
+
+/// Add asynchronous, composition-owned presence findings and refresh the
+/// derived summary/recommendation projections.
+pub fn append_doctor_findings(report: &mut DoctorReport, findings: Vec<DoctorFinding>) {
+    report.findings.extend(findings);
+    report.summary = summarize_doctor_findings(&report.findings);
+    report.recommendations = collect_recommendations(&report.findings);
 }
 
 /// Project safe peer-control-plane state into doctor output. A storage or
@@ -277,7 +305,6 @@ fn build_doctor_report(
     findings: Vec<DoctorFinding>,
     environment: DoctorEnvironmentVisibility,
     member_roster: Option<MembersList>,
-    graft_receivers: GraftReceiversDoctorReport,
     post_send: PostSendDoctorReport,
     config: crate::boundary::ConfigDoctorReport,
     mail_store: crate::boundary::MailStoreDoctorReport,
@@ -287,6 +314,7 @@ fn build_doctor_report(
     observability_health: crate::observability::AtmObservabilityHealth,
     runtime_status: Option<crate::protocol::RuntimeStatusSnapshot>,
     bootstrap_trace: Option<BootstrapTraceReport>,
+    herdr_breaker: HerdrBreakerDoctorReport,
 ) -> DoctorReport {
     let summary = summarize_doctor_findings(&findings);
     let recommendations = collect_recommendations(&findings);
@@ -298,8 +326,8 @@ fn build_doctor_report(
         client_context: doctor_client_context(&environment),
         daemon_context: None,
         member_roster,
-        graft_receivers,
         observability: observability_health,
+        herdr_breaker,
         post_send,
         config,
         mail_store,
@@ -309,49 +337,6 @@ fn build_doctor_report(
         runtime_status,
         bootstrap_trace,
     }
-}
-
-const ACTIVE_LEASE_WINDOW_SECONDS: i64 = 15;
-
-fn graft_receivers_doctor_report(
-    runtime: &impl RetainedServiceRuntime,
-    team: &TeamName,
-    findings: &mut Vec<DoctorFinding>,
-) -> GraftReceiversDoctorReport {
-    let roster = match runtime.load_team_roster(team) {
-        Ok(roster) => roster,
-        Err(error) => {
-            push_doctor_error(findings, DoctorSeverity::Error, error);
-            return GraftReceiversDoctorReport::default();
-        }
-    };
-    let now = chrono::Utc::now();
-    let receivers = roster
-        .into_iter()
-        .filter_map(|member| {
-            let lease = match runtime.graft_receiver_lease(team, &member.agent_name) {
-                Ok(lease) => lease?,
-                Err(error) => {
-                    push_doctor_error(findings, DoctorSeverity::Error, error);
-                    return None;
-                }
-            };
-            let age = now.signed_duration_since(lease.last_seen_at);
-            let last_seen_age_seconds = age.num_seconds().max(0);
-            Some(GraftReceiverLeaseDoctorReport {
-                team: team.clone(),
-                agent: member.agent_name,
-                endpoint: lease.endpoint.to_string(),
-                registered_at: lease.registered_at,
-                last_seen_at: lease.last_seen_at,
-                last_seen_age_seconds,
-                reachable_at_last_use: age.num_seconds() >= 0
-                    && age.num_seconds() <= ACTIVE_LEASE_WINDOW_SECONDS
-                    && lease.unreachable_since.is_none(),
-            })
-        })
-        .collect();
-    GraftReceiversDoctorReport { receivers }
 }
 
 fn doctor_client_context(environment: &DoctorEnvironmentVisibility) -> DoctorExecutionContext {
@@ -604,7 +589,10 @@ fn load_member_roster(
         return None;
     }
     let members = match runtime.load_team_roster(team) {
-        Ok(roster) => ordered_roster_member_summaries(&roster, caller_identity, live_cwd),
+        Ok(roster) => {
+            push_mixed_local_backend_warning(team, &roster, findings);
+            ordered_roster_member_summaries(&roster, caller_identity, live_cwd)
+        }
         Err(error) => {
             push_doctor_error(findings, DoctorSeverity::Error, error);
             return None;
@@ -617,16 +605,51 @@ fn load_member_roster(
     })
 }
 
+fn push_mixed_local_backend_warning(
+    team: &TeamName,
+    roster: &[crate::boundary::RosterEntry],
+    findings: &mut Vec<DoctorFinding>,
+) {
+    let mut tmux = Vec::new();
+    let mut herdr = Vec::new();
+    for member in roster {
+        match local_message_received_backend(member) {
+            Some(crate::delivery_channel::LocalMessageReceivedBackend::Tmux { .. }) => {
+                tmux.push(member.agent_name.to_string())
+            }
+            Some(crate::delivery_channel::LocalMessageReceivedBackend::Herdr { .. }) => {
+                herdr.push(member.agent_name.to_string())
+            }
+            None => {}
+        }
+    }
+    if tmux.is_empty() || herdr.is_empty() {
+        return;
+    }
+    findings.push(DoctorFinding {
+        severity: DoctorSeverity::Warning,
+        code: AtmErrorCode::RosterMixedLocalBackend,
+        message: format!(
+            "team {team} has mixed local backends; tmux members: [{}]; Herdr members: [{}]",
+            tmux.join(", "), herdr.join(", ")
+        ),
+        remediation: Some(format!(
+            "Use `atm teams update-member {team} <member> --backend herdr` or `atm teams update-member {team} <member> --backend tmux --target %N` to select the intended backend."
+        )),
+    });
+}
+
 fn push_doctor_error(
     findings: &mut Vec<DoctorFinding>,
     severity: DoctorSeverity,
     error: crate::error::AtmError,
 ) {
-    let remediation = Some(error.message().to_owned());
+    let remediation = Some(error.remediation().to_owned());
+    let message = error.detail().to_owned();
     findings.push(DoctorFinding {
         severity,
         code: error.code(),
-        message: error.into_message(),
+        message,
         remediation,
     });
 }
@@ -686,6 +709,9 @@ fn member_summary(
         model: member.model.clone(),
         joined_at: member.joined_at,
         tmux_pane_id: member.tmux_pane_id.clone(),
+        backend: None,
+        herdr_session: None,
+        local_backend: None,
         home_dir: member.home_dir.clone(),
         live_cwd: match (caller_identity, live_cwd) {
             (Some(identity), Some(path)) if member.name == identity.as_str() => {
@@ -976,6 +1002,9 @@ mod tests {
                 model: Default::default(),
                 joined_at: None,
                 tmux_pane_id: None,
+                backend: None,
+                herdr_session: None,
+                local_backend: None,
                 home_dir: PathBuf::from("/workspace").into(),
                 live_cwd: None,
                 extra: serde_json::Map::new(),

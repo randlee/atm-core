@@ -484,8 +484,12 @@ impl StorageAndNudgeRouter {
         let home = self.daemon_home.clone();
         let runtime_health = self.runtime_health.clone();
         let doctor_ports = self.doctor_ports.clone();
+        let presence_doctor = doctor_ports
+            .as_ref()
+            .map(|ports| Arc::clone(&ports.herdr_presence));
         let daemon_context = self.daemon_context.clone();
-        self.blocking_core_bridge
+        let mut report = self
+            .blocking_core_bridge
             .run(deadline, move || {
                 let query = query.with_daemon_paths(home);
                 let mut report = match doctor_ports {
@@ -504,9 +508,16 @@ impl StorageAndNudgeRouter {
                 }?;
                 report.runtime_status = Some(runtime_health.snapshot());
                 report.daemon_context = daemon_context;
-                Ok(ApiResponse::new(ResponseEnvelope::Doctor(Box::new(report))))
+                Ok(report)
             })
-            .await
+            .await?;
+        if let (Some(presence_doctor), Some(roster)) =
+            (presence_doctor, report.member_roster.as_ref())
+        {
+            let findings = presence_doctor.probe(roster, deadline).await;
+            atm_core::doctor::append_doctor_findings(&mut report, findings);
+        }
+        Ok(ApiResponse::new(ResponseEnvelope::Doctor(Box::new(report))))
     }
 
     async fn search(
@@ -868,9 +879,9 @@ mod tests {
     use atm_core::LocalServiceRuntime;
     use atm_core::boundary::{
         AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, GraftNudgeTarget,
-        LocalTmuxNudgeTarget, MemberKey, MessageReceivedHookSelector, NudgeKind, PendingNudgeStore,
-        PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEvent, RosterEntry, RosterHarness,
-        RosterMemberKind,
+        LocalSteerTarget, LocalTmuxNudgeTarget, MemberKey, MessageReceivedHookSelector, NudgeKind,
+        PendingNudgeStore, PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEvent,
+        RosterEntry, RosterHarness, RosterMemberKind,
     };
     use atm_core::observability::NullObservability;
     use atm_core::protocol::{
@@ -1068,7 +1079,10 @@ mod tests {
             dispatch: &BuiltInPostSendDispatch,
         ) -> Option<&dyn AsyncMessageReceivedHookEmitter> {
             match &dispatch.target {
-                PostSendBuiltInTarget::LocalSteer(_) => Some(self.tmux.as_ref()),
+                PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Tmux(_)) => {
+                    Some(self.tmux.as_ref())
+                }
+                PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Herdr(_)) => None,
                 PostSendBuiltInTarget::Graft(_) => Some(self.graft.as_ref()),
             }
         }
@@ -1464,10 +1478,12 @@ mod tests {
         };
         let tmux_dispatch = BuiltInPostSendDispatch {
             event: hook_event(),
-            target: PostSendBuiltInTarget::LocalSteer(LocalTmuxNudgeTarget {
-                pane_id: PaneId::from_cli("%1").expect("pane"),
-                rendered_nudge: "tmux nudge".to_owned(),
-            }),
+            target: PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Tmux(
+                LocalTmuxNudgeTarget {
+                    pane_id: PaneId::from_cli("%1").expect("pane"),
+                    rendered_nudge: "tmux nudge".to_owned(),
+                },
+            )),
             kind: NudgeKind::Steer,
         };
         let graft_dispatch = BuiltInPostSendDispatch {
