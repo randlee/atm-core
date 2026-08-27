@@ -53,6 +53,7 @@ pub enum RequestEnvelope {
     CompatibilityPreflight(CompatibilityPreflight),
     Heartbeat(TeamMemberHeartbeatRequest),
     GraftReceiverRegister(GraftReceiverRegistration),
+    GraftReceiverRefresh(GraftReceiverRefreshRequest),
     GraftReceiverUnregister(GraftReceiverUnregistration),
     GraftReceiverLookup {
         team: TeamName,
@@ -75,6 +76,7 @@ pub enum ResponseEnvelope {
     CompatibilityVerdict(CompatibilityVerdict),
     Heartbeat(TeamMemberHeartbeatResponse),
     GraftReceiverRegister,
+    GraftReceiverRefresh,
     GraftReceiverUnregister,
     GraftReceiverLookup(Option<GraftReceiverLease>),
     List(ListOutcome),
@@ -384,6 +386,18 @@ pub struct TeamMemberHeartbeatResponse {
 /// Owner-checked removal request for one durable graft receiver lease.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GraftReceiverUnregistration {
+    pub team: TeamName,
+    pub agent: AgentName,
+    pub owner_generation: OwnerGeneration,
+}
+
+/// Owner-checked liveness keepalive for one durable graft receiver lease.
+///
+/// Unlike [`GraftReceiverRegistration`], which unconditionally upserts, this
+/// request is rejected with `NotOwner` when the stored lease no longer
+/// matches `owner_generation` — see ADR-056.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GraftReceiverRefreshRequest {
     pub team: TeamName,
     pub agent: AgentName,
     pub owner_generation: OwnerGeneration,
