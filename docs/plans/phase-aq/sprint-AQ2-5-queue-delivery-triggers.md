@@ -26,9 +26,9 @@ and that is accepted — the mail itself is always durably in the mailbox.
 
 **Naming rule (Rand, 2026-08-24)**: channels are named by their
 **mechanism** (tmux steer, graft, bare-CLI), never by negation
-("non-tmux") — a future harness channel (e.g. a tmux replacement) must
-slot in as one new classifier arm + target variant + emitter impl with
-no renames.
+("non-tmux") — an alternate harness channel slots in as one new classifier
+arm + target variant + emitter impl with no renames. AQ2.6 exercises this
+seam by adding `HerdrSteer`; it retains `TmuxSteer` as a coexisting backend.
 
 **Verified baseline (2026-08-24, fenix)**: a production Codex hook
 implementation already exists machine-globally (`~/.codex/hooks.json` →
@@ -48,25 +48,32 @@ is in-repo (see Non-closure for the machine-global follow-up).
 For a message pending for member M, the trigger and channel are decided
 by M's classified delivery channel. **Hooks are uniform and
 roster-blind**: every harness runs the same scripts and never consults
-roster state. The **channel classifier (deliverable 4) is the single
-code owner of this table** — core's dispatch-target planner, the
-queue-get handler (deliverable 3), and AQ3's sweep pre-check
-(implemented in AQ3 over this sprint's classifier seam) all call the
-same function, so the enforcement points cannot drift. A get from a
-tmux member is harmless: its FIFO does not exist, the get returns
-nothing — denied, never raced against AQ3.
+roster state. The **channel classifier (defined in AQ1, consumed here)
+is the single code owner of where a new dispatch is routed** — core's
+dispatch-target planner and AQ3's sweep/drain pre-check (implemented in
+AQ3 over this sprint's classifier seam) both call the same function, so
+those two enforcement points cannot drift. The queue-get handler
+(deliverable 3) is deliberately **not** a third caller of the
+classifier: it decides purely on FIFO existence (critical review I15;
+see deliverable 3/4), because re-classifying at get-time would strand a
+member's already-queued FIFO backlog the moment their classification
+changes. A get from a tmux member is harmless anyway: its FIFO does not
+exist (no code path ever appends to it), so the get returns nothing —
+denied by construction, never raced against AQ3.
 
 | Member's classified channel (inputs: roster row + graft lease) | Trigger | Delivery |
 |---|---|---|
-| **tmux steer** — roster `pane_id` set (Claude or Codex — identical) | AQ3 idle-transition drain (fed by this sprint's heartbeats) | existing steer selector (tmux send-keys) |
-| **graft** — no `pane_id`, graft lease registered (AQ1.5 store) | AQ2 queue channel | graft queue-kind wire message |
-| **bare-CLI** — no `pane_id`, no graft lease (Claude or Codex) | message arrival appends to the member's RAM FIFO; drain at the member's next Stop-pull get | queue-kind: one item per get · steer-kind: all items at once. Claude injects via Stop-hook block-with-reason. **Codex has no injection surface yet** — its FIFO accumulates bounded (drop-oldest ages out stale nudges) until Codex gains one or the member adopts graft; disclosed, not silent. |
+| **tmux steer** — explicit local `backend = tmux` configuration (Claude or Codex — identical) | AQ3 idle-transition drain (fed by this sprint's heartbeats) | retained tmux emitter |
+| **Herdr steer** — explicit local `backend = herdr` configuration (AQ2.6) | AQ2.7 lifecycle-gated wake pump for queue; immediate for steer | Herdr `agent prompt`; mailbox remains authoritative |
+| **graft** — no local backend, graft lease registered (AQ1.5 store) | AQ2 queue channel | graft queue-kind wire message |
+| **bare-CLI** — no local backend, no graft lease (Claude or Codex) | message arrival appends to the member's RAM FIFO; drain at the member's next Stop-pull get | queue-kind: one item per get · steer-kind: all items at once. Claude injects via Stop-hook block-with-reason. **Codex has no injection surface yet** — its FIFO accumulates bounded (drop-oldest ages out stale nudges) until Codex gains one or the member adopts graft; disclosed, not silent. |
 
-The pending-marker machinery (AQ1 store, AQ3 sweep) applies **only** to
-tmux-steer and graft members. For bare-CLI members the FIFO **is** the
-mechanism: the emitter's append is the handoff (marker cleared, exactly
-AQ2's handoff-clears-marker semantics), so the sweep never has bare-CLI
-work and the false-stuck problem cannot arise.
+The pending-marker machinery (AQ1 store) applies to tmux-steer, Herdr-steer,
+and graft members. AQ3 schedules only tmux/graft; AQ2.7 is the sole
+Herdr-marker claimant. For bare-CLI members the FIFO **is** the mechanism:
+the emitter's append is the handoff (marker cleared, exactly AQ2's
+handoff-clears-marker semantics), so neither scheduler has bare-CLI work and
+the false-stuck problem cannot arise.
 
 ## Deliverables
 
@@ -110,18 +117,68 @@ work and the false-stuck problem cannot arise.
    persisted**; a daemon restart empties it and that is the accepted
    trade (staleness beats loss; the mail remains durably unread in the
    mailbox, visible to `atm read` and the operator).
-   - **FIFO**: one bounded in-memory FIFO per bare-CLI (team, member)
-     inside the daemon (plain `VecDeque` behind the runtime's existing
-     shared state, beside `RuntimeHealth` — no new async machinery).
+   - **FIFO**: one bounded in-memory FIFO per bare-CLI (team, agent).
+     Type: `BareCliFifo = Arc<Mutex<HashMap<MemberKey,
+     VecDeque<QueuedNudgeMessage>>>>` — a plain shared map, no new async
+     machinery. **Key type**: AQ1's canonical public
+     `atm_core MemberKey { team, agent }` (defined by AQ1 per the
+     ruthless-boundary-qa one-canonical-key finding; both crates already
+     depend on atm-core). The PRIVATE `runtime_health::MemberKey`
+     (atm-http-runtime) is intentionally untouched and must be
+     module-qualified wherever both are in scope. This sprint's earlier
+     `BareCliMemberKey` (identical shape) is superseded — no such type
+     is introduced. **Wiring (explicit, one interpretation)**: constructed
+     ONCE in atm-daemon-bootstrap's `run_replacement_daemon_with_selector`
+     composition root (defined at `atm-daemon-bootstrap/src/lib.rs:640`;
+     it constructs `RuntimeHealth::with_owner` at line 653 and calls
+     `build_replacement_handler`, whose `selector_factory(...)` invocation
+     sits at line ~504 — corrects this doc's earlier "~lib.rs:217" anchor
+     against the verified baseline) and cloned into BOTH consumers: (1)
+     `StorageAndNudgeRouter` via a new `with_bare_cli_fifo(...)` builder
+     step (mirroring `with_runtime_health`,
+     `storage_and_nudge_router.rs:145-148`) for the get handler, and (2) a
+     widened selector factory — `active_received_hook_selector(service_runtime,
+     bare_cli_fifo)` and the matching `selector_factory` closure
+     signature — for `PullPendingReceivedHook`. The FIFO deliberately
+     does NOT live inside `LocalServiceRuntime` or `RuntimeHealth`; it is
+     composition-root state like they are, reached by clone, so neither
+     atm-core nor the health type grows daemon-RAM concerns.
      Capacity `BARE_CLI_FIFO_CAPACITY` (constant, default 32); overflow
      drops the **oldest** item (staleness preference) and increments a
-     cumulative dropped counter on the health report
-     (`queue_full_drops_total` precedent).
+     drop counter — **placement**: a plain `Arc<AtomicU64>`
+     (`BareCliQueueFullDrops`, not folded into the `BareCliFifo` map type
+     itself), constructed once beside `bare_cli_fifo` in the same
+     composition root and cloned into the same two consumers. The
+     `PullPendingReceivedHook` producer increments it on overflow; the
+     `doctor()` handler in `storage_and_nudge_router.rs` (~437-465, which
+     already does `report.runtime_status = Some(runtime_health.snapshot())`
+     after `blocking_core_bridge.run`) reads it via the router's existing
+     `self.bare_cli_fifo`-adjacent handle and sets a new
+     `#[serde(default)] pub bare_cli_queue_full_drops_total: u64` field on
+     `RuntimeStatusSnapshot` (`atm-core/src/protocol.rs:424`) — populated
+     at the doctor call site, not inside `RuntimeHealth::snapshot()`,
+     because `RuntimeHealth` deliberately has no FIFO knowledge. This is
+     the concrete home for the `queue_full_drops_total` precedent this
+     doc cites; the legacy daemon's `daemon_observability` module is
+     off-limits and not a candidate.
    - **Producer**: `PullPendingReceivedHook` (deliverable 4) appends
-     `{kind, msg_id, body}` on message arrival and clears the pending
-     marker — the append **is** the handoff, mirroring AQ2's
-     handoff-clears-marker semantics. Bounded and synchronous; the al3
-     no-detached-work test stays green by construction.
+     `{kind, msg_id, body}` on message arrival and clears exactly that
+     message's marker via AQ1's
+     `PendingNudgeStore::clear_pending_on_handoff(member, msg)` — the
+     specific-message handoff clear, same as AQ2's graft channel (never
+     `claim_next_pending`, which selects the oldest pending and would
+     clear the wrong marker under a backlog). The append **is** the
+     handoff. Bounded and synchronous; the al3 no-detached-work test
+     stays green by construction. **Store handle**: mirroring AQ2's
+     `PublishedGraftReceivedHook { service_runtime }`
+     (`received_hook_selector.rs:78`, real code today),
+     `PullPendingReceivedHook` is constructed with the whole
+     `LocalServiceRuntime` (or, equivalently, the
+     `Arc<dyn PendingNudgeStore>` obtained once from it) as a struct
+     field at composition time — `service_runtime.pending_nudge_store()`
+     — inside the widened `ReplacementReceivedHookSelector::new`. No
+     separate plumbing is needed beyond the `service_runtime` parameter
+     `active_received_hook_selector` already receives.
    - **Consumer — one route, one CLI surface, a straight line**:
 
    ```rust
@@ -149,9 +206,14 @@ work and the false-stuck problem cannot arise.
    Handler beside the Heartbeat handler in
    `storage_and_nudge_router.rs`: gate `AuthenticatedIngress::Local` →
    validate member against the roster (mirroring
-   `validate_heartbeat_member`) → classifier says `BareCli`? → drain
-   per the policy above. Not bare-CLI or empty → empty vec. Nothing
-   else.
+   `validate_heartbeat_member`) → drain per the policy above whatever is
+   in that member's FIFO entry, if any — **FIFO existence wins, not a
+   fresh classifier re-check** (critical review I15; deliverable 4).
+   Empty or no FIFO entry → empty vec, regardless of the member's current
+   classification. A get from a `TmuxSteer`/`Graft`/`HerdrSteer` member is
+   harmless: nothing ever appends to their FIFO, so it is always empty in
+   practice — denied by construction, never by a classifier check racing
+   AQ3's sweep. Nothing else.
 
    ```text
    atm _internal-queue-get [--team <TEAM>] [--as <ACTOR>]
@@ -168,6 +230,22 @@ work and the false-stuck problem cannot arise.
    messages → emit Claude's literal block shape (bodies joined,
    oldest first) and exit 0; got nothing → exit 0.
 
+   **Interaction with the heartbeat producer (deliverable 2, critical
+   review M10)**: the same `Stop` event drives two independent calls with
+   different timing, and they are never sequenced against each other.
+   `_internal-queue-get` runs synchronously on every raw `Stop`, undebounced
+   — it is a direct pull, not gated by idle detection. The idle heartbeat
+   (`_internal-heartbeat --activity idle`) is debounced separately (`Stop`
+   schedules it, `PreToolUse` cancels it, expiry sends it) and feeds AQ3's
+   idle-transition drain, which only ever matters for `TmuxSteer`/`Graft`
+   members. A given member is classified into exactly one channel, so in
+   practice only one of the two consumers does anything for that member —
+   the get always fires (hooks are uniform and roster-blind per this
+   sprint's naming rule) but returns empty for a non-bare-CLI member,
+   while the debounced heartbeat only ever produces an AQ3 drain for a
+   non-bare-CLI member. Neither call blocks or waits on the other; both
+   are independently fail-open.
+
    ```json
    {"decision": "block", "reason": "<drained message bodies>"}
    ```
@@ -178,39 +256,169 @@ work and the false-stuck problem cannot arise.
    **never block when the get returned nothing.** No hook-side counters
    or state. **Fail-open**: any error path exits 0 without blocking.
 
-4. **Channel classifier + received-hook selector extension** — the
-   trigger table's single code owner, deliberately small (one enum, one
-   function, one trivial emitter):
-   - A `DeliveryChannel` classification function in core: inputs are
-     the roster row (`pane_id`) and
+4. **Bare-CLI arm of AQ1's channel classifier + received-hook selector
+   extension.** This sprint consumes AQ1's classifier; it adds only the
+   `BareCli` consequences. AQ1 owns and defines the `DeliveryChannel`
+   enum, `classify_delivery_channel`, the `LocalMessageReceivedBackend`
+   input, and the `LocalSteer` target (trait-foundation deliverables); this
+   sprint adds no new enum variants and implements no part of the
+   classifier itself — only what a `BareCli` classification result drives
+   (the `QueuePull` target, the FIFO, and the emitter):
+   - (Reference — defined in AQ1) the classification function in core: inputs are the
+     roster row's `LocalMessageReceivedBackend` (not a pane-id shape) and
      `GraftReceiverEndpointStore::lookup` for the graft lease — the
      AQ1.5 registry, **never** the retired file record, mirroring AQ2's
      `must_follow AQ1.7` reasoning — returning
-     `TmuxSteer | Graft | BareCli`. The handler obtains the store
+     `TmuxSteer | HerdrSteer | Graft | BareCli`. The handler obtains the store
      handle exactly as AQ2's queue channel wires it into
      `storage_and_nudge_router.rs`.
    - `PostSendBuiltInTarget::QueuePull` — a third variant in core's
-     post-persistence dispatch-target planning (the selector's
-     doc-comment is explicit that core plans the target; the selector
-     "owns no application routing").
+     post-persistence dispatch-target planning. **This sprint owns the
+     third branch in `build_built_in_dispatch`
+     (`atm-core/src/send/hook.rs:17`, invoked from
+     `build_received_hook_dispatches`, `send/mod.rs` ~:391)**: classify
+     via `classify_delivery_channel`; a `BareCli` member's dispatch —
+     any kind, steer or queue — becomes a `QueuePull` target. This is a
+     shared-file seam with AQ1, whose deliverable 2 gives the same
+     function the kind decision; AQ1 lands first (already
+     `must_follow AQ1`), and this sprint's branch builds on it —
+     sequenced single ownership, mirroring the `received_hook_selector.rs`
+     seam with AQ2.
+   - `PostSendEmissionPath::QueuePull` — a matching variant in
+     `atm-core/src/boundary/mod.rs`'s emission-path enum. AQ2.6 replaces the
+     local execution label with backend-neutral `LocalSteer`, so planners and
+     selectors do not encode tmux-vs-Herdr branching;
+     `PullPendingReceivedHook::emit_received_message` returns it, so the
+     impl is fully specified.
    - `PullPendingReceivedHook` — a third `AsyncMessageReceivedHookEmitter`
      impl (sealed, beside `TokioTmuxReceivedHook` /
      `PublishedGraftReceivedHook` in
      `atm-daemon-bootstrap/src/received_hook_selector.rs`), selected by
      `ReplacementReceivedHookSelector` for `QueuePull` targets; its
      emit is deliverable 3's FIFO append.
-   - **Seam ownership**: AQ2.5 owns the classifier, the target variant,
-     the emitter, and the FIFO. AQ3 owns the sweep pre-check **code**
-     that calls the classifier — the sweep claims only for members
-     classified `TmuxSteer` or `Graft` (recorded in AQ3's deliverable 3
-     and gated by AQ3's own AC; AQ3 takes `must_follow AQ2.5` for this
-     seam). Exactly one sprint authors each diff; no shared-file
-     double-ownership.
-   - Extensibility (naming rule above): a future harness channel adds
-     one classifier arm + one target variant + one emitter impl — no
-     renames anywhere.
+   - **Seam ownership**: AQ1 owns the classifier itself. This sprint owns
+     the `QueuePull` target variant, the `PullPendingReceivedHook`
+     emitter, and the FIFO — the consequences of a `BareCli`
+     classification, not the classification decision. AQ3 owns the sweep
+     (and drain) pre-check **code** that calls the classifier — claiming
+     only for members classified `TmuxSteer` or `Graft` (recorded in
+     AQ3's deliverables 2 and 3 and gated by AQ3's own AC; AQ3 takes
+     `must_follow AQ2.5` for this seam). `received_hook_selector.rs` is
+     shared with AQ2's queue-channel edits, so this sprint takes
+     `must_follow AQ2` and lands its emitter + selector arm on top of
+     AQ2's merged changes. Exactly one sprint authors each diff —
+     ownership is sequenced, never concurrent, on every shared file.
+   - **Classification drift at get-time (critical review I15)**: the
+     `QueueGetNextRequest` handler (deliverable 3) does not re-run
+     `classify_delivery_channel` fresh and trust it blindly against a
+     member whose roster/lease state may have changed since their last
+     write-time dispatch. The rule is FIFO-existence-wins: the handler
+     drains whatever is in that member's FIFO entry if one exists,
+     regardless of the member's *current* classification. A `TmuxSteer`
+     or `Graft` member's FIFO is always empty in practice (no code path
+     ever appends to it), so this rule is a no-op for them today — a get
+     from a tmux member is harmless exactly because nothing ever put
+     anything in its FIFO — but it means a member who has *since*
+     migrated off bare-CLI (added a local backend or a graft lease) still
+     drains any messages a prior bare-CLI window queued for them, instead
+     of those messages silently stranding because the live classifier now
+     says `TmuxSteer`/`Graft`/`HerdrSteer`. The classifier remains the
+     single decision point for where a *new* dispatch is routed
+     (deliverable 4's `QueuePull` branch); it is not re-consulted to
+     decide whether an *existing* FIFO entry may be drained.
 
-5. **ADR-054 addendum**: the delivery-trigger policy table, the
+   ```rust
+   // atm-core (beside the existing delivery-policy/dispatch planning;
+   // exact module placement follows DeliveryHarnessPath's home):
+   /// Single code owner of the delivery-trigger table.
+   pub enum DeliveryChannel { TmuxSteer, HerdrSteer, Graft, BareCli }
+
+   /// Pure decision over already-fetched inputs — the caller performs
+   /// the roster read and the GraftReceiverEndpointStore::lookup; the
+   /// classifier itself does no I/O (trivially unit-testable).
+   pub fn classify_delivery_channel(
+       local_backend: Option<&LocalMessageReceivedBackend>, // roster row
+       graft_lease: GraftLeaseState,  // AQ1 D7: Absent | Active; AQ1.7 maps the AQ1.5 lookup result onto it
+   ) -> DeliveryChannel
+
+   // core's post-persistence dispatch-target planning gains:
+   pub enum PostSendBuiltInTarget {
+       /// Backend-neutral opaque local-steer target. AQ2.6 binds this to
+       /// either retained tmux or Herdr through the sealed emitter contract;
+       /// planner/selector code does not match on that choice.
+       LocalSteer(/* target + sealed backend handle */),
+       Graft(/* existing payload, unchanged */),
+       /// NEW: bare-CLI members — emitter appends to the RAM FIFO.
+       QueuePull(QueuePullTarget), // { team, agent, kind, msg_id, body }
+   }
+
+   // Key: AQ1's canonical public atm_core::MemberKey { team, agent }
+   // (NOT the private runtime_health::MemberKey, which is unchanged —
+   // module-qualify where both are in scope). BareCliMemberKey is
+   // superseded; no new key type is introduced by this sprint.
+   // Derivation at the producer:
+   //   PullPendingReceivedHook::emit_received_message constructs
+   //   MemberKey { team: envelope.recipient_team.clone(),
+   //               agent: envelope.recipient.clone() }
+   //   from the delivered message envelope — the same fields the
+   //   read-path clear uses, so producer and store key can never skew.
+   pub type BareCliFifo =
+       Arc<Mutex<HashMap<MemberKey, VecDeque<QueuedNudgeMessage>>>>;
+
+   // atm-daemon-bootstrap/src/received_hook_selector.rs (on top of
+   // AQ2's merged changes — must_follow AQ2):
+
+   struct PullPendingReceivedHook {
+       fifo: BareCliFifo,
+       drops_total: BareCliQueueFullDrops, // Arc<AtomicU64>, deliverable 3
+       // Store handle mirrors AQ2's PublishedGraftReceivedHook
+       // (received_hook_selector.rs:78, real code today: `graft:
+       // PublishedGraftReceivedHook { service_runtime }`) — captured
+       // once at construction, no per-call plumbing:
+       service_runtime: atm_core::LocalServiceRuntime,
+   }
+   impl boundary::sealed::Sealed for PullPendingReceivedHook {}
+   impl AsyncMessageReceivedHookEmitter for PullPendingReceivedHook {
+       // emit = bounded synchronous FIFO append +
+       // clear_pending_on_handoff(member, msg); returns
+       // PostSendEmissionPath::QueuePull (no detached work — al3
+       // green by construction)
+   }
+   // ReplacementReceivedHookSelector::select_emitter gains:
+   //   PostSendBuiltInTarget::QueuePull(_) => Some(&self.queue_pull)
+
+   // Composition-root wiring (atm-daemon-bootstrap/src/lib.rs:640,
+   // run_replacement_daemon_with_selector — today's RuntimeHealth
+   // construction is at line 653; selector_factory(...) is invoked
+   // inside build_replacement_handler at line ~504):
+   //   let bare_cli_fifo: BareCliFifo = Arc::default();
+   //   let bare_cli_queue_full_drops: BareCliQueueFullDrops = Arc::default();
+   //   StorageAndNudgeRouter ... .with_bare_cli_fifo(bare_cli_fifo.clone(),
+   //       bare_cli_queue_full_drops.clone())
+   //   active_received_hook_selector(service_runtime, bare_cli_fifo,
+   //       bare_cli_queue_full_drops)
+   //   // selector_factory widens to
+   //   //   FnOnce(LocalServiceRuntime, BareCliFifo, BareCliQueueFullDrops) -> ...
+   //
+   // Benchmark harness (second real caller of the widened signature —
+   // received_hook_selector.rs ~:55, lib.rs ~:171, Justfile-wired):
+   //   benchmark_received_hook_selector's Active arm calls
+   //   active_received_hook_selector(service_runtime, Arc::default(),
+   //       Arc::default())
+   //   — an empty FIFO and a zeroed drop counter; bare-CLI delivery is intentionally outside
+   //   benchmark semantics (the benchmark roster has no bare-CLI
+   //   members), and the harness keeps compiling with no compat shim.
+   ```
+   - Extensibility (naming rule above): AQ2.6 adds mode-only `HerdrSteer` and
+     one emitter impl after this sprint lands. Herdr derives its live target
+     from the member `AgentName`; it adds no persisted target field and does
+     not rename or remove `TmuxSteer`. Later channels use the same seam.
+
+5. **ADR-054 addendum**: one clarifying sentence that 'steer = immediate'
+   describes the KIND's delivery intent, while the bare-CLI mechanism may
+   still defer steer-kind physically until the member's next Stop-pull
+   (FIFO deferral is a mechanism property, not a kind change); plus the
+   delivery-trigger policy table, the
    classifier as its single code owner with its enforcement call sites,
    the mechanism-positive channel naming rule, the heartbeat-producer
    decision (hook-side debounce, daemon stays dumb), the RAM-only FIFO
@@ -229,10 +437,13 @@ work and the false-stuck problem cannot arise.
 3. FIFO semantics: (a) two queued queue-kind messages drain one per
    get, oldest first; (b) three steer-kind items drain all at once in
    one get alongside at most one queue-kind item; (c) at capacity, an
-   append drops the oldest item and increments the dropped counter;
-   (d) after a simulated daemon restart the get returns nothing and no
-   error — the FIFO is empty by design, the underlying mail is still
-   unread in the mailbox.
+   append drops the oldest item and increments the
+   `bare_cli_queue_full_drops_total` counter, observable on the doctor
+   report's `RuntimeStatusSnapshot` (not inside `RuntimeHealth`, which has
+   no FIFO knowledge — see deliverable 3's placement note); (d) after a
+   simulated daemon restart the get returns nothing and no error — the
+   FIFO is empty by design, the underlying mail is still unread in the
+   mailbox.
 4. Stop-pull drain: with two pending queue messages, a genuine-idle
    Stop (`stop_hook_active: false`) gets the oldest and emits the
    literal block JSON; the follow-up Stop (`stop_hook_active: true`)
@@ -247,14 +458,21 @@ work and the false-stuck problem cannot arise.
    threat model, identical to every other Local-ingress command (test:
    the clap surface rejects any attempt to pass a member argument; a
    crafted envelope for a non-roster member is rejected by validation).
-6. Classifier totality, selector, and gating: every classification
-   outcome resolves through the single classifier function (test over
-   all three member shapes); `QueuePull` targets select
+6. Classifier totality, selector, and gating: every classification outcome
+   resolves through the single classifier function (test over all four member
+   shapes); its local input is the backend enum, never `pane_id` syntax.
+   `QueuePull` targets select
    `PullPendingReceivedHook` whose emit is bounded and synchronous (al3
-   stays green); a get for a member classified `TmuxSteer` or `Graft`
-   returns empty and touches no FIFO/store state; the roster-shape →
-   channel mapping exists in exactly one function (review gate: no
-   duplicate match on pane-id/lease outside the classifier).
+   stays green); a get for a member classified `TmuxSteer`, `HerdrSteer`, or
+   `Graft` returns empty because no code path ever appends to their FIFO —
+   the get handler itself performs no classifier call (FIFO existence
+   wins, critical review I15); the backend/lease →
+   channel mapping exists in exactly one function (review gate: no duplicate
+   backend or lease match outside the classifier). Migration case: a member
+   with a stale FIFO entry from an earlier bare-CLI window still drains it
+   on get even after their classification has since changed (test double:
+   pre-seed a FIFO entry, flip the roster/lease inputs, assert the get
+   still returns it).
 7. Marker handoff: for a bare-CLI member, message arrival appends to
    the FIFO and clears the pending marker in the same dispatch (AQ2
    handoff semantics) — the AQ3 sweep subsequently finds nothing for
@@ -267,6 +485,48 @@ work and the false-stuck problem cannot arise.
     green on **all three lanes including Windows** (Claude Code runs on
     Windows; cross-platform-guidelines apply). Codex hook scripts' unit
     tests green on ubuntu/macOS (Codex/hermes are not used on Windows).
+    **Justfile lane**: `scripts/hooks/`'s tests are not auto-discovered by
+    `.just/run_pytests.py` (it only globs `.just/tests/test_*.py` and
+    `scripts/smoke/test_*.py`, verified) and not folded into default
+    `just test`'s mode, so this sprint adds a dedicated recipe following
+    the existing standalone-lane precedent (`test-graft-python`,
+    `Justfile:165-166`: `{{python_cmd}} scripts/test_atm_graft_python.py`;
+    `test-admission-capacity`, invoked as its own CI step,
+    `.github/workflows/ci.yml:310`, on all three `Test (${{ matrix.os }})`
+    OSes): a new `test-queue-hooks-python:` recipe running
+    `{{python_cmd}} -m unittest discover -s scripts/hooks -p "test_*.py"`
+    (or an explicit file list, matching `test-admission-capacity`'s
+    `-m unittest` shape), invoked as its own CI step on all three matrix
+    OSes for the Claude scripts and gated to ubuntu/macOS only for the
+    Codex-specific script's tests (a second recipe or an env-conditional
+    skip inside the same one, whichever keeps the Justfile recipe
+    single-purpose).
+
+11. Boundary-manifest freshness: `boundaries/atm-core/
+   message-received-hook-emitter.toml`'s `[status].notes` implementer
+   list — brought current by AQ1's L3.2 (baseline: `TokioTmuxReceivedHook`,
+   `PublishedGraftReceivedHook`, sync `GraftReceiveHook`; verified today's
+   pre-AQ1 manifest instead says only "the daemon tmux receiver and
+   atm_graft::nudge_sink::GraftReceiveHook", so AQ1 must land its
+   currency fix first) — is extended in this sprint's PR by exactly one
+   name, `PullPendingReceivedHook`, the third
+   `AsyncMessageReceivedHookEmitter` implementer (after
+   `TokioTmuxReceivedHook` and `PublishedGraftReceivedHook`;
+   `received_hook_selector.rs` has exactly those two `impl
+   AsyncMessageReceivedHookEmitter for` occurrences today, verified). No
+   manifest-vs-code count test exists in the repo yet
+   (`crates/atm-architecture/tests/boundary_enforcement.rs`'s existing
+   `al1`/`al3`/`al9` checks reference the manifest file only, never an
+   implementer count) — this sprint adds one, a new test function in that
+   same file (e.g. `al_message_received_hook_emitter_manifest_matches_async_implementers`,
+   following the file's existing `.matches("...").count()` idiom at
+   `al3_received_hook_is_single_receiver_side_path_without_detached_work`),
+   asserting `received_hook_selector.rs`'s literal
+   `impl AsyncMessageReceivedHookEmitter for` count (3 after this sprint)
+   against the manifest's implementer-list length, so a future drift in
+   either fails CI. If AQ1 has already introduced this test as part of
+   its own manifest-currency fix, this sprint extends the same test's
+   literal count from 2 to 3 rather than adding a second one.
 
 ## Required validation
 
@@ -296,8 +556,9 @@ work and the false-stuck problem cannot arise.
   Codex has no injection surface; drain waits for one (or graft
   adoption via AQ1.5–AQ1.9/AQ2). Bounded drop-oldest ages out stale
   nudges meanwhile. Disclosed in the trigger table.
-- Additional harness channels (e.g. a tmux replacement) — designed-for
-  via the classifier/target/emitter extension seam, not delivered here.
+- Additional harness channels beyond the retained tmux and the AQ2.6 Herdr
+  backend — designed-for via the classifier/target/emitter extension seam,
+  not delivered here.
 - Claude Stop-pull **live evidence** on Windows (unit tests run there
   per AC 10; the committed live transcript is macOS/ubuntu — disclosed
   platform bound, revisited if a Windows deployment materializes).
@@ -313,13 +574,30 @@ work and the false-stuck problem cannot arise.
 ## Dependencies
 
 - must_follow: AQ1 (kinds + pending-marker dispatch the emitter hands
-  off from). Merge-forward trigger: AQ1 dev push.
+  off from; `clear_pending_on_handoff` in its store contract; AND a
+  shared-file seam — AQ1's deliverable 2 edits
+  `send/hook.rs::build_built_in_dispatch` first, this sprint adds the
+  `QueuePull` branch on top, sequenced single ownership like the
+  `received_hook_selector.rs` seam with AQ2). Merge-forward trigger:
+  AQ1 dev push.
 - must_follow: AQ1.7 (the classifier's graft-lease input reads AQ1.5's
   `GraftReceiverEndpointStore` — the daemon registry, never the retired
   file record; same reasoning as AQ2's identical dependency).
   Merge-forward trigger: AQ1.7 dev push.
-- parallel_safe: AQ2 (graft channel — disjoint emitters/files).
-- Downstream: AQ3 takes `must_follow AQ2.5` for the classifier seam its
-  sweep pre-check calls, and its **live-evidence validation** requires
-  this sprint's heartbeat producer (both recorded in AQ3; AQ3's other
-  deliverables and its parallel_safe AQ2 claim are unaffected).
+- must_follow: AQ2 (shared file:
+  `atm-daemon-bootstrap/src/received_hook_selector.rs` — AQ2 edits
+  `PublishedGraftReceivedHook`'s emit path and this sprint adds
+  `PullPendingReceivedHook` + the `ReplacementReceivedHookSelector`
+  match arm to the same file and match statement. AQ2 lands its
+  selector-file changes first; this sprint's diff builds on them —
+  single owner per diff, sequenced, mirroring the AQ2.5→AQ3 classifier
+  seam resolution). Merge-forward trigger: AQ2 dev push. The resulting
+  sprint chain is AQ2 → AQ2.5 → AQ3.
+- must_follow: AQ2.6 (2026-08-26 reorder: Herdr lands before this sprint;
+  the selector already carries the Herdr arm and this sprint adds the
+  bare-CLI arm beside it). Merge-forward trigger: AQ2.6 dev push.
+- Downstream: AQ3 takes `must_follow AQ2.5` for its live-evidence
+  validation (heartbeat producer) and the bare-CLI "never sweep" rule;
+  the classifier seam itself is AQ1's.
+- Removed 2026-08-26: "AQ2.6 takes must_follow AQ2.5" — inverted; AQ2.6
+  is now upstream and neither sprint owns the classifier (AQ1 does).

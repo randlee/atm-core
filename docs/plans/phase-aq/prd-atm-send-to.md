@@ -44,7 +44,7 @@ Wyvern is used as a `dialog`/`zenity`-class picker: CLI-hosted webview, custom H
 
 ### 4.2 Contracts
 
-**Input to picker** (`atm teams --json --members`, the AQ2 projection; plain
+**Input to picker** (`atm teams --json --members`, the AQ4 projection; plain
 `atm teams --json` remains the existing team-count output):
 ```json
 { "schema_version": 1,
@@ -102,15 +102,32 @@ IT policy), not something the daemon can plan around. The design:
   No daemon endpoint, no fetch/push state machine, no envelope semantics —
   the daemon carries only the ordinary message.
 - **Fan-out:** N recipients → N ordinary messages client-side; remote
-  recipients sharing a host share one transfer.
+  recipients sharing a host share one transfer. Recipient/attachment shape
+  validates for the whole batch before anything is staged (a malformed
+  request stages and sends nothing — R5/R13). A *live* transfer or send
+  failure partway through a multi-host batch is different: it is real I/O
+  after validation already passed, so it cannot be pre-flighted away.
+  Policy (AQ4 decision (g)): abort every not-yet-attempted host and report
+  a partial result — recipients already delivered stay delivered,
+  recipients on or after the failed host are reported not-delivered by id.
+  This is fail-forward, not fail-atomic, across hosts in one `--from-json`
+  batch; the single-invocation "zero sends on failure" guarantee in §5a
+  covers pre-flight validation, not live transfer I/O.
 
 ### 4.5 Lifecycle: ATM_TEMP as a system-level contract
 
-`ATM_TEMP` is a **mandatory, system-level environment variable** defining the
-ATM scratch area for *all* features, validated at daemon/CLI startup with an
-actionable error. A periodic daemon sweep removes anything under `$ATM_TEMP`
-older than **30 days** (TTL-only; no ack coupling, no storage traits). With
-that contract in place, per-feature temp layouts are a non-issue.
+`ATM_TEMP` is a **system-level environment variable** defining the ATM
+scratch area for *all* features, resolved by one shared `resolve_atm_temp`
+that the daemon calls at startup and the CLI calls lazily at first
+scratch-space use. It is not a hard boot requirement: **unset** resolves to
+a documented per-OS default (`<std::env::temp_dir()>/atm`, created if
+missing) with a single startup warning, so every already-installed daemon
+keeps booting unmodified (AQ4 decision (a) — rollout story). **Set but
+invalid** (relative, unresolvable, unwritable) fails closed with an
+actionable error at daemon startup and at CLI first scratch use. A periodic
+daemon sweep removes anything under `$ATM_TEMP` older than **30 days**
+(TTL-only; no ack coupling, no storage traits). With that contract in
+place, per-feature temp layouts are a non-issue.
 
 ### 4.5a `atm queue` — deferred-nudge send
 
@@ -225,15 +242,19 @@ not a hard failure at the picker-selection stage: the pipeline falls back to
 the native picker (AQ5 deliverable 3a). Additive evolution happens by
 incrementing `schema_version`, never by silently widening this shape. `atm send
 --from-json` performs client-side fan-out through the existing canonical write
-path, one immutable message per recipient. The AQ1 ADR owns message-id
-allocation versus staging; AQ2 tests that order rather than inventing a
-second rule.
+path, one immutable message per recipient. AQ4 (ADR-055) owns message-id
+allocation versus staging order and tests it rather than inventing a
+second rule (corrected 2026-08-26: previously mis-attributed to AQ1/AQ2,
+which are queue sprints).
 
 All attachment bytes remain outside the message bus. The message carries the
 landed path in its text; staging (local copy or transfer-script invocation)
-completes before the send, and any transfer failure aborts the whole
-invocation with zero sends. This is the production boundary for both
-same-host and cross-host paths.
+completes before the send. For a single recipient, any transfer failure
+aborts that invocation with zero sends. For a multi-recipient `--from-json`
+batch, a live transfer/send failure on host N aborts every host after N
+without rolling back hosts already delivered before N — see §4.4's Fan-out
+bullet (AQ4 decision (g)) for the full partial-fan-out policy. This is the
+production boundary for both same-host and cross-host paths.
 
 ## 6. Open Questions (block ADR, not prototype)
 
@@ -245,8 +266,9 @@ same-host and cross-host paths.
 4. Team-level addressing in atm-core, or stay with client-side fan-out?
 5. Wyvern cold-start latency — is it under the ~1 s context-menu tolerance? **Measure before committing Wyvern as the picker.**
 6. Which registration fields supply member `cwd`? Host sourcing is no longer
-   open: AQ1 decision (h) owns the explicit roster `host` binding and AQ2
-   implements its projection/resolution without heartbeat changes.
+   open: AQ4 decision (e) owns the explicit roster `host` binding and AQ4
+   implements its projection/resolution without heartbeat changes
+   (corrected 2026-08-26: "AQ1 decision (h)" did not exist).
 7. (P2) Which local model is the drafter default, and what is "Luna"? Does it run on the Mac Studio via Ollama/MLX?
 8. (P2) Does `fork` in the Wyvern chat integration fork the *session transcript* or the *agent process*? Send-To only needs transcript.
 9. (P2) Byte cap for the drafter — and does a directory get a tree listing or nothing?
