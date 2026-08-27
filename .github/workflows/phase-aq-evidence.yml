@@ -100,6 +100,8 @@ jobs:
 
       - name: Bootstrap exact repository tools
         run: just bootstrap
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # --- end shared CI setup ---
 
       - name: Ensure tmux is available (macOS)
