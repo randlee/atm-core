@@ -308,13 +308,25 @@ default scratch root (decision (a)), it does not error.
    consumed at `atm-http-runtime::storage_and_nudge_router.rs:95` — not
    the legacy `emit_daemon_event`) with `subsystem`/`action`/`outcome` +
    health counter.
-6. **Transfer example scripts + setup doc**: `scripts/send-to/
-   transfer-examples/{sftp.sh,tailscale.sh,rsync.sh,sftp.ps1}` — short,
-   commented, agent/human-modifiable, honoring the exact invocation
-   contract (remote `$ATM_TEMP` resolution shown two ways: fixed value or
-   `ssh <host> 'echo $ATM_TEMP'`; destination dir created by the script);
-   `docs/cross-host-file-transfer.md` walks copy → chmod → adapt → verify
-   and quotes the canonical error verbatim.
+6. **Transfer example scripts + setup doc**: `scripts/transfer/
+   {sftp.sh,tailscale.sh,sftp.ps1}` — short, commented, agent/human-modifiable,
+   honoring the exact invocation contract (remote `$ATM_TEMP` resolution
+   shown two ways: fixed value or `ssh <host> 'echo $ATM_TEMP'`; destination
+   dir created by the script); `docs/cross-host-file-transfer.md` walks
+   copy → chmod → adapt → verify and quotes the canonical error verbatim.
+   (QM43-M1 correction, recorded 2026-08-27: shipped as `scripts/transfer/`,
+   not the `scripts/send-to/transfer-examples/` path this deliverable
+   originally named — a shorter path with no redundant `-examples` suffix,
+   consistent with `docs/cross-host-file-transfer.md`'s existing links and
+   ADR-055's own references. Ships 3 scripts, not 4: `rsync.sh` was dropped
+   because the fleet's baseline transport is the passwordless-SSH `scp`
+   flow `sftp.sh`/`sftp.ps1` already cover end to end (verified sprint
+   baseline: "The fleet has passwordless SSH from this machine to all
+   destinations"); `rsync.sh` is deferred as a documented future addition
+   for a fleet whose transport needs it, per
+   `docs/cross-host-file-transfer.md`'s "write your own script honoring the
+   same contract" guidance, rather than shipped speculatively unverified
+   against any real destination.)
 7. **Single-owner gate**: an `atm-architecture` test (precedent:
    `boundary_enforcement.rs`'s `emit_received_hook` single-call-site
    assertion) pins one construction site for `send_to_staging_dir()` and

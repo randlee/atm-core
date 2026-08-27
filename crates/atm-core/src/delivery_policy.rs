@@ -1,3 +1,4 @@
+use crate::HerdrSession;
 use crate::boundary::{RosterEntry, RosterHarness};
 use crate::delivery_channel::{
     DeliveryChannel, GraftLeaseState, classify_delivery_channel, graft_lease_state,
@@ -60,6 +61,8 @@ pub(crate) struct DeliveryRecipientSnapshot {
     pub(crate) harness: DeliveryHarnessPath,
     pub(crate) recipient_pane_id: Option<PaneId>,
     pub(crate) local_tmux_post_send: bool,
+    pub(crate) local_herdr_post_send: bool,
+    pub(crate) herdr_session: Option<HerdrSession>,
     pub(crate) graft_post_send: bool,
     pub(crate) roster_backed: bool,
 }
@@ -72,6 +75,8 @@ impl DeliveryRecipientSnapshot {
             harness: DeliveryHarnessPath::NonClaude,
             recipient_pane_id: None,
             local_tmux_post_send: false,
+            local_herdr_post_send: false,
+            herdr_session: None,
             graft_post_send: false,
             roster_backed: false,
         }
@@ -84,6 +89,13 @@ impl DeliveryRecipientSnapshot {
         let local_backend = local_message_received_backend(&member);
         let delivery_channel = classify_delivery_channel(local_backend.as_ref(), graft_lease);
         let local_tmux_post_send = delivery_channel == DeliveryChannel::TmuxSteer;
+        let local_herdr_post_send = delivery_channel == DeliveryChannel::HerdrSteer;
+        let herdr_session = match local_backend.as_ref() {
+            Some(crate::delivery_channel::LocalMessageReceivedBackend::Herdr { session }) => {
+                session.clone()
+            }
+            _ => None,
+        };
         let graft_post_send = delivery_channel == DeliveryChannel::Graft;
         Self {
             agent: member.agent_name,
@@ -91,6 +103,8 @@ impl DeliveryRecipientSnapshot {
             harness: DeliveryHarnessPath::from_roster_harness(member.harness),
             recipient_pane_id: member.recipient_pane_id,
             local_tmux_post_send,
+            local_herdr_post_send,
+            herdr_session,
             graft_post_send,
             roster_backed: true,
         }
@@ -731,6 +745,29 @@ mod tests {
             assert_eq!(snapshot.harness, DeliveryHarnessPath::NonClaude);
             assert!(snapshot.graft_post_send);
         }
+    }
+
+    #[test]
+    fn herdr_backend_wins_over_non_claude_graft_fallback() {
+        let mut metadata = Map::new();
+        metadata.insert(
+            crate::delivery_channel::BACKEND_TYPE_METADATA_KEY.to_owned(),
+            serde_json::json!("herdr"),
+        );
+        let entry = RosterEntry {
+            team_name: "team-a".parse().expect("team"),
+            agent_name: crate::test_support::TEST_SENDER.parse().expect("agent"),
+            member_kind: RosterMemberKind::Permanent,
+            harness: RosterHarness::CodexCli,
+            agent_type: AgentType::Worker,
+            model: crate::types::ModelName::default(),
+            recipient_pane_id: None,
+            metadata_json: metadata,
+        };
+        let snapshot = DeliveryRecipientSnapshot::from_roster(entry);
+        assert!(!snapshot.local_tmux_post_send);
+        assert!(snapshot.local_herdr_post_send);
+        assert!(!snapshot.graft_post_send);
     }
 
     #[test]

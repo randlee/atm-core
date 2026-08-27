@@ -18,6 +18,10 @@ dependency bump plus live proof that the Hermes workaround era is over —
 coordinated with team-lead@atm-dev on M5, framed per standing convention as
 an atm-graft API change notification, not a Python code change request.
 
+> **Scope ruling (fenix, 2026-08-27):** the automated loopback restart-matrix
+> tests belong to AQ1.7; this sprint owns the live m5 evidence run (harness +
+> committed evidence), and may reuse AQ1.7's test fixtures.
+
 ## Deliverables
 
 1. Rebuild/bump the `atm-graft-python` wheel against the AQ1.5–AQ1.8

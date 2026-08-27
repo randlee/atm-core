@@ -104,6 +104,13 @@ the file is written but no longer read by anything in-tree.
    is rendered from the read-time aliveness derivation (AQ1.5: lease
    exists AND `last_seen_at` within window AND `unreachable_at IS NULL`) —
    display-only, consistent with deliverable 2's dial-anyway rule (I11).
+> **AC ownership ruling (fenix, 2026-08-27, after QA on #1046/#1048):** this sprint
+> owns the **automated loopback restart-matrix integration tests in-tree**
+> (daemon restart with live receiver; receiver restart with live daemon →
+> immediate displacement; SIGKILL crash-within-window). AQ1.9 owns only the
+> **live m5 evidence run** of the same matrix. Every AC in this doc must ship
+> with a named automated test; "implemented but untested" is not complete.
+
 5. **Fallback removal is explicit**: no silent file fallback remains in any
    cutover consumer — if the lease is absent, the error says the receiver
    is not registered (actionable: receiver not running or daemon missed

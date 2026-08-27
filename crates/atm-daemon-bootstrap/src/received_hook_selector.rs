@@ -9,6 +9,8 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
+#[cfg(feature = "benchmark-harness")]
+use atm_core::HerdrSession;
 use atm_core::LocalServiceRuntime;
 use atm_core::RequestDeadline;
 use atm_core::boundary::{
@@ -17,6 +19,9 @@ use atm_core::boundary::{
     TMUX_NUDGE_CONFIRM_KEY,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
+#[cfg(feature = "benchmark-harness")]
+use atm_herdr::{AgentSnapshot, HerdrAgentStatus, HerdrError};
+use atm_herdr::{HerdrProcessAdapter, HerdrPromptOutcome};
 
 /// Builds the selector injected into every production replacement daemon.
 ///
@@ -25,8 +30,12 @@ use atm_core::error::{AtmError, AtmErrorCode};
 /// is compiled as a separate feature-gated binary below.
 pub fn active_received_hook_selector(
     service_runtime: LocalServiceRuntime,
+    herdr_process: Arc<dyn HerdrProcessAdapter>,
 ) -> Arc<dyn MessageReceivedHookSelector> {
-    Arc::new(ReplacementReceivedHookSelector::new(service_runtime))
+    Arc::new(ReplacementReceivedHookSelector::with_herdr_process(
+        service_runtime,
+        herdr_process,
+    ))
 }
 
 /// Mode accepted exclusively by the separately compiled benchmark binary.
@@ -56,10 +65,76 @@ impl BenchmarkHookMode {
 pub fn benchmark_received_hook_selector(
     service_runtime: LocalServiceRuntime,
     mode: BenchmarkHookMode,
+    herdr_process: Arc<dyn HerdrProcessAdapter>,
 ) -> Arc<dyn MessageReceivedHookSelector> {
     match mode {
-        BenchmarkHookMode::Active => active_received_hook_selector(service_runtime),
+        BenchmarkHookMode::Active => active_received_hook_selector(service_runtime, herdr_process),
         BenchmarkHookMode::Disabled => Arc::new(DisabledReceivedHookSelector),
+    }
+}
+
+/// Benchmark-only adapter: active-hook capacity runs must not invoke Herdr or
+/// construct the real process invoker. It accepts the wake locally so the
+/// benchmark measures ATM admission and routing rather than an external CLI.
+#[cfg(feature = "benchmark-harness")]
+pub struct BenchmarkNoopHerdrProcessAdapter;
+
+#[cfg(feature = "benchmark-harness")]
+impl HerdrProcessAdapter for BenchmarkNoopHerdrProcessAdapter {
+    fn prompt<'a>(
+        &'a self,
+        agent: &'a atm_core::types::AgentName,
+        _session: Option<&'a HerdrSession>,
+        _deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Result<HerdrPromptOutcome, HerdrError>> + Send + 'a>> {
+        let snapshot = AgentSnapshot {
+            name: Some(agent.to_string()),
+            status: HerdrAgentStatus::Idle,
+            workspace_id: None,
+        };
+        Box::pin(async move { Ok(HerdrPromptOutcome::Accepted(snapshot)) })
+    }
+
+    fn wait<'a>(
+        &'a self,
+        agent: &'a atm_core::types::AgentName,
+        _session: Option<&'a HerdrSession>,
+        _until: &'a [HerdrAgentStatus],
+        _timeout: std::time::Duration,
+        _deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Result<atm_herdr::HerdrWaitOutcome, HerdrError>> + Send + 'a>>
+    {
+        let snapshot = AgentSnapshot {
+            name: Some(agent.to_string()),
+            status: HerdrAgentStatus::Idle,
+            workspace_id: None,
+        };
+        Box::pin(async move { Ok(atm_herdr::HerdrWaitOutcome { snapshot }) })
+    }
+
+    fn get<'a>(
+        &'a self,
+        agent: &'a atm_core::types::AgentName,
+        _session: Option<&'a HerdrSession>,
+        _deadline: RequestDeadline,
+        _breaker_policy: atm_herdr::BreakerPolicy,
+    ) -> Pin<Box<dyn Future<Output = Result<atm_herdr::HerdrGetOutcome, HerdrError>> + Send + 'a>>
+    {
+        let snapshot = AgentSnapshot {
+            name: Some(agent.to_string()),
+            status: HerdrAgentStatus::Idle,
+            workspace_id: None,
+        };
+        Box::pin(async move { Ok(atm_herdr::HerdrGetOutcome { snapshot }) })
+    }
+
+    fn list<'a>(
+        &'a self,
+        _session: Option<&'a HerdrSession>,
+        _deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Result<atm_herdr::HerdrListOutcome, HerdrError>> + Send + 'a>>
+    {
+        Box::pin(async { Ok(atm_herdr::HerdrListOutcome { agents: Vec::new() }) })
     }
 }
 
@@ -68,14 +143,30 @@ pub fn benchmark_received_hook_selector(
 #[derive(Clone)]
 struct ReplacementReceivedHookSelector {
     tmux: TokioTmuxReceivedHook,
+    herdr: HerdrReceivedHook,
     graft: PublishedGraftReceivedHook,
 }
 
 impl ReplacementReceivedHookSelector {
+    #[cfg(test)]
     #[must_use]
     fn new(service_runtime: LocalServiceRuntime) -> Self {
+        Self::with_herdr_process(
+            service_runtime,
+            Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default()),
+        )
+    }
+
+    #[must_use]
+    fn with_herdr_process(
+        service_runtime: LocalServiceRuntime,
+        herdr_process: Arc<dyn HerdrProcessAdapter>,
+    ) -> Self {
         Self {
             tmux: TokioTmuxReceivedHook,
+            herdr: HerdrReceivedHook {
+                process: herdr_process,
+            },
             graft: PublishedGraftReceivedHook { service_runtime },
         }
     }
@@ -89,9 +180,20 @@ impl MessageReceivedHookSelector for ReplacementReceivedHookSelector {
         dispatch: &BuiltInPostSendDispatch,
     ) -> Option<&dyn AsyncMessageReceivedHookEmitter> {
         match (dispatch.kind, &dispatch.target) {
-            (NudgeKind::Steer, PostSendBuiltInTarget::LocalSteer(_)) => Some(&self.tmux),
+            (
+                NudgeKind::Steer,
+                PostSendBuiltInTarget::LocalSteer(boundary::LocalSteerTarget::Tmux(_)),
+            ) => Some(&self.tmux),
+            (
+                NudgeKind::Steer,
+                PostSendBuiltInTarget::LocalSteer(boundary::LocalSteerTarget::Herdr(_)),
+            ) => Some(&self.herdr),
             (NudgeKind::Steer, PostSendBuiltInTarget::Graft(_)) => Some(&self.graft),
-            (NudgeKind::Queue, _) => None, // AQ2/AQ3 own queue-kind emitters
+            (
+                NudgeKind::Queue,
+                PostSendBuiltInTarget::LocalSteer(boundary::LocalSteerTarget::Herdr(_)),
+            ) => Some(&self.herdr),
+            (NudgeKind::Queue, _) => None, // AQ3 owns tmux/graft queue-kind emitters
         }
     }
 }
@@ -130,7 +232,9 @@ impl AsyncMessageReceivedHookEmitter for TokioTmuxReceivedHook {
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<PostSendEmissionPath, AtmError>> + Send + '_>> {
         Box::pin(async move {
-            let PostSendBuiltInTarget::LocalSteer(target) = dispatch.target else {
+            let PostSendBuiltInTarget::LocalSteer(boundary::LocalSteerTarget::Tmux(target)) =
+                dispatch.target
+            else {
                 return Err(AtmError::validation(
                     "tmux receiver hook received a non-tmux dispatch",
                 ));
@@ -176,6 +280,47 @@ impl AsyncMessageReceivedHookEmitter for TokioTmuxReceivedHook {
     }
 }
 
+/// Tokio-native Herdr receiver. Herdr performs live agent resolution and its
+/// own pre-input blocked-dialog guard; this emitter never falls back to tmux.
+#[derive(Clone)]
+struct HerdrReceivedHook {
+    process: Arc<dyn HerdrProcessAdapter>,
+}
+
+impl boundary::sealed::Sealed for HerdrReceivedHook {}
+
+impl AsyncMessageReceivedHookEmitter for HerdrReceivedHook {
+    fn emit_received_message(
+        &self,
+        dispatch: BuiltInPostSendDispatch,
+        deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Result<PostSendEmissionPath, AtmError>> + Send + '_>> {
+        let process = Arc::clone(&self.process);
+        Box::pin(async move {
+            let PostSendBuiltInTarget::LocalSteer(boundary::LocalSteerTarget::Herdr(target)) =
+                dispatch.target
+            else {
+                return Err(AtmError::validation(
+                    "Herdr receiver hook received a non-Herdr dispatch",
+                ));
+            };
+            let result = process
+                .prompt(&dispatch.event.recipient, target.session.as_ref(), deadline)
+                .await;
+            match result {
+                Ok(HerdrPromptOutcome::Accepted(_)) => {
+                    tracing::info!(backend = "herdr", member = %dispatch.event.recipient, outcome = "accepted", "Herdr wake-up submitted");
+                }
+                Err(error) => {
+                    let outcome = error.emission_outcome();
+                    tracing::warn!(backend = "herdr", member = %dispatch.event.recipient, error = ?error, outcome, "Herdr wake-up was not accepted");
+                }
+            }
+            Ok(PostSendEmissionPath::LocalHerdr)
+        })
+    }
+}
+
 async fn run_tmux<const N: usize>(
     arguments: [&str; N],
     deadline: RequestDeadline,
@@ -183,29 +328,38 @@ async fn run_tmux<const N: usize>(
     let remaining = deadline
         .remaining()
         .ok_or_else(|| hook_deadline_error("before tmux command start"))?;
-    let output = tokio::time::timeout(
-        remaining,
-        tokio::process::Command::new("tmux")
-            .args(arguments)
-            .output(),
-    )
-    .await
-    .map_err(|_| hook_deadline_error("while executing tmux"))?
-    .map_err(|source| {
+    let mut child = tokio::process::Command::new("tmux")
+        .args(arguments)
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|source| {
+            AtmError::new(
+                AtmErrorCode::PostSendTmuxSendFailed,
+                "failed to start tmux received-message hook command",
+            )
+            .with_cause(source)
+        })?;
+    let status = match tokio::time::timeout(remaining, child.wait()).await {
+        Ok(Ok(status)) => status,
+        Ok(Err(source)) => {
+            return Err(AtmError::new(
+                AtmErrorCode::PostSendTmuxSendFailed,
+                "tmux received-message hook command failed",
+            )
+            .with_cause(source));
+        }
+        Err(_) => {
+            let _ = child.kill().await;
+            let _ = child.wait().await;
+            return Err(hook_deadline_error("while executing tmux"));
+        }
+    };
+    status.success().then_some(()).ok_or_else(|| {
         AtmError::new(
             AtmErrorCode::PostSendTmuxSendFailed,
-            "failed to start tmux received-message hook command",
-        )
-        .with_cause(source)
-    })?;
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err(AtmError::new(
-            AtmErrorCode::PostSendTmuxSendFailed,
             "tmux received-message hook command failed",
-        ))
-    }
+        )
+    })
 }
 
 fn hook_deadline_error(stage: &'static str) -> AtmError {
@@ -259,8 +413,9 @@ mod tests {
     use atm_core::RequestDeadline;
     use atm_core::boundary::MessageReceivedHookSelector;
     use atm_core::boundary::{
-        AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, LocalTmuxNudgeTarget, NudgeKind,
-        PostSendBuiltInTarget, PostSendHookEvent,
+        AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, HerdrNudgeTarget,
+        LocalSteerTarget, LocalTmuxNudgeTarget, NudgeKind, PostSendBuiltInTarget,
+        PostSendHookEvent,
     };
     use atm_core::types::{AgentName, PaneId, TeamName};
 
@@ -284,10 +439,12 @@ mod tests {
                 task_id: None,
                 recipient_pane_id: Some(PaneId::from_cli("%1").expect("pane")),
             },
-            target: PostSendBuiltInTarget::LocalSteer(LocalTmuxNudgeTarget {
-                pane_id: PaneId::from_cli("%1").expect("pane"),
-                rendered_nudge: "test".to_owned(),
-            }),
+            target: PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Tmux(
+                LocalTmuxNudgeTarget {
+                    pane_id: PaneId::from_cli("%1").expect("pane"),
+                    rendered_nudge: "test".to_owned(),
+                },
+            )),
             kind: NudgeKind::Steer,
         }
     }
@@ -295,6 +452,16 @@ mod tests {
     fn queue_dispatch() -> BuiltInPostSendDispatch {
         let mut dispatch = tmux_dispatch();
         dispatch.kind = NudgeKind::Queue;
+        dispatch
+    }
+
+    fn herdr_dispatch(kind: NudgeKind) -> BuiltInPostSendDispatch {
+        let mut dispatch = tmux_dispatch();
+        dispatch.kind = kind;
+        dispatch.target =
+            PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Herdr(HerdrNudgeTarget {
+                session: Some(atm_core::HerdrSession::new("team-a").expect("session")),
+            }));
         dispatch
     }
 
@@ -308,6 +475,69 @@ mod tests {
 
         assert!(selector.select_emitter(&tmux_dispatch()).is_some());
         assert!(selector.select_emitter(&queue_dispatch()).is_none());
+    }
+
+    #[tokio::test]
+    async fn selector_routes_both_herdr_kinds_through_the_injected_adapter() {
+        let temporary_root = tempfile::tempdir().expect("temporary selector runtime root");
+        let assembly =
+            atm_runtime_test_support::open_isolated_sqlite_boundary(temporary_root.path())
+                .expect("assemble isolated selector runtime");
+        let fake = std::sync::Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
+        let selector = ReplacementReceivedHookSelector::with_herdr_process(
+            assembly.service_runtime,
+            fake.clone(),
+        );
+        for kind in [NudgeKind::Steer, NudgeKind::Queue] {
+            let emitter = selector
+                .select_emitter(&herdr_dispatch(kind))
+                .expect("Herdr local steer must be selected");
+            assert_eq!(
+                emitter
+                    .emit_received_message(
+                        herdr_dispatch(kind),
+                        RequestDeadline::after(Duration::from_secs(1))
+                    )
+                    .await
+                    .expect("fake Herdr accepts prompt"),
+                atm_core::boundary::PostSendEmissionPath::LocalHerdr
+            );
+        }
+        let calls = fake.calls();
+        assert_eq!(calls.len(), 2);
+        assert!(calls.iter().all(|call| matches!(
+            call,
+            atm_herdr::testing::FakeHerdrCall::Prompt {
+                session: Some(_),
+                ..
+            }
+        )));
+    }
+
+    #[test]
+    fn structured_herdr_outcomes_preserve_each_d8_condition() {
+        use atm_herdr::HerdrError;
+        assert_eq!(
+            HerdrError::AgentBlocked.emission_outcome(),
+            "blocked_before_input"
+        );
+        assert_eq!(
+            HerdrError::AgentNotFound.emission_outcome(),
+            "target_not_present"
+        );
+        assert_eq!(HerdrError::AgentNotReady.emission_outcome(), "not_ready");
+        assert_ne!(
+            HerdrError::ProtocolMismatch.emission_outcome(),
+            "advisory_failure"
+        );
+        assert_eq!(HerdrError::TimedOut.emission_outcome(), "timed_out");
+        assert_eq!(
+            HerdrError::Unavailable {
+                retry_after: Duration::from_secs(1),
+            }
+            .emission_outcome(),
+            "breaker_unavailable"
+        );
     }
 
     #[tokio::test]
