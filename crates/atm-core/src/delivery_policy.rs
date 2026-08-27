@@ -1,5 +1,7 @@
 use crate::boundary::{RosterEntry, RosterHarness};
-use crate::delivery_channel::local_message_received_backend;
+use crate::delivery_channel::{
+    DeliveryChannel, GraftLeaseState, classify_delivery_channel, local_message_received_backend,
+};
 use crate::error::AtmError;
 use crate::provenance::ValidatedWriteProvenance;
 use crate::schema::{AtmMessageId, ThreadMode};
@@ -78,28 +80,33 @@ impl DeliveryRecipientSnapshot {
         }
     }
 
-    /// Projects the roster's single backend-selection seam into the legacy
-    /// delivery snapshot consumed by the retained send planner.
+    /// Historical AQ0-era backend-selection flags kept for existing send/nudge
+    /// callers. They are projected from the canonical AQ1 delivery-channel
+    /// classifier so immediate and deferred routing cannot diverge.
     fn from_roster(member: RosterEntry) -> Self {
         let local_backend = local_message_received_backend(&member);
-        let (local_tmux_post_send, local_herdr_post_send, herdr_session) = match local_backend {
-            Some(crate::delivery_channel::LocalMessageReceivedBackend::Tmux { .. }) => {
-                (true, false, None)
-            }
-            Some(crate::delivery_channel::LocalMessageReceivedBackend::Herdr { session }) => {
-                (false, true, session.map(|session| session.to_string()))
-            }
-            None => (false, false, None),
-        };
-        let graft_post_send = matches!(
+        let graft_lease = if matches!(
             member.harness,
             RosterHarness::CodexCli
                 | RosterHarness::GeminiCli
                 | RosterHarness::Opencode
                 | RosterHarness::Hermes
                 | RosterHarness::PythonGraft
-        ) && !local_tmux_post_send
-            && !local_herdr_post_send;
+        ) {
+            GraftLeaseState::Active
+        } else {
+            GraftLeaseState::Absent
+        };
+        let delivery_channel = classify_delivery_channel(local_backend.as_ref(), graft_lease);
+        let local_tmux_post_send = delivery_channel == DeliveryChannel::TmuxSteer;
+        let local_herdr_post_send = delivery_channel == DeliveryChannel::HerdrSteer;
+        let herdr_session = match local_backend.as_ref() {
+            Some(crate::delivery_channel::LocalMessageReceivedBackend::Herdr { session }) => {
+                session.as_ref().map(ToString::to_string)
+            }
+            _ => None,
+        };
+        let graft_post_send = delivery_channel == DeliveryChannel::Graft;
         Self {
             agent: member.agent_name,
             team: member.team_name,

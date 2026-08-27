@@ -34,7 +34,10 @@ error_types = ["AtmError"]
 notes = ["MAX_NUDGE_ATTEMPTS bounds claim_next_pending eligibility; at or above this count the marker stays set but the row is reported stuck", "the caller-owned write policy (NudgeMode) that decides when to invoke this contract lives in atm-core::send, not here", "concrete backend implementations must implement the atm-storage sealed trait directly and must not depend on atm-core to satisfy this contract"]
 
 [testing]
-allowed_test_double_paths = []
+allowed_test_double_paths = [
+  "crate::contract::DummyPendingNudgeStore",
+  "atm_core::tests::nudge_mode::RecordingPendingNudgeStore",
+]
 forbidden_test_bypasses = ["rusqlite::Connection"]
 
 [enforcement]

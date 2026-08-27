@@ -277,8 +277,8 @@ an optimization; AQ1's test suite proves it directly (duplicate write → zero
   standing CI check, not a one-time migration script; it must be extended
   deliberately (new allowlist entries land beside the ADR/PR that
   introduces them), never bulk-regenerated to silence a finding.
-- `ADR-018` §3's capability-trait cap is now at five traits including
-  `PendingNudgeStore`; a sixth optional capability trait requires counting
+- `ADR-018` §3's capability-trait cap is now at six traits including
+  `PendingNudgeStore`; a seventh optional capability trait requires counting
   from this ADR forward, not from ADR-018's original baseline.
 
 ## Rejected alternatives
