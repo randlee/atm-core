@@ -6,7 +6,7 @@ phase: AT
 sprint: AT.1
 worktree: feature/pat-s1-install-and-publish
 branch: feature/pat-s1-install-and-publish
-status: proposed
+status: in-progress
 estimated_scope: shared-package install, parity, and authorized 1.4.3 TestPyPI/PyPI publication
 ```
 
@@ -133,9 +133,9 @@ metadata` at sprint time is authoritative if the workspace has changed.
 
 | Surface | Members |
 | --- | --- |
-| Publishable crates (crates.io), dependency order | Baseline census: 12 crates, one valid topological order: `atm-error` → `atm-storage` → `agent-team-mail-core` → `atm-storage-rusqlite` → `atm-http-runtime` → `atm-runtime` → `atm-template-sc-compose` → `atm-daemon-bootstrap` → `atm-daemon-client` → `agent-team-mail` → `atm-daemon` → `atm-graft`. Any order satisfying the workspace dependency graph is acceptable; re-derive this list at sprint time. |
+| Publishable crates (crates.io), dependency order | **Resolved sprint census: 13 crates.** `atm-error` → `atm-storage` → `peer-tls` → `agent-team-mail-core` → `atm-storage-rusqlite` → `atm-http-runtime` → `atm-daemon-client` → `atm-runtime` → `atm-template-sc-compose` → `atm-daemon-bootstrap` → `atm-daemon` → `atm-graft` → `agent-team-mail`. The order is validated against the live workspace dependency graph. |
 | Internal `publish = false` crates | 9 crates, never published: `atm-architecture`, `atm-storage-sqlserver-proof`, `atm-runtime-test-support`, `atm-peer-tls-interop`, `atm-graft-python`, `atm-query-python`, `sc-lint-attributes`, `sc-lint-directives`, `sc-lint-boundary`. |
-| Workspace member requiring an explicit disposition | **UNRESOLVED:** `peer-tls` is present on current `origin/develop` (workspace version `1.4.4`), has no `publish = false` declaration, and depends on `atm-storage`. The sprint must explicitly choose `publish = true` or `publish = false` and update the consumer input before promotion. |
+| Workspace member requiring an explicit disposition | **RESOLVED:** `peer-tls` is `publish = true` at order 3. It is a normal dependency of publishable `atm-daemon-bootstrap`, depends only on `atm-storage`, and therefore must be released after `atm-storage` and before `atm-daemon-bootstrap`. |
 | Python distributions | `atm-graft` (maturin, `crates/atm-graft-python`, version dynamic from Cargo.toml), `atm-query` (maturin, `crates/atm-query-python`), `hermes-atm` (setuptools, `crates/hermes-atm` — a pure-Python package, not a workspace crate). |
 | Released binaries | `atm` (crate `agent-team-mail`) and `atm-daemon` (crate `atm-daemon`), both confirmed cargo bin targets. `atm_post_send_hook_fixture` and `atm-daemon-benchmark` are internal bins and are not released. |
 

@@ -3,7 +3,7 @@
 ```yaml
 plan_type: phase_index
 phase: AT
-status: proposed
+status: in-progress
 branch: plan/phase-at-publish-recovery
 worktree: plan/phase-at-publish-recovery
 upstream_package: sc-publish
@@ -109,7 +109,7 @@ receipt and the recovered re-pin verification receipt.
 
 | Sprint | Purpose | Dependency |
 | --- | --- | --- |
-| [AT.1](AT.1-install-parity-and-publish.md) | Install the pinned shared package, prove parity, and perform authorized TestPyPI/PyPI 1.4.3 publication. | Start point |
+| [AT.1](AT.1-install-parity-and-publish.md) | Installed the pinned shared package and proved parity; TestPyPI/PyPI publication is authorization-gated and recorded as pending. | Start point |
 | [AT.2](AT.2-legacy-deletion.md) | Verify coverage, then delete the deprecated legacy publish surface. | must_follow AT.1 |
 
 Each sprint doc's frontmatter `status:` flips to `in-progress` when its

@@ -8,7 +8,6 @@ import re
 import shutil
 import subprocess
 import sys
-import tempfile
 import tomllib
 from dataclasses import asdict
 from dataclasses import dataclass
@@ -25,13 +24,12 @@ from release_artifacts import load_manifest
 REQUIRED_RELEASE_FILES = (
     "release/publish-artifacts.toml",
     "scripts/release_gate.sh",
-    "scripts/release_artifacts.py",
+    ".github/scripts/release_artifacts.py",
     "docs/release-inventory-schema.json",
     "release/RELEASE-NOTES-TEMPLATE.md",
 )
 REQUIRED_RELEASE_BINARIES = ("atm", "atm-daemon")
-INVENTORY_REQUIRED_TOP = ("releaseVersion", "releaseTag", "releaseCommit", "generatedAt", "items")
-INVENTORY_REQUIRED_ITEM = ("artifact", "version", "sourceRef", "publishTarget", "verifyCommands", "required")
+KIT_RELEASE_ARTIFACTS = ".github/scripts/release_artifacts.py"
 CHECK_DEP_CURRENCY_ENV = "ATMD_CHECK_DEP_CURRENCY"
 GITHUB_ISSUE_ENV = "ATMD_GH_AUTOFIX_ISSUES"
 PHASE_AE_STAGED_INSTALL_ROOT = Path("target/phase-ae/staged-install-root")
@@ -93,6 +91,64 @@ def run_capture(cmd: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str
     )
 
 
+def kit_command(*args: str) -> list[str]:
+    """Build a command for the installed release-contract validator."""
+
+    return ["python3", KIT_RELEASE_ARTIFACTS, *args]
+
+
+def load_release_contract(root: Path) -> dict:
+    """Load consumer-owned manifest data for checks absent from the kit CLI."""
+
+    return tomllib.loads((root / "release" / "publish-artifacts.toml").read_text(encoding="utf-8"))
+
+
+def validate_preflight_contract(root: Path, findings: list[Finding]) -> None:
+    """Verify the kit can render the declared preflight contract.
+
+    The former ``validate-preflight-checks`` command belonged to the retired
+    manifest schema.  The installed kit now owns contract validation and emits
+    this plan only after validating the manifest and channel contracts.
+    """
+
+    completed = run_capture(
+        kit_command("preflight-secret-plan", "--manifest", "release/publish-artifacts.toml"),
+        cwd=root,
+    )
+    append_completed_findings(
+        findings,
+        "preflight-contract",
+        completed,
+        "preflight contract rendered",
+        "preflight contract rendering failed",
+    )
+    if completed.returncode != 0:
+        return
+    try:
+        plan = json.loads(completed.stdout)
+    except json.JSONDecodeError as error:
+        findings.append(
+            Finding(
+                check="preflight-contract",
+                severity="error",
+                summary="kit preflight contract is not valid JSON",
+                detail=str(error),
+            )
+        )
+        return
+    required = ("repository_secrets", "environment_secrets", "github_environments")
+    missing = [key for key in required if not isinstance(plan.get(key), list)]
+    if missing:
+        findings.append(
+            Finding(
+                check="preflight-contract",
+                severity="error",
+                summary="kit preflight contract is incomplete",
+                detail=", ".join(missing),
+            )
+        )
+
+
 def append_completed_findings(
     findings: list[Finding],
     check: str,
@@ -120,6 +176,53 @@ def append_completed_findings(
             exit_code=completed.returncode,
         )
     )
+
+
+def is_expected_unpublished_workspace_resolution(
+    completed: subprocess.CompletedProcess[str],
+    root: Path,
+    workspace_version: str,
+) -> bool:
+    """Identify Cargo's pre-publication lookup of this workspace version only."""
+
+    if completed.returncode == 0:
+        return False
+    output = f"{completed.stdout}\n{completed.stderr}"
+    requirement = re.compile(
+        rf'failed to select a version for the requirement `(?P<package>[^\s=]+) = "\^{re.escape(workspace_version)}"`'
+    )
+    match = requirement.search(output)
+    return bool(
+        match
+        and match.group("package") in workspace_package_names(root)
+        and "candidate versions found which didn't match" in output
+        and "location searched: crates.io index" in output
+    )
+
+
+def append_publish_dry_run_finding(
+    findings: list[Finding],
+    completed: subprocess.CompletedProcess[str],
+    root: Path,
+    check: str,
+    failure_summary: str,
+    workspace_version: str,
+) -> None:
+    """Keep publish dry-runs fail-closed except before their own version exists."""
+
+    if is_expected_unpublished_workspace_resolution(completed, root, workspace_version):
+        findings.append(
+            Finding(
+                check=check,
+                severity="warning",
+                summary="package dry-run requires the not-yet-published workspace version",
+                detail=(completed.stderr or completed.stdout).strip(),
+                command=completed.args if isinstance(completed.args, list) else None,
+                exit_code=completed.returncode,
+            )
+        )
+        return
+    append_completed_findings(findings, check, completed, f"{check} passed", failure_summary)
 
 
 def validate_support_files(root: Path, findings: list[Finding]) -> None:
@@ -241,74 +344,52 @@ def validate_manifest(
     release_version: str,
 ) -> None:
     manifest_path = root / "release" / "publish-artifacts.toml"
-    resolved_staged_install_root = ensure_staged_install_docs(
-        root,
-        manifest_path=manifest_path,
-        staged_install_root=staged_install_root,
-    )
     commands = (
         (
             "manifest-coverage",
-            [
-                "python3",
-                "scripts/release_artifacts.py",
+            kit_command(
                 "validate-manifest",
                 "--manifest",
                 "release/publish-artifacts.toml",
                 "--workspace-toml",
                 "Cargo.toml",
-            ],
+            ),
             "manifest coverage validation failed",
         ),
         (
-            "preflight-modes",
-            [
-                "python3",
-                "scripts/release_artifacts.py",
-                "validate-preflight-checks",
-                "--manifest",
-                "release/publish-artifacts.toml",
-                "--workspace-toml",
-                "Cargo.toml",
-            ],
-            "preflight mode validation failed",
-        ),
-        (
             "publish-order",
-            [
-                "python3",
-                "scripts/release_artifacts.py",
+            kit_command(
                 "validate-publish-order",
                 "--manifest",
                 "release/publish-artifacts.toml",
                 "--workspace-toml",
                 "Cargo.toml",
-            ],
+            ),
             "publish-order validation failed",
         ),
     )
     for check, cmd, summary in commands:
         completed = run_capture(cmd, cwd=root)
         append_completed_findings(findings, check, completed, f"{check} passed", summary)
-    validate_staged_install_docs(
-        root,
-        findings,
-        manifest_path=manifest_path,
-        staged_install_root=resolved_staged_install_root,
-        release_version=release_version,
-    )
+    validate_preflight_contract(root, findings)
+    if "installed_docs" in load_release_contract(root):
+        resolved_staged_install_root = ensure_staged_install_docs(
+            root,
+            manifest_path=manifest_path,
+            staged_install_root=staged_install_root,
+        )
+        validate_staged_install_docs(
+            root,
+            findings,
+            manifest_path=manifest_path,
+            staged_install_root=resolved_staged_install_root,
+            release_version=release_version,
+        )
 
 
 def validate_release_binaries(root: Path, findings: list[Finding]) -> None:
     completed = run_capture(
-        [
-            "python3",
-            "scripts/release_artifacts.py",
-            "validate-release-binaries",
-            "--manifest",
-            "release/publish-artifacts.toml",
-            *sum((["--required", binary] for binary in REQUIRED_RELEASE_BINARIES), []),
-        ],
+        kit_command("cargo-build-bin-args", "--manifest", "release/publish-artifacts.toml"),
         cwd=root,
     )
     append_completed_findings(
@@ -318,6 +399,18 @@ def validate_release_binaries(root: Path, findings: list[Finding]) -> None:
         "required release binaries validated",
         "required release binaries missing from manifest",
     )
+    if completed.returncode != 0:
+        return
+    missing = [binary for binary in REQUIRED_RELEASE_BINARIES if f"--bin {binary}" not in completed.stdout]
+    if missing or not completed.stdout.split():
+        findings.append(
+            Finding(
+                check="release-binaries",
+                severity="error",
+                summary="required release binaries missing from kit build arguments",
+                detail=", ".join(missing) if missing else "kit rendered no build arguments",
+            )
+        )
 
 
 def validate_publish_surface(
@@ -329,15 +422,13 @@ def validate_publish_surface(
 ) -> None:
     if enforce_release_version:
         unpublished = run_capture(
-            [
-                "python3",
-                "scripts/release_artifacts.py",
+            kit_command(
                 "check-version-unpublished",
                 "--manifest",
                 "release/publish-artifacts.toml",
                 "--version",
                 version,
-            ],
+            ),
             cwd=root,
         )
         append_completed_findings(
@@ -356,42 +447,29 @@ def validate_publish_surface(
             )
         )
 
-    modes = {
-        "full": [
-            "python3",
-            "scripts/release_artifacts.py",
-            "list-preflight",
-            "--manifest",
-            "release/publish-artifacts.toml",
-            "--mode",
-            "full",
-        ],
-        "locked": [
-            "python3",
-            "scripts/release_artifacts.py",
-            "list-preflight",
-            "--manifest",
-            "release/publish-artifacts.toml",
-            "--mode",
-            "locked",
-        ],
-    }
-    crates_by_mode: dict[str, list[str]] = {}
-    for mode, cmd in modes.items():
-        completed = run_capture(cmd, cwd=root)
-        if completed.returncode != 0:
-            append_completed_findings(
-                findings,
-                f"publish-surface-{mode}-list",
-                completed,
-                f"{mode} preflight list generated",
-                f"{mode} preflight list generation failed",
-            )
-            crates_by_mode[mode] = []
-            continue
-        crates_by_mode[mode] = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
+    publish_plan = run_capture(
+        kit_command("list-publish-plan", "--manifest", "release/publish-artifacts.toml"),
+        cwd=root,
+    )
+    append_completed_findings(
+        findings,
+        "publish-surface-plan",
+        publish_plan,
+        "kit publish plan rendered",
+        "kit publish plan rendering failed",
+    )
+    contract = load_release_contract(root)
+    crates = contract.get("crates", [])
+    if not isinstance(crates, list):
+        findings.append(Finding("publish-surface-plan", "error", "release contract crates must be a list"))
+        return
+    publishable_crates = [entry.get("package") for entry in crates if isinstance(entry, dict) and entry.get("publish") is True]
+    locked_crates = [entry.get("package") for entry in crates if isinstance(entry, dict) and entry.get("publish") is not True]
+    if not all(isinstance(package, str) and package for package in [*publishable_crates, *locked_crates]):
+        findings.append(Finding("publish-surface-plan", "error", "release contract crates must declare package names"))
+        return
 
-    for crate in crates_by_mode.get("full", []):
+    for crate in publishable_crates:
         for cmd, check_name, summary in (
             (
                 ["cargo", "package", "-p", crate, "--locked", "--no-verify"],
@@ -405,9 +483,9 @@ def validate_publish_surface(
             ),
         ):
             completed = run_capture(cmd, cwd=root)
-            append_completed_findings(findings, check_name, completed, f"{check_name} passed", summary)
+            append_publish_dry_run_finding(findings, completed, root, check_name, summary, version)
 
-    for crate in crates_by_mode.get("locked", []):
+    for crate in locked_crates:
         completed = run_capture(["cargo", "check", "-p", crate, "--locked"], cwd=root)
         append_completed_findings(
             findings,
@@ -419,89 +497,34 @@ def validate_publish_surface(
 
 
 def validate_inventory(root: Path, version: str, findings: list[Finding]) -> None:
-    tag = f"v{version}"
-    commit_result = run_capture(["git", "rev-parse", "HEAD"], cwd=root)
-    if commit_result.returncode != 0:
-        append_completed_findings(
-            findings,
-            "inventory-commit",
-            commit_result,
-            "release commit resolved",
-            "release commit resolution failed",
-        )
-        return
-    commit = commit_result.stdout.strip()
-    with tempfile.TemporaryDirectory(prefix="atm-release-inventory-") as tmpdir:
-        output = Path(tmpdir) / "release-inventory.json"
-        completed = run_capture(
-            [
-                "python3",
-                "scripts/release_artifacts.py",
-                "emit-inventory",
-                "--manifest",
-                "release/publish-artifacts.toml",
-                "--version",
-                version,
-                "--tag",
-                tag,
-                "--commit",
-                commit,
-                "--source-ref",
-                f"refs/heads/{current_ref(root)}",
-                "--generated-at",
-                utc_now(),
-                "--output",
-                str(output),
-            ],
-            cwd=root,
-        )
-        if completed.returncode != 0:
-            append_completed_findings(
-                findings,
-                "inventory-generate",
-                completed,
-                "release inventory generated",
-                "release inventory generation failed",
-            )
-            return
-        inventory = json.loads(output.read_text(encoding="utf-8"))
+    """Validate the kit's renderable build plan instead of legacy inventory output."""
 
-    missing_top = [field for field in INVENTORY_REQUIRED_TOP if field not in inventory]
-    if missing_top:
-        findings.append(
-            Finding(
-                check="inventory-shape",
-                severity="error",
-                summary="inventory missing required top-level fields",
-                detail=", ".join(missing_top),
-            )
-        )
+    completed = run_capture(
+        kit_command("build-plan", "--manifest", "release/publish-artifacts.toml"),
+        cwd=root,
+    )
+    append_completed_findings(
+        findings,
+        "release-build-plan",
+        completed,
+        "kit release build plan rendered",
+        "kit release build plan rendering failed",
+    )
+    if completed.returncode != 0:
         return
-    items = inventory.get("items", [])
-    if not isinstance(items, list) or not items:
-        findings.append(
-            Finding(
-                check="inventory-shape",
-                severity="error",
-                summary="inventory.items must be a non-empty list",
-            )
-        )
+    try:
+        plan = json.loads(completed.stdout)
+    except json.JSONDecodeError as error:
+        findings.append(Finding("release-build-plan", "error", "kit build plan is not valid JSON", str(error)))
         return
-    item_errors: list[str] = []
-    for idx, item in enumerate(items):
-        if not isinstance(item, dict):
-            item_errors.append(f"items[{idx}] must be an object")
-            continue
-        for field in INVENTORY_REQUIRED_ITEM:
-            if field not in item:
-                item_errors.append(f"items[{idx}] missing {field}")
-    if item_errors:
+    missing = [name for name in ("has_crates", "has_python_wheels", "has_python_sdists") if plan.get(name) is not True]
+    if missing:
         findings.append(
             Finding(
-                check="inventory-shape",
+                check="release-build-plan",
                 severity="error",
-                summary="inventory shape validation failed",
-                detail="; ".join(item_errors),
+                summary="kit build plan is missing required release surfaces",
+                detail=", ".join(missing),
             )
         )
 

@@ -1448,25 +1448,25 @@ forward no AS work, files, acceptance criteria, or release receipts. The AS
 artifacts remain only on `origin/integrate/phase-as` as historical
 reference; do not build on them.
 
-## 52. Phase AT — Manifest-Driven Publishing Recovery [PROPOSED — PLAN ON BRANCH, AT.1 REHEARSED]
+## 52. Phase AT — Manifest-Driven Publishing Recovery [IN PROGRESS — AT.1 INSTALL/PARITY COMPLETE, PUBLICATION AUTHORIZATION PENDING]
 
 Phase AT restarts the publish-kit adoption from the post-AS-revert baseline
 (commit `d610b4c07`) under the ADR-050 ownership split: `sc-publish` owns
 generic publish mechanics; atm-core owns its own manifest, validation, and
-publish-order correctness. Three sprints: `AT.1` install one immutable,
+publish-order correctness. Two sprints: `AT.1` install one immutable,
 pinned `sc-publish` revision (never patched locally) driven by ATM's
-complete consumer JSON input and prove preflight/release parity; `AT.2`
-authorized TestPyPI→PyPI retry of the previously-unpublished 1.4.3 Python
-release from immutable `main` (must_follow AT.1); `AT.3` verify coverage,
-then delete the legacy publish surface — `release.yml`,
+complete consumer JSON input, prove preflight/release parity, and execute only
+authorized TestPyPI→PyPI retry of the immutable 1.4.3 Python release; `AT.2`
+verifies coverage, then deletes the legacy publish surface — `release.yml`,
 `release-preflight.yml`, `hermes-atm-pypi-publish.yml`, root `scripts/` —
-that the kit now covers (must_follow AT.2). Integration branch:
+that the kit now covers (must_follow AT.1). Integration branch:
 `integrate/phase-at`.
 
 The plan lives on branch `plan/phase-at-publish-recovery`
-(`docs/plans/phase-at/`, status proposed, hardened 2026-08-20 per
-critical/traceability review); an AT.1 dry-run rehearsal receipt exists on
-`smoke/phase-at-at1-rehearsal`. Not yet merged to `develop`.
+(`docs/plans/phase-at/`, status in progress, hardened 2026-08-20 per
+critical/traceability review). AT.1's completed install/parity receipt records
+the 13-crate census including `peer-tls`; TestPyPI/PyPI dispatches remain
+explicitly authorization-gated.
 
 ## 53. Phase AU — Boundary Debt Retirement [PLANNING ACTIVE]
 
