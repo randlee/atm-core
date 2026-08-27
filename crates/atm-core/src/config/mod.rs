@@ -69,6 +69,14 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
             &path,
         )?,
         graft: normalize_graft_config(parsed.atm.graft),
+        sweep_interval_seconds: parsed
+            .atm
+            .sweep_interval_seconds
+            .unwrap_or(types::DEFAULT_SWEEP_INTERVAL_SECONDS),
+        sweep_ttl_days: parsed
+            .atm
+            .sweep_ttl_days
+            .unwrap_or(types::DEFAULT_SWEEP_TTL_DAYS),
         config_root,
     }))
 }
@@ -204,6 +212,10 @@ struct RawAtmSection {
     claude_jsonl_body_export_max_bytes: Option<u64>,
     #[serde(default)]
     graft: Option<RawGraftSection>,
+    #[serde(default)]
+    sweep_interval_seconds: Option<u64>,
+    #[serde(default)]
+    sweep_ttl_days: Option<u32>,
 }
 
 #[derive(Debug, Default, Deserialize)]
