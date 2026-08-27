@@ -6,6 +6,9 @@ pub mod api;
 /// `ATM_TEMP` scratch-root resolution and shared-host safety validation
 /// (ADR-055).
 pub mod atm_temp;
+/// `$ATM_TEMP` TTL sweep config validation and one pure, `tokio`-free sweep
+/// pass (ADR-055 decision (b)).
+pub mod atm_temp_sweeper;
 /// Phase R boundary traits and placeholder contract types.
 pub mod boundary;
 /// Hidden daemon-private ingress/export helpers used by concrete boundary
@@ -116,6 +119,9 @@ pub use atm_storage::derive_ack_requirement;
 pub use atm_storage::{TemplateFrontmatter, TemplateSha};
 pub use atm_temp::{
     AtmTemp, AtmTempError, EnvSource, ProcessEnvSource, resolve_atm_temp, send_to_staging_dir,
+};
+pub use atm_temp_sweeper::{
+    SweepConfig, SweepReport, SweeperError, sweep_once, validate_sweep_config,
 };
 #[allow(deprecated)]
 pub use boundary::{
