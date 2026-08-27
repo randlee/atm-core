@@ -10,7 +10,7 @@
 //! store reload helper this module wraps.
 
 use crate::boundary::{
-    BuiltInPostSendDispatch, MemberKey, MessageKey, NudgeKind, PendingNudgeStore, PostSendHookEvent,
+    BuiltInPostSendDispatch, MemberKey, MessageKey, NudgeKind, PostSendHookEvent,
 };
 use crate::delivery_policy::DeliveryPolicyCoordinator;
 use crate::error::AtmError;
