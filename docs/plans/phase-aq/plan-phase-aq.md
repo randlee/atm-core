@@ -114,7 +114,7 @@ the Herdr pair (disjoint files); AQ2/AQ2.5/AQ3 follow; AQ4–AQ6 unchanged.
 | AQ1.5 | Graft registration: daemon API + durable SQLite store (ADR-056) | must_follow AQ1 · parallel_safe AQ2.6, AQ2.7 |
 | AQ1.6 | Graft registration: receiver announce-at-init + lease refresh (dual-write) | must_follow AQ1.5 · parallel_safe AQ2.6, AQ2.7 |
 | AQ1.7 | Graft endpoint consumer cutover (delivery, `_internal-nudge`, doctor) | must_follow AQ1.6 · parallel_safe AQ2.6, AQ2.7 |
-| AQ1.8 | Graft file-record retirement + AI3133 closure | must_follow AQ1.7 · parallel_safe AQ1.9, AQ2.6, AQ2.7 |
+| AQ1.8 | Graft file-record retirement + AI3133 closure | must_follow AQ1.7 · parallel_safe AQ1.9, AQ2.6, AQ2.7 — **Scope note (fenix, 2026-08-27): AQ1.8 content landed on `integrate/phase-aq` via #1051 before #1048; #1049 is the verification/closure PR.** |
 | AQ1.9 | hermes-atm wheel bump + live restart-matrix verification on m5 | must_follow AQ1.7 · parallel_safe AQ1.8, AQ2.6, AQ2.7 |
 | AQ2 | Queue: atm-graft dual-channel | must_follow AQ1, AQ1.7 (AQ2 owns the graft channel's send-and-report; retry state lives only in AQ1's store) |
 | AQ2.5 | Queue delivery triggers: heartbeat producer (harness idle hooks), bare-CLI arm of AQ1's classifier, RAM FIFO + Stop-pull get (ADR-054 addendum) | must_follow AQ1, AQ1.7, AQ2 (shared `received_hook_selector.rs` — AQ2 lands first), AQ2.6 (Herdr arm already present in the seam) |
