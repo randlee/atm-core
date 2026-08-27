@@ -218,11 +218,19 @@ for whichever sprint picks up the shared-drain follow-up.
       and orders it **across members** by a single **rotating start index**
       (`HerdrTickRotationCursor`, held in the pump's own in-memory state,
       process-lifetime like the breaker, reset to `0` on daemon restart):
-      the fixed, alphabetically-sorted `(team, agent)` candidate universe is
-      rotated so this tick starts at `cursor % candidates.len()` and wraps,
-      then the cursor advances by the number of candidates *considered* this
-      tick (claimed-or-skipped, not just successfully dispatched) so the
-      next tick picks up where this one left off. Within one member's own
+      this tick's candidate list — recomputed fresh every tick from the
+      idle+pending set and alphabetically sorted by `(team, agent)` only for
+      a stable within-tick order (the set itself is NOT fixed across ticks)
+      — is rotated so the tick starts at `cursor % candidates.len()` and
+      wraps. **Algorithm (one, normative — PLAN-CRIT-201): break-at-cap.**
+      The loop walks the rotated list and, for each candidate in turn,
+      claims-and-dispatches (or skips a candidate whose status changed);
+      it **breaks immediately** once `HERDR_MAX_PROMPTS_PER_TICK` successful
+      `prompted` dispatches have occurred, never visiting trailing
+      candidates. The cursor advances by the number of loop iterations
+      actually executed (dispatched + non-idle skips encountered before the
+      break), so the next tick resumes exactly at the first unvisited
+      candidate. Within one member's own
       turn there is only ever one oldest-first candidate
       (`claim_next_pending`'s own FIFO), so "oldest ULID within a member"
       falls out of that call for free — the rotation only orders *across*
@@ -239,8 +247,8 @@ for whichever sprint picks up the shared-drain follow-up.
       revisited later; a claim is held only for the duration of its own
       dispatch call. The loop stops after `HERDR_MAX_PROMPTS_PER_TICK`
       **successful `prompted` dispatches** or after the rotated candidate
-      list is exhausted, whichever comes first — a claim beyond the cap is
-      simply **never taken** (not claimed-then-`release_pending`'d: with
+      list is exhausted, whichever comes first (break-at-cap, above) — a
+      claim beyond the cap is simply **never taken** (not claimed-then-`release_pending`'d: with
       one-at-a-time claiming there is nothing left to release once the cap
       is reached, because the loop has already stopped claiming). Members
       past the cap keep their marker and attempt count exactly as they
@@ -527,12 +535,16 @@ for whichever sprint picks up the shared-drain follow-up.
     members simultaneously idle and pending and `HERDR_MAX_PROMPTS_PER_TICK`
     held at its constant 16, a fixture proves every one of the 20 members
     receives exactly one prompt within 2 ticks: tick 1 claims-and-dispatches
-    16 in rotation order starting from the persisted cursor, advances the
-    cursor past all 20 considered candidates (16 dispatched + 4 skipped by
-    the cap), and tick 2 starts from the advanced cursor and dispatches the
-    remaining 4 (plus up to 12 more from the next rotation, if still
-    idle+pending) — no member is starved by always losing the tie-break to
-    the same neighbors on every tick.
+    16 in rotation order starting from the persisted cursor and breaks at
+    the cap, advancing the cursor by exactly the 16 iterations executed
+    (the trailing 4 are never visited); tick 2 starts at the 17th candidate
+    and dispatches the remaining 4 first (plus up to 12 more from the next
+    rotation, if still idle+pending) — no member is starved by always
+    losing the tie-break to the same neighbors on every tick. A second
+    fixture changes the candidate-list composition between ticks (two new
+    members become idle+pending and one serviced member re-enters with a
+    second queued message) and proves the same bound: every member idle on
+    two consecutive ticks is prompted within 2 ticks under break-at-cap.
 
 ## Required validation
 

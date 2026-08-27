@@ -272,7 +272,7 @@ pub mod testing {
     pub enum FakeHerdrCall {
         Prompt { agent: String, session: Option<atm_core::HerdrSession> },
         Wait { agent: String, session: Option<atm_core::HerdrSession>, until: Vec<super::HerdrAgentStatus>, timeout: std::time::Duration },
-        Get { agent: String, session: Option<atm_core::HerdrSession> },
+        Get { agent: String, session: Option<atm_core::HerdrSession>, breaker_policy: super::BreakerPolicy },
         List { session: Option<atm_core::HerdrSession> },
     }
 
