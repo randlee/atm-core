@@ -7,7 +7,7 @@ use std::io::Write;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 #[cfg(unix)]
 use std::num::NonZeroU32;
-use std::num::{NonZeroU16, NonZeroUsize};
+use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::{Arc, Once};
 use std::time::Duration;
@@ -36,11 +36,10 @@ use atm_herdr::{
     HerdrSpawnBreaker,
 };
 use atm_http_runtime::{
-    AcceptedPeerStream, BareCliFifo, BareCliQueueFullDrops, DirectPeerTcpConfig,
-    EstablishedPeerStream, HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig,
-    NonZeroDuration, PeerConnectionPool, PeerPoolConfig, PeerStreamAdapter, PeerStreamFuture,
-    RuntimeHealth, RuntimeLimits, RuntimeTimeouts, StorageAndNudgeRouter,
-    shared_direct_peer_client,
+    AcceptedPeerStream, DirectPeerTcpConfig, EstablishedPeerStream, HttpRuntimeBuilder,
+    HttpRuntimeConfig, LoopbackTcpConfig, NonZeroDuration, PeerConnectionPool, PeerPoolConfig,
+    PeerStreamAdapter, PeerStreamFuture, RuntimeHealth, RuntimeLimits, RuntimeTimeouts,
+    StorageAndNudgeRouter, shared_direct_peer_client,
 };
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime};
 use atm_storage_rusqlite::SqliteStorageFactory;
@@ -48,15 +47,19 @@ use peer_tls::MtlsPeerStreamAdapter;
 use tokio::net::TcpStream;
 
 mod atm_temp_sweeper_runtime;
+mod bare_cli_runtime;
 mod owner_gate;
-mod peer_pool_config;
+mod peer_launch_config;
 mod queue_drain;
 mod received_hook_selector;
 
 use atm_temp_sweeper_runtime::AtmTempSweeperRuntime;
+use bare_cli_runtime::BareCliRuntime;
 
 pub use owner_gate::DaemonOwnerGuard;
-pub use peer_pool_config::parse_peer_pool_config;
+pub use peer_launch_config::{
+    parse_direct_peer_port, parse_peer_pool_config, parse_peer_wire_mode,
+};
 pub use received_hook_selector::active_received_hook_selector;
 pub use received_hook_selector::active_received_hook_selector_with_health;
 #[cfg(feature = "benchmark-harness")]
@@ -88,8 +91,7 @@ struct ReplacementHandlerConfig<F> {
     peer_wire_mode: PeerWireMode,
     peer_adapter_selection: SelectedPeerAdapterSelection,
     runtime_health: RuntimeHealth,
-    bare_cli_fifo: BareCliFifo,
-    bare_cli_queue_full_drops: BareCliQueueFullDrops,
+    bare_cli: BareCliRuntime,
     herdr_process: Option<Arc<dyn HerdrProcessAdapter>>,
 }
 
@@ -98,8 +100,7 @@ fn compose_queue_workers<F>(
     selector_factory: F,
     herdr_process: Arc<dyn HerdrProcessAdapter>,
     runtime_health: RuntimeHealth,
-    bare_cli_fifo: BareCliFifo,
-    bare_cli_queue_full_drops: BareCliQueueFullDrops,
+    bare_cli: BareCliRuntime,
 ) -> (
     Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     queue_drain::RecoverySweepHandle,
@@ -109,16 +110,14 @@ where
         atm_core::LocalServiceRuntime,
         Arc<dyn HerdrProcessAdapter>,
         RuntimeHealth,
-        BareCliFifo,
-        BareCliQueueFullDrops,
+        BareCliRuntime,
     ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
 {
     let selector = selector_factory(
         runtime.clone(),
         herdr_process,
         runtime_health.clone(),
-        bare_cli_fifo,
-        bare_cli_queue_full_drops,
+        bare_cli,
     );
     let recovery_sweep =
         queue_drain::spawn_recovery_sweep(runtime, selector.clone(), runtime_health);
@@ -273,108 +272,6 @@ pub fn resolve_daemon_launch_identity() -> DaemonLaunchIdentity {
     }
 }
 
-/// Parse the sole non-durable peer-wire launch policy before composition.
-///
-/// The process mode deliberately has no environment, database, or adapter
-/// availability source: those inputs can cause a startup error but cannot
-/// select plaintext.
-pub fn parse_peer_wire_mode(
-    arguments: impl IntoIterator<Item = std::ffi::OsString>,
-) -> Result<PeerWireMode, AtmError> {
-    if std::env::var_os("ATM_PEER_WIRE_SECURITY").is_some() {
-        return Err(AtmError::peer_wire_mode_source_forbidden(
-            "ATM_PEER_WIRE_SECURITY is forbidden; use --peer-wire-security at daemon launch",
-        ));
-    }
-    let mut arguments = arguments.into_iter();
-    let _program = arguments.next();
-    let mut mode = None;
-    while let Some(argument) = arguments.next() {
-        let argument = argument.into_string().map_err(|_| {
-            AtmError::peer_wire_mode_invalid("daemon launch arguments must be valid UTF-8")
-        })?;
-        let value = if argument == "--peer-wire-security" {
-            Some(arguments.next().ok_or_else(|| {
-                AtmError::peer_wire_mode_invalid(
-                    "--peer-wire-security requires `mutual-tls` or `plaintext-test`",
-                )
-            })?)
-        } else {
-            argument
-                .strip_prefix("--peer-wire-security=")
-                .map(std::ffi::OsString::from)
-        };
-        let Some(value) = value else {
-            continue;
-        };
-        let value = value.into_string().map_err(|_| {
-            AtmError::peer_wire_mode_invalid("peer-wire launch mode must be valid UTF-8")
-        })?;
-        let parsed = match value.as_str() {
-            "mutual-tls" => PeerWireMode::mtls(),
-            "plaintext-test" => PeerWireMode::plaintext_test(),
-            _ => {
-                return Err(AtmError::peer_wire_mode_invalid(
-                    "--peer-wire-security accepts only `mutual-tls` or `plaintext-test`",
-                ));
-            }
-        };
-        if mode.replace(parsed).is_some() {
-            return Err(AtmError::peer_wire_mode_invalid(
-                "--peer-wire-security may be supplied only once",
-            ));
-        }
-    }
-    Ok(mode.unwrap_or_default())
-}
-
-/// Selects the direct-peer listener port from the immutable daemon launch.
-///
-/// The fixed protocol port remains the service default. An explicit value is
-/// useful for a dedicated physical benchmark account that shares a host with
-/// another account's live daemon; it is not peer identity or wire policy.
-pub fn parse_direct_peer_port(
-    arguments: impl IntoIterator<Item = std::ffi::OsString>,
-) -> Result<NonZeroU16, AtmError> {
-    let mut arguments = arguments.into_iter();
-    let _program = arguments.next();
-    let mut port = None;
-    while let Some(argument) = arguments.next() {
-        let argument = argument
-            .into_string()
-            .map_err(|_| AtmError::config("direct-peer launch arguments must be valid UTF-8"))?;
-        let value = if argument == "--direct-peer-port" {
-            Some(arguments.next().ok_or_else(|| {
-                AtmError::config("--direct-peer-port requires a non-zero TCP port")
-            })?)
-        } else {
-            argument
-                .strip_prefix("--direct-peer-port=")
-                .map(std::ffi::OsString::from)
-        };
-        let Some(value) = value else {
-            continue;
-        };
-        let value = value
-            .into_string()
-            .map_err(|_| AtmError::config("direct-peer launch port must be valid UTF-8"))?;
-        let parsed = value
-            .parse::<u16>()
-            .ok()
-            .and_then(NonZeroU16::new)
-            .ok_or_else(|| AtmError::config("--direct-peer-port requires a non-zero TCP port"))?;
-        if port.replace(parsed).is_some() {
-            return Err(AtmError::config(
-                "--direct-peer-port may be supplied only once",
-            ));
-        }
-    }
-    Ok(port.unwrap_or_else(|| {
-        NonZeroU16::new(atm_http_runtime::DIRECT_PEER_TCP_PORT)
-            .expect("the protocol direct-peer port is non-zero")
-    }))
-}
-
 struct BootstrapMtlsStreamAdapter {
     adapter: Arc<MtlsPeerStreamAdapter>,
 }
@@ -489,17 +386,13 @@ pub async fn run_replacement_daemon_with_observability(
     let peer_pool_config = parse_peer_pool_config(std::env::args_os())?;
     run_replacement_daemon_with_selector(
         observability,
-        |service_runtime,
-         herdr_process,
-         runtime_health,
-         bare_cli_fifo,
-         bare_cli_queue_full_drops| {
+        |service_runtime, herdr_process, runtime_health, bare_cli| {
             received_hook_selector::active_received_hook_selector_with_health_and_fifo(
                 service_runtime,
                 herdr_process,
                 runtime_health,
-                bare_cli_fifo,
-                bare_cli_queue_full_drops,
+                bare_cli.fifo(),
+                bare_cli.queue_full_drops(),
             )
         },
         resolve_daemon_launch_identity(),
@@ -523,18 +416,14 @@ pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode) -> Result<(), At
     let peer_pool_config = parse_peer_pool_config(std::env::args_os())?;
     run_replacement_daemon_with_selector(
         Arc::new(NullObservability),
-        move |service_runtime,
-              herdr_process,
-              runtime_health,
-              bare_cli_fifo,
-              bare_cli_queue_full_drops| {
+        move |service_runtime, herdr_process, runtime_health, bare_cli| {
             received_hook_selector::benchmark_received_hook_selector_with_health_and_fifo(
                 service_runtime,
                 hook_mode,
                 herdr_process,
                 runtime_health,
-                bare_cli_fifo,
-                bare_cli_queue_full_drops,
+                bare_cli.fifo(),
+                bare_cli.queue_full_drops(),
             )
         },
         resolve_daemon_launch_identity(),
@@ -555,8 +444,7 @@ fn build_replacement_handler(
             atm_core::LocalServiceRuntime,
             Arc<dyn HerdrProcessAdapter>,
             RuntimeHealth,
-            BareCliFifo,
-            BareCliQueueFullDrops,
+            BareCliRuntime,
         ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     >,
 ) -> Result<(Arc<StorageAndNudgeRouter>, queue_drain::RecoverySweepHandle), AtmError> {
@@ -567,8 +455,7 @@ fn build_replacement_handler(
         peer_wire_mode,
         peer_adapter_selection,
         runtime_health,
-        bare_cli_fifo,
-        bare_cli_queue_full_drops,
+        bare_cli,
         herdr_process,
     } = config;
     let herdr_process = match herdr_process {
@@ -591,8 +478,7 @@ fn build_replacement_handler(
         selector_factory,
         herdr_process,
         runtime_health.clone(),
-        bare_cli_fifo.clone(),
-        bare_cli_queue_full_drops.clone(),
+        bare_cli.clone(),
     );
     let transition_sink = queue_drain::transition_sink(
         assembly.service_runtime.clone(),
@@ -608,7 +494,7 @@ fn build_replacement_handler(
     )
     .with_runtime_health(runtime_health, assembly.doctor_ports)
     .with_member_state_transition_sink(transition_sink)
-    .with_bare_cli_fifo(bare_cli_fifo, bare_cli_queue_full_drops)
+    .with_bare_cli_fifo(bare_cli.fifo(), bare_cli.queue_full_drops())
     .with_daemon_context(atm_core::doctor::DoctorExecutionContext {
         team: daemon_launch_identity.team.clone(),
         identity: daemon_launch_identity.identity.clone(),
@@ -736,8 +622,7 @@ async fn run_replacement_daemon_with_selector(
         atm_core::LocalServiceRuntime,
         Arc<dyn HerdrProcessAdapter>,
         RuntimeHealth,
-        BareCliFifo,
-        BareCliQueueFullDrops,
+        BareCliRuntime,
     ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     daemon_launch_identity: DaemonLaunchIdentity,
     peer_wire_mode: PeerWireMode,
@@ -749,8 +634,7 @@ async fn run_replacement_daemon_with_selector(
     let scope = current_host_runtime_scope()?;
     let _owner = DaemonOwnerGuard::acquire_at(scope.owner_lock.clone())?;
     let runtime_health = RuntimeHealth::with_owner(std::process::id());
-    let bare_cli_fifo: BareCliFifo = Default::default();
-    let bare_cli_queue_full_drops: BareCliQueueFullDrops = Default::default();
+    let bare_cli = BareCliRuntime::default();
     let atm_temp_sweeper =
         start_atm_temp_sweeper(Arc::clone(&observability), daemon_launch_identity.clone())?;
     let assembly = assemble_daemon_runtime()?;
@@ -768,8 +652,7 @@ async fn run_replacement_daemon_with_selector(
                 pool_config: peer_pool_config,
             },
             runtime_health: runtime_health.clone(),
-            bare_cli_fifo,
-            bare_cli_queue_full_drops,
+            bare_cli,
             herdr_process,
         },
     )?;
@@ -1157,7 +1040,7 @@ mod replacement_runtime_tests {
     use atm_template_sc_compose::ScComposeTemplateComposer;
     use serde_json::Map;
 
-    use super::peer_pool_config::parse_peer_pool_config_with_environment;
+    use super::peer_launch_config::parse_peer_pool_config_with_environment;
     use super::{
         DaemonLaunchIdentity, HerdrPresenceDoctorAdapter, REPLACEMENT_DRAIN_DEADLINE,
         ReplacementHandlerConfig, SelectedPeerAdapterSelection, ShutdownSignal,
@@ -1400,7 +1283,7 @@ mod replacement_runtime_tests {
             assembly,
             ReplacementHandlerConfig {
                 observability: Arc::new(NullObservability),
-                selector_factory: |_, _, _, _, _| {
+                selector_factory: |_, _, _, _| {
                     Arc::new(NoReceivedHookSelector)
                         as Arc<dyn atm_core::boundary::MessageReceivedHookSelector>
                 },
@@ -1411,8 +1294,7 @@ mod replacement_runtime_tests {
                     pool_config: PeerPoolConfig::default(),
                 },
                 runtime_health: runtime_health.clone(),
-                bare_cli_fifo: Default::default(),
-                bare_cli_queue_full_drops: Default::default(),
+                bare_cli: Default::default(),
                 herdr_process: None,
             },
         )
