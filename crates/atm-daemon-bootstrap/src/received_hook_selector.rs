@@ -444,47 +444,12 @@ impl AsyncMessageReceivedHookEmitter for PublishedGraftReceivedHook {
                     deadline,
                 );
                 if result.is_ok() && kind == NudgeKind::Queue {
-                    let store = match service_runtime.pending_nudge_store() {
-                        Ok(store) => store,
-                        Err(error) => {
-                            runtime_health_for_clear.record_graft_queue_marker_clear_failure();
-                            tracing::warn!(
-                                subsystem = "atm_core.queue",
-                                action = "handoff_marker_clear",
-                                outcome = "failed",
-                                %error,
-                                msg_id = %message_id,
-                                "queue delivery succeeded but pending marker store was unavailable"
-                            );
-                            return result;
-                        }
-                    };
-                    if let Err(error) =
-                        store.clear_pending_on_handoff(&member_for_handoff, &message_id)
-                    {
-                        runtime_health_for_clear.record_graft_queue_marker_clear_failure();
-                        tracing::warn!(
-                            subsystem = "atm_core.queue",
-                            action = "handoff_marker_clear",
-                            outcome = "failed",
-                            %error,
-                            msg_id = %message_id,
-                            "queue delivery succeeded but pending marker clear failed; retrying"
-                        );
-                        if let Err(retry_error) =
-                            store.clear_pending_on_handoff(&member_for_handoff, &message_id)
-                        {
-                            runtime_health_for_clear.record_graft_queue_marker_clear_failure();
-                            tracing::warn!(
-                                subsystem = "atm_core.queue",
-                                action = "handoff_marker_clear",
-                                outcome = "failed",
-                                %retry_error,
-                                msg_id = %message_id,
-                                "pending marker clear retry failed after successful queue delivery"
-                            );
-                        }
-                    }
+                    atm_core::nudge_dispatch::clear_queue_marker_after_handoff(
+                        &service_runtime,
+                        &member_for_handoff,
+                        &message_id,
+                        || runtime_health_for_clear.record_graft_queue_marker_clear_failure(),
+                    );
                 }
                 result
             })
