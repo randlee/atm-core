@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-009>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-009" ;
+  triage:title "release/publish-surface-scope.md still describes the deleted scripts/verify_user_docs.py as the live user-doc freshness gate" ;
+  triage:description "AT.2 deleted scripts/verify_user_docs.py and its unreachable calling branch in validate_release.py (RBQA-F001), but release/publish-surface-scope.md:75-76 still states in prose that 'the user-doc freshness gate reuses scripts/verify_user_docs.py rather than maintaining a second partial checker.' AT.2's own prescribed reference-scan command covers only .github/, .just/, Justfile, scripts/, and docs/ — release/ was never in scope, so this dangling reference survived the sprint's own dead-reference sweep. Dual-reported independently by arch-qa (ARCH-001) and req-qa (ATM-QA-RECHECK-002) in QA pass AT2-QA-R1 on PR #1064." ;
+  triage:phaseId "phase-at" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "release/*.md and any other doc directory outside .github/, .just/, Justfile, scripts/, docs/ for stale references to files this sprint deletes" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-27T20:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AT2 ;
+  triage:foundAt "2026-08-27T20:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-009/PAT-S2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-009/PAT-S2-1>
+  a triage:Occurrence ;
+  triage:file "release/publish-surface-scope.md" ;
+  triage:line 75 ;
+  triage:snippet "the user-doc freshness gate reuses `scripts/verify_user_docs.py` rather than maintaining a second partial checker." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pat-s2-legacy-publish-deletion" ;
+  triage:headSha "b7f8c189872f4a07b1329fc3f0af911130968b88" ;
+  triage:occursIn <urn:atm:triage:worktree/PAT-S2/b7f8c189> .
+
+<urn:atm:triage:worktree/PAT-S2/b7f8c189>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature-pat-s2-legacy-publish-deletion" ;
+  triage:branch "feature/pat-s2-legacy-publish-deletion" ;
+  triage:headSha "b7f8c189872f4a07b1329fc3f0af911130968b88" ;
+  triage:orderIndex 1 .

@@ -15,13 +15,34 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-27T19:35:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AT1 ;
   triage:foundAt "2026-08-27T18:40:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006/AT1-DOC-001> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-27T20:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/ATM-QA-006/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-at/receipts/AT.1-receipt.md" ;
+  triage:line 184 ;
+  triage:snippet "quality-mgr AT2-QA-R1 re-verification: AT.1-receipt.md now explains the 708-vs-714 delta (R2 kit-delegation change replaced ten root check_version_sync tests with four installed-kit delegation tests); confirmed by req-qa on PR #1064" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pat-s2-legacy-publish-deletion" ;
+  triage:headSha "b7f8c189872f4a07b1329fc3f0af911130968b88" ;
+  triage:occursIn <urn:atm:triage:worktree/PAT-S2/b7f8c189> .
+
+<urn:atm:triage:worktree/PAT-S2/b7f8c189>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature-pat-s2-legacy-publish-deletion" ;
+  triage:branch "feature/pat-s2-legacy-publish-deletion" ;
+  triage:headSha "b7f8c189872f4a07b1329fc3f0af911130968b88" ;
+  triage:orderIndex 4 .
 
 <urn:atm:triage:occurrence/ATM-QA-006/AT1-DOC-001>
   a triage:Occurrence ;
