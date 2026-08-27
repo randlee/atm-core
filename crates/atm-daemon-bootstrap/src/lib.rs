@@ -937,13 +937,7 @@ async fn run_until_shutdown(
         .await;
         return Err(error);
     }
-    await_runtime_or_shutdown(
-        running,
-        handler,
-        workflow_telemetry,
-        atm_temp_sweeper,
-    )
-    .await
+    await_runtime_or_shutdown(running, &handler, workflow_telemetry, atm_temp_sweeper).await
 }
 
 async fn await_runtime_or_shutdown(
@@ -975,13 +969,7 @@ async fn await_runtime_or_shutdown(
             };
         }
     };
-    shutdown_replacement_daemon(
-        running,
-        handler.as_ref(),
-        workflow_telemetry,
-        atm_temp_sweeper,
-    )
-    .await
+    shutdown_replacement_daemon(running, handler, workflow_telemetry, atm_temp_sweeper).await
 }
 
 /// Resolves `$ATM_TEMP` (defaulting and emitting the one-time fallback
