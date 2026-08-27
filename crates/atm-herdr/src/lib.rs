@@ -461,7 +461,16 @@ async fn execute_list(
     session: Option<&HerdrSession>,
     deadline: RequestDeadline,
 ) -> Result<HerdrListOutcome, HerdrError> {
-    let args = list_args();
+    execute_list_with_args(binary, breaker, list_args(), session, deadline).await
+}
+
+async fn execute_list_with_args(
+    binary: &str,
+    breaker: Arc<HerdrSpawnBreaker>,
+    args: Vec<String>,
+    session: Option<&HerdrSession>,
+    deadline: RequestDeadline,
+) -> Result<HerdrListOutcome, HerdrError> {
     let output = run_command_with_binary(
         binary,
         &breaker,
@@ -476,11 +485,7 @@ async fn execute_list(
     } else {
         Err(parse_error(&output.stderr))
     };
-    if result.is_err() {
-        breaker.record_infrastructure_failure();
-    } else {
-        breaker.record_success();
-    }
+    record_result(&breaker, &result);
     result
 }
 
@@ -1064,6 +1069,26 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(breaker.consecutive_failures(), 1);
         assert!(matches!(breaker.state(), HerdrBreakerState::Open { .. }));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn non_infrastructure_list_error_leaves_the_breaker_closed() {
+        let breaker = Arc::new(HerdrSpawnBreaker::default());
+        let result = execute_list_with_args(
+            "/bin/sh",
+            Arc::clone(&breaker),
+            vec![
+                "-c".to_owned(),
+                r#"printf '%s' '{"error":{"code":"agent_not_ready"}}' >&2; exit 1"#.to_owned(),
+            ],
+            None,
+            RequestDeadline::after(Duration::from_secs(1)),
+        )
+        .await;
+        assert!(result.is_err());
+        assert_eq!(breaker.consecutive_failures(), 0);
+        assert_eq!(breaker.state(), HerdrBreakerState::Closed);
     }
 
     #[cfg(unix)]
