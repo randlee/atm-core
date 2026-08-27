@@ -926,9 +926,9 @@ mod tests {
     use atm_core::LocalServiceRuntime;
     use atm_core::boundary::{
         AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, GraftNudgeTarget,
-        LocalSteerTarget, LocalTmuxNudgeTarget, MemberKey, MessageReceivedHookSelector, NudgeKind,
-        PendingNudgeStore, PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEvent,
-        RosterEntry, RosterHarness, RosterMemberKind,
+        LocalSteerTarget, LocalTmuxNudgeTarget, MemberKey, MessageReceivedHookSelector, NudgeClaim,
+        NudgeKind, PendingNudgeStore, PostSendBuiltInTarget, PostSendEmissionPath,
+        PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
     };
     use atm_core::observability::NullObservability;
     use atm_core::protocol::{
@@ -940,14 +940,15 @@ mod tests {
     use atm_core::send::{
         MessageClassification, NudgeMode, SendMessageSource, TemplateSendSource, WriteRequest,
     };
-    use atm_core::types::{AgentName, ModelName, PaneId, TeamName};
+    use atm_core::types::{AgentName, IsoTimestamp, ModelName, PaneId, TeamName};
     use atm_core::{AuthenticatedIngress, RequestDeadline, api::ApiRequest, error::AtmError};
     use atm_runtime_test_support::{
         inspect_template_admission_for_test, install_sqlite_message_write_failure,
         open_graft_receiver_endpoint_store, open_sqlite_boundary,
     };
     use atm_storage::{
-        MessageKey, MessageQuery, MessageStore, RosterSnapshot, TemplateFrontmatter, TemplateSha,
+        MessageKey, MessageQuery, MessageStore, RosterSnapshot, RosterStore, TemplateFrontmatter,
+        TemplateSha,
     };
     use axum::body::{Body, to_bytes};
     use axum::http::header::{CONTENT_TYPE, LOCATION};
@@ -1050,6 +1051,67 @@ mod tests {
         }
     }
 
+    struct FailingMarkPendingStore {
+        inner: Arc<dyn PendingNudgeStore + Send + Sync>,
+        remaining_failures: AtomicUsize,
+    }
+
+    impl atm_storage::contract::sealed::Sealed for FailingMarkPendingStore {}
+
+    impl PendingNudgeStore for FailingMarkPendingStore {
+        fn mark_pending(
+            &self,
+            member: &MemberKey,
+            msg: &AtmMessageId,
+            at: IsoTimestamp,
+        ) -> Result<bool, AtmError> {
+            let previous = self
+                .remaining_failures
+                .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |remaining| {
+                    remaining.checked_sub(1)
+                })
+                .unwrap_or(0);
+            if previous > 0 {
+                return Err(AtmError::daemon_unavailable(
+                    "test pending-marker store failure",
+                ));
+            }
+            self.inner.mark_pending(member, msg, at)
+        }
+
+        fn claim_next_pending(&self, member: &MemberKey) -> Result<Option<NudgeClaim>, AtmError> {
+            self.inner.claim_next_pending(member)
+        }
+
+        fn requeue_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
+            self.inner.requeue_pending(member, claim)
+        }
+
+        fn release_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
+            self.inner.release_pending(member, claim)
+        }
+
+        fn clear_pending_on_read(
+            &self,
+            member: &MemberKey,
+            msg: &AtmMessageId,
+        ) -> Result<(), AtmError> {
+            self.inner.clear_pending_on_read(member, msg)
+        }
+
+        fn clear_pending_on_handoff(
+            &self,
+            member: &MemberKey,
+            msg: &AtmMessageId,
+        ) -> Result<(), AtmError> {
+            self.inner.clear_pending_on_handoff(member, msg)
+        }
+
+        fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError> {
+            self.inner.list_pending_members()
+        }
+    }
+
     struct FixtureTemplateComposer {
         source_bytes: Vec<u8>,
         inspection: atm_core::TemplateInspection,
@@ -1143,6 +1205,7 @@ mod tests {
         message_store: Arc<dyn MessageStore + Send + Sync>,
         pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
         received_hook: Arc<RecordingReceivedHook>,
+        runtime_health: RuntimeHealth,
         database_path: PathBuf,
         home_dir: PathBuf,
         current_dir: PathBuf,
@@ -1225,37 +1288,71 @@ mod tests {
     where
         F: FnOnce(Arc<RecordingReceivedHook>) -> Arc<dyn MessageReceivedHookSelector>,
     {
+        fixture_with_selector_and_template_and_pending(
+            with_recipient,
+            hook_failure,
+            cancelled_on_drop,
+            template_composer,
+            select,
+            None,
+        )
+    }
+
+    /// Seeds a `recipient`/`sender` roster pair used by fixtures that need a
+    /// resolvable recipient for dispatch planning.
+    fn seed_recipient_roster(roster_store: &(dyn RosterStore + Send + Sync), team: &TeamName) {
+        roster_store
+            .save_roster(&RosterSnapshot {
+                team_name: team.clone(),
+                members: ["recipient", "sender"]
+                    .into_iter()
+                    .map(|agent_name| RosterEntry {
+                        team_name: team.clone(),
+                        agent_name: agent_name.parse().expect("agent"),
+                        member_kind: RosterMemberKind::Permanent,
+                        harness: RosterHarness::PythonGraft,
+                        agent_type: atm_core::schema::AgentType::default(),
+                        model: ModelName::default(),
+                        recipient_pane_id: None,
+                        metadata_json: serde_json::Map::new(),
+                    })
+                    .collect(),
+                refreshed_at: None,
+            })
+            .expect("seed recipient roster");
+    }
+
+    fn fixture_with_selector_and_template_and_pending<F>(
+        with_recipient: bool,
+        hook_failure: Option<AtmError>,
+        cancelled_on_drop: Option<Arc<AtomicBool>>,
+        template_composer: Option<Arc<dyn atm_core::TemplateComposer>>,
+        select: F,
+        pending_marker_failures: Option<usize>,
+    ) -> Fixture
+    where
+        F: FnOnce(Arc<RecordingReceivedHook>) -> Arc<dyn MessageReceivedHookSelector>,
+    {
         let temporary_root = tempfile::tempdir().expect("temporary runtime root");
         let database_path = temporary_root.path().join("mail.sqlite");
         let assembly = open_sqlite_boundary(&database_path).expect("assemble SQLite boundary");
         let team: TeamName = "test-team".parse().expect("team");
         if with_recipient {
-            assembly
-                .shared_roster_store_arc()
-                .save_roster(&RosterSnapshot {
-                    team_name: team.clone(),
-                    members: ["recipient", "sender"]
-                        .into_iter()
-                        .map(|agent_name| RosterEntry {
-                            team_name: team.clone(),
-                            agent_name: agent_name.parse().expect("agent"),
-                            member_kind: RosterMemberKind::Permanent,
-                            harness: RosterHarness::PythonGraft,
-                            agent_type: atm_core::schema::AgentType::default(),
-                            model: ModelName::default(),
-                            recipient_pane_id: None,
-                            metadata_json: serde_json::Map::new(),
-                        })
-                        .collect(),
-                    refreshed_at: None,
-                })
-                .expect("seed recipient roster");
+            seed_recipient_roster(assembly.shared_roster_store_arc().as_ref(), &team);
         }
         let message_store = assembly.message_store_arc();
         let pending_nudge_store = assembly
             .service_runtime
             .pending_nudge_store()
             .expect("sqlite pending-nudge store");
+        let pending_nudge_store_for_runtime: Arc<dyn PendingNudgeStore + Send + Sync> =
+            match pending_marker_failures {
+                Some(failures) => Arc::new(FailingMarkPendingStore {
+                    inner: Arc::clone(&pending_nudge_store),
+                    remaining_failures: AtomicUsize::new(failures),
+                }),
+                None => Arc::clone(&pending_nudge_store),
+            };
         let received_hook = Arc::new(RecordingReceivedHook {
             message_store: Arc::clone(&message_store),
             emitted_ids: Mutex::new(Vec::new()),
@@ -1275,19 +1372,22 @@ mod tests {
         };
         let service_runtime =
             attach_graft_receiver_store(service_runtime, &database_path, with_recipient);
+        let service_runtime =
+            service_runtime.with_pending_nudge_store(pending_nudge_store_for_runtime);
         let router = StorageAndNudgeRouter::new(
             service_runtime,
             Arc::new(NullObservability),
             select(received_hook.clone()),
             home_dir.clone(),
         )
-        .with_runtime_health(health, assembly.doctor_ports);
+        .with_runtime_health(health.clone(), assembly.doctor_ports);
         Fixture {
             _temporary_root: temporary_root,
             router,
             message_store,
             pending_nudge_store,
             received_hook,
+            runtime_health: health,
             database_path,
             home_dir,
             current_dir,
@@ -2347,6 +2447,89 @@ mod tests {
         assert!(
             second_claim.is_none(),
             "an idempotent duplicate must not re-mark a claimed deferred write"
+        );
+    }
+
+    #[tokio::test]
+    async fn async_router_retries_one_marker_failure_and_preserves_write() {
+        let fixture = fixture_with_selector_and_template_and_pending(
+            true,
+            None,
+            None,
+            None,
+            |received_hook| {
+                Arc::new(FixedReceivedHookSelector {
+                    emitter: received_hook,
+                })
+            },
+            Some(1),
+        );
+        let message_id = AtmMessageId::new();
+        let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone())
+            .with_origin_metadata(message_id, atm_core::types::IsoTimestamp::now())
+            .with_nudge_mode(NudgeMode::Deferred);
+
+        let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+        assert_eq!(response.status(), StatusCode::CREATED);
+        assert_eq!(
+            fixture
+                .runtime_health
+                .snapshot()
+                .queue_marker_set_failures_total,
+            1
+        );
+        assert_eq!(
+            fixture
+                .pending_nudge_store
+                .claim_next_pending(&MemberKey::new(
+                    "test-team".parse().expect("team"),
+                    "recipient".parse().expect("agent"),
+                ))
+                .expect("claim after one retry")
+                .expect("marker succeeds on retry")
+                .msg,
+            message_id
+        );
+    }
+
+    #[tokio::test]
+    async fn async_router_counts_two_marker_failures_and_preserves_documented_loss_bound() {
+        let fixture = fixture_with_selector_and_template_and_pending(
+            true,
+            None,
+            None,
+            None,
+            |received_hook| {
+                Arc::new(FixedReceivedHookSelector {
+                    emitter: received_hook,
+                })
+            },
+            Some(2),
+        );
+        let message_id = AtmMessageId::new();
+        let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone())
+            .with_origin_metadata(message_id, atm_core::types::IsoTimestamp::now())
+            .with_nudge_mode(NudgeMode::Deferred);
+
+        let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+        assert_eq!(response.status(), StatusCode::CREATED);
+        assert_eq!(
+            fixture
+                .runtime_health
+                .snapshot()
+                .queue_marker_set_failures_total,
+            2
+        );
+        assert!(
+            fixture
+                .pending_nudge_store
+                .claim_next_pending(&MemberKey::new(
+                    "test-team".parse().expect("team"),
+                    "recipient".parse().expect("agent"),
+                ))
+                .expect("claim after exhausted retries")
+                .is_none(),
+            "the documented two-attempt marker loss bound leaves no marker"
         );
     }
 

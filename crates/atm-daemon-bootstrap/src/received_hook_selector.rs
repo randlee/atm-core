@@ -478,51 +478,6 @@ fn hook_deadline_error(stage: &'static str) -> AtmError {
     )
 }
 
-fn clear_queue_marker_after_handoff(
-    service_runtime: &LocalServiceRuntime,
-    runtime_health: &RuntimeHealth,
-    member: &atm_core::boundary::MemberKey,
-    message_id: &atm_core::schema::AtmMessageId,
-) {
-    let store = match service_runtime.pending_nudge_store() {
-        Ok(store) => store,
-        Err(error) => {
-            runtime_health.record_graft_queue_marker_clear_failure();
-            tracing::warn!(
-                subsystem = "atm_core.queue",
-                action = "handoff_marker_clear",
-                outcome = "failed",
-                %error,
-                msg_id = %message_id,
-                "queue delivery succeeded but pending marker store was unavailable"
-            );
-            return;
-        }
-    };
-    if let Err(error) = store.clear_pending_on_handoff(member, message_id) {
-        runtime_health.record_graft_queue_marker_clear_failure();
-        tracing::warn!(
-            subsystem = "atm_core.queue",
-            action = "handoff_marker_clear",
-            outcome = "failed",
-            %error,
-            msg_id = %message_id,
-            "queue delivery succeeded but pending marker clear failed; retrying"
-        );
-        if let Err(retry_error) = store.clear_pending_on_handoff(member, message_id) {
-            runtime_health.record_graft_queue_marker_clear_failure();
-            tracing::warn!(
-                subsystem = "atm_core.queue",
-                action = "handoff_marker_clear",
-                outcome = "failed",
-                %retry_error,
-                msg_id = %message_id,
-                "pending marker clear retry failed after successful queue delivery"
-            );
-        }
-    }
-}
-
 /// Graft remains receiver-owned. The existing endpoint operation has bounded
 /// socket timeouts derived from the inherited absolute deadline, so the only
 /// blocking seam is awaited rather than detached.
@@ -558,11 +513,11 @@ impl AsyncMessageReceivedHookEmitter for PublishedGraftReceivedHook {
                     deadline,
                 );
                 if result.is_ok() && kind == NudgeKind::Queue {
-                    clear_queue_marker_after_handoff(
+                    atm_core::nudge_dispatch::clear_queue_marker_after_handoff(
                         &service_runtime,
-                        &runtime_health_for_clear,
                         &member_for_handoff,
                         &message_id,
+                        || runtime_health_for_clear.record_graft_queue_marker_clear_failure(),
                     );
                 }
                 result
@@ -656,11 +611,11 @@ impl AsyncMessageReceivedHookEmitter for PullPendingReceivedHook {
                 // The append above IS the handoff (AQ2 handoff semantics).
                 // A marker-clear failure here is never allowed to fail an
                 // already-successful FIFO append; see the struct doc.
-                clear_queue_marker_after_handoff(
+                atm_core::nudge_dispatch::clear_queue_marker_after_handoff(
                     &service_runtime,
-                    &runtime_health,
                     &member,
                     &target.msg_id,
+                    || runtime_health.record_graft_queue_marker_clear_failure(),
                 );
                 Ok(PostSendEmissionPath::QueuePull)
             })
