@@ -2,12 +2,135 @@ use std::fmt;
 use std::ops::Deref;
 use std::str::FromStr;
 
+use base64::Engine as _;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::error::AtmError;
 use crate::template_workflow::TemplateVariableName;
 use crate::validation::{validate_agent_at_team, validate_path_segment};
+
+pub const LOCAL_CAPABILITY_BYTES: usize = 32;
+
+/// Per-bind secret used to authenticate same-host local HTTP and graft calls.
+///
+/// The storage contract owns this value because durable graft registrations
+/// must be implementable without a dependency on `atm-core`.
+#[derive(Clone, PartialEq, Eq)]
+pub struct LocalCapability([u8; LOCAL_CAPABILITY_BYTES]);
+
+impl fmt::Debug for LocalCapability {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("LocalCapability([REDACTED])")
+    }
+}
+
+impl LocalCapability {
+    pub fn generate() -> Result<Self, AtmError> {
+        let mut bytes = [0; LOCAL_CAPABILITY_BYTES];
+        getrandom::fill(&mut bytes).map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "failed to generate local HTTP capability: {source}"
+            ))
+        })?;
+        Ok(Self(bytes))
+    }
+
+    pub fn to_base64url(&self) -> String {
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(self.0)
+    }
+
+    pub fn parse_base64url(value: &str) -> Result<Self, AtmError> {
+        let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(value)
+            .map_err(|source| {
+                AtmError::local_http_capability_invalid("local HTTP capability is not base64url")
+                    .with_cause(source)
+            })?;
+        let bytes: [u8; LOCAL_CAPABILITY_BYTES] = bytes.try_into().map_err(|_| {
+            AtmError::local_http_capability_invalid(
+                "local HTTP capability must decode to exactly 32 bytes",
+            )
+        })?;
+        Ok(Self(bytes))
+    }
+
+    pub fn matches_header(&self, value: &str) -> bool {
+        match Self::parse_base64url(value) {
+            Ok(candidate) => {
+                let mut difference = 0_u8;
+                for (left, right) in self.0.iter().zip(candidate.0.iter()) {
+                    difference |= left ^ right;
+                }
+                difference == 0
+            }
+            Err(_) => false,
+        }
+    }
+}
+
+impl Serialize for LocalCapability {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_base64url())
+    }
+}
+
+impl<'de> Deserialize<'de> for LocalCapability {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::parse_base64url(&value).map_err(serde::de::Error::custom)
+    }
+}
+
+/// Validated ULID identifying the owner generation of a local lease.
+#[derive(Clone, PartialEq, Eq, Hash, Serialize)]
+#[serde(transparent)]
+pub struct OwnerGeneration(String);
+
+impl OwnerGeneration {
+    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
+        let value = value.into();
+        value.parse::<ulid::Ulid>().map_err(|_| {
+            AtmError::validation("graft receiver owner generation must be a valid ULID")
+        })?;
+        Ok(Self(value))
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Debug for OwnerGeneration {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_tuple("OwnerGeneration")
+            .field(&self.0)
+            .finish()
+    }
+}
+
+impl fmt::Display for OwnerGeneration {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for OwnerGeneration {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Self::new(String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
+    }
+}
 
 /// Lowercase SHA-256 identity for an immutable raw template file.
 ///
@@ -516,8 +639,42 @@ impl fmt::Display for TeamName {
 
 #[cfg(test)]
 mod tests {
-    use super::{AgentId, AgentIdentity, AgentName, ChatId, HostName, IsoTimestamp, TemplateSha};
+    use super::{
+        AgentId, AgentIdentity, AgentName, ChatId, HostName, IsoTimestamp, LocalCapability,
+        OwnerGeneration, TemplateSha,
+    };
     use std::str::FromStr;
+
+    #[test]
+    fn local_capability_debug_never_prints_the_token() {
+        let capability = LocalCapability::generate().expect("capability");
+        let rendered = format!("{capability:?}");
+        assert_eq!(rendered, "LocalCapability([REDACTED])");
+        assert!(
+            !rendered.contains(&capability.to_base64url()),
+            "debug output must never leak the encoded capability token"
+        );
+    }
+
+    #[test]
+    fn owner_generation_accepts_valid_ulid_and_rejects_garbage() {
+        let generation =
+            OwnerGeneration::new("01J00000000000000000000001").expect("valid ULID generation");
+        assert_eq!(generation.as_str(), "01J00000000000000000000001");
+        assert_eq!(generation.to_string(), "01J00000000000000000000001");
+
+        for invalid in [
+            "",
+            "generation-1",
+            "not-a-ulid",
+            "01J0000000000000000000000",
+        ] {
+            assert!(
+                OwnerGeneration::new(invalid).is_err(),
+                "{invalid} must not parse as a valid owner generation"
+            );
+        }
+    }
 
     #[test]
     fn agent_identity_owns_chat_id_parsing_and_rendering() {

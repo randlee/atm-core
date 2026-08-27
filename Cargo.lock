@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "agent-team-mail"
-version = "1.4.4"
+version = "1.4.5"
 dependencies = [
  "agent-team-mail-core",
  "anyhow",
@@ -32,7 +32,7 @@ dependencies = [
 
 [[package]]
 name = "agent-team-mail-core"
-version = "1.4.4"
+version = "1.4.5"
 dependencies = [
  "async-trait",
  "atm-error",
@@ -41,7 +41,6 @@ dependencies = [
  "base64",
  "chrono",
  "fs4",
- "getrandom 0.3.4",
  "interprocess",
  "libc",
  "parking_lot",
@@ -181,7 +180,7 @@ dependencies = [
 
 [[package]]
 name = "atm-architecture"
-version = "1.4.4"
+version = "1.4.5"
 dependencies = [
  "cargo_metadata",
  "serde",
@@ -191,7 +190,7 @@ dependencies = [
 
 [[package]]
 name = "atm-daemon"
-version = "1.4.4"
+version = "1.4.5"
 dependencies = [
  "agent-team-mail-core",
  "atm-daemon-bootstrap",
@@ -207,7 +206,7 @@ dependencies = [
 
 [[package]]
 name = "atm-daemon-bootstrap"
-version = "1.4.4"
+version = "1.4.5"
 dependencies = [
  "agent-team-mail-core",
  "atm-http-runtime",
@@ -227,7 +226,7 @@ dependencies = [
 
 [[package]]
 name = "atm-daemon-client"
-version = "1.4.4"
+version = "1.4.5"
 dependencies = [
  "agent-team-mail-core",
  "atm-http-runtime",
@@ -242,7 +241,7 @@ dependencies = [
 
 [[package]]
 name = "atm-error"
-version = "1.4.4"
+version = "1.4.5"
 dependencies = [
  "serde",
  "serde_json",
@@ -250,7 +249,7 @@ dependencies = [
 
 [[package]]
 name = "atm-graft"
-version = "1.4.4"
+version = "1.4.5"
 dependencies = [
  "agent-team-mail-core",
  "async-trait",
@@ -264,7 +263,7 @@ dependencies = [
 
 [[package]]
 name = "atm-graft-python"
-version = "1.4.4"
+version = "1.4.5"
 dependencies = [
  "agent-team-mail-core",
  "atm-graft",
@@ -275,7 +274,7 @@ dependencies = [
 
 [[package]]
 name = "atm-http-runtime"
-version = "1.4.4"
+version = "1.4.5"
 dependencies = [
  "agent-team-mail-core",
  "async-trait",
@@ -301,7 +300,7 @@ dependencies = [
 
 [[package]]
 name = "atm-peer-tls-interop"
-version = "1.4.4"
+version = "1.4.5"
 dependencies = [
  "agent-team-mail-core",
  "atm-storage",
@@ -312,7 +311,7 @@ dependencies = [
 
 [[package]]
 name = "atm-query-python"
-version = "1.4.4"
+version = "1.4.5"
 dependencies = [
  "atm-storage",
  "atm-storage-rusqlite",
@@ -322,7 +321,7 @@ dependencies = [
 
 [[package]]
 name = "atm-runtime"
-version = "1.4.4"
+version = "1.4.5"
 dependencies = [
  "agent-team-mail-core",
  "atm-storage",
@@ -333,7 +332,7 @@ dependencies = [
 
 [[package]]
 name = "atm-runtime-test-support"
-version = "1.4.4"
+version = "1.4.5"
 dependencies = [
  "agent-team-mail-core",
  "atm-runtime",
@@ -342,11 +341,13 @@ dependencies = [
 
 [[package]]
 name = "atm-storage"
-version = "1.4.4"
+version = "1.4.5"
 dependencies = [
  "async-trait",
  "atm-error",
+ "base64",
  "chrono",
+ "getrandom 0.3.4",
  "rustls",
  "serde",
  "serde_json",
@@ -359,7 +360,7 @@ dependencies = [
 
 [[package]]
 name = "atm-storage-rusqlite"
-version = "1.4.4"
+version = "1.4.5"
 dependencies = [
  "async-trait",
  "atm-storage",
@@ -374,14 +375,14 @@ dependencies = [
 
 [[package]]
 name = "atm-storage-sqlserver-proof"
-version = "1.4.4"
+version = "1.4.5"
 dependencies = [
  "atm-storage",
 ]
 
 [[package]]
 name = "atm-template-sc-compose"
-version = "1.4.4"
+version = "1.4.5"
 dependencies = [
  "agent-team-mail-core",
  "atm-storage",
@@ -1443,7 +1444,7 @@ dependencies = [
 
 [[package]]
 name = "peer-tls"
-version = "1.4.4"
+version = "1.4.5"
 dependencies = [
  "atm-storage",
  "rcgen",
@@ -1910,7 +1911,7 @@ dependencies = [
 
 [[package]]
 name = "sc-lint-attributes"
-version = "1.4.4"
+version = "1.4.5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1920,7 +1921,7 @@ dependencies = [
 
 [[package]]
 name = "sc-lint-boundary"
-version = "1.4.4"
+version = "1.4.5"
 dependencies = [
  "anyhow",
  "cargo_metadata",
@@ -1938,7 +1939,7 @@ dependencies = [
 
 [[package]]
 name = "sc-lint-directives"
-version = "1.4.4"
+version = "1.4.5"
 dependencies = [
  "quote",
  "syn 2.0.119",

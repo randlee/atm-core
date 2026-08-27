@@ -7,7 +7,6 @@ use std::fs;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
-use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
@@ -16,50 +15,7 @@ use crate::types::IsoTimestamp;
 
 pub const LOCAL_HTTP_RECORD_FILENAME: &str = "local-http.json";
 pub const LOCAL_CAPABILITY_HEADER: &str = "X-ATM-Local-Capability";
-pub const LOCAL_CAPABILITY_BYTES: usize = 32;
-
-/// Capability presented by local loopback HTTP clients.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LocalCapability([u8; LOCAL_CAPABILITY_BYTES]);
-
-impl LocalCapability {
-    /// Generates a fresh capability using the operating system RNG.
-    pub fn generate() -> Result<Self, AtmError> {
-        let mut bytes = [0; LOCAL_CAPABILITY_BYTES];
-        getrandom::fill(&mut bytes).map_err(|source| {
-            AtmError::daemon_unavailable(format!(
-                "failed to generate local HTTP capability: {source}"
-            ))
-        })?;
-        Ok(Self(bytes))
-    }
-
-    pub fn to_base64url(&self) -> String {
-        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(self.0)
-    }
-
-    pub fn parse_base64url(value: &str) -> Result<Self, AtmError> {
-        let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
-            .decode(value)
-            .map_err(|source| {
-                AtmError::local_http_capability_invalid("local HTTP capability is not base64url")
-                    .with_cause(source)
-            })?;
-        let bytes: [u8; LOCAL_CAPABILITY_BYTES] = bytes.try_into().map_err(|_| {
-            AtmError::local_http_capability_invalid(
-                "local HTTP capability must decode to exactly 32 bytes",
-            )
-        })?;
-        Ok(Self(bytes))
-    }
-
-    pub fn matches_header(&self, value: &str) -> bool {
-        match Self::parse_base64url(value) {
-            Ok(candidate) => constant_time_eq(&self.0, &candidate.0),
-            Err(_) => false,
-        }
-    }
-}
+pub use atm_storage::{LOCAL_CAPABILITY_BYTES, LocalCapability};
 
 /// Owner-readable local endpoint publication next to the singleton lock.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -206,20 +162,9 @@ fn read_owner_shadow_record(_lock_path: &Path) -> Result<String, AtmError> {
     ))
 }
 
-fn constant_time_eq(
-    left: &[u8; LOCAL_CAPABILITY_BYTES],
-    right: &[u8; LOCAL_CAPABILITY_BYTES],
-) -> bool {
-    let mut difference = 0_u8;
-    for (left, right) in left.iter().zip(right) {
-        difference |= left ^ right;
-    }
-    difference == 0
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{LOCAL_CAPABILITY_BYTES, LocalCapability, LocalHttpEndpointRecord};
+    use super::{LocalCapability, LocalHttpEndpointRecord};
     use crate::error::AtmErrorCode;
     use std::net::SocketAddr;
     use ulid::Ulid;
@@ -234,10 +179,10 @@ mod tests {
         assert_eq!(
             LocalCapability::parse_base64url(&encoded)
                 .expect("decode")
-                .0
-                .len(),
-            LOCAL_CAPABILITY_BYTES
+                .to_base64url(),
+            encoded
         );
+        assert_eq!(encoded.len(), 43, "32 bytes in unpadded base64url");
     }
 
     #[test]

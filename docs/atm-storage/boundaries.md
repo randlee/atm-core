@@ -163,3 +163,25 @@ Rules:
 - concrete backend implementations such as `atm-storage-rusqlite` must
   implement the `atm-storage` sealed trait directly and must not depend on
   `atm-core` to satisfy this contract
+
+## GraftReceiverEndpointStore
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-storage/graft-receiver-endpoint-store.toml](../../boundaries/atm-storage/graft-receiver-endpoint-store.toml)
+
+Purpose:
+- own the durable `(team, agent)` registry for loopback graft receiver
+  endpoints, capabilities, owner generations, refresh timestamps, and
+  delivery-time unreachable feedback
+
+Rules:
+- `register` replaces a stored row when the owner generation changes; the
+  caller has already proved same-host exclusivity with the receiver flock
+- `refresh`, `unregister`, and `mark_unreachable` are owner-generation
+  checked; a lookup miss is `Ok(None)`
+- consumers derive liveness from timestamps and `unreachable_at`; no status
+  boolean or roster mirror is stored
+- the registry uses a natural `(team, agent)` join key without a SQL foreign
+  key because roster saves replace a team's rows in bulk
+- concrete SQLite implementations implement the sealed trait directly and
+  do not depend on `atm-core`

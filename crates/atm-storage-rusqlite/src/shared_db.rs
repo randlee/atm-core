@@ -664,6 +664,7 @@ pub(crate) fn ensure_schema(
     ensure_team_roster_harness_values(connection, target)?;
     ensure_team_nudge_template_override_columns(connection, target)?;
     ensure_mail_message_states_nudge_columns(connection, target)?;
+    crate::graft_receiver_endpoint_schema::ensure_schema(connection, target)?;
     ensure_column(
         connection,
         target,

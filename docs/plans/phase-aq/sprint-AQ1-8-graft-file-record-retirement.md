@@ -1,6 +1,12 @@
+---
+status: complete
+branch: feature/aq-1-8-graft-file-record-retirement
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/aq-1-8-graft-file-record-retirement
+---
+
 # Sprint AQ1.8 — Graft File-Record Retirement + Receiver-Singleton Finding Closure
 
-Status: draft · Branch: `feature/aq-1-8-graft-file-retirement` off
+Status: complete · Branch: `feature/aq-1-8-graft-file-record-retirement` off
 `integrate/phase-aq` · PR target: `integrate/phase-aq`
 recommended_agent: Cipher-311d · recommended_model: fast
 

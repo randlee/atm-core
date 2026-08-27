@@ -41,9 +41,9 @@ Rules:
 - reconnect and shutdown behavior are owned here rather than in daemon-private
   runtime code
 - one active receiver must own each canonical `(graft root, team, agent)`
-  endpoint record. Ownership acquisition is explicit and a second live owner
-  fails without replacing the published endpoint; stale owner recovery is
-  process-death-safe.
+  registry lease. Ownership acquisition is explicit and a second live owner
+  fails without replacing the active lease; stale owner recovery is
+  process-death-safe through the retained flock and generation checks.
 - receiver-local state may be a bounded transient nudge handoff only. It must
   not persist mail, retain acknowledgement state, or implement reconciliation.
 - receiver-private task/thread/callback choices stay inside this consumer layer
@@ -80,6 +80,6 @@ Rules:
   well. Unix UDS and Windows loopback writes are selected only through the
   approved `atm-http-runtime` client facade.
 - it must not dispatch daemon requests or access SQLite/storage directly
-- endpoint records carry the receiver generation needed to make close
-  compare-and-remove safe; they remain one receiver endpoint per current
+- registry leases carry the receiver generation needed to make lifecycle
+  updates owner-checked; they remain one receiver endpoint per current
   `(root, team, agent)`, not a multi-chat session registry

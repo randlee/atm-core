@@ -1,15 +1,12 @@
-use atm_core::graft::{GraftReceiverListener, graft_receiver_record_path_from_home};
+use atm_core::graft::GraftReceiverListener;
 use atm_core::types::{AgentName, TeamName};
 
 const CHILD_ROOT: &str = "ATM_GRAFT_RECLAIM_CHILD_ROOT";
 const TEST_AGENT: &str = "qa-a";
 const TEST_TEAM: &str = "test-team";
 
-fn receiver_record_path_from_test_root() -> std::path::PathBuf {
-    let team = TeamName::from_validated(TEST_TEAM);
-    let agent = AgentName::from_validated(TEST_AGENT);
-    let root = std::env::var_os(CHILD_ROOT).expect("cross-process fixture root");
-    graft_receiver_record_path_from_home(std::path::Path::new(&root), &team, &agent)
+fn receiver_root_from_test_root() -> std::path::PathBuf {
+    std::path::PathBuf::from(std::env::var_os(CHILD_ROOT).expect("cross-process fixture root"))
 }
 
 /// Executed by the Python graft smoke as the crash child. `forget` prevents
@@ -17,8 +14,11 @@ fn receiver_record_path_from_test_root() -> std::path::PathBuf {
 #[test]
 #[ignore = "orchestrated by scripts/test_atm_graft_python.py"]
 fn child_owner_exits_without_drop() {
-    let listener = GraftReceiverListener::bind(&receiver_record_path_from_test_root(), None)
-        .expect("child owner");
+    let team = TeamName::from_validated(TEST_TEAM);
+    let agent = AgentName::from_validated(TEST_AGENT);
+    let listener =
+        GraftReceiverListener::bind(&receiver_root_from_test_root(), &team, &agent, None)
+            .expect("child owner");
     std::mem::forget(listener);
 }
 
@@ -26,9 +26,10 @@ fn child_owner_exits_without_drop() {
 #[test]
 #[ignore = "orchestrated by scripts/test_atm_graft_python.py"]
 fn parent_reclaims_child_owner_lock() {
-    let record_path = receiver_record_path_from_test_root();
+    let team = TeamName::from_validated(TEST_TEAM);
+    let agent = AgentName::from_validated(TEST_AGENT);
     drop(
-        GraftReceiverListener::bind(&record_path, None)
+        GraftReceiverListener::bind(&receiver_root_from_test_root(), &team, &agent, None)
             .expect("parent reclaims OS-released child ownership lock"),
     );
 }
