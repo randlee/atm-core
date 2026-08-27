@@ -1,7 +1,13 @@
+---
+status: complete
+branch: feature/aq-1-7-graft-endpoint-consumer-cutover
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/aq-1-7-graft-endpoint-consumer-cutover
+---
+
 # Sprint AQ1.7 — Graft Endpoint Consumer Cutover (Registry Becomes Truth)
 
-Status: draft · Branch: `feature/aq-1-7-graft-endpoint-cutover` off
-`integrate/phase-aq` · PR target: `integrate/phase-aq`
+Status: complete · Branch: `feature/aq-1-7-graft-endpoint-consumer-cutover` off
+`integrate/phase-aq` · Worktree: `/Users/randlee/Documents/github/atm-core-worktrees/feature/aq-1-7-graft-endpoint-consumer-cutover` · PR target: `integrate/phase-aq`
 recommended_agent: arch-ctm · recommended_model: deep-reasoning
 
 Third graft connection-model sprint (see AQ1.5). Every production consumer
@@ -30,11 +36,14 @@ the file is written but no longer read by anything in-tree.
    present, falling back to the same `Ok(None)`/`Ok(())` a runtime with no
    store attached gives everyone else (correct: no store wired means no
    lease exists, which is honest for a runtime nothing ever registered
-   against). `crates/atm-daemon-bootstrap/src/lib.rs`'s
-   `assemble_runtime`/`assemble_host_runtime` construct the real rusqlite
-   `GraftReceiverEndpointStore` from the same `SqliteStorageFactory`
-   already used for `roster_store` (mirroring the `shared_roster_store_arc`
-   pattern at `:911`/`:1155`) and call
+   against). **ATM-QA-AQ17-007 doc-accuracy correction**: this is
+   `crates/atm-runtime/src/composition.rs`'s `assemble_runtime` (not
+   `atm-daemon-bootstrap/src/lib.rs`, which owns the separate
+   `assemble_host_runtime`/`assemble_host_runtime_with_template_composer`
+   legacy-host-runtime entry points) — `assemble_runtime` constructs the
+   real rusqlite `GraftReceiverEndpointStore` via
+   `storage.graft_receiver_endpoint_store()` from the same `StorageFactory`
+   already used for `storage_backends.rosters`, and calls
    `.with_graft_receiver_endpoint_store(store)` on the `LocalServiceRuntime`
    that becomes the real running daemon's `service_runtime` — this is the
    point at which registrations made since AQ1.5/AQ1.6 landed start

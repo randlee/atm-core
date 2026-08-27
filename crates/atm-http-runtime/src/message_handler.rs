@@ -17,9 +17,9 @@ use atm_core::clear::ClearQuery;
 use atm_core::doctor::DoctorQuery;
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::protocol::{
-    CompatibilityPreflight, GraftReceiverLookupRequest, GraftReceiverRegistration,
-    GraftReceiverUnregistration, RequestId, ResponseEnvelope, SendResponseEnvelope,
-    TeamMemberHeartbeatRequest, next_request_id,
+    CompatibilityPreflight, GraftReceiverLookupRequest, GraftReceiverRefreshRequest,
+    GraftReceiverRegistration, GraftReceiverUnregistration, RequestId, ResponseEnvelope,
+    SendResponseEnvelope, TeamMemberHeartbeatRequest, next_request_id,
 };
 use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::search::SearchRequest;
@@ -483,24 +483,13 @@ fn decode_framework_request(
                 .map(ApiRequest::Heartbeat)
                 .map_err(|source| invalid("heartbeat", source))
         }
-        Some(HttpRouteKind::GraftReceiverRegister) => {
-            serde_json::from_slice::<GraftReceiverRegistration>(body)
-                .map(ApiRequest::GraftReceiverRegister)
-                .map_err(|source| invalid("graft receiver register", source))
-        }
-        Some(HttpRouteKind::GraftReceiverUnregister) => {
-            serde_json::from_slice::<GraftReceiverUnregistration>(body)
-                .map(ApiRequest::GraftReceiverUnregister)
-                .map_err(|source| invalid("graft receiver unregister", source))
-        }
-        Some(HttpRouteKind::GraftReceiverLookup) => {
-            serde_json::from_slice::<GraftReceiverLookupRequest>(body)
-                .map(|value| ApiRequest::GraftReceiverLookup {
-                    team: value.team,
-                    agent: value.agent,
-                })
-                .map_err(|source| invalid("graft receiver lookup", source))
-        }
+        Some(
+            kind @ (HttpRouteKind::GraftReceiverRegister
+            | HttpRouteKind::GraftReceiverRefresh
+            | HttpRouteKind::GraftReceiverUnregister
+            | HttpRouteKind::GraftReceiverLookup),
+        ) => decode_graft_receiver_request(kind, body)
+            .expect("graft receiver route kind must decode to a graft receiver request"),
         Some(HttpRouteKind::RuntimeReload) => serde_json::from_slice::<()>(body)
             .map(|()| ApiRequest::ReloadRuntimeView)
             .map_err(|source| invalid("runtime reload", source)),
@@ -508,6 +497,50 @@ fn decode_framework_request(
             format!("unsupported daemon HTTP route {method} {}", request.path),
             "use a method and path from the daemon HTTP route contract and retry",
         )),
+    }
+}
+
+/// Decodes one of the four local-ingress-only graft receiver routes.
+///
+/// Returns `None` for any other route kind so the caller's route dispatch
+/// stays exhaustive over `HttpRouteKind` without duplicating this match arm
+/// group inline (kept `decode_framework_request` under the repository's
+/// function-length gate).
+fn decode_graft_receiver_request(
+    kind: HttpRouteKind,
+    body: &[u8],
+) -> Option<Result<ApiRequest, AtmError>> {
+    let invalid = |request_kind: &str, source: serde_json::Error| {
+        AtmError::validation_with_recovery(
+            format!("invalid {request_kind} HTTP request body: {source}"),
+            "ensure the client sends the documented JSON request body and retry",
+        )
+    };
+    match kind {
+        HttpRouteKind::GraftReceiverRegister => Some(
+            serde_json::from_slice::<GraftReceiverRegistration>(body)
+                .map(ApiRequest::GraftReceiverRegister)
+                .map_err(|source| invalid("graft receiver register", source)),
+        ),
+        HttpRouteKind::GraftReceiverRefresh => Some(
+            serde_json::from_slice::<GraftReceiverRefreshRequest>(body)
+                .map(ApiRequest::GraftReceiverRefresh)
+                .map_err(|source| invalid("graft receiver refresh", source)),
+        ),
+        HttpRouteKind::GraftReceiverUnregister => Some(
+            serde_json::from_slice::<GraftReceiverUnregistration>(body)
+                .map(ApiRequest::GraftReceiverUnregister)
+                .map_err(|source| invalid("graft receiver unregister", source)),
+        ),
+        HttpRouteKind::GraftReceiverLookup => Some(
+            serde_json::from_slice::<GraftReceiverLookupRequest>(body)
+                .map(|value| ApiRequest::GraftReceiverLookup {
+                    team: value.team,
+                    agent: value.agent,
+                })
+                .map_err(|source| invalid("graft receiver lookup", source)),
+        ),
+        _ => None,
     }
 }
 
@@ -649,6 +682,7 @@ fn map_api_response(response: ApiResponse) -> Result<Response, AtmError> {
         }
         ResponseEnvelope::Heartbeat(value) => json_response(StatusCode::OK, &value, None),
         ResponseEnvelope::GraftReceiverRegister => json_response(StatusCode::OK, &(), None),
+        ResponseEnvelope::GraftReceiverRefresh => json_response(StatusCode::OK, &(), None),
         ResponseEnvelope::GraftReceiverUnregister => json_response(StatusCode::OK, &(), None),
         ResponseEnvelope::GraftReceiverLookup(value) => json_response(StatusCode::OK, &value, None),
         ResponseEnvelope::List(value) => json_response(StatusCode::OK, &value, None),

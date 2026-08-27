@@ -695,6 +695,7 @@ impl StorageFactory for SqliteStorageFactory {
             roster_store: backend.roster_store(),
             nudge_template_override_store: backend.nudge_template_override_store(),
             pending_nudge_store: backend.pending_nudge_store(),
+            graft_receiver_endpoint_store: backend.graft_receiver_endpoint_store(),
             peer_config_store: backend.peer_config_store(),
             template_catalog_store: backend.template_catalog_store(),
             message_search_store: backend.message_search_store(),
