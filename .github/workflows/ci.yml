@@ -309,6 +309,13 @@ jobs:
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         run: just test-queue-hooks-python
 
+      # Codex/hermes are not used on Windows (ADR-054 AQ2.5 AC10); this leg
+      # is intentionally excluded from the windows-latest matrix entry so
+      # the Windows leg never runs Codex-specific hook tests at all.
+      - name: Run Codex ATM queue lifecycle hook tests
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' && matrix.os != 'windows-latest' }}
+        run: just test-queue-hooks-python-codex
+
       - name: Test admission-capacity benchmark runner
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         run: just test-admission-capacity

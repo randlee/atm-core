@@ -177,9 +177,17 @@ test-admission-capacity:
 test-hermes-graft-bridge:
     {{python_cmd}} .just/run_hermes_graft_bridge_tests.py
 
-# Run the deterministic Claude/Codex ATM lifecycle-hook contract tests.
+# Run the deterministic, harness-neutral ATM lifecycle-hook contract tests.
+# All three CI matrix OSes run this recipe (Claude Code runs on Windows too).
 test-queue-hooks-python:
-    {{python_cmd}} scripts/hooks/test_queue_hooks.py
+    {{python_cmd}} scripts/hooks/test_queue_hooks.py QueueHookTests
+
+# Run the Codex-specific ATM lifecycle-hook contract tests. Codex/hermes are
+# not used on Windows (ADR-054 AQ2.5 AC10); the CI workflow invokes this
+# recipe only on the ubuntu/macOS matrix legs. The test class itself also
+# self-skips on Windows so a direct/local invocation is safe everywhere.
+test-queue-hooks-python-codex:
+    {{python_cmd}} scripts/hooks/test_queue_hooks.py CodexQueueHookTests
 
 # Compatibility alias for the canonical `just smoke graft-hermes` entry point.
 test-hermes-graft-smoke:

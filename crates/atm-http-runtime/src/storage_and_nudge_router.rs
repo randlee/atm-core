@@ -618,7 +618,7 @@ impl StorageAndNudgeRouter {
         let sink = self.member_state_transition_sink.clone();
         self.blocking_core_bridge
             .run(deadline, move || {
-                validate_heartbeat_member(runtime, &request)?;
+                validate_heartbeat_member(&runtime, &request.team, &request.member)?;
                 Ok(request)
             })
             .await
@@ -650,17 +650,7 @@ impl StorageAndNudgeRouter {
         let fifo = self.bare_cli_fifo.clone();
         self.blocking_core_bridge
             .run(deadline, move || {
-                validate_heartbeat_member(
-                    runtime,
-                    &atm_core::protocol::TeamMemberHeartbeatRequest {
-                        team: request.team.clone(),
-                        member: request.member.clone(),
-                        pid: 0,
-                        observed_at: atm_core::types::IsoTimestamp::now(),
-                        activity: atm_core::protocol::HeartbeatActivity::Idle,
-                        session_id: None,
-                    },
-                )?;
+                validate_heartbeat_member(&runtime, &request.team, &request.member)?;
                 let member = atm_core::boundary::MemberKey::new(request.team, request.member);
                 drain_bare_cli_messages(&fifo, &member).map(|messages| {
                     ApiResponse::new(ResponseEnvelope::QueueGetNext(
@@ -887,17 +877,12 @@ fn compatibility_verdict(
 }
 
 fn validate_heartbeat_member(
-    runtime: LocalServiceRuntime,
-    request: &atm_core::protocol::TeamMemberHeartbeatRequest,
+    runtime: &LocalServiceRuntime,
+    team: &atm_core::types::TeamName,
+    member: &atm_core::types::AgentName,
 ) -> Result<(), AtmError> {
-    if runtime
-        .load_roster_member(&request.team, &request.member)?
-        .is_none()
-    {
-        return Err(AtmError::agent_not_found(
-            request.member.as_str(),
-            request.team.as_str(),
-        ));
+    if runtime.load_roster_member(team, member)?.is_none() {
+        return Err(AtmError::agent_not_found(member.as_str(), team.as_str()));
     }
     Ok(())
 }
@@ -968,8 +953,8 @@ mod tests {
     use atm_core::observability::NullObservability;
     use atm_core::protocol::{
         GraftReceiverRegistration, GraftReceiverUnregistration, HeartbeatActivity, OwnerGeneration,
-        RequestEnvelope, ResponseEnvelope, RuntimeReadinessState, SendResponseEnvelope,
-        TeamMemberHeartbeatRequest,
+        QueueGetNextRequest, QueuedNudgeMessage, RequestEnvelope, ResponseEnvelope,
+        RuntimeReadinessState, SendResponseEnvelope, TeamMemberHeartbeatRequest,
     };
     use atm_core::schema::AtmMessageId;
     use atm_core::send::{
@@ -998,8 +983,9 @@ mod tests {
         direct_peer_tcp_client,
     };
     use crate::{
-        AuthenticatedConnector, CanonicalWriteHandler, NonZeroDuration, RuntimeHealth,
-        RuntimeLimits, RuntimeTimeouts, canonical_message_router,
+        AuthenticatedConnector, BareCliFifo, BareCliQueueFullDrops, CanonicalWriteHandler,
+        NonZeroDuration, RuntimeHealth, RuntimeLimits, RuntimeTimeouts, append_bare_cli_message,
+        canonical_message_router,
     };
     #[cfg(unix)]
     use crate::{UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid};
@@ -1795,7 +1781,9 @@ mod tests {
             .expect("authorized heartbeat");
         assert!(matches!(
             first_response.into_inner(),
-            ResponseEnvelope::Heartbeat(response) if !response.pid_changed
+            ResponseEnvelope::Heartbeat(response)
+                if !response.pid_changed
+                    && response.state == atm_core::protocol::RuntimeMemberState::Active
         ));
 
         let second = TeamMemberHeartbeatRequest {
@@ -1814,7 +1802,9 @@ mod tests {
             .expect("second authorized heartbeat");
         assert!(matches!(
             second_response.into_inner(),
-            ResponseEnvelope::Heartbeat(response) if response.pid_changed
+            ResponseEnvelope::Heartbeat(response)
+                if response.pid_changed
+                    && response.state == atm_core::protocol::RuntimeMemberState::Offline
         ));
         // Health remains listener-owned. A member becoming offline does not
         // make a process that is still serving local adapters become NotReady.
@@ -1823,6 +1813,237 @@ mod tests {
             RuntimeReadinessState::Unavailable,
             "the fixture has no running listener; heartbeat cannot claim readiness"
         );
+    }
+
+    /// AC1: a deterministic (non-wall-clock) `observed_at` proves the
+    /// existing Heartbeat route drives `RuntimeHealth`'s member-state
+    /// projection end to end. AQ3's own observation sink does not exist yet
+    /// (this sprint is upstream of AQ3), so this test covers the AC1 claim
+    /// as it is actually implementable today: the router's real dispatch
+    /// path into `RuntimeHealth::record_heartbeat` and its snapshot.
+    #[tokio::test]
+    async fn heartbeat_route_drives_runtime_health_member_state_transitions_with_a_deterministic_clock()
+     {
+        let fixture = fixture(true, None, None);
+        let observed_at: atm_core::types::IsoTimestamp = "2026-01-01T00:00:00Z"
+            .parse()
+            .expect("deterministic fixed timestamp, not wall-clock `now()`");
+        let request = TeamMemberHeartbeatRequest {
+            team: "test-team".parse().expect("team"),
+            member: "recipient".parse().expect("agent"),
+            pid: 7,
+            observed_at,
+            activity: HeartbeatActivity::ActiveToolUse,
+            session_id: None,
+        };
+        fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Heartbeat(request)),
+                atm_core::AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("authorized heartbeat");
+
+        let snapshot = fixture.router.runtime_health.snapshot();
+        let member = snapshot
+            .members
+            .iter()
+            .find(|observation| observation.member.as_str() == "recipient")
+            .expect("heartbeat route projected the member into RuntimeHealth");
+        assert_eq!(
+            member.state,
+            atm_core::protocol::RuntimeMemberState::Active,
+            "an active-tool-use heartbeat drives the member to Active"
+        );
+        assert_eq!(
+            member.last_active_at,
+            Some(observed_at),
+            "the projection preserves the caller-supplied deterministic timestamp"
+        );
+
+        let idle_request = TeamMemberHeartbeatRequest {
+            team: "test-team".parse().expect("team"),
+            member: "recipient".parse().expect("agent"),
+            pid: 7,
+            observed_at,
+            activity: HeartbeatActivity::Idle,
+            session_id: None,
+        };
+        fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Heartbeat(idle_request)),
+                atm_core::AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("second authorized heartbeat");
+        let idle_state = fixture
+            .router
+            .runtime_health
+            .snapshot()
+            .members
+            .into_iter()
+            .find(|observation| observation.member.as_str() == "recipient")
+            .expect("member remains projected")
+            .state;
+        assert_eq!(
+            idle_state,
+            atm_core::protocol::RuntimeMemberState::Idle,
+            "an idle heartbeat transitions the projected member state to Idle"
+        );
+    }
+
+    /// AC5: a caller not on the roster is rejected by the real
+    /// `queue_get_next` handler, not merely the wire codec.
+    #[tokio::test]
+    async fn queue_get_next_router_rejects_a_caller_not_on_the_roster() {
+        let fixture = fixture(true, None, None);
+        let request = QueueGetNextRequest {
+            team: "test-team".parse().expect("team"),
+            member: "not-on-the-roster".parse().expect("agent"),
+        };
+        let error = fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::QueueGetNext(request)),
+                atm_core::AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect_err("a non-roster member must be rejected");
+        assert_eq!(error.code(), atm_core::error::AtmErrorCode::AgentNotFound);
+    }
+
+    /// AC7/AC3: the real `queue_get_next` handler (not the FIFO helper in
+    /// isolation) drains a pre-seeded bare-CLI FIFO entry for an
+    /// authenticated roster member.
+    #[tokio::test]
+    async fn queue_get_next_router_drains_the_bare_cli_fifo_through_the_real_dispatch_path() {
+        let fixture = fixture(true, None, None);
+        let fifo: BareCliFifo = Default::default();
+        let drops: BareCliQueueFullDrops = Default::default();
+        let router = fixture
+            .router
+            .clone()
+            .with_bare_cli_fifo(fifo.clone(), drops);
+        let member = MemberKey::new(
+            "test-team".parse().expect("team"),
+            "recipient".parse().expect("agent"),
+        );
+        append_bare_cli_message(
+            &fifo,
+            &Default::default(),
+            member,
+            QueuedNudgeMessage {
+                kind: NudgeKind::Queue,
+                msg_id: AtmMessageId::new(),
+                body: "queued through the real handler".to_owned(),
+            },
+        )
+        .expect("seed FIFO");
+
+        let request = QueueGetNextRequest {
+            team: "test-team".parse().expect("team"),
+            member: "recipient".parse().expect("agent"),
+        };
+        let response = router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::QueueGetNext(request)),
+                atm_core::AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("authorized queue-get");
+        let ResponseEnvelope::QueueGetNext(response) = response.into_inner() else {
+            panic!("expected a QueueGetNext response");
+        };
+        assert_eq!(response.messages.len(), 1);
+        assert_eq!(response.messages[0].body, "queued through the real handler");
+    }
+
+    /// AC6 migration case: a stale FIFO entry from an earlier bare-CLI
+    /// window still drains on `queue_get_next` even after the member's
+    /// roster/lease inputs have since changed. `queue_get_next` never
+    /// re-runs the classifier (FIFO existence wins, critical review I15);
+    /// this proves that invariant against the real handler, not just the
+    /// classifier function in isolation.
+    #[tokio::test]
+    async fn queue_get_next_router_drains_a_stale_fifo_entry_after_the_members_classification_changes()
+     {
+        let fixture = fixture(true, None, None);
+        let fifo: BareCliFifo = Default::default();
+        let drops: BareCliQueueFullDrops = Default::default();
+        let team: TeamName = "test-team".parse().expect("team");
+        let member = MemberKey::new(team.clone(), "recipient".parse().expect("agent"));
+        append_bare_cli_message(
+            &fifo,
+            &Default::default(),
+            member.clone(),
+            QueuedNudgeMessage {
+                kind: NudgeKind::Queue,
+                msg_id: AtmMessageId::new(),
+                body: "queued before the migration".to_owned(),
+            },
+        )
+        .expect("seed stale FIFO entry");
+
+        // Flip the roster input the classifier reads: this member now
+        // resolves to a tmux local backend (would classify TmuxSteer for
+        // any *new* dispatch), simulating a migration away from bare-CLI
+        // since the FIFO entry was queued.
+        let assembly_roster =
+            atm_runtime_test_support::open_sqlite_boundary(&fixture.database_path)
+                .expect("reopen SQLite boundary for the roster mutation");
+        assembly_roster
+            .shared_roster_store_arc()
+            .save_roster(&RosterSnapshot {
+                team_name: team.clone(),
+                members: ["recipient", "sender"]
+                    .into_iter()
+                    .map(|agent_name| RosterEntry {
+                        team_name: team.clone(),
+                        agent_name: agent_name.parse().expect("agent"),
+                        member_kind: RosterMemberKind::Permanent,
+                        harness: RosterHarness::PythonGraft,
+                        agent_type: atm_core::schema::AgentType::default(),
+                        model: ModelName::default(),
+                        recipient_pane_id: if agent_name == "recipient" {
+                            Some(PaneId::from_cli("%9").expect("pane"))
+                        } else {
+                            None
+                        },
+                        metadata_json: serde_json::Map::new(),
+                    })
+                    .collect(),
+                refreshed_at: None,
+            })
+            .expect("flip recipient onto a tmux local backend");
+
+        let router = fixture.router.clone().with_bare_cli_fifo(fifo, drops);
+        let request = QueueGetNextRequest {
+            team,
+            member: "recipient".parse().expect("agent"),
+        };
+        let response = router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::QueueGetNext(request)),
+                atm_core::AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("authorized queue-get");
+        let ResponseEnvelope::QueueGetNext(response) = response.into_inner() else {
+            panic!("expected a QueueGetNext response");
+        };
+        assert_eq!(
+            response.messages.len(),
+            1,
+            "the stale FIFO entry still drains after the member's classification inputs changed"
+        );
+        assert_eq!(response.messages[0].body, "queued before the migration");
     }
 
     #[tokio::test]
