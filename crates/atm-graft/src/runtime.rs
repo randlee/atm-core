@@ -36,6 +36,25 @@ const GRAFT_RECEIVER_RECORD_RECHECK_INTERVAL: Duration = Duration::from_secs(1);
 pub(crate) const GRAFT_LEASE_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
 #[allow(dead_code)]
 pub(crate) const ACTIVE_LEASE_WINDOW: Duration = Duration::from_secs(15);
+/// Caps how long one blocking lease announce/refresh/unregister client call is
+/// allowed to hold up the caller before this loop gives up waiting on it and
+/// moves on. A stalled (not merely slow) daemon must not compound across the
+/// per-iteration refresh check and `Drop`'s unregister call to approach or
+/// exceed `RECEIVE_LOOP_JOIN_DEADLINE` (rust-service-hardening RSH-001); the
+/// helper thread that actually runs the call is detached and its late result
+/// discarded on timeout, which is safe because every lease call this loop
+/// makes is already best-effort and retried on the next tick.
+const GRAFT_LEASE_CALL_DEADLINE: Duration = Duration::from_secs(1);
+/// Initial and per-failure cadence for the periodic lease refresh, growing
+/// with each consecutive failure (rust-service-hardening RSH-002) so a
+/// sustained daemon outage does not drive a reconnect attempt every single
+/// tick. A successful refresh resets the cadence back to this base interval,
+/// so the healthy-daemon refresh rate required by deliverable 2 / AC6 is
+/// unaffected.
+const GRAFT_LEASE_REFRESH_BACKOFF_INITIAL: Duration = GRAFT_LEASE_REFRESH_INTERVAL;
+/// Caps the refresh backoff so a long daemon outage still retries at a
+/// bounded, actionable cadence instead of backing off indefinitely.
+const GRAFT_LEASE_REFRESH_BACKOFF_MAX: Duration = Duration::from_secs(30);
 /// Each recovery cycle makes a small, bounded number of bind attempts before
 /// yielding to the slower re-arm cadence below.
 const GRAFT_RECEIVER_REBIND_MAX_ATTEMPTS: usize = 3;
@@ -103,6 +122,50 @@ impl ReceiverRecoveryCircuit {
 
     fn reset(&mut self, now: Instant) {
         *self = Self::new(now);
+    }
+}
+
+/// Bounds reconnect pressure from the periodic lease refresh during a
+/// sustained daemon outage (rust-service-hardening RSH-002), instead of
+/// retrying every fixed `GRAFT_LEASE_REFRESH_INTERVAL` tick. Mirrors
+/// `ReceiverRecoveryCircuit`'s growing delay shape. A successful refresh
+/// resets the cadence to the base interval immediately, so AC6's "still
+/// refreshes on cadence while busy" requirement holds whenever the daemon is
+/// healthy.
+#[derive(Debug)]
+struct LeaseRefreshBackoff {
+    next_attempt_at: Instant,
+    delay: Duration,
+}
+
+impl LeaseRefreshBackoff {
+    fn new(now: Instant) -> Self {
+        Self {
+            next_attempt_at: now + GRAFT_LEASE_REFRESH_BACKOFF_INITIAL,
+            delay: GRAFT_LEASE_REFRESH_BACKOFF_INITIAL,
+        }
+    }
+
+    fn due(&self, now: Instant) -> bool {
+        now >= self.next_attempt_at
+    }
+
+    fn record_success(&mut self, now: Instant) {
+        self.delay = GRAFT_LEASE_REFRESH_BACKOFF_INITIAL;
+        self.next_attempt_at = now + self.delay;
+    }
+
+    fn record_failure(&mut self, now: Instant) {
+        self.next_attempt_at = now + self.delay;
+        self.delay = self
+            .delay
+            .saturating_mul(2)
+            .min(GRAFT_LEASE_REFRESH_BACKOFF_MAX);
+    }
+
+    #[cfg(test)]
+    fn current_delay(&self) -> Duration {
+        self.delay
     }
 }
 
@@ -507,12 +570,68 @@ fn owner_generation(listener: &GraftReceiverListener) -> OwnerGeneration {
         .expect("graft receiver listener owner generation is always a valid ULID")
 }
 
+/// Runs a possibly-blocking daemon client call on a helper thread and gives up
+/// waiting on it after `deadline` instead of blocking the caller indefinitely.
+///
+/// This bounds the receive loop's per-iteration lease call and `Drop`'s
+/// unregister call so a stalled (not merely slow) daemon cannot silently push
+/// shutdown latency toward or past `RECEIVE_LOOP_JOIN_DEADLINE`
+/// (rust-service-hardening RSH-001). On timeout the helper thread is left
+/// detached and its late result discarded — every call this loop makes
+/// through this helper is already a best-effort lease operation retried on
+/// the next tick, so a stranded attempt causes no correctness issue.
+fn run_bounded_lease_call<F>(
+    action: &'static str,
+    deadline: Duration,
+    call: F,
+) -> Result<(), AtmError>
+where
+    F: FnOnce() -> Result<(), AtmError> + Send + 'static,
+{
+    let (result_tx, result_rx) = mpsc::sync_channel(1);
+    let spawned = thread::Builder::new()
+        .name("atm-graft-lease-call".to_string())
+        .spawn(move || {
+            let _ = result_tx.send(call());
+        });
+    if spawned.is_err() {
+        return Err(AtmError::daemon_unavailable(format!(
+            "failed to spawn graft {action} helper"
+        )));
+    }
+    match result_rx.recv_timeout(deadline) {
+        Ok(result) => result,
+        Err(RecvTimeoutError::Timeout) => Err(AtmError::new(
+            AtmErrorCode::WaitTimeout,
+            format!("graft {action} exceeded the {deadline:?} bounded deadline"),
+        )),
+        Err(RecvTimeoutError::Disconnected) => Err(AtmError::daemon_unavailable(format!(
+            "graft {action} helper disconnected before returning a result"
+        ))),
+    }
+}
+
 /// Owns a listener together with its best-effort daemon lease lifecycle.
 struct RegisteredGraftReceiver {
     listener: GraftReceiverListener,
     team: TeamName,
     agent: AgentName,
     client: Option<GraftClient>,
+    /// Set once [`Self::announce`] has observed a successful register call.
+    /// While `false`, the periodic loop keeps retrying `announce` (an
+    /// idempotent upsert) instead of the owner-checked `refresh`, so a
+    /// receiver that bound while the daemon was down still self-heals once
+    /// the daemon returns (AC2) instead of mistaking "never registered" for
+    /// "displaced".
+    announced: bool,
+    /// Set once a `refresh` call observes `AtmErrorCode::GraftReceiverNotOwner`
+    /// for an already-`announced` lease — a genuine displacement (closes the
+    /// RBQA-F001 dead-refresh-path finding). Once set, `refresh` becomes a
+    /// permanent no-op for this generation: the receiver logs the transition
+    /// once (via the returned `Err`), never crashes its accept loop, and
+    /// never fights to reclaim a lease another generation now legitimately
+    /// owns (AC5/AC8).
+    displaced: bool,
 }
 
 impl RegisteredGraftReceiver {
@@ -522,22 +641,69 @@ impl RegisteredGraftReceiver {
             team: ctx.team.clone(),
             agent: ctx.agent.clone(),
             client: ctx.client.clone(),
+            announced: false,
+            displaced: false,
         }
     }
 
+    /// Returns the daemon client, establishing (and permanently caching) one
+    /// via `GraftClient::connect_existing()` on first use if `ctx.client` did
+    /// not already provide one. A transient announce/refresh failure never
+    /// discards this client — the underlying transport already handles
+    /// per-request reconnection, and discarding it here would make retries
+    /// unable to reach a daemon reachable only through a test-injected or
+    /// otherwise non-default-resolvable client.
+    fn client(&mut self) -> Result<GraftClient, AtmError> {
+        if let Some(client) = &self.client {
+            return Ok(client.clone());
+        }
+        let client = GraftClient::connect_existing()?;
+        self.client = Some(client.clone());
+        Ok(client)
+    }
+
+    /// Unconditionally announces this receiver's endpoint (ADR-056's
+    /// `register`: an upsert), used once at bind/rebind time and retried by
+    /// the periodic loop on every tick until it first succeeds.
+    fn announce(&mut self) -> Result<(), AtmError> {
+        let client = self.client()?;
+        let team = self.team.clone();
+        let agent = self.agent.clone();
+        let endpoint = self.listener.local_addr()?;
+        let capability = self.listener.capability().clone();
+        let generation = owner_generation(&self.listener);
+        let result =
+            run_bounded_lease_call("lease_announce", GRAFT_LEASE_CALL_DEADLINE, move || {
+                client.register_receiver_sync(team, agent, endpoint, capability, generation)
+            });
+        if result.is_ok() {
+            self.announced = true;
+        }
+        result
+    }
+
+    /// Owner-checked keepalive (ADR-056's `refresh`); see the `displaced`
+    /// field doc for the NotOwner handling this method implements.
     fn refresh(&mut self) -> Result<(), AtmError> {
-        let client = match self.client.clone() {
-            Some(client) => client,
-            None => GraftClient::connect_existing()?,
-        };
-        let result = client.register_receiver_sync(
-            self.team.clone(),
-            self.agent.clone(),
-            self.listener.local_addr()?,
-            self.listener.capability().clone(),
-            owner_generation(&self.listener),
-        );
-        self.client = result.as_ref().ok().map(|_| client);
+        if self.displaced {
+            return Ok(());
+        }
+        if !self.announced {
+            return self.announce();
+        }
+        let client = self.client()?;
+        let team = self.team.clone();
+        let agent = self.agent.clone();
+        let generation = owner_generation(&self.listener);
+        let result =
+            run_bounded_lease_call("lease_refresh", GRAFT_LEASE_CALL_DEADLINE, move || {
+                client.refresh_receiver_sync(team, agent, generation)
+            });
+        if let Err(error) = &result
+            && error.code() == AtmErrorCode::GraftReceiverNotOwner
+        {
+            self.displaced = true;
+        }
         result
     }
 }
@@ -547,11 +713,14 @@ impl Drop for RegisteredGraftReceiver {
         let Some(client) = self.client.take() else {
             return;
         };
-        if let Err(error) = client.unregister_receiver_sync(
-            self.team.clone(),
-            self.agent.clone(),
-            owner_generation(&self.listener),
-        ) {
+        let team = self.team.clone();
+        let agent = self.agent.clone();
+        let generation = owner_generation(&self.listener);
+        if let Err(error) =
+            run_bounded_lease_call("lease_unregister", GRAFT_LEASE_CALL_DEADLINE, move || {
+                client.unregister_receiver_sync(team, agent, generation)
+            })
+        {
             tracing::debug!(
                 subsystem = "atm_graft.receiver_loop",
                 action = "unregister_graft_receiver",
@@ -583,6 +752,65 @@ pub(crate) fn run_graft_receiver_loop(ctx: GraftReceiverLoopContext) -> Result<(
     result
 }
 
+/// Runs the per-iteration lease refresh check unconditionally (deliverable
+/// 2): unlike the pre-AQ1.6 idle-only `handle_idle_graft_receiver` path, this
+/// runs regardless of whether the same iteration also accepted a connection,
+/// so a continuously busy receiver still refreshes on cadence (AC6).
+fn tick_lease_refresh(
+    ctx: &GraftReceiverLoopContext,
+    listener: &mut RegisteredGraftReceiver,
+    lease_backoff: &mut LeaseRefreshBackoff,
+) {
+    let now = Instant::now();
+    if !lease_backoff.due(now) {
+        return;
+    }
+    match listener.refresh() {
+        Ok(()) => {
+            lease_backoff.record_success(Instant::now());
+            if let Ok(snapshot) = read_snapshot(&ctx.snapshot) {
+                ctx.observability
+                    .receiver_ownership(&snapshot, "refresh_receiver_lease", "ok");
+            }
+        }
+        Err(error) => {
+            lease_backoff.record_failure(Instant::now());
+            warn_runtime_error("refresh_graft_receiver", Some(&ctx.graft_root), &error);
+            let outcome = if error.code() == AtmErrorCode::GraftReceiverNotOwner {
+                "displaced"
+            } else {
+                "error"
+            };
+            if let Ok(snapshot) = read_snapshot(&ctx.snapshot) {
+                ctx.observability
+                    .receiver_ownership(&snapshot, "refresh_receiver_lease", outcome);
+            }
+        }
+    }
+}
+
+/// Republishes the dual-write file record if an external actor deleted it,
+/// unchanged in effect from the pre-AQ1.6 behavior (refresh-only after
+/// AQ1.8 removes the file-record path).
+fn republish_record_if_missing(ctx: &GraftReceiverLoopContext, listener: &RegisteredGraftReceiver) {
+    match listener.listener.republish_if_missing() {
+        Ok(true) => {
+            if let Ok(snapshot) = read_snapshot(&ctx.snapshot) {
+                ctx.observability
+                    .receiver_ownership(&snapshot, "restore_receiver_record", "ok");
+            }
+        }
+        Ok(false) => {}
+        Err(error) => {
+            warn_runtime_error("restore_receiver_record", Some(&ctx.graft_root), &error);
+            if let Ok(snapshot) = read_snapshot(&ctx.snapshot) {
+                ctx.observability
+                    .receiver_ownership(&snapshot, "restore_receiver_record", "error");
+            }
+        }
+    }
+}
+
 fn listen_for_graft_nudges(
     ctx: &GraftReceiverLoopContext,
     injector: &BoundedHostNudgeInjector,
@@ -596,18 +824,15 @@ fn listen_for_graft_nudges(
     // ACCEPT_POLL_INTERVAL instead of parking in a blocking accept, so no
     // wake-by-connect machinery is needed to unblock shutdown.
     let mut last_record_recheck = Instant::now();
-    let mut last_lease_refresh = Instant::now();
+    let mut lease_backoff = LeaseRefreshBackoff::new(Instant::now());
     loop {
         if stop_requested(&ctx.stop_rx) {
             return Ok(());
         }
-        if last_lease_refresh.elapsed() >= GRAFT_LEASE_REFRESH_INTERVAL {
-            last_lease_refresh = Instant::now();
-            refresh_receiver_lease(ctx, &mut listener);
-        }
+        tick_lease_refresh(ctx, &mut listener, &mut lease_backoff);
         if last_record_recheck.elapsed() >= GRAFT_RECEIVER_RECORD_RECHECK_INTERVAL {
             last_record_recheck = Instant::now();
-            republish_receiver_record(ctx, &listener.listener);
+            republish_record_if_missing(ctx, &listener);
         }
         match listener.listener.poll_accept() {
             Ok(Some(mut stream)) => {
@@ -636,38 +861,6 @@ fn listen_for_graft_nudges(
     }
 }
 
-fn refresh_receiver_lease(ctx: &GraftReceiverLoopContext, listener: &mut RegisteredGraftReceiver) {
-    if let Err(error) = listener.refresh() {
-        warn_runtime_error("refresh_graft_receiver", Some(&ctx.graft_root), &error);
-        if let Ok(snapshot) = read_snapshot(&ctx.snapshot) {
-            ctx.observability
-                .receiver_ownership(&snapshot, "refresh_receiver_lease", "error");
-        }
-    } else if let Ok(snapshot) = read_snapshot(&ctx.snapshot) {
-        ctx.observability
-            .receiver_ownership(&snapshot, "refresh_receiver_lease", "ok");
-    }
-}
-
-fn republish_receiver_record(ctx: &GraftReceiverLoopContext, listener: &GraftReceiverListener) {
-    match listener.republish_if_missing() {
-        Ok(true) => {
-            if let Ok(snapshot) = read_snapshot(&ctx.snapshot) {
-                ctx.observability
-                    .receiver_ownership(&snapshot, "restore_receiver_record", "ok");
-            }
-        }
-        Ok(false) => {}
-        Err(error) => {
-            warn_runtime_error("restore_receiver_record", Some(&ctx.graft_root), &error);
-            if let Ok(snapshot) = read_snapshot(&ctx.snapshot) {
-                ctx.observability
-                    .receiver_ownership(&snapshot, "restore_receiver_record", "error");
-            }
-        }
-    }
-}
-
 fn publish_receiver_target(ctx: &GraftReceiverLoopContext, listener: &GraftReceiverListener) {
     if let Some(target_tx) = &ctx.receiver_target_tx
         && let Ok(endpoint) = listener.local_addr()
@@ -687,7 +880,7 @@ fn activate_graft_receiver(
     ) {
         Ok(listener) => {
             let mut receiver = RegisteredGraftReceiver::new(listener, ctx);
-            if let Err(error) = receiver.refresh() {
+            if let Err(error) = receiver.announce() {
                 warn_runtime_error("register_graft_receiver", Some(&ctx.graft_root), &error);
             }
             let snapshot = read_snapshot(&ctx.snapshot)?;
@@ -800,7 +993,7 @@ fn rebind_graft_receiver(
             Ok(listener) => {
                 let mut receiver = RegisteredGraftReceiver::new(listener, ctx);
                 publish_receiver_target(ctx, &receiver.listener);
-                if let Err(error) = receiver.refresh() {
+                if let Err(error) = receiver.announce() {
                     warn_runtime_error("register_graft_receiver", Some(&ctx.graft_root), &error);
                 }
                 let snapshot = read_snapshot(&ctx.snapshot)?;
@@ -882,31 +1075,33 @@ mod tests {
         GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL, GraftPostSendRequest, GraftPostSendResponse,
         GraftReceiverListener, deliver_graft_post_send,
     };
-    use atm_core::protocol::LocalCapability;
+    use atm_core::protocol::{LocalCapability, OwnerGeneration, RequestEnvelope, ResponseEnvelope};
     use atm_core::schema::AtmMessageId;
     use atm_core::test_support::{TEST_LEAD, TEST_QA, TEST_TEAM};
+    use atm_core::transport::testing::FakeClientTransport;
     use atm_core::types::{AgentName, ChatId, TeamName};
+    use std::collections::HashMap;
     use std::fs;
     use std::net::SocketAddr;
     use std::path::PathBuf;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::mpsc;
     use std::sync::{Arc, Barrier, Mutex, RwLock};
     use std::time::{Duration, Instant};
     use tempfile::TempDir;
 
-    use crate::{GraftObservability, HostNudge, HostNudgeInjector};
+    use crate::{GraftClient, GraftObservability, HostNudge, HostNudgeInjector};
 
     use super::{
-        BoundedHostNudgeInjector, GRAFT_RECEIVER_RECOVERY_MAX_DURATION,
-        GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY, GraftReceiverLoopContext, HelperThreadBudget,
-        MAX_HOST_NUDGE_HELPERS, RECEIVE_LOOP_READY_DEADLINE, ReceiverReadyLatch,
-        ReceiverRecoveryCircuit, RegisteredGraftReceiver, handle_graft_receiver_connection,
-        join_receive_loop_with_deadline, load_graft_config, read_snapshot,
-        recover_after_poll_accept_error, recover_graft_receiver, run_graft_receiver_loop,
-        wait_for_stop_or_delay,
+        BoundedHostNudgeInjector, GRAFT_LEASE_REFRESH_INTERVAL,
+        GRAFT_RECEIVER_RECOVERY_MAX_DURATION, GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY,
+        GraftReceiverLoopContext, HelperThreadBudget, LeaseRefreshBackoff, MAX_HOST_NUDGE_HELPERS,
+        RECEIVE_LOOP_READY_DEADLINE, ReceiverReadyLatch, ReceiverRecoveryCircuit,
+        RegisteredGraftReceiver, handle_graft_receiver_connection, join_receive_loop_with_deadline,
+        load_graft_config, read_snapshot, recover_after_poll_accept_error, recover_graft_receiver,
+        run_graft_receiver_loop, wait_for_stop_or_delay,
     };
-    use crate::{GraftSessionState, SessionSnapshot};
+    use crate::{GraftSessionState, RECEIVE_LOOP_JOIN_DEADLINE, SessionSnapshot};
 
     const DELIVER_CONNECT_DEADLINE: Duration = Duration::from_secs(2);
     const DELIVER_IO_DEADLINE: Duration = Duration::from_secs(3);
@@ -1077,6 +1272,14 @@ mod tests {
         graft_root: PathBuf,
         injector: Arc<dyn HostNudgeInjector>,
     ) -> SpawnedReceiver {
+        spawn_receiver_with_client(graft_root, injector, None)
+    }
+
+    fn spawn_receiver_with_client(
+        graft_root: PathBuf,
+        injector: Arc<dyn HostNudgeInjector>,
+        client: Option<GraftClient>,
+    ) -> SpawnedReceiver {
         let (stop_tx, stop_rx) = mpsc::channel();
         let ready_latch = ReceiverReadyLatch::new();
         let (target_tx, target_rx) = mpsc::sync_channel(1);
@@ -1090,7 +1293,7 @@ mod tests {
             team: TeamName::from_validated(TEST_TEAM),
             agent: AgentName::from_validated(TEST_QA),
             owner_chat_id: None,
-            client: None,
+            client,
             snapshot: Arc::clone(&snapshot),
             injector,
             observability: Arc::new(NoopObservability),
@@ -1519,5 +1722,541 @@ mod tests {
         );
 
         stop_receiver(stop_tx, join);
+    }
+
+    // ---------------------------------------------------------------------
+    // AQ1.6 QA-1 fixes: dead-code refresh wiring, missing AC tests (AC2, AC3,
+    // AC5, AC6, AC7), and rust-service-hardening RSH-001/RSH-002.
+    // ---------------------------------------------------------------------
+
+    #[derive(Clone)]
+    struct FakeLease {
+        endpoint: SocketAddr,
+        capability: LocalCapability,
+        owner_generation: OwnerGeneration,
+    }
+
+    /// Deterministic in-memory daemon-registry test double wired through
+    /// [`GraftClient::from_fake_transport_for_test`]. It implements the same
+    /// `register` (unconditional upsert) / `refresh` (owner-checked,
+    /// `NotOwner` on mismatch or absence) / `unregister` (owner-checked,
+    /// idempotent on an absent row) contract as
+    /// `SqliteGraftReceiverEndpointStore`, so runtime.rs's lease lifecycle
+    /// can be exercised without a real daemon or database.
+    #[derive(Default)]
+    struct FakeGraftRegistry {
+        leases: Mutex<HashMap<(TeamName, AgentName), FakeLease>>,
+        online: AtomicBool,
+        registrations: AtomicUsize,
+        refreshes: AtomicUsize,
+        refresh_failures: AtomicUsize,
+    }
+
+    impl FakeGraftRegistry {
+        fn new(online: bool) -> Arc<Self> {
+            let registry = Arc::new(Self::default());
+            registry.online.store(online, Ordering::SeqCst);
+            registry
+        }
+
+        fn set_online(&self, online: bool) {
+            self.online.store(online, Ordering::SeqCst);
+        }
+
+        /// Seeds a lease directly, bypassing `register`, to model a stale
+        /// lease left behind by a SIGKILLed receiver that will never run
+        /// another tick of its own.
+        fn seed_stale_lease(
+            &self,
+            team: TeamName,
+            agent: AgentName,
+            owner_generation: OwnerGeneration,
+        ) {
+            self.leases.lock().expect("leases").insert(
+                (team, agent),
+                FakeLease {
+                    endpoint: "127.0.0.1:1".parse().expect("endpoint"),
+                    capability: LocalCapability::generate().expect("capability"),
+                    owner_generation,
+                },
+            );
+        }
+
+        fn lease(&self, team: &TeamName, agent: &AgentName) -> Option<FakeLease> {
+            self.leases
+                .lock()
+                .expect("leases")
+                .get(&(team.clone(), agent.clone()))
+                .cloned()
+        }
+
+        fn registration_count(&self) -> usize {
+            self.registrations.load(Ordering::SeqCst)
+        }
+
+        fn refresh_count(&self) -> usize {
+            self.refreshes.load(Ordering::SeqCst)
+        }
+
+        fn refresh_failure_count(&self) -> usize {
+            self.refresh_failures.load(Ordering::SeqCst)
+        }
+
+        fn client(self: &Arc<Self>) -> GraftClient {
+            let registry = Arc::clone(self);
+            GraftClient::from_fake_transport_for_test(Arc::new(FakeClientTransport::new(
+                move |request| registry.handle(request),
+            )))
+        }
+
+        fn handle(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+            if !self.online.load(Ordering::SeqCst) {
+                if matches!(request, RequestEnvelope::GraftReceiverRefresh(_)) {
+                    self.refresh_failures.fetch_add(1, Ordering::SeqCst);
+                }
+                return Err(AtmError::daemon_unavailable(
+                    "fake graft registry is offline",
+                ));
+            }
+            match request {
+                RequestEnvelope::GraftReceiverRegister(registration) => {
+                    self.registrations.fetch_add(1, Ordering::SeqCst);
+                    self.leases.lock().expect("leases").insert(
+                        (registration.team, registration.agent),
+                        FakeLease {
+                            endpoint: registration.endpoint,
+                            capability: registration.capability,
+                            owner_generation: registration.owner_generation,
+                        },
+                    );
+                    Ok(ResponseEnvelope::GraftReceiverRegister)
+                }
+                RequestEnvelope::GraftReceiverRefresh(request) => {
+                    let leases = self.leases.lock().expect("leases");
+                    match leases.get(&(request.team.clone(), request.agent.clone())) {
+                        Some(lease) if lease.owner_generation == request.owner_generation => {
+                            self.refreshes.fetch_add(1, Ordering::SeqCst);
+                            Ok(ResponseEnvelope::GraftReceiverRefresh)
+                        }
+                        _ => {
+                            self.refresh_failures.fetch_add(1, Ordering::SeqCst);
+                            Err(AtmError::new(
+                                AtmErrorCode::GraftReceiverNotOwner,
+                                "fake graft registry: not owner",
+                            ))
+                        }
+                    }
+                }
+                RequestEnvelope::GraftReceiverUnregister(request) => {
+                    let mut leases = self.leases.lock().expect("leases");
+                    match leases.get(&(request.team.clone(), request.agent.clone())) {
+                        Some(lease) if lease.owner_generation == request.owner_generation => {
+                            leases.remove(&(request.team, request.agent));
+                            Ok(ResponseEnvelope::GraftReceiverUnregister)
+                        }
+                        Some(_) => Err(AtmError::new(
+                            AtmErrorCode::GraftReceiverNotOwner,
+                            "fake graft registry: not owner",
+                        )),
+                        None => Ok(ResponseEnvelope::GraftReceiverUnregister),
+                    }
+                }
+                other => panic!("fake graft registry received an unexpected request: {other:?}"),
+            }
+        }
+    }
+
+    fn wait_until(deadline: Duration, mut predicate: impl FnMut() -> bool) -> bool {
+        let (_wait_tx, wait_rx) = mpsc::channel::<()>();
+        let started = Instant::now();
+        while !predicate() {
+            if started.elapsed() >= deadline {
+                return false;
+            }
+            // Bounded poll wait per ADR-008: no fixed sleep as the primary
+            // synchronization mechanism, and this always terminates by
+            // `deadline` even if the predicate never becomes true.
+            let _ = wait_for_stop_or_delay(&wait_rx, GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL);
+        }
+        true
+    }
+
+    // AC2: bind with the daemon down succeeds (the file record keeps the
+    // receiver functional), and the next tick after the daemon returns
+    // registers the lease with no manual step.
+    #[test]
+    fn ac2_bind_with_daemon_down_succeeds_and_registers_once_daemon_returns() {
+        let paths = test_paths();
+        let endpoint_path = receiver_record_path(&paths);
+        let registry = FakeGraftRegistry::new(false);
+        let (stop_tx, join, _snapshot, _target) = spawn_receiver_with_client(
+            paths.workspace_root.clone(),
+            Arc::new(RecordingInjector::default()),
+            Some(registry.client()),
+        );
+        assert!(
+            endpoint_path.exists(),
+            "file record must publish even though the daemon is down"
+        );
+        assert_eq!(registry.registration_count(), 0);
+
+        registry.set_online(true);
+        assert!(
+            wait_until(Duration::from_secs(3), || registry.registration_count()
+                >= 1),
+            "receiver must register once the daemon returns, with no manual step"
+        );
+
+        stop_receiver(stop_tx, join);
+    }
+
+    // AC3: daemon restart with a live receiver — the lease persists across a
+    // reopened store and refresh ticks keep advancing `last_seen_at` without
+    // any receiver-side action.
+    #[test]
+    fn ac3_daemon_restart_persists_lease_and_refresh_keeps_advancing_last_seen() {
+        let paths = test_paths();
+        let db_path = paths._tempdir.path().join("graft-registry.sqlite3");
+        // Uses the same test-support seam (`atm-runtime-test-support`) that
+        // `atm-http-runtime`'s own replacement-router tests use to reach a
+        // real SQLite-backed store: `atm-graft` may not depend on
+        // `atm-storage-rusqlite` directly (repository boundary lint).
+        let store: Arc<Mutex<Arc<dyn atm_core::GraftReceiverEndpointStore + Send + Sync>>> =
+            Arc::new(Mutex::new(
+                atm_runtime_test_support::open_graft_receiver_endpoint_store(&db_path)
+                    .expect("open sqlite-backed graft receiver endpoint store"),
+            ));
+        let handler_store = Arc::clone(&store);
+        let client = GraftClient::from_fake_transport_for_test(Arc::new(FakeClientTransport::new(
+            move |request| match request {
+                RequestEnvelope::GraftReceiverRegister(registration) => handler_store
+                    .lock()
+                    .expect("store")
+                    .register(
+                        &registration,
+                        atm_core::types::IsoTimestamp::now().into_inner(),
+                    )
+                    .map(|()| ResponseEnvelope::GraftReceiverRegister)
+                    .map_err(atm_core::graft_store_error),
+                RequestEnvelope::GraftReceiverRefresh(request) => handler_store
+                    .lock()
+                    .expect("store")
+                    .refresh(
+                        &request.team,
+                        &request.agent,
+                        &request.owner_generation,
+                        atm_core::types::IsoTimestamp::now().into_inner(),
+                    )
+                    .map(|()| ResponseEnvelope::GraftReceiverRefresh)
+                    .map_err(atm_core::graft_store_error),
+                RequestEnvelope::GraftReceiverUnregister(request) => handler_store
+                    .lock()
+                    .expect("store")
+                    .unregister(&request.team, &request.agent, &request.owner_generation)
+                    .map(|()| ResponseEnvelope::GraftReceiverUnregister)
+                    .map_err(atm_core::graft_store_error),
+                other => panic!("unexpected request in AC3 harness: {other:?}"),
+            },
+        )));
+
+        let (stop_tx, join, _snapshot, _target) = spawn_receiver_with_client(
+            paths.workspace_root.clone(),
+            Arc::new(RecordingInjector::default()),
+            Some(client),
+        );
+
+        let team = TeamName::from_validated(TEST_TEAM);
+        let agent = AgentName::from_validated(TEST_QA);
+        let lookup =
+            |store: &Arc<Mutex<Arc<dyn atm_core::GraftReceiverEndpointStore + Send + Sync>>>| {
+                store
+                    .lock()
+                    .expect("store")
+                    .lookup(&team, &agent)
+                    .ok()
+                    .flatten()
+            };
+        assert!(
+            wait_until(Duration::from_secs(3), || lookup(&store).is_some()),
+            "the initial announce must persist a lease before any daemon restart"
+        );
+        let before_restart = lookup(&store).expect("lease before restart");
+
+        // Simulate a daemon restart: drop the open backend and reopen the
+        // same database file. The receiver keeps running unaware.
+        *store.lock().expect("store") =
+            atm_runtime_test_support::open_graft_receiver_endpoint_store(&db_path)
+                .expect("reopen sqlite-backed graft receiver endpoint store");
+
+        assert!(
+            wait_until(Duration::from_secs(3), || {
+                lookup(&store)
+                    .map(|lease| lease.last_seen_at > before_restart.last_seen_at)
+                    .unwrap_or(false)
+            }),
+            "refresh ticks must keep advancing last_seen_at across a reopened store"
+        );
+        assert_eq!(
+            lookup(&store).expect("lease after reopen").owner_generation,
+            before_restart.owner_generation,
+            "the same generation's lease must persist, not be replaced"
+        );
+
+        stop_receiver(stop_tx, join);
+    }
+
+    // AC5: displacement is immediate, not window-gated. A stale lease left by
+    // a SIGKILLed receiver (which never runs another tick) is replaced by the
+    // very next bind's registration, not after ACTIVE_LEASE_WINDOW elapses.
+    #[test]
+    fn ac5_new_bind_displaces_a_stale_lease_left_by_a_sigkilled_receiver_without_delay() {
+        let paths = test_paths();
+        let registry = FakeGraftRegistry::new(true);
+        let team = TeamName::from_validated(TEST_TEAM);
+        let agent = AgentName::from_validated(TEST_QA);
+        let stale_generation =
+            OwnerGeneration::new("01J00000000000000000000099").expect("generation");
+        registry.seed_stale_lease(team.clone(), agent.clone(), stale_generation.clone());
+        let stale_lease = registry.lease(&team, &agent).expect("seeded stale lease");
+
+        let (stop_tx, join, _snapshot, _target) = spawn_receiver_with_client(
+            paths.workspace_root.clone(),
+            Arc::new(RecordingInjector::default()),
+            Some(registry.client()),
+        );
+
+        let lease = registry
+            .lease(&team, &agent)
+            .expect("a lease must exist after the successor's bind");
+        assert_ne!(
+            lease.owner_generation, stale_generation,
+            "the successor bind must displace the stale generation immediately, \
+             not after ACTIVE_LEASE_WINDOW elapses"
+        );
+        assert_ne!(
+            lease.endpoint, stale_lease.endpoint,
+            "the successor's fresh loopback endpoint must replace the stale one"
+        );
+        assert_ne!(
+            lease.capability, stale_lease.capability,
+            "the successor's freshly generated capability must replace the stale one"
+        );
+        assert_eq!(
+            registry.registration_count(),
+            1,
+            "displacement happens on the successor's first registration tick"
+        );
+
+        stop_receiver(stop_tx, join);
+    }
+
+    // AC6: sustained-load refresh. A receiver kept continuously busy
+    // (back-to-back accepted connections, no idle iterations) still refreshes
+    // on cadence — deliverable 2's per-iteration check is not gated behind
+    // the idle-only arm that `handle_idle_graft_receiver` used to own.
+    #[test]
+    fn ac6_sustained_connection_load_never_starves_the_lease_refresh_cadence() {
+        let paths = test_paths();
+        let registry = FakeGraftRegistry::new(true);
+        let injector = Arc::new(RecordingInjector::default());
+        let (stop_tx, join, _snapshot, (endpoint, capability)) = spawn_receiver_with_client(
+            paths.workspace_root.clone(),
+            injector.clone() as Arc<dyn HostNudgeInjector>,
+            Some(registry.client()),
+        );
+        assert!(
+            wait_until(Duration::from_secs(3), || registry.registration_count()
+                >= 1),
+            "initial announce must land before the sustained-load phase starts"
+        );
+
+        // Sustain back-to-back deliveries for multiple refresh intervals so
+        // the accept loop never reaches an idle `Ok(None)` poll iteration.
+        const SUSTAINED_LOAD_DURATION: Duration = Duration::from_secs(4);
+        let deadline = Instant::now() + SUSTAINED_LOAD_DURATION;
+        let mut delivered = 0usize;
+        while Instant::now() < deadline {
+            assert_eq!(
+                deliver_request(endpoint, &capability, request_event()),
+                GraftPostSendResponse::Delivered
+            );
+            delivered += 1;
+        }
+        assert!(
+            delivered > 0,
+            "the busy loop must have delivered at least once"
+        );
+        assert_eq!(
+            injector.nudges.lock().expect("nudges lock").len(),
+            delivered
+        );
+
+        assert!(
+            registry.refresh_count() >= 2,
+            "a continuously busy receiver must still refresh on cadence \
+             (got {} refreshes over {:?})",
+            registry.refresh_count(),
+            SUSTAINED_LOAD_DURATION
+        );
+
+        stop_receiver(stop_tx, join);
+    }
+
+    // AC7: a refresh/republish failure injected mid-loop is logged and does
+    // not terminate `listen_for_graft_nudges` — the receiver keeps accepting
+    // connections on subsequent iterations after the injected failure.
+    #[test]
+    fn ac7_refresh_failure_injected_mid_loop_never_terminates_the_accept_loop() {
+        let paths = test_paths();
+        let registry = FakeGraftRegistry::new(true);
+        let injector = Arc::new(RecordingInjector::default());
+        let (stop_tx, join, snapshot, (endpoint, capability)) = spawn_receiver_with_client(
+            paths.workspace_root.clone(),
+            injector.clone() as Arc<dyn HostNudgeInjector>,
+            Some(registry.client()),
+        );
+        assert_eq!(
+            deliver_request(endpoint, &capability, request_event()),
+            GraftPostSendResponse::Delivered
+        );
+
+        registry.set_online(false);
+        assert!(
+            wait_until(Duration::from_secs(3), || registry.refresh_failure_count()
+                >= 1),
+            "at least one refresh must fail while the registry is offline"
+        );
+        assert_eq!(
+            read_snapshot(&snapshot).expect("snapshot").state,
+            GraftSessionState::Listening,
+            "an injected refresh failure must not crash or degrade the accept loop"
+        );
+        assert_eq!(
+            deliver_request(endpoint, &capability, request_event()),
+            GraftPostSendResponse::Delivered,
+            "the accept loop must keep accepting connections after an injected refresh failure"
+        );
+
+        registry.set_online(true);
+        let refreshes_before_recovery = registry.refresh_count();
+        assert!(
+            wait_until(Duration::from_secs(3), || registry.refresh_count()
+                > refreshes_before_recovery),
+            "refresh must resume once the daemon becomes reachable again, with no manual reset"
+        );
+
+        stop_receiver(stop_tx, join);
+    }
+
+    // rust-service-hardening RSH-001: a stalled (not merely slow) daemon must
+    // not compound the loop's blocking refresh call with `Drop`'s blocking
+    // unregister call past the outer receive-loop join deadline.
+    #[test]
+    fn rsh001_stalled_daemon_calls_never_delay_stop_past_the_join_deadline() {
+        let paths = test_paths();
+        let released = Arc::new(AtomicBool::new(false));
+        let stalled_calls = Arc::new(AtomicUsize::new(0));
+        let handler_released = Arc::clone(&released);
+        let handler_calls = Arc::clone(&stalled_calls);
+        let client = GraftClient::from_fake_transport_for_test(Arc::new(FakeClientTransport::new(
+            move |request| match request {
+                RequestEnvelope::GraftReceiverRegister(_) => {
+                    Ok(ResponseEnvelope::GraftReceiverRegister)
+                }
+                RequestEnvelope::GraftReceiverRefresh(_) => {
+                    handler_calls.fetch_add(1, Ordering::SeqCst);
+                    while !handler_released.load(Ordering::SeqCst) {
+                        std::thread::yield_now();
+                    }
+                    Ok(ResponseEnvelope::GraftReceiverRefresh)
+                }
+                RequestEnvelope::GraftReceiverUnregister(_) => {
+                    handler_calls.fetch_add(1, Ordering::SeqCst);
+                    while !handler_released.load(Ordering::SeqCst) {
+                        std::thread::yield_now();
+                    }
+                    Ok(ResponseEnvelope::GraftReceiverUnregister)
+                }
+                other => panic!("unexpected request in RSH-001 harness: {other:?}"),
+            },
+        )));
+
+        let (stop_tx, join, _snapshot, _target) = spawn_receiver_with_client(
+            paths.workspace_root.clone(),
+            Arc::new(RecordingInjector::default()),
+            Some(client),
+        );
+        assert!(
+            wait_until(Duration::from_secs(3), || stalled_calls
+                .load(Ordering::SeqCst)
+                >= 1),
+            "the periodic refresh tick must reach the stalled daemon call"
+        );
+
+        let stop_started = Instant::now();
+        stop_tx.send(()).expect("stop");
+        join_receive_loop_with_deadline(join).expect("join receiver despite stalled lease calls");
+        let elapsed = stop_started.elapsed();
+        assert!(
+            elapsed < RECEIVE_LOOP_JOIN_DEADLINE,
+            "stop must be observed within the outer join deadline even with a stalled \
+             daemon on both the refresh and unregister calls: {elapsed:?}"
+        );
+
+        // Release the (now detached) stalled helper thread(s) so the process
+        // does not accumulate a permanently blocked thread across tests.
+        released.store(true, Ordering::SeqCst);
+    }
+
+    // rust-service-hardening RSH-002: the refresh backoff grows on repeated
+    // failure and resets to the base cadence on the next success, so a
+    // sustained outage does not retry every fixed tick while a healthy
+    // daemon keeps the AC6 cadence unaffected. Deterministic per ADR-008:
+    // pure `Instant` arithmetic, no real waiting.
+    #[test]
+    fn rsh002_refresh_backoff_grows_on_failure_and_resets_on_success() {
+        let now = Instant::now();
+        let mut backoff = LeaseRefreshBackoff::new(now);
+        assert_eq!(backoff.current_delay(), GRAFT_LEASE_REFRESH_INTERVAL);
+        assert!(
+            !backoff.due(now),
+            "the first tick must not fire immediately at t=0"
+        );
+        assert!(backoff.due(now + GRAFT_LEASE_REFRESH_INTERVAL));
+
+        backoff.record_failure(now + GRAFT_LEASE_REFRESH_INTERVAL);
+        let grown_delay = backoff.current_delay();
+        assert!(
+            grown_delay > GRAFT_LEASE_REFRESH_INTERVAL,
+            "a failure must grow the backoff delay beyond the base interval"
+        );
+        let next_due_at = backoff.next_attempt_at;
+        assert!(
+            !backoff.due(next_due_at - Duration::from_millis(1)),
+            "the grown delay must not be satisfied one millisecond early"
+        );
+        assert!(
+            backoff.due(next_due_at),
+            "the next attempt must become due exactly at the grown delay boundary"
+        );
+
+        let mut previous_delay = grown_delay;
+        let mut when = now + GRAFT_LEASE_REFRESH_INTERVAL;
+        for _ in 0..10 {
+            when += previous_delay;
+            backoff.record_failure(when);
+            previous_delay = backoff.current_delay();
+        }
+        assert!(
+            previous_delay <= Duration::from_secs(30),
+            "repeated failures must not grow the backoff without bound"
+        );
+
+        backoff.record_success(when);
+        assert_eq!(
+            backoff.current_delay(),
+            GRAFT_LEASE_REFRESH_INTERVAL,
+            "a success must reset the cadence back to the base interval"
+        );
     }
 }

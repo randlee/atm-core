@@ -35,6 +35,7 @@ const DOCTOR_PATH: &str = "/v1/atm/doctor";
 const COMPATIBILITY_PATH: &str = "/v1/atm/compatibility";
 const HEARTBEAT_PATH: &str = "/v1/atm/heartbeat";
 const GRAFT_RECEIVER_REGISTER_PATH: &str = "/v1/atm/graft/receiver/register";
+const GRAFT_RECEIVER_REFRESH_PATH: &str = "/v1/atm/graft/receiver/refresh";
 const GRAFT_RECEIVER_UNREGISTER_PATH: &str = "/v1/atm/graft/receiver/unregister";
 const GRAFT_RECEIVER_LOOKUP_PATH: &str = "/v1/atm/graft/receiver/lookup";
 const RUNTIME_RELOAD_PATH: &str = "/v1/atm/runtime/reload";
@@ -59,6 +60,7 @@ pub enum HttpRouteKind {
     Compatibility,
     Heartbeat,
     GraftReceiverRegister,
+    GraftReceiverRefresh,
     GraftReceiverUnregister,
     GraftReceiverLookup,
     Search,
@@ -164,6 +166,13 @@ const HTTP_ROUTE_SPECS: &[HttpRouteSpec] = &[
             path_template: GRAFT_RECEIVER_LOOKUP_PATH,
         },
     },
+    HttpRouteSpec {
+        kind: HttpRouteKind::GraftReceiverRefresh,
+        route: HttpRoute {
+            method: "POST",
+            path_template: GRAFT_RECEIVER_REFRESH_PATH,
+        },
+    },
 ];
 
 /// Registered HTTP route inventory for documentation conformance tests.
@@ -188,6 +197,7 @@ fn route_spec(kind: HttpRouteKind) -> &'static HttpRouteSpec {
         HttpRouteKind::GraftReceiverRegister => &HTTP_ROUTE_SPECS[10],
         HttpRouteKind::GraftReceiverUnregister => &HTTP_ROUTE_SPECS[11],
         HttpRouteKind::GraftReceiverLookup => &HTTP_ROUTE_SPECS[12],
+        HttpRouteKind::GraftReceiverRefresh => &HTTP_ROUTE_SPECS[13],
     }
 }
 
@@ -204,6 +214,7 @@ fn route_kind_for_request(request: &RequestEnvelope) -> HttpRouteKind {
         RequestEnvelope::CompatibilityPreflight(_) => HttpRouteKind::Compatibility,
         RequestEnvelope::Heartbeat(_) => HttpRouteKind::Heartbeat,
         RequestEnvelope::GraftReceiverRegister(_) => HttpRouteKind::GraftReceiverRegister,
+        RequestEnvelope::GraftReceiverRefresh(_) => HttpRouteKind::GraftReceiverRefresh,
         RequestEnvelope::GraftReceiverUnregister(_) => HttpRouteKind::GraftReceiverUnregister,
         RequestEnvelope::GraftReceiverLookup { .. } => HttpRouteKind::GraftReceiverLookup,
     }
@@ -333,6 +344,7 @@ fn encode_request_body(request: &RequestEnvelope) -> Result<Vec<u8>, AtmError> {
         RequestEnvelope::CompatibilityPreflight(value) => serde_json::to_vec(value),
         RequestEnvelope::Heartbeat(value) => serde_json::to_vec(value),
         RequestEnvelope::GraftReceiverRegister(value) => serde_json::to_vec(value),
+        RequestEnvelope::GraftReceiverRefresh(value) => serde_json::to_vec(value),
         RequestEnvelope::GraftReceiverUnregister(value) => serde_json::to_vec(value),
         RequestEnvelope::GraftReceiverLookup { team, agent } => {
             serde_json::to_vec(&crate::protocol::GraftReceiverLookupRequest {
@@ -388,6 +400,10 @@ fn decode_success_response(
             decode_response_body::<()>(body, "graft receiver register")
                 .map(|()| ResponseEnvelope::GraftReceiverRegister)
         }
+        RequestEnvelope::GraftReceiverRefresh(_) => {
+            decode_response_body::<()>(body, "graft receiver refresh")
+                .map(|()| ResponseEnvelope::GraftReceiverRefresh)
+        }
         RequestEnvelope::GraftReceiverUnregister(_) => {
             decode_response_body::<()>(body, "graft receiver unregister")
                 .map(|()| ResponseEnvelope::GraftReceiverUnregister)
@@ -433,6 +449,7 @@ pub enum ApiRequest {
     CompatibilityPreflight(CompatibilityPreflight),
     Heartbeat(TeamMemberHeartbeatRequest),
     GraftReceiverRegister(atm_storage::GraftReceiverRegistration),
+    GraftReceiverRefresh(crate::protocol::GraftReceiverRefreshRequest),
     GraftReceiverUnregister(crate::protocol::GraftReceiverUnregistration),
     GraftReceiverLookup {
         team: crate::types::TeamName,
@@ -469,6 +486,7 @@ impl ApiRequest {
             }
             Self::Heartbeat(request) => RequestEnvelope::Heartbeat(request),
             Self::GraftReceiverRegister(request) => RequestEnvelope::GraftReceiverRegister(request),
+            Self::GraftReceiverRefresh(request) => RequestEnvelope::GraftReceiverRefresh(request),
             Self::GraftReceiverUnregister(request) => {
                 RequestEnvelope::GraftReceiverUnregister(request)
             }
@@ -501,6 +519,7 @@ impl From<RequestEnvelope> for ApiRequest {
             }
             RequestEnvelope::Heartbeat(request) => Self::Heartbeat(request),
             RequestEnvelope::GraftReceiverRegister(request) => Self::GraftReceiverRegister(request),
+            RequestEnvelope::GraftReceiverRefresh(request) => Self::GraftReceiverRefresh(request),
             RequestEnvelope::GraftReceiverUnregister(request) => {
                 Self::GraftReceiverUnregister(request)
             }
@@ -582,6 +601,11 @@ mod tests {
         };
         let requests = [
             RequestEnvelope::GraftReceiverRegister(registration),
+            RequestEnvelope::GraftReceiverRefresh(crate::protocol::GraftReceiverRefreshRequest {
+                team: TeamName::from_validated("test-team"),
+                agent: AgentName::from_validated("test-agent"),
+                owner_generation: owner_generation.clone(),
+            }),
             RequestEnvelope::GraftReceiverUnregister(
                 crate::protocol::GraftReceiverUnregistration {
                     team: TeamName::from_validated("test-team"),
@@ -601,6 +625,9 @@ mod tests {
                 Some(match request {
                     RequestEnvelope::GraftReceiverRegister(_) => {
                         HttpRouteKind::GraftReceiverRegister
+                    }
+                    RequestEnvelope::GraftReceiverRefresh(_) => {
+                        HttpRouteKind::GraftReceiverRefresh
                     }
                     RequestEnvelope::GraftReceiverUnregister(_) => {
                         HttpRouteKind::GraftReceiverUnregister

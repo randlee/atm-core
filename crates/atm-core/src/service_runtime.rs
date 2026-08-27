@@ -18,6 +18,7 @@ use crate::boundary::TemplateComposer;
 use crate::config::{self, AtmConfig};
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
+use crate::error_codes::AtmErrorCode;
 #[cfg(test)]
 use crate::protocol::NotificationEvent;
 use crate::read::seen_state;
@@ -683,9 +684,10 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
 /// `daemon_unavailable`.
 pub fn graft_store_error(error: GraftEndpointStoreError) -> AtmError {
     match error {
-        GraftEndpointStoreError::NotOwner => {
-            AtmError::validation("graft receiver lease is owned by another generation")
-        }
+        GraftEndpointStoreError::NotOwner => AtmError::new(
+            AtmErrorCode::GraftReceiverNotOwner,
+            "graft receiver lease is owned by another generation",
+        ),
         GraftEndpointStoreError::AlreadyActive => {
             AtmError::validation("graft receiver lease is already active")
         }

@@ -101,6 +101,7 @@ impl LoopbackClientTransport {
                 "loopback heartbeat transport is not wired outside the daemon runtime",
             )),
             RequestEnvelope::GraftReceiverRegister(_)
+            | RequestEnvelope::GraftReceiverRefresh(_)
             | RequestEnvelope::GraftReceiverUnregister(_)
             | RequestEnvelope::GraftReceiverLookup { .. } => Err(AtmError::daemon_unavailable(
                 "loopback graft receiver transport is not wired outside the daemon runtime",
