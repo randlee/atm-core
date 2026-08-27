@@ -339,8 +339,9 @@ an optimization; AQ1's test suite proves it directly (duplicate write → zero
 ADR-058 D8 outcomes are partitioned for ADR-054 (f) retry accounting: outcomes
 where no input reached the agent (blocked, not-present family, infrastructure)
 use `release_pending` (no attempt consumed) bounded by a per-member
-consecutive-release cap (`HERDR_MAX_CONSECUTIVE_RELEASES = 10`, after which one
-`requeue_pending` consumes an attempt); outcomes after input was injected or
-ambiguous (`agent_prompt_stalled`, post-write errors/timeouts) use
+consecutive-release cap (`HERDR_MAX_CONSECUTIVE_RELEASES = 10`); after ten
+consecutive releases, the 11th no-input outcome uses `requeue_pending` and
+consumes an attempt. Outcomes after input was injected or ambiguous
+(`agent_prompt_stalled`, post-write errors/timeouts) use
 `requeue_pending`. This keeps the (f) stuck signal reachable for Herdr
 members. Normative text: sprint-AQ2-7 deliverable 3.

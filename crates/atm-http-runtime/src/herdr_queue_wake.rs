@@ -430,6 +430,16 @@ impl HerdrQueueWakePump {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
+    #[cfg(test)]
+    fn release_streak_for(&self, member: &MemberKey) -> u32 {
+        self.release_streaks
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get(member)
+            .copied()
+            .unwrap_or_default()
+    }
+
     fn save_stats(&self, stats: HerdrQueueWakeStats) {
         self.runtime_health
             .record_herdr_queue_tick(stats.last_tick_at);
@@ -557,11 +567,11 @@ impl ReleasePendingOnDrop {
                     .lock()
                     .unwrap_or_else(|poisoned| poisoned.into_inner());
                 let streak = streaks.entry(self.member.clone()).or_default();
-                *streak = streak.saturating_add(1);
                 if *streak >= HERDR_MAX_CONSECUTIVE_RELEASES {
                     streaks.remove(&self.member);
                     true
                 } else {
+                    *streak = streak.saturating_add(1);
                     false
                 }
             };
@@ -582,6 +592,10 @@ impl ReleasePendingOnDrop {
             if let Err(error) = self.store.requeue_pending(&self.member, &self.claim) {
                 tracing::warn!(error = %error, member = %self.member, "failed to requeue Herdr queue claim");
             }
+            self.release_streaks
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .remove(&self.member);
             self.armed = false;
         }
     }
@@ -600,7 +614,8 @@ impl Drop for ReleasePendingOnDrop {
 #[cfg(test)]
 mod tests {
     use super::{
-        HERDR_MAX_PROMPTS_PER_TICK, HERDR_POLL_INTERVAL_MS, HerdrQueueWakePump, runtime_state,
+        HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK, HERDR_POLL_INTERVAL_MS,
+        HerdrQueueWakePump, runtime_state,
     };
     use atm_core::LocalServiceRuntime;
     use atm_core::api::RequestDeadline;
@@ -1069,19 +1084,108 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ac06_retry_partition_has_a_bounded_release_side() {
+    async fn ac06_blocked_race_releases_pending_with_zero_injected_bytes() {
         let (_root, runtime, fake, pump, _health, key) = build_test_pump();
-        fake.queue_prompt_result(Err(atm_herdr::HerdrError::AgentPromptStalled));
+        fake.queue_prompt_result(Err(atm_herdr::HerdrError::AgentBlocked));
+
         pump.tick_once().await;
-        assert_eq!(pump.stats().prompted, 0);
+
+        assert_eq!(pump.stats().prompted, 0, "blocked prompt injected no bytes");
         assert_eq!(pump.stats().released, 1);
+        assert_eq!(pump.release_streak_for(&key), 1);
+        assert_eq!(
+            fake.calls()
+                .iter()
+                .filter(|call| matches!(call, atm_herdr::testing::FakeHerdrCall::Prompt { .. }))
+                .count(),
+            1,
+            "the post-claim prompt was attempted exactly once"
+        );
+
         let store = runtime.pending_nudge_store().expect("pending store");
         let claim = store
             .claim_next_pending(&key)
-            .expect("claim retry")
-            .expect("requeued claim");
-        assert_eq!(claim.attempt, 1);
-        store.release_pending(&key, &claim).expect("release claim");
+            .expect("claim released message")
+            .expect("blocked claim remains pending");
+        assert_eq!(claim.attempt, 0, "blocked input consumes no retry debt");
+        store.release_pending(&key, &claim).expect("restore claim");
+    }
+
+    #[tokio::test]
+    async fn ac06_not_found_family_releases_without_input() {
+        for error in [
+            atm_herdr::HerdrError::AgentNotFound,
+            atm_herdr::HerdrError::AgentTargetAmbiguous,
+            atm_herdr::HerdrError::AgentNotReady,
+        ] {
+            let (_root, runtime, fake, pump, _health, key) = build_test_pump();
+            fake.queue_prompt_result(Err(error));
+
+            pump.tick_once().await;
+
+            assert_eq!(pump.stats().prompted, 0);
+            assert_eq!(pump.stats().released, 1);
+            assert_eq!(pump.release_streak_for(&key), 1);
+            let prompt_calls = fake
+                .calls()
+                .iter()
+                .filter(|call| matches!(call, atm_herdr::testing::FakeHerdrCall::Prompt { .. }))
+                .count();
+            assert_eq!(
+                prompt_calls, 1,
+                "each lifecycle error reaches one prompt call"
+            );
+
+            let store = runtime.pending_nudge_store().expect("pending store");
+            let claim = store
+                .claim_next_pending(&key)
+                .expect("claim released message")
+                .expect("not-found-family claim remains pending");
+            assert_eq!(claim.attempt, 0, "not-present input consumes no retry debt");
+            store.release_pending(&key, &claim).expect("restore claim");
+        }
+    }
+
+    #[tokio::test]
+    async fn ac06_consecutive_release_bound_requeues_after_ten() {
+        let (_root, runtime, fake, pump, _health, key) = build_test_pump();
+        for _ in 0..HERDR_MAX_CONSECUTIVE_RELEASES {
+            fake.queue_list_result(Ok(HerdrListOutcome {
+                agents: vec![AgentSnapshot {
+                    name: Some(key.agent().to_string()),
+                    status: HerdrAgentStatus::Idle,
+                    workspace_id: None,
+                }],
+            }));
+        }
+        for _ in 0..=HERDR_MAX_CONSECUTIVE_RELEASES {
+            fake.queue_prompt_result(Err(atm_herdr::HerdrError::AgentBlocked));
+        }
+
+        let store = runtime.pending_nudge_store().expect("pending store");
+        for release_number in 1..=HERDR_MAX_CONSECUTIVE_RELEASES + 1 {
+            pump.tick_once().await;
+            let claim = store
+                .claim_next_pending(&key)
+                .expect("claim resolved message")
+                .expect("resolved claim remains pending");
+            let expected_attempt = if release_number > HERDR_MAX_CONSECUTIVE_RELEASES {
+                1
+            } else {
+                0
+            };
+            assert_eq!(claim.attempt, expected_attempt, "release {release_number}");
+            assert_eq!(
+                pump.release_streak_for(&key),
+                if release_number > HERDR_MAX_CONSECUTIVE_RELEASES {
+                    0
+                } else {
+                    release_number
+                },
+                "release counter at outcome {release_number}"
+            );
+            store.release_pending(&key, &claim).expect("restore claim");
+        }
     }
 
     #[tokio::test]

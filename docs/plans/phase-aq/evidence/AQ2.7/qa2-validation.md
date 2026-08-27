@@ -1,4 +1,4 @@
-# AQ2.7 QA-2 validation evidence
+# AQ2.7 validation evidence
 
 Date: 2026-08-27  
 Branch: `feature/aq-2-7-herdr-queue-wake`  
@@ -43,6 +43,25 @@ The prior workspace failure in
 was caused by the sibling merge reintroducing file-record references. The
 integrate-side graft correction resolves that mismatch without weakening or
 editing the architectural guard.
+
+## QA-4 retry-partition run
+
+Command:
+
+```text
+cargo test -p atm-http-runtime herdr_queue_wake::tests::ac06 -- --nocapture
+```
+
+Result: PASS — three tests passed. The blocked and not-present-family
+post-claim fixtures retain attempt 0 and their pending markers; the bounded
+fixture records release counters 9 and 10, then requeues on outcome 11 with
+attempt 1 and a reset counter.
+
+The deterministic blocked-dialog transcript is recorded in
+[`ac06-blocked-race-fake-herdr-transcript.md`](ac06-blocked-race-fake-herdr-transcript.md).
+
+AQ3 drains tmux / graft-only remains a downstream integrate verification after
+#1054 merges (AQ3 tests …); it is not claimed as complete here.
 
 ## Scope and evidence notes
 
