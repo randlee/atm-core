@@ -9,9 +9,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 use atm_storage::{
-    AsyncMessageSearchStore, AsyncMessageStore as SharedAsyncMessageStore,
-    MessageStore as SharedMessageStore, PendingNudgeStore, RosterStore as SharedRosterStore,
-    TemplateCatalogStore,
+    AsyncMessageSearchStore, AsyncMessageStore as SharedAsyncMessageStore, GraftEndpointStoreError,
+    GraftReceiverEndpointStore, GraftReceiverLease, MessageStore as SharedMessageStore,
+    OwnerGeneration, PendingNudgeStore, RosterStore as SharedRosterStore, TemplateCatalogStore,
 };
 
 use crate::boundary::TemplateComposer;
@@ -96,6 +96,24 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
     ) -> Result<Option<crate::boundary::TeamNudgeTemplateOverrideRow>, AtmError> {
         Ok(None)
     }
+    #[allow(dead_code)]
+    fn graft_receiver_lease(
+        &self,
+        _team: &TeamName,
+        _agent: &AgentName,
+    ) -> Result<Option<GraftReceiverLease>, AtmError> {
+        Ok(None)
+    }
+    #[allow(dead_code)]
+    fn mark_graft_receiver_unreachable(
+        &self,
+        _team: &TeamName,
+        _agent: &AgentName,
+        _owner_generation: &OwnerGeneration,
+        _now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), AtmError> {
+        Ok(())
+    }
     fn inbox_path(
         &self,
         home_dir: &Path,
@@ -145,6 +163,8 @@ pub struct LocalServiceRuntime {
     /// (`atm queue`) nudges. Unset in runtimes that never enqueue a deferred
     /// nudge, e.g. plain-text mailbox tests.
     pending_nudge_store: Option<std::sync::Arc<dyn PendingNudgeStore + Send + Sync>>,
+    graft_receiver_endpoint_store:
+        Option<std::sync::Arc<dyn GraftReceiverEndpointStore + Send + Sync>>,
     /// Optional renderer selected by the bootstrap composition root. Core send
     /// policy sees only this port; it never depends on `sc-composer` itself.
     pub(crate) template_composer: Option<std::sync::Arc<dyn TemplateComposer>>,
@@ -179,6 +199,7 @@ impl LocalServiceRuntime {
             nudge_template_override_store,
             non_claude_outbound,
             pending_nudge_store: None,
+            graft_receiver_endpoint_store: None,
             template_composer: None,
             template_catalog_store: None,
             roster_cache: Arc::new(RosterSnapshotCache::default()),
@@ -258,6 +279,27 @@ impl LocalServiceRuntime {
         self.pending_nudge_store.clone().ok_or_else(|| {
             AtmError::daemon_unavailable(
                 "the deferred-nudge pending store was not installed in this runtime",
+            )
+        })
+    }
+
+    /// Attaches the durable graft receiver endpoint registry for local-only
+    /// registration, refresh, unregistration, and lookup requests.
+    #[must_use]
+    pub fn with_graft_receiver_endpoint_store(
+        mut self,
+        store: std::sync::Arc<dyn GraftReceiverEndpointStore + Send + Sync>,
+    ) -> Self {
+        self.graft_receiver_endpoint_store = Some(store);
+        self
+    }
+
+    pub fn graft_receiver_endpoint_store(
+        &self,
+    ) -> Result<std::sync::Arc<dyn GraftReceiverEndpointStore + Send + Sync>, AtmError> {
+        self.graft_receiver_endpoint_store.clone().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "the graft receiver endpoint store was not installed in this runtime",
             )
         })
     }
@@ -425,6 +467,10 @@ impl fmt::Debug for LocalServiceRuntime {
                 &std::sync::Arc::as_ptr(&self.non_claude_outbound),
             )
             .field("pending_nudge_store", &self.pending_nudge_store.is_some())
+            .field(
+                "graft_receiver_endpoint_store",
+                &self.graft_receiver_endpoint_store.is_some(),
+            )
             .finish()
     }
 }
@@ -537,6 +583,32 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
             .load_template_override(team, kind)
     }
 
+    fn graft_receiver_lease(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<Option<GraftReceiverLease>, AtmError> {
+        let Some(store) = &self.graft_receiver_endpoint_store else {
+            return Ok(None);
+        };
+        store.lookup(team, agent).map_err(graft_store_error)
+    }
+
+    fn mark_graft_receiver_unreachable(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+        owner_generation: &OwnerGeneration,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), AtmError> {
+        let Some(store) = &self.graft_receiver_endpoint_store else {
+            return Ok(());
+        };
+        store
+            .mark_unreachable(team, agent, owner_generation, now)
+            .map_err(graft_store_error)
+    }
+
     fn inbox_path(
         &self,
         home_dir: &Path,
@@ -593,6 +665,31 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
                 messages: messages.to_vec(),
             })
             .map(|_| ())
+    }
+}
+
+/// Canonical `GraftEndpointStoreError` -> `AtmError` mapping.
+///
+/// This is the single source of truth for how graft-receiver store errors
+/// surface as `AtmError`s (and therefore as HTTP statuses, via the shared
+/// `error_response` translation in `atm-http-runtime`). QA-1 finding: this
+/// mapping used to be duplicated here and in
+/// `atm-http-runtime::storage_and_nudge_router`, with different outcomes
+/// (`NotOwner` mapped to `daemon_unavailable`/503 here but to
+/// `validation`/400 there) depending on which call path produced the error.
+/// A generation mismatch is a caller-input problem, not a backend outage, so
+/// the unified mapping treats it (and the reserved `AlreadyActive` variant)
+/// as a validation error; only genuine backend I/O failures map to
+/// `daemon_unavailable`.
+pub fn graft_store_error(error: GraftEndpointStoreError) -> AtmError {
+    match error {
+        GraftEndpointStoreError::NotOwner => {
+            AtmError::validation("graft receiver lease is owned by another generation")
+        }
+        GraftEndpointStoreError::AlreadyActive => {
+            AtmError::validation("graft receiver lease is already active")
+        }
+        GraftEndpointStoreError::Storage(message) => AtmError::daemon_unavailable(message),
     }
 }
 

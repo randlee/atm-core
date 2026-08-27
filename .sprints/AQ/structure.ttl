@@ -1,0 +1,21 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Phase AQ landing order (plan-phase-aq.md sprint table, reordered 2026-08-26:
+# trait foundation first, Herdr second, graft chain parallel with Herdr).
+triage:PhaseAQ a triage:Phase .
+
+triage:AQ1 a triage:Sprint ; triage:inPhase triage:PhaseAQ ; triage:order 1 ; triage:criteria "docs/plans/phase-aq/sprint-AQ1-queue-cli.md" ; triage:branch "feature/aq-1-trait-foundation" .
+triage:AQ2-6 a triage:Sprint ; triage:inPhase triage:PhaseAQ ; triage:order 2 ; triage:criteria "docs/plans/phase-aq/sprint-AQ2-6-herdr-steer-backend.md" ; triage:branch "feature/aq-2-6-herdr-steer-backend" .
+triage:AQ2-7 a triage:Sprint ; triage:inPhase triage:PhaseAQ ; triage:order 3 ; triage:criteria "docs/plans/phase-aq/sprint-AQ2-7-herdr-queue-wake.md" ; triage:branch "feature/aq-2-7-herdr-queue-wake" .
+triage:AQ1-5 a triage:Sprint ; triage:inPhase triage:PhaseAQ ; triage:order 4 ; triage:criteria "docs/plans/phase-aq/sprint-AQ1-5-graft-registration-api.md" ; triage:branch "feature/aq-1-5-graft-registration-api" .
+triage:AQ1-6 a triage:Sprint ; triage:inPhase triage:PhaseAQ ; triage:order 5 ; triage:criteria "docs/plans/phase-aq/sprint-AQ1-6-graft-receiver-registration-client.md" ; triage:branch "feature/aq-1-6-graft-receiver-registration-client" .
+triage:AQ1-7 a triage:Sprint ; triage:inPhase triage:PhaseAQ ; triage:order 6 ; triage:criteria "docs/plans/phase-aq/sprint-AQ1-7-graft-endpoint-consumer-cutover.md" ; triage:branch "feature/aq-1-7-graft-endpoint-consumer-cutover" .
+triage:AQ1-8 a triage:Sprint ; triage:inPhase triage:PhaseAQ ; triage:order 7 ; triage:criteria "docs/plans/phase-aq/sprint-AQ1-8-graft-file-record-retirement.md" ; triage:branch "feature/aq-1-8-graft-file-record-retirement" .
+triage:AQ1-9 a triage:Sprint ; triage:inPhase triage:PhaseAQ ; triage:order 8 ; triage:criteria "docs/plans/phase-aq/sprint-AQ1-9-hermes-atm-wheel-verification.md" ; triage:branch "feature/aq-1-9-hermes-atm-wheel-verification" .
+triage:AQ2 a triage:Sprint ; triage:inPhase triage:PhaseAQ ; triage:order 9 ; triage:criteria "docs/plans/phase-aq/sprint-AQ2-queue-graft.md" ; triage:branch "feature/aq-2-queue-graft" .
+triage:AQ2-5 a triage:Sprint ; triage:inPhase triage:PhaseAQ ; triage:order 10 ; triage:criteria "docs/plans/phase-aq/sprint-AQ2-5-queue-delivery-triggers.md" ; triage:branch "feature/aq-2-5-queue-delivery-triggers" .
+triage:AQ3 a triage:Sprint ; triage:inPhase triage:PhaseAQ ; triage:order 11 ; triage:criteria "docs/plans/phase-aq/sprint-AQ3-queue-tmux.md" ; triage:branch "feature/aq-3-queue-tmux" .
+triage:AQ4 a triage:Sprint ; triage:inPhase triage:PhaseAQ ; triage:order 12 ; triage:criteria "docs/plans/phase-aq/sprint-AQ4-send-to-core.md" ; triage:branch "feature/aq-4-send-to-core" .
+triage:AQ5 a triage:Sprint ; triage:inPhase triage:PhaseAQ ; triage:order 13 ; triage:criteria "docs/plans/phase-aq/sprint-AQ5-surface-evidence.md" ; triage:branch "feature/aq-5-surface-evidence" .
+triage:AQ6 a triage:Sprint ; triage:inPhase triage:PhaseAQ ; triage:order 14 ; triage:criteria "docs/plans/phase-aq/sprint-AQ6-ecosystem-preflight.md" ; triage:branch "feature/aq-6-ecosystem-preflight" .

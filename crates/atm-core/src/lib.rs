@@ -122,6 +122,7 @@ pub use api::{
     MAX_HTTP_REQUEST_BODY_BYTES, RequestDeadline,
 };
 pub use atm_storage::derive_ack_requirement;
+pub use atm_storage::{GraftEndpointStoreError, GraftReceiverEndpointStore, GraftReceiverLease};
 pub use atm_storage::{TemplateFrontmatter, TemplateSha};
 pub use atm_temp::{
     AtmTemp, AtmTempError, EnvSource, ProcessEnvSource, resolve_atm_temp, send_to_staging_dir,
@@ -159,6 +160,11 @@ pub use delivery_channel::{
 pub use graft::AtmGraftClient;
 pub use protocol::{RequestEnvelope, ResponseEnvelope};
 pub use search::{SearchAggregateInput, SearchHit, SearchInput, SearchRequest, SearchResponse};
+// The canonical `GraftEndpointStoreError` -> `AtmError` mapping. Every
+// dispatch path (HTTP handlers, the retained-runtime bridge) must produce the
+// same `AtmError` — and therefore the same HTTP status — for a given store
+// error; see the doc comment on `service_runtime::graft_store_error`.
+pub use service_runtime::graft_store_error;
 pub use service_runtime::{
     LocalFileNonClaudeOutbound, LocalServiceRuntime, with_default_local_service_runtime,
 };
