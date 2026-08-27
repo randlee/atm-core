@@ -19,13 +19,20 @@ impl SqliteGraftReceiverEndpointStore {
     pub(crate) fn new(db: Arc<SharedDb>) -> Self {
         Self { db }
     }
-
-    fn storage_error(error: atm_storage::AtmError) -> GraftEndpointStoreError {
-        GraftEndpointStoreError::storage(&error)
-    }
 }
 
 impl sealed::Sealed for SqliteGraftReceiverEndpointStore {}
+
+// sc-boundary SCB-CYCLE-003: kept as a free function, not an inherent
+// associated function on `SqliteGraftReceiverEndpointStore`. Every
+// `GraftReceiverEndpointStore` trait method below maps its backend error
+// through this helper; as an inherent `storage_error` associated
+// function it created a same-owner self-reference from each trait-impl
+// method back to the owning type, which sc-boundary flags as an
+// architectural self-loop.
+fn storage_error(error: atm_storage::AtmError) -> GraftEndpointStoreError {
+    GraftEndpointStoreError::storage(&error)
+}
 
 impl GraftReceiverEndpointStore for SqliteGraftReceiverEndpointStore {
     fn register(
@@ -64,7 +71,7 @@ impl GraftReceiverEndpointStore for SqliteGraftReceiverEndpointStore {
                     })?;
                 Ok(())
             })
-            .map_err(Self::storage_error)
+            .map_err(storage_error)
     }
 
     fn refresh(
@@ -94,7 +101,7 @@ impl GraftReceiverEndpointStore for SqliteGraftReceiverEndpointStore {
                             .error("failed to refresh graft receiver endpoint", error)
                     })
             })
-            .map_err(Self::storage_error)?;
+            .map_err(storage_error)?;
         if changed == 0 {
             return Err(GraftEndpointStoreError::NotOwner);
         }
@@ -144,7 +151,7 @@ impl GraftReceiverEndpointStore for SqliteGraftReceiverEndpointStore {
                     Some(_) => Ok(Err(GraftEndpointStoreError::NotOwner)),
                 }
             })
-            .map_err(Self::storage_error)?
+            .map_err(storage_error)?
     }
 
     fn lookup(
@@ -204,7 +211,7 @@ impl GraftReceiverEndpointStore for SqliteGraftReceiverEndpointStore {
                             .error("failed to look up graft receiver endpoint", error)
                     })
             })
-            .map_err(Self::storage_error)
+            .map_err(storage_error)
     }
 
     fn mark_unreachable(
@@ -234,7 +241,7 @@ impl GraftReceiverEndpointStore for SqliteGraftReceiverEndpointStore {
                             .error("failed to mark graft receiver endpoint unreachable", error)
                     })
             })
-            .map_err(Self::storage_error)?;
+            .map_err(storage_error)?;
         if changed == 0 {
             return Err(GraftEndpointStoreError::NotOwner);
         }
