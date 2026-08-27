@@ -29,3 +29,100 @@ Stop pull; it has no target-member option. The Stop call passes `--team`,
 Use
 `python3 scripts/hooks/test_queue_hooks.py` for the deterministic fake-CLI
 contract tests.
+
+## Installation
+
+Install the reference scripts in a checkout of `atm-core`, then replace
+`/absolute/path/to/atm-core` in the snippets below with that checkout's
+absolute path. Keep the existing top-level `hooks` entries in each file and
+merge these event entries into them.
+
+For Claude Code, add the following to `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /absolute/path/to/atm-core/scripts/hooks/atm_queue_hook.py --event pre-tool-use --harness claude"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /absolute/path/to/atm-core/scripts/hooks/atm_queue_hook.py --event stop --harness claude"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /absolute/path/to/atm-core/scripts/hooks/atm_queue_hook.py --event session-end --harness claude"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+For Codex, add the following to `~/.codex/hooks.json`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /absolute/path/to/atm-core/scripts/hooks/atm_queue_hook.py --event pre-tool-use --harness codex"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /absolute/path/to/atm-core/scripts/hooks/atm_queue_hook.py --event stop --harness codex"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /absolute/path/to/atm-core/scripts/hooks/atm_queue_hook.py --event session-end --harness codex"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+The hook environment must provide `ATM_TEAM`, `ATM_IDENTITY`, and an absolute
+existing `ATM_HOME` (or `HOME`) for Stop queue pulls. `ATM_BIN` overrides the
+`atm` executable; `ATM_HOOK_STATE_DIR`, `ATM_HOOK_DEBOUNCE_SECONDS`, and
+`ATM_HOOK_TIMEOUT_SECONDS` make state and timing deterministic in tests. The
+raw `_internal-queue-get` CLI is fail-open when the daemon is unavailable, but
+the lifecycle Stop hook uses `--require-daemon` and reports missing context or
+diagnostic failure on stderr with a non-zero status.
+
+These Python reference scripts are the MVP contract for the later schook Rust
+plugin, which will link `atm-core` as a library. The schook plugin is out of
+scope for this sprint.
