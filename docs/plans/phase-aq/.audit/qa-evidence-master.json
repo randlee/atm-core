@@ -1307,7 +1307,7 @@
    "important": 4,
    "minor": 1,
    "count_basis": "headline/reviewer",
-   "evidence": "5/14 @ d56a28961: ATM-QA-AQ5-001 pickers don't exclude dead/idle members (R4 Must), -002 traceability table mismapped (R3/R6/R7), -003 Wyvern pick-member.html PR absent, -004 manual GUI E2E absent; Important: no OS notification for GUI-entry stderr, README Nautilus path drift, committed fixtures unused by harness, degradation harness lacks CI transcript; Minor (rust-qa): member_mutation.rs:558 duplicate host insert. Ruling (fenix): fix pass dispatched for code/doc items; Wyvern PR to randlee/wyvern (refs #139); manual GUI E2E → follow-up AQ5-gui-e2e (owner: Rand, macOS Finder first; then Explorer/Nautilus)."
+   "evidence": "5/14 @ d56a28961: ATM-QA-AQ5-001 pickers don't exclude dead/idle members (R4 Must), -002 traceability table mismapped (R3/R6/R7), -003 Wyvern pick-member.html PR absent, -004 manual GUI E2E absent; Important: no OS notification for GUI-entry stderr, README Nautilus path drift, committed fixtures unused by harness, degradation harness lacks CI transcript; Minor (rust-qa): member_mutation.rs:558 duplicate host insert. Ruling (fenix): fix pass dispatched for code/doc items; Wyvern PR to randlee/wyvern (refs #139); manual GUI E2E \u2192 follow-up AQ5-gui-e2e (owner: Rand, macOS Finder first; then Explorer/Nautilus)."
   },
   {
    "run_id": "QA-AQ3-R2",
@@ -1432,7 +1432,7 @@
    "important": 11,
    "minor": 2,
    "count_basis": "headline/reviewer",
-   "evidence": "11/13 @ 9af3817b2: 0 blocking; ATM-QA-101 live tmux idle-drain transcript absent, ATM-QA-102 no AC8 multi-OS run id cited, ATM-QA-103 member-state-transition-sink.toml not mechanically enforced; ruling (fenix): no deferral — transcript produced via clean-runner harness (scripts/phase-aq/run_aq3_tmux_idle_drain_evidence.py, in progress)."
+   "evidence": "11/13 @ 9af3817b2: 0 blocking; ATM-QA-101 live tmux idle-drain transcript absent, ATM-QA-102 no AC8 multi-OS run id cited, ATM-QA-103 member-state-transition-sink.toml not mechanically enforced; ruling (fenix): no deferral \u2014 transcript produced via clean-runner harness (scripts/phase-aq/run_aq3_tmux_idle_drain_evidence.py, in progress)."
   },
   {
    "run_id": "QA-AQ4-R2",
@@ -1457,7 +1457,7 @@
    "important": 5,
    "minor": 0,
    "count_basis": "headline/reviewer",
-   "evidence": "10/15 @ d8e2514b8: frontmatter draft/no worktree; no evidence/AQ4 transcript (AC7); no tests for scripts/transfer/{sftp.sh,tailscale.sh,sftp.ps1}; no cfg(windows) junction test (AC6); ruling (fenix): sftp leg evidenced via clean-runner loopback harness; tailscale leg → follow-up AQ4-tailscale-m5 (paired with AQ1.9-m5). Fix pass in progress."
+   "evidence": "10/15 @ d8e2514b8: frontmatter draft/no worktree; no evidence/AQ4 transcript (AC7); no tests for scripts/transfer/{sftp.sh,tailscale.sh,sftp.ps1}; no cfg(windows) junction test (AC6); ruling (fenix): sftp leg evidenced via clean-runner loopback harness; tailscale leg \u2192 follow-up AQ4-tailscale-m5 (paired with AQ1.9-m5). Fix pass in progress."
   },
   {
    "run_id": "QA-AQ6-R1",
@@ -1470,11 +1470,11 @@
    "assignment_message_id": null,
    "assignment_from": "cipher",
    "assignment_shared_path": null,
-   "assignment_summary": "AQ6 ecosystem preflight (cipher)",
-   "result_time_utc": null,
+   "assignment_summary": "AQ6 ecosystem preflight (cipher), PR #1066",
+   "result_time_utc": "2026-08-27T23:20:00Z",
    "result_time_pst": null,
    "result_message_id": null,
-   "result_from": null,
+   "result_from": "cipher",
    "result_shared_path": null,
    "result_temp_path": null,
    "verdict": null,
@@ -1482,7 +1482,7 @@
    "important": null,
    "minor": null,
    "count_basis": "headline/reviewer",
-   "evidence": "Dev started (cipher), first push 08fa8fd04, Wyvern contract issue https://github.com/randlee/wyvern/issues/139, QA pending."
+   "evidence": "Dev validation complete @ 08fa8fd04: lint 32/32 pass, Python harness 727 passed / 9 skipped, fake-Wyvern preflight pass. QA-1 pending. Wyvern contract issue: https://github.com/randlee/wyvern/issues/139"
   }
  ],
  "follow_ups": [
