@@ -14,9 +14,20 @@ upstream_revision: 42e0fcea23f730fae0ef3d08b060cd4df6a2602e
 
 Replace no product code and add no ATM-specific publishing framework. Install
 the shared `sc-publish` package from one immutable upstream revision using
-ATM's complete JSON input, prove a retryable 1.4.3 Python release from
-immutable `main` reaches TestPyPI and PyPI (AT.1), then delete the deprecated
-legacy publish surface the shared kit demonstrably covers (AT.2).
+ATM's complete JSON input and prove install parity (AT.1), then delete the
+deprecated legacy publish surface the shared kit demonstrably covers (AT.2).
+
+**Amendment (2026-08-27, owner decision — forward-only publishing).** The
+original goal also included proving a retryable 1.4.3 Python release from
+immutable `main` reaches TestPyPI and PyPI. Rand ruled re-publishing tags
+that predate the kit installation out of scope ("I don't see a reason to try
+to re-publish anything before the first kit install"). `v1.4.3` is
+unpublishable via the kit — the kit action is absent at that tag and the
+legacy manifest fails the kit schema (see the AT.1 receipt's TestPyPI
+amendment). The publish-proof leg is retargeted to the **first kit-era tag
+(workspace version `1.4.4`)**, cut after phase AT merges to `develop`;
+TestPyPI authorization carries over, production remains
+`pending-contemporaneous-authorization`.
 
 ## Baseline
 
@@ -101,15 +112,20 @@ The new release-candidate provenance gate (sc-publish PR #48) runs in
 `release-candidate.yml`/`release.yml` before release creation. The
 `pypi-publish.yml` dispatch accepts only `tag` and `target`, and then requires
 the named GitHub Release to be published, non-draft, and to have all required
-assets. An immutable v1.4.3 retry therefore uses the post-release path without
-re-running provenance or rebuilding assets; this is recorded in the AT.1
-receipt and the recovered re-pin verification receipt.
+assets. An immutable v1.4.3 retry would therefore have used the post-release
+path without re-running provenance or rebuilding assets — but per the
+2026-08-27 forward-only ruling (see Goal amendment) the v1.4.3 retry is
+withdrawn: `pypi-publish.yml` checks out the release tag's tree for its
+action and manifest, so only tags cut from kit-installed trees are
+publishable. The publish proof runs against the first kit-era tag (1.4.4);
+this is recorded in the AT.1 receipt and the recovered re-pin verification
+receipt.
 
 ## Sprint Sequence
 
 | Sprint | Purpose | Dependency |
 | --- | --- | --- |
-| [AT.1](AT.1-install-parity-and-publish.md) | Install the pinned shared package, prove parity, and perform authorized TestPyPI/PyPI 1.4.3 publication. | Start point |
+| [AT.1](AT.1-install-parity-and-publish.md) | Install the pinned shared package and prove parity. The 1.4.3 publish leg was retargeted to the first kit-era tag (1.4.4) per the forward-only ruling (see Goal amendment). | Start point |
 | [AT.2](AT.2-legacy-deletion.md) | Verify coverage, then delete the deprecated legacy publish surface. | must_follow AT.1 |
 
 Each sprint doc's frontmatter `status:` flips to `in-progress` when its

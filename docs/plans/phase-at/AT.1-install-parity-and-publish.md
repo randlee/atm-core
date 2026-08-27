@@ -382,6 +382,18 @@ PR may merge with the TestPyPI receipt and an explicit
 a follow-up commit/PR on the same receipt file
 (`docs/plans/phase-at/receipts/AT.1-receipt.md`) without reopening this sprint.
 
+**Amendment (2026-08-27, owner decision — forward-only publishing).** The
+authorized v1.4.3 TestPyPI attempt (run 33040465059) failed pre-upload:
+`pypi-publish.yml` checks out the release tag's tree, and at `v1.4.3` the kit
+action is absent and the legacy manifest fails the kit schema — v1.4.3 is
+unpublishable via the kit on two independent grounds. Rand ruled
+re-publishing pre-kit tags out of scope ("I don't see a reason to try to
+re-publish anything before the first kit install"). This checkpoint is
+therefore retargeted to the **first kit-era tag (workspace version `1.4.4`)**,
+cut after phase AT merges to `develop`; the TestPyPI authorization carries
+over, and production remains `pending-contemporaneous-authorization`. Full
+evidence: the AT.1 receipt's TestPyPI amendment.
+
 ## Publication Non-Goals
 
 - No product-source changes (sprint artifacts on the feature branch are

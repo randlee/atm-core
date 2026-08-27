@@ -118,21 +118,28 @@ schema are absent/incompatible at that tag; see the AT.1 receipt's TestPyPI
 amendment). All publication evidence for this sprint's gates therefore comes
 from the **first kit-era release (workspace version `1.4.4`)**, cut from a
 kit-installed tree after phase AT merges to `develop`. This sprint executes
-as a post-release deletion pass once that release's receipts exist.
+now, within phase AT: rows whose gate receipt does not yet exist are RETAINED
+as `deferred-until-<gate>` per the Deletion Candidates deferral rule above,
+and the follow-up deletion pass after the first kit-era release resolves
+them. The sprint does not wait for that release.
 
-- At minimum, the first kit-era release's TestPyPI receipt proving the kit
-  built and published every declared distribution — including the setuptools
-  `hermes-atm` — end-to-end. The hermes rows (the
+- Gate evidence for **deleting** a publish-path row is the first kit-era
+  release's TestPyPI receipt proving the kit built and published every
+  declared distribution — including the setuptools `hermes-atm` —
+  end-to-end. The hermes rows (the
   `.github/workflows/hermes-atm-pypi-publish.yml` workflow, its feeder
   script, and their tests) additionally require the production PyPI receipt
   (the receipt's production section complete, not
-  `production: pending-authorization`), per the `Gate` column.
+  `production: pending-authorization`), per the `Gate` column. Rows whose
+  gate receipt does not yet exist when the sprint runs are deferred, not
+  deleted.
 - A channel-scoped credential-unavailable (fail-closed) result in AT.1 is
   valid evidence the workflow fails closed, and per the phase README
   Non-Blocking Outcomes table it is never an emergency — but it does NOT
-  constitute publication and does not satisfy this coverage-evidence
-  prerequisite. AT.2 proceeds only on receipts showing the public indexes
-  actually contain the first kit-era (1.4.4) distributions.
+  constitute publication and does not satisfy a row's gate. A row is deleted
+  only on receipts showing the public indexes actually contain the first
+  kit-era (1.4.4) distributions; otherwise it is retained as
+  `deferred-until-<gate>`.
 - `install.py --dry-run` (run from the pinned checkout, per the phase README
   installer contract) clean on the sprint branch before starting.
 
