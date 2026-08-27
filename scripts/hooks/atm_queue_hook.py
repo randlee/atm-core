@@ -12,9 +12,10 @@ import sys
 import time
 
 
-def state_path() -> Path:
+def state_path(*, create: bool = True) -> Path:
     root = Path(os.environ.get("ATM_HOOK_STATE_DIR", ".atm-hook-state"))
-    root.mkdir(parents=True, exist_ok=True)
+    if create:
+        root.mkdir(parents=True, exist_ok=True)
     return root / "pending-idle"
 
 
@@ -146,7 +147,7 @@ def send_heartbeat(activity: str, harness: str) -> None:
 
 def cancel_idle() -> None:
     try:
-        state_path().unlink()
+        state_path(create=False).unlink()
     except FileNotFoundError:
         pass
 
@@ -173,7 +174,9 @@ def expire_idle(token: str, harness: str) -> None:
     delay = max(0.0, float(os.environ.get("ATM_HOOK_DEBOUNCE_SECONDS", "2")))
     if delay:
         time.sleep(delay)
-    path = state_path()
+    # The hook process can outlive the host application's temporary state
+    # directory. Never recreate that directory from a detached expiry child.
+    path = state_path(create=False)
     try:
         if path.read_text(encoding="utf-8") != token:
             return
