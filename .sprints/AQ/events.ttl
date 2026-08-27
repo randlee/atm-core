@@ -69,3 +69,8 @@ triage:a7 a triage:Assignment ;
 triage:c7 a triage:Completion ;
     triage:ofSprint triage:AQ1-9 ;
     triage:at "2026-08-27T03:49:05Z"^^xsd:dateTime .
+
+triage:a8 a triage:Assignment ;
+    triage:ofSprint triage:AQ2 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-08-27T03:55:00Z"^^xsd:dateTime .
