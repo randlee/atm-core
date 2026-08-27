@@ -253,15 +253,6 @@ impl GraftReceiverEndpointRecord {
     }
 }
 
-/// Absolute path of the loopback endpoint record for an embedded agent.
-pub fn graft_receiver_record_path_from_home(
-    home_dir: &Path,
-    team: &TeamName,
-    agent: &AgentName,
-) -> PathBuf {
-    graft_receiver_record_path_from_root(home_dir, team, agent)
-}
-
 /// Absolute path of a loopback endpoint record under the canonical graft root.
 ///
 /// The root is intentionally supplied by the caller so publishers and daemon
@@ -843,7 +834,7 @@ mod tests {
         AtmGraftClient, GRAFT_RECEIVER_RECORD_SCHEMA_VERSION, GraftPostSendRequest,
         GraftPostSendResponse, GraftReceiverEndpointRecord, GraftReceiverListener,
         RECEIVER_HOOK_RESULT_HANDOFF_GRACE, deliver_graft_post_send,
-        deliver_published_receiver_hook, graft_receiver_record_path_from_home,
+        deliver_published_receiver_hook, graft_receiver_record_path_from_root,
         read_receiver_record, remaining_hook_budget, write_receiver_record,
     };
     use crate::api::RequestDeadline;
@@ -943,7 +934,7 @@ mod tests {
             None,
         )
         .expect("bind listener");
-        let record_path = graft_receiver_record_path_from_home(
+        let record_path = graft_receiver_record_path_from_root(
             tempdir.path(),
             &TeamName::from_validated(TEST_TEAM),
             &AgentName::from_validated(TEST_QA),
@@ -992,7 +983,7 @@ mod tests {
     #[test]
     fn receiver_republishes_its_record_after_external_removal() {
         let tempdir = TempDir::new().expect("tempdir");
-        let record_path = graft_receiver_record_path_from_home(
+        let record_path = graft_receiver_record_path_from_root(
             tempdir.path(),
             &TeamName::from_validated(TEST_TEAM),
             &AgentName::from_validated(TEST_QA),
@@ -1067,7 +1058,7 @@ mod tests {
     #[test]
     fn receiver_record_rejects_old_schema_and_malformed_generation() {
         let tempdir = TempDir::new().expect("tempdir");
-        let record_path = graft_receiver_record_path_from_home(
+        let record_path = graft_receiver_record_path_from_root(
             tempdir.path(),
             &TeamName::from_validated(TEST_TEAM),
             &AgentName::from_validated(TEST_QA),
@@ -1096,7 +1087,7 @@ mod tests {
         let tempdir = TempDir::new().expect("tempdir");
         let team = TeamName::from_validated(TEST_TEAM);
         let agent = AgentName::from_validated(TEST_QA);
-        let record_path = graft_receiver_record_path_from_home(tempdir.path(), &team, &agent);
+        let record_path = graft_receiver_record_path_from_root(tempdir.path(), &team, &agent);
         let chat_id = "chat-1".parse::<ChatId>().expect("chat id");
         let first =
             bind_listener(tempdir.path(), &team, &agent, Some(chat_id.clone())).expect("first");
@@ -1119,7 +1110,7 @@ mod tests {
     #[test]
     fn old_owner_cleanup_cannot_remove_successor_generation() {
         let tempdir = TempDir::new().expect("tempdir");
-        let record_path = graft_receiver_record_path_from_home(
+        let record_path = graft_receiver_record_path_from_root(
             tempdir.path(),
             &TeamName::from_validated(TEST_TEAM),
             &AgentName::from_validated(TEST_QA),
@@ -1404,7 +1395,7 @@ mod tests {
         let team = TeamName::from_validated(TEST_TEAM);
         let agent = AgentName::from_validated(TEST_QA);
         let listener = bind_listener(tempdir.path(), &team, &agent, None).expect("bind listener");
-        let record_path = graft_receiver_record_path_from_home(tempdir.path(), &team, &agent);
+        let record_path = graft_receiver_record_path_from_root(tempdir.path(), &team, &agent);
         fs::remove_file(&record_path).expect("delete legacy record before delivery");
 
         let runtime = GraftLeaseTestRuntime::with_lease(Some(lease_for(&listener)));
