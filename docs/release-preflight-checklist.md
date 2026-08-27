@@ -30,7 +30,6 @@ For a concrete release candidate, the workflow-equivalent local invocation is:
 ```bash
 python3 scripts/validate_release.py all \
   --version <X.Y.Z> \
-  --staged-install-root target/phase-ae/staged-install-root \
   --findings release-findings.json
 ```
 
@@ -50,7 +49,8 @@ The validator currently accepts these targets:
 - `inventory` — generate and shape-check release inventory output
 - `cargo-lock-drift` — detect release-window `Cargo.lock` drift
 - `dependency-currency` — check dependency freshness
-- `phase-ad-readiness` — verify the retained Phase AD readiness boundary gates
+- `phase-ad-readiness` — an explicit historical diagnostic used by the
+  thorough smoke lane; it is no longer part of the default release target
 
 ## Checklist Coverage Matrix
 
@@ -67,11 +67,10 @@ The validator currently accepts these targets:
 | Generate and shape-check release inventory | local | `validate_release.py inventory` |
 | Check `Cargo.lock` drift during the release window | local | `validate_release.py cargo-lock-drift` |
 | Check dependency currency | local | `validate_release.py dependency-currency` |
-| Enforce retained Phase AD readiness gates | local | `validate_release.py phase-ad-readiness` |
+| Run the optional historical Phase AD diagnostic | thorough-smoke only | `validate_release.py phase-ad-readiness` |
 | Assert workflow dispatcher ownership (`run_by_agent=publisher`) | CI-only | `.github/workflows/release-preflight.yml` |
 | Normalize workflow version input to `vX.Y.Z` / `X.Y.Z` | CI-only | `.github/workflows/release-preflight.yml` |
 | Install toolchain / `just` / cargo helpers / `codespell` | CI-only | `.github/workflows/release-preflight.yml` |
-| Stage installed docs into deterministic root before validation | CI-only | `.github/workflows/release-preflight.yml` + `scripts/release_artifacts.py stage-install-docs` |
 | Upload `release-findings.json` as workflow artifact | CI-only | `.github/workflows/release-preflight.yml` |
 | Confirm completed release notes were provided by `team-lead` | agent-specific, not script-covered | `.claude/agents/publisher.md` |
 | Download and inspect the workflow `release-findings` artifact after preflight | agent-specific, not script-covered | `.claude/agents/publisher.md` |
@@ -121,9 +120,7 @@ These steps happen in the release-preflight workflow but are not part of local
 - assert `run_by_agent` is exactly `publisher`
 - install the pinned Rust toolchain and required helper tools
 - normalize release version input
-- create `target/phase-ae/staged-install-root`
-- stage installed docs into that deterministic root
-- pass `--version` and `--staged-install-root` to the validator
+- pass `--version` to the validator
 - upload `release-findings.json` for later inspection
 
 ## Publisher-Specific Manual Checks

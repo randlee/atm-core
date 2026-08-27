@@ -1,0 +1,100 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-015>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-015" ;
+  triage:title "Seven infallible Result-wrapped functions flagged by clippy::unnecessary_wraps (not in this workspace's -D warnings lint gate)" ;
+  triage:description "rust-qa-agent's phase-end review (AT-PHASECLOSE-QA-R2, PR #1065) ran `cargo clippy -- -W clippy::unnecessary_wraps` (a lint not enabled in this workspace's default/-D-warnings gate) and found seven functions whose Result return type has no fallible code path, all returning unconditional Ok(...): crates/atm-core/src/write/acknowledgement.rs:367 finish(), crates/atm-storage-rusqlite/src/analyst_query.rs:422 advance_nested_sql_state(), crates/atm-core/src/mailbox/atomic.rs:85 identity(), crates/atm-core/src/mailbox/store.rs:60 identity() (near-duplicate of atomic.rs:85), crates/atm-daemon-bootstrap/src/owner_gate.rs:128 sync_owner_record_shadow(), crates/atm/src/composition.rs:62 install_local_runtime_for_read_only_command(), crates/atm-daemon/src/bin_support/daemon_observability.rs:850 retained_sink_fault_mode(). None fail any requested check (fmt/clippy/tests/coverage/artifacts all pass); reported per an explicit dispatch checklist item, not a merge gate. Route to rust-best-practices-agent to judge which are genuinely infallible cleanup candidates versus deliberate forward-compatible API shapes before any code change." ;
+  triage:phaseId "phase-at" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "code-quality" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace_wide" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-27T22:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AT2 ;
+  triage:foundAt "2026-08-27T21:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-015/INTEGRATE-AT-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-015/INTEGRATE-AT-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-015/INTEGRATE-AT-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-015/INTEGRATE-AT-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-015/INTEGRATE-AT-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-015/INTEGRATE-AT-6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-015/INTEGRATE-AT-7> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-015/INTEGRATE-AT-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/write/acknowledgement.rs" ;
+  triage:line 367 ;
+  triage:snippet "fn finish(...) -> Result<AckOutcome, AtmError> (unconditional Ok(...))" ;
+  triage:status "open" ; triage:closed false ;
+  triage:branch "integrate/phase-at" ; triage:headSha "5c8cbf760" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE-AT/5c8cbf760> .
+
+<urn:atm:triage:occurrence/ATM-QA-015/INTEGRATE-AT-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
+  triage:line 422 ;
+  triage:snippet "fn advance_nested_sql_state(...) -> Result<usize, AtmError> (all arms return bare usize)" ;
+  triage:status "open" ; triage:closed false ;
+  triage:branch "integrate/phase-at" ; triage:headSha "5c8cbf760" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE-AT/5c8cbf760> .
+
+<urn:atm:triage:occurrence/ATM-QA-015/INTEGRATE-AT-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/atomic.rs" ;
+  triage:line 85 ;
+  triage:snippet "fn identity(message: &InboxMessage) -> Result<InboxMessage, AtmError> (Ok(message.clone()) only)" ;
+  triage:status "open" ; triage:closed false ;
+  triage:branch "integrate/phase-at" ; triage:headSha "5c8cbf760" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE-AT/5c8cbf760> .
+
+<urn:atm:triage:occurrence/ATM-QA-015/INTEGRATE-AT-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/store.rs" ;
+  triage:line 60 ;
+  triage:snippet "fn identity(message: &InboxMessage) -> Result<InboxMessage, AtmError> (Ok(message.clone()) only; duplicate of atomic.rs:85)" ;
+  triage:status "open" ; triage:closed false ;
+  triage:branch "integrate/phase-at" ; triage:headSha "5c8cbf760" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE-AT/5c8cbf760> .
+
+<urn:atm:triage:occurrence/ATM-QA-015/INTEGRATE-AT-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/owner_gate.rs" ;
+  triage:line 128 ;
+  triage:snippet "fn sync_owner_record_shadow(...) -> Result<(), AtmError> (unconditional Ok(()))" ;
+  triage:status "open" ; triage:closed false ;
+  triage:branch "integrate/phase-at" ; triage:headSha "5c8cbf760" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE-AT/5c8cbf760> .
+
+<urn:atm:triage:occurrence/ATM-QA-015/INTEGRATE-AT-6>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 62 ;
+  triage:snippet "fn install_local_runtime_for_read_only_command() -> Result<(), AtmError> (unconditional Ok(()))" ;
+  triage:status "open" ; triage:closed false ;
+  triage:branch "integrate/phase-at" ; triage:headSha "5c8cbf760" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE-AT/5c8cbf760> .
+
+<urn:atm:triage:occurrence/ATM-QA-015/INTEGRATE-AT-7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/bin_support/daemon_observability.rs" ;
+  triage:line 850 ;
+  triage:snippet "fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmError> (unconditional Ok(None)/Ok(Some(...)))" ;
+  triage:status "open" ; triage:closed false ;
+  triage:branch "integrate/phase-at" ; triage:headSha "5c8cbf760" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE-AT/5c8cbf760> .
+
+<urn:atm:triage:worktree/INTEGRATE-AT/5c8cbf760>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/integrate-phase-at" ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "5c8cbf760" ;
+  triage:orderIndex 1 .

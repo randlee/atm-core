@@ -1,3 +1,5 @@
+"""Temporary legacy PyPI coverage retained pending production-kit evidence."""
+
 from __future__ import annotations
 
 from pathlib import Path

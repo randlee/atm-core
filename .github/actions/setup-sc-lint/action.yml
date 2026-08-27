@@ -1,0 +1,172 @@
+name: Setup sc-lint
+description: >-
+  Install and verify the pinned sc-lint release and sibling analyzers. The
+  default repository and version are the deliberate shared ecosystem pin for
+  every kit consumer; the source archive's .just/*.py utilities are copied
+  into the workspace's .just/ directory (the layout sc-lint's Python helpers
+  require).
+inputs:
+  version:
+    description: Released sc-lint version to install (deliberate ecosystem pin)
+    required: false
+    default: "0.4.0"
+  repository:
+    description: GitHub repository slug hosting sc-lint releases
+    required: false
+    default: "randlee/sc-lint"
+runs:
+  using: composite
+  steps:
+    - name: Install sc-lint release (Unix)
+      if: runner.os != 'Windows'
+      shell: bash
+      env:
+        SC_LINT_VERSION: ${{ inputs.version }}
+        SC_LINT_REPOSITORY: ${{ inputs.repository }}
+      run: |
+        set -euo pipefail
+        case "${RUNNER_OS}:${RUNNER_ARCH}" in
+          Linux:X64) target="x86_64-unknown-linux-gnu" ;;
+          macOS:X64) target="x86_64-apple-darwin" ;;
+          macOS:ARM64) target="aarch64-apple-darwin" ;;
+          *)
+            echo "sc-lint setup: unsupported runner ${RUNNER_OS}/${RUNNER_ARCH}" >&2
+            exit 1
+            ;;
+        esac
+        archive="sc-lint_${SC_LINT_VERSION}_${target}.tar.gz"
+        url="https://github.com/${SC_LINT_REPOSITORY}/releases/download/v${SC_LINT_VERSION}/${archive}"
+        install_dir="${RUNNER_TEMP}/sc-lint-${SC_LINT_VERSION}/${target}"
+        mkdir -p "${install_dir}"
+        curl --fail --location --retry 4 --retry-all-errors --silent --show-error \
+          --output "${RUNNER_TEMP}/${archive}" "${url}" || {
+          echo "sc-lint setup: could not download ${url}; verify that release v${SC_LINT_VERSION} publishes this runner asset" >&2
+          exit 1
+        }
+        tar -xzf "${RUNNER_TEMP}/${archive}" -C "${install_dir}"
+        test -x "${install_dir}/sc-lint" || {
+          echo "sc-lint setup: release archive is missing executable sc-lint" >&2
+          exit 1
+        }
+        for backend in sc-lint-boundary sc-lint-portability sc-lint-runtime; do
+          test -x "${install_dir}/${backend}" || {
+            echo "sc-lint setup: release archive is missing sibling backend ${backend}" >&2
+            exit 1
+          }
+        done
+        echo "${install_dir}" >> "${GITHUB_PATH}"
+    - name: Install sc-lint release (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        SC_LINT_VERSION: ${{ inputs.version }}
+        SC_LINT_REPOSITORY: ${{ inputs.repository }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+        if ($env:RUNNER_ARCH -ne 'X64') {
+          throw "sc-lint setup: unsupported Windows architecture $env:RUNNER_ARCH"
+        }
+        $target = 'x86_64-pc-windows-msvc'
+        $archive = "sc-lint_$env:SC_LINT_VERSION`_$target.zip"
+        $url = "https://github.com/$env:SC_LINT_REPOSITORY/releases/download/v$env:SC_LINT_VERSION/$archive"
+        $installDir = Join-Path $env:RUNNER_TEMP "sc-lint-$env:SC_LINT_VERSION\$target"
+        New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+        $archivePath = Join-Path $env:RUNNER_TEMP $archive
+        try {
+          Invoke-WebRequest -Uri $url -OutFile $archivePath
+        } catch {
+          throw "sc-lint setup: could not download $url; verify that release v$env:SC_LINT_VERSION publishes this runner asset. $($_.Exception.Message)"
+        }
+        Expand-Archive -Path $archivePath -DestinationPath $installDir -Force
+        foreach ($binary in @('sc-lint.exe', 'sc-lint-boundary.exe', 'sc-lint-portability.exe', 'sc-lint-runtime.exe')) {
+          if (-not (Test-Path (Join-Path $installDir $binary))) {
+            throw "sc-lint setup: release archive is missing sibling backend $binary"
+          }
+        }
+        Add-Content -Path $env:GITHUB_PATH -Value $installDir
+    - name: Verify sc-lint version contract
+      if: runner.os != 'Windows'
+      shell: bash
+      env:
+        SC_LINT_VERSION: ${{ inputs.version }}
+        SC_LINT_REPOSITORY: ${{ inputs.repository }}
+      run: |
+        set -euo pipefail
+        version_json="$(sc-lint version --json)"
+        jq -e --arg expected "${SC_LINT_VERSION}" \
+          '.ok == true and .data.crate_version == $expected' \
+          <<<"${version_json}" >/dev/null || {
+          echo "sc-lint setup: version contract failed; expected ${SC_LINT_VERSION}" >&2
+          exit 1
+        }
+    - name: Verify sc-lint version contract (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        SC_LINT_VERSION: ${{ inputs.version }}
+        SC_LINT_REPOSITORY: ${{ inputs.repository }}
+      run: |
+        $value = sc-lint version --json | ConvertFrom-Json
+        if (-not $value.ok -or $value.data.crate_version -ne $env:SC_LINT_VERSION) {
+          throw "sc-lint setup: expected version $env:SC_LINT_VERSION, got $($value.data.crate_version)"
+        }
+    - name: Materialize pinned sc-lint Python utilities (Unix)
+      if: runner.os != 'Windows'
+      shell: bash
+      env:
+        SC_LINT_VERSION: ${{ inputs.version }}
+        SC_LINT_REPOSITORY: ${{ inputs.repository }}
+      run: |
+        set -euo pipefail
+        archive="${RUNNER_TEMP}/sc-lint-source-${SC_LINT_VERSION}.tar.gz"
+        source_root="${RUNNER_TEMP}/sc-lint-source-${SC_LINT_VERSION}"
+        mkdir -p "${source_root}"
+        curl --fail --location --retry 4 --retry-all-errors --silent --show-error \
+          --output "${archive}" \
+          "https://github.com/${SC_LINT_REPOSITORY}/archive/refs/tags/v${SC_LINT_VERSION}.tar.gz"
+        tar -xzf "${archive}" -C "${source_root}" --strip-components=1
+        mkdir -p "${GITHUB_WORKSPACE}/.just"
+        cp "${source_root}/.just/"*.py "${GITHUB_WORKSPACE}/.just/"
+        printf '%s\n' "${SC_LINT_VERSION}" > "${GITHUB_WORKSPACE}/.just/.sc-lint-runtime-version"
+        test -f "${GITHUB_WORKSPACE}/.just/run_lint.py"
+    - name: Materialize pinned sc-lint Python utilities (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        SC_LINT_VERSION: ${{ inputs.version }}
+        SC_LINT_REPOSITORY: ${{ inputs.repository }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $archive = Join-Path $env:RUNNER_TEMP "sc-lint-source-$env:SC_LINT_VERSION.zip"
+        $sourceRoot = Join-Path $env:RUNNER_TEMP "sc-lint-source-$env:SC_LINT_VERSION"
+        Invoke-WebRequest -Uri "https://github.com/$env:SC_LINT_REPOSITORY/archive/refs/tags/v$env:SC_LINT_VERSION.zip" -OutFile $archive
+        Expand-Archive -Path $archive -DestinationPath $sourceRoot -Force
+        $extracted = Get-ChildItem -Directory $sourceRoot | Select-Object -First 1
+        $justRoot = Join-Path $env:GITHUB_WORKSPACE '.just'
+        New-Item -ItemType Directory -Force -Path $justRoot | Out-Null
+        Copy-Item (Join-Path $extracted.FullName '.just\*.py') $justRoot -Force
+        Set-Content -Path (Join-Path $justRoot '.sc-lint-runtime-version') -Value $env:SC_LINT_VERSION -NoNewline
+        if (-not (Test-Path (Join-Path $justRoot 'run_lint.py'))) {
+          throw 'sc-lint setup: source archive is missing .just/run_lint.py'
+        }
+    - name: Smoke-test repository root discovery (Unix)
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        set -euo pipefail
+        root="${GITHUB_WORKSPACE:-${PWD}}"
+        smoke_json="$(sc-lint --json --root "${root}" lint sc-boundary)"
+        jq -e '.ok == true and (.error.code // "") != "CLI.CONFIG_ERROR"' \
+          <<<"${smoke_json}" >/dev/null || {
+          echo "sc-lint setup: root discovery failed or returned CLI.CONFIG_ERROR" >&2
+          exit 1
+        }
+    - name: Smoke-test repository root discovery (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $root = if ($env:GITHUB_WORKSPACE) { $env:GITHUB_WORKSPACE } else { (Get-Location).Path }
+        $value = sc-lint --json --root $root lint sc-boundary | ConvertFrom-Json
+        if (-not $value.ok -or $value.error.code -eq 'CLI.CONFIG_ERROR') {
+          throw "sc-lint root discovery failed: $($value | ConvertTo-Json -Compress)"
+        }

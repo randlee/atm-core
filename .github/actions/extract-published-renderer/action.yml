@@ -1,0 +1,37 @@
+name: Extract published renderer
+description: Extract and expose the Linux renderer binary from a verified release archive
+inputs:
+  archive:
+    description: Absolute path to the verified published renderer archive
+    required: true
+  extract-dir:
+    description: Expected top-level archive directory
+    required: true
+  binary-path:
+    description: Relative renderer executable path inside the extracted archive directory
+    required: true
+outputs:
+  renderer-path:
+    description: Absolute path to the extracted renderer
+    value: ${{ steps.extract.outputs.renderer-path }}
+runs:
+  using: composite
+  steps:
+    - id: extract
+      shell: bash
+      env:
+        RENDERER_ARCHIVE: ${{ inputs.archive }}
+        RENDERER_EXTRACT_DIR: ${{ inputs.extract-dir }}
+        RENDERER_BINARY_PATH: ${{ inputs.binary-path }}
+      run: |
+        set -euo pipefail
+        renderer_root="${RUNNER_TEMP}/published-renderer"
+        mkdir -p "${renderer_root}"
+        tar -xzf "${RENDERER_ARCHIVE}" -C "${renderer_root}"
+        renderer="${renderer_root}/${RENDERER_EXTRACT_DIR}/${RENDERER_BINARY_PATH}"
+        test -x "${renderer}" || {
+          echo "Published renderer archive is missing ${RENDERER_BINARY_PATH}" >&2
+          exit 1
+        }
+        echo "renderer-path=${renderer}" >> "$GITHUB_OUTPUT"
+        echo "PUBLISHED_RENDERER=${renderer}" >> "$GITHUB_ENV"

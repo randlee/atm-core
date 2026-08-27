@@ -1448,7 +1448,7 @@ forward no AS work, files, acceptance criteria, or release receipts. The AS
 artifacts remain only on `origin/integrate/phase-as` as historical
 reference; do not build on them.
 
-## 52. Phase AT — Manifest-Driven Publishing Recovery [IN PROGRESS — AT.1 MERGED, AT.2 PENDING]
+## 52. Phase AT — Manifest-Driven Publishing Recovery [COMPLETE — AT.1 MERGED, AT.2 DEFERRALS RECORDED]
 
 Phase AT restarts the publish-kit adoption from the post-AS-revert baseline
 (commit `d610b4c07`) under the ADR-050 ownership split: `sc-publish` owns
@@ -1473,7 +1473,11 @@ pending contemporaneous authorization. See
 `docs/plans/phase-at/receipts/AT.1-receipt.md`.
 
 AT.1 merged via PR #1044 (plus receipt amendments #1052/#1062); an AT.1
-dry-run rehearsal receipt exists on `smoke/phase-at-at1-rehearsal`.
+dry-run rehearsal receipt exists on `smoke/phase-at-at1-rehearsal`. AT.2
+completed on `feature/pat-s2-legacy-publish-deletion`: it removed the
+unreachable pre-kit installed-doc validator path and recorded every remaining
+legacy publish candidate as a gate-bound deferral in its receipt. The first
+kit-era release is the follow-up deletion trigger.
 
 ## 53. Phase AU — Boundary Debt Retirement [PLANNING ACTIVE]
 

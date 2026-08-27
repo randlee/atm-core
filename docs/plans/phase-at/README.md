@@ -126,7 +126,7 @@ receipt.
 | Sprint | Purpose | Dependency |
 | --- | --- | --- |
 | [AT.1](AT.1-install-parity-and-publish.md) | Install the pinned shared package and prove parity. The 1.4.3 publish leg was retargeted to the first kit-era tag (1.4.4) per the forward-only ruling (see Goal amendment). | Start point |
-| [AT.2](AT.2-legacy-deletion.md) | Verify coverage, then delete the deprecated legacy publish surface. | must_follow AT.1 |
+| [AT.2](AT.2-legacy-deletion.md) | Resolved the legacy publish surface: deleted structurally unreachable legacy validation and recorded all publication-gated rows as explicit deferrals. | must_follow AT.1 — complete on `feature/pat-s2-legacy-publish-deletion` |
 
 Each sprint doc's frontmatter `status:` flips to `in-progress` when its
 worktree is created and to `complete` in the same PR that merges the sprint's

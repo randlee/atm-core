@@ -1,0 +1,7 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:PhaseAT a triage:Phase .
+
+triage:AT1 a triage:Sprint ; triage:inPhase triage:PhaseAT ; triage:order 1 ; triage:branch "feature/pat-s1-install-and-publish" ; triage:criteria "docs/plans/phase-at/AT.1-install-parity-and-publish.md" .
+triage:AT2 a triage:Sprint ; triage:inPhase triage:PhaseAT ; triage:order 2 ; triage:branch "feature/pat-s2-legacy-publish-deletion" ; triage:criteria "docs/plans/phase-at/AT.2-legacy-deletion.md" .
