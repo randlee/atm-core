@@ -554,7 +554,7 @@ the false-stuck problem cannot arise.
 | Runner | Status | Run ID | Head | Files |
 |--------|--------|--------|------|-------|
 | ubuntu-latest | PASS | [33100596324](https://github.com/randlee/atm-core/actions/runs/33100596324) | bc3c9ee95 | [queue-delivery-trigger-clean-runner-linux.json](evidence/AQ2.5/queue-delivery-trigger-clean-runner-linux.json), [queue-delivery-trigger-clean-runner-linux.md](evidence/AQ2.5/queue-delivery-trigger-clean-runner-linux.md) — both scenarios (queue_kind_one_per_stop, steer_kind_full_drain) confirmed |
-| macOS | Not executed | — | — | runner bootstrap 403; pending PR #1061 |
+| macOS | PASS | [33110344593](https://github.com/randlee/atm-core/actions/runs/33110344593) | df5900a5e | [queue-delivery-trigger-clean-runner-macos.json](evidence/AQ2.5/queue-delivery-trigger-clean-runner-macos.json), [queue-delivery-trigger-clean-runner-macos.md](evidence/AQ2.5/queue-delivery-trigger-clean-runner-macos.md) — both scenarios (queue_kind_one_per_stop, steer_kind_full_drain) confirmed |
 
 ## Non-closure / out of scope
 
