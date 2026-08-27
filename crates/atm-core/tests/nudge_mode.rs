@@ -1,6 +1,6 @@
 //! L2.2/L2.5 coverage: `NudgeMode::Deferred` suppresses the immediate
 //! receiver dispatch and sets exactly one durable queue marker via
-//! `PreparedWrite::finish`; `NudgeMode::Immediate` is byte-identical to the
+//! the async router's blocking marker seam; `NudgeMode::Immediate` is byte-identical to the
 //! pre-AQ1 dispatch; a duplicate (idempotent) write never sets a second
 //! marker.
 
@@ -21,6 +21,7 @@ use atm_core::types::{AgentName, IsoTimestamp, ModelName, PaneId, TeamName};
 #[derive(Default)]
 struct RecordingPendingNudgeStore {
     mark_pending_calls: Mutex<Vec<(MemberKey, AtmMessageId)>>,
+    fail_mark_pending: bool,
 }
 
 impl RecordingPendingNudgeStore {
@@ -45,6 +46,11 @@ impl PendingNudgeStore for RecordingPendingNudgeStore {
             .lock()
             .expect("mark_pending calls lock")
             .push((member.clone(), *msg));
+        if self.fail_mark_pending {
+            return Err(AtmError::mailbox_write(
+                "pending nudge test store rejected marker",
+            ));
+        }
         Ok(true)
     }
 
@@ -87,10 +93,24 @@ fn setup() -> (
     Arc<RecordingPendingNudgeStore>,
     TeamName,
 ) {
+    setup_with_store(false)
+}
+
+fn setup_with_store(
+    fail_mark_pending: bool,
+) -> (
+    tempfile::TempDir,
+    atm_core::LocalServiceRuntime,
+    Arc<RecordingPendingNudgeStore>,
+    TeamName,
+) {
     let root = tempfile::tempdir().expect("temp root");
     let assembly = atm_runtime_test_support::open_isolated_sqlite_boundary(root.path())
         .expect("sqlite runtime");
-    let recording_store = Arc::new(RecordingPendingNudgeStore::default());
+    let recording_store = Arc::new(RecordingPendingNudgeStore {
+        fail_mark_pending,
+        ..RecordingPendingNudgeStore::default()
+    });
     let runtime = assembly
         .service_runtime
         .with_pending_nudge_store(recording_store.clone());
@@ -176,6 +196,7 @@ fn deferred_write_suppresses_dispatch_and_sets_exactly_one_marker() {
     prepared
         .finish(&runtime, &NullObservability)
         .expect("finish");
+    prepared.mark_pending_if_deferred(&runtime);
     assert_eq!(
         recording_store.mark_pending_call_count(),
         1,
@@ -216,6 +237,7 @@ fn immediate_write_dispatch_is_unchanged_and_sets_no_marker() {
     prepared
         .finish(&runtime, &NullObservability)
         .expect("finish");
+    prepared.mark_pending_if_deferred(&runtime);
     assert_eq!(
         recording_store.mark_pending_call_count(),
         0,
@@ -241,11 +263,39 @@ fn duplicate_deferred_write_sets_no_second_marker() {
         prepared
             .finish(&runtime, &NullObservability)
             .expect("finish");
+        prepared.mark_pending_if_deferred(&runtime);
     }
 
     assert_eq!(
         recording_store.mark_pending_call_count(),
         1,
         "an idempotent duplicate write must not set a second queue marker"
+    );
+}
+
+#[test]
+fn failing_marker_store_does_not_fail_the_deferred_write() {
+    let (root, runtime, failing_store, team) = setup_with_store(true);
+    let home_dir = root.path().join("home");
+    std::fs::create_dir_all(&home_dir).expect("home dir");
+    let request = write_request(
+        &home_dir,
+        &team,
+        NudgeMode::Deferred,
+        AtmMessageId::new(),
+        IsoTimestamp::now(),
+    );
+    let mut prepared =
+        prepare_write_with_runtime(request, &NullObservability, &runtime).expect("prepare write");
+
+    prepared
+        .finish(&runtime, &NullObservability)
+        .expect("a marker failure must not fail durable write");
+    prepared.mark_pending_if_deferred(&runtime);
+
+    assert_eq!(
+        failing_store.mark_pending_call_count(),
+        1,
+        "the failing store double must exercise the marker error path"
     );
 }

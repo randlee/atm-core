@@ -72,27 +72,44 @@ impl PreparedWrite {
         runtime: &LocalServiceRuntime,
         observability: &dyn ObservabilityPort,
     ) -> Result<WriteOutcome, AtmError> {
-        let outcome = self.finish_with_runtime(runtime, observability)?;
-        self.mark_pending_if_deferred(runtime);
-        Ok(outcome)
+        self.finish_with_runtime(runtime, observability)
     }
 
     /// Sets the durable at-most-once queue marker for a newly persisted
     /// `NudgeMode::Deferred` write.
-    fn mark_pending_if_deferred(&self, runtime: &LocalServiceRuntime) {
+    ///
+    /// The caller must invoke this from a blocking task. The pending-store
+    /// contract is synchronous because its concrete SQLite implementation
+    /// owns a blocking transaction; the Tokio router supplies that task
+    /// boundary after async message admission completes.
+    pub fn mark_pending_if_deferred(&self, runtime: &LocalServiceRuntime) {
         if !self.is_newly_persisted() || self.outbound_request.nudge_mode != NudgeMode::Deferred {
             return;
         }
         let message_id = self.persisted_message_id();
-        let Ok(Some(post_write)) = &self.received_hook else {
-            tracing::warn!(
-                subsystem = "atm_core.queue",
-                action = "queue_marker_set",
-                outcome = "failed",
-                message_id = %message_id,
-                "deferred write has no retained recipient to resolve a queue marker for"
-            );
-            return;
+        let post_write = match &self.received_hook {
+            Ok(Some(post_write)) => post_write,
+            Ok(None) => {
+                tracing::warn!(
+                    subsystem = "atm_core.queue",
+                    action = "queue_marker_set",
+                    outcome = "failed",
+                    message_id = %message_id,
+                    "deferred write has no retained recipient to resolve a queue marker for"
+                );
+                return;
+            }
+            Err(error) => {
+                tracing::warn!(
+                    subsystem = "atm_core.queue",
+                    action = "queue_marker_set",
+                    outcome = "failed",
+                    message_id = %message_id,
+                    %error,
+                    "deferred write receiver-hook planning failed before queue marker resolution"
+                );
+                return;
+            }
         };
         let member = boundary::MemberKey::new(
             post_write.recipient.team.clone(),
