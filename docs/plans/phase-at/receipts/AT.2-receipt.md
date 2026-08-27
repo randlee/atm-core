@@ -46,7 +46,9 @@ The original prescribed scan covered `.github/`, `.just/`, `Justfile`,
 `scripts/`, and `docs/`; AT2-FIX-R2 widened it to the whole tracked repository,
 including `release/`. The wider audit found the stale active publish-surface
 prose and removed it. It excludes only immutable historical plans, receipts,
-and triage evidence when classifying a live caller. `AT.2 plan` means the
+triage evidence, and dated smoke-proof snapshots under `reports/smoke/`
+(e.g. `reports/smoke/phase-AE-installed-docs-proof.md`, which records a past
+Phase AE validation run, not current behavior) when classifying a live caller. `AT.2 plan` means the
 remaining mention is this disposition table; `historical receipt` means
 immutable evidence rather than a live caller.
 
