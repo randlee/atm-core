@@ -1,8 +1,10 @@
 //! In-memory lifecycle and heartbeat projection for the replacement runtime.
 //!
 //! This is intentionally small: it retains no listener, storage, or harness
-//! implementation.  Listener lifecycle drives readiness; authenticated local
-//! heartbeats only enrich the existing doctor/status payload.
+//! implementation. Listener lifecycle drives readiness; authenticated local
+//! heartbeats enrich the existing doctor/status payload and make a best-effort
+//! idle-transition notification. Durable pending-nudge state and the recovery
+//! sweep remain the correctness backstop.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -22,12 +24,30 @@ pub struct RuntimeHealth {
     inner: Arc<Mutex<RuntimeHealthState>>,
 }
 
+/// Best-effort notification of a genuine member lifecycle transition.
+///
+/// The callback is invoked after the health mutex is released. Implementations
+/// must keep storage and process work off the heartbeat task.
+pub trait MemberStateTransitionSink: atm_core::boundary::sealed::Sealed + Send + Sync {
+    fn on_transition(
+        &self,
+        member: &atm_core::boundary::MemberKey,
+        from: RuntimeMemberState,
+        to: RuntimeMemberState,
+    );
+}
+
 #[derive(Default)]
 struct RuntimeHealthState {
     lifecycle: Lifecycle,
     detail: Option<String>,
     owner_pid: Option<u32>,
     members: HashMap<MemberKey, MemberRecord>,
+    graft_queue_handoff_failures_total: u64,
+    graft_queue_marker_clear_failures_total: u64,
+    queue_marker_set_failures_total: u64,
+    queue_messages_drained_total: u64,
+    queue_drain_failures_total: u64,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -94,6 +114,39 @@ impl RuntimeHealth {
         state.detail = Some("replacement runtime is stopped".to_owned());
     }
 
+    /// Records one failed queue-kind graft handoff. The counter is
+    /// cumulative for the daemon lifetime and deliberately does not own any
+    /// retry state; the pending-nudge store and AQ3 own that policy.
+    pub fn record_graft_queue_handoff_failure(&self) {
+        let mut state = self.lock();
+        state.graft_queue_handoff_failures_total =
+            state.graft_queue_handoff_failures_total.saturating_add(1);
+    }
+
+    /// Records a failed pending-marker clear after delivery succeeded.
+    pub fn record_graft_queue_marker_clear_failure(&self) {
+        let mut state = self.lock();
+        state.graft_queue_marker_clear_failures_total = state
+            .graft_queue_marker_clear_failures_total
+            .saturating_add(1);
+    }
+
+    pub fn record_queue_marker_set_failure(&self) {
+        let mut state = self.lock();
+        state.queue_marker_set_failures_total =
+            state.queue_marker_set_failures_total.saturating_add(1);
+    }
+
+    pub fn record_queue_message_drained(&self) {
+        let mut state = self.lock();
+        state.queue_messages_drained_total = state.queue_messages_drained_total.saturating_add(1);
+    }
+
+    pub fn record_queue_drain_failure(&self) {
+        let mut state = self.lock();
+        state.queue_drain_failures_total = state.queue_drain_failures_total.saturating_add(1);
+    }
+
     /// Record an already-authorized local heartbeat.
     ///
     /// The brief mutex protects only in-memory status fields; storage and
@@ -101,7 +154,7 @@ impl RuntimeHealth {
     pub fn record_heartbeat(
         &self,
         request: &TeamMemberHeartbeatRequest,
-    ) -> TeamMemberHeartbeatResponse {
+    ) -> (TeamMemberHeartbeatResponse, Option<RuntimeMemberState>) {
         let mut state = self.lock();
         let key = MemberKey {
             team: request.team.clone(),
@@ -133,7 +186,11 @@ impl RuntimeHealth {
             HeartbeatActivity::Idle => RuntimeMemberState::Idle,
             HeartbeatActivity::SessionEnded => RuntimeMemberState::Offline,
         };
-        if record.state != next_state {
+        let previous_state = record.state;
+        let transitioned_to_idle = (previous_state != RuntimeMemberState::Idle
+            && next_state == RuntimeMemberState::Idle)
+            .then_some(previous_state);
+        if previous_state != next_state {
             record.state = next_state;
             record.state_changed_at = Some(request.observed_at);
         }
@@ -146,15 +203,18 @@ impl RuntimeHealth {
             record.session_id = request.session_id.clone();
             record.session_changed_at = Some(request.observed_at);
         }
-        TeamMemberHeartbeatResponse {
-            team: request.team.clone(),
-            member: request.member.clone(),
-            pid: request.pid,
-            pid_changed: previous_pid.is_some_and(|pid| pid != request.pid),
-            state: next_state,
-            last_active_at: record.last_active_at,
-            session_id: record.session_id.clone(),
-        }
+        (
+            TeamMemberHeartbeatResponse {
+                team: request.team.clone(),
+                member: request.member.clone(),
+                pid: request.pid,
+                pid_changed: previous_pid.is_some_and(|pid| pid != request.pid),
+                state: next_state,
+                last_active_at: record.last_active_at,
+                session_id: record.session_id.clone(),
+            },
+            transitioned_to_idle,
+        )
     }
 
     #[must_use]
@@ -214,6 +274,12 @@ impl RuntimeHealth {
             degraded_ingest: false,
             member_counts: counts,
             members,
+            graft_queue_handoff_failures_total: state.graft_queue_handoff_failures_total,
+            graft_queue_marker_clear_failures_total: state.graft_queue_marker_clear_failures_total,
+            bare_cli_queue_full_drops_total: 0,
+            queue_marker_set_failures_total: state.queue_marker_set_failures_total,
+            queue_messages_drained_total: state.queue_messages_drained_total,
+            queue_drain_failures_total: state.queue_drain_failures_total,
         }
     }
 
@@ -252,11 +318,15 @@ mod tests {
             RuntimeReadinessState::Unavailable
         );
         health.mark_ready();
-        let first = health.record_heartbeat(&heartbeat(10, HeartbeatActivity::ActiveToolUse));
+        let (first, transition) =
+            health.record_heartbeat(&heartbeat(10, HeartbeatActivity::ActiveToolUse));
         assert!(!first.pid_changed);
-        let second = health.record_heartbeat(&heartbeat(11, HeartbeatActivity::SessionEnded));
+        assert!(transition.is_none());
+        let (second, transition) =
+            health.record_heartbeat(&heartbeat(11, HeartbeatActivity::SessionEnded));
         assert!(second.pid_changed);
         assert_eq!(second.state, RuntimeMemberState::Offline);
+        assert!(transition.is_none());
         assert_eq!(health.snapshot().readiness, RuntimeReadinessState::Ready);
         health.begin_drain();
         assert_eq!(
@@ -268,5 +338,32 @@ mod tests {
             health.snapshot().liveness,
             RuntimeLivenessState::Unavailable
         );
+    }
+
+    #[test]
+    fn queue_graft_failures_are_cumulative_health_observations() {
+        let health = RuntimeHealth::default();
+        health.record_graft_queue_handoff_failure();
+        health.record_graft_queue_handoff_failure();
+        health.record_graft_queue_marker_clear_failure();
+        assert_eq!(health.snapshot().graft_queue_handoff_failures_total, 2);
+        assert_eq!(health.snapshot().graft_queue_marker_clear_failures_total, 1);
+    }
+
+    #[test]
+    fn heartbeat_reports_only_genuine_transition_into_idle() {
+        let health = RuntimeHealth::default();
+        let (response, transition) =
+            health.record_heartbeat(&heartbeat(10, HeartbeatActivity::ActiveToolUse));
+        assert_eq!(response.state, RuntimeMemberState::Active);
+        assert_eq!(transition, None);
+
+        let (response, transition) =
+            health.record_heartbeat(&heartbeat(10, HeartbeatActivity::Idle));
+        assert_eq!(response.state, RuntimeMemberState::Idle);
+        assert_eq!(transition, Some(RuntimeMemberState::Active));
+
+        let (_, transition) = health.record_heartbeat(&heartbeat(10, HeartbeatActivity::Idle));
+        assert_eq!(transition, None);
     }
 }

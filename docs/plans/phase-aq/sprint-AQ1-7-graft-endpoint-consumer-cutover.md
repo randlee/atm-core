@@ -1,7 +1,13 @@
+---
+status: complete
+branch: feature/aq-1-7-graft-endpoint-consumer-cutover
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/aq-1-7-graft-endpoint-consumer-cutover
+---
+
 # Sprint AQ1.7 — Graft Endpoint Consumer Cutover (Registry Becomes Truth)
 
-Status: draft · Branch: `feature/aq-1-7-graft-endpoint-cutover` off
-`integrate/phase-aq` · PR target: `integrate/phase-aq`
+Status: complete · Branch: `feature/aq-1-7-graft-endpoint-consumer-cutover` off
+`integrate/phase-aq` · Worktree: `/Users/randlee/Documents/github/atm-core-worktrees/feature/aq-1-7-graft-endpoint-consumer-cutover` · PR target: `integrate/phase-aq`
 recommended_agent: arch-ctm · recommended_model: deep-reasoning
 
 Third graft connection-model sprint (see AQ1.5). Every production consumer

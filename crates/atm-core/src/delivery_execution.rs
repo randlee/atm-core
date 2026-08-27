@@ -221,6 +221,7 @@ mod tests {
             local_herdr_post_send: false,
             herdr_session: None,
             graft_post_send: false,
+            bare_cli_post_send: false,
             roster_backed: true,
         }
     }

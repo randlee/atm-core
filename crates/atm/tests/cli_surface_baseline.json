@@ -45,6 +45,95 @@
     {
       "args": [
         {
+          "has_default": false,
+          "id": "activity",
+          "long": "activity",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": true,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "actor",
+          "long": "as",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": true,
+          "id": "stderr_logs",
+          "long": "stderr-logs",
+          "num_args": {
+            "max": 0,
+            "min": 0
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "team",
+          "long": "team",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        }
+      ],
+      "name": "_internal-heartbeat",
+      "subcommands": []
+    },
+    {
+      "args": [
+        {
+          "has_default": false,
+          "id": "actor",
+          "long": "as",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": true,
+          "id": "stderr_logs",
+          "long": "stderr-logs",
+          "num_args": {
+            "max": 0,
+            "min": 0
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "team",
+          "long": "team",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        }
+      ],
+      "name": "_internal-queue-get",
+      "subcommands": []
+    },
+    {
+      "args": [
+        {
           "has_default": true,
           "id": "json",
           "long": "json",

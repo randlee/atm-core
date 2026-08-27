@@ -177,6 +177,10 @@ test-admission-capacity:
 test-hermes-graft-bridge:
     {{python_cmd}} .just/run_hermes_graft_bridge_tests.py
 
+# Run the deterministic Claude/Codex ATM lifecycle-hook contract tests.
+test-queue-hooks-python:
+    {{python_cmd}} scripts/hooks/test_queue_hooks.py
+
 # Compatibility alias for the canonical `just smoke graft-hermes` entry point.
 test-hermes-graft-smoke:
     just smoke graft-hermes
