@@ -2406,7 +2406,10 @@ mod tests {
         /// (under this fixture's `HOME` override) that stages `attach_name`
         /// into a real directory and prints it on stdout -- exercising the
         /// production `resolve_transfer_script`/`invoke_transfer_script`
-        /// path exactly as a real cross-host transfer would.
+        /// path exactly as a real cross-host transfer would. Unix-only: the
+        /// stub script is a `#!/bin/sh` script invoked directly, which has
+        /// no Windows equivalent (see the paired `#[cfg(unix)]` test below).
+        #[cfg(unix)]
         fn write_remote_transfer_script(&self, host: &str, attach_name: &str) -> PathBuf {
             use std::os::unix::fs::PermissionsExt;
 
@@ -2460,6 +2463,10 @@ mod tests {
     /// failure -- not a stub); recipient 3 is never attempted. Remote
     /// staged bytes from recipient 1's successful transfer are asserted to
     /// still exist afterward: this sprint ships no rollback machinery.
+    /// Unix-only: exercises a real `#!/bin/sh` transfer-script invocation
+    /// via [`FanOutFixture::write_remote_transfer_script`], which has no
+    /// Windows equivalent.
+    #[cfg(unix)]
     #[tokio::test]
     #[serial(env)]
     async fn from_json_fan_out_aborts_remaining_recipients_after_a_mid_batch_failure() {
