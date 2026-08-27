@@ -189,6 +189,13 @@ None.
 
 ## Non-closure / out of scope
 
+- QA-1 remediation (2026-08-27): transition drains are tracked and joined
+  within the replacement shutdown deadline; interrupted claims are released
+  by a drop guard; the recovery sweep isolates per-member failures and
+  continues; and handoff marker cleanup has one `atm-core` helper enforced by
+  an architecture test. The real daemon/tmux loopback transcript remains
+  pending because the shared local daemon owner lock is occupied and `m5` is
+  not resolvable from this workstation.
 - Durable heartbeat history; subscription APIs beyond the internal sink;
   priority ordering; re-nudge/reminder policies.
 
