@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 from collections import deque
+import contextlib
 import json
 import os
 from pathlib import Path
@@ -25,7 +26,7 @@ import tempfile
 import threading
 import time
 import uuid
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -33,9 +34,55 @@ TEAM = "aq1-9-hermes"
 SENDER = "aq1-9-sender"
 RECEIVER = "aq1-9-receiver"
 LEASE_REFRESH_INTERVAL_SECONDS = 1.0
-CRASH_RECOVERY_LIMIT_SECONDS = 1.5
+# AC2 (sprint-AQ1-9) requires *sub-tick* recovery: the successor must
+# register and deliver strictly inside one GRAFT_LEASE_REFRESH_INTERVAL
+# tick, not merely close to it. The bound is therefore the tick length
+# itself, not a padded multiple of it.
+CRASH_RECOVERY_LIMIT_SECONDS = LEASE_REFRESH_INTERVAL_SECONDS
 EVENT_TIMEOUT_SECONDS = 15.0
 HOST_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+# `atm_graft`'s native PyO3 session runs in this process and reads its
+# configuration from the process environment directly -- unlike every other
+# child this runner starts, there is no per-call `env=` argument for it.
+NATIVE_SESSION_ENV_KEYS = (
+    "HOME",
+    "ATM_HOME",
+    "ATM_CONFIG_HOME",
+    "ATM_WORKSPACE_ROOT",
+    "ATM_TEAM",
+    "ATM_IDENTITY",
+    "ATM_DAEMON_BIN",
+    "ATM_LOG_DIR",
+    "TMPDIR",
+    "TMP",
+    "TEMP",
+)
+
+
+@contextlib.contextmanager
+def scoped_process_environment(overrides: dict[str, str]) -> Iterator[None]:
+    """Temporarily apply `overrides` to the ambient process environment.
+
+    Every subprocess this runner starts (the daemon, `atm`, the receiver
+    worker) receives its own explicit `env=` dict and never reads ambient
+    state. The one exception is the native `atm_graft` extension, which
+    shares this process and therefore this process's environment -- there is
+    no per-call env argument to give it instead. This context manager scopes
+    that one unavoidable mutation to exactly the block that constructs and
+    drives the native session, and restores every prior value (or absence)
+    on exit, including on exceptions, so one restart-matrix row never leaks
+    its fixture environment into a later row or into the caller's shell.
+    """
+    previous = {key: os.environ.get(key) for key in overrides}
+    os.environ.update(overrides)
+    try:
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
 
 def parse_args() -> argparse.Namespace:
@@ -416,6 +463,7 @@ def run_scenario(args: argparse.Namespace, row: str, action: str) -> dict[str, A
         root = Path(temporary)
         env, workspace = fixture_environment(root, args.atm)
         home = Path(env["HOME"])
+        native_env = {key: env[key] for key in NATIVE_SESSION_ENV_KEYS}
         daemon = OwnedDaemon(args.daemon, env, args.timeout)
         receiver: ReceiverWorker | None = None
         sender_session: Any | None = None
@@ -427,74 +475,74 @@ def run_scenario(args: argparse.Namespace, row: str, action: str) -> dict[str, A
             "status": "fail",
             "host": args.host,
         }
-        try:
-            add_roster_member(args.atm, env, home, SENDER)
-            roster_members.append(SENDER)
-            add_roster_member(args.atm, env, home, RECEIVER)
-            roster_members.append(RECEIVER)
-            daemon_start = daemon.start()
-            record["daemon_before"] = daemon_start
-            record["doctor_before"] = doctor(args.atm, env)
-            receiver = ReceiverWorker(Path(__file__).resolve(), workspace, env, args.timeout)
-            record["receiver_before"] = receiver.start()
-            os.environ.update({key: env[key] for key in ("HOME", "ATM_HOME", "ATM_CONFIG_HOME", "ATM_WORKSPACE_ROOT", "ATM_TEAM", "ATM_IDENTITY", "ATM_DAEMON_BIN", "ATM_LOG_DIR", "TMPDIR", "TMP", "TEMP")})
-            import atm_graft
-
-            sender_session = atm_graft.PyGraftSession(atm_graft.PyAgentAddress(SENDER, TEAM, None))
-            receiver_address = atm_graft.PyAgentAddress(RECEIVER, TEAM, None)
-            if action == "daemon_restart":
-                record["restart_at_ns"] = time.time_ns()
-                record["daemon_stop"] = daemon.stop()
-                record["daemon_after"] = daemon.start()
-            else:
-                crash = action == "receiver_crash_within_window"
-                record["restart_at_ns"] = time.time_ns()
-                record["receiver_stop"] = receiver.stop(crash=crash)
+        with scoped_process_environment(native_env):
+            try:
+                add_roster_member(args.atm, env, home, SENDER)
+                roster_members.append(SENDER)
+                add_roster_member(args.atm, env, home, RECEIVER)
+                roster_members.append(RECEIVER)
+                daemon_start = daemon.start()
+                record["daemon_before"] = daemon_start
+                record["doctor_before"] = doctor(args.atm, env)
                 receiver = ReceiverWorker(Path(__file__).resolve(), workspace, env, args.timeout)
-                record["receiver_after"] = receiver.start()
-            marker = f"aq1-9-{row}-{uuid.uuid4()}"
-            send_started = time.time_ns()
-            sent = sender_session.send(receiver_address, marker, False)
-            nudge = receiver.wait_for_nudge(marker, args.timeout)
-            delivered_at = int(nudge["at_ns"])
-            record.update(
-                {
-                    "marker": marker,
-                    "message_id": str(sent.message_id),
-                    "sent_at_ns": send_started,
-                    "delivered_at_ns": delivered_at,
-                    "delivery_latency_ms": round((delivered_at - send_started) / 1_000_000, 3),
-                    "nudge": nudge,
-                    "receiver_transcript": receiver.output.tail() if receiver.output is not None else [],
-                    "daemon_transcript": daemon.output.tail() if daemon.output is not None else [],
-                    "doctor_after": doctor(args.atm, env),
-                    "status": "pass",
-                }
-            )
-            if action == "receiver_crash_within_window":
-                recovery_ms = (delivered_at - int(record["restart_at_ns"])) / 1_000_000
-                record["crash_recovery_ms"] = round(recovery_ms, 3)
-                record["within_one_refresh_tick"] = recovery_ms <= CRASH_RECOVERY_LIMIT_SECONDS * 1000
-                if not record["within_one_refresh_tick"]:
-                    record["status"] = "fail"
-                    record["error"] = "successor delivery exceeded the one-refresh-tick recovery bound"
-        except Exception as error:  # noqa: BLE001 - evidence must retain the row failure
-            record["error"] = f"{type(error).__name__}: {error}"
-        finally:
-            if sender_session is not None:
-                try:
-                    sender_session.close()
-                except Exception:
-                    pass
-            if receiver is not None:
-                receiver.stop()
-            record["daemon_cleanup"] = daemon.stop()
-            if RECEIVER in roster_members:
-                remove_roster_member(args.atm, env, SENDER)
-                remove_roster_member(args.atm, env, RECEIVER)
-            elif SENDER in roster_members:
-                remove_roster_member(args.atm, env, SENDER, caller=SENDER)
-            record["finished_at_ns"] = time.time_ns()
+                record["receiver_before"] = receiver.start()
+                import atm_graft
+
+                sender_session = atm_graft.PyGraftSession(atm_graft.PyAgentAddress(SENDER, TEAM, None))
+                receiver_address = atm_graft.PyAgentAddress(RECEIVER, TEAM, None)
+                if action == "daemon_restart":
+                    record["restart_at_ns"] = time.time_ns()
+                    record["daemon_stop"] = daemon.stop()
+                    record["daemon_after"] = daemon.start()
+                else:
+                    crash = action == "receiver_crash_within_window"
+                    record["restart_at_ns"] = time.time_ns()
+                    record["receiver_stop"] = receiver.stop(crash=crash)
+                    receiver = ReceiverWorker(Path(__file__).resolve(), workspace, env, args.timeout)
+                    record["receiver_after"] = receiver.start()
+                marker = f"aq1-9-{row}-{uuid.uuid4()}"
+                send_started = time.time_ns()
+                sent = sender_session.send(receiver_address, marker, False)
+                nudge = receiver.wait_for_nudge(marker, args.timeout)
+                delivered_at = int(nudge["at_ns"])
+                record.update(
+                    {
+                        "marker": marker,
+                        "message_id": str(sent.message_id),
+                        "sent_at_ns": send_started,
+                        "delivered_at_ns": delivered_at,
+                        "delivery_latency_ms": round((delivered_at - send_started) / 1_000_000, 3),
+                        "nudge": nudge,
+                        "receiver_transcript": receiver.output.tail() if receiver.output is not None else [],
+                        "daemon_transcript": daemon.output.tail() if daemon.output is not None else [],
+                        "doctor_after": doctor(args.atm, env),
+                        "status": "pass",
+                    }
+                )
+                if action == "receiver_crash_within_window":
+                    recovery_ms = (delivered_at - int(record["restart_at_ns"])) / 1_000_000
+                    record["crash_recovery_ms"] = round(recovery_ms, 3)
+                    record["within_one_refresh_tick"] = recovery_ms <= CRASH_RECOVERY_LIMIT_SECONDS * 1000
+                    if not record["within_one_refresh_tick"]:
+                        record["status"] = "fail"
+                        record["error"] = "successor delivery exceeded the one-refresh-tick recovery bound"
+            except Exception as error:  # noqa: BLE001 - evidence must retain the row failure
+                record["error"] = f"{type(error).__name__}: {error}"
+            finally:
+                if sender_session is not None:
+                    try:
+                        sender_session.close()
+                    except Exception:
+                        pass
+                if receiver is not None:
+                    receiver.stop()
+                record["daemon_cleanup"] = daemon.stop()
+                if RECEIVER in roster_members:
+                    remove_roster_member(args.atm, env, SENDER)
+                    remove_roster_member(args.atm, env, RECEIVER)
+                elif SENDER in roster_members:
+                    remove_roster_member(args.atm, env, SENDER, caller=SENDER)
+                record["finished_at_ns"] = time.time_ns()
         return record
 
 

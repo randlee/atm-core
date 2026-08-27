@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -38,10 +39,38 @@ class HermesAtmRestartMatrixTests(unittest.TestCase):
             self.assertIn("receiver-crash-within-window", markdown)
             self.assertIn("no remote result is inferred", markdown)
 
-    def test_crash_recovery_bound_is_one_and_a_half_refresh_ticks(self) -> None:
+    def test_crash_recovery_bound_is_sub_tick(self) -> None:
+        # AC2 (sprint-AQ1-9) requires sub-tick recovery: strictly inside one
+        # GRAFT_LEASE_REFRESH_INTERVAL tick, not a padded multiple of it.
         module = load_module()
         self.assertEqual(module.LEASE_REFRESH_INTERVAL_SECONDS, 1.0)
-        self.assertEqual(module.CRASH_RECOVERY_LIMIT_SECONDS, 1.5)
+        self.assertEqual(module.CRASH_RECOVERY_LIMIT_SECONDS, module.LEASE_REFRESH_INTERVAL_SECONDS)
+
+    def test_scoped_process_environment_restores_prior_values_and_absence(self) -> None:
+        module = load_module()
+        sentinel_key = "AQ19_RESTART_MATRIX_TEST_PRESENT"
+        absent_key = "AQ19_RESTART_MATRIX_TEST_ABSENT"
+        os.environ[sentinel_key] = "before"
+        os.environ.pop(absent_key, None)
+        try:
+            with module.scoped_process_environment({sentinel_key: "during", absent_key: "during"}):
+                self.assertEqual(os.environ[sentinel_key], "during")
+                self.assertEqual(os.environ[absent_key], "during")
+            self.assertEqual(os.environ[sentinel_key], "before")
+            self.assertNotIn(absent_key, os.environ)
+        finally:
+            os.environ.pop(sentinel_key, None)
+            os.environ.pop(absent_key, None)
+
+    def test_scoped_process_environment_restores_on_exception(self) -> None:
+        module = load_module()
+        absent_key = "AQ19_RESTART_MATRIX_TEST_EXC_ABSENT"
+        os.environ.pop(absent_key, None)
+        with self.assertRaises(RuntimeError):
+            with module.scoped_process_environment({absent_key: "during"}):
+                self.assertEqual(os.environ[absent_key], "during")
+                raise RuntimeError("boom")
+        self.assertNotIn(absent_key, os.environ)
 
 
 if __name__ == "__main__":

@@ -6,7 +6,9 @@ worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/aq-1-9-herm
 
 # Sprint AQ1.9 — hermes-atm Wheel Bump + Live Verification
 
-Status: local loopback complete · m5 live run pending · Branch:
+Status: restart-matrix harness in-tree, unit-tested · local loopback run
+OPEN (blocked on this workstation by an ambient account-owned `atm-daemon`;
+see `restart-matrix-local.pending.md`) · m5 live run OPEN (pending) · Branch:
 `feature/aq-1-9-hermes-atm-wheel-verification` off `integrate/phase-aq` · PR
 target: `integrate/phase-aq`
 recommended_agent: Cipher-311d · recommended_model: fast
@@ -58,10 +60,19 @@ an atm-graft API change notification, not a Python code change request.
 
 ## Evidence
 
-The local loopback transcript and `atm doctor --json` captures are committed
-under `docs/plans/phase-aq/evidence/AQ1.9/`. The m5 evidence slot remains
-explicitly `PENDING-LIVE-RUN`; its exact single-command procedure is in
-`restart-matrix-m5.pending.md` in that directory.
+Neither the local loopback rows nor the m5 rows have an executed transcript
+committed yet — no PASS claim is made for either. What is committed under
+`docs/plans/phase-aq/evidence/AQ1.9/` is: the runner
+(`scripts/phase-aq/run_hermes_atm_restart_matrix.py`) and its unit tests
+(`scripts/phase-aq/test_run_hermes_atm_restart_matrix.py`), plus two explicit
+pending stubs. `restart-matrix-local.pending.md` records that the local
+loopback run was attempted and refused: this workstation has an
+ambient account-owned `atm-daemon`, and the runner fails closed rather than
+compete with it (`require_clean_host`). `restart-matrix-m5.pending.md`
+records that the m5 live run has not been attempted at all. Both files carry
+the exact one-command procedure to produce real `restart-matrix-<host>.json`
+/ `.md` evidence once run on a dedicated host; those files (not this doc)
+are the only source of truth for pass/fail once the runs happen.
 
 ## Acceptance criteria
 
