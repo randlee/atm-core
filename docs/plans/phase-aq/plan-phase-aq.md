@@ -247,6 +247,9 @@ issue target repo `randlee/wyvern`.
   semantics, `AttachmentDeliveryStore`/`AttachmentSweepStore`, ADR-018 §3
   amendment): **rejected 2026-08-23 by Rand** as daemon state-machine
   complexity for a script-sized problem; retained only in git history.
+- `atm-http-runtime::runtime_health::MemberKey` vs. `atm_storage::MemberKey`
+  duplication (QM19v2-I1): tracked follow-up owned by AQ3, triggered when it
+  adds `MemberStateTransitionSink` — see sprint-AQ1-queue-cli.md Non-closure.
 
 ## Plan-hardening QA history (2026-08-23)
 

@@ -337,6 +337,16 @@ None beyond identifier renames; no behavior change to `atm send`.
   gated on `newly_persisted && Deferred`), never directly on a Tokio worker
   from async `commit_write`; a Deferred-write test through the real async
   router + SQLite is required (AC 3).
+- **Tracked follow-up (QM19v2-I1): `runtime_health::MemberKey` duplication.**
+  This sprint's canonical public `MemberKey` (`crates/atm-storage/src/
+  types.rs`, above) and the pre-existing private `MemberKey{team, member}`
+  in `atm-http-runtime::runtime_health` (`runtime_health.rs:43`, widened to
+  `pub(crate)` by AQ2.7) remain two independent definitions of the same
+  team+agent key. Owner: AQ3, triggered when it adds
+  `MemberStateTransitionSink` — AQ3 migrates `runtime_health::MemberKey`
+  onto `atm_storage::MemberKey` at that point. Until then, a
+  `// AQ1: shadowed by atm_storage::MemberKey` comment marks the private
+  type so the duplication cannot silently persist as an undated TODO.
 
 ## Dependencies
 

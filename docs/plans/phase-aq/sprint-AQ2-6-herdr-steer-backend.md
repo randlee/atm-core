@@ -397,24 +397,23 @@ this doc cites it by decision id (`D1`–`D8`).
    above). **`list` is a day-one member of this trait, defined and
    implemented in this deliverable** — not something AQ2.7 adds later
    (finding 102: every "AQ2.7 adds a fourth trait method" framing in the
-   prior draft was wrong and is removed):
+   prior draft was wrong and is removed).
 
-   ```rust
-   pub trait HerdrProcessAdapter: Send + Sync {
-       fn prompt(&self, agent: &AgentName, session: Option<&HerdrSession>, deadline: RequestDeadline)
-           -> Pin<Box<dyn Future<Output = Result<HerdrPromptOutcome, AtmError>> + Send + '_>>;
-       fn wait(&self, agent: &AgentName, session: Option<&HerdrSession>, until: &[HerdrAgentStatus],
-               timeout: Duration, deadline: RequestDeadline)
-           -> Pin<Box<dyn Future<Output = Result<HerdrWaitOutcome, AtmError>> + Send + '_>>;
-       fn get(&self, agent: &AgentName, session: Option<&HerdrSession>, deadline: RequestDeadline,
-              breaker_policy: BreakerPolicy)
-           -> Pin<Box<dyn Future<Output = Result<HerdrGetOutcome, AtmError>> + Send + '_>>;
-       fn list(&self, session: Option<&HerdrSession>, deadline: RequestDeadline)
-           -> Pin<Box<dyn Future<Output = Result<HerdrListOutcome, AtmError>> + Send + '_>>;
-   }
-   pub struct HerdrProcessInvoker;
-   impl HerdrProcessAdapter for HerdrProcessInvoker { /* tokio::process::Command, ADR-058 D2/D3 argv+parsing */ }
-   ```
+   **Reference — defined in `docs/atm-herdr/architecture.md` §4; do not
+   diverge.** The trait, its error type, and `HerdrProcessInvoker`'s shape
+   are normative there, not resketched independently here (the same
+   convention deliverable 1 uses for `LocalMessageReceivedBackend`: "the
+   type is AQ1's, not this sprint's"). In particular: every method returns
+   `Result<_, HerdrError>` (never `AtmError` — `atm-herdr` itself never
+   constructs one; a caller folds `HerdrError` into `AtmError` at its own
+   boundary via the `From<HerdrError> for atm_core::error::AtmError` impl
+   architecture.md defines), `session` is `Option<&HerdrSession>` on every
+   method that takes one, `get` additionally takes a `breaker_policy:
+   BreakerPolicy` parameter, and `HerdrProcessInvoker` is a struct carrying
+   a `breaker: std::sync::Arc<HerdrSpawnBreaker>` field with a matching
+   `pub fn new(breaker: Arc<HerdrSpawnBreaker>) -> Self` constructor (used
+   by deliverable 5's single composition-root call, `HerdrProcessInvoker::
+   new(breaker.clone())`) — it is not a fieldless unit struct.
 
    `wait`, `get`, and `list` all exist on the trait now, argv-equality tested
    (HR-TEST-002) alongside `prompt` in this same deliverable — `get` for
@@ -811,6 +810,14 @@ this doc cites it by decision id (`D1`–`D8`).
   argv including session selection (D1/I16), stderr codes and exit-code
   contract (D3/D8), fixture transcript (`herdr-cli-contract-fixture.md`).
   No dev dispatch before it merges.
+- **Re-verification step (QM19v2-I3):** ADR-058 merging (PR #1039) is
+  necessary but not sufficient. Before dev dispatch, diff the ADR-058-derived
+  tables already authored in `docs/atm-herdr/{requirements.md,
+  architecture.md,boundaries.md}` (pin version, checkout hash, argv shapes,
+  error-code vocabulary, D1–D10.1 citations) against the final merged
+  ADR-058 text, and reconcile any drift in those three docs first. Treating
+  "PR #1039 merged" alone as sufficient is not acceptable — the docs were
+  authored against a moving draft and must be checked, not assumed current.
 - downstream: AQ2.7 consumes this backend's emitter and the **named**
   `HerdrProcessAdapter`/`HerdrProcessInvoker` this sprint delivers in the
   new dedicated `atm-herdr` crate (critical review I18 — resolved: not
