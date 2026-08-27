@@ -17,7 +17,8 @@ use atm_core::clear::ClearQuery;
 use atm_core::doctor::DoctorQuery;
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::protocol::{
-    CompatibilityPreflight, RequestId, ResponseEnvelope, SendResponseEnvelope,
+    CompatibilityPreflight, GraftReceiverLookupRequest, GraftReceiverRegistration,
+    GraftReceiverUnregistration, RequestId, ResponseEnvelope, SendResponseEnvelope,
     TeamMemberHeartbeatRequest, next_request_id,
 };
 use atm_core::read::{PeekQuery, ReadQuery};
@@ -482,6 +483,24 @@ fn decode_framework_request(
                 .map(ApiRequest::Heartbeat)
                 .map_err(|source| invalid("heartbeat", source))
         }
+        Some(HttpRouteKind::GraftReceiverRegister) => {
+            serde_json::from_slice::<GraftReceiverRegistration>(body)
+                .map(ApiRequest::GraftReceiverRegister)
+                .map_err(|source| invalid("graft receiver register", source))
+        }
+        Some(HttpRouteKind::GraftReceiverUnregister) => {
+            serde_json::from_slice::<GraftReceiverUnregistration>(body)
+                .map(ApiRequest::GraftReceiverUnregister)
+                .map_err(|source| invalid("graft receiver unregister", source))
+        }
+        Some(HttpRouteKind::GraftReceiverLookup) => {
+            serde_json::from_slice::<GraftReceiverLookupRequest>(body)
+                .map(|value| ApiRequest::GraftReceiverLookup {
+                    team: value.team,
+                    agent: value.agent,
+                })
+                .map_err(|source| invalid("graft receiver lookup", source))
+        }
         Some(HttpRouteKind::RuntimeReload) => serde_json::from_slice::<()>(body)
             .map(|()| ApiRequest::ReloadRuntimeView)
             .map_err(|source| invalid("runtime reload", source)),
@@ -629,6 +648,9 @@ fn map_api_response(response: ApiResponse) -> Result<Response, AtmError> {
             json_response(StatusCode::OK, &value, None)
         }
         ResponseEnvelope::Heartbeat(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::GraftReceiverRegister => json_response(StatusCode::OK, &(), None),
+        ResponseEnvelope::GraftReceiverUnregister => json_response(StatusCode::OK, &(), None),
+        ResponseEnvelope::GraftReceiverLookup(value) => json_response(StatusCode::OK, &value, None),
         ResponseEnvelope::List(value) => json_response(StatusCode::OK, &value, None),
         ResponseEnvelope::Peek(value) => json_response(StatusCode::OK, &value, None),
         ResponseEnvelope::Receive(value) => json_response(StatusCode::OK, &value, None),
