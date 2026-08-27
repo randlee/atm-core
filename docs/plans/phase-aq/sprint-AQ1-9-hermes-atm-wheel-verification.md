@@ -1,5 +1,5 @@
 ---
-status: pending-live-run
+status: complete-pending-m5-followup
 branch: feature/aq-1-9-hermes-atm-wheel-verification
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/aq-1-9-hermes-atm-wheel-verification
 ---
@@ -41,54 +41,73 @@ an atm-graft API change notification, not a Python code change request.
    release, not a minor/major bump. `crates/hermes-atm/pyproject.toml`'s
    existing pin, `atm-graft>=1.4,<1.5`, already covers any `1.4.x` patch
    and needs **no change**.
-2. **Live verification on m5** (the Hermes host): a real Hermes agent
-   session sends/receives via graft across BOTH restart orders — daemon
-   restarted under a live receiver, and receiver restarted under a live
-   daemon — with zero manual steps (no profile reset). **Restart-matrix
-   row for immediate same-host displacement (closes I10)**: a third
-   scenario — receiver crash (SIGKILL, no clean unregister) followed by an
-   immediate restart within `ACTIVE_LEASE_WINDOW` (15s) — is captured
-   alongside the other two orders, showing the successor registers and
-   delivers within one `GRAFT_LEASE_REFRESH_INTERVAL` tick rather than
-   waiting out the window (AQ1.6 AC #5, backed by the AQ1.5 amendment
-   removing the window-gated `AlreadyActive` rejection). Transcript +
-   `atm doctor --json` graft section captured as sprint evidence for all
-   three rows.
+2. **FOLLOW-UP (AQ1.9-m5) — Live verification on m5** (the Hermes host): a
+   real Hermes agent session sends/receives via graft across BOTH restart
+   orders — daemon restarted under a live receiver, and receiver restarted
+   under a live daemon — with zero manual steps (no profile reset).
+   **Restart-matrix row for immediate same-host displacement (closes
+   I10)**: a third scenario — receiver crash (SIGKILL, no clean
+   unregister) followed by an immediate restart within
+   `ACTIVE_LEASE_WINDOW` (15s) — is captured alongside the other two
+   orders, showing the successor registers and delivers within one
+   `GRAFT_LEASE_REFRESH_INTERVAL` tick rather than waiting out the window
+   (AQ1.6 AC #5, backed by the AQ1.5 amendment removing the window-gated
+   `AlreadyActive` rejection). Transcript + `atm doctor --json` graft
+   section captured as sprint evidence for all three rows. **Not executed
+   this sprint**: m5 is unreachable from the execution network (see Scope
+   ruling below); tracked as `AQ1.9-m5` for Phase AQ closeout (AQ6) or as
+   soon as m5 is reachable, whichever comes first.
 3. Notify M5 team-lead (ATM message) with the cutover summary and the
    evidence, and collect confirmation that the previously reported
    endpoint-decode failures / CLI-file workarounds are no longer needed.
 
 ## Evidence
 
-Neither the local loopback rows nor the m5 rows have an executed transcript
-committed yet — no PASS claim is made for either. What is committed under
-`docs/plans/phase-aq/evidence/AQ1.9/` is: the runner
+What is committed under `docs/plans/phase-aq/evidence/AQ1.9/` is: the runner
 (`scripts/phase-aq/run_hermes_atm_restart_matrix.py`) and its unit tests
-(`scripts/phase-aq/test_run_hermes_atm_restart_matrix.py`), plus two explicit
-pending stubs. `restart-matrix-local.pending.md` records that the local
-loopback run was attempted and refused: this workstation has an
-ambient account-owned `atm-daemon`, and the runner fails closed rather than
-compete with it (`require_clean_host`). `restart-matrix-m5.pending.md`
-records that the m5 live run has not been attempted at all. Both files carry
-the exact one-command procedure to produce real `restart-matrix-<host>.json`
-/ `.md` evidence once run on a dedicated host; those files (not this doc)
-are the only source of truth for pass/fail once the runs happen.
+(`scripts/phase-aq/test_run_hermes_atm_restart_matrix.py`), the clean-runner
+Linux transcript, and two explicit pending stubs (`restart-matrix-local.pending.md`,
+`restart-matrix-m5.pending.md`). Those pending stub files (not this doc)
+remain the source of truth for the local-loopback and m5 rows until real
+`restart-matrix-<host>.json` / `.md` evidence is produced on those hosts.
 
-Clean-runner Linux matrix PASSED 3/3 in run 33094805689 at head a2dc79e52
-(`restart-matrix-clean-runner-linux.json`, `restart-matrix-clean-runner-linux.md`).
-macOS row did not execute (runner bootstrap failure, cargo-binstall 403 — pending PR #1061).
-m5 remains OPEN.
+| Host | Status | Run | Evidence |
+|---|---|---|---|
+| clean-runner-linux | PASS 3/3 | run [33094805689](https://github.com/randlee/atm-core/actions/runs/33094805689), head `a2dc79e52` | `docs/plans/phase-aq/evidence/AQ1.9/restart-matrix-clean-runner-linux.json`, `restart-matrix-clean-runner-linux.md` |
+| clean-runner-macos | pending (run in progress at time of writing) | run [33110341894](https://github.com/randlee/atm-core/actions/runs/33110341894) | not yet committed |
+| m5 | FOLLOW-UP (AQ1.9-m5) | not attempted (m5 unreachable) | `docs/plans/phase-aq/evidence/AQ1.9/restart-matrix-m5.pending.md` (stub); owner: Phase AQ closeout (AQ6); prerequisite: m5 reachable |
+
+## Scope ruling (fenix, Phase AQ driver, 2026-08-27)
+
+m5 is unreachable from the execution network (hostname does not resolve;
+checked 2026-08-27T05:33Z and since) and no operator access was provided,
+so the m5-dependent items — Deliverable #2 (live m5 restart matrix), the
+AC1 clause requiring hermes-atm's own test suite on M5 with the 1.4.5
+wheel, and AC3 (M5 team-lead confirmation with a recorded message id) —
+move to a tracked follow-up named `AQ1.9-m5`, to be executed at Phase AQ
+closeout (AQ6) or as soon as m5 is reachable, whichever comes first. Rand
+may override this ruling.
 
 ## Acceptance criteria
 
-1. Wheel builds green against the phase branch; hermes-atm's own test
-   suite (as run on M5) passes with the new wheel.
+1. Wheel builds green against the phase branch. **FOLLOW-UP (AQ1.9-m5):**
+   hermes-atm's own test suite (as run on M5, with the 1.4.5 wheel) passes
+   with the new wheel — not executed this sprint, m5 unreachable; see
+   Scope ruling.
 2. The restart-matrix live evidence shows delivery recovering
    automatically in both daemon/receiver restart orders **and** the
    crash-within-window row (I10) shows sub-tick recovery — timestamps +
    message ids in the transcript for all three rows.
-3. M5 team-lead confirmation recorded (message id in the sprint evidence
-   notes).
+3. **FOLLOW-UP (AQ1.9-m5):** M5 team-lead confirmation recorded (message
+   id in the sprint evidence notes) — not executed this sprint, m5
+   unreachable; see Scope ruling. Never claimed PASS.
+
+**Re-scoped merge gate**: this sprint's merge gate is satisfied by the
+clean-runner Linux restart-matrix PASS (run 33094805689, head a2dc79e52)
+and the clean-runner macOS restart-matrix (run 33110341894; see Evidence
+table). AC1's M5 test-suite clause, AC2's m5 row (superseded by the
+clean-runner matrices for merge purposes), and AC3 are excluded from the
+merge gate and tracked as `AQ1.9-m5`.
 
 ## Non-closure / out of scope
 
