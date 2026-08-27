@@ -1,0 +1,115 @@
+# AT.1 Receipt — Canonical Consumer Install, Parity, And Publication Readiness
+
+```yaml
+receipt_type: sprint
+sprint: AT.1
+branch: feature/pat-s1-install-and-publish
+base: origin/integrate/phase-at @ 2bad2812a
+status: install-parity-complete
+testpypi: pending-authorization-and-merge
+production: pending-contemporaneous-authorization
+```
+
+## Immutable inputs
+
+| Item | Value |
+| --- | --- |
+| `sc-publish` revision | `42e0fcea23f730fae0ef3d08b060cd4df6a2602e` |
+| Package file count | 49 |
+| Package digest | `75da9d18426eacb92bab3e02bb6655a35e14f69deafe1ba2d00f4e93aabc0a5b` |
+| Package-digest algorithm | SHA-256 over the newline-joined, path-sorted `"<sha256(file)>  <relative-path>"` lines from `install.package_files()`; source-relative paths, excluding the package source-root marker, `__pycache__`, and `*.pyc`. |
+| Consumer input SHA-256 | `dfa4e053425a42714e957d4cf35118e11545dec21eed38a22e58b96c8c80c017` |
+| `release/publish-artifacts.toml` SHA-256 | `f6d5ba976b01c255c14e35fe93322bc5a082fa6dc3989546e5867007c5d37287` |
+| `release/publish-channel-contracts.toml` SHA-256 | `88d7ac055689c1e9fcd752c178eac9094ca29084a097fa7aff109c4fb0f40fd8` |
+
+The local `/Users/randlee/Documents/github/sc-publish` checkout had the right
+`develop` SHA but an untracked `.sc-compose/`; it was left untouched. All
+installer and verification commands instead used a clean detached scratch clone
+at the recorded SHA. The installed consumer-root `install.py` was never run.
+
+## Live workspace census
+
+`cargo metadata --no-deps --format-version 1` recorded workspace version
+`1.4.4` and 22 workspace members. Every member received an explicit
+disposition in the consumer input: 13 crates publish and 9 remain internal
+`publish = false` crates. `peer-tls` is publishable because the publishable
+`atm-daemon-bootstrap` has it as a normal dependency; it is order 3, after
+`atm-storage` and before `atm-daemon-bootstrap`. No other live-census drift
+from the declared consumer surface was found.
+
+## Commands and validation
+
+| Command | Exit | Result |
+| --- | ---: | --- |
+| `cargo metadata --no-deps --format-version 1` | 0 | Captured the 22-member, version-1.4.4 census and `peer-tls` dependency edge. |
+| `git -C "$SP" rev-parse HEAD && git -C "$SP" status --porcelain` | 0 | Clean detached upstream clone at the required pin. |
+| `python3 "$SP/plugins/sc-publish/.github/scripts/bootstrap_sc_compose.py" --venv .venv-sc-publish` | 0 | Installed the prebuilt `sc-compose==1.4.1`; no Cargo build or install. |
+| `.venv-sc-publish/bin/python "$SP/plugins/sc-publish/install.py" --input release/sc-publish-consumer-input.json .` | 0 | Installed 49 shared files and rendered the two consumer manifests. |
+| `.venv-sc-publish/bin/python "$SP/plugins/sc-publish/install.py" --dry-run --input release/sc-publish-consumer-input.json .` | 0 | `Publish-kit assets are in sync.` |
+| `install.package_files()` parity sweep with `RENAMED_FILES` | 0 | `byte-identical: 49, mismatched: 0, missing: 0`. |
+| `python3 .github/scripts/release_artifacts.py validate-manifest --manifest release/publish-artifacts.toml --workspace-toml Cargo.toml` | 0 | Manifest validation passed. |
+| `python3 .github/scripts/release_artifacts.py validate-publish-order --manifest release/publish-artifacts.toml --workspace-toml Cargo.toml` | 0 | Publish order matches the workspace dependency graph. |
+| `python3 .just/check_version_sync.py` | 0 | Workspace version, released Python artifacts, path dependencies, lockfile, Winget, and kit release wiring are aligned at 1.4.4. |
+| `python3 .just/tests/test_release_preflight.py` | 0 | 3 passed: manifest/order, channel result, and candidate-provenance contract checks. |
+| `python3 .just/tests/test_release_homebrew_workflow.py` | 0 | 3 passed: manifest config, declared formulas, credential/published-renderer contract checks. |
+| `.venv-sc-publish/bin/python -m pytest -p no:cacheprovider "$SP/plugins/sc-publish/.github/scripts/tests/" -q` | 0 | `79 passed, 10 skipped, 3 subtests passed`; the scratch package checkout remained clean. |
+
+The package test dependency (`pytest==9.1.1`) was added only to the disposable
+verification venv. The installed shared files were not locally edited; the
+only expectation changes are ATM-owned lint/test data under `.just/`, as
+required by ADR-050 and the AT.1 plan.
+
+## Channel and required-check evidence
+
+The pinned rendered channel contract declares all required destinations:
+crates.io, GitHub Releases, PyPI/TestPyPI, Homebrew, Winget, and Scoop.
+
+| Requirement | Observed configured state |
+| --- | --- |
+| Repository secret `CARGO_REGISTRY_TOKEN` | Present (name-only API evidence) |
+| Repository secret `HOMEBREW_TAP_TOKEN` | Present |
+| Repository secret `WINGET_GITHUB_TOKEN` | Present |
+| Repository secret `SCOOP_BUCKET_TOKEN` | Present |
+| Environment `crates-io` | Present; no environment secret is declared by the contract |
+| Environment `pypi` / `PYPI_API_TOKEN` | Present |
+| Environment `testpypi` / `TEST_PYPI_API_TOKEN` | Present |
+
+The GitHub branch-protection required-status-checks endpoint returned HTTP 404
+for both `integrate/phase-at` and `develop`: neither branch currently has a
+configured required-check list to migrate. Installed kit workflow job IDs are
+`preflight`, `establish-provenance`, `gate-and-tag`, `release-plan`, `build`,
+`build-python-wheels`, `build-python-sdists`, `verify-release`, `publish`,
+`publish-crates`, `update-tap`, `publish-winget`, and `update-bucket`.
+Transition plan: before either branch later gains required checks, select only
+stable current CI checks (for example `just-lint`, `test`, `clippy`, and
+`fmt`) plus any intentional release-gate job, and verify those exact job names
+exist on the protected branch; do not retain names from the overwritten legacy
+release workflow.
+
+## Immutable 1.4.3 publication readiness
+
+The published, non-draft release is
+[`v1.4.3`](https://github.com/randlee/atm-core/releases/tag/v1.4.3) (release
+ID `371881933`) with its four platform archives, checksums, published manifest,
+surface scope, and release notes. Its tag commit
+`fa6066468f8e638893bedd686244cffa2a43dbdf` is an ancestor of current
+`origin/main` (`14eaf118dbc2615387949ad35069308f8cd870ea`). The package pin's
+candidate gate applies before release creation; `pypi-publish.yml` is a
+post-release retry workflow that accepts only `tag` and `target`, verifies the
+non-draft release and attached assets, and neither rebuilds assets nor creates
+tags.
+
+No TestPyPI authorization was relayed with this assignment. Therefore no
+publish workflow was dispatched. The next authorized action is to open and
+merge this install/parity PR, then obtain Fenix's relayed verbatim authorization
+from Rand before dispatching the TestPyPI command. Production remains
+`pending-contemporaneous-authorization`; no standing or advance authorization
+will be treated as production permission.
+
+## Findings and scope
+
+No GENUINE STOP occurred. The temporary local upstream checkout with
+`.sc-compose/` was bypassed in favor of a clean scratch clone. The absence of
+branch protection is recorded as transition evidence, not a release blocker.
+No legacy workflow or publish asset was deleted; AT.2 remains the only owner
+of deletion decisions.
