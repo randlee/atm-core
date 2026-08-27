@@ -53,11 +53,19 @@ from the declared consumer surface was found.
 | `python3 .just/tests/test_release_preflight.py` | 0 | 3 passed: manifest/order, channel result, and candidate-provenance contract checks. |
 | `python3 .just/tests/test_release_homebrew_workflow.py` | 0 | 3 passed: manifest config, declared formulas, credential/published-renderer contract checks. |
 | `.venv-sc-publish/bin/python -m pytest -p no:cacheprovider "$SP/plugins/sc-publish/.github/scripts/tests/" -q` | 0 | `79 passed, 10 skipped, 3 subtests passed`; the scratch package checkout remained clean. |
+| `just bootstrap` | 1 | Environment finding: `cargo-shear 1.13.3` requires Rust 1.95+, while the checked-in bootstrap contract selects Rust 1.94.1. This is a pre-existing bootstrap-pin incompatibility, not an AT.1 install/parity or package-byte defect. |
+| `PATH="$PWD/.bootstrap-venv/bin:/tmp/at1-cargo-tools-20260827/bin:$PATH" just lint` | 0 | All recorded lint lanes exited 0; the temporary exact `cargo-shear 1.13.3` executable was built outside the repository only to complete validation after the bootstrap pin incompatibility. |
+| `PATH="$PWD/.bootstrap-venv/bin:/tmp/at1-cargo-tools-20260827/bin:$PATH" just test` | 0 | 714 tests passed, 9 skipped. |
 
 The package test dependency (`pytest==9.1.1`) was added only to the disposable
 verification venv. The installed shared files were not locally edited; the
 only expectation changes are ATM-owned lint/test data under `.just/`, as
 required by ADR-050 and the AT.1 plan.
+
+The bootstrap incompatibility is deliberately not patched in this sprint: it
+is a repository-wide toolchain-pin decision outside AT.1's consumer-install
+scope. It does not alter the pinned shared package, consumer input, rendered
+manifests, or the successful lint/test evidence above.
 
 ## Channel and required-check evidence
 
