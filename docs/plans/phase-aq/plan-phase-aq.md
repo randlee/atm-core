@@ -1,6 +1,6 @@
 # Plan — Phase AQ: ATM Send-To Shell Integration
 
-Status: **re-hardened — whole-tree critical review PASS (round 3, 2026-08-26, `ea990a8dd`); quality-mgr gate pending.** The original critical review (fenix, 2026-08-26: 10 blocking / 22 important / 17 minor) and its closure are recorded below. The prior "hardened — plan-QA PASS (2026-08-24, queue-first 6-sprint structure)" header is **retracted**: the AQ2.6/AQ2.7 insertion (2026-08-25, `47a26c90f`…`e2d886c91`) was never reviewed and rewrote already-PASSed docs (AQ1, AQ2.5, AQ3, AQ4, AQ5), so those PASS rows no longer describe the text on disk (see "Critical review 2026-08-26" and "Insertion QA history (AQ2.6–AQ2.7)" below). Reordered 2026-08-26 per Rand: trait foundation first, Herdr second. ·
+Status: **re-hardened — whole-tree critical review PASS (`ea990a8dd`) and Herdr architecture critical review PASS (`89062d6aa`), both 2026-08-26; quality-mgr gate pending.** The original critical review (fenix, 2026-08-26: 10 blocking / 22 important / 17 minor) and its closure are recorded below. The prior "hardened — plan-QA PASS (2026-08-24, queue-first 6-sprint structure)" header is **retracted**: the AQ2.6/AQ2.7 insertion (2026-08-25, `47a26c90f`…`e2d886c91`) was never reviewed and rewrote already-PASSed docs (AQ1, AQ2.5, AQ3, AQ4, AQ5), so those PASS rows no longer describe the text on disk (see "Critical review 2026-08-26" and "Insertion QA history (AQ2.6–AQ2.7)" below). Reordered 2026-08-26 per Rand: trait foundation first, Herdr second. ·
 Source PRD: [prd-atm-send-to.md](./prd-atm-send-to.md)
 Reference code: `integrate/phase-ao2` (CLI at
 `crates/atm/src/commands/{teams,send}.rs`, daemon maintenance-worker
@@ -212,6 +212,16 @@ issue target repo `randlee/wyvern`.
 | 1 | critical-plan-reviewer (sonnet, whole tree) | `9827dfb1e` | FAIL — 3 Blocking (F1 AQ2.6 `Herdr.session` typed `Option<String>` vs AQ1's `HerdrSession`; F2 AQ2.5 classifier signature still `Option<&GraftReceiverLease>`; F3 "Rand to confirm" markers absent inline in 6/8 docs), 4 Important (F4 AQ3 attributed the classifier to AQ2.5; F5 no owner for the lease→`GraftLeaseState` mapping; F6 B9 "closed" while PR #1039 unmerged; F7 fallback `ATM_TEMP` had no shared-host permission story), 1 minor | Fixed `ab74477b6`/`cb0747be7`: types aligned to landed code; inline approval markers; AQ1.7 owns `graft_lease_state`; B9 reworded with PR #1039 as AQ2.6 precondition; per-uid `0700` fallback dir with `AtmTempInsecure`. |
 | 2 | same | `cb0747be7` | FAIL — 0 Blocking, 2 Important (AQ1.7 AC 8 referenced but missing; AQ4 `AtmTempInsecure` not in error table/AC 1), 1 minor (AQ3 pronoun) | Fixed `ea990a8dd`. |
 | 3 | same | `ea990a8dd` | **PASS** — zero Blocking/Important; no regressions | Ready for quality-mgr gate. |
+
+## Herdr architecture review (polling pump + atm-herdr crate, 2026-08-26)
+
+| Round | Reviewer | Commit | Verdict | Notes |
+|---|---|---|---|---|
+| SCOPE-R1 | plan-scope-reviewer | `931f66f1d` | FAIL — 3 Blocking, 2 Important | type-name drift between writers; breaker unowned; manifest edges; RuntimeHealth pid clobber |
+| SCOPE-R2 | plan-scope-reviewer | `bdcffe7e1` | **PASS** | 101–105 closed |
+| CRIT-R1 | critical-plan-reviewer | `bdcffe7e1` | FAIL — 3 Blocking, 6 Important | shared-breaker composition; `list()` ownership; stale ledger (5); doctor probe vs breaker; claim stranding on shutdown; burst-cap fairness; test-utils leakage; bound precedence; doctor breaker field (partially blind: EPERM on several refs) |
+| CRIT-R2 | critical-plan-reviewer | `a1bc0da5c` | FAIL — 0 Blocking, 1 Important | 101–109 closed with full file access; new 201: two cap algorithms in AQ2.7 |
+| CRIT-R3 | critical-plan-reviewer | `89062d6aa` | **PASS** | break-at-cap normative; composition-change fixture; FakeHerdrCall::Get records breaker_policy |
 
 ## Insertion QA history (AQ2.6–AQ2.7)
 
