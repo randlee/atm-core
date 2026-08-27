@@ -1019,7 +1019,7 @@ mod tests {
     use crate::{
         AuthenticatedConnector, BareCliFifo, BareCliQueueFullDrops, CanonicalWriteHandler,
         NonZeroDuration, RuntimeHealth, RuntimeLimits, RuntimeTimeouts, append_bare_cli_message,
-        canonical_message_router,
+        canonical_api_router, canonical_message_router,
     };
     #[cfg(unix)]
     use crate::{UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid};
@@ -2217,6 +2217,108 @@ mod tests {
         assert!(
             rejected_endpoint.is_err(),
             "non-loopback endpoint must be rejected"
+        );
+    }
+
+    // AC7 (PR #1048, QA-2): `GraftReceiverLookup` round-trips through the
+    // *actual* `atm-http-runtime` HTTP route `_internal-nudge` calls in
+    // production (`lookup_receiver_via` in `atm/src/commands/internal_nudge.rs`
+    // POSTs `GraftReceiverLookupRequest` JSON to this exact path and decodes
+    // an `Option<GraftReceiverLease>` JSON body). Earlier coverage only drove
+    // `lookup_receiver_via` against a hand-rolled `FakeClientTransport`, which
+    // could not catch a divergence in the real wire contract (path, method,
+    // request/response JSON shape). This test builds the production
+    // `canonical_api_router` over the real `StorageAndNudgeRouter` fixture
+    // (same helper other route tests in this module use) and drives it with
+    // an actual `tower::Service::oneshot` HTTP call for both a present lease
+    // (`recipient`, seeded by `attach_graft_receiver_store`) and a roster
+    // member with no registered lease (`sender`) — no fake stands in for the
+    // router or store at any point.
+    #[tokio::test]
+    async fn graft_receiver_lookup_round_trips_hit_and_absent_lease_through_the_real_http_route() {
+        let fixture = fixture(true, None, None);
+        let app = canonical_api_router(
+            Arc::new(fixture.router.clone()),
+            AuthenticatedConnector::local(),
+            RuntimeLimits::new(
+                std::num::NonZeroUsize::new(4096).expect("non-zero body limit"),
+                std::num::NonZeroUsize::new(4).expect("non-zero request limit"),
+            ),
+            RuntimeTimeouts::new(
+                NonZeroDuration::new(Duration::from_secs(10)).expect("non-zero request timeout"),
+                NonZeroDuration::new(Duration::from_secs(1)).expect("non-zero shutdown timeout"),
+            ),
+        );
+        let lookup_path = atm_core::api::http_route_surface()
+            .find(|route| {
+                route.method == "POST" && route.path_template.contains("/graft/receiver/lookup")
+            })
+            .expect("graft receiver lookup route")
+            .path_template;
+
+        // Hit: a roster member with a registered lease resolves it through
+        // the real HTTP decode -> dispatch -> SQLite store -> HTTP encode
+        // path.
+        let hit_body = serde_json::to_vec(&atm_core::protocol::GraftReceiverLookupRequest {
+            team: "test-team".parse().expect("team"),
+            agent: "recipient".parse().expect("agent"),
+        })
+        .expect("serialize lookup request");
+        let hit_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(lookup_path)
+                    .header(CONTENT_TYPE, "application/json")
+                    .body(Body::from(hit_body))
+                    .expect("HTTP request"),
+            )
+            .await
+            .expect("infallible Axum service");
+        assert_eq!(hit_response.status(), StatusCode::OK);
+        let hit_bytes = to_bytes(hit_response.into_body(), usize::MAX)
+            .await
+            .expect("hit response body");
+        let hit_lease: Option<atm_storage::GraftReceiverLease> =
+            serde_json::from_slice(&hit_bytes).expect("decode hit lease");
+        assert_eq!(
+            hit_lease
+                .expect("recipient has a registered lease")
+                .endpoint,
+            "127.0.0.1:9".parse().expect("fixture endpoint"),
+            "the real route must resolve the fixture-registered lease"
+        );
+
+        // Absent lease: a roster member with no registration is `Ok(None)`
+        // over HTTP, exactly what `lookup_receiver_via` maps into the
+        // not-registered error client-side.
+        let absent_body = serde_json::to_vec(&atm_core::protocol::GraftReceiverLookupRequest {
+            team: "test-team".parse().expect("team"),
+            agent: "sender".parse().expect("agent"),
+        })
+        .expect("serialize lookup request");
+        let absent_response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(lookup_path)
+                    .header(CONTENT_TYPE, "application/json")
+                    .body(Body::from(absent_body))
+                    .expect("HTTP request"),
+            )
+            .await
+            .expect("infallible Axum service");
+        assert_eq!(absent_response.status(), StatusCode::OK);
+        let absent_bytes = to_bytes(absent_response.into_body(), usize::MAX)
+            .await
+            .expect("absent response body");
+        let absent_lease: Option<atm_storage::GraftReceiverLease> =
+            serde_json::from_slice(&absent_bytes).expect("decode absent lease");
+        assert_eq!(
+            absent_lease, None,
+            "a known roster member with no registered lease must be Ok(None), not an error, \
+             over the real HTTP route"
         );
     }
 

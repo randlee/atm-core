@@ -409,7 +409,7 @@ delivery or `atm read` already exercises for that member.
 
 | Sprint | Gate | Reviewer | Date | Verdict | Notes |
 | --- | --- | --- | --- | --- | --- |
-| AQ2.5 | ADR-054 addendum (delivery-trigger policy, AC 9) | quality-mgr | _pending re-gate_ | _pending_ | Fill in on re-gate after the QA-1 fix cycle closes; mirrors AQ1 AC 1's ADR-054 sign-off gate. |
+| AQ2.5 | ADR-054 addendum (delivery-trigger policy, AC 9) | quality-mgr | 2026-08-27 | PASS | QA-final3 @ cd48e7ffb: both blocking findings from the prior round closed -- scripts/hooks/README.md now has the exact ~/.claude/settings.json / ~/.codex/hooks.json install entries plus the schook-MVP-contract statement; AC8/AC11 wording corrected (AC11: 4 implementers, matching received_hook_selector.rs and the boundary manifest, verified by aq25_received_hook_manifest_matches_async_implementers). All substantive QA-1 through QA-final content independently confirmed across prior rounds. |
 
 ## Addendum (2026-08-27): Herdr retry partition (AQ2.7 ruling)
 
