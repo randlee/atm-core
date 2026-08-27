@@ -18,6 +18,7 @@ use clap::{Args, Subcommand};
 use crate::commands::caller_context::{
     CallerContext, CallerContextOverrides, resolve_cli_caller_context,
 };
+use crate::commands::members;
 use crate::commands::retained_roster::with_retained_roster_store;
 use crate::composition::reload_running_runtime_view;
 use crate::observability::CliObservability;
@@ -31,6 +32,10 @@ pub struct TeamsCommand {
 
     #[arg(long)]
     json: bool,
+
+    /// Emit the nested PickerInput contract used by Send-To pickers.
+    #[arg(long, requires = "json")]
+    members: bool,
 }
 
 #[derive(Debug, Subcommand)]
@@ -67,6 +72,9 @@ struct AddMemberCommand {
 
     #[arg(long, help = "Herdr session name; only valid with --backend herdr")]
     session: Option<String>,
+
+    #[arg(long, help = "durable routable host advertised to Send-To")]
+    host: Option<String>,
 
     #[arg(
         long = "pane-id",
@@ -106,6 +114,9 @@ struct UpdateMemberCommand {
 
     #[arg(long, help = "Herdr session name; only valid with --backend herdr")]
     session: Option<String>,
+
+    #[arg(long, help = "durable routable host advertised to Send-To")]
+    host: Option<String>,
 
     #[arg(
         long = "pane-id",
@@ -191,6 +202,9 @@ impl TeamsCommand {
         let home_dir = home::atm_home()?;
         match self.command {
             None => {
+                if self.members {
+                    return members::print_picker_input(_observability).await;
+                }
                 let outcome = with_retained_roster_store(|roster_store| {
                     team_admin::list_teams_with_roster_store(
                         roster_store,
@@ -262,6 +276,7 @@ impl AddMemberCommand {
                     session: self.session.as_deref(),
                 },
             )
+            .and_then(|request| request.with_host(self.host.as_deref()))
         } else {
             AddMemberRequest::new(
                 atm_home_dir,
@@ -272,6 +287,7 @@ impl AddMemberCommand {
                 member_home_dir,
                 self.pane_id,
             )
+            .and_then(|request| request.with_host(self.host.as_deref()))
         }
         .map_err(Into::into)
     }
@@ -391,6 +407,7 @@ impl UpdateMemberCommand {
                     session: self.session.as_deref(),
                 },
             )
+            .and_then(|request| request.with_host(self.host.as_deref()))
         } else {
             UpdateMemberRequest::new(
                 caller_context.caller_identity,
@@ -404,6 +421,7 @@ impl UpdateMemberCommand {
                 self.model,
                 self.pane_id,
             )
+            .and_then(|request| request.with_host(self.host.as_deref()))
         }
         .map_err(Into::into)
     }
@@ -522,9 +540,11 @@ mod tests {
                 target: None,
                 session: None,
                 pane_id: Some("%19".to_string()),
+                host: None,
                 json,
             })),
             json: false,
+            members: false,
         }
     }
 
@@ -537,6 +557,7 @@ mod tests {
                 json,
             })),
             json: false,
+            members: false,
         }
     }
 
@@ -550,6 +571,7 @@ mod tests {
                 },
             )),
             json: false,
+            members: false,
         }
     }
 
@@ -563,6 +585,7 @@ mod tests {
                 },
             )),
             json: false,
+            members: false,
         }
     }
 
@@ -682,6 +705,7 @@ mod tests {
             target: None,
             session: None,
             pane_id: None,
+            host: None,
             json: false,
         };
 
@@ -705,6 +729,7 @@ mod tests {
             target: None,
             session: None,
             pane_id: None,
+            host: None,
             json: false,
         };
 
@@ -772,6 +797,7 @@ mod tests {
             target: None,
             session: None,
             pane_id: Some("17".to_string()),
+            host: None,
             json: false,
         };
 
@@ -800,6 +826,7 @@ mod tests {
             target: None,
             session: None,
             pane_id: None,
+            host: None,
             json: false,
         };
 
@@ -840,6 +867,7 @@ mod tests {
             target: None,
             session: None,
             pane_id: Some("17".to_string()),
+            host: None,
             json: true,
         };
 
@@ -938,6 +966,7 @@ mod tests {
         let command = TeamsCommand {
             command: None,
             json: true,
+            members: false,
         };
 
         fixture.with_env_and_cwd(|| {
@@ -1000,6 +1029,7 @@ mod tests {
             model: "gpt-5".to_string(),
             home_dir: Some(fixture.current_dir.clone()),
             pane_id: Some("21".to_string()),
+            host: None,
             backend: None,
             target: None,
             session: None,
@@ -1037,6 +1067,7 @@ mod tests {
             backend: None,
             target: None,
             session: None,
+            host: None,
             json: true,
         };
 

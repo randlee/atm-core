@@ -9,7 +9,7 @@ use crate::delivery_channel::{HerdrSession, LocalMessageReceivedBackend};
 use crate::error::AtmError;
 use crate::home;
 use crate::schema::{AgentType, HOME_DIR_METADATA_KEY, HomeDirPath, WORKSPACE_ROOT_METADATA_KEY};
-use crate::types::{AgentName, ModelName, PaneId, TeamName};
+use crate::types::{AgentName, HostName, ModelName, PaneId, TeamName};
 
 use super::{filesystem, projection};
 
@@ -37,6 +37,7 @@ pub struct AddMemberRequest {
     pub tmux_pane_id: Option<PaneId>,
     pub local_backend: Option<LocalMessageReceivedBackend>,
     pub backend_warning: Option<String>,
+    pub host: Option<HostName>,
 }
 
 impl AddMemberRequest {
@@ -61,6 +62,7 @@ impl AddMemberRequest {
             local_backend: tmux_pane_id
                 .map(|pane_id| LocalMessageReceivedBackend::Tmux { pane_id }),
             backend_warning: None,
+            host: None,
         })
     }
 
@@ -97,7 +99,14 @@ impl AddMemberRequest {
             tmux_pane_id,
             local_backend,
             backend_warning,
+            host: None,
         })
+    }
+
+    /// Set the explicit routable host advertised by the picker projection.
+    pub fn with_host(mut self, host: Option<&str>) -> Result<Self, AtmError> {
+        self.host = host.map(str::parse).transpose()?;
+        Ok(self)
     }
 }
 
@@ -127,6 +136,7 @@ pub struct UpdateMemberRequest {
     pub tmux_pane_id: Option<PaneId>,
     pub local_backend: Option<LocalMessageReceivedBackend>,
     pub backend_warning: Option<String>,
+    pub host: Option<HostName>,
 }
 
 impl UpdateMemberRequest {
@@ -162,6 +172,7 @@ impl UpdateMemberRequest {
                 .map(|pane_id| LocalMessageReceivedBackend::Tmux { pane_id }),
             tmux_pane_id,
             backend_warning: None,
+            host: None,
         })
     }
 
@@ -208,7 +219,14 @@ impl UpdateMemberRequest {
             tmux_pane_id,
             local_backend,
             backend_warning,
+            host: None,
         })
+    }
+
+    /// Set the explicit routable host advertised by the picker projection.
+    pub fn with_host(mut self, host: Option<&str>) -> Result<Self, AtmError> {
+        self.host = host.map(str::parse).transpose()?;
+        Ok(self)
     }
 }
 
@@ -483,6 +501,9 @@ fn build_member_add_roster_record(request: &AddMemberRequest) -> RosterEntry {
         HOME_DIR_METADATA_KEY.to_string(),
         json!(request.member_home_dir.as_ref().display().to_string()),
     );
+    if let Some(host) = &request.host {
+        extra.insert("host".to_string(), json!(host.as_str()));
+    }
 
     RosterEntry {
         team_name: request.team.clone(),
@@ -516,6 +537,11 @@ fn apply_member_metadata_update(member: &mut RosterEntry, request: &UpdateMember
             WORKSPACE_ROOT_METADATA_KEY.to_string(),
             json!(workspace_root.as_ref().display().to_string()),
         );
+    }
+    if let Some(host) = &request.host {
+        member
+            .metadata_json
+            .insert("host".to_string(), json!(host.as_str()));
     }
     if let Some(harness) = request.harness {
         member.harness = harness;

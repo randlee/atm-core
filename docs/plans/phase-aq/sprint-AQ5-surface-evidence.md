@@ -1,6 +1,6 @@
 # Sprint AQ5 — Send-To Surface and Phase Evidence
 
-Status: draft · Branch: `feature/aq-5-surface-evidence` off
+Status: implementation complete; host/QA evidence pending · Branch: `feature/aq-5-surface-evidence` off
 `integrate/phase-aq` · PR target: `integrate/phase-aq`
 recommended_agent: Cipher-311d · recommended_model: fast
 
@@ -134,3 +134,9 @@ None.
   evidence consumes AQ1–AQ3 and AQ2.6–AQ2.7) — merge-forward before every
   dev/fix round.
 - parallel_safe: none remaining.
+
+AQ5's automated implementation evidence is recorded in
+[`validation-evidence.md`](validation-evidence.md). Physical Finder,
+Explorer, and Nautilus runs remain explicitly OPEN until named host
+operators attach real transcripts and screenshots; this sprint does not
+claim those runs from a local macOS-only checkout.

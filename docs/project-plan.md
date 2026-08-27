@@ -1398,6 +1398,11 @@ pending its host run.
 AQ2 graft dual-channel queue delivery is complete on
 `feature/aq-2-queue-graft`; its PR carries the additive wire kind, exact
 pending-marker handoff semantics, and Hermes `/queue`/`/steer` routing.
+AQ5 Send-To surface implementation is complete on
+`feature/aq-5-surface-evidence`; its automated picker/pipeline evidence is
+recorded in [the AQ validation register](./plans/phase-aq/validation-evidence.md),
+while the three physical file-manager runs and Wyvern six-case degradation
+transcript remain OPEN for their named host/QA owners.
 
 ## 49. Phase AO2 — Benchmark Safety, Evidence, And Transport Performance [COMPLETE — MERGED TO DEVELOP]
 

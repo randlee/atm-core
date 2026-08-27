@@ -817,6 +817,7 @@ mod tests {
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("7").expect("pane")),
                 local_backend: None,
                 backend_warning: None,
+                host: None,
             },
         )
         .expect("add member");
@@ -856,6 +857,7 @@ mod tests {
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("session:1.2").expect("pane")),
                 local_backend: None,
                 backend_warning: None,
+                host: None,
             },
         )
         .expect("add member");
@@ -983,6 +985,7 @@ mod tests {
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("%12").expect("pane")),
                 local_backend: None,
                 backend_warning: None,
+                host: None,
             },
         )
         .expect("add member");
@@ -1033,6 +1036,7 @@ mod tests {
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("22").expect("pane")),
                 local_backend: None,
                 backend_warning: None,
+                host: None,
             },
         )
         .expect("update member");
@@ -1095,6 +1099,7 @@ mod tests {
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("%0").expect("pane")),
                 local_backend: None,
                 backend_warning: None,
+                host: None,
             },
         )
         .expect("repair team-lead pane");
@@ -1114,6 +1119,7 @@ mod tests {
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("%1").expect("pane")),
                 local_backend: None,
                 backend_warning: None,
+                host: None,
             },
         )
         .expect("repair secondary member pane");
@@ -1162,6 +1168,7 @@ mod tests {
                 tmux_pane_id: None,
                 local_backend: None,
                 backend_warning: None,
+                host: None,
             },
         )
         .expect_err("caller team mismatch");
@@ -1192,6 +1199,7 @@ mod tests {
                 tmux_pane_id: None,
                 local_backend: None,
                 backend_warning: None,
+                host: None,
             },
         )
         .expect_err("missing caller");
@@ -1222,6 +1230,7 @@ mod tests {
                 tmux_pane_id: None,
                 local_backend: None,
                 backend_warning: None,
+                host: None,
             },
         )
         .expect_err("missing member");

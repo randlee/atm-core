@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "teams": [
+    {
+      "id": "atm-dev",
+      "name": "atm-dev",
+      "members": [
+        {"id": "cipher@atm-dev", "name": "cipher", "host": "m4", "cwd": "/work/atm-core", "status": "active"},
+        {"id": "fenix@atm-dev", "name": "fenix", "host": "m5", "cwd": "/work/atm-core", "status": "idle"},
+        {"id": "offline@atm-dev", "name": "offline", "host": null, "cwd": null, "status": "dead"}
+      ]
+    }
+  ]
+}

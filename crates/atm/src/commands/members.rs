@@ -11,6 +11,8 @@ use atm_core::team_admin::{self, MembersQuery};
 use atm_core::types::TeamName;
 use chrono::Utc;
 use clap::Args;
+use serde::Serialize;
+use std::path::Path;
 
 use crate::commands::caller_context::{
     CallerContextOverrides, CallerTeamOverride, resolve_cli_caller_context,
@@ -29,6 +31,110 @@ pub struct MembersCommand {
 
     #[arg(long)]
     json: bool,
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+struct PickerInput {
+    schema_version: u8,
+    teams: Vec<PickerTeam>,
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+struct PickerTeam {
+    id: String,
+    name: String,
+    members: Vec<PickerMember>,
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+struct PickerMember {
+    id: String,
+    name: String,
+    host: Option<String>,
+    cwd: Option<String>,
+    status: &'static str,
+}
+
+/// Emit the versioned PickerInput projection consumed by Send-To adapters.
+/// The projection deliberately contains only roster metadata and a bounded
+/// runtime observation; pickers do not need (or receive) addressing logic.
+pub(crate) async fn print_picker_input(observability: &CliObservability) -> Result<()> {
+    let caller_context = resolve_cli_caller_context(CallerContextOverrides::default())?;
+    let current_dir = home::command_invocation_dir()?;
+    let teams = with_retained_roster_store(|roster_store| {
+        team_admin::list_teams_with_roster_store(roster_store, caller_context.caller_team.clone())
+    })?;
+
+    let mut picker_teams = Vec::with_capacity(teams.teams.len());
+    for team in teams.teams {
+        let query = MembersQuery {
+            team: team.name.clone(),
+            caller_identity: Some(caller_context.caller_identity.clone()),
+            live_cwd: Some(current_dir.clone()),
+        };
+        let outcome = with_retained_roster_store(|roster_store| {
+            team_admin::list_members_with_roster_store(roster_store, query)
+        })?;
+        let command = MembersCommand {
+            team: Some(team.name.to_string()),
+            json: false,
+        };
+        let runtime = command.runtime_snapshot(&team.name, observability).await;
+        let members = outcome
+            .members
+            .into_iter()
+            .map(|member| {
+                let status = runtime
+                    .as_ref()
+                    .and_then(|snapshot| {
+                        snapshot.members.iter().find(|observation| {
+                            observation.team == team.name && observation.member == member.name
+                        })
+                    })
+                    .map(|observation| picker_status(observation.state))
+                    .unwrap_or("dead");
+                let host = member
+                    .extra
+                    .get("host")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_owned);
+                let cwd = member
+                    .live_cwd
+                    .filter(|value| Path::new(value).is_absolute());
+                PickerMember {
+                    id: member.agent_id,
+                    name: member.name.to_string(),
+                    host,
+                    cwd,
+                    status,
+                }
+            })
+            .collect();
+        picker_teams.push(PickerTeam {
+            id: team.name.to_string(),
+            name: team.name.to_string(),
+            members,
+        });
+    }
+
+    println!(
+        "{}",
+        serde_json::to_string(&PickerInput {
+            schema_version: 1,
+            teams: picker_teams,
+        })?
+    );
+    Ok(())
+}
+
+fn picker_status(state: RuntimeMemberState) -> &'static str {
+    match state {
+        RuntimeMemberState::Active => "active",
+        RuntimeMemberState::Idle => "idle",
+        RuntimeMemberState::Offline
+        | RuntimeMemberState::Unknown
+        | RuntimeMemberState::IdentityConflict => "dead",
+    }
 }
 
 impl MembersCommand {
@@ -234,7 +340,7 @@ mod tests {
     use serial_test::serial;
     use tempfile::TempDir;
 
-    use super::{MembersCommand, short_session_id_for_human};
+    use super::{MembersCommand, RuntimeMemberState, picker_status, short_session_id_for_human};
     use crate::observability::CliObservability;
 
     struct Fixture {
@@ -420,5 +526,14 @@ mod tests {
     fn short_session_id_uses_unicode_scalar_limit() {
         let session = atm_core::types::SessionId::new("ééééééééééééé").expect("session");
         assert_eq!(short_session_id_for_human(&session), "éééééééééééé…");
+    }
+
+    #[test]
+    fn picker_status_maps_runtime_states_to_contract_values() {
+        assert_eq!(picker_status(RuntimeMemberState::Active), "active");
+        assert_eq!(picker_status(RuntimeMemberState::Idle), "idle");
+        assert_eq!(picker_status(RuntimeMemberState::Offline), "dead");
+        assert_eq!(picker_status(RuntimeMemberState::Unknown), "dead");
+        assert_eq!(picker_status(RuntimeMemberState::IdentityConflict), "dead");
     }
 }
