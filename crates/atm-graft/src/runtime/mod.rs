@@ -1588,6 +1588,7 @@ mod tests {
             observability: Arc::new(NoopObservability),
             stop_rx,
             ready_tx: None,
+            receiver_target_tx: None,
         };
         let mut receiver = RegisteredGraftReceiver::new(listener, &ctx);
         receiver.announce().expect("announce this generation");
@@ -1793,11 +1794,10 @@ mod tests {
     #[test]
     fn refresh_tick_observing_notowner_on_a_live_receiver_sets_displaced_and_stops_refreshing() {
         let paths = test_paths();
-        let endpoint_path = receiver_record_path(&paths);
         let registry = FakeGraftRegistry::new(true);
         let team = TeamName::from_validated(TEST_TEAM);
         let agent = AgentName::from_validated(TEST_QA);
-        let (stop_tx, join, _snapshot) = spawn_receiver_with_client(
+        let (stop_tx, join, _snapshot, (endpoint, capability)) = spawn_receiver_with_client(
             paths.workspace_root.clone(),
             Arc::new(RecordingInjector::default()),
             Some(registry.client()),
@@ -1828,7 +1828,7 @@ mod tests {
         // The accept loop must never crash once displaced: deliver a nudge
         // through the still-running receiver.
         assert_eq!(
-            deliver_request(&endpoint_path, request_event()),
+            deliver_request(endpoint, &capability, request_event()),
             GraftPostSendResponse::Delivered,
             "the accept loop must keep delivering after its refresh path is displaced"
         );
