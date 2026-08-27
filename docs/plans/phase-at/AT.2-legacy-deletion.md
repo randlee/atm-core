@@ -1,11 +1,11 @@
-# AT.3 — Legacy Publish Surface Deletion
+# AT.2 — Legacy Publish Surface Deletion
 
 ```yaml
 plan_type: sprint_plan
 phase: AT
-sprint: AT.3
-worktree: feature/pat-s3-legacy-publish-deletion
-branch: feature/pat-s3-legacy-publish-deletion
+sprint: AT.2
+worktree: feature/pat-s2-legacy-publish-deletion
+branch: feature/pat-s2-legacy-publish-deletion
 status: proposed
 estimated_scope: verify-then-delete of retired publish assets; no behavior additions
 ```
@@ -14,7 +14,7 @@ estimated_scope: verify-then-delete of retired publish assets; no behavior addit
 
 Remove every deprecated publish asset that the installed shared kit now
 covers, so the kit files plus the ATM-owned consumer input are the entire
-publish surface. Deletion is gated on AT.2's successful run as coverage
+publish surface. Deletion is gated on AT.1's successful run as coverage
 evidence (ADR-050: ATM owns no local copies of generic release behavior).
 
 ## Deliverables
@@ -25,7 +25,7 @@ evidence (ADR-050: ATM owns no local copies of generic release behavior).
    recipes, test registrations, doc links).
 3. Retained-file rationales recorded in module docstrings and in the PR
    description.
-4. The AT.3 receipt at `docs/plans/phase-at/receipts/AT.3-receipt.md`
+4. The AT.2 receipt at `docs/plans/phase-at/receipts/AT.2-receipt.md`
    (shape per the phase README's Receipt Convention).
 
 ## Method
@@ -53,14 +53,14 @@ Files the installer overwrites in place — the complete rehearsal-proven list:
 `.claude/agents/publisher.md`, and `release/publish-artifacts.toml` — are
 adopted in AT.1 and are not deletion rows (the kit's channel-agent prompts
 are installed as new files, not overwrites). AT.1's receipt lists every file
-the installer created or overwrote (48 files at the pin), including the
+the installer created or overwrote (49 files at the pin), including the
 installed agent files. This sprint owns what the installer does **not**
 replace by name.
 
 The `Gate` column names the specific receipt that must exist before that
 row may be deleted:
 
-- **AT.2 production receipt** = `docs/plans/phase-at/receipts/AT.2-receipt.md`
+- **AT.1 production receipt** = `docs/plans/phase-at/receipts/AT.1-receipt.md`
   with its production PyPI section complete (not
   `production: pending-authorization`).
 - **First kit-release receipt** = the receipt of the first kit-driven
@@ -70,10 +70,10 @@ row may be deleted:
 
 | Path | Observed state | Expected coverage | Gate |
 | --- | --- | --- | --- |
-| `.github/workflows/hermes-atm-pypi-publish.yml` | Legacy bespoke PyPI workflow for `hermes-atm` | Kit `pypi-publish.yml` building the declared setuptools distribution (upstream #39) | AT.2 production receipt |
-| `scripts/prepare_hermes_atm_publish_artifacts.py` | Feeds the legacy hermes workflow | Same kit leg; manifest-declared distribution | AT.2 production receipt (deleted with the workflow it feeds) |
-| `.just/tests/test_hermes_atm_pypi_publish_workflow.py` | Tests the legacy hermes workflow | Kit upstream tests at the pinned revision | AT.2 production receipt (same gate as its subject) |
-| `.just/tests/test_prepare_hermes_atm_publish_artifacts.py` | Tests the legacy prepare script | Same | AT.2 production receipt (same gate as its subject) |
+| `.github/workflows/hermes-atm-pypi-publish.yml` | Legacy bespoke PyPI workflow for `hermes-atm` | Kit `pypi-publish.yml` building the declared setuptools distribution (upstream #39) | AT.1 production receipt |
+| `scripts/prepare_hermes_atm_publish_artifacts.py` | Feeds the legacy hermes workflow | Same kit leg; manifest-declared distribution | AT.1 production receipt (deleted with the workflow it feeds) |
+| `.just/tests/test_hermes_atm_pypi_publish_workflow.py` | Tests the legacy hermes workflow | Kit upstream tests at the pinned revision | AT.1 production receipt (same gate as its subject) |
+| `.just/tests/test_prepare_hermes_atm_publish_artifacts.py` | Tests the legacy prepare script | Same | AT.1 production receipt (same gate as its subject) |
 | `scripts/release_artifacts.py` | Legacy copy at root; kit installs `.github/scripts/release_artifacts.py` | Kit script | First kit-release receipt |
 | `scripts/release_gate.sh` | Legacy copy at root | Kit `.github/scripts/release_gate.sh` via `release.yml` | First kit-release receipt |
 | `scripts/verify_release_archive.py` | Legacy archive verifier | Kit `verify-published-release` action + `verify-*-release-assets` subcommands; retain only if it checks ATM-owned data the kit does not | First kit-release receipt |
@@ -88,9 +88,9 @@ row may be deleted:
 Any additional legacy file discovered during the sprint joins the table with
 the same loop and an explicit gate; none is deleted without its row.
 
-Rows whose gate receipt does not yet exist when AT.3 executes are RETAINED
-with status `deferred-until-<gate>` recorded in the AT.3 receipt (e.g.
-`deferred-until-first-kit-release-receipt`). AT.3 completes with these
+Rows whose gate receipt does not yet exist when AT.2 executes are RETAINED
+with status `deferred-until-<gate>` recorded in the AT.2 receipt (e.g.
+`deferred-until-first-kit-release-receipt`). AT.2 completes with these
 explicit deferrals rather than waiting on future releases; a follow-up
 deletion pass runs after the first full kit-driven release produces the
 outstanding gate receipts.
@@ -110,26 +110,26 @@ retained test records that rationale in its module docstring.
 
 ## Prerequisites
 
-- At minimum, the AT.2 TestPyPI receipt
-  (`docs/plans/phase-at/receipts/AT.2-receipt.md`) proving the kit built and
+- At minimum, the AT.1 TestPyPI receipt
+  (`docs/plans/phase-at/receipts/AT.1-receipt.md`) proving the kit built and
   published every declared distribution — including the setuptools
   `hermes-atm` — end-to-end. The hermes rows (the
   `.github/workflows/hermes-atm-pypi-publish.yml` workflow, its feeder
   script, and their tests) additionally require the production PyPI receipt
   (the receipt's production section complete, not
   `production: pending-authorization`), per the `Gate` column.
-- A channel-scoped credential-unavailable (fail-closed) result in AT.2 is
+- A channel-scoped credential-unavailable (fail-closed) result in AT.1 is
   valid evidence the workflow fails closed, and per the phase README
   Non-Blocking Outcomes table it is never an emergency — but it does NOT
   constitute publication and does not satisfy this coverage-evidence
-  prerequisite. AT.3 proceeds only on receipts showing the public indexes
+  prerequisite. AT.2 proceeds only on receipts showing the public indexes
   actually contain the 1.4.3 distributions.
 - `install.py --dry-run` (run from the pinned checkout, per the phase README
   installer contract) clean on the sprint branch before starting.
 
 ## Dependencies
 
-- `AT.1`, `AT.2`: `must_follow`. Deletion without the coverage proof recreates
+- `AT.1`: `must_follow`. Deletion without the coverage proof recreates
   the risk ADR-050 exists to prevent, in the opposite direction.
 
 ## Non-Goals
@@ -148,7 +148,7 @@ retained test records that rationale in its module docstring.
 - `install.py --dry-run` still reports no drift after all deletions.
 - Full repo lint and test gates pass; no dangling references to deleted paths
   (`grep` scans return empty).
-- The AT.3 receipt (`docs/plans/phase-at/receipts/AT.3-receipt.md`) lists
+- The AT.2 receipt (`docs/plans/phase-at/receipts/AT.2-receipt.md`) lists
   every deleted path, every retained-with-rationale path, and every
   `deferred-until-<gate>` path, with a coverage statement (or named pending
   gate) for each.
@@ -176,7 +176,7 @@ python3 -c "import pathlib, yaml; [yaml.safe_load(p.read_text()) for p in pathli
 - `scripts/validate_release.py` drives a live Justfile recipe; deleting it
   without replacing the recipe breaks `just` targets. Resolve the decision
   first, then delete.
-- The hermes-atm legacy workflow must not be deleted before AT.2's production
+- The hermes-atm legacy workflow must not be deleted before AT.1's production
   PyPI receipt proves the kit publishes the setuptools distribution — the
   TestPyPI receipt alone does not clear that row, and the proof depends on
   the upstream #39 fix being in the pinned revision.

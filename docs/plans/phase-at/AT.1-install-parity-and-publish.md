@@ -1,25 +1,26 @@
-# AT.1 — Canonical Consumer Install And Preflight Parity
+# AT.1 — Canonical Consumer Install, Parity, And 1.4.3 Publish
 
 ```yaml
 plan_type: sprint_plan
 phase: AT
 sprint: AT.1
-worktree: feature/pat-s1-canonical-consumer-install
-branch: feature/pat-s1-canonical-consumer-install
+worktree: feature/pat-s1-install-and-publish
+branch: feature/pat-s1-install-and-publish
 status: proposed
-estimated_scope: shared-package install plus ATM-owned manifest input only
+estimated_scope: shared-package install, parity, and authorized 1.4.3 TestPyPI/PyPI publication
 ```
 
 ## Goal
 
 Install one immutable `sc-publish` package revision into an ATM worktree with
-complete explicit JSON and prove that the resulting preflight and release
-paths use identical shared assets and tool bootstrap.
+complete explicit JSON, prove that the resulting preflight and release paths
+use identical shared assets and tool bootstrap, then publish the immutable
+1.4.3 release to TestPyPI and (with contemporaneous authorization) PyPI.
 
 ## Deliverables
 
 1. Record the pinned immutable `sc-publish` commit
-   (`0fa5b05e44a655ec76ada8a6c2b24714d47acca1`, see phase README) and package
+   (`42e0fcea23f730fae0ef3d08b060cd4df6a2602e`, see phase README) and package
    digest (algorithm per the phase README Receipt Convention) in the ATM
    consumer input/evidence. Run the packaged installer and dry-run FROM the
    pinned checkout — `<sc-publish-checkout>/plugins/sc-publish/install.py` —
@@ -39,21 +40,20 @@ paths use identical shared assets and tool bootstrap.
    system. The authoritative input schema is `load_install_values` in
    `plugins/sc-publish/install.py` at the pinned revision; a complete worked
    example exists at
-   `smoke/phase-at-at1-rehearsal:release/sc-publish-consumer-input.json`.
-   Rehearsal evidence exists on branch `smoke/phase-at-at1-rehearsal` (that
-   consumer input plus its receipt at
-   `docs/plans/phase-at/AT.1-rehearsal-receipt.md` on that branch); it is
-   evidence and reference only, not authority — the sprint re-derives and
-   reviews the full document against the Publish Surface Ground Truth below
-   rather than trusting the rehearsal draft.
+   `docs/plans/phase-at/recovered/sc-publish-consumer-input.rehearsal.json`.
+   Promote that recovered consumer input after reviewing its diff against the
+   Publish Surface Ground Truth below and re-running the scripted
+   install/dry-run/parity/test validation at the new pin. Full re-derivation
+   of the document is intentionally dropped as redundant bureaucracy.
 3. Use the package's single tool bootstrap in both preflight and release.
-   Remove no legacy workflow until AT.3's coverage gate; where the installer
+   Remove no legacy workflow until the new AT.2 deletion sprint's coverage gate; where the installer
    overwrites a same-named legacy file, the overwrite is the adoption. The
    complete expected-overwrite list at the pinned revision (per rehearsal):
    `.github/workflows/release.yml`, `.github/workflows/release-preflight.yml`,
    `.claude/agents/publisher.md`, and `release/publish-artifacts.toml`. The
-   AT.1 receipt lists **every** file the installer created or overwrote (48
-   files at the pin), including the installed agent files.
+   AT.1 receipt lists **every** file the installer created or overwrote (49
+   files at the pin), including the installed agent files. The verified
+   package digest is `75da9d18426eacb92bab3e02bb6655a35e14f69deafe1ba2d00f4e93aabc0a5b`.
 4. Lock all released crates and Python deliverables to the workspace version.
    Python metadata may derive its version dynamically only from the same
    workspace version; wheel filenames remain valid PEP 440 versions and never
@@ -86,7 +86,7 @@ paths use identical shared assets and tool bootstrap.
    `.just/tests/test_release_homebrew_workflow.py`. These are ATM-owned
    validation data (ADR-050), NOT kit files — updating them is permitted and
    required. Retention-vs-deletion decisions about those test files still
-   belong to AT.3.
+   belong to the new AT.2 deletion sprint.
 
 The consumer input must express Python build ownership explicitly; the shared
 workflow chooses its command from this contract rather than guessing from a
@@ -154,22 +154,24 @@ Expected channel enablement (all six):
 
 ## Dependencies
 
-- `AT.2`: `must_follow`; real publication consumes only the exact installed
-  package/input/manifest tuple proven here.
+- The new `AT.2` deletion sprint must follow this sprint; its coverage gates
+  consume this sprint's install, parity, and publication receipts.
 - No other phase dependency. This sprint is parallel-safe with product work
   because it changes only publishing assets and release metadata.
 
 ## Non-Goals
 
 - No product, daemon, Hermes, or crate behavior change.
-- No production or TestPyPI dispatch.
+- No legacy-surface deletion; the new AT.2 owns that decision after the
+  publication receipts exist.
 - No copied shared-file modification, local publishing framework, or
   repo-specific branch in `sc-publish`.
 
 ## Paths To Delete
 
-None. Existing release assets remain until AT.2 proves the installed shared
-path covers their retained behavior; AT.3 owns the explicit deletion decision.
+None. Existing release assets remain until this sprint proves the installed
+shared path and publication coverage; the new AT.2 owns the explicit deletion
+decision.
 
 ## Acceptance Criteria
 
@@ -205,7 +207,7 @@ command below must exit 0 on a clean install.
 <venv>/bin/python <sc-publish-checkout>/plugins/sc-publish/install.py --dry-run --input release/sc-publish-consumer-input.json <worktree>
 # Package-byte parity: byte-compare every copied kit file against its package
 # source (the rehearsal's sweep: same file set and exclusion rules as
-# install.py; expected result "byte-identical: 48, mismatched/missing: 0").
+# install.py; expected result "byte-identical: 49, mismatched/missing: 0").
 # A plain `diff -ru` is acceptable only if it excludes ALL consumer-owned
 # files under release/ (publish-artifacts.toml, publish-channel-contracts.toml,
 # sc-publish-consumer-input.json, and any other consumer-owned release/ file)
@@ -259,5 +261,168 @@ upstream (in the shared package, not the consumer input):
   never a reason to hand-merge changes.
 - A credential result is not a package-install failure and is not grounds for
   inventing a local credential workaround.
+- Classify every non-passing result against the phase README's Non-Blocking
+  Outcomes table before reacting; only its GENUINE STOP row halts work.
+## Branch And Review Mechanics For Publication
+
+Workflow dispatches run against the immutable `main` tag and its release
+assets and change no source. All sprint artifacts — receipts and doc-status
+updates — land on `feature/pat-s1-install-and-publish` and merge through a normal
+PR under the quality-mgr gate (phase README Branch Strategy). The sprint
+never commits to `main`.
+
+**Dispatch mechanics.** `gh workflow run` executes the workflow YAML from the
+ref given to `--ref`, not from the release tag. This sprint therefore dispatches
+with `--ref integrate/phase-at` — the branch where the installed kit workflows
+live after this sprint's PR merges — while the immutable release
+tag is passed as a workflow input. The kit's `pypi-publish.yml`
+`workflow_dispatch` inputs at the pinned revision are `tag` (the published
+GitHub Release tag) and `target` (choice: `testpypi` | `production`); the
+workflow checks out `inputs.tag` internally and downloads the release's
+already-attached assets. The concrete invocations:
+
+```bash
+gh workflow run pypi-publish.yml --ref integrate/phase-at -f tag=v1.4.3 -f target=testpypi
+# after contemporaneous production authorization (see Prerequisites):
+gh workflow run pypi-publish.yml --ref integrate/phase-at -f tag=v1.4.3 -f target=production
+```
+
+No local checkout of `main` is required at any point: the sprint performs
+dispatch plus public-index verification only.
+
+## Publication Deliverables
+
+1. Resolve the immutable `main` commit, version, signed/tagged release assets,
+   the pinned package revision, consumer-input digest, manifest digest, and build
+   receipt before any upload. Reject an asset/version/digest mismatch.
+2. Before the first TestPyPI/PyPI dispatch, verify the `hermes-atm` and
+   `atm-graft` PyPI descriptions/READMEs and the GitHub release notes carry
+   the first-public-release framing decided in
+   [ADR-049](../../adr/ADR-049-hermes-atm-first-public-pypi-release-versioning.md);
+   record the check in the receipt.
+3. Read the new pin's release-candidate provenance gate (`sc-publish` PR #48,
+   `release-candidate.yml`) and record its impact on the `pypi-publish.yml`
+   dispatch preconditions in the AT.1 receipt before the first TestPyPI
+   dispatch. The gate runs before release creation; `pypi-publish.yml` accepts
+   only `tag` and `target`, then requires a published non-draft release with
+   attached assets. The immutable retry therefore uses the post-release path
+   without rebuilding or re-running provenance. AT-REPIN-VERIFY-R1 is complete:
+   package digest `75da9d18426eacb92bab3e02bb6655a35e14f69deafe1ba2d00f4e93aabc0a5b`,
+   49 files, 49/49 parity, dry-run clean, kit tests 81 passed/8 skipped, and
+   manifest validation passed (see recovered verification receipt).
+4. With the release authorizer's TestPyPI authorization on record (it may be
+   granted in advance in the sprint dispatch message; quote it verbatim in
+   the receipt), execute the canonical release workflow against that
+   immutable source for TestPyPI. It must build/select all manifest-declared
+   wheels and sdists, validate them, and perform a real retry-safe upload
+   with `--skip-existing` behavior.
+5. Verify TestPyPI's public package/version/file set and install each package
+   from the public index on Python 3.11, 3.12, 3.13, and 3.14.
+6. After contemporaneous production authorization from the release authorizer
+   (quoted verbatim in the receipt; advance or standing authorization is not
+   valid for production), repeat the same immutable asset and validation path
+   for PyPI. Store public URLs, hashes, workflow run IDs, interpreter
+   results, and the package/tool/manifest identity tuple.
+
+## Publication Prerequisites
+
+- The install/parity portion of this sprint's acceptance criteria passes for
+  the exact package revision and input, and this sprint's PR is merged to
+  `integrate/phase-at` (the dispatch `--ref`
+  target).
+- `main` contains the intended immutable 1.4.3 source and release assets.
+- The release authorizer explicitly authorizes the TestPyPI and PyPI
+  dispatches. The release authorizer is defined in the phase README: only
+  the human repository owner (Rand), acting outside any agent role — never
+  an agent, coordinator, or teammate. Each authorization is quoted verbatim
+  in the receipt. TestPyPI authorization may be granted in advance in the
+  sprint dispatch message; production authorization must be contemporaneous
+  with the production dispatch.
+
+## Publication Dependencies
+
+- Channel actions are ordered: TestPyPI public verification must pass before
+  any PyPI dispatch.
+- The new `AT.2` deletion sprint must follow this sprint; this sprint's
+  receipts are its coverage evidence. The TestPyPI receipt is its minimum
+  gate; the Hermes legacy-workflow rows additionally require this sprint's
+  production PyPI receipt.
+
+## TestPyPI Checkpoint
+
+TestPyPI success plus its receipt section is an independently mergeable,
+QA-checkable checkpoint. If production authorization is delayed, the sprint
+PR may merge with the TestPyPI receipt and an explicit
+`production: pending-authorization` marker; the PyPI dispatch then lands as
+a follow-up commit/PR on the same receipt file
+(`docs/plans/phase-at/receipts/AT.1-receipt.md`) without reopening this sprint.
+
+## Publication Non-Goals
+
+- No product-source changes (sprint artifacts on the feature branch are
+  receipts and doc-status updates only), no version bump, crate publication,
+  GitHub Release rebuild, Homebrew, Scoop, or Winget publication, and no
+  Hermes gateway/product onboarding flow. The `hermes-atm` public-index
+  install/import check (pip install from TestPyPI/PyPI and module import on
+  each supported interpreter) IS required — it is part of this sprint's
+  verification, not Hermes onboarding.
+- No token rotation, token-value logging, credential workaround, or claim that
+  a GitHub-environment credential exists without workflow evidence.
+
+## Publication Paths To Delete
+
+None. This is publication evidence only; it deletes or replaces no workflow,
+asset, tag, or release.
+
+## Publication Acceptance Criteria
+
+- TestPyPI and PyPI contain every Python distribution declared in the same
+  immutable manifest, with exactly version 1.4.3 and matching hashes.
+- Each supported Python version installs from the public index and imports the
+  declared module without using local wheels, paths, or a source checkout.
+- The workflow records a structured, channel-specific failure if a GitHub
+  environment credential is unavailable. A channel-scoped
+  credential-unavailable (fail-closed) result is valid evidence the workflow
+  fails closed, and per the phase README Non-Blocking Outcomes table it is
+  never an emergency — but it does NOT constitute publication: it does not
+  close this sprint's publication acceptance criterion and does not satisfy
+  the new AT.2 coverage-evidence prerequisite.
+- The PyPI descriptions and release notes carry ADR-049's
+  first-public-release framing, verified before the first dispatch
+  (Deliverable 2).
+- Receipts prove the same source commit, package revision, consumer-input
+  digest, manifest digest, tool bootstrap, asset hashes, and validation
+  results for TestPyPI and PyPI.
+
+## Publication Required Validation
+
+```bash
+python3 .github/scripts/release_artifacts.py validate-manifest --manifest release/publish-artifacts.toml --workspace-toml Cargo.toml
+python3 .github/scripts/release_artifacts.py verify-python-release-assets --manifest release/publish-artifacts.toml --asset-dir <immutable-release-assets>
+# Dispatches (see Branch And Review Mechanics: workflow YAML executes from
+# --ref integrate/phase-at; the release tag is a workflow input; no local
+# checkout of main):
+gh workflow run pypi-publish.yml --ref integrate/phase-at -f tag=v1.4.3 -f target=testpypi
+gh workflow run pypi-publish.yml --ref integrate/phase-at -f tag=v1.4.3 -f target=production
+python3 -m pip install --index-url https://test.pypi.org/simple --only-binary=:all: <package>==1.4.3
+python3 -m pip install --index-url https://pypi.org/simple --only-binary=:all: <package>==1.4.3
+```
+
+Run the public-index install commands in fresh Python 3.11–3.14 environments
+for every manifest-declared Python package.
+
+## Publication Required Document Updates
+
+Append the sprint receipt at `docs/plans/phase-at/receipts/AT.1-receipt.md`
+(shape per the phase README's Receipt Convention) containing the
+TestPyPI/PyPI URLs, workflow run IDs, source and asset identities,
+index-install matrix, and any channel-scoped fail-closed credential result.
+
+## Publication Risks And Watchouts
+
+- Public indexes are immutable: an existing different file/version is a hard
+  stop; do not overwrite or rebuild under the same version.
+- A retry only reuses the same verified immutable assets. Any changed asset or
+  manifest starts a new release decision.
 - Classify every non-passing result against the phase README's Non-Blocking
   Outcomes table before reacting; only its GENUINE STOP row halts work.
