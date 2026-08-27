@@ -3,8 +3,10 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -93,6 +95,106 @@ class EcosystemPinTests(unittest.TestCase):
             ],
         )
 
+    @mock.patch.object(VALIDATE_RELEASE, "run_ecosystem_command", return_value=False)
+    @mock.patch.object(VALIDATE_RELEASE, "maybe_file_dep_currency_issue", return_value="https://example.test/issue/2")
+    @mock.patch.object(VALIDATE_RELEASE, "latest_wyvern_version", return_value="0.6.0")
+    @mock.patch.object(VALIDATE_RELEASE, "latest_registry_version")
+    @mock.patch.object(VALIDATE_RELEASE.shutil, "which", return_value="/usr/bin/tool")
+    def test_failed_latest_wyvern_probe_pins_back_and_records_evidence(
+        self,
+        _which: mock.Mock,
+        latest_registry: mock.Mock,
+        _latest_wyvern: mock.Mock,
+        _file_issue: mock.Mock,
+        _run_command: mock.Mock,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for relative_path in (
+                Path("Cargo.toml"),
+                Path("crates/atm-template-sc-compose/Cargo.toml"),
+                *VALIDATE_RELEASE.WYVERN_PIN_FILES,
+            ):
+                destination = root / relative_path
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(REPO_ROOT / relative_path, destination)
+            for path in root.joinpath("scripts/send-to").glob("atm-send-to.*"):
+                path.write_text(path.read_text().replace("0.5.0", "0.6.0"), encoding="utf-8")
+            evidence = root / "evidence.md"
+            latest_registry.side_effect = lambda _root, dependency: {
+                "sc-composer": "1.5.0",
+                "sc-observability": "1.2.0",
+                "sc-observability-types": "1.2.0",
+            }[dependency]
+            findings: list[VALIDATE_RELEASE.Finding] = []
+            with mock.patch.dict(
+                VALIDATE_RELEASE.os.environ,
+                {
+                    VALIDATE_RELEASE.ECOSYSTEM_FIX_FORWARD_ENV: "1",
+                    VALIDATE_RELEASE.ECOSYSTEM_KNOWN_GOOD_ENV: json.dumps(
+                        {
+                            "wyvern": "0.5.0",
+                            "sc-composer": "1.4.1",
+                            "sc-observability": "1.1.0",
+                        }
+                    ),
+                    VALIDATE_RELEASE.ECOSYSTEM_EVIDENCE_ENV: str(evidence),
+                },
+                clear=False,
+            ):
+                VALIDATE_RELEASE.validate_ecosystem_currency(root, findings)
+
+            self.assertIn('WYVERN_PIN="0.5.0"', (root / VALIDATE_RELEASE.WYVERN_PIN_FILES[0]).read_text())
+            self.assertIn('$wyvernPin = "0.5.0"', (root / VALIDATE_RELEASE.WYVERN_PIN_FILES[1]).read_text())
+            cargo_text = (root / "Cargo.toml").read_text()
+            self.assertIn('sc-observability = "=1.1.0"', cargo_text)
+            self.assertIn('sc-observability-types = "=1.1.0"', cargo_text)
+            compose_text = (root / "crates/atm-template-sc-compose/Cargo.toml").read_text()
+            self.assertIn('sc-composer = "=1.4.1"', compose_text)
+            self.assertIn('sc-sha = "=1.4.1"', compose_text)
+            evidence_text = evidence.read_text()
+            self.assertIn("pinned back to last known-good: `0.5.0`", evidence_text)
+            self.assertIn("https://example.test/issue/2", evidence_text)
+            self.assertTrue(any("pinned back to 0.5.0" in finding.summary for finding in findings))
+
+    @mock.patch.object(VALIDATE_RELEASE, "latest_wyvern_version", return_value="0.5.0")
+    @mock.patch.object(VALIDATE_RELEASE, "latest_registry_version")
+    @mock.patch.object(VALIDATE_RELEASE.shutil, "which", return_value="/usr/bin/wyvern")
+    def test_healthy_latest_does_not_rewrite_pins(
+        self,
+        _which: mock.Mock,
+        latest_registry: mock.Mock,
+        _latest_wyvern: mock.Mock,
+    ) -> None:
+        latest_registry.side_effect = lambda _root, dependency: {
+            "sc-composer": "1.5.0",
+            "sc-observability": "1.2.0",
+            "sc-observability-types": "1.2.0",
+        }[dependency]
+        before = {
+            path: path.read_text(encoding="utf-8")
+            for path in (
+                REPO_ROOT / "Cargo.toml",
+                REPO_ROOT / "crates/atm-template-sc-compose/Cargo.toml",
+                *(REPO_ROOT / relative for relative in VALIDATE_RELEASE.WYVERN_PIN_FILES),
+            )
+        }
+        findings: list[VALIDATE_RELEASE.Finding] = []
+        with mock.patch.dict(
+            VALIDATE_RELEASE.os.environ,
+            {
+                VALIDATE_RELEASE.ECOSYSTEM_FIX_FORWARD_ENV: "1",
+                VALIDATE_RELEASE.ECOSYSTEM_KNOWN_GOOD_ENV: json.dumps(
+                    {"sc-composer": "1.4.1", "sc-observability": "1.1.0", "wyvern": "0.4.0"}
+                ),
+            },
+            clear=False,
+        ):
+            VALIDATE_RELEASE.validate_ecosystem_currency(REPO_ROOT, findings, dry_run=True)
+        after = {path: path.read_text(encoding="utf-8") for path in before}
+        self.assertEqual(before, after)
+        self.assertFalse(any("pinned back" in finding.summary for finding in findings))
+
     @mock.patch.object(VALIDATE_RELEASE, "run_capture")
     def test_wyvern_release_lookup_uses_approved_repository(self, run_capture: mock.Mock) -> None:
         run_capture.return_value = subprocess.CompletedProcess(
@@ -104,6 +206,19 @@ class EcosystemPinTests(unittest.TestCase):
         self.assertEqual(
             command[:7],
             ["gh", "release", "list", "--repo", "randlee/wyvern", "--limit", "1"],
+        )
+
+    @mock.patch.object(VALIDATE_RELEASE, "run_capture")
+    def test_wyvern_release_lookup_falls_back_to_rest(self, run_capture: mock.Mock) -> None:
+        run_capture.side_effect = [
+            subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="rate limited"),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout='{"tag_name":"v0.6.0"}', stderr=""),
+        ]
+
+        self.assertEqual(VALIDATE_RELEASE.latest_wyvern_version(REPO_ROOT), "0.6.0")
+        self.assertEqual(
+            run_capture.call_args_list[1].args[0],
+            ["gh", "api", "repos/randlee/wyvern/releases/latest"],
         )
 
 

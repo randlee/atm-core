@@ -90,7 +90,7 @@ target). The generic registry sweep above remains opt-in and warn-only.
 | --- | --- | --- |
 | sc-compose | `cargo search sc-composer --limit 1`; update `crates/atm-template-sc-compose/Cargo.toml`'s `sc-composer` pin (and its paired `sc-sha` pin when the release requires it) | `cargo test -p atm-template-sc-compose`, then `sc-compose render --file` against the codex-orchestration and plan-hardening `.j2` fixtures |
 | sc-observability | `cargo search sc-observability --limit 1` and `cargo search sc-observability-types --limit 1`; exact-pin both workspace dependencies | `cargo test -p agent-team-mail` (the `crates/atm` package) |
-| Wyvern | `gh release list --repo randlee/wyvern --limit 1`; update the matching exact `WYVERN_PIN` in `scripts/send-to/atm-send-to.sh` and `.ps1` | `scripts/send-to/probe_wyvern.py` plus the shared `PickerInput`/`PickerOutput` fixture suite |
+| Wyvern | `gh release list --repo randlee/wyvern --limit 1` (REST fallback: `gh api repos/randlee/wyvern/releases/latest`); update the matching exact `WYVERN_PIN` in `scripts/send-to/atm-send-to.sh` and `.ps1` | `scripts/send-to/probe_wyvern.py` plus the shared `PickerInput`/`PickerOutput` fixture suite |
 
 The Cargo comparison strips a leading `=` from exact pins before comparing
 them with crates.io's bare version output. A stale pin, unresolved release,
@@ -108,10 +108,25 @@ python3 scripts/validate_release.py ecosystem-preflight --dry-run \
 ```
 
 If a newest upstream release regresses the contract, fix forward when
-possible. Otherwise pin back to the last known-good exact version and reuse
-the existing `maybe_file_dep_currency_issue` path with
-`ATMD_GH_AUTOFIX_ISSUES=1`; record the regression, pinned-back version, and
-issue URL in `docs/plans/phase-aq/evidence/AQ6/ecosystem-preflight.md`.
+possible. Otherwise run the validator in the explicitly gated fix-forward
+mode, supplying the last-known-good map; the validator rewrites the exact
+Cargo/WYVERN pins while preserving manifest and script formatting, reuses the
+existing `maybe_file_dep_currency_issue` path, and appends the regression,
+pinned-back version, and issue URL to
+`docs/plans/phase-aq/evidence/AQ6/ecosystem-preflight.md`:
+
+```bash
+ATMD_ECOSYSTEM_FIX_FORWARD=1 \
+ATMD_ECOSYSTEM_KNOWN_GOOD='{"sc-composer":"1.4.1","sc-observability":"1.1.0","sc-observability-types":"1.1.0","wyvern":"0.4.0"}' \
+ATMD_GH_AUTOFIX_ISSUES=1 \
+python3 scripts/validate_release.py ecosystem-preflight \
+  --findings target/aq6-ecosystem-preflight-findings.json
+```
+
+Without `ATMD_ECOSYSTEM_FIX_FORWARD=1`, the validator reports the regression
+and leaves pins unchanged. Manual pin-back is the operator override when the
+automated fix-forward mode cannot be used; it must still record the same
+tracking issue and evidence before release continues.
 
 ## `just lint` Gate Breakdown
 

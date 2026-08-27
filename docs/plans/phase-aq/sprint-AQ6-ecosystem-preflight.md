@@ -1,6 +1,6 @@
 # Sprint AQ6 — SC-Ecosystem Dependency Preflight and Wyvern Contract Issue
 
-Status: draft · Branch: `feature/aq-6-ecosystem-preflight` off
+Status: complete · Branch: `feature/aq-6-ecosystem-preflight` off
 `integrate/phase-aq` · PR target: `integrate/phase-aq`
 recommended_agent: Cipher-311d · recommended_model: fast
 
@@ -184,6 +184,16 @@ None.
 - Preflight dry-run transcript committed on the branch.
 - quality-mgr review of the checklist step and the issue text against the
   PRD contract sections.
+
+## Acceptance evidence
+
+| Criterion | Evidence/status |
+| --- | --- |
+| AC1 / AC1a / AC1b | Blocking validator, exact pin comparison, actionable Wyvern prerequisite, gated pin-back mutation, regression tests, and evidence-register recording in `scripts/validate_release.py` and `.just/tests/test_ecosystem_pins.py`. |
+| AC2 | Dry-run transcript committed in `docs/plans/phase-aq/evidence/AQ6/ecosystem-preflight.md`. |
+| AC3 | Wyvern contract issue [#139](https://github.com/randlee/wyvern/issues/139), linked from the AQ6 evidence register. |
+| AC4 | PR #1066 CI lane run IDs are recorded in the evidence file after the final checks complete; local lint/test phases passed, with local macOS codesign requiring an interactive keychain and therefore not claimable here. |
+| AC5 | Verified at Phase AQ closeout (integrate→develop PR) — not claimable in this PR. |
 
 ## Non-closure / out of scope
 

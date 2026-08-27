@@ -47,6 +47,24 @@ SC_ECOSYSTEM_CARGO_DEPENDENCIES = (
     "sc-observability",
     "sc-observability-types",
 )
+ECOSYSTEM_FIX_FORWARD_ENV = "ATMD_ECOSYSTEM_FIX_FORWARD"
+ECOSYSTEM_KNOWN_GOOD_ENV = "ATMD_ECOSYSTEM_KNOWN_GOOD"
+ECOSYSTEM_EVIDENCE_ENV = "ATMD_ECOSYSTEM_EVIDENCE"
+AQ6_EVIDENCE_REGISTER = Path("docs/plans/phase-aq/evidence/AQ6/ecosystem-preflight.md")
+ECOSYSTEM_CARGO_PIN_FILES = {
+    "sc-composer": (
+        (Path("crates/atm-template-sc-compose/Cargo.toml"), "sc-composer"),
+        (Path("crates/atm-template-sc-compose/Cargo.toml"), "sc-sha"),
+    ),
+    "sc-observability": (
+        (Path("Cargo.toml"), "sc-observability"),
+        (Path("Cargo.toml"), "sc-observability-types"),
+    ),
+    "sc-observability-types": (
+        (Path("Cargo.toml"), "sc-observability"),
+        (Path("Cargo.toml"), "sc-observability-types"),
+    ),
+}
 
 
 @dataclass
@@ -697,16 +715,29 @@ def latest_wyvern_version(root: Path) -> str | None:
         ],
         cwd=root,
     )
-    if completed.returncode != 0:
-        return None
-    try:
-        releases = json.loads(completed.stdout)
-    except json.JSONDecodeError:
-        releases = None
+    if completed.returncode == 0:
+        try:
+            releases = json.loads(completed.stdout)
+        except json.JSONDecodeError:
+            releases = None
+    else:
+        # `gh release list` uses the GraphQL API and can be rate-limited even
+        # when the repository's REST endpoint remains available.
+        completed = run_capture(
+            ["gh", "api", f"repos/{WYVERN_REPOSITORY}/releases/latest"],
+            cwd=root,
+        )
+        if completed.returncode != 0:
+            return None
+        try:
+            releases = [json.loads(completed.stdout)]
+        except json.JSONDecodeError:
+            releases = None
     if isinstance(releases, list):
         for release in releases:
-            if isinstance(release, dict) and isinstance(release.get("tagName"), str):
-                version = semantic_version(release["tagName"])
+            tag = release.get("tagName", release.get("tag_name")) if isinstance(release, dict) else None
+            if isinstance(tag, str):
+                version = semantic_version(tag)
                 if version is not None:
                     return ".".join(str(part) for part in version)
     return next(
@@ -716,6 +747,159 @@ def latest_wyvern_version(root: Path) -> str | None:
             if version is not None
         ),
         None,
+    )
+
+
+def ecosystem_evidence_path(root: Path) -> Path:
+    configured = os.environ.get(ECOSYSTEM_EVIDENCE_ENV)
+    if configured is None:
+        return root / AQ6_EVIDENCE_REGISTER
+    path = Path(configured)
+    return path if path.is_absolute() else root / path
+
+
+def configured_known_good_pin(dependency: str) -> str | None:
+    raw = os.environ.get(ECOSYSTEM_KNOWN_GOOD_ENV)
+    if not raw:
+        return None
+    try:
+        values = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    value = values.get(dependency) if isinstance(values, dict) else None
+    return value if isinstance(value, str) and semantic_version(value) is not None else None
+
+
+def replace_cargo_exact_pin(path: Path, dependency: str, version: str) -> bool:
+    text = path.read_text(encoding="utf-8")
+    pattern = re.compile(
+        rf'(?m)^(?P<prefix>[ \t]*{re.escape(dependency)}[ \t]*=[ \t]*")'
+        rf"=?\d+\.\d+\.\d+(?P<suffix>\"[^\n]*)$"
+    )
+    updated, count = pattern.subn(rf"\g<prefix>={version}\g<suffix>", text, count=1)
+    if count != 1:
+        raise ValueError(f"could not find one exact Cargo pin for {dependency} in {path}")
+    if updated == text:
+        return False
+    path.write_text(updated, encoding="utf-8")
+    return True
+
+
+def replace_wyvern_pin(path: Path, version: str) -> bool:
+    text = path.read_text(encoding="utf-8")
+    pattern = re.compile(
+        r'(?m)(?P<prefix>(?:WYVERN_PIN|wyvernPin)[ \t]*[=:][ \t]*["\'])'
+        r"\d+\.\d+\.\d+(?P<suffix>[\"'][^\n]*)"
+    )
+    updated, count = pattern.subn(rf"\g<prefix>{version}\g<suffix>", text, count=1)
+    if count != 1:
+        raise ValueError(f"could not find one WYVERN_PIN in {path}")
+    if updated == text:
+        return False
+    path.write_text(updated, encoding="utf-8")
+    return True
+
+
+def pin_back_ecosystem_dependency(
+    root: Path,
+    dependency: str,
+    last_known_good: str,
+    latest: str,
+    issue_url: str | None,
+    *,
+    evidence_register: Path | None = None,
+) -> list[Path]:
+    """Pin a regressed latest release back and append the required evidence."""
+    good_version = semantic_version(last_known_good)
+    latest_version = semantic_version(latest)
+    if good_version is None or latest_version is None:
+        raise ValueError(f"pin-back versions must be semantic versions: {last_known_good}, {latest}")
+    if good_version == latest_version:
+        raise ValueError(f"pin-back version for {dependency} must differ from regressed latest {latest}")
+
+    changed: list[Path] = []
+    if dependency == "wyvern":
+        for relative_path in WYVERN_PIN_FILES:
+            path = root / relative_path
+            if not path.is_file():
+                raise ValueError(f"missing Wyvern pin file: {relative_path}")
+            if replace_wyvern_pin(path, last_known_good):
+                changed.append(relative_path)
+    else:
+        pin_files = ECOSYSTEM_CARGO_PIN_FILES.get(dependency)
+        if pin_files is None:
+            raise ValueError(f"unsupported sc-ecosystem dependency: {dependency}")
+        for relative_path, cargo_dependency in pin_files:
+            path = root / relative_path
+            if not path.is_file():
+                raise ValueError(f"missing Cargo pin file: {relative_path}")
+            if replace_cargo_exact_pin(path, cargo_dependency, last_known_good):
+                if relative_path not in changed:
+                    changed.append(relative_path)
+
+    register = evidence_register or ecosystem_evidence_path(root)
+    register.parent.mkdir(parents=True, exist_ok=True)
+    issue_reference = issue_url or "not filed; set ATMD_GH_AUTOFIX_ISSUES=1 to file it"
+    files = ", ".join(f"`{path}`" for path in changed) or "already at the requested pin"
+    with register.open("a", encoding="utf-8") as stream:
+        stream.write(
+            "\n## Fix-forward pin-back\n\n"
+            f"- dependency: `{dependency}`\n"
+            f"- regressed latest: `{latest}`\n"
+            f"- pinned back to last known-good: `{last_known_good}`\n"
+            f"- changed files: {files}\n"
+            f"- tracking issue: {issue_reference}\n"
+        )
+    return changed
+
+
+def handle_ecosystem_regression(
+    root: Path,
+    findings: list[Finding],
+    dependency: str,
+    current: str,
+    latest: str,
+    failure: str,
+) -> None:
+    issue_url = maybe_file_dep_currency_issue(root, [(dependency, current, latest)])
+    if os.environ.get(ECOSYSTEM_FIX_FORWARD_ENV) != "1":
+        append_ecosystem_finding(
+            findings,
+            f"{dependency} latest release regressed its integration contract",
+            f"{failure}; set {ECOSYSTEM_FIX_FORWARD_ENV}=1 with a {ECOSYSTEM_KNOWN_GOOD_ENV} map "
+            "to pin back in fix-forward mode, or fix the latest release forward.",
+        )
+        return
+
+    last_known_good = configured_known_good_pin(dependency)
+    if last_known_good is None:
+        append_ecosystem_finding(
+            findings,
+            f"{dependency} regression cannot be pinned back",
+            f"{failure}; provide {ECOSYSTEM_KNOWN_GOOD_ENV} with the last-known-good version.",
+        )
+        return
+    try:
+        changed = pin_back_ecosystem_dependency(
+            root,
+            dependency,
+            last_known_good,
+            latest,
+            issue_url,
+        )
+    except (OSError, ValueError) as error:
+        append_ecosystem_finding(
+            findings,
+            f"{dependency} regression pin-back failed",
+            f"{failure}; {error}",
+        )
+        return
+    files = ", ".join(str(path) for path in changed) or "no file changes needed"
+    issue = issue_url or "no issue URL (set ATMD_GH_AUTOFIX_ISSUES=1)"
+    append_ecosystem_finding(
+        findings,
+        f"{dependency} latest release regressed; pinned back to {last_known_good}",
+        f"{failure}; changed {files}; tracking issue: {issue}. Fix forward before release closure.",
     )
 
 
@@ -775,6 +959,7 @@ def validate_ecosystem_currency(
     """Block a release when an sc-ecosystem pin or its integration proof is stale."""
     stale: list[tuple[str, str, str]] = []
     unresolved: list[str] = []
+    latest_versions: dict[str, str] = {}
     direct = direct_registry_dependencies(root)
     for dependency in SC_ECOSYSTEM_CARGO_DEPENDENCIES:
         current = direct.get(dependency)
@@ -789,6 +974,7 @@ def validate_ecosystem_currency(
         if latest is None:
             unresolved.append(dependency)
             continue
+        latest_versions[dependency] = latest
         comparable_current = normalized_dependency_version(current)
         if latest != comparable_current:
             stale.append((dependency, current, latest))
@@ -867,7 +1053,15 @@ def validate_ecosystem_currency(
             "--asset",
             str(asset),
         ]
-        run_ecosystem_command(root, findings, probe, "Wyvern version/schema preflight probe failed")
+        if not run_ecosystem_command(root, findings, probe, "Wyvern version/schema preflight probe failed"):
+            handle_ecosystem_regression(
+                root,
+                findings,
+                "wyvern",
+                wyvern_pin,
+                latest_wyvern or wyvern_pin,
+                "Wyvern version/schema preflight probe failed",
+            )
 
     if dry_run or stale or unresolved:
         return
@@ -880,24 +1074,42 @@ def validate_ecosystem_currency(
             "install the pinned sc-compose release before running preflight.",
         )
     else:
-        run_ecosystem_command(
+        compose_tests_passed = run_ecosystem_command(
             root,
             findings,
             ["cargo", "test", "-p", "atm-template-sc-compose"],
             "sc-compose adapter integration tests failed",
         )
-        run_ecosystem_command(
+        if not compose_tests_passed:
+            handle_ecosystem_regression(
+                root,
+                findings,
+                "sc-composer",
+                direct["sc-composer"],
+                latest_versions["sc-composer"],
+                "sc-compose adapter integration tests failed",
+            )
+        observability_tests_passed = run_ecosystem_command(
             root,
             findings,
             ["cargo", "test", "-p", "agent-team-mail"],
             "sc-observability ATM integration tests failed",
         )
+        if not observability_tests_passed:
+            handle_ecosystem_regression(
+                root,
+                findings,
+                "sc-observability",
+                direct["sc-observability"],
+                latest_versions["sc-observability"],
+                "sc-observability ATM integration tests failed",
+            )
         vars_file = root / "docs" / "plans" / "phase-aq" / "fixtures" / "sc-compose-preflight-vars.json"
         for template in (
             root / ".claude" / "skills" / "codex-orchestration" / "dev-template.xml.j2",
             root / ".claude" / "skills" / "plan-hardening" / "01-plan-scope-review.xml.j2",
         ):
-            run_ecosystem_command(
+            template_passed = run_ecosystem_command(
                 root,
                 findings,
                 [
@@ -911,6 +1123,15 @@ def validate_ecosystem_currency(
                 ],
                 f"sc-compose canonical template smoke failed: {template.relative_to(root)}",
             )
+            if not template_passed:
+                handle_ecosystem_regression(
+                    root,
+                    findings,
+                    "sc-composer",
+                    direct["sc-composer"],
+                    latest_versions["sc-composer"],
+                    f"sc-compose canonical template smoke failed: {template.relative_to(root)}",
+                )
 
     # The fixture validator is intentionally independent of Wyvern so the AQ5
     # fallback lanes remain runnable on hosts without the optional binary.
