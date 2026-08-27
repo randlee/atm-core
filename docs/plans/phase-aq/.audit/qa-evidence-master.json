@@ -458,6 +458,31 @@
    "minor": null,
    "count_basis": "headline/reviewer",
    "evidence": "7/15; AQ3-CRIT-001 bare-CLI orphaned marker depends on #1053 fix; CRIT-002 untracked shutdown task; CRIT-003 fourth hand-rolled marker-clear (systemic fix: single helper + architecture gate on AQ2); CRIT-004 sweep aborts pass on first failure; evidence transcript + project-plan entry missing. Merge order #1051 \u2192 #1053 \u2192 #1054. https://github.com/randlee/atm-core/pull/1054"
+  },
+  {
+   "run_id": "QA-AQ2.7-R1",
+   "aich_sprint": "AQ2-7",
+   "phase_sprint": "AQ2.7",
+   "pass": null,
+   "run_type": "qa",
+   "assignment_time_utc": "2026-08-27T06:15:00Z",
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": "fenix",
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ2.7 Herdr polling pump (arch-ctm), PR #1056 @ 6d48e41bd; QA-1 queued via team-lead",
+   "result_time_utc": null,
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": null,
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": null,
+   "blockers": null,
+   "important": null,
+   "minor": null,
+   "count_basis": "headline/reviewer",
+   "evidence": "pending"
   }
  ]
 }
