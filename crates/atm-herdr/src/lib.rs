@@ -227,17 +227,36 @@ struct BreakerState {
     half_open_probe: bool,
 }
 
+trait BreakerClock: std::fmt::Debug + Send + Sync {
+    fn now(&self) -> Instant;
+}
+
+#[derive(Debug, Default)]
+struct SystemBreakerClock;
+
+impl BreakerClock for SystemBreakerClock {
+    fn now(&self) -> Instant {
+        Instant::now()
+    }
+}
+
 /// Per-host, in-memory circuit breaker shared by all Herdr operations.
 #[derive(Debug, Clone)]
 pub struct HerdrSpawnBreaker {
     state: Arc<Mutex<BreakerState>>,
+    clock: Arc<dyn BreakerClock>,
 }
 
 impl HerdrSpawnBreaker {
     #[must_use]
     pub fn new() -> Self {
+        Self::with_clock(Arc::new(SystemBreakerClock))
+    }
+
+    fn with_clock(clock: Arc<dyn BreakerClock>) -> Self {
         Self {
             state: Arc::new(Mutex::new(BreakerState::default())),
+            clock,
         }
     }
 
@@ -248,7 +267,7 @@ impl HerdrSpawnBreaker {
                 retry_after: BREAKER_MAX_BACKOFF,
             };
         };
-        breaker_state(&state)
+        breaker_state(&state, self.clock.as_ref())
     }
 
     /// Reads the state and failure counter under one lock for coherent
@@ -264,7 +283,7 @@ impl HerdrSpawnBreaker {
             };
         };
         HerdrBreakerSnapshot {
-            state: breaker_state(&state),
+            state: breaker_state(&state, self.clock.as_ref()),
             consecutive_failures: state.consecutive_failures,
         }
     }
@@ -274,7 +293,7 @@ impl HerdrSpawnBreaker {
         let Ok(mut state) = self.state.lock() else {
             return false;
         };
-        match breaker_state(&state) {
+        match breaker_state(&state, self.clock.as_ref()) {
             HerdrBreakerState::Closed => true,
             HerdrBreakerState::HalfOpen if !state.half_open_probe => {
                 state.half_open_probe = true;
@@ -297,7 +316,7 @@ impl HerdrSpawnBreaker {
     pub fn record_infrastructure_failure(&self) {
         if let Ok(mut state) = self.state.lock() {
             state.consecutive_failures = state.consecutive_failures.saturating_add(1);
-            state.opened_at = Some(Instant::now());
+            state.opened_at = Some(self.clock.now());
             state.half_open_probe = false;
         }
     }
@@ -317,12 +336,12 @@ impl Default for HerdrSpawnBreaker {
     }
 }
 
-fn breaker_state(state: &BreakerState) -> HerdrBreakerState {
+fn breaker_state(state: &BreakerState, clock: &dyn BreakerClock) -> HerdrBreakerState {
     let Some(opened_at) = state.opened_at else {
         return HerdrBreakerState::Closed;
     };
-    let retry_after =
-        breaker_backoff(state.consecutive_failures).saturating_sub(opened_at.elapsed());
+    let retry_after = breaker_backoff(state.consecutive_failures)
+        .saturating_sub(clock.now().saturating_duration_since(opened_at));
     if retry_after.is_zero() || state.half_open_probe {
         HerdrBreakerState::HalfOpen
     } else {
@@ -928,6 +947,29 @@ pub mod testing {
 mod tests {
     use super::*;
 
+    #[derive(Debug)]
+    struct TestBreakerClock {
+        now: Mutex<Instant>,
+    }
+
+    impl TestBreakerClock {
+        fn new() -> Self {
+            Self {
+                now: Mutex::new(Instant::now()),
+            }
+        }
+
+        fn advance(&self, duration: Duration) {
+            *self.now.lock().expect("test clock lock") += duration;
+        }
+    }
+
+    impl BreakerClock for TestBreakerClock {
+        fn now(&self) -> Instant {
+            *self.now.lock().expect("test clock lock")
+        }
+    }
+
     #[test]
     fn prompt_text_is_fixed_and_non_empty() {
         assert_eq!(
@@ -1160,12 +1202,18 @@ mod tests {
 
     #[test]
     fn breaker_opens_with_exponential_backoff_and_half_open_probe() {
-        let breaker = HerdrSpawnBreaker::default();
+        let clock = Arc::new(TestBreakerClock::new());
+        let breaker = HerdrSpawnBreaker::with_clock(clock.clone());
         assert_eq!(breaker.state(), HerdrBreakerState::Closed);
         assert!(breaker.permits_spawn());
         breaker.record_infrastructure_failure();
         assert!(matches!(breaker.state(), HerdrBreakerState::Open { .. }));
         assert!(!breaker.permits_spawn());
+        clock.advance(Duration::from_secs(1));
+        assert!(
+            breaker.permits_spawn(),
+            "the injected clock reached the probe window"
+        );
         breaker.record_success();
         assert_eq!(breaker.state(), HerdrBreakerState::Closed);
     }
