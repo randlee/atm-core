@@ -69,11 +69,14 @@ impl FileIdentity {
     }
 }
 
+/// Delegates to `atm_core::atm_temp::is_owned_by_uid`, the one owner-uid
+/// check ADR-055 documents as shared across the `ATM_TEMP` scratch-root
+/// check, the transfer-script safety check, and this UDS-socket owner
+/// check, so there is one pattern to verify, not several independently
+/// invented ones (QM43-I3).
 #[cfg(unix)]
 fn is_owned_by(metadata: &std::fs::Metadata, owner_uid: u32) -> bool {
-    use std::os::unix::fs::MetadataExt;
-
-    metadata.uid() == owner_uid
+    atm_core::atm_temp::is_owned_by_uid(metadata, owner_uid)
 }
 
 /// Returns whether a Unix parent grants group or other users write access.

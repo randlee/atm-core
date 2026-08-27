@@ -85,6 +85,19 @@ pub enum AtmTempError {
     /// A transfer script exists at `~/.atm/transfer/<host>` but failed the
     /// executable-bit / owner-uid / not-group-or-world-writable check.
     TransferScriptUnsafe { host: String, reason: String },
+    /// The user's home directory could not be resolved (neither `$HOME` nor
+    /// `%USERPROFILE%` is set) while locating `~/.atm/transfer`. Distinct
+    /// from [`Self::Unresolvable`], which names an `ATM_TEMP`-resolution
+    /// failure: this is a home-directory failure, unrelated to `ATM_TEMP`,
+    /// and must not be reported with `ATM_TEMP`-flavored recovery text.
+    HomeDirUnavailable,
+    /// `~/.atm/transfer/<host>` could not be inspected for a reason other
+    /// than "does not exist" (for example, a permission-denied ancestor
+    /// directory, or a transient I/O error). Distinct from
+    /// [`TransferScript::NotConfigured`](crate::transfer_script::TransferScript::NotConfigured):
+    /// collapsing an unreadable-but-present path into "not configured" would
+    /// point the operator at the wrong recovery action.
+    TransferScriptUnreadable { host: String, reason: String },
 }
 
 impl fmt::Display for AtmTempError {
@@ -104,6 +117,16 @@ impl fmt::Display for AtmTempError {
             }
             Self::TransferScriptUnsafe { host, reason } => {
                 write!(f, "transfer script for host '{host}' is unsafe: {reason}")
+            }
+            Self::HomeDirUnavailable => f.write_str(
+                "the user's home directory could not be resolved (neither $HOME nor \
+                 %USERPROFILE% is set); required to locate ~/.atm/transfer",
+            ),
+            Self::TransferScriptUnreadable { host, reason } => {
+                write!(
+                    f,
+                    "transfer script for host '{host}' could not be read: {reason}"
+                )
             }
         }
     }
@@ -177,8 +200,10 @@ fn resolve_at_root(path: PathBuf) -> Result<AtmTemp, AtmTempError> {
 fn ensure_secure_scratch_dir(path: &Path) -> Result<(), AtmTempError> {
     match std::fs::symlink_metadata(path) {
         Ok(link_metadata) if link_metadata.file_type().is_symlink() => {
-            let target_metadata =
-                std::fs::metadata(path).map_err(|_| AtmTempError::Unresolvable)?;
+            let target_metadata = std::fs::metadata(path).map_err(|error| {
+                warn_atm_temp_io_error("resolve_symlink_target", path, &error);
+                AtmTempError::Unresolvable
+            })?;
             validate_existing_scratch_dir(path, &target_metadata)
         }
         Ok(metadata) => validate_existing_scratch_dir(path, &metadata),
@@ -187,16 +212,38 @@ fn ensure_secure_scratch_dir(path: &Path) -> Result<(), AtmTempError> {
                 .parent()
                 .filter(|candidate| !candidate.as_os_str().is_empty())
                 .ok_or(AtmTempError::Unresolvable)?;
-            parent
-                .canonicalize()
-                .map_err(|_| AtmTempError::Unresolvable)?;
+            parent.canonicalize().map_err(|error| {
+                warn_atm_temp_io_error("canonicalize_parent", path, &error);
+                AtmTempError::Unresolvable
+            })?;
             create_scratch_dir(path)?;
-            let metadata =
-                std::fs::symlink_metadata(path).map_err(|_| AtmTempError::NotWritable)?;
+            let metadata = std::fs::symlink_metadata(path).map_err(|error| {
+                warn_atm_temp_io_error("stat_after_create", path, &error);
+                AtmTempError::NotWritable
+            })?;
             validate_existing_scratch_dir(path, &metadata)
         }
-        Err(_) => Err(AtmTempError::NotWritable),
+        Err(error) => {
+            warn_atm_temp_io_error("stat_scratch_root", path, &error);
+            Err(AtmTempError::NotWritable)
+        }
     }
+}
+
+/// Logs a discarded I/O error at `warn` with structured fields before it is
+/// mapped to a variant-only [`AtmTempError`] (`Unresolvable`/`NotWritable`
+/// carry no `reason` field, unlike `AtmTempInsecure`/`TransferScriptUnsafe`,
+/// so the underlying cause would otherwise vanish entirely rather than just
+/// being coarsened).
+fn warn_atm_temp_io_error(action: &'static str, path: &Path, error: &io::Error) {
+    tracing::warn!(
+        subsystem = "atm_temp",
+        action,
+        outcome = "io_error",
+        path = %path.display(),
+        %error,
+        "ATM_TEMP scratch-root resolution hit an I/O error"
+    );
 }
 
 #[cfg(unix)]
@@ -206,12 +253,18 @@ fn create_scratch_dir(path: &Path) -> Result<(), AtmTempError> {
     std::fs::DirBuilder::new()
         .mode(0o700)
         .create(path)
-        .map_err(|_| AtmTempError::NotWritable)
+        .map_err(|error| {
+            warn_atm_temp_io_error("create_scratch_dir", path, &error);
+            AtmTempError::NotWritable
+        })
 }
 
 #[cfg(windows)]
 fn create_scratch_dir(path: &Path) -> Result<(), AtmTempError> {
-    std::fs::create_dir_all(path).map_err(|_| AtmTempError::NotWritable)
+    std::fs::create_dir_all(path).map_err(|error| {
+        warn_atm_temp_io_error("create_scratch_dir", path, &error);
+        AtmTempError::NotWritable
+    })
 }
 
 #[cfg(unix)]
@@ -263,21 +316,35 @@ fn validate_existing_scratch_dir(
 /// Returns whether `metadata`'s owner uid matches `owner_uid`. A pure
 /// function so tests can exercise the "foreign owner" branch by asserting
 /// against a deliberately wrong uid, without needing a second real account.
+///
+/// This is the single owner-uid check ADR-055 documents as shared: the
+/// `ATM_TEMP` scratch-root check (below), the transfer-script safety check
+/// (`crate::transfer_script::check_script_safety`), and the daemon's
+/// UDS-socket owner check (`atm_http_runtime::unix_socket::is_owned_by`) all
+/// call this one function rather than each inventing their own comparison.
 #[cfg(unix)]
-fn is_owned_by_uid(metadata: &std::fs::Metadata, owner_uid: u32) -> bool {
+#[must_use]
+pub fn is_owned_by_uid(metadata: &std::fs::Metadata, owner_uid: u32) -> bool {
     use std::os::unix::fs::MetadataExt;
 
     metadata.uid() == owner_uid
 }
 
-/// Returns whether a Unix mode has any group or world permission bit set.
+/// Returns whether a Unix mode has any group or world permission bit set
+/// (`mode & 0o077 != 0`): ADR-055's widened shared-host check, used both for
+/// the `ATM_TEMP` scratch root (below) and the transfer-script safety check
+/// (`crate::transfer_script::check_script_safety`), which the daemon's
+/// UDS-socket precedent's narrower write-only `0o022` check does not cover.
 #[cfg(unix)]
-fn has_group_or_world_bits(mode: u32) -> bool {
+pub(crate) fn has_group_or_world_bits(mode: u32) -> bool {
     mode & 0o077 != 0
 }
 
+/// Returns the current process's effective uid. Shared by every ADR-055
+/// owner-uid check (see [`is_owned_by_uid`]).
 #[cfg(unix)]
-fn current_uid() -> u32 {
+#[must_use]
+pub fn current_uid() -> u32 {
     // SAFETY: `geteuid` has no preconditions.
     unsafe { libc::geteuid() }
 }
@@ -314,6 +381,7 @@ fn default_scratch_root() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::capture_tracing;
     use std::collections::HashMap;
 
     #[derive(Default)]
@@ -486,6 +554,34 @@ mod tests {
             // Restore permissions so tempfile can clean up the directory.
             std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o700))
                 .expect("restore parent permissions");
+        }
+
+        /// The underlying `io::Error` behind a `NotWritable`/`Unresolvable`
+        /// result must not be silently discarded: it is logged at `warn`
+        /// with structured `subsystem`/`action`/`outcome` fields (QM43-I2).
+        #[test]
+        fn not_writable_io_error_is_logged_not_discarded() {
+            let dir = tempfile::tempdir().expect("tempdir");
+            let parent = dir.path().join("locked-parent");
+            std::fs::create_dir(&parent).expect("create parent");
+            std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o500))
+                .expect("chmod parent read-only");
+            let target = parent.join("atm-temp");
+            let env = FakeEnvSource::with("ATM_TEMP", target.to_str().expect("utf8 path"));
+
+            let (result, logs) = capture_tracing(|| resolve_atm_temp(&env));
+            let error = result.expect_err("locked parent must refuse creation");
+
+            std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o700))
+                .expect("restore parent permissions");
+
+            assert_eq!(error, AtmTempError::NotWritable);
+            assert!(
+                logs.contains("subsystem=\"atm_temp\"")
+                    && logs.contains("action=\"create_scratch_dir\"")
+                    && logs.contains("outcome=\"io_error\""),
+                "expected a structured warn for the discarded io::Error, got: {logs}"
+            );
         }
     }
 }

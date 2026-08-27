@@ -2,10 +2,11 @@
 //! contract (ADR-055 decision (c)).
 //!
 //! This module resolves `~/.atm/transfer/<host>` (or `<host>.ps1` on
-//! Windows), runs the executable-bit/owner-uid/not-group-or-world-writable
-//! safety check, and builds the argv-array invocation. It deliberately does
-//! **not** execute anything: spawning the resolved script is the CLI-surface
-//! lane's job (`atm send --attach`), which lane C explicitly excludes. See
+//! Windows), runs the executable-bit/owner-uid/not-group-or-other-accessible
+//! safety check (ADR-055's widened `mode & 0o077` rule), and builds the
+//! argv-array invocation. It deliberately does **not** execute anything:
+//! spawning the resolved script is the CLI-surface lane's job (`atm send
+//! --attach`), which lane C explicitly excludes. See
 //! `docs/adr/ADR-055-atm-temp-and-transfer-seam.md` for the full design
 //! rationale.
 
@@ -15,8 +16,7 @@ use std::time::Duration;
 
 use ulid::Ulid;
 
-use crate::atm_temp::AtmTempError;
-use crate::home::resolve_user_home;
+use crate::atm_temp::{AtmTempError, EnvSource, ProcessEnvSource, current_uid, is_owned_by_uid};
 use crate::types::HostName;
 
 /// The child-process environment a transfer script inherits: an explicit
@@ -122,8 +122,25 @@ pub fn resolve_transfer_script(host: &HostName) -> Result<TransferScript, AtmTem
 }
 
 fn transfer_script_root() -> Result<PathBuf, AtmTempError> {
-    let home = resolve_user_home().map_err(|_| AtmTempError::Unresolvable)?;
-    Ok(home.join(".atm").join("transfer"))
+    home_dir_from_env(&ProcessEnvSource).map(|home| home.join(".atm").join("transfer"))
+}
+
+/// Resolves the user's home directory (`$HOME`, then `%USERPROFILE%` — the
+/// same precedence `crate::home::resolve_user_home` uses) through the
+/// [`EnvSource`] seam, so a missing-home-directory failure is unit-testable
+/// with a `FakeEnvSource` instead of mutating the real process environment.
+///
+/// # Errors
+///
+/// Returns [`AtmTempError::HomeDirUnavailable`] when neither variable is
+/// set (or both are empty) — distinct from [`AtmTempError::Unresolvable`],
+/// which names an `ATM_TEMP`-resolution failure, not a home-directory one.
+fn home_dir_from_env(env: &dyn EnvSource) -> Result<PathBuf, AtmTempError> {
+    env.var("HOME")
+        .filter(|value| !value.is_empty())
+        .or_else(|| env.var("USERPROFILE").filter(|value| !value.is_empty()))
+        .map(PathBuf::from)
+        .ok_or(AtmTempError::HomeDirUnavailable)
 }
 
 /// Testable core of [`resolve_transfer_script`]: resolves against an
@@ -143,7 +160,24 @@ fn resolve_transfer_script_in(
                 kind,
             }))
         }
-        Err(_) => Ok(TransferScript::NotConfigured { host: host.clone() }),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            Ok(TransferScript::NotConfigured { host: host.clone() })
+        }
+        Err(error) => {
+            tracing::warn!(
+                subsystem = "transfer_script",
+                action = "resolve",
+                outcome = "metadata_read_failed",
+                host = host.as_str(),
+                path = %script_path.display(),
+                %error,
+                "failed to read transfer-script metadata; refusing to treat this the same as \"not configured\""
+            );
+            Err(AtmTempError::TransferScriptUnreadable {
+                host: host.as_str().to_string(),
+                reason: error.to_string(),
+            })
+        }
     }
 }
 
@@ -184,8 +218,8 @@ fn check_script_safety(
             reason: "script is not owner-executable".to_string(),
         });
     }
-    let owner_uid = current_process_uid();
-    if !is_owned_by_uid(metadata.uid(), owner_uid) {
+    let owner_uid = current_uid();
+    if !is_owned_by_uid(metadata, owner_uid) {
         return Err(AtmTempError::TransferScriptUnsafe {
             host: host.as_str().to_string(),
             reason: format!(
@@ -194,11 +228,16 @@ fn check_script_safety(
             ),
         });
     }
-    if is_group_or_world_writable(mode) {
+    // ADR-055's widened rule: refuse any group/other permission bit at all
+    // (`mode & 0o077 != 0`), not just group/other-writable. This is the same
+    // shared-host bit-check `crate::atm_temp::has_group_or_world_bits` uses
+    // for the `ATM_TEMP` scratch root, reused here rather than reinvented.
+    if crate::atm_temp::has_group_or_world_bits(mode) {
         return Err(AtmTempError::TransferScriptUnsafe {
             host: host.as_str().to_string(),
             reason: format!(
-                "script permissions {:04o} are group- or world-writable",
+                "script permissions {:04o} grant group or other access; expected 0700 \
+                 (owner-only read/write/execute)",
                 mode & 0o777
             ),
         });
@@ -228,25 +267,6 @@ fn check_script_safety(
 #[cfg(unix)]
 fn is_owner_executable(mode: u32) -> bool {
     mode & 0o100 != 0
-}
-
-/// Pure predicate so tests can exercise "foreign owner" by asserting
-/// against a deliberately wrong uid, without needing a second real account.
-#[cfg(unix)]
-fn is_owned_by_uid(actual_uid: u32, expected_uid: u32) -> bool {
-    actual_uid == expected_uid
-}
-
-/// Pure predicate for the group/world-writable refusal reason.
-#[cfg(unix)]
-fn is_group_or_world_writable(mode: u32) -> bool {
-    mode & 0o022 != 0
-}
-
-#[cfg(unix)]
-fn current_process_uid() -> u32 {
-    // SAFETY: `geteuid` has no preconditions.
-    unsafe { libc::geteuid() }
 }
 
 #[cfg(test)]
@@ -374,7 +394,7 @@ mod tests {
             let error = resolve_transfer_script_in(dir.path(), &host("m5"))
                 .expect_err("group-writable script must be refused");
             assert!(
-                matches!(&error, AtmTempError::TransferScriptUnsafe { reason, .. } if reason.contains("writable")),
+                matches!(&error, AtmTempError::TransferScriptUnsafe { reason, .. } if reason.contains("access")),
                 "{error:?}"
             );
         }
@@ -386,15 +406,25 @@ mod tests {
             let error = resolve_transfer_script_in(dir.path(), &host("m5"))
                 .expect_err("world-writable script must be refused");
             assert!(
-                matches!(&error, AtmTempError::TransferScriptUnsafe { reason, .. } if reason.contains("writable")),
+                matches!(&error, AtmTempError::TransferScriptUnsafe { reason, .. } if reason.contains("access")),
                 "{error:?}"
             );
         }
 
+        /// ADR-055's widened check (`mode & 0o077`, QM43-B1): a script that is
+        /// only group-readable/executable -- never writable -- must still be
+        /// refused. The pre-widening check (`mode & 0o022`) would have
+        /// accepted this.
         #[test]
-        fn is_owned_by_uid_rejects_a_foreign_owner() {
-            assert!(is_owned_by_uid(501, 501));
-            assert!(!is_owned_by_uid(501, 502));
+        fn group_readable_and_executable_script_is_unsafe() {
+            let dir = tempfile::tempdir().expect("tempdir");
+            write_script(dir.path(), "m5", 0o750);
+            let error = resolve_transfer_script_in(dir.path(), &host("m5"))
+                .expect_err("group-readable/executable script must be refused");
+            assert!(
+                matches!(&error, AtmTempError::TransferScriptUnsafe { reason, .. } if reason.contains("access")),
+                "{error:?}"
+            );
         }
 
         #[test]
@@ -403,11 +433,71 @@ mod tests {
             assert!(!is_owner_executable(0o600));
         }
 
+        /// A `symlink_metadata` failure other than "not found" (here:
+        /// permission-denied on an ancestor directory) must not be
+        /// collapsed into `NotConfigured` (QM43-I1): it is a distinct,
+        /// propagated error.
         #[test]
-        fn is_group_or_world_writable_detects_either_bit() {
-            assert!(!is_group_or_world_writable(0o700));
-            assert!(is_group_or_world_writable(0o720));
-            assert!(is_group_or_world_writable(0o702));
+        fn unreadable_ancestor_is_distinct_from_not_configured() {
+            let dir = tempfile::tempdir().expect("tempdir");
+            let locked_root = dir.path().join("locked");
+            std::fs::create_dir(&locked_root).expect("create locked root");
+            let script_path = locked_root.join("m5");
+            std::fs::write(&script_path, "#!/bin/sh\necho ok\n").expect("write script");
+            std::fs::set_permissions(&locked_root, std::fs::Permissions::from_mode(0o000))
+                .expect("chmod locked root unreadable");
+
+            let error = resolve_transfer_script_in(&locked_root, &host("m5"));
+
+            std::fs::set_permissions(&locked_root, std::fs::Permissions::from_mode(0o700))
+                .expect("restore locked root permissions");
+
+            let error =
+                error.expect_err("permission-denied ancestor must not read as NotConfigured");
+            assert!(
+                matches!(&error, AtmTempError::TransferScriptUnreadable { host, .. } if host == "m5"),
+                "{error:?}"
+            );
         }
+    }
+
+    struct FakeEnvSource(std::collections::HashMap<&'static str, &'static str>);
+
+    impl EnvSource for FakeEnvSource {
+        fn var(&self, key: &str) -> Option<String> {
+            self.0.get(key).map(|value| (*value).to_string())
+        }
+    }
+
+    /// A home-directory resolution failure must surface as its own error,
+    /// distinct from `AtmTempError::Unresolvable` (which names an
+    /// `ATM_TEMP`-resolution failure, not a home-directory one) (QM43-B2).
+    #[test]
+    fn missing_home_env_vars_report_home_dir_unavailable() {
+        let env = FakeEnvSource(std::collections::HashMap::new());
+        let error = home_dir_from_env(&env).expect_err("no HOME/USERPROFILE must fail closed");
+        assert_eq!(error, AtmTempError::HomeDirUnavailable);
+    }
+
+    #[test]
+    fn home_env_var_is_used_when_present() {
+        // A platform-neutral placeholder: this test only proves `HOME`'s
+        // raw value flows through unchanged, not that it looks like a real
+        // Unix home directory (`home_dir_from_env` does not validate path
+        // shape at all).
+        let mut vars = std::collections::HashMap::new();
+        vars.insert("HOME", "test-home-value");
+        let env = FakeEnvSource(vars);
+        let home = home_dir_from_env(&env).expect("HOME is set");
+        assert_eq!(home, PathBuf::from("test-home-value"));
+    }
+
+    #[test]
+    fn userprofile_is_used_when_home_is_unset() {
+        let mut vars = std::collections::HashMap::new();
+        vars.insert("USERPROFILE", r"C:\Users\rand");
+        let env = FakeEnvSource(vars);
+        let home = home_dir_from_env(&env).expect("USERPROFILE is set");
+        assert_eq!(home, PathBuf::from(r"C:\Users\rand"));
     }
 }

@@ -127,7 +127,8 @@ pub use atm_temp::{
     AtmTemp, AtmTempError, EnvSource, ProcessEnvSource, resolve_atm_temp, send_to_staging_dir,
 };
 pub use atm_temp_sweeper::{
-    SweepConfig, SweepReport, SweeperError, sweep_once, validate_sweep_config,
+    EntryAge, EntryAgeSource, RealEntryAgeSource, SweepConfig, SweepReport, SweeperError,
+    sweep_once, sweep_once_cancellable, sweep_once_with_age_source, validate_sweep_config,
 };
 #[allow(deprecated)]
 pub use boundary::{

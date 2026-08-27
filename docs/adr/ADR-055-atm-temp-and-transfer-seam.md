@@ -165,6 +165,53 @@ targets. Symlinked entries are aged and reclaimed using their own
 never traversed into — this makes "never follows symlinks out of the root"
 true by construction rather than by an extra traversal guard.
 
+**Concurrent-writer safety (QM43-I6).** A single mtime-only expiry check is
+not enough: it does not by itself protect a file that lands via an atomic
+rename, whose destination inode gets a fresh `ctime` from the rename itself
+even when the file's *content* `mtime` is already old (for example,
+preserved from a remote source the transfer script copied from). The
+sweeper therefore requires **both** the entry's `mtime` and its `ctime` to
+independently be at least `ttl` old before reclaiming it
+(`atm_core::atm_temp_sweeper::EntryAge`/`is_expired`); either signal alone
+being fresh keeps the entry. On a platform with no ctime-equivalent, the
+mtime-only signal decides on its own. The sweeper additionally never
+reclaims an entry with an `<entry-name>.inprogress` sibling marker file,
+regardless of age — the seam a future writer (`atm send --attach`'s landing
+path, a later sprint) uses to protect an in-flight write beyond what the
+mtime/ctime check alone covers. **Residual window:** this is still a
+best-effort guard, not a lock — a writer that neither uses an atomic rename
+nor creates the `.inprogress` marker, and whose write spans a TTL-length
+stall with no metadata touch in between, is not protected. The sweeper does
+not take out a file lock (`flock`) on every candidate before reclaiming it;
+doing so would require every producer (transfer scripts, `--attach`) to
+also cooperate with the same lock protocol, which is out of this sprint's
+scope (deliverable 3, lane C excluded).
+
+**Cancellable, chunked passes (QM43-I7).** A `spawn_blocking`-hosted sweep
+pass is not itself cancellable by tokio: an unconditional `.abort()` only
+detaches the outer task wrapper, letting the blocking closure keep deleting
+files in the background after `shutdown()` returns, which breaks the
+"leaves the filesystem in a consistent state" guarantee decision (b)
+otherwise makes. The sweep pass therefore polls a shared cancellation flag
+once per entry (`atm_core::sweep_once_cancellable`) — a chunk size of one
+entry — so `AtmTempSweeperRuntime::shutdown` can set it immediately and
+have an in-flight pass observe it within a bounded number of entries,
+rather than the shutdown grace period needing to cover an entire,
+potentially unbounded, remaining walk.
+
+**Observability (QM43-I4).** Each pass emits the existing structured
+`tracing::info!`/`tracing::warn!` events described above, and additionally
+reports through `atm_core::observability::ObservabilityPort` — the same
+seam already threaded through `atm-daemon-bootstrap`'s composition function
+and consumed by `atm-http-runtime::storage_and_nudge_router.rs`, not the
+legacy daemon's `emit_daemon_event` — mirroring the existing
+`record_peer_wire_mode_selection` precedent: the event is emitted only when
+the daemon's launch identity supplies a team and agent to attribute it to
+(`CommandEvent` has no optional-attribution shape), and the tracing event is
+the fallback when it does not. This is what makes a persistently failing
+sweeper visible on the daemon's retained observability/health surface, not
+only by log-grepping.
+
 ### (c) Transfer-script seam
 
 Cross-host bytes move via a per-destination-host user script, resolved as:
@@ -300,6 +347,12 @@ here only for cross-reference completeness and are authoritative in
 - Sweeper unit tests with a temporary directory and an injected clock:
   expired entries reclaimed, fresh entries kept, a symlink is never
   traversed into, and a per-entry removal failure is skipped rather than
-  aborting the pass.
+  aborting the pass; an entry whose mtime looks old but whose ctime is
+  fresh is not reclaimed, and an entry with an `.inprogress` marker is
+  never reclaimed regardless of age (QM43-I6); a cancellation flag set
+  mid-pass stops the walk before every entry is visited, and (at the
+  `atm-daemon-bootstrap` runtime layer) `shutdown()` returns within its
+  bounded grace period against a simulated slow filesystem instead of
+  waiting for a full, uncancelled pass to finish (QM43-I7).
 - `cargo test` with `ATM_TEMP` unset in the test process environment passes
   unchanged on the pre-existing suite plus this ADR's own tests.

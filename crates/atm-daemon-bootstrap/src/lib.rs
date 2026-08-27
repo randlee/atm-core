@@ -656,7 +656,8 @@ async fn run_replacement_daemon_with_selector(
     let scope = current_host_runtime_scope()?;
     let _owner = DaemonOwnerGuard::acquire_at(scope.owner_lock.clone())?;
     let runtime_health = RuntimeHealth::with_owner(std::process::id());
-    let atm_temp_sweeper = start_atm_temp_sweeper()?;
+    let atm_temp_sweeper =
+        start_atm_temp_sweeper(Arc::clone(&observability), daemon_launch_identity.clone())?;
     let assembly = assemble_daemon_runtime()?;
     let workflow_telemetry = assembly.workflow_telemetry.clone();
     let peer_stream_adapter = bootstrap_peer_stream_adapter(&assembly, peer_wire_mode)?;
@@ -756,7 +757,10 @@ async fn run_until_shutdown(
 /// closed: an operator who explicitly set an invalid `ATM_TEMP`, or a zero
 /// sweep interval/TTL, gets an actionable error rather than a silently
 /// disabled sweeper.
-fn start_atm_temp_sweeper() -> Result<AtmTempSweeperRuntime, AtmError> {
+fn start_atm_temp_sweeper(
+    observability: Arc<dyn ObservabilityPort + Send + Sync>,
+    daemon_launch_identity: DaemonLaunchIdentity,
+) -> Result<AtmTempSweeperRuntime, AtmError> {
     let env = ProcessEnvSource;
     let atm_temp =
         resolve_atm_temp(&env).map_err(|error| AtmError::config(format!("ATM_TEMP: {error}")))?;
@@ -780,6 +784,8 @@ fn start_atm_temp_sweeper() -> Result<AtmTempSweeperRuntime, AtmError> {
     Ok(AtmTempSweeperRuntime::start(
         atm_temp.path().to_path_buf(),
         sweep_config,
+        observability,
+        daemon_launch_identity,
     ))
 }
 

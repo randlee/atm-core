@@ -49,10 +49,12 @@ non-zero.
    ```
 
    This is not optional politeness -- ATM refuses to run a script that is
-   not owner-executable, not owned by your uid, or writable by anyone else
-   (`TransferScriptUnsafe`, distinct from the "not configured" error above).
-   On a shared machine, `0700` and correct ownership are what keep another
-   local user from planting a script that runs with your identity.
+   not owner-executable, not owned by your uid, or has **any** group or
+   other permission bit set (`mode & 0o077 != 0` -- readable, writable, *or*
+   executable by group or other, not just writable) (`TransferScriptUnsafe`,
+   distinct from the "not configured" error above). On a shared machine,
+   `0700` and correct ownership are what keep another local user from
+   planting or reading a script that runs with your identity.
 
 3. **Adapt** the script to your fleet. The two things every example needs
    you to choose:
@@ -96,7 +98,8 @@ closed stdin, and the one-line-absolute-path-on-success convention.
 ## What ATM does and does not do here
 
 - **Does:** resolve `~/.atm/transfer/<host>`, check it is safe to run
-  (owner-executable, owned by you, not group- or world-writable), invoke it
+  (owner-executable, owned by you, and no group/other permission bit set at
+  all -- not just not-writable), invoke it
   with a bounded deadline (default 60 seconds; a wedged script is killed),
   capture bounded stdout/stderr, and validate the success line as untrusted
   input (one line, absolute, no control characters).
