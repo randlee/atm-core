@@ -484,8 +484,11 @@ the false-stuck problem cannot arise.
    the FIFO and clears the pending marker in the same dispatch (AQ2
    handoff semantics) — the AQ3 sweep subsequently finds nothing for
    that member (test double).
-8. Daemon down: both CLI surfaces exit 0 within the bounded timeout;
-   hooks never block a harness (timed test).
+8. Daemon down: both raw CLI surfaces exit 0 within the bounded timeout
+   and print nothing; the lifecycle Stop hook's `--require-daemon` queue
+   pull instead exits nonzero with a diagnostic on stderr, while still
+   returning within the bounded timeout. Hooks never block a harness
+   (timed test).
 9. ADR-054 addendum merged with quality-mgr sign-off recorded (mirrors
    AQ1 AC 1's ADR gate).
 10. `just test` all three lanes. Claude hook scripts' Python unit tests
@@ -512,28 +515,21 @@ the false-stuck problem cannot arise.
 11. Boundary-manifest freshness: `boundaries/atm-core/
    message-received-hook-emitter.toml`'s `[status].notes` implementer
    list — brought current by AQ1's L3.2 (baseline: `TokioTmuxReceivedHook`,
-   `PublishedGraftReceivedHook`, sync `GraftReceiveHook`; verified today's
-   pre-AQ1 manifest instead says only "the daemon tmux receiver and
-   atm_graft::nudge_sink::GraftReceiveHook", so AQ1 must land its
-   currency fix first) — is extended in this sprint's PR by exactly one
-   name, `PullPendingReceivedHook`, the third
+   `HerdrReceivedHook`, `PublishedGraftReceivedHook`, sync
+   `GraftReceiveHook`; verified today's pre-AQ1 manifest instead says only
+   "the daemon tmux receiver and atm_graft::nudge_sink::GraftReceiveHook",
+   so AQ1 must land its currency fix first) — is extended in this sprint's
+   PR by exactly one name, `PullPendingReceivedHook`, the fourth
    `AsyncMessageReceivedHookEmitter` implementer (after
-   `TokioTmuxReceivedHook` and `PublishedGraftReceivedHook`;
-   `received_hook_selector.rs` has exactly those two `impl
-   AsyncMessageReceivedHookEmitter for` occurrences today, verified). No
-   manifest-vs-code count test exists in the repo yet
-   (`crates/atm-architecture/tests/boundary_enforcement.rs`'s existing
-   `al1`/`al3`/`al9` checks reference the manifest file only, never an
-   implementer count) — this sprint adds one, a new test function in that
-   same file (e.g. `al_message_received_hook_emitter_manifest_matches_async_implementers`,
-   following the file's existing `.matches("...").count()` idiom at
-   `al3_received_hook_is_single_receiver_side_path_without_detached_work`),
-   asserting `received_hook_selector.rs`'s literal
-   `impl AsyncMessageReceivedHookEmitter for` count (3 after this sprint)
-   against the manifest's implementer-list length, so a future drift in
-   either fails CI. If AQ1 has already introduced this test as part of
-   its own manifest-currency fix, this sprint extends the same test's
-   literal count from 2 to 3 rather than adding a second one.
+   `TokioTmuxReceivedHook`, `HerdrReceivedHook`, and
+   `PublishedGraftReceivedHook`; `received_hook_selector.rs` has exactly
+   those four `impl AsyncMessageReceivedHookEmitter for` occurrences today,
+   verified). The manifest-vs-code count test in
+   `crates/atm-architecture/tests/boundary_enforcement.rs` keeps this list
+   current: `aq25_received_hook_manifest_matches_async_implementers`
+   asserts the selector's literal implementer count (4) against the
+   manifest's implementer list and checks every named implementer, so a
+   future drift in either fails CI.
 
 ## Required validation
 
