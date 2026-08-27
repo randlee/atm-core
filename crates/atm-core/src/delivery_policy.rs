@@ -764,7 +764,7 @@ mod tests {
             recipient_pane_id: None,
             metadata_json: metadata,
         };
-        let snapshot = DeliveryRecipientSnapshot::from_roster(entry, GraftLeaseState::Absent);
+        let snapshot = DeliveryRecipientSnapshot::from_roster(entry, GraftLeaseState::Active);
         assert!(!snapshot.local_tmux_post_send);
         assert!(snapshot.local_herdr_post_send);
         assert!(!snapshot.graft_post_send);
