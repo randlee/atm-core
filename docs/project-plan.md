@@ -1448,25 +1448,32 @@ forward no AS work, files, acceptance criteria, or release receipts. The AS
 artifacts remain only on `origin/integrate/phase-as` as historical
 reference; do not build on them.
 
-## 52. Phase AT — Manifest-Driven Publishing Recovery [IN PROGRESS — AT.1 INSTALL/PARITY COMPLETE, PUBLICATION AUTHORIZATION PENDING]
+## 52. Phase AT — Manifest-Driven Publishing Recovery [IN PROGRESS — AT.1 MERGED, AT.2 PENDING]
 
 Phase AT restarts the publish-kit adoption from the post-AS-revert baseline
 (commit `d610b4c07`) under the ADR-050 ownership split: `sc-publish` owns
 generic publish mechanics; atm-core owns its own manifest, validation, and
 publish-order correctness. Two sprints: `AT.1` install one immutable,
 pinned `sc-publish` revision (never patched locally) driven by ATM's
-complete consumer JSON input, prove preflight/release parity, and execute only
-authorized TestPyPI→PyPI retry of the immutable 1.4.3 Python release; `AT.2`
-verifies coverage, then deletes the legacy publish surface — `release.yml`,
-`release-preflight.yml`, `hermes-atm-pypi-publish.yml`, root `scripts/` —
-that the kit now covers (must_follow AT.1). Integration branch:
-`integrate/phase-at`.
+complete consumer JSON input, prove preflight/release parity, and perform
+the authorized publish proof; `AT.2` verify coverage, then delete the
+legacy publish surface — `release.yml`, `release-preflight.yml`,
+`hermes-atm-pypi-publish.yml`, root `scripts/` — that the kit now covers
+(must_follow AT.1), retaining rows whose gate receipt does not yet exist as
+`deferred-until-<gate>`. Integration branch: `integrate/phase-at`.
 
-The plan lives on branch `plan/phase-at-publish-recovery`
-(`docs/plans/phase-at/`, status in progress, hardened 2026-08-20 per
-critical/traceability review). AT.1's completed install/parity receipt records
-the 13-crate census including `peer-tls`; TestPyPI/PyPI dispatches remain
-explicitly authorization-gated.
+**Amendment (2026-08-27, owner decision — forward-only publishing).** The
+originally planned TestPyPI→PyPI retry of the pre-kit 1.4.3 release is
+withdrawn: v1.4.3 is unpublishable via the kit (kit action absent at the
+tag; legacy manifest fails the kit schema), and Rand ruled pre-kit-tag
+republishing out of scope. The publish-proof leg is retargeted to the first
+kit-era tag (workspace version 1.4.4), cut after phase AT merges to
+`develop`; TestPyPI authorization carries over, production remains
+pending contemporaneous authorization. See
+`docs/plans/phase-at/receipts/AT.1-receipt.md`.
+
+AT.1 merged via PR #1044 (plus receipt amendments #1052/#1062); an AT.1
+dry-run rehearsal receipt exists on `smoke/phase-at-at1-rehearsal`.
 
 ## 53. Phase AU — Boundary Debt Retirement [PLANNING ACTIVE]
 
