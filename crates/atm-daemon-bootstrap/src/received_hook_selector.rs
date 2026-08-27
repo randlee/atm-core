@@ -986,8 +986,7 @@ mod tests {
                     agent: recipient.clone(),
                     endpoint: listener.local_addr().expect("endpoint"),
                     capability: listener.capability().clone(),
-                    owner_generation: OwnerGeneration::new(listener.owner_generation())
-                        .expect("generation"),
+                    owner_generation: listener.owner_generation().clone(),
                 },
                 atm_core::types::IsoTimestamp::now().into_inner(),
             )
@@ -1069,8 +1068,7 @@ mod tests {
                     agent: recipient.clone(),
                     endpoint: listener.local_addr().expect("endpoint"),
                     capability: listener.capability().clone(),
-                    owner_generation: OwnerGeneration::new(listener.owner_generation())
-                        .expect("generation"),
+                    owner_generation: listener.owner_generation().clone(),
                 },
                 atm_core::types::IsoTimestamp::now().into_inner(),
             )
