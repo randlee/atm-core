@@ -20,6 +20,15 @@ fake adapter, poll timestamp propagation into runtime status and doctor, and
 the `runtime_maintenance.rs` extraction that keeps the production runtime
 module below the architecture line limit.
 
+QA-2 rework (2026-08-27): the shutdown watch now cancels an in-flight poll
+tick, including a prompt future, and `ReleasePendingOnDrop` restores the
+claimed marker when that cancellation unwinds the dispatch scope. The former
+constant-only AC checks were replaced with real SQLite-backed fixtures using
+`atm_herdr::testing::FakeHerdrProcessAdapter`; the test-to-criterion map and
+command evidence are recorded in
+[`docs/plans/phase-aq/.audit/aq2.7/ac-test-map.md`](.audit/aq2.7/ac-test-map.md)
+and [`docs/plans/phase-aq/.audit/aq2.7/qa2-validation.md`](.audit/aq2.7/qa2-validation.md).
+
 Implement deferred queue wake-ups for AQ2.6's `HerdrSteer` members without
 pretending that Herdr supplies a queue. The durable ATM mailbox is the queue:
 mail remains immediately readable through `atm read`, while AQ1's pending

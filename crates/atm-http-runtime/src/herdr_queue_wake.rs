@@ -77,15 +77,21 @@ impl HerdrQueueWakePump {
     pub fn start(self: Arc<Self>, mut shutdown: watch::Receiver<()>) -> JoinHandle<()> {
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_millis(HERDR_POLL_INTERVAL_MS));
-            interval.tick().await;
             loop {
                 tokio::select! {
                     changed = shutdown.changed() => {
-                        if changed.is_err() {
-                            break;
+                        let _ = changed;
+                        break;
+                    }
+                    _ = interval.tick() => {
+                        tokio::select! {
+                            changed = shutdown.changed() => {
+                                let _ = changed;
+                                break;
+                            }
+                            _ = self.tick_once() => {}
                         }
                     }
-                    _ = interval.tick() => self.tick_once().await,
                 }
             }
         })
@@ -416,6 +422,14 @@ impl HerdrQueueWakePump {
             .clone()
     }
 
+    #[cfg(test)]
+    fn cursor_position(&self) -> usize {
+        *self
+            .cursor
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
     fn save_stats(&self, stats: HerdrQueueWakeStats) {
         self.runtime_health
             .record_herdr_queue_tick(stats.last_tick_at);
@@ -586,13 +600,13 @@ impl Drop for ReleasePendingOnDrop {
 #[cfg(test)]
 mod tests {
     use super::{
-        HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK, HERDR_POLL_INTERVAL_MS,
-        HerdrQueueWakePump, HerdrQueueWakeStats, runtime_state,
+        HERDR_MAX_PROMPTS_PER_TICK, HERDR_POLL_INTERVAL_MS, HerdrQueueWakePump, runtime_state,
     };
+    use atm_core::LocalServiceRuntime;
     use atm_core::api::RequestDeadline;
     use atm_core::boundary::{
         AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, MessageReceivedHookSelector,
-        NudgeKind, PostSendEmissionPath, RosterEntry, RosterHarness, RosterMemberKind,
+        PostSendEmissionPath, RosterEntry, RosterHarness, RosterMemberKind,
     };
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::observability::NullObservability;
@@ -600,7 +614,6 @@ mod tests {
     use atm_core::schema::AtmMessageId;
     use atm_core::send::{NudgeMode, SendMessageSource, WriteRequest, write_mail_with_runtime};
     use atm_core::types::{ModelName, TeamName};
-    use atm_core::{HerdrSession, LocalServiceRuntime};
     use atm_herdr::{
         AgentSnapshot, HerdrAgentStatus, HerdrListOutcome, HerdrProcessAdapter, HerdrPromptOutcome,
     };
@@ -662,7 +675,7 @@ mod tests {
         }
     }
 
-    fn herdr_member(team: &TeamName, agent: &str) -> RosterEntry {
+    fn herdr_member_with_session(team: &TeamName, agent: &str, session: &str) -> RosterEntry {
         RosterEntry {
             team_name: team.clone(),
             agent_name: agent.parse().expect("agent"),
@@ -674,10 +687,14 @@ mod tests {
             metadata_json: {
                 let mut metadata = serde_json::Map::new();
                 metadata.insert(["backend", "Type"].concat(), json!("herdr"));
-                metadata.insert("herdrSession".to_owned(), json!("aq27-test"));
+                metadata.insert("herdrSession".to_owned(), json!(session));
                 metadata
             },
         }
+    }
+
+    fn herdr_member(team: &TeamName, agent: &str) -> RosterEntry {
+        herdr_member_with_session(team, agent, "aq27-test")
     }
 
     fn queue_message(
@@ -711,55 +728,187 @@ mod tests {
         .persisted_message_id()
     }
 
-    async fn test_pump() -> (
+    fn build_test_pump_with_agents(
+        agents: Vec<AgentSnapshot>,
+    ) -> (
         tempfile::TempDir,
         LocalServiceRuntime,
         Arc<atm_herdr::testing::FakeHerdrProcessAdapter>,
+        Arc<HerdrQueueWakePump>,
+        super::RuntimeHealth,
         atm_core::boundary::MemberKey,
     ) {
         let root = tempfile::tempdir().expect("temporary root");
         let assembly = open_isolated_sqlite_boundary(root.path()).expect("runtime");
         let team: TeamName = "aq27-team".parse().expect("team");
-        let agent = "aq27-agent";
-        let member = herdr_member(&team, agent);
+        let roster_agents: Vec<String> = if agents.is_empty() {
+            vec!["aq27-agent".to_owned()]
+        } else {
+            agents
+                .iter()
+                .filter_map(|snapshot| snapshot.name.clone())
+                .collect()
+        };
+        let members = roster_agents
+            .iter()
+            .map(|agent| herdr_member(&team, agent))
+            .collect();
         assembly
             .service_runtime
             .shared_roster_store_arc()
             .save_roster(&RosterSnapshot {
                 team_name: team.clone(),
-                members: vec![member],
+                members,
                 refreshed_at: None,
             })
             .expect("roster");
-        let message_id = queue_message(root.path(), &assembly.service_runtime, &team, agent);
-        let key = atm_core::boundary::MemberKey::new(team, agent.parse().expect("agent"));
+        for agent in &roster_agents {
+            queue_message(root.path(), &assembly.service_runtime, &team, agent);
+        }
+        let key =
+            atm_core::boundary::MemberKey::new(team, roster_agents[0].parse().expect("agent"));
         let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
-        fake.queue_list_result(Ok(HerdrListOutcome {
-            agents: vec![AgentSnapshot {
-                name: Some(agent.to_owned()),
-                status: HerdrAgentStatus::Idle,
-                workspace_id: None,
-            }],
-        }));
+        fake.queue_list_result(Ok(HerdrListOutcome { agents }));
         let selector = Arc::new(FakeSelector {
             emitter: FakeEmitter {
                 process: Arc::clone(&fake),
             },
         });
         let process: Arc<dyn HerdrProcessAdapter> = fake.clone();
-        let pump = HerdrQueueWakePump::new(
+        let health = super::RuntimeHealth::default();
+        let pump = Arc::new(HerdrQueueWakePump::new(
+            assembly.service_runtime.clone(),
+            selector,
+            health.clone(),
+            process,
+        ));
+        (root, assembly.service_runtime, fake, pump, health, key)
+    }
+
+    fn build_test_pump() -> (
+        tempfile::TempDir,
+        LocalServiceRuntime,
+        Arc<atm_herdr::testing::FakeHerdrProcessAdapter>,
+        Arc<HerdrQueueWakePump>,
+        super::RuntimeHealth,
+        atm_core::boundary::MemberKey,
+    ) {
+        build_test_pump_with_agents(vec![AgentSnapshot {
+            name: Some("aq27-agent".to_owned()),
+            status: HerdrAgentStatus::Idle,
+            workspace_id: None,
+        }])
+    }
+
+    fn build_test_pump_with_two_sessions() -> (
+        tempfile::TempDir,
+        LocalServiceRuntime,
+        Arc<atm_herdr::testing::FakeHerdrProcessAdapter>,
+        Arc<HerdrQueueWakePump>,
+        atm_core::boundary::MemberKey,
+    ) {
+        let root = tempfile::tempdir().expect("temporary root");
+        let assembly = open_isolated_sqlite_boundary(root.path()).expect("runtime");
+        let team: TeamName = "aq27-team".parse().expect("team");
+        let members = vec![
+            herdr_member_with_session(&team, "aq27-agent", "aq27-session-a"),
+            herdr_member_with_session(&team, "aq27-agent-b", "aq27-session-b"),
+        ];
+        assembly
+            .service_runtime
+            .shared_roster_store_arc()
+            .save_roster(&RosterSnapshot {
+                team_name: team.clone(),
+                members,
+                refreshed_at: None,
+            })
+            .expect("roster");
+        queue_message(root.path(), &assembly.service_runtime, &team, "aq27-agent");
+        queue_message(
+            root.path(),
+            &assembly.service_runtime,
+            &team,
+            "aq27-agent-b",
+        );
+        let agents = vec![
+            AgentSnapshot {
+                name: Some("aq27-agent".to_owned()),
+                status: HerdrAgentStatus::Idle,
+                workspace_id: None,
+            },
+            AgentSnapshot {
+                name: Some("aq27-agent-b".to_owned()),
+                status: HerdrAgentStatus::Idle,
+                workspace_id: None,
+            },
+        ];
+        let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
+        for _ in 0..2 {
+            fake.queue_list_result(Ok(HerdrListOutcome {
+                agents: agents.clone(),
+            }));
+        }
+        let selector = Arc::new(FakeSelector {
+            emitter: FakeEmitter {
+                process: Arc::clone(&fake),
+            },
+        });
+        let process: Arc<dyn HerdrProcessAdapter> = fake.clone();
+        let pump = Arc::new(HerdrQueueWakePump::new(
             assembly.service_runtime.clone(),
             selector,
             super::RuntimeHealth::default(),
             process,
-        );
+        ));
+        let key = atm_core::boundary::MemberKey::new(team, "aq27-agent".parse().expect("agent"));
+        (root, assembly.service_runtime, fake, pump, key)
+    }
+
+    async fn cancel_inflight_prompt() -> (
+        tempfile::TempDir,
+        LocalServiceRuntime,
+        Arc<atm_herdr::testing::FakeHerdrProcessAdapter>,
+        atm_core::boundary::MemberKey,
+    ) {
+        let (root, runtime, fake, pump, _health, key) = build_test_pump();
+        let prompt_gate = fake.block_next_prompt();
+        let (shutdown_tx, shutdown_rx) = watch::channel(());
+        let sender_clone = shutdown_tx.clone();
+        let task = pump.start(shutdown_rx);
+        tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                if fake
+                    .calls()
+                    .iter()
+                    .any(|call| matches!(call, atm_herdr::testing::FakeHerdrCall::Prompt { .. }))
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("the fake prompt is in flight before shutdown");
+        shutdown_tx.send(()).expect("shutdown notification");
+        tokio::time::timeout(Duration::from_secs(1), task)
+            .await
+            .expect("pump joins after shutdown notification")
+            .expect("poll task join");
+        drop(prompt_gate);
+        drop(sender_clone);
+        (root, runtime, fake, key)
+    }
+
+    async fn test_pump() -> (
+        tempfile::TempDir,
+        LocalServiceRuntime,
+        Arc<atm_herdr::testing::FakeHerdrProcessAdapter>,
+        atm_core::boundary::MemberKey,
+    ) {
+        let (root, runtime, fake, pump, _health, key) = build_test_pump();
         pump.tick_once().await;
-        assert_eq!(
-            pump.stats().prompted,
-            1,
-            "queued message {message_id} prompted"
-        );
-        (root, assembly.service_runtime, fake, key)
+        assert_eq!(pump.stats().prompted, 1, "one queued message prompted");
+        (root, runtime, fake, key)
     }
 
     #[test]
@@ -768,48 +917,122 @@ mod tests {
         assert_eq!(HERDR_MAX_PROMPTS_PER_TICK, 16);
     }
 
-    #[test]
-    fn ac01_fifo_per_member_via_claim() {
-        assert_eq!(NudgeKind::Queue.as_str(), "queue");
-    }
-
-    #[test]
-    fn ac02_burst_cap_is_sixteen_successful_prompts() {
-        assert_eq!(HERDR_MAX_PROMPTS_PER_TICK, 16);
-    }
-
-    #[test]
-    fn ac03_session_grouping_is_part_of_the_poll_contract() {
-        assert_eq!(
-            HerdrSession::new("aq27-test").expect("session").as_str(),
-            "aq27-test"
+    #[tokio::test]
+    async fn ac01_fifo_per_member_via_claim() {
+        let (root, runtime, fake, pump, _health, key) = build_test_pump();
+        queue_message(root.path(), &runtime, key.team(), key.agent().as_str());
+        queue_message(root.path(), &runtime, key.team(), key.agent().as_str());
+        pump.tick_once().await;
+        assert_eq!(pump.stats().prompted, 1, "FIFO claims one message per tick");
+        assert!(fake.calls().iter().any(|call| matches!(
+            call,
+            atm_herdr::testing::FakeHerdrCall::Prompt {
+                agent,
+                session: Some(session),
+            } if agent == "aq27-agent" && session.as_str() == "aq27-test"
+        )));
+        assert!(
+            runtime
+                .pending_nudge_store()
+                .expect("pending store")
+                .list_pending_members()
+                .expect("pending members")
+                .contains(&key)
         );
     }
 
     #[tokio::test]
-    async fn ac04_shutdown_signal_stops_poll_task() {
-        let (shutdown_tx, shutdown_rx) = watch::channel(());
-        let root = tempfile::tempdir().expect("temporary root");
-        let assembly = open_isolated_sqlite_boundary(root.path()).expect("runtime");
-        let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
-        let selector = Arc::new(FakeSelector {
-            emitter: FakeEmitter {
-                process: Arc::clone(&fake),
-            },
-        });
-        let process: Arc<dyn HerdrProcessAdapter> = fake.clone();
-        let pump = Arc::new(HerdrQueueWakePump::new(
-            assembly.service_runtime,
-            selector,
-            super::RuntimeHealth::default(),
-            process,
-        ));
-        let task = pump.start(shutdown_rx);
-        drop(shutdown_tx);
-        tokio::time::timeout(Duration::from_secs(2), task)
-            .await
-            .expect("shutdown is observed without waiting for the five-second tick")
-            .expect("poll task join");
+    async fn ac02_burst_cap_is_sixteen_successful_prompts() {
+        let agents: Vec<AgentSnapshot> = (0..17)
+            .map(|index| AgentSnapshot {
+                name: Some(if index == 0 {
+                    "aq27-agent".to_owned()
+                } else {
+                    format!("aq27-agent-{index:02}")
+                }),
+                status: HerdrAgentStatus::Idle,
+                workspace_id: None,
+            })
+            .collect();
+        let (_root, runtime, fake, pump, _health, key) = build_test_pump_with_agents(agents);
+        pump.tick_once().await;
+        assert_eq!(pump.stats().prompted, HERDR_MAX_PROMPTS_PER_TICK);
+        assert_eq!(
+            fake.calls()
+                .iter()
+                .filter(|call| matches!(call, atm_herdr::testing::FakeHerdrCall::Prompt { .. }))
+                .count(),
+            HERDR_MAX_PROMPTS_PER_TICK
+        );
+        assert_eq!(
+            runtime
+                .pending_nudge_store()
+                .expect("pending store")
+                .list_pending_members()
+                .expect("pending members")
+                .len(),
+            1
+        );
+        let remaining = atm_core::boundary::MemberKey::new(
+            key.team().clone(),
+            "aq27-agent-16".parse().expect("agent"),
+        );
+        let store = runtime.pending_nudge_store().expect("pending store");
+        let claim = store
+            .claim_next_pending(&remaining)
+            .expect("remaining claim")
+            .expect("cap leaves remaining marker");
+        assert_eq!(claim.attempt, 0, "the capped member was never claimed");
+        store
+            .release_pending(&remaining, &claim)
+            .expect("restore cap assertion claim");
+    }
+
+    #[tokio::test]
+    async fn ac03_session_grouping_is_part_of_the_poll_contract() {
+        let (_root, _runtime, fake, pump, _key) = build_test_pump_with_two_sessions();
+        pump.tick_once().await;
+        let list_sessions: Vec<_> = fake
+            .calls()
+            .into_iter()
+            .filter_map(|call| match call {
+                atm_herdr::testing::FakeHerdrCall::List { session } => session,
+                _ => None,
+            })
+            .collect();
+        assert_eq!(list_sessions.len(), 2);
+        assert!(
+            list_sessions
+                .iter()
+                .any(|session| session.as_str() == "aq27-session-a")
+        );
+        assert!(
+            list_sessions
+                .iter()
+                .any(|session| session.as_str() == "aq27-session-b")
+        );
+    }
+
+    #[tokio::test]
+    async fn ac04_shutdown_send_stops_pump_before_drain_completes() {
+        let (_root, runtime, fake, key) = cancel_inflight_prompt().await;
+        let calls = fake.calls();
+        assert_eq!(
+            calls
+                .iter()
+                .filter(|call| matches!(call, atm_herdr::testing::FakeHerdrCall::Prompt { .. }))
+                .count(),
+            1,
+            "shutdown leaves no second prompt"
+        );
+        assert!(
+            runtime
+                .pending_nudge_store()
+                .expect("pending store")
+                .list_pending_members()
+                .expect("pending members")
+                .contains(&key)
+        );
     }
 
     #[tokio::test]
@@ -845,16 +1068,40 @@ mod tests {
         assert!(pump.stats().breaker_open > 0);
     }
 
-    #[test]
-    fn ac06_retry_partition_has_a_bounded_release_side() {
-        assert_eq!(HERDR_MAX_CONSECUTIVE_RELEASES, 10);
+    #[tokio::test]
+    async fn ac06_retry_partition_has_a_bounded_release_side() {
+        let (_root, runtime, fake, pump, _health, key) = build_test_pump();
+        fake.queue_prompt_result(Err(atm_herdr::HerdrError::AgentPromptStalled));
+        pump.tick_once().await;
+        assert_eq!(pump.stats().prompted, 0);
+        assert_eq!(pump.stats().released, 1);
+        let store = runtime.pending_nudge_store().expect("pending store");
+        let claim = store
+            .claim_next_pending(&key)
+            .expect("claim retry")
+            .expect("requeued claim");
+        assert_eq!(claim.attempt, 1);
+        store.release_pending(&key, &claim).expect("release claim");
     }
 
-    #[test]
-    fn ac07_absent_members_are_not_presented_as_idle() {
-        assert_eq!(
-            runtime_state(HerdrAgentStatus::Unknown),
-            RuntimeMemberState::Unknown
+    #[tokio::test]
+    async fn ac07_absent_members_are_not_presented_as_idle() {
+        let (_root, runtime, fake, pump, _health, key) = build_test_pump_with_agents(Vec::new());
+        pump.tick_once().await;
+        assert_eq!(pump.stats().not_present, 1);
+        assert!(
+            !fake
+                .calls()
+                .iter()
+                .any(|call| matches!(call, atm_herdr::testing::FakeHerdrCall::Prompt { .. }))
+        );
+        assert!(
+            runtime
+                .pending_nudge_store()
+                .expect("pending store")
+                .list_pending_members()
+                .expect("pending members")
+                .contains(&key)
         );
     }
 
@@ -877,32 +1124,88 @@ mod tests {
         assert_eq!(key.agent().as_str(), "aq27-agent");
     }
 
-    #[test]
-    fn ac09_fake_adapter_never_needs_wait_for_queue_wake() {
-        assert!(std::mem::size_of::<HerdrQueueWakeStats>() > 0);
-    }
-
-    #[test]
-    fn ac10_herdr_statuses_update_runtime_health_states() {
-        assert_eq!(
-            runtime_state(HerdrAgentStatus::Working),
-            RuntimeMemberState::Active
-        );
-        assert_eq!(
-            runtime_state(HerdrAgentStatus::Done),
-            RuntimeMemberState::Idle
+    #[tokio::test]
+    async fn ac09_fake_adapter_never_needs_wait_for_queue_wake() {
+        let (_root, _runtime, fake, _key) = test_pump().await;
+        assert!(
+            !fake
+                .calls()
+                .iter()
+                .any(|call| matches!(call, atm_herdr::testing::FakeHerdrCall::Wait { .. }))
         );
     }
 
-    #[test]
-    fn ac11_claim_drop_guard_is_named_and_bounded() {
-        assert!(std::hint::black_box(HERDR_MAX_CONSECUTIVE_RELEASES) > 1);
+    #[tokio::test]
+    async fn ac10_herdr_statuses_update_runtime_health_states() {
+        let agents = vec![AgentSnapshot {
+            name: Some("aq27-agent".to_owned()),
+            status: HerdrAgentStatus::Working,
+            workspace_id: None,
+        }];
+        let (_root, _runtime, _fake, pump, health, key) = build_test_pump_with_agents(agents);
+        pump.tick_once().await;
+        let member = health
+            .snapshot()
+            .members
+            .into_iter()
+            .find(|member| member.member.as_str() == key.agent().as_str())
+            .expect("Herdr member health observation");
+        assert_eq!(member.state, RuntimeMemberState::Active);
+        assert_eq!(
+            member.state_changed_by,
+            Some(atm_core::protocol::RuntimeObservationSource::HerdrPoll)
+        );
     }
 
-    #[test]
-    fn ac12_cursor_contract_is_rotation_not_reordering() {
-        assert_eq!(HERDR_MAX_PROMPTS_PER_TICK, 16);
-        assert_eq!(HERDR_POLL_INTERVAL_MS, 5_000);
+    #[tokio::test]
+    async fn ac11_claim_drop_guard_releases_marker_on_cancellation() {
+        let (_root, runtime, _fake, key) = cancel_inflight_prompt().await;
+        assert!(
+            runtime
+                .pending_nudge_store()
+                .expect("pending store")
+                .list_pending_members()
+                .expect("pending members")
+                .contains(&key)
+        );
+        assert_eq!(
+            runtime
+                .pending_nudge_store()
+                .expect("pending store")
+                .claim_next_pending(&key)
+                .expect("claim after cancellation")
+                .expect("released claim")
+                .attempt,
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn ac12_cursor_contract_is_rotation_not_reordering() {
+        let agents: Vec<AgentSnapshot> = (0..20)
+            .map(|index| AgentSnapshot {
+                name: Some(if index == 0 {
+                    "aq27-agent".to_owned()
+                } else {
+                    format!("aq27-agent-{index:02}")
+                }),
+                status: HerdrAgentStatus::Idle,
+                workspace_id: None,
+            })
+            .collect();
+        let (_root, _runtime, fake, pump, _health, _key) =
+            build_test_pump_with_agents(agents.clone());
+        pump.tick_once().await;
+        assert_eq!(pump.cursor_position(), HERDR_MAX_PROMPTS_PER_TICK);
+        fake.queue_list_result(Ok(HerdrListOutcome { agents }));
+        pump.tick_once().await;
+        assert_eq!(
+            fake.calls()
+                .iter()
+                .filter(|call| matches!(call, atm_herdr::testing::FakeHerdrCall::Prompt { .. }))
+                .count(),
+            20
+        );
     }
 
     #[test]

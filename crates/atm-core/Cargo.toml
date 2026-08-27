@@ -39,7 +39,7 @@ sc-lint-attributes = { path = "../sc-lint-attributes", version = "1.4.5" }
 
 [dev-dependencies]
 atm-runtime-test-support = { path = "../atm-runtime-test-support" }
-atm-storage = { path = "../atm-storage", version = "1.4.4", features = ["test-utils"] }
+atm-storage = { path = "../atm-storage", version = "1.4.5", features = ["test-utils"] }
 serial_test = "3"
 tempfile = "3"
 tracing-subscriber.workspace = true

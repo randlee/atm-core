@@ -784,9 +784,11 @@ pub mod testing {
     struct FakeState {
         calls: Vec<FakeHerdrCall>,
         prompt_results: VecDeque<Result<HerdrPromptOutcome, HerdrError>>,
+        prompt_gate: Option<Arc<tokio::sync::Notify>>,
         wait_results: VecDeque<Result<HerdrWaitOutcome, HerdrError>>,
         get_results: VecDeque<Result<HerdrGetOutcome, HerdrError>>,
         list_results: VecDeque<Result<HerdrListOutcome, HerdrError>>,
+        list_gate: Option<Arc<tokio::sync::Notify>>,
     }
 
     #[derive(Debug, Default, Clone)]
@@ -809,6 +811,15 @@ pub mod testing {
             }
         }
 
+        /// Blocks the next prompt until the returned notifier is woken.
+        pub fn block_next_prompt(&self) -> Arc<tokio::sync::Notify> {
+            let gate = Arc::new(tokio::sync::Notify::new());
+            if let Ok(mut state) = self.state.lock() {
+                state.prompt_gate = Some(Arc::clone(&gate));
+            }
+            gate
+        }
+
         pub fn queue_wait_result(&self, result: Result<HerdrWaitOutcome, HerdrError>) {
             if let Ok(mut state) = self.state.lock() {
                 state.wait_results.push_back(result);
@@ -825,6 +836,15 @@ pub mod testing {
             if let Ok(mut state) = self.state.lock() {
                 state.list_results.push_back(result);
             }
+        }
+
+        /// Blocks the next list call until the returned notifier is woken.
+        pub fn block_next_list(&self) -> Arc<tokio::sync::Notify> {
+            let gate = Arc::new(tokio::sync::Notify::new());
+            if let Ok(mut state) = self.state.lock() {
+                state.list_gate = Some(Arc::clone(&gate));
+            }
+            gate
         }
     }
 
@@ -844,7 +864,7 @@ pub mod testing {
             _deadline: RequestDeadline,
         ) -> Pin<Box<dyn Future<Output = Result<HerdrPromptOutcome, HerdrError>> + Send + 'a>>
         {
-            let result = self
+            let (gate, result) = self
                 .state
                 .lock()
                 .map(|mut state| {
@@ -852,12 +872,18 @@ pub mod testing {
                         agent: agent.to_string(),
                         session: session.cloned(),
                     });
-                    state.prompt_results.pop_front()
+                    (state.prompt_gate.take(), state.prompt_results.pop_front())
                 })
                 .ok()
-                .flatten()
-                .unwrap_or_else(|| Ok(HerdrPromptOutcome::Accepted(default_snapshot(agent))));
-            Box::pin(async move { result })
+                .unwrap_or((None, None));
+            let result =
+                result.unwrap_or_else(|| Ok(HerdrPromptOutcome::Accepted(default_snapshot(agent))));
+            Box::pin(async move {
+                if let Some(gate) = gate {
+                    gate.notified().await;
+                }
+                result
+            })
         }
 
         fn wait<'a>(
@@ -926,19 +952,24 @@ pub mod testing {
             _deadline: RequestDeadline,
         ) -> Pin<Box<dyn Future<Output = Result<HerdrListOutcome, HerdrError>> + Send + 'a>>
         {
-            let result = self
+            let (gate, result) = self
                 .state
                 .lock()
                 .map(|mut state| {
                     state.calls.push(FakeHerdrCall::List {
                         session: session.cloned(),
                     });
-                    state.list_results.pop_front()
+                    (state.list_gate.take(), state.list_results.pop_front())
                 })
                 .ok()
-                .flatten()
-                .unwrap_or_else(|| Ok(HerdrListOutcome { agents: Vec::new() }));
-            Box::pin(async move { result })
+                .unwrap_or((None, None));
+            let result = result.unwrap_or_else(|| Ok(HerdrListOutcome { agents: Vec::new() }));
+            Box::pin(async move {
+                if let Some(gate) = gate {
+                    gate.notified().await;
+                }
+                result
+            })
         }
     }
 }

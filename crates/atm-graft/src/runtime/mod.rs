@@ -794,7 +794,7 @@ fn handle_graft_receiver_connection(
 
 #[cfg(test)]
 mod tests {
-    use atm_core::boundary::PostSendHookEvent;
+    use atm_core::boundary::{NudgeKind, PostSendHookEvent};
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::graft::{
         GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL, GraftPostSendRequest, GraftPostSendResponse,
@@ -985,6 +985,7 @@ mod tests {
             body: event.description.clone(),
             notice_text: format!("📬 from {}\n{}", event.source_address(), event.description),
             event,
+            kind: NudgeKind::Steer,
         }
     }
 
