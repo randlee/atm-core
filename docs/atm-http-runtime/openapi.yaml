@@ -96,6 +96,14 @@ paths:
       responses:
         '200': { description: Receiver registration accepted, content: { application/json: { schema: { type: 'null' } } } }
         default: { $ref: '#/components/responses/AtmError' }
+  /graft/receiver/refresh:
+    post:
+      operationId: refreshGraftReceiver
+      description: Local-ingress-only owner-checked liveness keepalive for the current agent's graft receiver lease; rejected with a NotOwner error when another generation now owns the stored lease.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/GraftReceiverRefreshRequest' } } } }
+      responses:
+        '200': { description: Receiver lease refreshed, content: { application/json: { schema: { type: 'null' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
   /graft/receiver/unregister:
     post:
       operationId: unregisterGraftReceiver
@@ -250,6 +258,13 @@ components:
         capability: { type: string, format: byte }
         owner_generation: { type: string }
     GraftReceiverUnregistration:
+      type: object
+      required: [team, agent, owner_generation]
+      properties:
+        team: { type: string }
+        agent: { type: string }
+        owner_generation: { type: string }
+    GraftReceiverRefreshRequest:
       type: object
       required: [team, agent, owner_generation]
       properties:

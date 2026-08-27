@@ -336,7 +336,7 @@ an optimization; AQ1's test suite proves it directly (duplicate write → zero
 ## AQ2.5 addendum — delivery-trigger policy
 
 This addendum is normative for the AQ2.5 delivery-trigger implementation.
-“Steer” and “queue” remain kinds, while the physical mechanism may defer a
+"Steer" and "queue" remain kinds, while the physical mechanism may defer a
 steer-kind notification until a bare-CLI Stop pull; mechanism timing never
 changes the kind.
 
@@ -399,3 +399,14 @@ delivery or `atm read` already exercises for that member.
 | Sprint | Gate | Reviewer | Date | Verdict | Notes |
 | --- | --- | --- | --- | --- | --- |
 | AQ2.5 | ADR-054 addendum (delivery-trigger policy, AC 9) | quality-mgr | _pending re-gate_ | _pending_ | Fill in on re-gate after the QA-1 fix cycle closes; mirrors AQ1 AC 1's ADR-054 sign-off gate. |
+
+## Addendum (2026-08-27): Herdr retry partition (AQ2.7 ruling)
+
+ADR-058 D8 outcomes are partitioned for ADR-054 (f) retry accounting: outcomes
+where no input reached the agent (blocked, not-present family, infrastructure)
+use `release_pending` (no attempt consumed) bounded by a per-member
+consecutive-release cap (`HERDR_MAX_CONSECUTIVE_RELEASES = 10`, after which one
+`requeue_pending` consumes an attempt); outcomes after input was injected or
+ambiguous (`agent_prompt_stalled`, post-write errors/timeouts) use
+`requeue_pending`. This keeps the (f) stuck signal reachable for Herdr
+members. Normative text: sprint-AQ2-7 deliverable 3.
