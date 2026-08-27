@@ -87,6 +87,8 @@ jobs:
 
       - name: Bootstrap exact repository tools
         run: just bootstrap
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run just lint
         run: just lint
@@ -245,6 +247,8 @@ jobs:
       - name: Bootstrap exact repository tools
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         run: just bootstrap
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build workspace
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
