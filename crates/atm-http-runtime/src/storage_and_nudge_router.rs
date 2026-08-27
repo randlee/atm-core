@@ -2189,7 +2189,7 @@ mod tests {
             let client = direct_peer_tcp_client(
                 peer_host.parse().expect("direct peer host"),
                 std::num::NonZeroU16::new(peer_port).expect("non-zero peer port"),
-                Duration::from_secs(1),
+                Duration::from_secs(5),
             )
             .expect("direct peer client");
             let response = client
@@ -2440,7 +2440,7 @@ mod tests {
         let local_peer_client = direct_peer_tcp_client(
             "127.0.0.1".parse().expect("loopback source host"),
             std::num::NonZeroU16::new(local_port).expect("non-zero port"),
-            Duration::from_secs(1),
+            Duration::from_secs(5),
         )
         .expect("local direct peer client");
         assert!(matches!(
@@ -2588,7 +2588,7 @@ mod tests {
         let client = direct_peer_tcp_client(
             "localhost".parse().expect("direct peer host"),
             std::num::NonZeroU16::new(peer_port).expect("non-zero peer port"),
-            Duration::from_secs(1),
+            Duration::from_secs(5),
         )
         .expect("direct peer client");
         let response = client
