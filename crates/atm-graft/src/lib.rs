@@ -898,12 +898,18 @@ mod tests {
     #[test]
     fn session_activates_in_a_bare_workspace_without_atm_config() {
         let paths = test_paths();
-        let endpoint_path = paths
+        let legacy_endpoint_path = paths
             .workspace_root
             .join(".atm")
             .join("graft")
             .join(TEST_TEAM)
             .join("qa-a.json");
+        let lock_path = paths
+            .workspace_root
+            .join(".atm")
+            .join("graft")
+            .join(TEST_TEAM)
+            .join("qa-a.lock");
         let session = GraftSession::activate(session_options(&paths), Arc::new(NoopInjector))
             .expect("bare workspace must activate or return an error");
 
@@ -911,7 +917,14 @@ mod tests {
             session.snapshot().expect("snapshot").state,
             GraftSessionState::Listening
         );
-        assert!(endpoint_path.exists(), "receiver record must be published");
+        assert!(
+            lock_path.exists(),
+            "receiver ownership lock must be retained"
+        );
+        assert!(
+            !legacy_endpoint_path.exists(),
+            "receiver must not publish a legacy endpoint artifact"
+        );
         session.close().expect("close active receiver");
     }
 

@@ -1,4 +1,4 @@
-//! Structural ownership guard for the graft receiver endpoint record.
+//! Structural ownership guard for the registry-backed graft receiver.
 
 use std::fs;
 use std::path::PathBuf;
@@ -8,7 +8,7 @@ fn workspace_root() -> PathBuf {
 }
 
 #[test]
-fn receiver_record_publication_and_unlink_stay_in_the_listener_owner() {
+fn receiver_registry_ownership_has_one_flock_owner_and_no_file_publication() {
     let root = workspace_root();
     let graft_source = fs::read_to_string(root.join("crates/atm-core/src/graft.rs"))
         .expect("read graft ownership source");
@@ -18,38 +18,74 @@ fn receiver_record_publication_and_unlink_stay_in_the_listener_owner() {
         .expect("production source");
     let python_source = fs::read_to_string(root.join("crates/atm-graft-python/src/lib.rs"))
         .expect("read Python graft source");
+    let write_symbol = concat!("write_", "receiver_record");
+    let read_symbol = concat!("read_", "receiver_record");
+    let home_path_symbol = concat!("graft_receiver_", "record_path_from_home");
+    let root_path_symbol = concat!("graft_receiver_", "record_path_from_root");
 
-    assert!(
-        !production.contains("pub fn write_receiver_record"),
-        "endpoint record publication must remain private to GraftReceiverListener"
-    );
-    let authorized_record_publication_sites = [
-        "fn write_receiver_record(",
-        "write_receiver_record(record_path, &record)?;",
-        "write_receiver_record(&self.record_path, &self.record)?;",
-    ];
     assert_eq!(
-        production.matches("write_receiver_record(").count(),
-        authorized_record_publication_sites.len(),
-        "only the private helper, GraftReceiverListener::bind, and same-owner republish may publish a receiver record"
+        production.matches(write_symbol).count(),
+        0,
+        "graft listener must not publish a file endpoint"
     );
-    for site in authorized_record_publication_sites {
-        assert_eq!(
-            production.matches(site).count(),
-            1,
-            "receiver record publication site must remain the reviewed exact call site: {site}"
-        );
-    }
+    assert_eq!(
+        production.matches(read_symbol).count(),
+        0,
+        "graft listener must not read a file endpoint"
+    );
+    assert_eq!(
+        production.matches(home_path_symbol).count(),
+        0,
+        "home-derived endpoint record paths must be retired"
+    );
+    assert_eq!(
+        production.matches(root_path_symbol).count(),
+        0,
+        "root-derived endpoint record paths must be retired"
+    );
     assert_eq!(
         production
-            .matches("fs::remove_file(&self.record_path)")
+            .matches("ReceiverOwnershipGuard::acquire(")
             .count(),
         1,
-        "only GraftReceiverListener cleanup may unlink its endpoint record"
+        "the flock acquisition primitive must remain singular"
     );
+    assert_eq!(
+        production
+            .matches("impl Drop for ReceiverOwnershipGuard")
+            .count(),
+        1,
+        "the flock release owner must remain singular"
+    );
+
+    let runtime_source = fs::read_to_string(root.join("crates/atm-graft/src/runtime.rs"))
+        .expect("read graft runtime source");
+    assert_eq!(
+        runtime_source
+            .matches("impl Drop for RegisteredGraftReceiver")
+            .count(),
+        1,
+        "registry lease cleanup must have one owner"
+    );
+    let unregister_start = runtime_source
+        .find("impl Drop for RegisteredGraftReceiver")
+        .expect("registered receiver drop");
+    let unregister_body = &runtime_source[unregister_start..];
+    assert_eq!(
+        runtime_source.matches(".unregister_receiver_sync(").count(),
+        unregister_body
+            .matches(".unregister_receiver_sync(")
+            .count(),
+        "daemon unregister must remain owned by RegisteredGraftReceiver::drop"
+    );
+
     assert!(
-        !python_source.contains("write_receiver_record")
-            && !python_source.contains("remove_file(&self.record_path)"),
-        "Python graft bindings must not publish or unlink receiver endpoint records"
+        !python_source.contains(write_symbol)
+            && !python_source.contains(read_symbol)
+            && !python_source.contains(concat!("graft_receiver_", "record_path"))
+            && !python_source.contains(".register(")
+            && !python_source.contains(".unregister(")
+            && !python_source.contains(".refresh("),
+        "Python graft bindings must not manage receiver file or lease lifecycle"
     );
 }

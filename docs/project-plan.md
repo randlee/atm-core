@@ -1387,6 +1387,8 @@ AQ1.6 graft receiver registration client implementation is complete on
 `feature/aq-1-6-graft-receiver-registration-client`; its PR targets
 `integrate/phase-aq`. AQ1.7 graft endpoint consumer cutover is complete on
 `feature/aq-1-7-graft-endpoint-consumer-cutover`, pending its PR review.
+AQ1.8 graft file-record retirement is complete on
+`feature/aq-1-8-graft-file-record-retirement`, pending its PR review.
 
 ## 49. Phase AO2 — Benchmark Safety, Evidence, And Transport Performance [COMPLETE — MERGED TO DEVELOP]
 
