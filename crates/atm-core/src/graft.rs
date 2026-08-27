@@ -26,6 +26,7 @@ use crate::boundary::{
 use crate::error::{AtmError, AtmErrorCode};
 use crate::list::{ListOutcome, ListQuery};
 use crate::local_http::LocalCapability;
+use crate::protocol::OwnerGeneration;
 use crate::read::{ReadOutcome, ReadQuery};
 use crate::send::{SendOutcome, SendRequest};
 use crate::service_runtime::RetainedServiceRuntime;
@@ -288,7 +289,7 @@ pub fn read_graft_post_send_message<T: DeserializeOwned>(
 /// not loopback are dropped without being served.
 pub struct GraftReceiverListener {
     listener: TcpListener,
-    owner_generation: String,
+    owner_generation: OwnerGeneration,
     capability: LocalCapability,
     _ownership: ReceiverOwnershipGuard,
 }
@@ -377,7 +378,12 @@ impl GraftReceiverListener {
             .with_cause(source)
         })?;
         let capability = LocalCapability::generate()?;
-        let owner_generation = Ulid::new().to_string();
+        // A freshly minted ULID is always a valid `OwnerGeneration`; storing
+        // the already-validated newtype here (RBP-F002) means every later
+        // read of this listener's generation is a cheap clone instead of a
+        // re-parse of a raw string on every ~1s refresh tick.
+        let owner_generation = OwnerGeneration::new(Ulid::new().to_string())
+            .expect("a freshly minted ULID is always a valid owner generation");
         Ok(Self {
             listener,
             owner_generation,
@@ -482,7 +488,7 @@ impl GraftReceiverListener {
     }
 
     /// Return the generation that owns this receiver binding.
-    pub fn owner_generation(&self) -> &str {
+    pub fn owner_generation(&self) -> &OwnerGeneration {
         &self.owner_generation
     }
 }
@@ -627,19 +633,28 @@ mod tests {
     use super::{
         AtmGraftClient, GraftPostSendRequest, GraftPostSendResponse, GraftPostSendWireRequest,
         GraftReceiverListener, RECEIVER_HOOK_RESULT_HANDOFF_GRACE, deliver_graft_post_send,
-        graft_receiver_lock_path_from_root, remaining_hook_budget,
+        deliver_published_receiver_hook, graft_receiver_lock_path_from_root, remaining_hook_budget,
     };
     use crate::api::RequestDeadline;
-    use crate::boundary::{NudgeKind, PostSendHookEvent};
+    use crate::boundary::{
+        BuiltInPostSendDispatch, GraftNudgeTarget, NudgeKind, PostSendBuiltInTarget,
+        PostSendEmissionPath, PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
+    };
+    use crate::config::AtmConfig;
+    use crate::delivery_policy::DeliveryRecipientSnapshot;
     use crate::error::AtmError;
+    use crate::protocol::OwnerGeneration;
     use crate::read::{ReadOutcome, ReadQuery};
-    use crate::schema::AtmMessageId;
+    use crate::schema::{AtmMessageId, InboxMessage};
     use crate::send::{SendOutcome, SendRequest};
+    use crate::service_runtime::RetainedServiceRuntime;
     use crate::test_support::{TEST_LEAD, TEST_QA, TEST_TEAM};
-    use crate::types::{AgentName, ChatId, TeamName};
+    use crate::types::{AgentName, ChatId, IsoTimestamp, ModelName, TeamName};
+    use atm_storage::AgentType;
     use std::fs;
     use std::net::TcpStream;
     use std::path::Path;
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tempfile::TempDir;
 
@@ -883,5 +898,376 @@ mod tests {
             first.local_addr().expect("first addr"),
             second.local_addr().expect("second addr")
         );
+    }
+
+    // ------------------------------------------------------------------
+    // AQ1.7 QA-1 fixes, ported forward through AQ1.8's file-record removal:
+    // AC1/AC3/AC5/AC6 coverage for deliver_published_receiver_hook against
+    // the registry lease alone (there is no legacy file record left to
+    // reference at all after this sprint).
+    // ------------------------------------------------------------------
+
+    fn roster_entry(team: &TeamName, agent: &AgentName) -> RosterEntry {
+        RosterEntry {
+            team_name: team.clone(),
+            agent_name: agent.clone(),
+            member_kind: RosterMemberKind::Permanent,
+            harness: RosterHarness::CodexCli,
+            agent_type: AgentType::default(),
+            model: ModelName::default(),
+            recipient_pane_id: None,
+            metadata_json: serde_json::Map::new(),
+        }
+    }
+
+    fn dispatch_for(event: PostSendHookEvent) -> BuiltInPostSendDispatch {
+        BuiltInPostSendDispatch {
+            target: PostSendBuiltInTarget::Graft(GraftNudgeTarget {
+                recipient: event.recipient.clone(),
+                recipient_team: event.recipient_team.clone(),
+                rendered_nudge: "<atm>test nudge</atm>".to_string(),
+                message_body: "full immutable body".to_string(),
+            }),
+            event,
+            kind: NudgeKind::Steer,
+        }
+    }
+
+    /// Shared backing state for [`GraftLeaseTestRuntime`]: multiple
+    /// independently constructed runtime instances can attach to the same
+    /// `Arc`, modeling a daemon process restart that reattaches to the same
+    /// persisted store (AC5's "daemon restart with a live receiver" cell).
+    #[derive(Clone, Default)]
+    struct SharedGraftLease(Arc<Mutex<Option<atm_storage::GraftReceiverLease>>>);
+
+    impl SharedGraftLease {
+        fn set(&self, lease: atm_storage::GraftReceiverLease) {
+            *self.0.lock().expect("shared lease") = Some(lease);
+        }
+
+        fn get(&self) -> Option<atm_storage::GraftReceiverLease> {
+            self.0.lock().expect("shared lease").clone()
+        }
+    }
+
+    /// Deterministic [`RetainedServiceRuntime`] test double exercising only
+    /// the graft-lease seam `deliver_published_receiver_hook` depends on: a
+    /// fixed roster member and a caller-controlled lease/mark-unreachable
+    /// recorder. All other trait methods use their harmless defaults.
+    struct GraftLeaseTestRuntime {
+        lease: SharedGraftLease,
+        marked_unreachable: Mutex<Vec<(TeamName, AgentName, OwnerGeneration)>>,
+    }
+
+    impl GraftLeaseTestRuntime {
+        fn with_lease(lease: Option<atm_storage::GraftReceiverLease>) -> Self {
+            let shared = SharedGraftLease::default();
+            if let Some(lease) = lease {
+                shared.set(lease);
+            }
+            Self::from_shared(shared)
+        }
+
+        /// Attaches a fresh runtime instance to an existing shared lease
+        /// cell, modeling a newly constructed daemon-runtime object that
+        /// reattaches to already-persisted state after a restart.
+        fn from_shared(lease: SharedGraftLease) -> Self {
+            Self {
+                lease,
+                marked_unreachable: Mutex::new(Vec::new()),
+            }
+        }
+    }
+
+    impl crate::boundary::sealed::Sealed for GraftLeaseTestRuntime {}
+
+    impl RetainedServiceRuntime for GraftLeaseTestRuntime {
+        fn load_config(&self, _current_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
+            Ok(None)
+        }
+
+        fn graft_receiver_lease(
+            &self,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<Option<atm_storage::GraftReceiverLease>, AtmError> {
+            Ok(self.lease.get())
+        }
+
+        fn mark_graft_receiver_unreachable(
+            &self,
+            team: &TeamName,
+            agent: &AgentName,
+            owner_generation: &OwnerGeneration,
+            _now: chrono::DateTime<chrono::Utc>,
+        ) -> Result<(), AtmError> {
+            self.marked_unreachable
+                .lock()
+                .expect("marked_unreachable")
+                .push((team.clone(), agent.clone(), owner_generation.clone()));
+            Ok(())
+        }
+
+        fn inbox_path(
+            &self,
+            home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<std::path::PathBuf, AtmError> {
+            Ok(home_dir.join("inbox.jsonl"))
+        }
+
+        fn load_seen_watermark(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<Option<IsoTimestamp>, AtmError> {
+            Ok(None)
+        }
+
+        fn save_seen_watermark(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _timestamp: IsoTimestamp,
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn deliver_non_claude_payloads(
+            &self,
+            _recipient: &DeliveryRecipientSnapshot,
+            _messages: &[InboxMessage],
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn load_roster_member(
+            &self,
+            team: &TeamName,
+            agent: &AgentName,
+        ) -> Result<Option<RosterEntry>, AtmError> {
+            Ok(Some(roster_entry(team, agent)))
+        }
+
+        fn load_team_roster(&self, team: &TeamName) -> Result<Vec<RosterEntry>, AtmError> {
+            Ok(vec![roster_entry(
+                team,
+                &AgentName::from_validated(TEST_QA),
+            )])
+        }
+    }
+
+    fn lease_for(listener: &GraftReceiverListener) -> atm_storage::GraftReceiverLease {
+        atm_storage::GraftReceiverLease {
+            endpoint: listener.local_addr().expect("endpoint"),
+            capability: listener.capability().clone(),
+            owner_generation: OwnerGeneration::new(listener.owner_generation().to_string())
+                .expect("owner generation"),
+            registered_at: chrono::Utc::now(),
+            last_seen_at: chrono::Utc::now(),
+            unreachable_since: None,
+        }
+    }
+
+    /// Runs one `deliver_published_receiver_hook` call concurrently with a
+    /// background thread that serves exactly one accepted connection with
+    /// `Delivered`, then joins that thread before returning. Borrows
+    /// `listener` rather than consuming it, so the same live listener can
+    /// serve multiple sequential deliveries (AC5's "receiver stays alive
+    /// across a daemon restart" matrix cell).
+    fn deliver_through_listener(
+        runtime: &GraftLeaseTestRuntime,
+        listener: &GraftReceiverListener,
+    ) -> Result<PostSendEmissionPath, AtmError> {
+        std::thread::scope(|scope| {
+            scope.spawn(|| {
+                let mut stream = loop {
+                    if let Some(stream) = listener.poll_accept().expect("poll accept") {
+                        break stream;
+                    }
+                    std::thread::yield_now();
+                };
+                listener
+                    .read_request(&mut stream, Duration::from_secs(3))
+                    .expect("read request");
+                listener
+                    .write_response(&mut stream, &GraftPostSendResponse::Delivered)
+                    .expect("write response");
+            });
+            deliver_published_receiver_hook(
+                runtime,
+                &dispatch_for(test_event()),
+                RequestDeadline::after(Duration::from_secs(3)),
+            )
+        })
+    }
+
+    // AC1 (PR #1048): delivery through a registered lease succeeds via the
+    // registry alone. AQ1.8 retires the legacy file record entirely, so
+    // there is no file left to reference — the registry is the only path.
+    #[test]
+    fn ac1_delivery_succeeds_through_the_registry_lease_alone() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let team = TeamName::from_validated(TEST_TEAM);
+        let agent = AgentName::from_validated(TEST_QA);
+        let listener = bind_listener(tempdir.path(), &team, &agent, None).expect("bind listener");
+
+        let runtime = GraftLeaseTestRuntime::with_lease(Some(lease_for(&listener)));
+        let outcome = deliver_through_listener(&runtime, &listener)
+            .expect("delivery must succeed via the registry lease alone");
+        assert_eq!(outcome, PostSendEmissionPath::GraftPort);
+    }
+
+    // AC3 (PR #1048): a dead endpoint records `mark_graft_receiver_unreachable`
+    // and surfaces today's delivery error unchanged (no new error shape).
+    #[test]
+    fn ac3_connect_failure_marks_the_lease_unreachable_and_surfaces_todays_delivery_error() {
+        let team = TeamName::from_validated(TEST_TEAM);
+        let agent = AgentName::from_validated(TEST_QA);
+        // A bound-then-dropped loopback listener yields a port nothing is
+        // listening on, deterministically producing a connect failure
+        // without depending on any particular unused-port convention.
+        let dead_port = {
+            let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("bind probe");
+            listener.local_addr().expect("probe addr")
+        };
+        let owner_generation =
+            OwnerGeneration::new("01J00000000000000000000030").expect("owner generation");
+        let lease = atm_storage::GraftReceiverLease {
+            endpoint: dead_port,
+            capability: crate::local_http::LocalCapability::generate().expect("capability"),
+            owner_generation: owner_generation.clone(),
+            registered_at: chrono::Utc::now(),
+            last_seen_at: chrono::Utc::now(),
+            unreachable_since: None,
+        };
+        let runtime = GraftLeaseTestRuntime::with_lease(Some(lease));
+
+        let error = deliver_published_receiver_hook(
+            &runtime,
+            &dispatch_for(test_event()),
+            RequestDeadline::after(Duration::from_secs(3)),
+        )
+        .expect_err("a dead endpoint must surface today's connect-failure error");
+        assert_eq!(
+            error.code(),
+            crate::error::AtmErrorCode::PostSendGraftUnavailable
+        );
+
+        let marked = runtime
+            .marked_unreachable
+            .lock()
+            .expect("marked_unreachable");
+        assert_eq!(
+            marked.as_slice(),
+            [(team, agent, owner_generation)],
+            "the connect failure must record exactly one mark_graft_receiver_unreachable call"
+        );
+    }
+
+    // AC6 (PR #1048, closes I11): a lease that exists but whose `last_seen_at`
+    // is far beyond `ACTIVE_LEASE_WINDOW` is still dialed — staleness never
+    // gates delivery, only an absent lease does.
+    #[test]
+    fn ac6_present_but_expired_lease_is_dialed_not_refused() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let team = TeamName::from_validated(TEST_TEAM);
+        let agent = AgentName::from_validated(TEST_QA);
+        let listener = bind_listener(tempdir.path(), &team, &agent, None).expect("bind listener");
+
+        // Far beyond ACTIVE_LEASE_WINDOW (15s); the receiver is actually
+        // alive (simulated clock skew), so delivery must still succeed.
+        let stale_lease = atm_storage::GraftReceiverLease {
+            registered_at: chrono::Utc::now() - chrono::Duration::hours(2),
+            last_seen_at: chrono::Utc::now() - chrono::Duration::hours(2),
+            unreachable_since: Some(chrono::Utc::now() - chrono::Duration::hours(1)),
+            ..lease_for(&listener)
+        };
+        let runtime = GraftLeaseTestRuntime::with_lease(Some(stale_lease));
+
+        let outcome = deliver_through_listener(&runtime, &listener)
+            .expect("a present-but-expired lease must still be dialed, not refused");
+        assert_eq!(outcome, PostSendEmissionPath::GraftPort);
+        assert!(
+            runtime
+                .marked_unreachable
+                .lock()
+                .expect("marked_unreachable")
+                .is_empty(),
+            "a successful dial must not record an unreachable observation"
+        );
+    }
+
+    // AC5 (PR #1048), matrix cell "daemon restart with a live receiver": the
+    // receiver's lease is served correctly by a freshly constructed runtime
+    // instance that reattaches to the same persisted state, with zero
+    // receiver-side action — this is the automated in-tree half of the
+    // restart matrix (AQ1.9 owns only the live multi-process evidence).
+    #[test]
+    fn ac5_daemon_restart_with_live_receiver_delivers_through_a_reattached_runtime() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let team = TeamName::from_validated(TEST_TEAM);
+        let agent = AgentName::from_validated(TEST_QA);
+        // One listener stays bound for the whole test: only the daemon-side
+        // runtime object "restarts" below, never the receiver.
+        let listener = bind_listener(tempdir.path(), &team, &agent, None).expect("bind listener");
+
+        let shared = SharedGraftLease::default();
+        shared.set(lease_for(&listener));
+        let before_restart = GraftLeaseTestRuntime::from_shared(shared.clone());
+        deliver_through_listener(&before_restart, &listener)
+            .expect("delivery must succeed before the simulated daemon restart");
+
+        // Simulate a daemon restart: a brand-new runtime object, sharing only
+        // the same persisted lease state and the still-live receiver, must
+        // still resolve delivery with no receiver-side action at all.
+        let after_restart = GraftLeaseTestRuntime::from_shared(shared);
+        let outcome = deliver_through_listener(&after_restart, &listener)
+            .expect("delivery must succeed through the reattached post-restart runtime");
+        assert_eq!(outcome, PostSendEmissionPath::GraftPort);
+    }
+
+    // AC5 (PR #1048), matrix cells "receiver restart with a live daemon" and
+    // "SIGKILL crash-within-window": the daemon-side runtime object never
+    // restarts here (same `GraftLeaseTestRuntime` throughout); only the
+    // receiver does. Dropping the first listener without any unregister call
+    // mirrors what a SIGKILL leaves behind (the OS releases the flock; no
+    // graceful cleanup ever runs) — the successor's registration must
+    // displace it immediately, not after any window elapses, and delivery
+    // must reach only the successor.
+    #[test]
+    fn ac5_receiver_restart_with_a_live_daemon_displaces_immediately_after_a_sigkill_style_exit() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let team = TeamName::from_validated(TEST_TEAM);
+        let agent = AgentName::from_validated(TEST_QA);
+        let runtime = GraftLeaseTestRuntime::with_lease(None);
+
+        let first = bind_listener(tempdir.path(), &team, &agent, None).expect("bind first");
+        let first_lease = lease_for(&first);
+        runtime.lease.set(first_lease.clone());
+        // No unregister call follows: this models a SIGKILL, which leaves
+        // the store's row exactly as `register` last wrote it.
+        drop(first);
+
+        let second = bind_listener(tempdir.path(), &team, &agent, None).expect(
+            "the successor must be able to bind immediately: the OS released the flock \
+             when the first process's file handle disappeared, exactly as it would after SIGKILL",
+        );
+        let second_lease = lease_for(&second);
+        assert_ne!(
+            second_lease.owner_generation, first_lease.owner_generation,
+            "the successor must mint its own generation, never reuse the crashed one"
+        );
+        // The successor's registration displaces the stale entry on its very
+        // first tick — no ACTIVE_LEASE_WINDOW wait, matching the daemon
+        // registry's real `register` semantics (ADR-056).
+        runtime.lease.set(second_lease);
+
+        let outcome = deliver_through_listener(&runtime, &second)
+            .expect("delivery must reach the successor immediately after displacement");
+        assert_eq!(outcome, PostSendEmissionPath::GraftPort);
     }
 }

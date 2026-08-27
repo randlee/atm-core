@@ -8,6 +8,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
+    process::Command,
 };
 
 use cargo_metadata::{DependencyKind, MetadataCommand};
@@ -515,13 +516,13 @@ fn queue_marker_handoff_clear_has_one_core_owner() {
             visitor
                 .definitions
                 .into_iter()
-                .map(|name| format!("{}::{name}", path.display())),
+                .map(|name| format!("{}::{name}", path.display().to_string().replace('\\', "/"))),
         );
         violations.extend(
             visitor
                 .violations
                 .into_iter()
-                .map(|name| format!("{}::{name}", path.display())),
+                .map(|name| format!("{}::{name}", path.display().to_string().replace('\\', "/"))),
         );
     }
 
@@ -3102,15 +3103,72 @@ fn aq25_adr_addendum_contains_normative_trigger_policy() {
 fn aq25_adr_addendum_records_a_quality_mgr_sign_off_section() {
     let root = workspace_root();
     let adr = read_source(&root.join("docs/adr/ADR-054-nudge-taxonomy-and-queue-mechanism.md"));
-    for required in [
-        "### AQ2.5 quality-mgr sign-off",
-        "| Sprint | Gate | Reviewer | Date | Verdict | Notes |",
-    ] {
-        assert!(
-            adr.contains(required),
-            "ADR-054 is missing the AQ2.5 quality-mgr sign-off section marker {required}"
-        );
+    let heading = "### AQ2.5 quality-mgr sign-off";
+    let heading_index = adr
+        .lines()
+        .position(|line| line.trim_end() == heading)
+        .expect("ADR-054 must contain an exact AQ2.5 quality-mgr sign-off heading");
+    let mut signoff_section = adr
+        .lines()
+        .skip(heading_index + 1)
+        .take_while(|line| !line.starts_with("### "));
+    assert!(
+        signoff_section
+            .any(|line| line.trim() == "| Sprint | Gate | Reviewer | Date | Verdict | Notes |"),
+        "ADR-054 AQ2.5 sign-off heading must contain the sign-off table header"
+    );
+}
+
+#[test]
+fn no_merge_conflict_markers_in_tracked_docs() {
+    let root = workspace_root();
+    let output = Command::new("git")
+        .args([
+            "-C",
+            root.to_str().expect("workspace path is UTF-8"),
+            "ls-files",
+            "-z",
+            "--",
+            "docs",
+            ".sprints",
+            ".triage",
+        ])
+        .output()
+        .expect("git must be available to enumerate tracked documentation");
+    assert!(
+        output.status.success(),
+        "git ls-files failed while enumerating tracked documentation: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let mut findings = Vec::new();
+    for relative in output
+        .stdout
+        .split(|byte| *byte == 0)
+        .filter(|path| !path.is_empty())
+        .filter_map(|path| std::str::from_utf8(path).ok())
+    {
+        let is_markdown_under_docs = relative.starts_with("docs/") && relative.ends_with(".md");
+        let is_sprint_or_triage_artifact =
+            relative.starts_with(".sprints/") || relative.starts_with(".triage/");
+        if !(is_markdown_under_docs || is_sprint_or_triage_artifact) {
+            continue;
+        }
+        let path = root.join(relative);
+        let contents = read_source(&path);
+        for (line_number, line) in contents.lines().enumerate() {
+            if ["<<<<<<<", "=======", ">>>>>>>"]
+                .iter()
+                .any(|marker| line.starts_with(marker))
+            {
+                findings.push(format!("{}:{}: {}", path.display(), line_number + 1, line));
+            }
+        }
     }
+    assert!(
+        findings.is_empty(),
+        "tracked documentation contains merge-conflict markers:\n{}",
+        findings.join("\n")
+    );
 }
 
 #[test]

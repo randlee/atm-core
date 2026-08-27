@@ -59,12 +59,15 @@ fn receiver_registry_ownership_has_one_flock_owner_and_no_file_publication() {
     );
 
     // AQ1.6 QA-2 (RULE-003) split the registry lease lifecycle out of
-    // `runtime.rs` into `runtime/lease_client.rs`; that submodule is where
-    // `RegisteredGraftReceiver`'s `Drop` and its daemon unregister call now
-    // live.
-    let runtime_source =
+    // `runtime.rs` into `runtime/mod.rs` + `runtime/lease_client.rs`; read
+    // both so this guard survives code moving between the two.
+    let runtime_source = format!(
+        "{}\n{}",
+        fs::read_to_string(root.join("crates/atm-graft/src/runtime/mod.rs"))
+            .expect("read graft runtime module"),
         fs::read_to_string(root.join("crates/atm-graft/src/runtime/lease_client.rs"))
-            .expect("read graft runtime lease-client source");
+            .expect("read graft lease client module")
+    );
     assert_eq!(
         runtime_source
             .matches("impl Drop for RegisteredGraftReceiver")

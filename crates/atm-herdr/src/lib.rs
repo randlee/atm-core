@@ -1038,7 +1038,15 @@ mod tests {
     #[tokio::test]
     async fn failing_bypass_get_does_not_open_the_shared_breaker() {
         let breaker = Arc::new(HerdrSpawnBreaker::default());
-        breaker.record_infrastructure_failure();
+        // Three consecutive failures before the bypassed call gives
+        // breaker_backoff a 4s window (2^(3-1)) instead of the 1s window one
+        // failure would produce — the single-failure window was tight enough
+        // against real subprocess-spawn overhead under `cargo test
+        // --workspace` parallel load that the final Open-state assertion
+        // below could observe a HalfOpen transition on a contended runner.
+        for _ in 0..3 {
+            breaker.record_infrastructure_failure();
+        }
         let failures = breaker.consecutive_failures();
         let agent: AgentName = "alice".parse().expect("agent");
         let result = execute_get(

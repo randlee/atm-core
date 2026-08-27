@@ -1,101 +1,12 @@
-use std::num::NonZeroU16;
 use std::time::Duration;
 
 use atm_core::error::AtmError;
-use atm_core::peer_wire::PeerWireMode;
 use atm_http_runtime::PeerPoolConfig;
 
-/// Parse the sole non-durable peer-wire launch policy before composition.
-pub fn parse_peer_wire_mode(
-    arguments: impl IntoIterator<Item = std::ffi::OsString>,
-) -> Result<PeerWireMode, AtmError> {
-    if std::env::var_os("ATM_PEER_WIRE_SECURITY").is_some() {
-        return Err(AtmError::peer_wire_mode_source_forbidden(
-            "ATM_PEER_WIRE_SECURITY is forbidden; use --peer-wire-security at daemon launch",
-        ));
-    }
-    let mut arguments = arguments.into_iter();
-    let _program = arguments.next();
-    let mut mode = None;
-    while let Some(argument) = arguments.next() {
-        let argument = argument.into_string().map_err(|_| {
-            AtmError::peer_wire_mode_invalid("daemon launch arguments must be valid UTF-8")
-        })?;
-        let value = if argument == "--peer-wire-security" {
-            Some(arguments.next().ok_or_else(|| {
-                AtmError::peer_wire_mode_invalid(
-                    "--peer-wire-security requires `mutual-tls` or `plaintext-test`",
-                )
-            })?)
-        } else {
-            argument
-                .strip_prefix("--peer-wire-security=")
-                .map(std::ffi::OsString::from)
-        };
-        let Some(value) = value else { continue };
-        let value = value.into_string().map_err(|_| {
-            AtmError::peer_wire_mode_invalid("peer-wire launch mode must be valid UTF-8")
-        })?;
-        let parsed = match value.as_str() {
-            "mutual-tls" => PeerWireMode::mtls(),
-            "plaintext-test" => PeerWireMode::plaintext_test(),
-            _ => {
-                return Err(AtmError::peer_wire_mode_invalid(
-                    "--peer-wire-security accepts only `mutual-tls` or `plaintext-test`",
-                ));
-            }
-        };
-        if mode.replace(parsed).is_some() {
-            return Err(AtmError::peer_wire_mode_invalid(
-                "--peer-wire-security may be supplied only once",
-            ));
-        }
-    }
-    Ok(mode.unwrap_or_default())
-}
-
-/// Selects the direct-peer listener port from the immutable daemon launch.
-pub fn parse_direct_peer_port(
-    arguments: impl IntoIterator<Item = std::ffi::OsString>,
-) -> Result<NonZeroU16, AtmError> {
-    let mut arguments = arguments.into_iter();
-    let _program = arguments.next();
-    let mut port = None;
-    while let Some(argument) = arguments.next() {
-        let argument = argument
-            .into_string()
-            .map_err(|_| AtmError::config("direct-peer launch arguments must be valid UTF-8"))?;
-        let value = if argument == "--direct-peer-port" {
-            Some(arguments.next().ok_or_else(|| {
-                AtmError::config("--direct-peer-port requires a non-zero TCP port")
-            })?)
-        } else {
-            argument
-                .strip_prefix("--direct-peer-port=")
-                .map(std::ffi::OsString::from)
-        };
-        let Some(value) = value else { continue };
-        let value = value
-            .into_string()
-            .map_err(|_| AtmError::config("direct-peer launch port must be valid UTF-8"))?;
-        let parsed = value
-            .parse::<u16>()
-            .ok()
-            .and_then(NonZeroU16::new)
-            .ok_or_else(|| AtmError::config("--direct-peer-port requires a non-zero TCP port"))?;
-        if port.replace(parsed).is_some() {
-            return Err(AtmError::config(
-                "--direct-peer-port may be supplied only once",
-            ));
-        }
-    }
-    Ok(port.unwrap_or_else(|| {
-        NonZeroU16::new(atm_http_runtime::DIRECT_PEER_TCP_PORT)
-            .expect("the protocol direct-peer port is non-zero")
-    }))
-}
-
 /// Resolves bounded outbound peer-pool settings before daemon composition.
+/// Environment values provide deployment defaults; an explicit launch flag
+/// overrides the matching environment value without changing peer identity or
+/// wire-security policy.
 pub fn parse_peer_pool_config(
     arguments: impl IntoIterator<Item = std::ffi::OsString>,
 ) -> Result<PeerPoolConfig, AtmError> {
