@@ -633,7 +633,8 @@ mod tests {
     use super::{
         AtmGraftClient, GraftPostSendRequest, GraftPostSendResponse, GraftPostSendWireRequest,
         GraftReceiverListener, RECEIVER_HOOK_RESULT_HANDOFF_GRACE, deliver_graft_post_send,
-        deliver_published_receiver_hook, graft_receiver_lock_path_from_root, remaining_hook_budget,
+        deliver_published_receiver_hook, graft_receiver_lock_path_from_root,
+        graft_receiver_not_registered_error, remaining_hook_budget,
     };
     use crate::api::RequestDeadline;
     use crate::boundary::{
@@ -1119,6 +1120,48 @@ mod tests {
         let outcome = deliver_through_listener(&runtime, &listener)
             .expect("delivery must succeed via the registry lease alone");
         assert_eq!(outcome, PostSendEmissionPath::GraftPort);
+    }
+
+    // PR #1048 QA-2 (ATM-QA-AQ17-B01, blocking): a direct unit test on
+    // `deliver_published_receiver_hook` for the absent-lease branch. Prior
+    // coverage only exercised connect failures against a *present* lease
+    // (AC3) — none of it drove `graft_receiver_lease` returning `Ok(None)`.
+    // No listener is bound at all in this test: if the hook ever attempted
+    // to dial an endpoint it does not have, there would be nothing for it
+    // to reach, and the error message asserted below is textually distinct
+    // from the connect-failure message AC3 asserts, so a regression that
+    // started dialing on an absent lease would fail this assertion.
+    #[test]
+    fn deliver_published_receiver_hook_returns_not_registered_error_when_lease_is_absent() {
+        let team = TeamName::from_validated(TEST_TEAM);
+        let agent = AgentName::from_validated(TEST_QA);
+        let runtime = GraftLeaseTestRuntime::with_lease(None);
+
+        let error = deliver_published_receiver_hook(
+            &runtime,
+            &dispatch_for(test_event()),
+            RequestDeadline::after(Duration::from_secs(3)),
+        )
+        .expect_err("an absent lease must be reported as not-registered, never dialed");
+
+        assert_eq!(
+            error.code(),
+            crate::error::AtmErrorCode::PostSendGraftUnavailable
+        );
+        assert_eq!(
+            error.message(),
+            graft_receiver_not_registered_error(&team, &agent).message(),
+            "the absent-lease error must be the not-registered error, not a connect-failure error"
+        );
+        assert!(
+            runtime
+                .marked_unreachable
+                .lock()
+                .expect("marked_unreachable")
+                .is_empty(),
+            "an absent lease must never attempt a delivery, so it can never record an \
+             unreachable observation"
+        );
     }
 
     // AC3 (PR #1048): a dead endpoint records `mark_graft_receiver_unreachable`

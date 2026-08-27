@@ -542,11 +542,16 @@ mod tests {
         assert!(TMUX_DOUBLE_ENTER_DELAY >= Duration::from_millis(250));
     }
 
-    // AC7 (PR #1048): `GraftReceiverLookup` round-trips through
-    // `_internal-nudge`'s own query path — `lookup_receiver_via` is the exact
-    // request/response contract `GraftNudgeSink::deliver` uses, exercised
-    // here against a fake transport so no real daemon or file record is
-    // involved, mirroring the router-level `GraftReceiverLookup` test style.
+    // Client-side translation-contract unit test (supplements AC7, does not
+    // stand in for it): `lookup_receiver_via` is the exact request/response
+    // contract `GraftNudgeSink::deliver` uses. This exercises its Some/None
+    // -> Ok(lease)/Err(not-registered) mapping against a `FakeClientTransport`
+    // for fast, deterministic coverage of the translation logic itself. AC7's
+    // real-route coverage — proving this same contract holds against the
+    // actual `atm-http-runtime` HTTP route, not a hand-rolled fake — lives in
+    // `atm-http-runtime`'s
+    // `storage_and_nudge_router::tests::graft_receiver_lookup_round_trips_hit_and_absent_lease_through_the_real_http_route`
+    // (PR #1048, QA-2).
     #[tokio::test]
     async fn graft_receiver_lookup_round_trips_hit_and_absent_lease() {
         let team: atm_core::types::TeamName = TEST_TEAM.parse().expect("team");
