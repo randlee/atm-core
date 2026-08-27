@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-005>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-005" ;
+  triage:title "AT.2 never started — phase cannot close" ;
+  triage:description "AT.2 (must_follow AT.1) has not started: frontmatter status: proposed, no feature/pat-s2-legacy-publish-deletion worktree/branch, no docs/plans/phase-at/receipts/AT.2-receipt.md. No Deletion Candidates row is resolved. Phase AT cannot close until AT.2 executes and files its receipt. Planned resolution: dispatch AT.2 to arch-ctm on feature/pat-s2-legacy-publish-deletion off integrate/phase-at; AT.2 executes now using its own deferral mechanism (rows whose gate receipt does not yet exist are RETAINED with status deferred-until-<gate>); the PR #1063 amendment line calling AT.2 a 'post-release deletion pass' will be revised to match. Reported by req-qa in QA pass AT-PHASECLOSE-QA-R1." ;
+  triage:phaseId "phase-at" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "process" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "none" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-27T17:38:31Z"^^xsd:dateTime ;
+  triage:foundIn triage:AT2 ;
+  triage:foundAt "2026-08-27T18:40:00Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:worktree/1-pat-s1>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature-pat-s1-install-and-publish" ;
+  triage:branch "feature/pat-s1-install-and-publish" ;
+  triage:headSha "83c9965b38a923d178ed2f6d2b523e571b4c952a" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/2-at2-gates>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/docs-at2-forward-only-gates" ;
+  triage:branch "docs/at2-forward-only-gates" ;
+  triage:headSha "a6ce24c58b8d4e6ccb1e37722ce1c60ce74cc55c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/3-integrate-at>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/integrate-phase-at" ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "cc32e21caf36097a0cd849fc3d19e49c0da9cdc2" ;
+  triage:orderIndex 3 .

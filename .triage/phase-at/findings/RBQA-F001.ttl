@@ -1,0 +1,80 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F001>
+  a triage:Finding ;
+  triage:findingId "RBQA-F001" ;
+  triage:title "Structurally unreachable installed_docs validation branch in validate_release.py" ;
+  triage:description "scripts/validate_release.py:289+ (installed_docs branch gated at line 375) is structurally unreachable against the real kit-rendered release/publish-artifacts.toml, which never emits an [installed_docs] table (doc-shipping is expressed via release_binaries[].bundled_paths instead). Only the hand-written legacy-schema fixture in .just/tests/test_validate_release.py exercises this branch. Fix: delete the dead installed_docs validation path (and its scripts/verify_user_docs.py companion), or replace it with a thin check against the kit's actual bundled_paths field." ;
+  triage:phaseId "phase-at" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "scripts/*.py and .just/tests/" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-27T20:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AT1 ;
+  triage:foundAt "2026-08-27T18:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/PAT-S1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/AT2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/INTEGRATE-AT-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F001/PAT-S1-1>
+  a triage:Occurrence ;
+  triage:file "scripts/validate_release.py" ;
+  triage:line 289 ;
+  triage:snippet "def validate_staged_install_docs(...) [DEAD CODE: unreachable in production]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pat-s1-install-and-publish" ;
+  triage:headSha "83c9965b38a923d178ed2f6d2b523e571b4c952a" ;
+  triage:occursIn <urn:atm:triage:worktree/PAT-S1/83c9965> .
+
+<urn:atm:triage:occurrence/RBQA-F001/AT2-1>
+  a triage:Occurrence ;
+  triage:file "scripts/validate_release.py" ;
+  triage:line 289 ;
+  triage:snippet "def validate_staged_install_docs(...) [DEAD CODE: unreachable in production]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "docs/at2-forward-only-gates" ;
+  triage:headSha "a6ce24c58b8d4e6ccb1e37722ce1c60ce74cc55c" ;
+  triage:occursIn <urn:atm:triage:worktree/AT2/a6ce24c> .
+
+<urn:atm:triage:occurrence/RBQA-F001/INTEGRATE-AT-1>
+  a triage:Occurrence ;
+  triage:file "scripts/validate_release.py" ;
+  triage:line 289 ;
+  triage:snippet "def validate_staged_install_docs(...) [DEAD CODE: unreachable in production]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "cc32e21caf36097a0cd849fc3d19e49c0da9cdc2" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE-AT/cc32e21> .
+
+<urn:atm:triage:worktree/PAT-S1/83c9965>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature-pat-s1-install-and-publish" ;
+  triage:branch "feature/pat-s1-install-and-publish" ;
+  triage:headSha "83c9965b38a923d178ed2f6d2b523e571b4c952a" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AT2/a6ce24c>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/docs-at2-forward-only-gates" ;
+  triage:branch "docs/at2-forward-only-gates" ;
+  triage:headSha "a6ce24c58b8d4e6ccb1e37722ce1c60ce74cc55c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/INTEGRATE-AT/cc32e21>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/integrate-phase-at" ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "cc32e21caf36097a0cd849fc3d19e49c0da9cdc2" ;
+  triage:orderIndex 3 .

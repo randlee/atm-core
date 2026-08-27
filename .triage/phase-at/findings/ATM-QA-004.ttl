@@ -1,0 +1,68 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-004>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-004" ;
+  triage:title "project-plan.md Phase AT entry stale on forward-only ruling" ;
+  triage:description "docs/project-plan.md's Phase AT entry (~line 1457) is stale: still says AT.1's scope is 'execute only authorized TestPyPI->PyPI retry of the immutable 1.4.3 Python release,' with no mention of the forward-only ruling. The forward-only ruling was documented in docs/at2-forward-only-gates branch, which correctly separates AT.1 (install and prove parity) from AT.2 (the TestPyPI->PyPI retry with forward-only constraint). Reported by req-qa in QA pass AT-PHASECLOSE-QA-R1." ;
+  triage:phaseId "phase-at" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "docs/project-plan.md Phase AT section" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-27T19:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AT1 ;
+  triage:foundAt "2026-08-27T18:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004/S1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004/S3-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-004/S1-1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1457 ;
+  triage:snippet "execute only authorized TestPyPI→PyPI retry of the immutable 1.4.3 Python release" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pat-s1-install-and-publish" ;
+  triage:headSha "83c9965b38a923d178ed2f6d2b523e571b4c952a" ;
+  triage:occursIn <urn:atm:triage:worktree/S1/83c9965b> .
+
+<urn:atm:triage:occurrence/ATM-QA-004/S3-1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1457 ;
+  triage:snippet "execute only authorized TestPyPI→PyPI retry of the immutable 1.4.3 Python release" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "cc32e21caf36097a0cd849fc3d19e49c0da9cdc2" ;
+  triage:occursIn <urn:atm:triage:worktree/S3/cc32e21c> .
+
+<urn:atm:triage:worktree/S1/83c9965b>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature-pat-s1-install-and-publish" ;
+  triage:branch "feature/pat-s1-install-and-publish" ;
+  triage:headSha "83c9965b38a923d178ed2f6d2b523e571b4c952a" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/S2/a6ce24c5>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/docs-at2-forward-only-gates" ;
+  triage:branch "docs/at2-forward-only-gates" ;
+  triage:headSha "a6ce24c58b8d4e6ccb1e37722ce1c60ce74cc55c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/S3/cc32e21c>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/integrate-phase-at" ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "cc32e21caf36097a0cd849fc3d19e49c0da9cdc2" ;
+  triage:orderIndex 3 .

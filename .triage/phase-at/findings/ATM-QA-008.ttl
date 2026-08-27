@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-008>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-008" ;
+  triage:title "No-further-publish-dispatch claim rests on receipt narrative only" ;
+  triage:description "The claim that no publish workflow beyond run 33040465059 was ever dispatched rests on the AT.1 receipt's own narrative; neither req-qa nor the quality-mgr pass had/used GitHub Actions run-history API access to independently confirm it this round. Accepted as receipt-level evidence for now; flagged for a future round with gh run list access if load-bearing. Independent verification via `gh run list --workflow=pypi-publish.yml` is the fix path — record the evidence in the receipt or a triage note. Reported by req-qa in QA pass AT-PHASECLOSE-QA-R1." ;
+  triage:phaseId "phase-at" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "evidence" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "none" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-27T17:38:47Z"^^xsd:dateTime ;
+  triage:foundIn triage:AT1 ;
+  triage:foundAt "2026-08-27T18:40:00Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:worktree/PAT1/83c9965b38a923d178ed2f6d2b523e571b4c952a>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature-pat-s1-install-and-publish" ;
+  triage:branch "feature/pat-s1-install-and-publish" ;
+  triage:headSha "83c9965b38a923d178ed2f6d2b523e571b4c952a" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AT2/a6ce24c58b8d4e6ccb1e37722ce1c60ce74cc55c>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/docs-at2-forward-only-gates" ;
+  triage:branch "docs/at2-forward-only-gates" ;
+  triage:headSha "a6ce24c58b8d4e6ccb1e37722ce1c60ce74cc55c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AT3/cc32e21caf36097a0cd849fc3d19e49c0da9cdc2>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/integrate-phase-at" ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "cc32e21caf36097a0cd849fc3d19e49c0da9cdc2" ;
+  triage:orderIndex 3 .

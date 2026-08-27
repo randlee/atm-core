@@ -1,0 +1,116 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F002>
+  a triage:Finding ;
+  triage:findingId "RBQA-F002" ;
+  triage:title "validate_release.py still imports from legacy release_artifacts.py slated for AT.2 deletion" ;
+  triage:description "scripts/validate_release.py still imports installed_doc_members/installed_doc_source_files/installed_docs_source_root/load_manifest from the legacy root scripts/release_artifacts.py — the exact file AT.2's Deletion Candidates table marks for removal because the kit supersedes it. The file that claims full kit-delegation (per the AT1-QA-001 fix) is quietly still dependent on the module marked for deletion. Removing RBQA-F001's dead branch removes this import too. Planned routing: fold into AT.2's validate_release.py decision row alongside RBQA-F001. Reported by ruthless-boundary-qa (important) in QA pass AT-PHASECLOSE-QA-R1." ;
+  triage:phaseId "phase-at" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "all scripts/ and .github/scripts/ files importing from scripts/release_artifacts.py" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-27T17:39:19Z"^^xsd:dateTime ;
+  triage:foundIn triage:AT1 ;
+  triage:foundAt "2026-08-27T18:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/pat-s1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/pat-s1-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/at2-fwd-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/at2-fwd-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/integrate-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/integrate-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F002/pat-s1-1>
+  a triage:Occurrence ;
+  triage:file "scripts/validate_release.py" ;
+  triage:line 18 ;
+  triage:snippet "from release_artifacts import installed_doc_members" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pat-s1-install-and-publish" ;
+  triage:headSha "83c9965b38a923d178ed2f6d2b523e571b4c952a" ;
+  triage:occursIn <urn:atm:triage:worktree/pat-s1/83c9965> .
+
+<urn:atm:triage:occurrence/RBQA-F002/pat-s1-2>
+  a triage:Occurrence ;
+  triage:file "scripts/verify_release_archive.py" ;
+  triage:line 9 ;
+  triage:snippet "from release_artifacts import installed_doc_members" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pat-s1-install-and-publish" ;
+  triage:headSha "83c9965b38a923d178ed2f6d2b523e571b4c952a" ;
+  triage:occursIn <urn:atm:triage:worktree/pat-s1/83c9965> .
+
+<urn:atm:triage:occurrence/RBQA-F002/at2-fwd-1>
+  a triage:Occurrence ;
+  triage:file "scripts/validate_release.py" ;
+  triage:line 19 ;
+  triage:snippet "from release_artifacts import installed_doc_members" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "docs/at2-forward-only-gates" ;
+  triage:headSha "a6ce24c58b8d4e6ccb1e37722ce1c60ce74cc55c" ;
+  triage:occursIn <urn:atm:triage:worktree/at2-fwd/a6ce24c> .
+
+<urn:atm:triage:occurrence/RBQA-F002/at2-fwd-2>
+  a triage:Occurrence ;
+  triage:file "scripts/verify_release_archive.py" ;
+  triage:line 9 ;
+  triage:snippet "from release_artifacts import installed_doc_members" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "docs/at2-forward-only-gates" ;
+  triage:headSha "a6ce24c58b8d4e6ccb1e37722ce1c60ce74cc55c" ;
+  triage:occursIn <urn:atm:triage:worktree/at2-fwd/a6ce24c> .
+
+<urn:atm:triage:occurrence/RBQA-F002/integrate-1>
+  a triage:Occurrence ;
+  triage:file "scripts/validate_release.py" ;
+  triage:line 18 ;
+  triage:snippet "from release_artifacts import installed_doc_members" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "cc32e21caf36097a0cd849fc3d19e49c0da9cdc2" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-at/cc32e21> .
+
+<urn:atm:triage:occurrence/RBQA-F002/integrate-2>
+  a triage:Occurrence ;
+  triage:file "scripts/verify_release_archive.py" ;
+  triage:line 9 ;
+  triage:snippet "from release_artifacts import installed_doc_members" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "cc32e21caf36097a0cd849fc3d19e49c0da9cdc2" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-at/cc32e21> .
+
+<urn:atm:triage:worktree/pat-s1/83c9965>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-pat-s1-install-and-publish" ;
+  triage:branch "feature/pat-s1-install-and-publish" ;
+  triage:headSha "83c9965b38a923d178ed2f6d2b523e571b4c952a" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/at2-fwd/a6ce24c>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/docs-at2-forward-only-gates" ;
+  triage:branch "docs/at2-forward-only-gates" ;
+  triage:headSha "a6ce24c58b8d4e6ccb1e37722ce1c60ce74cc55c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/integrate-at/cc32e21>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-at" ;
+  triage:branch "integrate/phase-at" ;
+  triage:headSha "cc32e21caf36097a0cd849fc3d19e49c0da9cdc2" ;
+  triage:orderIndex 3 .
