@@ -421,5 +421,4 @@ mod tests {
         let session = atm_core::types::SessionId::new("ééééééééééééé").expect("session");
         assert_eq!(short_session_id_for_human(&session), "éééééééééééé…");
     }
-
 }
