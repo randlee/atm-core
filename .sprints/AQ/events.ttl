@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+
+# Provenance: Phase AQ driven by fenix (Rand's delegate) from 2026-08-26. AQ1 was
+# built by fenix's background lanes + cipher (L3); AQ2.6 by arch-ctm via team-lead;
+# AQ1.5-1.7 by cipher. Assignment times are dispatch approximations (ATM message
+# times); completion = PR opened (dev-complete evidence).
+
+triage:a1 a triage:Assignment ;
+    triage:ofSprint triage:AQ1 ;
+    triage:assignedTo "fenix" ;
+    triage:assignedAt "2026-08-26T22:00:00Z"^^xsd:dateTime .
+
+triage:c1 a triage:Completion ;
+    triage:ofSprint triage:AQ1 ;
+    triage:at "2026-08-26T22:54:16Z"^^xsd:dateTime .
+
+triage:a2 a triage:Assignment ;
+    triage:ofSprint triage:AQ2-6 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-26T23:30:00Z"^^xsd:dateTime .
+
+triage:c2 a triage:Completion ;
+    triage:ofSprint triage:AQ2-6 ;
+    triage:at "2026-08-27T00:54:22Z"^^xsd:dateTime .
+
+triage:a3 a triage:Assignment ;
+    triage:ofSprint triage:AQ1-5 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-08-27T01:00:30Z"^^xsd:dateTime .
+
+triage:c3 a triage:Completion ;
+    triage:ofSprint triage:AQ1-5 ;
+    triage:at "2026-08-27T01:29:54Z"^^xsd:dateTime .
+
+triage:a4 a triage:Assignment ;
+    triage:ofSprint triage:AQ1-6 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-08-27T01:30:20Z"^^xsd:dateTime .
+
+triage:c4 a triage:Completion ;
+    triage:ofSprint triage:AQ1-6 ;
+    triage:at "2026-08-27T01:50:28Z"^^xsd:dateTime .
+
+triage:a5 a triage:Assignment ;
+    triage:ofSprint triage:AQ1-7 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-08-27T01:48:00Z"^^xsd:dateTime .
