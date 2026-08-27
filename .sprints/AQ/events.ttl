@@ -47,3 +47,75 @@ triage:a5 a triage:Assignment ;
     triage:ofSprint triage:AQ1-7 ;
     triage:assignedTo "cipher" ;
     triage:assignedAt "2026-08-27T01:48:00Z"^^xsd:dateTime .
+
+triage:c5 a triage:Completion ;
+    triage:ofSprint triage:AQ1-7 ;
+    triage:at "2026-08-27T03:07:04Z"^^xsd:dateTime .
+
+triage:a6 a triage:Assignment ;
+    triage:ofSprint triage:AQ1-8 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-08-27T03:12:00Z"^^xsd:dateTime .
+
+triage:c6 a triage:Completion ;
+    triage:ofSprint triage:AQ1-8 ;
+    triage:at "2026-08-27T03:28:16Z"^^xsd:dateTime .
+
+triage:a7 a triage:Assignment ;
+    triage:ofSprint triage:AQ1-9 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-08-27T03:34:00Z"^^xsd:dateTime .
+
+triage:c7 a triage:Completion ;
+    triage:ofSprint triage:AQ1-9 ;
+    triage:at "2026-08-27T03:49:05Z"^^xsd:dateTime .
+
+triage:a8 a triage:Assignment ;
+    triage:ofSprint triage:AQ2 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-08-27T03:55:00Z"^^xsd:dateTime .
+
+triage:c8 a triage:Completion ;
+    triage:ofSprint triage:AQ2 ;
+    triage:at "2026-08-27T04:18:44Z"^^xsd:dateTime .
+
+triage:a9 a triage:Assignment ;
+    triage:ofSprint triage:AQ2-5 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-08-27T04:22:00Z"^^xsd:dateTime .
+
+triage:a10 a triage:Assignment ;
+    triage:ofSprint triage:AQ2-7 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-27T04:30:00Z"^^xsd:dateTime .
+
+triage:c9 a triage:Completion ;
+    triage:ofSprint triage:AQ2-5 ;
+    triage:at "2026-08-27T05:20:00Z"^^xsd:dateTime .
+
+triage:a11 a triage:Assignment ;
+    triage:ofSprint triage:AQ3 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-08-27T05:25:00Z"^^xsd:dateTime .
+
+triage:c11 a triage:Completion ;
+    triage:ofSprint triage:AQ3 ;
+    triage:at "2026-08-27T05:26:02Z"^^xsd:dateTime .
+
+triage:a12 a triage:Assignment ;
+    triage:ofSprint triage:AQ4 ;
+    triage:assignedTo "fenix" ;
+    triage:assignedAt "2026-08-27T05:40:00Z"^^xsd:dateTime .
+
+triage:c10 a triage:Completion ;
+    triage:ofSprint triage:AQ2-7 ;
+    triage:at "2026-08-27T05:45:19Z"^^xsd:dateTime .
+
+triage:c12 a triage:Completion ;
+    triage:ofSprint triage:AQ4 ;
+    triage:at "2026-08-27T07:10:00Z"^^xsd:dateTime .
+
+triage:a13 a triage:Assignment ;
+    triage:ofSprint triage:AQ5 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-08-27T07:20:00Z"^^xsd:dateTime .

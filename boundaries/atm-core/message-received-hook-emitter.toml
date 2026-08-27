@@ -20,7 +20,7 @@ io_owns = ["receiver_hook_emission"]
 io_forbidden = ["sqlite", "message_delivery", "delivery_plan_construction"]
 
 [dependencies]
-allowed_dependents = ["atm-daemon", "atm-daemon-bootstrap", "atm-graft", "atm-graft-python", "atm-http-runtime", "atm-runtime"]
+allowed_dependents = ["atm-daemon", "atm-daemon-bootstrap", "atm-graft", "atm-graft-python", "atm-herdr", "atm-http-runtime", "atm-runtime"]
 allowed_dependencies = []
 forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
 
@@ -44,4 +44,4 @@ review_gates = ["persist_before_hook", "no_sender_side_nudge", "no_delivery_plan
 
 [status]
 state = "active"
-notes = ["AL.1 replaced PostSendHookEmitter and GraftPostSendPort.", "Sprint AQ1 (L3.2) brings the implementer set current; this list is the authoritative count later sprints' manifest ACs extend (AQ2.5 AC 11, AQ2.6): TokioTmuxReceivedHook (crates/atm-daemon-bootstrap/src/received_hook_selector.rs) and PublishedGraftReceivedHook (same file) implement the accepted async AsyncMessageReceivedHookEmitter extension point; atm_graft::nudge_sink::GraftReceiveHook implements the retained sync MessageReceivedHookEmitter trait. The daemon has no atm-graft dependency."]
+notes = ["AL.1 replaced PostSendHookEmitter and GraftPostSendPort.", "Sprint AQ1 (L3.2) brings the implementer set current; this list is the authoritative count later sprints' manifest ACs extend (AQ2.5 AC 11, AQ2.6): TokioTmuxReceivedHook, HerdrReceivedHook, and PublishedGraftReceivedHook (crates/atm-daemon-bootstrap/src/received_hook_selector.rs) implement the accepted async AsyncMessageReceivedHookEmitter extension point; atm_graft::nudge_sink::GraftReceiveHook implements the retained sync MessageReceivedHookEmitter trait. Herdr mechanics are delegated to atm_herdr::HerdrProcessAdapter. The daemon has no atm-graft dependency."]

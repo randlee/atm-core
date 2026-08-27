@@ -22,7 +22,7 @@ io_forbidden = ["http_server", "raw_http_framing", "direct_rusqlite_calls", "gra
 
 [dependencies]
 allowed_dependents = ["atm", "atm-daemon"]
-allowed_dependencies = ["atm-core", "atm-runtime", "atm-runtime-test-support", "atm-storage", "atm-storage-rusqlite", "atm-template-sc-compose", "atm-http-runtime", "peer-tls", "tokio", "fs4", "serde_json", "tempfile", "tracing", "ulid"]
+allowed_dependencies = ["atm-core", "atm-herdr", "atm-runtime", "atm-runtime-test-support", "atm-storage", "atm-storage-rusqlite", "atm-template-sc-compose", "atm-http-runtime", "peer-tls", "tokio", "fs4", "serde_json", "tempfile", "tracing", "ulid"]
 forbidden_edges = ["atm-daemon -> atm-storage-rusqlite", "atm-daemon -> atm-runtime", "atm-http-runtime -> atm-daemon-bootstrap", "atm-daemon-bootstrap -> atm-graft"]
 
 [references]
