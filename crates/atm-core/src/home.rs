@@ -282,9 +282,11 @@ pub fn resolve_user_home_via(env: &dyn crate::atm_temp::EnvSource) -> Option<Pat
 
 /// Resolve the profile home for the operating-system account that owns this
 /// process. Unlike [`resolve_user_home`], this never consults shell environment
-/// variables; it is reserved for host-wide runtime ownership.
+/// variables; it is reserved for host-wide runtime ownership and (on
+/// Windows) `crate::transfer_script`'s minimum-bar "is this path under the
+/// current user's profile" safety check.
 #[cfg(unix)]
-fn os_account_home() -> Result<PathBuf, AtmError> {
+pub(crate) fn os_account_home() -> Result<PathBuf, AtmError> {
     use std::ffi::CStr;
     use std::os::unix::ffi::OsStrExt;
 
@@ -307,7 +309,7 @@ fn os_account_home() -> Result<PathBuf, AtmError> {
 /// Resolve the Windows profile directory through the known-folder API rather
 /// than USERPROFILE, which a caller can redirect per process.
 #[cfg(windows)]
-fn os_account_home() -> Result<PathBuf, AtmError> {
+pub(crate) fn os_account_home() -> Result<PathBuf, AtmError> {
     use std::os::windows::ffi::OsStringExt;
     use windows_sys::Win32::Foundation::HANDLE;
     use windows_sys::Win32::System::Com::CoTaskMemFree;

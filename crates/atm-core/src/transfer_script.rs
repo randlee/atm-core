@@ -16,7 +16,9 @@ use std::time::Duration;
 
 use ulid::Ulid;
 
-use crate::atm_temp::{AtmTempError, EnvSource, ProcessEnvSource, current_uid, is_owned_by_uid};
+use crate::atm_temp::{AtmTempError, EnvSource, ProcessEnvSource};
+#[cfg(unix)]
+use crate::atm_temp::{current_uid, is_owned_by_uid};
 use crate::types::HostName;
 
 /// The child-process environment a transfer script inherits: an explicit
@@ -271,10 +273,12 @@ fn check_transfer_root_metadata(
             reason: format!("{} is not a directory", transfer_root.display()),
         });
     }
-    // Windows has no POSIX owner/mode model here; ADR-055 does not add a
-    // Windows-specific ACL check for the transfer-script directory, mirroring
-    // `check_script_safety`'s own Windows branch.
-    Ok(())
+    check_windows_path_safety(
+        transfer_root,
+        host,
+        metadata,
+        "the ~/.atm/transfer directory",
+    )
 }
 
 #[cfg(windows)]
@@ -353,8 +357,78 @@ fn check_script_safety(
             reason: format!("{} is not a regular file", path.display()),
         });
     }
-    // Windows has no POSIX exec-bit/owner-uid model here; ADR-055 does not
-    // add a Windows-specific ACL check for the transfer script.
+    check_windows_path_safety(path, host, metadata, "the transfer script")
+}
+
+/// Minimum-bar Windows safety check for the transfer-script seam
+/// (`docs/cross-platform-guidelines.md`'s `#[cfg(windows)]`-split pattern),
+/// applied to both the script file and its containing `~/.atm/transfer`
+/// directory. Windows has no POSIX owner-uid/mode-bits model, so this is
+/// not a like-for-like port of the Unix check; it verifies two structural
+/// properties instead:
+///
+/// 1. `path` is not a reparse point (an NTFS symlink or junction) — a
+///    reparse point passing this check could point somewhere outside the
+///    validated location by the time it is used, defeating everything
+///    below it. `metadata` comes from `symlink_metadata` (never followed),
+///    so this is exactly the same "never follow symlinks out of the
+///    checked location" discipline the rest of this module already uses.
+/// 2. `path` resolves under the current OS account's profile directory,
+///    read through the same known-folder API `crate::home::os_account_home`
+///    uses for host-runtime ownership (`SHGetKnownFolderPath`), not
+///    `%USERPROFILE%`, which a caller process can redirect.
+///
+/// **Explicitly deferred, not silently assumed safe:** this does **not**
+/// inspect the file/directory's Windows ACL (who else has write access).
+/// Unlike Unix mode bits, a Windows ACL has no single-comparison shape to
+/// check generically; mirroring `atm_temp.rs`'s own Windows scratch-root
+/// branch (`validate_existing_scratch_dir`, which also performs no ACL
+/// check and documents why), this ships the achievable minimum bar now
+/// and records the gap here rather than pretending it is closed.
+#[cfg(windows)]
+fn check_windows_path_safety(
+    path: &Path,
+    host: &HostName,
+    metadata: &std::fs::Metadata,
+    what: &'static str,
+) -> Result<(), AtmTempError> {
+    if metadata.file_type().is_symlink() {
+        return Err(AtmTempError::TransferScriptUnsafe {
+            host: host.clone(),
+            reason: format!(
+                "{what} at {} is a reparse point (symlink or junction); refusing to trust its target",
+                path.display()
+            ),
+        });
+    }
+    let profile =
+        crate::home::os_account_home().map_err(|_| AtmTempError::TransferScriptUnsafe {
+            host: host.clone(),
+            reason: format!(
+                "could not resolve the current user's profile directory to validate {what} at {}",
+                path.display()
+            ),
+        })?;
+    // Both sides canonicalized consistently: Windows `canonicalize()`
+    // normalizes to a double-backslash-question-mark-prefixed
+    // extended-length absolute path, and comparing one
+    // canonicalized side against one non-canonicalized side would produce
+    // spurious `starts_with` mismatches. Falling back to the
+    // as-resolved path/profile on a canonicalize failure fails toward the
+    // stricter branch below (an unresolvable path is unlikely to already
+    // start with a resolvable profile path).
+    let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let canonical_profile = profile.canonicalize().unwrap_or(profile);
+    if !canonical_path.starts_with(&canonical_profile) {
+        return Err(AtmTempError::TransferScriptUnsafe {
+            host: host.clone(),
+            reason: format!(
+                "{what} at {} is outside the current user's profile directory ({})",
+                path.display(),
+                canonical_profile.display()
+            ),
+        });
+    }
     Ok(())
 }
 
