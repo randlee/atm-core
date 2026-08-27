@@ -435,6 +435,7 @@ impl AsyncMessageReceivedHookEmitter for PublishedGraftReceivedHook {
         );
         let member_for_handoff = member.clone();
         let message_id = dispatch.event.message_id;
+        let runtime_health_for_clear = runtime_health.clone();
         Box::pin(async move {
             let result = tokio::task::spawn_blocking(move || {
                 let result = atm_core::graft::deliver_published_receiver_hook_from_local_runtime(
@@ -443,8 +444,47 @@ impl AsyncMessageReceivedHookEmitter for PublishedGraftReceivedHook {
                     deadline,
                 );
                 if result.is_ok() && kind == NudgeKind::Queue {
-                    let store = service_runtime.pending_nudge_store()?;
-                    store.clear_pending_on_handoff(&member_for_handoff, &message_id)?;
+                    let store = match service_runtime.pending_nudge_store() {
+                        Ok(store) => store,
+                        Err(error) => {
+                            runtime_health_for_clear.record_graft_queue_handoff_failure();
+                            tracing::warn!(
+                                subsystem = "atm_core.queue",
+                                action = "handoff_marker_clear",
+                                outcome = "failed",
+                                %error,
+                                msg_id = %message_id,
+                                "queue delivery succeeded but pending marker store was unavailable"
+                            );
+                            return result;
+                        }
+                    };
+                    if let Err(error) =
+                        store.clear_pending_on_handoff(&member_for_handoff, &message_id)
+                    {
+                        runtime_health_for_clear.record_graft_queue_handoff_failure();
+                        tracing::warn!(
+                            subsystem = "atm_core.queue",
+                            action = "handoff_marker_clear",
+                            outcome = "failed",
+                            %error,
+                            msg_id = %message_id,
+                            "queue delivery succeeded but pending marker clear failed; retrying"
+                        );
+                        if let Err(retry_error) =
+                            store.clear_pending_on_handoff(&member_for_handoff, &message_id)
+                        {
+                            runtime_health_for_clear.record_graft_queue_handoff_failure();
+                            tracing::warn!(
+                                subsystem = "atm_core.queue",
+                                action = "handoff_marker_clear",
+                                outcome = "failed",
+                                %retry_error,
+                                msg_id = %message_id,
+                                "pending marker clear retry failed after successful queue delivery"
+                            );
+                        }
+                    }
                 }
                 result
             })
@@ -791,6 +831,61 @@ mod tests {
         store
             .release_pending(&member, &claim)
             .expect("restore test claim");
+    }
+
+    #[tokio::test]
+    async fn sweep_dispatched_queue_graft_failure_reports_for_caller_requeue() {
+        let root = tempfile::tempdir().expect("temporary runtime root");
+        let (runtime, endpoint_store, team, recipient) = queue_graft_runtime(root.path());
+        let unused = TcpListener::bind(("127.0.0.1", 0)).expect("reserve endpoint");
+        let endpoint = unused.local_addr().expect("endpoint");
+        drop(unused);
+        endpoint_store
+            .register(
+                &GraftReceiverRegistration {
+                    team: team.clone(),
+                    agent: recipient.clone(),
+                    endpoint,
+                    capability: atm_core::local_http::LocalCapability::generate()
+                        .expect("capability"),
+                    owner_generation: OwnerGeneration::new("01J00000000000000000000000")
+                        .expect("generation"),
+                },
+                atm_core::types::IsoTimestamp::now().into_inner(),
+            )
+            .expect("register unavailable receiver");
+
+        let message_id = queue_write(root.path(), &runtime, &team);
+        let member = MemberKey::new(team.clone(), recipient.clone());
+        let dispatch =
+            rebuild_received_hook_dispatch(&runtime, &member, message_id, NudgeKind::Queue)
+                .expect("rebuild dispatch")
+                .expect("graft dispatch");
+        let claim = runtime
+            .pending_nudge_store()
+            .expect("pending store")
+            .claim_next_pending(&member)
+            .expect("claim query")
+            .expect("sweep claim");
+        let health = RuntimeHealth::default();
+        let selector = ReplacementReceivedHookSelector::with_herdr_process(
+            runtime.clone(),
+            Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default()),
+            health.clone(),
+        );
+        let error = selector
+            .select_emitter(&dispatch)
+            .expect("graft emitter")
+            .emit_received_message(dispatch, RequestDeadline::after(Duration::from_secs(1)))
+            .await
+            .expect_err("unavailable graft must be reported to sweep caller");
+        assert_eq!(error.code(), AtmErrorCode::PostSendGraftUnavailable);
+        assert_eq!(health.snapshot().graft_queue_handoff_failures_total, 1);
+        runtime
+            .pending_nudge_store()
+            .expect("pending store")
+            .requeue_pending(&member, &claim)
+            .expect("AQ3 caller owns requeue");
     }
 
     #[tokio::test]

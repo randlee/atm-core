@@ -215,21 +215,45 @@ impl StorageAndNudgeRouter {
         let outcome = prepared.finish(&self.service_runtime, self.observability.as_ref())?;
         if newly_persisted && canonical_request.nudge_mode == NudgeMode::Deferred {
             let runtime = self.service_runtime.clone();
-            if let Err(error) = self
+            let health = self.runtime_health.clone();
+            let marker_result = self
                 .blocking_core_bridge
                 .run(deadline, move || {
-                    prepared.mark_pending_if_deferred(&runtime);
-                    Ok(())
+                    let first = prepared.mark_pending_if_deferred(&runtime);
+                    if let Err(error) = &first {
+                        health.record_queue_marker_set_failure();
+                        tracing::warn!(
+                            subsystem = "atm_core.queue",
+                            action = "queue_marker_set",
+                            outcome = "failed",
+                            %error,
+                            "retrying deferred write queue marker"
+                        );
+                        let retry = prepared.mark_pending_if_deferred(&runtime);
+                        if retry.is_err() {
+                            health.record_queue_marker_set_failure();
+                        }
+                        return Ok(retry);
+                    }
+                    Ok(Ok(()))
                 })
-                .await
-            {
-                tracing::warn!(
+                .await;
+            match marker_result {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => tracing::warn!(
+                    subsystem = "atm_core.queue",
+                    action = "queue_marker_set",
+                    outcome = "failed",
+                    %error,
+                    "deferred write queue marker failed after one retry"
+                ),
+                Err(error) => tracing::warn!(
                     subsystem = "atm_core.queue",
                     action = "queue_marker_set",
                     outcome = "failed",
                     %error,
                     "deferred write queue marker task could not be scheduled"
-                );
+                ),
             }
         }
         Ok(CommittedWrite {

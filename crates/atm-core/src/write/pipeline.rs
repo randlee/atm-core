@@ -98,7 +98,7 @@ impl PreparedWrite {
         observability: &dyn ObservabilityPort,
     ) -> Result<WriteOutcome, AtmError> {
         let outcome = self.finish(runtime, observability)?;
-        self.mark_pending_if_deferred(runtime);
+        let _ = self.mark_pending_if_deferred(runtime);
         Ok(outcome)
     }
 
@@ -109,9 +109,9 @@ impl PreparedWrite {
     /// contract is synchronous because its concrete SQLite implementation
     /// owns a blocking transaction; the Tokio router supplies that task
     /// boundary after async message admission completes.
-    pub fn mark_pending_if_deferred(&self, runtime: &LocalServiceRuntime) {
+    pub fn mark_pending_if_deferred(&self, runtime: &LocalServiceRuntime) -> Result<(), AtmError> {
         if !self.is_newly_persisted() || self.outbound_request.nudge_mode != NudgeMode::Deferred {
-            return;
+            return Ok(());
         }
         let message_id = self.persisted_message_id();
         let post_write = match &self.received_hook {
@@ -124,7 +124,10 @@ impl PreparedWrite {
                     message_id = %message_id,
                     "deferred write has no retained recipient to resolve a queue marker for"
                 );
-                return;
+                return Err(AtmError::new(
+                    crate::error_codes::AtmErrorCode::InternalError,
+                    "deferred write has no retained recipient",
+                ));
             }
             Err(error) => {
                 tracing::warn!(
@@ -135,7 +138,7 @@ impl PreparedWrite {
                     %error,
                     "deferred write receiver-hook planning failed before queue marker resolution"
                 );
-                return;
+                return Err(error.clone());
             }
         };
         let member = boundary::MemberKey::new(
@@ -154,20 +157,24 @@ impl PreparedWrite {
                     %error,
                     "deferred write has no pending-nudge store installed in this runtime"
                 );
-                return;
+                return Err(error.clone());
             }
         };
-        if let Err(error) = store.mark_pending(&member, &message_id, self.persisted_timestamp) {
-            tracing::warn!(
-                subsystem = "atm_core.queue",
-                action = "queue_marker_set",
-                outcome = "failed",
-                message_id = %message_id,
-                member = %member,
-                %error,
-                "failed to set the deferred-nudge queue marker"
-            );
-        }
+        store
+            .mark_pending(&member, &message_id, self.persisted_timestamp)
+            .map(|_| ())
+            .map_err(|error| {
+                tracing::warn!(
+                    subsystem = "atm_core.queue",
+                    action = "queue_marker_set",
+                    outcome = "failed",
+                    message_id = %message_id,
+                    member = %member,
+                    %error,
+                    "failed to set the deferred-nudge queue marker"
+                );
+                error
+            })
     }
 
     fn finish_with_runtime<R>(
