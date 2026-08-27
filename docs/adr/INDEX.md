@@ -65,8 +65,7 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - `ADR-056` — reserved — Phase AQ (graft receiver registration + lease
   semantics, AQ1.5)
 - [ADR-057 — Peer-Write Redial and Delivery-Attempt Invariant](./ADR-057-peer-write-redial-and-delivery-attempt-invariant.md)
-- `ADR-058` — reserved — Phase AQ (Herdr local steer backend contract,
-  PR #1039)
+- [ADR-058 — Herdr Local Steer Backend Contract](./ADR-058-herdr-local-steer-backend-contract.md)
 
 ## Extracted Crate-Local ADRs
 
