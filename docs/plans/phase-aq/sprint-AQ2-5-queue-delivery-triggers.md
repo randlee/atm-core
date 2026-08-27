@@ -549,6 +549,13 @@ the false-stuck problem cannot arise.
   pre-check code); AQ2.5's AC 6 covers only the classifier both rely
   on.
 
+## Evidence/validation
+
+| Runner | Status | Run ID | Head | Files |
+|--------|--------|--------|------|-------|
+| ubuntu-latest | PASS | [33100596324](https://github.com/randlee/atm-core/actions/runs/33100596324) | bc3c9ee95 | [queue-delivery-trigger-clean-runner-linux.json](evidence/AQ2.5/queue-delivery-trigger-clean-runner-linux.json), [queue-delivery-trigger-clean-runner-linux.md](evidence/AQ2.5/queue-delivery-trigger-clean-runner-linux.md) — both scenarios (queue_kind_one_per_stop, steer_kind_full_drain) confirmed |
+| macOS | Not executed | — | — | runner bootstrap 403; pending PR #1061 |
+
 ## Non-closure / out of scope
 
 - **Machine-global hook migration (ops follow-up, not a committed
