@@ -58,8 +58,13 @@ fn receiver_registry_ownership_has_one_flock_owner_and_no_file_publication() {
         "the flock release owner must remain singular"
     );
 
-    let runtime_source = fs::read_to_string(root.join("crates/atm-graft/src/runtime.rs"))
-        .expect("read graft runtime source");
+    // AQ1.6 QA-2 (RULE-003) split the registry lease lifecycle out of
+    // `runtime.rs` into `runtime/lease_client.rs`; that submodule is where
+    // `RegisteredGraftReceiver`'s `Drop` and its daemon unregister call now
+    // live.
+    let runtime_source =
+        fs::read_to_string(root.join("crates/atm-graft/src/runtime/lease_client.rs"))
+            .expect("read graft runtime lease-client source");
     assert_eq!(
         runtime_source
             .matches("impl Drop for RegisteredGraftReceiver")

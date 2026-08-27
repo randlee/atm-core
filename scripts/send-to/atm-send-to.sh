@@ -10,6 +10,11 @@ send_to_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 files=("$@")
 atm_bin=${ATM_BIN:-atm}
 picker_override=${ATM_SEND_TO_PICKER:-}
+# Test-only seam: overrides which native fallback picker runs once Wyvern is
+# unavailable or incompatible, so degradation-harness coverage never depends
+# on a host having zenity/fzf/osascript installed. Production launches never
+# set this; the real OS-detected picker below remains the default.
+native_picker_override=${ATM_SEND_TO_NATIVE_PICKER:-}
 # AQ6 updates this exact-version constant during release preflight.
 WYVERN_PIN="0.5.0"
 wyvern_asset=${ATM_SEND_TO_WYVERN_ASSET:-"$send_to_dir/pick-member.html"}
@@ -33,10 +38,14 @@ else
         echo "send-to: Wyvern unavailable or incompatible; using native picker" >&2
     fi
     if [ -z "$picker_output" ]; then
-        case "$(uname -s)" in
-            Darwin) native_picker="$send_to_dir/picker-macos.sh" ;;
-            *) native_picker="$send_to_dir/picker-linux.sh" ;;
-        esac
+        if [ -n "$native_picker_override" ]; then
+            native_picker="$native_picker_override"
+        else
+            case "$(uname -s)" in
+                Darwin) native_picker="$send_to_dir/picker-macos.sh" ;;
+                *) native_picker="$send_to_dir/picker-linux.sh" ;;
+            esac
+        fi
         picker_output=$(printf '%s\n' "$input" | "$native_picker")
     fi
 fi

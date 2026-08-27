@@ -9,14 +9,18 @@ use std::time::Duration;
 
 use atm_core::LocalServiceRuntime;
 use atm_core::api::RequestDeadline;
-use atm_core::boundary::{MemberKey, MessageReceivedHookSelector, NudgeKind};
+use atm_core::boundary::{
+    BuiltInPostSendDispatch, MemberKey, MessageReceivedHookSelector, NudgeKind,
+};
 use atm_core::delivery_channel::{
     DeliveryChannel, classify_delivery_channel, graft_lease_state, local_message_received_backend,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::nudge_dispatch::rebuild_received_hook_dispatch;
 use atm_core::protocol::RuntimeMemberState;
+use atm_core::schema::AtmMessageId;
 use atm_http_runtime::{MemberStateTransitionSink, RuntimeHealth};
+use atm_storage::NudgeClaim;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
@@ -181,15 +185,16 @@ pub(crate) async fn run_recovery_sweep_once(
     Ok(())
 }
 
-async fn drain_one(
+/// Claims the next eligible pending message for `member` and rebuilds its
+/// received-hook dispatch, requeuing the claim on any rebuild failure or
+/// stale-message miss so the marker is never silently dropped.
+async fn claim_drain_target(
     runtime: &LocalServiceRuntime,
-    selector: &Arc<dyn MessageReceivedHookSelector>,
-    runtime_health: &RuntimeHealth,
     member: &MemberKey,
-) -> Result<bool, AtmError> {
+) -> Result<Option<(NudgeClaim, BuiltInPostSendDispatch)>, AtmError> {
     let runtime_for_claim = runtime.clone();
     let member_for_claim = member.clone();
-    let claimed = run_blocking("claim pending queue message", move || {
+    run_blocking("claim pending queue message", move || {
         if !queue_drain_channel_allowed(&runtime_for_claim, &member_for_claim)? {
             return Ok(None);
         }
@@ -216,17 +221,19 @@ async fn drain_one(
         };
         Ok(Some((claim, dispatch)))
     })
-    .await?;
-    let Some((claim, dispatch)) = claimed else {
-        return Ok(false);
-    };
+    .await
+}
+
+/// Emits one claimed dispatch through the selected receiver hook, requeuing
+/// the claim and logging on failure so the marker survives a failed handoff.
+async fn emit_drain_dispatch(
+    runtime: &LocalServiceRuntime,
+    selector: &Arc<dyn MessageReceivedHookSelector>,
+    member: &MemberKey,
+    claim: NudgeClaim,
+    dispatch: BuiltInPostSendDispatch,
+) -> Result<(), AtmError> {
     let message_id = claim.msg;
-    let tmux_marker = matches!(
-        &dispatch.target,
-        atm_core::boundary::PostSendBuiltInTarget::LocalSteer(
-            atm_core::boundary::LocalSteerTarget::Tmux(_)
-        )
-    );
     let emit_result = match selector.select_emitter(&dispatch) {
         Some(emitter) => emitter
             .emit_received_message(dispatch, RequestDeadline::after(QUEUE_DRAIN_DEADLINE))
@@ -237,58 +244,90 @@ async fn drain_one(
             "queue claim rebuilt without a selected receiver emitter",
         )),
     };
-    if let Err(error) = emit_result {
-        let runtime_for_requeue = runtime.clone();
-        let member_for_requeue = member.clone();
-        run_blocking("requeue failed queue message", move || {
-            runtime_for_requeue
-                .pending_nudge_store()?
-                .requeue_pending(&member_for_requeue, &claim)
-        })
-        .await?;
+    let Err(error) = emit_result else {
+        return Ok(());
+    };
+    let runtime_for_requeue = runtime.clone();
+    let member_for_requeue = member.clone();
+    run_blocking("requeue failed queue message", move || {
+        runtime_for_requeue
+            .pending_nudge_store()?
+            .requeue_pending(&member_for_requeue, &claim)
+    })
+    .await?;
+    tracing::warn!(
+        subsystem = "atm_core.queue",
+        action = "drain",
+        outcome = "requeued",
+        member = %member,
+        msg_id = %message_id,
+        %error,
+        "queue dispatch failed and was requeued"
+    );
+    Err(error)
+}
+
+/// Clears the delivered-tmux handoff marker for one drained message, retrying
+/// once before recording a health-visible drain failure. Never fails the
+/// caller: the message was already delivered, so a marker-clear failure is
+/// advisory only.
+async fn clear_drain_handoff_marker(
+    runtime: &LocalServiceRuntime,
+    runtime_health: &RuntimeHealth,
+    member: &MemberKey,
+    message_id: AtmMessageId,
+) {
+    let runtime_for_clear = runtime.clone();
+    let member_for_clear = member.clone();
+    if let Err(error) = run_blocking("clear delivered queue marker", move || {
+        let store = runtime_for_clear.pending_nudge_store()?;
+        if let Err(first_error) = store.clear_pending_on_handoff(&member_for_clear, &message_id) {
+            store
+                .clear_pending_on_handoff(&member_for_clear, &message_id)
+                .map_err(|retry_error| {
+                    AtmError::new(
+                        AtmErrorCode::InternalError,
+                        format!("queue marker clear failed after retry: {retry_error}"),
+                    )
+                    .with_cause(first_error)
+                })?;
+        }
+        Ok(())
+    })
+    .await
+    {
+        runtime_health.record_queue_drain_failure();
         tracing::warn!(
             subsystem = "atm_core.queue",
-            action = "drain",
-            outcome = "requeued",
+            action = "handoff_marker_clear",
+            outcome = "failed",
             member = %member,
             msg_id = %message_id,
             %error,
-            "queue dispatch failed and was requeued"
+            "tmux queue delivery succeeded but marker clear failed"
         );
-        return Err(error);
     }
+}
+
+async fn drain_one(
+    runtime: &LocalServiceRuntime,
+    selector: &Arc<dyn MessageReceivedHookSelector>,
+    runtime_health: &RuntimeHealth,
+    member: &MemberKey,
+) -> Result<bool, AtmError> {
+    let Some((claim, dispatch)) = claim_drain_target(runtime, member).await? else {
+        return Ok(false);
+    };
+    let message_id = claim.msg;
+    let tmux_marker = matches!(
+        &dispatch.target,
+        atm_core::boundary::PostSendBuiltInTarget::LocalSteer(
+            atm_core::boundary::LocalSteerTarget::Tmux(_)
+        )
+    );
+    emit_drain_dispatch(runtime, selector, member, claim, dispatch).await?;
     if tmux_marker {
-        let runtime_for_clear = runtime.clone();
-        let member_for_clear = member.clone();
-        if let Err(error) = run_blocking("clear delivered queue marker", move || {
-            let store = runtime_for_clear.pending_nudge_store()?;
-            if let Err(first_error) = store.clear_pending_on_handoff(&member_for_clear, &message_id)
-            {
-                store
-                    .clear_pending_on_handoff(&member_for_clear, &message_id)
-                    .map_err(|retry_error| {
-                        AtmError::new(
-                            AtmErrorCode::InternalError,
-                            format!("queue marker clear failed after retry: {retry_error}"),
-                        )
-                        .with_cause(first_error)
-                    })?;
-            }
-            Ok(())
-        })
-        .await
-        {
-            runtime_health.record_queue_drain_failure();
-            tracing::warn!(
-                subsystem = "atm_core.queue",
-                action = "handoff_marker_clear",
-                outcome = "failed",
-                member = %member,
-                msg_id = %message_id,
-                %error,
-                "tmux queue delivery succeeded but marker clear failed"
-            );
-        }
+        clear_drain_handoff_marker(runtime, runtime_health, member, message_id).await;
     }
     runtime_health.record_queue_message_drained();
     tracing::info!(

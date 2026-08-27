@@ -3079,7 +3079,7 @@ fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
         "the replacement receiver selector must explicitly handle queue-kind dispatches"
     );
 
-    // `atm-graft/src/runtime.rs` is deliberately excluded: it is the
+    // `atm-graft/src/runtime/` is deliberately excluded: it is the
     // independently-started receiver implementation, not an outbound client.
     for path in [
         "crates/atm/src",

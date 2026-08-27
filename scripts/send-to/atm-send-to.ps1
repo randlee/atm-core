@@ -31,7 +31,11 @@ if ($env:ATM_SEND_TO_PICKER) {
         [Console]::Error.WriteLine("send-to: Wyvern unavailable or incompatible; using native picker")
     }
     if (-not $pickerOutput) {
-        $pickerOutput = $inputJson | & (Join-Path $pickerDir "picker-windows.ps1") | Out-String
+        # Test-only seam mirroring the .sh script's ATM_SEND_TO_NATIVE_PICKER:
+        # lets degradation-harness coverage avoid depending on a real
+        # Out-GridView session. Production launches never set this.
+        $nativePicker = if ($env:ATM_SEND_TO_NATIVE_PICKER) { $env:ATM_SEND_TO_NATIVE_PICKER } else { Join-Path $pickerDir "picker-windows.ps1" }
+        $pickerOutput = $inputJson | & $nativePicker | Out-String
     }
 }
 

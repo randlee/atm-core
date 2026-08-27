@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import stat
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -30,6 +31,12 @@ def executable(path: Path) -> None:
     path.chmod(path.stat().st_mode | stat.S_IXUSR)
 
 
+@unittest.skipIf(
+    sys.platform == "win32",
+    "atm-send-to.sh is the macOS/Linux pipeline (bash + osascript/zenity/fzf); "
+    "Windows ships the separate atm-send-to.ps1 + picker-windows.ps1 pipeline, "
+    "validated by manual E2E per docs/plans/phase-aq/sprint-AQ5-surface-evidence.md",
+)
 class SendToSurfaceTests(unittest.TestCase):
     def make_atm(self, directory: Path, log: Path) -> Path:
         path = directory / "atm"
@@ -105,6 +112,14 @@ class SendToSurfaceTests(unittest.TestCase):
             self.make_atm(directory, log)
             asset = directory / "pick-member.html"
             asset.write_text("external Wyvern asset")
+            # Every case in this loop degrades to the native fallback picker.
+            # Route it through a deterministic fixture (never the host's real
+            # zenity/fzf/osascript) so this harness proves the degradation
+            # contract without depending on desktop tooling being installed
+            # on the CI runner.
+            native_picker = self.make_picker(
+                directory, '{"schema_version":1,"recipients":["cipher@atm-dev"]}'
+            )
             for case in cases:
                 with self.subTest(case=case):
                     log.unlink(missing_ok=True)
@@ -115,7 +130,12 @@ class SendToSurfaceTests(unittest.TestCase):
                         elif case == "unparsable":
                             body = "printf 'wyvern development\\n'\n"
                         elif case == "hang":
-                            body = "sleep 3\n"
+                            # Comfortably exceeds probe_wyvern.py's PROBE_SECONDS
+                            # (1.5s) bounded deadline; subprocess.run's timeout
+                            # kills this before it ever completes, so a larger
+                            # margin costs nothing but removes any chance of a
+                            # loaded CI runner racing the deadline closed.
+                            body = "sleep 30\n"
                         else:
                             body = "printf 'wyvern 0.5.0\\n'\n"
                         picker_output = (
@@ -131,6 +151,7 @@ class SendToSurfaceTests(unittest.TestCase):
                     extra = {
                         "ATM_SEND_TO_WYVERN_BIN": str(wyvern),
                         "ATM_SEND_TO_WYVERN_ASSET": str(asset if case != "missing-asset" else directory / "absent.html"),
+                        "ATM_SEND_TO_NATIVE_PICKER": str(native_picker),
                         "ATM_SEND_TO_SELECTION": "cipher@atm-dev",
                     }
                     result = self.run_surface(None, [directory / "one.txt"], directory, log, extra)
