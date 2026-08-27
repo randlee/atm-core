@@ -16,8 +16,8 @@ use atm_core::graft::AtmGraftClient;
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::local_http::LocalCapability;
 use atm_core::protocol::{
-    GraftReceiverRegistration, GraftReceiverUnregistration, OwnerGeneration, RequestEnvelope,
-    ResponseEnvelope, SendResponseEnvelope,
+    GraftReceiverRefreshRequest, GraftReceiverRegistration, GraftReceiverUnregistration,
+    OwnerGeneration, RequestEnvelope, ResponseEnvelope, SendResponseEnvelope,
 };
 use atm_core::read::{PeekQuery, ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest, WriteOutcome};
@@ -280,6 +280,28 @@ impl GraftClient {
         ))? {
             ResponseEnvelope::GraftReceiverRegister => Ok(()),
             other => Err(unexpected_response("graft receiver register", other)),
+        }
+    }
+
+    /// Owner-checked liveness keepalive (ADR-056's `refresh`): fails with
+    /// `AtmErrorCode::GraftReceiverNotOwner` when another generation now owns
+    /// the stored lease, unlike [`Self::register_receiver_sync`]'s
+    /// unconditional upsert.
+    pub(crate) fn refresh_receiver_sync(
+        &self,
+        team: TeamName,
+        agent: AgentName,
+        owner_generation: OwnerGeneration,
+    ) -> Result<(), AtmError> {
+        match self.execute_request_sync(RequestEnvelope::GraftReceiverRefresh(
+            GraftReceiverRefreshRequest {
+                team,
+                agent,
+                owner_generation,
+            },
+        ))? {
+            ResponseEnvelope::GraftReceiverRefresh => Ok(()),
+            other => Err(unexpected_response("graft receiver refresh", other)),
         }
     }
 

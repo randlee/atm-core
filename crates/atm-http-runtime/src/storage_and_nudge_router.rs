@@ -372,6 +372,10 @@ impl StorageAndNudgeRouter {
                 self.graft_receiver_register(request, ingress, deadline)
                     .await
             }
+            ApiRequest::GraftReceiverRefresh(request) => {
+                self.graft_receiver_refresh(request, ingress, deadline)
+                    .await
+            }
             ApiRequest::GraftReceiverUnregister(request) => {
                 self.graft_receiver_unregister(request, ingress, deadline)
                     .await
@@ -569,6 +573,36 @@ impl StorageAndNudgeRouter {
                     .register(&request, atm_core::types::IsoTimestamp::now().into_inner())
                     .map_err(graft_store_error)?;
                 Ok(ApiResponse::new(ResponseEnvelope::GraftReceiverRegister))
+            })
+            .await
+    }
+
+    /// Owner-checked liveness keepalive per ADR-056: unlike `register`, this
+    /// rejects with `NotOwner` (mapped to `AtmErrorCode::GraftReceiverNotOwner`)
+    /// when the stored lease no longer matches `request.owner_generation`, so a
+    /// receiver-side generation mismatch is observable instead of silently
+    /// re-upserting over a lease another generation now legitimately owns.
+    async fn graft_receiver_refresh(
+        &self,
+        request: atm_core::protocol::GraftReceiverRefreshRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        require_local_graft_ingress(ingress)?;
+        let runtime = self.service_runtime.clone();
+        let store = runtime.graft_receiver_endpoint_store()?;
+        self.blocking_core_bridge
+            .run(deadline, move || {
+                validate_graft_receiver_member(&runtime, &request.team, &request.agent)?;
+                store
+                    .refresh(
+                        &request.team,
+                        &request.agent,
+                        &request.owner_generation,
+                        atm_core::types::IsoTimestamp::now().into_inner(),
+                    )
+                    .map_err(graft_store_error)?;
+                Ok(ApiResponse::new(ResponseEnvelope::GraftReceiverRefresh))
             })
             .await
     }
@@ -1769,6 +1803,95 @@ mod tests {
         assert!(
             unknown_member_unregister.is_err(),
             "an unknown roster member must not be unregistered"
+        );
+    }
+
+    // Closes the RBQA-F001 / real-gap finding on AQ1.6 PR #1046: the
+    // generation-checked `GraftReceiverEndpointStore::refresh` keepalive must
+    // be reachable through the daemon client route (not only `register`'s
+    // unconditional upsert), and a foreign-generation refresh must surface as
+    // `AtmErrorCode::GraftReceiverNotOwner`, not a generic error.
+    #[tokio::test]
+    async fn graft_receiver_refresh_round_trips_owner_match_and_rejects_foreign_generation() {
+        let fixture = fixture(true, None, None);
+        let team: TeamName = "test-team".parse().expect("team");
+        let agent: AgentName = "recipient".parse().expect("agent");
+        let owner_generation =
+            OwnerGeneration::new("01J00000000000000000000020").expect("generation");
+        let registration = GraftReceiverRegistration {
+            team: team.clone(),
+            agent: agent.clone(),
+            endpoint: "127.0.0.1:43110".parse().expect("endpoint"),
+            capability: atm_core::local_http::LocalCapability::generate().expect("capability"),
+            owner_generation: owner_generation.clone(),
+        };
+        fixture
+            .router
+            .clone()
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverRegister(registration)),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("register response");
+
+        let refresh = atm_core::protocol::GraftReceiverRefreshRequest {
+            team: team.clone(),
+            agent: agent.clone(),
+            owner_generation: owner_generation.clone(),
+        };
+        let refreshed = fixture
+            .router
+            .clone()
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverRefresh(refresh)),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("owner-matched refresh must succeed")
+            .into_inner();
+        assert!(matches!(refreshed, ResponseEnvelope::GraftReceiverRefresh));
+
+        let foreign_generation =
+            OwnerGeneration::new("01J00000000000000000000021").expect("generation");
+        let foreign_refresh = atm_core::protocol::GraftReceiverRefreshRequest {
+            team: team.clone(),
+            agent: agent.clone(),
+            owner_generation: foreign_generation,
+        };
+        let rejected = fixture
+            .router
+            .clone()
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverRefresh(foreign_refresh)),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect_err("a foreign generation must be rejected, not silently accepted");
+        assert_eq!(
+            rejected.code(),
+            atm_core::error_codes::AtmErrorCode::GraftReceiverNotOwner
+        );
+
+        let non_local_refresh = atm_core::protocol::GraftReceiverRefreshRequest {
+            team,
+            agent,
+            owner_generation,
+        };
+        let non_local = fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::GraftReceiverRefresh(non_local_refresh)),
+                AuthenticatedIngress::Peer,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await;
+        assert!(
+            non_local.is_err(),
+            "peer ingress must not refresh receivers"
         );
     }
 

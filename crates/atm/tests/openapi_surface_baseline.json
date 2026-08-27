@@ -48,6 +48,22 @@
         }
       }
     },
+    "/graft/receiver/refresh": {
+      "post": {
+        "operation_id": "refreshGraftReceiver",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": null
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
     "/graft/receiver/register": {
       "post": {
         "operation_id": "registerGraftReceiver",
@@ -264,6 +280,18 @@
       ],
       "required": [
         "agent",
+        "team"
+      ]
+    },
+    "GraftReceiverRefreshRequest": {
+      "properties": [
+        "agent",
+        "owner_generation",
+        "team"
+      ],
+      "required": [
+        "agent",
+        "owner_generation",
         "team"
       ]
     },
