@@ -212,6 +212,45 @@ pub struct GraftReceiversDoctorReport {
     pub receivers: Vec<GraftReceiverLeaseDoctorReport>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum HerdrBreakerDoctorState {
+    Closed,
+    Open,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct HerdrBreakerDoctorReport {
+    pub state: HerdrBreakerDoctorState,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub retry_after_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub consecutive_failures: Option<u32>,
+}
+
+impl Default for HerdrBreakerDoctorReport {
+    fn default() -> Self {
+        Self {
+            state: HerdrBreakerDoctorState::Closed,
+            retry_after_ms: None,
+            consecutive_failures: None,
+        }
+    }
+}
+
+pub trait HerdrBreakerDoctor: Send + Sync {
+    fn report(&self) -> HerdrBreakerDoctorReport;
+}
+
+#[derive(Debug, Default)]
+pub struct ClosedHerdrBreakerDoctor;
+
+impl HerdrBreakerDoctor for ClosedHerdrBreakerDoctor {
+    fn report(&self) -> HerdrBreakerDoctorReport {
+        HerdrBreakerDoctorReport::default()
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DoctorReport {
     pub summary: DoctorSummary,
@@ -227,6 +266,8 @@ pub struct DoctorReport {
     #[serde(default)]
     pub graft_receivers: GraftReceiversDoctorReport,
     pub observability: AtmObservabilityHealth,
+    #[serde(default)]
+    pub herdr_breaker: HerdrBreakerDoctorReport,
     #[serde(default)]
     pub post_send: PostSendDoctorReport,
     pub config: ConfigDoctorReport,

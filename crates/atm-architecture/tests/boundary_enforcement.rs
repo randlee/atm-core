@@ -41,6 +41,13 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm-daemon", "atm-template-sc-compose"),
     ("atm-runtime", "atm-template-sc-compose"),
     ("atm-http-runtime", "atm-template-sc-compose"),
+    ("atm-core", "atm-herdr"),
+    ("atm-storage", "atm-herdr"),
+    ("atm-storage-rusqlite", "atm-herdr"),
+    ("atm-herdr", "atm-daemon"),
+    ("atm-herdr", "atm-daemon-bootstrap"),
+    ("atm-herdr", "atm-http-runtime"),
+    ("atm-herdr", "atm-storage-rusqlite"),
 ];
 
 const RETIRED_DAEMON_CONSTRUCT_FRAGMENTS: &[(&str, &str)] = &[
@@ -2266,8 +2273,8 @@ fn al1_http_runtime_is_core_contract_only_and_excludes_retired_transport_shapes(
         .expect("AL.1 HTTP runtime package must exist");
     assert_eq!(
         actual,
-        &BTreeSet::from(["agent-team-mail-core".to_string()]),
-        "atm-http-runtime may depend on ATM core contracts only"
+        &BTreeSet::from(["agent-team-mail-core".to_string(), "atm-herdr".to_string(),]),
+        "atm-http-runtime may depend on ATM core contracts and the Herdr process adapter"
     );
 
     let root = workspace_root();
@@ -3002,6 +3009,83 @@ fn al3_replacement_runtime_cannot_restore_legacy_or_blocking_runtime_constructs(
     }
 }
 
+#[test]
+fn herdr_constructors_have_one_composition_root_call_site() {
+    let root = workspace_root();
+    let mut rust_files = Vec::new();
+    collect_rust_files(&root.join("crates"), &mut rust_files);
+    rust_files.retain(|path| !path.starts_with(root.join("crates/atm-architecture/tests")));
+
+    let sources = rust_files
+        .iter()
+        .map(|path| read_source(path))
+        .collect::<Vec<_>>();
+    let breaker_calls = sources
+        .iter()
+        .map(|source| source.matches("HerdrSpawnBreaker::new(").count())
+        .sum::<usize>();
+    let invoker_calls = sources
+        .iter()
+        .map(|source| source.matches("HerdrProcessInvoker::new(").count())
+        .sum::<usize>();
+    assert_eq!(
+        breaker_calls, 1,
+        "HerdrSpawnBreaker must have one composition call site"
+    );
+    assert_eq!(
+        invoker_calls, 1,
+        "HerdrProcessInvoker must have one composition call site"
+    );
+
+    let bootstrap = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
+    let composition = bootstrap
+        .split_once("fn build_replacement_handler")
+        .and_then(|(_, tail)| tail.split_once("fn "))
+        .map(|(body, _)| body)
+        .expect("replacement handler composition function must exist");
+    assert!(composition.contains("HerdrSpawnBreaker::new("));
+    assert!(composition.contains("HerdrProcessInvoker::new("));
+}
+
+#[test]
+fn herdr_test_utils_are_dev_dependencies_only() {
+    let root = workspace_root();
+    for crate_name in ["atm-daemon-bootstrap", "atm-http-runtime"] {
+        let manifest: toml::Value = toml::from_str(&read_source(
+            &root.join(format!("crates/{crate_name}/Cargo.toml")),
+        ))
+        .expect("consumer manifest must parse");
+        let production = manifest
+            .get("dependencies")
+            .and_then(|table| table.get("atm-herdr"));
+        assert!(
+            !production.is_some_and(|dependency| {
+                dependency
+                    .get("features")
+                    .and_then(toml::Value::as_array)
+                    .is_some_and(|features| {
+                        features
+                            .iter()
+                            .any(|feature| feature.as_str() == Some("test-utils"))
+                    })
+            }),
+            "{crate_name} production atm-herdr dependency must not enable test-utils"
+        );
+        let dev = manifest
+            .get("dev-dependencies")
+            .and_then(|table| table.get("atm-herdr"))
+            .expect("consumer must declare atm-herdr test dependency");
+        assert!(
+            dev.get("features")
+                .and_then(toml::Value::as_array)
+                .is_some_and(|features| features
+                    .iter()
+                    .any(|feature| feature.as_str() == Some("test-utils"))),
+            "{crate_name} must enable atm-herdr test-utils only in dev-dependencies"
+        );
+    }
+}
+
 fn documented_forbidden_edges() -> BTreeSet<(String, String)> {
     guarded_boundary_files()
         .into_iter()
@@ -3052,6 +3136,7 @@ fn guarded_boundary_files() -> Vec<PathBuf> {
         root.join("boundaries/atm-runtime/runtime-composition.toml"),
         root.join("boundaries/atm-storage/tls.toml"),
         root.join("boundaries/atm-template-sc-compose/sc-composer.toml"),
+        root.join("boundaries/atm-herdr/herdr-process-adapter.toml"),
     ];
     let mut sqlite_files = fs::read_dir(root.join("boundaries/atm-storage-rusqlite"))
         .expect("boundaries/atm-storage-rusqlite directory must be readable")

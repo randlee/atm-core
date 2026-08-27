@@ -15,6 +15,8 @@ use serde_json::Value;
 use crate::error::AtmError;
 use crate::types::PaneId;
 
+pub(crate) const BACKEND_TYPE_METADATA_KEY: &str = "backendType";
+
 /// One non-empty Herdr session identifier from roster metadata.
 ///
 /// Herdr sessions are roster data, like `pane_id`: the daemon never launches
@@ -139,7 +141,7 @@ pub fn local_message_received_backend(
     }
     let is_herdr = member
         .metadata_json
-        .get("backendType")
+        .get(BACKEND_TYPE_METADATA_KEY)
         .and_then(Value::as_str)
         == Some("herdr");
     if !is_herdr {
@@ -250,9 +252,10 @@ mod tests {
     fn local_message_received_backend_prefers_tmux_pane() {
         let mut member = roster_entry();
         member.recipient_pane_id = Some(PaneId::from_cli("%2").expect("pane"));
-        member
-            .metadata_json
-            .insert("backendType".to_owned(), Value::String("herdr".to_owned()));
+        member.metadata_json.insert(
+            BACKEND_TYPE_METADATA_KEY.to_owned(),
+            Value::String("herdr".to_owned()),
+        );
 
         let backend = local_message_received_backend(&member).expect("backend");
         assert!(matches!(backend, LocalMessageReceivedBackend::Tmux { .. }));
@@ -261,9 +264,10 @@ mod tests {
     #[test]
     fn local_message_received_backend_reads_herdr_session() {
         let mut member = roster_entry();
-        member
-            .metadata_json
-            .insert("backendType".to_owned(), Value::String("herdr".to_owned()));
+        member.metadata_json.insert(
+            BACKEND_TYPE_METADATA_KEY.to_owned(),
+            Value::String("herdr".to_owned()),
+        );
         member.metadata_json.insert(
             "herdrSession".to_owned(),
             Value::String("session-7".to_owned()),
@@ -281,9 +285,10 @@ mod tests {
     #[test]
     fn local_message_received_backend_treats_invalid_herdr_session_as_absent() {
         let mut member = roster_entry();
-        member
-            .metadata_json
-            .insert("backendType".to_owned(), Value::String("herdr".to_owned()));
+        member.metadata_json.insert(
+            BACKEND_TYPE_METADATA_KEY.to_owned(),
+            Value::String("herdr".to_owned()),
+        );
         member.metadata_json.insert(
             "herdrSession".to_owned(),
             Value::String("has space".to_owned()),

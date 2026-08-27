@@ -64,6 +64,12 @@ impl AtmError {
             .map_or(self.message(), |(detail, _)| detail)
     }
 
+    /// Returns only the catalog-owned recovery guidance for doctor findings.
+    #[must_use]
+    pub fn remediation(&self) -> &'static str {
+        crate::error_catalog::guidance(self.code)
+    }
+
     #[must_use]
     pub fn into_message(self) -> String {
         self.message
@@ -615,6 +621,22 @@ mod tests {
 
         assert_eq!(outer.message().matches("Recovery:").count(), 1);
         assert!(outer.message().contains("invalid caller identity"));
+    }
+
+    #[test]
+    fn herdr_and_mixed_backend_codes_have_specific_catalog_guidance() {
+        let codes = [
+            AtmErrorCode::RosterMixedLocalBackend,
+            AtmErrorCode::HerdrAgentNotVisible,
+            AtmErrorCode::PostSendHerdrPromptFailed,
+            AtmErrorCode::HerdrPromptFailed,
+            AtmErrorCode::HerdrUnavailable,
+        ];
+        for code in codes {
+            let error = AtmError::for_code(code);
+            assert!(!error.remediation().contains("logged diagnostic"));
+            assert!(!error.message().contains("Inspect the logged diagnostic"));
+        }
     }
 
     #[test]

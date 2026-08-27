@@ -3,6 +3,7 @@ use std::path::Path;
 use serde_json::Value;
 
 use crate::boundary::{RosterEntry, RosterStore};
+use crate::delivery_channel::local_message_received_backend;
 use crate::error::AtmError;
 use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::agent_member::LEGACY_CWD_METADATA_KEY;
@@ -96,6 +97,14 @@ fn member_summary_from_roster(
     caller_identity: Option<&AgentName>,
     live_cwd: Option<&Path>,
 ) -> MemberSummary {
+    let local_backend = local_message_received_backend(record);
+    let (backend, herdr_session) = match local_backend.as_ref() {
+        Some(crate::delivery_channel::LocalMessageReceivedBackend::Herdr { session }) => (
+            Some("herdr".to_string()),
+            session.as_ref().map(ToString::to_string),
+        ),
+        _ => (None, None),
+    };
     MemberSummary {
         name: record.agent_name.clone(),
         agent_id: metadata_string(&record.metadata_json, "agentId")
@@ -105,6 +114,9 @@ fn member_summary_from_roster(
         model: record.model.clone(),
         joined_at: metadata_u64(&record.metadata_json, "joinedAt"),
         tmux_pane_id: record.recipient_pane_id.clone(),
+        backend,
+        herdr_session,
+        local_backend,
         home_dir: canonical_home_dir(&record.metadata_json).unwrap_or_default(),
         live_cwd: runtime_live_cwd(record, caller_identity, live_cwd),
         extra: compatibility_extra_fields(&record.metadata_json),
