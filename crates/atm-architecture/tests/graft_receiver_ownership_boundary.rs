@@ -58,8 +58,9 @@ fn receiver_registry_ownership_has_one_flock_owner_and_no_file_publication() {
         "the flock release owner must remain singular"
     );
 
-    let runtime_source = fs::read_to_string(root.join("crates/atm-graft/src/runtime.rs"))
-        .expect("read graft runtime source");
+    let runtime_source =
+        fs::read_to_string(root.join("crates/atm-graft/src/runtime/lease_client.rs"))
+            .expect("read graft runtime lease-client source");
     assert_eq!(
         runtime_source
             .matches("impl Drop for RegisteredGraftReceiver")

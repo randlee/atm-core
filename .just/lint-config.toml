@@ -156,7 +156,7 @@ allowed_dependencies = ["atm-core", "atm-http-runtime", "atm-storage", "fs4", "i
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-graft/Cargo.toml"
-allowed_dependencies = ["async-trait", "atm-core", "atm-daemon-client", "atm-http-runtime", "serde_json", "tempfile", "tokio", "tracing"]
+allowed_dependencies = ["async-trait", "atm-core", "atm-daemon-client", "atm-http-runtime", "atm-runtime-test-support", "serde_json", "tempfile", "tokio", "tracing"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-graft-python/Cargo.toml"
