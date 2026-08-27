@@ -1038,13 +1038,16 @@ mod tests {
     #[tokio::test]
     async fn failing_bypass_get_does_not_open_the_shared_breaker() {
         let breaker = Arc::new(HerdrSpawnBreaker::default());
-        // Three consecutive failures before the bypassed call gives
-        // breaker_backoff a 4s window (2^(3-1)) instead of the 1s window one
-        // failure would produce — the single-failure window was tight enough
-        // against real subprocess-spawn overhead under `cargo test
-        // --workspace` parallel load that the final Open-state assertion
-        // below could observe a HalfOpen transition on a contended runner.
-        for _ in 0..3 {
+        // Six consecutive failures saturate breaker_backoff's exponential
+        // schedule at its BREAKER_MAX_BACKOFF ceiling (30s) instead of the 1s
+        // window a single recorded failure would produce. Observed under
+        // `cargo test --workspace` running concurrently with a fresh
+        // workspace compile: OS scheduling contention can stall this test's
+        // real subprocess spawn + tokio::time::timeout wait by tens of
+        // seconds of wall-clock time even though the nominal deadline is 1s,
+        // so the window needs to be the widest the breaker design allows,
+        // not merely "comfortably larger than the nominal deadline".
+        for _ in 0..6 {
             breaker.record_infrastructure_failure();
         }
         let failures = breaker.consecutive_failures();
