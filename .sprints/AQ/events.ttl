@@ -97,3 +97,12 @@ triage:a11 a triage:Assignment ;
     triage:ofSprint triage:AQ3 ;
     triage:assignedTo "cipher" ;
     triage:assignedAt "2026-08-27T05:25:00Z"^^xsd:dateTime .
+
+triage:c11 a triage:Completion ;
+    triage:ofSprint triage:AQ3 ;
+    triage:at "2026-08-27T05:26:02Z"^^xsd:dateTime .
+
+triage:a12 a triage:Assignment ;
+    triage:ofSprint triage:AQ4 ;
+    triage:assignedTo "fenix" ;
+    triage:assignedAt "2026-08-27T05:40:00Z"^^xsd:dateTime .
