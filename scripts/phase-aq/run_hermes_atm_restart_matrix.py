@@ -273,6 +273,23 @@ def worker_main(args: argparse.Namespace) -> int:
     return 0
 
 
+def daemon_launch_argv(binary: Path) -> list[str]:
+    """Return the argv used to start the runner's owned, scratch-home daemon.
+
+    The restart matrix verifies same-host graft receiver delivery, never
+    cross-host peer replication, so it deliberately runs the daemon with
+    `--peer-wire-security plaintext-test`: `mutual-tls` mode requires an
+    enabled peer HTTPS interface and a local certificate identity
+    (`crates/peer-tls/src/lib.rs`), which only exist in an operator's
+    already-provisioned home directory, not in this runner's disposable
+    `tempfile.TemporaryDirectory` home. Requiring real peer TLS material here
+    would make the matrix unrunnable on a clean host (exactly what CI hit),
+    without proving anything about the graft restart/crash-recovery
+    behavior this sprint's ACs actually cover.
+    """
+    return [str(binary), "--peer-wire-security", "plaintext-test"]
+
+
 class OwnedDaemon:
     def __init__(self, binary: Path, env: dict[str, str], timeout: float) -> None:
         self.binary = binary
@@ -285,7 +302,7 @@ class OwnedDaemon:
         if self.process is not None and process_alive(self.process):
             raise RuntimeError("owned daemon is already running")
         self.process = subprocess.Popen(
-            [str(self.binary), "--peer-wire-security", "mutual-tls"],
+            daemon_launch_argv(self.binary),
             cwd=ROOT,
             env={**self.env, "ATM_DAEMON_READY_STDOUT": "1"},
             stdout=subprocess.PIPE,

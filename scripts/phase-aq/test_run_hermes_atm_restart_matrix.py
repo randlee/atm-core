@@ -39,6 +39,17 @@ class HermesAtmRestartMatrixTests(unittest.TestCase):
             self.assertIn("receiver-crash-within-window", markdown)
             self.assertIn("no remote result is inferred", markdown)
 
+    def test_daemon_launch_uses_plaintext_test_wire_security(self) -> None:
+        # The runner's daemon runs from a disposable tempfile home with no
+        # provisioned peer HTTPS interface or certificate identity, so it
+        # must launch in `plaintext-test` mode, never `mutual-tls` (which
+        # requires exactly that provisioning and made the matrix unrunnable
+        # on a clean CI host).
+        module = load_module()
+        argv = module.daemon_launch_argv(Path("/fake/atm-daemon"))
+        self.assertEqual(argv, [str(Path("/fake/atm-daemon")), "--peer-wire-security", "plaintext-test"])
+        self.assertNotIn("mutual-tls", argv)
+
     def test_crash_recovery_bound_is_sub_tick(self) -> None:
         # AC2 (sprint-AQ1-9) requires sub-tick recovery: strictly inside one
         # GRAFT_LEASE_REFRESH_INTERVAL tick, not a padded multiple of it.
