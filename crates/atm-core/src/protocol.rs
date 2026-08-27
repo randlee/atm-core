@@ -25,7 +25,9 @@ use crate::search::{SearchRequest, SearchResponse};
 use crate::send::{SendOutcome, WriteRequest};
 use crate::types::{AgentName, IsoTimestamp, SessionId, TeamName, deserialize_optional_session_id};
 
-pub use atm_storage::{GraftReceiverLease, GraftReceiverRegistration, LocalCapability};
+pub use atm_storage::{
+    GraftReceiverLease, GraftReceiverRegistration, LocalCapability, OwnerGeneration,
+};
 
 /// Body representation for the local graft receiver lookup route.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -383,7 +385,7 @@ pub struct TeamMemberHeartbeatResponse {
 pub struct GraftReceiverUnregistration {
     pub team: TeamName,
     pub agent: AgentName,
-    pub owner_generation: String,
+    pub owner_generation: OwnerGeneration,
 }
 
 /// Runtime-owned live-state projection for one known team member.

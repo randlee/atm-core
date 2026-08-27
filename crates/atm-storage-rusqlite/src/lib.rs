@@ -8,6 +8,7 @@
 //! message and roster contracts.
 
 mod analyst_query;
+mod graft_receiver_endpoint_schema;
 mod graft_receiver_endpoint_store;
 #[cfg(test)]
 mod mailbox_metadata;

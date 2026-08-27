@@ -11,8 +11,8 @@ use std::sync::Arc;
 use crate::error::AtmError;
 use crate::schema::{AtmMessageId, InboxMessage, MessageEnvelope};
 use crate::types::{
-    AgentName, HostName, IsoTimestamp, LocalCapability, MemberKey, ModelName, PaneId, TaskId,
-    TeamName,
+    AgentName, HostName, IsoTimestamp, LocalCapability, MemberKey, ModelName, OwnerGeneration,
+    PaneId, TaskId, TeamName,
 };
 
 #[doc(hidden)]
@@ -627,7 +627,7 @@ pub struct GraftReceiverRegistration {
     pub agent: AgentName,
     pub endpoint: SocketAddr,
     pub capability: LocalCapability,
-    pub owner_generation: String,
+    pub owner_generation: OwnerGeneration,
 }
 
 /// Durable graft receiver endpoint and its liveness observations.
@@ -635,7 +635,7 @@ pub struct GraftReceiverRegistration {
 pub struct GraftReceiverLease {
     pub endpoint: SocketAddr,
     pub capability: LocalCapability,
-    pub owner_generation: String,
+    pub owner_generation: OwnerGeneration,
     pub registered_at: DateTime<Utc>,
     pub last_seen_at: DateTime<Utc>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -682,7 +682,7 @@ pub trait GraftReceiverEndpointStore: sealed::Sealed + Send + Sync {
         &self,
         team: &TeamName,
         agent: &AgentName,
-        owner_generation: &str,
+        owner_generation: &OwnerGeneration,
         now: DateTime<Utc>,
     ) -> Result<(), GraftEndpointStoreError>;
 
@@ -690,7 +690,7 @@ pub trait GraftReceiverEndpointStore: sealed::Sealed + Send + Sync {
         &self,
         team: &TeamName,
         agent: &AgentName,
-        owner_generation: &str,
+        owner_generation: &OwnerGeneration,
     ) -> Result<(), GraftEndpointStoreError>;
 
     fn lookup(
@@ -703,7 +703,7 @@ pub trait GraftReceiverEndpointStore: sealed::Sealed + Send + Sync {
         &self,
         team: &TeamName,
         agent: &AgentName,
-        owner_generation: &str,
+        owner_generation: &OwnerGeneration,
         now: DateTime<Utc>,
     ) -> Result<(), GraftEndpointStoreError>;
 }
@@ -963,24 +963,80 @@ pub trait PendingNudgeStore: sealed::Sealed + Send + Sync {
 mod tests {
     use super::{
         AckRequirementState, AtmMessageId, BuiltInNudgeTemplateKind, CertificateFingerprint,
-        Message, MessageKey, MessageQuery, MessageReceivedEvent, MessageStore, NudgeClaim,
-        NudgeTemplateOverrideStore, PendingNudgeStore, PrivateKeyRef, RosterChangedEvent,
-        RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore,
-        StorageNotifier, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
+        GraftEndpointStoreError, GraftReceiverEndpointStore, GraftReceiverLease,
+        GraftReceiverRegistration, Message, MessageKey, MessageQuery, MessageReceivedEvent,
+        MessageStore, NudgeClaim, NudgeTemplateOverrideStore, PendingNudgeStore, PrivateKeyRef,
+        RosterChangedEvent, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot,
+        RosterStore, StorageNotifier, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
         derive_ack_requirement, sealed,
     };
     use crate::ROLE_WORKER;
     use crate::error::AtmError;
     use crate::schema::MessageEnvelope;
-    use crate::types::{AgentName, IsoTimestamp, MemberKey, ModelName, TeamName};
-    use chrono::Utc;
+    use crate::types::{
+        AgentName, IsoTimestamp, LocalCapability, MemberKey, ModelName, OwnerGeneration, TeamName,
+    };
+    use chrono::{DateTime, Utc};
     use serde_json::Map;
+    use std::net::SocketAddr;
 
     #[derive(Default)]
     struct DummyStore;
 
     #[derive(Default)]
     struct DummyNudgeTemplateOverrideStore;
+
+    #[derive(Default)]
+    struct DummyGraftReceiverEndpointStore;
+
+    impl sealed::Sealed for DummyGraftReceiverEndpointStore {}
+
+    impl GraftReceiverEndpointStore for DummyGraftReceiverEndpointStore {
+        fn register(
+            &self,
+            _registration: &GraftReceiverRegistration,
+            _now: DateTime<Utc>,
+        ) -> Result<(), GraftEndpointStoreError> {
+            Ok(())
+        }
+
+        fn refresh(
+            &self,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _owner_generation: &OwnerGeneration,
+            _now: DateTime<Utc>,
+        ) -> Result<(), GraftEndpointStoreError> {
+            Ok(())
+        }
+
+        fn unregister(
+            &self,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _owner_generation: &OwnerGeneration,
+        ) -> Result<(), GraftEndpointStoreError> {
+            Ok(())
+        }
+
+        fn lookup(
+            &self,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<Option<GraftReceiverLease>, GraftEndpointStoreError> {
+            Ok(None)
+        }
+
+        fn mark_unreachable(
+            &self,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _owner_generation: &OwnerGeneration,
+            _now: DateTime<Utc>,
+        ) -> Result<(), GraftEndpointStoreError> {
+            Ok(())
+        }
+    }
 
     impl sealed::Sealed for DummyStore {}
 
@@ -1147,6 +1203,8 @@ mod tests {
         let notifier: &dyn StorageNotifier = &store;
         let pending_nudge_store: &dyn PendingNudgeStore = &DummyPendingNudgeStore;
         let override_store: &dyn NudgeTemplateOverrideStore = &DummyNudgeTemplateOverrideStore;
+        let graft_receiver_endpoint_store: &dyn GraftReceiverEndpointStore =
+            &DummyGraftReceiverEndpointStore;
 
         let team: TeamName = "test-team".parse().expect("team");
         let agent: AgentName = ROLE_WORKER.parse().expect("agent");
@@ -1275,6 +1333,45 @@ mod tests {
                 .expect("list pending members")
                 .is_empty()
         );
+
+        let generation =
+            OwnerGeneration::new("01J00000000000000000000001").expect("owner generation");
+        let registration = GraftReceiverRegistration {
+            team: "test-team".parse().expect("team"),
+            agent: ROLE_WORKER.parse().expect("agent"),
+            endpoint: "127.0.0.1:43101".parse::<SocketAddr>().expect("endpoint"),
+            capability: LocalCapability::generate().expect("capability"),
+            owner_generation: generation.clone(),
+        };
+        graft_receiver_endpoint_store
+            .register(&registration, Utc::now())
+            .expect("register");
+        assert!(
+            graft_receiver_endpoint_store
+                .lookup(&registration.team, &registration.agent)
+                .expect("lookup")
+                .is_none(),
+            "the dummy store never persists a lease"
+        );
+        graft_receiver_endpoint_store
+            .refresh(
+                &registration.team,
+                &registration.agent,
+                &generation,
+                Utc::now(),
+            )
+            .expect("refresh");
+        graft_receiver_endpoint_store
+            .mark_unreachable(
+                &registration.team,
+                &registration.agent,
+                &generation,
+                Utc::now(),
+            )
+            .expect("mark unreachable");
+        graft_receiver_endpoint_store
+            .unregister(&registration.team, &registration.agent, &generation)
+            .expect("unregister");
     }
 
     #[test]

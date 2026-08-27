@@ -34,7 +34,10 @@ error_types = ["GraftEndpointStoreError"]
 notes = ["register unconditionally displaces a different owner generation because its sole in-tree caller has already acquired the same-host receiver flock", "lookup liveness is derived by consumers from last_seen_at and unreachable_at; no status boolean is stored", "the lease table uses a natural (team, agent) join key and declares no roster foreign key"]
 
 [testing]
-allowed_test_double_paths = []
+allowed_test_double_paths = [
+  "crate::contract::DummyGraftReceiverEndpointStore",
+  "atm_core::ack::admission_tests::EmptyGraftReceiverStore",
+]
 forbidden_test_bypasses = ["rusqlite::Connection"]
 
 [enforcement]
