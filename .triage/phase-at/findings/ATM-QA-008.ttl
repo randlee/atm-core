@@ -15,12 +15,33 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "none" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-08-27T17:38:47Z"^^xsd:dateTime ;
   triage:foundIn triage:AT1 ;
   triage:foundAt "2026-08-27T18:40:00Z"^^xsd:dateTime ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/QMGR-CLOSE-1> ;
+  triage:closedAt "2026-08-27T20:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/ATM-QA-008/QMGR-CLOSE-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-at/receipts/AT.2-receipt.md" ;
+  triage:line 20 ;
+  triage:snippet "quality-mgr AT2-QA-R1 re-verification: AT.2-receipt.md now embeds the literal `gh run list --workflow=pypi-publish.yml` JSON output showing run 33040465059 as the only dispatch, conclusion failure before the publish job; confirmed by req-qa on PR #1064" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pat-s2-legacy-publish-deletion" ;
+  triage:headSha "b7f8c189872f4a07b1329fc3f0af911130968b88" ;
+  triage:occursIn <urn:atm:triage:worktree/PAT-S2/b7f8c189> .
+
+<urn:atm:triage:worktree/PAT-S2/b7f8c189>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature-pat-s2-legacy-publish-deletion" ;
+  triage:branch "feature/pat-s2-legacy-publish-deletion" ;
+  triage:headSha "b7f8c189872f4a07b1329fc3f0af911130968b88" ;
+  triage:orderIndex 4 .
 
 <urn:atm:triage:worktree/PAT1/83c9965b38a923d178ed2f6d2b523e571b4c952a>
   a triage:WorktreeSnapshot ;

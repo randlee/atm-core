@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-011>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-011" ;
+  triage:title "AT.2-receipt.md does not conform to the phase README's Receipt Convention (missing digest/sha256 fields)" ;
+  triage:description "docs/plans/phase-at/README.md:183-199 (Receipt Convention) mandates every AT sprint receipt record the pinned sc-publish revision plus a package digest (sha256 over newline-joined, path-sorted sha256(file)/relative-path lines, excluding specified files), the consumer-input sha256, and rendered-manifest sha256s. docs/plans/phase-at/receipts/AT.2-receipt.md's frontmatter contains only kit_revision; none of the mandated digest/sha256 fields are present anywhere in the file. Reported by arch-qa (ARCH-002) in QA pass AT2-QA-R1 on PR #1064." ;
+  triage:phaseId "phase-at" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-27T20:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AT2 ;
+  triage:foundAt "2026-08-27T20:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-011/PAT-S2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-011/PAT-S2-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-at/receipts/AT.2-receipt.md" ;
+  triage:line 3 ;
+  triage:snippet "receipt_type: sprint ... kit_revision: 42e0fcea23f730fae0ef3d08b060cd4df6a2602e (no package digest, consumer-input sha256, or rendered-manifest sha256 fields present)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pat-s2-legacy-publish-deletion" ;
+  triage:headSha "b7f8c189872f4a07b1329fc3f0af911130968b88" ;
+  triage:occursIn <urn:atm:triage:worktree/PAT-S2/b7f8c189> .
+
+<urn:atm:triage:worktree/PAT-S2/b7f8c189>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature-pat-s2-legacy-publish-deletion" ;
+  triage:branch "feature/pat-s2-legacy-publish-deletion" ;
+  triage:headSha "b7f8c189872f4a07b1329fc3f0af911130968b88" ;
+  triage:orderIndex 1 .
