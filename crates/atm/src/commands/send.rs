@@ -224,15 +224,7 @@ impl SendCommand {
         if self.attach.is_empty() {
             return Ok(None);
         }
-        let caller_context = if self.actor.is_some() || self.chat_id.is_some() {
-            resolve_cli_mutation_caller_context_with_overrides(CallerContextOverrides {
-                identity_override: self.actor.as_deref().map(CallerIdentityOverride),
-                chat_id_override: self.chat_id.as_deref().map(CallerChatIdOverride),
-                team_override: self.team.as_deref().map(CallerTeamOverride),
-            })?
-        } else {
-            resolve_cli_mutation_caller_context(self.team.as_deref().map(CallerTeamOverride))?
-        };
+        let caller_context = self.resolve_caller_context()?;
         let target = self.target_with_explicit_host(&caller_context.caller_team)?;
         let address: AgentAddress = target.parse()?;
         let local_host = load_atm_config(current_dir)?.and_then(|config| config.local_host);
@@ -564,44 +556,14 @@ impl SendCommand {
         current_dir: PathBuf,
     ) -> Result<()> {
         let picker_output = read_picker_output_from_stdin()?;
-        let caller_context = if self.actor.is_some() || self.chat_id.is_some() {
-            resolve_cli_mutation_caller_context_with_overrides(CallerContextOverrides {
-                identity_override: self.actor.as_deref().map(CallerIdentityOverride),
-                chat_id_override: self.chat_id.as_deref().map(CallerChatIdOverride),
-                team_override: self.team.as_deref().map(CallerTeamOverride),
-            })?
-        } else {
-            resolve_cli_mutation_caller_context(self.team.as_deref().map(CallerTeamOverride))?
-        };
+        let caller_context = self.resolve_caller_context()?;
         let local_host = load_atm_config(&current_dir)?.and_then(|config| config.local_host);
 
-        // Resolve and classify every recipient before any staging, transfer,
-        // or send begins (R5/R13): a malformed request -- including an
-        // unknown/null-host recipient anywhere in the batch -- stages and
-        // sends nothing.
-        let mut recipients: Vec<FanOutRecipient> =
-            Vec::with_capacity(picker_output.recipients.len());
-        for member_id in &picker_output.recipients {
-            let address = with_default_roster_store(|roster| {
-                atm_core::send_to::resolve_picker_recipient(member_id, roster)
-                    .map_err(atm_core::error::AtmError::from)
-            })?;
-            let locality = classify_recipient_locality(address.host(), local_host.as_ref())
-                .map_err(atm_core::error::AtmError::from)?;
-            recipients.push(FanOutRecipient {
-                member_id: member_id.clone(),
-                address,
-                locality,
-            });
-        }
-
-        // Every attachment's source is validated once, up front, across the
-        // whole batch (R5/R13): a missing/unreadable source must fail before
-        // any per-host staging or transfer for *any* recipient.
-        for file in &self.attach {
-            std::fs::metadata(file)
-                .with_context(|| format!("attachment '{}' could not be read", file.display()))?;
-        }
+        // Resolve every recipient and validate every attachment source
+        // before any staging, transfer, or send begins (R5/R13): a
+        // malformed request stages and sends nothing.
+        let recipients = resolve_fan_out_recipients(&picker_output, local_host.as_ref())?;
+        validate_attach_sources(&self.attach)?;
 
         let atm_temp = if self.attach.is_empty() {
             None
@@ -615,12 +577,64 @@ impl SendCommand {
             AtmHomePath::new(&home_dir),
         )?;
 
+        let (delivered, not_delivered, failure) = self
+            .send_fan_out_recipients(
+                &recipients,
+                &picker_output,
+                &composition,
+                &current_dir,
+                home_dir,
+                nudge_mode,
+                atm_temp.as_ref(),
+                &caller_context,
+            )
+            .await;
+
+        report_fan_out_result(self.json, &delivered, &not_delivered);
+        failure.map_or(Ok(()), Err)
+    }
+
+    /// Resolves the caller's identity/team/chat-id, shared by both the
+    /// ordinary single-recipient path and `--from-json`'s fan-out.
+    fn resolve_caller_context(&self) -> Result<atm_core::caller_context::CallerContext> {
+        if self.actor.is_some() || self.chat_id.is_some() {
+            resolve_cli_mutation_caller_context_with_overrides(CallerContextOverrides {
+                identity_override: self.actor.as_deref().map(CallerIdentityOverride),
+                chat_id_override: self.chat_id.as_deref().map(CallerChatIdOverride),
+                team_override: self.team.as_deref().map(CallerTeamOverride),
+            })
+            .map_err(Into::into)
+        } else {
+            resolve_cli_mutation_caller_context(self.team.as_deref().map(CallerTeamOverride))
+                .map_err(Into::into)
+        }
+    }
+
+    /// Sends to every resolved recipient in array order (decision (g)):
+    /// aborts remaining recipients on the first transfer or send failure, no
+    /// further transfer or send calls. Returns the delivered/not-delivered
+    /// recipient-id lists and, on abort, the triggering error.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "fan-out send threads through shared, already-resolved batch state"
+    )]
+    async fn send_fan_out_recipients(
+        &self,
+        recipients: &[FanOutRecipient],
+        picker_output: &PickerOutput,
+        composition: &CliComposition<'_>,
+        current_dir: &std::path::Path,
+        home_dir: PathBuf,
+        nudge_mode: NudgeMode,
+        atm_temp: Option<&atm_core::atm_temp::AtmTemp>,
+        caller_context: &atm_core::caller_context::CallerContext,
+    ) -> (Vec<String>, Vec<String>, Option<anyhow::Error>) {
         let mut landed_by_locality: Vec<(RecipientLocality, PathBuf)> = Vec::new();
         let mut delivered: Vec<String> = Vec::new();
         let mut not_delivered: Vec<String> = Vec::new();
         let mut failure: Option<anyhow::Error> = None;
 
-        for recipient in &recipients {
+        for recipient in recipients {
             if failure.is_some() {
                 not_delivered.push(recipient.member_id.clone());
                 continue;
@@ -628,14 +642,14 @@ impl SendCommand {
             match self
                 .send_one_fan_out_recipient(
                     recipient,
-                    &picker_output,
-                    &composition,
-                    &current_dir,
+                    picker_output,
+                    composition,
+                    current_dir,
                     home_dir.clone(),
                     nudge_mode,
-                    atm_temp.as_ref(),
+                    atm_temp,
                     &mut landed_by_locality,
-                    &caller_context,
+                    caller_context,
                 )
                 .await
             {
@@ -647,12 +661,7 @@ impl SendCommand {
             }
         }
 
-        report_fan_out_result(self.json, &delivered, &not_delivered);
-
-        if let Some(error) = failure {
-            return Err(error);
-        }
-        Ok(())
+        (delivered, not_delivered, failure)
     }
 
     #[allow(
@@ -742,6 +751,43 @@ fn read_picker_output_from_stdin() -> Result<PickerOutput> {
     atm_core::send_to::parse_picker_output(&raw)
         .map_err(atm_core::error::AtmError::from)
         .map_err(Into::into)
+}
+
+/// Resolves and classifies every `--from-json` recipient against the roster
+/// before any staging, transfer, or send begins (R5/R13): an
+/// unknown/null-host/unclassifiable recipient anywhere in the batch fails
+/// the whole invocation closed.
+fn resolve_fan_out_recipients(
+    picker_output: &PickerOutput,
+    local_host: Option<&HostName>,
+) -> Result<Vec<FanOutRecipient>> {
+    let mut recipients = Vec::with_capacity(picker_output.recipients.len());
+    for member_id in &picker_output.recipients {
+        let address = with_default_roster_store(|roster| {
+            atm_core::send_to::resolve_picker_recipient(member_id, roster)
+                .map_err(atm_core::error::AtmError::from)
+        })?;
+        let locality = classify_recipient_locality(address.host(), local_host)
+            .map_err(atm_core::error::AtmError::from)?;
+        recipients.push(FanOutRecipient {
+            member_id: member_id.clone(),
+            address,
+            locality,
+        });
+    }
+    Ok(recipients)
+}
+
+/// Validates every `--attach` source file's readability once, up front,
+/// across the whole `--from-json` batch (R5/R13): a missing/unreadable
+/// source must fail before any per-host staging or transfer for *any*
+/// recipient.
+fn validate_attach_sources(files: &[PathBuf]) -> Result<()> {
+    for file in files {
+        std::fs::metadata(file)
+            .with_context(|| format!("attachment '{}' could not be read", file.display()))?;
+    }
+    Ok(())
 }
 
 /// Reports the decision-(g) partial delivery result on stderr, and includes

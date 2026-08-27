@@ -134,7 +134,7 @@ toml_glob = "boundaries/*/*.toml"
 # by one named implementation seam.
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm/Cargo.toml"
-allowed_dependencies = ["anyhow", "async-trait", "atm-core", "atm-daemon-bootstrap", "atm-daemon-client", "atm-graft", "atm-http-runtime", "atm-runtime-test-support", "atm-storage", "chrono", "clap", "sc-observability", "sc-observability-types", "serde", "serde_json", "serde_yaml", "serial_test", "tempfile", "time", "tokio", "tracing", "tracing-subscriber"]
+allowed_dependencies = ["anyhow", "async-trait", "atm-core", "atm-daemon-bootstrap", "atm-daemon-client", "atm-graft", "atm-http-runtime", "atm-runtime-test-support", "atm-storage", "chrono", "clap", "sc-observability", "sc-observability-types", "serde", "serde_json", "serde_yaml", "serial_test", "tempfile", "time", "tokio", "tracing", "tracing-subscriber", "ulid"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-core/Cargo.toml"

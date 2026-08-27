@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use atm_core::LocalFileNonClaudeOutbound;
 use atm_core::api::RequestDeadline;
-use atm_core::atm_temp::{EnvSource, ProcessEnvSource, is_atm_temp_unset};
+use atm_core::atm_temp::{ProcessEnvSource, is_atm_temp_unset};
 use atm_core::boundary::{NonClaudeOutbound, RosterStore, TemplateComposer};
 use atm_core::doctor::{DoctorFinding, DoctorSeverity, HerdrPresenceDoctor};
 use atm_core::error::AtmError;
@@ -30,7 +30,7 @@ use atm_core::send::input::DEFAULT_MESSAGE_MAX_BYTES;
 use atm_core::team_admin::MembersList;
 use atm_core::types::HostName;
 use atm_core::types::{AgentName, TeamName};
-use atm_core::{AtmConfig, resolve_atm_temp, validate_sweep_config};
+use atm_core::{resolve_atm_temp, validate_sweep_config};
 use atm_herdr::{
     BreakerPolicy, HerdrBreakerState, HerdrError, HerdrProcessAdapter, HerdrProcessInvoker,
     HerdrSpawnBreaker,
@@ -47,11 +47,13 @@ use atm_storage_rusqlite::SqliteStorageFactory;
 use peer_tls::MtlsPeerStreamAdapter;
 use tokio::net::TcpStream;
 
+mod atm_temp_config;
 mod atm_temp_sweeper_runtime;
 mod owner_gate;
 mod queue_drain;
 mod received_hook_selector;
 
+use atm_temp_config::daemon_atm_config;
 use atm_temp_sweeper_runtime::AtmTempSweeperRuntime;
 
 pub use owner_gate::DaemonOwnerGuard;
@@ -1060,24 +1062,6 @@ fn start_atm_temp_sweeper(
     ))
 }
 
-/// Loads `.atm.toml`'s sweep-interval/TTL configuration (ADR-055 decision
-/// (b)/QM43-I5) from the user's home directory, never from the daemon's
-/// current working directory.
-///
-/// `assemble_daemon_runtime`'s doc comment explains why the daemon's config
-/// doctor deliberately does not depend on a *workspace-relative* `.atm.toml`
-/// (a LaunchAgent's `getcwd(2)` can block). The user's home directory is a
-/// different, fixed OS concept -- the same one `~/.atm/transfer` and
-/// `AtmConfig.local_host`'s documented setup already anchor to -- so reading
-/// `$HOME/.atm.toml` here does not reintroduce that hazard. Returns `None`
-/// when the home directory cannot be resolved or no `.atm.toml` exists
-/// there; callers fall back to `AtmConfig::default()`'s compiled-in ADR-055
-/// defaults (1 hour / 30 days), exactly as before this threading landed.
-fn daemon_atm_config(env: &dyn EnvSource) -> Option<AtmConfig> {
-    let home = atm_core::home::resolve_user_home_via(env)?;
-    atm_core::load_atm_config(&home).ok().flatten()
-}
-
 fn bootstrap_peer_stream_adapter(
     assembly: &RuntimeAssembly,
     peer_wire_mode: PeerWireMode,
@@ -1315,51 +1299,11 @@ mod replacement_runtime_tests {
     use super::{
         DaemonLaunchIdentity, HerdrPresenceDoctorAdapter, REPLACEMENT_DRAIN_DEADLINE,
         ReplacementHandlerConfig, SelectedPeerAdapterSelection, ShutdownSignal,
-        assemble_host_runtime_with_template_composer, build_replacement_handler, daemon_atm_config,
+        assemble_host_runtime_with_template_composer, build_replacement_handler,
         parse_direct_peer_port, parse_peer_pool_config_with_environment, parse_peer_wire_mode,
         peer_stream_adapter_for_mode, replacement_runtime_config_with_direct_peer,
         write_ready_signal_if_requested,
     };
-
-    struct FixedEnvSource(HashMap<&'static str, String>);
-
-    impl atm_core::atm_temp::EnvSource for FixedEnvSource {
-        fn var(&self, key: &str) -> Option<String> {
-            self.0.get(key).cloned()
-        }
-    }
-
-    /// QM43-I5: sweep-interval/TTL threading reads `$HOME/.atm.toml`, not a
-    /// workspace-relative config -- `assemble_daemon_runtime`'s doc comment
-    /// explains why the daemon must not depend on its (possibly-blocking)
-    /// working directory for config discovery.
-    #[test]
-    fn daemon_atm_config_reads_sweep_settings_from_the_home_directory() {
-        let home = tempfile::tempdir().expect("tempdir");
-        std::fs::write(
-            home.path().join(".atm.toml"),
-            "[atm]\nsweep_interval_seconds = 120\nsweep_ttl_days = 7\n",
-        )
-        .expect("write .atm.toml");
-        let mut vars = HashMap::new();
-        vars.insert("HOME", home.path().to_str().expect("utf8 path").to_string());
-        let config = daemon_atm_config(&FixedEnvSource(vars)).expect("config resolves");
-        assert_eq!(config.sweep_interval_seconds, 120);
-        assert_eq!(config.sweep_ttl_days, 7);
-    }
-
-    #[test]
-    fn daemon_atm_config_is_none_without_a_home_atm_toml() {
-        let home = tempfile::tempdir().expect("tempdir");
-        let mut vars = HashMap::new();
-        vars.insert("HOME", home.path().to_str().expect("utf8 path").to_string());
-        assert_eq!(daemon_atm_config(&FixedEnvSource(vars)), None);
-    }
-
-    #[test]
-    fn daemon_atm_config_is_none_when_home_is_unresolvable() {
-        assert_eq!(daemon_atm_config(&FixedEnvSource(HashMap::new())), None);
-    }
 
     /// Test-owned receiver selection prevents an external tmux/graft action
     /// from obscuring the bootstrap's direct-peer persistence proof.

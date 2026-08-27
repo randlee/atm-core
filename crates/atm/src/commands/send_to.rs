@@ -352,6 +352,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial(env)]
     async fn invoke_transfer_script_child_environment_is_restricted_to_the_allow_list() {
         let dir = tempfile::tempdir().expect("tempdir");
         let landed = dir.path().join("landed");
@@ -368,14 +369,12 @@ mod tests {
         let script_path = write_script(dir.path(), "stub.sh", &script_contents);
         let configured = fixture_configured_script(script_path, host("m5"));
 
-        // SAFETY: single-threaded test process section; no other thread
-        // reads/writes these keys concurrently within this test.
-        unsafe {
-            std::env::set_var("ATM_TEMP", "/tmp/atm-test");
-            std::env::set_var("ATM_IDENTITY", "test-agent");
-            std::env::set_var("ATM_TEAM", "test-team");
-            std::env::set_var("NOT_ALLOWED_LEAK", "should-not-appear");
-        }
+        let _env = atm_core::test_support::EnvGuard::set_many([
+            ("ATM_TEMP", Some("atm-temp-test-value")),
+            ("ATM_IDENTITY", Some("test-agent")),
+            ("ATM_TEAM", Some("test-team")),
+            ("NOT_ALLOWED_LEAK", Some("should-not-appear")),
+        ]);
 
         let result = invoke_transfer_script(
             &configured,
@@ -384,13 +383,6 @@ mod tests {
             Duration::from_secs(5),
         )
         .await;
-
-        unsafe {
-            std::env::remove_var("ATM_TEMP");
-            std::env::remove_var("ATM_IDENTITY");
-            std::env::remove_var("ATM_TEAM");
-            std::env::remove_var("NOT_ALLOWED_LEAK");
-        }
 
         result.expect("happy path succeeds");
         let captured =

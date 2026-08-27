@@ -609,23 +609,23 @@ mod tests {
 
     #[test]
     fn member_host_is_none_when_metadata_key_absent() {
-        let entry = roster_entry("arch-ctm", "test-team", None);
-        assert_eq!(member_host("arch-ctm@test-team", &entry), Ok(None));
+        let entry = roster_entry("sender-a", "test-team", None);
+        assert_eq!(member_host("sender-a@test-team", &entry), Ok(None));
     }
 
     #[test]
     fn member_host_parses_a_valid_registered_host() {
-        let entry = roster_entry("arch-ctm", "test-team", Some("rand-m5.local"));
+        let entry = roster_entry("sender-a", "test-team", Some("rand-m5.local"));
         assert_eq!(
-            member_host("arch-ctm@test-team", &entry),
+            member_host("sender-a@test-team", &entry),
             Ok(Some(host("rand-m5.local")))
         );
     }
 
     #[test]
     fn member_host_rejects_an_unparsable_registered_host() {
-        let entry = roster_entry("arch-ctm", "test-team", Some("has a space"));
-        let error = member_host("arch-ctm@test-team", &entry).expect_err("invalid host string");
+        let entry = roster_entry("sender-a", "test-team", Some("has a space"));
+        let error = member_host("sender-a@test-team", &entry).expect_err("invalid host string");
         assert!(matches!(
             error,
             AddressResolutionError::InvalidRegisteredHost { .. }
@@ -637,10 +637,10 @@ mod tests {
     #[test]
     fn resolve_picker_recipient_resolves_a_registered_host() {
         let roster = FakeRosterStore {
-            entries: vec![roster_entry("arch-ctm", "test-team", Some("rand-m5.local"))],
+            entries: vec![roster_entry("sender-a", "test-team", Some("rand-m5.local"))],
         };
-        let resolved = resolve_picker_recipient("arch-ctm@test-team", &roster).expect("resolves");
-        assert_eq!(resolved.agent(), &agent_name("arch-ctm"));
+        let resolved = resolve_picker_recipient("sender-a@test-team", &roster).expect("resolves");
+        assert_eq!(resolved.agent(), &agent_name("sender-a"));
         assert_eq!(resolved.team(), Some(&team_name("test-team")));
         assert_eq!(resolved.host(), Some(&host("rand-m5.local")));
     }
@@ -648,7 +648,7 @@ mod tests {
     #[test]
     fn resolve_picker_recipient_fails_closed_on_unknown_member() {
         let roster = FakeRosterStore { entries: vec![] };
-        let error = resolve_picker_recipient("arch-ctm@test-team", &roster)
+        let error = resolve_picker_recipient("sender-a@test-team", &roster)
             .expect_err("unknown member must fail closed");
         assert!(matches!(
             error,
@@ -659,9 +659,9 @@ mod tests {
     #[test]
     fn resolve_picker_recipient_fails_closed_on_null_host() {
         let roster = FakeRosterStore {
-            entries: vec![roster_entry("arch-ctm", "test-team", None)],
+            entries: vec![roster_entry("sender-a", "test-team", None)],
         };
-        let error = resolve_picker_recipient("arch-ctm@test-team", &roster)
+        let error = resolve_picker_recipient("sender-a@test-team", &roster)
             .expect_err("null host must fail closed for --from-json");
         assert!(matches!(
             error,
