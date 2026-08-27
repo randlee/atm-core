@@ -299,9 +299,12 @@ impl MessageReceivedHookSelector for ReplacementReceivedHookSelector {
             (NudgeKind::Steer, PostSendBuiltInTarget::QueuePull(_)) => None,
             (
                 NudgeKind::Queue,
+                PostSendBuiltInTarget::LocalSteer(boundary::LocalSteerTarget::Tmux(_)),
+            ) => Some(&self.tmux),
+            (
+                NudgeKind::Queue,
                 PostSendBuiltInTarget::LocalSteer(boundary::LocalSteerTarget::Herdr(_)),
             ) => Some(&self.herdr),
-            (NudgeKind::Queue, _) => None, // AQ3 owns tmux/graft queue-kind emitters
         }
     }
 }
@@ -734,7 +737,7 @@ mod tests {
     }
 
     #[test]
-    fn selector_routes_tmux_only_for_steer() {
+    fn selector_routes_tmux_for_steer_and_queue_replay() {
         let temporary_root = tempfile::tempdir().expect("temporary selector runtime root");
         let assembly =
             atm_runtime_test_support::open_isolated_sqlite_boundary(temporary_root.path())
@@ -742,7 +745,7 @@ mod tests {
         let selector = ReplacementReceivedHookSelector::new(assembly.service_runtime);
 
         assert!(selector.select_emitter(&tmux_dispatch()).is_some());
-        assert!(selector.select_emitter(&queue_dispatch()).is_none());
+        assert!(selector.select_emitter(&queue_dispatch()).is_some());
     }
 
     #[test]

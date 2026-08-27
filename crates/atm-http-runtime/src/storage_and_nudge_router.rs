@@ -135,6 +135,7 @@ pub struct StorageAndNudgeRouter {
     shared_direct_peer_client: Option<reqwest::Client>,
     bare_cli_fifo: BareCliFifo,
     bare_cli_queue_full_drops: BareCliQueueFullDrops,
+    member_state_transition_sink: Option<Arc<dyn crate::MemberStateTransitionSink>>,
 }
 
 impl StorageAndNudgeRouter {
@@ -161,6 +162,7 @@ impl StorageAndNudgeRouter {
             shared_direct_peer_client: None,
             bare_cli_fifo: Default::default(),
             bare_cli_queue_full_drops: Default::default(),
+            member_state_transition_sink: None,
         }
     }
 
@@ -193,6 +195,17 @@ impl StorageAndNudgeRouter {
     ) -> Self {
         self.bare_cli_fifo = fifo;
         self.bare_cli_queue_full_drops = queue_full_drops;
+        self
+    }
+
+    /// Installs the best-effort idle-transition queue drain owned by daemon
+    /// composition. The runtime only forwards the sealed notification.
+    #[must_use]
+    pub fn with_member_state_transition_sink(
+        mut self,
+        sink: Arc<dyn crate::MemberStateTransitionSink>,
+    ) -> Self {
+        self.member_state_transition_sink = Some(sink);
         self
     }
 
@@ -602,6 +615,7 @@ impl StorageAndNudgeRouter {
         }
         let runtime = self.service_runtime.clone();
         let health = self.runtime_health.clone();
+        let sink = self.member_state_transition_sink.clone();
         self.blocking_core_bridge
             .run(deadline, move || {
                 validate_heartbeat_member(runtime, &request)?;
@@ -609,9 +623,15 @@ impl StorageAndNudgeRouter {
             })
             .await
             .map(|request| {
-                ApiResponse::new(ResponseEnvelope::Heartbeat(
-                    health.record_heartbeat(&request),
-                ))
+                let member = atm_core::boundary::MemberKey::new(
+                    request.team.clone(),
+                    request.member.clone(),
+                );
+                let (response, transition) = health.record_heartbeat(&request);
+                if let (Some(from), Some(sink)) = (transition, sink.as_ref()) {
+                    sink.on_transition(&member, from, atm_core::protocol::RuntimeMemberState::Idle);
+                }
+                ApiResponse::new(ResponseEnvelope::Heartbeat(response))
             })
     }
 

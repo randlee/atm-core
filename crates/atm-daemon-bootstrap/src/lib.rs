@@ -36,9 +36,9 @@ use atm_herdr::{
 use atm_http_runtime::{
     AcceptedPeerStream, BareCliFifo, BareCliQueueFullDrops, DirectPeerTcpConfig,
     EstablishedPeerStream, HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig,
-    NonZeroDuration, PeerConnectionPool, PeerPoolConfig, PeerStreamAdapter, PeerStreamFuture,
-    RuntimeHealth, RuntimeLimits, RuntimeTimeouts, StorageAndNudgeRouter,
-    shared_direct_peer_client,
+    MemberStateTransitionSink, NonZeroDuration, PeerConnectionPool, PeerPoolConfig,
+    PeerStreamAdapter, PeerStreamFuture, RuntimeHealth, RuntimeLimits, RuntimeTimeouts,
+    StorageAndNudgeRouter, shared_direct_peer_client,
 };
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime};
 use atm_storage_rusqlite::SqliteStorageFactory;
@@ -46,6 +46,7 @@ use peer_tls::MtlsPeerStreamAdapter;
 use tokio::net::TcpStream;
 
 mod owner_gate;
+mod queue_drain;
 mod received_hook_selector;
 
 pub use owner_gate::DaemonOwnerGuard;
@@ -83,6 +84,38 @@ struct ReplacementHandlerConfig<F> {
     bare_cli_fifo: BareCliFifo,
     bare_cli_queue_full_drops: BareCliQueueFullDrops,
     herdr_process: Option<Arc<dyn HerdrProcessAdapter>>,
+}
+
+fn compose_queue_workers<F>(
+    runtime: atm_core::LocalServiceRuntime,
+    selector_factory: F,
+    herdr_process: Arc<dyn HerdrProcessAdapter>,
+    runtime_health: RuntimeHealth,
+    bare_cli_fifo: BareCliFifo,
+    bare_cli_queue_full_drops: BareCliQueueFullDrops,
+) -> (
+    Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
+    queue_drain::RecoverySweepHandle,
+)
+where
+    F: FnOnce(
+        atm_core::LocalServiceRuntime,
+        Arc<dyn HerdrProcessAdapter>,
+        RuntimeHealth,
+        BareCliFifo,
+        BareCliQueueFullDrops,
+    ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
+{
+    let selector = selector_factory(
+        runtime.clone(),
+        herdr_process,
+        runtime_health.clone(),
+        bare_cli_fifo,
+        bare_cli_queue_full_drops,
+    );
+    let recovery_sweep =
+        queue_drain::spawn_recovery_sweep(runtime, selector.clone(), runtime_health);
+    (selector, recovery_sweep)
 }
 
 struct HerdrBreakerDoctorAdapter {
@@ -682,7 +715,7 @@ fn build_replacement_handler(
             BareCliQueueFullDrops,
         ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     >,
-) -> Result<Arc<StorageAndNudgeRouter>, AtmError> {
+) -> Result<(Arc<StorageAndNudgeRouter>, queue_drain::RecoverySweepHandle), AtmError> {
     let ReplacementHandlerConfig {
         observability,
         selector_factory,
@@ -709,13 +742,20 @@ fn build_replacement_handler(
             process
         }
     };
-    let selector = selector_factory(
+    let (selector, recovery_sweep) = compose_queue_workers(
         assembly.service_runtime.clone(),
+        selector_factory,
         herdr_process,
         runtime_health.clone(),
         bare_cli_fifo.clone(),
         bare_cli_queue_full_drops.clone(),
     );
+    let transition_sink: Arc<dyn MemberStateTransitionSink> =
+        Arc::new(queue_drain::DrainOnTransitionSink::new(
+            assembly.service_runtime.clone(),
+            Arc::clone(&selector),
+            runtime_health.clone(),
+        ));
     let handler = StorageAndNudgeRouter::new(
         assembly.service_runtime,
         observability,
@@ -723,6 +763,7 @@ fn build_replacement_handler(
         atm_core::home::atm_home()?,
     )
     .with_runtime_health(runtime_health, assembly.doctor_ports)
+    .with_member_state_transition_sink(transition_sink)
     .with_bare_cli_fifo(bare_cli_fifo, bare_cli_queue_full_drops)
     .with_daemon_context(atm_core::doctor::DoctorExecutionContext {
         team: daemon_launch_identity.team.clone(),
@@ -740,7 +781,7 @@ fn build_replacement_handler(
         )),
         None => handler,
     };
-    Ok(Arc::new(handler))
+    Ok((Arc::new(handler), recovery_sweep))
 }
 
 /// Selects the optional mTLS stream adapter from the immutable daemon launch
@@ -869,7 +910,7 @@ async fn run_replacement_daemon_with_selector(
     let assembly = assemble_daemon_runtime()?;
     let workflow_telemetry = assembly.workflow_telemetry.clone();
     let peer_stream_adapter = bootstrap_peer_stream_adapter(&assembly, peer_wire_mode)?;
-    let handler = build_replacement_handler(
+    let (handler, recovery_sweep) = build_replacement_handler(
         assembly,
         ReplacementHandlerConfig {
             observability: Arc::clone(&observability),
@@ -899,25 +940,46 @@ async fn run_replacement_daemon_with_selector(
         peer_wire_mode,
         &peer_stream_adapter,
     );
-    let runtime_handler: Arc<dyn atm_http_runtime::CanonicalWriteHandler> = handler.clone();
-    let running = HttpRuntimeBuilder::new(config, runtime_handler)
-        .with_runtime_health(runtime_health)
-        .build()?
-        .start()
-        .await?;
+    let running = start_replacement_runtime(config, handler.clone(), runtime_health).await?;
     if let Err(error) = emit_ready_signal_if_requested() {
         // The process has not advertised readiness, so it must not retain an
         // otherwise-live listener when its supervisor handshake fails.
-        let _ = shutdown_replacement_daemon(running, handler.as_ref(), workflow_telemetry).await;
+        let _ = shutdown_replacement_daemon(
+            running,
+            handler.as_ref(),
+            workflow_telemetry,
+            recovery_sweep,
+        )
+        .await;
         return Err(error);
     }
-    await_runtime_or_shutdown(running, handler.as_ref(), workflow_telemetry).await
+    await_runtime_or_shutdown(
+        running,
+        handler.as_ref(),
+        workflow_telemetry,
+        recovery_sweep,
+    )
+    .await
+}
+
+async fn start_replacement_runtime(
+    config: HttpRuntimeConfig,
+    handler: Arc<StorageAndNudgeRouter>,
+    runtime_health: RuntimeHealth,
+) -> Result<atm_http_runtime::HttpRuntime<atm_http_runtime::Running>, AtmError> {
+    let runtime_handler: Arc<dyn atm_http_runtime::CanonicalWriteHandler> = handler;
+    HttpRuntimeBuilder::new(config, runtime_handler)
+        .with_runtime_health(runtime_health)
+        .build()?
+        .start()
+        .await
 }
 
 async fn await_runtime_or_shutdown(
     mut running: atm_http_runtime::HttpRuntime<atm_http_runtime::Running>,
     handler: &StorageAndNudgeRouter,
     workflow_telemetry: atm_runtime::WorkflowTelemetryRuntime,
+    recovery_sweep: queue_drain::RecoverySweepHandle,
 ) -> Result<(), AtmError> {
     let server_stopped = tokio::select! {
         signal = wait_for_shutdown_signal() => {
@@ -931,11 +993,13 @@ async fn await_runtime_or_shutdown(
         }
     };
     if server_stopped {
+        let _ =
+            shutdown_replacement_daemon(running, handler, workflow_telemetry, recovery_sweep).await;
         return Err(AtmError::daemon_unavailable(
             "replacement HTTP runtime server stopped unexpectedly",
         ));
     }
-    shutdown_replacement_daemon(running, handler, workflow_telemetry).await
+    shutdown_replacement_daemon(running, handler, workflow_telemetry, recovery_sweep).await
 }
 
 fn bootstrap_peer_stream_adapter(
@@ -959,8 +1023,10 @@ async fn shutdown_replacement_daemon(
     running: atm_http_runtime::HttpRuntime<atm_http_runtime::Running>,
     handler: &StorageAndNudgeRouter,
     workflow_telemetry: atm_runtime::WorkflowTelemetryRuntime,
+    recovery_sweep: queue_drain::RecoverySweepHandle,
 ) -> Result<(), AtmError> {
     let stopped = running.begin_shutdown().finish().await;
+    recovery_sweep.shutdown(REPLACEMENT_DRAIN_DEADLINE).await;
     handler
         .shutdown_peer_connections(REPLACEMENT_DRAIN_DEADLINE)
         .await;
@@ -1407,7 +1473,7 @@ mod replacement_runtime_tests {
             })
             .expect("plaintext bootstrap selects no TLS stream adapter");
         let runtime_health = RuntimeHealth::with_owner(std::process::id());
-        let handler = build_replacement_handler(
+        let (handler, _recovery_sweep) = build_replacement_handler(
             assembly,
             ReplacementHandlerConfig {
                 observability: Arc::new(NullObservability),
