@@ -205,6 +205,74 @@ class ValidateReleaseProofTests(unittest.TestCase):
             ],
         )
 
+    @mock.patch.object(VALIDATE_RELEASE, "run_capture")
+    def test_manifest_validation_uses_installed_kit_contract(self, run_capture: mock.Mock) -> None:
+        run_capture.side_effect = [
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+            subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout='{"repository_secrets": [], "environment_secrets": [], "github_environments": []}',
+                stderr="",
+            ),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+        ]
+        findings: list[VALIDATE_RELEASE.Finding] = []
+
+        VALIDATE_RELEASE.validate_manifest(
+            self.root,
+            findings,
+            staged_install_root=None,
+            release_version="1.3.0",
+        )
+
+        self.assertFalse(findings)
+        commands = [call.args[0] for call in run_capture.call_args_list]
+        self.assertTrue(all("scripts/release_artifacts.py" not in command for command in commands))
+        self.assertEqual(
+            commands[:3],
+            [
+                [
+                    "python3",
+                    ".github/scripts/release_artifacts.py",
+                    "validate-manifest",
+                    "--manifest",
+                    "release/publish-artifacts.toml",
+                    "--workspace-toml",
+                    "Cargo.toml",
+                ],
+                [
+                    "python3",
+                    ".github/scripts/release_artifacts.py",
+                    "validate-publish-order",
+                    "--manifest",
+                    "release/publish-artifacts.toml",
+                    "--workspace-toml",
+                    "Cargo.toml",
+                ],
+                [
+                    "python3",
+                    ".github/scripts/release_artifacts.py",
+                    "preflight-secret-plan",
+                    "--manifest",
+                    "release/publish-artifacts.toml",
+                ],
+            ],
+        )
+
+    @mock.patch.object(VALIDATE_RELEASE, "run_capture")
+    def test_release_binary_validation_fails_closed_when_kit_omits_a_binary(self, run_capture: mock.Mock) -> None:
+        run_capture.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="--bin atm\n", stderr=""
+        )
+        findings: list[VALIDATE_RELEASE.Finding] = []
+
+        VALIDATE_RELEASE.validate_release_binaries(self.root, findings)
+
+        self.assertEqual(run_capture.call_args.args[0][1], ".github/scripts/release_artifacts.py")
+        self.assertTrue(any(finding.check == "release-binaries" and finding.blocks for finding in findings))
+
 
 if __name__ == "__main__":
     unittest.main()
