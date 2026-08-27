@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use anyhow::Context;
 use anyhow::Result;
 use quote::ToTokens;
+use sc_lint_attributes::sc_lint;
 use serde::Deserialize;
 use syn::Attribute;
 use syn::Block;
@@ -130,6 +131,9 @@ pub(crate) fn count_scanned_crates(root: &Path) -> Result<usize> {
         .count())
 }
 
+// Recursive-descent visitor: visit_items -> visit_item -> visit_item_mod -> visit_items;
+// visit_item_impl follows the same recursive descent.
+#[sc_lint(boundary.allow("cycle.type_method_self_loop"))]
 struct PortabilityCollector<'a> {
     file_context: &'a FileContext,
     config: &'a PortabilityConfig,

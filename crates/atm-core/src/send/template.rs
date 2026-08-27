@@ -28,7 +28,7 @@ impl MergedVars {
 
 /// Output required by the routing/persistence step after verification.
 #[derive(Debug, Clone)]
-pub(super) struct VerifiedTemplateSend {
+pub(crate) struct VerifiedTemplateSend {
     pub source: TemplateSource,
     pub inspection: crate::boundary::TemplateInspection,
     pub vars: MergedVars,

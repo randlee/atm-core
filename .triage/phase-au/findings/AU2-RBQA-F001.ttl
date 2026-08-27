@@ -1,0 +1,55 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AU2-RBQA-F001>
+  a triage:Finding ;
+  triage:findingId "AU2-RBQA-F001" ;
+  triage:title "sc-lint-boundary delegating-call classifier suppresses real self-owner cycles by name-inequality alone" ;
+  triage:description "crates/sc-lint-boundary/src/analysis.rs (is_delegating_call, is_trait_impl_delegating_call, ~lines 195-300): these functions exclude a call edge from SCB-CYCLE-002/003 whenever the caller and callee method names differ and share the same owner type, with NO graph-reachability/cycle-traversal check. This was originally flagged by ruthless-boundary-qa as a false-negative class for hypothetical mutual/indirect self-recursion (e.g. fn a(){Self::b()} / fn b(){Self::a()}), independently confirmed by quality-mgr via direct source read. quality-mgr then independently re-ran the sc-boundary full JSON payload against BOTH the true pre-AU baseline (commit 9923ef6cbe71c65381efbc717f0ddb85abe62e38) and the AU.2 worktree (feature/pau-s2-lint-calibration @ 8a8292e9d) and found this is not just hypothetical: the baseline's SCB-CYCLE-001 finding #1 -- a real 6-node cycle across atm_core::ack / atm_core::send (nodes: ack_mail_with_runtime, admit_acknowledgement_write, admit_acknowledgement_write_async, prepare_write_with_async_runtime, write_mail_with_runtime, write_mail_with_runtime_impl_with_mode) -- is COMPLETELY ABSENT from the AU.2 worktree's own boundary-lint output. None of AU.2's 7 SCB-CYCLE-001 findings mention ack or send at all. This is the exact known architectural violation that sibling sprint AU.3 exists to fix (sprint-AU3's acceptance criterion requires 'Finding #1 absent from the full JSON payload by identity' as AU.3's OWN deliverable after its fix -- not something AU.2 is authorized to cause via a lint blind spot). AU.2's sprint doc (docs/plans/phase-au/sprint-AU2-lint-calibration.md) explicitly states 'this sprint touches crates/sc-lint-boundary ONLY' and 'Direct recursion Self::same_method() remains a positive' -- the classifier is only supposed to exclude single-hop delegation to a different associated function of the SAME logical operation, not mask a genuine multi-node call cycle. Required fix: is_delegating_call/is_trait_impl_delegating_call need real graph-reachability (does excluding this edge remove the target node from being part of any cycle that would otherwise be reported) or equivalent cycle-aware validation -- not simple pairwise name-inequality + same-owner exclusion. Fix verification: re-run the sc-boundary full JSON payload against the fixed AU.2 worktree and confirm the ack/send SCB-CYCLE-001 finding (by the 6-node identity above) REAPPEARS, while the AU.2-owned findings (#8-11,#13-16,#18,#20,#21) remain correctly absent, and no pre-existing tests.rs true-positive regresses. VERIFIED LIVE at qa-triage (2026-08-26): is_delegating_call (crates/sc-lint-boundary/src/analysis.rs:278-295) excludes an edge solely via `source_method != callee.ident` (line 294) after a same-owner check (line 285) -- no graph-reachability or cycle-traversal test. is_trait_impl_delegating_call (lines 211-239) uses the analogous name-equality/inherent-forwarder test with no cycle check either." ;
+  triage:phaseId "phase-au" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "cycle-detection-false-negative" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/sc-lint-boundary/src/analysis.rs (SCB-CYCLE-002 and SCB-CYCLE-003 classifier paths)" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-26T20:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AU2 ;
+  triage:foundAt "2026-08-26T20:25:55Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AU2-RBQA-F001/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AU2-RBQA-F001/2> ;
+  triage:triageRecordVersion "2" ;
+  triage:closedNote "Fixed on feature/pau-s2-lint-calibration @ d4a90bf12 ('retain real delegation cycles'): is_delegating_call/is_trait_impl_delegating_call (crates/sc-lint-boundary/src/analysis.rs:288,218) now each additionally require '&& !call_edge_participates_in_cycle(edge, node_map, owner_graph)' (lines 305, 247) -- a real graph-reachability check (analysis.rs:315-328), not the prior pairwise name-inequality/same-owner-only exclusion. quality-mgr independently re-verified this closure during the Phase-AU phase-end gate review (2026-08-26): confirmed the guard is present at both call sites in the current integrate/phase-au head, applied uniformly (not special-cased to pre-AU.3 code shapes); confirmed via live `cargo run -q -p sc-lint-boundary -- analyze --root . --format json` (run by rust-qa-agent, independently spot-checked) that the ack<->send SCB-CYCLE-001 finding correctly reappeared post-fix (proving the reachability check works) and was then correctly retired again by AU.3's write-module fix, with 0 residual findings against the 22-finding baseline; confirmed by arch-qa and req-qa via independent static read of the same guard. This record's triage:status was stale (left at \"open\"/dispatchReady=true after the code fix landed) -- corrected here now that the fix's own governing doc amendment (docs/plans/boundary-regression-plan.md, merged via PR #1032 @ 08c079b76, merge-forwarded into integrate/phase-au @ 68c10f702) is confirmed present on the integrate branch." .
+
+<urn:atm:triage:occurrence/AU2-RBQA-F001/1>
+  a triage:Occurrence ;
+  triage:file "crates/sc-lint-boundary/src/analysis.rs" ;
+  triage:line 278 ;
+  triage:snippet "fn is_delegating_call(...) { ... source_method != callee.ident }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pau-s2-lint-calibration" ;
+  triage:headSha "d4a90bf12" ;
+  triage:occursIn <urn:atm:triage:worktree/pau-s2-lint-calibration> .
+
+<urn:atm:triage:occurrence/AU2-RBQA-F001/2>
+  a triage:Occurrence ;
+  triage:file "crates/sc-lint-boundary/src/analysis.rs" ;
+  triage:line 211 ;
+  triage:snippet "fn is_trait_impl_delegating_call(...) { ... same_name_inherent_forwarder / non_public_associated_helper ... }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pau-s2-lint-calibration" ;
+  triage:headSha "d4a90bf12" ;
+  triage:occursIn <urn:atm:triage:worktree/pau-s2-lint-calibration> .
+
+<urn:atm:triage:worktree/pau-s2-lint-calibration>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pau-s2-lint-calibration" ;
+  triage:branch "feature/pau-s2-lint-calibration" ;
+  triage:headSha "d4a90bf12" ;
+  triage:orderIndex 1 .

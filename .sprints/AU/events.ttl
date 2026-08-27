@@ -1,0 +1,34 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Provenance: Phase AU dispatched by fenix (team-lead delegate) on 2026-08-26
+# as three fully parallel sprints (easiest -> hardest). Assignment times are
+# the sprint dispatch approximations; completion times are the dev-complete
+# evidence (PR opened / final dev push).
+
+triage:a1 a triage:Assignment ;
+    triage:ofSprint triage:AU1 ;
+    triage:assignedTo "Cipher-311d" ;
+    triage:assignedAt "2026-08-26T18:30:00Z"^^xsd:dateTime .
+
+triage:c1 a triage:Completion ;
+    triage:ofSprint triage:AU1 ;
+    triage:at "2026-08-26T19:59:42Z"^^xsd:dateTime .
+
+triage:a2 a triage:Assignment ;
+    triage:ofSprint triage:AU2 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-26T18:30:00Z"^^xsd:dateTime .
+
+triage:c2 a triage:Completion ;
+    triage:ofSprint triage:AU2 ;
+    triage:at "2026-08-26T19:59:52Z"^^xsd:dateTime .
+
+triage:a3 a triage:Assignment ;
+    triage:ofSprint triage:AU3 ;
+    triage:assignedTo "fenix" ;
+    triage:assignedAt "2026-08-26T18:30:00Z"^^xsd:dateTime .
+
+triage:c3 a triage:Completion ;
+    triage:ofSprint triage:AU3 ;
+    triage:at "2026-08-26T20:31:54Z"^^xsd:dateTime .
