@@ -66,10 +66,13 @@ document cites it by decision id (`D1`-`D10.1`).
 `atm-herdr` does not own:
 
 - `LocalMessageReceivedBackend::Herdr { session: Option<HerdrSession> }`
-  and `HerdrSession` — roster-derived routing data owned by `atm-core`
-  (AQ1, `crates/atm-core/src/delivery_channel.rs`); `atm-herdr` consumes an
-  already-resolved `AgentName` and an already-validated optional session
-  string, it does not derive either from roster metadata
+  and the roster-derived decision of *which* session a member lives in —
+  owned by `atm-core` (AQ1, `crates/atm-core/src/delivery_channel.rs`).
+  `atm-herdr` does depend on `atm-core` for the `HerdrSession` type itself
+  (along with `AgentName`, `RequestDeadline`, and `AtmError`) and consumes
+  an already-resolved `AgentName` and an already-validated
+  `Option<&HerdrSession>`; it does not derive either value from roster
+  metadata
 - `HerdrReceivedHook`, the immediate-steer emitter that implements the
   sealed `AsyncMessageReceivedHookEmitter` contract and decides *when* to
   call this crate's `prompt` — owned by `atm-daemon-bootstrap` (AQ2.6)
