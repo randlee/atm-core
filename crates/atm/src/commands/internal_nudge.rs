@@ -3,7 +3,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
-use atm_core::api::ApiRequest;
+use atm_core::api::{ApiRequest, DaemonApiClient};
 use atm_core::boundary::{
     BuiltInNudgeSinkTarget, InternalNudgeEnvelope, PostSendHookEvent, ResolvedBuiltInNudgeTemplate,
     TMUX_DOUBLE_ENTER_DELAY, TMUX_NUDGE_CONFIRM_KEY,
@@ -207,6 +207,18 @@ async fn lookup_receiver(
     let endpoint = resolve_daemon_local_ipc_endpoint()?;
     let transport =
         atm_http_runtime::preferred_local_client(endpoint.as_ref(), SAME_HOST_REQUEST_DEADLINE)?;
+    lookup_receiver_via(transport.as_ref(), team, agent).await
+}
+
+/// Executes the `GraftReceiverLookup` round trip against any daemon client
+/// transport, decoupled from local endpoint resolution so it can be
+/// exercised against a fake or router-backed transport in tests without a
+/// running daemon (AC7).
+async fn lookup_receiver_via(
+    transport: &dyn DaemonApiClient,
+    team: &atm_core::types::TeamName,
+    agent: &atm_core::types::AgentName,
+) -> Result<atm_storage::GraftReceiverLease, AtmError> {
     let response = transport
         .execute(ApiRequest::new(RequestEnvelope::GraftReceiverLookup {
             team: team.clone(),
@@ -299,9 +311,13 @@ mod tests {
     use serial_test::serial;
     use tempfile::tempdir;
 
+    use atm_core::graft::graft_receiver_not_registered_error;
+    use atm_core::protocol::{OwnerGeneration, RequestEnvelope, ResponseEnvelope};
+    use atm_core::transport::testing::FakeClientTransport;
+
     use super::{
         INTERNAL_NUDGE_ENV, InternalNudgeCommand, InternalNudgeInput, TMUX_PROGRAM_ENV,
-        render_template,
+        lookup_receiver_via, render_template,
     };
 
     fn base_event() -> PostSendHookEvent {
@@ -524,5 +540,53 @@ mod tests {
         let logged = fs::read_to_string(&tmux_log).expect("tmux log");
         assert_eq!(logged.matches("Enter").count(), 2);
         assert!(TMUX_DOUBLE_ENTER_DELAY >= Duration::from_millis(250));
+    }
+
+    // AC7 (PR #1048): `GraftReceiverLookup` round-trips through
+    // `_internal-nudge`'s own query path — `lookup_receiver_via` is the exact
+    // request/response contract `GraftNudgeSink::deliver` uses, exercised
+    // here against a fake transport so no real daemon or file record is
+    // involved, mirroring the router-level `GraftReceiverLookup` test style.
+    #[tokio::test]
+    async fn graft_receiver_lookup_round_trips_hit_and_absent_lease() {
+        let team: atm_core::types::TeamName = TEST_TEAM.parse().expect("team");
+        let agent: atm_core::types::AgentName = TEST_ARCH_CTM.parse().expect("agent");
+        let owner_generation =
+            OwnerGeneration::new("01J00000000000000000000040").expect("owner generation");
+        let lease = atm_storage::GraftReceiverLease {
+            endpoint: "127.0.0.1:43120".parse().expect("endpoint"),
+            capability: atm_core::local_http::LocalCapability::generate().expect("capability"),
+            owner_generation,
+            registered_at: chrono::Utc::now(),
+            last_seen_at: chrono::Utc::now(),
+            unreachable_since: None,
+        };
+
+        let hit_lease = lease.clone();
+        let hit_transport = FakeClientTransport::new(move |request| match request {
+            RequestEnvelope::GraftReceiverLookup { .. } => Ok(
+                ResponseEnvelope::GraftReceiverLookup(Some(hit_lease.clone())),
+            ),
+            other => panic!("unexpected request in graft receiver lookup test: {other:?}"),
+        });
+        let resolved = lookup_receiver_via(&hit_transport, &team, &agent)
+            .await
+            .expect("hit lookup must resolve the lease");
+        assert_eq!(resolved, lease);
+
+        let miss_transport = FakeClientTransport::new(|request| match request {
+            RequestEnvelope::GraftReceiverLookup { .. } => {
+                Ok(ResponseEnvelope::GraftReceiverLookup(None))
+            }
+            other => panic!("unexpected request in graft receiver lookup test: {other:?}"),
+        });
+        let error = lookup_receiver_via(&miss_transport, &team, &agent)
+            .await
+            .expect_err("an absent lease must surface the not-registered error");
+        assert_eq!(
+            error.code(),
+            graft_receiver_not_registered_error(&team, &agent).code()
+        );
+        assert!(error.message().contains(TEST_ARCH_CTM));
     }
 }

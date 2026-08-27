@@ -36,11 +36,10 @@ use atm_herdr::{
     HerdrSpawnBreaker,
 };
 use atm_http_runtime::{
-    AcceptedPeerStream, BareCliFifo, BareCliQueueFullDrops, DirectPeerTcpConfig,
-    EstablishedPeerStream, HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig,
-    NonZeroDuration, PeerConnectionPool, PeerPoolConfig, PeerStreamAdapter, PeerStreamFuture,
-    RuntimeHealth, RuntimeLimits, RuntimeTimeouts, StorageAndNudgeRouter,
-    shared_direct_peer_client,
+    AcceptedPeerStream, DirectPeerTcpConfig, EstablishedPeerStream, HttpRuntimeBuilder,
+    HttpRuntimeConfig, LoopbackTcpConfig, NonZeroDuration, PeerConnectionPool, PeerPoolConfig,
+    PeerStreamAdapter, PeerStreamFuture, RuntimeHealth, RuntimeLimits, RuntimeTimeouts,
+    StorageAndNudgeRouter, shared_direct_peer_client,
 };
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime};
 use atm_storage_rusqlite::SqliteStorageFactory;
@@ -49,6 +48,7 @@ use tokio::net::TcpStream;
 
 mod atm_temp_config;
 mod atm_temp_sweeper_runtime;
+mod bare_cli_runtime;
 mod owner_gate;
 mod peer_launch_config;
 mod queue_drain;
@@ -56,9 +56,12 @@ mod received_hook_selector;
 
 use atm_temp_config::daemon_atm_config;
 use atm_temp_sweeper_runtime::AtmTempSweeperRuntime;
-use peer_launch_config::{parse_direct_peer_port, parse_peer_pool_config, parse_peer_wire_mode};
+use bare_cli_runtime::BareCliRuntime;
 
 pub use owner_gate::DaemonOwnerGuard;
+pub use peer_launch_config::{
+    parse_direct_peer_port, parse_peer_pool_config, parse_peer_wire_mode,
+};
 pub use received_hook_selector::active_received_hook_selector;
 pub use received_hook_selector::active_received_hook_selector_with_health;
 #[cfg(feature = "benchmark-harness")]
@@ -90,8 +93,7 @@ struct ReplacementHandlerConfig<F> {
     peer_wire_mode: PeerWireMode,
     peer_adapter_selection: SelectedPeerAdapterSelection,
     runtime_health: RuntimeHealth,
-    bare_cli_fifo: BareCliFifo,
-    bare_cli_queue_full_drops: BareCliQueueFullDrops,
+    bare_cli: BareCliRuntime,
     herdr_process: Option<Arc<dyn HerdrProcessAdapter>>,
 }
 
@@ -100,8 +102,7 @@ fn compose_queue_workers<F>(
     selector_factory: F,
     herdr_process: Arc<dyn HerdrProcessAdapter>,
     runtime_health: RuntimeHealth,
-    bare_cli_fifo: BareCliFifo,
-    bare_cli_queue_full_drops: BareCliQueueFullDrops,
+    bare_cli: BareCliRuntime,
 ) -> (
     Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     queue_drain::RecoverySweepHandle,
@@ -111,16 +112,14 @@ where
         atm_core::LocalServiceRuntime,
         Arc<dyn HerdrProcessAdapter>,
         RuntimeHealth,
-        BareCliFifo,
-        BareCliQueueFullDrops,
+        BareCliRuntime,
     ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
 {
     let selector = selector_factory(
         runtime.clone(),
         herdr_process,
         runtime_health.clone(),
-        bare_cli_fifo,
-        bare_cli_queue_full_drops,
+        bare_cli,
     );
     let recovery_sweep =
         queue_drain::spawn_recovery_sweep(runtime, selector.clone(), runtime_health);
@@ -389,17 +388,13 @@ pub async fn run_replacement_daemon_with_observability(
     let peer_pool_config = parse_peer_pool_config(std::env::args_os())?;
     run_replacement_daemon_with_selector(
         observability,
-        |service_runtime,
-         herdr_process,
-         runtime_health,
-         bare_cli_fifo,
-         bare_cli_queue_full_drops| {
+        |service_runtime, herdr_process, runtime_health, bare_cli| {
             received_hook_selector::active_received_hook_selector_with_health_and_fifo(
                 service_runtime,
                 herdr_process,
                 runtime_health,
-                bare_cli_fifo,
-                bare_cli_queue_full_drops,
+                bare_cli.fifo(),
+                bare_cli.queue_full_drops(),
             )
         },
         resolve_daemon_launch_identity(),
@@ -423,18 +418,14 @@ pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode) -> Result<(), At
     let peer_pool_config = parse_peer_pool_config(std::env::args_os())?;
     run_replacement_daemon_with_selector(
         Arc::new(NullObservability),
-        move |service_runtime,
-              herdr_process,
-              runtime_health,
-              bare_cli_fifo,
-              bare_cli_queue_full_drops| {
+        move |service_runtime, herdr_process, runtime_health, bare_cli| {
             received_hook_selector::benchmark_received_hook_selector_with_health_and_fifo(
                 service_runtime,
                 hook_mode,
                 herdr_process,
                 runtime_health,
-                bare_cli_fifo,
-                bare_cli_queue_full_drops,
+                bare_cli.fifo(),
+                bare_cli.queue_full_drops(),
             )
         },
         resolve_daemon_launch_identity(),
@@ -455,8 +446,7 @@ fn build_replacement_handler(
             atm_core::LocalServiceRuntime,
             Arc<dyn HerdrProcessAdapter>,
             RuntimeHealth,
-            BareCliFifo,
-            BareCliQueueFullDrops,
+            BareCliRuntime,
         ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     >,
 ) -> Result<(Arc<StorageAndNudgeRouter>, queue_drain::RecoverySweepHandle), AtmError> {
@@ -467,8 +457,7 @@ fn build_replacement_handler(
         peer_wire_mode,
         peer_adapter_selection,
         runtime_health,
-        bare_cli_fifo,
-        bare_cli_queue_full_drops,
+        bare_cli,
         herdr_process,
     } = config;
     let herdr_process = match herdr_process {
@@ -491,8 +480,7 @@ fn build_replacement_handler(
         selector_factory,
         herdr_process,
         runtime_health.clone(),
-        bare_cli_fifo.clone(),
-        bare_cli_queue_full_drops.clone(),
+        bare_cli.clone(),
     );
     let transition_sink = queue_drain::transition_sink(
         assembly.service_runtime.clone(),
@@ -508,7 +496,7 @@ fn build_replacement_handler(
     )
     .with_runtime_health(runtime_health, assembly.doctor_ports)
     .with_member_state_transition_sink(transition_sink)
-    .with_bare_cli_fifo(bare_cli_fifo, bare_cli_queue_full_drops)
+    .with_bare_cli_fifo(bare_cli.fifo(), bare_cli.queue_full_drops())
     .with_daemon_context(atm_core::doctor::DoctorExecutionContext {
         team: daemon_launch_identity.team.clone(),
         identity: daemon_launch_identity.identity.clone(),
@@ -636,8 +624,7 @@ async fn run_replacement_daemon_with_selector(
         atm_core::LocalServiceRuntime,
         Arc<dyn HerdrProcessAdapter>,
         RuntimeHealth,
-        BareCliFifo,
-        BareCliQueueFullDrops,
+        BareCliRuntime,
     ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     daemon_launch_identity: DaemonLaunchIdentity,
     peer_wire_mode: PeerWireMode,
@@ -649,10 +636,9 @@ async fn run_replacement_daemon_with_selector(
     let scope = current_host_runtime_scope()?;
     let _owner = DaemonOwnerGuard::acquire_at(scope.owner_lock.clone())?;
     let runtime_health = RuntimeHealth::with_owner(std::process::id());
+    let bare_cli = BareCliRuntime::default();
     let atm_temp_sweeper =
         start_atm_temp_sweeper(Arc::clone(&observability), daemon_launch_identity.clone())?;
-    let bare_cli_fifo: BareCliFifo = Default::default();
-    let bare_cli_queue_full_drops: BareCliQueueFullDrops = Default::default();
     let assembly = assemble_daemon_runtime()?;
     let workflow_telemetry = assembly.workflow_telemetry.clone();
     let peer_stream_adapter = bootstrap_peer_stream_adapter(&assembly, peer_wire_mode)?;
@@ -668,8 +654,7 @@ async fn run_replacement_daemon_with_selector(
                 pool_config: peer_pool_config,
             },
             runtime_health: runtime_health.clone(),
-            bare_cli_fifo,
-            bare_cli_queue_full_drops,
+            bare_cli,
             herdr_process,
         },
     )?;
@@ -687,6 +672,27 @@ async fn run_replacement_daemon_with_selector(
         &peer_stream_adapter,
     );
     let running = start_replacement_runtime(config, handler.clone(), runtime_health).await?;
+    run_until_shutdown(
+        running,
+        handler,
+        workflow_telemetry,
+        recovery_sweep,
+        atm_temp_sweeper,
+    )
+    .await
+}
+
+/// Advertises readiness, then waits for either a shutdown signal or an
+/// unexpected server stop, draining every supervised subsystem exactly once
+/// on every exit path (ready-signal failure, unexpected stop, or ordinary
+/// shutdown).
+async fn run_until_shutdown(
+    running: atm_http_runtime::HttpRuntime<atm_http_runtime::Running>,
+    handler: Arc<StorageAndNudgeRouter>,
+    workflow_telemetry: atm_runtime::WorkflowTelemetryRuntime,
+    recovery_sweep: queue_drain::RecoverySweepHandle,
+    atm_temp_sweeper: AtmTempSweeperRuntime,
+) -> Result<(), AtmError> {
     if let Err(error) = emit_ready_signal_if_requested() {
         // The process has not advertised readiness, so it must not retain an
         // otherwise-live listener when its supervisor handshake fails.
@@ -694,8 +700,8 @@ async fn run_replacement_daemon_with_selector(
             running,
             handler.as_ref(),
             workflow_telemetry,
-            atm_temp_sweeper,
             recovery_sweep,
+            atm_temp_sweeper,
         )
         .await;
         return Err(error);
@@ -704,8 +710,8 @@ async fn run_replacement_daemon_with_selector(
         running,
         handler.as_ref(),
         workflow_telemetry,
-        atm_temp_sweeper,
         recovery_sweep,
+        atm_temp_sweeper,
     )
     .await
 }
@@ -723,18 +729,14 @@ async fn start_replacement_runtime(
         .await
 }
 
-/// Advertises readiness, then waits for either a shutdown signal or an
-/// unexpected server stop, draining every supervised subsystem exactly once
-/// on every exit path (ready-signal failure, unexpected stop, or ordinary
-/// shutdown).
 async fn await_runtime_or_shutdown(
     mut running: atm_http_runtime::HttpRuntime<atm_http_runtime::Running>,
     handler: &StorageAndNudgeRouter,
     workflow_telemetry: atm_runtime::WorkflowTelemetryRuntime,
-    atm_temp_sweeper: AtmTempSweeperRuntime,
     recovery_sweep: queue_drain::RecoverySweepHandle,
+    atm_temp_sweeper: AtmTempSweeperRuntime,
 ) -> Result<(), AtmError> {
-    let server_stopped = tokio::select! {
+    tokio::select! {
         signal = wait_for_shutdown_signal() => {
             let signal = signal?;
             eprintln!("replacement ATM daemon received {}; starting graceful shutdown", signal.as_str());
@@ -742,28 +744,28 @@ async fn await_runtime_or_shutdown(
         }
         _ = running.wait_for_server_stop() => {
             eprintln!("replacement ATM HTTP runtime server stopped unexpectedly; beginning cleanup");
-            true
+            let result = shutdown_replacement_daemon(
+                running,
+                handler,
+                workflow_telemetry,
+                recovery_sweep,
+                atm_temp_sweeper,
+            )
+            .await;
+            return match result {
+                Ok(()) => Err(AtmError::daemon_unavailable(
+                    "replacement HTTP runtime server stopped unexpectedly",
+                )),
+                Err(error) => Err(error),
+            };
         }
     };
-    if server_stopped {
-        let _ = shutdown_replacement_daemon(
-            running,
-            handler,
-            workflow_telemetry,
-            atm_temp_sweeper,
-            recovery_sweep,
-        )
-        .await;
-        return Err(AtmError::daemon_unavailable(
-            "replacement HTTP runtime server stopped unexpectedly",
-        ));
-    }
     shutdown_replacement_daemon(
         running,
         handler,
         workflow_telemetry,
-        atm_temp_sweeper,
         recovery_sweep,
+        atm_temp_sweeper,
     )
     .await
 }
@@ -820,8 +822,8 @@ async fn shutdown_replacement_daemon(
     running: atm_http_runtime::HttpRuntime<atm_http_runtime::Running>,
     handler: &StorageAndNudgeRouter,
     workflow_telemetry: atm_runtime::WorkflowTelemetryRuntime,
-    atm_temp_sweeper: AtmTempSweeperRuntime,
     recovery_sweep: queue_drain::RecoverySweepHandle,
+    atm_temp_sweeper: AtmTempSweeperRuntime,
 ) -> Result<(), AtmError> {
     let stopped = running.begin_shutdown().finish().await;
     recovery_sweep.shutdown(REPLACEMENT_DRAIN_DEADLINE).await;
@@ -1033,8 +1035,7 @@ mod replacement_runtime_tests {
     use atm_template_sc_compose::ScComposeTemplateComposer;
     use serde_json::Map;
 
-    use crate::peer_launch_config::parse_peer_pool_config_with_environment;
-
+    use super::peer_launch_config::parse_peer_pool_config_with_environment;
     use super::{
         DaemonLaunchIdentity, HerdrPresenceDoctorAdapter, REPLACEMENT_DRAIN_DEADLINE,
         ReplacementHandlerConfig, SelectedPeerAdapterSelection, ShutdownSignal,
@@ -1277,7 +1278,7 @@ mod replacement_runtime_tests {
             assembly,
             ReplacementHandlerConfig {
                 observability: Arc::new(NullObservability),
-                selector_factory: |_, _, _, _, _| {
+                selector_factory: |_, _, _, _| {
                     Arc::new(NoReceivedHookSelector)
                         as Arc<dyn atm_core::boundary::MessageReceivedHookSelector>
                 },
@@ -1288,8 +1289,7 @@ mod replacement_runtime_tests {
                     pool_config: PeerPoolConfig::default(),
                 },
                 runtime_health: runtime_health.clone(),
-                bare_cli_fifo: Default::default(),
-                bare_cli_queue_full_drops: Default::default(),
+                bare_cli: Default::default(),
                 herdr_process: None,
             },
         )

@@ -134,12 +134,11 @@ impl LeaseRefreshBackoff {
     }
 }
 
-/// The listener's owner generation is a freshly minted ULID (see
-/// `GraftReceiverListener::bind`), so this conversion into the storage-layer
-/// validated newtype can never fail in practice.
+/// The listener already stores its owner generation as the validated
+/// `OwnerGeneration` newtype (RBP-F002), so this is a cheap clone rather
+/// than a re-parse of a raw string on every ~1s refresh tick.
 fn owner_generation(listener: &GraftReceiverListener) -> OwnerGeneration {
-    OwnerGeneration::new(listener.owner_generation())
-        .expect("graft receiver listener owner generation is always a valid ULID")
+    listener.owner_generation().clone()
 }
 
 /// Runs a possibly-blocking daemon client call on a helper thread and gives up
