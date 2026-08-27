@@ -38,6 +38,16 @@ schema-version rejection semantics, one-object stdin/stdout discipline,
 stderr-only diagnostics, cancel behavior, bounded parseable `--version`,
 approximately one-second cold start, and the shared fixture corpus.
 
+## PR CI evidence
+
+Fix-pass head: `ff67655d1294a061a842e8a6040beb9144ec1cd7`.
+
+- [CI run 33125908664](https://github.com/randlee/atm-core/actions/runs/33125908664)
+- [Phase AQ Evidence run 33125908632](https://github.com/randlee/atm-core/actions/runs/33125908632)
+
+The fix-pass run IDs above are the authoritative CI evidence for the pushed
+QA-1 correction; lane completion status is tracked by the linked workflows.
+
 ## Fix-forward record
 
 No upstream regression was observed in the current-release dry run. If a
