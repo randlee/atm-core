@@ -2308,6 +2308,7 @@ mod tests {
             observability: Arc::new(NoopObservability),
             stop_rx,
             ready_tx: None,
+            receiver_target_tx: None,
         };
         let listener = bind_receiver(&paths, None).expect("bind listener");
         let mut receiver = RegisteredGraftReceiver::new(listener, &ctx);
