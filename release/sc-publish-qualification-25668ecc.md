@@ -174,7 +174,28 @@ artifact builds:
    touching tag `v1.4.4`; the idempotent crates.io publish job skips all
    already-live crates.
 
-Round-3 rehearsal evidence: the fix is byte-for-byte the component list and
+10. **`sync-python-version`/`verify-python-version` cannot handle
+    `dynamic = ["version"]`** (found on retry run 33202161368, after fix 9
+    unblocked atm-query-python and hermes-atm): `cmd_sync_python_version`
+    hard-fails with "could not find [project].version to rewrite" when a
+    pyproject deliberately declares `dynamic = ["version"]`
+    (atm-graft-python does, by design — maturin derives the wheel version
+    from the adjacent Cargo manifest), and `cmd_verify_python_version`
+    would likewise mismatch on the empty dynamic version. The manifest
+    layer's `_assert_python_package_version` (used by the lockstep gate)
+    already supports dynamic versions by falling back to the Cargo
+    manifest; the two composite-invoked commands never got that handling.
+    Fix: `sync-python-version` treats a dynamic version as a no-op success,
+    and `verify-python-version` verifies the adjacent Cargo manifest's
+    version against the workspace base (same semantics as the lockstep
+    check). Upstream:
+    [sc-publish #73](https://github.com/randlee/sc-publish/issues/73).
+    Rehearsed locally: sync+verify green on both the dynamic
+    (atm-graft-python) and static (atm-query-python) distributions, a wrong
+    `--version` still fails closed, and `maturin sdist` builds
+    `atm_graft-1.4.4.tar.gz` with the correctly derived dynamic version.
+
+Round-3 rehearsal evidence (fix 9): the fix is byte-for-byte the component list and
 rationale already running green on every sprint CI maturin job (`ci.yml`
 "Install Rust toolchain": `components: clippy, rustfmt` with the same race
 documented in its comment); the edited composite parses as valid YAML. The

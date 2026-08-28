@@ -744,11 +744,36 @@ def cmd_verify_version_lockstep(args: argparse.Namespace) -> int:
     return 0
 
 
+def _python_project_declares_dynamic_version(pyproject: Path) -> bool:
+    project = tomllib.loads(pyproject.read_text(encoding="utf-8")).get("project", {})
+    return project.get("version") is None and "version" in project.get("dynamic", [])
+
+
 def cmd_verify_python_version(args: argparse.Namespace) -> int:
     version = workspace_version(Path(args.workspace_toml))
     if version != args.version:
         raise SystemExit(f"workspace version mismatch: expected {args.version}, got {version}")
-    actual = _python_project_version(Path(args.pyproject))
+    pyproject = Path(args.pyproject)
+    if _python_project_declares_dynamic_version(pyproject):
+        # Release-branch fix (v1.4.4, upstream sc-publish#73): maturin derives
+        # a dynamic [project].version from the adjacent Cargo manifest, so
+        # verify that source instead (same semantics as the lockstep check's
+        # _assert_python_package_version, which compares against the workspace
+        # base version).
+        cargo_toml = pyproject.parent / "Cargo.toml"
+        if not cargo_toml.is_file():
+            raise SystemExit(f"{pyproject}: dynamic version requires an adjacent Cargo.toml")
+        cargo_version = tomllib.loads(cargo_toml.read_text(encoding="utf-8")).get("package", {}).get("version")
+        if isinstance(cargo_version, dict) and cargo_version.get("workspace") is True:
+            cargo_version = version
+        expected = version.split("-", 1)[0]
+        if cargo_version != expected:
+            raise SystemExit(
+                f"python package version mismatch: expected {expected}, got {cargo_version!r} from {cargo_toml}"
+            )
+        print("python version verification passed (dynamic version from Cargo manifest)")
+        return 0
+    actual = _python_project_version(pyproject)
     if actual != version:
         raise SystemExit(f"python package version mismatch: expected {version}, got {actual}")
     print("python version verification passed")
@@ -758,6 +783,13 @@ def cmd_verify_python_version(args: argparse.Namespace) -> int:
 def cmd_sync_python_version(args: argparse.Namespace) -> int:
     version = workspace_version(Path(args.workspace_toml))
     pyproject = Path(args.pyproject)
+    if _python_project_declares_dynamic_version(pyproject):
+        # Release-branch fix (v1.4.4, upstream sc-publish#73): a dynamic
+        # [project].version has no static line to rewrite — maturin reads the
+        # version from the adjacent Cargo manifest at build time, which the
+        # lockstep check has already verified. Nothing to sync.
+        print("python package declares dynamic [project].version; nothing to sync")
+        return 0
     lines = pyproject.read_text(encoding="utf-8").splitlines()
     output: list[str] = []
     in_project = False
