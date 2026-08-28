@@ -1,11 +1,12 @@
 name: Phase AQ Evidence
 
 # Runs the Phase AQ live-evidence harnesses (AQ1.9 restart matrix, AQ2.5
-# queue-delivery triggers, AQ5's Wyvern degradation matrix, and any future
-# AQ3 drain/sweep transcript) on a clean runner with no ambient atm-daemon.
-# AQ5's harness is daemon-free (see its own module docstring) but still runs
-# here so its six-case transcript is produced on every PR touching the
-# Send-To surface, exactly like the other Phase AQ evidence artifacts.
+# queue-delivery triggers, AQ4 cross-host transfer, AQ5's Wyvern degradation
+# matrix, and any future AQ3 drain/sweep transcript) on a clean runner with
+# no ambient atm-daemon. AQ5's harness is daemon-free (see its own module
+# docstring) but still runs here so its six-case transcript is produced on
+# every PR touching the Send-To surface, exactly like the other Phase AQ
+# evidence artifacts.
 #
 # These harnesses fail closed by design: `atm_core::home::current_host_runtime_scope`
 # intentionally ignores `ATM_HOME`/`HOME` and always resolves the OS
@@ -181,6 +182,7 @@ jobs:
           EVIDENCE_DIR_BY_SCRIPT = {
               "run_hermes_atm_restart_matrix.py": "AQ1.9",
               "run_aq25_queue_delivery_trigger_evidence.py": "AQ2.5",
+              "run_aq4_transfer_evidence.py": "AQ4",
               "run_aq5_wyvern_degradation_evidence.py": "AQ5",
           }
 

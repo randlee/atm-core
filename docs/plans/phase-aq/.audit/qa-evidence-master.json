@@ -1171,6 +1171,15 @@
     "M5 team-lead confirmation message id"
    ],
    "tracked_at": "2026-08-27T20:00:00Z"
+  },
+  {
+   "id": "AQ4-tailscale-m5",
+   "owner": "Phase AQ closeout/AQ6",
+   "prerequisite": "m5 reachable",
+   "items": [
+    "live cross-host transfer transcript over scripts/transfer/tailscale.sh (Mac -> m5)"
+   ],
+   "tracked_at": "2026-08-27T21:00:00Z"
   }
  ]
 }
