@@ -77,6 +77,30 @@ pub const DEFAULT_TRANSFER_SCRIPT_TIMEOUT: Duration = Duration::from_secs(60);
 /// operator's real Windows install layout is respected without ever
 /// forwarding their full `PATH`.
 ///
+/// A second amendment (2026-08-27, AQ4 run 33144153970) widens this on both
+/// platforms with the user's identity/profile-location variables, forwarded
+/// from `env` only when the caller actually has them set: `USERPROFILE`,
+/// `HOMEDRIVE`, `HOMEPATH`, `LOCALAPPDATA`, `APPDATA`, `ProgramData`, and
+/// `COMSPEC` on Windows, and `HOME` on Unix. These are never secrets and
+/// never `PATH` -- they are the same class of "where do I live" variable as
+/// `SystemRoot`/`TEMP` above, just the ones Windows OpenSSH's *own* home
+/// resolution needs rather than `pwsh`'s. Windows `ssh.exe` resolves the
+/// invoking user's home directory (`~/.ssh/config`, `known_hosts`, the
+/// default identity file) via `USERPROFILE`/`HOMEDRIVE`/`HOMEPATH` even when
+/// an explicit `-F <config>` is given, unlike Unix `ssh`, which resolves the
+/// same information via `getpwuid()` and therefore never needed `HOME` in
+/// the child's environment at all -- the asymmetry this amendment closes.
+/// `pwsh` itself additionally consults `LOCALAPPDATA`/`APPDATA` for its own
+/// profile/module paths, and without them can fail before the script's own
+/// logic -- and its diagnostics -- ever run (run 33144153970: an env-clear
+/// child died silently, while the same `ssh -F <config>` invocation run from
+/// this harness's own full-environment Python process succeeded outright).
+/// `ProgramData` and `COMSPEC` are carried for the same reason: they are
+/// process-startup variables some Windows toolchains (and PowerShell's own
+/// native-command handling, which shells out via `COMSPEC` in some code
+/// paths) assume are present, and forwarding them costs nothing since they
+/// never carry secrets.
+///
 /// Callers apply every returned pair with `Command::env` alongside (never
 /// instead of) the [`TRANSFER_SCRIPT_ALLOWED_ENV_KEYS`] allow-list, after
 /// `Command::env_clear()`.
@@ -88,14 +112,18 @@ pub fn synthesized_transfer_script_env(env: &dyn EnvSource) -> Vec<(&'static str
 
 /// Callers apply every returned pair with `Command::env` alongside (never
 /// instead of) the [`TRANSFER_SCRIPT_ALLOWED_ENV_KEYS`] allow-list, after
-/// `Command::env_clear()`. On this platform the result is always exactly
-/// one entry, a fixed `PATH`; `env` is accepted only to keep one call
-/// signature across platforms and is not consulted here.
+/// `Command::env_clear()`. `env` is consulted for `HOME` (forwarded only
+/// when the caller has it set) -- see the second amendment on
+/// [`synthesized_transfer_script_env`]'s Windows sibling above for the
+/// symmetry rationale; a fixed `PATH` is always present regardless.
 #[cfg(not(windows))]
 #[must_use]
 pub fn synthesized_transfer_script_env(env: &dyn EnvSource) -> Vec<(&'static str, OsString)> {
-    let _ = env;
-    vec![("PATH", unix_synthesized_transfer_script_path())]
+    let mut vars = vec![("PATH", unix_synthesized_transfer_script_path())];
+    if let Some(home) = env.var("HOME") {
+        vars.push(("HOME", OsString::from(home)));
+    }
+    vars
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
@@ -124,6 +152,27 @@ fn windows_synthesized_transfer_script_env(env: &dyn EnvSource) -> Vec<(&'static
     ];
     if let Some(temp) = env.var("TEMP").or_else(|| env.var("TMP")) {
         vars.push(("TEMP", OsString::from(temp)));
+    }
+    // Identity/profile-location variables (second amendment, 2026-08-27):
+    // forwarded only when the caller actually has them, never hardcoded.
+    // `USERPROFILE`/`HOMEDRIVE`/`HOMEPATH` are what Windows OpenSSH's own
+    // home-directory resolution reads (`~/.ssh/config`, `known_hosts`, the
+    // default identity), even with an explicit `-F <config>`; `LOCALAPPDATA`/
+    // `APPDATA` are `pwsh`'s own profile/module-path needs; `ProgramData`
+    // and `COMSPEC` are common Windows process-startup assumptions. None of
+    // these carry secrets -- they are locations, not credentials.
+    for key in [
+        "USERPROFILE",
+        "HOMEDRIVE",
+        "HOMEPATH",
+        "LOCALAPPDATA",
+        "APPDATA",
+        "ProgramData",
+        "COMSPEC",
+    ] {
+        if let Some(value) = env.var(key) {
+            vars.push((key, OsString::from(value)));
+        }
     }
     vars
 }
@@ -1355,6 +1404,32 @@ mod tests {
         );
     }
 
+    /// Second amendment (2026-08-27, AQ4 run 33144153970): `HOME` is
+    /// forwarded only when the caller actually has it set, mirroring the
+    /// Windows `TEMP` test below -- never hardcoded, never present when the
+    /// caller's environment doesn't have it either.
+    #[cfg(unix)]
+    #[test]
+    fn unix_synthesized_env_forwards_home_only_when_the_caller_has_one() {
+        let env = FakeEnvSource(std::collections::HashMap::new());
+        assert_eq!(
+            path_entry(&synthesized_transfer_script_env(&env), "HOME"),
+            None
+        );
+
+        // A platform-neutral placeholder (matching `home_env_var_is_used_
+        // when_present` above): this test only proves `HOME`'s raw value
+        // flows through unchanged, not that it looks like a real Unix home
+        // directory.
+        let mut vars = std::collections::HashMap::new();
+        vars.insert("HOME", "test-home-value".to_string());
+        let env = FakeEnvSource(vars);
+        assert_eq!(
+            path_entry(&synthesized_transfer_script_env(&env), "HOME"),
+            Some(OsString::from("test-home-value"))
+        );
+    }
+
     #[cfg(windows)]
     #[test]
     fn windows_synthesized_env_defaults_system_root_when_unset() {
@@ -1433,5 +1508,50 @@ mod tests {
             path_entry(&synthesized_transfer_script_env(&env), "TEMP"),
             Some(OsString::from(r"C:\Users\rand\AppData\Local\Temp"))
         );
+    }
+
+    /// Second amendment (2026-08-27, AQ4 run 33144153970): the identity/
+    /// profile-location variables Windows OpenSSH and `pwsh` need to resolve
+    /// the invoking user's home directory (`USERPROFILE`, `HOMEDRIVE`,
+    /// `HOMEPATH`, `LOCALAPPDATA`, `APPDATA`, `ProgramData`, `COMSPEC`) are
+    /// each forwarded only when the caller actually has them set -- never
+    /// hardcoded, and absent entirely when the caller's environment doesn't
+    /// have them either.
+    #[cfg(windows)]
+    #[test]
+    fn windows_synthesized_env_forwards_profile_identity_vars_only_when_the_caller_has_them() {
+        let keys = [
+            "USERPROFILE",
+            "HOMEDRIVE",
+            "HOMEPATH",
+            "LOCALAPPDATA",
+            "APPDATA",
+            "ProgramData",
+            "COMSPEC",
+        ];
+
+        let env = FakeEnvSource(std::collections::HashMap::new());
+        let entries = synthesized_transfer_script_env(&env);
+        for key in keys {
+            assert_eq!(
+                path_entry(&entries, key),
+                None,
+                "{key} must be absent when the caller doesn't have it"
+            );
+        }
+
+        let mut vars = std::collections::HashMap::new();
+        for key in keys {
+            vars.insert(key, format!("value-for-{key}"));
+        }
+        let env = FakeEnvSource(vars);
+        let entries = synthesized_transfer_script_env(&env);
+        for key in keys {
+            assert_eq!(
+                path_entry(&entries, key),
+                Some(OsString::from(format!("value-for-{key}"))),
+                "{key} must be forwarded unchanged when the caller has it"
+            );
+        }
     }
 }

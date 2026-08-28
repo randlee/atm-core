@@ -93,6 +93,18 @@ if ($env:ATM_TRANSFER_SSH_CONFIG) {
     $SshExtraArgs = @("-F", $env:ATM_TRANSFER_SSH_CONFIG)
 }
 
+# One unconditional diagnostic line, written before the first ssh/scp call
+# below actually runs (run 33144153970 @ 9c9f9918a: a child that dies before
+# `Invoke-Transfer`'s own try/catch is even entered -- e.g. because `pwsh`
+# itself couldn't resolve its profile paths in a minimal synthesized
+# environment -- previously surfaced only as this script's own generic
+# "(ssh exit unknown): (no output)" below, indistinguishable from ssh/scp
+# actually running and producing no output). This line makes that
+# distinction unambiguous: if it is missing from a failure's captured
+# stderr, the process died before reaching here, not inside ssh/scp.
+$SshConfigDescription = if ($env:ATM_TRANSFER_SSH_CONFIG) { $env:ATM_TRANSFER_SSH_CONFIG } else { "default" }
+[Console]::Error.WriteLine("sftp.ps1: invoking $Ssh (config=$SshConfigDescription)")
+
 # Remote $ATM_TEMP resolution -- pick ONE of the following and delete the
 # other.
 #

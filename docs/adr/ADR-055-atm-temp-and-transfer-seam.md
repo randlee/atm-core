@@ -443,6 +443,98 @@ scenario), so a future regression like this one is visible in the evidence
 transcript itself rather than requiring a second investigation to
 reconstruct what the child's environment actually was.
 
+### Amendment (2026-08-27): synthesized transfer-script env carries the user's profile/home variables
+
+The `PATH` amendment above fixed binary resolution but not the third gap it
+shared a root cause with. Windows clean-runner CI run 33144153970 (commit
+`9c9f9918a`) isolated it precisely: the harness's own diagnostic
+`ssh.EXE -F <scratch-config> -vvv -n localhost "echo …"`, run from the
+harness's Python process (full, uncleared environment), succeeded outright
+— publickey accepted, command output returned. The *same* `mkdir` step, run
+moments later through `sftp.ps1` inside the `atm`-spawned `pwsh` child, kept
+failing with the maximally uninformative `(ssh exit unknown): (no output)`
+this file's earlier amendment already hardened `sftp.ps1` to avoid — proving
+the server, the loopback `sshd`, the scratch `ssh_client_config`, and the
+key material were all fine. The only thing that differs between those two
+invocations is the child's *environment*, and specifically what
+`synthesized_transfer_script_env` (the previous amendment) puts in it: on
+Windows, exactly `PATH`, `SystemRoot`/`SYSTEMROOT`, and an optional `TEMP`,
+alongside the four-key `TRANSFER_SCRIPT_ALLOWED_ENV_KEYS` allow-list.
+
+Windows OpenSSH resolves the invoking user's home directory —
+`~/.ssh/config`, `known_hosts`, the default identity file — via
+`USERPROFILE` (falling back to `HOMEDRIVE`+`HOMEPATH`), even when an
+explicit `-F <config>` is given on the command line: unlike Unix `ssh`,
+which resolves the same information through `getpwuid()` and therefore
+never needed `HOME` in the child's environment at all, Windows `ssh.exe` has
+no such OS-level identity lookup and depends entirely on these environment
+variables. `pwsh` itself independently wants `LOCALAPPDATA`/`APPDATA` for
+its own profile and module-path resolution; without them the *host process*
+can fail or behave unpredictably before the script's own logic — and its
+diagnostics — ever run at all, which is consistent with a child that
+produces literally zero output rather than a clean, attributable failure.
+This is the same Unix/Windows identity-resolution asymmetry the `PATH`
+amendment already documented for command lookup, just showing up a second
+time for home-directory lookup instead.
+
+**The fix widens `synthesized_transfer_script_env` on both platforms with
+this class of variable, forwarded from the caller's own process
+environment only when actually present — never hardcoded, never a secret,
+never `PATH`:**
+
+- **Windows** gains `USERPROFILE`, `HOMEDRIVE`, `HOMEPATH`, `LOCALAPPDATA`,
+  `APPDATA`, `ProgramData`, and `COMSPEC`. The first four are the identity/
+  profile-location variables described above; `ProgramData` and `COMSPEC`
+  are carried alongside them for the same reason `SystemRoot`/`TEMP`
+  already are — common Windows process-startup assumptions some toolchains
+  (and PowerShell's own native-command handling) make, forwarded because
+  doing so costs nothing and they never carry secrets either.
+- **Unix** gains `HOME`, for symmetry: even though the *server's* and
+  `sshd`'s own key/host-file resolution were already proven fine by this
+  run's diagnostic, `~/.ssh/config` and identity-file resolution on a
+  Unix *sender* should not silently depend on `getpwuid()` alone matching
+  whatever the harness's scratch-user setup assumes, now that the Windows
+  leg makes clear this was never actually guaranteed by the allow-list
+  before this amendment.
+
+None of these are added to `TRANSFER_SCRIPT_ALLOWED_ENV_KEYS` — that
+allow-list remains exactly ATM's own four keys (unchanged since the
+allow-list itself was introduced). This amendment only widens the
+separate, always-applied *synthesized* set the previous amendment already
+established, for exactly the same reason `PATH` lives there instead of the
+allow-list: these are process-identity/location variables the transfer
+script's *runtime* needs to function at all, not application data ATM
+itself is choosing to pass through.
+
+`scripts/transfer/sftp.ps1` additionally gained one unconditional stderr
+line, written immediately before its first `ssh` invocation:
+`sftp.ps1: invoking <ssh path> (config=<-F path or default>)`. This exists
+purely so a future "(no output)" failure can never again be ambiguous about
+whether the script's own `ssh`/`scp` resolution logic ran at all before the
+process died — this run's own diagnosis required cross-referencing a
+separate `ssh -vvv` harness probe to establish that; the new line makes it
+visible directly in the script's own stderr capture instead.
+
+`crates/atm-core/src/transfer_script.rs`'s unit tests assert, per platform,
+the exact set of keys this amendment adds, that each is forwarded
+unchanged when the caller has it set, and that each is absent when the
+caller doesn't — the same "present only when the caller has it, never
+hardcoded" contract the `TEMP` test already established for the first
+amendment. The existing "caller `PATH` never leaks" tests are unaffected:
+this amendment adds keys, it does not change how `PATH` itself is
+synthesized. `scripts/phase-aq/run_aq4_transfer_evidence.py`'s Python
+mirror of `synthesized_transfer_script_env` gains a new
+`record["transfer_script"]["synthesized_env"]["synthesized_env_identity_
+keys"]` field recording which of these identity/profile variables the
+harness's own environment actually had — **key names only, never their
+values**, unlike the existing `PATH`/`SystemRoot`/`TEMP` entries in that
+same dict: this evidence JSON is committed to the repository (see the
+`docs(aq4): commit clean-runner transfer evidence...` commits), and unlike
+those, several of these variables (`USERPROFILE`, `HOMEPATH`, ...) carry
+the runner account's real username as their value — diagnosability only
+needs to know *whether* a key was present, not what a CI runner's account
+happened to be called.
+
 ### (d)–(g): message-text convention, member-host sourcing, local-host identity, fan-out failure policy
 
 These four decisions govern the CLI/roster surface (`atm send --attach`,

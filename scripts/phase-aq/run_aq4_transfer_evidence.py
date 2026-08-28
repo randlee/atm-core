@@ -675,6 +675,26 @@ def _is_within_profile(path: Path, profile_home: Path) -> bool:
         return False
 
 
+# Identity/profile-location variables the second ADR-055 decision (c)
+# amendment (2026-08-27, AQ4 run 33144153970) adds to the synthesized
+# transfer-script child environment, forwarded only when the caller has
+# them set. Recorded in evidence JSON as *keys present*, never values --
+# unlike `PATH`/`SystemRoot`/`TEMP` above, these can carry the runner
+# account's real username (`USERPROFILE`, `HOMEPATH`, ...), and this
+# harness's evidence JSON is committed to the repository, so the value
+# itself is not worth recording for a field whose only purpose is
+# diagnosability.
+_WINDOWS_SYNTHESIZED_IDENTITY_KEYS = (
+    "USERPROFILE",
+    "HOMEDRIVE",
+    "HOMEPATH",
+    "LOCALAPPDATA",
+    "APPDATA",
+    "ProgramData",
+    "COMSPEC",
+)
+
+
 def _synthesized_transfer_script_path(env: dict[str, str]) -> dict[str, Any]:
     """Python mirror of `atm_core::transfer_script::
     synthesized_transfer_script_env` (ADR-055 decision (c) amendment), for
@@ -688,6 +708,13 @@ def _synthesized_transfer_script_path(env: dict[str, str]) -> dict[str, Any]:
     alongside `record["transfer_script"]`, exactly like
     `windows_profile_containment` mirrors the Windows safety check for the
     same reason.
+
+    The second amendment (2026-08-27, AQ4 run 33144153970) adds
+    `synthesized_env_identity_keys`: the *names* only (never values -- see
+    `_WINDOWS_SYNTHESIZED_IDENTITY_KEYS`'s docstring) of the identity/
+    profile-location variables Windows OpenSSH's own home-directory
+    resolution and `pwsh`'s profile-path resolution need, present in this
+    list only when the harness's own environment actually had them.
     """
     if IS_WINDOWS:
         system_root = env.get("SystemRoot") or env.get("SYSTEMROOT") or r"C:\Windows"
@@ -703,10 +730,19 @@ def _synthesized_transfer_script_path(env: dict[str, str]) -> dict[str, Any]:
         temp = env.get("TEMP") or env.get("TMP")
         if temp:
             result["TEMP"] = temp
+        result["synthesized_env_identity_keys"] = sorted(
+            key for key in _WINDOWS_SYNTHESIZED_IDENTITY_KEYS if env.get(key)
+        )
         return result
-    if sys.platform == "darwin":
-        return {"PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin"}
-    return {"PATH": "/usr/bin:/bin:/usr/local/bin"}
+    unix_result: dict[str, Any] = {
+        "PATH": (
+            "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin"
+            if sys.platform == "darwin"
+            else "/usr/bin:/bin:/usr/local/bin"
+        )
+    }
+    unix_result["synthesized_env_identity_keys"] = ["HOME"] if env.get("HOME") else []
+    return unix_result
 
 
 def windows_receiver_atm_temp(env: dict[str, str]) -> dict[str, str]:
