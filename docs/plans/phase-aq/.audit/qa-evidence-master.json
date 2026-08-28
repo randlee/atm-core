@@ -3008,6 +3008,31 @@
    "minor": null,
    "count_basis": "headline/reviewer",
    "evidence": "AQ4 #1055 @ c76314cd1: SftpShTests/TailscaleShTests invoke .sh scripts via discovered POSIX shell on Windows (unix unchanged); latent CRLF corruption in fake-binary writer fixed (newline=\\\"\\\"); PosixShellDiscoveryTests added; 32/32 lint locally. CI errors=16 confirmation run (pytest artifact on failure). Evidence run 6 Windows leg pending API-limit reset."
+  },
+  {
+   "run_id": "CI-AQ4-RATE-LIMIT-1",
+   "aich_sprint": "AQ4",
+   "phase_sprint": "AQ4",
+   "pass": null,
+   "run_type": "ci",
+   "assignment_time_utc": null,
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": null,
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ4 #1055 GitHub secondary rate limit blocks artifact downloads for run 33137262962; AQ4 run-6 artifact commit deferred",
+   "result_time_utc": "2026-08-28T19:30:00Z",
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": "ci-monitor",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": null,
+   "blockers": null,
+   "important": null,
+   "minor": null,
+   "count_basis": "headline/reviewer",
+   "evidence": "GitHub secondary rate limit active (HTTP 403); artifact downloads for GHA run 33137262962 blocked (10+ retries); AQ4 run-6 artifact commit on #1055 deferred until limit clears; gh polling throttled to 90s-interval CI watcher on #1055 c76314cd1 (33138148783) plus one deferred artifact fetch; Windows AQ4 leg diagnosis pending rate-limit recovery."
   }
  ],
  "follow_ups": [
