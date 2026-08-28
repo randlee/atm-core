@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import collections
 import importlib.util
 import os
+import subprocess
+import sys
 from pathlib import Path
 import tempfile
 import unittest
@@ -97,6 +100,12 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
             with self.subTest(status=status):
                 self.assertEqual(0 if status in ("pass", "blocked_ambient_daemon", "skipped_no_sshd") else 1, expected)
 
+    @unittest.skipUnless(
+        sys.platform != "win32",
+        "0o700 mode bits are a POSIX permission concept; Windows ACLs do not "
+        "round-trip through os.chmod the same way, so this check is skipped "
+        "there rather than reporting a false failure",
+    )
     def test_install_transfer_script_forces_0700_on_every_path_the_safety_check_inspects(self) -> None:
         # Clean-runner CI (run 33126676155) refused the harness live with
         # exactly this failure before this fix: ~/.atm/transfer created via
@@ -132,6 +141,12 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
             self.assertEqual(stat_module.S_IMODE(installed.stat().st_mode), 0o700)
             self.assertEqual(installed.read_bytes(), (module.ROOT / "scripts" / "transfer" / "sftp.sh").read_bytes())
 
+    @unittest.skipUnless(
+        sys.platform != "win32",
+        "0o700 mode bits are a POSIX permission concept; Windows ACLs do not "
+        "round-trip through os.chmod the same way, so this check is skipped "
+        "there rather than reporting a false failure",
+    )
     def test_install_transfer_script_is_idempotent_and_still_forces_0700_on_rerun(self) -> None:
         module = load_module()
         with tempfile.TemporaryDirectory() as temporary:
@@ -205,6 +220,141 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
         module = load_module()
         found = module.find_sshd()
         self.assertTrue(found is None or isinstance(found, module.Path))
+
+    # -- QA-2 B6: scratch ssh client config, never the real ~/.ssh/config --
+
+    def test_write_scratch_ssh_client_config_never_touches_the_real_home(self) -> None:
+        module = load_module()
+        real_home_before = list(Path.home().glob("*"))
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            identity = root / "id_ed25519"
+            identity.write_text("fake key material", encoding="utf-8")
+            config_path = module.write_scratch_ssh_client_config(root, 4242, identity)
+
+            self.assertEqual(config_path, root / "ssh_client_config")
+            self.assertTrue(config_path.is_file())
+            content = config_path.read_text(encoding="utf-8")
+            self.assertIn("Host localhost", content)
+            self.assertIn("Port 4242", content)
+            self.assertIn(str(identity), content)
+        # The scratch root (a TemporaryDirectory) is gone; the real
+        # ~/.ssh directory tree must be exactly as it was before this
+        # test ran -- proving the function never opened, backed up, or
+        # wrote through Path.home() at all.
+        self.assertEqual(list(Path.home().glob("*")), real_home_before)
+
+    def test_write_scratch_ssh_client_config_uses_dev_null_known_hosts_on_unix(self) -> None:
+        module = load_module()
+        self.assertFalse(module.IS_WINDOWS, "this test asserts the non-Windows branch")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config_path = module.write_scratch_ssh_client_config(root, 1, root / "identity")
+            self.assertIn("UserKnownHostsFile /dev/null", config_path.read_text(encoding="utf-8"))
+
+    def test_write_scratch_ssh_client_config_uses_nul_known_hosts_when_windows(self) -> None:
+        # cipher's investigation: OpenSSH on Windows does not treat
+        # /dev/null as a discard sink for UserKnownHostsFile the way Unix
+        # does; it must be the literal device name NUL there.
+        module = load_module()
+        original = module.IS_WINDOWS
+        module.IS_WINDOWS = True
+        try:
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                config_path = module.write_scratch_ssh_client_config(root, 1, root / "identity")
+                content = config_path.read_text(encoding="utf-8")
+                self.assertIn("UserKnownHostsFile NUL", content)
+                self.assertNotIn("/dev/null", content)
+        finally:
+            module.IS_WINDOWS = original
+
+    # -- Windows install_transfer_script: profile-containment, not chmod --
+
+    def test_install_transfer_script_installs_sftp_ps1_under_the_profile_home_on_windows(self) -> None:
+        module = load_module()
+        original = module.IS_WINDOWS
+        module.IS_WINDOWS = True
+        try:
+            with tempfile.TemporaryDirectory() as temporary:
+                home = Path(temporary) / "home"
+                home.mkdir()
+                info = module.install_transfer_script(home)
+
+                installed = home / ".atm" / "transfer" / f"{module.TRANSFER_HOST}.ps1"
+                self.assertEqual(info["installed_at"], str(installed))
+                self.assertTrue(installed.is_file())
+                self.assertEqual(
+                    installed.read_bytes(),
+                    (module.ROOT / "scripts" / "transfer" / "sftp.ps1").read_bytes(),
+                )
+                self.assertNotIn("atm_dir_mode", info)
+                self.assertNotIn("transfer_dir_mode", info)
+                self.assertNotIn("script_mode", info)
+                containment = info["windows_profile_containment"]
+                self.assertTrue(containment["transfer_dir_contained"])
+                self.assertTrue(containment["script_contained"])
+                self.assertFalse(containment["transfer_dir_is_reparse_point"])
+                self.assertFalse(containment["script_is_reparse_point"])
+        finally:
+            module.IS_WINDOWS = original
+
+    def test_is_within_profile_rejects_a_sibling_directory_sharing_a_string_prefix(self) -> None:
+        # Mirrors crate::transfer_script::path_is_within's own regression
+        # coverage: "rand" must not be treated as a prefix of "randlee".
+        module = load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            profile_home = root / "rand"
+            sibling = root / "randlee" / "file.txt"
+            profile_home.mkdir()
+            self.assertFalse(module._is_within_profile(sibling, profile_home))
+            contained = profile_home / "file.txt"
+            self.assertTrue(module._is_within_profile(contained, profile_home))
+
+    # -- FTQ-002/003: continuous pipe draining --
+
+    def test_pipe_drain_keeps_draining_a_chatty_child_past_its_readiness_probe(self) -> None:
+        # Writes well past a typical 64KiB OS pipe buffer so a harness that
+        # only reads during a readiness probe (the pre-fix shape) would
+        # block the child on a full pipe the instant that probe stops
+        # reading -- proving PipeDrain keeps the pipe open for the whole
+        # process lifetime, not only while something else happens to poll
+        # it.
+        module = load_module()
+        line_count = 20000
+        script = (
+            "import sys\n"
+            f"for i in range({line_count}):\n"
+            "    print('x' * 200)\n"
+            "sys.stdout.flush()\n"
+        )
+        process = subprocess.Popen(  # noqa: S603 - fixed, non-shell argv
+            [sys.executable, "-c", script],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        drain = module.PipeDrain(process)
+        try:
+            returncode = process.wait(timeout=30)
+        finally:
+            drain.join(timeout=5)
+            if process.stdout is not None:
+                process.stdout.close()
+            if process.stderr is not None:
+                process.stderr.close()
+        self.assertEqual(returncode, 0, "a chatty child must not be blocked on an undrained pipe")
+        self.assertLessEqual(len(drain.stdout_lines), 4000, "PipeDrain's deque must stay bounded")
+        self.assertTrue(all(line == "x" * 200 for line in drain.stdout_lines))
+
+    def test_pipe_drain_tail_returns_the_most_recent_lines_only(self) -> None:
+        module = load_module()
+        sink: "collections.deque[str]" = collections.deque(
+            [f"line-{i}" for i in range(10)], maxlen=100
+        )
+        tail = module.PipeDrain.tail(sink, count=3)
+        self.assertEqual(tail, "line-7\nline-8\nline-9")
 
 
 if __name__ == "__main__":

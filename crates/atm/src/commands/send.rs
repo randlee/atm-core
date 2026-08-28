@@ -2,15 +2,21 @@ use std::net::{IpAddr, Ipv4Addr, ToSocketAddrs};
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use atm_core::address::AgentAddress;
 use atm_core::load_atm_config;
 use atm_core::send::{
     MessageClassification, NudgeMode, SendMessageSource, SendRequest, TemplateSendSource, input,
 };
-use atm_core::send_to::{PickerOutput, RecipientLocality, classify_recipient_locality};
+use atm_core::send_to::classify_recipient_locality;
+// `RecipientLocality` itself is only referenced (unqualified) by the
+// `#[cfg(unix)]` fan-out integration test in `mod tests` below; production
+// code here only calls `classify_recipient_locality`, never names the
+// return type.
+#[cfg(all(test, unix))]
+use atm_core::send_to::RecipientLocality;
 use atm_core::types::{AgentIdentity, HostName, TaskId, TeamName};
-use atm_daemon_bootstrap::{with_default_peer_address_stores, with_default_roster_store};
+use atm_daemon_bootstrap::with_default_peer_address_stores;
 use atm_storage::{AtmError, PeerConfigStore, RosterStore, TrustedPeer};
 use clap::Args;
 
@@ -95,8 +101,11 @@ pub struct SendCommand {
     /// message text; there is no envelope change. Mutually exclusive with
     /// `--template` (structured template content and free-form attachment
     /// notes are not composed in this phase).
+    // `pub(super)`: also read directly by `send_fan_out.rs`'s fan-out
+    // send/staging orchestration (a sibling module under `commands`; see
+    // RULE-003 note on `resolve_caller_context`).
     #[arg(long = "attach", value_name = "PATH", conflicts_with = "template")]
-    attach: Vec<PathBuf>,
+    pub(super) attach: Vec<PathBuf>,
 
     /// Read one `PickerOutput` JSON document
     /// (`{"schema_version":1,"recipients":[...],"note":"..."}`) from stdin
@@ -119,16 +128,16 @@ pub struct SendCommand {
     summary: Option<String>,
 
     #[arg(long = "requires-ack")]
-    requires_ack: bool,
+    pub(super) requires_ack: bool,
 
     #[arg(long = "task-id")]
-    task_id: Option<TaskId>,
+    pub(super) task_id: Option<TaskId>,
 
     #[arg(long)]
-    dry_run: bool,
+    pub(super) dry_run: bool,
 
     #[arg(long)]
-    json: bool,
+    pub(super) json: bool,
 }
 
 impl SendCommand {
@@ -537,66 +546,11 @@ impl SendCommand {
             .ok_or_else(|| Self::template_load_error("--vars must contain a JSON object"))
     }
 
-    /// Executes the `--from-json` fan-out surface (ADR-055 decisions (e)-
-    /// (g)): reads one `PickerOutput` document from stdin, resolves and
-    /// validates every recipient and attachment path up front (R5/R13), then
-    /// sends one immutable message per recipient in array order.
-    ///
-    /// On a transfer or send failure for recipient N (decision (g)), aborts
-    /// every remaining not-yet-attempted recipient -- no further transfer or
-    /// send calls -- and reports a partial delivered/not-delivered result by
-    /// recipient id on stderr and in `--json` output, then returns an error
-    /// (nonzero exit).
-    async fn run_from_json(
-        self,
-        observability: &CliObservability,
-        nudge_mode: NudgeMode,
-        command_name: &'static str,
-        home_dir: PathBuf,
-        current_dir: PathBuf,
-    ) -> Result<()> {
-        let picker_output = read_picker_output_from_stdin()?;
-        let caller_context = self.resolve_caller_context()?;
-        let local_host = load_atm_config(&current_dir)?.and_then(|config| config.local_host);
-
-        // Resolve every recipient and validate every attachment source
-        // before any staging, transfer, or send begins (R5/R13): a
-        // malformed request stages and sends nothing.
-        let recipients = resolve_fan_out_recipients(&picker_output, local_host.as_ref())?;
-        validate_attach_sources(&self.attach)?;
-
-        let atm_temp = if self.attach.is_empty() {
-            None
-        } else {
-            Some(resolve_atm_temp_for_cli()?)
-        };
-        let composition = CliComposition::bootstrap(
-            command_name,
-            observability,
-            InvocationDir::new(&current_dir),
-            AtmHomePath::new(&home_dir),
-        )?;
-
-        let (delivered, not_delivered, failure) = self
-            .send_fan_out_recipients(
-                &recipients,
-                &picker_output,
-                &composition,
-                &current_dir,
-                home_dir,
-                nudge_mode,
-                atm_temp.as_ref(),
-                &caller_context,
-            )
-            .await;
-
-        report_fan_out_result(self.json, &delivered, &not_delivered);
-        failure.map_or(Ok(()), Err)
-    }
-
     /// Resolves the caller's identity/team/chat-id, shared by both the
-    /// ordinary single-recipient path and `--from-json`'s fan-out.
-    fn resolve_caller_context(&self) -> Result<atm_core::caller_context::CallerContext> {
+    /// ordinary single-recipient path and `--from-json`'s fan-out
+    /// (`send_fan_out.rs`, a sibling module: RULE-003 keeps this file under
+    /// the 1000-non-test-line cap).
+    pub(super) fn resolve_caller_context(&self) -> Result<atm_core::caller_context::CallerContext> {
         if self.actor.is_some() || self.chat_id.is_some() {
             resolve_cli_mutation_caller_context_with_overrides(CallerContextOverrides {
                 identity_override: self.actor.as_deref().map(CallerIdentityOverride),
@@ -609,214 +563,13 @@ impl SendCommand {
                 .map_err(Into::into)
         }
     }
-
-    /// Sends to every resolved recipient in array order (decision (g)):
-    /// aborts remaining recipients on the first transfer or send failure, no
-    /// further transfer or send calls. Returns the delivered/not-delivered
-    /// recipient-id lists and, on abort, the triggering error.
-    #[allow(
-        clippy::too_many_arguments,
-        reason = "fan-out send threads through shared, already-resolved batch state"
-    )]
-    async fn send_fan_out_recipients(
-        &self,
-        recipients: &[FanOutRecipient],
-        picker_output: &PickerOutput,
-        composition: &CliComposition<'_>,
-        current_dir: &std::path::Path,
-        home_dir: PathBuf,
-        nudge_mode: NudgeMode,
-        atm_temp: Option<&atm_core::atm_temp::AtmTemp>,
-        caller_context: &atm_core::caller_context::CallerContext,
-    ) -> (Vec<String>, Vec<String>, Option<anyhow::Error>) {
-        let mut landed_by_locality: Vec<(RecipientLocality, PathBuf)> = Vec::new();
-        let mut delivered: Vec<String> = Vec::new();
-        let mut not_delivered: Vec<String> = Vec::new();
-        let mut failure: Option<anyhow::Error> = None;
-
-        for recipient in recipients {
-            if failure.is_some() {
-                not_delivered.push(recipient.member_id.clone());
-                continue;
-            }
-            match self
-                .send_one_fan_out_recipient(
-                    recipient,
-                    picker_output,
-                    composition,
-                    current_dir,
-                    home_dir.clone(),
-                    nudge_mode,
-                    atm_temp,
-                    &mut landed_by_locality,
-                    caller_context,
-                )
-                .await
-            {
-                Ok(()) => delivered.push(recipient.member_id.clone()),
-                Err(error) => {
-                    not_delivered.push(recipient.member_id.clone());
-                    failure = Some(error);
-                }
-            }
-        }
-
-        (delivered, not_delivered, failure)
-    }
-
-    #[allow(
-        clippy::too_many_arguments,
-        reason = "fan-out per-recipient send threads through shared, already-resolved batch state"
-    )]
-    async fn send_one_fan_out_recipient(
-        &self,
-        recipient: &FanOutRecipient,
-        picker_output: &PickerOutput,
-        composition: &CliComposition<'_>,
-        current_dir: &std::path::Path,
-        home_dir: PathBuf,
-        nudge_mode: NudgeMode,
-        atm_temp: Option<&atm_core::atm_temp::AtmTemp>,
-        landed_by_locality: &mut Vec<(RecipientLocality, PathBuf)>,
-        caller_context: &atm_core::caller_context::CallerContext,
-    ) -> Result<()> {
-        let attachment_note = if self.attach.is_empty() {
-            None
-        } else {
-            let atm_temp = atm_temp.expect("atm_temp is resolved whenever --attach is non-empty");
-            let landed_dir = match landed_by_locality
-                .iter()
-                .find(|(locality, _)| *locality == recipient.locality)
-            {
-                Some((_, landed_dir)) => landed_dir.clone(),
-                None => {
-                    let landing = land_attachments(
-                        atm_temp,
-                        ulid::Ulid::new(),
-                        &recipient.locality,
-                        &self.attach,
-                    )
-                    .await?;
-                    landed_by_locality
-                        .push((recipient.locality.clone(), landing.landed_dir.clone()));
-                    landing.landed_dir
-                }
-            };
-            Some(atm_core::send_to::format_attachment_note(
-                &landed_dir,
-                &self.attach,
-            ))
-        };
-        let message_text = combine_message_with_attachment_note(
-            picker_output.note.clone(),
-            attachment_note.as_deref(),
-        )
-        .unwrap_or_default();
-
-        let request = SendRequest::new(
-            home_dir,
-            current_dir.to_path_buf(),
-            caller_context.caller_identity.clone(),
-            &recipient.address.to_string(),
-            caller_context.caller_team.clone(),
-            SendMessageSource::Inline(message_text),
-            None,
-            self.requires_ack,
-            self.task_id.clone(),
-            self.dry_run,
-        )?
-        .with_caller_chat_id(caller_context.caller_chat_id.clone())
-        .with_activity_observation(caller_context.activity_observation.clone())
-        .with_nudge_mode(nudge_mode);
-
-        composition.send(request).await?;
-        Ok(())
-    }
-}
-
-/// One `--from-json` recipient, resolved and classified before any staging,
-/// transfer, or send begins (R5/R13).
-struct FanOutRecipient {
-    member_id: String,
-    address: AgentAddress,
-    locality: RecipientLocality,
-}
-
-fn read_picker_output_from_stdin() -> Result<PickerOutput> {
-    use std::io::Read as _;
-    let mut raw = String::new();
-    std::io::stdin()
-        .read_to_string(&mut raw)
-        .map_err(|error| anyhow::anyhow!("--from-json stdin could not be read: {error}"))?;
-    atm_core::send_to::parse_picker_output(&raw)
-        .map_err(atm_core::error::AtmError::from)
-        .map_err(Into::into)
-}
-
-/// Resolves and classifies every `--from-json` recipient against the roster
-/// before any staging, transfer, or send begins (R5/R13): an
-/// unknown/null-host/unclassifiable recipient anywhere in the batch fails
-/// the whole invocation closed.
-fn resolve_fan_out_recipients(
-    picker_output: &PickerOutput,
-    local_host: Option<&HostName>,
-) -> Result<Vec<FanOutRecipient>> {
-    let mut recipients = Vec::with_capacity(picker_output.recipients.len());
-    for member_id in &picker_output.recipients {
-        let address = with_default_roster_store(|roster| {
-            atm_core::send_to::resolve_picker_recipient(member_id, roster)
-                .map_err(atm_core::error::AtmError::from)
-        })?;
-        let locality = classify_recipient_locality(address.host(), local_host)
-            .map_err(atm_core::error::AtmError::from)?;
-        recipients.push(FanOutRecipient {
-            member_id: member_id.clone(),
-            address,
-            locality,
-        });
-    }
-    Ok(recipients)
-}
-
-/// Validates every `--attach` source file's readability once, up front,
-/// across the whole `--from-json` batch (R5/R13): a missing/unreadable
-/// source must fail before any per-host staging or transfer for *any*
-/// recipient.
-fn validate_attach_sources(files: &[PathBuf]) -> Result<()> {
-    for file in files {
-        std::fs::metadata(file)
-            .with_context(|| format!("attachment '{}' could not be read", file.display()))?;
-    }
-    Ok(())
-}
-
-/// Reports the decision-(g) partial delivery result on stderr, and includes
-/// it in `--json` output when requested.
-fn report_fan_out_result(json: bool, delivered: &[String], not_delivered: &[String]) {
-    if json {
-        eprintln!("{}", fan_out_result_json(delivered, not_delivered));
-    } else {
-        eprintln!("delivered: {}", delivered.join(", "));
-        if !not_delivered.is_empty() {
-            eprintln!("not delivered: {}", not_delivered.join(", "));
-        }
-    }
-}
-
-/// Builds the decision-(g) `--json` partial-delivery report. Extracted from
-/// [`report_fan_out_result`] so its exact shape is unit-testable without
-/// capturing process stderr.
-fn fan_out_result_json(delivered: &[String], not_delivered: &[String]) -> serde_json::Value {
-    serde_json::json!({
-        "delivered": delivered,
-        "not_delivered": not_delivered,
-    })
 }
 
 /// Combines optional message text with the decision-(d) attachment note:
 /// both present join with a blank line; either alone passes through
-/// unchanged; neither present is `None`.
-fn combine_message_with_attachment_note(
+/// unchanged; neither present is `None`. `pub(super)`: also consumed by
+/// `send_fan_out.rs`'s per-recipient fan-out send.
+pub(super) fn combine_message_with_attachment_note(
     message: Option<String>,
     note: Option<&str>,
 ) -> Option<String> {
@@ -1203,10 +956,18 @@ mod tests {
     use std::num::NonZeroU16;
     use std::path::{Path, PathBuf};
 
-    use super::{
-        FanOutRecipient, RecipientLocality, SendCommand, fan_out_result_json,
-        resolve_trusted_ipv4_with_lookup,
-    };
+    use super::{SendCommand, resolve_trusted_ipv4_with_lookup};
+    use crate::commands::send_fan_out::fan_out_result_json;
+    // `FanOutRecipient`/`RecipientLocality`/`CliObservability` are consumed
+    // only by the real transfer-script fan-out integration test below,
+    // which is itself `#[cfg(unix)]` (it exercises a `#!/bin/sh` stub
+    // script with no Windows equivalent) -- gating the imports the same
+    // way avoids `unused_imports` on non-unix targets.
+    #[cfg(unix)]
+    use super::RecipientLocality;
+    #[cfg(unix)]
+    use crate::commands::send_fan_out::FanOutRecipient;
+    #[cfg(unix)]
     use crate::observability::CliObservability;
     use atm_core::roles::ROLE_TEAM_LEAD;
     use atm_core::send::{SendMessageSource, input};
@@ -2309,7 +2070,12 @@ mod tests {
     /// Minimal roster/team fixture for the fan-out integration test, mirrors
     /// `crate::composition::tests::LoopbackFixture`'s seeding shape (that
     /// fixture is private to `composition.rs`'s own test module and cannot
-    /// be reused directly from this sibling module).
+    /// be reused directly from this sibling module). Unix-only: its sole
+    /// consumer, the fan-out integration test below, exercises a real
+    /// `#!/bin/sh` transfer-script invocation with no Windows equivalent --
+    /// gating the fixture itself (not just that test) avoids `dead_code` on
+    /// non-unix targets.
+    #[cfg(unix)]
     #[allow(
         deprecated,
         reason = "test fixture calls the retained atm-core roster/mail store boundary directly, matching crate::composition::tests::LoopbackFixture's own precedent"
@@ -2322,6 +2088,7 @@ mod tests {
         current_dir: PathBuf,
     }
 
+    #[cfg(unix)]
     #[allow(
         deprecated,
         reason = "test fixture calls the retained atm-core roster/mail store boundary directly, matching crate::composition::tests::LoopbackFixture's own precedent"

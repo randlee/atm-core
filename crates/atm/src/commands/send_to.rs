@@ -131,7 +131,7 @@ async fn resolve_and_invoke_transfer_script(
 /// Spawns one bounded, argv-array transfer-script invocation (ADR-055
 /// decision (c)).
 ///
-/// The child inherits **only** `ATM_TEMP`/`ATM_IDENTITY`/`ATM_TEAM` from this
+/// The child inherits **only** [`TRANSFER_SCRIPT_ALLOWED_ENV_KEYS`] from this
 /// process's environment (an explicit allow-list, never the full parent
 /// environment), has stdin closed, and is killed if it outlives `timeout`.
 /// Captured stdout/stderr are capped at [`MAX_CAPTURED_OUTPUT_BYTES`] with a
@@ -400,6 +400,55 @@ mod tests {
         assert!(names.contains("ATM_TEAM"));
         assert!(names.contains("ATM_TEMP"));
         assert!(!names.contains("NOT_ALLOWED_LEAK"));
+    }
+
+    /// QA-2 B6: `ATM_TRANSFER_SSH_CONFIG` is an opt-in fourth allow-list
+    /// entry -- forwarded when the caller's process happens to have it set
+    /// (exactly like the other three), and simply absent from the child
+    /// otherwise. Every ordinary `atm send --attach` invocation never sets
+    /// it; only tooling like `scripts/phase-aq/run_aq4_transfer_evidence.py`
+    /// does, to route `ssh`/`scp` through a scratch config instead of the
+    /// real `~/.ssh/config`.
+    #[tokio::test]
+    #[serial_test::serial(env)]
+    async fn invoke_transfer_script_forwards_the_opt_in_ssh_config_override_when_set() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let landed = dir.path().join("landed");
+        std::fs::create_dir_all(&landed).expect("landed dir");
+        let capture_file = dir.path().join("env-capture.txt");
+        let script_contents = format!(
+            "#!/bin/sh\nenv | grep '^ATM_TRANSFER_SSH_CONFIG=' > {}\necho {}\n",
+            capture_file.display(),
+            landed.display()
+        );
+        let script_path = write_script(dir.path(), "stub.sh", &script_contents);
+        let configured = fixture_configured_script(script_path, host("m5"));
+
+        let _env = atm_core::test_support::EnvGuard::set_many([
+            ("ATM_TEMP", Some("atm-temp-test-value")),
+            ("ATM_IDENTITY", Some("test-agent")),
+            ("ATM_TEAM", Some("test-team")),
+            (
+                "ATM_TRANSFER_SSH_CONFIG",
+                Some("/scratch/ssh_client_config"),
+            ),
+        ]);
+
+        invoke_transfer_script(
+            &configured,
+            Ulid::new(),
+            &[PathBuf::from("/tmp/report.pdf")],
+            Duration::from_secs(5),
+        )
+        .await
+        .expect("happy path succeeds");
+
+        let captured =
+            std::fs::read_to_string(&capture_file).expect("script wrote its captured env");
+        assert_eq!(
+            captured.trim(),
+            "ATM_TRANSFER_SSH_CONFIG=/scratch/ssh_client_config"
+        );
     }
 
     /// Builds a real [`ConfiguredTransferScript`] by resolving `script_path`

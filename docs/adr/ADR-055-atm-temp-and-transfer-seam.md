@@ -265,7 +265,22 @@ yet."
 The child process inherits **only** `ATM_TEMP`, `ATM_IDENTITY`, and
 `ATM_TEAM` from the caller's environment (an explicit allow-list, never the
 full parent environment), runs with the caller's cwd, and has stdin closed
-(no accidental interactive-prompt hang). It has a bounded deadline (default
+(no accidental interactive-prompt hang).
+
+**QA-2 B6 correction (recorded post-merge):** the allow-list gained a
+fourth, opt-in entry, `ATM_TRANSFER_SSH_CONFIG`. Unset for every ordinary
+operator (identical behavior to the original three-entry list), it exists
+so `sftp.sh`/`sftp.ps1` can pass `ssh -F <path>`/`scp -F <path>` when a
+caller sets it, without needing any of the argv-array invocation contract
+above to change. Its only real consumer today is
+`scripts/phase-aq/run_aq4_transfer_evidence.py`'s live-evidence harness,
+which uses it to route a loopback `sshd` through a scratch config file
+instead of mutating the OS account's real `~/.ssh/config` -- a harness
+correctness fix (QA-2 B6, "serious"), not a change to what any shipped
+example script does by default. `TRANSFER_SCRIPT_ALLOWED_ENV_KEYS`
+(`crates/atm-core/src/transfer_script.rs`) is the single source of truth.
+
+It has a bounded deadline (default
 60 s, configurable; the child is killed on expiry) and capped stdout/stderr
 (truncated with a marker). Success is a single-line absolute-path landed
 directory on stdout, validated as **untrusted input** (exactly one line,

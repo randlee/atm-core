@@ -524,7 +524,53 @@ mod tests {
     }
 
     impl boundary::sealed::Sealed for RecordingRosterStore {}
+    impl atm_storage::contract::sealed::Sealed for RecordingRosterStore {}
     impl atm_storage::contract::sealed::Sealed for RecordingNudgeTemplateOverrideStore {}
+
+    // RBQA-F001: `resolve_picker_recipient` now resolves through the
+    // canonical, non-deprecated `atm_storage::RosterStore`, not the
+    // deprecated `crate::boundary::RosterStore` this fixture also
+    // implements above (still exercised directly by this module's other
+    // roster-mutation tests).
+    impl atm_storage::RosterStore for RecordingRosterStore {
+        fn load_roster(
+            &self,
+            team: &TeamName,
+        ) -> Result<atm_storage::RosterSnapshot, crate::error::AtmError> {
+            Ok(atm_storage::RosterSnapshot {
+                team_name: team.clone(),
+                members: self
+                    .teams
+                    .lock()
+                    .expect("roster store lock")
+                    .get(team)
+                    .cloned()
+                    .unwrap_or_default(),
+                refreshed_at: None,
+            })
+        }
+
+        fn save_roster(
+            &self,
+            roster: &atm_storage::RosterSnapshot,
+        ) -> Result<(), crate::error::AtmError> {
+            self.teams
+                .lock()
+                .expect("roster store lock")
+                .insert(roster.team_name.clone(), roster.members.clone());
+            Ok(())
+        }
+
+        fn list_teams(&self) -> Result<Vec<TeamName>, crate::error::AtmError> {
+            Ok(self
+                .teams
+                .lock()
+                .expect("roster store lock")
+                .keys()
+                .cloned()
+                .collect())
+        }
+    }
 
     impl RosterStore for RecordingRosterStore {
         fn replace_roster(

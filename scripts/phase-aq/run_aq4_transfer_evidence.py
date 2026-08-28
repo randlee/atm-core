@@ -7,7 +7,10 @@ invocation against a real loopback `sshd` this script starts on a scratch
 port, proving end to end that a file attached on the sending side lands
 under the receiving side's `$ATM_TEMP` staging convention
 (`send_to_staging_dir`) via nothing but genuine SSH/SCP I/O -- no daemon
-transport, no envelope change (ADR-055 decisions (c)/(d)).
+transport, no envelope change (ADR-055 decisions (c)/(d)). On Windows this
+drives `scripts/transfer/sftp.ps1` instead (via `pwsh`), matching how
+`crates/atm-core/src/transfer_script.rs` resolves a `.ps1` transfer script
+there.
 
 Mirrors `scripts/phase-aq/run_aq25_queue_delivery_trigger_evidence.py`'s
 shape: one real, owned `atm-daemon` (refuses to start if an ambient one
@@ -28,14 +31,20 @@ label gets both properties this scenario needs: no peer/mTLS setup required
 for message delivery, and the real transfer-script path exercised for the
 attachment.
 
-Why this script writes into the real (not scratch) `$HOME/.ssh/config`:
-`invoke_transfer_script` (`crates/atm/src/commands/send_to.rs`) calls
-`Command::env_clear()` before inserting only `ATM_TEMP`, `ATM_IDENTITY`,
-`ATM_TEAM` (ADR-055 decision (c)'s allow-list) -- `HOME` is deliberately not
-forwarded to the spawned `ssh`/`scp` child, so those processes resolve their
-own home directory (and therefore `~/.ssh/config`) via the OS account,
-never via any `$HOME` this script sets for the outer `atm` CLI process. The
-addition is backed up and restored; see `SshClientConfigOverride`.
+Why this script never touches the real `$HOME/.ssh/config` (QA-2 B6): an
+earlier revision backed up and overwrote the OS account's real
+`~/.ssh/config`, because `invoke_transfer_script`
+(`crates/atm/src/commands/send_to.rs`) calls `Command::env_clear()` before
+inserting only the allow-listed variables into the spawned `ssh`/`scp`
+child, and `HOME` is not one of them -- so those processes always resolve
+`~` via the OS account, never via any `$HOME` this script sets for the
+outer `atm` CLI process. Mutating a developer or CI account's real SSH
+config from a test harness is exactly the kind of blast radius a harness
+must not have. Instead this script writes a throwaway ssh client config
+under its own scratch root and exports `ATM_TRANSFER_SSH_CONFIG` (an opt-in
+fourth entry in `TRANSFER_SCRIPT_ALLOWED_ENV_KEYS`, unset for every ordinary
+install) so `sftp.sh`/`sftp.ps1` pass it through to `ssh`/`scp` as
+`-F <scratch config>`. See `write_scratch_ssh_client_config`.
 
 Why this script also writes a sender-side `.atm.toml` with `local_host`
 (confirmed live on clean-runner CI, run 33125703487: `atm send` exited 3,
@@ -44,11 +53,24 @@ has no `local_host` set"): decision (f) fails a host-qualified recipient
 closed with `LocalHostUnset` unless the sender's own `local_host` is
 configured. See `write_sender_atm_config`'s docstring for why its value is
 deliberately a *different* label than the recipient's `localhost`.
+
+Why the Windows transfer-script safety check is not POSIX-mode-based
+(cipher's investigation on #1066): NTFS reports `chmod` results as
+essentially always `0777`/`0666` regardless of what was requested -- mode
+bits are not a meaningful safety signal there. `check_script_safety` and
+`check_transfer_root_metadata` (`crates/atm-core/src/transfer_script.rs`,
+`#[cfg(windows)]` branches) instead require the installed `.atm/transfer`
+directory and script to sit under the resolved profile home
+(`$HOME`/`%USERPROFILE%`, falling back to the OS account profile) and not be
+a reparse point. `install_transfer_script` mirrors that check on Windows and
+records its result under `windows_profile_containment` instead of POSIX
+mode strings; the `0o700` assertions remain Unix-only.
 """
 
 from __future__ import annotations
 
 import argparse
+import collections
 import json
 import os
 from pathlib import Path
@@ -59,6 +81,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from typing import Any
 
@@ -74,6 +97,13 @@ SSHD_READY_TIMEOUT_SECONDS = 10.0
 ATTACHMENT_FILE_NAME = "aq4-report.pdf"
 ATTACHMENT_BODY = b"%PDF-1.4\naq4 live evidence attachment\n"
 MESSAGE_TEXT = "AQ4 live transfer evidence: see attached file"
+
+# Windows CI (`windows-latest`) is treated identically to every other
+# platform everywhere this constant is *not* consulted; it exists solely
+# for the handful of genuinely OS-divergent seams cipher's investigation
+# identified: which example script ships, how its safety check is proven,
+# and the `UserKnownHostsFile` sink OpenSSH accepts.
+IS_WINDOWS = sys.platform == "win32"
 
 
 def parse_args() -> argparse.Namespace:
@@ -159,7 +189,11 @@ def find_sshd() -> Path | None:
 def ensure_sshd_available() -> tuple[Path | None, dict[str, Any]]:
     """Locates `sshd`, installing it on ubuntu if missing and root/sudo is
     available. Never raises: an unavailable `sshd` is an honest
-    `skipped_no_sshd` evidence outcome, not a script failure."""
+    `skipped_no_sshd` evidence outcome, not a script failure -- this covers
+    Windows runners with no OpenSSH Server feature installed too, since
+    `find_sshd()` above already checks `PATH` (and the Unix-only fallback
+    paths are simply absent there) before this function's platform branches
+    run."""
     found = find_sshd()
     if found is not None:
         return found, {"found": True, "path": str(found)}
@@ -184,7 +218,10 @@ def ensure_sshd_available() -> tuple[Path | None, dict[str, Any]]:
     # launchd-managed Remote Login service) can be refused by the runner's
     # security policy; find_sshd() above already checked the well-known
     # path, so reaching here on macOS means it is genuinely absent or not
-    # executable -- record that honestly rather than guessing why.
+    # executable -- record that honestly rather than guessing why. Windows
+    # runners fall through to this same branch: there is no equivalent
+    # well-known-path fallback or unattended install path for OpenSSH
+    # Server there, so an absent `sshd` is reported the same honest way.
     return None, {"found": False, "install_attempted": False}
 
 
@@ -207,7 +244,8 @@ def generate_ssh_keys(root: Path) -> dict[str, Path]:
         )
         if completed.returncode != 0:
             raise RuntimeError(f"ssh-keygen failed for {path}: {completed.stderr.strip()}")
-        path.chmod(0o600)
+        if not IS_WINDOWS:
+            path.chmod(0o600)
     return {"identity": identity, "identity_pub": root / "id_ed25519.pub", "host_key": host_key}
 
 
@@ -236,6 +274,45 @@ def write_sshd_config(root: Path, port: int, keys: dict[str, Path]) -> Path:
     return config_path
 
 
+class PipeDrain:
+    """Continuously drains a subprocess's stdout (and stderr, when it is a
+    distinct pipe) into bounded in-memory deques on background daemon
+    threads, for the process's entire lifetime -- not only while a
+    readiness probe happens to be reading (FTQ-002/003). Without this, a
+    chatty child (this scenario runs `sshd` at `LogLevel DEBUG3` and the
+    daemon at `ATM_LOG=debug`) can fill its OS pipe buffer and block on a
+    write the instant nothing is actively draining it, wedging the whole
+    scenario with no timeout to save it.
+    """
+
+    def __init__(self, process: subprocess.Popen[str], max_lines: int = 4000) -> None:
+        self.stdout_lines: collections.deque[str] = collections.deque(maxlen=max_lines)
+        self.stderr_lines: collections.deque[str] = collections.deque(maxlen=max_lines)
+        self._threads: list[threading.Thread] = []
+        if process.stdout is not None:
+            self._threads.append(self._spawn_reader(process.stdout, self.stdout_lines))
+        if process.stderr is not None:
+            self._threads.append(self._spawn_reader(process.stderr, self.stderr_lines))
+
+    @staticmethod
+    def _spawn_reader(stream: Any, sink: "collections.deque[str]") -> threading.Thread:
+        def _drain() -> None:
+            for line in iter(stream.readline, ""):
+                sink.append(line.rstrip("\n"))
+
+        thread = threading.Thread(target=_drain, daemon=True)
+        thread.start()
+        return thread
+
+    @staticmethod
+    def tail(sink: "collections.deque[str]", count: int = 200) -> str:
+        return "\n".join(list(sink)[-count:])
+
+    def join(self, timeout: float = 2.0) -> None:
+        for thread in self._threads:
+            thread.join(timeout=timeout)
+
+
 def start_sshd(sshd_bin: Path, config_path: Path, port: int) -> dict[str, Any]:
     process = subprocess.Popen(
         [str(sshd_bin), "-f", str(config_path), "-D", "-e"],
@@ -245,6 +322,7 @@ def start_sshd(sshd_bin: Path, config_path: Path, port: int) -> dict[str, Any]:
         encoding="utf-8",
         errors="replace",
     )
+    drain = PipeDrain(process)
     deadline = time.monotonic() + SSHD_READY_TIMEOUT_SECONDS
     ready = False
     while time.monotonic() < deadline:
@@ -256,66 +334,60 @@ def start_sshd(sshd_bin: Path, config_path: Path, port: int) -> dict[str, Any]:
                 break
         except OSError:
             time.sleep(0.1)
-    log_tail = ""
-    if process.poll() is not None and process.stdout is not None:
-        log_tail = process.stdout.read()
-    return {"process": process, "ready": ready, "pid": process.pid, "log_tail": log_tail}
+    log_tail = PipeDrain.tail(drain.stdout_lines) if process.poll() is not None else ""
+    return {"process": process, "drain": drain, "ready": ready, "pid": process.pid, "log_tail": log_tail}
 
 
-def stop_sshd(process: subprocess.Popen[str] | None) -> None:
-    if process is None or process.poll() is not None:
-        return
-    process.terminate()
-    try:
-        process.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait(timeout=5)
+def stop_sshd(process: subprocess.Popen[str] | None, drain: PipeDrain | None = None) -> None:
+    if process is not None and process.poll() is None:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
+    if drain is not None:
+        drain.join()
 
 
-class SshClientConfigOverride:
-    """Temporarily replaces the real OS account's `~/.ssh/config` with one
-    stanza routing the literal hostname `localhost` at this script's
-    loopback `sshd`, restoring whatever was there (or its absence)
-    afterward. See this module's docstring for why the real home directory
-    -- not a scratch one -- is unavoidable here."""
+def write_scratch_ssh_client_config(root: Path, port: int, identity: Path) -> Path:
+    """Writes a throwaway `ssh`/`scp` client config under this scenario's
+    own scratch `root` (QA-2 B6) -- never the real OS account
+    `~/.ssh/config` -- routing the literal hostname `localhost` at this
+    script's loopback `sshd`. The caller threads its path through
+    `ATM_TRANSFER_SSH_CONFIG` (an opt-in fourth entry in
+    `TRANSFER_SCRIPT_ALLOWED_ENV_KEYS`), which `sftp.sh`/`sftp.ps1` pass to
+    `ssh`/`scp` as `-F <path>` when set. Cleanup is implicit: the caller's
+    scratch `root` is a `tempfile.TemporaryDirectory` removed when the
+    scenario ends, so this never needs its own backup/restore step -- the
+    real file it might otherwise have touched is never opened at all.
 
-    def __init__(self, port: int, identity: Path) -> None:
-        self._port = port
-        self._identity = identity
-        self._ssh_dir = Path.home() / ".ssh"
-        self._config_path = self._ssh_dir / "config"
-        self._backup_path: Path | None = None
-        self._had_config = False
-
-    def __enter__(self) -> "SshClientConfigOverride":
-        self._ssh_dir.mkdir(mode=0o700, exist_ok=True)
-        self._had_config = self._config_path.is_file()
-        if self._had_config:
-            self._backup_path = self._ssh_dir / "config.aq4-evidence-backup"
-            shutil.move(str(self._config_path), str(self._backup_path))
-        stanza = "\n".join(
-            [
-                f"Host {TRANSFER_HOST}",
-                "    Hostname 127.0.0.1",
-                f"    Port {self._port}",
-                f"    User {os.environ.get('USER') or os.environ.get('USERNAME') or ''}",
-                f"    IdentityFile {self._identity}",
-                "    IdentitiesOnly yes",
-                "    StrictHostKeyChecking no",
-                "    UserKnownHostsFile /dev/null",
-                "    PasswordAuthentication no",
-                "",
-            ]
-        )
-        self._config_path.write_text(stanza, encoding="utf-8")
-        self._config_path.chmod(0o600)
-        return self
-
-    def __exit__(self, *_exc: object) -> None:
-        self._config_path.unlink(missing_ok=True)
-        if self._had_config and self._backup_path is not None:
-            shutil.move(str(self._backup_path), str(self._config_path))
+    `UserKnownHostsFile` is `NUL` on Windows and `/dev/null` everywhere
+    else: OpenSSH on Windows does not treat the Unix device path as a sink,
+    so a POSIX-style `/dev/null` there would create (and then try to
+    parse as a known-hosts file) a literal file named `/dev/null` instead of
+    discarding host-key state.
+    """
+    known_hosts_sink = "NUL" if IS_WINDOWS else "/dev/null"
+    config_path = root / "ssh_client_config"
+    stanza = "\n".join(
+        [
+            f"Host {TRANSFER_HOST}",
+            "    Hostname 127.0.0.1",
+            f"    Port {port}",
+            f"    User {os.environ.get('USER') or os.environ.get('USERNAME') or ''}",
+            f"    IdentityFile {identity}",
+            "    IdentitiesOnly yes",
+            "    StrictHostKeyChecking no",
+            f"    UserKnownHostsFile {known_hosts_sink}",
+            "    PasswordAuthentication no",
+            "",
+        ]
+    )
+    config_path.write_text(stanza, encoding="utf-8")
+    if not IS_WINDOWS:
+        config_path.chmod(0o600)
+    return config_path
 
 
 def fixture_environment(root: Path) -> dict[str, str]:
@@ -399,41 +471,38 @@ def start_daemon(daemon: Path, env: dict[str, str], timeout: float) -> dict[str,
         encoding="utf-8",
         errors="replace",
     )
+    drain = PipeDrain(process)
     deadline = time.monotonic() + timeout
-    lines: list[str] = []
     ready = False
     while time.monotonic() < deadline:
         if process.poll() is not None:
             break
-        line = process.stdout.readline() if process.stdout is not None else ""
-        if line:
-            lines.append(line.rstrip("\n"))
-            if line.strip() == "ATM_DAEMON_READY":
-                ready = True
-                break
-    stderr_tail = ""
-    if process.poll() is not None:
-        stderr_tail = (process.stderr.read() if process.stderr is not None else "").strip()
+        if any(line.strip() == "ATM_DAEMON_READY" for line in drain.stdout_lines):
+            ready = True
+            break
+        time.sleep(0.05)
     return {
         "process": process,
+        "drain": drain,
         "ready": ready,
         "pid": process.pid,
-        "stdout_tail": lines,
+        "stdout_tail": list(drain.stdout_lines),
         "exited_early": process.poll() is not None,
         "returncode": process.returncode,
-        "stderr_tail": stderr_tail,
+        "stderr_tail": PipeDrain.tail(drain.stderr_lines),
     }
 
 
-def stop_daemon(process: subprocess.Popen[str] | None) -> None:
-    if process is None or process.poll() is not None:
-        return
-    process.terminate()
-    try:
-        process.wait(timeout=10)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait(timeout=5)
+def stop_daemon(process: subprocess.Popen[str] | None, drain: PipeDrain | None = None) -> None:
+    if process is not None and process.poll() is None:
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
+    if drain is not None:
+        drain.join()
 
 
 def extract_landed_path(peek_stdout: str, file_name: str) -> str | None:
@@ -464,10 +533,27 @@ def _mode_octal(path: Path) -> str:
     return oct(stat.S_IMODE(path.stat().st_mode))
 
 
+def _is_within_profile(path: Path, profile_home: Path) -> bool:
+    """Python mirror of `crate::transfer_script::path_is_within`'s
+    component-wise containment compare, for evidence recording only (the
+    Rust safety check itself is what actually gates `atm send`; this exists
+    so the JSON evidence can honestly report whether the scenario's own
+    Windows install landed somewhere the real check would accept, without
+    calling into Rust from Python)."""
+    try:
+        path.relative_to(profile_home)
+        return True
+    except ValueError:
+        return False
+
+
 def install_transfer_script(home: Path) -> dict[str, Any]:
-    """Installs the unmodified `scripts/transfer/sftp.sh` example at
-    `<home>/.atm/transfer/localhost`, explicitly enforcing 0700 on the
-    `.atm` and `.atm/transfer` directories (`check_transfer_root_metadata`,
+    """Installs the unmodified `scripts/transfer/sftp.sh` example (or, on
+    Windows, `scripts/transfer/sftp.ps1`) at
+    `<home>/.atm/transfer/localhost[.ps1]`.
+
+    Unix: explicitly enforces `0700` on the `.atm` and `.atm/transfer`
+    directories (`check_transfer_root_metadata`,
     `crates/atm-core/src/transfer_script.rs`) and the script file itself
     (`check_script_safety`) -- the only two paths ADR-055's Unix
     transfer-script safety check inspects; nothing else under `home` is on
@@ -483,10 +569,39 @@ def install_transfer_script(home: Path) -> dict[str, Any]:
     mode has no bits in the umask's cleared positions -- 0700 has none, so
     it is umask-proof, but this still `os.chmod`s every directory level
     explicitly after creation rather than relying on that interaction.
+
+    Windows (cipher's investigation on #1066): NTFS `chmod` results are not
+    a meaningful safety signal (`stat.S_IMODE` reports essentially always
+    `0o777`/`0o666` there), and the production check
+    (`check_transfer_root_metadata`/`check_script_safety`,
+    `#[cfg(windows)]`) does not consult mode bits at all -- it requires the
+    installed path to sit under the resolved profile home
+    (`$HOME`/`%USERPROFILE%`, which `fixture_environment` already points at
+    this scenario's scratch `home`) and not be a reparse point. This
+    function mirrors that containment check (`_is_within_profile`) and
+    records it under `windows_profile_containment` instead of POSIX mode
+    strings.
     """
     atm_dir = home / ".atm"
     transfer_dir = atm_dir / "transfer"
     os.makedirs(transfer_dir, mode=0o700, exist_ok=True)
+
+    if IS_WINDOWS:
+        installed = transfer_dir / f"{TRANSFER_HOST}.ps1"
+        shutil.copyfile(ROOT / "scripts" / "transfer" / "sftp.ps1", installed)
+        profile_home = home.resolve()
+        return {
+            "installed_at": str(installed),
+            "source": str(ROOT / "scripts" / "transfer" / "sftp.ps1"),
+            "windows_profile_containment": {
+                "profile_home": str(profile_home),
+                "transfer_dir_contained": _is_within_profile(transfer_dir.resolve(), profile_home),
+                "script_contained": _is_within_profile(installed.resolve(), profile_home),
+                "transfer_dir_is_reparse_point": transfer_dir.is_symlink(),
+                "script_is_reparse_point": installed.is_symlink(),
+            },
+        }
+
     os.chmod(atm_dir, 0o700)
     os.chmod(transfer_dir, 0o700)
 
@@ -544,13 +659,16 @@ def run_scenario(args: argparse.Namespace) -> dict[str, Any]:
         sshd_root = root / "sshd"
         sshd_root.mkdir()
         daemon_process: subprocess.Popen[str] | None = None
+        daemon_drain: PipeDrain | None = None
         sshd_process: subprocess.Popen[str] | None = None
+        sshd_drain: PipeDrain | None = None
         remote_landing_dir: Path | None = None
         try:
             keys = generate_ssh_keys(sshd_root)
             config_path = write_sshd_config(sshd_root, port, keys)
             sshd = start_sshd(sshd_bin, config_path, port)
             sshd_process = sshd.pop("process")
+            sshd_drain = sshd.pop("drain")
             record["sshd_start"] = {**sshd, "port": port}
             if not sshd["ready"]:
                 record["status"] = "blocked_sshd_start_failed"
@@ -565,23 +683,45 @@ def run_scenario(args: argparse.Namespace) -> dict[str, Any]:
                 "local_host": SENDER_LOCAL_HOST,
             }
 
-            with SshClientConfigOverride(port, keys["identity"]):
-                record["roster"] = {
-                    "sender": add_roster_member(args.atm, env, home, SENDER, args.timeout),
-                    # Decision (e): register the receiver's roster host as
-                    # the same literal "localhost" the send below targets
-                    # with --host, so the recipient this scenario delivers
-                    # to is consistently recorded as reachable at that host,
-                    # not merely accepted through the send-time override.
-                    "receiver": add_roster_member(args.atm, env, home, RECEIVER, args.timeout, host=TRANSFER_HOST),
-                }
+            # QA-2 B6: a scratch ssh client config, never the real
+            # ~/.ssh/config -- threaded to the transfer script's spawned
+            # ssh/scp children through ATM_TRANSFER_SSH_CONFIG, an opt-in
+            # entry in TRANSFER_SCRIPT_ALLOWED_ENV_KEYS every ordinary
+            # install leaves unset.
+            ssh_config_path = write_scratch_ssh_client_config(root, port, keys["identity"])
+            env["ATM_TRANSFER_SSH_CONFIG"] = str(ssh_config_path)
+            record["scratch_ssh_client_config"] = str(ssh_config_path)
 
-                record["transfer_script"] = install_transfer_script(home)
-                # Not a bare `assert` (stripped under `python -O`): the
-                # whole point of installing at 0700 explicitly is to make
-                # the safety check pass, so a mode mismatch here must be a
-                # loud, unconditional harness failure, not a silently
-                # skippable assertion.
+            record["roster"] = {
+                "sender": add_roster_member(args.atm, env, home, SENDER, args.timeout),
+                # Decision (e): register the receiver's roster host as
+                # the same literal "localhost" the send below targets
+                # with --host, so the recipient this scenario delivers
+                # to is consistently recorded as reachable at that host,
+                # not merely accepted through the send-time override.
+                "receiver": add_roster_member(args.atm, env, home, RECEIVER, args.timeout, host=TRANSFER_HOST),
+            }
+
+            record["transfer_script"] = install_transfer_script(home)
+            # Not a bare `assert` (stripped under `python -O`): the
+            # whole point of installing at 0700 (Unix) / under the
+            # profile home (Windows) explicitly is to make the safety
+            # check pass, so a mismatch here must be a loud,
+            # unconditional harness failure, not a silently skippable
+            # assertion.
+            if IS_WINDOWS:
+                containment = record["transfer_script"]["windows_profile_containment"]
+                if not (containment["transfer_dir_contained"] and containment["script_contained"]):
+                    raise RuntimeError(
+                        f"install_transfer_script did not land under the resolved profile "
+                        f"home on Windows: {containment}"
+                    )
+                if containment["transfer_dir_is_reparse_point"] or containment["script_is_reparse_point"]:
+                    raise RuntimeError(
+                        f"install_transfer_script produced a reparse point, which the real "
+                        f"Windows safety check refuses outright: {containment}"
+                    )
+            else:
                 for mode_key in ("atm_dir_mode", "transfer_dir_mode", "script_mode"):
                     recorded_mode = record["transfer_script"][mode_key]
                     if recorded_mode != "0o700":
@@ -590,91 +730,92 @@ def run_scenario(args: argparse.Namespace) -> dict[str, Any]:
                             f"got {recorded_mode} (record: {record['transfer_script']})"
                         )
 
-                daemon = start_daemon(args.daemon, env, args.timeout)
-                daemon_process = daemon.pop("process")
-                record["daemon_start"] = daemon
-                if not daemon["ready"]:
-                    record["status"] = "blocked_daemon_start_failed"
-                    record["error"] = daemon.get("stderr_tail") or "daemon did not report ready"
-                    return record
+            daemon = start_daemon(args.daemon, env, args.timeout)
+            daemon_process = daemon.pop("process")
+            daemon_drain = daemon.pop("drain")
+            record["daemon_start"] = daemon
+            if not daemon["ready"]:
+                record["status"] = "blocked_daemon_start_failed"
+                record["error"] = daemon.get("stderr_tail") or "daemon did not report ready"
+                return record
 
-                attach_source_dir = root / "attach-source"
-                attach_source_dir.mkdir()
-                attach_path = attach_source_dir / ATTACHMENT_FILE_NAME
-                attach_path.write_bytes(ATTACHMENT_BODY)
+            attach_source_dir = root / "attach-source"
+            attach_source_dir.mkdir()
+            attach_path = attach_source_dir / ATTACHMENT_FILE_NAME
+            attach_path.write_bytes(ATTACHMENT_BODY)
 
-                # cwd=sender_cwd: `atm send` resolves `.atm.toml`'s
-                # `local_host` (decision (f)) by walking upward from the
-                # process's current directory, so the sender-side config
-                # written above is only found if this invocation actually
-                # runs from there -- unlike every other command in this
-                # scenario, which has no need for `local_host` and keeps
-                # running from ROOT.
-                send_completed = run_cli(
+            # cwd=sender_cwd: `atm send` resolves `.atm.toml`'s
+            # `local_host` (decision (f)) by walking upward from the
+            # process's current directory, so the sender-side config
+            # written above is only found if this invocation actually
+            # runs from there -- unlike every other command in this
+            # scenario, which has no need for `local_host` and keeps
+            # running from ROOT.
+            send_completed = run_cli(
+                args.atm,
+                env,
+                ["send", f"{RECEIVER}@{TEAM}", MESSAGE_TEXT, "--host", TRANSFER_HOST, "--attach", str(attach_path)],
+                identity=SENDER,
+                timeout=args.timeout,
+                cwd=sender_cwd,
+            )
+            record["send"] = {
+                "argv": send_completed.args,
+                "returncode": send_completed.returncode,
+                "stdout": send_completed.stdout.strip(),
+                "stderr_tail": send_completed.stderr.strip()[-2000:],
+            }
+
+            send_ok = send_completed.returncode == 0
+            landed_path: str | None = None
+            landed_matches_convention = False
+            landed_file_exists = False
+            landed_content_matches = False
+
+            if send_ok:
+                peek_completed = run_cli(
                     args.atm,
                     env,
-                    ["send", f"{RECEIVER}@{TEAM}", MESSAGE_TEXT, "--host", TRANSFER_HOST, "--attach", str(attach_path)],
-                    identity=SENDER,
+                    ["peek", "--json", "--all", "--team", TEAM, "--as", RECEIVER],
+                    identity=RECEIVER,
                     timeout=args.timeout,
-                    cwd=sender_cwd,
                 )
-                record["send"] = {
-                    "argv": send_completed.args,
-                    "returncode": send_completed.returncode,
-                    "stdout": send_completed.stdout.strip(),
-                    "stderr_tail": send_completed.stderr.strip()[-2000:],
+                record["peek"] = {
+                    "returncode": peek_completed.returncode,
+                    "stdout": peek_completed.stdout,
+                    "stderr_tail": peek_completed.stderr.strip()[-2000:],
                 }
-
-                send_ok = send_completed.returncode == 0
-                landed_path: str | None = None
-                landed_matches_convention = False
-                landed_file_exists = False
-                landed_content_matches = False
-
-                if send_ok:
-                    peek_completed = run_cli(
-                        args.atm,
-                        env,
-                        ["peek", "--json", "--all", "--team", TEAM, "--as", RECEIVER],
-                        identity=RECEIVER,
-                        timeout=args.timeout,
+                landed_path = extract_landed_path(peek_completed.stdout, ATTACHMENT_FILE_NAME)
+                if landed_path is not None:
+                    remote_landing_dir = Path(landed_path).parent
+                    # Containment (ADR-055's send_to_staging_dir convention,
+                    # mirrored by sftp.sh's fixed remote_atm_temp choice):
+                    # the landed directory must be exactly
+                    # <remote atm-temp root>/send-to/<transfer-id>, never
+                    # anywhere else on the receiving filesystem.
+                    landed_matches_convention = bool(
+                        re.fullmatch(r".*/send-to/[0-9A-Za-z]+", str(remote_landing_dir))
                     )
-                    record["peek"] = {
-                        "returncode": peek_completed.returncode,
-                        "stdout": peek_completed.stdout,
-                        "stderr_tail": peek_completed.stderr.strip()[-2000:],
-                    }
-                    landed_path = extract_landed_path(peek_completed.stdout, ATTACHMENT_FILE_NAME)
-                    if landed_path is not None:
-                        remote_landing_dir = Path(landed_path).parent
-                        # Containment (ADR-055's send_to_staging_dir convention,
-                        # mirrored by sftp.sh's fixed remote_atm_temp choice):
-                        # the landed directory must be exactly
-                        # <remote atm-temp root>/send-to/<transfer-id>, never
-                        # anywhere else on the receiving filesystem.
-                        landed_matches_convention = bool(
-                            re.fullmatch(r".*/send-to/[0-9A-Za-z]+", str(remote_landing_dir))
-                        )
-                        landed_file = Path(landed_path)
-                        landed_file_exists = landed_file.is_file()
-                        if landed_file_exists:
-                            landed_content_matches = landed_file.read_bytes() == ATTACHMENT_BODY
+                    landed_file = Path(landed_path)
+                    landed_file_exists = landed_file.is_file()
+                    if landed_file_exists:
+                        landed_content_matches = landed_file.read_bytes() == ATTACHMENT_BODY
 
-                record["landed_path"] = landed_path
-                record["landed_matches_send_to_convention"] = landed_matches_convention
-                record["landed_file_exists"] = landed_file_exists
-                record["landed_content_matches"] = landed_content_matches
-                record["status"] = (
-                    "pass"
-                    if send_ok and landed_matches_convention and landed_file_exists and landed_content_matches
-                    else "fail"
-                )
+            record["landed_path"] = landed_path
+            record["landed_matches_send_to_convention"] = landed_matches_convention
+            record["landed_file_exists"] = landed_file_exists
+            record["landed_content_matches"] = landed_content_matches
+            record["status"] = (
+                "pass"
+                if send_ok and landed_matches_convention and landed_file_exists and landed_content_matches
+                else "fail"
+            )
         except Exception as error:  # noqa: BLE001 - evidence must retain the failure
             record["error"] = f"{type(error).__name__}: {error}"
             record["status"] = "fail"
         finally:
-            stop_daemon(daemon_process)
-            stop_sshd(sshd_process)
+            stop_daemon(daemon_process, daemon_drain)
+            stop_sshd(sshd_process, sshd_drain)
             if remote_landing_dir is not None and remote_landing_dir.exists():
                 shutil.rmtree(remote_landing_dir, ignore_errors=True)
             record["finished_at_ns"] = time.time_ns()

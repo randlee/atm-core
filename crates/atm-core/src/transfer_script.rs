@@ -23,7 +23,21 @@ use crate::types::HostName;
 
 /// The child-process environment a transfer script inherits: an explicit
 /// allow-list, never the full parent environment (ADR-055 decision (c)).
-pub const TRANSFER_SCRIPT_ALLOWED_ENV_KEYS: [&str; 3] = ["ATM_TEMP", "ATM_IDENTITY", "ATM_TEAM"];
+///
+/// `ATM_TRANSFER_SSH_CONFIG` is an opt-in fourth entry (QA-2 B6): unset for
+/// every ordinary operator (identical behavior to the original three-entry
+/// allow-list), it exists so `sftp.sh`/`sftp.ps1` can be pointed at an
+/// `ssh -F <path>` config file without the caller ever needing to touch a
+/// real `~/.ssh/config` -- the seam `scripts/phase-aq/
+/// run_aq4_transfer_evidence.py`'s live-evidence harness uses to route a
+/// loopback `sshd` through a scratch config instead of mutating the OS
+/// account's real one.
+pub const TRANSFER_SCRIPT_ALLOWED_ENV_KEYS: [&str; 4] = [
+    "ATM_TEMP",
+    "ATM_IDENTITY",
+    "ATM_TEAM",
+    "ATM_TRANSFER_SSH_CONFIG",
+];
 
 /// Default bounded deadline for one transfer-script invocation before the
 /// child is killed.

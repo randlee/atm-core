@@ -44,16 +44,17 @@ FAKE_SSH = textwrap.dedent(
     import pathlib
     import sys
 
-    from fake_transfer_lib import log_invocation, resolve_within_profile
+    from fake_transfer_lib import log_invocation, resolve_within_profile, strip_ssh_config_flag
 
     def main() -> int:
         argv = sys.argv[1:]
         log_invocation("ssh", argv)
-        if len(argv) < 1:
+        positional = strip_ssh_config_flag(argv)
+        if len(positional) < 1:
             print("fake ssh: missing host argument", file=sys.stderr)
             return 2
-        host = argv[0]
-        command = argv[1] if len(argv) > 1 else ""
+        host = positional[0]
+        command = positional[1] if len(positional) > 1 else ""
 
         allowed = os.environ.get("FAKE_SSH_ALLOWED_HOSTS")
         if allowed is not None and host not in allowed.split(","):
@@ -90,7 +91,7 @@ FAKE_SCP = textwrap.dedent(
     import shutil
     import sys
 
-    from fake_transfer_lib import log_invocation, resolve_within_profile
+    from fake_transfer_lib import log_invocation, resolve_within_profile, strip_ssh_config_flag
 
     def main() -> int:
         argv = sys.argv[1:]
@@ -101,7 +102,8 @@ FAKE_SCP = textwrap.dedent(
             print("fake scp: forced failure for test", file=sys.stderr)
             return int(forced)
 
-        positional = [arg for arg in argv if not arg.startswith("-")]
+        remaining = strip_ssh_config_flag(argv)
+        positional = [arg for arg in remaining if not arg.startswith("-")]
         if len(positional) != 2:
             print(f"fake scp: expected exactly one source and one destination, got {positional}", file=sys.stderr)
             return 1
@@ -156,6 +158,19 @@ FAKE_TRANSFER_LIB = textwrap.dedent(
         except ValueError:
             return None
         return resolved
+
+
+    def strip_ssh_config_flag(argv: list[str]) -> list[str]:
+        \"\"\"Strips a leading `-F <path>` pair (QA-2 B6's
+        ATM_TRANSFER_SSH_CONFIG passthrough) before host/positional
+        derivation, exactly like real OpenSSH's own flag parsing -- so
+        contract tests can assert on the pair's presence in the logged
+        argv while the rest of this fake's logic still finds the real
+        host/command/source/destination arguments regardless of whether
+        it is there.\"\"\"
+        if len(argv) >= 2 and argv[0] == "-F":
+            return argv[2:]
+        return argv
     """
 )
 
@@ -269,6 +284,32 @@ class _TransferScriptContractTestsMixin:
             self.assertNotEqual(result.returncode, 0, result.stdout)
             invocations = _read_log(log_path)
             self.assertEqual([call["bin"] for call in invocations], ["ssh"], invocations)
+
+    def test_ssh_config_override_is_passed_through_when_set(self) -> None:
+        # QA-2 B6: an opt-in fourth allow-list entry, ATM_TRANSFER_SSH_CONFIG,
+        # unset by every ordinary install (the fixture in `_fixture` never
+        # sets it, and `test_happy_path_exact_argv_and_single_line_landed_dir`
+        # above already proves ssh/scp's argv is unaffected when it is
+        # absent). When a caller *does* set it -- only
+        # `scripts/phase-aq/run_aq4_transfer_evidence.py` does, to avoid
+        # touching the real `~/.ssh/config` -- both ssh and scp must receive
+        # it as `-F <path>`.
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            tmp = Path(raw_tmp)
+            _bin_dir, log_path, env = self._fixture(tmp)
+            scratch_config = tmp / "scratch_ssh_config"
+            scratch_config.write_text("Host m5\n    Hostname 127.0.0.1\n", encoding="utf-8")
+            env["ATM_TRANSFER_SSH_CONFIG"] = str(scratch_config)
+            attach = tmp / "report.pdf"
+            attach.write_bytes(b"pdf-bytes")
+
+            result = self._invoke(["m5", "01J00000000000000000000f01", str(attach)], env, str(tmp))
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            invocations = _read_log(log_path)
+            ssh_call, scp_call = invocations[0], invocations[1]
+            self.assertEqual(ssh_call["argv"][:2], ["-F", str(scratch_config)])
+            self.assertEqual(scp_call["argv"][:2], ["-F", str(scratch_config)])
 
     def test_remote_mkdir_failure_fails_closed_before_any_copy(self) -> None:
         with tempfile.TemporaryDirectory() as raw_tmp:
@@ -405,6 +446,27 @@ class SftpPs1Tests(unittest.TestCase):
 
             invocations = _read_log(log_path)
             self.assertEqual([call["bin"] for call in invocations], ["ssh", "scp"], invocations)
+
+    def test_ssh_config_override_is_passed_through_when_set(self) -> None:
+        # QA-2 B6: mirrors the sh mixin's equivalent test for the pwsh
+        # example -- ATM_TRANSFER_SSH_CONFIG, unset by every ordinary
+        # install, is passed to both ssh and scp as -F <path>.
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            tmp = Path(raw_tmp)
+            _bin_dir, log_path, env = self._fixture(tmp)
+            scratch_config = tmp / "scratch_ssh_config"
+            scratch_config.write_text("Host m5\n    Hostname 127.0.0.1\n", encoding="utf-8")
+            env["ATM_TRANSFER_SSH_CONFIG"] = str(scratch_config)
+            attach = tmp / "report.pdf"
+            attach.write_bytes(b"pdf-bytes")
+
+            result = self._invoke(["m5", "01J00000000000000000000f02", str(attach)], env, str(tmp))
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            invocations = _read_log(log_path)
+            ssh_call, scp_call = invocations[0], invocations[1]
+            self.assertEqual(ssh_call["argv"][:2], ["-F", str(scratch_config)])
+            self.assertEqual(scp_call["argv"][:2], ["-F", str(scratch_config)])
 
     def test_missing_binary_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as raw_tmp:

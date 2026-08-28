@@ -152,7 +152,13 @@ baseline.
    process inherits **only** `ATM_TEMP`, `ATM_IDENTITY`, `ATM_TEAM` from
    the caller's environment (an explicit allow-list, not the full parent
    environment), runs with the caller's cwd, and has stdin closed (no
-   accidental interactive prompt hang). **Bounded deadline** (default
+   accidental interactive prompt hang).
+   (QA-2 B6 correction, recorded post-merge: the allow-list gained a
+   fourth, opt-in entry, `ATM_TRANSFER_SSH_CONFIG` -- unset for every
+   ordinary operator, identical behavior to the original three-entry list;
+   see ADR-055's matching correction and
+   `TRANSFER_SCRIPT_ALLOWED_ENV_KEYS` for the single source of truth.)
+   **Bounded deadline** (default
    60 s, configurable; child killed on expiry), **capped stdout/stderr**
    (truncate with marker), success = single-line absolute-path landed dir
    on stdout **validated as untrusted input** (one line, absolute, no
