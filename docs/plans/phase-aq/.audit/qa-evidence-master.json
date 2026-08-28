@@ -3033,6 +3033,31 @@
    "minor": null,
    "count_basis": "headline/reviewer",
    "evidence": "GitHub secondary rate limit active (HTTP 403); artifact downloads for GHA run 33137262962 blocked (10+ retries); AQ4 run-6 artifact commit on #1055 deferred until limit clears; gh polling throttled to 90s-interval CI watcher on #1055 c76314cd1 (33138148783) plus one deferred artifact fetch; Windows AQ4 leg diagnosis pending rate-limit recovery."
+  },
+  {
+   "run_id": "CI-AQ4-LINT-WINDOWS-R2",
+   "aich_sprint": "AQ4",
+   "phase_sprint": "AQ4",
+   "pass": null,
+   "run_type": "ci",
+   "assignment_time_utc": null,
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": null,
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ4 #1055 @ c76314cd1 CI 33138148783 (Just lint windows-latest): errors=16 confirmation + ruling dispatch",
+   "result_time_utc": "2026-08-28T20:00:00Z",
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": "quality-mgr",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": "WINDOWS-HYPOTHESIS-CONFIRMED",
+   "blockers": 16,
+   "important": null,
+   "minor": null,
+   "count_basis": "headline/reviewer",
+   "evidence": "AQ4 #1055 @ c76314cd1 CI 33138148783 (Just lint windows-latest): errors=16 hypothesis confirmed. SftpShTests and TailscaleShTests FAIL on path/argv shape under bash on Windows. SftpPs1Tests fails test_copy_failure_fails_closed and test_happy_path_exact_argv_and_single_line_landed_dir. Ruling (fenix): unix .sh transfer scripts are not the shipped Windows path → win32 skip with explicit reason for SftpShTests/TailscaleShTests (scope in AC7 test map); sftp.ps1 (shipped) must pass for real — fix dispatched from the full Windows log."
   }
  ],
  "follow_ups": [
