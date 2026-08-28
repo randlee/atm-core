@@ -103,7 +103,7 @@ pub use peer_stream::{
     AcceptedPeerStream, AuthenticatedPeerStream, EstablishedPeerStream, PeerStreamAdapter,
     PeerStreamFuture,
 };
-pub use runtime_health::RuntimeHealth;
+pub use runtime_health::{MemberStateTransitionSink, RuntimeHealth};
 pub use storage_and_nudge_router::StorageAndNudgeRouter;
 
 /// Validated configuration for the maintained Tokio HTTP runtime.

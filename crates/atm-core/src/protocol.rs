@@ -512,6 +512,13 @@ pub struct RuntimeStatusSnapshot {
     /// Cumulative failures setting a deferred queue marker.
     #[serde(default, skip_serializing_if = "is_zero_u64")]
     pub queue_marker_set_failures_total: u64,
+    /// Cumulative deferred queue messages drained by an idle transition or
+    /// recovery sweep.
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub queue_messages_drained_total: u64,
+    /// Cumulative deferred queue drain/recovery dispatch failures.
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub queue_drain_failures_total: u64,
 }
 
 fn is_zero_u64(value: &u64) -> bool {
@@ -659,6 +666,8 @@ mod tests {
             graft_queue_marker_clear_failures_total: 0,
             bare_cli_queue_full_drops_total: 0,
             queue_marker_set_failures_total: 0,
+            queue_messages_drained_total: 0,
+            queue_drain_failures_total: 0,
         };
 
         let encoded = serde_json::to_vec(&snapshot).expect("encode runtime snapshot");
@@ -722,6 +731,8 @@ mod tests {
             graft_queue_marker_clear_failures_total: 0,
             bare_cli_queue_full_drops_total: 0,
             queue_marker_set_failures_total: 0,
+            queue_messages_drained_total: 0,
+            queue_drain_failures_total: 0,
         };
         let decoded: LegacyRuntimeStatusSnapshot =
             serde_json::from_value(serde_json::to_value(snapshot).expect("encode snapshot"))
