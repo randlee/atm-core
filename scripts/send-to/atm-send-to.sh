@@ -9,6 +9,10 @@ fi
 send_to_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 files=("$@")
 atm_bin=${ATM_BIN:-atm}
+# Test-only seam: overrides the whole picker step (skipping both Wyvern and
+# the native fallback picker) with an arbitrary PickerInput -> PickerOutput
+# command, so end-to-end send-to coverage never depends on a real UI.
+# Production launches never set this.
 picker_override=${ATM_SEND_TO_PICKER:-}
 # Test-only seam: overrides which native fallback picker runs once Wyvern is
 # unavailable or incompatible, so degradation-harness coverage never depends
