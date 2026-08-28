@@ -6,7 +6,7 @@ phase: AT
 sprint: AT.2
 worktree: feature/pat-s2-legacy-publish-deletion
 branch: feature/pat-s2-legacy-publish-deletion
-status: proposed
+status: complete
 estimated_scope: verify-then-delete of retired publish assets; no behavior additions
 ```
 
@@ -60,8 +60,8 @@ replace by name.
 The `Gate` column names the specific receipt that must exist before that
 row may be deleted:
 
-- **AT.1 production receipt** = `docs/plans/phase-at/receipts/AT.1-receipt.md`
-  with its production PyPI section complete (not
+- **Production PyPI receipt** = the first kit-driven release's receipt with
+  its production PyPI section complete (not
   `production: pending-authorization`).
 - **First kit-release receipt** = the receipt of the first kit-driven
   release proving the crates.io + GitHub Release legs end-to-end.
@@ -70,10 +70,10 @@ row may be deleted:
 
 | Path | Observed state | Expected coverage | Gate |
 | --- | --- | --- | --- |
-| `.github/workflows/hermes-atm-pypi-publish.yml` | Legacy bespoke PyPI workflow for `hermes-atm` | Kit `pypi-publish.yml` building the declared setuptools distribution (upstream #39) | AT.1 production receipt |
-| `scripts/prepare_hermes_atm_publish_artifacts.py` | Feeds the legacy hermes workflow | Same kit leg; manifest-declared distribution | AT.1 production receipt (deleted with the workflow it feeds) |
-| `.just/tests/test_hermes_atm_pypi_publish_workflow.py` | Tests the legacy hermes workflow | Kit upstream tests at the pinned revision | AT.1 production receipt (same gate as its subject) |
-| `.just/tests/test_prepare_hermes_atm_publish_artifacts.py` | Tests the legacy prepare script | Same | AT.1 production receipt (same gate as its subject) |
+| `.github/workflows/hermes-atm-pypi-publish.yml` | Legacy bespoke PyPI workflow for `hermes-atm` | Kit `pypi-publish.yml` building the declared setuptools distribution (upstream #39) | Production PyPI receipt |
+| `scripts/prepare_hermes_atm_publish_artifacts.py` | Feeds the legacy hermes workflow | Same kit leg; manifest-declared distribution | Production PyPI receipt (deleted with the workflow it feeds) |
+| `.just/tests/test_hermes_atm_pypi_publish_workflow.py` | Tests the legacy hermes workflow | Kit upstream tests at the pinned revision | Production PyPI receipt (same gate as its subject) |
+| `.just/tests/test_prepare_hermes_atm_publish_artifacts.py` | Tests the legacy prepare script | Same | Production PyPI receipt (same gate as its subject) |
 | `scripts/release_artifacts.py` | Legacy copy at root; kit installs `.github/scripts/release_artifacts.py` | Kit script | First kit-release receipt |
 | `scripts/release_gate.sh` | Legacy copy at root | Kit `.github/scripts/release_gate.sh` via `release.yml` | First kit-release receipt |
 | `scripts/verify_release_archive.py` | Legacy archive verifier | Kit `verify-published-release` action + `verify-*-release-assets` subcommands; retain only if it checks ATM-owned data the kit does not | First kit-release receipt |
@@ -110,20 +110,36 @@ retained test records that rationale in its module docstring.
 
 ## Prerequisites
 
-- At minimum, the AT.1 TestPyPI receipt
-  (`docs/plans/phase-at/receipts/AT.1-receipt.md`) proving the kit built and
-  published every declared distribution — including the setuptools
-  `hermes-atm` — end-to-end. The hermes rows (the
+**Amendment (2026-08-27, owner decision — forward-only publishing).** Rand
+ruled that re-publishing tags predating the kit installation is out of scope
+("I don't see a reason to try to re-publish anything before the first kit
+install"). `v1.4.3` is unpublishable via the kit (the kit action and manifest
+schema are absent/incompatible at that tag; see the AT.1 receipt's TestPyPI
+amendment). All publication evidence for this sprint's gates therefore comes
+from the **first kit-era release (workspace version `1.4.4`)**, cut from a
+kit-installed tree after phase AT merges to `develop`. This sprint executes
+now, within phase AT: rows whose gate receipt does not yet exist are RETAINED
+as `deferred-until-<gate>` per the Deletion Candidates deferral rule above,
+and the follow-up deletion pass after the first kit-era release resolves
+them. The sprint does not wait for that release.
+
+- Gate evidence for **deleting** a publish-path row is the first kit-era
+  release's TestPyPI receipt proving the kit built and published every
+  declared distribution — including the setuptools `hermes-atm` —
+  end-to-end. The hermes rows (the
   `.github/workflows/hermes-atm-pypi-publish.yml` workflow, its feeder
   script, and their tests) additionally require the production PyPI receipt
   (the receipt's production section complete, not
-  `production: pending-authorization`), per the `Gate` column.
+  `production: pending-authorization`), per the `Gate` column. Rows whose
+  gate receipt does not yet exist when the sprint runs are deferred, not
+  deleted.
 - A channel-scoped credential-unavailable (fail-closed) result in AT.1 is
   valid evidence the workflow fails closed, and per the phase README
   Non-Blocking Outcomes table it is never an emergency — but it does NOT
-  constitute publication and does not satisfy this coverage-evidence
-  prerequisite. AT.2 proceeds only on receipts showing the public indexes
-  actually contain the 1.4.3 distributions.
+  constitute publication and does not satisfy a row's gate. A row is deleted
+  only on receipts showing the public indexes actually contain the first
+  kit-era (1.4.4) distributions; otherwise it is retained as
+  `deferred-until-<gate>`.
 - `install.py --dry-run` (run from the pinned checkout, per the phase README
   installer contract) clean on the sprint branch before starting.
 
@@ -176,7 +192,7 @@ python3 -c "import pathlib, yaml; [yaml.safe_load(p.read_text()) for p in pathli
 - `scripts/validate_release.py` drives a live Justfile recipe; deleting it
   without replacing the recipe breaks `just` targets. Resolve the decision
   first, then delete.
-- The hermes-atm legacy workflow must not be deleted before AT.1's production
+- The hermes-atm legacy workflow must not be deleted before the production
   PyPI receipt proves the kit publishes the setuptools distribution — the
   TestPyPI receipt alone does not clear that row, and the proof depends on
   the upstream #39 fix being in the pinned revision.

@@ -6,6 +6,32 @@
   daemon registry lease and same-host flock instead of the retired endpoint
   record, with the `atm-graft` Python wheel rebuilt against ADR-056
 
+## 1.4.4
+
+- first kit-era release: the repository's publish surface is fully cut over to
+  the installed `sc-publish` kit (pinned revision `25668ecc`, 54 byte-copied
+  files guarded by ADR-050, recorded in `release/sc-publish-pin.toml`);
+  manifest-driven publishing recovery lands as
+  canonical consumer install plus parity proof (AT.1) and legacy
+  publish-surface deletion with explicit `deferred-until-<gate>` dispositions
+  for paths that outlive their first-release receipts (AT.2). Per the
+  forward-only ruling, `v1.4.3` is not republished through the kit; this tag
+  carries the first kit-era publish proof (Phase AT)
+- ship the opt-in mTLS peer-wire transport for cross-host messaging, with
+  peer connection pooling, TLS session reuse, and admission-writer batching
+  and hot-path guardrails validated by official published benchmark campaigns
+  under the new benchmark data contract and `benchmark-run` skill (Phase AO2)
+- migrate release engineering onto the shared `sc-publish` kit: rendered
+  manifest contracts (`release/publish-artifacts.toml`,
+  `release/publish-channel-contracts.toml`), installer parity checks, and
+  version-lockstep validation delegated to the installed kit (Phase AS)
+- retire the waived sc-boundary lint debt and turn `develop` CI green again:
+  boundary code fixes, lint calibration, and the extracted ack/send write
+  module (Phase AU)
+- standalone fixes: Windows loopback ack-timing flake, reproducible Python
+  bootstrap closure, graft receiver recovery, daemon-switch signing gate,
+  optional `.atm.toml` activation, and CI trigger/bootstrap hardening
+
 ## 1.4.3
 
 - recovery release: `v1.4.2` was abandoned as a release tag/GitHub Release

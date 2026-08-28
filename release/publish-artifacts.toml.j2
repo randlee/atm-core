@@ -1,0 +1,177 @@
+---
+name: publish-artifacts
+version: 0.1.0
+description: Render a complete repository-specific release-artifact manifest.
+format: toml
+required_variables:
+  - schema_version
+  - project.name
+  - project.archive_prefix
+  - project.description
+  - project.homepage
+  - project.license
+  - project.readme_dependency_crate
+  - project.renderer_archive_path
+  - project.workspace_toml
+  - project.rust_toolchain
+  - release_targets
+  - crates
+  - release_binaries
+  - python_packages
+  - python_distributions
+  - channels.pypi.workflow
+  - channels.pypi.dispatch_inputs
+  - channels.pypi.credential_rehearsal_inputs
+  - channels.pypi.test_repository
+  - channels.pypi.production_repository
+  - channels.homebrew.workflow
+  - channels.homebrew.dispatch_inputs
+  - channels.homebrew.tap_repository
+  - channels.homebrew.renderer_target
+  - channels.homebrew.formulas
+  - channels.homebrew.assets
+  - channels.scoop.workflow
+  - channels.scoop.dispatch_inputs
+  - channels.scoop.bucket_repository
+  - channels.scoop.manifest_path
+  - channels.scoop.manifest_template
+  - channels.scoop.installer_target
+  - channels.scoop.binary
+  - channels.scoop.renderer_target
+  - channels.winget.workflow
+  - channels.winget.dispatch_inputs
+  - channels.winget.identifier
+  - channels.winget.installer_target
+  - has_readme_dependency_crate
+  - has_renderer_archive_path
+  - has_workspace_toml
+  - has_rust_toolchain
+  - has_channel_pypi
+  - has_channel_homebrew
+  - has_channel_winget
+  - has_channel_scoop
+---
+schema_version = {{ schema_version }}
+
+[project]
+name = {{ project.name }}
+archive_prefix = {{ project.archive_prefix }}
+description = {{ project.description }}
+homepage = {{ project.homepage }}
+license = {{ project.license }}
+{% if has_readme_dependency_crate %}
+readme_dependency_crate = {{ project.readme_dependency_crate }}
+{% endif %}
+{% if has_renderer_archive_path %}
+renderer_archive_path = {{ project.renderer_archive_path }}
+{% endif %}
+{% if has_workspace_toml %}
+workspace_toml = {{ project.workspace_toml }}
+{% endif %}
+{% if has_rust_toolchain %}
+rust_toolchain = {{ project.rust_toolchain }}
+{% endif %}
+
+{% for target in release_targets %}
+[[release_targets]]
+target = {{ target.target }}
+os = {{ target.os }}
+archive = {{ target.archive }}
+{% endfor %}
+
+{% for crate in crates %}
+[[crates]]
+artifact = {{ crate.artifact }}
+package = {{ crate.package }}
+cargo_toml = {{ crate.cargo_toml }}
+publish = {{ crate.publish }}
+publish_order = {{ crate.publish_order }}
+wait_after_publish_seconds = {{ crate.wait_after_publish_seconds }}
+{% endfor %}
+
+{% for binary in release_binaries %}
+[[release_binaries]]
+name = {{ binary.name }}
+{% if binary.has_bundled_paths %}
+bundled_paths = {{ binary.bundled_paths }}
+{% endif %}
+{% endfor %}
+
+{% for package in python_packages %}
+[[python_packages]]
+artifact = {{ package.artifact }}
+package = {{ package.package }}
+manifest = {{ package.manifest }}
+module = {{ package.module }}
+publish = {{ package.publish }}
+{% endfor %}
+
+{% for distribution in python_distributions %}
+[[python_distributions]]
+name = {{ distribution.name }}
+source = {{ distribution.source }}
+{% if distribution.cargo_manifest %}
+cargo_manifest = {{ distribution.cargo_manifest }}
+{% endif %}
+{% if distribution.build_system %}
+build_system = {{ distribution.build_system }}
+{% endif %}
+module_path = {{ distribution.module_path }}
+sdist = {{ distribution.sdist }}
+wheels = {{ distribution.wheels }}
+{% endfor %}
+
+{% if has_channel_pypi %}
+[channels.pypi]
+workflow = {{ channels.pypi.workflow }}
+dispatch_inputs = {{ channels.pypi.dispatch_inputs }}
+credential_rehearsal_inputs = {{ channels.pypi.credential_rehearsal_inputs }}
+test_repository = {{ channels.pypi.test_repository }}
+production_repository = {{ channels.pypi.production_repository }}
+{% endif %}
+
+{% if has_channel_homebrew %}
+[channels.homebrew]
+workflow = {{ channels.homebrew.workflow }}
+dispatch_inputs = {{ channels.homebrew.dispatch_inputs }}
+tap_repository = {{ channels.homebrew.tap_repository }}
+renderer_target = {{ channels.homebrew.renderer_target }}
+
+{% for formula in channels.homebrew.formulas %}
+[[channels.homebrew.formulas]]
+path = {{ formula.path }}
+template = {{ formula.template }}
+class = {{ formula.class }}
+binaries = {{ formula.binaries }}
+test_binary = {{ formula.test_binary }}
+test_command = {{ formula.test_command }}
+test_output = {{ formula.test_output }}
+release_track = {{ formula.release_track }}
+{% endfor %}
+
+{% for asset in channels.homebrew.assets %}
+[[channels.homebrew.assets]]
+key = {{ asset.key }}
+target = {{ asset.target }}
+{% endfor %}
+{% endif %}
+
+{% if has_channel_winget %}
+[channels.winget]
+workflow = {{ channels.winget.workflow }}
+dispatch_inputs = {{ channels.winget.dispatch_inputs }}
+identifier = {{ channels.winget.identifier }}
+installer_target = {{ channels.winget.installer_target }}
+{% endif %}
+
+{% if has_channel_scoop %}
+[channels.scoop]
+workflow = {{ channels.scoop.workflow }}
+dispatch_inputs = {{ channels.scoop.dispatch_inputs }}
+bucket_repository = {{ channels.scoop.bucket_repository }}
+manifest_path = {{ channels.scoop.manifest_path }}
+manifest_template = {{ channels.scoop.manifest_template }}
+installer_target = {{ channels.scoop.installer_target }}
+binary = {{ channels.scoop.binary }}
+renderer_target = {{ channels.scoop.renderer_target }}
+{% endif %}

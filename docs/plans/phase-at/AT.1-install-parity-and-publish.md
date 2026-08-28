@@ -6,7 +6,7 @@ phase: AT
 sprint: AT.1
 worktree: feature/pat-s1-install-and-publish
 branch: feature/pat-s1-install-and-publish
-status: proposed
+status: complete
 estimated_scope: shared-package install, parity, and authorized 1.4.3 TestPyPI/PyPI publication
 ```
 
@@ -133,9 +133,9 @@ metadata` at sprint time is authoritative if the workspace has changed.
 
 | Surface | Members |
 | --- | --- |
-| Publishable crates (crates.io), dependency order | Baseline census: 12 crates, one valid topological order: `atm-error` → `atm-storage` → `agent-team-mail-core` → `atm-storage-rusqlite` → `atm-http-runtime` → `atm-runtime` → `atm-template-sc-compose` → `atm-daemon-bootstrap` → `atm-daemon-client` → `agent-team-mail` → `atm-daemon` → `atm-graft`. Any order satisfying the workspace dependency graph is acceptable; re-derive this list at sprint time. |
-| Internal `publish = false` crates | 9 crates, never published: `atm-architecture`, `atm-storage-sqlserver-proof`, `atm-runtime-test-support`, `atm-peer-tls-interop`, `atm-graft-python`, `atm-query-python`, `sc-lint-attributes`, `sc-lint-directives`, `sc-lint-boundary`. |
-| Workspace member requiring an explicit disposition | **UNRESOLVED:** `peer-tls` is present on current `origin/develop` (workspace version `1.4.4`), has no `publish = false` declaration, and depends on `atm-storage`. The sprint must explicitly choose `publish = true` or `publish = false` and update the consumer input before promotion. |
+| Publishable crates (crates.io), dependency order | **Resolved sprint census: 13 crates.** `atm-error` → `atm-storage` → `peer-tls` → `agent-team-mail-core` → `atm-storage-rusqlite` → `atm-http-runtime` → `atm-daemon-client` → `atm-runtime` → `atm-template-sc-compose` → `atm-daemon-bootstrap` → `atm-daemon` → `atm-graft` → `agent-team-mail`. The order is validated against the live workspace dependency graph. |
+| Internal `publish = false` crates | 8 crates, never published: `atm-architecture`, `atm-storage-sqlserver-proof`, `atm-runtime-test-support`, `atm-peer-tls-interop`, `atm-graft-python`, `atm-query-python`, `sc-lint-directives`, `sc-lint-boundary`. (Census amended 2026-08-27: `sc-lint-attributes` was originally the 9th member; PR #1068 deleted the vendored copy in favor of the published crates.io `sc-lint-attributes 0.5` under the recorded sc-lint-migration sprint-10 exception.) |
+| Workspace member requiring an explicit disposition | **RESOLVED:** `peer-tls` is `publish = true` at order 3. It is a normal dependency of publishable `atm-daemon-bootstrap`, depends only on `atm-storage`, and therefore must be released after `atm-storage` and before `atm-daemon-bootstrap`. |
 | Python distributions | `atm-graft` (maturin, `crates/atm-graft-python`, version dynamic from Cargo.toml), `atm-query` (maturin, `crates/atm-query-python`), `hermes-atm` (setuptools, `crates/hermes-atm` — a pure-Python package, not a workspace crate). |
 | Released binaries | `atm` (crate `agent-team-mail`) and `atm-daemon` (crate `atm-daemon`), both confirmed cargo bin targets. `atm_post_send_hook_fixture` and `atm-daemon-benchmark` are internal bins and are not released. |
 
@@ -381,6 +381,18 @@ PR may merge with the TestPyPI receipt and an explicit
 `production: pending-authorization` marker; the PyPI dispatch then lands as
 a follow-up commit/PR on the same receipt file
 (`docs/plans/phase-at/receipts/AT.1-receipt.md`) without reopening this sprint.
+
+**Amendment (2026-08-27, owner decision — forward-only publishing).** The
+authorized v1.4.3 TestPyPI attempt (run 33040465059) failed pre-upload:
+`pypi-publish.yml` checks out the release tag's tree, and at `v1.4.3` the kit
+action is absent and the legacy manifest fails the kit schema — v1.4.3 is
+unpublishable via the kit on two independent grounds. Rand ruled
+re-publishing pre-kit tags out of scope ("I don't see a reason to try to
+re-publish anything before the first kit install"). This checkpoint is
+therefore retargeted to the **first kit-era tag (workspace version `1.4.4`)**,
+cut after phase AT merges to `develop`; the TestPyPI authorization carries
+over, and production remains `pending-contemporaneous-authorization`. Full
+evidence: the AT.1 receipt's TestPyPI amendment.
 
 ## Publication Non-Goals
 

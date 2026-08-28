@@ -1,0 +1,114 @@
+name: Publish Winget
+
+# This post-release channel reads its package identity and installer pattern
+# from release/publish-artifacts.toml and may be re-dispatched for the same tag.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Published release tag to submit (e.g. v1.4.1)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-winget-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  verify-release:
+    runs-on: ubuntu-latest
+    outputs:
+      channel_config: ${{ steps.config.outputs.channel_config }}
+      asset_patterns: ${{ steps.config.outputs.asset_patterns }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - id: config
+        name: Read Winget configuration from release manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          config="$(python3 .github/scripts/release_artifacts.py channel-config --manifest release/publish-artifacts.toml --channel winget)"
+          echo "channel_config=${config}" >> "$GITHUB_OUTPUT"
+          {
+            echo 'asset_patterns<<EOF'
+            jq -r '.asset_patterns[]' <<<"${config}"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+      - uses: ./.github/actions/verify-published-release
+        with:
+          release_tag: ${{ inputs.tag }}
+          asset_patterns: ${{ steps.config.outputs.asset_patterns }}
+
+  publish-winget:
+    needs: verify-release
+    runs-on: ubuntu-latest
+    steps:
+      # Detect-and-skip: a retried leg must not open a duplicate winget-pkgs
+      # pull request for an identifier+version that is already merged or
+      # already awaiting review. The probe fails closed: only a confirmed
+      # 404 (manifest genuinely absent) may proceed to the duplicate-PR
+      # search, and only a complete search result may proceed to submission;
+      # any other probe outcome (auth, rate limit, transient API error,
+      # incomplete search results) hard-fails the leg instead of being read
+      # as "not found".
+      - id: winget_probe
+        name: Probe winget-pkgs for an existing manifest or submission (fail closed)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IDENTIFIER: ${{ fromJSON(needs.verify-release.outputs.channel_config).channel.identifier }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          first_letter="$(tr '[:upper:]' '[:lower:]' <<<"${IDENTIFIER:0:1}")"
+          manifest_path="manifests/${first_letter}/${IDENTIFIER//.//}/${version}"
+          already_published=false
+          probe_stderr="$(mktemp)"
+          if gh api "repos/microsoft/winget-pkgs/contents/${manifest_path}" >/dev/null 2>"${probe_stderr}"; then
+            echo "winget-pkgs already publishes ${IDENTIFIER} ${version} (${manifest_path}); skipping submission."
+            already_published=true
+          elif ! grep -Eqi 'HTTP 404|Not Found' "${probe_stderr}"; then
+            echo "winget-pkgs manifest probe for ${IDENTIFIER} ${version} is indeterminate (not a confirmed 404); failing closed instead of risking a duplicate submission." >&2
+            cat "${probe_stderr}" >&2
+            exit 1
+          else
+            search_response="$(gh api -X GET search/issues \
+              -f q="repo:microsoft/winget-pkgs type:pr in:title ${IDENTIFIER} ${version}")"
+            pr_count="$(python3 -c '
+          import json
+          import sys
+
+          data = json.load(sys.stdin)
+          if data.get("incomplete_results"):
+              raise SystemExit(
+                  "winget-pkgs pull request search returned incomplete results; "
+                  "failing closed instead of risking a duplicate submission"
+              )
+          print(data["total_count"])
+          ' <<<"${search_response}")"
+            if [[ "${pr_count}" != "0" ]]; then
+              echo "A winget-pkgs pull request (open or merged) already exists for ${IDENTIFIER} ${version}; skipping submission."
+              already_published=true
+            fi
+          fi
+          echo "already_published=${already_published}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to Winget
+        if: ${{ steps.winget_probe.outputs.already_published != 'true' }}
+        # Pinned to the v2 release commit so this leg's behavior cannot change
+        # without a kit change (mutable tags are not a retry-safety contract).
+        uses: vedantmgoyal2009/winget-releaser@4ffc7888bffd451b357355dc214d43bb9f23917e # v2
+        with:
+          identifier: ${{ fromJSON(needs.verify-release.outputs.channel_config).channel.identifier }}
+          release-tag: ${{ inputs.tag }}
+          installers-regex: ${{ fromJSON(needs.verify-release.outputs.channel_config).asset_patterns[0] }}
+          # Must authorize a fork of microsoft/winget-pkgs; the repository
+          # GITHUB_TOKEN is intentionally not used for this external channel.
+          token: ${{ secrets.WINGET_GITHUB_TOKEN }}

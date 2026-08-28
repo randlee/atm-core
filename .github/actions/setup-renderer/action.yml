@@ -1,0 +1,24 @@
+name: Setup renderer
+description: Bootstrap the pinned template renderer on the runner
+outputs:
+  renderer-path:
+    description: Absolute path to the bootstrapped renderer CLI
+    value: ${{ steps.setup.outputs.renderer-path }}
+runs:
+  using: composite
+  steps:
+    - id: setup
+      shell: bash
+      run: |
+        set -euo pipefail
+        venv="${RUNNER_TEMP}/publish-renderer"
+        python3 "${GITHUB_WORKSPACE}/.github/scripts/bootstrap_sc_compose.py" \
+          --venv "${venv}" \
+          --write-cli
+        renderer="${venv}/bin/renderer"
+        test -x "${renderer}" || {
+          echo "Bootstrapped renderer CLI is missing at ${renderer}" >&2
+          exit 1
+        }
+        echo "renderer-path=${renderer}" >> "$GITHUB_OUTPUT"
+        echo "PUBLISHED_RENDERER=${renderer}" >> "$GITHUB_ENV"

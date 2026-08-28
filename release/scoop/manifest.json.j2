@@ -1,0 +1,14 @@
+{
+  "version": {{ version | tojson }},
+  "description": {{ description | tojson }},
+  "homepage": {{ homepage | tojson }},
+  "license": {{ license | tojson }},
+  "architecture": {
+    "64bit": {
+      "url": {{ windows_url | tojson }},
+      "hash": {{ windows_sha256 | tojson }},
+      "extract_dir": {{ extract_dir | tojson }},
+      "bin": {{ binary | tojson }}
+    }
+  }
+}

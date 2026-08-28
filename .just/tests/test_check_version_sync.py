@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
-import tomllib
 import unittest
+from unittest import mock
 
 
 JUST_DIR = Path(__file__).resolve().parents[1]
@@ -15,8 +16,8 @@ from check_version_sync import validate_crate_versions
 from check_version_sync import validate_lockfile
 from check_version_sync import validate_winget_manifests
 from check_version_sync import success_message
-from check_version_sync import validate_python_release_versions
-from check_version_sync import validate_workspace_member_versions
+from check_version_sync import validate_release_version_lockstep
+from check_version_sync import KIT_RELEASE_ARTIFACTS
 
 
 ROOT_MANIFEST = """\
@@ -62,123 +63,33 @@ class CheckVersionSyncTests(unittest.TestCase):
                 extra = '\n[dependencies]\natm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.1.2" }\n'
             (crate_dir / "Cargo.toml").write_text(crate_manifest(package_name, extra=extra), encoding="utf-8")
 
-    def write_python_release_manifests(self, repo_root: Path, version: str) -> tuple[tuple[Path, str], ...]:
-        manifests = (
-            (Path("crates/atm-graft-python/Cargo.toml"), "package"),
-            (Path("crates/atm-graft-python/pyproject.toml"), "project"),
-            (Path("crates/atm-query-python/Cargo.toml"), "package"),
-            (Path("crates/atm-query-python/pyproject.toml"), "project"),
-            (Path("crates/hermes-atm/pyproject.toml"), "project"),
+    @mock.patch("check_version_sync.subprocess.run")
+    def test_release_version_lockstep_delegates_to_installed_kit(self, run: mock.Mock) -> None:
+        run.return_value = subprocess.CompletedProcess(args=[], returncode=0, stdout="ok", stderr="")
+        repo_root = Path("/tmp/atm")
+
+        validate_release_version_lockstep(repo_root)
+
+        expected_kit_script = str(repo_root / KIT_RELEASE_ARTIFACTS)
+        self.assertEqual(
+            run.call_args.args[0],
+            [
+                sys.executable,
+                expected_kit_script,
+                "verify-version-lockstep",
+                "--manifest",
+                "release/publish-artifacts.toml",
+                "--workspace-toml",
+                "Cargo.toml",
+            ],
         )
-        for manifest_path, table_name in manifests:
-            path = repo_root / manifest_path
-            path.parent.mkdir(parents=True, exist_ok=True)
-            name = path.parent.name
-            path.write_text(
-                f'[{table_name}]\nname = "{name}"\nversion = "{version}"\n',
-                encoding="utf-8",
-            )
-        return manifests
 
-    def test_python_release_versions_accept_final_workspace_version(self) -> None:
-        with tempfile.TemporaryDirectory() as tempdir:
-            repo_root = Path(tempdir)
-            manifests = self.write_python_release_manifests(repo_root, "1.4.1")
+    @mock.patch("check_version_sync.subprocess.run")
+    def test_release_version_lockstep_propagates_kit_failure(self, run: mock.Mock) -> None:
+        run.return_value = subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="version mismatch")
 
-            validate_python_release_versions(repo_root, "1.4.1", manifests)
-
-    def test_python_release_versions_strip_prerelease_workspace_qualifier(self) -> None:
-        with tempfile.TemporaryDirectory() as tempdir:
-            repo_root = Path(tempdir)
-            manifests = self.write_python_release_manifests(repo_root, "1.4.1")
-
-            validate_python_release_versions(repo_root, "1.4.1-beta-ai-15", manifests)
-            validate_python_release_versions(repo_root, "1.4.1-beta-aj", manifests)
-
-    def test_python_release_versions_strip_combined_workspace_qualifiers(self) -> None:
-        with tempfile.TemporaryDirectory() as tempdir:
-            repo_root = Path(tempdir)
-            manifests = self.write_python_release_manifests(repo_root, "1.4.1")
-
-            validate_python_release_versions(repo_root, "1.4.1-beta-ai-15+build.7", manifests)
-
-    def test_python_release_versions_accept_dynamic_maturin_version_from_cargo(self) -> None:
-        with tempfile.TemporaryDirectory() as tempdir:
-            repo_root = Path(tempdir)
-            manifests = self.write_python_release_manifests(repo_root, "1.4.1")
-            (repo_root / "crates/atm-graft-python/pyproject.toml").write_text(
-                '[project]\nname = "atm-graft"\ndynamic = ["version"]\n',
-                encoding="utf-8",
-            )
-
-            validate_python_release_versions(repo_root, "1.4.1", manifests)
-
-    def test_python_release_versions_reject_wrong_dynamic_maturin_cargo_version(self) -> None:
-        with tempfile.TemporaryDirectory() as tempdir:
-            repo_root = Path(tempdir)
-            manifests = self.write_python_release_manifests(repo_root, "1.4.1")
-            (repo_root / "crates/atm-graft-python/pyproject.toml").write_text(
-                '[project]\nname = "atm-graft"\ndynamic = ["version"]\n',
-                encoding="utf-8",
-            )
-            cargo_path = repo_root / "crates/atm-graft-python/Cargo.toml"
-            cargo_path.write_text(
-                cargo_path.read_text(encoding="utf-8").replace('version = "1.4.1"', 'version = "1.4.2"'),
-                encoding="utf-8",
-            )
-
-            with self.assertRaises(SystemExit) as error:
-                validate_python_release_versions(repo_root, "1.4.1", manifests)
-
-            self.assertIn("crates/atm-graft-python/Cargo.toml", str(error.exception))
-            self.assertIn("1.4.2", str(error.exception))
-
-    def test_python_release_versions_reject_wrong_patch(self) -> None:
-        with tempfile.TemporaryDirectory() as tempdir:
-            repo_root = Path(tempdir)
-            manifests = self.write_python_release_manifests(repo_root, "1.4.2")
-
-            with self.assertRaises(SystemExit) as error:
-                validate_python_release_versions(repo_root, "1.4.1-beta-ai-15", manifests)
-
-            message = str(error.exception)
-            self.assertIn("crates/atm-graft-python/Cargo.toml", message)
-            self.assertIn("1.4.2", message)
-            self.assertIn("1.4.1", message)
-
-    def test_python_release_versions_reject_python_prerelease(self) -> None:
-        with tempfile.TemporaryDirectory() as tempdir:
-            repo_root = Path(tempdir)
-            manifests = self.write_python_release_manifests(repo_root, "1.4.1-beta-ai")
-
-            with self.assertRaises(SystemExit) as error:
-                validate_python_release_versions(repo_root, "1.4.1-beta-ai-15", manifests)
-
-            message = str(error.exception)
-            self.assertIn("crates/atm-graft-python/Cargo.toml", message)
-            self.assertIn("1.4.1-beta-ai", message)
-            self.assertIn("1.4.1", message)
-
-    def test_python_release_versions_reject_python_build_metadata(self) -> None:
-        with tempfile.TemporaryDirectory() as tempdir:
-            repo_root = Path(tempdir)
-            manifests = self.write_python_release_manifests(repo_root, "1.4.1+local")
-
-            with self.assertRaises(SystemExit) as error:
-                validate_python_release_versions(repo_root, "1.4.1-beta-ai-15+build.7", manifests)
-
-            message = str(error.exception)
-            self.assertIn("crates/atm-graft-python/Cargo.toml", message)
-            self.assertIn("1.4.1+local", message)
-            self.assertIn("1.4.1", message)
-
-    def test_real_repository_python_release_versions_are_numeric_workspace_base(self) -> None:
-        repo_root = Path(__file__).resolve().parents[2]
-        workspace_version = tomllib.loads(
-            (repo_root / "Cargo.toml").read_text(encoding="utf-8")
-        )["workspace"]["package"]["version"]
-
-        validate_python_release_versions(repo_root, workspace_version)
+        with self.assertRaisesRegex(SystemExit, "version mismatch"):
+            validate_release_version_lockstep(Path("/tmp/atm"))
 
     def test_validate_crate_versions_checks_all_member_manifests(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -257,55 +168,6 @@ version = "1.1.2"
                 'crates/atm/Cargo.toml [dependencies.atm-core]: internal path dependency version must match target crate version "1.1.2-beta-am.1"',
                 str(error.exception),
             )
-
-    def test_workspace_member_versions_reject_unreferenced_hardcoded_drift(self) -> None:
-        with tempfile.TemporaryDirectory() as tempdir:
-            repo_root = Path(tempdir)
-            self.write_repo(repo_root)
-            root_manifest = repo_root / "Cargo.toml"
-            root_manifest.write_text(
-                root_manifest.read_text(encoding="utf-8").replace(
-                    '"crates/atm-rusqlite"]', '"crates/atm-rusqlite", "crates/unreferenced"]'
-                ),
-                encoding="utf-8",
-            )
-            manifest = repo_root / "crates/unreferenced/Cargo.toml"
-            manifest.parent.mkdir(parents=True)
-            manifest.write_text(
-                crate_manifest("agent-team-mail-unreferenced").replace(
-                    "version.workspace = true", 'version = "9.9.9"'
-                ),
-                encoding="utf-8",
-            )
-
-            with self.assertRaisesRegex(SystemExit, "must equal expected workspace member version"):
-                validate_workspace_member_versions(repo_root, "1.1.2")
-
-    def test_python_release_cargo_members_use_numeric_base_for_prerelease_workspace(self) -> None:
-        with tempfile.TemporaryDirectory() as tempdir:
-            repo_root = Path(tempdir)
-            workspace_version = "1.4.2-beta-am.1"
-            self.write_repo(repo_root, workspace_version=workspace_version)
-            root_manifest = repo_root / "Cargo.toml"
-            root_manifest.write_text(
-                root_manifest.read_text(encoding="utf-8").replace(
-                    '"crates/atm-rusqlite"]',
-                    '"crates/atm-rusqlite", "crates/atm-graft-python", "crates/atm-query-python"]',
-                ),
-                encoding="utf-8",
-            )
-            self.write_python_release_manifests(repo_root, "1.4.2")
-
-            validate_workspace_member_versions(repo_root, workspace_version)
-            validate_python_release_versions(repo_root, workspace_version)
-
-    def test_real_repository_workspace_member_versions_match_workspace(self) -> None:
-        repo_root = Path(__file__).resolve().parents[2]
-        workspace_version = tomllib.loads(
-            (repo_root / "Cargo.toml").read_text(encoding="utf-8")
-        )["workspace"]["package"]["version"]
-
-        validate_workspace_member_versions(repo_root, workspace_version)
 
     def test_success_message_includes_workspace_version(self) -> None:
         self.assertEqual(

@@ -144,9 +144,9 @@ later.
 
 | Current ATM asset | Current use | Load-bearing detail | Migration impact |
 | --- | --- | --- | --- |
-| root `Cargo.toml` workspace members | vendors `crates/sc-lint-directives`, `crates/sc-lint-attributes`, `crates/sc-lint-boundary` | the analyzers compile as part of the ATM workspace today | must be removed from the workspace during cutover |
-| `crates/atm-core/Cargo.toml` | no current `sc-lint-*` library dependency | the accepted ATM line no longer depends on vendored `sc-lint` crates at compile time | any future cutover must establish an explicit published dependency only if ATM intentionally reintroduces one |
-| `crates/atm-core/src/observability.rs` | no current `#[sc_lint(...)]` usage | there is no live proc-macro call site in this file to retarget or keep source-compatible | a future execution branch must prove any newly introduced published proc-macro usage intentionally rather than assuming legacy carry-forward |
+| root `Cargo.toml` workspace members | vendors `crates/sc-lint-directives`, `crates/sc-lint-boundary` (inventory updated 2026-08-27: `crates/sc-lint-attributes` was vendored by Phase AU, then removed by PR #1068 in favor of the published crate — see the recorded exception below) | the analyzers compile as part of the ATM workspace today | the two remaining vendored members must be removed from the workspace during cutover |
+| `crates/atm-core/Cargo.toml` | depends on published `sc-lint-attributes = "0.5"` (since PR #1068; the Phase AU vendored path dependency preceded it) | the published proc-macro dependency is intentional and release-preflight-clean | already on the published surface; no further cutover action for this crate's `sc-lint` dependency |
+| `crates/atm-core/src/observability.rs` | two `#[sc_lint(boundary.allow("cycle.recursive_value_container"))]` call sites (introduced by Phase AU) | live proc-macro call sites compiled against the published `0.5` crate and honored by the vendored `sc-boundary` analyzer | analyzer cutover must preserve these allows' effect |
 
 ### B. Local lint wrappers and command entry points
 
@@ -511,6 +511,14 @@ No partial merge is acceptable where:
 - proc-macro crates come from the published release, but analyzer parity is
   unproven
 - or CI depends on ad hoc local checkouts of `../sc-lint`
+
+Recorded exception (2026-08-27): PR #1068 moved `sc-lint-attributes` alone to
+the published `0.5` crate and deleted the vendored copy, under Rand's direct
+authorization, to clear the v1.4.4 release-preflight publish-dependency
+blocker. Proc-macro parity was proven in that PR (compile, lint gate with the
+allows honored, tests, clean `just validate`); the analyzers remain vendored
+and fully gated. See the Partial-Scope Exception note in
+[sprint-10.md](./sprint-10.md).
 
 ## Open Questions For The sc-lint Team
 
