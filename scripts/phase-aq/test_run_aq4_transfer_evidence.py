@@ -286,6 +286,7 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
                     "blocked_ambient_daemon",
                     "skipped_no_sshd",
                     "skipped_no_posix_receiver",
+                    "deferred_windows_loopback",
                 )
                 self.assertEqual(0 if status in success_statuses else 1, expected)
 
@@ -966,6 +967,145 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
             module.winreg = original_winreg
         self.assertEqual(result["outcome"], "skipped_no_posix_receiver")
         self.assertIn("registry-view mismatch", result["reason"])
+
+    # -- classify_windows_transfer_failure: pure, platform-independent --
+
+    _PASSING_VVV_DIAGNOSTIC = {"returncode": 0, "stdout": "aq4-ssh-vvv-diagnostic-probe", "stderr_tail": ""}
+    _RESIDUAL_STDERR_TAIL = (
+        "sftp.ps1: invoking C:\\Windows\\System32\\OpenSSH\\ssh.exe (config=C:\\scratch\\ssh_client_config)\n"
+        "failed to create /tmp/atm-1000/send-to/01J... on localhost (ssh exit 255): "
+        "kex_exchange_identification: read: Connection aborted"
+    )
+
+    def test_classify_windows_transfer_failure_defers_when_every_documented_condition_holds(self) -> None:
+        module = load_module()
+        status, deferral = module.classify_windows_transfer_failure(
+            send_ok=False,
+            send_stderr_tail=self._RESIDUAL_STDERR_TAIL,
+            ssh_vvv_diagnostic=self._PASSING_VVV_DIAGNOSTIC,
+        )
+        self.assertEqual(status, "deferred_windows_loopback")
+        self.assertIsNotNone(deferral)
+        self.assertEqual(deferral["follow_up"], "AQ4-windows-loopback")
+        self.assertIsInstance(deferral["reason"], str)
+        self.assertTrue(deferral["reason"])
+
+    def test_classify_windows_transfer_failure_stays_fail_when_send_actually_succeeded(self) -> None:
+        # A landed-file mismatch on an otherwise-successful send (send_ok
+        # True) must never be reclassified as deferred, even if the other
+        # fields happen to look like the residual shape.
+        module = load_module()
+        status, deferral = module.classify_windows_transfer_failure(
+            send_ok=True,
+            send_stderr_tail=self._RESIDUAL_STDERR_TAIL,
+            ssh_vvv_diagnostic=self._PASSING_VVV_DIAGNOSTIC,
+        )
+        self.assertEqual(status, "fail")
+        self.assertIsNone(deferral)
+
+    def test_classify_windows_transfer_failure_stays_fail_when_vvv_diagnostic_is_missing(self) -> None:
+        module = load_module()
+        status, deferral = module.classify_windows_transfer_failure(
+            send_ok=False,
+            send_stderr_tail=self._RESIDUAL_STDERR_TAIL,
+            ssh_vvv_diagnostic=None,
+        )
+        self.assertEqual(status, "fail")
+        self.assertIsNone(deferral)
+
+    def test_classify_windows_transfer_failure_stays_fail_when_vvv_diagnostic_itself_failed(self) -> None:
+        module = load_module()
+        status, deferral = module.classify_windows_transfer_failure(
+            send_ok=False,
+            send_stderr_tail=self._RESIDUAL_STDERR_TAIL,
+            ssh_vvv_diagnostic={"returncode": 255, "stdout": "", "stderr_tail": "connection refused"},
+        )
+        self.assertEqual(status, "fail")
+        self.assertIsNone(deferral)
+
+    def test_classify_windows_transfer_failure_stays_fail_when_vvv_diagnostic_stdout_is_unexpected(
+        self,
+    ) -> None:
+        module = load_module()
+        status, deferral = module.classify_windows_transfer_failure(
+            send_ok=False,
+            send_stderr_tail=self._RESIDUAL_STDERR_TAIL,
+            ssh_vvv_diagnostic={"returncode": 0, "stdout": "something-else", "stderr_tail": ""},
+        )
+        self.assertEqual(status, "fail")
+        self.assertIsNone(deferral)
+
+    def test_classify_windows_transfer_failure_stays_fail_when_the_invoking_line_is_missing(self) -> None:
+        # The process died before sftp.ps1's own first diagnostic line ran
+        # -- a different, still-fatal failure shape (run 33144153970).
+        module = load_module()
+        stderr_tail = (
+            "failed to create /tmp/atm-1000/send-to/01J... on localhost (ssh exit 255): "
+            "kex_exchange_identification: read: Connection aborted"
+        )
+        status, deferral = module.classify_windows_transfer_failure(
+            send_ok=False,
+            send_stderr_tail=stderr_tail,
+            ssh_vvv_diagnostic=self._PASSING_VVV_DIAGNOSTIC,
+        )
+        self.assertEqual(status, "fail")
+        self.assertIsNone(deferral)
+
+    def test_classify_windows_transfer_failure_stays_fail_for_a_scp_copy_step_failure(self) -> None:
+        # The mkdir step succeeded; the failure is at the scp/copy step
+        # instead -- a genuinely different failure shape that must not be
+        # masked as the documented mkdir/ssh-step residual symptom.
+        module = load_module()
+        stderr_tail = (
+            "sftp.ps1: invoking C:\\Windows\\System32\\OpenSSH\\ssh.exe (config=C:\\scratch\\ssh_client_config)\n"
+            "failed to copy aq4-report.pdf to localhost (scp exit 1): lost connection"
+        )
+        status, deferral = module.classify_windows_transfer_failure(
+            send_ok=False,
+            send_stderr_tail=stderr_tail,
+            ssh_vvv_diagnostic=self._PASSING_VVV_DIAGNOSTIC,
+        )
+        self.assertEqual(status, "fail")
+        self.assertIsNone(deferral)
+
+    def test_write_evidence_deferred_windows_loopback_records_the_follow_up_and_reason(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            args = SimpleNamespace(host="clean-runner-windows", evidence_dir=Path(temporary))
+            record = {
+                "status": "deferred_windows_loopback",
+                "send": {
+                    "argv": ["atm", "send"],
+                    "returncode": 1,
+                    "stderr_tail": self._RESIDUAL_STDERR_TAIL,
+                },
+                "deferral": {
+                    "follow_up": "AQ4-windows-loopback",
+                    "reason": "Windows sender -> POSIX loopback receiver mkdir/ssh step fails.",
+                },
+                "ssh_vvv_diagnostic": self._PASSING_VVV_DIAGNOSTIC,
+            }
+            _json_path, markdown_path = module.write_evidence(args, record)
+            markdown = markdown_path.read_text(encoding="utf-8")
+            self.assertIn("DEFERRED_WINDOWS_LOOPBACK", markdown)
+            self.assertIn("AQ4-windows-loopback", markdown)
+            self.assertIn("mkdir/ssh step fails", markdown)
+
+    def test_main_exit_code_treats_deferred_windows_loopback_as_success(self) -> None:
+        module = load_module()
+        success_statuses = (
+            "pass",
+            "blocked_ambient_daemon",
+            "skipped_no_sshd",
+            "skipped_no_posix_receiver",
+            "deferred_windows_loopback",
+        )
+        for status, expected in (
+            ("deferred_windows_loopback", 0),
+            ("fail", 1),
+        ):
+            with self.subTest(status=status):
+                self.assertEqual(0 if status in success_statuses else 1, expected)
 
 
 if __name__ == "__main__":

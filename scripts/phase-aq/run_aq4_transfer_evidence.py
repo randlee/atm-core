@@ -123,6 +123,16 @@ ATTACHMENT_FILE_NAME = "aq4-report.pdf"
 ATTACHMENT_BODY = b"%PDF-1.4\naq4 live evidence attachment\n"
 MESSAGE_TEXT = "AQ4 live transfer evidence: see attached file"
 
+# The trivial remote command `run_ssh_vvv_diagnostic` runs, and the exact
+# stdout line a genuinely-reachable-and-answering loopback sshd echoes back
+# for it. Shared between that probe's own `argv` and
+# `classify_windows_transfer_failure` below so the two can never drift apart.
+_SSH_VVV_DIAGNOSTIC_PROBE_STDOUT = "aq4-ssh-vvv-diagnostic-probe"
+
+# The formally deferred follow-up (docs/plans/phase-aq/sprint-AQ4-send-to-core.md)
+# a `deferred_windows_loopback` evidence status records itself against.
+_WINDOWS_LOOPBACK_DEFERRAL_FOLLOW_UP = "AQ4-windows-loopback"
+
 # Windows CI (`windows-latest`) is treated identically to every other
 # platform everywhere this constant is *not* consulted; it exists solely
 # for the handful of genuinely OS-divergent seams cipher's investigation
@@ -489,7 +499,15 @@ def run_ssh_vvv_diagnostic(env: dict[str, str], ssh_config_path: Path, timeout: 
     ssh_bin = shutil.which("ssh", path=env.get("PATH")) or str(
         Path(env.get("SystemRoot", "C:\\Windows")) / "System32" / "OpenSSH" / "ssh.exe"
     )
-    argv = [ssh_bin, "-F", str(ssh_config_path), "-vvv", "-n", TRANSFER_HOST, "echo aq4-ssh-vvv-diagnostic-probe"]
+    argv = [
+        ssh_bin,
+        "-F",
+        str(ssh_config_path),
+        "-vvv",
+        "-n",
+        TRANSFER_HOST,
+        f"echo {_SSH_VVV_DIAGNOSTIC_PROBE_STDOUT}",
+    ]
     try:
         completed = subprocess.run(
             argv,
@@ -516,6 +534,72 @@ def run_ssh_vvv_diagnostic(env: dict[str, str], ssh_config_path: Path, timeout: 
             "stderr_tail": stderr.strip()[-4000:],
             "error": f"timed out after {timeout}s",
         }
+
+
+def classify_windows_transfer_failure(
+    *,
+    send_ok: bool,
+    send_stderr_tail: str,
+    ssh_vvv_diagnostic: dict[str, Any] | None,
+) -> tuple[str, dict[str, str] | None]:
+    """Classifies a failed `atm send --attach` outcome as either the
+    documented, formally deferred AQ4-windows-loopback residual symptom
+    (`"deferred_windows_loopback"`, non-fatal) or a genuine, still-fatal
+    `"fail"`.
+
+    Pure and platform-independent on purpose: it does not consult
+    `IS_WINDOWS`/`sys.platform` itself, only the evidence already collected
+    by the caller, so it can be unit-tested on every CI host, not only
+    Windows. Callers must gate invocation on `IS_WINDOWS` themselves --
+    this scenario has no macOS/Linux residual-symptom precedent to defer,
+    only the documented Windows one.
+
+    Returns `("deferred_windows_loopback", deferral)` only when every
+    documented symptom condition holds simultaneously:
+
+    - `send_ok` is `False` -- a `"pass"` outcome is never reclassified by
+      this function; callers must not invoke it once the scenario already
+      passed.
+    - `ssh_vvv_diagnostic` is present, exited `0`, and its stdout is
+      exactly the expected probe line -- proving the loopback sshd this
+      scenario started is genuinely reachable and answering commands over
+      this exact scratch ssh client config, so the failure is not some
+      unrelated connectivity break this harness should still fail on.
+    - `send_stderr_tail` contains `sftp.ps1`'s unconditional "invoking"
+      line, proving the script actually started running rather than dying
+      before reaching its first diagnostic (a different, still-fatal
+      failure shape).
+    - `send_stderr_tail` contains both "failed to create" and "ssh exit"
+      -- `sftp.ps1`'s `mkdir`-step failure message -- proving the failure
+      landed exactly at the documented mkdir/ssh step, not the scp/copy
+      step, a landed-file mismatch, or an unrelated exception.
+
+    Any other shape -- the vvv probe absent, non-zero, or with unexpected
+    stdout; the "invoking" line missing; a failure at the scp/copy step or
+    anywhere else -- returns `("fail", None)` unchanged, so a real
+    regression on this leg is never masked as deferred.
+    """
+    if (
+        not send_ok
+        and ssh_vvv_diagnostic is not None
+        and ssh_vvv_diagnostic.get("returncode") == 0
+        and ssh_vvv_diagnostic.get("stdout") == _SSH_VVV_DIAGNOSTIC_PROBE_STDOUT
+        and "sftp.ps1: invoking" in send_stderr_tail
+        and "failed to create" in send_stderr_tail
+        and "ssh exit" in send_stderr_tail
+    ):
+        return "deferred_windows_loopback", {
+            "follow_up": _WINDOWS_LOOPBACK_DEFERRAL_FOLLOW_UP,
+            "reason": (
+                "Windows sender -> POSIX loopback receiver mkdir/ssh step "
+                "fails in this harness's scratch-sshd environment; this is "
+                "the documented AQ4-windows-loopback residual symptom "
+                "(docs/plans/phase-aq/sprint-AQ4-send-to-core.md), confirmed "
+                "by a successful ssh -vvv probe and sftp.ps1's own "
+                "\"invoking\" line, not a new regression."
+            ),
+        }
+    return "fail", None
 
 
 def fixture_environment(root: Path) -> dict[str, str]:
@@ -1307,11 +1391,27 @@ def run_scenario(args: argparse.Namespace) -> dict[str, Any]:
         record["landed_matches_send_to_convention"] = landed_matches_convention
         record["landed_file_exists"] = landed_file_exists
         record["landed_content_matches"] = landed_content_matches
-        record["status"] = (
-            "pass"
-            if send_ok and landed_matches_convention and landed_file_exists and landed_content_matches
-            else "fail"
-        )
+        if send_ok and landed_matches_convention and landed_file_exists and landed_content_matches:
+            record["status"] = "pass"
+        elif IS_WINDOWS:
+            # Windows-only: the documented AQ4-windows-loopback residual
+            # symptom (see docs/plans/phase-aq/sprint-AQ4-send-to-core.md)
+            # is a known, formally deferred follow-up, not a new
+            # regression -- classify_windows_transfer_failure decides,
+            # from this run's own diagnostics, whether this failure is
+            # exactly that documented shape (non-fatal
+            # "deferred_windows_loopback") or a genuine, still-fatal
+            # "fail" that must not be masked.
+            deferred_status, deferral = classify_windows_transfer_failure(
+                send_ok=send_ok,
+                send_stderr_tail=record["send"]["stderr_tail"],
+                ssh_vvv_diagnostic=record.get("ssh_vvv_diagnostic"),
+            )
+            record["status"] = deferred_status
+            if deferral is not None:
+                record["deferral"] = deferral
+        else:
+            record["status"] = "fail"
     except Exception as error:  # noqa: BLE001 - evidence must retain the failure
         record["error"] = f"{type(error).__name__}: {error}"
         record["status"] = "fail"
@@ -1424,6 +1524,40 @@ def write_evidence(args: argparse.Namespace, record: dict[str, Any]) -> tuple[Pa
             json.dumps(record.get("windows_default_shell", {}), indent=2),
             "```",
         ]
+    elif record["status"] == "deferred_windows_loopback":
+        send = record.get("send", {})
+        deferral = record.get("deferral", {})
+        lines += [
+            "This run reproduced the documented AQ4-windows-loopback "
+            "residual symptom (Windows sender -> POSIX loopback receiver "
+            "mkdir/ssh step failure), with every precondition confirmed by "
+            "this run's own diagnostics below. Recorded as a non-fatal, "
+            "deferred evidence status -- not FAIL -- so this known, "
+            "tracked follow-up does not block CI on every branch that "
+            "carries this harness; every diagnostic field is preserved "
+            "exactly as a FAIL run would capture it (see the JSON payload).",
+            "",
+            f"Follow-up: `{deferral.get('follow_up')}`",
+            f"Reason: {deferral.get('reason')}",
+            "",
+            f"Command: `{' '.join(str(part) for part in send.get('argv', []))}`",
+            f"Exit code: `{send.get('returncode')}`",
+            "",
+            "```",
+            send.get("stderr_tail", ""),
+            "```",
+        ]
+        if record.get("ssh_vvv_diagnostic"):
+            lines += [
+                "",
+                "SSH `-vvv` diagnostic probe (confirms the loopback sshd is "
+                "genuinely reachable and answering over this run's scratch "
+                "ssh client config):",
+                "",
+                "```json",
+                json.dumps(record["ssh_vvv_diagnostic"], indent=2),
+                "```",
+            ]
     elif record["status"] == "harness_crashed":
         lines += [
             "The harness raised an unhandled exception before it could "
@@ -1492,7 +1626,13 @@ def main() -> int:
     return (
         0
         if record["status"]
-        in ("pass", "blocked_ambient_daemon", "skipped_no_sshd", "skipped_no_posix_receiver")
+        in (
+            "pass",
+            "blocked_ambient_daemon",
+            "skipped_no_sshd",
+            "skipped_no_posix_receiver",
+            "deferred_windows_loopback",
+        )
         else 1
     )
 

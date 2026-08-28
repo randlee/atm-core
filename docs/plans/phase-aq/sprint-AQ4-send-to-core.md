@@ -567,7 +567,13 @@ prerequisite: `m5` reachable), in
   in the evidence table above; run 11 reproduces the same failure signature
   one layer deeper (harness-level ssh succeeds, `sftp.ps1`-level ssh does
   not) and is not separately committed as an evidence file. No PASS is
-  claimed for the Windows lane.
+  claimed for the Windows lane. `run_aq4_transfer_evidence.py` now
+  classifies exactly this documented symptom (successful vvv probe, the
+  `sftp.ps1: invoking` line present, failure at the mkdir/ssh step) as a
+  non-fatal `deferred_windows_loopback` evidence status with every
+  diagnostic field preserved unchanged, so CI no longer goes red on this
+  known follow-up; the previously committed FAIL record (run 10, head
+  `9c9f9918a`) in the evidence table above remains as-is.
 
 ## Non-closure / out of scope
 
