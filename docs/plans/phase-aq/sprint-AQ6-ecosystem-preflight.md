@@ -204,6 +204,11 @@ None.
 - Implementing Wyvern-side tests (upstream work, tracked by the issue).
 - Auto-bump tooling beyond the documented preflight step (follow-on if the
   manual step proves error-prone).
+- **Follow-up `AQ6-wyvern-pin-bump`** (Phase AQ closeout, not a phase-merge
+  blocker): `validate_release.py ecosystem-preflight` reports "Wyvern pin is
+  not the latest release" (upstream release newer than the pinned 0.5.0 in
+  `tools/bootstrap.toml`; surfaced on PR #1076 @ 1c13fd57c, 2026-08-28) —
+  bump the pin (+ the contract re-verification above) before the next release.
 
 ## Dependencies
 

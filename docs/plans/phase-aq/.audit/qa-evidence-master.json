@@ -3733,6 +3733,31 @@
    "minor": 0,
    "count_basis": "merge-event",
    "evidence": "AQ6 #1066 merged to integrate/phase-aq @ edb1a5381 (head 29ac4a7c5, merged 2026-08-28 by team-lead, re-verify-b PASS); Phase AQ complete, 14/14 sprints on integrate/phase-aq."
+  },
+  {
+   "run_id": "MERGE-PR1076",
+   "aich_sprint": "AQ-integration",
+   "phase_sprint": "AQ (develop sync)",
+   "pass": true,
+   "run_type": "merge",
+   "assignment_time_utc": null,
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": "quality-mgr",
+   "assignment_shared_path": null,
+   "assignment_summary": "merge/develop-into-phase-aq #1076 (develop f99c85656 -> integrate/phase-aq) merged @ 4b0d47e78 (quality-mgr PASS-with-1-important: Wyvern pin not latest, registered as follow-up AQ6-wyvern-pin-bump)",
+   "result_time_utc": "2026-08-28T22:00:00Z",
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": "quality-mgr",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": "PASS-WITH-1-IMPORTANT",
+   "blockers": 0,
+   "important": 1,
+   "minor": 0,
+   "count_basis": "merge-event",
+   "evidence": "#1076 merge/develop-into-phase-aq (head 1c13fd57c, develop f99c85656) merged to integrate/phase-aq @ 4b0d47e78 (team-lead, 2026-08-28). quality-mgr PASS-with-1-important: validate_release.py ecosystem-preflight reports 'Wyvern pin is not the latest release' -> follow-up AQ6-wyvern-pin-bump."
   }
  ],
  "follow_ups": [
@@ -3776,6 +3801,17 @@
     "runs isolating the gap: 33144153970 (run 10, committed FAIL record at 9c9f9918a), 33145261567 (run 11, pull_request merge ref of 431e6ad4e)"
    ],
    "tracked_at": "2026-08-28T00:00:00Z"
+  },
+  {
+   "id": "AQ6-wyvern-pin-bump",
+   "owner": "Phase AQ closeout",
+   "prerequisite": "none (not a blocker for the phase merge)",
+   "scope": "validate_release.py ecosystem-preflight now reports 'Wyvern pin is not the latest release': a Wyvern release newer than the pinned 0.5.0 in tools/bootstrap.toml exists upstream (surfaced on PR #1076 @ 1c13fd57c, 2026-08-28)",
+   "items": [
+    "bump the Wyvern pin in tools/bootstrap.toml to the latest release before the next release",
+    "re-run any contract re-verification the AQ6 sprint doc requires for a pin bump"
+   ],
+   "tracked_at": "2026-08-28T22:00:00Z"
   }
  ]
 }

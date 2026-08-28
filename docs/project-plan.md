@@ -1420,10 +1420,13 @@ and hermes-atm suite run (Phase AQ closeout/AQ6); AQ4-tailscale-m5 — live
 tailscale transfer transcript (Phase AQ closeout); AQ4-windows-loopback —
 real Windows-host/POSIX-receiver reproduction of the ssh-under-pwsh loopback
 gap (Phase AQ closeout); AQ5-gui-e2e — live Finder/Explorer/Nautilus
-member-picker GUI E2E transcripts (Rand). See
-[Phase AQ plan](./plans/phase-aq/plan-phase-aq.md) for the authoritative
-sprint-by-sprint detail and `docs/plans/phase-aq/.audit/qa-evidence-master.json`
-for QA/merge provenance.
+member-picker GUI E2E transcripts (Rand); AQ6-wyvern-pin-bump — Wyvern pin
+behind the latest upstream release, surfaced by ecosystem-preflight on
+PR #1076, bump before the next release, not a phase-merge blocker (Phase AQ
+closeout). See [Phase AQ plan](./plans/phase-aq/plan-phase-aq.md) for the
+authoritative sprint-by-sprint detail and
+`docs/plans/phase-aq/.audit/qa-evidence-master.json` for QA/merge
+provenance.
 
 ## 49. Phase AO2 — Benchmark Safety, Evidence, And Transport Performance [COMPLETE — MERGED TO DEVELOP]
 
