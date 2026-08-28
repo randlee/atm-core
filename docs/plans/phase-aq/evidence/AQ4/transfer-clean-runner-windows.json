@@ -2,11 +2,11 @@
   "schema_version": 1,
   "sprint": "AQ4",
   "host": "clean-runner-windows",
-  "commit": "f9eb08449e8eda279da97470e30af9aea3c66149",
+  "commit": "7f677480222aaf3b1b2c055086e74f7d6e88efa8",
   "record": {
     "sprint": "AQ4",
     "host": "clean-runner-windows",
-    "started_at_ns": 1787883915527287100,
+    "started_at_ns": 1787890253652739200,
     "status": "fail",
     "sshd_probe": {
       "found": true,
@@ -14,15 +14,15 @@
     },
     "sshd_start": {
       "ready": true,
-      "pid": 4880,
+      "pid": 9176,
       "log_tail": "",
-      "port": 61795
+      "port": 58790
     },
     "sender_atm_config": {
-      "path": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-o5x9wold\\sender-cwd\\.atm.toml",
+      "path": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-0kopgt33\\sender-cwd\\.atm.toml",
       "local_host": "aq4-sender"
     },
-    "scratch_ssh_client_config": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-o5x9wold\\ssh_client_config",
+    "scratch_ssh_client_config": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-0kopgt33\\ssh_client_config",
     "roster": {
       "sender": {
         "argv": [
@@ -32,7 +32,7 @@
           "aq4-transfer-evidence",
           "aq4-sender",
           "--home-dir",
-          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-o5x9wold\\home",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-0kopgt33\\home",
           "--json"
         ],
         "stdout": "{\n  \"action\": \"add-member\",\n  \"team\": \"aq4-transfer-evidence\",\n  \"member\": \"aq4-sender\",\n  \"created_inbox\": true\n}"
@@ -45,7 +45,7 @@
           "aq4-transfer-evidence",
           "aq4-receiver",
           "--home-dir",
-          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-o5x9wold\\home",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-0kopgt33\\home",
           "--host",
           "localhost",
           "--json"
@@ -54,19 +54,25 @@
       }
     },
     "transfer_script": {
-      "installed_at": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-o5x9wold\\home\\.atm\\transfer\\localhost.ps1",
+      "installed_at": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-0kopgt33\\home\\.atm\\transfer\\localhost.ps1",
       "source": "D:\\a\\atm-core\\atm-core\\scripts\\transfer\\sftp.ps1",
       "windows_profile_containment": {
-        "profile_home": "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aq4-evidence-o5x9wold\\home",
+        "profile_home": "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aq4-evidence-0kopgt33\\home",
         "transfer_dir_contained": true,
         "script_contained": true,
         "transfer_dir_is_reparse_point": false,
         "script_is_reparse_point": false
+      },
+      "synthesized_env": {
+        "PATH": "C:\\Windows\\System32;C:\\Windows\\System32\\OpenSSH;C:\\Program Files\\PowerShell\\7",
+        "SystemRoot": "C:\\Windows",
+        "SYSTEMROOT": "C:\\Windows",
+        "TEMP": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-0kopgt33\\tmp"
       }
     },
     "daemon_start": {
       "ready": true,
-      "pid": 904,
+      "pid": 6384,
       "stdout_tail": [
         "ATM_DAEMON_READY"
       ],
@@ -83,16 +89,16 @@
         "--host",
         "localhost",
         "--attach",
-        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-o5x9wold\\attach-source\\aq4-report.pdf"
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aq4-evidence-0kopgt33\\attach-source\\aq4-report.pdf"
       ],
       "returncode": 3,
       "stdout": "",
-      "stderr_tail": "transfer script for host 'localhost' failed (exit code: 1): \u001b[31;1mlocalhost.ps1: \u001b[31;1mThe term 'ssh' is not recognized as a name of a cmdlet, function, script file, or executable program.\u001b[0m\n\u001b[31;1m\u001b[31;1mCheck the spelling of the name, or if a path was included, verify that the path is correct and try again.\u001b[0m\n\n  Recovery: Check the transfer script's stderr output above and retry."
+      "stderr_tail": "transfer script for host 'localhost' failed (exit code: 1): failed to create /tmp/atm-REPLACE_WITH_DESTINATION_UID/send-to/01M1390MRA1SJMS5ET3FZB0FC1 on localhost\n\n  Recovery: Check the transfer script's stderr output above and retry."
     },
     "landed_path": null,
     "landed_matches_send_to_convention": false,
     "landed_file_exists": false,
     "landed_content_matches": false,
-    "finished_at_ns": 1787883926130059900
+    "finished_at_ns": 1787890266094894300
   }
 }
