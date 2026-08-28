@@ -2782,7 +2782,32 @@
    "important": 0,
    "minor": 0,
    "count_basis": "headline/reviewer",
-   "evidence": "AQ4 #1055 @ c510a4745: Production fix verified — invoke_transfer_script's env_clear() left transfer-script child with no PATH. Unix worked via execvp's confstr(_CS_PATH) fallback; Windows pwsh could not resolve ssh/scp. Fix: atm-core now synthesizes minimal per-platform PATH alongside allow-list (ADR-055 decision (c) amended); sftp.ps1 resolves OpenSSH via Get-Command with System32\\OpenSSH fallback. Harness records synthesized env. Test results: 55/55 test binaries PASS, run_lint 32/32 PASS. Evidence run 5 dispatched (Windows leg target); CI watching."
+   "evidence": "AQ4 #1055 @ c510a4745: Production fix verified \u2014 invoke_transfer_script's env_clear() left transfer-script child with no PATH. Unix worked via execvp's confstr(_CS_PATH) fallback; Windows pwsh could not resolve ssh/scp. Fix: atm-core now synthesizes minimal per-platform PATH alongside allow-list (ADR-055 decision (c) amended); sftp.ps1 resolves OpenSSH via Get-Command with System32\\OpenSSH fallback. Harness records synthesized env. Test results: 55/55 test binaries PASS, run_lint 32/32 PASS. Evidence run 5 dispatched (Windows leg target); CI watching."
+  },
+  {
+   "run_id": "CI-AQ4-LINT-WINDOWS-PYTEST-R1",
+   "aich_sprint": "AQ4",
+   "phase_sprint": "AQ4",
+   "pass": false,
+   "run_type": "qa",
+   "assignment_time_utc": null,
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": "quality-mgr",
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ4 #1055 @ f9eb08449 CI run 33135353514 (Just lint windows-latest): 3 pytest failures on Windows (NUL variant needed)",
+   "result_time_utc": "2026-08-28T15:40:00Z",
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": "quality-mgr",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": "FAIL",
+   "blockers": 3,
+   "important": null,
+   "minor": null,
+   "count_basis": "headline/reviewer",
+   "evidence": "AQ4 #1055 @ f9eb08449: CI run 33135353514 (Just lint windows-latest) RED. 3 pytest failures on Windows (SFTP module, Windows-specific Path handling): SftpPs1Tests.test_happy_path_exact_argv_and_single_line_landed_dir, SftpPs1Tests.test_ssh_config_override_is_passed_through_when_set, test_write_scratch_ssh_client_config_uses_dev_null_known_hosts_on_unix (NUL variant needed on Windows). Fix dispatched on top of c510a4745. c510a4745's own CI and evidence run 5 in progress."
   }
  ],
  "follow_ups": [
