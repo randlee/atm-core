@@ -3358,6 +3358,31 @@
    "minor": 0,
    "count_basis": "ci",
    "evidence": "AQ4 #1055 CI run 33143115990 @ 857f14182: all lanes GREEN (linux, macOS, Windows; serialized send_to tests passing). Docs head 4b9205eed with run-9 artifacts (commit fields = dcd3130f1; linux/macOS PASS, windows FAIL diagnosed). Windows live-transfer leg fix in progress → run 10; else AQ4-windows-loopback follow-up ruling."
+  },
+  {
+   "run_id": "CI-AQ4-WINDOWS-RUN10",
+   "aich_sprint": "AQ4",
+   "phase_sprint": "AQ4",
+   "pass": true,
+   "run_type": "ci",
+   "assignment_time_utc": "2026-08-29T04:00:00Z",
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": "quality-mgr",
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ4 #1055 Windows root cause (ssh -n stdin); run 10 dispatched (Windows row decider)",
+   "result_time_utc": "2026-08-29T04:00:00Z",
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": "quality-mgr",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": "PASS",
+   "blockers": 0,
+   "important": 0,
+   "minor": 0,
+   "count_basis": "ci",
+   "evidence": "AQ4 #1055 @ 9c9f9918a: Windows root cause — ssh.exe polls stdin before identity exchange; transfer child inherits atm's closed stdin → ssh aborts mid-handshake (WSAECONNABORTED 10053), blank exit code in pwsh. Fix (shipped sftp.ps1): ssh -n for mkdir, Invoke-Transfer helper capturing $LASTEXITCODE immediately + surfacing exceptions, $PSNativeCommandUseErrorActionPreference disabled. Harness: BatchMode/LogLevel in scratch -F config, failure-only ssh -vvv probe (PATH-vs-env bug in probe fixed via test). Evidence: 29/29 contract tests, 52/52 harness tests, lint 32/32. Run 10 dispatched (Windows row decider)."
   }
  ],
  "follow_ups": [
