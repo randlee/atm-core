@@ -220,6 +220,42 @@ artifact builds:
     a removed platform wheel and a duplicate universal wheel both still
     fail). Upstream:
     [sc-publish #75](https://github.com/randlee/sc-publish/issues/75).
+13. **`pypi-publish.yml` pins its checkout to the immutable release tag**
+    (found while verifying that fixes 11–12 would actually take effect on
+    re-dispatch): both jobs check out `ref: ${{ inputs.tag }}`, but the
+    workflow never builds from source — the checkout exists only to supply
+    the verify tooling and manifest. Tag `v1.4.4` (e8a5b1c1b) predates
+    every round-3 script fix, so a re-dispatch after merging fixes 11–12 to
+    `main` would have run the tag's frozen `release_artifacts.py` and
+    failed identically — the immutable tag permanently bricks PyPI
+    publication on any verify-tooling defect. Fix: drop the `ref:` pins so
+    both jobs check out the dispatch ref (main), mirroring `release.yml`'s
+    model (immutable tag for artifacts — `gh release download` stays pinned
+    to the tag and `verify-published-release` validates via the API — with
+    tooling from current main). Upstream:
+    [sc-publish #76](https://github.com/randlee/sc-publish/issues/76).
+
+Round-3 full-pipeline rehearsal (every remaining pypi-publish.yml step,
+per the standing "no surprises" rule — collect all defects in one pass
+rather than one merge cycle per CI discovery):
+
+- `channel-config --channel pypi` → valid JSON; `test_repository=testpypi`,
+  `production_repository=pypi`.
+- `build-plan` → `python_upload_tool=maturin` (correct: maturin
+  distributions present).
+- The "Select configured Python repository" inline snippet run verbatim
+  with the real channel JSON → `PYPI_REPOSITORY=testpypi` (target=testpypi)
+  and `PYPI_REPOSITORY=pypi` (target=production).
+- `twine check` (twine 6.1.0, the kit-pinned uploader version) over all 10
+  release dist files → 10/10 PASSED. The maturin wheels/sdists warn about a
+  missing `long_description` (empty PyPI description page — cosmetic, not
+  an upload blocker; candidate future polish, not a v1.4.4 gate).
+- maturin 1.9.4 upload semantics verified in its pinned source
+  (`src/upload.rs` at tag v1.9.4): `testpypi` and `pypi` repository names
+  are built in (no `.pypirc` needed), token read from `MATURIN_PYPI_TOKEN`,
+  and `--skip-existing` is supported. Upload itself is deliberately NOT
+  rehearsed locally (tokens are CI secrets; maturin falls back to keyring
+  credentials, so a local invocation risks an accidental real publish).
 
 Round-3 rehearsal evidence (fixes 11–12): the exact failing CI step was
 rehearsed verbatim against the real v1.4.4 GitHub Release assets

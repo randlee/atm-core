@@ -35,9 +35,15 @@ jobs:
       pypi_config: ${{ steps.config.outputs.config }}
       python_upload_tool: ${{ steps.config.outputs.python_upload_tool }}
     steps:
+      # Release-branch fix (v1.4.4, upstream sc-publish#76): check out the
+      # dispatch ref, not the immutable tag. This workflow never builds from
+      # source — it only downloads already-published release assets — so the
+      # checkout exists solely to supply the verify tooling and manifest.
+      # Pinning it to the tag freezes any tooling defect into the release
+      # forever (the tag is immutable), making PyPI publication unrecoverable.
+      # Same model as release.yml: immutable tag for artifacts, current main
+      # for tooling.
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.tag }}
       - uses: ./.github/actions/verify-published-release
         with:
           release_tag: ${{ inputs.tag }}
@@ -57,9 +63,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ inputs.target == 'production' && 'pypi' || 'testpypi' }}
     steps:
+      # Release-branch fix (v1.4.4, upstream sc-publish#76): dispatch ref, not
+      # the immutable tag — see verify-release above.
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.tag }}
       - name: Download Python assets from the published GitHub Release
         shell: bash
         env:
