@@ -36,11 +36,20 @@ TEAM = "aq1-9-hermes"
 SENDER = "aq1-9-sender"
 RECEIVER = "aq1-9-receiver"
 LEASE_REFRESH_INTERVAL_SECONDS = 1.0
-# AC2 (sprint-AQ1-9) requires *sub-tick* recovery: the successor must
-# register and deliver strictly inside one GRAFT_LEASE_REFRESH_INTERVAL
-# tick, not merely close to it. The bound is therefore the tick length
-# itself, not a padded multiple of it.
-CRASH_RECOVERY_LIMIT_SECONDS = LEASE_REFRESH_INTERVAL_SECONDS
+# AC2 (sprint-AQ1-9) / AQ1.6 AC5: after a SIGKILLed receiver, the successor's
+# *bind-time* registration displaces the stale lease -- zero refresh ticks.
+# That is a product observable (`atm doctor --json` `graft_receivers`), and it
+# is what the crash row asserts on. Wall-clock recovery is recorded as a
+# diagnostic only: `restart_at_ns` is stamped before the kill *and* before the
+# successor worker's fresh CPython + `import atm_graft` spawn, so a wall-clock
+# bound charges interpreter start-up (observed 933 ms on a Windows CI runner
+# vs 170-270 ms on linux/macOS) against the product. See
+# docs/aq-closeout @ 9674f64b7 (merge b78c041f1): the product displaced the
+# lease at +211 ms while the old one-tick bound tripped on the 933 ms spawn.
+RFC3339_RE = re.compile(
+    r"^(\d{4})-(\d{2})-(\d{2})[Tt ](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?"
+    r"(Z|z|[+-]\d{2}:?\d{2})$"
+)
 EVENT_TIMEOUT_SECONDS = 15.0
 HOST_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 # `atm_graft`'s native PyO3 session runs in this process and reads its
@@ -364,8 +373,8 @@ class ReceiverWorker:
             except json.JSONDecodeError:
                 return False
 
-        self.output.wait_for(ready_event, self.timeout)
-        return {"pid": self.process.pid}
+        ready_line = self.output.wait_for(ready_event, self.timeout)
+        return {"pid": self.process.pid, "ready_at_ns": int(json.loads(ready_line)["at_ns"])}
 
     def wait_for_nudge(self, marker: str, timeout: float) -> dict[str, Any]:
         if self.output is None:
@@ -511,6 +520,141 @@ def _remove_tree_tolerant(path: Path, *, attempts: int = 6, initial_delay: float
     return f"could not remove {path} after {attempts} attempts: {last_error}"
 
 
+
+def parse_rfc3339_ns(text: str) -> int:
+    """Parse an RFC 3339 timestamp (up to nanosecond fraction) to epoch ns.
+
+    `atm doctor --json` emits `registered_at` with nine fractional digits
+    (`2026-08-28T21:12:08.776418200Z`), which `datetime.fromisoformat`
+    does not accept on every supported Python; so parse it by hand.
+    """
+    match = RFC3339_RE.match(text.strip())
+    if match is None:
+        raise ValueError(f"not an RFC 3339 timestamp: {text!r}")
+    year, month, day, hour, minute, second, fraction, zone = match.groups()
+    from datetime import datetime, timedelta, timezone
+
+    offset = timedelta(0)
+    if zone not in ("Z", "z"):
+        sign = 1 if zone[0] == "+" else -1
+        digits = zone[1:].replace(":", "")
+        offset = sign * timedelta(hours=int(digits[:2]), minutes=int(digits[2:]))
+    moment = datetime(
+        int(year), int(month), int(day), int(hour), int(minute), int(second), tzinfo=timezone(offset)
+    )
+    whole_ns = int(moment.timestamp()) * 1_000_000_000
+    fraction_ns = int((fraction or "0").ljust(9, "0"))
+    return whole_ns + fraction_ns
+
+
+def receiver_leases(doctor_payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Every `graft_receivers` lease for this row's receiver identity."""
+    section = doctor_payload.get("graft_receivers") or {}
+    receivers = section.get("receivers") if isinstance(section, dict) else None
+    return [
+        lease
+        for lease in (receivers or [])
+        if isinstance(lease, dict) and lease.get("team") == TEAM and lease.get("agent") == RECEIVER
+    ]
+
+
+def receiver_lease(doctor_payload: dict[str, Any]) -> dict[str, Any]:
+    """The single pre-crash lease for this row's receiver identity."""
+    leases = receiver_leases(doctor_payload)
+    if len(leases) != 1:
+        raise RuntimeError(f"expected exactly one pre-crash lease for {RECEIVER}, found {len(leases)}")
+    return leases[0]
+
+
+def successor_ready_at_ns(record: dict[str, Any]) -> int:
+    """The successor's `ready` event timestamp from its transcript.
+
+    Falls back to the `ready_at_ns` captured by `ReceiverWorker.start` when
+    the transcript tail has already rotated the `ready` line out.
+    """
+    for line in record.get("receiver_transcript") or []:
+        try:
+            event = json.loads(line)
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if isinstance(event, dict) and event.get("kind") == "ready":
+            return int(event["at_ns"])
+    receiver_after = record.get("receiver_after") or {}
+    if "ready_at_ns" in receiver_after:
+        return int(receiver_after["ready_at_ns"])
+    raise RuntimeError("successor receiver never reported a `ready` event")
+
+
+def classify_crash_recovery(
+    *,
+    pre_crash_lease: dict[str, Any],
+    leases_after: list[dict[str, Any]],
+    successor_ready_at_ns: int,
+    restart_at_ns: int,
+    delivered_at_ns: int,
+    delivery_matched: bool,
+) -> dict[str, Any]:
+    """Pure classification of the crash-within-window row (AQ1.6 AC5).
+
+    The row passes on product observables only:
+
+    1. `doctor_after` holds exactly one lease for the receiver identity;
+    2. its `endpoint` differs from the pre-crash lease (a fresh bind, not
+       the stale lease surviving);
+    3. its `registered_at` is at or before the successor's own `ready`
+       event -- the displacement happened at bind-time registration, with
+       zero refresh ticks (the first periodic tick is only scheduled at
+       ready + interval, `crates/atm-graft/src/runtime/lease_client.rs`);
+    4. the successor delivered the row's nudge marker.
+
+    `crash_recovery_ms`, `successor_spawn_to_ready_ms`, and
+    `lease_displaced_at_ms` are diagnostics: recorded, never asserted.
+    """
+    pre_crash_endpoint = pre_crash_lease.get("endpoint")
+    verdict: dict[str, Any] = {
+        "pre_crash_endpoint": pre_crash_endpoint,
+        "pre_crash_registered_at": pre_crash_lease.get("registered_at"),
+        "successor_ready_at_ns": successor_ready_at_ns,
+        "successor_lease_count": len(leases_after),
+        "crash_recovery_ms": round((delivered_at_ns - restart_at_ns) / 1_000_000, 3),
+        "successor_spawn_to_ready_ms": round((successor_ready_at_ns - restart_at_ns) / 1_000_000, 3),
+        "successor_endpoint": None,
+        "successor_registered_at": None,
+        "lease_displaced_at_ms": None,
+        "displaced_at_bind": False,
+        "error": None,
+    }
+    failures: list[str] = []
+    if len(leases_after) != 1:
+        failures.append(f"expected exactly one successor lease for {RECEIVER}, found {len(leases_after)}")
+    else:
+        lease = leases_after[0]
+        verdict["successor_endpoint"] = lease.get("endpoint")
+        verdict["successor_registered_at"] = lease.get("registered_at")
+        if not lease.get("endpoint") or lease.get("endpoint") == pre_crash_endpoint:
+            failures.append(
+                f"successor lease endpoint {lease.get('endpoint')!r} is not a fresh bind (pre-crash {pre_crash_endpoint!r})"
+            )
+        try:
+            registered_ns = parse_rfc3339_ns(str(lease.get("registered_at")))
+        except ValueError as error:
+            failures.append(f"successor lease registered_at unparsable: {error}")
+        else:
+            verdict["lease_displaced_at_ms"] = round((registered_ns - restart_at_ns) / 1_000_000, 3)
+            if registered_ns > successor_ready_at_ns:
+                failures.append(
+                    "successor lease was registered after the successor's ready event "
+                    f"(+{(registered_ns - successor_ready_at_ns) / 1_000_000:.3f} ms): displaced by a refresh tick, not at bind"
+                )
+    if not delivery_matched:
+        failures.append("successor did not deliver the row's nudge marker")
+    if failures:
+        verdict["error"] = "; ".join(failures)
+    else:
+        verdict["displaced_at_bind"] = True
+    return verdict
+
+
 def run_scenario(args: argparse.Namespace, row: str, action: str) -> dict[str, Any]:
     started_at = time.time_ns()
     # A manually-managed `mkdtemp` (not `tempfile.TemporaryDirectory`'s
@@ -583,12 +727,17 @@ def run_scenario(args: argparse.Namespace, row: str, action: str) -> dict[str, A
                 }
             )
             if action == "receiver_crash_within_window":
-                recovery_ms = (delivered_at - int(record["restart_at_ns"])) / 1_000_000
-                record["crash_recovery_ms"] = round(recovery_ms, 3)
-                record["within_one_refresh_tick"] = recovery_ms <= CRASH_RECOVERY_LIMIT_SECONDS * 1000
-                if not record["within_one_refresh_tick"]:
+                verdict = classify_crash_recovery(
+                    pre_crash_lease=receiver_lease(record["doctor_before"]),
+                    leases_after=receiver_leases(record["doctor_after"]),
+                    successor_ready_at_ns=successor_ready_at_ns(record),
+                    restart_at_ns=int(record["restart_at_ns"]),
+                    delivered_at_ns=delivered_at,
+                    delivery_matched=marker in nudge.get("body", ""),
+                )
+                record.update(verdict)
+                if not verdict["displaced_at_bind"]:
                     record["status"] = "fail"
-                    record["error"] = "successor delivery exceeded the one-refresh-tick recovery bound"
         except Exception as error:  # noqa: BLE001 - evidence must retain the row failure
             record["error"] = f"{type(error).__name__}: {error}"
         finally:
@@ -689,7 +838,9 @@ def write_evidence(args: argparse.Namespace, records: list[dict[str, Any]]) -> t
     lines.extend(
         [
             "",
-            "The daemon restart row keeps the receiver worker alive. The receiver restart row performs a clean close and immediate replacement. The crash row uses SIGKILL and starts the successor inside the active lease window; its one-refresh-tick assertion is recorded in JSON.",
+            "The daemon restart row keeps the receiver worker alive. The receiver restart row performs a clean close and immediate replacement. The crash row uses SIGKILL and starts the successor inside the active lease window; it passes only when `atm doctor --json` shows exactly one lease for the receiver at a new endpoint whose `registered_at` is at or before the successor's own `ready` event (`displaced_at_bind`: displaced by bind-time registration, zero refresh ticks) and the successor delivers the marker. `crash_recovery_ms`, `successor_spawn_to_ready_ms`, and `lease_displaced_at_ms` are recorded as diagnostics only, never asserted.",
+            "",
+            "A `returncode` of 1 in `receiver_stop` / `daemon_cleanup` on Windows is `TerminateProcess` semantics for a terminated or killed child (harmless; recorded for provenance only).",
             "",
             "The m5 live run must be executed on m5; no remote result is inferred from this local artifact.",
         ]

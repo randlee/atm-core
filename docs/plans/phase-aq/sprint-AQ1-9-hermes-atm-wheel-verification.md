@@ -49,10 +49,22 @@ an atm-graft API change notification, not a Python code change request.
    I10)**: a third scenario — receiver crash (SIGKILL, no clean
    unregister) followed by an immediate restart within
    `ACTIVE_LEASE_WINDOW` (15s) — is captured alongside the other two
-   orders, showing the successor registers and delivers within one
-   `GRAFT_LEASE_REFRESH_INTERVAL` tick rather than waiting out the window
-   (AQ1.6 AC #5, backed by the AQ1.5 amendment removing the window-gated
-   `AlreadyActive` rejection). Transcript + `atm doctor --json` graft
+   orders, showing the stale lease is displaced at the successor's
+   bind-time registration (zero refresh ticks) rather than waiting out the
+   window (AQ1.6 AC #5, backed by the AQ1.5 amendment removing the
+   window-gated `AlreadyActive` rejection). The row is measured on product
+   observables — `atm doctor --json` `graft_receivers` shows exactly one
+   lease for the receiver at a new endpoint whose `registered_at` is at or
+   before the successor's own `ready` event, plus successor delivery of the
+   marker (`displaced_at_bind`); wall-clock recovery (`crash_recovery_ms`,
+   `successor_spawn_to_ready_ms`, `lease_displaced_at_ms`) is recorded as
+   diagnostic only. **Incident (docs/aq-closeout @ 9674f64b7, merge ref
+   b78c041f1)**: the earlier harness failed the row on a one-tick wall-clock
+   bound stamped before the successor's interpreter spawn; on the Windows
+   clean runner the product displaced the lease at +211 ms while the bound
+   tripped on the 933 ms CPython + `atm_graft` spawn. Committed records under
+   `evidence/AQ1.9/` predate the fix and keep the old
+   `within_one_refresh_tick` field; they are not rewritten. Transcript + `atm doctor --json` graft
    section captured as sprint evidence for all three rows. **Not executed
    this sprint**: m5 is unreachable from the execution network (see Scope
    ruling below); tracked as `AQ1.9-m5` for Phase AQ closeout (AQ6) or as
@@ -96,8 +108,11 @@ may override this ruling.
    Scope ruling.
 2. The restart-matrix live evidence shows delivery recovering
    automatically in both daemon/receiver restart orders **and** the
-   crash-within-window row (I10) shows sub-tick recovery — timestamps +
-   message ids in the transcript for all three rows.
+   crash-within-window row (I10) shows the stale lease displaced at the
+   successor's bind-time registration (zero refresh ticks), measured on
+   product observables (`displaced_at_bind`), with wall-clock recovery
+   recorded as diagnostic — timestamps + message ids in the transcript for
+   all three rows.
 3. **FOLLOW-UP (AQ1.9-m5):** M5 team-lead confirmation recorded (message
    id in the sprint evidence notes) — not executed this sprint, m5
    unreachable; see Scope ruling. Never claimed PASS.
