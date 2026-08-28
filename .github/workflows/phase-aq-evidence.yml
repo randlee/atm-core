@@ -1,0 +1,330 @@
+name: Phase AQ Evidence
+
+# Runs the Phase AQ live-evidence harnesses (AQ1.9 restart matrix, AQ2.5
+# queue-delivery triggers, AQ3's tmux idle-transition-drain transcript, AQ4
+# cross-host transfer, and AQ5's Wyvern degradation matrix) on a clean
+# runner with no ambient atm-daemon. The AQ3 harness needs a real tmux
+# server, which is unavailable on Windows; it self-records a
+# `skipped_no_tmux` status there instead of failing the job. AQ5's harness
+# is daemon-free (see its own module docstring) but still runs here so its
+# six-case transcript is produced on every PR touching the Send-To surface,
+# exactly like the other Phase AQ evidence artifacts.
+#
+# These harnesses fail closed by design: `atm_core::home::current_host_runtime_scope`
+# intentionally ignores `ATM_HOME`/`HOME` and always resolves the OS
+# account's real profile directory, so `DaemonOwnerGuard`'s exclusive-lock
+# singleton check refuses to start a second daemon whenever a developer's own
+# ambient `atm-daemon` already owns that lock. A hosted Actions runner has no
+# such ambient daemon, so this job can produce real positive-path evidence
+# where a developer host cannot. See
+# docs/plans/phase-aq/evidence/README.md for the full explanation and the
+# manual recovery path when this job cannot commit evidence back on its own.
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to check out and run the Phase AQ live-evidence harnesses against"
+        required: true
+        type: string
+  pull_request:
+    paths:
+      - "scripts/phase-aq/**"
+      - "docs/plans/phase-aq/evidence/**"
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    name: Phase AQ live evidence (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.branch || github.ref }}
+          fetch-depth: 0
+
+      # --- Rust setup mirrors .github/workflows/ci.yml (toolchain pin + caching) ---
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.94.1"
+          components: clippy, rustfmt
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14.7"
+
+      - name: Expose Cargo binaries on PATH
+        run: python -c "import os; cargo_bin = os.path.expanduser('~/.cargo/bin'); open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8').write(cargo_bin + os.linesep)"
+
+      - name: Cache bootstrap outputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+            ~/.cargo/binstall
+            .bootstrap-venv
+          key: ${{ runner.os }}-bootstrap-${{ hashFiles('tools/bootstrap.toml', 'tools/bootstrap-requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-bootstrap-
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-phase-aq-evidence-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-phase-aq-evidence-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-phase-aq-evidence-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just@1.58.0
+
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@75b4bfae1b2c753a6806bbce6e6cb89b602de33c # v1.22.0
+        with:
+          version: "1.22.0"
+
+      - name: Bootstrap exact repository tools
+        run: just bootstrap
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # --- end shared CI setup ---
+
+      - name: Ensure tmux is available (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v tmux >/dev/null 2>&1; then
+            brew install tmux
+          fi
+
+      - name: Ensure tmux is available (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v tmux >/dev/null 2>&1; then
+            sudo apt-get update -y
+            sudo apt-get install -y tmux
+          fi
+
+      - name: tmux is unavailable on Windows (AQ3 harness self-skips)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Write-Host "tmux has no supported Windows build; run_aq3_tmux_idle_drain_evidence.py records a skipped_no_tmux status instead of failing this job."
+
+      - name: Confirm this runner has no ambient atm-daemon (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Phase AQ live-evidence harnesses fail closed the moment they see
+          # an OS-account-owned atm-daemon already holding the singleton
+          # runtime lock (by design: current_host_runtime_scope ignores
+          # ATM_HOME/HOME). A hosted Actions runner must never have one; if it
+          # does, something is wrong with the runner image or a prior step in
+          # this job, not with the harnesses themselves.
+          if pgrep -x atm-daemon >/dev/null 2>&1; then
+            echo "::error::an ambient atm-daemon is already running on this runner; refusing to start the live-evidence harnesses" >&2
+            exit 1
+          fi
+          echo "confirmed: no ambient atm-daemon on this runner"
+
+      - name: Confirm this runner has no ambient atm-daemon (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $existing = Get-Process -Name "atm-daemon" -ErrorAction SilentlyContinue
+          if ($existing) {
+            Write-Error "an ambient atm-daemon is already running on this runner; refusing to start the live-evidence harnesses"
+            exit 1
+          }
+          Write-Host "confirmed: no ambient atm-daemon on this runner"
+
+      - name: Build workspace (release)
+        run: cargo build --release --workspace --verbose
+
+      - name: Install the atm-graft Python extension (maturin develop, per scripts/test_atm_graft_python.py)
+        shell: bash
+        run: |
+          set -euo pipefail
+          venv_root="$GITHUB_WORKSPACE/.bootstrap-venv"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            venv_python="$venv_root/Scripts/python.exe"
+            venv_bin="$venv_root/Scripts"
+          else
+            venv_python="$venv_root/bin/python"
+            venv_bin="$venv_root/bin"
+          fi
+          # maturin refuses to "develop" without an active virtualenv. The
+          # repository's .bootstrap-venv is never `source`d by CI, so mirror
+          # scripts/test_atm_graft_python.py's approach of setting VIRTUAL_ENV
+          # and prepending the venv's bin/Scripts dir to PATH for this
+          # command instead of relying on shell activation.
+          export VIRTUAL_ENV="$venv_root"
+          export PATH="$venv_bin:$PATH"
+          maturin develop --manifest-path crates/atm-graft-python/Cargo.toml
+          "$venv_python" -c "import atm_graft; print('atm_graft import ok:', atm_graft.__file__)"
+          echo "PHASE_AQ_EVIDENCE_PYTHON=$venv_python" >> "$GITHUB_ENV"
+
+      - name: Run available Phase AQ live-evidence harnesses
+        shell: python
+        env:
+          PHASE_AQ_EVIDENCE_PYTHON: ${{ env.PHASE_AQ_EVIDENCE_PYTHON }}
+        run: |
+          import os
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          root = Path.cwd()
+          scripts_dir = root / "scripts" / "phase-aq"
+          python_bin = os.environ["PHASE_AQ_EVIDENCE_PYTHON"]
+          host_label = f"clean-runner-{os.environ.get('RUNNER_OS', 'unknown').lower()}"
+
+          # Explicit script -> evidence-subdirectory mapping. Deliberately
+          # not inferred by regex-scraping the harness source (fragile and
+          # implicit); add one entry here the moment a new Phase AQ
+          # live-evidence harness (for example an AQ3 drain/sweep transcript
+          # runner) lands on its branch.
+          EVIDENCE_DIR_BY_SCRIPT = {
+              "run_hermes_atm_restart_matrix.py": "AQ1.9",
+              "run_aq25_queue_delivery_trigger_evidence.py": "AQ2.5",
+              "run_aq3_tmux_idle_drain_evidence.py": "AQ3",
+              "run_aq4_transfer_evidence.py": "AQ4",
+              "run_aq5_wyvern_degradation_evidence.py": "AQ5",
+          }
+
+          # Release binaries carry a `.exe` suffix on Windows.
+          exe_suffix = ".exe" if os.name == "nt" else ""
+
+          # A harness's eligibility is decided by its own --help output, not
+          # by substring-scraping its source text.
+          REQUIRED_HELP_FLAGS = ("--evidence-dir", "--daemon", "--atm")
+
+          if not scripts_dir.is_dir():
+              print(f"SKIP: {scripts_dir} is not present on this branch; no Phase AQ evidence harnesses to run.")
+              sys.exit(0)
+
+          candidates = sorted(
+              path for path in scripts_dir.glob("run_*.py") if not path.name.startswith("test_")
+          )
+          if not candidates:
+              print(f"SKIP: no run_*.py live-evidence harnesses found under {scripts_dir}.")
+              sys.exit(0)
+
+          failures: list[str] = []
+          for script in candidates:
+              help_result = subprocess.run(
+                  [python_bin, str(script), "--help"],
+                  cwd=root,
+                  capture_output=True,
+                  text=True,
+                  check=False,
+              )
+              help_text = help_result.stdout + help_result.stderr
+              if help_result.returncode != 0 or not all(flag in help_text for flag in REQUIRED_HELP_FLAGS):
+                  print(
+                      f"SKIP: {script.name} --help does not advertise {REQUIRED_HELP_FLAGS}; "
+                      "not a live-evidence harness, leaving it alone."
+                  )
+                  continue
+
+              sprint = EVIDENCE_DIR_BY_SCRIPT.get(script.name)
+              if sprint is None:
+                  print(
+                      f"SKIP: {script.name} looks like a live-evidence harness (advertises "
+                      f"{REQUIRED_HELP_FLAGS}) but has no entry in EVIDENCE_DIR_BY_SCRIPT in "
+                      "this workflow; add one to run it. Refusing to guess its evidence directory."
+                  )
+                  continue
+
+              evidence_dir = root / "docs" / "plans" / "phase-aq" / "evidence" / sprint
+              print(f"::group::Running {script.relative_to(root)} -> {evidence_dir.relative_to(root)}")
+              result = subprocess.run(
+                  [
+                      python_bin,
+                      str(script),
+                      "--host", host_label,
+                      "--daemon", str(root / "target" / "release" / f"atm-daemon{exe_suffix}"),
+                      "--atm", str(root / "target" / "release" / f"atm{exe_suffix}"),
+                      "--evidence-dir", str(evidence_dir),
+                  ],
+                  cwd=root,
+                  check=False,
+              )
+              print("::endgroup::")
+              if result.returncode != 0:
+                  failures.append(script.name)
+
+          if failures:
+              print(f"::error::Phase AQ live-evidence harness failure(s): {failures}", file=sys.stderr)
+              sys.exit(1)
+
+      - name: Show produced/updated evidence files
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git status --porcelain -- docs/plans/phase-aq/evidence || true
+
+      - name: Upload Phase AQ evidence transcripts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-aq-evidence-${{ matrix.os }}
+          path: docs/plans/phase-aq/evidence/**
+          if-no-files-found: warn
+
+      # Opening/updating a PR that commits these transcripts back onto the
+      # dispatched branch would need a token with pull-requests: write scope
+      # against this repository. Neither the default GITHUB_TOKEN convention
+      # used elsewhere in this repo's workflows (see release.yml,
+      # release-preflight.yml) nor any repository secret currently grants
+      # that. This job intentionally stops at the artifact upload above; see
+      # docs/plans/phase-aq/evidence/README.md for the manual
+      # `gh run download` + commit step that lands the transcripts.
+      - name: Print manual evidence-commit instructions
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "### Phase AQ evidence — manual commit step required"
+            echo
+            echo "This job does not have a token authorized to open or update a pull"
+            echo "request against this repository, so it stops at the artifact upload."
+            echo "Download and commit the transcripts manually:"
+            echo
+            echo '```bash'
+            echo "gh run download ${{ github.run_id }} --name phase-aq-evidence-${{ matrix.os }} --dir /tmp/phase-aq-evidence"
+            echo "cp -R /tmp/phase-aq-evidence/. docs/plans/phase-aq/evidence/"
+            echo "git checkout -b evidence/${{ github.event.inputs.branch }}-${{ github.run_id }} origin/${{ github.event.inputs.branch }}"
+            echo "git add docs/plans/phase-aq/evidence"
+            echo "git commit -m 'docs(aq): live-evidence transcripts from run ${{ github.run_id }}'"
+            echo "git push -u origin evidence/${{ github.event.inputs.branch }}-${{ github.run_id }}"
+            echo "gh pr create --base ${{ github.event.inputs.branch }} --title 'docs(aq): live-evidence transcripts (run ${{ github.run_id }})' --fill"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -11,6 +11,10 @@ pub mod schema;
 pub mod search;
 pub mod template_catalog;
 pub mod template_workflow;
+/// Shared no-op test doubles for storage contract traits (RBQA-F002/F003).
+#[doc(hidden)]
+#[cfg(any(test, feature = "test-utils"))]
+pub mod testing;
 pub mod tls;
 pub mod types;
 mod validation;
@@ -27,9 +31,11 @@ pub use analyst_query::{AnalystQueryRow, AnalystQueryStore, AnalystQueryValue};
 pub use contract::{
     AckRequirementState, AckTransition, AcknowledgementCommit, AcknowledgementReplyBuilder,
     AcknowledgementSource, AgentType, AsyncMessageStore, BuiltInNudgeTemplateKind,
-    CertificateFingerprint, HttpsInterface, LocalCertificate, MailMessageState,
-    MailboxBucketCounts, Message, MessageFingerprint, MessageKey, MessageQuery,
-    MessageReceivedEvent, MessageStore, NudgeTemplateOverrideStore, PeerConfigStore, PrivateKeyRef,
+    CertificateFingerprint, GraftEndpointStoreError, GraftReceiverEndpointStore,
+    GraftReceiverLease, GraftReceiverRegistration, HttpsInterface, LocalCertificate,
+    MAX_NUDGE_ATTEMPTS, MailMessageState, MailboxBucketCounts, Message, MessageFingerprint,
+    MessageKey, MessageQuery, MessageReceivedEvent, MessageStore, NudgeClaim,
+    NudgeTemplateOverrideStore, PeerConfigStore, PendingNudgeStore, PrivateKeyRef,
     RosterChangedEvent, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore,
     StorageNotifier, TaskState, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
     TrustedPeer, derive_ack_requirement,
@@ -64,7 +70,8 @@ pub use tls::{
     install_tls_provider, normalize_fingerprint,
 };
 pub use types::{
-    AgentId, AgentIdentity, AgentName, ChatId, HostName, IsoTimestamp, ModelName, PaneId, TaskId,
-    TeamName, TemplateFrontmatter, TemplateSha,
+    AgentId, AgentIdentity, AgentName, ChatId, HostName, IsoTimestamp, LOCAL_CAPABILITY_BYTES,
+    LocalCapability, MemberKey, ModelName, OwnerGeneration, PaneId, TaskId, TeamName,
+    TemplateFrontmatter, TemplateSha,
 };
 pub use validation::{validate_agent_at_team, validate_path_segment};

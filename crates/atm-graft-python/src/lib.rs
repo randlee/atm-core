@@ -11,7 +11,7 @@ use ::atm_graft::{
     HostNudgeInjector, MailboxWorkCounts, SessionSnapshot,
 };
 use atm_core::address::AgentAddress;
-use atm_core::boundary::PostSendHookEvent;
+use atm_core::boundary::{NudgeKind, PostSendHookEvent};
 use atm_core::caller_context::activity_observation_for_resolved_caller;
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::AtmGraftClient;
@@ -274,6 +274,9 @@ pub struct PyNudge {
     body: String,
     #[pyo3(get)]
     notice_text: String,
+    /// ATM's additive nudge taxonomy projection: `steer` or `queue`.
+    #[pyo3(get)]
+    kind: String,
 }
 
 impl PyNudge {
@@ -284,6 +287,7 @@ impl PyNudge {
             source: PyAgentAddress::from_typed(event.source_address())?,
             notice_text: body.clone(),
             body,
+            kind: NudgeKind::Steer.as_str().to_owned(),
         })
     }
 
@@ -293,6 +297,7 @@ impl PyNudge {
             source: PyAgentAddress::from_typed(nudge.event.source_address())?,
             body: nudge.body.clone(),
             notice_text: nudge.notice_text.clone(),
+            kind: nudge.kind.as_str().to_owned(),
         })
     }
 }
@@ -300,7 +305,8 @@ impl PyNudge {
 #[pymethods]
 impl PyNudge {
     #[new]
-    fn new(message_id: String, source: PyAgentAddress, body: String) -> PyResult<Self> {
+    #[pyo3(signature = (message_id, source, body, kind="steer"))]
+    fn new(message_id: String, source: PyAgentAddress, body: String, kind: &str) -> PyResult<Self> {
         message_id
             .parse::<atm_core::schema::AtmMessageId>()
             .map_err(|error| {
@@ -311,11 +317,20 @@ impl PyNudge {
                 "nudge body must not be blank",
             )));
         }
+        let kind = match kind {
+            "steer" | "queue" => kind.to_owned(),
+            _ => {
+                return Err(atm_error(AtmError::validation(
+                    "nudge kind must be `steer` or `queue`",
+                )));
+            }
+        };
         Ok(Self {
             message_id,
             source,
             notice_text: body.clone(),
             body,
+            kind,
         })
     }
 
@@ -879,7 +894,7 @@ mod tests {
         _atm_graft, AtmGraftError, AtmToolError, PyAgentAddress, PyGraftSession,
         PyGraftSessionOptions, PyMailboxWorkCounts, PyNudge, PythonNudgeInjector, atm_error,
     };
-    use atm_core::boundary::PostSendHookEvent;
+    use atm_core::boundary::{NudgeKind, PostSendHookEvent};
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::list::ListOutcome;
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
@@ -1022,6 +1037,7 @@ mod tests {
 
     fn host_nudge(event: PostSendHookEvent) -> HostNudge {
         HostNudge {
+            kind: NudgeKind::Steer,
             body: "<atm><action>read atm</action></atm>".to_string(),
             notice_text: format!("📬 from {}\n{}", event.source_address(), event.description),
             event,
@@ -1062,6 +1078,7 @@ mod tests {
 
         let nudge = PyNudge::from_post_send(&event).expect("python nudge");
         assert_eq!(nudge.source.chat_id.as_deref(), Some("1234"));
+        assert_eq!(nudge.kind, "steer");
     }
 
     #[test]
@@ -1167,11 +1184,20 @@ mod tests {
             "01KX1TEST00000000000000000".to_string(),
             source,
             "nudge".to_string(),
+            "steer",
         )
         .expect("valid nudge");
         assert_eq!(nudge.message_id, "01KX1TEST00000000000000000");
         assert_eq!(nudge.source.chat_id.as_deref(), Some("1234"));
-        assert!(PyNudge::new("not-a-ulid".to_string(), nudge.source, "nudge".to_string()).is_err());
+        assert!(
+            PyNudge::new(
+                "not-a-ulid".to_string(),
+                nudge.source,
+                "nudge".to_string(),
+                "steer",
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -1666,8 +1692,14 @@ mod tests {
         let session = PyGraftSession {
             caller: caller.to_typed().expect("typed caller"),
             client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(Arc::new(
-                FakeClientTransport::new(Box::new(|_| {
-                    panic!("receiver activation must not call the daemon transport")
+                FakeClientTransport::new(Box::new(|request| match request {
+                    RequestEnvelope::GraftReceiverRegister(_) => {
+                        Ok(ResponseEnvelope::GraftReceiverRegister)
+                    }
+                    RequestEnvelope::GraftReceiverUnregister(_) => {
+                        Ok(ResponseEnvelope::GraftReceiverUnregister)
+                    }
+                    _ => panic!("receiver activation sent an unexpected daemon request"),
                 })),
             )))),
             receiver: Mutex::new(None),

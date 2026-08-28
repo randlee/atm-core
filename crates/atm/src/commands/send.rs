@@ -6,8 +6,15 @@ use anyhow::Result;
 use atm_core::address::AgentAddress;
 use atm_core::load_atm_config;
 use atm_core::send::{
-    MessageClassification, SendMessageSource, SendRequest, TemplateSendSource, input,
+    MessageClassification, NudgeMode, SendMessageSource, SendRequest, TemplateSendSource, input,
 };
+use atm_core::send_to::classify_recipient_locality;
+// `RecipientLocality` itself is only referenced (unqualified) by the
+// `#[cfg(unix)]` fan-out integration test in `mod tests` below; production
+// code here only calls `classify_recipient_locality`, never names the
+// return type.
+#[cfg(all(test, unix))]
+use atm_core::send_to::RecipientLocality;
 use atm_core::types::{AgentIdentity, HostName, TaskId, TeamName};
 use atm_daemon_bootstrap::with_default_peer_address_stores;
 use atm_storage::{AtmError, PeerConfigStore, RosterStore, TrustedPeer};
@@ -17,6 +24,7 @@ use crate::commands::caller_context::{
     CallerChatIdOverride, CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride,
     resolve_cli_mutation_caller_context, resolve_cli_mutation_caller_context_with_overrides,
 };
+use crate::commands::send_to::{land_attachments, resolve_atm_temp_for_cli};
 use crate::commands::sender_roster::unrostered_sender_warning;
 use crate::composition::{
     AtmHomePath, CliComposition, InvocationDir, resolve_command_runtime_context,
@@ -30,8 +38,8 @@ use crate::output;
 )]
 /// Send one ATM mailbox message.
 pub struct SendCommand {
-    #[arg()]
-    to: String,
+    #[arg(required_unless_present = "from_json", conflicts_with = "from_json")]
+    to: Option<String>,
 
     #[arg(index = 2)]
     message: Option<String>,
@@ -55,15 +63,15 @@ pub struct SendCommand {
     #[arg(long = "as")]
     actor: Option<String>,
 
-    #[arg(long)]
+    #[arg(long, conflicts_with = "from_json")]
     file: Option<PathBuf>,
 
-    #[arg(long)]
+    #[arg(long, conflicts_with = "from_json")]
     stdin: bool,
 
     /// Render and send a locally loaded template through the daemon-owned
     /// template admission path.
-    #[arg(long, value_name = "PATH")]
+    #[arg(long, value_name = "PATH", conflicts_with = "from_json")]
     template: Option<PathBuf>,
 
     /// JSON object providing template variables. `-` reads this object from
@@ -78,8 +86,34 @@ pub struct SendCommand {
 
     /// Capture current environment variables with this prefix at CLI
     /// composition time.
-    #[arg(long = "env-prefix", value_name = "PREFIX")]
+    #[arg(
+        long = "env-prefix",
+        value_name = "PREFIX",
+        conflicts_with = "from_json"
+    )]
     env_prefix: Option<String>,
+
+    /// Attach a local file for Send-To delivery (ADR-055). May be repeated.
+    /// A same-host recipient's files are staged under
+    /// `$ATM_TEMP/send-to/<id>/`; a remote recipient's files are routed
+    /// through that host's configured transfer script (see
+    /// `docs/cross-host-file-transfer.md`). The landed path rides in the
+    /// message text; there is no envelope change. Mutually exclusive with
+    /// `--template` (structured template content and free-form attachment
+    /// notes are not composed in this phase).
+    // `pub(super)`: also read directly by `send_fan_out.rs`'s fan-out
+    // send/staging orchestration (a sibling module under `commands`; see
+    // RULE-003 note on `resolve_caller_context`).
+    #[arg(long = "attach", value_name = "PATH", conflicts_with = "template")]
+    pub(super) attach: Vec<PathBuf>,
+
+    /// Read one `PickerOutput` JSON document
+    /// (`{"schema_version":1,"recipients":[...],"note":"..."}`) from stdin
+    /// and send one immutable message per recipient (ADR-055). Mutually
+    /// exclusive with the positional recipient/message text, `--stdin`,
+    /// `--file`, `--template`, and `--env-prefix`.
+    #[arg(long = "from-json")]
+    from_json: bool,
 
     #[arg(long, value_name = "CATEGORY")]
     category: Option<String>,
@@ -94,16 +128,16 @@ pub struct SendCommand {
     summary: Option<String>,
 
     #[arg(long = "requires-ack")]
-    requires_ack: bool,
+    pub(super) requires_ack: bool,
 
     #[arg(long = "task-id")]
-    task_id: Option<TaskId>,
+    pub(super) task_id: Option<TaskId>,
 
     #[arg(long)]
-    dry_run: bool,
+    pub(super) dry_run: bool,
 
     #[arg(long)]
-    json: bool,
+    pub(super) json: bool,
 }
 
 impl SendCommand {
@@ -129,11 +163,42 @@ impl SendCommand {
 
     /// Execute the `atm send` command.
     pub async fn run(self, observability: &CliObservability) -> Result<()> {
-        let (home_dir, current_dir) = resolve_command_runtime_context("send")?;
+        self.run_with_mode(observability, NudgeMode::Immediate)
+            .await
+    }
+
+    /// Execute this shared command surface with an explicit nudge mode.
+    pub(crate) async fn run_with_mode(
+        self,
+        observability: &CliObservability,
+        nudge_mode: NudgeMode,
+    ) -> Result<()> {
+        let command_name = match nudge_mode {
+            NudgeMode::Immediate => "send",
+            NudgeMode::Deferred => "queue",
+        };
+        let (home_dir, current_dir) = resolve_command_runtime_context(command_name)?;
+        if self.from_json {
+            return self
+                .run_from_json(
+                    observability,
+                    nudge_mode,
+                    command_name,
+                    home_dir,
+                    current_dir,
+                )
+                .await;
+        }
         let json = self.json;
-        let request = self.build_request(home_dir.clone(), current_dir.clone())?;
+        let attachment_note = self.land_attach_files_if_any(&current_dir).await?;
+        let request = self.build_request_with_mode(
+            home_dir.clone(),
+            current_dir.clone(),
+            nudge_mode,
+            attachment_note,
+        )?;
         let composition = CliComposition::bootstrap(
-            "send",
+            command_name,
             observability,
             InvocationDir::new(&current_dir),
             AtmHomePath::new(&home_dir),
@@ -149,7 +214,52 @@ impl SendCommand {
         output::print_send_result(&outcome, json)
     }
 
+    /// Lands this invocation's `--attach` files (if any) for the single
+    /// positional recipient, returning the decision-(d) message-text note to
+    /// append. Resolves the recipient's classification independently of
+    /// [`Self::build_request_with_mode`] (a second, cheap roster/peer-store
+    /// read) so attachment landing -- real I/O -- can complete before the
+    /// canonical write request is assembled.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the recipient cannot be resolved, is
+    /// host-qualified with no `local_host` configured (ADR-055 decision (f)),
+    /// or attachment staging/transfer fails.
+    async fn land_attach_files_if_any(
+        &self,
+        current_dir: &std::path::Path,
+    ) -> Result<Option<String>> {
+        if self.attach.is_empty() {
+            return Ok(None);
+        }
+        let caller_context = self.resolve_caller_context()?;
+        let target = self.target_with_explicit_host(&caller_context.caller_team)?;
+        let address: AgentAddress = target.parse()?;
+        let local_host = load_atm_config(current_dir)?.and_then(|config| config.local_host);
+        let locality = classify_recipient_locality(address.host(), local_host.as_ref())
+            .map_err(atm_core::error::AtmError::from)?;
+        let atm_temp = resolve_atm_temp_for_cli()?;
+        let landing =
+            land_attachments(&atm_temp, ulid::Ulid::new(), &locality, &self.attach).await?;
+        Ok(Some(atm_core::send_to::format_attachment_note(
+            &landing.landed_dir,
+            &self.attach,
+        )))
+    }
+
+    #[cfg(test)]
     fn build_request(self, home_dir: PathBuf, current_dir: PathBuf) -> Result<SendRequest> {
+        self.build_request_with_mode(home_dir, current_dir, NudgeMode::Immediate, None)
+    }
+
+    fn build_request_with_mode(
+        self,
+        home_dir: PathBuf,
+        current_dir: PathBuf,
+        nudge_mode: NudgeMode,
+        attachment_note: Option<String>,
+    ) -> Result<SendRequest> {
         let max_message_bytes = load_atm_config(&current_dir)?
             .map(|config| {
                 config.max_message_bytes.as_usize().ok_or_else(|| {
@@ -169,7 +279,8 @@ impl SendCommand {
         };
         let target = self.target_with_explicit_host(&caller_context.caller_team)?;
         let classification = self.build_classification()?;
-        let message_source = self.build_message_source(max_message_bytes, &current_dir)?;
+        let message_source =
+            self.build_message_source(max_message_bytes, &current_dir, attachment_note.as_deref())?;
         SendRequest::new(
             home_dir,
             current_dir,
@@ -188,6 +299,7 @@ impl SendCommand {
                 .with_activity_observation(caller_context.activity_observation)
                 .with_max_message_bytes(max_message_bytes)
                 .with_classification(classification)
+                .with_nudge_mode(nudge_mode)
         })
         .map_err(Into::into)
     }
@@ -206,6 +318,15 @@ impl SendCommand {
         .map_err(Into::into)
     }
 
+    /// Returns the required positional recipient. Only called from the
+    /// ordinary (non-`--from-json`) path, where clap's `required_unless_present`
+    /// guarantees `to` is present.
+    fn to_str(&self) -> &str {
+        self.to
+            .as_deref()
+            .expect("`to` is required unless --from-json is set (clap-enforced)")
+    }
+
     fn requires_peer_authority_lookup(&self, caller_team: &TeamName) -> bool {
         if self
             .host
@@ -215,7 +336,7 @@ impl SendCommand {
             return true;
         }
 
-        let Some((_, destination)) = self.to.trim().split_once('@') else {
+        let Some((_, destination)) = self.to_str().trim().split_once('@') else {
             return false;
         };
         if destination.eq(caller_team.as_str()) {
@@ -243,7 +364,7 @@ impl SendCommand {
         known_teams: &[TeamName],
         peers: &[TrustedPeer],
     ) -> std::result::Result<String, AtmError> {
-        let parsed = CliRecipientInput::parse(&self.to)?;
+        let parsed = CliRecipientInput::parse(self.to_str())?;
         let recipient = resolve_cli_recipient(&parsed, caller_team, known_teams, peers)?;
 
         let explicit_host = self
@@ -257,7 +378,7 @@ impl SendCommand {
 
     fn legacy_target_with_explicit_host(&self, caller_team: &TeamName) -> Result<String> {
         let explicit_host = self.host.as_deref().map(parse_host_input).transpose()?;
-        let recipient: AgentAddress = self.to.parse().map_err(anyhow::Error::from)?;
+        let recipient: AgentAddress = self.to_str().parse().map_err(anyhow::Error::from)?;
 
         merge_recipient_host(recipient, explicit_host, caller_team)
             .map(|target| target.to_string())
@@ -268,6 +389,7 @@ impl SendCommand {
         &self,
         max_message_bytes: usize,
         current_dir: &std::path::Path,
+        attachment_note: Option<&str>,
     ) -> Result<SendMessageSource> {
         if self.template.is_some() && (self.stdin || self.file.is_some() || self.message.is_some())
         {
@@ -306,19 +428,36 @@ impl SendCommand {
         match (&self.file, self.stdin, &self.message) {
             (Some(path), false, message) => Ok(SendMessageSource::File {
                 path: path.clone(),
-                message: message.clone(),
+                message: combine_message_with_attachment_note(message.clone(), attachment_note),
             }),
             // stdin is a CLI-owned input source. Materialize it before
             // bootstrapping the daemon so a wire request can never ask the
             // daemon (whose stdin is intentionally null) to read it.
             (None, true, None) => input::read_message_from_stdin_with_limit(max_message_bytes)
-                .map(SendMessageSource::Inline)
+                .map(|message| {
+                    SendMessageSource::Inline(
+                        combine_message_with_attachment_note(Some(message), attachment_note)
+                            .expect("stdin always supplies message text"),
+                    )
+                })
                 .map_err(Into::into),
-            (None, false, Some(message)) => Ok(SendMessageSource::Inline(message.clone())),
-            (None, false, None) => Err(Self::message_validation_error(
-                "provide message text, --file, or --stdin",
-                "Pass positional message text, `--file <path>`, or `--stdin` before retrying `atm send`.",
+            (None, false, Some(message)) => Ok(SendMessageSource::Inline(
+                combine_message_with_attachment_note(Some(message.clone()), attachment_note)
+                    .expect("positional message text is present"),
             )),
+            (None, false, None) => {
+                if let Some(note) = attachment_note {
+                    // `--attach` alone, with no other message source, is a
+                    // valid Send-To invocation: the decision-(d) note is the
+                    // entire message body.
+                    Ok(SendMessageSource::Inline(note.to_string()))
+                } else {
+                    Err(Self::message_validation_error(
+                        "provide message text, --file, --stdin, or --attach",
+                        "Pass positional message text, `--file <path>`, `--stdin`, or `--attach <path>` before retrying `atm send`.",
+                    ))
+                }
+            }
             (Some(_), true, _) => unreachable!("validated above"),
             (None, true, Some(_)) => unreachable!("validated above"),
         }
@@ -405,6 +544,40 @@ impl SendCommand {
             .as_object()
             .cloned()
             .ok_or_else(|| Self::template_load_error("--vars must contain a JSON object"))
+    }
+
+    /// Resolves the caller's identity/team/chat-id, shared by both the
+    /// ordinary single-recipient path and `--from-json`'s fan-out
+    /// (`send_fan_out.rs`, a sibling module: RULE-003 keeps this file under
+    /// the 1000-non-test-line cap).
+    pub(super) fn resolve_caller_context(&self) -> Result<atm_core::caller_context::CallerContext> {
+        if self.actor.is_some() || self.chat_id.is_some() {
+            resolve_cli_mutation_caller_context_with_overrides(CallerContextOverrides {
+                identity_override: self.actor.as_deref().map(CallerIdentityOverride),
+                chat_id_override: self.chat_id.as_deref().map(CallerChatIdOverride),
+                team_override: self.team.as_deref().map(CallerTeamOverride),
+            })
+            .map_err(Into::into)
+        } else {
+            resolve_cli_mutation_caller_context(self.team.as_deref().map(CallerTeamOverride))
+                .map_err(Into::into)
+        }
+    }
+}
+
+/// Combines optional message text with the decision-(d) attachment note:
+/// both present join with a blank line; either alone passes through
+/// unchanged; neither present is `None`. `pub(super)`: also consumed by
+/// `send_fan_out.rs`'s per-recipient fan-out send.
+pub(super) fn combine_message_with_attachment_note(
+    message: Option<String>,
+    note: Option<&str>,
+) -> Option<String> {
+    match (message, note) {
+        (Some(message), Some(note)) => Some(format!("{message}\n\n{note}")),
+        (Some(message), None) => Some(message),
+        (None, Some(note)) => Some(note.to_string()),
+        (None, None) => None,
     }
 }
 
@@ -784,6 +957,18 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     use super::{SendCommand, resolve_trusted_ipv4_with_lookup};
+    use crate::commands::send_fan_out::fan_out_result_json;
+    // `FanOutRecipient`/`RecipientLocality`/`CliObservability` are consumed
+    // only by the real transfer-script fan-out integration test below,
+    // which is itself `#[cfg(unix)]` (it exercises a `#!/bin/sh` stub
+    // script with no Windows equivalent) -- gating the imports the same
+    // way avoids `unused_imports` on non-unix targets.
+    #[cfg(unix)]
+    use super::RecipientLocality;
+    #[cfg(unix)]
+    use crate::commands::send_fan_out::FanOutRecipient;
+    #[cfg(unix)]
+    use crate::observability::CliObservability;
     use atm_core::roles::ROLE_TEAM_LEAD;
     use atm_core::send::{SendMessageSource, input};
     use atm_core::test_support::{EnvGuard, TEST_SENDER};
@@ -797,7 +982,7 @@ mod tests {
 
     fn send_command(to: &str, host: Option<&str>) -> SendCommand {
         SendCommand {
-            to: to.to_string(),
+            to: Some(to.to_string()),
             message: Some("hello".to_string()),
             team: Some(TEST_TEAM.to_string()),
             host: host.map(str::to_string),
@@ -817,6 +1002,8 @@ mod tests {
             task_id: None,
             dry_run: false,
             json: false,
+            attach: Vec::new(),
+            from_json: false,
         }
     }
 
@@ -1103,11 +1290,106 @@ mod tests {
     }
 
     #[test]
+    fn cli_accepts_from_json_without_a_positional_recipient() {
+        crate::commands::Cli::try_parse_from(["atm", "send", "--from-json"])
+            .expect("--from-json alone must parse without a positional recipient");
+    }
+
+    #[test]
+    fn cli_requires_a_positional_recipient_without_from_json() {
+        crate::commands::Cli::try_parse_from(["atm", "send"])
+            .expect_err("`to` remains required unless --from-json is set");
+    }
+
+    #[test]
+    fn cli_rejects_from_json_combined_with_a_positional_recipient() {
+        crate::commands::Cli::try_parse_from([
+            "atm",
+            "send",
+            "recipient-a@test-team",
+            "--from-json",
+        ])
+        .expect_err("--from-json conflicts with the positional recipient (M13)");
+    }
+
+    #[test]
+    fn cli_rejects_from_json_combined_with_stdin() {
+        crate::commands::Cli::try_parse_from(["atm", "send", "--from-json", "--stdin"])
+            .expect_err("--from-json conflicts with --stdin (M13)");
+    }
+
+    #[test]
+    fn cli_rejects_from_json_combined_with_file() {
+        crate::commands::Cli::try_parse_from(["atm", "send", "--from-json", "--file", "note.md"])
+            .expect_err("--from-json conflicts with --file (M13)");
+    }
+
+    #[test]
+    fn cli_rejects_from_json_combined_with_template() {
+        crate::commands::Cli::try_parse_from([
+            "atm",
+            "send",
+            "--from-json",
+            "--template",
+            "notice.j2",
+        ])
+        .expect_err("--from-json conflicts with --template (M13)");
+    }
+
+    #[test]
+    fn cli_rejects_from_json_combined_with_env_prefix() {
+        crate::commands::Cli::try_parse_from([
+            "atm",
+            "send",
+            "--from-json",
+            "--env-prefix",
+            "ATM_",
+        ])
+        .expect_err("--from-json conflicts with --env-prefix (M13)");
+    }
+
+    #[test]
+    fn cli_accepts_repeated_attach_flags() {
+        let parsed = crate::commands::Cli::try_parse_from([
+            "atm",
+            "send",
+            "recipient-a@test-team",
+            "hello",
+            "--attach",
+            "report.pdf",
+            "--attach",
+            "notes.txt",
+        ])
+        .expect("--attach must be repeatable");
+        let crate::commands::Command::Send(command) = parsed.command else {
+            panic!("expected the send subcommand");
+        };
+        assert_eq!(
+            command.attach,
+            vec![PathBuf::from("report.pdf"), PathBuf::from("notes.txt")]
+        );
+    }
+
+    #[test]
+    fn cli_rejects_attach_combined_with_template() {
+        crate::commands::Cli::try_parse_from([
+            "atm",
+            "send",
+            "recipient-a@test-team",
+            "--attach",
+            "report.pdf",
+            "--template",
+            "notice.j2",
+        ])
+        .expect_err("--attach conflicts with --template");
+    }
+
+    #[test]
     #[serial(env)]
     fn build_request_rejects_invalid_target_before_core() {
         let _env = EnvGuard::set_many([("ATM_IDENTITY", Some(ROLE_TEAM_LEAD))]);
         let command = SendCommand {
-            to: "../evil".to_string(),
+            to: Some("../evil".to_string()),
             message: Some("hello".to_string()),
             team: Some(TEST_TEAM.to_string()),
             host: None,
@@ -1127,6 +1409,8 @@ mod tests {
             task_id: None,
             dry_run: false,
             json: false,
+            attach: Vec::new(),
+            from_json: false,
         };
 
         let error = command
@@ -1139,7 +1423,7 @@ mod tests {
     #[test]
     fn validation_errors_retain_their_actionable_recovery() {
         let command = SendCommand {
-            to: "recipient@test-team".to_string(),
+            to: Some("recipient@test-team".to_string()),
             message: Some("hello".to_string()),
             team: None,
             host: None,
@@ -1159,11 +1443,14 @@ mod tests {
             task_id: None,
             dry_run: false,
             json: false,
+            attach: Vec::new(),
+            from_json: false,
         };
         let error = command
             .build_message_source(
                 input::default_message_max_bytes(),
                 std::path::Path::new("."),
+                None,
             )
             .expect_err("invalid sources");
         assert!(
@@ -1176,7 +1463,7 @@ mod tests {
     #[test]
     fn build_message_source_rejects_conflicting_input_flags() {
         let stdin_and_file = SendCommand {
-            to: "recipient-a@test-team".to_string(),
+            to: Some("recipient-a@test-team".to_string()),
             message: None,
             team: None,
             host: None,
@@ -1196,9 +1483,11 @@ mod tests {
             task_id: None,
             dry_run: false,
             json: false,
+            attach: Vec::new(),
+            from_json: false,
         };
         let stdin_and_message = SendCommand {
-            to: "recipient-a@test-team".to_string(),
+            to: Some("recipient-a@test-team".to_string()),
             message: Some("hello".to_string()),
             team: None,
             host: None,
@@ -1218,18 +1507,22 @@ mod tests {
             task_id: None,
             dry_run: false,
             json: false,
+            attach: Vec::new(),
+            from_json: false,
         };
 
         let file_error = stdin_and_file
             .build_message_source(
                 input::default_message_max_bytes(),
                 std::path::Path::new("."),
+                None,
             )
             .expect_err("stdin/file conflict");
         let message_error = stdin_and_message
             .build_message_source(
                 input::default_message_max_bytes(),
                 std::path::Path::new("."),
+                None,
             )
             .expect_err("stdin/message conflict");
 
@@ -1244,7 +1537,7 @@ mod tests {
     #[test]
     fn build_message_source_requires_one_input_channel() {
         let command = SendCommand {
-            to: "recipient-a@test-team".to_string(),
+            to: Some("recipient-a@test-team".to_string()),
             message: None,
             team: None,
             host: None,
@@ -1264,17 +1557,20 @@ mod tests {
             task_id: None,
             dry_run: false,
             json: false,
+            attach: Vec::new(),
+            from_json: false,
         };
 
         let error = command
             .build_message_source(
                 input::default_message_max_bytes(),
                 std::path::Path::new("."),
+                None,
             )
             .expect_err("missing message");
 
         assert!(error.to_string().contains(
-            "Pass positional message text, `--file <path>`, or `--stdin` before retrying `atm send`."
+            "Pass positional message text, `--file <path>`, `--stdin`, or `--attach <path>` before retrying `atm send`."
         ));
     }
 
@@ -1293,7 +1589,7 @@ mod tests {
         command.var = vec!["name=Rand".to_string()];
 
         let source = command
-            .build_message_source(input::default_message_max_bytes(), tempdir.path())
+            .build_message_source(input::default_message_max_bytes(), tempdir.path(), None)
             .expect("template source");
 
         let SendMessageSource::Template(source) = source else {
@@ -1314,7 +1610,7 @@ mod tests {
         let mut conflict = send_command("recipient-a@test-team", None);
         conflict.template = Some(PathBuf::from("notice.j2"));
         let error = conflict
-            .build_message_source(input::default_message_max_bytes(), Path::new("."))
+            .build_message_source(input::default_message_max_bytes(), Path::new("."), None)
             .expect_err("template and positional message conflict");
         assert!(
             error
@@ -1331,6 +1627,109 @@ mod tests {
             error.code(),
             atm_core::error::AtmErrorCode::TemplateClassificationInvalid
         );
+    }
+
+    // -- decision-(d) attachment-note composition (AC2: "message text names
+    // the landed path") --
+
+    #[test]
+    fn combine_message_with_attachment_note_joins_both_when_present() {
+        let combined = super::combine_message_with_attachment_note(
+            Some("hello".to_string()),
+            Some("Attached files (on this host):\n- /tmp/report.pdf"),
+        );
+        assert_eq!(
+            combined.as_deref(),
+            Some("hello\n\nAttached files (on this host):\n- /tmp/report.pdf")
+        );
+    }
+
+    #[test]
+    fn combine_message_with_attachment_note_passes_through_message_alone() {
+        assert_eq!(
+            super::combine_message_with_attachment_note(Some("hello".to_string()), None).as_deref(),
+            Some("hello")
+        );
+    }
+
+    #[test]
+    fn combine_message_with_attachment_note_passes_through_note_alone() {
+        assert_eq!(
+            super::combine_message_with_attachment_note(None, Some("note text")).as_deref(),
+            Some("note text")
+        );
+    }
+
+    #[test]
+    fn combine_message_with_attachment_note_is_none_when_both_absent() {
+        assert_eq!(
+            super::combine_message_with_attachment_note(None, None),
+            None
+        );
+    }
+
+    #[test]
+    fn build_message_source_uses_the_attachment_note_alone_when_no_other_source_given() {
+        let mut command = send_command("recipient-a@test-team", None);
+        command.message = None;
+        let source = command
+            .build_message_source(
+                input::default_message_max_bytes(),
+                Path::new("."),
+                Some("Attached files (on this host):\n- /tmp/report.pdf"),
+            )
+            .expect("--attach alone is a valid message source");
+        match source {
+            SendMessageSource::Inline(text) => {
+                assert_eq!(text, "Attached files (on this host):\n- /tmp/report.pdf");
+            }
+            other => panic!("expected inline message source, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn build_message_source_appends_the_attachment_note_to_positional_text() {
+        let command = send_command("recipient-a@test-team", None);
+        let source = command
+            .build_message_source(
+                input::default_message_max_bytes(),
+                Path::new("."),
+                Some("Attached files (on this host):\n- /tmp/report.pdf"),
+            )
+            .expect("attach note combines with positional text");
+        match source {
+            SendMessageSource::Inline(text) => {
+                assert_eq!(
+                    text,
+                    "hello\n\nAttached files (on this host):\n- /tmp/report.pdf"
+                );
+            }
+            other => panic!("expected inline message source, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn build_message_source_appends_the_attachment_note_to_file_message() {
+        let mut command = send_command("recipient-a@test-team", None);
+        command.message = None;
+        command.file = Some(PathBuf::from("incident.md"));
+        let source = command
+            .build_message_source(
+                input::default_message_max_bytes(),
+                Path::new("."),
+                Some("Attached files (on this host):\n- /tmp/report.pdf"),
+            )
+            .expect("attach note combines with a --file source's optional note");
+        match source {
+            SendMessageSource::File { path, message } => {
+                assert_eq!(path, PathBuf::from("incident.md"));
+                assert_eq!(
+                    message.as_deref(),
+                    Some("Attached files (on this host):\n- /tmp/report.pdf")
+                );
+            }
+            other => panic!("expected file message source, got {other:?}"),
+        }
     }
 
     #[test]
@@ -1368,7 +1767,7 @@ mod tests {
             ("ATM_TEAM", Some(TEST_TEAM)),
         ]);
         let command = SendCommand {
-            to: "recipient-a@test-team".to_string(),
+            to: Some("recipient-a@test-team".to_string()),
             message: Some("hello from send".to_string()),
             team: Some(TEST_TEAM.to_string()),
             host: None,
@@ -1388,6 +1787,8 @@ mod tests {
             task_id: Some("TASK-42".parse().expect("task id")),
             dry_run: true,
             json: true,
+            attach: Vec::new(),
+            from_json: false,
         };
         let tempdir = TempDir::new().expect("tempdir");
 
@@ -1422,7 +1823,7 @@ mod tests {
             ("ATM_TEAM", Some(TEST_TEAM)),
         ]);
         let command = SendCommand {
-            to: "recipient-a@test-team".to_string(),
+            to: Some("recipient-a@test-team".to_string()),
             message: Some("hello".to_string()),
             team: None,
             host: None,
@@ -1442,6 +1843,8 @@ mod tests {
             task_id: None,
             dry_run: false,
             json: false,
+            attach: Vec::new(),
+            from_json: false,
         };
 
         let request = command
@@ -1460,7 +1863,7 @@ mod tests {
             ("ATM_TEAM", Some(TEST_TEAM)),
         ]);
         let base = SendCommand {
-            to: "recipient-a@test-team".to_string(),
+            to: Some("recipient-a@test-team".to_string()),
             message: Some("hello".to_string()),
             team: None,
             host: None,
@@ -1480,6 +1883,8 @@ mod tests {
             task_id: None,
             dry_run: false,
             json: false,
+            attach: Vec::new(),
+            from_json: false,
         };
         let explicit = SendCommand {
             chat_id: None,
@@ -1488,7 +1893,7 @@ mod tests {
         };
 
         let shorthand = SendCommand {
-            to: "recipient-a@test-team".to_string(),
+            to: Some("recipient-a@test-team".to_string()),
             message: Some("hello".to_string()),
             team: None,
             host: None,
@@ -1508,6 +1913,8 @@ mod tests {
             task_id: None,
             dry_run: false,
             json: false,
+            attach: Vec::new(),
+            from_json: false,
         }
         .build_request(".".into(), ".".into())
         .expect("shorthand request");
@@ -1528,7 +1935,7 @@ mod tests {
             ("ATM_TEAM", Some(TEST_TEAM)),
         ]);
         let command = SendCommand {
-            to: "recipient-a@test-team".to_string(),
+            to: Some("recipient-a@test-team".to_string()),
             message: Some("hello".to_string()),
             team: None,
             host: None,
@@ -1548,6 +1955,8 @@ mod tests {
             task_id: None,
             dry_run: false,
             json: false,
+            attach: Vec::new(),
+            from_json: false,
         };
 
         let error = command
@@ -1564,7 +1973,7 @@ mod tests {
             ("ATM_TEAM", Some("env-team")),
         ]);
         let command = SendCommand {
-            to: "recipient-a@test-team".to_string(),
+            to: Some("recipient-a@test-team".to_string()),
             message: Some("hello".to_string()),
             team: Some(TEST_TEAM.to_string()),
             host: None,
@@ -1584,6 +1993,8 @@ mod tests {
             task_id: None,
             dry_run: false,
             json: false,
+            attach: Vec::new(),
+            from_json: false,
         };
 
         let request = command
@@ -1599,7 +2010,7 @@ mod tests {
     fn build_request_supports_file_with_trailing_inline_note() {
         let _env = EnvGuard::set_many([("ATM_IDENTITY", Some(ROLE_TEAM_LEAD))]);
         let command = SendCommand {
-            to: "recipient-a@test-team".to_string(),
+            to: Some("recipient-a@test-team".to_string()),
             message: Some("note".to_string()),
             team: Some(TEST_TEAM.to_string()),
             host: None,
@@ -1619,6 +2030,8 @@ mod tests {
             task_id: None,
             dry_run: false,
             json: false,
+            attach: Vec::new(),
+            from_json: false,
         };
         let tempdir = TempDir::new().expect("tempdir");
 
@@ -1633,5 +2046,318 @@ mod tests {
             }
             other => panic!("expected file message source, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn fan_out_result_json_reports_delivered_and_not_delivered_by_recipient_id() {
+        let report = fan_out_result_json(
+            &["a@team".to_string(), "b@team".to_string()],
+            &["c@team".to_string()],
+        );
+        assert_eq!(
+            report,
+            serde_json::json!({
+                "delivered": ["a@team", "b@team"],
+                "not_delivered": ["c@team"],
+            })
+        );
+    }
+
+    // -- `--from-json` multi-recipient fan-out integration test (decision
+    // (g)): a real, storage-backed `CliComposition::send` (no live daemon
+    // process) with mid-batch failure. --
+
+    /// Minimal roster/team fixture for the fan-out integration test, mirrors
+    /// `crate::composition::tests::LoopbackFixture`'s seeding shape (that
+    /// fixture is private to `composition.rs`'s own test module and cannot
+    /// be reused directly from this sibling module). Unix-only: its sole
+    /// consumer, the fan-out integration test below, exercises a real
+    /// `#!/bin/sh` transfer-script invocation with no Windows equivalent --
+    /// gating the fixture itself (not just that test) avoids `dead_code` on
+    /// non-unix targets.
+    #[cfg(unix)]
+    #[allow(
+        deprecated,
+        reason = "test fixture calls the retained atm-core roster/mail store boundary directly, matching crate::composition::tests::LoopbackFixture's own precedent"
+    )]
+    struct FanOutFixture {
+        _env_guard: EnvGuard,
+        _runtime_guard: atm_runtime_test_support::SqliteRuntimeGuard,
+        _tempdir: TempDir,
+        home_dir: PathBuf,
+        current_dir: PathBuf,
+    }
+
+    #[cfg(unix)]
+    #[allow(
+        deprecated,
+        reason = "test fixture calls the retained atm-core roster/mail store boundary directly, matching crate::composition::tests::LoopbackFixture's own precedent"
+    )]
+    impl FanOutFixture {
+        fn new(recipients: &[&str]) -> Self {
+            let tempdir = TempDir::new().expect("tempdir");
+            let home_dir = tempdir.path().to_path_buf();
+            let current_dir = tempdir.path().join("cwd");
+            std::fs::create_dir_all(&current_dir).expect("cwd");
+            std::fs::write(
+                current_dir.join(".atm.toml"),
+                "[atm]
+",
+            )
+            .expect("fixture atm config");
+            let env_guard = EnvGuard::set_many([
+                (
+                    "ATM_HOME",
+                    Some(home_dir.to_str().expect("utf8 tempdir path")),
+                ),
+                ("HOME", Some(home_dir.to_str().expect("utf8 tempdir path"))),
+            ]);
+            let runtime_guard =
+                atm_runtime_test_support::install_isolated_sqlite_runtime(&home_dir);
+
+            let team_dir = home_dir.join(".claude").join("teams").join(TEST_TEAM);
+            std::fs::create_dir_all(team_dir.join("inboxes")).expect("inboxes dir");
+            let mut members = vec![atm_core::schema::AgentMember::with_name(
+                TEST_SENDER.parse().expect("sender"),
+            )];
+            for recipient in recipients {
+                members.push(atm_core::schema::AgentMember::with_name(
+                    recipient.parse().expect("recipient"),
+                ));
+            }
+            let config = atm_core::schema::TeamConfig {
+                members,
+                ..Default::default()
+            };
+            std::fs::write(
+                team_dir.join("config.json"),
+                serde_json::to_vec(&config).expect("team config"),
+            )
+            .expect("write team config");
+
+            let team: TeamName = TEST_TEAM.parse().expect("team");
+            let assembly = atm_runtime_test_support::open_isolated_sqlite_boundary(&home_dir)
+                .expect("sqlite db");
+            let roster_store = assembly.roster_store_arc();
+            let mut roster_members = vec![Self::roster_entry(&team, TEST_SENDER)];
+            for recipient in recipients {
+                roster_members.push(Self::roster_entry(&team, recipient));
+            }
+            roster_store
+                .replace_roster(&team, &roster_members)
+                .expect("seed roster");
+
+            Self {
+                _env_guard: env_guard,
+                _runtime_guard: runtime_guard,
+                _tempdir: tempdir,
+                home_dir,
+                current_dir,
+            }
+        }
+
+        fn roster_entry(team: &TeamName, agent: &str) -> atm_core::boundary::RosterEntry {
+            atm_core::boundary::RosterEntry {
+                team_name: team.clone(),
+                agent_name: agent.parse().expect("agent"),
+                member_kind: atm_core::boundary::RosterMemberKind::Permanent,
+                harness: atm_core::boundary::RosterHarness::ClaudeCode,
+                agent_type: atm_core::schema::AgentType::default(),
+                model: atm_core::types::ModelName::default(),
+                recipient_pane_id: None,
+                metadata_json: serde_json::Map::new(),
+            }
+        }
+
+        /// Writes a real, owner-secured `~/.atm/transfer/<host>` stub script
+        /// (under this fixture's `HOME` override) that stages `attach_name`
+        /// into a real directory and prints it on stdout -- exercising the
+        /// production `resolve_transfer_script`/`invoke_transfer_script`
+        /// path exactly as a real cross-host transfer would. Unix-only: the
+        /// stub script is a `#!/bin/sh` script invoked directly, which has
+        /// no Windows equivalent (see the paired `#[cfg(unix)]` test below).
+        #[cfg(unix)]
+        fn write_remote_transfer_script(&self, host: &str, attach_name: &str) -> PathBuf {
+            use std::os::unix::fs::PermissionsExt;
+
+            let transfer_root = self.home_dir.join(".atm").join("transfer");
+            std::fs::create_dir_all(&transfer_root).expect("transfer root");
+            std::fs::set_permissions(&transfer_root, std::fs::Permissions::from_mode(0o700))
+                .expect("secure transfer root");
+            let landed_dir = self.home_dir.join("remote-landed");
+            std::fs::create_dir_all(&landed_dir).expect("landed dir");
+            let script_path = transfer_root.join(host);
+            let script_body = format!(
+                "#!/bin/sh\ncp \"$3\" {}/{attach_name}\necho {}\n",
+                landed_dir.display(),
+                landed_dir.display()
+            );
+            std::fs::write(&script_path, script_body).expect("write stub script");
+            std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o700))
+                .expect("chmod stub script");
+            landed_dir
+        }
+
+        fn write_attach_file(&self, name: &str, contents: &[u8]) -> PathBuf {
+            let path = self._tempdir.path().join(name);
+            std::fs::write(&path, contents).expect("write attach source");
+            path
+        }
+
+        fn inbox_contains(&self, agent: &str, text_fragment: &str) -> bool {
+            let assembly = atm_runtime_test_support::open_isolated_sqlite_boundary(&self.home_dir)
+                .expect("sqlite db");
+            let mail_store = assembly.mail_store_arc();
+            let team: TeamName = TEST_TEAM.parse().expect("team");
+            let agent_name: atm_core::types::AgentName = agent.parse().expect("agent");
+            let rows = mail_store
+                .query_mailbox_metadata(&team, &agent_name, None)
+                .expect("mailbox rows");
+            rows.into_iter().any(|row| {
+                mail_store
+                    .load_message(&team, &agent_name, &row.message_key)
+                    .expect("message record")
+                    .is_some_and(|message| message.envelope.text.contains(text_fragment))
+            })
+        }
+    }
+
+    /// Decision (g): a transfer or send failure for recipient N aborts every
+    /// remaining not-yet-attempted recipient. Recipient 1 (remote, real
+    /// transfer-script invocation) is delivered; recipient 2 is a
+    /// same-host, self-addressed recipient that the canonical writer's
+    /// self-send guard always rejects (a deterministic, real send-layer
+    /// failure -- not a stub); recipient 3 is never attempted. Remote
+    /// staged bytes from recipient 1's successful transfer are asserted to
+    /// still exist afterward: this sprint ships no rollback machinery.
+    /// Unix-only: exercises a real `#!/bin/sh` transfer-script invocation
+    /// via [`FanOutFixture::write_remote_transfer_script`], which has no
+    /// Windows equivalent.
+    #[cfg(unix)]
+    #[tokio::test]
+    #[serial(env)]
+    async fn from_json_fan_out_aborts_remaining_recipients_after_a_mid_batch_failure() {
+        let fixture = FanOutFixture::new(&["remote-recipient", "never-recipient"]);
+        let landed_dir = fixture.write_remote_transfer_script("stub-host", "report.pdf");
+        let attach_file = fixture.write_attach_file("report.pdf", b"pdf-bytes");
+
+        let composition_observability = CliObservability::fallback();
+        let transport =
+            std::sync::Arc::new(atm_core::transport::testing::LoopbackClientTransport::new(
+                std::sync::Arc::new(atm_core::observability::NullObservability),
+            ));
+        let composition = crate::composition::CliComposition::from_loopback_transport(
+            transport,
+            &composition_observability,
+        );
+
+        let caller_context = atm_core::caller_context::CallerContext {
+            caller_identity: TEST_SENDER.parse().expect("caller"),
+            caller_chat_id: None,
+            caller_team: TEST_TEAM.parse().expect("team"),
+            activity_observation: None,
+        };
+
+        let remote_address: atm_core::address::AgentAddress =
+            format!("remote-recipient@{TEST_TEAM}.stub-host")
+                .parse()
+                .expect("remote address");
+        let self_address: atm_core::address::AgentAddress = format!("{TEST_SENDER}@{TEST_TEAM}")
+            .parse()
+            .expect("self address");
+        let never_address: atm_core::address::AgentAddress = format!("never-recipient@{TEST_TEAM}")
+            .parse()
+            .expect("never address");
+
+        let recipients = vec![
+            FanOutRecipient {
+                member_id: format!("remote-recipient@{TEST_TEAM}"),
+                address: remote_address,
+                locality: RecipientLocality::Remote("stub-host".parse().expect("host")),
+            },
+            FanOutRecipient {
+                member_id: format!("{TEST_SENDER}@{TEST_TEAM}"),
+                address: self_address,
+                locality: RecipientLocality::SameHost,
+            },
+            FanOutRecipient {
+                member_id: format!("never-recipient@{TEST_TEAM}"),
+                address: never_address,
+                locality: RecipientLocality::SameHost,
+            },
+        ];
+
+        let mut command = send_command("placeholder@test-team", None);
+        command.attach = vec![attach_file];
+        let picker_output = atm_core::send_to::PickerOutput {
+            schema_version: 1,
+            recipients: Vec::new(),
+            note: Some("fan-out test".to_string()),
+        };
+        let env = std::collections::HashMap::from([(
+            "ATM_TEMP",
+            fixture
+                .home_dir
+                .join("atm-temp")
+                .to_str()
+                .expect("utf8")
+                .to_string(),
+        )]);
+        struct FixedEnvSource(std::collections::HashMap<&'static str, String>);
+        impl atm_core::atm_temp::EnvSource for FixedEnvSource {
+            fn var(&self, key: &str) -> Option<String> {
+                self.0.get(key).cloned()
+            }
+        }
+        let atm_temp =
+            atm_core::atm_temp::resolve_atm_temp(&FixedEnvSource(env)).expect("atm_temp resolves");
+
+        let (delivered, not_delivered, failure) = command
+            .send_fan_out_recipients(
+                &recipients,
+                &picker_output,
+                &composition,
+                &fixture.current_dir,
+                fixture.home_dir.clone(),
+                atm_core::send::NudgeMode::Immediate,
+                Some(&atm_temp),
+                &caller_context,
+            )
+            .await;
+
+        assert_eq!(delivered, vec![format!("remote-recipient@{TEST_TEAM}")]);
+        assert_eq!(
+            not_delivered,
+            vec![
+                format!("{TEST_SENDER}@{TEST_TEAM}"),
+                format!("never-recipient@{TEST_TEAM}"),
+            ]
+        );
+        assert!(
+            failure.is_some(),
+            "recipient 2's self-send must abort the batch"
+        );
+        assert!(
+            landed_dir.join("report.pdf").exists(),
+            "remote staged bytes must be left in place after the aborted batch (no rollback)"
+        );
+        assert!(
+            fixture.inbox_contains("remote-recipient", "fan-out test"),
+            "recipient 1 must have actually received its message"
+        );
+
+        // The same delivered/not-delivered lists this test already asserted
+        // are exactly what --json would have printed on stderr (decision
+        // (g)'s partial report).
+        assert_eq!(
+            fan_out_result_json(&delivered, &not_delivered),
+            serde_json::json!({
+                "delivered": [format!("remote-recipient@{TEST_TEAM}")],
+                "not_delivered": [
+                    format!("{TEST_SENDER}@{TEST_TEAM}"),
+                    format!("never-recipient@{TEST_TEAM}"),
+                ],
+            })
+        );
     }
 }

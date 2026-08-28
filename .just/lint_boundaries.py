@@ -11,6 +11,7 @@ import sys
 from lint_common import build_report
 from lint_common import discover_repo_root
 from lint_common import is_comment_line
+from lint_common import is_rust_test_cfg_attribute
 from lint_common import load_lint_config
 from lint_common import monotonic_now
 from lint_common import print_report
@@ -65,6 +66,8 @@ FORBIDDEN_EDGE_RE = re.compile(
 PUBLIC_TYPE_TEMPLATE = r"^\s*pub(?:\([^)]*\))?\s+(?:struct|enum|type)\s+{name}\b"
 PUBLIC_REEXPORT_TEMPLATE = r"^\s*pub(?:\([^)]*\))?\s+use\b.*\b{name}\b"
 PUBLIC_FUNCTION_RE = re.compile(r"^\s*pub(?:\([^)]*\))?\s+fn\s+[A-Za-z_][A-Za-z0-9_]*\b")
+MOD_BLOCK_OPEN_RE = re.compile(r"^(?:pub(?:\([^)]*\))?\s+)?mod\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{")
+MOD_FILE_DECL_RE = re.compile(r"^(?:pub(?:\([^)]*\))?\s+)?mod\s+([A-Za-z_][A-Za-z0-9_]*)\s*;$")
 
 # ``ownership.io_forbidden`` is a source-level policy, not merely metadata.
 # Keep the vocabulary explicit so adding a new tag cannot silently create an
@@ -72,6 +75,7 @@ PUBLIC_FUNCTION_RE = re.compile(r"^\s*pub(?:\([^)]*\))?\s+fn\s+[A-Za-z_][A-Za-z0
 # concrete implementation modules below; they are not searched through the
 # entire owner crate (which would conflate sibling boundaries).
 IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
+    "shell_interpolation": (r"\$\([^\n]+\)", r"`[^`\n]+`"),
     "ambient_singleton_lookup": (
         r"\bdefault_runtime\s*\(",
         r"\bget_default_runtime\s*\(",
@@ -213,6 +217,7 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
     "template_rendering": (r"\btemplate_rendering\b", r"\b(?:render|render_template)\s*\(", r"\bTemplateRenderer\b"),
     "tls_handshake": (r"\b(?:rustls|native_tls)::", r"\b(?:Client|Server)Connection\b", r"\b(?:tls|TLS)[^\n]*handshake\b"),
     "tmux_nudge_delivery": (r"\btmux_nudge_delivery\b", r"\btmux[^\n]*nudge\b", r"\b(?:send|emit)_tmux_nudge\s*\("),
+    "tmux_send_keys": (r"\btmux[^\n]*send-keys\b", r"\btmux[^\n]*send_keys\b"),
     "transport_dispatch": (r"\btransport_dispatch\b", r"\bdispatch_transport\s*\(", r"\bTransportDispatcher\b"),
     "transport": (
         r"\b(?:Tcp|Udp|Unix)(?:Stream|Listener|Socket)\b",
@@ -1585,6 +1590,22 @@ def source_files_for_crate(info: ManifestInfo) -> list[Path]:
     return sorted(crate_root.glob("**/*.rs"))
 
 
+def test_source_files_for_crate(info: ManifestInfo) -> list[Path]:
+    """Return every dev-only integration-test source file under `info`'s `tests/`.
+
+    A sealed trait's boundary is not limited to a crate's `src/`: an
+    integration test in any workspace crate's `tests/` directory can still
+    provide an `impl Trait for SomeDouble` test double. Those files never
+    ship in a release build, but they are real implementations that a
+    `testing.allowed_test_double_paths` allowlist must be able to name and
+    the boundary lint must be able to see.
+    """
+    tests_root = info.path.parent / "tests"
+    if not tests_root.exists():
+        return []
+    return sorted(tests_root.glob("**/*.rs"))
+
+
 def dedupe_violations(violations: list[BoundaryViolation]) -> list[BoundaryViolation]:
     unique: dict[tuple[str, str], BoundaryViolation] = {}
     for violation in violations:
@@ -2099,44 +2120,89 @@ def source_module_path(info: ManifestInfo, source_path: Path) -> str:
     return "::".join(("crate", *parts))
 
 
-def find_trait_only_test_double_violations(
-    record: BoundaryRecord,
-    owner_info: ManifestInfo,
-    source_path: Path,
-    repo_root: Path,
-) -> list[BoundaryViolation]:
-    """Require every owner-crate trait-only implementation to be an approved double.
+def test_module_path(info: ManifestInfo, source_path: Path) -> str:
+    """Return the module path an integration-test source file is addressed by.
 
-    A trait-only boundary that declares approved test doubles must name every
-    owner-crate implementation in ``testing.allowed_test_double_paths``. Keeping
-    this check in the generic boundary linter prevents a second ad-hoc test
-    emitter from silently bypassing the boundary manifest. Empty allowlists keep
-    legacy trait-only records observational until their test-double policy is
-    explicitly declared.
+    Each top-level file under `tests/` compiles as its own crate root, so it
+    is addressed from outside the crate as `<crate_path_name>::tests::<file>`
+    rather than the `crate::…` convention `src/` files use. This mirrors the
+    `<crate>::tests::<file_stem>::<Type>` shape boundary manifests use for
+    `testing.allowed_test_double_paths` entries naming a consumer crate's test
+    double (e.g. `atm_core::tests::nudge_mode::RecordingPendingNudgeStore`).
     """
 
-    if record.public_trait is None:
-        return []
-    trait_pattern = re.compile(
+    relative = source_path.relative_to(info.path.parent / "tests")
+    parts = list(relative.with_suffix("").parts)
+    if parts and parts[-1] in {"main", "mod"}:
+        parts.pop()
+    return "::".join((info.crate_path_name, "tests", *parts))
+
+
+def is_inside_string_literal(line: str, match_start: int) -> bool:
+    """Return whether `match_start` in `line` sits inside a `"…"` literal.
+
+    Counts unescaped double quotes preceding `match_start`; an odd count means
+    the position is inside an open string literal.
+    """
+
+    quote_count = 0
+    escaped = False
+    for character in line[:match_start]:
+        if escaped:
+            escaped = False
+            continue
+        if character == "\\":
+            escaped = True
+            continue
+        if character == '"':
+            quote_count += 1
+    return quote_count % 2 == 1
+
+
+def _trait_impl_pattern(public_trait: str) -> re.Pattern[str]:
+    return re.compile(
         rf"\bimpl(?:<[^>]+>)?\s+(?:[A-Za-z_][A-Za-z0-9_:]*::)?"
-        rf"{re.escape(record.public_trait)}(?:<[^>]+>)?\s+for\s+([A-Za-z_][A-Za-z0-9_]*)"
+        rf"{re.escape(public_trait)}(?:<[^>]+>)?\s+for\s+([A-Za-z_][A-Za-z0-9_]*)"
     )
-    module_path = source_module_path(owner_info, source_path)
+
+
+def _scan_lines_for_trait_impl_violations(
+    *,
+    record: BoundaryRecord,
+    trait_pattern: re.Pattern[str],
+    module_path: str,
+    rel_source: str,
+    lines: list[str],
+    line_offset: int = 0,
+) -> list[BoundaryViolation]:
+    """Scan `lines` (already sliced to the region under consideration) for
+    unapproved implementations of `record.public_trait`.
+
+    `line_offset` is the 0-based index of `lines[0]` within the original
+    file, so reported line numbers stay accurate when scanning a slice
+    (e.g. an inline `#[cfg(test)] mod { .. }` block) rather than a whole file.
+    """
+
     allowed_paths = set(record.allowed_test_double_paths)
     violations: list[BoundaryViolation] = []
-    rel_source = source_path.relative_to(repo_root).as_posix()
-    for line_number, line in enumerate(source_path.read_text(encoding="utf-8").splitlines(), start=1):
+    for offset, line in enumerate(lines):
         if is_comment_line(line):
             continue
         match = trait_pattern.search(line)
         if match is None:
+            continue
+        if is_inside_string_literal(line, match.start()):
+            # Architecture/boundary tests commonly assert against source text
+            # via string literals, e.g.
+            # `source.contains("impl Foo for Bar")`. That inert literal is not
+            # a real implementation and must not be mistaken for one.
             continue
         implementation_path = f"{module_path}::{match.group(1)}"
         if implementation_path in allowed_paths:
             continue
         violations.append(
             BoundaryViolation(
-                f"{rel_source}:{line_number}",
+                f"{rel_source}:{line_offset + offset + 1}",
                 f"{record.boundary_id} trait-only implementation {implementation_path!r} "
                 "is not listed in testing.allowed_test_double_paths",
             )
@@ -2144,20 +2210,228 @@ def find_trait_only_test_double_violations(
     return violations
 
 
+def find_trait_only_test_double_violations(
+    record: BoundaryRecord,
+    module_path: str,
+    source_path: Path,
+    repo_root: Path,
+) -> list[BoundaryViolation]:
+    """Require every trait-only implementation to be an approved test double.
+
+    A trait-only boundary that declares approved test doubles must name every
+    implementation reachable from the owner crate's `src/` *and* every
+    workspace crate's `tests/` directory in ``testing.allowed_test_double_paths``.
+    Keeping this check in the generic boundary linter prevents a second ad-hoc
+    test emitter — in production code or in a consumer crate's integration
+    tests — from silently bypassing the boundary manifest. Empty allowlists
+    keep legacy trait-only records observational until their test-double
+    policy is explicitly declared.
+    """
+
+    if record.public_trait is None:
+        return []
+    rel_source = source_path.relative_to(repo_root).as_posix()
+    lines = source_path.read_text(encoding="utf-8").splitlines()
+    return _scan_lines_for_trait_impl_violations(
+        record=record,
+        trait_pattern=_trait_impl_pattern(record.public_trait),
+        module_path=module_path,
+        rel_source=rel_source,
+        lines=lines,
+    )
+
+
+def crate_qualified_module_path(info: ManifestInfo, source_path: Path) -> str:
+    """Return the module path a `src/` file is addressed by from *outside* its crate.
+
+    Mirrors `source_module_path`'s directory-derived path but replaces the
+    intra-crate `crate::` prefix with the crate's own path name (e.g.
+    `atm_core::…`), matching the `<crate>::<module path>` convention
+    `testing.allowed_test_double_paths` manifest entries use to name a
+    `#[cfg(test)]` test double declared in another workspace crate's `src/`
+    (e.g. `atm_core::ack::admission_tests::EmptyGraftReceiverStore`).
+    """
+
+    module_path = source_module_path(info, source_path)
+    suffix = module_path[len("crate") :]
+    return f"{info.crate_path_name}{suffix}"
+
+
+def find_inline_cfg_test_mod_blocks(lines: list[str]) -> list[tuple[str, int, int]]:
+    """Return `(mod_name, start_index, end_index)` for each outermost inline
+    ``#[cfg(test)] mod NAME { .. }`` block in `lines` (0-based, `end_index`
+    exclusive; the mod-declaration and closing-brace lines are excluded from
+    the range).
+
+    Only tracks the `#[cfg(test)]` attribute immediately preceding the `mod`
+    item (stacked attribute lines in between are tolerated) and relies on
+    `cargo fmt`'s convention of opening a block's brace on the same line as
+    its declaration, which this repository enforces as a CI gate.
+    """
+
+    blocks: list[tuple[str, int, int]] = []
+    pending_test_attr = False
+    index = 0
+    total = len(lines)
+    while index < total:
+        stripped = lines[index].strip()
+        if stripped.startswith("#[") and not stripped.startswith("#!["):
+            if is_rust_test_cfg_attribute(stripped):
+                pending_test_attr = True
+            index += 1
+            continue
+        match = MOD_BLOCK_OPEN_RE.match(stripped)
+        if match is not None and pending_test_attr:
+            name = match.group(1)
+            depth = lines[index].count("{") - lines[index].count("}")
+            end_index = index + 1
+            while end_index < total and depth > 0:
+                depth += lines[end_index].count("{") - lines[end_index].count("}")
+                end_index += 1
+            # `end_index - 1` is the block's closing-brace line; exclude it
+            # (and the opening `mod NAME {` line at `index`) from the range
+            # handed back to callers, which only care about the block body.
+            blocks.append((name, index + 1, end_index - 1))
+            pending_test_attr = False
+            index = end_index
+            continue
+        if stripped:
+            pending_test_attr = False
+        index += 1
+    return blocks
+
+
+def find_cfg_test_file_mod_declarations(lines: list[str]) -> list[str]:
+    """Return the names declared by top-level ``#[cfg(test)] mod NAME;`` file
+    modules in `lines`.
+
+    Declarations nested inside an inline `mod { .. }` block are intentionally
+    skipped here; `find_inline_cfg_test_mod_blocks` already accounts for
+    everything inside such a block, and Rust's file-module resolution for a
+    `mod NAME;` nested inside an inline module is an unusual (`#[path]`-only)
+    pattern this scanner does not need to resolve.
+    """
+
+    names: list[str] = []
+    pending_test_attr = False
+    depth = 0
+    for line in lines:
+        stripped = line.strip()
+        if depth == 0 and stripped.startswith("#[") and not stripped.startswith("#!["):
+            if is_rust_test_cfg_attribute(stripped):
+                pending_test_attr = True
+            depth += line.count("{") - line.count("}")
+            continue
+        if depth == 0:
+            match = MOD_FILE_DECL_RE.match(stripped)
+            if match is not None and pending_test_attr:
+                names.append(match.group(1))
+        if depth == 0 and stripped:
+            pending_test_attr = False
+        depth += line.count("{") - line.count("}")
+        depth = max(depth, 0)
+    return names
+
+
+def resolve_file_module_child(source_path: Path, name: str) -> Path | None:
+    """Resolve the file backing a ``mod NAME;`` declared inside `source_path`.
+
+    Follows Rust's module-file resolution: a directory-index file (`mod.rs`,
+    `lib.rs`, `main.rs`) declares children as siblings in its own directory;
+    any other file (`foo.rs`) declares children under a `foo/` sibling
+    directory. Both the 2018-edition sibling-directory form (`NAME.rs`) and
+    the legacy form (`NAME/mod.rs`) are accepted for the child itself.
+    """
+
+    if source_path.stem in {"mod", "lib", "main"}:
+        base_dir = source_path.parent
+    else:
+        base_dir = source_path.parent / source_path.stem
+
+    direct = base_dir / f"{name}.rs"
+    if direct.exists():
+        return direct
+    nested = base_dir / name / "mod.rs"
+    if nested.exists():
+        return nested
+    return None
+
+
+def find_cfg_test_src_module_test_double_violations(
+    record: BoundaryRecord,
+    info: ManifestInfo,
+    source_path: Path,
+    repo_root: Path,
+) -> list[BoundaryViolation]:
+    """Find sealed-trait test doubles hidden inside a `src/` file's
+    `#[cfg(test)]` modules — both inline `mod NAME { .. }` blocks and
+    `mod NAME;` file modules — in a workspace crate other than the boundary's
+    owner.
+
+    `collect_active_implementation_violations` already scans the owner
+    crate's entire `src/` (test-gated or not) and every crate's `tests/`
+    directory unconditionally. Neither pass visits a *consumer* crate's
+    `#[cfg(test)]` module inside `src/`, so a sealed-trait test double
+    declared that way (e.g. `atm_core::ack::admission_tests::EmptyGraftReceiverStore`)
+    was invisible to allowlist enforcement even though the manifest can name
+    it with the same `<crate>::<module path>` convention used for `tests/`
+    directory doubles.
+    """
+
+    if record.public_trait is None:
+        return []
+
+    violations: list[BoundaryViolation] = []
+    rel_source = source_path.relative_to(repo_root).as_posix()
+    lines = source_path.read_text(encoding="utf-8").splitlines()
+    base_module_path = crate_qualified_module_path(info, source_path)
+    trait_pattern = _trait_impl_pattern(record.public_trait)
+
+    for mod_name, start_index, end_index in find_inline_cfg_test_mod_blocks(lines):
+        module_path = f"{base_module_path}::{mod_name}"
+        violations.extend(
+            _scan_lines_for_trait_impl_violations(
+                record=record,
+                trait_pattern=trait_pattern,
+                module_path=module_path,
+                rel_source=rel_source,
+                lines=lines[start_index:end_index],
+                line_offset=start_index,
+            )
+        )
+
+    for mod_name in find_cfg_test_file_mod_declarations(lines):
+        child_path = resolve_file_module_child(source_path, mod_name)
+        if child_path is None:
+            continue
+        child_module_path = crate_qualified_module_path(info, child_path)
+        violations.extend(
+            find_trait_only_test_double_violations(record, child_module_path, child_path, repo_root)
+        )
+
+    return violations
+
+
 def collect_active_implementation_violations(repo_root: Path, records: list[BoundaryRecord]) -> list[BoundaryViolation]:
     violations: list[BoundaryViolation] = []
     alias_map = manifest_by_alias(repo_root)
+    all_infos = manifest_info(repo_root)
     for record in records:
         if not record.is_active:
             continue
         owner_info = alias_map.get(record.owner_package)
         if owner_info is None:
             continue
+        is_trait_only_with_allowlist = (
+            record.implementation_visibility == "trait_only" and record.allowed_test_double_paths
+        )
         source_files = source_files_for_crate(owner_info)
         for source_path in source_files:
-            if record.implementation_visibility == "trait_only" and record.allowed_test_double_paths:
+            if is_trait_only_with_allowlist:
                 violations.extend(
-                    find_trait_only_test_double_violations(record, owner_info, source_path, repo_root)
+                    find_trait_only_test_double_violations(
+                        record, source_module_path(owner_info, source_path), source_path, repo_root
+                    )
                 )
                 continue
             if record.implementation_visibility == "private":
@@ -2165,6 +2439,35 @@ def collect_active_implementation_violations(repo_root: Path, records: list[Boun
                 violations.extend(find_public_reexport_violations(record, source_path, repo_root))
             if record.implementation_constructor == "private":
                 violations.extend(find_public_constructor_violations(record, source_path, repo_root))
+        if is_trait_only_with_allowlist:
+            # A sealed trait's test doubles are not confined to the owner
+            # crate's own `src/`: any workspace crate may implement the trait
+            # from its dev-only `tests/` directory (e.g. a consumer crate's
+            # integration-test double). Scan every crate's `tests/` so such a
+            # double is either allowlisted or flagged, never invisible.
+            for test_info in all_infos:
+                for test_path in test_source_files_for_crate(test_info):
+                    violations.extend(
+                        find_trait_only_test_double_violations(
+                            record, test_module_path(test_info, test_path), test_path, repo_root
+                        )
+                    )
+            # Nor are they confined to `tests/`: a consumer crate can just as
+            # easily hide a `impl Trait for Double` inside a `#[cfg(test)]`
+            # module of its own `src/` (an inline `mod x { .. }` block or a
+            # `mod x;` file module). The owner crate's own `src/` is already
+            # fully scanned above regardless of test-gating, so skip it here
+            # to avoid re-flagging an already-approved `crate::…`-qualified
+            # double under a second, `<crate>::…`-qualified identity.
+            for consumer_info in all_infos:
+                if consumer_info.path == owner_info.path:
+                    continue
+                for consumer_src_path in source_files_for_crate(consumer_info):
+                    violations.extend(
+                        find_cfg_test_src_module_test_double_violations(
+                            record, consumer_info, consumer_src_path, repo_root
+                        )
+                    )
     return violations
 
 

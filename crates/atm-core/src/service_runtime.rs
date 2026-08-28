@@ -9,14 +9,16 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 use atm_storage::{
-    AsyncMessageSearchStore, AsyncMessageStore as SharedAsyncMessageStore,
-    MessageStore as SharedMessageStore, RosterStore as SharedRosterStore, TemplateCatalogStore,
+    AsyncMessageSearchStore, AsyncMessageStore as SharedAsyncMessageStore, GraftEndpointStoreError,
+    GraftReceiverEndpointStore, GraftReceiverLease, MessageStore as SharedMessageStore,
+    OwnerGeneration, PendingNudgeStore, RosterStore as SharedRosterStore, TemplateCatalogStore,
 };
 
 use crate::boundary::TemplateComposer;
 use crate::config::{self, AtmConfig};
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
+use crate::error_codes::AtmErrorCode;
 #[cfg(test)]
 use crate::protocol::NotificationEvent;
 use crate::read::seen_state;
@@ -95,6 +97,24 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
     ) -> Result<Option<crate::boundary::TeamNudgeTemplateOverrideRow>, AtmError> {
         Ok(None)
     }
+    #[allow(dead_code)]
+    fn graft_receiver_lease(
+        &self,
+        _team: &TeamName,
+        _agent: &AgentName,
+    ) -> Result<Option<GraftReceiverLease>, AtmError> {
+        Ok(None)
+    }
+    #[allow(dead_code)]
+    fn mark_graft_receiver_unreachable(
+        &self,
+        _team: &TeamName,
+        _agent: &AgentName,
+        _owner_generation: &OwnerGeneration,
+        _now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), AtmError> {
+        Ok(())
+    }
     fn inbox_path(
         &self,
         home_dir: &Path,
@@ -140,6 +160,12 @@ pub struct LocalServiceRuntime {
         std::sync::Arc<dyn crate::boundary::NudgeTemplateOverrideStore + Send + Sync>,
     pub(crate) non_claude_outbound:
         std::sync::Arc<dyn crate::boundary::NonClaudeOutbound + Send + Sync>,
+    /// Optional durable at-most-once delivery capability for deferred
+    /// (`atm queue`) nudges. Unset in runtimes that never enqueue a deferred
+    /// nudge, e.g. plain-text mailbox tests.
+    pending_nudge_store: Option<std::sync::Arc<dyn PendingNudgeStore + Send + Sync>>,
+    graft_receiver_endpoint_store:
+        Option<std::sync::Arc<dyn GraftReceiverEndpointStore + Send + Sync>>,
     /// Optional renderer selected by the bootstrap composition root. Core send
     /// policy sees only this port; it never depends on `sc-composer` itself.
     pub(crate) template_composer: Option<std::sync::Arc<dyn TemplateComposer>>,
@@ -173,6 +199,8 @@ impl LocalServiceRuntime {
             roster_store,
             nudge_template_override_store,
             non_claude_outbound,
+            pending_nudge_store: None,
+            graft_receiver_endpoint_store: None,
             template_composer: None,
             template_catalog_store: None,
             roster_cache: Arc::new(RosterSnapshotCache::default()),
@@ -225,6 +253,54 @@ impl LocalServiceRuntime {
         self.async_message_search_store.clone().ok_or_else(|| {
             AtmError::daemon_unavailable(
                 "Tokio typed message search was not installed in this runtime",
+            )
+        })
+    }
+
+    /// Attaches the durable at-most-once delivery capability for deferred
+    /// (`atm queue`) nudges selected by the composition root.
+    #[must_use]
+    pub fn with_pending_nudge_store(
+        mut self,
+        pending_nudge_store: std::sync::Arc<dyn PendingNudgeStore + Send + Sync>,
+    ) -> Self {
+        self.pending_nudge_store = Some(pending_nudge_store);
+        self
+    }
+
+    /// Returns the runtime-selected deferred-nudge delivery capability.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] if no `PendingNudgeStore` was installed in this
+    /// runtime.
+    pub fn pending_nudge_store(
+        &self,
+    ) -> Result<std::sync::Arc<dyn PendingNudgeStore + Send + Sync>, AtmError> {
+        self.pending_nudge_store.clone().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "the deferred-nudge pending store was not installed in this runtime",
+            )
+        })
+    }
+
+    /// Attaches the durable graft receiver endpoint registry for local-only
+    /// registration, refresh, unregistration, and lookup requests.
+    #[must_use]
+    pub fn with_graft_receiver_endpoint_store(
+        mut self,
+        store: std::sync::Arc<dyn GraftReceiverEndpointStore + Send + Sync>,
+    ) -> Self {
+        self.graft_receiver_endpoint_store = Some(store);
+        self
+    }
+
+    pub fn graft_receiver_endpoint_store(
+        &self,
+    ) -> Result<std::sync::Arc<dyn GraftReceiverEndpointStore + Send + Sync>, AtmError> {
+        self.graft_receiver_endpoint_store.clone().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "the graft receiver endpoint store was not installed in this runtime",
             )
         })
     }
@@ -391,6 +467,11 @@ impl fmt::Debug for LocalServiceRuntime {
                 "non_claude_outbound",
                 &std::sync::Arc::as_ptr(&self.non_claude_outbound),
             )
+            .field("pending_nudge_store", &self.pending_nudge_store.is_some())
+            .field(
+                "graft_receiver_endpoint_store",
+                &self.graft_receiver_endpoint_store.is_some(),
+            )
             .finish()
     }
 }
@@ -503,6 +584,32 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
             .load_template_override(team, kind)
     }
 
+    fn graft_receiver_lease(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<Option<GraftReceiverLease>, AtmError> {
+        let Some(store) = &self.graft_receiver_endpoint_store else {
+            return Ok(None);
+        };
+        store.lookup(team, agent).map_err(graft_store_error)
+    }
+
+    fn mark_graft_receiver_unreachable(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+        owner_generation: &OwnerGeneration,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), AtmError> {
+        let Some(store) = &self.graft_receiver_endpoint_store else {
+            return Ok(());
+        };
+        store
+            .mark_unreachable(team, agent, owner_generation, now)
+            .map_err(graft_store_error)
+    }
+
     fn inbox_path(
         &self,
         home_dir: &Path,
@@ -559,6 +666,45 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
                 messages: messages.to_vec(),
             })
             .map(|_| ())
+    }
+}
+
+/// Canonical `GraftEndpointStoreError` -> `AtmError` mapping.
+///
+/// This is the single source of truth for how graft-receiver store errors
+/// surface as `AtmError`s (and therefore as HTTP statuses, via the shared
+/// `error_response` translation in `atm-http-runtime`). QA-1 finding: this
+/// mapping used to be duplicated here and in
+/// `atm-http-runtime::storage_and_nudge_router`, with different outcomes
+/// (`NotOwner` mapped to `daemon_unavailable`/503 here but to
+/// `validation`/400 there) depending on which call path produced the error.
+/// A generation mismatch is a caller-input problem, not a backend outage, so
+/// the unified mapping treats it (and the reserved `AlreadyActive` variant)
+/// as a validation error. Genuine backend I/O failures (`Storage`) preserve
+/// the originating error's own code and cause (RBP-F001) instead of
+/// collapsing every failure into one generic `daemon_unavailable` shape —
+/// a caller-input constraint violation surfaced by the backend therefore no
+/// longer looks identical to a true outage.
+pub fn graft_store_error(error: GraftEndpointStoreError) -> AtmError {
+    match error {
+        GraftEndpointStoreError::NotOwner => AtmError::new(
+            AtmErrorCode::GraftReceiverNotOwner,
+            "graft receiver lease is owned by another generation",
+        ),
+        GraftEndpointStoreError::AlreadyActive => {
+            AtmError::validation("graft receiver lease is already active")
+        }
+        GraftEndpointStoreError::Storage {
+            code,
+            message,
+            cause,
+        } => {
+            let error = AtmError::new(code, message);
+            match cause {
+                Some(cause) => error.with_cause(cause),
+                None => error,
+            }
+        }
     }
 }
 
@@ -709,5 +855,36 @@ mod tests {
             })
             .expect("reloaded roster lookup");
         assert_eq!(loads.load(Ordering::Relaxed), 2);
+    }
+
+    // RBP-F001/RBP-F003: `graft_store_error` is the single canonical
+    // `GraftEndpointStoreError` -> `AtmError` mapping. This covers all three
+    // variants, including the ADR-056-reserved `AlreadyActive` (RBP-F003:
+    // never constructed by the only production implementer today, but the
+    // mapping for it must still be exercised and correct for the day a
+    // caller that cannot prove same-host exclusivity needs it).
+    #[test]
+    fn graft_store_error_maps_all_variants_and_preserves_storage_code_and_cause() {
+        use crate::service_runtime::graft_store_error;
+        use atm_storage::contract::GraftEndpointStoreError;
+
+        let not_owner = graft_store_error(GraftEndpointStoreError::NotOwner);
+        assert_eq!(not_owner.code(), AtmErrorCode::GraftReceiverNotOwner);
+
+        let already_active = graft_store_error(GraftEndpointStoreError::AlreadyActive);
+        assert_eq!(already_active.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(already_active.message().contains("already active"));
+
+        // A representative backend failure code distinct from the generic
+        // `daemon_unavailable` this used to collapse into (RBP-F001): the
+        // original code and cause survive the round trip through `Storage`.
+        let storage_error = graft_store_error(GraftEndpointStoreError::Storage {
+            code: AtmErrorCode::MailboxWriteFailed,
+            message: "disk full".to_string(),
+            cause: Some("ENOSPC".to_string()),
+        });
+        assert_eq!(storage_error.code(), AtmErrorCode::MailboxWriteFailed);
+        assert!(storage_error.message().starts_with("disk full"));
+        assert_eq!(storage_error.cause(), Some("ENOSPC"));
     }
 }

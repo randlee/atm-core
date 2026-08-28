@@ -8,6 +8,7 @@
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+use chrono::Utc;
 use serde_json::Map;
 
 use super::{admit_acknowledgement_write, admit_acknowledgement_write_async};
@@ -21,9 +22,11 @@ use crate::send::{SendMessageSource, SendRequest};
 use crate::service_runtime::LocalServiceRuntime;
 use crate::test_support::{TEST_SENDER, TEST_TEAM};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
+use atm_storage::OwnerGeneration;
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource,
 };
+use atm_storage::testing::NoopGraftReceiverEndpointStore;
 
 /// The acknowledging agent: the pending source sits in this agent's mailbox
 /// and was sent by `TEST_SENDER`, so the reply target is never self-addressed.
@@ -423,6 +426,56 @@ fn local_runtime(store: Arc<InMemoryAsyncStore>, attach_async_store: bool) -> Lo
     } else {
         runtime
     }
+}
+
+// RBQA-F002/F003: the no-op `GraftReceiverEndpointStore` test double lives
+// once in `atm_storage::testing::NoopGraftReceiverEndpointStore`, shared
+// with `atm-storage`'s own contract tests, instead of being duplicated here.
+
+#[test]
+fn graft_receiver_runtime_wiring_and_unconfigured_defaults_are_explicit() {
+    use crate::service_runtime::RetainedServiceRuntime;
+
+    let store = Arc::new(InMemoryAsyncStore {
+        records: Mutex::new(Vec::new()),
+    });
+    let runtime = local_runtime(store, false);
+    assert!(runtime.graft_receiver_endpoint_store().is_err());
+    assert_eq!(
+        runtime
+            .graft_receiver_lease(
+                &TeamName::from_validated(TEST_TEAM),
+                &AgentName::from_validated(CALLER)
+            )
+            .expect("unconfigured lease default"),
+        None
+    );
+    runtime
+        .mark_graft_receiver_unreachable(
+            &TeamName::from_validated(TEST_TEAM),
+            &AgentName::from_validated(CALLER),
+            &OwnerGeneration::new("01J00000000000000000000001").expect("owner generation"),
+            Utc::now(),
+        )
+        .expect("unconfigured unreachable default");
+
+    let runtime = local_runtime(
+        Arc::new(InMemoryAsyncStore {
+            records: Mutex::new(Vec::new()),
+        }),
+        false,
+    )
+    .with_graft_receiver_endpoint_store(Arc::new(NoopGraftReceiverEndpointStore));
+    assert!(runtime.graft_receiver_endpoint_store().is_ok());
+    assert_eq!(
+        runtime
+            .graft_receiver_lease(
+                &TeamName::from_validated(TEST_TEAM),
+                &AgentName::from_validated(CALLER)
+            )
+            .expect("configured lease lookup"),
+        None
+    );
 }
 
 /// Minimal executor: with in-memory stores the admission future never pends,

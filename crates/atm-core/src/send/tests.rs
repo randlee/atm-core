@@ -330,7 +330,10 @@ pub(super) fn delivery_snapshot(harness: DeliveryHarnessPath) -> DeliveryRecipie
         harness,
         recipient_pane_id: None,
         local_tmux_post_send: false,
+        local_herdr_post_send: false,
+        herdr_session: None,
         graft_post_send: false,
+        bare_cli_post_send: false,
         roster_backed: true,
     }
 }

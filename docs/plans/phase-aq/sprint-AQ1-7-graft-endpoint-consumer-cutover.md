@@ -1,7 +1,13 @@
+---
+status: complete
+branch: feature/aq-1-7-graft-endpoint-consumer-cutover
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/aq-1-7-graft-endpoint-consumer-cutover
+---
+
 # Sprint AQ1.7 — Graft Endpoint Consumer Cutover (Registry Becomes Truth)
 
-Status: draft · Branch: `feature/aq-1-7-graft-endpoint-cutover` off
-`integrate/phase-aq` · PR target: `integrate/phase-aq`
+Status: complete · Branch: `feature/aq-1-7-graft-endpoint-consumer-cutover` off
+`integrate/phase-aq` · Worktree: `/Users/randlee/Documents/github/atm-core-worktrees/feature/aq-1-7-graft-endpoint-consumer-cutover` · PR target: `integrate/phase-aq`
 recommended_agent: arch-ctm · recommended_model: deep-reasoning
 
 Third graft connection-model sprint (see AQ1.5). Every production consumer
@@ -30,11 +36,14 @@ the file is written but no longer read by anything in-tree.
    present, falling back to the same `Ok(None)`/`Ok(())` a runtime with no
    store attached gives everyone else (correct: no store wired means no
    lease exists, which is honest for a runtime nothing ever registered
-   against). `crates/atm-daemon-bootstrap/src/lib.rs`'s
-   `assemble_runtime`/`assemble_host_runtime` construct the real rusqlite
-   `GraftReceiverEndpointStore` from the same `SqliteStorageFactory`
-   already used for `roster_store` (mirroring the `shared_roster_store_arc`
-   pattern at `:911`/`:1155`) and call
+   against). **ATM-QA-AQ17-007 doc-accuracy correction**: this is
+   `crates/atm-runtime/src/composition.rs`'s `assemble_runtime` (not
+   `atm-daemon-bootstrap/src/lib.rs`, which owns the separate
+   `assemble_host_runtime`/`assemble_host_runtime_with_template_composer`
+   legacy-host-runtime entry points) — `assemble_runtime` constructs the
+   real rusqlite `GraftReceiverEndpointStore` via
+   `storage.graft_receiver_endpoint_store()` from the same `StorageFactory`
+   already used for `storage_backends.rosters`, and calls
    `.with_graft_receiver_endpoint_store(store)` on the `LocalServiceRuntime`
    that becomes the real running daemon's `service_runtime` — this is the
    point at which registrations made since AQ1.5/AQ1.6 landed start
@@ -95,17 +104,40 @@ the file is written but no longer read by anything in-tree.
    is rendered from the read-time aliveness derivation (AQ1.5: lease
    exists AND `last_seen_at` within window AND `unreachable_at IS NULL`) —
    display-only, consistent with deliverable 2's dial-anyway rule (I11).
+> **AC ownership ruling (fenix, 2026-08-27, after QA on #1046/#1048):** this sprint
+> owns the **automated loopback restart-matrix integration tests in-tree**
+> (daemon restart with live receiver; receiver restart with live daemon →
+> immediate displacement; SIGKILL crash-within-window). AQ1.9 owns only the
+> **live m5 evidence run** of the same matrix. Every AC in this doc must ship
+> with a named automated test; "implemented but untested" is not complete.
+
 5. **Fallback removal is explicit**: no silent file fallback remains in any
    cutover consumer — if the lease is absent, the error says the receiver
    is not registered (actionable: receiver not running or daemon missed
-   its announce), never a file-read error. (The file keeps being written by
-   AQ1.6's dual-write; it is simply unread.)
+   its announce), never a file-read error.
+   > **Scope note (fenix, 2026-08-27):** the legacy file record's full
+   > retirement (removing the write path itself, formerly described here as
+   > deferred to AQ1.8) landed on `integrate/phase-aq` ahead of this PR via
+   > the AQ1.8 branch's own queue chain (#1051), merged forward into this
+   > branch before #1048 closed — not through AQ1.7 scope bleed. By the time
+   > this sprint's PR merges, the file is neither written nor read; every
+   > "the file keeps being written" statement below describes AQ1.7's
+   > original authoring-time scope, not what ships in this PR. See AC1 and
+   > the Non-closure section for the corresponding corrections.
 
 ## Acceptance criteria
 
 1. Delivery integration test: message to a registered receiver delivers
    via the lease endpoint with the file record DELETED beforehand —
    proving the file is no longer load-bearing.
+   > **Superseded (fenix, 2026-08-27):** the "delete the file record
+   > beforehand" scenario is moot — AQ1.8's file-record retirement (#1051)
+   > merged into this branch ahead of #1048, so there is no file record left
+   > to delete in this PR's tree at all. AC1 is verified directly against the
+   > registry lease instead: `graft::tests::ac1_delivery_succeeds_through_the_registry_lease_alone`
+   > (`crates/atm-core/src/graft.rs`) proves delivery succeeds through
+   > `deliver_published_receiver_hook` using only a registered lease, with no
+   > file record present anywhere in the test's tempdir tree.
 2. Absent-lease delivery and `_internal-nudge` produce the
    receiver-not-registered error naming (team, agent) — no file-path
    errors anywhere (grep gate: `read_receiver_record` and
@@ -119,6 +151,11 @@ the file is written but no longer read by anything in-tree.
    paths internally, so the only record-path references left are the
    graft.rs internals slated for AQ1.8 deletion; the gate greps the whole
    workspace including atm-graft).
+   > **Correction (fenix, 2026-08-27):** `read_receiver_record` and
+   > `graft_receiver_record_path_from_root`/`_from_home` no longer exist in
+   > `crates/atm-core/src/graft.rs` at all — AQ1.8's retirement (#1051)
+   > merged forward into this branch ahead of #1048, so the grep gate above
+   > is moot by construction (zero call sites because zero definitions).
 3. Connect-failure path: dead endpoint → `mark_unreachable` recorded +
    today's delivery error surfaced (no new error shapes).
 4. Doctor section renders for a live receiver and for a stale lease
@@ -149,7 +186,14 @@ the file is written but no longer read by anything in-tree.
 
 ## Non-closure / out of scope
 
-- File-record write path and its machinery still exist (deleted in AQ1.8).
+- File-record write path and its machinery were still expected to exist at
+  this sprint's original authoring time (scoped for deletion in AQ1.8).
+  **Correction (fenix, 2026-08-27):** by the time this PR (#1048) merges, the
+  file-record retirement has already landed on `integrate/phase-aq` from
+  AQ1.8's own PR chain (#1051) and reached this branch through a routine
+  merge-forward — not through AQ1.7 scope bleed. The write path no longer
+  exists in this tree; nothing here is deferred to AQ1.8 anymore. #1049 is
+  the AQ1.8 verification/closure PR against the already-shipped retirement.
 - hermes-atm wheel bump (AQ1.9).
 - **Version-skew posture**: `atm` CLI and daemon ship and switch as a
   matched release pair in this repo (the daemon-switch tooling enforces

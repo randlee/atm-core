@@ -133,3 +133,55 @@ Rules:
 - concrete backend implementations such as `atm-storage-rusqlite` must
   implement the `atm-storage` sealed trait directly and must not depend on
   `atm-core` to satisfy this contract
+
+## PendingNudgeStore
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-storage/pending-nudge-store.toml](../../boundaries/atm-storage/pending-nudge-store.toml)
+
+Purpose:
+- own the storage-neutral durable at-most-once delivery contract for
+  deferred (`atm queue`) nudges: `MemberKey`, `NudgeClaim`,
+  `MAX_NUDGE_ATTEMPTS`, and the sealed `PendingNudgeStore` trait
+- own the one marker column pair (`nudge_pending_at`, `nudge_attempts`) on
+  `mail_message_states`; no caller above the backend crate writes SQL
+  against those columns
+
+Rules:
+- `atm-storage` owns `MemberKey`, `NudgeClaim`, `MAX_NUDGE_ATTEMPTS`, and
+  `PendingNudgeStore`; `atm-core` consumes them directly from `atm-storage`
+  (no `atm-core::boundary` re-export dependency is required for this seam
+  to compile, though `atm-core::boundary` may additionally re-export them
+  for downstream ergonomics)
+- the caller-owned write policy (`NudgeMode`, deciding *when* to call
+  `mark_pending`) lives in `atm-core::send`, not in this contract
+- `claim_next_pending` is the one at-most-once mechanism: a single
+  conditional `UPDATE … RETURNING`, selecting FIFO via `message_key` (ULID)
+  order
+- `atm-storage` must not grow direct SQLite access, message delivery, or
+  process-spawn logic itself
+- concrete backend implementations such as `atm-storage-rusqlite` must
+  implement the `atm-storage` sealed trait directly and must not depend on
+  `atm-core` to satisfy this contract
+
+## GraftReceiverEndpointStore
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-storage/graft-receiver-endpoint-store.toml](../../boundaries/atm-storage/graft-receiver-endpoint-store.toml)
+
+Purpose:
+- own the durable `(team, agent)` registry for loopback graft receiver
+  endpoints, capabilities, owner generations, refresh timestamps, and
+  delivery-time unreachable feedback
+
+Rules:
+- `register` replaces a stored row when the owner generation changes; the
+  caller has already proved same-host exclusivity with the receiver flock
+- `refresh`, `unregister`, and `mark_unreachable` are owner-generation
+  checked; a lookup miss is `Ok(None)`
+- consumers derive liveness from timestamps and `unreachable_at`; no status
+  boolean or roster mirror is stored
+- the registry uses a natural `(team, agent)` join key without a SQL foreign
+  key because roster saves replace a team's rows in bulk
+- concrete SQLite implementations implement the sealed trait directly and
+  do not depend on `atm-core`

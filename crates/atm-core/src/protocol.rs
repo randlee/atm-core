@@ -21,9 +21,21 @@ use crate::error_codes::AtmErrorCode;
 use crate::home;
 use crate::list::{ListOutcome, ListQuery};
 use crate::read::{PeekQuery, ReadOutcome, ReadQuery};
+use crate::schema::AtmMessageId;
 use crate::search::{SearchRequest, SearchResponse};
 use crate::send::{SendOutcome, WriteRequest};
 use crate::types::{AgentName, IsoTimestamp, SessionId, TeamName, deserialize_optional_session_id};
+
+pub use atm_storage::{
+    GraftReceiverLease, GraftReceiverRegistration, LocalCapability, OwnerGeneration,
+};
+
+/// Body representation for the local graft receiver lookup route.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GraftReceiverLookupRequest {
+    pub team: TeamName,
+    pub agent: AgentName,
+}
 
 const DAEMON_SOCKET_FILENAME: &str = "atm-daemon.sock";
 const MAX_VERSION_LENGTH: usize = 256;
@@ -41,6 +53,14 @@ pub enum RequestEnvelope {
     Write(Box<WriteRequest>),
     CompatibilityPreflight(CompatibilityPreflight),
     Heartbeat(TeamMemberHeartbeatRequest),
+    QueueGetNext(QueueGetNextRequest),
+    GraftReceiverRegister(GraftReceiverRegistration),
+    GraftReceiverRefresh(GraftReceiverRefreshRequest),
+    GraftReceiverUnregister(GraftReceiverUnregistration),
+    GraftReceiverLookup {
+        team: TeamName,
+        agent: AgentName,
+    },
     List(ListQuery),
     Peek(PeekQuery),
     Receive(ReadQuery),
@@ -57,6 +77,11 @@ pub enum ResponseEnvelope {
     Send(SendResponseEnvelope),
     CompatibilityVerdict(CompatibilityVerdict),
     Heartbeat(TeamMemberHeartbeatResponse),
+    QueueGetNext(QueueGetNextResponse),
+    GraftReceiverRegister,
+    GraftReceiverRefresh,
+    GraftReceiverUnregister,
+    GraftReceiverLookup(Option<GraftReceiverLease>),
     List(ListOutcome),
     Peek(Box<ReadOutcome>),
     Receive(Box<ReadOutcome>),
@@ -323,6 +348,7 @@ pub enum HeartbeatActivity {
 pub enum RuntimeObservationSource {
     Heartbeat,
     LocalCommand,
+    HerdrPoll,
 }
 
 /// One daemon heartbeat request for one team member identity.
@@ -358,6 +384,47 @@ pub struct TeamMemberHeartbeatResponse {
         deserialize_with = "deserialize_optional_session_id"
     )]
     pub session_id: Option<SessionId>,
+}
+
+/// Authenticated local request to drain one member's bare-CLI queue.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct QueueGetNextRequest {
+    pub team: TeamName,
+    pub member: AgentName,
+}
+
+/// One item returned by the bare-CLI queue pull.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct QueuedNudgeMessage {
+    pub kind: crate::boundary::NudgeKind,
+    pub msg_id: AtmMessageId,
+    pub body: String,
+}
+
+/// Bare-CLI queue drain result: all current steer items and at most one queue item.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct QueueGetNextResponse {
+    pub messages: Vec<QueuedNudgeMessage>,
+}
+
+/// Owner-checked removal request for one durable graft receiver lease.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GraftReceiverUnregistration {
+    pub team: TeamName,
+    pub agent: AgentName,
+    pub owner_generation: OwnerGeneration,
+}
+
+/// Owner-checked liveness keepalive for one durable graft receiver lease.
+///
+/// Unlike [`GraftReceiverRegistration`], which unconditionally upserts, this
+/// request is rejected with `NotOwner` when the stored lease no longer
+/// matches `owner_generation` — see ADR-056.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GraftReceiverRefreshRequest {
+    pub team: TeamName,
+    pub agent: AgentName,
+    pub owner_generation: OwnerGeneration,
 }
 
 /// Runtime-owned live-state projection for one known team member.
@@ -434,6 +501,32 @@ pub struct RuntimeStatusSnapshot {
     pub member_counts: RuntimeStatusCounts,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub members: Vec<RuntimeMemberObservation>,
+    /// Cumulative queue-kind graft handoff failures observed by this daemon.
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub graft_queue_handoff_failures_total: u64,
+    /// Cumulative failures clearing a queue marker after a successful handoff.
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub graft_queue_marker_clear_failures_total: u64,
+    /// Cumulative bare-CLI FIFO overflow drops observed by the daemon.
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub bare_cli_queue_full_drops_total: u64,
+    /// Cumulative failures setting a deferred queue marker.
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub queue_marker_set_failures_total: u64,
+    /// Timestamp of the most recent Herdr queue-wake poll, when enabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub herdr_queue_last_tick_at: Option<IsoTimestamp>,
+    /// Cumulative deferred queue messages drained by an idle transition or
+    /// recovery sweep.
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub queue_messages_drained_total: u64,
+    /// Cumulative deferred queue drain/recovery dispatch failures.
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub queue_drain_failures_total: u64,
+}
+
+fn is_zero_u64(value: &u64) -> bool {
+    *value == 0
 }
 #[cfg(test)]
 mod tests {
@@ -573,6 +666,13 @@ mod tests {
                 unknown_members: 3,
             },
             members: Vec::new(),
+            graft_queue_handoff_failures_total: 0,
+            graft_queue_marker_clear_failures_total: 0,
+            bare_cli_queue_full_drops_total: 0,
+            queue_marker_set_failures_total: 0,
+            herdr_queue_last_tick_at: None,
+            queue_messages_drained_total: 0,
+            queue_drain_failures_total: 0,
         };
 
         let encoded = serde_json::to_vec(&snapshot).expect("encode runtime snapshot");
@@ -632,6 +732,13 @@ mod tests {
                 session_changed_by: None,
                 session_changed_at: None,
             }],
+            graft_queue_handoff_failures_total: 0,
+            graft_queue_marker_clear_failures_total: 0,
+            bare_cli_queue_full_drops_total: 0,
+            queue_marker_set_failures_total: 0,
+            herdr_queue_last_tick_at: None,
+            queue_messages_drained_total: 0,
+            queue_drain_failures_total: 0,
         };
         let decoded: LegacyRuntimeStatusSnapshot =
             serde_json::from_value(serde_json::to_value(snapshot).expect("encode snapshot"))

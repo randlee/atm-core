@@ -1,0 +1,235 @@
+<!--
+  Vendored copy of the atm-core Send-To picker page.
+  Canonical source: randlee/wyvern examples/wizards/atm-pick-member/pages/pick-member.html
+  Upstream PR: https://github.com/randlee/wyvern/pull/140 (references atm-core issue #139)
+  Synced from wyvern commit: 958b5102e977f30f812213d5ae08c1420828bead
+
+  This is a small, static, dependency-free HTML/JS asset -- vendoring it
+  here does not add a Wyvern build/test dependency (docs/plans/phase-aq/
+  fixtures/wyvern-pick-member-contract.md's "Wyvern source is not
+  vendored" clause is about the wyvern binary/crate, not this page).
+  atm-send-to.sh/.ps1 need the page bytes locally to build the wizard.json
+  `--ui-root` directory before invoking the optional wyvern binary; no atm
+  build or test lane requires wyvern itself to be installed.
+  Keep this file's content in sync with the upstream page when the PR
+  lands and evolves; the probe_wyvern.py asset-existence check and the
+  wizard.json generation in picker.py both assume this exact file.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ATM Send-To</title>
+  <link rel="stylesheet" href="/shared/embedded-chrome.css" />
+  <link rel="stylesheet" href="/shared/wizard-chrome.css" />
+  <script src="/shared/wyvern-api.js"></script>
+  <style>
+    .atm-picker-team {
+      margin: 0 0 1em 0;
+      border: 1px solid var(--wyvern-border, #ccc);
+      border-radius: 6px;
+      padding: 0.5em 0.75em;
+    }
+    .atm-picker-team legend {
+      font-weight: 600;
+      padding: 0 0.35em;
+    }
+    .atm-picker-member {
+      display: flex;
+      align-items: center;
+      gap: 0.5em;
+      padding: 0.25em 0;
+    }
+    .atm-picker-member[data-unavailable="true"] {
+      opacity: 0.5;
+    }
+    .atm-picker-status {
+      font-size: 0.85em;
+      color: var(--wyvern-muted, #666);
+    }
+    #atm-picker-note {
+      width: 100%;
+      box-sizing: border-box;
+      margin-top: 0.5em;
+    }
+  </style>
+</head>
+<body>
+  <!-- Terminal page contract (single step): Back is hidden, Next becomes Finish. -->
+  <main
+    id="dialog"
+    class="dialog dialog--frame"
+    data-wizard-terminal="true"
+    data-testid="atm-pick-member-root"
+  >
+    <h1 data-testid="atm-pick-member-heading">ATM Send-To</h1>
+    <p class="lead" data-testid="atm-pick-member-lead">
+      Pick one or more recipients. Dead/idle members cannot be selected.
+    </p>
+
+    <div id="atm-picker-teams" data-testid="atm-picker-teams"></div>
+
+    <label for="atm-picker-note">Optional note</label>
+    <textarea
+      id="atm-picker-note"
+      data-testid="atm-picker-note"
+      rows="2"
+      placeholder="Why this file, for the recipient"
+    ></textarea>
+
+    <p class="wizard-error" data-testid="wizard-error" hidden></p>
+
+    <nav class="wizard-chrome" data-wizard-nav aria-label="Wizard navigation">
+      <button type="button" class="secondary" data-wizard-back data-testid="wizard-back">
+        Back
+      </button>
+      <button
+        type="button"
+        class="primary"
+        data-wizard-next
+        data-testid="wizard-next"
+        id="atm-picker-finish"
+      >
+        Finish
+      </button>
+    </nav>
+  </main>
+
+  <script>
+    // ATM Send-To picker contract (docs/plans/phase-aq/fixtures/
+    // wyvern-pick-member-contract.md in atm-core): `PickerInput` arrives as
+    // this wizard command's opaque `config` (never `--stdin-json`; Wyvern's
+    // own stdin is reserved for its own Command JSON when no positional/
+    // extension arg is given, so the atm-core adapter wraps this page in a
+    // small generated `wizard.json` whose `config` IS the roster payload —
+    // see the "Real Wyvern invocation" note in this example's README.md).
+    //
+    // `PickerOutput` is returned via `collectCurrentPageData()`, which
+    // `wizard-nav.js` submits through `wyvernWizardFinish()` as this
+    // wizard's terminal `data` field. The atm-core adapter must therefore
+    // read `<wyvern stdout>.data` as `PickerOutput`, not the bare top-level
+    // stdout object the PRD's illustrative pipeline sketch assumed.
+    (function () {
+      "use strict";
+
+      var SCHEMA_VERSION = 1;
+
+      function showError(message) {
+        var el = document.querySelector("[data-testid='wizard-error']");
+        if (el) {
+          el.hidden = false;
+          el.textContent = message;
+        }
+      }
+
+      function renderUnsupportedSchema(actual) {
+        var root = document.getElementById("atm-picker-teams");
+        root.textContent = "";
+        showError(
+          "Unrecognized PickerInput schema_version " +
+            JSON.stringify(actual) +
+            " (expected " +
+            SCHEMA_VERSION +
+            "). Not guessing at field meanings; treat this exactly like a" +
+            " missing picker and fall back."
+        );
+        var finish = document.getElementById("atm-picker-finish");
+        if (finish) {
+          finish.disabled = true;
+        }
+      }
+
+      function renderTeams(input) {
+        var root = document.getElementById("atm-picker-teams");
+        root.textContent = "";
+        var teams = Array.isArray(input.teams) ? input.teams : [];
+        teams.forEach(function (team) {
+          var fieldset = document.createElement("fieldset");
+          fieldset.className = "atm-picker-team";
+          fieldset.setAttribute("data-testid", "atm-picker-team-" + team.id);
+
+          var legend = document.createElement("legend");
+          legend.textContent = team.name || team.id || "team";
+          fieldset.appendChild(legend);
+
+          var members = Array.isArray(team.members) ? team.members : [];
+          members.forEach(function (member) {
+            var row = document.createElement("label");
+            row.className = "atm-picker-member";
+            row.setAttribute("data-testid", "atm-picker-member-" + member.id);
+
+            var available = member.status === "active";
+            row.setAttribute("data-unavailable", available ? "false" : "true");
+
+            var checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.value = member.id;
+            checkbox.setAttribute("data-role", "member-checkbox");
+            checkbox.setAttribute("data-testid", "atm-picker-checkbox-" + member.id);
+            // PRD R4: dead/idle members are genuinely non-selectable, not
+            // merely styled -- `disabled` removes them from form submission
+            // and keyboard/mouse interaction, and screen readers announce
+            // the disabled state.
+            checkbox.disabled = !available;
+            row.appendChild(checkbox);
+
+            var name = document.createElement("span");
+            name.textContent = member.name || member.id;
+            row.appendChild(name);
+
+            var status = document.createElement("span");
+            status.className = "atm-picker-status";
+            status.setAttribute("data-testid", "atm-picker-status-" + member.id);
+            status.textContent = "[" + (member.status || "dead") + "]";
+            row.appendChild(status);
+
+            fieldset.appendChild(row);
+          });
+
+          root.appendChild(fieldset);
+        });
+      }
+
+      window.collectCurrentPageData = function () {
+        var checked = Array.prototype.slice.call(
+          document.querySelectorAll("[data-role='member-checkbox']:checked")
+        );
+        var recipients = checked.map(function (el) {
+          return el.value;
+        });
+        var noteField = document.getElementById("atm-picker-note");
+        var note = noteField && typeof noteField.value === "string" ? noteField.value.trim() : "";
+        var output = { schema_version: SCHEMA_VERSION, recipients: recipients };
+        if (note) {
+          output.note = note;
+        }
+        return output;
+      };
+
+      async function boot() {
+        try {
+          if (typeof window.wyvernWizardState === "function") {
+            await window.wyvernWizardState();
+          }
+          var input = (window.wyvern && window.wyvern.config) || {};
+          if (input.schema_version !== SCHEMA_VERSION) {
+            renderUnsupportedSchema(input.schema_version);
+            return;
+          }
+          renderTeams(input);
+        } catch (err) {
+          showError(String(err && err.message ? err.message : err));
+        }
+      }
+
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", boot);
+      } else {
+        boot();
+      }
+    })();
+  </script>
+  <script src="/shared/wizard-nav.js" data-wizard-chrome></script>
+</body>
+</html>

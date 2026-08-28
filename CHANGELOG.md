@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.5
+
+- complete the Phase AQ graft registration cutover: `atm-graft` now uses the
+  daemon registry lease and same-host flock instead of the retired endpoint
+  record, with the `atm-graft` Python wheel rebuilt against ADR-056
+
 ## 1.4.4
 
 - first kit-era release: the repository's publish surface is fully cut over to

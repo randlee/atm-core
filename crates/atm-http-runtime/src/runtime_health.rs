@@ -1,18 +1,21 @@
 //! In-memory lifecycle and heartbeat projection for the replacement runtime.
 //!
 //! This is intentionally small: it retains no listener, storage, or harness
-//! implementation.  Listener lifecycle drives readiness; authenticated local
-//! heartbeats only enrich the existing doctor/status payload.
+//! implementation. Listener lifecycle drives readiness; authenticated local
+//! heartbeats enrich the existing doctor/status payload and make a best-effort
+//! idle-transition notification. Durable pending-nudge state and the recovery
+//! sweep remain the correctness backstop.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use atm_core::boundary::MemberKey;
 use atm_core::protocol::{
     HeartbeatActivity, RuntimeLivenessState, RuntimeMemberObservation, RuntimeMemberState,
     RuntimeObservationSource, RuntimeReadinessState, RuntimeStatusCounts, RuntimeStatusSnapshot,
     TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
 };
-use atm_core::types::{AgentName, IsoTimestamp, SessionId, TeamName};
+use atm_core::types::{IsoTimestamp, SessionId};
 
 /// The bounded runtime-member projection is observability, not durable state.
 pub const MAX_RUNTIME_STATUS_MEMBERS: usize = 4096;
@@ -22,12 +25,31 @@ pub struct RuntimeHealth {
     inner: Arc<Mutex<RuntimeHealthState>>,
 }
 
+/// Best-effort notification of a genuine member lifecycle transition.
+///
+/// The callback is invoked after the health mutex is released. Implementations
+/// must keep storage and process work off the heartbeat task.
+pub trait MemberStateTransitionSink: atm_core::boundary::sealed::Sealed + Send + Sync {
+    fn on_transition(
+        &self,
+        member: &atm_core::boundary::MemberKey,
+        from: RuntimeMemberState,
+        to: RuntimeMemberState,
+    );
+}
+
 #[derive(Default)]
 struct RuntimeHealthState {
     lifecycle: Lifecycle,
     detail: Option<String>,
     owner_pid: Option<u32>,
     members: HashMap<MemberKey, MemberRecord>,
+    graft_queue_handoff_failures_total: u64,
+    graft_queue_marker_clear_failures_total: u64,
+    queue_marker_set_failures_total: u64,
+    herdr_queue_last_tick_at: Option<IsoTimestamp>,
+    queue_messages_drained_total: u64,
+    queue_drain_failures_total: u64,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -39,12 +61,6 @@ enum Lifecycle {
     Stopped,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
-struct MemberKey {
-    team: TeamName,
-    member: AgentName,
-}
-
 #[derive(Clone)]
 struct MemberRecord {
     pid: Option<u32>,
@@ -53,6 +69,7 @@ struct MemberRecord {
     last_active_at: Option<IsoTimestamp>,
     state_changed_at: Option<IsoTimestamp>,
     session_changed_at: Option<IsoTimestamp>,
+    state_source: RuntimeObservationSource,
 }
 
 impl RuntimeHealth {
@@ -94,6 +111,43 @@ impl RuntimeHealth {
         state.detail = Some("replacement runtime is stopped".to_owned());
     }
 
+    /// Records one failed queue-kind graft handoff. The counter is
+    /// cumulative for the daemon lifetime and deliberately does not own any
+    /// retry state; the pending-nudge store and AQ3 own that policy.
+    pub fn record_graft_queue_handoff_failure(&self) {
+        let mut state = self.lock();
+        state.graft_queue_handoff_failures_total =
+            state.graft_queue_handoff_failures_total.saturating_add(1);
+    }
+
+    /// Records a failed pending-marker clear after delivery succeeded.
+    pub fn record_graft_queue_marker_clear_failure(&self) {
+        let mut state = self.lock();
+        state.graft_queue_marker_clear_failures_total = state
+            .graft_queue_marker_clear_failures_total
+            .saturating_add(1);
+    }
+
+    pub fn record_queue_marker_set_failure(&self) {
+        let mut state = self.lock();
+        state.queue_marker_set_failures_total =
+            state.queue_marker_set_failures_total.saturating_add(1);
+    }
+
+    pub fn record_herdr_queue_tick(&self, observed_at: Option<IsoTimestamp>) {
+        self.lock().herdr_queue_last_tick_at = observed_at;
+    }
+
+    pub fn record_queue_message_drained(&self) {
+        let mut state = self.lock();
+        state.queue_messages_drained_total = state.queue_messages_drained_total.saturating_add(1);
+    }
+
+    pub fn record_queue_drain_failure(&self) {
+        let mut state = self.lock();
+        state.queue_drain_failures_total = state.queue_drain_failures_total.saturating_add(1);
+    }
+
     /// Record an already-authorized local heartbeat.
     ///
     /// The brief mutex protects only in-memory status fields; storage and
@@ -101,11 +155,11 @@ impl RuntimeHealth {
     pub fn record_heartbeat(
         &self,
         request: &TeamMemberHeartbeatRequest,
-    ) -> TeamMemberHeartbeatResponse {
+    ) -> (TeamMemberHeartbeatResponse, Option<RuntimeMemberState>) {
         let mut state = self.lock();
         let key = MemberKey {
             team: request.team.clone(),
-            member: request.member.clone(),
+            agent: request.member.clone(),
         };
         if !state.members.contains_key(&key) && state.members.len() == MAX_RUNTIME_STATUS_MEMBERS {
             // Observability must never become an unbounded in-process cache.
@@ -127,16 +181,22 @@ impl RuntimeHealth {
             last_active_at: None,
             state_changed_at: None,
             session_changed_at: None,
+            state_source: RuntimeObservationSource::Heartbeat,
         });
         let next_state = match request.activity {
             HeartbeatActivity::ActiveToolUse => RuntimeMemberState::Active,
             HeartbeatActivity::Idle => RuntimeMemberState::Idle,
             HeartbeatActivity::SessionEnded => RuntimeMemberState::Offline,
         };
-        if record.state != next_state {
+        let previous_state = record.state;
+        let transitioned_to_idle = (previous_state != RuntimeMemberState::Idle
+            && next_state == RuntimeMemberState::Idle)
+            .then_some(previous_state);
+        if previous_state != next_state {
             record.state = next_state;
             record.state_changed_at = Some(request.observed_at);
         }
+        record.state_source = RuntimeObservationSource::Heartbeat;
         if next_state == RuntimeMemberState::Active {
             record.last_active_at = Some(request.observed_at);
         }
@@ -146,15 +206,61 @@ impl RuntimeHealth {
             record.session_id = request.session_id.clone();
             record.session_changed_at = Some(request.observed_at);
         }
-        TeamMemberHeartbeatResponse {
-            team: request.team.clone(),
-            member: request.member.clone(),
-            pid: request.pid,
-            pid_changed: previous_pid.is_some_and(|pid| pid != request.pid),
-            state: next_state,
-            last_active_at: record.last_active_at,
-            session_id: record.session_id.clone(),
+        (
+            TeamMemberHeartbeatResponse {
+                team: request.team.clone(),
+                member: request.member.clone(),
+                pid: request.pid,
+                pid_changed: previous_pid.is_some_and(|pid| pid != request.pid),
+                state: next_state,
+                last_active_at: record.last_active_at,
+                session_id: record.session_id.clone(),
+            },
+            transitioned_to_idle,
+        )
+    }
+
+    /// Records a Herdr poll observation without changing heartbeat-owned
+    /// process or session identity fields.
+    pub fn record_observed_state(
+        &self,
+        member: &MemberKey,
+        next_state: RuntimeMemberState,
+        source: RuntimeObservationSource,
+    ) {
+        let mut state = self.lock();
+        if !state.members.contains_key(member)
+            && state.members.len() == MAX_RUNTIME_STATUS_MEMBERS
+            && let Some(evicted) = state
+                .members
+                .iter()
+                .min_by_key(|(_, record)| record.last_active_at.or(record.state_changed_at))
+                .map(|(key, _)| key.clone())
+        {
+            state.members.remove(&evicted);
         }
+        let record = state.members.entry(member.clone()).or_insert(MemberRecord {
+            pid: None,
+            session_id: None,
+            state: RuntimeMemberState::Unknown,
+            last_active_at: None,
+            state_changed_at: None,
+            session_changed_at: None,
+            state_source: source,
+        });
+        let observed_at = IsoTimestamp::now();
+        if record.state != next_state {
+            record.state = next_state;
+            record.state_changed_at = Some(observed_at);
+        }
+        record.state_source = source;
+        if next_state == RuntimeMemberState::Active {
+            record.last_active_at = Some(observed_at);
+        }
+    }
+
+    pub fn record_herdr_poll_state(&self, member: &MemberKey, next_state: RuntimeMemberState) {
+        self.record_observed_state(member, next_state, RuntimeObservationSource::HerdrPoll);
     }
 
     #[must_use]
@@ -165,12 +271,12 @@ impl RuntimeHealth {
             .iter()
             .map(|(key, record)| RuntimeMemberObservation {
                 team: key.team.clone(),
-                member: key.member.clone(),
+                member: key.agent.clone(),
                 state: record.state,
                 session_id: record.session_id.clone(),
                 pid: record.pid,
                 last_active_at: record.last_active_at,
-                state_changed_by: Some(RuntimeObservationSource::Heartbeat),
+                state_changed_by: Some(record.state_source),
                 state_changed_at: record.state_changed_at,
                 session_changed_by: record
                     .session_changed_at
@@ -214,6 +320,13 @@ impl RuntimeHealth {
             degraded_ingest: false,
             member_counts: counts,
             members,
+            graft_queue_handoff_failures_total: state.graft_queue_handoff_failures_total,
+            graft_queue_marker_clear_failures_total: state.graft_queue_marker_clear_failures_total,
+            bare_cli_queue_full_drops_total: 0,
+            queue_marker_set_failures_total: state.queue_marker_set_failures_total,
+            herdr_queue_last_tick_at: state.herdr_queue_last_tick_at,
+            queue_messages_drained_total: state.queue_messages_drained_total,
+            queue_drain_failures_total: state.queue_drain_failures_total,
         }
     }
 
@@ -227,11 +340,12 @@ impl RuntimeHealth {
 #[cfg(test)]
 mod tests {
     use super::RuntimeHealth;
+    use atm_core::boundary::MemberKey;
     use atm_core::protocol::{
-        HeartbeatActivity, RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState,
-        TeamMemberHeartbeatRequest,
+        HeartbeatActivity, RuntimeLivenessState, RuntimeMemberState, RuntimeObservationSource,
+        RuntimeReadinessState, TeamMemberHeartbeatRequest,
     };
-    use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+    use atm_core::types::{AgentName, IsoTimestamp, SessionId, TeamName};
 
     fn heartbeat(pid: u32, activity: HeartbeatActivity) -> TeamMemberHeartbeatRequest {
         TeamMemberHeartbeatRequest {
@@ -252,11 +366,15 @@ mod tests {
             RuntimeReadinessState::Unavailable
         );
         health.mark_ready();
-        let first = health.record_heartbeat(&heartbeat(10, HeartbeatActivity::ActiveToolUse));
+        let (first, transition) =
+            health.record_heartbeat(&heartbeat(10, HeartbeatActivity::ActiveToolUse));
         assert!(!first.pid_changed);
-        let second = health.record_heartbeat(&heartbeat(11, HeartbeatActivity::SessionEnded));
+        assert!(transition.is_none());
+        let (second, transition) =
+            health.record_heartbeat(&heartbeat(11, HeartbeatActivity::SessionEnded));
         assert!(second.pid_changed);
         assert_eq!(second.state, RuntimeMemberState::Offline);
+        assert!(transition.is_none());
         assert_eq!(health.snapshot().readiness, RuntimeReadinessState::Ready);
         health.begin_drain();
         assert_eq!(
@@ -268,5 +386,71 @@ mod tests {
             health.snapshot().liveness,
             RuntimeLivenessState::Unavailable
         );
+    }
+
+    #[test]
+    fn queue_graft_failures_are_cumulative_health_observations() {
+        let health = RuntimeHealth::default();
+        health.record_graft_queue_handoff_failure();
+        health.record_graft_queue_handoff_failure();
+        health.record_graft_queue_marker_clear_failure();
+        assert_eq!(health.snapshot().graft_queue_handoff_failures_total, 2);
+        assert_eq!(health.snapshot().graft_queue_marker_clear_failures_total, 1);
+    }
+
+    #[test]
+    fn herdr_poll_preserves_heartbeat_identity_and_tags_provenance() {
+        let health = RuntimeHealth::default();
+        let request = TeamMemberHeartbeatRequest {
+            team: TeamName::from_validated("runtime-team"),
+            member: AgentName::from_validated("runtime-agent"),
+            pid: 42,
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::ActiveToolUse,
+            session_id: Some(SessionId::new("session-a").expect("session")),
+        };
+        health.record_heartbeat(&request);
+        health.record_observed_state(
+            &MemberKey::new(request.team.clone(), request.member.clone()),
+            RuntimeMemberState::Idle,
+            RuntimeObservationSource::HerdrPoll,
+        );
+        let member = &health.snapshot().members[0];
+        assert_eq!(member.pid, Some(42));
+        assert_eq!(member.session_id, request.session_id);
+        assert_eq!(member.state, RuntimeMemberState::Idle);
+        assert_eq!(
+            member.state_changed_by,
+            Some(RuntimeObservationSource::HerdrPoll)
+        );
+        assert_eq!(
+            member.session_changed_by,
+            Some(RuntimeObservationSource::Heartbeat)
+        );
+    }
+
+    #[test]
+    fn herdr_queue_tick_is_visible_to_runtime_status() {
+        let health = RuntimeHealth::default();
+        let tick = IsoTimestamp::now();
+        health.record_herdr_queue_tick(Some(tick));
+        assert_eq!(health.snapshot().herdr_queue_last_tick_at, Some(tick));
+    }
+
+    #[test]
+    fn heartbeat_reports_only_genuine_transition_into_idle() {
+        let health = RuntimeHealth::default();
+        let (response, transition) =
+            health.record_heartbeat(&heartbeat(10, HeartbeatActivity::ActiveToolUse));
+        assert_eq!(response.state, RuntimeMemberState::Active);
+        assert_eq!(transition, None);
+
+        let (response, transition) =
+            health.record_heartbeat(&heartbeat(10, HeartbeatActivity::Idle));
+        assert_eq!(response.state, RuntimeMemberState::Idle);
+        assert_eq!(transition, Some(RuntimeMemberState::Active));
+
+        let (_, transition) = health.record_heartbeat(&heartbeat(10, HeartbeatActivity::Idle));
+        assert_eq!(transition, None);
     }
 }

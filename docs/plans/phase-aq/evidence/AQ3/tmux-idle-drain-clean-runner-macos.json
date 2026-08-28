@@ -1,0 +1,209 @@
+{
+  "commit": "35a28588ab4aa319eabbb972ca68931d9a61f05e",
+  "host": "clean-runner-macos",
+  "record": {
+    "counters_before": 0,
+    "daemon_log_tail": {
+      "lines": [
+        "{\"version\":\"v1\",\"timestamp\":\"2026-08-28T00:02:58.559396Z\",\"level\":\"Info\",\"service\":\"atm\",\"target\":\"atm.daemon\",\"action\":\"send\",\"message\":\"ATM daemon handled send with outcome sent\",\"identity\":{\"hostname\":null,\"pid\":null},\"trace\":null,\"request_id\":\"01M12TTHBHK10100RCB413X7T5\",\"correlation_id\":null,\"outcome\":\"sent\",\"diagnostic\":null,\"state_transition\":null,\"fields\":{\"agent\":\"aq3-idle-receiver\",\"command\":\"send\",\"dry_run\":false,\"message_id\":\"01M12TTHBHK10100RCB413X7T5\",\"requires_ack\":false,\"sender\":\"aq3-idle-sender\",\"team\":\"aq3-tmux-idle-drain\"}}",
+        "{\"version\":\"v1\",\"timestamp\":\"2026-08-28T00:02:58.868088Z\",\"level\":\"Info\",\"service\":\"atm\",\"target\":\"atm.command\",\"action\":\"send\",\"message\":\"ATM command send completed with outcome sent\",\"identity\":{\"hostname\":null,\"pid\":null},\"trace\":null,\"request_id\":\"01M12TTHBHK10100RCB413X7T5\",\"correlation_id\":null,\"outcome\":\"sent\",\"diagnostic\":null,\"state_transition\":null,\"fields\":{\"agent\":\"aq3-idle-receiver\",\"command\":\"send\",\"dry_run\":false,\"message_id\":\"01M12TTHBHK10100RCB413X7T5\",\"requires_ack\":false,\"sender\":\"aq3-idle-sender\",\"team\":\"aq3-tmux-idle-drain\"}}",
+        "{\"version\":\"v1\",\"timestamp\":\"2026-08-28T00:02:58.924724Z\",\"level\":\"Info\",\"service\":\"atm\",\"target\":\"atm.command\",\"action\":\"send\",\"message\":\"ATM command send completed with outcome sent\",\"identity\":{\"hostname\":null,\"pid\":null},\"trace\":null,\"request_id\":\"01M12TTHPV3XC0HVE4SMHXFMCQ\",\"correlation_id\":null,\"outcome\":\"sent\",\"diagnostic\":null,\"state_transition\":null,\"fields\":{\"agent\":\"aq3-idle-receiver\",\"command\":\"send\",\"dry_run\":false,\"message_id\":\"01M12TTHPV3XC0HVE4SMHXFMCQ\",\"requires_ack\":false,\"sender\":\"aq3-idle-sender\",\"team\":\"aq3-tmux-idle-drain\"}}",
+        "{\"version\":\"v1\",\"timestamp\":\"2026-08-28T00:02:58.923714Z\",\"level\":\"Info\",\"service\":\"atm\",\"target\":\"atm.daemon\",\"action\":\"send\",\"message\":\"ATM daemon handled send with outcome sent\",\"identity\":{\"hostname\":null,\"pid\":null},\"trace\":null,\"request_id\":\"01M12TTHPV3XC0HVE4SMHXFMCQ\",\"correlation_id\":null,\"outcome\":\"sent\",\"diagnostic\":null,\"state_transition\":null,\"fields\":{\"agent\":\"aq3-idle-receiver\",\"command\":\"send\",\"dry_run\":false,\"message_id\":\"01M12TTHPV3XC0HVE4SMHXFMCQ\",\"requires_ack\":false,\"sender\":\"aq3-idle-sender\",\"team\":\"aq3-tmux-idle-drain\"}}",
+        "{\"version\":\"v1\",\"timestamp\":\"2026-08-28T00:02:58.959138Z\",\"level\":\"Info\",\"service\":\"atm\",\"target\":\"atm.command\",\"action\":\"send\",\"message\":\"ATM command send completed with outcome sent\",\"identity\":{\"hostname\":null,\"pid\":null},\"trace\":null,\"request_id\":\"01M12TTHR386547004Z26JTNRQ\",\"correlation_id\":null,\"outcome\":\"sent\",\"diagnostic\":null,\"state_transition\":null,\"fields\":{\"agent\":\"aq3-idle-receiver\",\"command\":\"send\",\"dry_run\":false,\"message_id\":\"01M12TTHR386547004Z26JTNRQ\",\"requires_ack\":false,\"sender\":\"aq3-idle-sender\",\"team\":\"aq3-tmux-idle-drain\"}}",
+        "{\"version\":\"v1\",\"timestamp\":\"2026-08-28T00:02:58.957402Z\",\"level\":\"Info\",\"service\":\"atm\",\"target\":\"atm.daemon\",\"action\":\"send\",\"message\":\"ATM daemon handled send with outcome sent\",\"identity\":{\"hostname\":null,\"pid\":null},\"trace\":null,\"request_id\":\"01M12TTHR386547004Z26JTNRQ\",\"correlation_id\":null,\"outcome\":\"sent\",\"diagnostic\":null,\"state_transition\":null,\"fields\":{\"agent\":\"aq3-idle-receiver\",\"command\":\"send\",\"dry_run\":false,\"message_id\":\"01M12TTHR386547004Z26JTNRQ\",\"requires_ack\":false,\"sender\":\"aq3-idle-sender\",\"team\":\"aq3-tmux-idle-drain\"}}",
+        "{\"version\":\"v1\",\"timestamp\":\"2026-08-28T00:02:58.977248Z\",\"level\":\"Info\",\"service\":\"atm\",\"target\":\"atm.command\",\"action\":\"peek\",\"message\":\"ATM command peek completed with outcome ok\",\"identity\":{\"hostname\":null,\"pid\":null},\"trace\":null,\"request_id\":null,\"correlation_id\":null,\"outcome\":\"ok\",\"diagnostic\":null,\"state_transition\":null,\"fields\":{\"agent\":\"aq3-idle-receiver\",\"command\":\"peek\",\"dry_run\":false,\"requires_ack\":false,\"sender\":\"aq3-idle-receiver\",\"team\":\"aq3-tmux-idle-drain\"}}",
+        "{\"version\":\"v1\",\"timestamp\":\"2026-08-28T00:02:58.976939Z\",\"level\":\"Info\",\"service\":\"atm\",\"target\":\"atm.daemon\",\"action\":\"peek\",\"message\":\"ATM daemon handled peek with outcome ok\",\"identity\":{\"hostname\":null,\"pid\":null},\"trace\":null,\"request_id\":null,\"correlation_id\":null,\"outcome\":\"ok\",\"diagnostic\":null,\"state_transition\":null,\"fields\":{\"agent\":\"aq3-idle-receiver\",\"command\":\"peek\",\"dry_run\":false,\"requires_ack\":false,\"sender\":\"aq3-idle-receiver\",\"team\":\"aq3-tmux-idle-drain\"}}",
+        "{\"version\":\"v1\",\"timestamp\":\"2026-08-28T00:02:59.486379Z\",\"level\":\"Info\",\"service\":\"atm\",\"target\":\"atm.command\",\"action\":\"peek\",\"message\":\"ATM command peek completed with outcome ok\",\"identity\":{\"hostname\":null,\"pid\":null},\"trace\":null,\"request_id\":null,\"correlation_id\":null,\"outcome\":\"ok\",\"diagnostic\":null,\"state_transition\":null,\"fields\":{\"agent\":\"aq3-idle-receiver\",\"command\":\"peek\",\"dry_run\":false,\"requires_ack\":false,\"sender\":\"aq3-idle-receiver\",\"team\":\"aq3-tmux-idle-drain\"}}",
+        "{\"version\":\"v1\",\"timestamp\":\"2026-08-28T00:02:59.486111Z\",\"level\":\"Info\",\"service\":\"atm\",\"target\":\"atm.daemon\",\"action\":\"peek\",\"message\":\"ATM daemon handled peek with outcome ok\",\"identity\":{\"hostname\":null,\"pid\":null},\"trace\":null,\"request_id\":null,\"correlation_id\":null,\"outcome\":\"ok\",\"diagnostic\":null,\"state_transition\":null,\"fields\":{\"agent\":\"aq3-idle-receiver\",\"command\":\"peek\",\"dry_run\":false,\"requires_ack\":false,\"sender\":\"aq3-idle-receiver\",\"team\":\"aq3-tmux-idle-drain\"}}",
+        "{\"version\":\"v1\",\"timestamp\":\"2026-08-28T00:02:59.84366Z\",\"level\":\"Info\",\"service\":\"atm\",\"target\":\"atm.command\",\"action\":\"peek\",\"message\":\"ATM command peek completed with outcome ok\",\"identity\":{\"hostname\":null,\"pid\":null},\"trace\":null,\"request_id\":null,\"correlation_id\":null,\"outcome\":\"ok\",\"diagnostic\":null,\"state_transition\":null,\"fields\":{\"agent\":\"aq3-idle-receiver\",\"command\":\"peek\",\"dry_run\":false,\"requires_ack\":false,\"sender\":\"aq3-idle-receiver\",\"team\":\"aq3-tmux-idle-drain\"}}",
+        "{\"version\":\"v1\",\"timestamp\":\"2026-08-28T00:02:59.843395Z\",\"level\":\"Info\",\"service\":\"atm\",\"target\":\"atm.daemon\",\"action\":\"peek\",\"message\":\"ATM daemon handled peek with outcome ok\",\"identity\":{\"hostname\":null,\"pid\":null},\"trace\":null,\"request_id\":null,\"correlation_id\":null,\"outcome\":\"ok\",\"diagnostic\":null,\"state_transition\":null,\"fields\":{\"agent\":\"aq3-idle-receiver\",\"command\":\"peek\",\"dry_run\":false,\"requires_ack\":false,\"sender\":\"aq3-idle-receiver\",\"team\":\"aq3-tmux-idle-drain\"}}"
+      ],
+      "path": "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq3-tmux-idle-drain-v5pigk6c/logs/atm.log.jsonl"
+    },
+    "daemon_start": {
+      "exited_early": false,
+      "pid": 29762,
+      "ready": true,
+      "returncode": null,
+      "stderr_tail": "",
+      "stdout_tail": [
+        "ATM_DAEMON_READY"
+      ]
+    },
+    "diagnostics_before_drain": {
+      "doctor": {
+        "argv": [
+          "/Users/runner/work/atm-core/atm-core/target/release/atm",
+          "doctor",
+          "--json",
+          "--team",
+          "aq3-tmux-idle-drain"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "{\n  \"summary\": {\n    \"status\": \"healthy\",\n    \"message\": \"ATM doctor completed with healthy findings only\",\n    \"info_count\": 1,\n    \"warning_count\": 0,\n    \"error_count\": 0\n  },\n  \"findings\": [\n    {\n      \"severity\": \"info\",\n      \"code\": \"ATM_OBSERVABILITY_HEALTH_OK\",\n      \"message\": \"shared observability active at /var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq3-tmux-idle-drain-v5pigk6c/logs/atm.log.jsonl; logging health is healthy and query readiness is unknown. Detail: writer_state=running queue_depth=1 queue_capacity=1024 queue_high_water_mark=1 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never\",\n      \"remediation\": null\n    }\n  ],\n  \"recommendations\": [],\n  \"environment\": {\n    \"atm_home\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq3-tmux-idle-drain-v5pigk6c/atm-home\",\n    \"atm_team\": \"aq3-tmux-idle-drain\",\n    \"atm_identity\": \"aq3-idle-receiver\",\n    \"team_override\": \"aq3-tmux-idle-drain\"\n  },\n  \"client_context\": {\n    \"team\": \"aq3-tmux-idle-drain\",\n    \"identity\": \"aq3-idle-receiver\",\n    \"version\": \"1.4.5\",\n    \"cli_schema_version\": 1,\n    \"http_api_version\": \"1.0.0\"\n  },\n  \"daemon_context\": {\n    \"team\": \"aq3-tmux-idle-drain\",\n    \"version\": \"1.4.5\",\n    \"cli_schema_version\": 1,\n    \"http_api_version\": \"1.0.0\",\n    \"peer_wire_security\": \"plaintext-test\"\n  },\n  \"member_roster\": {\n    \"team\": \"aq3-tmux-idle-drain\",\n    \"members\": [\n      {\n        \"name\": \"aq3-idle-receiver\",\n        \"agent_id\": \"aq3-idle-receiver@aq3-tmux-idle-drain\",\n        \"agent_type\": \"general-purpose\",\n        \"harness\": \"claude-code\",\n        \"model\": \"unknown\",\n        \"joined_at\": 1787875378489,\n        \"tmux_pane_id\": \"%0\",\n        \"home_dir\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq3-tmux-idle-drain-v5pigk6c/home/aq3-idle-receiver\",\n        \"live_cwd\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq3-tmux-idle-drain-v5pigk6c/atm-home\",\n        \"extra\": {\n          \"backendType\": \"tmux\",\n          \"isActive\": true\n        }\n      },\n      {\n        \"name\": \"aq3-idle-sender\",\n        \"agent_id\": \"aq3-idle-sender@aq3-tmux-idle-drain\",\n        \"agent_type\": \"general-purpose\",\n        \"harness\": \"claude-code\",\n        \"model\": \"unknown\",\n        \"joined_at\": 1787875378475,\n        \"tmux_pane_id\": null,\n        \"home_dir\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq3-tmux-idle-drain-v5pigk6c/home/aq3-idle-sender\",\n        \"extra\": {}\n      }\n    ]\n  },\n  \"graft_receivers\": {\n    \"receivers\": []\n  },\n  \"observability\": {\n    \"active_log_path\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq3-tmux-idle-drain-v5pigk6c/logs/atm.log.jsonl\",\n    \"logging_state\": \"healthy\",\n    \"query_state\": null,\n    \"maintenance\": {\n      \"state\": \"running\",\n      \"rotated_files_total\": 0,\n      \"pruned_files_total\": 0,\n      \"last_pass_at\": null\n    },\n    \"diagnostic\": null,\n    \"detail\": \"writer_state=running queue_depth=1 queue_capacity=1024 queue_high_water_mark=1 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never\"\n  },\n  \"herdr_breaker\": {\n    \"state\": \"closed\"\n  },\n  \"post_send\": {\n    \"config_root\": \"\",\n    \"external_rules\": [],\n    \"recipient_paths\": []\n  },\n  \"config\": {\n    \"findings\": []\n  },\n  \"mail_store\": {\n    \"findings\": []\n  },\n  \"roster_store\": {\n    \"findings\": []\n  },\n  \"drift_findings\": [],\n  \"runtime_status\": {\n    \"liveness\": \"running\",\n    \"readiness\": \"ready\",\n    \"singleton_owner_pid\": 29762,\n    \"degraded_ingest\": false,\n    \"member_counts\": {\n      \"active_members\": 1,\n      \"idle_members\": 0,\n      \"offline_members\": 0,\n      \"unknown_members\": 0\n    },\n    \"members\": [\n      {\n        \"team\": \"aq3-tmux-idle-drain\",\n        \"member\": \"aq3-idle-receiver\",\n        \"state\": \"active\",\n        \"pid\": 29763,\n        \"last_active_at\": \"2026-08-28T00:02:58.519259Z\",\n        \"state_changed_by\": \"heartbeat\",\n        \"state_changed_at\": \"2026-08-28T00:02:58.519259Z\"\n      }\n    ]\n  }\n}\n"
+      },
+      "peek": {
+        "argv": [
+          "/Users/runner/work/atm-core/atm-core/target/release/atm",
+          "peek",
+          "--json",
+          "--all",
+          "--team",
+          "aq3-tmux-idle-drain"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "{\n  \"action\": \"peek\",\n  \"team\": \"aq3-tmux-idle-drain\",\n  \"agent\": \"aq3-idle-receiver\",\n  \"selection_mode\": \"all\",\n  \"mutation_applied\": false,\n  \"count\": 1,\n  \"message\": {\n    \"bucket\": \"unread\",\n    \"class\": \"unread\",\n    \"from\": \"aq3-idle-sender\",\n    \"text\": \"aq3-queue-item-two\",\n    \"timestamp\": \"2026-08-28T00:02:58.947837Z\",\n    \"read\": false,\n    \"source_team\": \"aq3-tmux-idle-drain\",\n    \"summary\": \"aq3-queue-item-two\",\n    \"message_id\": \"01M12TTHR386547004Z26JTNRQ\",\n    \"requires_ack\": false\n  },\n  \"selected_message_id\": \"01M12TTHR386547004Z26JTNRQ\",\n  \"match_count\": 3,\n  \"additional_match_count\": 2,\n  \"bucket_counts\": {\n    \"unread\": 3,\n    \"pending_ack\": 0,\n    \"history\": 0\n  }\n}\n"
+      }
+    },
+    "fifo_order_confirmed": true,
+    "finished_at_ns": 1787875379878546000,
+    "host": "clean-runner-macos",
+    "idle_transition_drain_one": {
+      "counters_after": 1,
+      "diagnostics": {
+        "doctor": {
+          "argv": [
+            "/Users/runner/work/atm-core/atm-core/target/release/atm",
+            "doctor",
+            "--json",
+            "--team",
+            "aq3-tmux-idle-drain"
+          ],
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\n  \"summary\": {\n    \"status\": \"healthy\",\n    \"message\": \"ATM doctor completed with healthy findings only\",\n    \"info_count\": 1,\n    \"warning_count\": 0,\n    \"error_count\": 0\n  },\n  \"findings\": [\n    {\n      \"severity\": \"info\",\n      \"code\": \"ATM_OBSERVABILITY_HEALTH_OK\",\n      \"message\": \"shared observability active at /var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq3-tmux-idle-drain-v5pigk6c/logs/atm.log.jsonl; logging health is healthy and query readiness is unknown. Detail: writer_state=running queue_depth=1 queue_capacity=1024 queue_high_water_mark=1 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never\",\n      \"remediation\": null\n    }\n  ],\n  \"recommendations\": [],\n  \"environment\": {\n    \"atm_home\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq3-tmux-idle-drain-v5pigk6c/atm-home\",\n    \"atm_team\": \"aq3-tmux-idle-drain\",\n    \"atm_identity\": \"aq3-idle-receiver\",\n    \"team_override\": \"aq3-tmux-idle-drain\"\n  },\n  \"client_context\": {\n    \"team\": \"aq3-tmux-idle-drain\",\n    \"identity\": \"aq3-idle-receiver\",\n    \"version\": \"1.4.5\",\n    \"cli_schema_version\": 1,\n    \"http_api_version\": \"1.0.0\"\n  },\n  \"daemon_context\": {\n    \"team\": \"aq3-tmux-idle-drain\",\n    \"version\": \"1.4.5\",\n    \"cli_schema_version\": 1,\n    \"http_api_version\": \"1.0.0\",\n    \"peer_wire_security\": \"plaintext-test\"\n  },\n  \"member_roster\": {\n    \"team\": \"aq3-tmux-idle-drain\",\n    \"members\": [\n      {\n        \"name\": \"aq3-idle-receiver\",\n        \"agent_id\": \"aq3-idle-receiver@aq3-tmux-idle-drain\",\n        \"agent_type\": \"general-purpose\",\n        \"harness\": \"claude-code\",\n        \"model\": \"unknown\",\n        \"joined_at\": 1787875378489,\n        \"tmux_pane_id\": \"%0\",\n        \"home_dir\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq3-tmux-idle-drain-v5pigk6c/home/aq3-idle-receiver\",\n        \"live_cwd\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq3-tmux-idle-drain-v5pigk6c/atm-home\",\n        \"extra\": {\n          \"backendType\": \"tmux\",\n          \"isActive\": true\n        }\n      },\n      {\n        \"name\": \"aq3-idle-sender\",\n        \"agent_id\": \"aq3-idle-sender@aq3-tmux-idle-drain\",\n        \"agent_type\": \"general-purpose\",\n        \"harness\": \"claude-code\",\n        \"model\": \"unknown\",\n        \"joined_at\": 1787875378475,\n        \"tmux_pane_id\": null,\n        \"home_dir\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq3-tmux-idle-drain-v5pigk6c/home/aq3-idle-sender\",\n        \"extra\": {}\n      }\n    ]\n  },\n  \"graft_receivers\": {\n    \"receivers\": []\n  },\n  \"observability\": {\n    \"active_log_path\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq3-tmux-idle-drain-v5pigk6c/logs/atm.log.jsonl\",\n    \"logging_state\": \"healthy\",\n    \"query_state\": null,\n    \"maintenance\": {\n      \"state\": \"running\",\n      \"rotated_files_total\": 0,\n      \"pruned_files_total\": 0,\n      \"last_pass_at\": null\n    },\n    \"diagnostic\": null,\n    \"detail\": \"writer_state=running queue_depth=1 queue_capacity=1024 queue_high_water_mark=1 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never\"\n  },\n  \"herdr_breaker\": {\n    \"state\": \"closed\"\n  },\n  \"post_send\": {\n    \"config_root\": \"\",\n    \"external_rules\": [],\n    \"recipient_paths\": []\n  },\n  \"config\": {\n    \"findings\": []\n  },\n  \"mail_store\": {\n    \"findings\": []\n  },\n  \"roster_store\": {\n    \"findings\": []\n  },\n  \"drift_findings\": [],\n  \"runtime_status\": {\n    \"liveness\": \"running\",\n    \"readiness\": \"ready\",\n    \"singleton_owner_pid\": 29762,\n    \"degraded_ingest\": false,\n    \"member_counts\": {\n      \"active_members\": 0,\n      \"idle_members\": 1,\n      \"offline_members\": 0,\n      \"unknown_members\": 0\n    },\n    \"members\": [\n      {\n        \"team\": \"aq3-tmux-idle-drain\",\n        \"member\": \"aq3-idle-receiver\",\n        \"state\": \"idle\",\n        \"pid\": 29792,\n        \"last_active_at\": \"2026-08-28T00:02:58.519259Z\",\n        \"state_changed_by\": \"heartbeat\",\n        \"state_changed_at\": \"2026-08-28T00:02:59.009173Z\"\n      }\n    ],\n    \"queue_messages_drained_total\": 1\n  }\n}\n"
+        },
+        "peek": {
+          "argv": [
+            "/Users/runner/work/atm-core/atm-core/target/release/atm",
+            "peek",
+            "--json",
+            "--all",
+            "--team",
+            "aq3-tmux-idle-drain"
+          ],
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\n  \"action\": \"peek\",\n  \"team\": \"aq3-tmux-idle-drain\",\n  \"agent\": \"aq3-idle-receiver\",\n  \"selection_mode\": \"all\",\n  \"mutation_applied\": false,\n  \"count\": 1,\n  \"message\": {\n    \"bucket\": \"unread\",\n    \"class\": \"unread\",\n    \"from\": \"aq3-idle-sender\",\n    \"text\": \"aq3-queue-item-two\",\n    \"timestamp\": \"2026-08-28T00:02:58.947837Z\",\n    \"read\": false,\n    \"source_team\": \"aq3-tmux-idle-drain\",\n    \"summary\": \"aq3-queue-item-two\",\n    \"message_id\": \"01M12TTHR386547004Z26JTNRQ\",\n    \"requires_ack\": false\n  },\n  \"selected_message_id\": \"01M12TTHR386547004Z26JTNRQ\",\n  \"match_count\": 3,\n  \"additional_match_count\": 2,\n  \"bucket_counts\": {\n    \"unread\": 3,\n    \"pending_ack\": 0,\n    \"history\": 0\n  }\n}\n"
+        }
+      },
+      "drained_delta": 1,
+      "heartbeat": {
+        "activity": "idle",
+        "member": "aq3-idle-receiver",
+        "returncode": 0
+      },
+      "pane_after": "<atm from=\"aq3-idle-sender@aq3-tmux-idle-drain\" message-id=\"01M12TTHBHK10100RCB4\n13X7T5\">\n  <action>read atm --team aq3-tmux-idle-drain</action>\n  <description>aq3-steer-immediate</description>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm><atm from=\"aq3-idle-sender@aq3-tmux-idle-drain\" message-id=\"01M12TTHBHK101\n00RCB413X7T5\">\n  <action>read atm --team aq3-tmux-idle-drain</action>\n  <description>aq3-steer-immediate</description>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n\n</atm>\n\n\n<atm from=\"aq3-idle-sender@aq3-tmux-idle-drain\" message-id=\"01M12TTHPV3XC0HVE4SM\nHXFMCQ\">\n  <action>read atm --team aq3-tmux-idle-drain</action>\n  <description>aq3-queue-item-one</description>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm><atm from=\"aq3-idle-sender@aq3-tmux-idle-drain\" message-id=\"01M12TTHPV3XC0\nHVE4SMHXFMCQ\">\n  <action>read atm --team aq3-tmux-idle-drain</action>\n  <description>aq3-queue-item-one</description>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n\n",
+      "second_item_not_yet_present": true
+    },
+    "idle_transition_drain_two": {
+      "counters_after": 2,
+      "diagnostics": {
+        "doctor": {
+          "argv": [
+            "/Users/runner/work/atm-core/atm-core/target/release/atm",
+            "doctor",
+            "--json",
+            "--team",
+            "aq3-tmux-idle-drain"
+          ],
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\n  \"summary\": {\n    \"status\": \"healthy\",\n    \"message\": \"ATM doctor completed with healthy findings only\",\n    \"info_count\": 1,\n    \"warning_count\": 0,\n    \"error_count\": 0\n  },\n  \"findings\": [\n    {\n      \"severity\": \"info\",\n      \"code\": \"ATM_OBSERVABILITY_HEALTH_OK\",\n      \"message\": \"shared observability active at /var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq3-tmux-idle-drain-v5pigk6c/logs/atm.log.jsonl; logging health is healthy and query readiness is unknown. Detail: writer_state=running queue_depth=1 queue_capacity=1024 queue_high_water_mark=1 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never\",\n      \"remediation\": null\n    }\n  ],\n  \"recommendations\": [],\n  \"environment\": {\n    \"atm_home\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq3-tmux-idle-drain-v5pigk6c/atm-home\",\n    \"atm_team\": \"aq3-tmux-idle-drain\",\n    \"atm_identity\": \"aq3-idle-receiver\",\n    \"team_override\": \"aq3-tmux-idle-drain\"\n  },\n  \"client_context\": {\n    \"team\": \"aq3-tmux-idle-drain\",\n    \"identity\": \"aq3-idle-receiver\",\n    \"version\": \"1.4.5\",\n    \"cli_schema_version\": 1,\n    \"http_api_version\": \"1.0.0\"\n  },\n  \"daemon_context\": {\n    \"team\": \"aq3-tmux-idle-drain\",\n    \"version\": \"1.4.5\",\n    \"cli_schema_version\": 1,\n    \"http_api_version\": \"1.0.0\",\n    \"peer_wire_security\": \"plaintext-test\"\n  },\n  \"member_roster\": {\n    \"team\": \"aq3-tmux-idle-drain\",\n    \"members\": [\n      {\n        \"name\": \"aq3-idle-receiver\",\n        \"agent_id\": \"aq3-idle-receiver@aq3-tmux-idle-drain\",\n        \"agent_type\": \"general-purpose\",\n        \"harness\": \"claude-code\",\n        \"model\": \"unknown\",\n        \"joined_at\": 1787875378489,\n        \"tmux_pane_id\": \"%0\",\n        \"home_dir\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq3-tmux-idle-drain-v5pigk6c/home/aq3-idle-receiver\",\n        \"live_cwd\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq3-tmux-idle-drain-v5pigk6c/atm-home\",\n        \"extra\": {\n          \"backendType\": \"tmux\",\n          \"isActive\": true\n        }\n      },\n      {\n        \"name\": \"aq3-idle-sender\",\n        \"agent_id\": \"aq3-idle-sender@aq3-tmux-idle-drain\",\n        \"agent_type\": \"general-purpose\",\n        \"harness\": \"claude-code\",\n        \"model\": \"unknown\",\n        \"joined_at\": 1787875378475,\n        \"tmux_pane_id\": null,\n        \"home_dir\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq3-tmux-idle-drain-v5pigk6c/home/aq3-idle-sender\",\n        \"extra\": {}\n      }\n    ]\n  },\n  \"graft_receivers\": {\n    \"receivers\": []\n  },\n  \"observability\": {\n    \"active_log_path\": \"/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq3-tmux-idle-drain-v5pigk6c/logs/atm.log.jsonl\",\n    \"logging_state\": \"healthy\",\n    \"query_state\": null,\n    \"maintenance\": {\n      \"state\": \"running\",\n      \"rotated_files_total\": 0,\n      \"pruned_files_total\": 0,\n      \"last_pass_at\": null\n    },\n    \"diagnostic\": null,\n    \"detail\": \"writer_state=running queue_depth=1 queue_capacity=1024 queue_high_water_mark=1 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never\"\n  },\n  \"herdr_breaker\": {\n    \"state\": \"closed\"\n  },\n  \"post_send\": {\n    \"config_root\": \"\",\n    \"external_rules\": [],\n    \"recipient_paths\": []\n  },\n  \"config\": {\n    \"findings\": []\n  },\n  \"mail_store\": {\n    \"findings\": []\n  },\n  \"roster_store\": {\n    \"findings\": []\n  },\n  \"drift_findings\": [],\n  \"runtime_status\": {\n    \"liveness\": \"running\",\n    \"readiness\": \"ready\",\n    \"singleton_owner_pid\": 29762,\n    \"degraded_ingest\": false,\n    \"member_counts\": {\n      \"active_members\": 0,\n      \"idle_members\": 1,\n      \"offline_members\": 0,\n      \"unknown_members\": 0\n    },\n    \"members\": [\n      {\n        \"team\": \"aq3-tmux-idle-drain\",\n        \"member\": \"aq3-idle-receiver\",\n        \"state\": \"idle\",\n        \"pid\": 29822,\n        \"last_active_at\": \"2026-08-28T00:02:59.511378Z\",\n        \"state_changed_by\": \"heartbeat\",\n        \"state_changed_at\": \"2026-08-28T00:02:59.521402Z\"\n      }\n    ],\n    \"queue_messages_drained_total\": 2\n  }\n}\n"
+        },
+        "peek": {
+          "argv": [
+            "/Users/runner/work/atm-core/atm-core/target/release/atm",
+            "peek",
+            "--json",
+            "--all",
+            "--team",
+            "aq3-tmux-idle-drain"
+          ],
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\n  \"action\": \"peek\",\n  \"team\": \"aq3-tmux-idle-drain\",\n  \"agent\": \"aq3-idle-receiver\",\n  \"selection_mode\": \"all\",\n  \"mutation_applied\": false,\n  \"count\": 1,\n  \"message\": {\n    \"bucket\": \"unread\",\n    \"class\": \"unread\",\n    \"from\": \"aq3-idle-sender\",\n    \"text\": \"aq3-queue-item-two\",\n    \"timestamp\": \"2026-08-28T00:02:58.947837Z\",\n    \"read\": false,\n    \"source_team\": \"aq3-tmux-idle-drain\",\n    \"summary\": \"aq3-queue-item-two\",\n    \"message_id\": \"01M12TTHR386547004Z26JTNRQ\",\n    \"requires_ack\": false\n  },\n  \"selected_message_id\": \"01M12TTHR386547004Z26JTNRQ\",\n  \"match_count\": 3,\n  \"additional_match_count\": 2,\n  \"bucket_counts\": {\n    \"unread\": 3,\n    \"pending_ack\": 0,\n    \"history\": 0\n  }\n}\n"
+        }
+      },
+      "drained_delta": 1,
+      "heartbeat": {
+        "activity": "idle",
+        "member": "aq3-idle-receiver",
+        "returncode": 0
+      },
+      "pane_after": "<atm from=\"aq3-idle-sender@aq3-tmux-idle-drain\" message-id=\"01M12TTHBHK10100RCB4\n13X7T5\">\n  <action>read atm --team aq3-tmux-idle-drain</action>\n  <description>aq3-steer-immediate</description>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm><atm from=\"aq3-idle-sender@aq3-tmux-idle-drain\" message-id=\"01M12TTHBHK101\n00RCB413X7T5\">\n  <action>read atm --team aq3-tmux-idle-drain</action>\n  <description>aq3-steer-immediate</description>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n\n</atm>\n\n\n<atm from=\"aq3-idle-sender@aq3-tmux-idle-drain\" message-id=\"01M12TTHPV3XC0HVE4SM\nHXFMCQ\">\n  <action>read atm --team aq3-tmux-idle-drain</action>\n  <description>aq3-queue-item-one</description>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm><atm from=\"aq3-idle-sender@aq3-tmux-idle-drain\" message-id=\"01M12TTHPV3XC0\nHVE4SMHXFMCQ\">\n  <action>read atm --team aq3-tmux-idle-drain</action>\n  <description>aq3-queue-item-one</description>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n\n</atm>\n\n\n<atm from=\"aq3-idle-sender@aq3-tmux-idle-drain\" message-id=\"01M12TTHR386547004Z2\n6JTNRQ\">\n  <action>read atm --team aq3-tmux-idle-drain</action>\n  <description>aq3-queue-item-two</description>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm><atm from=\"aq3-idle-sender@aq3-tmux-idle-drain\" message-id=\"01M12TTHR38654\n7004Z26JTNRQ\">\n  <action>read atm --team aq3-tmux-idle-drain</action>\n  <description>aq3-queue-item-two</description>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n\n</atm>\n\n"
+    },
+    "initial_heartbeat": {
+      "activity": "active-tool-use",
+      "member": "aq3-idle-receiver",
+      "returncode": 0
+    },
+    "queue_kind_sends": [
+      {
+        "body": "aq3-queue-item-one",
+        "stdout": "Sent to aq3-idle-receiver@aq3-tmux-idle-drain [message_id: 01M12TTHPV3XC0HVE4SMHXFMCQ]",
+        "verb": "queue"
+      },
+      {
+        "body": "aq3-queue-item-two",
+        "stdout": "Sent to aq3-idle-receiver@aq3-tmux-idle-drain [message_id: 01M12TTHR386547004Z26JTNRQ]",
+        "verb": "queue"
+      }
+    ],
+    "roster": {
+      "receiver": {
+        "argv": [
+          "/Users/runner/work/atm-core/atm-core/target/release/atm",
+          "teams",
+          "add-member",
+          "aq3-tmux-idle-drain",
+          "aq3-idle-receiver",
+          "--home-dir",
+          "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq3-tmux-idle-drain-v5pigk6c/home/aq3-idle-receiver",
+          "--json",
+          "--backend",
+          "tmux",
+          "--target",
+          "%0"
+        ],
+        "stdout": "{\n  \"action\": \"add-member\",\n  \"team\": \"aq3-tmux-idle-drain\",\n  \"member\": \"aq3-idle-receiver\",\n  \"created_inbox\": true\n}"
+      },
+      "sender": {
+        "argv": [
+          "/Users/runner/work/atm-core/atm-core/target/release/atm",
+          "teams",
+          "add-member",
+          "aq3-tmux-idle-drain",
+          "aq3-idle-sender",
+          "--home-dir",
+          "/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/aq3-tmux-idle-drain-v5pigk6c/home/aq3-idle-sender",
+          "--json"
+        ],
+        "stdout": "{\n  \"action\": \"add-member\",\n  \"team\": \"aq3-tmux-idle-drain\",\n  \"member\": \"aq3-idle-sender\",\n  \"created_inbox\": true\n}"
+      }
+    },
+    "single_drain_per_transition_confirmed": true,
+    "sprint": "AQ3",
+    "started_at_ns": 1787875378267279000,
+    "status": "pass",
+    "steer_kind_immediate": {
+      "delivered_before_any_idle_transition": true,
+      "pane_after_send": "<atm from=\"aq3-idle-sender@aq3-tmux-idle-drain\" message-id=\"01M12TTHBHK10100RCB4\n13X7T5\">\n  <action>read atm --team aq3-tmux-idle-drain</action>\n  <description>aq3-steer-immediate</description>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm><atm from=\"aq3-idle-sender@aq3-tmux-idle-drain\" message-id=\"01M12TTHBHK101\n00RCB413X7T5\">\n  <action>read atm --team aq3-tmux-idle-drain</action>\n  <description>aq3-steer-immediate</description>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n\n</atm>\n\n\n\n\n\n\n\n\n",
+      "send": {
+        "body": "aq3-steer-immediate",
+        "stdout": "Sent to aq3-idle-receiver@aq3-tmux-idle-drain [message_id: 01M12TTHBHK10100RCB413X7T5]",
+        "verb": "send"
+      }
+    },
+    "tmux": {
+      "pane": "%0",
+      "session": "aq3-idle-drain-29752",
+      "socket": "aq3-6e0cc5ac66",
+      "socket_path": "/private/tmp/tmux-501/aq3-6e0cc5ac66"
+    }
+  },
+  "schema_version": 1,
+  "sprint": "AQ3"
+}

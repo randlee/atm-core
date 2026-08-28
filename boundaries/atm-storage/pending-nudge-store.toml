@@ -1,0 +1,51 @@
+boundary_id = "BOUNDARY-PendingNudgeStore"
+owner_package = "atm-storage"
+owner_crate_path = "atm_storage"
+name = "PendingNudgeStore"
+
+[public]
+trait = "PendingNudgeStore"
+notes = "storage-neutral durable at-most-once delivery contract for deferred (`atm queue`) nudges; the sealed store owns one marker column pair on mail_message_states and no caller above the backend crate writes SQL"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["deferred_nudge_marker_lifecycle", "deferred_nudge_claim_at_most_once_delivery"]
+io_forbidden = ["direct_sqlite_io", "message_delivery", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-core", "atm-daemon-bootstrap", "atm-runtime", "atm-storage-rusqlite"]
+allowed_dependencies = []
+forbidden_edges = ["atm-storage -> atm-core", "atm-storage -> atm-storage-rusqlite", "atm-storage -> atm-daemon"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["rusqlite::Connection"]
+
+[contracts]
+request_types = ["MemberKey", "AtmMessageId", "NudgeClaim", "IsoTimestamp"]
+response_types = ["bool", "Option<NudgeClaim>", "Vec<MemberKey>"]
+error_types = ["AtmError"]
+notes = ["MAX_NUDGE_ATTEMPTS bounds claim_next_pending eligibility; at or above this count the marker stays set but the row is reported stuck", "the caller-owned write policy (NudgeMode) that decides when to invoke this contract lives in atm-core::send, not here", "concrete backend implementations must implement the atm-storage sealed trait directly and must not depend on atm-core to satisfy this contract"]
+
+[testing]
+allowed_test_double_paths = [
+    "crate::contract::DummyPendingNudgeStore",
+    "atm_core::tests::nudge_mode::RecordingPendingNudgeStore",
+    "atm_daemon_bootstrap::received_hook_selector::tests::FailingClearPendingStore",
+    "atm_http_runtime::storage_and_nudge_router::tests::FailingMarkPendingStore",
+]
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-PENDING-NUDGE-STORE-REFERENCES"]
+review_gates = ["no_cli_sqlite_lookup", "no_backend_to_core_edge_for_pending_nudge_store"]
+
+[status]
+state = "concrete_landed"
+notes = ["AQ1 lands the sealed trait plus the atm-storage-rusqlite backend implementation and schema migration in one sprint", "the router (storage_and_nudge_router.rs) and CLI (atm queue) call sites are added by the AQ1 L2/L3 lanes against this seam"]

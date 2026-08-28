@@ -5,11 +5,50 @@ use crate::error::AtmError;
 pub use crate::protocol::{NotificationEvent, RuntimeStatusSnapshot};
 use crate::schema::AtmMessageId;
 use crate::types::{AgentName, ChatId, HostName, PaneId, TaskId, TeamName};
+/// Durable roster store used by replacement-runtime maintenance projections.
+#[doc(inline)]
+pub use atm_storage::contract::RosterStore as DurableRosterStore;
 pub use atm_storage::contract::{AckTransition, Message, MessageKey, TaskState};
 pub use atm_storage::{
     BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, TeamNudgeTemplateOverrideMode,
     TeamNudgeTemplateOverrideRow,
 };
+
+/// Durable at-most-once delivery state for deferred (`atm queue`) nudges.
+///
+/// Re-exported from `atm_storage::contract`; see that crate for the
+/// canonical trait, error, and claim-tracking documentation.
+#[doc(inline)]
+pub use atm_storage::contract::{MAX_NUDGE_ATTEMPTS, NudgeClaim, PendingNudgeStore};
+/// The canonical durable-mailbox member key for nudge and queue surfaces.
+///
+/// Re-exported from `atm_storage::types`; see that crate for the canonical
+/// definition.
+#[doc(inline)]
+pub use atm_storage::types::MemberKey;
+
+/// Which kind of recipient nudge a committed dispatch represents.
+///
+/// `Steer` is the historical immediate best-effort receiver nudge (tmux
+/// `send-keys`, Graft loopback injection). `Queue` marks a message for
+/// deferred, durable, at-most-once delivery via [`PendingNudgeStore`]
+/// instead of an immediate emission attempt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NudgeKind {
+    Steer,
+    Queue,
+}
+
+impl NudgeKind {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Steer => "steer",
+            Self::Queue => "queue",
+        }
+    }
+}
 
 /// The retained tmux receiver nudge confirms its literal payload with two
 /// `send-keys Enter` events separated by this bounded delay. The active Tokio
@@ -132,6 +171,20 @@ pub struct LocalTmuxNudgeTarget {
     pub rendered_nudge: String,
 }
 
+/// Target metadata for a Herdr prompt. The live agent name is carried by the
+/// dispatch event; only the optional per-member session is persisted.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct HerdrNudgeTarget {
+    pub session: Option<crate::HerdrSession>,
+}
+
+/// Backend-specific payload for a local steer.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub enum LocalSteerTarget {
+    Tmux(LocalTmuxNudgeTarget),
+    Herdr(HerdrNudgeTarget),
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct GraftNudgeTarget {
     pub recipient: AgentName,
@@ -146,16 +199,31 @@ pub struct GraftNudgeTarget {
     pub message_body: String,
 }
 
+/// Target for a bare-CLI queue handoff into the daemon-owned RAM FIFO.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct QueuePullTarget {
+    pub team: TeamName,
+    pub agent: AgentName,
+    pub kind: NudgeKind,
+    pub msg_id: AtmMessageId,
+    pub body: String,
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub enum PostSendBuiltInTarget {
-    LocalTmux(LocalTmuxNudgeTarget),
+    /// Local steer through the explicitly selected backend.
+    LocalSteer(LocalSteerTarget),
     Graft(GraftNudgeTarget),
+    QueuePull(QueuePullTarget),
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct BuiltInPostSendDispatch {
     pub event: PostSendHookEvent,
     pub target: PostSendBuiltInTarget,
+    /// Whether this dispatch is an immediate steer or a deferred queue
+    /// marker. See [`NudgeKind`].
+    pub kind: NudgeKind,
 }
 
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
@@ -163,7 +231,9 @@ pub struct BuiltInPostSendDispatch {
 pub enum PostSendEmissionPath {
     ExternalHook,
     LocalTmux,
+    LocalHerdr,
     GraftPort,
+    QueuePull,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]

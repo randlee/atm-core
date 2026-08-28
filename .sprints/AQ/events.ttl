@@ -1,0 +1,261 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+
+# Provenance: Phase AQ driven by fenix (Rand's delegate) from 2026-08-26. AQ1 was
+# built by fenix's background lanes + cipher (L3); AQ2.6 by arch-ctm via team-lead;
+# AQ1.5-1.7 by cipher. Assignment times are dispatch approximations (ATM message
+# times); completion = PR opened (dev-complete evidence).
+
+triage:a1 a triage:Assignment ;
+    triage:ofSprint triage:AQ1 ;
+    triage:assignedTo "fenix" ;
+    triage:assignedAt "2026-08-26T22:00:00Z"^^xsd:dateTime .
+
+triage:c1 a triage:Completion ;
+    triage:ofSprint triage:AQ1 ;
+    triage:at "2026-08-26T22:54:16Z"^^xsd:dateTime .
+
+triage:a2 a triage:Assignment ;
+    triage:ofSprint triage:AQ2-6 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-26T23:30:00Z"^^xsd:dateTime .
+
+triage:c2 a triage:Completion ;
+    triage:ofSprint triage:AQ2-6 ;
+    triage:at "2026-08-27T00:54:22Z"^^xsd:dateTime .
+
+triage:a3 a triage:Assignment ;
+    triage:ofSprint triage:AQ1-5 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-08-27T01:00:30Z"^^xsd:dateTime .
+
+triage:c3 a triage:Completion ;
+    triage:ofSprint triage:AQ1-5 ;
+    triage:at "2026-08-27T01:29:54Z"^^xsd:dateTime .
+
+triage:a4 a triage:Assignment ;
+    triage:ofSprint triage:AQ1-6 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-08-27T01:30:20Z"^^xsd:dateTime .
+
+triage:c4 a triage:Completion ;
+    triage:ofSprint triage:AQ1-6 ;
+    triage:at "2026-08-27T01:50:28Z"^^xsd:dateTime .
+
+triage:a5 a triage:Assignment ;
+    triage:ofSprint triage:AQ1-7 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-08-27T01:48:00Z"^^xsd:dateTime .
+
+triage:c5 a triage:Completion ;
+    triage:ofSprint triage:AQ1-7 ;
+    triage:at "2026-08-27T03:07:04Z"^^xsd:dateTime .
+
+triage:a6 a triage:Assignment ;
+    triage:ofSprint triage:AQ1-8 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-08-27T03:12:00Z"^^xsd:dateTime .
+
+triage:c6 a triage:Completion ;
+    triage:ofSprint triage:AQ1-8 ;
+    triage:at "2026-08-27T03:28:16Z"^^xsd:dateTime .
+
+triage:a7 a triage:Assignment ;
+    triage:ofSprint triage:AQ1-9 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-08-27T03:34:00Z"^^xsd:dateTime .
+
+triage:c7 a triage:Completion ;
+    triage:ofSprint triage:AQ1-9 ;
+    triage:at "2026-08-27T03:49:05Z"^^xsd:dateTime .
+
+triage:a8 a triage:Assignment ;
+    triage:ofSprint triage:AQ2 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-08-27T03:55:00Z"^^xsd:dateTime .
+
+triage:c8 a triage:Completion ;
+    triage:ofSprint triage:AQ2 ;
+    triage:at "2026-08-27T04:18:44Z"^^xsd:dateTime .
+
+triage:a9 a triage:Assignment ;
+    triage:ofSprint triage:AQ2-5 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-08-27T04:22:00Z"^^xsd:dateTime .
+
+triage:a10 a triage:Assignment ;
+    triage:ofSprint triage:AQ2-7 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-27T04:30:00Z"^^xsd:dateTime .
+
+triage:c9 a triage:Completion ;
+    triage:ofSprint triage:AQ2-5 ;
+    triage:at "2026-08-27T05:20:00Z"^^xsd:dateTime .
+
+triage:a11 a triage:Assignment ;
+    triage:ofSprint triage:AQ3 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-08-27T05:25:00Z"^^xsd:dateTime .
+
+triage:c11 a triage:Completion ;
+    triage:ofSprint triage:AQ3 ;
+    triage:at "2026-08-27T05:26:02Z"^^xsd:dateTime .
+
+triage:a12 a triage:Assignment ;
+    triage:ofSprint triage:AQ4 ;
+    triage:assignedTo "fenix" ;
+    triage:assignedAt "2026-08-27T05:40:00Z"^^xsd:dateTime .
+
+triage:c10 a triage:Completion ;
+    triage:ofSprint triage:AQ2-7 ;
+    triage:at "2026-08-27T05:45:19Z"^^xsd:dateTime .
+
+triage:c12 a triage:Completion ;
+    triage:ofSprint triage:AQ4 ;
+    triage:at "2026-08-27T07:10:00Z"^^xsd:dateTime .
+
+triage:a13 a triage:Assignment ;
+    triage:ofSprint triage:AQ5 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-08-27T07:20:00Z"^^xsd:dateTime .
+
+triage:c13 a triage:Completion ;
+    triage:ofSprint triage:AQ5 ;
+    triage:at "2026-08-27T06:44:00Z"^^xsd:dateTime .
+
+triage:a14 a triage:Assignment ;
+    triage:ofSprint triage:AQ6 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-08-27T22:45:00Z"^^xsd:dateTime .
+
+triage:c14 a triage:Completion ;
+    triage:ofSprint triage:AQ6 ;
+    triage:at "2026-08-27T23:20:00Z"^^xsd:dateTime ;
+    triage:prNumber "#1066" ;
+    triage:prBranch "feature/aq-6-ecosystem-preflight" ;
+    triage:headCommit "08fa8fd04" ;
+    triage:note "PR merge gated on #1059 (AQ5)" .
+
+triage:c15 a triage:Completion ;
+    triage:ofSprint triage:AQ2-7 ;
+    triage:at "2026-08-28T09:30:00Z"^^xsd:dateTime ;
+    triage:headCommit "bd3fbe923" ;
+    triage:note "AQ2.7 cycle-4 QA-4 complete: FAIL on 2 unrouted blockers (AC12 second fixture; ADR-054 addendum) + 1 minor (qa2-validation.md count)" .
+
+triage:a16 a triage:Assignment ;
+    triage:ofSprint triage:AQ2-7 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-28T10:00:00Z"^^xsd:dateTime ;
+    triage:note "cycle-5 task assignment (rendered from cycle-4 findings)" .
+
+triage:c16 a triage:Completion ;
+    triage:ofSprint triage:AQ4 ;
+    triage:at "2026-08-28T06:00:00Z"^^xsd:dateTime ;
+    triage:headCommit "55822f32b" ;
+    triage:note "AQ4 QA-3 complete: PASS-with-deferral, 7/9 AC closed, 2 deferred by ruling (AQ4-windows-loopback, AQ4-tailscale-m5); AC7 doc-sync closed at 491e6067d" .
+
+triage:a17 a triage:Assignment ;
+    triage:ofSprint triage:AQ5 ;
+    triage:assignedTo "quality-mgr" ;
+    triage:assignedAt "2026-08-28T08:00:00Z"^^xsd:dateTime ;
+    triage:note "AQ5 QA-3 re-verify assignment @ 2eaa3d99f (Windows pytest fix: test_send_to_surface JSONDecodeError from fake atm.cmd stdin)" .
+
+triage:a18 a triage:Assignment ;
+    triage:ofSprint triage:AQ6 ;
+    triage:assignedTo "quality-mgr" ;
+    triage:assignedAt "2026-08-28T09:00:00Z"^^xsd:dateTime ;
+    triage:note "AQ6 targeted re-verify assignment @ e4bc3a3f3 (inherited #1059 Windows test; carry-forward items clean)" .
+
+triage:a15 a triage:Assignment ;
+    triage:ofSprint triage:AQ2-7 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-28T05:30:00Z"^^xsd:dateTime ;
+    triage:note "cycle-4 re-dispatch: merge-forward origin/integrate/phase-aq (26fb5bc4d) into #1056 (stale-base resolve)" .
+
+triage:c17 a triage:Completion ;
+    triage:ofSprint triage:AQ2-7 ;
+    triage:at "2026-08-28T10:30:00Z"^^xsd:dateTime ;
+    triage:headCommit "d25b049d7" ;
+    triage:note "AQ2.7 cycle-5 QA-5 closing gate: PASS, 20/20 AC verified, 0 blockers, 0 important (AC12 second fixture herdr_queue_wake.rs:1288-1369; ADR-054 addendum); PR #1056 merge-ready" .
+
+triage:m1 a triage:Merge ;
+    triage:ofPR "#1054" ;
+    triage:mergeCommit "deed32e93" ;
+    triage:headCommit "e7a488e5a" ;
+    triage:mergedAt "2026-08-28T06:15:00Z"^^xsd:dateTime ;
+    triage:target "integrate/phase-aq" ;
+    triage:note "AQ3 sprint #1054 merged to integration branch (QA-final6 PASS 14/14)" .
+
+triage:m2 a triage:Merge ;
+    triage:ofPR "#1070" ;
+    triage:mergeCommit "26fb5bc4d" ;
+    triage:headCommit "9327b558b" ;
+    triage:mergedAt "2026-08-28T06:30:00Z"^^xsd:dateTime ;
+    triage:target "integrate/phase-aq" ;
+    triage:note "AQ1.9 sprint #1070 restart-matrix crash guard merged (light gate PASS)" .
+
+triage:m3 a triage:Merge ;
+    triage:ofPR "#1055" ;
+    triage:mergeCommit "0adce24d6" ;
+    triage:headCommit "8a3dd0d9c" ;
+    triage:mergedAt "2026-08-28T06:00:00Z"^^xsd:dateTime ;
+    triage:target "integrate/phase-aq" ;
+    triage:note "AQ4 sprint #1055 merged to integration branch (QA-3 PASS-with-deferral 7/9 AC; Windows loopback deferred)" .
+
+triage:m4 a triage:Merge ;
+    triage:ofPR "#1056" ;
+    triage:mergeCommit "6c70f88ce" ;
+    triage:headCommit "d25b049d7" ;
+    triage:mergedAt "2026-08-28T10:30:00Z"^^xsd:dateTime ;
+    triage:target "integrate/phase-aq" ;
+    triage:note "AQ2.7 sprint #1056 merged to integration branch (QA-5 PASS closing gate; 12/14 sprints on integrate)" .
+
+triage:m5 a triage:Merge ;
+    triage:ofPR "#1059" ;
+    triage:mergeCommit "53921169e" ;
+    triage:headCommit "23b3e4a1a" ;
+    triage:mergedAt "2026-08-28T12:00:00Z"^^xsd:dateTime ;
+    triage:target "integrate/phase-aq" ;
+    triage:note "AQ5 sprint #1059 merged to integration branch (QA-3-b PASS; 13/14 sprints on integrate)" .
+
+triage:m6 a triage:Merge ;
+    triage:ofPR "#1066" ;
+    triage:mergeCommit "edb1a5381" ;
+    triage:headCommit "29ac4a7c5" ;
+    triage:mergedAt "2026-08-28T13:00:00Z"^^xsd:dateTime ;
+    triage:target "integrate/phase-aq" ;
+    triage:note "AQ6 sprint #1066 merged to integration branch (re-verify-b PASS; 14/14 sprints on integrate, Phase AQ complete)" .
+
+triage:m7 a triage:Merge ;
+    triage:ofPR "#1076" ;
+    triage:mergeCommit "4b0d47e78" ;
+    triage:headCommit "1c13fd57c" ;
+    triage:mergedAt "2026-08-28T22:00:00Z"^^xsd:dateTime ;
+    triage:target "integrate/phase-aq" ;
+    triage:note "merge/develop-into-phase-aq #1076 (develop f99c85656) merged to integration branch (quality-mgr PASS-with-1-important: Wyvern pin not latest -> follow-up AQ6-wyvern-pin-bump)" .
+
+triage:m8 a triage:Merge ;
+    triage:ofPR "#1078" ;
+    triage:mergeCommit "d0127c999" ;
+    triage:headCommit "246a3db9d" ;
+    triage:mergedAt "2026-08-28T00:00:00Z"^^xsd:dateTime ;
+    triage:target "integrate/phase-aq" ;
+    triage:note "AQ1.9 sprint #1078 fix/aq1-9-restart-matrix-bound merged (quality-mgr light gate PASS)" .
+
+triage:m9 a triage:Merge ;
+    triage:ofPR "#1075" ;
+    triage:mergeCommit "8d6a90e10" ;
+    triage:headCommit "9dbd599f1" ;
+    triage:mergedAt "2026-08-28T00:00:00Z"^^xsd:dateTime ;
+    triage:target "integrate/phase-aq" ;
+    triage:note "AQ closeout #1075 docs/aq-closeout merged to integration branch (doc-lint PASS)" .
+
+triage:phasePR1079 a triage:PhasePROpened ;
+    triage:ofPhase "AQ" ;
+    triage:prNumber "#1079" ;
+    triage:openedAt "2026-08-28T00:00:00Z"^^xsd:dateTime ;
+    triage:headCommit "8d6a90e10" ;
+    triage:source "integrate/phase-aq" ;
+    triage:target "develop" ;
+    triage:note "Phase AQ integrate→develop PR #1079 opened (AQ5 evidence file, wyvern#139)" .

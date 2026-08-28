@@ -37,6 +37,36 @@ DEFAULT_RELEASE_TARGETS = (
     "cargo-lock-drift",
     "dependency-currency",
 )
+WYVERN_REPOSITORY = "randlee/wyvern"
+WYVERN_PIN_FILES = (
+    Path("scripts/send-to/atm-send-to.sh"),
+    Path("scripts/send-to/atm-send-to.ps1"),
+)
+WYVERN_PIN_PATTERN = re.compile(r"(?:WYVERN_PIN|wyvernPin)\s*[=:]\s*[\"'](\d+\.\d+\.\d+)[\"']")
+SEMVER_PATTERN = re.compile(r"(?<!\d)v?(\d+)\.(\d+)\.(\d+)(?!\d)")
+SC_ECOSYSTEM_CARGO_DEPENDENCIES = (
+    "sc-composer",
+    "sc-observability",
+    "sc-observability-types",
+)
+ECOSYSTEM_FIX_FORWARD_ENV = "ATMD_ECOSYSTEM_FIX_FORWARD"
+ECOSYSTEM_KNOWN_GOOD_ENV = "ATMD_ECOSYSTEM_KNOWN_GOOD"
+ECOSYSTEM_EVIDENCE_ENV = "ATMD_ECOSYSTEM_EVIDENCE"
+AQ6_EVIDENCE_REGISTER = Path("docs/plans/phase-aq/evidence/AQ6/ecosystem-preflight.md")
+ECOSYSTEM_CARGO_PIN_FILES = {
+    "sc-composer": (
+        (Path("crates/atm-template-sc-compose/Cargo.toml"), "sc-composer"),
+        (Path("crates/atm-template-sc-compose/Cargo.toml"), "sc-sha"),
+    ),
+    "sc-observability": (
+        (Path("Cargo.toml"), "sc-observability"),
+        (Path("Cargo.toml"), "sc-observability-types"),
+    ),
+    "sc-observability-types": (
+        (Path("Cargo.toml"), "sc-observability"),
+        (Path("Cargo.toml"), "sc-observability-types"),
+    ),
+}
 
 
 @dataclass
@@ -560,6 +590,14 @@ def direct_registry_dependencies(root: Path) -> dict[str, str]:
         data = tomllib.loads(manifest.read_text(encoding="utf-8"))
         collect_from_table(data.get("dependencies"))
         collect_from_table(data.get("build-dependencies"))
+        # Workspace-level dependency declarations are direct registry
+        # dependencies too. Member manifests commonly inherit these with
+        # `workspace = true`, so omitting this table makes the currency sweep
+        # blind to the workspace's primary pins.
+        workspace = data.get("workspace")
+        if isinstance(workspace, dict):
+            collect_from_table(workspace.get("dependencies"))
+            collect_from_table(workspace.get("build-dependencies"))
         for target_data in data.get("target", {}).values():
             if isinstance(target_data, dict):
                 collect_from_table(target_data.get("dependencies"))
@@ -579,14 +617,14 @@ def latest_registry_version(root: Path, crate: str) -> str | None:
     return None
 
 
-def maybe_file_dep_currency_issue(root: Path, stale: list[tuple[str, str, str]]) -> None:
+def maybe_file_dep_currency_issue(root: Path, stale: list[tuple[str, str, str]]) -> str | None:
     if os.environ.get(GITHUB_ISSUE_ENV) != "1":
-        return
+        return None
     if not stale:
-        return
+        return None
     completed = run_capture(["gh", "--version"], cwd=root)
     if completed.returncode != 0:
-        return
+        return None
     title = f"Release preflight stale dependency findings on {current_ref(root)}"
     body_lines = [
         "Publisher preflight found stale direct dependencies that should be reviewed:",
@@ -600,10 +638,475 @@ def maybe_file_dep_currency_issue(root: Path, stale: list[tuple[str, str, str]])
             f"Detected by `scripts/validate_release.py` with `{CHECK_DEP_CURRENCY_ENV}=1`.",
         ]
     )
-    run_capture(["gh", "issue", "create", "--title", title, "--body", "\n".join(body_lines)], cwd=root)
+    completed = run_capture(
+        ["gh", "issue", "create", "--title", title, "--body", "\n".join(body_lines)],
+        cwd=root,
+    )
+    if completed.returncode == 0:
+        return completed.stdout.strip() or None
+    return None
 
 
-def validate_dependency_currency(root: Path, findings: list[Finding]) -> None:
+def normalized_dependency_version(version: str) -> str:
+    """Return the registry-comparable form of a Cargo dependency version."""
+    return version.strip().lstrip("=").strip()
+
+
+def semantic_version(value: str) -> tuple[int, int, int] | None:
+    match = SEMVER_PATTERN.search(value)
+    if match is None:
+        return None
+    return tuple(int(part) for part in match.groups())
+
+
+def latest_wyvern_version(root: Path) -> str | None:
+    """Read the newest non-draft Wyvern release through the GitHub CLI."""
+    completed = run_capture(
+        [
+            "gh",
+            "release",
+            "list",
+            "--repo",
+            WYVERN_REPOSITORY,
+            "--limit",
+            "1",
+            "--json",
+            "tagName",
+        ],
+        cwd=root,
+    )
+    if completed.returncode == 0:
+        try:
+            releases = json.loads(completed.stdout)
+        except json.JSONDecodeError:
+            releases = None
+    else:
+        # `gh release list` uses the GraphQL API and can be rate-limited even
+        # when the repository's REST endpoint remains available.
+        completed = run_capture(
+            ["gh", "api", f"repos/{WYVERN_REPOSITORY}/releases/latest"],
+            cwd=root,
+        )
+        if completed.returncode != 0:
+            return None
+        try:
+            releases = [json.loads(completed.stdout)]
+        except json.JSONDecodeError:
+            releases = None
+    if isinstance(releases, list):
+        for release in releases:
+            tag = release.get("tagName", release.get("tag_name")) if isinstance(release, dict) else None
+            if isinstance(tag, str):
+                version = semantic_version(tag)
+                if version is not None:
+                    return ".".join(str(part) for part in version)
+    return next(
+        (
+            ".".join(str(part) for part in version)
+            for version in (semantic_version(line) for line in completed.stdout.splitlines())
+            if version is not None
+        ),
+        None,
+    )
+
+
+def ecosystem_evidence_path(root: Path) -> Path:
+    configured = os.environ.get(ECOSYSTEM_EVIDENCE_ENV)
+    if configured is None:
+        return root / AQ6_EVIDENCE_REGISTER
+    path = Path(configured)
+    return path if path.is_absolute() else root / path
+
+
+def configured_known_good_pin(dependency: str) -> str | None:
+    raw = os.environ.get(ECOSYSTEM_KNOWN_GOOD_ENV)
+    if not raw:
+        return None
+    try:
+        values = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    value = values.get(dependency) if isinstance(values, dict) else None
+    return value if isinstance(value, str) and semantic_version(value) is not None else None
+
+
+def replace_cargo_exact_pin(path: Path, dependency: str, version: str) -> bool:
+    text = path.read_text(encoding="utf-8")
+    pattern = re.compile(
+        rf'(?m)^(?P<prefix>[ \t]*{re.escape(dependency)}[ \t]*=[ \t]*")'
+        rf"=?\d+\.\d+\.\d+(?P<suffix>\"[^\n]*)$"
+    )
+    matches = list(pattern.finditer(text))
+    if len(matches) != 1:
+        raise ValueError(f"expected exactly one exact Cargo pin for {dependency} in {path}; found {len(matches)}")
+    updated = pattern.sub(rf"\g<prefix>={version}\g<suffix>", text, count=1)
+    if updated == text:
+        return False
+    path.write_text(updated, encoding="utf-8")
+    return True
+
+
+def replace_wyvern_pin(path: Path, version: str) -> bool:
+    text = path.read_text(encoding="utf-8")
+    pattern = re.compile(
+        r'(?m)(?P<prefix>(?:WYVERN_PIN|wyvernPin)[ \t]*[=:][ \t]*["\'])'
+        r"\d+\.\d+\.\d+(?P<suffix>[\"'][^\n]*)"
+    )
+    matches = list(pattern.finditer(text))
+    if len(matches) != 1:
+        raise ValueError(f"expected exactly one WYVERN_PIN in {path}; found {len(matches)}")
+    updated = pattern.sub(rf"\g<prefix>{version}\g<suffix>", text, count=1)
+    if updated == text:
+        return False
+    path.write_text(updated, encoding="utf-8")
+    return True
+
+
+def pin_back_ecosystem_dependency(
+    root: Path,
+    dependency: str,
+    last_known_good: str,
+    latest: str,
+    issue_url: str | None,
+    *,
+    evidence_register: Path | None = None,
+) -> list[Path]:
+    """Pin a regressed latest release back and append the required evidence."""
+    good_version = semantic_version(last_known_good)
+    latest_version = semantic_version(latest)
+    if good_version is None or latest_version is None:
+        raise ValueError(f"pin-back versions must be semantic versions: {last_known_good}, {latest}")
+    if good_version == latest_version:
+        raise ValueError(f"pin-back version for {dependency} must differ from regressed latest {latest}")
+
+    changed: list[Path] = []
+    if dependency == "wyvern":
+        for relative_path in WYVERN_PIN_FILES:
+            path = root / relative_path
+            if not path.is_file():
+                raise ValueError(f"missing Wyvern pin file: {relative_path}")
+            if replace_wyvern_pin(path, last_known_good):
+                changed.append(relative_path)
+    else:
+        pin_files = ECOSYSTEM_CARGO_PIN_FILES.get(dependency)
+        if pin_files is None:
+            raise ValueError(f"unsupported sc-ecosystem dependency: {dependency}")
+        for relative_path, cargo_dependency in pin_files:
+            path = root / relative_path
+            if not path.is_file():
+                raise ValueError(f"missing Cargo pin file: {relative_path}")
+            if replace_cargo_exact_pin(path, cargo_dependency, last_known_good):
+                if relative_path not in changed:
+                    changed.append(relative_path)
+
+    register = evidence_register or ecosystem_evidence_path(root)
+    register.parent.mkdir(parents=True, exist_ok=True)
+    issue_reference = issue_url or "not filed; set ATMD_GH_AUTOFIX_ISSUES=1 to file it"
+    files = ", ".join(f"`{path}`" for path in changed) or "already at the requested pin"
+    with register.open("a", encoding="utf-8") as stream:
+        stream.write(
+            "\n## Fix-forward pin-back\n\n"
+            f"- dependency: `{dependency}`\n"
+            f"- regressed latest: `{latest}`\n"
+            f"- pinned back to last known-good: `{last_known_good}`\n"
+            f"- changed files: {files}\n"
+            f"- tracking issue: {issue_reference}\n"
+        )
+    return changed
+
+
+def handle_ecosystem_regression(
+    root: Path,
+    findings: list[Finding],
+    dependency: str,
+    current: str,
+    latest: str,
+    failure: str,
+) -> None:
+    issue_url = maybe_file_dep_currency_issue(root, [(dependency, current, latest)])
+    if os.environ.get(ECOSYSTEM_FIX_FORWARD_ENV) != "1":
+        append_ecosystem_finding(
+            findings,
+            f"{dependency} latest release regressed its integration contract",
+            f"{failure}; set {ECOSYSTEM_FIX_FORWARD_ENV}=1 with a {ECOSYSTEM_KNOWN_GOOD_ENV} map "
+            "to pin back in fix-forward mode, or fix the latest release forward.",
+        )
+        return
+
+    last_known_good = configured_known_good_pin(dependency)
+    if last_known_good is None:
+        append_ecosystem_finding(
+            findings,
+            f"{dependency} regression cannot be pinned back",
+            f"{failure}; provide {ECOSYSTEM_KNOWN_GOOD_ENV} with the last-known-good version.",
+        )
+        return
+    try:
+        changed = pin_back_ecosystem_dependency(
+            root,
+            dependency,
+            last_known_good,
+            latest,
+            issue_url,
+        )
+    except (OSError, ValueError) as error:
+        append_ecosystem_finding(
+            findings,
+            f"{dependency} regression pin-back failed",
+            f"{failure}; {error}",
+        )
+        return
+    files = ", ".join(str(path) for path in changed) or "no file changes needed"
+    issue = issue_url or "no issue URL (set ATMD_GH_AUTOFIX_ISSUES=1)"
+    append_ecosystem_finding(
+        findings,
+        f"{dependency} latest release regressed; pinned back to {last_known_good}",
+        f"{failure}; changed {files}; tracking issue: {issue}. Fix forward before release closure.",
+    )
+
+
+def wyvern_pins(root: Path) -> dict[Path, str]:
+    pins: dict[Path, str] = {}
+    for relative_path in WYVERN_PIN_FILES:
+        path = root / relative_path
+        if not path.is_file():
+            continue
+        matches = WYVERN_PIN_PATTERN.findall(path.read_text(encoding="utf-8"))
+        if len(matches) == 1:
+            pins[relative_path] = matches[0]
+    return pins
+
+
+def append_ecosystem_finding(
+    findings: list[Finding],
+    summary: str,
+    detail: str = "",
+    command: list[str] | None = None,
+) -> None:
+    findings.append(
+        Finding(
+            check="sc-ecosystem-preflight",
+            severity="error",
+            summary=summary,
+            detail=detail,
+            command=command,
+        )
+    )
+
+
+def run_ecosystem_command(
+    root: Path,
+    findings: list[Finding],
+    command: list[str],
+    summary: str,
+) -> bool:
+    completed = run_capture(command, cwd=root)
+    if completed.returncode == 0:
+        return True
+    append_ecosystem_finding(
+        findings,
+        summary,
+        (completed.stderr or completed.stdout).strip(),
+        command,
+    )
+    return False
+
+
+def validate_ecosystem_currency(
+    root: Path,
+    findings: list[Finding],
+    *,
+    dry_run: bool = False,
+) -> None:
+    """Block a release when an sc-ecosystem pin or its integration proof is stale."""
+    stale: list[tuple[str, str, str]] = []
+    unresolved: list[str] = []
+    latest_versions: dict[str, str] = {}
+    direct = direct_registry_dependencies(root)
+    for dependency in SC_ECOSYSTEM_CARGO_DEPENDENCIES:
+        current = direct.get(dependency)
+        if current is None:
+            append_ecosystem_finding(
+                findings,
+                f"missing required sc-ecosystem dependency pin: {dependency}",
+                f"Declare {dependency} in the workspace before running release preflight.",
+            )
+            continue
+        latest = latest_registry_version(root, dependency)
+        if latest is None:
+            unresolved.append(dependency)
+            continue
+        latest_versions[dependency] = latest
+        comparable_current = normalized_dependency_version(current)
+        if latest != comparable_current:
+            stale.append((dependency, current, latest))
+
+    if unresolved:
+        append_ecosystem_finding(
+            findings,
+            "sc-ecosystem registry releases could not be resolved",
+            ", ".join(unresolved),
+        )
+    if stale:
+        detail = "; ".join(
+            f"{dependency}: current {current} (pin {normalized_dependency_version(current)}), latest {latest}"
+            for dependency, current, latest in stale
+        )
+        issue_url = maybe_file_dep_currency_issue(root, stale)
+        if issue_url:
+            detail += f"; tracking issue: {issue_url}"
+        append_ecosystem_finding(
+            findings,
+            "sc-ecosystem dependency pin is not the latest release",
+            detail,
+        )
+
+    pins = wyvern_pins(root)
+    if len(pins) != len(WYVERN_PIN_FILES) or len(set(pins.values())) != 1:
+        append_ecosystem_finding(
+            findings,
+            "Wyvern pin is missing or inconsistent",
+            "Both Send-To entry points must carry the same exact WYVERN_PIN.",
+        )
+        wyvern_pin = next(iter(pins.values()), None)
+    else:
+        wyvern_pin = next(iter(pins.values()))
+
+    latest_wyvern = latest_wyvern_version(root)
+    if latest_wyvern is None:
+        append_ecosystem_finding(
+            findings,
+            "could not resolve the latest Wyvern release",
+            f"Run `gh release list --repo {WYVERN_REPOSITORY} --limit 1` with GitHub access.",
+        )
+    elif wyvern_pin is not None and latest_wyvern != wyvern_pin:
+        issue_url = maybe_file_dep_currency_issue(
+            root,
+            [("wyvern", wyvern_pin, latest_wyvern)],
+        )
+        detail = f"current pin {wyvern_pin}, latest release {latest_wyvern}"
+        if issue_url:
+            detail += f"; tracking issue: {issue_url}"
+        append_ecosystem_finding(
+            findings,
+            "Wyvern pin is not the latest release",
+            detail,
+        )
+
+    wyvern_binary = os.environ.get("ATM_SEND_TO_WYVERN_BIN", "wyvern")
+    if shutil.which(wyvern_binary) is None:
+        append_ecosystem_finding(
+            findings,
+            "Wyvern is required on PATH for ecosystem preflight",
+            "install wyvern before running preflight; AQ5 runtime lanes remain Wyvern-optional.",
+        )
+    elif wyvern_pin is not None and not dry_run:
+        asset = Path(
+            os.environ.get(
+                "ATM_SEND_TO_WYVERN_ASSET",
+                str(root / "scripts" / "send-to" / "pick-member.html"),
+            )
+        )
+        probe = [
+            sys.executable,
+            str(root / "scripts" / "send-to" / "probe_wyvern.py"),
+            "--pin",
+            wyvern_pin,
+            "--asset",
+            str(asset),
+        ]
+        if not run_ecosystem_command(root, findings, probe, "Wyvern version/schema preflight probe failed"):
+            handle_ecosystem_regression(
+                root,
+                findings,
+                "wyvern",
+                wyvern_pin,
+                latest_wyvern or wyvern_pin,
+                "Wyvern version/schema preflight probe failed",
+            )
+
+    if dry_run or stale or unresolved:
+        return
+
+    compose_binary = os.environ.get("ATMD_SC_COMPOSE_BIN", "sc-compose")
+    if shutil.which(compose_binary) is None:
+        append_ecosystem_finding(
+            findings,
+            "sc-compose is required for ecosystem preflight",
+            "install the pinned sc-compose release before running preflight.",
+        )
+    else:
+        compose_tests_passed = run_ecosystem_command(
+            root,
+            findings,
+            ["cargo", "test", "-p", "atm-template-sc-compose"],
+            "sc-compose adapter integration tests failed",
+        )
+        if not compose_tests_passed:
+            handle_ecosystem_regression(
+                root,
+                findings,
+                "sc-composer",
+                direct["sc-composer"],
+                latest_versions["sc-composer"],
+                "sc-compose adapter integration tests failed",
+            )
+        observability_tests_passed = run_ecosystem_command(
+            root,
+            findings,
+            ["cargo", "test", "-p", "agent-team-mail"],
+            "sc-observability ATM integration tests failed",
+        )
+        if not observability_tests_passed:
+            handle_ecosystem_regression(
+                root,
+                findings,
+                "sc-observability",
+                direct["sc-observability"],
+                latest_versions["sc-observability"],
+                "sc-observability ATM integration tests failed",
+            )
+        vars_file = root / "docs" / "plans" / "phase-aq" / "fixtures" / "sc-compose-preflight-vars.json"
+        for template in (
+            root / ".claude" / "skills" / "codex-orchestration" / "dev-template.xml.j2",
+            root / ".claude" / "skills" / "plan-hardening" / "01-plan-scope-review.xml.j2",
+        ):
+            template_passed = run_ecosystem_command(
+                root,
+                findings,
+                [
+                    compose_binary,
+                    "render",
+                    "--file",
+                    str(template),
+                    "--var-file",
+                    str(vars_file),
+                    "--check-render",
+                ],
+                f"sc-compose canonical template smoke failed: {template.relative_to(root)}",
+            )
+            if not template_passed:
+                handle_ecosystem_regression(
+                    root,
+                    findings,
+                    "sc-composer",
+                    direct["sc-composer"],
+                    latest_versions["sc-composer"],
+                    f"sc-compose canonical template smoke failed: {template.relative_to(root)}",
+                )
+
+    # The fixture validator is intentionally independent of Wyvern so the AQ5
+    # fallback lanes remain runnable on hosts without the optional binary.
+    fixture_test = root / ".just" / "tests" / "test_send_to_surface.py"
+    run_ecosystem_command(
+        root,
+        findings,
+        [sys.executable, str(fixture_test)],
+        "AQ5 picker fixture regression suite failed",
+    )
+
+
+def validate_generic_dependency_currency(root: Path, findings: list[Finding]) -> None:
     if os.environ.get(CHECK_DEP_CURRENCY_ENV) != "1":
         findings.append(
             Finding(
@@ -621,7 +1124,7 @@ def validate_dependency_currency(root: Path, findings: list[Finding]) -> None:
         if latest is None:
             unresolved.append(dep)
             continue
-        if latest != current:
+        if latest != normalized_dependency_version(current):
             stale.append((dep, current, latest))
 
     if unresolved:
@@ -644,6 +1147,17 @@ def validate_dependency_currency(root: Path, findings: list[Finding]) -> None:
             )
         )
         maybe_file_dep_currency_issue(root, stale)
+
+
+def validate_dependency_currency(
+    root: Path,
+    findings: list[Finding],
+    *,
+    ecosystem_dry_run: bool = False,
+) -> None:
+    """Run the legacy advisory sweep and the blocking sc-ecosystem gate."""
+    validate_generic_dependency_currency(root, findings)
+    validate_ecosystem_currency(root, findings, dry_run=ecosystem_dry_run)
 
 
 def validate_phase_ad_readiness(root: Path, findings: list[Finding]) -> None:
@@ -836,11 +1350,17 @@ def build_parser() -> argparse.ArgumentParser:
             "inventory",
             "cargo-lock-drift",
             "dependency-currency",
+            "ecosystem-preflight",
             "phase-ad-readiness",
         ),
     )
     parser.add_argument("--version", help="Release version to validate; defaults to workspace.package.version")
     parser.add_argument("--findings", default="release-findings.json", help="Path to findings JSON output")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Resolve ecosystem releases and pins without running integration commands",
+    )
     return parser
 
 
@@ -876,7 +1396,16 @@ def main(argv: list[str] | None = None) -> int:
             findings,
             enforce_release_window=explicit_version,
         ),
-        "dependency-currency": lambda: validate_dependency_currency(root, findings),
+        "dependency-currency": lambda: validate_dependency_currency(
+            root,
+            findings,
+            ecosystem_dry_run=args.dry_run,
+        ),
+        "ecosystem-preflight": lambda: validate_ecosystem_currency(
+            root,
+            findings,
+            dry_run=args.dry_run,
+        ),
         "phase-ad-readiness": lambda: validate_phase_ad_readiness(root, findings),
     }
 
