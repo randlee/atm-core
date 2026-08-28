@@ -1870,8 +1870,8 @@
    "assignment_message_id": null,
    "assignment_from": "quality-mgr",
    "assignment_shared_path": null,
-   "assignment_summary": "AQ5 #1059 QA-2 on wyvern invocation corrected @ 8cb881dfe",
-   "result_time_utc": "2026-08-28T02:20:00Z",
+   "assignment_summary": "AQ5 #1059 QA-2 minors fixed @ 02625b727",
+   "result_time_utc": "2026-08-28T03:40:00Z",
    "result_time_pst": null,
    "result_message_id": null,
    "result_from": "quality-mgr",
@@ -1882,7 +1882,7 @@
    "important": 4,
    "minor": 0,
    "count_basis": "headline/reviewer",
-   "evidence": "11/14 @ 8cb881dfe: ATM-QA-AQ5-001 pickers now exclude dead/idle members (real exclusion proven, traceability confirmed), ATM-QA-AQ5-002 traceability table correctly mapped (entry/exit confirmed), ATM-QA-AQ5-003 Wyvern pick-member.html vendored from randlee/wyvern#140 (real invocation contract proven), ATM-QA-AQ5-004 manual GUI E2E absent \u2014 ruling (fenix): deferred to Phase AQ closeout as AQ5-gui-e2e (owner Rand, macOS Finder first, then Explorer/Nautilus). Important: no OS notification for GUI-entry stderr, README Nautilus path drift, committed fixtures unused by harness. R1/R15 inherit. Minors (broken link, PRD R4 wording) docs fix in progress. wyvern#140 reference confirmed. Real contract delivered."
+   "evidence": "14/14 @ 02625b727: QA-2 minors fixed (docs wording: broken link + PRD R4 CLI exclude+notice equivalent blessed in rules table; AC4 deferred-by-ruling note added); Windows lint root-caused and fixed (.sh picker wrappers now run via discovered POSIX shell on Windows; sys.executable for picker.py fallback injection). CI 33128521856 queued. ATM-QA-AQ5-001 pickers exclude dead/idle members (real exclusion proven), ATM-QA-AQ5-002 traceability mapped (entry/exit confirmed), ATM-QA-AQ5-003 Wyvern pick-member.html vendored from randlee/wyvern#140 (real invocation contract proven), ATM-QA-AQ5-004 manual GUI E2E absent \u2014 ruling (fenix): deferred to AQ5-gui-e2e. Important (4): no OS notification for GUI-entry stderr, README Nautilus path drift, committed fixtures unused, degradation harness CI transcript missing. QA-3 pending: expected PASS-with-deferral AC4 \u2192 AQ5-gui-e2e."
   },
   {
    "run_id": "QA-AQ3-R2",
