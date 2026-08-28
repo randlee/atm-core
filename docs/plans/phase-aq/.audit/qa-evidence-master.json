@@ -3,7 +3,7 @@
  "timezone": "UTC (result_time_pst/assignment_time_pst omitted; verdict timestamps are GitHub PR comment times)",
  "audit_window": {
   "start": "2026-08-27T00:09:55Z",
-  "end": "2026-08-28T20:40:00Z"
+  "end": "2026-08-28T22:10:00Z"
  },
  "scope": "phase-aq sprints in landing order (structure.ttl). Runs recorded: AQ1 (3, final PASS, merged), AQ2.6 (2, latest FAIL, fix cycle 2 in progress), AQ1.5 (1, FAIL, fix in progress). AQ1.6 (#1046) QA-1 requested (pending run recorded, verdict null). Non-sprint lanes reviewed by quality-mgr but not sprint rows: lane A ADR-058 #1039 (PASS d6f4dd90f, merged 4805264a2) and lane C AQ4 groundwork #1043 (QA-1 FAIL a911abfd8 \u2192 QA-2 FAIL 23be719f3 \u2192 QA-3 PASS 28422190e, merge requested) \u2014 they roll into AQ2.6/AQ4 evidence at closeout.",
  "count_basis": "headline/reviewer",
@@ -3108,6 +3108,31 @@
    "minor": 0,
    "count_basis": "harness-written core fields",
    "evidence": "AQ4 #1055 @ a122d7ad6: CI run 33139895101 fully GREEN on all lanes including Windows lint (first fully green Windows lint on branch; .sh contract tests exec'd on Windows, sftp.ps1 NTFS placeholder fixed). Evidence commit-field audit: all 10 committed records match their run heads with harness-written core fields."
+  },
+  {
+   "run_id": "CI-AQ4-HARNESS-INTEGRITY-R7",
+   "aich_sprint": "AQ4",
+   "phase_sprint": "AQ4",
+   "pass": null,
+   "run_type": "evidence",
+   "assignment_time_utc": null,
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": null,
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ4 #1055 @ 7f6774802 evidence-harness integrity (head-verified); run 7 dispatched",
+   "result_time_utc": "2026-08-28T22:10:00Z",
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": "quality-mgr",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": null,
+   "blockers": null,
+   "important": null,
+   "minor": null,
+   "count_basis": "evidence",
+   "evidence": "AQ4 #1055 @ 7f6774802 evidence-harness integrity: Windows run-6 crash root cause = TemporaryDirectory.__exit__ WinError 32/5 on sender-cwd after atm send, discarding the computed record. Fix: record written before teardown, tolerant mkdtemp cleanup with cleanup_warning. All four run_*_evidence.py harnesses clear their own outputs at start and emit a harness_crashed record with traceback on exception (+ tests). Follow-up: run_hermes_atm_restart_matrix.py lacks the guard. Evidence run 7 dispatched on 7f6774802 (head-verified)."
   }
  ],
  "follow_ups": [
