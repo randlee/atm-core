@@ -2983,6 +2983,31 @@
    "minor": null,
    "count_basis": "headline/reviewer",
    "evidence": "AQ4 #1055 @ fcd7bd42b: CI observability improvements deployed: (1) run_lint pytest preview now enumerates every ERROR/FAIL block (15-line tracebacks, 400-line cap, tests added); (2) ci.yml uploads .just/logs/** as just-lint-logs-<os> on failure for full build logs. Hypothesis for 16 hidden Windows pytest errors: SftpShTests + TailscaleShTests (8 methods \u00d7 2) exec #!/bin/sh scripts directly on Windows \u2192 OSError on native cmd/pwsh. Fix dispatched: run POSIX shell via discovered shell.exe on win32, exact-reason skip if shell unavailable. Evidence run 6 Windows leg pending with new observability active."
+  },
+  {
+   "run_id": "CI-AQ4-RUNNER-7",
+   "aich_sprint": "AQ4",
+   "phase_sprint": "AQ4",
+   "pass": null,
+   "run_type": "qa",
+   "assignment_time_utc": "2026-08-28T18:00:00Z",
+   "assignment_time_pst": null,
+   "assignment_message_id": null,
+   "assignment_from": "quality-mgr",
+   "assignment_shared_path": null,
+   "assignment_summary": "AQ4 #1055 @ c76314cd1 Windows POSIX shell contract tests evidence run",
+   "result_time_utc": "2026-08-28T18:20:00Z",
+   "result_time_pst": null,
+   "result_message_id": null,
+   "result_from": "quality-mgr",
+   "result_shared_path": null,
+   "result_temp_path": null,
+   "verdict": null,
+   "blockers": null,
+   "important": null,
+   "minor": null,
+   "count_basis": "headline/reviewer",
+   "evidence": "AQ4 #1055 @ c76314cd1: SftpShTests/TailscaleShTests invoke .sh scripts via discovered POSIX shell on Windows (unix unchanged); latent CRLF corruption in fake-binary writer fixed (newline=\\\"\\\"); PosixShellDiscoveryTests added; 32/32 lint locally. CI errors=16 confirmation run (pytest artifact on failure). Evidence run 6 Windows leg pending API-limit reset."
   }
  ],
  "follow_ups": [
