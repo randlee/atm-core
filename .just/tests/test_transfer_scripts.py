@@ -177,7 +177,18 @@ FAKE_TRANSFER_LIB = textwrap.dedent(
 
 def _install_fake_bin(bin_dir: Path) -> None:
     """Writes the fake `ssh`/`scp` (and their shared helper module) into
-    `bin_dir`, marking the two executables owner-executable."""
+    `bin_dir`, marking the two executables owner-executable.
+
+    On Windows, `sftp.ps1` resolves `ssh`/`scp` via `Get-Command -CommandType
+    Application`, which only matches files whose extension is in
+    `$env:PATHEXT` -- a bare, extension-less file (fine for Unix, where the
+    kernel reads the shebang line regardless of extension) is invisible to
+    it. Also write a `<name>.cmd` shim next to each bare script so
+    `Get-Command ssh`/`Get-Command scp` finds a real command on `PATH`
+    exactly like the production OpenSSH client's `ssh.exe`/`scp.exe` would
+    be found; the shim just re-execs this same Python source under the
+    interpreter already running the test.
+    """
     bin_dir.mkdir(parents=True, exist_ok=True)
     (bin_dir / "fake_transfer_lib.py").write_text(FAKE_TRANSFER_LIB, encoding="utf-8")
     for name, body in (("ssh", FAKE_SSH), ("scp", FAKE_SCP)):
@@ -185,6 +196,12 @@ def _install_fake_bin(bin_dir: Path) -> None:
         script_path.write_text(body, encoding="utf-8")
         mode = script_path.stat().st_mode
         script_path.chmod(mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        if sys.platform == "win32":
+            cmd_path = bin_dir / f"{name}.cmd"
+            cmd_path.write_text(
+                f'@echo off\r\n"{sys.executable}" "%~dp0{name}" %*\r\n',
+                encoding="utf-8",
+            )
 
 
 def _read_log(log_path: Path) -> list[dict]:

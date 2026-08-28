@@ -244,6 +244,10 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
         # wrote through Path.home() at all.
         self.assertEqual(list(Path.home().glob("*")), real_home_before)
 
+    @unittest.skipUnless(
+        sys.platform != "win32",
+        "asserts the /dev/null UserKnownHostsFile branch, native non-Windows only",
+    )
     def test_write_scratch_ssh_client_config_uses_dev_null_known_hosts_on_unix(self) -> None:
         module = load_module()
         self.assertFalse(module.IS_WINDOWS, "this test asserts the non-Windows branch")
@@ -251,6 +255,20 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
             root = Path(temporary)
             config_path = module.write_scratch_ssh_client_config(root, 1, root / "identity")
             self.assertIn("UserKnownHostsFile /dev/null", config_path.read_text(encoding="utf-8"))
+
+    @unittest.skipUnless(
+        sys.platform == "win32",
+        "asserts the NUL UserKnownHostsFile branch, native Windows only",
+    )
+    def test_write_scratch_ssh_client_config_uses_nul_known_hosts_on_windows(self) -> None:
+        module = load_module()
+        self.assertTrue(module.IS_WINDOWS, "this test asserts the native Windows branch")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config_path = module.write_scratch_ssh_client_config(root, 1, root / "identity")
+            content = config_path.read_text(encoding="utf-8")
+            self.assertIn("UserKnownHostsFile NUL", content)
+            self.assertNotIn("/dev/null", content)
 
     def test_write_scratch_ssh_client_config_uses_nul_known_hosts_when_windows(self) -> None:
         # cipher's investigation: OpenSSH on Windows does not treat
